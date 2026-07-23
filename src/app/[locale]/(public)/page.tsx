@@ -6,21 +6,22 @@ import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getLatestJobs } from '@/lib/jobs';
+import { BelgiumSkyline } from '@/components/brand/BelgiumSkyline';
 import { Benefits } from '@/components/public/Benefits';
 import { CategoryGrid } from '@/components/public/CategoryGrid';
 import { ForCompanies } from '@/components/public/ForCompanies';
 import { HeroSearch } from '@/components/public/HeroSearch';
-import { HomeFaq } from '@/components/public/HomeFaq';
 import { HowItWorks } from '@/components/public/HowItWorks';
 import { JobCard } from '@/components/public/JobCard';
 import { LocationGrid } from '@/components/public/LocationGrid';
 
 /**
- * Strona główna Pracuj.be.
+ * Strona główna Pracuj.be — redesign wg makiety `docs/design/screens/01-home.png`.
  *
- * Lekka, mobile-first, w większości serwerowa (RSC). Sekcje w kolejności:
- * Hero (z wyszukiwarką) → najnowsze oferty → popularne branże → popularne miasta →
- * jak to działa → sekcja dla firm → korzyści → FAQ.
+ * Lekka, mobile-first, w większości serwerowa (RSC). Sekcje w kolejności z makiety:
+ * Hero (nagłówek + ilustracja Brukseli + wyszukiwarka + linki-akcje) → pasek zaufania →
+ * najnowsze oferty (lista-tabela) → popularne kategorie + lokalizacje (2 kolumny) →
+ * „Jak to działa?" obok karty „Jesteś pracodawcą?". Stopka jest w layoucie `(public)`.
  *
  * Renderuje się BEZ zmiennych środowiskowych — `getLatestJobs` korzysta z danych
  * demonstracyjnych, gdy Supabase nie jest skonfigurowane.
@@ -30,7 +31,7 @@ type HomePageProps = {
   params: Promise<{ locale: string }>;
 };
 
-const LATEST_JOBS_LIMIT = 6;
+const LATEST_JOBS_LIMIT = 4;
 const JOBS_PATH = '/oferty-pracy';
 
 /** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). */
@@ -76,31 +77,39 @@ export default async function HomePage({ params }: HomePageProps) {
   setRequestLocale(locale);
 
   const t = await getTranslations('home');
-  const tCommon = await getTranslations('common');
   const tJobs = await getTranslations('jobs');
 
   const latestJobs = await getLatestJobs(locale, LATEST_JOBS_LIMIT);
 
   return (
     <main>
-      {/* Hero — lekki, nie na cały ekran, bez ciężkiego tła. */}
-      <section className="border-b border-border bg-soft">
-        <div className="container py-12 md:py-16 lg:py-20">
-          <div className="mx-auto max-w-3xl text-center">
+      {/* Hero — lekki, nie na cały ekran; ilustracja Brukseli po prawej (desktop). */}
+      <section className="relative overflow-hidden border-b border-border bg-soft">
+        <div className="container py-12 md:py-16">
+          <BelgiumSkyline className="pointer-events-none absolute right-0 top-6 hidden w-2/5 max-w-md text-accent/20 lg:block" />
+
+          <div className="relative max-w-2xl">
             <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl">
               {t('heroTitle')}
             </h1>
-            <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
+            <p className="mt-3 max-w-xl text-base text-muted-foreground sm:text-lg">
               {t('heroSubtitle')}
             </p>
           </div>
-          <div className="mx-auto mt-8 max-w-3xl">
+
+          {/* Ilustracja pod tekstem na mobile. */}
+          <BelgiumSkyline className="mt-8 w-full text-accent/20 lg:hidden" />
+
+          <div className="relative mt-8">
             <HeroSearch />
           </div>
         </div>
       </section>
 
-      {/* Najnowsze oferty */}
+      {/* Pasek zaufania */}
+      <Benefits />
+
+      {/* Najnowsze oferty pracy */}
       <section className="container py-12 md:py-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
@@ -108,9 +117,9 @@ export default async function HomePage({ params }: HomePageProps) {
           </h2>
           <Link
             href={JOBS_PATH}
-            className="inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
+            className="inline-flex items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline"
           >
-            {tCommon('seeAll')}
+            {t('latestJobsSeeAll')}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </div>
@@ -128,23 +137,23 @@ export default async function HomePage({ params }: HomePageProps) {
         )}
       </section>
 
-      {/* Popularne branże */}
-      <CategoryGrid />
+      {/* Popularne kategorie + lokalizacje (2 kolumny) */}
+      <section className="border-t border-border bg-soft">
+        <div className="container py-12 md:py-16">
+          <div className="grid gap-10 lg:grid-cols-2 lg:gap-12">
+            <CategoryGrid />
+            <LocationGrid />
+          </div>
+        </div>
+      </section>
 
-      {/* Popularne miasta */}
-      <LocationGrid />
-
-      {/* Jak to działa */}
-      <HowItWorks />
-
-      {/* Sekcja dla firm */}
-      <ForCompanies />
-
-      {/* Korzyści */}
-      <Benefits />
-
-      {/* FAQ */}
-      <HomeFaq />
+      {/* Jak to działa? + Jesteś pracodawcą? */}
+      <section className="container py-12 md:py-16">
+        <div className="grid gap-8 lg:grid-cols-[1.8fr_1fr] lg:items-start lg:gap-10">
+          <HowItWorks />
+          <ForCompanies />
+        </div>
+      </section>
     </main>
   );
 }

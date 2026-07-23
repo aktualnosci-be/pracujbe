@@ -12,7 +12,8 @@
     "seeAll": "See all",
     "new": "New",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "home": "Home"
   },
   "nav": {
     "jobs": "Jobs",
@@ -147,7 +148,11 @@
     "allContractTypes": "All contract types",
     "paginationLabel": "Pagination",
     "paginationPrevious": "Previous",
-    "paginationNext": "Next"
+    "paginationNext": "Next",
+    "subtitle": "Find a job that fits you. Browse thousands of current offers.",
+    "searchJobs": "Search jobs",
+    "keywordPlaceholder": "e.g. mechanic, warehouse worker, carer",
+    "locationPlaceholder": "e.g. Antwerp, Brussels, Ghent"
   },
   "job": {
     "apply": "Apply for this job",
@@ -174,7 +179,20 @@
     "matchTitle": "Your match",
     "matchGood": "Good match",
     "matchPartial": "Partial match",
-    "matchLow": "Low match"
+    "matchLow": "Low match",
+    "backToResults": "Back to search results",
+    "tabDescription": "Job description",
+    "tabCompany": "About the company",
+    "tabSimilar": "Similar jobs",
+    "saveJob": "Save job",
+    "contactTitle": "Employer contact",
+    "contactViaPlatform": "Contact via the platform",
+    "sendMessage": "Send a message",
+    "similarJobs": "Similar jobs",
+    "seeMoreJobs": "See more jobs",
+    "learnMoreCompany": "Learn more about the company",
+    "industry": "Industry",
+    "accommodationCommute": "Accommodation and commute"
   },
   "cookies": {
     "bannerTitle": "We respect your privacy",
@@ -380,7 +398,25 @@
     "navOffers": "Offers",
     "navCandidates": "Candidates",
     "navCompany": "Company",
-    "navPayments": "Payments"
+    "navPayments": "Payments",
+    "rowActions": "Actions",
+    "checkBasicInfo": "Basic information",
+    "checkExperience": "Work experience",
+    "checkEducation": "Education",
+    "checkSkills": "Skills",
+    "checkLanguages": "Languages",
+    "checkPhoto": "Photo",
+    "employerRole": "Employer",
+    "switchCompany": "Switch company",
+    "seeAllOffers": "See all offers",
+    "seeAllCandidates": "See all",
+    "funnelDetails": "View details",
+    "offerId": "ID",
+    "selectOffer": "Select offer",
+    "selectAll": "Select all",
+    "saveCandidate": "Save candidate",
+    "offersApplications": "{count, plural, one {# application} other {# applications}}",
+    "offersMatched": "{count} matches"
   },
   "onboarding": {
     "title": "Your candidate profile",
@@ -431,7 +467,9 @@
     "relocation": "Willing to relocate",
     "relocationYes": "Yes, I'm ready",
     "expectedSalary": "Expected salary (gross/month)",
-    "salaryError": "Enter your expected salary."
+    "salaryError": "Enter your expected salary.",
+    "none": "Missing",
+    "helpText": "Check our guide on how to complete your profile."
   },
   "filters": {
     "title": "Filters",
@@ -459,7 +497,22 @@
     "sortNewest": "Newest",
     "activeFilters": "Active filters",
     "clear": "Clear filters",
-    "applyFilters": "Apply filters ({count})"
+    "applyFilters": "Apply filters ({count})",
+    "sortSalary": "Highest salary",
+    "date24h": "Last 24 hours",
+    "date7d": "Last 7 days",
+    "date30d": "Last 30 days",
+    "additional": "Additional filters",
+    "immediate": "Immediate start",
+    "noLanguageRequired": "No language required",
+    "salaryMin": "Salary from",
+    "salaryMax": "Salary up to",
+    "salaryMaxCap": "{value}+",
+    "salaryChip": "Salary: {min} – {max}",
+    "removeFilter": "Remove filter",
+    "showLess": "Show less",
+    "noLocations": "No locations",
+    "close": "Close"
   },
   "notifications": {
     "title": "Notifications",
@@ -474,5 +527,27 @@
     "month": "/mo",
     "popular": "Most popular",
     "choose": "Choose"
+  },
+  "apply": {
+    "title": "Apply now",
+    "subtitle": "Use your profile to apply quickly.",
+    "profileNote": "Your profile details will be attached to the application.",
+    "phone": "Phone",
+    "phonePlaceholder": "512 345 678",
+    "availability": "Availability",
+    "availImmediate": "Immediately",
+    "avail2weeks": "Within 2 weeks",
+    "avail1month": "Within a month",
+    "availFlexible": "To be agreed",
+    "message": "Add a message (optional)",
+    "messagePlaceholder": "Write a few words about yourself or your skills...",
+    "consent": "I accept the Privacy Policy and consent to the processing of my personal data for recruitment purposes.",
+    "submit": "Send application",
+    "sentTo": "Your application will be sent to {company}",
+    "success": "Your application has been sent.",
+    "phoneRequired": "Enter your phone number.",
+    "consentRequired": "You must accept to send the application.",
+    "hint": "It only takes 2 minutes",
+    "close": "Close"
   }
 }

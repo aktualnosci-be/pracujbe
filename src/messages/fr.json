@@ -12,7 +12,8 @@
     "seeAll": "Voir tout",
     "new": "Nouveau",
     "yes": "Oui",
-    "no": "Non"
+    "no": "Non",
+    "home": "Accueil"
   },
   "nav": {
     "jobs": "Offres d'emploi",
@@ -147,7 +148,11 @@
     "allContractTypes": "Tous les types de contrat",
     "paginationLabel": "Pagination",
     "paginationPrevious": "Précédent",
-    "paginationNext": "Suivant"
+    "paginationNext": "Suivant",
+    "subtitle": "Trouvez un emploi qui vous correspond. Parcourez des milliers d’offres actuelles.",
+    "searchJobs": "Rechercher un emploi",
+    "keywordPlaceholder": "p. ex. mécanicien, magasinier, aide-soignante",
+    "locationPlaceholder": "p. ex. Anvers, Bruxelles, Gand"
   },
   "job": {
     "apply": "Postuler à ce poste",
@@ -174,7 +179,20 @@
     "matchTitle": "Votre correspondance",
     "matchGood": "Bonne correspondance",
     "matchPartial": "Correspondance partielle",
-    "matchLow": "Faible correspondance"
+    "matchLow": "Faible correspondance",
+    "backToResults": "Retour aux résultats de recherche",
+    "tabDescription": "Description de l’offre",
+    "tabCompany": "À propos de l’entreprise",
+    "tabSimilar": "Offres similaires",
+    "saveJob": "Enregistrer l’offre",
+    "contactTitle": "Contact employeur",
+    "contactViaPlatform": "Contact via la plateforme",
+    "sendMessage": "Envoyer un message",
+    "similarJobs": "Offres similaires",
+    "seeMoreJobs": "Voir plus d’offres",
+    "learnMoreCompany": "En savoir plus sur l’entreprise",
+    "industry": "Secteur",
+    "accommodationCommute": "Logement et trajet"
   },
   "cookies": {
     "bannerTitle": "Nous respectons votre vie privée",
@@ -380,7 +398,25 @@
     "navOffers": "Offres",
     "navCandidates": "Candidats",
     "navCompany": "Entreprise",
-    "navPayments": "Paiements"
+    "navPayments": "Paiements",
+    "rowActions": "Actions",
+    "checkBasicInfo": "Informations de base",
+    "checkExperience": "Expérience professionnelle",
+    "checkEducation": "Formation",
+    "checkSkills": "Compétences",
+    "checkLanguages": "Langues",
+    "checkPhoto": "Photo",
+    "employerRole": "Employeur",
+    "switchCompany": "Changer d'entreprise",
+    "seeAllOffers": "Voir toutes les offres",
+    "seeAllCandidates": "Voir tous",
+    "funnelDetails": "Voir les détails",
+    "offerId": "ID",
+    "selectOffer": "Sélectionner l'offre",
+    "selectAll": "Tout sélectionner",
+    "saveCandidate": "Enregistrer le candidat",
+    "offersApplications": "{count, plural, one {# candidature} other {# candidatures}}",
+    "offersMatched": "{count} corresp."
   },
   "onboarding": {
     "title": "Votre profil de candidat",
@@ -431,7 +467,9 @@
     "relocation": "Prêt à déménager",
     "relocationYes": "Oui, je suis prêt",
     "expectedSalary": "Salaire souhaité (brut/mois)",
-    "salaryError": "Indiquez le salaire souhaité."
+    "salaryError": "Indiquez le salaire souhaité.",
+    "none": "Manquant",
+    "helpText": "Consultez notre guide pour remplir votre profil."
   },
   "filters": {
     "title": "Filtres",
@@ -459,7 +497,22 @@
     "sortNewest": "Plus récentes",
     "activeFilters": "Filtres actifs",
     "clear": "Effacer les filtres",
-    "applyFilters": "Appliquer les filtres ({count})"
+    "applyFilters": "Appliquer les filtres ({count})",
+    "sortSalary": "Salaire le plus élevé",
+    "date24h": "Dernières 24 heures",
+    "date7d": "7 derniers jours",
+    "date30d": "30 derniers jours",
+    "additional": "Filtres supplémentaires",
+    "immediate": "Immédiatement",
+    "noLanguageRequired": "Sans exigence linguistique",
+    "salaryMin": "Salaire à partir de",
+    "salaryMax": "Salaire jusqu’à",
+    "salaryMaxCap": "{value}+",
+    "salaryChip": "Salaire : {min} – {max}",
+    "removeFilter": "Retirer le filtre",
+    "showLess": "Afficher moins",
+    "noLocations": "Aucune localité",
+    "close": "Fermer"
   },
   "notifications": {
     "title": "Notifications",
@@ -474,5 +527,27 @@
     "month": "/mois",
     "popular": "Le plus populaire",
     "choose": "Choisir"
+  },
+  "apply": {
+    "title": "Postuler maintenant",
+    "subtitle": "Utilisez votre profil pour postuler rapidement.",
+    "profileNote": "Les données de votre profil seront jointes à la candidature.",
+    "phone": "Téléphone",
+    "phonePlaceholder": "512 345 678",
+    "availability": "Disponibilité",
+    "availImmediate": "Immédiatement",
+    "avail2weeks": "Sous 2 semaines",
+    "avail1month": "Sous un mois",
+    "availFlexible": "À convenir",
+    "message": "Ajouter un message (facultatif)",
+    "messagePlaceholder": "Écrivez quelques mots sur vous ou vos compétences...",
+    "consent": "J’accepte la Politique de confidentialité et le traitement de mes données personnelles à des fins de recrutement.",
+    "submit": "Envoyer la candidature",
+    "sentTo": "Votre candidature sera envoyée à {company}",
+    "success": "Votre candidature a été envoyée.",
+    "phoneRequired": "Indiquez votre numéro de téléphone.",
+    "consentRequired": "Vous devez accepter pour envoyer la candidature.",
+    "hint": "Cela ne prend que 2 minutes",
+    "close": "Fermer"
   }
 }

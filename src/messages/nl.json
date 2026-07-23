@@ -12,7 +12,8 @@
     "seeAll": "Alles bekijken",
     "new": "Nieuw",
     "yes": "Ja",
-    "no": "Nee"
+    "no": "Nee",
+    "home": "Startpagina"
   },
   "nav": {
     "jobs": "Vacatures",
@@ -147,7 +148,11 @@
     "allContractTypes": "Alle contracttypes",
     "paginationLabel": "Paginering",
     "paginationPrevious": "Vorige",
-    "paginationNext": "Volgende"
+    "paginationNext": "Volgende",
+    "subtitle": "Vind werk dat bij je past. Blader door duizenden actuele vacatures.",
+    "searchJobs": "Werk zoeken",
+    "keywordPlaceholder": "bijv. monteur, magazijnier, verzorgende",
+    "locationPlaceholder": "bijv. Antwerpen, Brussel, Gent"
   },
   "job": {
     "apply": "Solliciteer op deze functie",
@@ -174,7 +179,20 @@
     "matchTitle": "Jouw match",
     "matchGood": "Goede match",
     "matchPartial": "Gedeeltelijke match",
-    "matchLow": "Lage match"
+    "matchLow": "Lage match",
+    "backToResults": "Terug naar de zoekresultaten",
+    "tabDescription": "Vacaturebeschrijving",
+    "tabCompany": "Over het bedrijf",
+    "tabSimilar": "Vergelijkbare vacatures",
+    "saveJob": "Vacature opslaan",
+    "contactTitle": "Contact met werkgever",
+    "contactViaPlatform": "Contact via het platform",
+    "sendMessage": "Bericht sturen",
+    "similarJobs": "Vergelijkbare vacatures",
+    "seeMoreJobs": "Meer vacatures bekijken",
+    "learnMoreCompany": "Meer over het bedrijf",
+    "industry": "Sector",
+    "accommodationCommute": "Huisvesting en vervoer"
   },
   "cookies": {
     "bannerTitle": "We respecteren je privacy",
@@ -380,7 +398,25 @@
     "navOffers": "Vacatures",
     "navCandidates": "Kandidaten",
     "navCompany": "Bedrijf",
-    "navPayments": "Betalingen"
+    "navPayments": "Betalingen",
+    "rowActions": "Acties",
+    "checkBasicInfo": "Basisgegevens",
+    "checkExperience": "Werkervaring",
+    "checkEducation": "Opleiding",
+    "checkSkills": "Vaardigheden",
+    "checkLanguages": "Talen",
+    "checkPhoto": "Foto",
+    "employerRole": "Werkgever",
+    "switchCompany": "Wissel van bedrijf",
+    "seeAllOffers": "Bekijk alle vacatures",
+    "seeAllCandidates": "Bekijk allemaal",
+    "funnelDetails": "Details bekijken",
+    "offerId": "ID",
+    "selectOffer": "Vacature selecteren",
+    "selectAll": "Alles selecteren",
+    "saveCandidate": "Kandidaat opslaan",
+    "offersApplications": "{count, plural, one {# sollicitatie} other {# sollicitaties}}",
+    "offersMatched": "{count} matches"
   },
   "onboarding": {
     "title": "Je kandidatenprofiel",
@@ -431,7 +467,9 @@
     "relocation": "Bereid tot verhuizen",
     "relocationYes": "Ja, ik ben bereid",
     "expectedSalary": "Verwacht loon (bruto/maand)",
-    "salaryError": "Voer je verwachte loon in."
+    "salaryError": "Voer je verwachte loon in.",
+    "none": "Ontbreekt",
+    "helpText": "Bekijk onze gids over het invullen van je profiel."
   },
   "filters": {
     "title": "Filters",
@@ -459,7 +497,22 @@
     "sortNewest": "Nieuwste",
     "activeFilters": "Actieve filters",
     "clear": "Filters wissen",
-    "applyFilters": "Filters toepassen ({count})"
+    "applyFilters": "Filters toepassen ({count})",
+    "sortSalary": "Hoogste loon",
+    "date24h": "Laatste 24 uur",
+    "date7d": "Laatste 7 dagen",
+    "date30d": "Laatste 30 dagen",
+    "additional": "Extra filters",
+    "immediate": "Onmiddellijk",
+    "noLanguageRequired": "Geen taalvereiste",
+    "salaryMin": "Loon vanaf",
+    "salaryMax": "Loon tot",
+    "salaryMaxCap": "{value}+",
+    "salaryChip": "Loon: {min} – {max}",
+    "removeFilter": "Filter verwijderen",
+    "showLess": "Minder tonen",
+    "noLocations": "Geen locaties",
+    "close": "Sluiten"
   },
   "notifications": {
     "title": "Meldingen",
@@ -474,5 +527,27 @@
     "month": "/maand",
     "popular": "Populairst",
     "choose": "Kiezen"
+  },
+  "apply": {
+    "title": "Solliciteer nu",
+    "subtitle": "Gebruik je profiel om snel te solliciteren.",
+    "profileNote": "Je profielgegevens worden aan de sollicitatie toegevoegd.",
+    "phone": "Telefoon",
+    "phonePlaceholder": "512 345 678",
+    "availability": "Beschikbaarheid",
+    "availImmediate": "Onmiddellijk",
+    "avail2weeks": "Binnen 2 weken",
+    "avail1month": "Binnen een maand",
+    "availFlexible": "In overleg",
+    "message": "Voeg een bericht toe (optioneel)",
+    "messagePlaceholder": "Schrijf iets over jezelf of je vaardigheden...",
+    "consent": "Ik ga akkoord met het Privacybeleid en met de verwerking van mijn persoonsgegevens voor de rekrutering.",
+    "submit": "Sollicitatie versturen",
+    "sentTo": "Je sollicitatie wordt verzonden naar {company}",
+    "success": "Je sollicitatie is verzonden.",
+    "phoneRequired": "Vul je telefoonnummer in.",
+    "consentRequired": "Je moet akkoord gaan om te kunnen solliciteren.",
+    "hint": "Duurt maar 2 minuten",
+    "close": "Sluiten"
   }
 }

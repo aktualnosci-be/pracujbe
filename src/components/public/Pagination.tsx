@@ -3,12 +3,12 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
-import { buttonVariants } from '@/components/ui/button';
 
 /**
- * Paginacja listy ofert (server component). Linki oparte są o query param `page`
- * i zachowują pozostałe filtry (`filters`). Strona 1 nie zawiera parametru `page`
- * (kanoniczny adres bazowy). Renderuje `nav` z linkami — działa bez JS.
+ * Paginacja listy ofert (server component) wg makiety 02-jobs-list: „1 2 3 4 5 … 95 >”.
+ * Linki oparte są o query param `page` i zachowują pozostałe filtry (`filters`). Strona 1
+ * nie zawiera parametru `page` (kanoniczny adres bazowy). Renderuje `nav` z linkami — działa
+ * bez JS. Aktywna strona: granatowa pigułka; pozostałe: obrys + hover.
  */
 
 export interface PaginationProps {
@@ -43,6 +43,9 @@ function buildPages(current: number, totalPages: number): Array<number | 'ellips
   return result;
 }
 
+const CELL_BASE =
+  'inline-flex h-10 min-w-10 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+
 export async function Pagination({
   basePath,
   page,
@@ -70,36 +73,35 @@ export async function Pagination({
   const hasPrev = current > 1;
   const hasNext = current < totalPages;
 
-  const arrowClass = cn(buttonVariants({ variant: 'outline', size: 'icon' }));
+  const arrowClass = cn(CELL_BASE, 'border border-border text-foreground hover:bg-soft');
   const disabledArrowClass = cn(
-    buttonVariants({ variant: 'outline', size: 'icon' }),
-    'pointer-events-none opacity-50',
+    CELL_BASE,
+    'border border-border text-muted-foreground pointer-events-none opacity-50',
   );
 
   return (
     <nav
       aria-label={t('paginationLabel')}
-      className="mt-8 flex items-center justify-center gap-1"
+      className="mt-8 flex items-center justify-center gap-1.5"
     >
       {hasPrev ? (
-        <Link
-          href={hrefFor(current - 1)}
-          className={arrowClass}
-          aria-label={t('paginationPrevious')}
-          rel="prev"
-        >
-          <ChevronLeft aria-hidden="true" />
+        <Link href={hrefFor(current - 1)} className={arrowClass} aria-label={t('paginationPrevious')} rel="prev">
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </Link>
       ) : (
         <span className={disabledArrowClass} aria-hidden="true">
-          <ChevronLeft aria-hidden="true" />
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </span>
       )}
 
-      <ul className="flex items-center gap-1">
+      <ul className="flex items-center gap-1.5">
         {items.map((item, index) =>
           item === 'ellipsis' ? (
-            <li key={`ellipsis-${index}`} className="px-2 text-muted-foreground" aria-hidden="true">
+            <li
+              key={`ellipsis-${index}`}
+              className="px-1 text-sm text-muted-foreground"
+              aria-hidden="true"
+            >
               …
             </li>
           ) : (
@@ -108,10 +110,10 @@ export async function Pagination({
                 href={hrefFor(item)}
                 aria-current={item === current ? 'page' : undefined}
                 className={cn(
-                  buttonVariants({
-                    variant: item === current ? 'default' : 'outline',
-                    size: 'icon',
-                  }),
+                  CELL_BASE,
+                  item === current
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-border text-foreground hover:bg-soft',
                 )}
               >
                 {item}
@@ -122,17 +124,12 @@ export async function Pagination({
       </ul>
 
       {hasNext ? (
-        <Link
-          href={hrefFor(current + 1)}
-          className={arrowClass}
-          aria-label={t('paginationNext')}
-          rel="next"
-        >
-          <ChevronRight aria-hidden="true" />
+        <Link href={hrefFor(current + 1)} className={arrowClass} aria-label={t('paginationNext')} rel="next">
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </Link>
       ) : (
         <span className={disabledArrowClass} aria-hidden="true">
-          <ChevronRight aria-hidden="true" />
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </span>
       )}
     </nav>

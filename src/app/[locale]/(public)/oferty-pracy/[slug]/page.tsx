@@ -3,41 +3,55 @@ import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server';
 import {
   ArrowLeft,
+  ArrowRight,
   BadgeCheck,
   Building2,
   CalendarDays,
+  Check,
   CheckCircle2,
+  ChevronDown,
   Clock,
+  FileText,
+  Heart,
   Home,
   Languages as LanguagesIcon,
   MapPin,
+  MessageSquare,
   Truck,
+  Wallet,
 } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { getJobBySlug, type ContractType, type JobDetail } from '@/lib/jobs';
+import { getJobBySlug, getJobs, type ContractType, type JobDetail, type JobListItem } from '@/lib/jobs';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
+import { ApplyModal } from '@/components/public/ApplyModal';
 
 /**
- * Szczegóły oferty pracy (SSR). Dane z `getJobBySlug` (DB lub demo). Brak oferty → 404.
- * Zawiera pełne metadane SEO (canonical, hreflang, OpenGraph) oraz dane strukturalne
- * JobPosting (JSON-LD). Na desktopie panel „Aplikuj” jest przyklejony z boku; na mobile
- * przycisk aplikowania jest dostępny w nagłówku (nie zasłania treści).
+ * Szczegóły oferty pracy (SSR) wg makiety 03-job-detail.
  *
- * TODO(i18n-slugs): jeden segment `oferty-pracy` dla wszystkich języków; lokalizowane
- * slugi (vacatures/offres-emploi/jobs) w mapie drogowej (spec 12).
- * TODO(apply-flow): przycisk „Aplikuj” prowadzi tymczasowo do logowania — właściwy
- * formularz aplikacji dostarcza moduł kandydata.
+ * Nagłówek z meta-danymi, zakładki (kotwice do sekcji), treść (opis / obowiązki / wymagania /
+ * oferujemy / zakwaterowanie / o firmie) oraz przyklejony prawy panel (Aplikuj teraz + kontakt
+ * + podobne oferty). Na mobile sekcje są akordeonami (`<details>`), a aplikowanie odbywa się
+ * z przyklejonego dolnego paska. Zachowane pełne metadane SEO oraz dane strukturalne
+ * JobPosting (JSON-LD).
+ *
+ * Uwaga na Invariant #8: nie fabrykujemy danych osobowych kontaktu ani ocen — kontakt jest
+ * generyczny (przez platformę), a aplikowanie/zapis wymagają konta (logowanie).
+ *
+ * TODO(i18n-slugs): jeden segment `oferty-pracy` dla wszystkich języków; lokalizowane slugi
+ * w mapie drogowej (spec 12).
+ * TODO(company-page): „Dowiedz się więcej o firmie” prowadzi tymczasowo do ofert firmy
+ * (wyszukiwarka), docelowo do dedykowanej strony firmy.
  */
 
 const BASE_PATH = '/oferty-pracy';
-const APPLY_HREF = '/logowanie';
+const LOGIN_HREF = '/logowanie';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const VALID_DAYS = 60;
+const SIMILAR_LIMIT = 3;
 
 /** Mapowanie rodzaju umowy na schema.org employmentType. */
 const EMPLOYMENT_TYPE: Record<ContractType, string> = {
@@ -57,6 +71,17 @@ function truncate(text: string, max: number): string {
   const clean = text.replace(/\s+/g, ' ').trim();
   if (clean.length <= max) return clean;
   return `${clean.slice(0, max - 1).trimEnd()}…`;
+}
+
+function initials(name: string): string {
+  const letters = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+  return letters || '•';
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -150,12 +175,13 @@ export default async function JobDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [t, tJobs, tContract, tCategory, tCommon, format] = await Promise.all([
+  const [t, tJobs, tContract, tCategory, tCommon, tApply, format] = await Promise.all([
     getTranslations('job'),
     getTranslations('jobs'),
     getTranslations('contractTypes'),
     getTranslations('categories'),
     getTranslations('common'),
+    getTranslations('apply'),
     getFormatter(),
   ]);
 
@@ -164,36 +190,83 @@ export default async function JobDetailPage({ params }: PageProps) {
     currency: job.currency,
     maximumFractionDigits: 0,
   };
-
   const salaryLabel = (() => {
     if (job.salaryMin !== undefined && job.salaryMax !== undefined) {
-      return `${format.number(job.salaryMin, currencyOptions)} – ${format.number(
-        job.salaryMax,
-        currencyOptions,
-      )}`;
+      return `${format.number(job.salaryMin, currencyOptions)} – ${format.number(job.salaryMax, currencyOptions)}`;
     }
     const single = job.salaryMin ?? job.salaryMax;
     return single !== undefined ? format.number(single, currencyOptions) : t('salaryNotProvided');
   })();
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
-  const startDateLabel = job.startDate
-    ? format.dateTime(new Date(job.startDate), { dateStyle: 'long' })
-    : job.immediate
-      ? tJobs('immediate')
-      : undefined;
 
   const url = `${env.siteUrl}/${locale}${BASE_PATH}/${slug}`;
   const jsonLd = buildJsonLd(job, url);
 
-  const applyButton = (
-    <Link href={APPLY_HREF} className={cn(buttonVariants({ size: 'lg' }), 'w-full')}>
-      {t('apply')}
-    </Link>
+  // Podobne oferty (ta sama kategoria, bez bieżącej).
+  const similarResult = await getJobs({
+    locale,
+    category: job.category,
+    page: 1,
+    pageSize: SIMILAR_LIMIT + 1,
+  });
+  const similarJobs: JobListItem[] = similarResult.jobs
+    .filter((item) => item.slug !== job.slug)
+    .slice(0, SIMILAR_LIMIT);
+
+  const metaItems: Array<{ icon: React.ComponentType<{ className?: string }>; text: string }> = [
+    { icon: MapPin, text: `${job.city}, ${job.region}` },
+    { icon: Wallet, text: salaryLabel },
+    { icon: FileText, text: tContract(job.contractType) },
+    { icon: Clock, text: job.workingHours },
+  ];
+  if (job.shifts) metaItems.push({ icon: Clock, text: job.shifts });
+
+  const applyLabel = tJobs('applyNow');
+  const applyHint = tApply('hint');
+
+  const tabs = [
+    { href: '#opis', label: t('tabDescription') },
+    { href: '#firma', label: t('tabCompany') },
+    { href: '#podobne', label: t('tabSimilar') },
+  ];
+
+  const Section = ({
+    id,
+    title,
+    children,
+  }: {
+    id?: string;
+    title: string;
+    children: React.ReactNode;
+  }): React.JSX.Element => (
+    <details
+      id={id}
+      open
+      className="group border-b border-border py-4 first:pt-0 lg:border-0 lg:py-0"
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 lg:pointer-events-none lg:cursor-default [&::-webkit-details-marker]:hidden">
+        <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+        <ChevronDown
+          className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 lg:hidden"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="mt-3 lg:mt-4">{children}</div>
+    </details>
+  );
+
+  const companyLogo = (
+    <div
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
+      aria-hidden="true"
+    >
+      {initials(job.companyName)}
+    </div>
   );
 
   return (
-    <div className="container py-8 md:py-12">
+    <div className="container py-6 md:py-10">
       <script
         type="application/ld+json"
         // Escapowanie „<" chroni przed wyjściem z tagu <script> dla danych z bazy.
@@ -205,246 +278,321 @@ export default async function JobDetailPage({ params }: PageProps) {
         className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        {t('backToList')}
+        {t('backToResults')}
       </Link>
 
       {/* Nagłówek */}
-      <header className="mb-8">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{tContract(job.contractType)}</Badge>
-          <Badge variant="outline">{tCategory(job.category)}</Badge>
-          {job.isNew ? <Badge variant="success">{tJobs('newBadge')}</Badge> : null}
+      <header className="mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+              {job.title}
+            </h1>
+            <div className="mt-3 flex items-center gap-3">
+              {companyLogo}
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
+                  {job.companyName}
+                  {job.companyVerified ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                      <BadgeCheck className="h-4 w-4" aria-hidden="true" />
+                      {t('verified')}
+                    </span>
+                  ) : null}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {tCategory(job.category)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Zapisz (desktop) */}
+          <Link
+            href={LOGIN_HREF}
+            className={cn(buttonVariants({ variant: 'outline' }), 'hidden lg:inline-flex')}
+          >
+            <Heart className="h-4 w-4" aria-hidden="true" />
+            {t('saveJob')}
+          </Link>
         </div>
 
-        <h1 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">{job.title}</h1>
-
-        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+        {/* Meta */}
+        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+          {metaItems.map((item, index) => (
+            <span key={index} className="inline-flex items-center gap-1.5">
+              <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {item.text}
+            </span>
+          ))}
           <span className="inline-flex items-center gap-1.5">
-            <Building2 className="h-4 w-4" aria-hidden="true" />
-            {job.companyName}
-            {job.companyVerified ? (
-              <span className="inline-flex items-center gap-1 text-success" title={t('verified')}>
-                <BadgeCheck className="h-4 w-4" aria-hidden="true" />
-                <span className="sr-only">{t('verified')}</span>
-              </span>
-            ) : null}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <MapPin className="h-4 w-4" aria-hidden="true" />
-            {job.city}, {job.region}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <CalendarDays className="h-4 w-4" aria-hidden="true" />
+            <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />
             {t('publishedOn')} {publishedLabel}
           </span>
         </div>
-
-        {job.highlights.length > 0 ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {job.highlights.map((highlight) => (
-              <Badge key={highlight} variant="outline">
-                {highlight}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-
-        {/* CTA mobilne — dostępne, nie zasłania treści (brak sticky/fixed) */}
-        <div className="mt-6 lg:hidden">{applyButton}</div>
       </header>
 
+      {/* Zakładki (kotwice do sekcji) */}
+      <nav aria-label={t('tabDescription')} className="mb-6 border-b border-border">
+        <ul className="-mb-px flex flex-wrap gap-6">
+          {tabs.map((tab, index) => (
+            <li key={tab.href}>
+              <a
+                href={tab.href}
+                aria-current={index === 0 ? 'true' : undefined}
+                className={cn(
+                  'inline-block border-b-2 pb-3 text-sm font-medium transition-colors',
+                  index === 0
+                    ? 'border-accent text-accent'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {tab.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
       <div className="grid gap-8 lg:grid-cols-3">
-        {/* Treść główna */}
-        <div className="space-y-8 lg:col-span-2">
-          <section>
-            <h2 className="mb-3 text-xl font-semibold">{t('aboutRole')}</h2>
+        {/* Treść */}
+        <div className="lg:col-span-2 lg:space-y-8">
+          <Section id="opis" title={t('aboutRole')}>
             <p className="whitespace-pre-line leading-relaxed text-foreground">{job.description}</p>
-          </section>
+          </Section>
 
           {job.responsibilities.length > 0 ? (
-            <section>
-              <h2 className="mb-3 text-xl font-semibold">{t('responsibilities')}</h2>
+            <Section title={t('responsibilities')}>
               <ul className="space-y-2">
                 {job.responsibilities.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2
-                      className="mt-0.5 h-5 w-5 shrink-0 text-primary"
-                      aria-hidden="true"
-                    />
-                    <span>{item}</span>
+                  <li key={item} className="flex items-start gap-2.5">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
+                    <span className="text-foreground">{item}</span>
                   </li>
                 ))}
               </ul>
-            </section>
+            </Section>
           ) : null}
 
-          {job.requirementsMandatory.length > 0 ? (
-            <section>
-              <h2 className="mb-3 text-xl font-semibold">{t('requirementsMandatory')}</h2>
+          {job.requirementsMandatory.length > 0 || job.requirementsOptional.length > 0 ? (
+            <Section title={t('requirementsMandatory')}>
               <ul className="space-y-2">
                 {job.requirementsMandatory.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2
-                      className="mt-0.5 h-5 w-5 shrink-0 text-primary"
-                      aria-hidden="true"
-                    />
-                    <span>{item}</span>
+                  <li key={item} className="flex items-start gap-2.5">
+                    <Check className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
+                    <span className="text-foreground">{item}</span>
                   </li>
                 ))}
               </ul>
-            </section>
-          ) : null}
-
-          {job.requirementsOptional.length > 0 ? (
-            <section>
-              <h2 className="mb-3 text-xl font-semibold">{t('requirementsOptional')}</h2>
-              <ul className="space-y-2">
-                {job.requirementsOptional.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span
-                      className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span className="text-muted-foreground">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+              {job.requirementsOptional.length > 0 ? (
+                <>
+                  <h3 className="mb-2 mt-4 text-sm font-semibold text-muted-foreground">
+                    {t('requirementsOptional')}
+                  </h3>
+                  <ul className="space-y-2">
+                    {job.requirementsOptional.map((item) => (
+                      <li key={item} className="flex items-start gap-2.5">
+                        <span
+                          className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <span className="text-muted-foreground">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </Section>
           ) : null}
 
           {job.conditions.length > 0 ? (
-            <section>
-              <h2 className="mb-3 text-xl font-semibold">{t('conditions')}</h2>
-              <ul className="space-y-2">
+            <Section title={t('conditions')}>
+              <ul className="grid gap-3 sm:grid-cols-2">
                 {job.conditions.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2
-                      className="mt-0.5 h-5 w-5 shrink-0 text-success"
-                      aria-hidden="true"
-                    />
-                    <span>{item}</span>
+                  <li key={item} className="flex items-start gap-2.5">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+                    <span className="text-foreground">{item}</span>
                   </li>
                 ))}
               </ul>
-            </section>
+            </Section>
           ) : null}
 
-          {/* Szczegóły pracy */}
-          <section>
-            <h2 className="mb-3 text-xl font-semibold">{t('workingHours')}</h2>
-            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              <div className="flex items-start gap-2">
-                <Clock className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <div>
-                  <dt className="text-sm text-muted-foreground">{t('workingHours')}</dt>
-                  <dd className="font-medium">{job.workingHours}</dd>
-                </div>
-              </div>
-
-              {job.shifts ? (
-                <div className="flex items-start gap-2">
-                  <Clock
-                    className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <dt className="text-sm text-muted-foreground">{t('shifts')}</dt>
-                    <dd className="font-medium">{job.shifts}</dd>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="flex items-start gap-2">
-                <LanguagesIcon
-                  className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <div>
-                  <dt className="text-sm text-muted-foreground">{t('languages')}</dt>
-                  <dd className="font-medium">
-                    {job.languages.length > 0 ? job.languages.join(', ') : '—'}
-                  </dd>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2">
+          <Section title={t('accommodationCommute')}>
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <div className="flex items-start gap-2.5">
                 <Home className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div>
                   <dt className="text-sm text-muted-foreground">{t('accommodation')}</dt>
-                  <dd className="font-medium">{job.accommodation ? tCommon('yes') : tCommon('no')}</dd>
+                  <dd className="font-medium text-foreground">
+                    {job.accommodation ? tCommon('yes') : tCommon('no')}
+                  </dd>
                 </div>
               </div>
-
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2.5">
                 <Truck className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div>
                   <dt className="text-sm text-muted-foreground">{t('transport')}</dt>
-                  <dd className="font-medium">{job.transport ? tCommon('yes') : tCommon('no')}</dd>
+                  <dd className="font-medium text-foreground">
+                    {job.transport ? tCommon('yes') : tCommon('no')}
+                  </dd>
                 </div>
               </div>
-
-              {startDateLabel ? (
-                <div className="flex items-start gap-2">
-                  <CalendarDays
+              {job.languages.length > 0 ? (
+                <div className="flex items-start gap-2.5">
+                  <LanguagesIcon
                     className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"
                     aria-hidden="true"
                   />
                   <div>
-                    <dt className="text-sm text-muted-foreground">{t('startDate')}</dt>
-                    <dd className="font-medium">{startDateLabel}</dd>
+                    <dt className="text-sm text-muted-foreground">{t('languages')}</dt>
+                    <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
                   </div>
                 </div>
               ) : null}
             </dl>
-          </section>
+          </Section>
 
-          {/* O firmie */}
-          <section>
-            <h2 className="mb-3 text-xl font-semibold">{t('aboutCompany')}</h2>
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{job.companyName}</span>
-              {job.companyVerified ? (
-                <Badge variant="success" className="gap-1">
-                  <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                  {t('verified')}
-                </Badge>
-              ) : null}
+          {/* Informacje o firmie */}
+          <Section id="firma" title={t('aboutCompany')}>
+            <div className="rounded-lg border border-border bg-soft p-5">
+              <div className="flex items-center gap-3">
+                {companyLogo}
+                <div>
+                  <p className="flex items-center gap-2 font-semibold text-foreground">
+                    {job.companyName}
+                    {job.companyVerified ? (
+                      <BadgeCheck className="h-4 w-4 text-success" aria-hidden="true" />
+                    ) : null}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {t('industry')}: {tCategory(job.category)}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 leading-relaxed text-muted-foreground">{job.companyDescription}</p>
+              <Link
+                href={`${BASE_PATH}?keyword=${encodeURIComponent(job.companyName)}`}
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-dark"
+              >
+                {t('learnMoreCompany')}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
             </div>
-            <p className="mt-2 leading-relaxed text-muted-foreground">{job.companyDescription}</p>
-          </section>
+          </Section>
         </div>
 
-        {/* Panel boczny (desktop, sticky) */}
-        <aside className="hidden lg:block">
-          <div className="sticky top-24 space-y-4 rounded-lg border border-border bg-card p-6 shadow-sm">
-            <div>
-              <p className="text-sm text-muted-foreground">{t('company')}</p>
-              <p className="font-semibold">{job.companyName}</p>
+        {/* Panel boczny */}
+        <aside className="lg:col-span-1">
+          <div className="space-y-4 lg:sticky lg:top-24">
+            {/* Aplikuj (desktop — mobile ma dolny pasek) */}
+            <div className="hidden rounded-lg border border-border bg-card p-5 shadow-sm lg:block">
+              <ApplyModal
+                companyName={job.companyName}
+                triggerLabel={applyLabel}
+                triggerHint={applyHint}
+                triggerClassName="w-full"
+              />
+              <Link
+                href={LOGIN_HREF}
+                className={cn(buttonVariants({ variant: 'outline' }), 'mt-3 w-full')}
+              >
+                <Heart className="h-4 w-4" aria-hidden="true" />
+                {t('saveJob')}
+              </Link>
             </div>
 
-            <div>
-              <p className="text-sm text-muted-foreground">{tJobs('salary')}</p>
-              <p className="text-lg font-bold text-foreground">{salaryLabel}</p>
+            {/* Kontakt */}
+            <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+              <h2 className="mb-3 text-base font-semibold text-foreground">{t('contactTitle')}</h2>
+              <div className="flex items-center gap-3">
+                <Building2 className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-foreground">{job.companyName}</p>
+                  <p className="text-sm text-muted-foreground">{t('contactViaPlatform')}</p>
+                </div>
+              </div>
+              {job.languages.length > 0 ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {t('languages')}: {job.languages.join(', ')}
+                </p>
+              ) : null}
+              <Link
+                href={LOGIN_HREF}
+                className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 w-full')}
+              >
+                <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                {t('sendMessage')}
+              </Link>
             </div>
 
-            <div>
-              <p className="text-sm text-muted-foreground">{t('location')}</p>
-              <p className="font-medium">
-                {job.city}, {job.region}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">{tContract(job.contractType)}</Badge>
-              {job.accommodation ? <Badge variant="outline">{t('accommodation')}</Badge> : null}
-              {job.transport ? <Badge variant="outline">{t('transport')}</Badge> : null}
-              {job.immediate ? <Badge variant="outline">{tJobs('immediate')}</Badge> : null}
-            </div>
-
-            <div className="pt-2">{applyButton}</div>
+            {/* Podobne oferty */}
+            {similarJobs.length > 0 ? (
+              <div id="podobne" className="rounded-lg border border-border bg-card p-5 shadow-sm">
+                <h2 className="mb-3 text-base font-semibold text-foreground">{t('similarJobs')}</h2>
+                <ul className="divide-y divide-border">
+                  {similarJobs.map((item) => {
+                    const itemSalary =
+                      item.salaryMin !== undefined && item.salaryMax !== undefined
+                        ? `${format.number(item.salaryMin, { style: 'currency', currency: item.currency, maximumFractionDigits: 0 })} – ${format.number(item.salaryMax, { style: 'currency', currency: item.currency, maximumFractionDigits: 0 })}`
+                        : null;
+                    return (
+                      <li key={item.id} className="py-3 first:pt-0 last:pb-0">
+                        <Link href={`${BASE_PATH}/${item.slug}`} className="group flex gap-3">
+                          <div
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
+                            aria-hidden="true"
+                          >
+                            {initials(item.companyName)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-foreground group-hover:text-accent">
+                              {item.title}
+                            </p>
+                            <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <MapPin className="h-3 w-3" aria-hidden="true" />
+                              {item.city}
+                            </p>
+                            {itemSalary ? (
+                              <p className="mt-0.5 text-xs font-medium text-foreground">{itemSalary}</p>
+                            ) : null}
+                          </div>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <Link
+                  href={`${BASE_PATH}?category=${job.category}`}
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-dark"
+                >
+                  {t('seeMoreJobs')}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </div>
+            ) : null}
           </div>
         </aside>
       </div>
+
+      {/* Dolny pasek (mobile) */}
+      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background/95 p-3 shadow-[0_-4px_12px_rgba(15,42,71,0.08)] backdrop-blur lg:hidden">
+        <Link
+          href={LOGIN_HREF}
+          className={cn(buttonVariants({ variant: 'outline' }), 'flex-1')}
+        >
+          <Heart className="h-4 w-4" aria-hidden="true" />
+          {t('saveJob')}
+        </Link>
+        <ApplyModal
+          companyName={job.companyName}
+          triggerLabel={applyLabel}
+          triggerSize="default"
+          triggerClassName="flex-1"
+        />
+      </div>
+      {/* Odstęp, aby dolny pasek nie zasłaniał treści na mobile. */}
+      <div className="h-20 lg:hidden" aria-hidden="true" />
     </div>
   );
 }

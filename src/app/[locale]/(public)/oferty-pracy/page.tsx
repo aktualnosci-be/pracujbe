@@ -1,48 +1,55 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { SearchX } from 'lucide-react';
+import { ChevronDown, MapPin, Search, SearchX, X } from 'lucide-react';
 
+import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { getJobs, type CategoryKey, type ContractType } from '@/lib/jobs';
-import { FiltersBar } from '@/components/public/FiltersBar';
-import { Pagination } from '@/components/public/Pagination';
+import { getJobs } from '@/lib/jobs';
+import { cn } from '@/lib/utils';
+import { BelgiumSkyline } from '@/components/brand/BelgiumSkyline';
+import { FilterSidebar } from '@/components/public/FilterSidebar';
+import { FilterSheet } from '@/components/public/FilterSheet';
 import { JobCard } from '@/components/public/JobCard';
+import { Pagination } from '@/components/public/Pagination';
+import {
+  SALARY_MAX_BOUND,
+  isSalaryNarrowed,
+  matchesSidebar,
+  parseSidebarFilters,
+  parseSort,
+  sidebarFiltersToParams,
+  sortJobs,
+  splitParam,
+  toFacetItem,
+  type DateValue,
+  type FacetItem,
+  type SortValue,
+} from '@/components/public/job-filters';
 
 /**
- * Lista ofert pracy (SSR). Filtry czytane są z `searchParams` i zapisywane w URL
- * (FiltersBar), dzięki czemu wyniki są renderowane po stronie serwera, a adres jest
- * współdzielony (link/odświeżenie). Działa BEZ zmiennych środowiskowych — `getJobs`
- * korzysta wtedy z danych demonstracyjnych.
+ * Lista ofert pracy (SSR) wg makiety 02-jobs-list.
  *
- * TODO(i18n-slugs): docelowo segment lokalizowany (nl: `vacatures`, fr: `offres-emploi`,
- * en: `jobs`) przez `pathnames` w konfiguracji next-intl. Na teraz jeden segment
- * `oferty-pracy` dla wszystkich języków (prostota, mapa drogowa: spec 12).
+ * Układ 2-kolumnowy na desktopie: lewy `FilterSidebar`, prawa kolumna z chipami aktywnych
+ * filtrów, sortowaniem, wierszami `JobCard` i paginacją. Na mobile: górna wyszukiwarka,
+ * pasek „Filtry (n)” (bottom-sheet `FilterSheet`) + sortowanie, oferty i paginacja.
+ *
+ * Wszystkie filtry trzymane są w URL. Słowo kluczowe i miasto zawężają zbiór natywnie przez
+ * `getJobs`; pozostałe (kategoria/lokalizacja/wynagrodzenie/umowa/zakwaterowanie/od zaraz/
+ * bez języka/data) filtrowane są nad wynikiem — reguły wspólne dla serwera i klienta
+ * (`job-filters`). Działa BEZ zmiennych środowiskowych (dane demonstracyjne z `getJobs`).
+ *
+ * TODO(data): faceting + filtrowanie zaawansowane wykonywane są nad ograniczonym zbiorem
+ * (`MAX_FACET`). Docelowo powinny zejść do warstwy danych (SQL, count po stronie serwera),
+ * by skalować się na duże wolumeny ofert.
+ *
+ * TODO(i18n-slugs): jeden segment `oferty-pracy` dla wszystkich języków; lokalizowane slugi
+ * (vacatures/offres-emploi/jobs) w mapie drogowej (spec 12).
  */
 
 const BASE_PATH = '/oferty-pracy';
-
-const CATEGORY_KEYS: readonly CategoryKey[] = [
-  'construction',
-  'transport',
-  'warehouse',
-  'production',
-  'technical',
-  'cleaning',
-  'hospitality',
-  'care',
-  'logistics',
-  'seasonal',
-];
-
-const CONTRACT_TYPES: readonly ContractType[] = [
-  'permanent',
-  'temporary',
-  'interim',
-  'freelance',
-  'internship',
-  'seasonal',
-];
+const PAGE_SIZE = 12;
+const MAX_FACET = 200;
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -55,16 +62,12 @@ function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function parseCategory(value: string | undefined): CategoryKey | undefined {
-  return value !== undefined && CATEGORY_KEYS.includes(value as CategoryKey)
-    ? (value as CategoryKey)
-    : undefined;
-}
-
-function parseContractType(value: string | undefined): ContractType | undefined {
-  return value !== undefined && CONTRACT_TYPES.includes(value as ContractType)
-    ? (value as ContractType)
-    : undefined;
+function flatten(sp: SearchParams): Record<string, string | undefined> {
+  const flat: Record<string, string | undefined> = {};
+  for (const key of Object.keys(sp)) {
+    flat[key] = firstValue(sp[key]);
+  }
+  return flat;
 }
 
 export async function generateMetadata({
@@ -107,73 +110,345 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
   setRequestLocale(locale);
 
   const sp = await searchParams;
-  const keyword = firstValue(sp['keyword'])?.trim() || undefined;
-  const city = firstValue(sp['city'])?.trim() || undefined;
-  const category = parseCategory(firstValue(sp['category']));
-  const contractType = parseContractType(firstValue(sp['contractType']));
+  const flat = flatten(sp);
 
-  const pageRaw = Number(firstValue(sp['page']));
+  const keyword = flat['keyword']?.trim() || undefined;
+  const city = flat['city']?.trim() || undefined;
+  const sort: SortValue = parseSort(flat['sort']);
+  const sf = parseSidebarFilters(flat);
+
+  const pageRaw = Number(flat['page']);
   const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.trunc(pageRaw) : 1;
 
-  const t = await getTranslations('jobs');
+  const [t, tFilters, tCat, tContract, tCommon, tNav] = await Promise.all([
+    getTranslations('jobs'),
+    getTranslations('filters'),
+    getTranslations('categories'),
+    getTranslations('contractTypes'),
+    getTranslations('common'),
+    getTranslations('nav'),
+  ]);
 
-  const result = await getJobs({
-    locale,
-    keyword,
-    city,
-    category,
-    contractType,
-    page,
+  // Zbiór bazowy: zawężony słowem kluczowym / miastem (natywnie), reszta filtrowana niżej.
+  const base = await getJobs({ locale, keyword, city, page: 1, pageSize: MAX_FACET });
+  const items: FacetItem[] = base.jobs.map(toFacetItem);
+
+  const filtered = base.jobs.filter((job) => matchesSidebar(toFacetItem(job), sf));
+  const sorted = sortJobs(filtered, sort);
+  const total = sorted.length;
+  const start = (page - 1) * PAGE_SIZE;
+  const pageItems = sorted.slice(start, start + PAGE_SIZE);
+
+  const currency = new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
   });
 
-  const filters: Record<string, string | undefined> = {
-    keyword,
-    city,
-    category,
-    contractType,
+  // Zestaw aktywnych parametrów (spójny z tym, co zapisuje sidebar) do budowy linków.
+  const activeParams: Record<string, string> = { ...sidebarFiltersToParams(sf) };
+  if (keyword) activeParams['keyword'] = keyword;
+  if (city) activeParams['city'] = city;
+  if (sort !== 'newest') activeParams['sort'] = sort;
+
+  const hrefFrom = (paramsObj: Record<string, string>): string => {
+    const qs = new URLSearchParams(paramsObj).toString();
+    return qs ? `${BASE_PATH}?${qs}` : BASE_PATH;
+  };
+  const withoutKey = (key: string): string => {
+    const next = { ...activeParams };
+    delete next[key];
+    return hrefFrom(next);
+  };
+  const withoutValue = (key: string, value: string): string => {
+    const next = { ...activeParams };
+    const rest = splitParam(next[key]).filter((v) => v !== value);
+    if (rest.length) next[key] = rest.join(',');
+    else delete next[key];
+    return hrefFrom(next);
+  };
+  const withoutSalary = (): string => {
+    const next = { ...activeParams };
+    delete next['salaryMin'];
+    delete next['salaryMax'];
+    return hrefFrom(next);
+  };
+  const sortHref = (value: SortValue): string => {
+    const next = { ...activeParams };
+    if (value === 'newest') delete next['sort'];
+    else next['sort'] = value;
+    return hrefFrom(next);
   };
 
+  const dateChipLabel = (d: DateValue): string =>
+    d === '24h'
+      ? tFilters('date24h')
+      : d === '7d'
+        ? tFilters('date7d')
+        : d === '30d'
+          ? tFilters('date30d')
+          : tFilters('any');
+
+  const salaryMaxLabel =
+    sf.salaryMax >= SALARY_MAX_BOUND
+      ? tFilters('salaryMaxCap', { value: currency.format(sf.salaryMax) })
+      : currency.format(sf.salaryMax);
+  const salaryChipLabel = tFilters('salaryChip', {
+    min: currency.format(sf.salaryMin),
+    max: salaryMaxLabel,
+  });
+
+  // Chipy aktywnych filtrów (odzwierciedlają activeParams).
+  const chips: Array<{ id: string; label: string; href: string }> = [];
+  if (keyword) chips.push({ id: 'kw', label: keyword, href: withoutKey('keyword') });
+  if (city) chips.push({ id: 'city', label: city, href: withoutKey('city') });
+  for (const cat of sf.categories) {
+    chips.push({ id: `cat-${cat}`, label: tCat(cat), href: withoutValue('category', cat) });
+  }
+  for (const loc of sf.locations) {
+    chips.push({ id: `loc-${loc}`, label: loc, href: withoutValue('location', loc) });
+  }
+  for (const ct of sf.contractTypes) {
+    chips.push({ id: `ct-${ct}`, label: tContract(ct), href: withoutValue('contractType', ct) });
+  }
+  if (isSalaryNarrowed(sf)) {
+    chips.push({ id: 'salary', label: salaryChipLabel, href: withoutSalary() });
+  }
+  if (sf.accommodation.length === 1) {
+    const value = sf.accommodation.includes('provided') ? 'provided' : 'unavailable';
+    chips.push({ id: 'acc', label: tFilters(value), href: withoutKey('accommodation') });
+  }
+  if (sf.immediate) {
+    chips.push({ id: 'immediate', label: tFilters('immediate'), href: withoutKey('immediate') });
+  }
+  if (sf.noLanguageRequired) {
+    chips.push({
+      id: 'nolang',
+      label: tFilters('noLanguageRequired'),
+      href: withoutKey('noLang'),
+    });
+  }
+  if (sf.date !== 'any') {
+    chips.push({ id: 'date', label: dateChipLabel(sf.date), href: withoutKey('date') });
+  }
+
+  const clearFiltersHref = hrefFrom({
+    ...(keyword ? { keyword } : {}),
+    ...(city ? { city } : {}),
+    ...(sort !== 'newest' ? { sort } : {}),
+  });
+
+  // Parametry ukryte w formularzu wyszukiwarki (zachowanie filtrów przy wyszukiwaniu tekstem).
+  const hiddenSearchParams = { ...activeParams };
+  delete hiddenSearchParams['keyword'];
+  delete hiddenSearchParams['city'];
+
+  const currentSortLabel = sort === 'salary' ? tFilters('sortSalary') : tFilters('sortNewest');
+  const sortOptions: Array<{ value: SortValue; label: string }> = [
+    { value: 'newest', label: tFilters('sortNewest') },
+    { value: 'salary', label: tFilters('sortSalary') },
+  ];
+
+  const sortMenu = () => (
+    <details className="group relative">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-soft [&::-webkit-details-marker]:hidden">
+        <span className="text-muted-foreground">{tFilters('sortBy')}:</span>
+        <span className="font-medium">{currentSortLabel}</span>
+        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 w-60 rounded-md border border-border bg-background p-1 shadow-md">
+        {sortOptions.map((option) => (
+          <Link
+            key={option.value}
+            href={sortHref(option.value)}
+            className={cn(
+              'block rounded-sm px-3 py-2 text-sm transition-colors hover:bg-soft',
+              option.value === sort ? 'font-medium text-accent' : 'text-foreground',
+            )}
+          >
+            {option.label}
+          </Link>
+        ))}
+      </div>
+    </details>
+  );
+
   return (
-    <div className="container py-8 md:py-12">
-      <header className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">{t('pageTitle')}</h1>
+    <div className="container py-6 md:py-10">
+      {/* Breadcrumb */}
+      <nav aria-label="breadcrumb" className="mb-4 text-sm text-muted-foreground">
+        <ol className="flex items-center gap-1.5">
+          <li>
+            <Link href="/" className="transition-colors hover:text-foreground">
+              {tCommon('home')}
+            </Link>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li className="text-foreground">{tNav('jobs')}</li>
+        </ol>
+      </nav>
+
+      {/* Nagłówek + panorama */}
+      <header className="relative mb-6 overflow-hidden">
+        <div className="max-w-2xl">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+            {t('pageTitle')}
+          </h1>
+          <p className="mt-2 text-muted-foreground">{t('subtitle')}</p>
+        </div>
+        <BelgiumSkyline className="pointer-events-none absolute -right-4 top-0 hidden h-24 w-80 text-accent/20 lg:block" />
       </header>
 
-      <div className="mb-6">
-        <FiltersBar
-          keyword={keyword ?? ''}
-          city={city ?? ''}
-          category={category}
-          contractType={contractType}
-        />
-      </div>
-
-      <p className="mb-6 text-sm text-muted-foreground" aria-live="polite">
-        {t('resultsCount', { count: result.total })}
-      </p>
-
-      {result.jobs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-soft px-6 py-16 text-center">
-          <SearchX className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
-          <p className="max-w-md text-muted-foreground">{t('empty')}</p>
+      {/* Wyszukiwarka (GET — działa bez JS, zachowuje aktywne filtry) */}
+      <form
+        action={`/${locale}${BASE_PATH}`}
+        method="get"
+        className="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm md:grid-cols-[1.5fr_1.2fr_auto] md:items-end"
+      >
+        <div className="space-y-1.5">
+          <label htmlFor="q-keyword" className="text-sm font-medium text-foreground">
+            {t('keyword')}
+          </label>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <input
+              id="q-keyword"
+              name="keyword"
+              defaultValue={keyword ?? ''}
+              placeholder={t('keywordPlaceholder')}
+              autoComplete="off"
+              className="flex h-11 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
         </div>
-      ) : (
-        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
-          {result.jobs.map((job) => (
-            <li key={job.id}>
-              <JobCard job={job} />
-            </li>
-          ))}
-        </ul>
-      )}
 
-      <Pagination
-        basePath={BASE_PATH}
-        page={result.page}
-        total={result.total}
-        pageSize={result.pageSize}
-        filters={filters}
-      />
+        <div className="space-y-1.5">
+          <label htmlFor="q-city" className="text-sm font-medium text-foreground">
+            {t('location')}
+          </label>
+          <div className="relative">
+            <MapPin
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <input
+              id="q-city"
+              name="city"
+              defaultValue={city ?? ''}
+              placeholder={t('locationPlaceholder')}
+              autoComplete="off"
+              className="flex h-11 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+        </div>
+
+        {Object.entries(hiddenSearchParams).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+
+        <button
+          type="submit"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Search className="h-4 w-4" aria-hidden="true" />
+          {t('searchJobs')}
+        </button>
+      </form>
+
+      {/* Układ wyników */}
+      <div className="mt-6 lg:grid lg:grid-cols-[288px_1fr] lg:gap-8">
+        {/* Sidebar (desktop) */}
+        <aside className="hidden lg:block">
+          <div className="sticky top-24">
+            <FilterSidebar
+              items={items}
+              initial={sf}
+              keyword={keyword}
+              city={city}
+              sort={sort}
+            />
+          </div>
+        </aside>
+
+        {/* Kolumna wyników */}
+        <div className="min-w-0">
+          {/* Pasek narzędzi (mobile) */}
+          <div className="mb-4 flex items-center gap-3 lg:hidden">
+            <FilterSheet
+              items={items}
+              initial={sf}
+              keyword={keyword}
+              city={city}
+              sort={sort}
+              className="flex-1"
+            />
+            {sortMenu()}
+          </div>
+
+          {/* Nagłówek wyników (desktop) */}
+          <div className="mb-4 hidden items-center justify-between gap-3 lg:flex">
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {t('resultsCount', { count: total })}
+            </p>
+            {sortMenu()}
+          </div>
+
+          {/* Liczba wyników (mobile) */}
+          <p className="mb-3 text-sm text-muted-foreground lg:hidden" aria-live="polite">
+            {t('resultsCount', { count: total })}
+          </p>
+
+          {/* Chipy aktywnych filtrów */}
+          {chips.length > 0 ? (
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {chips.map((chip) => (
+                <Link
+                  key={chip.id}
+                  href={chip.href}
+                  aria-label={`${tFilters('removeFilter')}: ${chip.label}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-soft py-1 pl-3 pr-2 text-sm text-foreground transition-colors hover:bg-muted"
+                >
+                  <span>{chip.label}</span>
+                  <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                </Link>
+              ))}
+              <Link
+                href={clearFiltersHref}
+                className="ml-1 text-sm font-medium text-accent hover:text-accent-dark"
+              >
+                {tFilters('clear')}
+              </Link>
+            </div>
+          ) : null}
+
+          {/* Wyniki */}
+          {pageItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-soft px-6 py-16 text-center">
+              <SearchX className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
+              <p className="max-w-md text-muted-foreground">{t('empty')}</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+              {pageItems.map((job) => (
+                <li key={job.id}>
+                  <JobCard job={job} />
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <Pagination
+            basePath={BASE_PATH}
+            page={page}
+            total={total}
+            pageSize={PAGE_SIZE}
+            filters={activeParams}
+          />
+        </div>
+      </div>
     </div>
   );
 }
