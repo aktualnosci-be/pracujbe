@@ -81,11 +81,14 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
 
   for (const row of queue) {
     const base = `${site}/${row.locale}`;
+    // Panel odbiorcy wiadomości ('employer'|'candidate') przenoszony w payloadzie z RPC send_message.
+    const panel = (row.payload?.['panel'] === 'employer' ? 'employer' : 'candidate');
     const data: Record<string, unknown> = {
       ...(row.payload ?? {}),
       applicationUrl: row.template === 'newApplication' ? `${base}/employer` : `${base}/candidate`,
       offerUrl: `${base}/candidate`,
       actionUrl: `${base}/employer`,
+      messageUrl: `${base}/${panel}/wiadomosci`,
     };
 
     try {
