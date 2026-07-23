@@ -50,6 +50,22 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
     },
     appleWebApp: { capable: true, statusBarStyle: 'default', title: tCommon('appName') },
+    alternates: { canonical: `/${locale}` },
+    openGraph: {
+      type: 'website',
+      siteName: tCommon('appName'),
+      locale,
+      url: `/${locale}`,
+      title: tMeta('homeTitle'),
+      description: tMeta('homeDescription'),
+      images: [{ url: '/og.png', width: 1200, height: 630, alt: tCommon('appName') }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: tMeta('homeTitle'),
+      description: tMeta('homeDescription'),
+      images: ['/og.png'],
+    },
   };
 }
 

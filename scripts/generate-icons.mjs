@@ -42,4 +42,22 @@ for (const [name, svg, size] of jobs) {
   await sharp(Buffer.from(svg)).resize(size, size).png().toFile(join(PUBLIC, name));
   console.log('wrote', name);
 }
+
+// Obraz Open Graph / social (1200x630) — granatowa karta z logo, wordmarkiem i hasłem.
+const ACCENT = '#2563EB';
+const SOFT = '#CBD5E1';
+const ogSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="${NAVY}"/>
+  <g transform="translate(96 210)">
+    <rect x="0" y="0" width="140" height="140" rx="32" fill="${WHITE}"/>
+    <g transform="translate(18 18) scale(3.25)">${markPaths(NAVY)}</g>
+  </g>
+  <text x="270" y="300" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="800" fill="${WHITE}">Pracuj<tspan fill="${ACCENT}">.be</tspan></text>
+  <text x="272" y="372" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="500" fill="${SOFT}">Praca w Belgii — szybko i bez CV</text>
+  <rect x="96" y="470" width="1008" height="4" rx="2" fill="${ACCENT}" opacity="0.5"/>
+  <text x="96" y="536" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="${SOFT}">Werk in Belgie · Travail en Belgique · Work in Belgium</text>
+</svg>`;
+await sharp(Buffer.from(ogSvg)).png().toFile(join(PUBLIC, 'og.png'));
+console.log('wrote og.png');
+
 console.log('done');
