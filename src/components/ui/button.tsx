@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils';
@@ -7,7 +6,14 @@ import { cn } from '@/lib/utils';
 /**
  * Button (shadcn-style) — warianty przez cva, kolory wyłącznie klasami Tailwind
  * mapowanymi na tokeny w globals.css. `asChild` renderuje dowolny element (np. Link)
- * z zachowaniem stylów, dzięki Radix Slot.
+ * z zachowaniem stylów.
+ *
+ * Uwaga: `asChild` jest zaimplementowane lokalnie przez React.cloneElement zamiast
+ * `@radix-ui/react-slot`. Slot wywołuje `createContext` na poziomie modułu, a że Button
+ * bywa używany w komponentach SERWEROWYCH (np. ForCompanies), pakiet trafiałby do grafu
+ * RSC, gdzie `react` (warunek eksportu react-server) nie udostępnia `createContext`
+ * (błąd „createContext is not a function" przy zbieraniu danych stron). Lokalne
+ * scalanie propsów utrzymuje Button bezpiecznym po stronie serwera i klienta.
  */
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
@@ -41,15 +47,22 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, type, ...props }, ref) => {
-    const Comp = asChild ? Slot : 'button';
+  ({ className, variant, size, asChild = false, type, children, ...props }, ref) => {
+    const classes = cn(buttonVariants({ variant, size }), className);
+
+    if (asChild && React.isValidElement(children)) {
+      const child = children as React.ReactElement<Record<string, unknown>>;
+      return React.cloneElement(child, {
+        ...props,
+        ref,
+        className: cn(classes, child.props.className as string | undefined),
+      });
+    }
+
     return (
-      <Comp
-        ref={ref}
-        className={cn(buttonVariants({ variant, size }), className)}
-        {...(asChild ? {} : { type: type ?? 'button' })}
-        {...props}
-      />
+      <button ref={ref} type={type ?? 'button'} className={classes} {...props}>
+        {children}
+      </button>
     );
   },
 );

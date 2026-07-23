@@ -8,7 +8,7 @@ import { env } from '@/lib/env';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { CookieConsent } from '@/components/cookies/CookieConsent';
-import { inter } from '../layout';
+import { inter } from '../fonts';
 
 /**
  * Layout dla segmentu językowego. To TUTAJ renderowane są <html>/<body> — z lang={locale}

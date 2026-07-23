@@ -1,0 +1,65 @@
+import type { Metadata } from 'next';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
+
+import { Link } from '@/i18n/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AuthForm } from '@/components/auth/AuthForm';
+
+/**
+ * Rejestracja kandydata (wybór roli). Formularz kliencki (AuthForm) wywołuje server action
+ * `registerCandidate`, które zapisuje `preferred_locale` = bieżące locale i po sukcesie
+ * przekierowuje do strony potwierdzenia e-maila. Link kieruje pracodawców do ich rejestracji.
+ */
+
+type PageProps = {
+  params: Promise<{ locale: string }>;
+};
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'auth' });
+  return {
+    title: t('registerCandidateTitle'),
+    description: t('agreeTerms'),
+  };
+}
+
+export default async function RegisterCandidatePage({ params }: PageProps) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+
+  const t = await getTranslations('auth');
+
+  return (
+    <div className="container flex min-h-[calc(100vh-8rem)] items-center justify-center py-12">
+      <div className="w-full max-w-md">
+        <Card>
+          <CardHeader className="space-y-2 text-center">
+            <CardTitle className="text-2xl">{t('registerCandidateTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <AuthForm variant="registerCandidate" />
+
+            <div className="space-y-3 text-center text-sm">
+              <Link
+                href="/rejestracja-pracodawca"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {t('registerAsEmployer')}
+              </Link>
+              <p className="text-muted-foreground">
+                {t('haveAccount')}{' '}
+                <Link
+                  href="/logowanie"
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {t('submitLogin')}
+                </Link>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
