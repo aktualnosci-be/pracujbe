@@ -41,6 +41,7 @@ end $$;
 \set EMPA  '33333333-3333-3333-3333-333333333333'
 \set EMPB  '44444444-4444-4444-4444-444444444444'
 \set EMPC  '66666666-6666-6666-6666-666666666666'
+\set ADMIN '77777777-7777-7777-7777-777777777777'
 \set COMPA 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 \set COMPB 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
 \set COMPC 'cccccccc-cccc-cccc-cccc-cccccccccccc'
@@ -54,7 +55,10 @@ insert into auth.users(id,email,raw_user_meta_data) values
   (:'CANDB','candb@test.be','{"role":"candidate","first_name":"Bea","last_name":"L","locale":"nl"}'),
   (:'EMPA','empa@test.be','{"role":"employer","first_name":"Emp","last_name":"A","locale":"nl"}'),
   (:'EMPB','empb@test.be','{"role":"employer","first_name":"Emp","last_name":"B","locale":"fr"}'),
-  (:'EMPC','empc@test.be','{"role":"employer","first_name":"Emp","last_name":"C","locale":"en"}');
+  (:'EMPC','empc@test.be','{"role":"employer","first_name":"Emp","last_name":"C","locale":"en"}'),
+  (:'ADMIN','admin@test.be','{"role":"employer","first_name":"Ad","last_name":"Min","locale":"en"}');
+-- Nadaj rolę admina (self-signup ogranicza do candidate/employer; admin tylko ręcznie).
+update public.profiles set role = 'admin' where id = :'ADMIN';
 
 insert into public.companies(id,name,status) values
   (:'COMPA','Firma A','verified'),
@@ -233,6 +237,42 @@ select pg_temp.assert(
 -- G4: authenticated NIE czyta audit_logs (RLS deny + revoke).
 set role authenticated; set app.current_uid = :'CANDA';
 select pg_temp.expect_error('select count(*) from public.audit_logs', 'permission denied', 'G4 klient nie czyta audit_logs');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- H. Admin (0019): is_admin, weryfikacja firm tylko admin, ochrona przed self-verify
+-- ============================================================================
+-- H1: is_admin() -> true dla admina, false dla kandydata.
+set role authenticated; set app.current_uid = :'ADMIN';
+select pg_temp.assert((select public.is_admin()) = true, 'H1 is_admin(admin)=true');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.assert((select public.is_admin()) = false, 'H1b is_admin(candidate)=false');
+reset role; reset app.current_uid;
+
+-- H2: admin weryfikuje COMPC (unverified -> verified).
+set role authenticated; set app.current_uid = :'ADMIN';
+select public.admin_set_company_status(:'COMPC'::uuid, 'verified');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.companies where id = :'COMPC') = 'verified',
+  'H2 admin zweryfikował COMPC');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs
+     where action='company.status_changed' and entity_id = :'COMPC' and actor_id = :'ADMIN') = 1,
+  'H2b audit company.status_changed (actor=ADMIN)');
+
+-- H3: nie-admin (EMPB) NIE może użyć admin_set_company_status.
+set role authenticated; set app.current_uid = :'EMPB';
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa''::uuid, ''suspended'')',
+  'PERMISSION_DENIED', 'H3 nie-admin nie zmienia statusu firmy');
+reset role; reset app.current_uid;
+
+-- H4: właściciel firmy NIE może samodzielnie zweryfikować firmy (bezpośredni UPDATE).
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'update public.companies set status=''suspended'' where id=''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa''',
+  'PERMISSION_DENIED', 'H4 zmiana statusu firmy przez właściciela zablokowana');
 reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
