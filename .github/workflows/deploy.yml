@@ -1,23 +1,22 @@
 name: Deploy
 
-# Deploy Pracuj.be na Vercel — również na self-hosted runnerach.
-#   - push na `develop`  → deploy STAGING (preview, noindex)
-#   - push na `main`     → deploy PRODUKCJA
+# Deploy Pracuj.be na Vercel — na self-hosted runnerach, URUCHAMIANY DOPIERO PO ZIELONYM CI
+# (workflow_run: "CI" completed + success) dla tego samego commita (head_sha).
+#   - main    → PRODUKCJA
+#   - develop → STAGING (preview, noindex)
 #
-# Wymagane sekrety repo/organizacji (Settings → Secrets and variables → Actions):
-#   VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
-#
-# DOPÓKI sekrety NIE są ustawione, job pomija właściwy deploy i kończy się SUKCESEM
-# (zielono) — nie blokuje CI. Po dodaniu VERCEL_TOKEN deploy aktywuje się automatycznie.
-# Szczegóły: docs/DEPLOYMENT.md, docs/STAGING.md
+# Wymagane sekrety: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID (Settings → Secrets → Actions).
+# Bez VERCEL_TOKEN job pomija deploy (zielono). Szczegóły: docs/DEPLOYMENT.md, docs/STAGING.md.
 
 on:
-  push:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
     branches: [main, develop]
   workflow_dispatch:
 
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: deploy-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -26,12 +25,19 @@ env:
 jobs:
   deploy:
     name: Deploy to Vercel
+    # Tylko gdy CI zakończyło się sukcesem (lub ręczne uruchomienie).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, linux, x64]
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'production' || 'staging' }}
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      VERCEL_CLI_VERSION: '56.5.0'
     steps:
       # Bramka: bez VERCEL_TOKEN pomijamy deploy (zielono), z jasnym komunikatem.
       - name: Sprawdź konfigurację Vercel
@@ -39,14 +45,17 @@ jobs:
         run: |
           if [ -z "${VERCEL_TOKEN}" ]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Deploy pominięty::Brak sekretu VERCEL_TOKEN. Dodaj VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID w Settings → Secrets and variables → Actions, aby włączyć deploy (patrz docs/DEPLOYMENT.md)."
+            echo "::notice title=Deploy pominięty::Brak sekretu VERCEL_TOKEN. Dodaj VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID (docs/DEPLOYMENT.md)."
           else
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
+          echo "is_prod=${{ env.HEAD_BRANCH == 'main' }}" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout
+      - name: Checkout (dokładny commit z CI)
         if: steps.cfg.outputs.enabled == 'true'
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.HEAD_SHA }}
 
       - name: Setup Node
         if: steps.cfg.outputs.enabled == 'true'
@@ -55,30 +64,30 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      - name: Install Vercel CLI
+      - name: Install Vercel CLI (pinned)
         if: steps.cfg.outputs.enabled == 'true'
-        run: npm i -g vercel@latest
+        run: npm i -g vercel@${VERCEL_CLI_VERSION}
 
       - name: Pull Vercel env (production)
-        if: steps.cfg.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
+        if: steps.cfg.outputs.enabled == 'true' && steps.cfg.outputs.is_prod == 'true'
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Pull Vercel env (preview/staging)
-        if: steps.cfg.outputs.enabled == 'true' && github.ref != 'refs/heads/main'
+        if: steps.cfg.outputs.enabled == 'true' && steps.cfg.outputs.is_prod != 'true'
         run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
 
       - name: Build (production)
-        if: steps.cfg.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
+        if: steps.cfg.outputs.enabled == 'true' && steps.cfg.outputs.is_prod == 'true'
         run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Build (preview/staging)
-        if: steps.cfg.outputs.enabled == 'true' && github.ref != 'refs/heads/main'
+        if: steps.cfg.outputs.enabled == 'true' && steps.cfg.outputs.is_prod != 'true'
         run: vercel build --token="$VERCEL_TOKEN"
 
       - name: Deploy (production)
-        if: steps.cfg.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
+        if: steps.cfg.outputs.enabled == 'true' && steps.cfg.outputs.is_prod == 'true'
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy (preview/staging)
-        if: steps.cfg.outputs.enabled == 'true' && github.ref != 'refs/heads/main'
+        if: steps.cfg.outputs.enabled == 'true' && steps.cfg.outputs.is_prod != 'true'
         run: vercel deploy --prebuilt --token="$VERCEL_TOKEN"

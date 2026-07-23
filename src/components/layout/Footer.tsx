@@ -19,16 +19,13 @@ export async function Footer() {
     {
       title: t('forCandidates'),
       links: [
-        { href: '/jobs', label: t('jobs') },
-        { href: '/how-it-works', label: t('howItWorks') },
-        { href: '/guides', label: t('guides') },
+        { href: '/oferty-pracy', label: t('jobs') },
       ],
     },
     {
       title: t('forEmployers'),
       links: [
-        { href: '/post-job', label: t('postJob') },
-        { href: '/pricing', label: t('pricing') },
+        { href: '/rejestracja-pracodawca', label: t('postJob') },
       ],
     },
     {

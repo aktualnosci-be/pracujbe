@@ -299,6 +299,14 @@ Cały CI/CD chodzi na **self-hosted runnerach** (wymóg projektu). Zobacz:
 Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 **Model kontynuujący: wybierz pierwszy niezaznaczony punkt, zrób, zaznacz, zaktualizuj ten plik.**
 
+> 🔒 **Audyt bezpieczeństwa 2026-07-23** (`docs/audit/audyt-2026-07-23.md`) + remediacja
+> (`docs/REMEDIATION-2026-07-23.md`). Zamknięte P0-01..04, P1-01/02/05/06/07/10/11/12/14
+> (migracja `0011_security_hardening.sql` zweryfikowana testami adwersaryjnymi na PostgreSQL 16;
+> lint/typecheck/test/build zielone). **Otwarte przed produkcją (NO-GO do czasu domknięcia):**
+> widoki publiczne firm/ofert (P1-03/04), outbox e-mail (P1-13), revoke trackerów + serwerowy log
+> zgód (P1-08/09), pełna CSP (P2-01), testy integracyjne RLS w CI. Statusy poniżej rozdzielają
+> `schema/scaffold` od `backend flow` i `tested` — nie oznaczaj funkcji jako gotowej bez działającego przepływu.
+
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
 - [x] System wizualny: tokeny kolorów, typografia (Inter), globals.css

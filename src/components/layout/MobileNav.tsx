@@ -20,10 +20,8 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
 
   const navLinks = [
-    { href: '/jobs', label: t('jobs') },
-    { href: '/how-it-works', label: t('howItWorks') },
-    { href: '/for-employers', label: t('forEmployers') },
-    { href: '/guides', label: t('guides') },
+    { href: '/oferty-pracy', label: t('jobs') },
+    { href: '/rejestracja-pracodawca', label: t('forEmployers') },
   ] as const;
 
   const close = () => setOpen(false);
@@ -70,14 +68,14 @@ export function MobileNav() {
 
           <div className="flex flex-col gap-3">
             <Link
-              href="/login"
+              href="/logowanie"
               onClick={close}
               className={cn(buttonVariants({ variant: 'outline' }), 'w-full')}
             >
               {t('login')}
             </Link>
             <Link
-              href="/post-job"
+              href="/rejestracja-pracodawca"
               onClick={close}
               className={cn(buttonVariants(), 'w-full')}
             >

@@ -19,14 +19,9 @@ import { getJobs, type CategoryKey, type LocationKey } from '@/lib/jobs';
 
 const JOBS_PATH = '/oferty-pracy';
 
-/** Publiczne strony statyczne (segment bez prefiksu języka). '' = strona główna. */
-const STATIC_PATHS: readonly string[] = [
-  '',
-  JOBS_PATH,
-  '/how-it-works',
-  '/for-employers',
-  '/guides',
-];
+/** Publiczne strony statyczne (segment bez prefiksu języka). '' = strona główna.
+ *  Tylko trasy zwracające 200 — strony treściowe dojdą wraz z ich implementacją. */
+const STATIC_PATHS: readonly string[] = ['', JOBS_PATH];
 
 const CATEGORY_KEYS: readonly CategoryKey[] = [
   'construction',
@@ -67,7 +62,17 @@ function buildLanguages(
   return languages;
 }
 
+/** Środowiska nieprodukcyjne (staging/preview/local) nie publikują mapy strony. */
+function isNonProduction(): boolean {
+  const vercelEnv = process.env.VERCEL_ENV;
+  if (vercelEnv && vercelEnv !== 'production') return true;
+  return /localhost|127\.0\.0\.1|0\.0\.0\.0|staging|preview/i.test(env.siteUrl);
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Staging/preview: pusty sitemap (spójne z robots.ts Disallow:/ i X-Robots-Tag).
+  if (isNonProduction()) return [];
+
   const base = env.siteUrl;
   const locales = routing.locales;
   const now = new Date();

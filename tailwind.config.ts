@@ -30,6 +30,11 @@ const config: Config = {
           dark: 'hsl(var(--primary-dark))',
           foreground: 'hsl(var(--primary-foreground))',
         },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          dark: 'hsl(var(--accent-dark))',
+          foreground: 'hsl(var(--accent-foreground))',
+        },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',
           foreground: 'hsl(var(--secondary-foreground))',

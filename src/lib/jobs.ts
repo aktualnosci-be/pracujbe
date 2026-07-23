@@ -12,6 +12,8 @@
  */
 
 import { isSupabaseConfigured } from '@/lib/env';
+import { AppError } from '@/lib/errors';
+import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
 import { resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
 
@@ -323,8 +325,11 @@ export async function getJobs(params: GetJobsParams): Promise<GetJobsResult> {
   if (isSupabaseConfigured()) {
     try {
       return await getJobsFromDb(params, page, pageSize);
-    } catch {
-      // Błąd zapytania / niepełny schemat — degradacja do danych demonstracyjnych.
+    } catch (error) {
+      // Skonfigurowana baza NIE może po cichu degradować do danych demonstracyjnych
+      // (fikcyjne oferty indeksowane jako realne). Loguj i propaguj kontrolowany błąd.
+      captureError(error, { area: 'jobs.getJobs' });
+      throw new AppError('INTERNAL');
     }
   }
 
@@ -337,8 +342,9 @@ export async function getJobBySlug(slug: string, locale: string): Promise<JobDet
   if (isSupabaseConfigured()) {
     try {
       return await getJobBySlugFromDb(slug);
-    } catch {
-      // Fallback do danych demonstracyjnych.
+    } catch (error) {
+      captureError(error, { area: 'jobs.getJobBySlug', slug });
+      throw new AppError('INTERNAL');
     }
   }
 

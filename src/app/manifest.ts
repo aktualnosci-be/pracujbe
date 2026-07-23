@@ -20,7 +20,7 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: 'pl',
     dir: 'ltr',
     background_color: '#FFFFFF',
-    theme_color: '#2563EB',
+    theme_color: '#0F2A47',
     categories: ['business', 'productivity'],
     icons: [
       {

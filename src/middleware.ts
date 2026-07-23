@@ -9,6 +9,8 @@ import { routing } from './i18n/routing';
 export default createMiddleware(routing);
 
 export const config = {
-  // Pomijamy: api, pliki wewnętrzne Next/Vercel oraz wszystko z kropką (assety, .xml, .txt).
-  matcher: ['/((?!api|_next|_vercel|.*\\..*).*)'],
+  // Pomijamy: api, auth (callback OAuth/e-mail — obsługiwany poza i18n), pliki wewnętrzne
+  // Next/Vercel oraz wszystko z kropką (assety, .xml, .txt). `auth` MUSI być wykluczone,
+  // inaczej /auth/callback jest przekierowywany na /{locale}/auth/callback (404).
+  matcher: ['/((?!api|auth|_next|_vercel|.*\\..*).*)'],
 };

@@ -23,20 +23,23 @@
     --secondary: 210 40% 96%; /* #F1F5F9 */
     --secondary-foreground: 221 38% 15%; /* #172033 */
 
-    /* Marka */
-    --primary: 221 83% 53%; /* #2563EB */
-    --primary-dark: 224 76% 48%; /* #1D4ED8 */
+    /* Marka — paleta z makiet: primary = granat, accent = niebieski. */
+    --primary: 211 65% 17%; /* #0F2A47 granat — akcje/marka, sidebar, stopka */
+    --primary-dark: 213 70% 13%; /* #0A1F38 hover granatu */
     --primary-foreground: 0 0% 100%; /* #FFFFFF */
+    --accent: 221 83% 53%; /* #2563EB niebieski — linki, ".be", aktywne akcenty */
+    --accent-dark: 224 76% 48%; /* #1D4ED8 */
+    --accent-foreground: 0 0% 100%; /* #FFFFFF */
 
     /* Stany */
     --success: 142 76% 36%; /* #16A34A */
-    --warning: 21 90% 48%; /* #EA580C */
+    --warning: 33 94% 43%; /* #D97706 — status "Obejrzana" itp. */
     --error: 0 72% 51%; /* #DC2626 */
 
     /* Obrysy / kontrolki / focus */
     --border: 214 32% 91%; /* #E2E8F0 */
     --input: 214 32% 91%; /* #E2E8F0 */
-    --ring: 221 83% 53%; /* #2563EB */
+    --ring: 221 83% 53%; /* #2563EB — akcent na focusie */
 
     /* Promień zaokrągleń */
     --radius: 0.625rem;

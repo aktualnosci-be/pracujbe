@@ -15,11 +15,11 @@ import { MobileNav } from './MobileNav';
 export async function Header() {
   const t = await getTranslations('nav');
 
+  // Tylko trasy z realnymi stronami (uniknięcie 404 na CTA). Strony treściowe
+  // (jak-to-działa/poradniki) dojdą wraz z ich implementacją — patrz roadmapa CLAUDE.md.
   const navLinks = [
-    { href: '/jobs', label: t('jobs') },
-    { href: '/how-it-works', label: t('howItWorks') },
-    { href: '/for-employers', label: t('forEmployers') },
-    { href: '/guides', label: t('guides') },
+    { href: '/oferty-pracy', label: t('jobs') },
+    { href: '/rejestracja-pracodawca', label: t('forEmployers') },
   ] as const;
 
   return (
@@ -47,13 +47,13 @@ export async function Header() {
             <LocaleSwitcher />
           </div>
           <Link
-            href="/login"
+            href="/logowanie"
             className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'hidden md:inline-flex')}
           >
             {t('login')}
           </Link>
           <Link
-            href="/post-job"
+            href="/rejestracja-pracodawca"
             className={cn(buttonVariants({ size: 'sm' }), 'hidden md:inline-flex')}
           >
             {t('postJob')}

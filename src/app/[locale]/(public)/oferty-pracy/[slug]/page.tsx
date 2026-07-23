@@ -35,7 +35,7 @@ import { buttonVariants } from '@/components/ui/button';
  */
 
 const BASE_PATH = '/oferty-pracy';
-const APPLY_HREF = '/login';
+const APPLY_HREF = '/logowanie';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const VALID_DAYS = 60;
 
