@@ -1,14 +1,28 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowRight, Calendar, Check, CheckCircle2, ExternalLink, MapPin, X } from 'lucide-react';
+import { useForm } from 'react-hook-form';
 import { useTranslations } from 'next-intl';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  ExternalLink,
+  Loader2,
+  MapPin,
+  Plus,
+  X,
+} from 'lucide-react';
 
-import { Link } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -19,31 +33,247 @@ import {
 import { Stepper } from '@/components/ui/stepper';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
+import {
+  AVAILABILITY_VALUES,
+  CATEGORY_KEYS,
+  CONTRACT_TYPES,
+  LANGUAGE_LEVELS,
+  step1Schema,
+  step2Schema,
+  step3Schema,
+  step4Schema,
+  step5Schema,
+  step6Schema,
+} from '@/lib/validation/candidate';
+import type { CategoryKey, ContractType } from '@/lib/jobs';
+import { saveOnboardingStep, type OnboardingStep } from '@/lib/actions/onboarding';
 
 /**
- * OnboardingWizard — kreator profilu kandydata, krok 1 „Dane podstawowe" (makieta 06).
+ * OnboardingWizard — kreator profilu kandydata (makieta 06), 6 kroków z REALNYM zapisem.
  *
- * Zawiera: nagłówek + zamykany znacznik „Zapisano", Stepper 6 kroków, kolumnę boczną
- * (kompletność + checklista + karta pomocy) oraz główny formularz (dane podstawowe +
- * informacje dodatkowe z pigułkami prawa jazdy, przełącznikiem własnego samochodu i polem
- * wynagrodzenia w STANIE BŁĘDU). Stopka: autozapis + Anuluj / Zapisz i wyjdź / Dalej.
+ * Pola są kontrolowane przez React Hook Form (bez `defaultValue`), a każdy krok jest
+ * walidowany właściwym `stepNSchema` (Zod, to samo źródło co po stronie serwera) i zapisywany
+ * przez server action `saveOnboardingStep`. „Dalej" przechodzi dalej dopiero po udanym zapisie;
+ * „Zapisz i wyjdź" zapisuje i wraca do panelu; krok 6 („Zakończ") ustawia `profile_completed`.
  *
- * Komponent kliencki (interakcje: wybór pigułek, przełącznik, walidacja pola, zamykanie
- * znacznika). Dane są DEMO, a zapis/przejścia kroków są niepodpięte — TODO(data).
+ * Invariant #11: blokada przycisku podczas zapisu, zachowanie danych po błędzie, błędy przy
+ * polach, przewijanie do pierwszego błędu, jasny wskaźnik stanu zapisu (idle/saving/saved/error).
+ * Tryb DEMO (brak env): zapis nie trafia do DB, ale przepływ działa i pokazuje „zapisano (demo)".
+ *
+ * TODO(data): relacje słownikowe (umiejętności/języki/certyfikaty) są zbierane i walidowane,
+ * ale w tej iteracji nie są utrwalane — patrz `@/lib/actions/onboarding` (persistuje candidate_profiles).
  */
 
+type Availability = (typeof AVAILABILITY_VALUES)[number];
+type LanguageLevel = (typeof LANGUAGE_LEVELS)[number];
+type Currency = 'EUR' | 'PLN';
 type License = 'none' | 'b' | 'c' | 'ce';
 
-export function OnboardingWizard(): React.JSX.Element {
-  const t = useTranslations('onboarding');
-  const tn = useTranslations('nav');
+interface LanguageEntry {
+  language: string;
+  level: LanguageLevel;
+}
 
-  const [savedOpen, setSavedOpen] = React.useState(true);
-  const [license, setLicense] = React.useState<License>('b');
-  const [ownCar, setOwnCar] = React.useState<boolean>(true);
-  const [salary, setSalary] = React.useState('2 500');
-  // Prezentacja stanu błędu z makiety: pokazany na starcie, znika po edycji na wartość niepustą.
-  const [salaryError, setSalaryError] = React.useState(true);
+/** Dane wejściowe z profilu (gdy zalogowany); w trybie demo — puste. */
+export interface OnboardingInitialValues {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  occupations?: string[];
+  categories?: CategoryKey[];
+  skills?: string[];
+  experienceYears?: number | null;
+  city?: string;
+  region?: string;
+  radiusKm?: number | null;
+  hasDrivingLicense?: boolean;
+  hasCar?: boolean;
+  languages?: LanguageEntry[];
+  certificates?: string[];
+  availability?: Availability | null;
+  preferredContractTypes?: ContractType[];
+  expectedSalaryMin?: number | null;
+  expectedSalaryCurrency?: string;
+  bio?: string;
+}
+
+interface FormValues {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  occupations: string[];
+  categories: CategoryKey[];
+  skills: string[];
+  experienceYears: string;
+  city: string;
+  region: string;
+  radiusKm: string;
+  hasDrivingLicense: boolean;
+  hasCar: boolean;
+  languages: LanguageEntry[];
+  certificates: string[];
+  availability: '' | Availability;
+  preferredContractTypes: ContractType[];
+  expectedSalaryMin: string;
+  expectedSalaryCurrency: Currency;
+  bio: string;
+  agreeTerms: boolean;
+}
+
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+/** Pola należące do danego kroku (kolejność = kolejność przewijania do pierwszego błędu). */
+const STEP_FIELDS: Record<OnboardingStep, (keyof FormValues)[]> = {
+  1: ['firstName', 'lastName', 'phone'],
+  2: ['occupations', 'categories'],
+  3: ['experienceYears', 'skills'],
+  4: ['city', 'region', 'radiusKm', 'hasDrivingLicense', 'hasCar'],
+  5: ['languages', 'certificates'],
+  6: ['availability', 'preferredContractTypes', 'expectedSalaryMin', 'bio', 'agreeTerms'],
+};
+
+const SCHEMAS = {
+  1: step1Schema,
+  2: step2Schema,
+  3: step3Schema,
+  4: step4Schema,
+  5: step5Schema,
+  6: step6Schema,
+} as const;
+
+function domId(field: keyof FormValues): string {
+  return `onb-${field}`;
+}
+
+/** '' → NaN (wymagane pole: NaN da błąd typu z i18n), inaczej liczba. */
+function toRequiredNumber(value: string): number {
+  return value.trim() === '' ? Number.NaN : Number(value);
+}
+
+/** '' → undefined (pole opcjonalne / z wartością domyślną w schemacie). */
+function toOptionalNumber(value: string): number | undefined {
+  return value.trim() === '' ? undefined : Number(value);
+}
+
+/** Buduje obiekt danych kroku zgodny z odpowiednim `stepNSchema`. */
+function buildStepData(step: OnboardingStep, v: FormValues): unknown {
+  switch (step) {
+    case 1:
+      return { firstName: v.firstName, lastName: v.lastName, phone: v.phone };
+    case 2:
+      return { occupations: v.occupations, categories: v.categories };
+    case 3:
+      return { skills: v.skills, experienceYears: toRequiredNumber(v.experienceYears) };
+    case 4:
+      return {
+        city: v.city,
+        region: v.region.trim() === '' ? undefined : v.region,
+        radiusKm: toOptionalNumber(v.radiusKm),
+        hasDrivingLicense: v.hasDrivingLicense,
+        hasCar: v.hasCar,
+      };
+    case 5:
+      return { languages: v.languages, certificates: v.certificates };
+    case 6:
+      return {
+        availability: v.availability,
+        preferredContractTypes: v.preferredContractTypes,
+        expectedSalaryMin: toOptionalNumber(v.expectedSalaryMin),
+        bio: v.bio.trim() === '' ? undefined : v.bio,
+        agreeTerms: v.agreeTerms,
+        // Waluta nie jest częścią step6Schema — action czyta ją defensywnie z surowych danych.
+        expectedSalaryCurrency: v.expectedSalaryCurrency,
+      };
+  }
+}
+
+function toFormValues(init?: OnboardingInitialValues): FormValues {
+  return {
+    firstName: init?.firstName ?? '',
+    lastName: init?.lastName ?? '',
+    phone: init?.phone ?? '',
+    occupations: init?.occupations ?? [],
+    categories: init?.categories ?? [],
+    skills: init?.skills ?? [],
+    experienceYears: init?.experienceYears != null ? String(init.experienceYears) : '',
+    city: init?.city ?? '',
+    region: init?.region ?? '',
+    radiusKm: init?.radiusKm != null ? String(init.radiusKm) : '25',
+    hasDrivingLicense: init?.hasDrivingLicense ?? false,
+    hasCar: init?.hasCar ?? false,
+    languages: init?.languages ?? [],
+    certificates: init?.certificates ?? [],
+    availability: init?.availability ?? '',
+    preferredContractTypes: init?.preferredContractTypes ?? [],
+    expectedSalaryMin: init?.expectedSalaryMin != null ? String(init.expectedSalaryMin) : '',
+    expectedSalaryCurrency: init?.expectedSalaryCurrency === 'PLN' ? 'PLN' : 'EUR',
+    bio: init?.bio ?? '',
+    agreeTerms: false,
+  };
+}
+
+/** Zamienia komunikat błędu z Zod na klucz i18n (fallback dla domyślnych komunikatów enum). */
+function toErrorKey(field: string, message: string): string {
+  if (message.startsWith('candidate.error.')) return message;
+  if (field === 'availability') return 'candidate.error.availabilityRequired';
+  return 'candidate.error.invalid';
+}
+
+export interface OnboardingWizardProps {
+  initialValues?: OnboardingInitialValues;
+}
+
+export function OnboardingWizard({ initialValues }: OnboardingWizardProps): React.JSX.Element {
+  const t = useTranslations('onboarding');
+  const tRoot = useTranslations();
+  const tn = useTranslations('nav');
+  const tCat = useTranslations('categories');
+  const tContract = useTranslations('contractTypes');
+  const router = useRouter();
+
+  const {
+    register,
+    watch,
+    getValues,
+    setValue,
+    setError,
+    clearErrors,
+    formState: { errors },
+  } = useForm<FormValues>({
+    defaultValues: toFormValues(initialValues),
+    mode: 'onSubmit',
+  });
+
+  const values = watch();
+
+  const [step, setStep] = React.useState<OnboardingStep>(1);
+  const [saveState, setSaveState] = React.useState<SaveState>('idle');
+  const [demoSaved, setDemoSaved] = React.useState(false);
+  const [badgeVisible, setBadgeVisible] = React.useState(false);
+
+  // Lokalny stan pigułek prawa jazdy (kategoria) — schemat/DB przechowują tylko boolean
+  // `hasDrivingLicense`; granularność kategorii to element wizualny makiety (TODO(data)).
+  const [license, setLicense] = React.useState<License>(
+    initialValues?.hasDrivingLicense ? 'b' : 'none',
+  );
+
+  // Roboczy wiersz dodawania języka (relacja — nieutrwalana w tej iteracji, TODO(data)).
+  const [langDraft, setLangDraft] = React.useState('');
+  const [levelDraft, setLevelDraft] = React.useState<LanguageLevel>('basic');
+  const [langError, setLangError] = React.useState(false);
+
+  const AVAIL_LABEL: Record<Availability, string> = {
+    immediate: t('availImmediate'),
+    within_month: t('availWithinMonth'),
+    within_three_months: t('availWithinThreeMonths'),
+    flexible: t('availFlexible'),
+  };
+  const LEVEL_LABEL: Record<LanguageLevel, string> = {
+    basic: t('levelBasic'),
+    intermediate: t('levelIntermediate'),
+    fluent: t('levelFluent'),
+    native: t('levelNative'),
+  };
 
   const steps = [
     { title: t('step1Title'), desc: t('step1Sub') },
@@ -54,21 +284,130 @@ export function OnboardingWizard(): React.JSX.Element {
     { title: t('step6Title'), desc: t('step6Sub') },
   ];
 
-  const checklist = [
-    { label: t('step1Title'), done: true },
-    { label: t('step2Title'), hint: t('none') },
-    { label: t('step3Title'), hint: t('none') },
-    { label: t('step4Title'), hint: t('none') },
-    { label: t('step5Title'), hint: t('none') },
-    { label: t('step6Title'), hint: t('none') },
+  // Stan ukończenia kroków (heurystyka do wskaźnika kompletności i checklisty).
+  const stepDone: boolean[] = [
+    Boolean(values.firstName.trim() && values.lastName.trim()),
+    values.occupations.length > 0 && values.categories.length > 0,
+    values.experienceYears.trim() !== '',
+    values.city.trim() !== '',
+    values.languages.length > 0 || values.certificates.length > 0,
+    Boolean(values.availability) && values.agreeTerms,
   ];
+  const completeness = Math.round((stepDone.filter(Boolean).length / stepDone.length) * 100);
+  const checklist = steps.map((s, i) => ({
+    label: s.title,
+    done: stepDone[i] ?? false,
+    hint: stepDone[i] ? undefined : t('none'),
+  }));
 
-  const licenseOptions: { value: License; label: string }[] = [
-    { value: 'none', label: t('noLicense') },
-    { value: 'b', label: t('catB') },
-    { value: 'c', label: t('catC') },
-    { value: 'ce', label: t('catCE') },
-  ];
+  function scrollToFirstError(current: OnboardingStep, erroredFields: Set<string>): void {
+    const first = STEP_FIELDS[current].find((f) => erroredFields.has(f));
+    if (!first) return;
+    const el = document.getElementById(domId(first));
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) el.focus();
+    }
+  }
+
+  /** Waliduje i zapisuje bieżący krok. Zwraca true przy sukcesie. */
+  async function persistStep(current: OnboardingStep): Promise<boolean> {
+    clearErrors(STEP_FIELDS[current]);
+    const data = buildStepData(current, getValues());
+    const result = SCHEMAS[current].safeParse(data);
+
+    if (!result.success) {
+      const erroredFields = new Set<string>();
+      for (const issue of result.error.issues) {
+        const field = String(issue.path[0] ?? '');
+        if (!field) continue;
+        erroredFields.add(field);
+        if ((STEP_FIELDS[current] as string[]).includes(field)) {
+          setError(field as keyof FormValues, {
+            type: 'validate',
+            message: toErrorKey(field, issue.message),
+          });
+        }
+      }
+      setSaveState('idle');
+      scrollToFirstError(current, erroredFields);
+      return false;
+    }
+
+    setSaveState('saving');
+    try {
+      const res = await saveOnboardingStep(current, data);
+      if (!res.ok) {
+        setSaveState('error');
+        return false;
+      }
+      setDemoSaved(Boolean(res.demo));
+      setSaveState('saved');
+      setBadgeVisible(true);
+      return true;
+    } catch {
+      setSaveState('error');
+      return false;
+    }
+  }
+
+  async function handleNext(): Promise<void> {
+    const ok = await persistStep(step);
+    if (ok && step < 6) setStep((step + 1) as OnboardingStep);
+  }
+
+  function handleBack(): void {
+    if (step <= 1) return;
+    clearErrors();
+    setSaveState('idle');
+    setStep((step - 1) as OnboardingStep);
+  }
+
+  async function handleSaveExit(): Promise<void> {
+    const ok = await persistStep(step);
+    if (ok) router.push('/candidate');
+  }
+
+  async function handleFinish(): Promise<void> {
+    const ok = await persistStep(6);
+    if (ok) router.push('/candidate');
+  }
+
+  const busy = saveState === 'saving';
+
+  function toggleInArray<T>(field: keyof FormValues, value: T): void {
+    const current = getValues(field) as unknown as T[];
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value];
+    setValue(field, next as FormValues[typeof field], { shouldDirty: true });
+  }
+
+  function addLanguage(): void {
+    const name = langDraft.trim();
+    if (name.length < 2) {
+      setLangError(true);
+      return;
+    }
+    const exists = values.languages.some((l) => l.language.toLowerCase() === name.toLowerCase());
+    if (!exists) {
+      setValue('languages', [...values.languages, { language: name, level: levelDraft }], {
+        shouldDirty: true,
+      });
+    }
+    setLangDraft('');
+    setLangError(false);
+  }
+
+  function FieldError({ name }: { name: keyof FormValues }): React.JSX.Element | null {
+    const message = errors[name]?.message;
+    if (!message) return null;
+    return (
+      <p id={`${domId(name)}-error`} className="text-sm text-error">
+        {tRoot(String(message))}
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -78,13 +417,18 @@ export function OnboardingWizard(): React.JSX.Element {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
           <p className="mt-1 max-w-2xl text-muted-foreground">{t('subtitle')}</p>
         </div>
-        {savedOpen ? (
-          <div className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-success/30 bg-success/5 px-3 py-2">
+        {saveState === 'saved' && badgeVisible ? (
+          <div
+            role="status"
+            className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-success/30 bg-success/5 px-3 py-2"
+          >
             <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-            <span className="text-sm font-medium text-foreground">{t('saved')}</span>
+            <span className="text-sm font-medium text-foreground">
+              {demoSaved ? t('savedDemo') : t('saved')}
+            </span>
             <button
               type="button"
-              onClick={() => setSavedOpen(false)}
+              onClick={() => setBadgeVisible(false)}
               aria-label={tn('close')}
               className="-mr-1 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
             >
@@ -95,7 +439,11 @@ export function OnboardingWizard(): React.JSX.Element {
       </div>
 
       {/* Stepper */}
-      <Stepper steps={steps} current={0} className="rounded-lg border border-border bg-card p-4 sm:p-6" />
+      <Stepper
+        steps={steps}
+        current={step - 1}
+        className="rounded-lg border border-border bg-card p-4 sm:p-6"
+      />
 
       {/* Kolumny: boczna + formularz */}
       <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">
@@ -103,7 +451,12 @@ export function OnboardingWizard(): React.JSX.Element {
         <aside className="space-y-6">
           <section className="rounded-lg border border-border bg-card p-4 sm:p-5">
             <h2 className="text-base font-semibold text-foreground">{t('completeness')}</h2>
-            <ProfileCompleteness className="mt-4" value={45} hint={t('completenessHint')} size={64} />
+            <ProfileCompleteness
+              className="mt-4"
+              value={completeness}
+              hint={t('completenessHint')}
+              size={64}
+            />
             <ProfileChecklist className="mt-5" items={checklist} />
           </section>
 
@@ -111,7 +464,6 @@ export function OnboardingWizard(): React.JSX.Element {
             <h2 className="text-base font-semibold text-foreground">{t('needHelp')}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{t('helpText')}</p>
             <Button asChild variant="outline" size="sm" className="mt-4 w-full bg-background">
-              {/* TODO(data): link do właściwego poradnika. */}
               <Link href="/poradniki">
                 {t('seeGuide')}
                 <ExternalLink className="h-4 w-4" aria-hidden="true" />
@@ -120,115 +472,211 @@ export function OnboardingWizard(): React.JSX.Element {
           </section>
         </aside>
 
-        {/* Formularz kroku 1 */}
+        {/* Formularz bieżącego kroku */}
         <section className="rounded-lg border border-border bg-card p-4 sm:p-6">
-          <h2 className="text-lg font-semibold text-foreground">{t('step1Title')}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t('step1Sub')}</p>
+          <h2 className="text-lg font-semibold text-foreground">{steps[step - 1]?.title}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{steps[step - 1]?.desc}</p>
 
-          {/* Dane podstawowe */}
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="firstName">{t('firstName')}</Label>
-              <Input id="firstName" defaultValue="Jan" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="lastName">{t('lastName')}</Label>
-              <Input id="lastName" defaultValue="Kowalski" />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="city">{t('city')}</Label>
-              <div className="relative">
-                <Input id="city" className="pr-10" defaultValue="Antwerpia, Belgia" />
-                <MapPin
-                  className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="phone">{t('phone')}</Label>
-              <Input id="phone" type="tel" defaultValue="+32 470 12 34 56" />
-              <p className="text-xs text-muted-foreground">{t('phoneHint')}</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="email">{t('email')}</Label>
-              <Input id="email" type="email" defaultValue="jan.kowalski@email.com" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="birthDate">{t('birthDate')}</Label>
-              <div className="relative">
-                <Input id="birthDate" className="pr-10" defaultValue="15.04.1990" />
-                <Calendar
-                  className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="nationality">{t('nationality')}</Label>
-              <Select name="nationality" defaultValue="pl">
-                <SelectTrigger id="nationality">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {/* TODO(data): słownik krajów z backendu. */}
-                  <SelectItem value="pl">Polska</SelectItem>
-                  <SelectItem value="be">Belgia</SelectItem>
-                  <SelectItem value="ua">Ukraina</SelectItem>
-                  <SelectItem value="ro">Rumunia</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="workPermit">{t('workPermit')}</Label>
-              <Select name="workPermit" defaultValue="yes">
-                <SelectTrigger id="workPermit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yes">{t('workPermitYes')}</SelectItem>
-                  <SelectItem value="no">{t('no')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Informacje dodatkowe */}
-          <div className="mt-6 border-t border-border pt-6">
-            <h3 className="text-base font-semibold text-foreground">{t('additionalInfo')}</h3>
-
-            <div className="mt-4 space-y-4">
-              <div>
-                <Label>{t('drivingLicense')}</Label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {licenseOptions.map((option) => {
-                    const active = license === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => setLicense(option.value)}
-                        className={cn(
-                          'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
-                          active
-                            ? 'border-accent bg-accent/10 text-accent'
-                            : 'border-input text-foreground hover:bg-soft',
-                        )}
-                      >
-                        {option.label}
-                        {active ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
-                      </button>
-                    );
-                  })}
+          <form
+            className="mt-5"
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleNext();
+            }}
+          >
+            {step === 1 ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('firstName')}>{t('firstName')}</Label>
+                  <Input
+                    id={domId('firstName')}
+                    autoComplete="given-name"
+                    aria-invalid={errors.firstName ? true : undefined}
+                    {...register('firstName')}
+                  />
+                  <FieldError name="firstName" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('lastName')}>{t('lastName')}</Label>
+                  <Input
+                    id={domId('lastName')}
+                    autoComplete="family-name"
+                    aria-invalid={errors.lastName ? true : undefined}
+                    {...register('lastName')}
+                  />
+                  <FieldError name="lastName" />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor={domId('phone')}>{t('phone')}</Label>
+                  <Input
+                    id={domId('phone')}
+                    type="tel"
+                    autoComplete="tel"
+                    aria-invalid={errors.phone ? true : undefined}
+                    {...register('phone')}
+                  />
+                  <p className="text-xs text-muted-foreground">{t('phoneHint')}</p>
+                  <FieldError name="phone" />
                 </div>
               </div>
+            ) : null}
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
+            {step === 2 ? (
+              <div className="space-y-6">
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('occupations')}>{t('occupationsLabel')}</Label>
+                  <ChipInput
+                    id={domId('occupations')}
+                    values={values.occupations}
+                    onChange={(next) => setValue('occupations', next, { shouldDirty: true })}
+                    placeholder={t('occupationsPlaceholder')}
+                    addLabel={t('add')}
+                    removeLabel={t('remove')}
+                    invalid={Boolean(errors.occupations)}
+                  />
+                  <p className="text-xs text-muted-foreground">{t('occupationsHint')}</p>
+                  <FieldError name="occupations" />
+                </div>
+
+                <div id={domId('categories')} className="space-y-2">
+                  <Label>{t('categoriesLabel')}</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {CATEGORY_KEYS.map((key) => {
+                      const active = values.categories.includes(key);
+                      return (
+                        <TogglePill
+                          key={key}
+                          active={active}
+                          label={tCat(key)}
+                          onClick={() => toggleInArray('categories', key)}
+                        />
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t('categoriesHint')}</p>
+                  <FieldError name="categories" />
+                </div>
+              </div>
+            ) : null}
+
+            {step === 3 ? (
+              <div className="space-y-6">
+                <div className="space-y-1.5 sm:max-w-xs">
+                  <Label htmlFor={domId('experienceYears')}>{t('experienceLabel')}</Label>
+                  <Input
+                    id={domId('experienceYears')}
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={60}
+                    aria-invalid={errors.experienceYears ? true : undefined}
+                    {...register('experienceYears')}
+                  />
+                  <p className="text-xs text-muted-foreground">{t('experienceHint')}</p>
+                  <FieldError name="experienceYears" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('skills')}>{t('skillsLabel')}</Label>
+                  <ChipInput
+                    id={domId('skills')}
+                    values={values.skills}
+                    onChange={(next) => setValue('skills', next, { shouldDirty: true })}
+                    placeholder={t('skillsPlaceholder')}
+                    addLabel={t('add')}
+                    removeLabel={t('remove')}
+                    invalid={Boolean(errors.skills)}
+                  />
+                  <p className="text-xs text-muted-foreground">{t('skillsHint')}</p>
+                  <FieldError name="skills" />
+                </div>
+              </div>
+            ) : null}
+
+            {step === 4 ? (
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor={domId('city')}>{t('city')}</Label>
+                    <div className="relative">
+                      <Input
+                        id={domId('city')}
+                        className="pr-10"
+                        autoComplete="address-level2"
+                        aria-invalid={errors.city ? true : undefined}
+                        {...register('city')}
+                      />
+                      <MapPin
+                        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                    </div>
+                    <FieldError name="city" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={domId('region')}>{t('regionLabel')}</Label>
+                    <Input
+                      id={domId('region')}
+                      aria-invalid={errors.region ? true : undefined}
+                      {...register('region')}
+                    />
+                    <FieldError name="region" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={domId('radiusKm')}>{t('radiusLabel')}</Label>
+                    <Input
+                      id={domId('radiusKm')}
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={300}
+                      aria-invalid={errors.radiusKm ? true : undefined}
+                      {...register('radiusKm')}
+                    />
+                    <FieldError name="radiusKm" />
+                  </div>
+                </div>
+
+                <div id={domId('hasDrivingLicense')}>
+                  <Label>{t('drivingLicense')}</Label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(
+                      [
+                        { value: 'none', label: t('noLicense') },
+                        { value: 'b', label: t('catB') },
+                        { value: 'c', label: t('catC') },
+                        { value: 'ce', label: t('catCE') },
+                      ] as { value: License; label: string }[]
+                    ).map((option) => {
+                      const active = license === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => {
+                            setLicense(option.value);
+                            setValue('hasDrivingLicense', option.value !== 'none', {
+                              shouldDirty: true,
+                            });
+                          }}
+                          className={cn(
+                            'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+                            active
+                              ? 'border-accent bg-accent/10 text-accent'
+                              : 'border-input text-foreground hover:bg-soft',
+                          )}
+                        >
+                          {option.label}
+                          {active ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div id={domId('hasCar')}>
                   <Label>{t('ownCar')}</Label>
                   <div
                     className="mt-2 inline-flex rounded-md border border-input p-1"
@@ -237,106 +685,419 @@ export function OnboardingWizard(): React.JSX.Element {
                   >
                     <button
                       type="button"
-                      aria-pressed={!ownCar}
-                      onClick={() => setOwnCar(false)}
+                      aria-pressed={!values.hasCar}
+                      onClick={() => setValue('hasCar', false, { shouldDirty: true })}
                       className={cn(
                         'rounded px-5 py-1.5 text-sm font-medium transition-colors',
-                        !ownCar ? 'bg-accent/10 text-accent' : 'text-muted-foreground hover:text-foreground',
+                        !values.hasCar
+                          ? 'bg-accent/10 text-accent'
+                          : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
                       {t('no')}
                     </button>
                     <button
                       type="button"
-                      aria-pressed={ownCar}
-                      onClick={() => setOwnCar(true)}
+                      aria-pressed={values.hasCar}
+                      onClick={() => setValue('hasCar', true, { shouldDirty: true })}
                       className={cn(
                         'rounded px-5 py-1.5 text-sm font-medium transition-colors',
-                        ownCar ? 'bg-accent/10 text-accent' : 'text-muted-foreground hover:text-foreground',
+                        values.hasCar
+                          ? 'bg-accent/10 text-accent'
+                          : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
                       {t('yes')}
                     </button>
                   </div>
                 </div>
+              </div>
+            ) : null}
+
+            {step === 5 ? (
+              <div className="space-y-6">
+                <div id={domId('languages')} className="space-y-2">
+                  <Label htmlFor="onb-language-draft">{t('languagesLabel')}</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="onb-language-draft"
+                      className="flex-1"
+                      value={langDraft}
+                      placeholder={t('languageNamePlaceholder')}
+                      aria-invalid={langError ? true : undefined}
+                      onChange={(e) => {
+                        setLangDraft(e.target.value);
+                        if (langError) setLangError(false);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addLanguage();
+                        }
+                      }}
+                    />
+                    <div className="w-full sm:w-40">
+                      <Select
+                        value={levelDraft}
+                        onValueChange={(val) => setLevelDraft(val as LanguageLevel)}
+                      >
+                        <SelectTrigger aria-label={LEVEL_LABEL[levelDraft]}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LANGUAGE_LEVELS.map((lvl) => (
+                            <SelectItem key={lvl} value={lvl}>
+                              {LEVEL_LABEL[lvl]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button type="button" variant="outline" onClick={addLanguage}>
+                      {t('addLanguage')}
+                    </Button>
+                  </div>
+                  {langError ? (
+                    <p className="text-sm text-error">{tRoot('candidate.error.languageInvalid')}</p>
+                  ) : null}
+                  {values.languages.length > 0 ? (
+                    <ul className="mt-1 flex flex-wrap gap-2">
+                      {values.languages.map((entry) => (
+                        <li
+                          key={entry.language}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-input bg-soft px-2.5 py-1 text-sm text-foreground"
+                        >
+                          {entry.language} · {LEVEL_LABEL[entry.level]}
+                          <button
+                            type="button"
+                            aria-label={`${t('remove')}: ${entry.language}`}
+                            onClick={() =>
+                              setValue(
+                                'languages',
+                                values.languages.filter((l) => l.language !== entry.language),
+                                { shouldDirty: true },
+                              )
+                            }
+                            className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <X className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <FieldError name="languages" />
+                </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="relocation">{t('relocation')}</Label>
-                  <Select name="relocation" defaultValue="yes">
-                    <SelectTrigger id="relocation">
-                      <SelectValue />
+                  <Label htmlFor={domId('certificates')}>{t('certificatesLabel')}</Label>
+                  <ChipInput
+                    id={domId('certificates')}
+                    values={values.certificates}
+                    onChange={(next) => setValue('certificates', next, { shouldDirty: true })}
+                    placeholder={t('certificatesPlaceholder')}
+                    addLabel={t('add')}
+                    removeLabel={t('remove')}
+                    invalid={Boolean(errors.certificates)}
+                  />
+                  <FieldError name="certificates" />
+                </div>
+              </div>
+            ) : null}
+
+            {step === 6 ? (
+              <div className="space-y-6">
+                <div id={domId('availability')} className="space-y-1.5 sm:max-w-xs">
+                  <Label htmlFor="onb-availability-trigger">{t('availabilityLabel')}</Label>
+                  <Select
+                    value={values.availability || undefined}
+                    onValueChange={(val) =>
+                      setValue('availability', val as Availability, { shouldDirty: true })
+                    }
+                  >
+                    <SelectTrigger
+                      id="onb-availability-trigger"
+                      aria-invalid={errors.availability ? true : undefined}
+                    >
+                      <SelectValue placeholder={t('availabilityLabel')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="yes">{t('relocationYes')}</SelectItem>
-                      <SelectItem value="no">{t('no')}</SelectItem>
+                      {AVAILABILITY_VALUES.map((a) => (
+                        <SelectItem key={a} value={a}>
+                          {AVAIL_LABEL[a]}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  <FieldError name="availability" />
                 </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="salary">{t('expectedSalary')}</Label>
-                <div className="flex items-start gap-2">
-                  <div className="flex-1">
-                    <Input
-                      id="salary"
-                      inputMode="numeric"
-                      value={salary}
-                      aria-invalid={salaryError}
-                      aria-describedby={salaryError ? 'salary-error' : undefined}
-                      onChange={(event) => {
-                        setSalary(event.target.value);
-                        setSalaryError(event.target.value.trim() === '');
-                      }}
-                      className={cn(
-                        salaryError && 'border-error focus-visible:ring-error',
-                      )}
-                    />
+                <div id={domId('preferredContractTypes')} className="space-y-2">
+                  <Label>{t('contractTypesLabel')}</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {CONTRACT_TYPES.map((ct) => {
+                      const active = values.preferredContractTypes.includes(ct);
+                      return (
+                        <TogglePill
+                          key={ct}
+                          active={active}
+                          label={tContract(ct)}
+                          onClick={() => toggleInArray('preferredContractTypes', ct)}
+                        />
+                      );
+                    })}
                   </div>
-                  <div className="w-24 shrink-0">
-                    <Select name="currency" defaultValue="EUR">
-                      <SelectTrigger aria-label="EUR">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="EUR">EUR</SelectItem>
-                        <SelectItem value="PLN">PLN</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <FieldError name="preferredContractTypes" />
                 </div>
-                {salaryError ? (
-                  <p id="salary-error" className="text-sm text-error">
-                    {t('salaryError')}
-                  </p>
-                ) : null}
+
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('expectedSalaryMin')}>{t('expectedSalary')}</Label>
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <Input
+                        id={domId('expectedSalaryMin')}
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        aria-invalid={errors.expectedSalaryMin ? true : undefined}
+                        {...register('expectedSalaryMin')}
+                      />
+                    </div>
+                    <div className="w-24 shrink-0">
+                      <Select
+                        value={values.expectedSalaryCurrency}
+                        onValueChange={(val) =>
+                          setValue('expectedSalaryCurrency', val as Currency, { shouldDirty: true })
+                        }
+                      >
+                        <SelectTrigger aria-label={t('currencyLabel')}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="EUR">EUR</SelectItem>
+                          <SelectItem value="PLN">PLN</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <FieldError name="expectedSalaryMin" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('bio')}>{t('bioLabel')}</Label>
+                  <Textarea
+                    id={domId('bio')}
+                    rows={4}
+                    placeholder={t('bioPlaceholder')}
+                    aria-invalid={errors.bio ? true : undefined}
+                    {...register('bio')}
+                  />
+                  <FieldError name="bio" />
+                </div>
+
+                <div id={domId('agreeTerms')} className="space-y-1.5">
+                  <div className="flex items-start gap-2.5">
+                    <Checkbox
+                      id="onb-agreeTerms-box"
+                      checked={values.agreeTerms}
+                      onCheckedChange={(checked) =>
+                        setValue('agreeTerms', checked === true, { shouldDirty: true })
+                      }
+                      aria-invalid={errors.agreeTerms ? true : undefined}
+                      className="mt-0.5"
+                    />
+                    <Label
+                      htmlFor="onb-agreeTerms-box"
+                      className="text-sm font-normal leading-snug text-muted-foreground"
+                    >
+                      {t('agreeTerms')}
+                    </Label>
+                  </div>
+                  <FieldError name="agreeTerms" />
+                </div>
               </div>
-            </div>
-          </div>
+            ) : null}
+          </form>
         </section>
       </div>
 
-      {/* Stopka */}
+      {/* Stopka: wskaźnik zapisu + nawigacja */}
       <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-          {t('autosave')}
-        </p>
+        <SaveIndicator
+          state={saveState}
+          demo={demoSaved}
+          labels={{
+            idle: t('saveHint'),
+            saving: t('saving'),
+            saved: demoSaved ? t('savedDemo') : t('saved'),
+            error: t('saveError'),
+          }}
+        />
         <div className="flex flex-col gap-2 sm:flex-row">
-          {/* TODO(data): anulowanie / zapis powiązać z akcją serwerową. */}
-          <Button asChild variant="ghost">
+          <Button asChild variant="ghost" disabled={busy}>
             <Link href="/candidate">{t('cancel')}</Link>
           </Button>
-          <Button asChild variant="outline">
-            <Link href="/candidate">{t('saveExit')}</Link>
+          <Button type="button" variant="outline" onClick={() => void handleSaveExit()} disabled={busy}>
+            {t('saveExit')}
           </Button>
-          {/* TODO(data): przejście do kroku 2 „Preferencje pracy". */}
-          <Button type="button">
-            {t('next')}: {t('step2Title')}
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          {step > 1 ? (
+            <Button type="button" variant="outline" onClick={handleBack} disabled={busy}>
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              {t('back')}
+            </Button>
+          ) : null}
+          {step < 6 ? (
+            <Button type="button" onClick={() => void handleNext()} disabled={busy}>
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : null}
+              {t('next')}: {steps[step]?.title}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          ) : (
+            <Button type="button" onClick={() => void handleFinish()} disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              {t('finish')}
+            </Button>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Wskaźnik stanu zapisu (idle/saving/saved/error) — zastępuje fałszywy „autozapis". */
+function SaveIndicator({
+  state,
+  labels,
+}: {
+  state: SaveState;
+  demo: boolean;
+  labels: Record<SaveState, string>;
+}): React.JSX.Element {
+  if (state === 'saving') {
+    return (
+      <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        {labels.saving}
+      </p>
+    );
+  }
+  if (state === 'saved') {
+    return (
+      <p role="status" className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+        {labels.saved}
+      </p>
+    );
+  }
+  if (state === 'error') {
+    return (
+      <p role="alert" className="inline-flex items-center gap-2 text-sm text-error">
+        <AlertCircle className="h-4 w-4" aria-hidden="true" />
+        {labels.error}
+      </p>
+    );
+  }
+  return <p className="text-sm text-muted-foreground">{labels.idle}</p>;
+}
+
+/** Pigułka wielokrotnego wyboru (kategorie/rodzaje umów). */
+function TogglePill({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+        active
+          ? 'border-accent bg-accent/10 text-accent'
+          : 'border-input text-foreground hover:bg-soft',
+      )}
+    >
+      {label}
+      {active ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
+    </button>
+  );
+}
+
+/** Pole „chipów" — dodawanie/usuwanie krótkich wpisów (zawody/umiejętności/certyfikaty). */
+function ChipInput({
+  id,
+  values,
+  onChange,
+  placeholder,
+  addLabel,
+  removeLabel,
+  invalid,
+}: {
+  id: string;
+  values: string[];
+  onChange: (next: string[]) => void;
+  placeholder: string;
+  addLabel: string;
+  removeLabel: string;
+  invalid?: boolean;
+}): React.JSX.Element {
+  const [draft, setDraft] = React.useState('');
+
+  function add(): void {
+    const value = draft.trim();
+    if (!value) return;
+    if (!values.includes(value)) onChange([...values, value]);
+    setDraft('');
+  }
+
+  return (
+    <div>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          value={draft}
+          placeholder={placeholder}
+          aria-invalid={invalid ? true : undefined}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <Button type="button" variant="outline" onClick={add}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          {addLabel}
+        </Button>
+      </div>
+      {values.length > 0 ? (
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {values.map((value) => (
+            <li
+              key={value}
+              className="inline-flex items-center gap-1.5 rounded-md border border-input bg-soft px-2.5 py-1 text-sm text-foreground"
+            >
+              {value}
+              <button
+                type="button"
+                aria-label={`${removeLabel}: ${value}`}
+                onClick={() => onChange(values.filter((v) => v !== value))}
+                className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

@@ -275,42 +275,51 @@ async function getJobsFromDb(
   const { createServerClient } = await import('@/lib/supabase/server');
   const supabase = await createServerClient();
 
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+  // Publiczne dane WYŁĄCZNIE przez RPC get_public_jobs (0014): join firmy+tłumaczeń+wymagań,
+  // fallback locale, tylko bezpieczne kolumny (bez VAT/e-mail/contact_email). Anon nie ma
+  // dostępu do tabel bazowych. Filtrowanie/paginacja/licznik po stronie SQL (P1-02/P2-04).
+  const rpcArgs = {
+    p_locale: params.locale,
+    p_keyword: params.keyword ?? null,
+    p_city: params.city ?? null,
+    p_category: params.category ?? null,
+    p_contract_type: params.contractType ?? null,
+    p_limit: pageSize,
+    p_offset: (page - 1) * pageSize,
+  };
 
-  let query = supabase
-    .from('jobs')
-    .select('*', { count: 'exact' })
-    .eq('status', 'active');
-
-  if (params.category) query = query.eq('category', params.category);
-  if (params.contractType) query = query.eq('contract_type', params.contractType);
-  if (params.city) query = query.ilike('city', `%${params.city}%`);
-  if (params.keyword) query = query.ilike('title', `%${params.keyword}%`);
-
-  const { data, error, count } = await query
-    .order('published_at', { ascending: false })
-    .range(from, to);
+  const [{ data, error }, { data: countData, error: countError }] = await Promise.all([
+    supabase.rpc('get_public_jobs', rpcArgs),
+    supabase.rpc('get_public_jobs_count', {
+      p_keyword: params.keyword ?? null,
+      p_city: params.city ?? null,
+      p_category: params.category ?? null,
+      p_contract_type: params.contractType ?? null,
+    }),
+  ]);
 
   if (error) throw error;
+  if (countError) throw countError;
 
   const rows: unknown[] = Array.isArray(data) ? data : [];
   const jobs = rows.map(rowToJobListItem);
-  return { jobs, total: count ?? jobs.length, page, pageSize };
+  const total = typeof countData === 'number' ? countData : jobs.length;
+  return { jobs, total, page, pageSize };
 }
 
-async function getJobBySlugFromDb(slug: string): Promise<JobDetail | null> {
+async function getJobBySlugFromDb(slug: string, locale: string): Promise<JobDetail | null> {
   const { createServerClient } = await import('@/lib/supabase/server');
   const supabase = await createServerClient();
 
-  const { data, error } = await supabase
-    .from('jobs')
-    .select('*')
-    .eq('slug', slug)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('get_public_job', {
+    p_slug: slug,
+    p_locale: locale,
+  });
 
   if (error) throw error;
-  return data ? rowToJobDetail(data) : null;
+  const rows: unknown[] = Array.isArray(data) ? data : [];
+  const first = rows[0];
+  return first ? rowToJobDetail(first) : null;
 }
 
 /* ---------------------------------------------------------------------------
@@ -341,7 +350,7 @@ export async function getJobBySlug(slug: string, locale: string): Promise<JobDet
 
   if (isSupabaseConfigured()) {
     try {
-      return await getJobBySlugFromDb(slug);
+      return await getJobBySlugFromDb(slug, resolvedLocale);
     } catch (error) {
       captureError(error, { area: 'jobs.getJobBySlug', slug });
       throw new AppError('INTERNAL');
