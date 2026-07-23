@@ -318,27 +318,28 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Centralny system błędów + kody + Sentry (config)
 - [ ] shadcn/ui — pełny zestaw komponentów (na razie podstawowe)
 
-### Redesign wg makiet (PRIORYTET po fazie fundamentu) — `docs/DESIGN_SCREENS.md`
-- [ ] Paleta granatowa: `globals.css` + `tailwind.config.ts` (`--primary` #0F2A47 vs `--accent` #2563EB), `manifest.ts` theme_color
-- [ ] Komponenty z makiet: JobRow(hover), FilterSidebar+FilterSheet, SalaryRange, StatusPill, StatCard, MatchBar, Stepper, DashboardSidebar+BottomTabBar, ApplyModal, NotificationsDropdown, Toast, CookieSettingsDialog, PricingPackageCard, RecruitmentFunnel
-- [ ] Odwzorowanie 7 ekranów 1:1 (home, lista, detal+modal, panel kandydata, panel pracodawcy, onboarding, stany)
+### Redesign wg makiet — `docs/DESIGN_SCREENS.md` (ZROBIONE, UI)
+- [x] Paleta granatowa: `globals.css` + `tailwind.config.ts` (`--primary` #0F2A47 + `--accent` #2563EB), `manifest.ts` theme_color
+- [x] Komponenty z makiet: JobCard(wiersz+hover), FilterSidebar+FilterSheet, StatusPill, StatCard, MatchBar, Stepper, DashboardShell(sidebar+bottom tab bar), NotificationsDropdown, Toast, ApplyModal, RecruitmentFunnel, PricingPackageCard, BelgiumSkyline (hero SVG)
+- [x] Odwzorowanie 7 ekranów (home, lista+filtry, detal+modal, panel kandydata, onboarding, panel pracodawcy, stany cookies) — **UI gotowe**; panele na danych DEMO (podpięcie realnych danych = warstwa backendu, niżej)
+- [x] Restrukturyzacja layoutów: root=(html/body/providery/cookies), `(public)/layout`=Header+Footer, `(auth)/layout` minimalny, panele=własny layout (DashboardShell, noindex)
 
 ### Etap 2 — strony publiczne
-- [x] Strona główna (hero + sekcje) SSR
-- [~] Lista ofert + filtry (podstawa; brak pełnych filtrów i infinite scroll)
-- [~] Szczegóły oferty + JobPosting JSON-LD (podstawa)
-- [ ] Strony: kategorie/miasta/regiony/zawody/typy umów/bez języka/z zakwaterowaniem/od zaraz/branże
-- [x] SEO: sitemap.ts, robots.ts, metadata + hreflang (podstawa)
+- [x] Strona główna (hero + sekcje) SSR — redesign wg makiety 01
+- [x] Lista ofert + filtry (FilterSidebar/FilterSheet, chipy, sort, paginacja) — wg makiety 02; infinite scroll opcjonalnie później
+- [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
+- [ ] Strony: kategorie/miasta/regiony/zawody/typy umów/bez języka/z zakwaterowaniem/od zaraz/branże (landing pages)
+- [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
 - [ ] Poradniki (blog) + Article JSON-LD
 
 ### Etap 3 — kandydat
-- [ ] Rejestracja / logowanie / reset / potwierdzenie e-mail (Supabase Auth)
-- [ ] Onboarding kandydata (6 kroków, zapis per krok)
-- [ ] Panel kandydata (podsumowanie, oferty, aplikacje, propozycje, wiadomości, profil, ustawienia)
+- [~] Rejestracja / logowanie / reset / potwierdzenie e-mail — strony + Supabase Auth actions gotowe; callback naprawiony (P1-01). Do dokończenia: pełne guardy tras paneli.
+- [~] Onboarding kandydata (6 kroków) — **UI gotowe** (Stepper, walidacja, autosave UI); zapis per krok do DB do zrobienia (TODO(data))
+- [~] Panel kandydata — **UI gotowe** (podsumowanie/oferty/aplikacje/propozycje/wiadomości/profil/ustawienia), noindex; na danych DEMO — podpięcie realnych danych do zrobienia
 
 ### Etap 4 — pracodawca
-- [ ] Konto firmy + weryfikacja
-- [ ] Panel pracodawcy
+- [ ] Konto firmy + weryfikacja (RPC `create_company_with_owner` gotowy w 0011; UI/flow do zrobienia)
+- [~] Panel pracodawcy — **UI gotowe** (oferty/kandydaci/lejek/pakiet), noindex, dane DEMO; podpięcie danych do zrobienia
 - [ ] Kreator oferty (9 kroków, autozapis draftu)
 
 ### Etap 5 — procesy
