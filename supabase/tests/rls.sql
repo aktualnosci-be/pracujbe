@@ -210,4 +210,29 @@ select pg_temp.assert(
   (select count(*) from public.notifications where profile_id = :'EMPA' and read_at is null) = 0,
   'F3 brak nieprzeczytanych EMPA po oznaczeniu');
 
+-- ============================================================================
+-- G. Audit logs (0017): wrażliwe zmiany zapisane; klient nie czyta audit_logs
+-- ============================================================================
+-- G1: zmiana statusu aplikacji (C2: viewed) zapisana z actor_id = EMPA.
+select pg_temp.assert(
+  (select count(*) from public.audit_logs
+     where action='application.status_changed' and entity_id = :'appa' and actor_id = :'EMPA') >= 1,
+  'G1 audit application.status_changed (actor=EMPA)');
+-- G2: propozycja wysłana (D2) + odpowiedź (D6) zapisane.
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action='offer.sent' and entity_id = :'offa') = 1,
+  'G2 audit offer.sent');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs
+     where action='offer.status_changed' and entity_id = :'offa' and actor_id = :'CANDA') = 1,
+  'G2b audit offer.status_changed (actor=CANDA)');
+-- G3: utworzenie firm z seeda zapisane (3).
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action='company.created') = 3,
+  'G3 audit company.created x3');
+-- G4: authenticated NIE czyta audit_logs (RLS deny + revoke).
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.expect_error('select count(*) from public.audit_logs', 'permission denied', 'G4 klient nie czyta audit_logs');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
