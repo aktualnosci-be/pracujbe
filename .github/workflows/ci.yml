@@ -149,6 +149,8 @@ jobs:
         run: psql --version
       - name: RLS/triggers adversarial tests
         run: bash scripts/test-rls.sh
+      - name: Seed data load test (10 firm / 50 ofert / 40 kandydatów)
+        run: bash scripts/test-seed.sh
 
   e2e:
     name: E2E (Playwright)
