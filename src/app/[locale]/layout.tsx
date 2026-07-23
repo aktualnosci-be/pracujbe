@@ -5,16 +5,18 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
 import { CookieConsent } from '@/components/cookies/CookieConsent';
 import { inter } from '../fonts';
 
 /**
  * Layout dla segmentu językowego. To TUTAJ renderowane są <html>/<body> — z lang={locale}
- * ustawianym dynamicznie. Dostarcza wiadomości i18n do klienta (NextIntlClientProvider),
- * a także globalny chrome: Header, Footer, baner cookies. setRequestLocale włącza
- * statyczne renderowanie dla stron pod danym językiem.
+ * ustawianym dynamicznie. Dostarcza wiadomości i18n do klienta (NextIntlClientProvider)
+ * oraz baner zgód cookie. setRequestLocale włącza statyczne renderowanie stron pod danym językiem.
+ *
+ * UWAGA (struktura layoutów): globalny chrome (Header/Footer) NIE jest tutaj. Trafił do
+ * grupy `(public)` — src/app/[locale]/(public)/layout.tsx — aby panele (candidate/employer),
+ * strony auth i onboarding mogły mieć własne, odrębne layouty. Ten layout to wyłącznie
+ * powłoka dokumentu + providery.
  */
 
 type LocaleLayoutProps = {
@@ -60,11 +62,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <div className="flex min-h-screen flex-col">
-            <Header />
-            <main className="flex-1">{children}</main>
-            <Footer />
-          </div>
+          {children}
           <CookieConsent />
         </NextIntlClientProvider>
       </body>

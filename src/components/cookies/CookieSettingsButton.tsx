@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { cn } from '@/lib/utils';
 import { openCookieSettings } from '@/lib/consent-store';
 
 /**
@@ -16,7 +17,14 @@ export function CookieSettingsButton({ className }: { className?: string }) {
   const t = useTranslations('footer');
 
   return (
-    <button type="button" onClick={() => openCookieSettings()} className={className}>
+    <button
+      type="button"
+      onClick={() => openCookieSettings()}
+      className={cn(
+        'text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline',
+        className,
+      )}
+    >
       {t('cookieSettings')}
     </button>
   );

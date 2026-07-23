@@ -1,13 +1,16 @@
 import { getTranslations } from 'next-intl/server';
+
 import { Link } from '@/i18n/navigation';
-import { Logo } from '@/components/brand/Logo';
 import { LocaleSwitcher } from './LocaleSwitcher';
 import { CookieSettingsButton } from './CookieSettingsButton';
 
 /**
- * Stopka (server component).
- * Kolumny linków wg namespace `footer`, znak marki z tagline'em, ponowne otwarcie ustawień
- * cookies oraz przełącznik języka. Teksty wyłącznie z i18n (footer + common.appName).
+ * Stopka (server component) — granatowa, wg makiety 01-home.
+ *
+ * Tło `--primary` (granat), tekst jasny. Znak marki renderowany jako wordmark (biały
+ * „Pracuj" + akcentowe „.be") — komponent `Logo` ma granatowy znak, więc byłby niewidoczny
+ * na granatowym tle. Kolumny linków wg namespace `footer`, ponowne otwarcie ustawień cookies
+ * oraz przełącznik języka. Teksty wyłącznie z i18n (footer + common.appName).
  */
 export async function Footer() {
   const [t, tCommon] = await Promise.all([
@@ -18,15 +21,11 @@ export async function Footer() {
   const columns = [
     {
       title: t('forCandidates'),
-      links: [
-        { href: '/oferty-pracy', label: t('jobs') },
-      ],
+      links: [{ href: '/oferty-pracy', label: t('jobs') }],
     },
     {
       title: t('forEmployers'),
-      links: [
-        { href: '/rejestracja-pracodawca', label: t('postJob') },
-      ],
+      links: [{ href: '/rejestracja-pracodawca', label: t('postJob') }],
     },
     {
       title: t('company'),
@@ -38,21 +37,27 @@ export async function Footer() {
     },
   ] as const;
 
-  const linkClass = 'text-sm text-muted-foreground transition-colors hover:text-foreground';
+  const linkClass =
+    'text-sm text-primary-foreground/70 transition-colors hover:text-primary-foreground';
+  const headingClass = 'text-sm font-semibold text-primary-foreground';
   const year = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-border bg-soft">
+    <footer className="bg-primary text-primary-foreground">
       <div className="container py-12">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-3 lg:col-span-2">
-            <Logo />
-            <p className="max-w-xs text-sm text-muted-foreground">{t('tagline')}</p>
+            <Link href="/" className="inline-flex rounded-sm" aria-label={tCommon('appName')}>
+              <span className="text-lg font-bold tracking-tight text-primary-foreground">
+                Pracuj<span className="text-accent">.be</span>
+              </span>
+            </Link>
+            <p className="max-w-xs text-sm text-primary-foreground/70">{t('tagline')}</p>
           </div>
 
           {columns.map((column) => (
             <nav key={column.title} aria-label={column.title}>
-              <h2 className="text-sm font-semibold text-foreground">{column.title}</h2>
+              <h2 className={headingClass}>{column.title}</h2>
               <ul className="mt-3 space-y-2">
                 {column.links.map((item) => (
                   <li key={item.href}>
@@ -66,7 +71,7 @@ export async function Footer() {
           ))}
 
           <nav aria-label={t('legal')}>
-            <h2 className="text-sm font-semibold text-foreground">{t('legal')}</h2>
+            <h2 className={headingClass}>{t('legal')}</h2>
             <ul className="mt-3 space-y-2">
               <li>
                 <Link href="/terms" className={linkClass}>
@@ -90,8 +95,8 @@ export async function Footer() {
           </nav>
         </div>
 
-        <div className="mt-10 flex flex-col gap-4 border-t border-border pt-6 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm text-muted-foreground">
+        <div className="mt-10 flex flex-col gap-4 border-t border-primary-foreground/10 pt-6 md:flex-row md:items-center md:justify-between">
+          <p className="text-sm text-primary-foreground/70">
             © {year} {tCommon('appName')}. {t('rights')}
           </p>
           <LocaleSwitcher />
