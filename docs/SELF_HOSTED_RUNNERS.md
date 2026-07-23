@@ -54,10 +54,18 @@ sudo ./svc.sh status
 | git | dowolna aktualna | checkout |
 | Przeglądarki Playwright | Chromium | zainstaluj raz: `npx playwright install --with-deps chromium` |
 | biblioteki systemowe | zależności Chromium | na Ubuntu: `npx playwright install-deps` (wymaga sudo) |
+| Docker | dowolna aktualna | wymagane przez job `rls` (usługa kontenerowa `postgres:16`) |
+| Klient `psql` | 16 (lub zgodny) | job `rls`: na Ubuntu `sudo apt-get install -y postgresql-client` |
 | Vercel CLI | pobierane w jobie | `npm i -g vercel@latest` (deploy) |
 
 > **Playwright:** job `e2e` wykonuje `npx playwright install chromium` (bez `--with-deps`,
 > bo tamto wymaga sudo w trakcie CI). Zależności systemowe zainstaluj **raz** przy provisioningu runnera.
+>
+> **RLS (`rls`):** job uruchamia `scripts/test-rls.sh` — nakłada `supabase/tests/shim.sql`
+> + wszystkie migracje na kontener `postgres:16` (usługa GH Actions) i wykonuje adwersaryjne
+> asercje `supabase/tests/rls.sql`. Runner musi mieć **Docker** (usługi kontenerowe) oraz
+> klienta **`psql`**. Job nie wymaga `node_modules`. Lokalnie: `npm run test:rls`
+> (peer auth: `sudo -u postgres bash scripts/test-rls.sh`).
 
 ---
 
