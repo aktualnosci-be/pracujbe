@@ -24,6 +24,7 @@ import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -175,6 +176,11 @@ async function signUpUser(args: SignUpArgs): Promise<void> {
 
 /** Logowanie e-mail + hasło. Sukces → panel wg roli. */
 export async function signIn(input: LoginInput): Promise<AuthActionResult> {
+  // Rate limit per IP (10 prób / 5 min) — ochrona przed brute-force. Bez ujawniania detali.
+  if (!(await checkRateLimit('signin', { max: 10, windowSeconds: 300 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
@@ -207,6 +213,11 @@ export async function signIn(input: LoginInput): Promise<AuthActionResult> {
 
 /** Rejestracja kandydata. Sukces → strona potwierdzenia e-maila. */
 export async function registerCandidate(input: RegisterCandidateInput): Promise<AuthActionResult> {
+  // Rate limit per IP (5 rejestracji / godz) — ochrona przed masowym zakładaniem kont.
+  if (!(await checkRateLimit('register', { max: 5, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
   const parsed = registerCandidateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
@@ -232,6 +243,11 @@ export async function registerCandidate(input: RegisterCandidateInput): Promise<
 
 /** Rejestracja pracodawcy. Sukces → strona potwierdzenia e-maila. */
 export async function registerEmployer(input: RegisterEmployerInput): Promise<AuthActionResult> {
+  // Rate limit per IP (5 rejestracji / godz) — ochrona przed masowym zakładaniem kont.
+  if (!(await checkRateLimit('register', { max: 5, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
   const parsed = registerEmployerSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
@@ -261,6 +277,11 @@ export async function registerEmployer(input: RegisterEmployerInput): Promise<Au
  * istnieje). Wyjątki: błąd walidacji oraz brak konfiguracji (INTERNAL) są sygnalizowane.
  */
 export async function requestPasswordReset(input: ResetInput): Promise<AuthActionResult> {
+  // Rate limit per IP (5 prób / godz) — nie ujawnia istnienia konta (RATE_LIMITED jest neutralny).
+  if (!(await checkRateLimit('password-reset', { max: 5, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
   const parsed = resetSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };

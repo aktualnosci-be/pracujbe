@@ -1,0 +1,1325 @@
+'use client';
+
+import * as React from 'react';
+import { useForm } from 'react-hook-form';
+import { useLocale, useTranslations } from 'next-intl';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Loader2,
+  Plus,
+  Send,
+  X,
+} from 'lucide-react';
+
+import { Link, useRouter } from '@/i18n/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Stepper } from '@/components/ui/stepper';
+import {
+  CATEGORY_KEYS,
+  CONTRACT_TYPES,
+  LANGUAGE_LEVELS,
+} from '@/lib/validation/candidate';
+import {
+  SALARY_PERIODS,
+  step1Schema,
+  step2Schema,
+  step3Schema,
+  step4Schema,
+  step5Schema,
+  step6Schema,
+  step7Schema,
+  step8Schema,
+  step9Schema,
+} from '@/lib/validation/job';
+import type { CategoryKey, ContractType } from '@/lib/jobs';
+import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
+import { createJobDraft, publishJob, updateJobDraft } from '@/lib/actions/jobs';
+
+/**
+ * JobWizard — kreator oferty pracy (Etap 5), 9 kroków z REALNYM zapisem wersji roboczej.
+ *
+ * Krok N jest walidowany `stepNSchema` (Zod — to samo źródło co po stronie serwera) i zapisywany
+ * przez Server Action `updateJobDraft`. Szkic (`createJobDraft`) tworzony jest LENIWIE — dopiero
+ * przy pierwszym udanym zapisie (brak śmieciowych szkiców z samego wejścia na stronę). „Dalej"
+ * przechodzi po udanym zapisie; ostatni krok publikuje ofertę (`publishJob`).
+ *
+ * Invariant #11: blokada przycisków w trakcie zapisu, zachowanie danych po błędzie, błędy przy
+ * polach, przewijanie do pierwszego błędu, jasny wskaźnik stanu (idle/saving/saved/error).
+ * Publikacja wymaga firmy `verified` — `COMPANY_NOT_VERIFIED` pokazujemy jako czytelną informację
+ * (szkic zostaje zapisany). Tryb DEMO (brak env): zapis nie trafia do DB, ale przepływ działa.
+ *
+ * TODO(data): języki oferty i wymagane certyfikaty (krok 7) są zbierane i walidowane, ale nie
+ * utrwalane — patrz `@/lib/actions/jobs` (brak relacji job_languages / job_certificates).
+ */
+
+const TOTAL_STEPS = 9;
+type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+type LanguageLevel = (typeof LANGUAGE_LEVELS)[number];
+type SalaryPeriod = (typeof SALARY_PERIODS)[number];
+type Currency = 'EUR' | 'PLN';
+const CURRENCIES: readonly Currency[] = ['EUR', 'PLN'];
+
+interface LanguageEntry {
+  language: string;
+  level: LanguageLevel;
+}
+
+interface FormValues {
+  // krok 1 — stanowisko
+  title: string;
+  category: '' | CategoryKey;
+  occupation: string;
+  // krok 2 — umowa i grafik
+  contractType: '' | ContractType;
+  workingHours: string;
+  shifts: string;
+  startImmediately: boolean;
+  startDate: string;
+  // krok 3 — lokalizacja
+  city: string;
+  region: string;
+  address: string;
+  remote: boolean;
+  // krok 4 — wynagrodzenie
+  salaryMin: string;
+  salaryMax: string;
+  currency: Currency;
+  salaryPeriod: SalaryPeriod;
+  // krok 5 — opis i obowiązki
+  description: string;
+  responsibilities: string[];
+  // krok 6 — wymagania
+  requirementsMandatory: string[];
+  mandatorySkills: string[];
+  minExperienceYears: string;
+  // krok 7 — dodatkowe / języki
+  requirementsOptional: string[];
+  skills: string[];
+  languages: LanguageEntry[];
+  requiredCertificates: string[];
+  requiresDrivingLicense: boolean;
+  noLanguageRequired: boolean;
+  // krok 8 — warunki i benefity
+  conditions: string[];
+  benefits: string[];
+  accommodation: boolean;
+  transport: boolean;
+  // krok 9 — firma i publikacja
+  companyDescription: string;
+  contactEmail: string;
+  agreePublish: boolean;
+}
+
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+const DEFAULT_VALUES: FormValues = {
+  title: '',
+  category: '',
+  occupation: '',
+  contractType: '',
+  workingHours: '',
+  shifts: '',
+  startImmediately: false,
+  startDate: '',
+  city: '',
+  region: '',
+  address: '',
+  remote: false,
+  salaryMin: '',
+  salaryMax: '',
+  currency: 'EUR',
+  salaryPeriod: 'month',
+  description: '',
+  responsibilities: [],
+  requirementsMandatory: [],
+  mandatorySkills: [],
+  minExperienceYears: '',
+  requirementsOptional: [],
+  skills: [],
+  languages: [],
+  requiredCertificates: [],
+  requiresDrivingLicense: false,
+  noLanguageRequired: false,
+  conditions: [],
+  benefits: [],
+  accommodation: false,
+  transport: false,
+  companyDescription: '',
+  contactEmail: '',
+  agreePublish: false,
+};
+
+/** Pola należące do kroku (kolejność = kolejność przewijania do pierwszego błędu). */
+const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
+  1: ['title', 'category', 'occupation'],
+  2: ['contractType', 'workingHours', 'shifts', 'startDate'],
+  3: ['city', 'region', 'address'],
+  4: ['salaryMin', 'salaryMax', 'currency', 'salaryPeriod'],
+  5: ['description', 'responsibilities'],
+  6: ['requirementsMandatory', 'mandatorySkills', 'minExperienceYears'],
+  7: ['requirementsOptional', 'skills', 'languages', 'requiredCertificates'],
+  8: ['conditions', 'benefits'],
+  9: ['companyDescription', 'contactEmail', 'agreePublish'],
+};
+
+const SCHEMAS = {
+  1: step1Schema,
+  2: step2Schema,
+  3: step3Schema,
+  4: step4Schema,
+  5: step5Schema,
+  6: step6Schema,
+  7: step7Schema,
+  8: step8Schema,
+  9: step9Schema,
+} as const;
+
+function domId(field: keyof FormValues): string {
+  return `job-${field}`;
+}
+
+/** '' → undefined (pole opcjonalne / z wartością domyślną w schemacie). */
+function toOptionalNumber(value: string): number | undefined {
+  return value.trim() === '' ? undefined : Number(value);
+}
+
+/** '' → undefined (pole tekstowe opcjonalne). */
+function toOptionalText(value: string): string | undefined {
+  return value.trim() === '' ? undefined : value;
+}
+
+/** Buduje obiekt danych kroku zgodny z odpowiednim `stepNSchema`. */
+function buildStepData(step: WizardStep, v: FormValues): unknown {
+  switch (step) {
+    case 1:
+      return { title: v.title, category: v.category, occupation: v.occupation };
+    case 2:
+      return {
+        contractType: v.contractType,
+        workingHours: v.workingHours,
+        shifts: toOptionalText(v.shifts),
+        startImmediately: v.startImmediately,
+        startDate: toOptionalText(v.startDate),
+      };
+    case 3:
+      return { city: v.city, region: v.region, address: toOptionalText(v.address), remote: v.remote };
+    case 4:
+      return {
+        salaryMin: toOptionalNumber(v.salaryMin),
+        salaryMax: toOptionalNumber(v.salaryMax),
+        currency: v.currency,
+        salaryPeriod: v.salaryPeriod,
+      };
+    case 5:
+      return { description: v.description, responsibilities: v.responsibilities };
+    case 6:
+      return {
+        requirementsMandatory: v.requirementsMandatory,
+        mandatorySkills: v.mandatorySkills,
+        minExperienceYears: toOptionalNumber(v.minExperienceYears),
+      };
+    case 7:
+      return {
+        requirementsOptional: v.requirementsOptional,
+        skills: v.skills,
+        languages: v.languages,
+        requiredCertificates: v.requiredCertificates,
+        requiresDrivingLicense: v.requiresDrivingLicense,
+        noLanguageRequired: v.noLanguageRequired,
+      };
+    case 8:
+      return {
+        conditions: v.conditions,
+        benefits: v.benefits,
+        accommodation: v.accommodation,
+        transport: v.transport,
+      };
+    case 9:
+      return {
+        companyDescription: v.companyDescription,
+        contactEmail: toOptionalText(v.contactEmail),
+        agreePublish: v.agreePublish,
+      };
+  }
+}
+
+/** Zamienia komunikat błędu z Zod na klucz i18n (fallback dla domyślnych komunikatów enum). */
+function toErrorKey(field: string, message: string): string {
+  if (message.startsWith('job.error.')) return message;
+  if (field === 'category') return 'job.error.categoryRequired';
+  if (field === 'contractType') return 'job.error.contractTypeRequired';
+  if (field === 'agreePublish') return 'job.error.publishAgreementRequired';
+  return 'job.error.invalid';
+}
+
+export function JobWizard(): React.JSX.Element {
+  const t = useTranslations('jobWizard');
+  const tRoot = useTranslations();
+  const tn = useTranslations('nav');
+  const tCat = useTranslations('categories');
+  const tContract = useTranslations('contractTypes');
+  const locale = useLocale();
+  const router = useRouter();
+
+  const {
+    register,
+    watch,
+    getValues,
+    setValue,
+    setError,
+    clearErrors,
+    formState: { errors },
+  } = useForm<FormValues>({ defaultValues: DEFAULT_VALUES, mode: 'onSubmit' });
+
+  const values = watch();
+
+  const [step, setStep] = React.useState<WizardStep>(1);
+  const [jobId, setJobId] = React.useState<string | null>(null);
+  const [saveState, setSaveState] = React.useState<SaveState>('idle');
+  const [demo, setDemo] = React.useState(false);
+  const [badgeVisible, setBadgeVisible] = React.useState(false);
+  const [publishing, setPublishing] = React.useState(false);
+  const [publishError, setPublishError] = React.useState<ErrorCode | null>(null);
+
+  // Roboczy wiersz dodawania języka (relacja — nieutrwalana w tej iteracji, TODO(data)).
+  const [langDraft, setLangDraft] = React.useState('');
+  const [levelDraft, setLevelDraft] = React.useState<LanguageLevel>('basic');
+  const [langError, setLangError] = React.useState(false);
+
+  const LEVEL_LABEL: Record<LanguageLevel, string> = {
+    basic: t('levelBasic'),
+    intermediate: t('levelIntermediate'),
+    fluent: t('levelFluent'),
+    native: t('levelNative'),
+  };
+  const PERIOD_LABEL: Record<SalaryPeriod, string> = {
+    hour: t('periodHour'),
+    month: t('periodMonth'),
+    year: t('periodYear'),
+  };
+
+  const steps = [
+    { title: t('step1Title'), desc: t('step1Sub') },
+    { title: t('step2Title'), desc: t('step2Sub') },
+    { title: t('step3Title'), desc: t('step3Sub') },
+    { title: t('step4Title'), desc: t('step4Sub') },
+    { title: t('step5Title'), desc: t('step5Sub') },
+    { title: t('step6Title'), desc: t('step6Sub') },
+    { title: t('step7Title'), desc: t('step7Sub') },
+    { title: t('step8Title'), desc: t('step8Sub') },
+    { title: t('step9Title'), desc: t('step9Sub') },
+  ];
+
+  const busy = saveState === 'saving' || publishing;
+
+  function scrollToFirstError(current: WizardStep, erroredFields: Set<string>): void {
+    const first = STEP_FIELDS[current].find((f) => erroredFields.has(f));
+    if (!first) return;
+    const el = document.getElementById(domId(first));
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) el.focus();
+    }
+  }
+
+  /** Waliduje i zapisuje bieżący krok (tworzy szkic przy pierwszym zapisie). Zwraca true. */
+  async function persistStep(current: WizardStep): Promise<boolean> {
+    clearErrors(STEP_FIELDS[current]);
+    const data = buildStepData(current, getValues());
+    const result = SCHEMAS[current].safeParse(data);
+
+    if (!result.success) {
+      const erroredFields = new Set<string>();
+      for (const issue of result.error.issues) {
+        const field = String(issue.path[0] ?? '');
+        if (!field) continue;
+        erroredFields.add(field);
+        if ((STEP_FIELDS[current] as string[]).includes(field)) {
+          setError(field as keyof FormValues, {
+            type: 'validate',
+            message: toErrorKey(field, issue.message),
+          });
+        }
+      }
+      setSaveState('idle');
+      scrollToFirstError(current, erroredFields);
+      return false;
+    }
+
+    setSaveState('saving');
+    try {
+      let id = jobId;
+      if (!id) {
+        const created = await createJobDraft(locale);
+        if (!created.ok) {
+          setSaveState('error');
+          return false;
+        }
+        id = created.id;
+        setJobId(id);
+        if (created.demo) setDemo(true);
+      }
+
+      const res = await updateJobDraft(id, current, data);
+      if (!res.ok) {
+        setSaveState('error');
+        return false;
+      }
+      if (res.demo) setDemo(true);
+      setSaveState('saved');
+      setBadgeVisible(true);
+      return true;
+    } catch {
+      setSaveState('error');
+      return false;
+    }
+  }
+
+  async function handleNext(): Promise<void> {
+    const ok = await persistStep(step);
+    if (ok && step < TOTAL_STEPS) setStep((step + 1) as WizardStep);
+  }
+
+  function handleBack(): void {
+    if (step <= 1) return;
+    clearErrors();
+    setPublishError(null);
+    setSaveState('idle');
+    setStep((step - 1) as WizardStep);
+  }
+
+  async function handleSaveExit(): Promise<void> {
+    const ok = await persistStep(step);
+    if (ok) router.push('/employer');
+  }
+
+  async function handlePublish(): Promise<void> {
+    setPublishError(null);
+    const ok = await persistStep(9);
+    if (!ok) return;
+
+    const id = jobId;
+    if (!id) {
+      setPublishError('INTERNAL');
+      return;
+    }
+
+    setPublishing(true);
+    try {
+      const res = await publishJob(id);
+      if (!res.ok) {
+        setPublishError(res.error);
+        return;
+      }
+      router.push('/employer');
+    } catch {
+      setPublishError('INTERNAL');
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  function FieldError({ name }: { name: keyof FormValues }): React.JSX.Element | null {
+    const message = errors[name]?.message;
+    if (!message) return null;
+    return (
+      <p id={`${domId(name)}-error`} className="text-sm text-error">
+        {tRoot(String(message))}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Nagłówek + znacznik zapisu */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+          <p className="mt-1 max-w-2xl text-muted-foreground">{t('subtitle')}</p>
+        </div>
+        {saveState === 'saved' && badgeVisible ? (
+          <div
+            role="status"
+            className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-success/30 bg-success/5 px-3 py-2"
+          >
+            <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+            <span className="text-sm font-medium text-foreground">
+              {demo ? t('savedDemo') : t('saved')}
+            </span>
+            <button
+              type="button"
+              onClick={() => setBadgeVisible(false)}
+              aria-label={tn('close')}
+              className="-mr-1 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Stepper */}
+      <Stepper
+        steps={steps}
+        current={step - 1}
+        className="rounded-lg border border-border bg-card p-4 sm:p-6"
+      />
+
+      {/* Formularz bieżącego kroku */}
+      <section className="rounded-lg border border-border bg-card p-4 sm:p-6">
+        <h2 className="text-lg font-semibold text-foreground">{steps[step - 1]?.title}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{steps[step - 1]?.desc}</p>
+
+        <form
+          className="mt-5"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (step < TOTAL_STEPS) void handleNext();
+          }}
+        >
+          {step === 1 ? (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('title')}>{t('titleLabel')}</Label>
+                <Input
+                  id={domId('title')}
+                  placeholder={t('titlePlaceholder')}
+                  aria-invalid={errors.title ? true : undefined}
+                  {...register('title')}
+                />
+                <FieldError name="title" />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div id={domId('category')} className="space-y-1.5">
+                  <Label htmlFor="job-category-trigger">{t('categoryLabel')}</Label>
+                  <Select
+                    value={values.category || undefined}
+                    onValueChange={(val) => setValue('category', val as CategoryKey, { shouldDirty: true })}
+                  >
+                    <SelectTrigger
+                      id="job-category-trigger"
+                      aria-invalid={errors.category ? true : undefined}
+                    >
+                      <SelectValue placeholder={t('categoryPlaceholder')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORY_KEYS.map((key) => (
+                        <SelectItem key={key} value={key}>
+                          {tCat(key)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError name="category" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('occupation')}>{t('occupationLabel')}</Label>
+                  <Input
+                    id={domId('occupation')}
+                    placeholder={t('occupationPlaceholder')}
+                    aria-invalid={errors.occupation ? true : undefined}
+                    {...register('occupation')}
+                  />
+                  <FieldError name="occupation" />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {step === 2 ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div id={domId('contractType')} className="space-y-1.5">
+                  <Label htmlFor="job-contract-trigger">{t('contractTypeLabel')}</Label>
+                  <Select
+                    value={values.contractType || undefined}
+                    onValueChange={(val) =>
+                      setValue('contractType', val as ContractType, { shouldDirty: true })
+                    }
+                  >
+                    <SelectTrigger
+                      id="job-contract-trigger"
+                      aria-invalid={errors.contractType ? true : undefined}
+                    >
+                      <SelectValue placeholder={t('contractTypePlaceholder')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONTRACT_TYPES.map((ct) => (
+                        <SelectItem key={ct} value={ct}>
+                          {tContract(ct)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError name="contractType" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('workingHours')}>{t('workingHoursLabel')}</Label>
+                  <Input
+                    id={domId('workingHours')}
+                    placeholder={t('workingHoursPlaceholder')}
+                    aria-invalid={errors.workingHours ? true : undefined}
+                    {...register('workingHours')}
+                  />
+                  <FieldError name="workingHours" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('shifts')}>{t('shiftsLabel')}</Label>
+                  <Input
+                    id={domId('shifts')}
+                    placeholder={t('shiftsPlaceholder')}
+                    aria-invalid={errors.shifts ? true : undefined}
+                    {...register('shifts')}
+                  />
+                  <FieldError name="shifts" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('startDate')}>{t('startDateLabel')}</Label>
+                  <Input
+                    id={domId('startDate')}
+                    type="date"
+                    aria-invalid={errors.startDate ? true : undefined}
+                    {...register('startDate')}
+                  />
+                  <FieldError name="startDate" />
+                </div>
+              </div>
+              <CheckboxField
+                id={domId('startImmediately')}
+                label={t('startImmediately')}
+                checked={values.startImmediately}
+                onChange={(c) => setValue('startImmediately', c, { shouldDirty: true })}
+              />
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('city')}>{t('cityLabel')}</Label>
+                  <Input
+                    id={domId('city')}
+                    placeholder={t('cityPlaceholder')}
+                    autoComplete="address-level2"
+                    aria-invalid={errors.city ? true : undefined}
+                    {...register('city')}
+                  />
+                  <FieldError name="city" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('region')}>{t('regionLabel')}</Label>
+                  <Input
+                    id={domId('region')}
+                    placeholder={t('regionPlaceholder')}
+                    aria-invalid={errors.region ? true : undefined}
+                    {...register('region')}
+                  />
+                  <FieldError name="region" />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor={domId('address')}>{t('addressLabel')}</Label>
+                  <Input
+                    id={domId('address')}
+                    placeholder={t('addressPlaceholder')}
+                    aria-invalid={errors.address ? true : undefined}
+                    {...register('address')}
+                  />
+                  <FieldError name="address" />
+                </div>
+              </div>
+              <CheckboxField
+                id={domId('remote')}
+                label={t('remote')}
+                checked={values.remote}
+                onChange={(c) => setValue('remote', c, { shouldDirty: true })}
+              />
+            </div>
+          ) : null}
+
+          {step === 4 ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('salaryMin')}>{t('salaryMinLabel')}</Label>
+                  <Input
+                    id={domId('salaryMin')}
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    aria-invalid={errors.salaryMin ? true : undefined}
+                    {...register('salaryMin')}
+                  />
+                  <FieldError name="salaryMin" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={domId('salaryMax')}>{t('salaryMaxLabel')}</Label>
+                  <Input
+                    id={domId('salaryMax')}
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    aria-invalid={errors.salaryMax ? true : undefined}
+                    {...register('salaryMax')}
+                  />
+                  <FieldError name="salaryMax" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="job-currency-trigger">{t('currencyLabel')}</Label>
+                  <Select
+                    value={values.currency}
+                    onValueChange={(val) => setValue('currency', val as Currency, { shouldDirty: true })}
+                  >
+                    <SelectTrigger id="job-currency-trigger">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCIES.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="job-period-trigger">{t('salaryPeriodLabel')}</Label>
+                  <Select
+                    value={values.salaryPeriod}
+                    onValueChange={(val) =>
+                      setValue('salaryPeriod', val as SalaryPeriod, { shouldDirty: true })
+                    }
+                  >
+                    <SelectTrigger id="job-period-trigger">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SALARY_PERIODS.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {PERIOD_LABEL[p]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">{t('salaryHint')}</p>
+            </div>
+          ) : null}
+
+          {step === 5 ? (
+            <div className="space-y-6">
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('description')}>{t('descriptionLabel')}</Label>
+                <Textarea
+                  id={domId('description')}
+                  rows={6}
+                  placeholder={t('descriptionPlaceholder')}
+                  aria-invalid={errors.description ? true : undefined}
+                  {...register('description')}
+                />
+                <FieldError name="description" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('responsibilities')}>{t('responsibilitiesLabel')}</Label>
+                <ChipInput
+                  id={domId('responsibilities')}
+                  values={values.responsibilities}
+                  onChange={(next) => setValue('responsibilities', next, { shouldDirty: true })}
+                  placeholder={t('responsibilitiesPlaceholder')}
+                  addLabel={t('add')}
+                  removeLabel={t('remove')}
+                  invalid={Boolean(errors.responsibilities)}
+                />
+                <p className="text-xs text-muted-foreground">{t('responsibilitiesHint')}</p>
+                <FieldError name="responsibilities" />
+              </div>
+            </div>
+          ) : null}
+
+          {step === 6 ? (
+            <div className="space-y-6">
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('requirementsMandatory')}>
+                  {t('requirementsMandatoryLabel')}
+                </Label>
+                <ChipInput
+                  id={domId('requirementsMandatory')}
+                  values={values.requirementsMandatory}
+                  onChange={(next) => setValue('requirementsMandatory', next, { shouldDirty: true })}
+                  placeholder={t('requirementsMandatoryPlaceholder')}
+                  addLabel={t('add')}
+                  removeLabel={t('remove')}
+                  invalid={Boolean(errors.requirementsMandatory)}
+                />
+                <FieldError name="requirementsMandatory" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('mandatorySkills')}>{t('mandatorySkillsLabel')}</Label>
+                <ChipInput
+                  id={domId('mandatorySkills')}
+                  values={values.mandatorySkills}
+                  onChange={(next) => setValue('mandatorySkills', next, { shouldDirty: true })}
+                  placeholder={t('mandatorySkillsPlaceholder')}
+                  addLabel={t('add')}
+                  removeLabel={t('remove')}
+                  invalid={Boolean(errors.mandatorySkills)}
+                />
+                <FieldError name="mandatorySkills" />
+              </div>
+              <div className="space-y-1.5 sm:max-w-xs">
+                <Label htmlFor={domId('minExperienceYears')}>{t('minExperienceLabel')}</Label>
+                <Input
+                  id={domId('minExperienceYears')}
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={60}
+                  aria-invalid={errors.minExperienceYears ? true : undefined}
+                  {...register('minExperienceYears')}
+                />
+                <p className="text-xs text-muted-foreground">{t('minExperienceHint')}</p>
+                <FieldError name="minExperienceYears" />
+              </div>
+            </div>
+          ) : null}
+
+          {step === 7 ? (
+            <div className="space-y-6">
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('requirementsOptional')}>
+                  {t('requirementsOptionalLabel')}
+                </Label>
+                <ChipInput
+                  id={domId('requirementsOptional')}
+                  values={values.requirementsOptional}
+                  onChange={(next) => setValue('requirementsOptional', next, { shouldDirty: true })}
+                  placeholder={t('requirementsOptionalPlaceholder')}
+                  addLabel={t('add')}
+                  removeLabel={t('remove')}
+                  invalid={Boolean(errors.requirementsOptional)}
+                />
+                <FieldError name="requirementsOptional" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('skills')}>{t('skillsLabel')}</Label>
+                <ChipInput
+                  id={domId('skills')}
+                  values={values.skills}
+                  onChange={(next) => setValue('skills', next, { shouldDirty: true })}
+                  placeholder={t('skillsPlaceholder')}
+                  addLabel={t('add')}
+                  removeLabel={t('remove')}
+                  invalid={Boolean(errors.skills)}
+                />
+                <FieldError name="skills" />
+              </div>
+
+              <div id={domId('languages')} className="space-y-2">
+                <Label htmlFor="job-language-draft">{t('languagesLabel')}</Label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="job-language-draft"
+                    className="flex-1"
+                    value={langDraft}
+                    placeholder={t('languageNamePlaceholder')}
+                    aria-invalid={langError ? true : undefined}
+                    onChange={(e) => {
+                      setLangDraft(e.target.value);
+                      if (langError) setLangError(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addLanguage();
+                      }
+                    }}
+                  />
+                  <div className="w-full sm:w-48">
+                    <Select value={levelDraft} onValueChange={(val) => setLevelDraft(val as LanguageLevel)}>
+                      <SelectTrigger aria-label={LEVEL_LABEL[levelDraft]}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGE_LEVELS.map((lvl) => (
+                          <SelectItem key={lvl} value={lvl}>
+                            {LEVEL_LABEL[lvl]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="button" variant="outline" onClick={addLanguage}>
+                    {t('addLanguage')}
+                  </Button>
+                </div>
+                {langError ? (
+                  <p className="text-sm text-error">{tRoot('candidate.error.languageInvalid')}</p>
+                ) : null}
+                {values.languages.length > 0 ? (
+                  <ul className="mt-1 flex flex-wrap gap-2">
+                    {values.languages.map((entry) => (
+                      <li
+                        key={entry.language}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-input bg-soft px-2.5 py-1 text-sm text-foreground"
+                      >
+                        {entry.language} · {LEVEL_LABEL[entry.level]}
+                        <button
+                          type="button"
+                          aria-label={`${t('remove')}: ${entry.language}`}
+                          onClick={() =>
+                            setValue(
+                              'languages',
+                              values.languages.filter((l) => l.language !== entry.language),
+                              { shouldDirty: true },
+                            )
+                          }
+                          className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <X className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <FieldError name="languages" />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('requiredCertificates')}>{t('certificatesLabel')}</Label>
+                <ChipInput
+                  id={domId('requiredCertificates')}
+                  values={values.requiredCertificates}
+                  onChange={(next) => setValue('requiredCertificates', next, { shouldDirty: true })}
+                  placeholder={t('certificatesPlaceholder')}
+                  addLabel={t('add')}
+                  removeLabel={t('remove')}
+                  invalid={Boolean(errors.requiredCertificates)}
+                />
+                <FieldError name="requiredCertificates" />
+              </div>
+
+              <div className="space-y-3">
+                <CheckboxField
+                  id={domId('requiresDrivingLicense')}
+                  label={t('requiresDrivingLicense')}
+                  checked={values.requiresDrivingLicense}
+                  onChange={(c) => setValue('requiresDrivingLicense', c, { shouldDirty: true })}
+                />
+                <CheckboxField
+                  id={domId('noLanguageRequired')}
+                  label={t('noLanguageRequired')}
+                  checked={values.noLanguageRequired}
+                  onChange={(c) => setValue('noLanguageRequired', c, { shouldDirty: true })}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {step === 8 ? (
+            <div className="space-y-6">
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('conditions')}>{t('conditionsLabel')}</Label>
+                <ChipInput
+                  id={domId('conditions')}
+                  values={values.conditions}
+                  onChange={(next) => setValue('conditions', next, { shouldDirty: true })}
+                  placeholder={t('conditionsPlaceholder')}
+                  addLabel={t('add')}
+                  removeLabel={t('remove')}
+                  invalid={Boolean(errors.conditions)}
+                />
+                <FieldError name="conditions" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('benefits')}>{t('benefitsLabel')}</Label>
+                <ChipInput
+                  id={domId('benefits')}
+                  values={values.benefits}
+                  onChange={(next) => setValue('benefits', next, { shouldDirty: true })}
+                  placeholder={t('benefitsPlaceholder')}
+                  addLabel={t('add')}
+                  removeLabel={t('remove')}
+                  invalid={Boolean(errors.benefits)}
+                />
+                <FieldError name="benefits" />
+              </div>
+              <div className="space-y-3">
+                <CheckboxField
+                  id={domId('accommodation')}
+                  label={t('accommodation')}
+                  checked={values.accommodation}
+                  onChange={(c) => setValue('accommodation', c, { shouldDirty: true })}
+                />
+                <CheckboxField
+                  id={domId('transport')}
+                  label={t('transport')}
+                  checked={values.transport}
+                  onChange={(c) => setValue('transport', c, { shouldDirty: true })}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {step === 9 ? (
+            <div className="space-y-6">
+              <div className="space-y-1.5">
+                <Label htmlFor={domId('companyDescription')}>{t('companyDescriptionLabel')}</Label>
+                <Textarea
+                  id={domId('companyDescription')}
+                  rows={5}
+                  placeholder={t('companyDescriptionPlaceholder')}
+                  aria-invalid={errors.companyDescription ? true : undefined}
+                  {...register('companyDescription')}
+                />
+                <FieldError name="companyDescription" />
+              </div>
+              <div className="space-y-1.5 sm:max-w-md">
+                <Label htmlFor={domId('contactEmail')}>{t('contactEmailLabel')}</Label>
+                <Input
+                  id={domId('contactEmail')}
+                  type="email"
+                  placeholder={t('contactEmailPlaceholder')}
+                  aria-invalid={errors.contactEmail ? true : undefined}
+                  {...register('contactEmail')}
+                />
+                <FieldError name="contactEmail" />
+              </div>
+
+              {/* Podgląd oferty */}
+              <div className="rounded-lg border border-border bg-soft p-4 sm:p-5">
+                <h3 className="text-base font-semibold text-foreground">{t('previewTitle')}</h3>
+                <p className="mt-0.5 text-sm text-muted-foreground">{t('previewNote')}</p>
+                <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                  <PreviewRow label={t('titleLabel')} value={values.title} empty={t('previewNothing')} />
+                  <PreviewRow
+                    label={t('categoryLabel')}
+                    value={values.category ? tCat(values.category) : ''}
+                    empty={t('previewNothing')}
+                  />
+                  <PreviewRow
+                    label={t('occupationLabel')}
+                    value={values.occupation}
+                    empty={t('previewNothing')}
+                  />
+                  <PreviewRow
+                    label={t('contractTypeLabel')}
+                    value={values.contractType ? tContract(values.contractType) : ''}
+                    empty={t('previewNothing')}
+                  />
+                  <PreviewRow
+                    label={t('cityLabel')}
+                    value={[values.city, values.region].filter(Boolean).join(', ')}
+                    empty={t('previewNothing')}
+                  />
+                  <PreviewRow
+                    label={t('salaryPeriodLabel')}
+                    value={
+                      values.salaryMin || values.salaryMax
+                        ? `${[values.salaryMin, values.salaryMax].filter(Boolean).join(' – ')} ${values.currency} / ${PERIOD_LABEL[values.salaryPeriod]}`
+                        : t('previewSalaryNotProvided')
+                    }
+                    empty={t('previewSalaryNotProvided')}
+                  />
+                </dl>
+                {values.responsibilities.length > 0 ? (
+                  <PreviewList label={t('responsibilitiesLabel')} items={values.responsibilities} />
+                ) : null}
+                {values.requirementsMandatory.length > 0 ? (
+                  <PreviewList
+                    label={t('requirementsMandatoryLabel')}
+                    items={values.requirementsMandatory}
+                  />
+                ) : null}
+                {values.benefits.length > 0 ? (
+                  <PreviewList label={t('benefitsLabel')} items={values.benefits} />
+                ) : null}
+              </div>
+
+              <div id={domId('agreePublish')} className="space-y-1.5">
+                <div className="flex items-start gap-2.5">
+                  <Checkbox
+                    id="job-agreePublish-box"
+                    checked={values.agreePublish}
+                    onCheckedChange={(checked) =>
+                      setValue('agreePublish', checked === true, { shouldDirty: true })
+                    }
+                    aria-invalid={errors.agreePublish ? true : undefined}
+                    className="mt-0.5"
+                  />
+                  <Label
+                    htmlFor="job-agreePublish-box"
+                    className="text-sm font-normal leading-snug text-muted-foreground"
+                  >
+                    {t('agreePublish')}
+                  </Label>
+                </div>
+                <FieldError name="agreePublish" />
+              </div>
+
+              {publishError ? (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/5 p-3"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+                  <div className="text-sm">
+                    <p className="font-medium text-foreground">
+                      {tRoot(toUserMessageKey(publishError))}
+                    </p>
+                    {publishError === 'COMPANY_NOT_VERIFIED' ? (
+                      <p className="mt-0.5 text-muted-foreground">{t('notVerifiedNote')}</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </form>
+      </section>
+
+      {/* Stopka: wskaźnik zapisu + nawigacja */}
+      <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <SaveIndicator
+          state={saveState}
+          labels={{
+            idle: t('saveHint'),
+            saving: t('saving'),
+            saved: demo ? t('savedDemo') : t('saved'),
+            error: t('saveError'),
+          }}
+        />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button asChild variant="ghost" disabled={busy}>
+            <Link href="/employer">{t('cancel')}</Link>
+          </Button>
+          <Button type="button" variant="outline" onClick={() => void handleSaveExit()} disabled={busy}>
+            {t('saveExit')}
+          </Button>
+          {step > 1 ? (
+            <Button type="button" variant="outline" onClick={handleBack} disabled={busy}>
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              {t('back')}
+            </Button>
+          ) : null}
+          {step < TOTAL_STEPS ? (
+            <Button type="button" onClick={() => void handleNext()} disabled={busy}>
+              {saveState === 'saving' ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : null}
+              {t('next')}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          ) : (
+            <Button type="button" onClick={() => void handlePublish()} disabled={busy}>
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Send className="h-4 w-4" aria-hidden="true" />
+              )}
+              {publishing ? t('publishing') : t('publish')}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  function addLanguage(): void {
+    const name = langDraft.trim();
+    if (name.length < 2) {
+      setLangError(true);
+      return;
+    }
+    const exists = values.languages.some((l) => l.language.toLowerCase() === name.toLowerCase());
+    if (!exists) {
+      setValue('languages', [...values.languages, { language: name, level: levelDraft }], {
+        shouldDirty: true,
+      });
+    }
+    setLangDraft('');
+    setLangError(false);
+  }
+}
+
+/** Wskaźnik stanu zapisu (idle/saving/saved/error). */
+function SaveIndicator({
+  state,
+  labels,
+}: {
+  state: SaveState;
+  labels: Record<SaveState, string>;
+}): React.JSX.Element {
+  if (state === 'saving') {
+    return (
+      <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        {labels.saving}
+      </p>
+    );
+  }
+  if (state === 'saved') {
+    return (
+      <p role="status" className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+        {labels.saved}
+      </p>
+    );
+  }
+  if (state === 'error') {
+    return (
+      <p role="alert" className="inline-flex items-center gap-2 text-sm text-error">
+        <AlertCircle className="h-4 w-4" aria-hidden="true" />
+        {labels.error}
+      </p>
+    );
+  }
+  return <p className="text-sm text-muted-foreground">{labels.idle}</p>;
+}
+
+/** Pole logiczne (checkbox z etykietą) — flagi oferty. */
+function CheckboxField({
+  id,
+  label,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}): React.JSX.Element {
+  return (
+    <div id={id} className="flex items-start gap-2.5">
+      <Checkbox
+        id={`${id}-box`}
+        checked={checked}
+        onCheckedChange={(c) => onChange(c === true)}
+        className="mt-0.5"
+      />
+      <Label htmlFor={`${id}-box`} className="text-sm font-normal leading-snug text-foreground">
+        {label}
+      </Label>
+    </div>
+  );
+}
+
+/** Wiersz podglądu (etykieta + wartość / placeholder). */
+function PreviewRow({
+  label,
+  value,
+  empty,
+}: {
+  label: string;
+  value: string;
+  empty: string;
+}): React.JSX.Element {
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 text-sm text-foreground">{value.trim() ? value : empty}</dd>
+    </div>
+  );
+}
+
+/** Lista podglądu (etykieta + pozycje). */
+function PreviewList({ label, items }: { label: string; items: string[] }): React.JSX.Element {
+  return (
+    <div className="mt-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm text-foreground">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Pole „chipów" — dodawanie/usuwanie krótkich wpisów (obowiązki/wymagania/umiejętności). */
+function ChipInput({
+  id,
+  values,
+  onChange,
+  placeholder,
+  addLabel,
+  removeLabel,
+  invalid,
+}: {
+  id: string;
+  values: string[];
+  onChange: (next: string[]) => void;
+  placeholder: string;
+  addLabel: string;
+  removeLabel: string;
+  invalid?: boolean;
+}): React.JSX.Element {
+  const [draft, setDraft] = React.useState('');
+
+  function add(): void {
+    const value = draft.trim();
+    if (!value) return;
+    if (!values.includes(value)) onChange([...values, value]);
+    setDraft('');
+  }
+
+  return (
+    <div>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          value={draft}
+          placeholder={placeholder}
+          aria-invalid={invalid ? true : undefined}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <Button type="button" variant="outline" onClick={add}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          {addLabel}
+        </Button>
+      </div>
+      {values.length > 0 ? (
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {values.map((value) => (
+            <li
+              key={value}
+              className="inline-flex items-center gap-1.5 rounded-md border border-input bg-soft px-2.5 py-1 text-sm text-foreground"
+            >
+              {value}
+              <button
+                type="button"
+                aria-label={`${removeLabel}: ${value}`}
+                onClick={() => onChange(values.filter((v) => v !== value))}
+                className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}

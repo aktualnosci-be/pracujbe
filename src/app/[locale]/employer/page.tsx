@@ -104,7 +104,7 @@ export default async function EmployerDashboardPage({
             {td('employerGreetingSub', { name: 'Jan' })}
           </p>
         </div>
-        {/* TODO(data): kreator oferty — podpiąć w osobnym etapie. */}
+        {/* Kreator oferty (Etap 5) — 9 kroków z autozapisem szkicu. */}
         <Button asChild className="shrink-0 gap-2 self-start sm:self-auto">
           <Link href="/employer/oferty/nowa">
             <Plus className="size-4" aria-hidden="true" />

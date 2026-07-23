@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import { createServerClient } from '@/lib/supabase/server';
 import type { ErrorCode } from '@/lib/errors';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { applicationSchema, type ApplicationInput } from '@/lib/validation/application';
 
 /**
@@ -34,6 +35,11 @@ function mapPgError(message: string | undefined): ErrorCode {
 
 /** Kandydat aplikuje na ofertę (idempotentnie). */
 export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> {
+  // Rate limit per IP (20 aplikacji / godz) — ochrona przed spamowaniem ofert.
+  if (!(await checkRateLimit('apply', { max: 20, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
   const parsed = applicationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
