@@ -344,15 +344,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 ### Etap 5 — procesy
 - [~] Matching (logika + test jednostkowy) — rdzeń gotowy, integracja z UI do zrobienia
-- [ ] Aplikacje (idempotentne) + statusy + historia
-- [ ] Propozycje pracy (idempotentne, kolejka e-mail) + statusy
+- [~] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions gotowe i zweryfikowane na PG; wpięcie ApplyModal do UI do zrobienia
+- [~] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions gotowe i zweryfikowane; wpięcie do UI do zrobienia
 - [ ] Wiadomości (konwersacje, załączniki, przeczytania, zgłoszenia)
 
 ### Etap 6 — komunikacja
-- [~] Wybór języka odbiorcy (fallback) — util + test gotowe
-- [ ] Kolejka e-mail + worker + ponawianie
-- [ ] Szablony React Email PL/NL/FR/EN (wszystkie typy z sekcji 22)
-- [ ] Powiadomienia in-app + preferencje
+- [x] Wybór języka odbiorcy (fallback) — util + test + `resolve_recipient_locale()` w DB (INVARIANT #1 egzekwowany przy kolejkowaniu)
+- [~] Kolejka e-mail + worker + ponawianie — outbox (`email_deliveries`: attempts/next_attempt_at/payload), worker `src/lib/email/outbox.ts` + route `/api/email/process` (sekret) gotowe; realna wysyłka wymaga `RESEND_API_KEY`
+- [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; podpięte do outboxa (payload z RPC)
+- [ ] Powiadomienia in-app + preferencje (rekordy `notifications` tworzone przez RPC; UI do zrobienia)
 
 ### Etap 7 — admin / prywatność / płatności
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)
