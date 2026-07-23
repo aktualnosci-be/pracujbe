@@ -1,0 +1,98 @@
+'use server';
+
+import { createServerClient } from '@/lib/supabase/server';
+import type { ErrorCode } from '@/lib/errors';
+import { isSupabaseConfigured } from '@/lib/env';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { messageBodySchema } from '@/lib/validation/message';
+
+/**
+ * Server Actions komunikacji (Etap 6) — cienka warstwa nad RPC z migracji 0016.
+ * Cała logika domenowa (walidacja relacji/uczestnictwa, tworzenie konwersacji z obiema
+ * stronami, powiadomienia in-app, kolejka e-mail w języku ODBIORCY) jest w DB (SECURITY
+ * DEFINER). Tu: walidacja wejścia + rate limit + mapowanie błędu na kod użytkowy (bez
+ * technikaliów — Invariant #8).
+ *
+ * Tryb demo (brak konfiguracji Supabase) zwraca sukces-atrapę, aby UI działało bez backendu.
+ */
+
+export type MsgResult = { ok: true; id: string } | { ok: false; error: ErrorCode };
+export type OkResult = { ok: true } | { ok: false; error: ErrorCode };
+
+/** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
+function mapPgError(message: string | undefined): ErrorCode {
+  const m = message ?? '';
+  if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
+  if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
+  if (
+    m.includes('PERMISSION_DENIED') ||
+    m.includes('UNAUTHENTICATED') ||
+    m.includes('row-level security')
+  ) {
+    return 'PERMISSION_DENIED';
+  }
+  return 'INTERNAL';
+}
+
+/**
+ * Otwiera (lub zwraca istniejącą) konwersację powiązaną z aplikacją LUB propozycją.
+ * Dokładnie jedno z pól musi być podane — RPC dodatkowo waliduje, że wywołujący jest stroną.
+ */
+export async function openConversation(input: {
+  applicationId?: string;
+  offerId?: string;
+}): Promise<MsgResult> {
+  const applicationId = input.applicationId || undefined;
+  const offerId = input.offerId || undefined;
+
+  // XOR: dokładnie jedna relacja.
+  if ((applicationId === undefined) === (offerId === undefined)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  if (!isSupabaseConfigured()) return { ok: true, id: 'demo' };
+
+  const supabase = await createServerClient();
+  const { data, error } = await supabase.rpc('get_or_create_conversation', {
+    p_application_id: applicationId ?? null,
+    p_offer_id: offerId ?? null,
+  });
+
+  if (error) return { ok: false, error: mapPgError(error.message) };
+  return { ok: true, id: String(data) };
+}
+
+/** Wysyła wiadomość w konwersacji (tylko uczestnik — egzekwuje RPC). */
+export async function sendMessage(conversationId: string, body: string): Promise<MsgResult> {
+  const parsed = messageBodySchema.safeParse(body);
+  if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
+
+  if (!isSupabaseConfigured()) return { ok: true, id: 'demo' };
+
+  // Rate limit per IP (60 wiadomości / godz) — ochrona przed spamowaniem konwersacji.
+  if (!(await checkRateLimit('message', { max: 60, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
+  const supabase = await createServerClient();
+  const { data, error } = await supabase.rpc('send_message', {
+    p_conversation_id: conversationId,
+    p_body: parsed.data,
+  });
+
+  if (error) return { ok: false, error: mapPgError(error.message) };
+  return { ok: true, id: String(data) };
+}
+
+/** Oznacza konwersację jako przeczytaną (ustawia `last_read_at`, wygasza powiadomienia). */
+export async function markConversationRead(conversationId: string): Promise<OkResult> {
+  if (!isSupabaseConfigured()) return { ok: true };
+
+  const supabase = await createServerClient();
+  const { error } = await supabase.rpc('mark_conversation_read', {
+    p_conversation_id: conversationId,
+  });
+
+  if (error) return { ok: false, error: mapPgError(error.message) };
+  return { ok: true };
+}

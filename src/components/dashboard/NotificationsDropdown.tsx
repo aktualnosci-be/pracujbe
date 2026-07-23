@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
+import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 
 /**
@@ -30,11 +31,17 @@ export interface NotificationsDropdownProps {
   items: NotificationItem[];
   /** Licznik nieprzeczytanych; gdy pominięty — liczony z `items`. */
   count?: number;
+  /** Wywoływane przez „oznacz wszystkie jako przeczytane" (rodzic robi zapis + refresh). */
+  onMarkAllRead?: () => void;
+  /** Docelowa trasa „zobacz wszystkie" (bez prefiksu locale). Bez niej — zwykły przycisk. */
+  seeAllHref?: string;
 }
 
 export function NotificationsDropdown({
   items,
   count,
+  onMarkAllRead,
+  seeAllHref,
 }: NotificationsDropdownProps): React.JSX.Element {
   const t = useTranslations('notifications');
   const unread = count ?? items.filter((item) => item.unread).length;
@@ -56,7 +63,9 @@ export function NotificationsDropdown({
         </div>
         <button
           type="button"
-          className="rounded text-xs font-medium text-accent hover:underline"
+          onClick={onMarkAllRead}
+          disabled={unread === 0}
+          className="rounded text-xs font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
         >
           {t('markAllRead')}
         </button>
@@ -91,15 +100,26 @@ export function NotificationsDropdown({
             </li>
           ))}
         </ul>
-      ) : null}
+      ) : (
+        <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t('empty')}</p>
+      )}
 
       <div className="border-t border-border px-4 py-2.5 text-center">
-        <button
-          type="button"
-          className="rounded text-sm font-medium text-accent hover:underline"
-        >
-          {t('seeAll')}
-        </button>
+        {seeAllHref ? (
+          <Link
+            href={seeAllHref}
+            className="rounded text-sm font-medium text-accent hover:underline"
+          >
+            {t('seeAll')}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="rounded text-sm font-medium text-accent hover:underline"
+          >
+            {t('seeAll')}
+          </button>
+        )}
       </div>
     </div>
   );

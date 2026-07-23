@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
+import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 
 /**
  * CandidateShell — chrome panelu kandydata (makieta 04): granatowy sidebar + topbar
@@ -41,7 +42,22 @@ const HREF = {
   settings: '/candidate/ustawienia',
 } as const;
 
-export function CandidateShell({ children }: { children: React.ReactNode }): React.JSX.Element {
+export interface CandidateShellProps {
+  children: React.ReactNode;
+  /** Realne powiadomienia (z sesji/RLS). Bez nich DashboardShell użyje fallbacku DEMO. */
+  notifItems?: NotificationItem[];
+  /** Liczba nieprzeczytanych powiadomień (badge na dzwonku). */
+  notifUnread?: number;
+  /** Liczba konwersacji z nieprzeczytanymi (badge pozycji „Wiadomości"). */
+  unreadMessages?: number;
+}
+
+export function CandidateShell({
+  children,
+  notifItems,
+  notifUnread,
+  unreadMessages,
+}: CandidateShellProps): React.JSX.Element {
   const td = useTranslations('dashboard');
   const pathname = usePathname();
 
@@ -56,7 +72,7 @@ export function CandidateShell({ children }: { children: React.ReactNode }): Rea
     { href: HREF.saved, label: td('navSaved'), icon: <Heart /> },
     { href: HREF.applications, label: td('navApplications'), icon: <Bookmark /> },
     { href: HREF.proposals, label: td('navProposals'), icon: <MailCheck /> },
-    { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare />, badge: 2 },
+    { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
     { href: HREF.profile, label: td('navProfile'), icon: <User /> },
     { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },
   ];
@@ -68,13 +84,15 @@ export function CandidateShell({ children }: { children: React.ReactNode }): Rea
     return item.href.length > best.length ? item.href : best;
   }, HREF.summary);
 
-  // TODO(data): realne dane użytkownika i licznik powiadomień z sesji/backendu.
+  // TODO(data): realne dane użytkownika z sesji/backendu (powiadomienia już realne).
   return (
     <DashboardShell
       nav={nav}
       active={active}
       user={{ name: 'Adam Kowalski', subtitle: td('viewProfile'), initials: 'AK' }}
-      notifications={2}
+      notifications={notifUnread}
+      notifItems={notifItems}
+      unreadMessages={unreadMessages}
     >
       {children}
     </DashboardShell>

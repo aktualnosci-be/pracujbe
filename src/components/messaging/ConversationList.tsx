@@ -1,0 +1,118 @@
+import { getTranslations } from 'next-intl/server';
+
+import { Link } from '@/i18n/navigation';
+import { cn } from '@/lib/utils';
+import type { Locale } from '@/i18n/routing';
+import type { ConversationListItem } from '@/lib/data/messages';
+
+/**
+ * ConversationList — prezentacyjna lista konwersacji panelu (makieta „Wiadomości").
+ *
+ * Serwerowy komponent (bez interakcji): pozycje to `Link` do TEJ SAMEJ trasy panelu
+ * z parametrem `?c=<id>` (rodzic wybiera wątek po `searchParams`). Aktywna pozycja
+ * (`activeId`) i nieprzeczytane są wizualnie wyróżnione. Pusty stan (brak konwersacji)
+ * obsłużony tu — teksty z i18n (`messages`). Czas formatowany wg `locale` (Intl).
+ */
+
+export interface ConversationListProps {
+  items: ConversationListItem[];
+  /** `id` aktywnej konwersacji (podświetlenie). */
+  activeId?: string | null;
+  /** Ścieżka trasy panelu BEZ prefiksu locale (np. `/candidate/wiadomosci`). */
+  basePath: string;
+  locale: Locale;
+}
+
+/** Krótki, lokalny format czasu ostatniej wiadomości (dzień/miesiąc). */
+function formatWhen(iso: string, locale: Locale): string {
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return '';
+  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit' }).format(ts);
+}
+
+/** Inicjały drugiej strony (placeholder awatara/logo). */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '•';
+}
+
+export async function ConversationList({
+  items,
+  activeId,
+  basePath,
+  locale,
+}: ConversationListProps) {
+  const t = await getTranslations({ locale, namespace: 'messages' });
+
+  if (items.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-1 p-8 text-center">
+        <p className="text-sm font-medium text-foreground">{t('empty')}</p>
+        <p className="text-sm text-muted-foreground">{t('emptyHint')}</p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="divide-y divide-border">
+      {items.map((item) => {
+        const active = item.id === activeId;
+        return (
+          <li key={item.id}>
+            <Link
+              href={`${basePath}?c=${item.id}`}
+              aria-current={active ? 'true' : undefined}
+              className={cn(
+                'flex gap-3 px-4 py-3 transition-colors hover:bg-soft',
+                active ? 'bg-soft' : 'bg-transparent',
+              )}
+            >
+              <span
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
+                aria-hidden="true"
+              >
+                {initials(item.counterpartyName)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p
+                    className={cn(
+                      'truncate text-sm',
+                      item.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground',
+                    )}
+                  >
+                    {item.counterpartyName || item.subject}
+                  </p>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatWhen(item.lastMessageAt, locale)}
+                  </span>
+                </div>
+                {item.subject ? (
+                  <p className="truncate text-xs text-muted-foreground">{item.subject}</p>
+                ) : null}
+                <div className="mt-0.5 flex items-center gap-2">
+                  <p
+                    className={cn(
+                      'min-w-0 flex-1 truncate text-sm',
+                      item.unread ? 'text-foreground' : 'text-muted-foreground',
+                    )}
+                  >
+                    {item.lastPreview}
+                  </p>
+                  {item.unread ? (
+                    <span
+                      className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-semibold text-accent-foreground"
+                      aria-label={t('unreadBadge')}
+                    >
+                      {item.unreadCount > 0 ? item.unreadCount : ''}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}

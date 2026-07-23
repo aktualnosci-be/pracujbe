@@ -1,11 +1,13 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, HelpCircle, LogOut, Menu, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { signOut } from '@/lib/actions/auth';
+import { markNotificationsRead } from '@/lib/actions/notifications';
 import { cn } from '@/lib/utils';
 
 import { NotificationsDropdown, type NotificationItem } from './NotificationsDropdown';
@@ -39,6 +41,10 @@ export interface DashboardShellProps {
   user: { name: string; subtitle?: string; initials: string };
   /** Licznik nieprzeczytanych powiadomień (badge na dzwonku). */
   notifications?: number;
+  /** Pozycje powiadomień do dropdownu. Gdy pominięte — fallback DEMO. */
+  notifItems?: NotificationItem[];
+  /** Liczba konwersacji z nieprzeczytanymi — badge pozycji „Wiadomości" w nawigacji. */
+  unreadMessages?: number;
   children: React.ReactNode;
 }
 
@@ -50,23 +56,48 @@ export function DashboardShell({
   brand,
   user,
   notifications,
+  notifItems,
+  unreadMessages,
   children,
 }: DashboardShellProps): React.JSX.Element {
   const tc = useTranslations('common');
   const td = useTranslations('dashboard');
   const tnav = useTranslations('nav');
   const tn = useTranslations('notifications');
+  const router = useRouter();
 
   const [notifOpen, setNotifOpen] = React.useState(false);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [, startMarkTransition] = React.useTransition();
   const notifRef = React.useRef<HTMLDivElement>(null);
 
-  // TODO(data): powiadomienia demonstracyjne — podmienić na realne z backendu.
-  const notifItems: NotificationItem[] = [
+  // Powiadomienia realne (`notifItems`), a bez nich — fallback DEMO (tryb bez backendu).
+  const demoNotifItems: NotificationItem[] = [
     { title: tn('sampleNewJob'), meta: '10 min', unread: true },
     { title: tn('sampleAppViewed'), meta: '1 h', unread: true },
     { title: tn('sampleMessage'), meta: '3 h', unread: false },
   ];
+  const items = notifItems ?? demoNotifItems;
+
+  // Trasa „Wiadomości" (jeśli w nawigacji) — cel „zobacz wszystkie" oraz nośnik badge.
+  const messagesHref = nav.find((item) => item.href.endsWith('/wiadomosci'))?.href;
+
+  // Badge pozycji „Wiadomości" bierze się z realnej liczby nieprzeczytanych konwersacji.
+  const effectiveNav =
+    unreadMessages === undefined
+      ? nav
+      : nav.map((item) =>
+          item.href === messagesHref
+            ? { ...item, badge: unreadMessages > 0 ? unreadMessages : undefined }
+            : item,
+        );
+
+  function handleMarkAllRead(): void {
+    startMarkTransition(async () => {
+      await markNotificationsRead();
+      router.refresh();
+    });
+  }
 
   // Zamknięcie dropdownu powiadomień: klik poza obszarem + Escape.
   React.useEffect(() => {
@@ -105,8 +136,11 @@ export function DashboardShell({
     <span className="text-lg font-semibold tracking-tight text-white">{tc('appName')}</span>
   );
 
-  const tabItems = nav.length > MOBILE_TABS ? nav.slice(0, MOBILE_TABS - 1) : nav.slice(0, MOBILE_TABS);
-  const hasMore = nav.length > MOBILE_TABS;
+  const tabItems =
+    effectiveNav.length > MOBILE_TABS
+      ? effectiveNav.slice(0, MOBILE_TABS - 1)
+      : effectiveNav.slice(0, MOBILE_TABS);
+  const hasMore = effectiveNav.length > MOBILE_TABS;
 
   return (
     <div className="min-h-screen bg-soft">
@@ -114,7 +148,7 @@ export function DashboardShell({
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-primary text-white lg:flex">
         <div className="flex h-16 items-center px-6">{brand ?? defaultBrand}</div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {nav.map((item) => (
+          {effectiveNav.map((item) => (
             <SidebarLink key={item.href} item={item} active={item.href === active} />
           ))}
         </nav>
@@ -169,7 +203,12 @@ export function DashboardShell({
             </button>
             {notifOpen ? (
               <div className="absolute right-0 top-full z-30 mt-2">
-                <NotificationsDropdown items={notifItems} count={notifications} />
+                <NotificationsDropdown
+                  items={items}
+                  count={notifications}
+                  onMarkAllRead={handleMarkAllRead}
+                  seeAllHref={messagesHref}
+                />
               </div>
             ) : null}
           </div>
@@ -235,7 +274,7 @@ export function DashboardShell({
               </button>
             </div>
             <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-              {nav.map((item) => (
+              {effectiveNav.map((item) => (
                 <SidebarLink
                   key={item.href}
                   item={item}

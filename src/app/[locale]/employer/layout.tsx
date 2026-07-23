@@ -2,10 +2,13 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
 import { EmployerShell } from '@/components/employer/EmployerShell';
+import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { isSupabaseConfigured } from '@/lib/env';
 import { createServerClient } from '@/lib/supabase/server';
+import { getNotifications } from '@/lib/data/notifications';
+import { getUnreadConversationsCount } from '@/lib/data/messages';
 
 /**
  * Layout panelu pracodawcy (grupa tras `/employer/*`).
@@ -36,6 +39,10 @@ export default async function EmployerLayout({
 }) {
   const { locale } = await params;
 
+  let notifItems: NotificationItem[] | undefined;
+  let notifUnread: number | undefined;
+  let unreadMessages: number | undefined;
+
   if (isSupabaseConfigured()) {
     const supabase = await createServerClient();
     const {
@@ -58,7 +65,28 @@ export default async function EmployerLayout({
     if (!memberships || memberships.length === 0) {
       redirect({ href: '/rejestracja-pracodawca', locale: locale as Locale });
     }
+
+    // Realne powiadomienia + licznik nieprzeczytanych konwersacji (pod sesją/RLS).
+    const [notif, unread] = await Promise.all([
+      getNotifications(locale),
+      getUnreadConversationsCount(),
+    ]);
+    notifItems = notif.items.map((item) => ({
+      title: item.title,
+      meta: item.meta,
+      unread: item.unread,
+    }));
+    notifUnread = notif.unread;
+    unreadMessages = unread;
   }
 
-  return <EmployerShell>{children}</EmployerShell>;
+  return (
+    <EmployerShell
+      notifItems={notifItems}
+      notifUnread={notifUnread}
+      unreadMessages={unreadMessages}
+    >
+      {children}
+    </EmployerShell>
+  );
 }

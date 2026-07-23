@@ -615,7 +615,16 @@
     "seeAll": "See all",
     "sampleNewJob": "New job matched to your profile",
     "sampleAppViewed": "Your application was viewed",
-    "sampleMessage": "You have a new message from an employer"
+    "sampleMessage": "You have a new message from an employer",
+    "itemApplicationReceived": "New application received",
+    "itemApplicationStatusChanged": "Your application status has changed",
+    "itemOfferReceived": "You received a job offer",
+    "itemOfferStatusChanged": "The job offer status has changed",
+    "itemMessageReceived": "You have a new message",
+    "itemJobMatch": "New job matched to your profile",
+    "itemCompanyVerified": "Your company has been verified",
+    "itemSystem": "System notification",
+    "empty": "No notifications"
   },
   "pricing": {
     "standard": "Standard",
@@ -800,5 +809,21 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Not provided",
     "notVerifiedNote": "The draft has been saved. Publishing will be available once the company is verified."
+  },
+  "messages": {
+    "title": "Messages",
+    "subtitle": "All your conversations in one place",
+    "empty": "No messages",
+    "emptyHint": "Your conversations will appear here once you start talking.",
+    "selectConversation": "Select a conversation to view messages.",
+    "threadEmpty": "No messages in this conversation yet.",
+    "composerPlaceholder": "Write a message…",
+    "send": "Send",
+    "sending": "Sending…",
+    "sendError": "Could not send the message. Please try again.",
+    "you": "You",
+    "systemLabel": "System",
+    "back": "Back to list",
+    "unreadBadge": "Unread"
   }
 }

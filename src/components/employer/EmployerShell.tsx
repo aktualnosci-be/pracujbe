@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
+import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 
 /**
  * EmployerShell — chrome panelu pracodawcy (makieta 05): granatowy sidebar z przełącznikiem
@@ -42,7 +43,22 @@ const HREF = {
 const COMPANY_NAME = 'AGO Jobs & HR';
 const COMPANY_INITIALS = 'AGO';
 
-export function EmployerShell({ children }: { children: React.ReactNode }): React.JSX.Element {
+export interface EmployerShellProps {
+  children: React.ReactNode;
+  /** Realne powiadomienia (z sesji/RLS). Bez nich DashboardShell użyje fallbacku DEMO. */
+  notifItems?: NotificationItem[];
+  /** Liczba nieprzeczytanych powiadomień (badge na dzwonku). */
+  notifUnread?: number;
+  /** Liczba konwersacji z nieprzeczytanymi (badge pozycji „Wiadomości"). */
+  unreadMessages?: number;
+}
+
+export function EmployerShell({
+  children,
+  notifItems,
+  notifUnread,
+  unreadMessages,
+}: EmployerShellProps): React.JSX.Element {
   const td = useTranslations('dashboard');
   const pathname = usePathname();
 
@@ -50,8 +66,8 @@ export function EmployerShell({ children }: { children: React.ReactNode }): Reac
     { href: HREF.summary, label: td('navSummary'), icon: <LayoutDashboard /> },
     { href: HREF.offers, label: td('navOffers'), icon: <ClipboardList /> },
     { href: HREF.candidates, label: td('navCandidates'), icon: <Users /> },
-    { href: HREF.applications, label: td('navApplications'), icon: <ClipboardList />, badge: 12 },
-    { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare />, badge: 5 },
+    { href: HREF.applications, label: td('navApplications'), icon: <ClipboardList /> },
+    { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
     { href: HREF.company, label: td('navCompany'), icon: <Building2 /> },
     { href: HREF.payments, label: td('navPayments'), icon: <CreditCard /> },
     { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },
@@ -86,14 +102,16 @@ export function EmployerShell({ children }: { children: React.ReactNode }): Reac
     </button>
   );
 
-  // TODO(data): realne dane użytkownika i licznik powiadomień z sesji/backendu.
+  // TODO(data): realne dane użytkownika/firmy z sesji/backendu (powiadomienia już realne).
   return (
     <DashboardShell
       nav={nav}
       active={active}
       brand={brand}
       user={{ name: 'Jan Kowalski', subtitle: COMPANY_NAME, initials: 'JK' }}
-      notifications={5}
+      notifications={notifUnread}
+      notifItems={notifItems}
+      unreadMessages={unreadMessages}
     >
       {children}
     </DashboardShell>

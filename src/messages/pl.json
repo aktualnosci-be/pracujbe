@@ -615,7 +615,16 @@
     "seeAll": "Zobacz wszystkie",
     "sampleNewJob": "Nowa oferta pracy dopasowana do Twojego profilu",
     "sampleAppViewed": "Twoja aplikacja została obejrzana",
-    "sampleMessage": "Masz nową wiadomość od pracodawcy"
+    "sampleMessage": "Masz nową wiadomość od pracodawcy",
+    "itemApplicationReceived": "Otrzymano nową aplikację",
+    "itemApplicationStatusChanged": "Status Twojej aplikacji uległ zmianie",
+    "itemOfferReceived": "Otrzymałeś propozycję pracy",
+    "itemOfferStatusChanged": "Status propozycji pracy uległ zmianie",
+    "itemMessageReceived": "Masz nową wiadomość",
+    "itemJobMatch": "Nowa oferta dopasowana do Twojego profilu",
+    "itemCompanyVerified": "Twoja firma została zweryfikowana",
+    "itemSystem": "Powiadomienie systemowe",
+    "empty": "Brak powiadomień"
   },
   "pricing": {
     "standard": "Standard",
@@ -800,5 +809,21 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Nie podano",
     "notVerifiedNote": "Wersja robocza została zapisana. Publikacja będzie możliwa po weryfikacji firmy."
+  },
+  "messages": {
+    "title": "Wiadomości",
+    "subtitle": "Twoje rozmowy w jednym miejscu",
+    "empty": "Brak wiadomości",
+    "emptyHint": "Twoje rozmowy pojawią się tutaj, gdy zaczniesz kontakt.",
+    "selectConversation": "Wybierz konwersację, aby zobaczyć wiadomości.",
+    "threadEmpty": "Brak wiadomości w tej rozmowie.",
+    "composerPlaceholder": "Napisz wiadomość…",
+    "send": "Wyślij",
+    "sending": "Wysyłanie…",
+    "sendError": "Nie udało się wysłać wiadomości. Spróbuj ponownie.",
+    "you": "Ty",
+    "systemLabel": "System",
+    "back": "Wróć do listy",
+    "unreadBadge": "Nieprzeczytane"
   }
 }

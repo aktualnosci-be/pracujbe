@@ -615,7 +615,16 @@
     "seeAll": "Voir tout",
     "sampleNewJob": "Nouvelle offre adaptée à votre profil",
     "sampleAppViewed": "Votre candidature a été consultée",
-    "sampleMessage": "Vous avez un nouveau message d'un employeur"
+    "sampleMessage": "Vous avez un nouveau message d'un employeur",
+    "itemApplicationReceived": "Nouvelle candidature reçue",
+    "itemApplicationStatusChanged": "Le statut de votre candidature a changé",
+    "itemOfferReceived": "Vous avez reçu une proposition d'emploi",
+    "itemOfferStatusChanged": "Le statut de la proposition d'emploi a changé",
+    "itemMessageReceived": "Vous avez un nouveau message",
+    "itemJobMatch": "Nouvelle offre adaptée à votre profil",
+    "itemCompanyVerified": "Votre entreprise a été vérifiée",
+    "itemSystem": "Notification système",
+    "empty": "Aucune notification"
   },
   "pricing": {
     "standard": "Standard",
@@ -800,5 +809,21 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Non précisé",
     "notVerifiedNote": "Le brouillon est enregistré. La publication sera possible une fois l'entreprise vérifiée."
+  },
+  "messages": {
+    "title": "Messages",
+    "subtitle": "Toutes vos conversations au même endroit",
+    "empty": "Aucun message",
+    "emptyHint": "Vos conversations apparaîtront ici dès que vous prendrez contact.",
+    "selectConversation": "Sélectionnez une conversation pour voir les messages.",
+    "threadEmpty": "Aucun message dans cette conversation.",
+    "composerPlaceholder": "Écrivez un message…",
+    "send": "Envoyer",
+    "sending": "Envoi…",
+    "sendError": "Échec de l'envoi du message. Réessayez.",
+    "you": "Vous",
+    "systemLabel": "Système",
+    "back": "Retour à la liste",
+    "unreadBadge": "Non lu"
   }
 }

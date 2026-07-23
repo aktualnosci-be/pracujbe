@@ -615,7 +615,16 @@
     "seeAll": "Alles bekijken",
     "sampleNewJob": "Nieuwe vacature afgestemd op je profiel",
     "sampleAppViewed": "Je sollicitatie is bekeken",
-    "sampleMessage": "Je hebt een nieuw bericht van een werkgever"
+    "sampleMessage": "Je hebt een nieuw bericht van een werkgever",
+    "itemApplicationReceived": "Nieuwe sollicitatie ontvangen",
+    "itemApplicationStatusChanged": "De status van je sollicitatie is gewijzigd",
+    "itemOfferReceived": "Je hebt een werkaanbod ontvangen",
+    "itemOfferStatusChanged": "De status van het werkaanbod is gewijzigd",
+    "itemMessageReceived": "Je hebt een nieuw bericht",
+    "itemJobMatch": "Nieuwe vacature afgestemd op je profiel",
+    "itemCompanyVerified": "Je bedrijf is geverifieerd",
+    "itemSystem": "Systeemmelding",
+    "empty": "Geen meldingen"
   },
   "pricing": {
     "standard": "Standaard",
@@ -800,5 +809,21 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Niet opgegeven",
     "notVerifiedNote": "Het concept is opgeslagen. Publiceren kan zodra het bedrijf is geverifieerd."
+  },
+  "messages": {
+    "title": "Berichten",
+    "subtitle": "Al je gesprekken op één plek",
+    "empty": "Geen berichten",
+    "emptyHint": "Je gesprekken verschijnen hier zodra je contact maakt.",
+    "selectConversation": "Kies een gesprek om de berichten te bekijken.",
+    "threadEmpty": "Nog geen berichten in dit gesprek.",
+    "composerPlaceholder": "Schrijf een bericht…",
+    "send": "Versturen",
+    "sending": "Versturen…",
+    "sendError": "Bericht kon niet worden verzonden. Probeer het opnieuw.",
+    "you": "Jij",
+    "systemLabel": "Systeem",
+    "back": "Terug naar lijst",
+    "unreadBadge": "Ongelezen"
   }
 }
