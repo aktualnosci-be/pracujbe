@@ -12,10 +12,16 @@ import { defineConfig, devices } from '@playwright/test';
  * - reporter: html
  *
  * W CI serwer jest budowany od zera; lokalnie można podmienić komendę na `npm run dev`.
+ *
+ * Self-hosted: gdy runner ma preinstalowaną przeglądarkę (np. /opt/pw-browsers/chromium)
+ * ustaw PLAYWRIGHT_CHROMIUM_PATH — Playwright użyje jej zamiast pobierać własną
+ * (unika błędu „Executable doesn't exist" przy niezgodności wersji builda). Bez tej
+ * zmiennej zachowanie jest domyślne.
  */
 
 const PORT = 3000;
 const BASE_URL = `http://localhost:${PORT}`;
+const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -31,7 +37,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(CHROMIUM_PATH ? { launchOptions: { executablePath: CHROMIUM_PATH } } : {}),
+      },
     },
   ],
   webServer: {

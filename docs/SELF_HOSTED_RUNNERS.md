@@ -60,6 +60,9 @@ sudo ./svc.sh status
 
 > **Playwright:** job `e2e` wykonuje `npx playwright install chromium` (bez `--with-deps`,
 > bo tamto wymaga sudo w trakcie CI). Zależności systemowe zainstaluj **raz** przy provisioningu runnera.
+> Gdy runner ma preinstalowaną przeglądarkę o innej wersji builda niż oczekuje Playwright
+> (błąd „Executable doesn't exist"), ustaw `PLAYWRIGHT_CHROMIUM_PATH` na ścieżkę binarki
+> (np. `/opt/pw-browsers/chromium`) — `playwright.config.ts` użyje jej przez `executablePath`.
 >
 > **RLS (`rls`):** job uruchamia `scripts/test-rls.sh` — nakłada `supabase/tests/shim.sql`
 > + wszystkie migracje na kontener `postgres:16` (usługa GH Actions) i wykonuje adwersaryjne
