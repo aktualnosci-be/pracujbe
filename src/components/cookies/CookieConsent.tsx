@@ -154,7 +154,7 @@ export function CookieConsent() {
               <p id="cookie-banner-desc" className="text-sm text-muted-foreground">
                 {t('bannerDesc')}{' '}
                 <Link
-                  href="/cookie-policy"
+                  href="/polityka-cookies"
                   className="font-medium text-accent underline-offset-4 hover:underline"
                 >
                   {t('moreInfo')}
@@ -242,7 +242,7 @@ export function CookieConsent() {
             </div>
 
             <Link
-              href="/cookie-policy"
+              href="/polityka-cookies"
               className="text-sm font-medium text-accent underline-offset-4 hover:underline"
             >
               {t('moreInfo')}

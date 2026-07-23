@@ -5,6 +5,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { CheckCircle2, Lock, X, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { Link } from '@/i18n/navigation';
+import { applyToJob } from '@/lib/actions/applications';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -28,13 +30,15 @@ import { Toast } from '@/components/ui/toast';
  * „Wyślij aplikację”. Walidacja kliencka blokuje wysyłkę bez telefonu i zgody; przycisk
  * jest zablokowany w trakcie wysyłki (Invariant #11).
  *
- * TODO(data): brak realnego zapisu — po „wysłaniu” pokazujemy potwierdzenie (Toast) i
- * zamykamy modal. Docelowo: idempotentna Server Action tworząca aplikację (Invariant #4)
- * + kolejka e-mail do pracodawcy w jego języku (Invariant #1).
+ * Zapis realny: idempotentna Server Action `applyToJob` (Invariant #4) woła RPC `apply_to_job`,
+ * które tworzy aplikację + kolejkuje e-mail do pracodawcy w jego języku (Invariant #1).
+ * Sukces (potwierdzenie + zamknięcie) pokazujemy DOPIERO po `res.ok`. Błędy z warstwy domenowej
+ * mapujemy na komunikat i18n (bez technikaliów — Invariant #8): brak logowania → link do logowania.
  */
 
 const MESSAGE_MAX = 500;
 const TOAST_MS = 5000;
+const LOGIN_HREF = '/logowanie';
 
 /** Kody kierunkowe (dane, nie tekst UI). */
 const DIAL_CODES = [
@@ -49,7 +53,22 @@ const DIAL_CODES = [
 const AVAILABILITY = ['immediate', 'twoWeeks', 'oneMonth', 'flexible'] as const;
 type Availability = (typeof AVAILABILITY)[number];
 
+/** Mapowanie opcji UI na wartości enuma `availability_status` w bazie (0001). */
+const AVAILABILITY_TO_DB: Record<
+  Availability,
+  'immediate' | 'within_month' | 'within_three_months' | 'flexible'
+> = {
+  immediate: 'immediate',
+  twoWeeks: 'within_month',
+  oneMonth: 'within_month',
+  flexible: 'flexible',
+};
+
+/** Rodzaj błędu formularza (mapowany na komunikat i18n, bez technikaliów). */
+type FormError = 'generic' | 'already' | 'login';
+
 export interface ApplyModalProps {
+  jobId: string;
   companyName: string;
   triggerLabel: string;
   triggerHint?: string;
@@ -59,6 +78,7 @@ export interface ApplyModalProps {
 }
 
 export function ApplyModal({
+  jobId,
   companyName,
   triggerLabel,
   triggerHint,
@@ -76,6 +96,7 @@ export function ApplyModal({
   const [consent, setConsent] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [errors, setErrors] = React.useState<{ phone?: boolean; consent?: boolean }>({});
+  const [formError, setFormError] = React.useState<FormError | null>(null);
   const [sent, setSent] = React.useState(false);
 
   const availabilityLabel = (value: Availability): string => {
@@ -97,6 +118,7 @@ export function ApplyModal({
     setMessage('');
     setConsent(false);
     setErrors({});
+    setFormError(null);
     setSubmitting(false);
   };
 
@@ -111,16 +133,45 @@ export function ApplyModal({
     return () => window.clearTimeout(timer);
   }, [sent]);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (submitting) return;
+
     const nextErrors = { phone: phone.trim().length === 0, consent: !consent };
     setErrors(nextErrors);
     if (nextErrors.phone || nextErrors.consent) return;
 
+    setFormError(null);
     setSubmitting(true);
-    // TODO(data): tu trafi wywołanie idempotentnej Server Action tworzącej aplikację.
-    setOpen(false);
-    setSent(true);
+
+    const dialEntry = DIAL_CODES.find((entry) => entry.code === dial);
+    const fullPhone = `${dialEntry?.dial ?? ''} ${phone.trim()}`.trim();
+    const trimmedMessage = message.trim();
+
+    const res = await applyToJob({
+      jobId,
+      phone: fullPhone,
+      availability: AVAILABILITY_TO_DB[availability],
+      message: trimmedMessage.length > 0 ? trimmedMessage : undefined,
+      agreeTerms: true,
+      idempotencyKey: crypto.randomUUID(),
+    });
+
+    // Sukces DOPIERO po realnym zapisie (Invariant #11).
+    if (res.ok) {
+      setOpen(false);
+      setSent(true);
+      return;
+    }
+
+    setSubmitting(false);
+    if (res.error === 'PERMISSION_DENIED') {
+      setFormError('login');
+    } else if (res.error === 'APPLICATION_ALREADY_EXISTS') {
+      setFormError('already');
+    } else {
+      setFormError('generic');
+    }
   };
 
   return (
@@ -258,9 +309,26 @@ export function ApplyModal({
                 <p className="-mt-2 text-sm text-error">{t('consentRequired')}</p>
               ) : null}
 
+              {formError ? (
+                <div
+                  role="alert"
+                  className="rounded-lg bg-error/10 p-3 text-sm text-error"
+                >
+                  {formError === 'login' ? (
+                    <Link href={LOGIN_HREF} className="font-medium underline">
+                      {t('loginRequired')}
+                    </Link>
+                  ) : formError === 'already' ? (
+                    t('alreadyApplied')
+                  ) : (
+                    t('errorGeneric')
+                  )}
+                </div>
+              ) : null}
+
               <Button type="submit" className="w-full" disabled={submitting}>
                 <Lock className="h-4 w-4" aria-hidden="true" />
-                {t('submit')}
+                {submitting ? t('submitting') : t('submit')}
               </Button>
 
               <p className="text-center text-xs text-muted-foreground">

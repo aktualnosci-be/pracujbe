@@ -5,6 +5,7 @@ import { Bell, HelpCircle, LogOut, Menu, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
+import { signOut } from '@/lib/actions/auth';
 import { cn } from '@/lib/utils';
 
 import { NotificationsDropdown, type NotificationItem } from './NotificationsDropdown';
@@ -125,14 +126,7 @@ export function DashboardShell({
             <HelpCircle className="size-5 shrink-0" aria-hidden="true" />
             <span>{td('help')}</span>
           </Link>
-          {/* TODO(data): wylogowanie — podpiąć akcję serwerową w osobnym etapie. */}
-          <button
-            type="button"
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
-          >
-            <LogOut className="size-5 shrink-0" aria-hidden="true" />
-            <span>{td('logout')}</span>
-          </button>
+          <LogoutButton label={td('logout')} />
         </div>
       </aside>
 
@@ -259,19 +253,43 @@ export function DashboardShell({
                 <HelpCircle className="size-5 shrink-0" aria-hidden="true" />
                 <span>{td('help')}</span>
               </Link>
-              {/* TODO(data): wylogowanie — podpiąć akcję serwerową w osobnym etapie. */}
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
-              >
-                <LogOut className="size-5 shrink-0" aria-hidden="true" />
-                <span>{td('logout')}</span>
-              </button>
+              <LogoutButton label={td('logout')} onNavigate={() => setDrawerOpen(false)} />
             </div>
           </div>
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Wylogowanie — wołanie serwerowej akcji `signOut` (Supabase `auth.signOut()` + redirect
+ * na /logowanie). `useTransition` daje stan `pending`: blokada przycisku podczas akcji
+ * eliminuje podwójny submit (Invariant #11).
+ */
+function LogoutButton({
+  label,
+  onNavigate,
+}: {
+  label: string;
+  onNavigate?: () => void;
+}): React.JSX.Element {
+  const [pending, startTransition] = React.useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => {
+        onNavigate?.();
+        startTransition(async () => {
+          await signOut();
+        });
+      }}
+      className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <LogOut className="size-5 shrink-0" aria-hidden="true" />
+      <span>{label}</span>
+    </button>
   );
 }
 

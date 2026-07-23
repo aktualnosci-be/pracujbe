@@ -16,8 +16,12 @@ export function resolveRecipientLocale(r: {
   const supported = routing.locales as readonly string[];
   const candidates = [r.preferred_locale, r.account_locale, r.signup_locale];
   for (const candidate of candidates) {
-    if (candidate && supported.includes(candidate)) {
-      return candidate as Locale;
+    if (!candidate) continue;
+    // Porównanie case-insensitive: np. "PL", "Nl", "FR" mają dać locale z listy.
+    const normalized = candidate.toLowerCase();
+    const match = supported.find((locale) => locale.toLowerCase() === normalized);
+    if (match) {
+      return match as Locale;
     }
   }
   return 'en';

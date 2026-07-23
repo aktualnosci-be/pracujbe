@@ -123,6 +123,7 @@
   },
   "jobs": {
     "pageTitle": "Vacatures in België",
+    "search": "Zoeken",
     "filtersTitle": "Filters",
     "keyword": "Trefwoord",
     "location": "Locatie",
@@ -264,6 +265,11 @@
     "registerAsCandidate": "Op zoek naar werk? Maak een kandidatenaccount aan",
     "resetSuccess": "Als er een account met dit e-mailadres bestaat, hebben we een link gestuurd om het wachtwoord opnieuw in te stellen.",
     "backToLogin": "Terug naar inloggen",
+    "newPasswordTitle": "Nieuw wachtwoord instellen",
+    "newPassword": "Nieuw wachtwoord",
+    "newPasswordConfirm": "Nieuw wachtwoord bevestigen",
+    "setPassword": "Wachtwoord opslaan",
+    "passwordUpdated": "Je wachtwoord is gewijzigd. Je kunt nu inloggen.",
     "error": {
       "emailRequired": "Vul je e-mailadres in.",
       "emailInvalid": "Vul een geldig e-mailadres in.",
@@ -548,6 +554,25 @@
     "phoneRequired": "Vul je telefoonnummer in.",
     "consentRequired": "Je moet akkoord gaan om te kunnen solliciteren.",
     "hint": "Duurt maar 2 minuten",
+    "loginRequired": "Log in om te solliciteren.",
+    "errorGeneric": "De sollicitatie kon niet worden verzonden. Probeer opnieuw.",
+    "alreadyApplied": "Je hebt al op deze vacature gesolliciteerd.",
+    "submitting": "Bezig met verzenden...",
     "close": "Sluiten"
+  },
+  "legal": {
+    "termsTitle": "Algemene voorwaarden",
+    "privacyTitle": "Privacybeleid",
+    "cookiePolicyTitle": "Cookiebeleid",
+    "aboutTitle": "Over ons",
+    "faqTitle": "Veelgestelde vragen",
+    "contactTitle": "Contact",
+    "helpTitle": "Help",
+    "intro": "Hieronder vind je de belangrijkste informatie. Deze sectie is in voorbereiding.",
+    "lastUpdated": "Laatst bijgewerkt: {date}",
+    "placeholder": "De inhoud van deze pagina wordt voorbereid en is binnenkort beschikbaar."
+  },
+  "consent": {
+    "saved": "Je toestemmingen zijn opgeslagen."
   }
 }

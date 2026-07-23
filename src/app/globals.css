@@ -31,10 +31,15 @@
     --accent-dark: 224 76% 48%; /* #1D4ED8 */
     --accent-foreground: 0 0% 100%; /* #FFFFFF */
 
-    /* Stany */
+    /* Stany — wersje bazowe (tła, kropki statusu, ikony na kolorowym tle) */
     --success: 142 76% 36%; /* #16A34A */
     --warning: 33 94% 43%; /* #D97706 — status "Obejrzana" itp. */
     --error: 0 72% 51%; /* #DC2626 */
+
+    /* Stany — wersje TEKSTOWE spełniające kontrast WCAG 2.2 AA na białym tle.
+       Używaj do tekstu/linków na jasnym tle; --success/--warning zostają na tła i kropki. */
+    --success-text: 142 72% 29%; /* #15803D */
+    --warning-text: 26 90% 37%; /* #B45309 */
 
     /* Obrysy / kontrolki / focus */
     --border: 214 32% 91%; /* #E2E8F0 */

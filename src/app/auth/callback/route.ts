@@ -3,6 +3,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
 import { env } from '@/lib/env';
 import { routing, type Locale } from '@/i18n/routing';
+import { bootstrapCompany } from '@/lib/actions/auth';
 
 /**
  * Route handler callbacku Auth: wymienia kod (PKCE) na sesję (`exchangeCodeForSession`)
@@ -26,12 +27,19 @@ function isLocale(value: string | null): value is Locale {
   return value !== null && supported.includes(value);
 }
 
-/** Zezwól tylko na bezpieczne, wewnętrzne ścieżki (ochrona przed open redirect). */
+/**
+ * Zezwól tylko na bezpieczne, wewnętrzne ścieżki z prefiksem języka (`/{locale}/...`).
+ * Chroni przed open redirect oraz wyjściem poza routing i18n (allowlist na pierwszy segment).
+ */
 function sanitizeNext(value: string | null): string | null {
   if (!value || !value.startsWith('/')) {
     return null;
   }
   if (value.startsWith('//') || value.startsWith('/\\')) {
+    return null;
+  }
+  const firstSegment = value.split('/')[1];
+  if (firstSegment === undefined || !isLocale(firstSegment)) {
     return null;
   }
   return value;
@@ -79,16 +87,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL(errorTarget, origin));
   }
 
-  let target = next;
-  if (!target) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', data.session.user.id)
-      .maybeSingle();
-    const role = (profile as { role?: string } | null)?.role;
-    target = `/${locale}${panelPathForRole(role)}`;
+  // Rola: potrzebna do bootstrapu firmy oraz (gdy brak `next`) do celu przekierowania.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', data.session.user.id)
+    .maybeSingle();
+  const role = (profile as { role?: string } | null)?.role;
+
+  // Pracodawca bez firmy → utwórz firmę + właściciela (idempotentnie). Przekazujemy klienta,
+  // który po wymianie kodu ma sesję w pamięci (cookie sesji trafiają na odpowiedź dopiero niżej,
+  // więc świeżo utworzony klient jeszcze by ich nie widział). Błąd nie blokuje logowania.
+  if (role === 'employer') {
+    await bootstrapCompany(supabase);
   }
+
+  const target = next ?? `/${locale}${panelPathForRole(role)}`;
 
   const response = NextResponse.redirect(new URL(target, origin));
   for (const cookie of pendingCookies) {

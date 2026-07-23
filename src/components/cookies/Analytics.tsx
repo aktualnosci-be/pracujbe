@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
 import { getConsent, type ConsentRecord } from '@/lib/consent';
-import { subscribeConsent } from '@/lib/consent-store';
+import { subscribeConsent, syncTrackers } from '@/lib/consent-store';
 
 /**
  * Ładowanie skryptów analityki/marketingu — WYŁĄCZNIE po świadomej zgodzie.
@@ -32,6 +32,13 @@ export function Analytics() {
 
   const analyticsGranted = record?.categories.analytics === true;
   const marketingGranted = record?.categories.marketing === true;
+
+  // Egzekwuj stan trackerów przy każdej zmianie zgody: skuteczne WYCOFANIE (ga-disable / fbq
+  // revoke + czyszczenie cookies), a przy ponownej zgodzie zdjęcie blokady. Uzupełnia (nie
+  // zastępuje) warunkowego renderowania <Script> — Invariant #7 (zero trackingu przed zgodą).
+  useEffect(() => {
+    syncTrackers({ analytics: analyticsGranted, marketing: marketingGranted });
+  }, [analyticsGranted, marketingGranted]);
 
   return (
     <>

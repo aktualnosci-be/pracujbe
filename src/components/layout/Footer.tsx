@@ -30,9 +30,9 @@ export async function Footer() {
     {
       title: t('company'),
       links: [
-        { href: '/about', label: t('about') },
+        { href: '/o-nas', label: t('about') },
         { href: '/faq', label: t('faq') },
-        { href: '/contact', label: t('contact') },
+        { href: '/kontakt', label: t('contact') },
       ],
     },
   ] as const;
@@ -74,17 +74,17 @@ export async function Footer() {
             <h2 className={headingClass}>{t('legal')}</h2>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/terms" className={linkClass}>
+                <Link href="/regulamin" className={linkClass}>
                   {t('terms')}
                 </Link>
               </li>
               <li>
-                <Link href="/privacy" className={linkClass}>
+                <Link href="/polityka-prywatnosci" className={linkClass}>
                   {t('privacy')}
                 </Link>
               </li>
               <li>
-                <Link href="/cookie-policy" className={linkClass}>
+                <Link href="/polityka-cookies" className={linkClass}>
                   {t('cookiePolicy')}
                 </Link>
               </li>

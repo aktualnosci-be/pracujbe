@@ -18,6 +18,7 @@
  */
 
 import { getLocale } from 'next-intl/server';
+import { z } from 'zod';
 
 import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
@@ -27,6 +28,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   loginSchema,
+  passwordSchema,
   registerCandidateSchema,
   registerEmployerSchema,
   resetSchema,
@@ -35,6 +37,24 @@ import {
   type RegisterEmployerInput,
   type ResetInput,
 } from '@/lib/validation/auth';
+
+/**
+ * Schemat ustawienia nowego hasła (po sesji recovery). Reużywa `passwordSchema`
+ * (min 8, litera + cyfra) i wymaga zgodnego powtórzenia. Komunikaty to klucze i18n.
+ * Definiowany lokalnie (plik `'use server'` może eksportować tylko akcje async).
+ */
+const updatePasswordSchema = z
+  .object({
+    password: passwordSchema,
+    passwordConfirm: z.string().min(1, 'auth.error.passwordConfirmRequired'),
+  })
+  .refine((data) => data.password === data.passwordConfirm, {
+    path: ['passwordConfirm'],
+    message: 'auth.error.passwordMismatch',
+  });
+
+/** Wejście akcji `updatePassword` (walidowane po stronie serwera i klienta). */
+export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>;
 
 /** Wynik akcji przekazywany do formularza (serializowalny). Na sukcesie z przekierowaniem akcja nie wraca. */
 export type AuthActionResult = { ok: true } | { ok: false; error: ErrorCode };
@@ -250,7 +270,12 @@ export async function requestPasswordReset(input: ResetInput): Promise<AuthActio
 
   try {
     const supabase = await createServerClient();
-    const redirectTo = `${env.siteUrl}/auth/callback?locale=${encodeURIComponent(locale)}`;
+    // Callback wymienia kod recovery na sesję i przekierowuje na stronę ustawienia hasła
+    // (dokładnie tam, w języku odbiorcy). `next` jest allowlistowany w handlerze callbacku.
+    const next = `/${locale}/ustaw-nowe-haslo`;
+    const redirectTo =
+      `${env.siteUrl}/auth/callback` +
+      `?next=${encodeURIComponent(next)}&locale=${encodeURIComponent(locale)}`;
     const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, { redirectTo });
     if (error) {
       const mapped = mapAuthError(error);
@@ -264,6 +289,107 @@ export async function requestPasswordReset(input: ResetInput): Promise<AuthActio
       return { ok: false, error: 'INTERNAL' };
     }
     // provider/nieznany błąd → pozostajemy neutralni
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Ustawia nowe hasło po sesji recovery (użytkownik trafił tu z linku resetu przez
+ * `/auth/callback`, który wymienił kod na sesję). Waliduje wejście (min 8, litera+cyfra,
+ * zgodne powtórzenie) i wywołuje `supabase.auth.updateUser({ password })`.
+ *
+ * Zwraca serializowalny wynik — bez technikaliów (Invariant #8). Brak aktywnej sesji
+ * (np. link wygasł) → `AUTH_INVALID_CREDENTIALS`.
+ */
+export async function updatePassword(input: UpdatePasswordInput): Promise<AuthActionResult> {
+  const parsed = updatePasswordSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  try {
+    const supabase = await createServerClient();
+
+    // Wymagana aktywna sesja (recovery). getUser() weryfikuje token po stronie Auth.
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) {
+      return { ok: false, error: 'AUTH_INVALID_CREDENTIALS' };
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+    if (error) {
+      throw mapAuthError(error);
+    }
+  } catch (e) {
+    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+  }
+
+  return { ok: true };
+}
+
+/** Prosty, deterministyczny rdzeń sluga z losowym sufiksem (slug `companies` jest UNIQUE). */
+function companySlug(name: string): string {
+  const base = name
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '');
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return base ? `${base}-${suffix}` : `firma-${suffix}`;
+}
+
+/**
+ * Bootstrap firmy pracodawcy (idempotentny). Jeśli zalogowany użytkownik NIE jest jeszcze
+ * członkiem żadnej firmy, tworzy firmę + właściciela atomowo przez RPC
+ * `create_company_with_owner` (nazwa z metadanych rejestracji `company_name`).
+ * Jeśli członkostwo już istnieje — nic nie robi.
+ *
+ * Może przyjąć gotowego klienta (np. z callbacku Auth, który po wymianie kodu ma sesję
+ * w pamięci); bez argumentu tworzy własnego klienta z sesji cookie.
+ */
+export async function bootstrapCompany(
+  client?: Awaited<ReturnType<typeof createServerClient>>,
+): Promise<AuthActionResult> {
+  try {
+    const supabase = client ?? (await createServerClient());
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) {
+      return { ok: false, error: 'PERMISSION_DENIED' };
+    }
+    const user = userData.user;
+
+    // Idempotencja: jeśli użytkownik jest już członkiem firmy, kończymy sukcesem.
+    const { data: membership } = await supabase
+      .from('company_members')
+      .select('company_id')
+      .eq('profile_id', user.id)
+      .limit(1)
+      .maybeSingle();
+    if (membership) {
+      return { ok: true };
+    }
+
+    const metadata = user.user_metadata as Record<string, unknown> | undefined;
+    const rawName = metadata?.['company_name'];
+    const companyName = typeof rawName === 'string' ? rawName.trim() : '';
+    if (!companyName) {
+      return { ok: false, error: 'VALIDATION_FAILED' };
+    }
+
+    const { error } = await supabase.rpc('create_company_with_owner', {
+      p_name: companyName,
+      p_slug: companySlug(companyName),
+    });
+    if (error) {
+      throw new AppError('INTERNAL', { cause: error, context: { rpc: 'create_company_with_owner' } });
+    }
+  } catch (e) {
+    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
   }
 
   return { ok: true };

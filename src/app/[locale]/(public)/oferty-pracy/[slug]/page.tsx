@@ -488,6 +488,7 @@ export default async function JobDetailPage({ params }: PageProps) {
             {/* Aplikuj (desktop — mobile ma dolny pasek) */}
             <div className="hidden rounded-lg border border-border bg-card p-5 shadow-sm lg:block">
               <ApplyModal
+                jobId={job.id}
                 companyName={job.companyName}
                 triggerLabel={applyLabel}
                 triggerHint={applyHint}
@@ -585,6 +586,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           {t('saveJob')}
         </Link>
         <ApplyModal
+          jobId={job.id}
           companyName={job.companyName}
           triggerLabel={applyLabel}
           triggerSize="default"

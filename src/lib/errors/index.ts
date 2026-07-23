@@ -28,11 +28,35 @@ export const ErrorCodes = {
 export type ErrorCode = keyof typeof ErrorCodes;
 
 /**
- * Mapuje kod błędu na klucz i18n. Klucze muszą istnieć w namespace `errors`
- * we wszystkich plikach `src/messages/*.json` (pl/nl/fr/en).
+ * Mapowanie kodu błędu (SCREAMING_SNAKE_CASE) na sufiks klucza i18n (camelCase).
+ * Klucze muszą istnieć w namespace `errors` we WSZYSTKICH plikach `src/messages/*.json`
+ * (pl/nl/fr/en) — patrz test `tests/unit/error-keys.test.ts`.
+ *
+ * `Record<ErrorCode, string>` gwarantuje, że każdy nowy kod błędu wymusi tu wpis
+ * (błąd kompilacji, jeśli brak).
+ */
+const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
+  AUTH_INVALID_CREDENTIALS: 'authInvalidCredentials',
+  PERMISSION_DENIED: 'permissionDenied',
+  VALIDATION_FAILED: 'validationFailed',
+  JOB_NOT_ACTIVE: 'jobNotActive',
+  APPLICATION_ALREADY_EXISTS: 'applicationAlreadyExists',
+  OFFER_ALREADY_EXISTS: 'offerAlreadyExists',
+  OFFER_SEND_FAILED: 'offerSendFailed',
+  EMAIL_DELIVERY_FAILED: 'emailDeliveryFailed',
+  RATE_LIMITED: 'rateLimited',
+  COMPANY_NOT_VERIFIED: 'companyNotVerified',
+  NOT_FOUND: 'notFound',
+  INTERNAL: 'internal',
+};
+
+/**
+ * Mapuje kod błędu na klucz i18n w formacie `errors.<camelCase>`.
+ * Zwracany klucz odpowiada strukturze plików tłumaczeń (np. `errors.authInvalidCredentials`),
+ * a NIE surowemu kodowi (`errors.AUTH_INVALID_CREDENTIALS`).
  */
 export function toUserMessageKey(code: ErrorCode): string {
-  return `errors.${code}`;
+  return `errors.${ERROR_MESSAGE_KEYS[code]}`;
 }
 
 export interface AppErrorOptions {

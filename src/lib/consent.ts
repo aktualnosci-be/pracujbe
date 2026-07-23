@@ -10,11 +10,19 @@
  * platformy: logowanie, bezpieczeństwo, sam zapis zgody), pozostałe domyślnie WYŁĄCZONE.
  */
 
+import { recordConsent } from '@/lib/actions/consent';
+
 /** Kategorie zgód. `necessary` jest zawsze aktywna i nie podlega wyłączeniu. */
 export type ConsentCategory = 'necessary' | 'preferences' | 'analytics' | 'marketing';
 
 /** Stan zgody dla każdej kategorii. */
 export type ConsentCategories = Record<ConsentCategory, boolean>;
+
+/**
+ * Źródło zdarzenia zgody (który ekran/przycisk) — utrwalane w kolumnie `source` tabeli
+ * `consents` dla rozliczalności. Wyprowadzane z kontekstu wywołania, nie z cookie.
+ */
+export type ConsentSource = 'cookie_banner' | 'cookie_settings' | 'footer' | 'onboarding';
 
 /**
  * Rekord zgody zapisywany w cookie. Struktura celowo minimalna i zgodna z tym, co później
@@ -91,9 +99,15 @@ export function getConsent(): ConsentRecord | null {
 /**
  * Zapis zgody. Normalizuje kategorie (necessary wymuszone na true), stempluje wersją polityki,
  * czasem i losowym id, po czym utrwala w cookie. Zwraca zapisany rekord (do dalszej dystrybucji
- * przez consent-store / ewentualnej synchronizacji z serwerem).
+ * przez consent-store / synchronizacji z serwerem).
+ *
+ * Po zapisaniu cookie (tylko w przeglądarce) dubluje zgodę w bazie przez Server Action
+ * `recordConsent` — best-effort: błąd/brak env NIE blokuje UX (patrz nota na końcu pliku).
  */
-export function saveConsent(categories: ConsentCategories): ConsentRecord {
+export function saveConsent(
+  categories: ConsentCategories,
+  source: ConsentSource = 'cookie_banner',
+): ConsentRecord {
   const record: ConsentRecord = {
     v: CONSENT_POLICY_VERSION,
     categories: {
@@ -108,9 +122,27 @@ export function saveConsent(categories: ConsentCategories): ConsentRecord {
 
   if (typeof document !== 'undefined') {
     writeCookie(CONSENT_COOKIE_NAME, JSON.stringify(record), CONSENT_MAX_AGE_DAYS);
+    // Rozliczalność (RODO art. 7 ust. 1): serwerowy log zgody, PER KATEGORIA.
+    void persistConsentToServer(record.categories, source);
   }
 
   return record;
+}
+
+/**
+ * Best-effort wysyłka zgody do serwerowego logu. Wszystkie błędy są połykane — cookie jest
+ * głównym dowodem zgody w przeglądarce, a log serwerowy nie może wpływać na UX ani ujawniać
+ * technikaliów (Invariant #8). Wywoływane wyłącznie po stronie klienta (z `saveConsent`).
+ */
+async function persistConsentToServer(
+  categories: ConsentCategories,
+  source: ConsentSource,
+): Promise<void> {
+  try {
+    await recordConsent(categories, source);
+  } catch {
+    // celowo połknięte — pomocniczy log zgód nie może zaburzyć zapisu w przeglądarce
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -176,21 +208,14 @@ function createConsentId(): string {
 /* Nota: utrwalanie zgody po stronie serwera (tabela `consents`)              */
 /* -------------------------------------------------------------------------- */
 /*
- * Cookie jest dowodem zgody w przeglądarce; dla rozliczalności (RODO art. 7 ust. 1)
- * warto zdublować rekord w bazie. Docelowo w Server Action / Route Handler:
- *
- *   import { createAdminClient } from '@/lib/supabase/admin';
- *   const supabase = createAdminClient();
- *   await supabase.from('consents').insert({
- *     id: record.id,                 // ten sam identyfikator co w cookie
- *     version: record.v,             // wersja polityki (kolumna `wersja`)
- *     categories: record.categories, // JSONB (kolumna `kategorie`)
- *     ts: record.ts,                 // znacznik czasu zgody
- *     source: 'banner',              // źródło: 'banner' | 'settings' | 'footer' (kolumna `źródło`)
- *     user_id: userId ?? null,       // gdy zalogowany
- *     // Uwaga RODO: NIE zapisuj pełnego IP w formie jawnej — ewentualnie hash/skrót.
- *   });
+ * Zaimplementowane: `saveConsent` (tylko w przeglądarce) po zapisaniu cookie woła Server Action
+ * `recordConsent` (@/lib/actions/consent) w trybie best-effort. Zapis idzie PER KATEGORIA do
+ * tabeli `consents` (kolumny: profile_id, category, granted, source) — schemat 0007_misc.sql,
+ * RLS w 0009_rls.sql (anon: profile_id null; zalogowany: profile_id = auth.uid()).
  *
  * `source` wyprowadza się z kontekstu wywołania (który przycisk / ekran), a nie z cookie —
  * dlatego nie jest częścią minimalnej struktury zapisywanej w przeglądarce.
+ *
+ * Uwaga RODO: pełne IP nie jest zapisywane po stronie klienta; ewentualne wzbogacenie rekordu
+ * o IP/User-Agent (z nagłówków żądania) należy robić wyłącznie serwerowo i w formie skrótu.
  */

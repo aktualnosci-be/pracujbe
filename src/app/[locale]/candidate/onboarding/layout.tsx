@@ -2,8 +2,11 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 
-import { Link } from '@/i18n/navigation';
+import { Link, redirect } from '@/i18n/navigation';
+import type { Locale } from '@/i18n/routing';
 import { Logo } from '@/components/brand/Logo';
+import { isSupabaseConfigured } from '@/lib/env';
+import { createServerClient } from '@/lib/supabase/server';
 
 /**
  * Layout kreatora onboardingu kandydata (makieta 06).
@@ -11,7 +14,12 @@ import { Logo } from '@/components/brand/Logo';
  * Celowo LEKKI — bez panelowego sidebara i bez pełnego Headera/Footera. Górny pasek
  * z samym logo (odnośnik do strony głównej) skupia uwagę na wypełnianiu profilu; sam
  * Stepper i treść kroków renderuje strona. NOINDEX (Invariant #9).
+ *
+ * GUARD: przy skonfigurowanym Supabase wymaga zalogowanego użytkownika (onboarding zapisuje
+ * profil) — brak sesji → /logowanie. Bez env → tryb demo. `force-dynamic`, bo zależy od sesji.
  */
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
@@ -24,6 +32,17 @@ export default async function OnboardingLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+
+  if (isSupabaseConfigured()) {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      redirect({ href: '/logowanie', locale: locale as Locale });
+    }
+  }
+
   const tc = await getTranslations({ locale, namespace: 'common' });
 
   return (

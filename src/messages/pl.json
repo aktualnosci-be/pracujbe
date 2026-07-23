@@ -123,6 +123,7 @@
   },
   "jobs": {
     "pageTitle": "Oferty pracy w Belgii",
+    "search": "Szukaj",
     "filtersTitle": "Filtry",
     "keyword": "Słowo kluczowe",
     "location": "Lokalizacja",
@@ -264,6 +265,11 @@
     "registerAsCandidate": "Szukasz pracy? Załóż konto kandydata",
     "resetSuccess": "Jeśli konto o podanym adresie istnieje, wysłaliśmy na nie link do zresetowania hasła.",
     "backToLogin": "Wróć do logowania",
+    "newPasswordTitle": "Ustaw nowe hasło",
+    "newPassword": "Nowe hasło",
+    "newPasswordConfirm": "Powtórz nowe hasło",
+    "setPassword": "Zapisz nowe hasło",
+    "passwordUpdated": "Twoje hasło zostało zmienione. Możesz się teraz zalogować.",
     "error": {
       "emailRequired": "Podaj adres e-mail.",
       "emailInvalid": "Podaj poprawny adres e-mail.",
@@ -548,6 +554,25 @@
     "phoneRequired": "Podaj numer telefonu.",
     "consentRequired": "Musisz zaakceptować zgodę, aby wysłać aplikację.",
     "hint": "Zajmie to tylko 2 minuty",
+    "loginRequired": "Zaloguj się, aby aplikować.",
+    "errorGeneric": "Nie udało się wysłać aplikacji. Spróbuj ponownie.",
+    "alreadyApplied": "Już aplikowałeś na tę ofertę.",
+    "submitting": "Wysyłanie...",
     "close": "Zamknij"
+  },
+  "legal": {
+    "termsTitle": "Regulamin",
+    "privacyTitle": "Polityka prywatności",
+    "cookiePolicyTitle": "Polityka cookie",
+    "aboutTitle": "O nas",
+    "faqTitle": "Pytania i odpowiedzi",
+    "contactTitle": "Kontakt",
+    "helpTitle": "Pomoc",
+    "intro": "Poniżej znajdziesz najważniejsze informacje. Ta sekcja jest w trakcie przygotowania.",
+    "lastUpdated": "Ostatnia aktualizacja: {date}",
+    "placeholder": "Treść tej strony jest w przygotowaniu i wkrótce będzie dostępna."
+  },
+  "consent": {
+    "saved": "Twoje zgody zostały zapisane."
   }
 }

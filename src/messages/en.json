@@ -123,6 +123,7 @@
   },
   "jobs": {
     "pageTitle": "Jobs in Belgium",
+    "search": "Search",
     "filtersTitle": "Filters",
     "keyword": "Keyword",
     "location": "Location",
@@ -264,6 +265,11 @@
     "registerAsCandidate": "Looking for work? Create a candidate account",
     "resetSuccess": "If an account exists for this email address, we've sent a link to reset the password.",
     "backToLogin": "Back to login",
+    "newPasswordTitle": "Set a new password",
+    "newPassword": "New password",
+    "newPasswordConfirm": "Confirm new password",
+    "setPassword": "Save password",
+    "passwordUpdated": "Your password has been changed. You can now log in.",
     "error": {
       "emailRequired": "Enter your email address.",
       "emailInvalid": "Enter a valid email address.",
@@ -548,6 +554,25 @@
     "phoneRequired": "Enter your phone number.",
     "consentRequired": "You must accept to send the application.",
     "hint": "It only takes 2 minutes",
+    "loginRequired": "Log in to apply.",
+    "errorGeneric": "The application could not be sent. Please try again.",
+    "alreadyApplied": "You've already applied for this job.",
+    "submitting": "Sending...",
     "close": "Close"
+  },
+  "legal": {
+    "termsTitle": "Terms of Service",
+    "privacyTitle": "Privacy Policy",
+    "cookiePolicyTitle": "Cookie Policy",
+    "aboutTitle": "About us",
+    "faqTitle": "FAQ",
+    "contactTitle": "Contact",
+    "helpTitle": "Help",
+    "intro": "Below you'll find the key information. This section is being prepared.",
+    "lastUpdated": "Last updated: {date}",
+    "placeholder": "The content of this page is being prepared and will be available soon."
+  },
+  "consent": {
+    "saved": "Your consent preferences have been saved."
   }
 }

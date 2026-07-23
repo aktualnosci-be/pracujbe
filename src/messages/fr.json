@@ -123,6 +123,7 @@
   },
   "jobs": {
     "pageTitle": "Offres d'emploi en Belgique",
+    "search": "Rechercher",
     "filtersTitle": "Filtres",
     "keyword": "Mot-clé",
     "location": "Localisation",
@@ -264,6 +265,11 @@
     "registerAsCandidate": "Vous cherchez un emploi ? Créez un compte candidat",
     "resetSuccess": "Si un compte existe pour cette adresse e-mail, nous avons envoyé un lien pour réinitialiser le mot de passe.",
     "backToLogin": "Retour à la connexion",
+    "newPasswordTitle": "Définir un nouveau mot de passe",
+    "newPassword": "Nouveau mot de passe",
+    "newPasswordConfirm": "Confirmer le nouveau mot de passe",
+    "setPassword": "Enregistrer le mot de passe",
+    "passwordUpdated": "Votre mot de passe a été modifié. Vous pouvez maintenant vous connecter.",
     "error": {
       "emailRequired": "Saisissez votre adresse e-mail.",
       "emailInvalid": "Saisissez une adresse e-mail valide.",
@@ -548,6 +554,25 @@
     "phoneRequired": "Indiquez votre numéro de téléphone.",
     "consentRequired": "Vous devez accepter pour envoyer la candidature.",
     "hint": "Cela ne prend que 2 minutes",
+    "loginRequired": "Connectez-vous pour postuler.",
+    "errorGeneric": "L'envoi de la candidature a échoué. Réessayez.",
+    "alreadyApplied": "Vous avez déjà postulé à cette offre.",
+    "submitting": "Envoi en cours...",
     "close": "Fermer"
+  },
+  "legal": {
+    "termsTitle": "Conditions générales",
+    "privacyTitle": "Politique de confidentialité",
+    "cookiePolicyTitle": "Politique en matière de cookies",
+    "aboutTitle": "À propos",
+    "faqTitle": "Questions fréquentes",
+    "contactTitle": "Contact",
+    "helpTitle": "Aide",
+    "intro": "Vous trouverez ci-dessous les informations essentielles. Cette section est en cours de préparation.",
+    "lastUpdated": "Dernière mise à jour : {date}",
+    "placeholder": "Le contenu de cette page est en préparation et sera bientôt disponible."
+  },
+  "consent": {
+    "saved": "Vos consentements ont été enregistrés."
   }
 }
