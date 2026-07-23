@@ -825,5 +825,15 @@
     "systemLabel": "System",
     "back": "Back to list",
     "unreadBadge": "Unread"
+  },
+  "files": {
+    "cvTitle": "Your CV / documents",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "cvHint": "PDF, DOC or DOCX, max 5 MB. Files are private.",
+    "empty": "No documents uploaded yet.",
+    "delete": "Delete",
+    "uploadError": "Upload failed. Check the format and size.",
+    "deleteError": "Delete failed."
   }
 }

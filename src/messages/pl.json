@@ -825,5 +825,15 @@
     "systemLabel": "System",
     "back": "Wróć do listy",
     "unreadBadge": "Nieprzeczytane"
+  },
+  "files": {
+    "cvTitle": "Twoje CV / dokumenty",
+    "upload": "Wgraj",
+    "uploading": "Wgrywanie…",
+    "cvHint": "PDF, DOC lub DOCX, maks. 5 MB. Pliki są prywatne.",
+    "empty": "Brak wgranych dokumentów.",
+    "delete": "Usuń",
+    "uploadError": "Nie udało się wgrać pliku. Sprawdź format i rozmiar.",
+    "deleteError": "Nie udało się usunąć pliku."
   }
 }

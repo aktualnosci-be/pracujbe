@@ -558,3 +558,51 @@ export async function getLatestMessages(): Promise<LatestMessage[]> {
     return [];
   }
 }
+
+/** Element listy dokumentów kandydata (CV) z krótkotrwałym signed URL. */
+export interface CandidateFile {
+  id: string;
+  fileName: string;
+  url: string | null;
+}
+
+/**
+ * Dokumenty kandydata (CV) z tabeli files + signed URL do każdego (Invariant #10).
+ * Bez env / błąd -> pusta lista (panel działa dalej).
+ */
+export async function getCandidateFiles(): Promise<CandidateFile[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    const { createServerClient } = await import('@/lib/supabase/server');
+    const { getSignedFileUrl } = await import('@/lib/storage');
+    const supabase = await createServerClient();
+    const userId = await getAuthUserId(supabase);
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('files')
+      .select('id, path, bucket, file_name')
+      .eq('owner_id', userId)
+      .eq('entity_type', 'candidate_cv')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+
+    const rows = asArr(data);
+    return Promise.all(
+      rows.map(async (row) => {
+        const r = asRecord(row);
+        const path = asStr(r['path']);
+        const bucket = asStr(r['bucket']) || undefined;
+        return {
+          id: asStr(r['id']),
+          fileName: asStr(r['file_name']) || path.split('/').pop() || 'CV',
+          url: path ? await getSignedFileUrl(path, bucket) : null,
+        };
+      }),
+    );
+  } catch (error) {
+    captureError(error, { area: 'candidate.getCandidateFiles' });
+    return [];
+  }
+}

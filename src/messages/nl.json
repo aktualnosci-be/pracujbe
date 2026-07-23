@@ -825,5 +825,15 @@
     "systemLabel": "Systeem",
     "back": "Terug naar lijst",
     "unreadBadge": "Ongelezen"
+  },
+  "files": {
+    "cvTitle": "Je cv / documenten",
+    "upload": "Uploaden",
+    "uploading": "Bezig met uploaden…",
+    "cvHint": "PDF, DOC of DOCX, max. 5 MB. Bestanden zijn privé.",
+    "empty": "Nog geen documenten geüpload.",
+    "delete": "Verwijderen",
+    "uploadError": "Uploaden mislukt. Controleer formaat en grootte.",
+    "deleteError": "Verwijderen mislukt."
   }
 }

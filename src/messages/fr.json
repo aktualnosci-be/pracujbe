@@ -825,5 +825,15 @@
     "systemLabel": "Système",
     "back": "Retour à la liste",
     "unreadBadge": "Non lu"
+  },
+  "files": {
+    "cvTitle": "Votre CV / documents",
+    "upload": "Téléverser",
+    "uploading": "Téléversement…",
+    "cvHint": "PDF, DOC ou DOCX, max. 5 Mo. Les fichiers sont privés.",
+    "empty": "Aucun document téléversé.",
+    "delete": "Supprimer",
+    "uploadError": "Échec du téléversement. Vérifiez le format et la taille.",
+    "deleteError": "Échec de la suppression."
   }
 }

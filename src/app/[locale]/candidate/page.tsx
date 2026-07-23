@@ -10,11 +10,13 @@ import { MatchBar } from '@/components/ui/match-bar';
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
+import { CvUpload } from '@/components/candidate/CvUpload';
 import { SaveJobButton } from '@/components/candidate/SaveJobButton';
 import { ApplicationActions } from '@/components/candidate/ApplicationActions';
 import {
   getCandidateOverview,
   getCandidateProfileSummary,
+  getCandidateFiles,
   getLatestMessages,
   getMyApplications,
   getRecommendedJobs,
@@ -76,12 +78,13 @@ export default async function CandidateDashboardPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tj = await getTranslations({ locale, namespace: 'jobs' });
 
-  const [overview, profile, recommended, applications, messages] = await Promise.all([
+  const [overview, profile, recommended, applications, messages, files] = await Promise.all([
     getCandidateOverview(),
     getCandidateProfileSummary(),
     getRecommendedJobs(locale),
     getMyApplications(locale),
     getLatestMessages(),
+    getCandidateFiles(),
   ]);
 
   const checklist = [
@@ -261,6 +264,9 @@ export default async function CandidateDashboardPage({
               <Link href="/candidate/profil">{td('completeProfile')}</Link>
             </Button>
           </section>
+
+          {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
+          <CvUpload items={files} />
 
           {/* Najnowsze wiadomości */}
           <section className="rounded-lg border border-border bg-card">
