@@ -925,7 +925,6 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
       <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
         <SaveIndicator
           state={saveState}
-          demo={demoSaved}
           labels={{
             idle: t('saveHint'),
             saving: t('saving'),
@@ -972,7 +971,6 @@ function SaveIndicator({
   labels,
 }: {
   state: SaveState;
-  demo: boolean;
   labels: Record<SaveState, string>;
 }): React.JSX.Element {
   if (state === 'saving') {
