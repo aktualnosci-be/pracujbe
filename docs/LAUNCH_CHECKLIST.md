@@ -116,6 +116,27 @@ tam, gdzie wskazano). Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
 - [ ] Zgłoszenia treści (`reports`) trafiają do moderacji.
 - [ ] Plan wsparcia / kontaktu na wypadek incydentu.
 
+## 14. Moduły: firma / admin / płatności / pliki
+
+- [ ] **Storage:** migracja `0018_storage.sql` utworzyła prywatny bucket `candidate-files`
+      + polityki `storage.objects` (właściciel operuje tylko na własnym folderze). Bucket
+      **niepubliczny**; dostęp wyłącznie przez signed URLs. Zweryfikuj upload/pobranie CV.
+- [ ] **Admin:** co najmniej jedno konto ma `profiles.role = 'admin'` (nadawane ręcznie w DB,
+      NIE przez self-signup):
+      ```sql
+      update public.profiles set role='admin' where id = '<uuid właściciela>';
+      ```
+      `/admin` dostępny tylko dla admina (inni → 404). Weryfikacja firm (`admin_set_company_status`)
+      i moderacja zgłoszeń (`admin_resolve_report`) zapisują `audit_logs` (actor = admin).
+- [ ] **Firma pracodawcy:** rejestracja pracodawcy → `/employer/firma` (utworzenie firmy,
+      status `unverified`) → admin weryfikuje → dopiero `verified` pozwala publikować oferty
+      i wysyłać propozycje (egzekwowane w DB). Przejdź ten łańcuch end-to-end na produkcji.
+- [ ] **Płatności:** bez `STRIPE_SECRET_KEY` panel `/employer/platnosci` działa w trybie DEMO
+      („rozliczenia w przygotowaniu") — świadoma decyzja na start. Po integracji dostawcy dodać
+      klucz jako sekret (serwer) i zweryfikować checkout/webhook.
+- [ ] **audit_logs:** przejrzyj wpisy po testowych operacjach (status aplikacji/oferty,
+      utworzenie/weryfikacja firmy) — obecne z poprawnym `actor_id`.
+
 ---
 
 ## Po starcie (pierwsze 48 h)
