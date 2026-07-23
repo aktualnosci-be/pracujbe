@@ -341,7 +341,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Panel kandydata — realne dane pod sesją (RLS) + akcje (zapis oferty, wycofanie aplikacji, odpowiedź na propozycję), noindex; fallback demo bez env
 
 ### Etap 4 — pracodawca
-- [ ] Konto firmy + weryfikacja (RPC `create_company_with_owner` gotowy w 0011; UI/flow do zrobienia)
+- [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
 - [x] Panel pracodawcy — realne dane pod sesją (RLS) + akcje (zmiana statusu aplikacji, wysyłka propozycji), noindex; fallback demo bez env
 - [x] Kreator oferty (9 kroków, autozapis draftu, publikacja z kontrolą `verified`) — `src/lib/actions/jobs.ts` + `JobWizard`
 
@@ -359,9 +359,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 ### Etap 7 — admin / prywatność / płatności
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)
-- [ ] Panel administratora (pełny)
-- [ ] Audit logs (zapisy przy operacjach wrażliwych)
-- [ ] Płatności / subskrypcje / faktury / kody rabatowe
+- [x] Panel administratora — `/admin/**` (guard role='admin'→notFound, noindex): dashboard, firmy
+  (weryfikuj/odrzuć/zawieś), zgłoszenia (moderacja), użytkownicy; odczyt service-role, zapis przez RPC (0019)
+- [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
+- [~] Płatności / subskrypcje / faktury / kody rabatowe — `/employer/platnosci` (plany, faktury, kod rabatowy),
+  provider-gated (bez `STRIPE_SECRET_KEY` = tryb demo „w przygotowaniu"); realna integracja dostawcy = follow-up
 
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
@@ -369,16 +371,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
-- [x] Zależności: 0 high/critical (vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
-- [ ] next-intl v4 + @sentry/nextjs v9/v10 (23 moderate) — migracja majorów z testami.
-- [ ] `next/font/local` (offline self-hosted build), PWA ikony + service worker, storage signed URLs.
+- [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
+- [x] `next/font/local` (offline Inter), PWA (ikony/manifest/service worker), storage signed URLs + upload CV (0018, Invariant #10).
 
 ### Etap 8 — jakość
-- [~] Testy: Vitest (matching, recipient-locale, i18n keys), integracyjne RLS w CI (`postgres:16`), Playwright (smoke)
+- [~] Testy: Vitest (matching, recipient-locale, i18n keys, error-keys), integracyjne RLS+seed w CI (`postgres:16`), Playwright (smoke)
 - [ ] Testy Playwright: języki, propozycje, aplikowanie, cookies, bezpieczeństwo, SEO
 - [ ] Wydajność / Core Web Vitals / dostępność (audyt)
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa
-- [ ] Dane seed pełne (10 firm / 50 ofert / 40 kandydatów) — podstawa w seed.sql
+- [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 
 ---
 
