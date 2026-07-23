@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * System kolorów Pracuj.be — single source of truth.
+ * Wartości to trójki HSL (H S% L%) używane w tailwind.config.ts jako hsl(var(--token)).
+ * W komentarzach podano odpowiadający hex z DESIGN TOKENS. Nie wpisuj hexów w JSX —
+ * korzystaj z klas Tailwind (bg-primary, text-muted-foreground, border-border, text-success…).
+ */
+@layer base {
+  :root {
+    /* Powierzchnie */
+    --background: 0 0% 100%; /* #FFFFFF */
+    --foreground: 221 38% 15%; /* #172033 */
+    --card: 0 0% 100%; /* #FFFFFF */
+    --card-foreground: 221 38% 15%; /* #172033 */
+    --soft: 210 40% 98%; /* #F8FAFC */
+
+    /* Neutralne / stonowane */
+    --muted: 210 40% 96%; /* #F1F5F9 */
+    --muted-foreground: 215 16% 47%; /* #64748B */
+    --secondary: 210 40% 96%; /* #F1F5F9 */
+    --secondary-foreground: 221 38% 15%; /* #172033 */
+
+    /* Marka */
+    --primary: 221 83% 53%; /* #2563EB */
+    --primary-dark: 224 76% 48%; /* #1D4ED8 */
+    --primary-foreground: 0 0% 100%; /* #FFFFFF */
+
+    /* Stany */
+    --success: 142 76% 36%; /* #16A34A */
+    --warning: 21 90% 48%; /* #EA580C */
+    --error: 0 72% 51%; /* #DC2626 */
+
+    /* Obrysy / kontrolki / focus */
+    --border: 214 32% 91%; /* #E2E8F0 */
+    --input: 214 32% 91%; /* #E2E8F0 */
+    --ring: 221 83% 53%; /* #2563EB */
+
+    /* Promień zaokrągleń */
+    --radius: 0.625rem;
+  }
+
+  /* Domyślny kolor obrysu dla elementów używających klasy `border`. */
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+
+  /* WCAG 2.1 (2.4.7): wyraźny, widoczny wskaźnik fokusu klawiatury.
+     Reguła bazowa — komponenty mogą ją nadpisać własnymi utilitami focus-visible. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  ::selection {
+    @apply bg-primary/20;
+  }
+}

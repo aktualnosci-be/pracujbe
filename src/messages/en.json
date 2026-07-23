@@ -64,7 +64,17 @@
     "benefitMatchingDesc": "We show jobs that truly fit you.",
     "benefitVerifiedTitle": "Verified employers",
     "benefitVerifiedDesc": "We check companies so you feel safe.",
-    "faqTitle": "Frequently asked questions"
+    "faqTitle": "Frequently asked questions",
+    "faqQ1": "Do I need a CV to use Pracuj.be?",
+    "faqA1": "No. Instead of a CV, you fill in a short profile with your experience and skills. Employers can see it and contact you directly.",
+    "faqQ2": "Is Pracuj.be free for job seekers?",
+    "faqA2": "Yes. Creating a profile, searching for jobs and applying are completely free for candidates.",
+    "faqQ3": "What languages does the platform support?",
+    "faqA3": "You can use Pracuj.be in Polish, Dutch, French and English. Job offers are shown in your language.",
+    "faqQ4": "Do I have to speak Dutch or French?",
+    "faqA4": "Not always. Many employers accept candidates without local language skills. Use the filter to see jobs with no language requirement.",
+    "faqQ5": "How do employers get in touch with me?",
+    "faqA5": "After you apply or publish your profile, employers can message you directly on the platform to arrange the next steps."
   },
   "categories": {
     "construction": "Construction",

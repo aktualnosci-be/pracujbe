@@ -64,7 +64,17 @@
     "benefitMatchingDesc": "Pokazujemy oferty, które naprawdę pasują do Ciebie.",
     "benefitVerifiedTitle": "Sprawdzeni pracodawcy",
     "benefitVerifiedDesc": "Weryfikujemy firmy, żebyś czuł się bezpiecznie.",
-    "faqTitle": "Najczęstsze pytania"
+    "faqTitle": "Najczęstsze pytania",
+    "faqQ1": "Czy potrzebuję CV, żeby korzystać z Pracuj.be?",
+    "faqA1": "Nie. Zamiast CV wypełniasz krótki profil ze swoim doświadczeniem i umiejętnościami. Pracodawcy widzą go i kontaktują się z Tobą bezpośrednio.",
+    "faqQ2": "Czy Pracuj.be jest bezpłatne dla osób szukających pracy?",
+    "faqA2": "Tak. Założenie profilu, przeglądanie ofert i aplikowanie są dla kandydatów całkowicie bezpłatne.",
+    "faqQ3": "W jakich językach działa platforma?",
+    "faqA3": "Z Pracuj.be korzystasz po polsku, niderlandzku, francusku i angielsku. Oferty pokazujemy w Twoim języku.",
+    "faqQ4": "Czy muszę znać niderlandzki lub francuski?",
+    "faqA4": "Nie zawsze. Wielu pracodawców przyjmuje kandydatów bez znajomości lokalnego języka. Użyj filtra, aby zobaczyć oferty bez wymogu językowego.",
+    "faqQ5": "Jak pracodawcy się ze mną kontaktują?",
+    "faqA5": "Po wysłaniu aplikacji lub opublikowaniu profilu pracodawcy mogą napisać do Ciebie bezpośrednio na platformie, aby ustalić kolejne kroki."
   },
   "categories": {
     "construction": "Budownictwo",

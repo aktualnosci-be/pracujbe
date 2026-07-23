@@ -64,7 +64,17 @@
     "benefitMatchingDesc": "We tonen vacatures die echt bij je passen.",
     "benefitVerifiedTitle": "Gecontroleerde werkgevers",
     "benefitVerifiedDesc": "We controleren bedrijven zodat jij je veilig voelt.",
-    "faqTitle": "Veelgestelde vragen"
+    "faqTitle": "Veelgestelde vragen",
+    "faqQ1": "Heb ik een cv nodig om Pracuj.be te gebruiken?",
+    "faqA1": "Nee. In plaats van een cv vul je een kort profiel in met je ervaring en vaardigheden. Werkgevers zien het en nemen rechtstreeks contact met je op.",
+    "faqQ2": "Is Pracuj.be gratis voor werkzoekenden?",
+    "faqA2": "Ja. Een profiel aanmaken, jobs zoeken en solliciteren zijn voor kandidaten volledig gratis.",
+    "faqQ3": "In welke talen werkt het platform?",
+    "faqA3": "Je gebruikt Pracuj.be in het Pools, Nederlands, Frans en Engels. Vacatures tonen we in jouw taal.",
+    "faqQ4": "Moet ik Nederlands of Frans spreken?",
+    "faqA4": "Niet altijd. Veel werkgevers aanvaarden kandidaten zonder kennis van de lokale taal. Gebruik de filter om jobs zonder taalvereiste te zien.",
+    "faqQ5": "Hoe nemen werkgevers contact met me op?",
+    "faqA5": "Nadat je hebt gesolliciteerd of je profiel hebt gepubliceerd, kunnen werkgevers je rechtstreeks een bericht sturen op het platform om de volgende stappen af te spreken."
   },
   "categories": {
     "construction": "Bouw",
