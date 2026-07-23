@@ -132,7 +132,10 @@
     "accommodation": "Z zakwaterowaniem",
     "immediate": "Od zaraz",
     "allCategories": "Wszystkie branże",
-    "allContractTypes": "Wszystkie rodzaje umów"
+    "allContractTypes": "Wszystkie rodzaje umów",
+    "paginationLabel": "Paginacja",
+    "paginationPrevious": "Poprzednia",
+    "paginationNext": "Następna"
   },
   "job": {
     "apply": "Aplikuj na to stanowisko",
@@ -224,7 +227,31 @@
     "verifyTitle": "Potwierdź adres e-mail",
     "verifySubtitle": "Wysłaliśmy link na Twój adres e-mail. Kliknij go, aby dokończyć rejestrację.",
     "orContinue": "lub kontynuuj przez",
-    "agreeTerms": "Zakładając konto, akceptujesz regulamin i politykę prywatności."
+    "agreeTerms": "Zakładając konto, akceptujesz regulamin i politykę prywatności.",
+    "passwordHint": "Minimum 8 znaków, w tym litera i cyfra.",
+    "registerAsEmployer": "Rekrutujesz? Załóż konto pracodawcy",
+    "registerAsCandidate": "Szukasz pracy? Załóż konto kandydata",
+    "resetSuccess": "Jeśli konto o podanym adresie istnieje, wysłaliśmy na nie link do zresetowania hasła.",
+    "backToLogin": "Wróć do logowania",
+    "error": {
+      "emailRequired": "Podaj adres e-mail.",
+      "emailInvalid": "Podaj poprawny adres e-mail.",
+      "emailTooLong": "Adres e-mail jest za długi.",
+      "passwordRequired": "Podaj hasło.",
+      "passwordTooShort": "Hasło musi mieć co najmniej 8 znaków.",
+      "passwordTooLong": "Hasło jest za długie.",
+      "passwordNeedsLetter": "Hasło musi zawierać co najmniej jedną literę.",
+      "passwordNeedsNumber": "Hasło musi zawierać co najmniej jedną cyfrę.",
+      "nameRequired": "To pole jest wymagane.",
+      "nameTooShort": "Wpis jest za krótki.",
+      "nameTooLong": "Wpis jest za długi.",
+      "passwordConfirmRequired": "Powtórz hasło.",
+      "passwordMismatch": "Hasła nie są takie same.",
+      "termsRequired": "Musisz zaakceptować regulamin i politykę prywatności.",
+      "companyNameRequired": "Podaj nazwę firmy.",
+      "companyNameTooShort": "Nazwa firmy jest za krótka.",
+      "companyNameTooLong": "Nazwa firmy jest za długa."
+    }
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Praca w Belgii bez CV",

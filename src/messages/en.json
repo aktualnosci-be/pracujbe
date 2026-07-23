@@ -132,7 +132,10 @@
     "accommodation": "With accommodation",
     "immediate": "Immediate start",
     "allCategories": "All sectors",
-    "allContractTypes": "All contract types"
+    "allContractTypes": "All contract types",
+    "paginationLabel": "Pagination",
+    "paginationPrevious": "Previous",
+    "paginationNext": "Next"
   },
   "job": {
     "apply": "Apply for this job",
@@ -224,7 +227,31 @@
     "verifyTitle": "Confirm your email address",
     "verifySubtitle": "We've sent a link to your email address. Click it to complete your registration.",
     "orContinue": "or continue with",
-    "agreeTerms": "By creating an account, you agree to the terms and privacy policy."
+    "agreeTerms": "By creating an account, you agree to the terms and privacy policy.",
+    "passwordHint": "At least 8 characters, including a letter and a number.",
+    "registerAsEmployer": "Hiring? Create an employer account",
+    "registerAsCandidate": "Looking for work? Create a candidate account",
+    "resetSuccess": "If an account exists for this email address, we've sent a link to reset the password.",
+    "backToLogin": "Back to login",
+    "error": {
+      "emailRequired": "Enter your email address.",
+      "emailInvalid": "Enter a valid email address.",
+      "emailTooLong": "The email address is too long.",
+      "passwordRequired": "Enter your password.",
+      "passwordTooShort": "The password must be at least 8 characters.",
+      "passwordTooLong": "The password is too long.",
+      "passwordNeedsLetter": "The password must contain at least one letter.",
+      "passwordNeedsNumber": "The password must contain at least one number.",
+      "nameRequired": "This field is required.",
+      "nameTooShort": "The entry is too short.",
+      "nameTooLong": "The entry is too long.",
+      "passwordConfirmRequired": "Confirm your password.",
+      "passwordMismatch": "The passwords don't match.",
+      "termsRequired": "You must accept the terms and privacy policy.",
+      "companyNameRequired": "Enter the company name.",
+      "companyNameTooShort": "The company name is too short.",
+      "companyNameTooLong": "The company name is too long."
+    }
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Work in Belgium without a CV",

@@ -132,7 +132,10 @@
     "accommodation": "Avec logement",
     "immediate": "Immédiat",
     "allCategories": "Tous les secteurs",
-    "allContractTypes": "Tous les types de contrat"
+    "allContractTypes": "Tous les types de contrat",
+    "paginationLabel": "Pagination",
+    "paginationPrevious": "Précédent",
+    "paginationNext": "Suivant"
   },
   "job": {
     "apply": "Postuler à ce poste",
@@ -224,7 +227,31 @@
     "verifyTitle": "Confirmez votre adresse e-mail",
     "verifySubtitle": "Nous avons envoyé un lien à votre adresse e-mail. Cliquez dessus pour terminer votre inscription.",
     "orContinue": "ou continuez avec",
-    "agreeTerms": "En créant un compte, vous acceptez les conditions générales et la politique de confidentialité."
+    "agreeTerms": "En créant un compte, vous acceptez les conditions générales et la politique de confidentialité.",
+    "passwordHint": "Au moins 8 caractères, dont une lettre et un chiffre.",
+    "registerAsEmployer": "Vous recrutez ? Créez un compte employeur",
+    "registerAsCandidate": "Vous cherchez un emploi ? Créez un compte candidat",
+    "resetSuccess": "Si un compte existe pour cette adresse e-mail, nous avons envoyé un lien pour réinitialiser le mot de passe.",
+    "backToLogin": "Retour à la connexion",
+    "error": {
+      "emailRequired": "Saisissez votre adresse e-mail.",
+      "emailInvalid": "Saisissez une adresse e-mail valide.",
+      "emailTooLong": "L'adresse e-mail est trop longue.",
+      "passwordRequired": "Saisissez votre mot de passe.",
+      "passwordTooShort": "Le mot de passe doit contenir au moins 8 caractères.",
+      "passwordTooLong": "Le mot de passe est trop long.",
+      "passwordNeedsLetter": "Le mot de passe doit contenir au moins une lettre.",
+      "passwordNeedsNumber": "Le mot de passe doit contenir au moins un chiffre.",
+      "nameRequired": "Ce champ est obligatoire.",
+      "nameTooShort": "La saisie est trop courte.",
+      "nameTooLong": "La saisie est trop longue.",
+      "passwordConfirmRequired": "Confirmez votre mot de passe.",
+      "passwordMismatch": "Les mots de passe ne correspondent pas.",
+      "termsRequired": "Vous devez accepter les conditions générales et la politique de confidentialité.",
+      "companyNameRequired": "Saisissez le nom de l'entreprise.",
+      "companyNameTooShort": "Le nom de l'entreprise est trop court.",
+      "companyNameTooLong": "Le nom de l'entreprise est trop long."
+    }
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Travailler en Belgique sans CV",

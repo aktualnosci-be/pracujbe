@@ -132,7 +132,10 @@
     "accommodation": "Met huisvesting",
     "immediate": "Onmiddellijk",
     "allCategories": "Alle sectoren",
-    "allContractTypes": "Alle contracttypes"
+    "allContractTypes": "Alle contracttypes",
+    "paginationLabel": "Paginering",
+    "paginationPrevious": "Vorige",
+    "paginationNext": "Volgende"
   },
   "job": {
     "apply": "Solliciteer op deze functie",
@@ -224,7 +227,31 @@
     "verifyTitle": "Bevestig je e-mailadres",
     "verifySubtitle": "We hebben een link naar je e-mailadres gestuurd. Klik erop om je registratie af te ronden.",
     "orContinue": "of ga verder met",
-    "agreeTerms": "Door een account aan te maken ga je akkoord met de algemene voorwaarden en het privacybeleid."
+    "agreeTerms": "Door een account aan te maken ga je akkoord met de algemene voorwaarden en het privacybeleid.",
+    "passwordHint": "Minimaal 8 tekens, met een letter en een cijfer.",
+    "registerAsEmployer": "Werkgever? Maak een werkgeversaccount aan",
+    "registerAsCandidate": "Op zoek naar werk? Maak een kandidatenaccount aan",
+    "resetSuccess": "Als er een account met dit e-mailadres bestaat, hebben we een link gestuurd om het wachtwoord opnieuw in te stellen.",
+    "backToLogin": "Terug naar inloggen",
+    "error": {
+      "emailRequired": "Vul je e-mailadres in.",
+      "emailInvalid": "Vul een geldig e-mailadres in.",
+      "emailTooLong": "Het e-mailadres is te lang.",
+      "passwordRequired": "Vul je wachtwoord in.",
+      "passwordTooShort": "Het wachtwoord moet minstens 8 tekens bevatten.",
+      "passwordTooLong": "Het wachtwoord is te lang.",
+      "passwordNeedsLetter": "Het wachtwoord moet minstens één letter bevatten.",
+      "passwordNeedsNumber": "Het wachtwoord moet minstens één cijfer bevatten.",
+      "nameRequired": "Dit veld is verplicht.",
+      "nameTooShort": "De invoer is te kort.",
+      "nameTooLong": "De invoer is te lang.",
+      "passwordConfirmRequired": "Bevestig je wachtwoord.",
+      "passwordMismatch": "De wachtwoorden komen niet overeen.",
+      "termsRequired": "Je moet de algemene voorwaarden en het privacybeleid accepteren.",
+      "companyNameRequired": "Vul de bedrijfsnaam in.",
+      "companyNameTooShort": "De bedrijfsnaam is te kort.",
+      "companyNameTooLong": "De bedrijfsnaam is te lang."
+    }
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Werken in België zonder cv",
