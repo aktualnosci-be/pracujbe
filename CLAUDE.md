@@ -41,6 +41,16 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 ## 2. System wizualny (identyfikacja)
 
+> 🎨 **ŹRÓDŁO PRAWDY DLA UI:** zatwierdzone makiety w `docs/design/screens/` + specyfikacja
+> `docs/DESIGN_SCREENS.md` (7 ekranów: home, lista ofert, szczegóły oferty, panel kandydata,
+> panel pracodawcy, onboarding, stany UI — desktop + mobile). Gdy cokolwiek tu różni się od makiet,
+> **makiety wygrywają**.
+>
+> **KOREKTA PALETY (potwierdzona przez użytkownika):** kolorem MARKI/AKCJI jest **granat `#0F2A47`**
+> (przyciski, sidebar paneli, stopka), a jasny niebieski `#2563EB` to **akcent** (linki, „.be" w logo,
+> aktywny krok). To odwrotnie niż w pierwotnej specyfikacji — pełna tabela w `docs/DESIGN_SCREENS.md §0`.
+> Makiety są pionowo rozciągnięte (artefakt generatora) — odstępy rób normalnie, nie kopiuj rozciągnięcia.
+
 Całkowicie nowa identyfikacja — **nie** kopiujemy Work-Volume.com.
 
 **Zasady:** minimalizm, jasność, mobile-first, dużo pustej przestrzeni, wysoka czytelność.
@@ -299,6 +309,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] CI/CD na self-hosted (ci.yml, deploy.yml) + docs
 - [x] Centralny system błędów + kody + Sentry (config)
 - [ ] shadcn/ui — pełny zestaw komponentów (na razie podstawowe)
+
+### Redesign wg makiet (PRIORYTET po fazie fundamentu) — `docs/DESIGN_SCREENS.md`
+- [ ] Paleta granatowa: `globals.css` + `tailwind.config.ts` (`--primary` #0F2A47 vs `--accent` #2563EB), `manifest.ts` theme_color
+- [ ] Komponenty z makiet: JobRow(hover), FilterSidebar+FilterSheet, SalaryRange, StatusPill, StatCard, MatchBar, Stepper, DashboardSidebar+BottomTabBar, ApplyModal, NotificationsDropdown, Toast, CookieSettingsDialog, PricingPackageCard, RecruitmentFunnel
+- [ ] Odwzorowanie 7 ekranów 1:1 (home, lista, detal+modal, panel kandydata, panel pracodawcy, onboarding, stany)
 
 ### Etap 2 — strony publiczne
 - [x] Strona główna (hero + sekcje) SSR
