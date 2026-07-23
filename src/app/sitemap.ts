@@ -1,9 +1,9 @@
 import type { MetadataRoute } from 'next';
-import { getTranslations } from 'next-intl/server';
 
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getJobs, type CategoryKey, type LocationKey } from '@/lib/jobs';
+import { getAllGuideSlugs } from '@/lib/guides/guides';
 
 /**
  * Mapa strony (sitemap.xml) — Pracuj.be.
@@ -18,10 +18,24 @@ import { getJobs, type CategoryKey, type LocationKey } from '@/lib/jobs';
  */
 
 const JOBS_PATH = '/oferty-pracy';
+const HUB_PATH = '/praca';
+const GUIDES_PATH = '/poradniki';
 
 /** Publiczne strony statyczne (segment bez prefiksu języka). '' = strona główna.
- *  Tylko trasy zwracające 200 — strony treściowe dojdą wraz z ich implementacją. */
-const STATIC_PATHS: readonly string[] = ['', JOBS_PATH];
+ *  Tylko trasy zwracające 200 (zweryfikowane smoke). */
+const STATIC_PATHS: readonly string[] = [
+  '',
+  JOBS_PATH,
+  HUB_PATH,
+  GUIDES_PATH,
+  '/o-nas',
+  '/faq',
+  '/kontakt',
+  '/pomoc',
+  '/regulamin',
+  '/polityka-prywatnosci',
+  '/polityka-cookies',
+];
 
 const CATEGORY_KEYS: readonly CategoryKey[] = [
   'construction',
@@ -92,9 +106,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  // --- Landing-page'e kategorii (?category=<klucz> — klucz stabilny między językami) ---
+  // --- Landing-page'e kategorii (dedykowana trasa /praca/kategoria/<klucz>, slug stabilny) ---
   for (const key of CATEGORY_KEYS) {
-    const path = `${JOBS_PATH}?category=${key}`;
+    const path = `${HUB_PATH}/kategoria/${key}`;
     const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
     for (const locale of locales) {
       entries.push({
@@ -107,24 +121,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  // --- Landing-page'e lokalizacji (?city=<nazwa lokalna> — różna per język) ---
-  const translators = await Promise.all(
-    locales.map(async (locale) => ({
-      locale,
-      t: await getTranslations({ locale, namespace: 'locations' }),
-    })),
-  );
-
+  // --- Landing-page'e miast (dedykowana trasa /praca/miasto/<slug>, slug stabilny) ---
   for (const key of LOCATION_KEYS) {
-    const languages: Record<string, string> = {};
-    for (const { locale, t } of translators) {
-      languages[locale] = `${base}/${locale}${JOBS_PATH}?city=${encodeURIComponent(t(key))}`;
-    }
-    for (const { locale, t } of translators) {
+    const path = `${HUB_PATH}/miasto/${key}`;
+    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
+    for (const locale of locales) {
       entries.push({
-        url: `${base}/${locale}${JOBS_PATH}?city=${encodeURIComponent(t(key))}`,
+        url: `${base}/${locale}${path}`,
         lastModified: now,
         changeFrequency: 'weekly',
+        priority: 0.5,
+        alternates: { languages },
+      });
+    }
+  }
+
+  // --- Poradniki (blog) ---
+  for (const slug of getAllGuideSlugs()) {
+    const path = `${GUIDES_PATH}/${slug}`;
+    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
+    for (const locale of locales) {
+      entries.push({
+        url: `${base}/${locale}${path}`,
+        lastModified: now,
+        changeFrequency: 'monthly',
         priority: 0.5,
         alternates: { languages },
       });
