@@ -291,7 +291,7 @@ insert into categories (id, key, name, icon, sort_order, is_active, is_demo) val
   ('00000000-0000-0000-0000-000090000008', 'care'::job_category, 'Opieka', 'heart-handshake', 8, true, true),
   ('00000000-0000-0000-0000-000090000009', 'logistics'::job_category, 'Logistyka', 'route', 9, true, true),
   ('00000000-0000-0000-0000-000090000010', 'seasonal'::job_category, 'Prace sezonowe', 'sprout', 10, true, true)
-on conflict (key) do nothing;
+on conflict (key) do update set id = excluded.id;
 
 -- ==========================================================================
 -- occupations - slownik zawodow
@@ -331,7 +331,7 @@ insert into occupations (id, slug, name, category_key, sort_order, is_active, is
   ('00000000-0000-0000-0000-000091000032', 'fruit-picker', 'Pracownik zbioru owocow', 'seasonal'::job_category, 32, true, true),
   ('00000000-0000-0000-0000-000091000033', 'gardener', 'Ogrodnik', 'seasonal'::job_category, 33, true, true),
   ('00000000-0000-0000-0000-000091000034', 'greenhouse-worker', 'Pracownik szklarni', 'seasonal'::job_category, 34, true, true)
-on conflict (slug) do nothing;
+on conflict (slug) do update set id = excluded.id;
 
 -- ==========================================================================
 -- skills - slownik umiejetnosci
@@ -371,7 +371,7 @@ insert into skills (id, slug, name, category_key, is_active, is_demo) values
   ('00000000-0000-0000-0000-000092000032', 'housekeeping', 'Prace porzadkowe', 'care'::job_category, true, true),
   ('00000000-0000-0000-0000-000092000033', 'gardening', 'Prace ogrodnicze', 'seasonal'::job_category, true, true),
   ('00000000-0000-0000-0000-000092000034', 'harvesting', 'Zbior plonow', 'seasonal'::job_category, true, true)
-on conflict (slug) do nothing;
+on conflict (slug) do update set id = excluded.id;
 
 -- ==========================================================================
 -- languages - slownik jezykow
@@ -382,7 +382,7 @@ insert into languages (id, code, name, sort_order, is_active, is_demo) values
   ('00000000-0000-0000-0000-000093000003', 'fr', 'Francuski', 3, true, true),
   ('00000000-0000-0000-0000-000093000004', 'en', 'Angielski', 4, true, true),
   ('00000000-0000-0000-0000-000093000005', 'de', 'Niemiecki', 5, true, true)
-on conflict (code) do nothing;
+on conflict (code) do update set id = excluded.id;
 
 -- ==========================================================================
 -- certificates - slownik certyfikatow
@@ -400,7 +400,7 @@ insert into certificates (id, slug, name, is_active, is_demo) values
   ('00000000-0000-0000-0000-000094000010', 'sep-1kv', 'Uprawnienia elektryczne SEP do 1kV', true, true),
   ('00000000-0000-0000-0000-000094000011', 'welder-cert', 'Ksiazka spawacza / certyfikat', true, true),
   ('00000000-0000-0000-0000-000094000012', 'sanitary', 'Badania sanitarno-epidemiologiczne', true, true)
-on conflict (slug) do nothing;
+on conflict (slug) do update set id = excluded.id;
 
 -- ==========================================================================
 -- locations - slownik miast/regionow
@@ -416,7 +416,7 @@ insert into locations (id, slug, name, region, province, country, latitude, long
   ('00000000-0000-0000-0000-000095000008', 'charleroi', 'Charleroi', 'Wallonia', 'Hainaut', 'BE', 50.41077, 4.444922, 8, true, true),
   ('00000000-0000-0000-0000-000095000009', 'bruges', 'Bruges', 'Flanders', 'West Flanders', 'BE', 51.209347, 3.2247, 9, true, true),
   ('00000000-0000-0000-0000-000095000010', 'kortrijk', 'Kortrijk', 'Flanders', 'West Flanders', 'BE', 50.82814, 3.2647, 10, true, true)
-on conflict (slug) do nothing;
+on conflict (slug) do update set id = excluded.id;
 
 -- ==========================================================================
 -- companies - firmy pracodawcow
