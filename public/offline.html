@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Offline — Pracuj.be</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: #F8FAFC; color: #172033; padding: 24px;
+      }
+      .card { max-width: 28rem; text-align: center; }
+      .logo {
+        width: 64px; height: 64px; border-radius: 16px; background: #0F2A47; color: #fff;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 32px; font-weight: 800; margin-bottom: 16px;
+      }
+      h1 { font-size: 1.25rem; margin: 0 0 8px; }
+      p { color: #64748B; margin: 0 0 20px; line-height: 1.5; }
+      button {
+        border: 0; background: #0F2A47; color: #fff; padding: 10px 20px; border-radius: 8px;
+        font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      }
+      button:hover { background: #0b2038; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="logo">P</div>
+      <h1>Brak połączenia z internetem</h1>
+      <p>
+        Nie udało się załadować strony. Sprawdź połączenie i spróbuj ponownie.<br />
+        Geen internetverbinding · Pas de connexion · No internet connection.
+      </p>
+      <button onclick="location.reload()">Spróbuj ponownie</button>
+    </div>
+  </body>
+</html>

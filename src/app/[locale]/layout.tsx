@@ -6,6 +6,7 @@ import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { CookieConsent } from '@/components/cookies/CookieConsent';
+import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
 import { inter } from '../fonts';
 
 /**
@@ -43,6 +44,12 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       template: `%s · ${tCommon('appName')}`,
     },
     description: tMeta('homeDescription'),
+    manifest: '/manifest.webmanifest',
+    icons: {
+      icon: [{ url: '/icon-32.png', sizes: '32x32', type: 'image/png' }],
+      apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+    },
+    appleWebApp: { capable: true, statusBarStyle: 'default', title: tCommon('appName') },
   };
 }
 
@@ -64,6 +71,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}
           <CookieConsent />
+          <ServiceWorkerRegister />
         </NextIntlClientProvider>
       </body>
     </html>
