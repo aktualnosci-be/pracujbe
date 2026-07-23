@@ -406,6 +406,11 @@
     "navCompany": "Bedrijf",
     "navPayments": "Betalingen",
     "rowActions": "Acties",
+    "withdrawApplication": "Sollicitatie intrekken",
+    "acceptProposal": "Voorstel aanvaarden",
+    "declineProposal": "Voorstel afwijzen",
+    "noApplications": "Je hebt nog geen sollicitaties.",
+    "noMessages": "Geen berichten.",
     "checkBasicInfo": "Basisgegevens",
     "checkExperience": "Werkervaring",
     "checkEducation": "Opleiding",
@@ -422,7 +427,14 @@
     "selectAll": "Alles selecteren",
     "saveCandidate": "Kandidaat opslaan",
     "offersApplications": "{count, plural, one {# sollicitatie} other {# sollicitaties}}",
-    "offersMatched": "{count} matches"
+    "offersMatched": "{count} matches",
+    "recentApplications": "Recente sollicitaties",
+    "sendOffer": "Voorstel versturen",
+    "offerSentSuccess": "Voorstel is verzonden.",
+    "statusChanged": "Status is gewijzigd.",
+    "offerDefaultMessage": "Hallo, uw profiel past bij onze vacature. We nodigen u graag uit voor een gesprek.",
+    "candidateFallback": "Kandidaat",
+    "emptyState": "Geen gegevens om weer te geven."
   },
   "onboarding": {
     "title": "Je kandidatenprofiel",

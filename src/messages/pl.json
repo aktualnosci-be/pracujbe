@@ -406,6 +406,11 @@
     "navCompany": "Firma",
     "navPayments": "Płatności",
     "rowActions": "Działania",
+    "withdrawApplication": "Wycofaj aplikację",
+    "acceptProposal": "Przyjmij propozycję",
+    "declineProposal": "Odrzuć propozycję",
+    "noApplications": "Nie masz jeszcze żadnych aplikacji.",
+    "noMessages": "Brak wiadomości.",
     "checkBasicInfo": "Informacje podstawowe",
     "checkExperience": "Doświadczenie zawodowe",
     "checkEducation": "Wykształcenie",
@@ -422,7 +427,14 @@
     "selectAll": "Zaznacz wszystkie",
     "saveCandidate": "Zapisz kandydata",
     "offersApplications": "{count, plural, one {# aplikacja} few {# aplikacje} many {# aplikacji} other {# aplikacji}}",
-    "offersMatched": "{count} dopas."
+    "offersMatched": "{count} dopas.",
+    "recentApplications": "Najnowsze aplikacje",
+    "sendOffer": "Wyślij propozycję",
+    "offerSentSuccess": "Propozycja została wysłana.",
+    "statusChanged": "Status został zmieniony.",
+    "offerDefaultMessage": "Dzień dobry, Twój profil pasuje do naszej oferty. Zapraszamy do rozmowy.",
+    "candidateFallback": "Kandydat",
+    "emptyState": "Brak danych do wyświetlenia."
   },
   "onboarding": {
     "title": "Twój profil kandydata",

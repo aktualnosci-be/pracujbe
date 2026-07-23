@@ -406,6 +406,11 @@
     "navCompany": "Entreprise",
     "navPayments": "Paiements",
     "rowActions": "Actions",
+    "withdrawApplication": "Retirer la candidature",
+    "acceptProposal": "Accepter la proposition",
+    "declineProposal": "Refuser la proposition",
+    "noApplications": "Vous n'avez pas encore de candidatures.",
+    "noMessages": "Aucun message.",
     "checkBasicInfo": "Informations de base",
     "checkExperience": "Expérience professionnelle",
     "checkEducation": "Formation",
@@ -422,7 +427,14 @@
     "selectAll": "Tout sélectionner",
     "saveCandidate": "Enregistrer le candidat",
     "offersApplications": "{count, plural, one {# candidature} other {# candidatures}}",
-    "offersMatched": "{count} corresp."
+    "offersMatched": "{count} corresp.",
+    "recentApplications": "Candidatures récentes",
+    "sendOffer": "Envoyer une proposition",
+    "offerSentSuccess": "La proposition a été envoyée.",
+    "statusChanged": "Le statut a été mis à jour.",
+    "offerDefaultMessage": "Bonjour, votre profil correspond à notre offre. Nous vous invitons à un entretien.",
+    "candidateFallback": "Candidat",
+    "emptyState": "Aucune donnée à afficher."
   },
   "onboarding": {
     "title": "Votre profil de candidat",

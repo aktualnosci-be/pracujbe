@@ -406,6 +406,11 @@
     "navCompany": "Company",
     "navPayments": "Payments",
     "rowActions": "Actions",
+    "withdrawApplication": "Withdraw application",
+    "acceptProposal": "Accept proposal",
+    "declineProposal": "Decline proposal",
+    "noApplications": "You have no applications yet.",
+    "noMessages": "No messages.",
     "checkBasicInfo": "Basic information",
     "checkExperience": "Work experience",
     "checkEducation": "Education",
@@ -422,7 +427,14 @@
     "selectAll": "Select all",
     "saveCandidate": "Save candidate",
     "offersApplications": "{count, plural, one {# application} other {# applications}}",
-    "offersMatched": "{count} matches"
+    "offersMatched": "{count} matches",
+    "recentApplications": "Recent applications",
+    "sendOffer": "Send offer",
+    "offerSentSuccess": "Offer has been sent.",
+    "statusChanged": "Status has been updated.",
+    "offerDefaultMessage": "Hello, your profile matches our job offer. We would like to invite you for an interview.",
+    "candidateFallback": "Candidate",
+    "emptyState": "No data to display."
   },
   "onboarding": {
     "title": "Your candidate profile",

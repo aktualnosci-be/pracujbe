@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Bookmark, MapPin, MoreHorizontal } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
@@ -10,14 +10,22 @@ import { MatchBar } from '@/components/ui/match-bar';
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
+import { SaveJobButton } from '@/components/candidate/SaveJobButton';
+import { ApplicationActions } from '@/components/candidate/ApplicationActions';
+import {
+  getCandidateOverview,
+  getCandidateProfileSummary,
+  getLatestMessages,
+  getMyApplications,
+  getRecommendedJobs,
+} from '@/lib/data/candidate';
 
 /**
  * Panel kandydata — Podsumowanie (makieta 04).
  *
- * Struktura: powitanie + baner nowej propozycji, rząd 4 kafelków statystyk (StatCard),
- * kolumna główna z „Polecanymi ofertami" (MatchBar) i „Moimi aplikacjami" (StatusPill)
- * oraz kolumna boczna z kompletnością profilu (pierścień + checklista) i najnowszymi
- * wiadomościami. NOINDEX (panel). Wszystkie dane są DEMO — backend niepodpięty (TODO(data)).
+ * Dane realne z bazy pod sesją użytkownika (RLS) przez `@/lib/data/candidate`; bez env te same
+ * struktury z danymi DEMO. NOINDEX (dziedziczone z layoutu panelu). Akcje (zapis oferty, wycofanie
+ * aplikacji) w wydzielonych fragmentach klienckich; reszta renderowana serwerowo.
  */
 
 export async function generateMetadata({
@@ -39,27 +47,23 @@ function initials(name: string): string {
   return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '•';
 }
 
-// TODO(data): dane demonstracyjne — zastąpić realnymi z backendu (matching + aplikacje).
-const RECOMMENDED = [
-  { company: 'AG Logistics', title: 'Specjalista ds. logistyki', city: 'Antwerpia', match: 92 },
-  { company: 'MetalCraft', title: 'Operator maszyn CNC', city: 'Genk', match: 89 },
-  { company: 'DHL Supply Chain', title: 'Magazynier', city: 'Bruksela', match: 87 },
-  { company: 'TransMove', title: 'Koordynator transportu', city: 'Charleroi', match: 84 },
-  { company: 'Daoust', title: 'Pracownik produkcji', city: 'Liège', match: 82 },
-] as const;
+/** Formatuje datę ISO do krótkiej postaci wg locale (bez rzucania na złej wartości). */
+function formatDate(iso: string, locale: string): string {
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return '';
+  return new Intl.DateTimeFormat(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(ts);
+}
 
-const APPLICATIONS = [
-  { title: 'Specjalista ds. logistyki', company: 'AG Logistics', date: '12.05.2024', status: 'submitted' },
-  { title: 'Operator wózka widłowego', company: 'Start People', date: '10.05.2024', status: 'viewed' },
-  { title: 'Pracownik magazynu', company: 'Randstad', date: '08.05.2024', status: 'interview' },
-  { title: 'Asystent działu obsługi klienta', company: 'Manpower', date: '01.05.2024', status: 'rejected' },
-] as const;
-
-const MESSAGES = [
-  { company: 'AG Logistics', preview: 'Nowa oferta pracy dopasowana do Twojego profilu', time: '10:24', unread: true },
-  { company: 'Randstad', preview: 'Zaproszenie do rozmowy kwalifikacyjnej', time: 'Wczoraj', unread: false },
-  { company: 'Start People', preview: 'Dziękujemy za Twoją aplikację', time: '2 dni temu', unread: false },
-] as const;
+/** Formatuje czas ostatniej wiadomości do krótkiej postaci wg locale. */
+function formatShort(iso: string, locale: string): string {
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return '';
+  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit' }).format(ts);
+}
 
 export default async function CandidateDashboardPage({
   params,
@@ -72,20 +76,28 @@ export default async function CandidateDashboardPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tj = await getTranslations({ locale, namespace: 'jobs' });
 
+  const [overview, profile, recommended, applications, messages] = await Promise.all([
+    getCandidateOverview(),
+    getCandidateProfileSummary(),
+    getRecommendedJobs(locale),
+    getMyApplications(locale),
+    getLatestMessages(),
+  ]);
+
   const checklist = [
-    { label: td('checkBasicInfo'), done: true },
-    { label: td('checkExperience'), done: true },
-    { label: td('checkEducation'), done: true },
-    { label: td('checkSkills'), done: true },
-    { label: td('checkLanguages'), action: td('add') },
-    { label: td('checkPhoto'), action: td('add') },
+    { label: td('checkBasicInfo'), done: profile.checklist.basicInfo, action: td('add') },
+    { label: td('checkExperience'), done: profile.checklist.experience, action: td('add') },
+    { label: td('checkEducation'), done: profile.checklist.education, action: td('add') },
+    { label: td('checkSkills'), done: profile.checklist.skills, action: td('add') },
+    { label: td('checkLanguages'), done: profile.checklist.languages, action: td('add') },
+    { label: td('checkPhoto'), done: profile.checklist.photo, action: td('add') },
   ];
 
   return (
     <div className="space-y-6">
       {/* Powitanie */}
       <h1 className="text-2xl font-bold tracking-tight text-foreground">
-        {td('greeting', { name: 'Adam' })} <span aria-hidden="true">👋</span>
+        {td('greeting', { name: profile.firstName ?? '' })} <span aria-hidden="true">👋</span>
       </h1>
 
       {/* Baner nowej propozycji (zamykany) */}
@@ -93,10 +105,24 @@ export default async function CandidateDashboardPage({
 
       {/* Statystyki */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label={td('newJobs')} value={24} sub={td('newJobsSub')} />
-        <StatCard label={td('activeApplications')} value={5} sub={td('activeApplicationsSub')} />
-        <StatCard label={td('unreadMessages')} value={2} sub={td('unreadMessagesSub')} tone="error" />
-        <StatCard label={td('profileCompleteness')} value="78%" tone="accent" progress={78} />
+        <StatCard label={td('newJobs')} value={overview.newJobsCount} sub={td('newJobsSub')} />
+        <StatCard
+          label={td('activeApplications')}
+          value={overview.activeApplicationsCount}
+          sub={td('activeApplicationsSub')}
+        />
+        <StatCard
+          label={td('unreadMessages')}
+          value={overview.unreadMessagesCount}
+          sub={td('unreadMessagesSub')}
+          tone="error"
+        />
+        <StatCard
+          label={td('profileCompleteness')}
+          value={`${overview.profileCompletionPct}%`}
+          tone="accent"
+          progress={overview.profileCompletionPct}
+        />
       </div>
 
       {/* Główna siatka: lewa (2/3) + prawa (1/3) */}
@@ -113,48 +139,54 @@ export default async function CandidateDashboardPage({
                 {td('seeAll')}
               </Link>
             </div>
-            <ul className="divide-y divide-border">
-              {RECOMMENDED.map((job) => (
-                <li key={job.title} className="flex items-start gap-3 p-4 sm:px-5">
-                  <span
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-                    aria-hidden="true"
-                  >
-                    {initials(job.company)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        {/* TODO(data): link do szczegółów oferty. */}
-                        <p className="truncate text-sm font-semibold text-foreground">{job.title}</p>
-                        <p className="truncate text-sm text-muted-foreground">{job.company}</p>
+            {recommended.length === 0 ? (
+              <p className="p-4 text-sm text-muted-foreground sm:px-5">{tj('empty')}</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {recommended.map((job) => (
+                  <li key={job.id} className="flex items-start gap-3 p-4 sm:px-5">
+                    <span
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
+                      aria-hidden="true"
+                    >
+                      {initials(job.companyName)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          {job.slug ? (
+                            <Link
+                              href={`/oferty-pracy/${job.slug}`}
+                              className="truncate text-sm font-semibold text-foreground hover:text-accent hover:underline"
+                            >
+                              {job.title}
+                            </Link>
+                          ) : (
+                            <p className="truncate text-sm font-semibold text-foreground">{job.title}</p>
+                          )}
+                          <p className="truncate text-sm text-muted-foreground">{job.companyName}</p>
+                        </div>
+                        <SaveJobButton jobId={job.id} initialSaved={job.saved} className="-mt-1" />
                       </div>
-                      {/* TODO(data): zapis oferty — podpiąć akcję serwerową. */}
-                      <button
-                        type="button"
-                        aria-label={tj('save')}
-                        title={tj('save')}
-                        className="-mt-1 shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-soft hover:text-accent"
-                      >
-                        <Bookmark className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
-                    <div className="mt-2 flex items-center gap-3">
-                      <span className="inline-flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
-                        <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-                        {job.city}
-                      </span>
-                      <span className="ml-auto flex min-w-0 max-w-[11rem] flex-1 items-center gap-2">
-                        <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-success">
-                          {job.match}%
+                      <div className="mt-2 flex items-center gap-3">
+                        <span className="inline-flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
+                          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                          {job.city}
                         </span>
-                        <MatchBar value={job.match} className="flex-1" />
-                      </span>
+                        {job.match !== null ? (
+                          <span className="ml-auto flex min-w-0 max-w-[11rem] flex-1 items-center gap-2">
+                            <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-success">
+                              {job.match}%
+                            </span>
+                            <MatchBar value={job.match} className="flex-1" />
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           {/* Moje ostatnie aplikacje */}
@@ -168,27 +200,48 @@ export default async function CandidateDashboardPage({
                 {td('seeAll')}
               </Link>
             </div>
-            <ul className="divide-y divide-border">
-              {APPLICATIONS.map((app) => (
-                <li key={app.title} className="flex items-center gap-3 p-4 sm:px-5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{app.title}</p>
-                    <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                      {app.company} <span className="text-border">·</span> {app.date}
-                    </p>
-                  </div>
-                  <StatusPill status={app.status} className="shrink-0" />
-                  {/* TODO(data): menu działań aplikacji. */}
-                  <button
-                    type="button"
-                    aria-label={td('rowActions')}
-                    className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-soft hover:text-foreground"
-                  >
-                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {applications.length === 0 ? (
+              <p className="p-4 text-sm text-muted-foreground sm:px-5">{td('noApplications')}</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {applications.map((app) => {
+                  const date = formatDate(app.date, locale);
+                  return (
+                    <li key={app.id} className="flex items-center gap-3 p-4 sm:px-5">
+                      <div className="min-w-0 flex-1">
+                        {app.slug ? (
+                          <Link
+                            href={`/oferty-pracy/${app.slug}`}
+                            className="truncate text-sm font-medium text-foreground hover:text-accent hover:underline"
+                          >
+                            {app.jobTitle || '—'}
+                          </Link>
+                        ) : (
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {app.jobTitle || '—'}
+                          </p>
+                        )}
+                        <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                          {app.companyName ? (
+                            <>
+                              {app.companyName} <span className="text-border">·</span> {date}
+                            </>
+                          ) : (
+                            date
+                          )}
+                        </p>
+                      </div>
+                      <StatusPill status={app.status} className="shrink-0" />
+                      <ApplicationActions
+                        applicationId={app.id}
+                        status={app.status}
+                        slug={app.slug}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
         </div>
 
@@ -199,7 +252,7 @@ export default async function CandidateDashboardPage({
             <h2 className="text-base font-semibold text-foreground">{td('profileCompleteness')}</h2>
             <ProfileCompleteness
               className="mt-4"
-              value={78}
+              value={profile.completionPct}
               title={td('goodLevel')}
               hint={td('completenessHint')}
             />
@@ -214,31 +267,37 @@ export default async function CandidateDashboardPage({
             <div className="border-b border-border p-4 sm:px-5">
               <h2 className="text-base font-semibold text-foreground">{td('latestMessages')}</h2>
             </div>
-            <ul className="divide-y divide-border">
-              {MESSAGES.map((msg) => (
-                <li key={msg.preview} className="flex gap-3 p-4 sm:px-5">
-                  <span
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-                    aria-hidden="true"
-                  >
-                    {initials(msg.company)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-medium text-foreground">{msg.company}</p>
-                      <span className="shrink-0 text-xs text-muted-foreground">{msg.time}</span>
-                    </div>
-                    <p className="mt-0.5 truncate text-sm text-muted-foreground">{msg.preview}</p>
-                  </div>
-                  {msg.unread ? (
+            {messages.length === 0 ? (
+              <p className="p-4 text-sm text-muted-foreground sm:px-5">{td('noMessages')}</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {messages.map((msg) => (
+                  <li key={msg.id} className="flex gap-3 p-4 sm:px-5">
                     <span
-                      className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
                       aria-hidden="true"
-                    />
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+                    >
+                      {initials(msg.title)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-sm font-medium text-foreground">{msg.title}</p>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {formatShort(msg.time, locale)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 truncate text-sm text-muted-foreground">{msg.preview}</p>
+                    </div>
+                    {msg.unread ? (
+                      <span
+                        className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className="border-t border-border p-3">
               <Button asChild variant="outline" className="w-full">
                 <Link href="/candidate/wiadomosci">{td('seeAllMessages')}</Link>
