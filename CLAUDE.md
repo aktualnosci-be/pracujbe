@@ -334,25 +334,25 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 ### Etap 3 — kandydat
 - [~] Rejestracja / logowanie / reset / potwierdzenie e-mail — strony + Supabase Auth actions gotowe; callback naprawiony (P1-01). Do dokończenia: pełne guardy tras paneli.
-- [~] Onboarding kandydata (6 kroków) — **UI gotowe** (Stepper, walidacja, autosave UI); zapis per krok do DB do zrobienia (TODO(data))
-- [~] Panel kandydata — **UI gotowe** (podsumowanie/oferty/aplikacje/propozycje/wiadomości/profil/ustawienia), noindex; na danych DEMO — podpięcie realnych danych do zrobienia
+- [x] Onboarding kandydata (6 kroków) — UI + realny zapis per krok do DB (`saveOnboardingStep`, RHF + stan zapisu)
+- [x] Panel kandydata — realne dane pod sesją (RLS) + akcje (zapis oferty, wycofanie aplikacji, odpowiedź na propozycję), noindex; fallback demo bez env
 
 ### Etap 4 — pracodawca
 - [ ] Konto firmy + weryfikacja (RPC `create_company_with_owner` gotowy w 0011; UI/flow do zrobienia)
-- [~] Panel pracodawcy — **UI gotowe** (oferty/kandydaci/lejek/pakiet), noindex, dane DEMO; podpięcie danych do zrobienia
-- [ ] Kreator oferty (9 kroków, autozapis draftu)
+- [x] Panel pracodawcy — realne dane pod sesją (RLS) + akcje (zmiana statusu aplikacji, wysyłka propozycji), noindex; fallback demo bez env
+- [x] Kreator oferty (9 kroków, autozapis draftu, publikacja z kontrolą `verified`) — `src/lib/actions/jobs.ts` + `JobWizard`
 
 ### Etap 5 — procesy
 - [~] Matching (logika + test jednostkowy) — rdzeń gotowy, integracja z UI do zrobienia
-- [~] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions gotowe i zweryfikowane na PG; wpięcie ApplyModal do UI do zrobienia
-- [~] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions gotowe i zweryfikowane; wpięcie do UI do zrobienia
-- [ ] Wiadomości (konwersacje, załączniki, przeczytania, zgłoszenia)
+- [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
+- [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
+- [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** załączniki, zgłoszenia
 
 ### Etap 6 — komunikacja
 - [x] Wybór języka odbiorcy (fallback) — util + test + `resolve_recipient_locale()` w DB (INVARIANT #1 egzekwowany przy kolejkowaniu)
 - [~] Kolejka e-mail + worker + ponawianie — outbox (`email_deliveries`: attempts/next_attempt_at/payload), worker `src/lib/email/outbox.ts` + route `/api/email/process` (sekret) gotowe; realna wysyłka wymaga `RESEND_API_KEY`
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; podpięte do outboxa (payload z RPC)
-- [ ] Powiadomienia in-app + preferencje (rekordy `notifications` tworzone przez RPC; UI do zrobienia)
+- [~] Powiadomienia in-app + preferencje — in-app GOTOWE (RPC 0016 `mark_notifications_read`, realny dropdown + badge nieprzeczytanych, „oznacz wszystkie"); **do zrobienia:** ekran preferencji (`notification_preferences`)
 
 ### Etap 7 — admin / prywatność / płatności
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)
