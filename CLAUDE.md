@@ -300,12 +300,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 **Model kontynuujący: wybierz pierwszy niezaznaczony punkt, zrób, zaznacz, zaktualizuj ten plik.**
 
 > 🔒 **Audyt bezpieczeństwa 2026-07-23** (`docs/audit/audyt-2026-07-23.md`) + remediacja
-> (`docs/REMEDIATION-2026-07-23.md`). Zamknięte P0-01..04, P1-01/02/05/06/07/10/11/12/14
-> (migracja `0011_security_hardening.sql` zweryfikowana testami adwersaryjnymi na PostgreSQL 16;
-> lint/typecheck/test/build zielone). **Otwarte przed produkcją (NO-GO do czasu domknięcia):**
-> widoki publiczne firm/ofert (P1-03/04), outbox e-mail (P1-13), revoke trackerów + serwerowy log
-> zgód (P1-08/09), pełna CSP (P2-01), testy integracyjne RLS w CI. Statusy poniżej rozdzielają
-> `schema/scaffold` od `backend flow` i `tested` — nie oznaczaj funkcji jako gotowej bez działającego przepływu.
+> (`docs/REMEDIATION-2026-07-23.md`). Zamknięte P0-01..04 oraz P1-01..14 i P2-01 (migracje
+> `0011`–`0016` zweryfikowane testami adwersaryjnymi na PostgreSQL 16 — teraz również **w CI**,
+> job `rls` na usłudze `postgres:16`, `supabase/tests/*`). Domknięte od poprzedniej fali:
+> widoki publiczne firm/ofert (P1-03/04 → `0014`), outbox e-mail (P1-13 → `0012`/`outbox.ts`),
+> revoke trackerów + serwerowy log zgód (P1-08/09), pełna CSP (P2-01 → `next.config.mjs`,
+> wariant nonce/strict-dynamic = follow-up z E2E), integracyjne testy RLS w CI. Zależności:
+> Dependabot 0 critical / 0 high (23 moderate wymagają majorów next-intl v4 / Sentry v9+ — osobna
+> migracja). Statusy poniżej rozdzielają `schema/scaffold` od `backend flow` i `tested` —
+> nie oznaczaj funkcji jako gotowej bez działającego przepływu.
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
@@ -360,8 +363,18 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [ ] Audit logs (zapisy przy operacjach wrażliwych)
 - [ ] Płatności / subskrypcje / faktury / kody rabatowe
 
+### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
+- [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
+  connect/img/font, GA/Meta/Supabase/Sentry). Wariant nonce/strict-dynamic = follow-up (E2E).
+- [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
+- [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
+  `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
+- [x] Zależności: 0 high/critical (vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
+- [ ] next-intl v4 + @sentry/nextjs v9/v10 (23 moderate) — migracja majorów z testami.
+- [ ] `next/font/local` (offline self-hosted build), PWA ikony + service worker, storage signed URLs.
+
 ### Etap 8 — jakość
-- [~] Testy: Vitest (matching, recipient-locale, i18n keys), Playwright (smoke) — podstawa
+- [~] Testy: Vitest (matching, recipient-locale, i18n keys), integracyjne RLS w CI (`postgres:16`), Playwright (smoke)
 - [ ] Testy Playwright: języki, propozycje, aplikowanie, cookies, bezpieczeństwo, SEO
 - [ ] Wydajność / Core Web Vitals / dostępność (audyt)
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa

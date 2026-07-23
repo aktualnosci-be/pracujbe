@@ -121,6 +121,10 @@ jobs:
     # Patrz docs/SELF_HOSTED_RUNNERS.md.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
+    # ADVISORY na start: job URUCHAMIA się i raportuje, ale NIE blokuje CI/deploy, dopóki
+    # runner nie zostanie doprovisionowany w Docker + klienta psql (patrz docs). Gdy runner
+    # jest gotowy — USUŃ `continue-on-error`, by uczynić z tego twardą bramkę (audyt: RLS w CI).
+    continue-on-error: true
     services:
       postgres:
         image: postgres:16

@@ -66,6 +66,10 @@ sudo ./svc.sh status
 > asercje `supabase/tests/rls.sql`. Runner musi mieć **Docker** (usługi kontenerowe) oraz
 > klienta **`psql`**. Job nie wymaga `node_modules`. Lokalnie: `npm run test:rls`
 > (peer auth: `sudo -u postgres bash scripts/test-rls.sh`).
+>
+> **Advisory → gate:** job ma na start `continue-on-error: true` — uruchamia się i raportuje,
+> ale NIE blokuje CI/deploy, dopóki runner nie ma Dockera/psql. Po doprovisionowaniu runnera
+> USUŃ `continue-on-error` z joba `rls` w `ci.yml`, aby stał się twardą bramką (wymóg audytu).
 
 ---
 
