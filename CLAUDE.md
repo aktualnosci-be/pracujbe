@@ -475,6 +475,43 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > **P1 NIE-AUTONOMICZNE:** P1-20/21/25 (twarda bramka RLS + migracje/rollback w deployu +
 > ephemeral runners = infra), P1-22-AV (skan antywirusowy = usługa zewn.), P1-24-treść (realna
 > treść prawna = prawnik).
+>
+> 🔒 **Audyt niezależny 2026-07-24 (AUDIT_REPORT, NO-GO: 2×P0, 25×P1, 14×P2, 4×P3, 4×P4).**
+> Remediacja falami (migracje `0048`–`0051`), każda zweryfikowana adwersaryjnie na PG16 (rls.sql
+> sekcje CC–EE + D4b) + tsc/lint/vitest/build:
+> **P0 — OBA ZAMKNIĘTE:** P0-01 (checkout w produkcji wymaga STRIPE_WEBHOOK_SECRET —
+> `isBillingProviderReady`, inaczej `BILLING_UNAVAILABLE`; koniec pobrania płatności bez
+> synchronizacji subskrypcji). P0-02 (`0050`: `checkout_intents` + partial-unique 'pending' per
+> firma + `begin_checkout` z advisory lock i kontrolą aktywnej sub → stabilny intent_id = klucz
+> idempotencji Stripe; webhook domyka `complete_checkout`; dwa równoległe checkouty nie tworzą
+> dwóch subskrypcji — `CHECKOUT_IN_PROGRESS`; dowód sekcja DD).
+> **P1 autonomiczne — ZAMKNIĘTE:** P1-07 (loader onboardingu: jawny wynik demo/ok/error — błąd
+> odczytu → retry, NIGDY pusty edytor kasujący dane replace-all), P1-08 (`0051`: umiejętność
+> realnie przechodzi mandatory↔optional — usuwamy etykietę z drugiego zakresu przed insertem;
+> dowód EE), P1-09 (koniec danych demo jako realnych: realna nazwa użytkownika lub neutralna
+> etykieta „Twoje konto"; realne imię w powitaniu pracodawcy; liczniki kategorii/miast REALNE
+> `get_public_jobs_count` spójne z filtrem linku, albo pomijane w demo), P1-11 (`0048`: wygasłe
+> oferty znikają z `job_is_public`/`get_public_jobs`/`_count`/`get_public_job` — filtr
+> `expires_at`; dowód CC), P1-13 (sitemap ofert stronicowany do 5000), P1-22 (błąd
+> `finalize_discount` w webhooku → 500/retry zamiast cichego połknięcia).
+> **P2/P3 autonomiczne — ZAMKNIĘTE:** P2-03 (`0049`: send_offer domyślny expires_at
+> `least(job, now()+30d)`; dowód D4b), P2-05 (twardy limit body webhooków przy STREAMINGU —
+> `readTextWithLimit`, nie tylko po Content-Length), P3-01 (/api/health publicznie tylko `status`;
+> szczegóły za `HEALTH_CHECK_SECRET`/poza produkcją), P3-02 (allowlista next/image + CSP img-src
+> zawężone do hosta Supabase), P3-03 (usunięto sztuczny `lastModified=now` ze stron statycznych),
+> P3-04 (billing nie połyka błędów DB — INTERNAL vs NOT_FOUND).
+> **P1 NIE-AUTONOMICZNE / duże funkcje (OTWARTE — wymagają Ciebie/produktu/infry/prawnika):**
+> P1-01 (entitlements planów — brak warstwy policy/limitów), P1-02 (dostęp firmy do CV = model
+> grantów + AV, usługa zewn.), P1-03 (pipeline materializacji `matches`), P1-04 (edycja/wznowienie
+> draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata),
+> P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-12 (JSON-LD:
+> `validThrough` z `expires_at` + `unitText` z `salary_period` — wymaga rozszerzenia zwrotu
+> `get_public_job`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
+> (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR),
+> P1-18 (moderacja zgłoszeń end-to-end), P1-19 (webhook Resend bounce/complaint = zewn.),
+> P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
+> P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
+> P2-04/06/13 i P4-* (paginacja admina, atomowy lease inboxa, zarządzanie zespołem, alerty/CWV).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
