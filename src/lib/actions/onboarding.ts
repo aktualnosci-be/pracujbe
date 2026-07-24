@@ -18,17 +18,18 @@ import {
  * Każdy krok jest walidowany odpowiednim `stepNSchema` (to samo źródło prawdy, co po stronie
  * klienta) i zapisywany atomowo dla danego kroku:
  *   - krok 1 → `profiles` (first_name / last_name / phone; dane tożsamości są w profiles),
- *   - kroki 2, 3, 4, 6 → `candidate_profiles` (UPSERT po unikalnym `profile_id`),
+ *   - krok 3 → `candidate_profiles` (doświadczenie) + `candidate_skills` przez RPC (0028),
+ *   - krok 5 → `candidate_languages` (z poziomem) + `candidate_certificates` przez RPC (0028),
+ *   - kroki 2, 4, 6 → `candidate_profiles` (UPSERT po unikalnym `profile_id`),
  *   - krok 6 dodatkowo ustawia `profile_completed = true`.
+ *
+ * Relacje (skills/languages/certificates) zapisujemy transakcyjnie przez SECURITY DEFINER RPC
+ * `set_candidate_*` (replace-all) — koniec cichej utraty danych z FUN-04. Bezpośredni DML na
+ * tych tabelach jest odebrany klientowi (0028), więc RPC to jedyna ścieżka zapisu.
  *
  * TRYB DEMO (Invariant: panele działają bez env): gdy Supabase nie jest skonfigurowane,
  * walidujemy dane, ale NIE zapisujemy — zwracamy `{ ok: true, demo: true }`. Dzięki temu
  * build i UX działają bez backendu.
- *
- * TODO(data): relacje słownikowe — `candidate_skills` (krok 3), `candidate_languages` i
- * `candidate_certificates` (krok 5) — wymagają rozwiązania po słownikach (skills/languages/
- * certificates) i osobnych tabelach pośrednich. W tej iteracji są walidowane, ale NIE
- * utrwalane; zapisujemy tylko kolumny należące do `candidate_profiles`/`profiles`.
  * Bez technikaliów dla użytkownika (Invariant #8) — błędy mapujemy na kod użytkowy.
  */
 
@@ -101,13 +102,33 @@ export async function saveOnboardingStep(
       return { ok: true };
     }
 
-    if (step === 5) {
-      // Krok 5 to wyłącznie relacje (languages/certificates) — patrz TODO(data) na górze pliku.
-      // Walidacja przeszła; w tej iteracji nie ma kolumn `candidate_profiles` do zapisania.
+    if (step === 3) {
+      // Doświadczenie → candidate_profiles; umiejętności → relacja przez transakcyjne RPC (0028).
+      const v = parsed.value as import('@/lib/validation/candidate').CandidateStep3;
+      const { error: ue } = await supabase
+        .from('candidate_profiles')
+        .upsert({ profile_id: user.id, experience_years: v.experienceYears }, { onConflict: 'profile_id' });
+      if (ue) return { ok: false, error: mapPgError(ue.message) };
+      const { error: se } = await supabase.rpc('set_candidate_skills', { p_skills: v.skills });
+      if (se) return { ok: false, error: mapPgError(se.message) };
       return { ok: true };
     }
 
-    // Kroki 2/3/4/6 → UPSERT do candidate_profiles po unikalnym profile_id.
+    if (step === 5) {
+      // Krok 5: języki (z poziomem) + certyfikaty → relacje przez transakcyjne RPC (0028).
+      // Wcześniej dane były walidowane, ale NIE zapisywane (FUN-04, cicha utrata danych).
+      const v = parsed.value as import('@/lib/validation/candidate').CandidateStep5;
+      const langs = v.languages.map((l) => ({ language: l.language, level: l.level }));
+      const { error: le } = await supabase.rpc('set_candidate_languages', { p_languages: langs });
+      if (le) return { ok: false, error: mapPgError(le.message) };
+      const { error: ce } = await supabase.rpc('set_candidate_certificates', {
+        p_certificates: v.certificates,
+      });
+      if (ce) return { ok: false, error: mapPgError(ce.message) };
+      return { ok: true };
+    }
+
+    // Kroki 2/4/6 → UPSERT do candidate_profiles po unikalnym profile_id.
     const row = buildCandidateProfileRow(step, parsed.value, data);
     const { error } = await supabase
       .from('candidate_profiles')
@@ -144,18 +165,12 @@ function buildCandidateProfileRow(
   raw: unknown,
 ): Record<string, unknown> {
   type S2 = import('@/lib/validation/candidate').CandidateStep2;
-  type S3 = import('@/lib/validation/candidate').CandidateStep3;
   type S4 = import('@/lib/validation/candidate').CandidateStep4;
   type S6 = import('@/lib/validation/candidate').CandidateStep6;
 
   if (step === 2) {
     const v = value as S2;
     return { occupations: v.occupations, categories: v.categories };
-  }
-  if (step === 3) {
-    const v = value as S3;
-    // v.skills → relacja candidate_skills (TODO(data)); tu zapisujemy tylko doświadczenie.
-    return { experience_years: v.experienceYears };
   }
   if (step === 4) {
     const v = value as S4;

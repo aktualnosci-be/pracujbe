@@ -522,4 +522,42 @@ reset role; reset app.current_uid;
 -- Przywrócenie stanu (gdyby doszły kolejne asercje na EMPA).
 update public.company_members set is_active = true where company_id = :'COMPA' and profile_id = :'EMPA';
 
+-- ============================================================================
+-- M. Persystencja relacji onboardingu 0028 (FUN-04) + RPC-only DML
+-- ============================================================================
+set role authenticated; set app.current_uid = :'CANDA';
+-- Umiejętności: dedup (duplikat pomijany) + replace-all przy kolejnym zapisie.
+select public.set_candidate_skills(array['Spawanie','Wózek widłowy','Spawanie']);
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills cs
+     join public.candidate_profiles cp on cp.id = cs.candidate_profile_id
+    where cp.profile_id = :'CANDA') = 2,
+  'M1 set_candidate_skills zapisuje umiejętności (dedup do 2)');
+select public.set_candidate_skills(array['Prawo jazdy C']);
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills cs
+     join public.candidate_profiles cp on cp.id = cs.candidate_profile_id
+    where cp.profile_id = :'CANDA') = 1,
+  'M1b set_candidate_skills zastępuje poprzedni zestaw (replace-all)');
+-- Języki z poziomem.
+select public.set_candidate_languages('[{"language":"polski","level":"native"},{"language":"niderlandzki","level":"basic"}]'::jsonb);
+select pg_temp.assert(
+  (select count(*) from public.candidate_languages cl
+     join public.candidate_profiles cp on cp.id = cl.candidate_profile_id
+    where cp.profile_id = :'CANDA' and cl.level = 'native') = 1,
+  'M2 set_candidate_languages zapisuje języki z poziomem');
+-- Certyfikaty.
+select public.set_candidate_certificates(array['VCA','HACCP']);
+select pg_temp.assert(
+  (select count(*) from public.candidate_certificates cc
+     join public.candidate_profiles cp on cp.id = cc.candidate_profile_id
+    where cp.profile_id = :'CANDA') = 2,
+  'M3 set_candidate_certificates zapisuje certyfikaty');
+-- RPC-only: bezpośredni INSERT do relacji odrzucony na poziomie grantu.
+select pg_temp.expect_error(
+  'insert into public.candidate_skills(candidate_profile_id, skill_label) values '
+  || '((select id from public.candidate_profiles where profile_id = '''|| :'CANDA' ||'''::uuid), ''hack'')',
+  'permission denied', 'M4 bezpośredni INSERT do candidate_skills odrzucony (RPC-only)');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
