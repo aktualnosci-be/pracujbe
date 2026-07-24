@@ -774,4 +774,23 @@ select pg_temp.expect_error(
   'insert into public.processed_webhooks(id, source) values (''t:evt-1'', ''test'')',
   'duplicate key', 'T2 duplikat id odrzucony (dedup replay)');
 
+-- ============================================================================
+-- U. C3 0037: propozycje/statusy wymagają recruiter+ (CANDB = member COMPA)
+-- ============================================================================
+set role authenticated; set app.current_uid = :'CANDB';
+select pg_temp.expect_error(
+  'select public.transition_application(current_setting(''my.appa'')::uuid, ''viewed'')',
+  'PERMISSION_DENIED', 'U1 zwykły member nie zmienia statusu aplikacji (recruiter+)');
+select pg_temp.expect_error(
+  'select public.send_offer('''|| :'JOBA' ||'''::uuid, '''|| :'CANDA' ||'''::uuid, ''c3-x'', ''hej'', null)',
+  'PERMISSION_DENIED', 'U2 zwykły member nie wysyła propozycji (recruiter+)');
+reset role; reset app.current_uid;
+-- Kontrola pozytywna: recruiter+ (EMPC owner COMPA) MOŻE zmienić status aplikacji.
+set role authenticated; set app.current_uid = :'EMPC';
+select public.transition_application(:'appa'::uuid, 'viewed');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.applications where id = :'appa') = 'viewed',
+  'U3 recruiter+ zmienia status aplikacji (transition_application)');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

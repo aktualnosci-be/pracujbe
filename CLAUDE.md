@@ -409,9 +409,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > safe default zrobiony). **P2/P3 — ZROBIONE:** SEC-16 (0035, in_app opt-out trigger),
 > SEC-15 (outbox: sprawdzanie błędów zapisu po wysyłce + log do reconciliacji), SEC-14 (0036,
 > `processed_webhooks` dedup po event.id/webhook-id + limit rozmiaru body dla Stripe/email-hook;
-> dowód rls.sql T). **Pozostałe follow-up:** C3 (propozycje/statusy → recruiter+), SEC-12 (skan
-> CV — wymaga AV/usługi zewn.), FUN-02 (pełna transakcyjność kroków kreatora), CI-01/02/07 (infra),
-> FUN-09 (treść prawna).
+> dowód rls.sql T). **C3 (0037) — ZROBIONE:** propozycje (enforce_offer_integrity
+> INSERT → can_manage_jobs) i zmiany statusu aplikacji (transition_application → is_job_manager)
+> wymagają recruiter+; respond_to_offer (kandydat) bez zmian. Dowód: rls.sql sekcja U.
+> **Pozostałe follow-up (nieautonomiczne):** SEC-12 (skan CV — wymaga AV/usługi zewn.), FUN-02
+> (pełna transakcyjność każdego kroku kreatora — duży refactor), CI-01/02/07 (separacja runnerów +
+> twarda bramka RLS/Storage — infra), FUN-09 (treść prawna do zatwierdzenia).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
