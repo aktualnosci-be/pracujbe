@@ -24,6 +24,8 @@ import type { MatchResult } from '@/lib/matching/score';
 const KNOWN_CRITERIA = new Set([
   'allMandatorySkills',
   'localCandidate',
+  'remoteJob',
+  'withinCommuteRadius',
   'experienceExceeds',
   'immediateStart',
   'noLanguageBarrier',

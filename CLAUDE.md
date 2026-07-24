@@ -386,9 +386,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > `isAppReady`); w trybie produkcyjnym brak konfiguracji Supabase → middleware zwraca **503
 > maintenance** (nie fikcyjny tryb demo), a `GET /api/health` → 503 `{status:"unconfigured"}`
 > (readiness dla monitoringu). Demo (lokalnie/staging/E2E) bez zmian. Zweryfikowane runtime
-> (503 na stronie i /api/health). **Do zrobienia:** FUN-06 (matching), FUN-07 (multi-company),
-> C3 (propozycje/statusy recruiter+), P2/P3 (SEC-12/14/15/16), billing (decyzja),
-> CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
+> (503 na stronie i /api/health).
+> **Wave F — FUN-06 (matching) — ZROBIONE (część):** `scoreMatch` — praca zdalna znosi
+> ograniczenie lokalizacji (pełne punkty), promień dojazdu (`radiusKm>=50` przy dopasowaniu
+> regionu → pełne punkty), wymagania OBOWIĄZKOWE jako próg (niespełnione → wynik nie „good",
+> cap 65). `get_job_match_profile` zwraca `remote` (0034). i18n `match.criteria` (remoteJob/
+> withinCommuteRadius). Testy: matching.test 10 (było 7). **Odłożone (FUN-06):** poziomy
+> języków/certyfikatów (wymaga rozszerzenia MatchCandidate/MatchJob o levele) + geokodowanie.
+> **Do zrobienia:** FUN-07 (multi-company), C3 (propozycje/statusy recruiter+), P2/P3
+> (SEC-12/14/15/16), billing (decyzja), CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)

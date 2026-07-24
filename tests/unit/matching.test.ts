@@ -211,6 +211,58 @@ describe('scoreMatch', () => {
     expect(low.score).toBeLessThan(40);
   });
 
+  it('praca zdalna znosi ograniczenie lokalizacji (FUN-06)', () => {
+    const base = candidate({ city: 'Brussels', region: 'Brussels-Capital' });
+    const remoteJob = job({ remote: true, city: 'Ghent', region: 'East Flanders' });
+    const onsiteJob = job({ city: 'Ghent', region: 'East Flanders' });
+
+    const remoteResult = scoreMatch(base, remoteJob);
+    const onsiteResult = scoreMatch(base, onsiteJob);
+
+    // Remote: pełne punkty lokalizacji + atut; on-site (brak dopasowania): brak.
+    expect(remoteResult.strengths).toContain('remoteJob');
+    expect(onsiteResult.missing).toContain('location');
+    expect(remoteResult.score).toBeGreaterThan(onsiteResult.score);
+  });
+
+  it('duży promień dojazdu daje pełne punkty przy dopasowaniu regionu (FUN-06)', () => {
+    const j = job({ city: 'Liege', region: 'Liège Province' });
+    const near = scoreMatch(candidate({ city: 'Seraing', region: 'Liège Province', radiusKm: 60 }), j);
+    const local = scoreMatch(candidate({ city: 'Seraing', region: 'Liège Province', radiusKm: 10 }), j);
+
+    // Ten sam region: promień >=50 => pełne punkty + atut; mały promień => tylko częściowe.
+    expect(near.strengths).toContain('withinCommuteRadius');
+    expect(near.score).toBeGreaterThan(local.score);
+  });
+
+  it('niespełnione wymaganie obowiązkowe blokuje wynik "good" (FUN-06, próg)', () => {
+    // Kandydat spełnia niemal wszystko poza jedną obowiązkową umiejętnością.
+    const result = scoreMatch(
+      candidate({
+        occupations: ['x'],
+        categories: ['warehouse'],
+        skills: ['a'],
+        city: 'A',
+        region: 'B',
+        experienceYears: 10,
+        availability: 'immediate',
+      }),
+      job({
+        occupation: 'x',
+        category: 'warehouse',
+        skills: ['a', 'b'],
+        mandatorySkills: ['a', 'b'], // 'b' niespełnione => próg
+        city: 'A',
+        region: 'B',
+      }),
+    );
+    expect(result.mandatoryMet).toBe(1);
+    expect(result.mandatoryTotal).toBe(2);
+    // Mimo wysokiego dopasowania — brak obowiązkowej umiejętności trzyma wynik poniżej „good".
+    expect(result.score).toBeLessThanOrEqual(65);
+    expect(result.summaryKey).not.toBe('good');
+  });
+
   it('jest deterministyczny: te same wejścia => ten sam wynik', () => {
     const c = candidate({ occupations: ['x'], skills: ['s1', 's2'] });
     const j = job({ occupation: 'x', skills: ['s1'] });

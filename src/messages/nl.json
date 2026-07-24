@@ -1108,7 +1108,9 @@
       "experience": "Ervaring",
       "availability": "Beschikbaarheid",
       "drivingLicense": "Rijbewijs",
-      "contractType": "Contracttype"
+      "contractType": "Contracttype",
+      "remoteJob": "Werk op afstand — locatie speelt geen rol",
+      "withinCommuteRadius": "Werkplek binnen jouw reisafstand"
     }
   }
 }

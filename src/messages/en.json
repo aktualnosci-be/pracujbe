@@ -1108,7 +1108,9 @@
       "experience": "Experience",
       "availability": "Availability",
       "drivingLicense": "Driving licence",
-      "contractType": "Contract type"
+      "contractType": "Contract type",
+      "remoteJob": "Remote work — location does not matter",
+      "withinCommuteRadius": "Workplace within your commute radius"
     }
   }
 }

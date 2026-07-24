@@ -54,6 +54,8 @@ export type MatchJob = {
   requiresDrivingLicense?: boolean;
   contractType?: string;
   startImmediately?: boolean;
+  /** Praca zdalna — znosi ograniczenie lokalizacji (pełne punkty). */
+  remote?: boolean;
 };
 
 const WEIGHTS = {
@@ -157,8 +159,11 @@ export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResul
     strengths.push('allMandatorySkills');
   }
 
-  // --- Lokalizacja (15) ---
-  if (!job.city && !job.region) {
+  // --- Lokalizacja (15) — remote znosi ograniczenie; promień wzmacnia dopasowanie regionu ---
+  if (job.remote) {
+    score += WEIGHTS.location;
+    strengths.push('remoteJob');
+  } else if (!job.city && !job.region) {
     score += WEIGHTS.location;
   } else {
     const cityMatch =
@@ -169,7 +174,13 @@ export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResul
       score += WEIGHTS.location;
       strengths.push('localCandidate');
     } else if (regionMatch) {
-      score += 10;
+      // Kandydat gotów dojeżdżać w obrębie regionu (duży promień) => pełne punkty.
+      if ((candidate.radiusKm ?? 0) >= 50) {
+        score += WEIGHTS.location;
+        strengths.push('withinCommuteRadius');
+      } else {
+        score += 10;
+      }
     } else {
       missing.push('location');
     }
@@ -258,7 +269,12 @@ export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResul
     missing.push('contractType');
   }
 
-  const finalScore = Math.max(0, Math.min(100, Math.round(score)));
+  let finalScore = Math.max(0, Math.min(100, Math.round(score)));
+  // Wymagania OBOWIĄZKOWE działają jak próg: gdy któreś nie jest spełnione, dopasowanie
+  // NIE może być „good" (koniec zawyżania mimo braku kluczowych umiejętności) — FUN-06.
+  if (mandatoryTotal > 0 && mandatoryMet < mandatoryTotal) {
+    finalScore = Math.min(finalScore, 65);
+  }
   const summaryKey: MatchResult['summaryKey'] =
     finalScore >= 70 ? 'good' : finalScore >= 40 ? 'partial' : 'low';
 

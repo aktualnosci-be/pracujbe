@@ -1108,7 +1108,9 @@
       "experience": "Doświadczenie",
       "availability": "Dostępność",
       "drivingLicense": "Prawo jazdy",
-      "contractType": "Typ umowy"
+      "contractType": "Typ umowy",
+      "remoteJob": "Praca zdalna — lokalizacja bez znaczenia",
+      "withinCommuteRadius": "Miejsce pracy w Twoim promieniu dojazdu"
     }
   }
 }

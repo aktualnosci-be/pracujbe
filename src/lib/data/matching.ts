@@ -117,6 +117,7 @@ export async function getMyJobMatch(jobId: string): Promise<MatchResult | null> 
       requiresDrivingLicense: jr['requires_driving_license'] === true,
       contractType: asStr(jr['contract_type']) || undefined,
       startImmediately: jr['start_immediately'] === true,
+      remote: jr['remote'] === true,
     };
 
     return scoreMatch(candidate, job);

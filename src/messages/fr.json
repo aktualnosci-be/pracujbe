@@ -1108,7 +1108,9 @@
       "experience": "Expérience",
       "availability": "Disponibilité",
       "drivingLicense": "Permis de conduire",
-      "contractType": "Type de contrat"
+      "contractType": "Type de contrat",
+      "remoteJob": "Télétravail — la localisation importe peu",
+      "withinCommuteRadius": "Lieu de travail dans votre rayon de déplacement"
     }
   }
 }
