@@ -460,9 +460,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > głębsza walidacja OOXML DOCX + flaga scan_status/kwarantanna; kolejność delete DB→Storage;
 > **AV = świadomie odłożone, usługa zewn.**), P1-24 (0043: RPC-only record_consent — niezmienny
 > receipt visitor/wersja/IP/UA; **treść prawna nadal placeholder+noindex, do zatwierdzenia**).
-> Dowód: rls.sql sekcje P (0042), Y (0043). **P1 OTWARTE (świadomie, większe refactory):** P1-09
-> (pełna transakcyjność każdego kroku — publish atomowy, relacje replace-all), P1-12 (filtrowanie/
-> paginacja >200 w SQL — refactor listy ofert), P1-15 (transakcyjna realizacja kodów rabatowych).
+> P1-15 (0045: tabela discount_redemptions + reserve/finalize/release; startCheckout rezerwuje
+> i ZATRZYMUJE na nieprawidłowym kodzie; webhook finalizuje; dowód rls.sql sekcja Z).
+> Dowód: rls.sql sekcje P (0042), Y (0043), Z (0045). **P1 OTWARTE (świadomie, duże refactory —
+> nie live-bug: seed <200 ofert, publish już atomowy):** P1-12 (filtry zaawansowane/sort/paginacja
+> listy ofert liczone są nad `MAX_FACET=200` w pamięci — do zejścia w całości do SQL; wymaga
+> rozszerzenia get_public_jobs o widełki/akomodację/„od zaraz"/język/datę + przepisania strony
+> SSR z asercjami E2E), P1-09 (owinięcie KAŻDEGO kroku kreatora/onboardingu w transakcyjne RPC —
+> publish jest atomowy, relacje replace-all, ale pełna per-krok transakcyjność to duży refactor).
 > **P1 NIE-AUTONOMICZNE:** P1-20/21/25 (twarda bramka RLS + migracje/rollback w deployu +
 > ephemeral runners = infra), P1-22-AV (skan antywirusowy = usługa zewn.), P1-24-treść (realna
 > treść prawna = prawnik).
