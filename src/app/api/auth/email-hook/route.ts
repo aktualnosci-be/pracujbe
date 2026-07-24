@@ -1,5 +1,3 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
-
 import { Resend } from 'resend';
 
 import { renderEmail } from '@/emails/templates';
@@ -7,6 +5,7 @@ import type { EmailType } from '@/emails/copy';
 import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
+import { verifyStandardWebhook } from '@/lib/webhooks';
 
 /**
  * Supabase Auth „Send Email Hook" — wysyłka transakcyjnych e-maili Auth (potwierdzenie konta,
@@ -48,38 +47,16 @@ function toLocale(value: unknown): Locale {
 
 /** Weryfikacja podpisu Standard Webhooks (jak Supabase Send Email Hook). */
 function verifySignature(secret: string, headers: Headers, rawBody: string): boolean {
-  const id = headers.get('webhook-id');
-  const timestamp = headers.get('webhook-signature-timestamp') ?? headers.get('webhook-timestamp');
-  const sigHeader = headers.get('webhook-signature');
-  if (!id || !timestamp || !sigHeader) return false;
-
-  // Świeżość znacznika czasu: odrzuć nieparsowalny lub spoza okna ±tolerancja (anty-replay).
-  const ts = Number(timestamp);
-  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > TIMESTAMP_TOLERANCE_SECONDS) {
-    return false;
-  }
-
-  // Supabase podaje sekret jako 'v1,whsec_<base64>'; akceptujemy też samo 'whsec_<base64>'.
-  const base64Secret = secret.replace(/^v1,/, '').replace(/^whsec_/, '');
-  let key: Buffer;
-  try {
-    key = Buffer.from(base64Secret, 'base64');
-  } catch {
-    return false;
-  }
-  const expected = createHmac('sha256', key).update(`${id}.${timestamp}.${rawBody}`).digest('base64');
-  const expectedBuf = Buffer.from(expected);
-
-  // Nagłówek może zawierać wiele podpisów oddzielonych spacją, każdy w formie 'v1,<sig>'.
-  for (const part of sigHeader.split(' ')) {
-    const value = part.includes(',') ? part.split(',')[1] : part;
-    if (!value) continue;
-    const candidate = Buffer.from(value);
-    if (candidate.length === expectedBuf.length && timingSafeEqual(candidate, expectedBuf)) {
-      return true;
-    }
-  }
-  return false;
+  return verifyStandardWebhook(
+    secret,
+    {
+      id: headers.get('webhook-id'),
+      timestamp: headers.get('webhook-signature-timestamp') ?? headers.get('webhook-timestamp'),
+      signature: headers.get('webhook-signature'),
+    },
+    rawBody,
+    { toleranceSeconds: TIMESTAMP_TOLERANCE_SECONDS },
+  );
 }
 
 /** Mapuje typ akcji GoTrue na nasz typ e-maila + dane szablonu (link w locale odbiorcy). */
