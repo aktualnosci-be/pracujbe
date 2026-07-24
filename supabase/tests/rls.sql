@@ -675,4 +675,45 @@ select pg_temp.expect_error(
   'PERMISSION_DENIED', 'P4 nie-członek nie publikuje cudzej oferty');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- Q. Owner invariants 0032 (SEC-10) — ochrona właściciela firmy
+-- ============================================================================
+-- Setup: EMPC (owner COMPC) zostaje ADMINEM (nie-owner) w COMPA. EMPA to jedyny owner COMPA.
+reset role;
+insert into public.company_members(company_id, profile_id, role, is_active)
+  values (:'COMPA', :'EMPC', 'admin', true);
+
+-- Q1: admin (nie-owner) nie awansuje siebie na ownera (przejęcie firmy).
+set role authenticated; set app.current_uid = :'EMPC';
+select pg_temp.expect_error(
+  'update public.company_members set role=''owner'' where company_id='''|| :'COMPA' ||''' and profile_id='''|| :'EMPC' ||'''',
+  'PERMISSION_DENIED', 'Q1 admin nie awansuje siebie na ownera');
+reset role; reset app.current_uid;
+
+-- Q2: nie można zdemotować OSTATNIEGO aktywnego ownera (EMPA demote self).
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'update public.company_members set role=''admin'' where company_id='''|| :'COMPA' ||''' and profile_id='''|| :'EMPA' ||'''',
+  'VALIDATION_FAILED', 'Q2 nie można zdemotować ostatniego ownera');
+
+-- Q3: nie można usunąć OSTATNIEGO aktywnego ownera (EMPA delete self).
+select pg_temp.expect_error(
+  'delete from public.company_members where company_id='''|| :'COMPA' ||''' and profile_id='''|| :'EMPA' ||'''',
+  'VALIDATION_FAILED', 'Q3 nie można usunąć ostatniego ownera');
+
+-- Q4: owner MOŻE awansować innego członka do owner (transfer/współwłasność).
+update public.company_members set role='owner' where company_id=:'COMPA' and profile_id=:'EMPC';
+select pg_temp.assert(
+  (select role::text from public.company_members where company_id=:'COMPA' and profile_id=:'EMPC') = 'owner',
+  'Q4 owner awansuje innego członka do owner');
+reset role; reset app.current_uid;
+
+-- Q5: gdy jest już drugi aktywny owner (EMPC), pierwszy (EMPA) MOŻE zejść z roli.
+set role authenticated; set app.current_uid = :'EMPA';
+update public.company_members set role='admin' where company_id=:'COMPA' and profile_id=:'EMPA';
+select pg_temp.assert(
+  (select role::text from public.company_members where company_id=:'COMPA' and profile_id=:'EMPA') = 'admin',
+  'Q5 owner może zejść z roli, gdy istnieje inny aktywny owner');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

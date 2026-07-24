@@ -371,9 +371,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > wymaganie obowiązkowe) + guard trigger `guard_job_publish` (aktywacja oferty tylko przez RPC;
 > klient nie ustawi status='active' bezpośrednio). Dowód: `rls.sql` sekcja P. FUN-02 (pełna
 > transakcyjność per-krok) — częściowo: publish atomowy, relacje replace-all; pełne owinięcie
-> każdego kroku w RPC = follow-up. **Do zrobienia:** Wave C (RBAC + owner invariants SEC-09/10),
-> Wave F (matching FUN-06, multi-company FUN-07, fail-closed env SEC-19), billing (decyzja),
-> CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
+> każdego kroku w RPC = follow-up.
+> **Wave C1 (0032) — ZROBIONE:** SEC-10 (owner invariants) — trigger `enforce_owner_invariants`
+> na company_members: rolę owner nadaje/odbiera tylko aktywny owner; nie można zdemotować/
+> usunąć/dezaktywować OSTATNIEGO aktywnego ownera (koniec przejęcia firmy przez admina i
+> osierocenia firmy). Dowód: `rls.sql` sekcja Q. **Do zrobienia:** C2 (capability RBAC SEC-09:
+> job/candidate/offer tylko recruiter+), Wave F (matching FUN-06, multi-company FUN-07,
+> fail-closed env SEC-19), billing (decyzja), CI (separacja runnerów, twarda bramka RLS,
+> SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
