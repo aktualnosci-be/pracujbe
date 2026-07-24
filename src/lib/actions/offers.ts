@@ -49,8 +49,15 @@ export async function sendOffer(input: OfferInput): Promise<SendOfferResult> {
   return { ok: true, id: String(data) };
 }
 
+/** Walidacja UUID na granicy Server Action (P2-19: spójny walidator na wszystkich granicach). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Kandydat akceptuje lub odrzuca propozycję. */
 export async function respondToOffer(offerId: string, accept: boolean): Promise<RespondResult> {
+  // P1-23/P2-19: walidacja UUID PRZED RPC (błędny input → VALIDATION_FAILED, nie „INTERNAL").
+  if (typeof offerId !== 'string' || !UUID_RE.test(offerId)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
   const supabase = await createServerClient();
   const { error } = await supabase.rpc('respond_to_offer', {
     p_offer_id: offerId,

@@ -902,4 +902,29 @@ select public.withdraw_application(:'appjb'::uuid) as wres \gset
 select pg_temp.assert(:'wres' = 'withdrawn', 'W7 wycofanie aplikacji aktywnej OK (P1-06)');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- X. Audyt produkcyjny 0041 (P1-23) — idempotencja aktywnej pary + wygaśnięcie propozycji
+-- ============================================================================
+-- EMPC = recruiter+ COMPA; CANDA związany z COMPA (aplikacja appa). Brak aktywnej propozycji.
+set role authenticated; set app.current_uid = :'EMPC';
+select public.send_offer(:'JOBA'::uuid, :'CANDA'::uuid, 'x-off-key-1', 'Zapraszamy', null) as xoff1 \gset
+-- Inny klucz idempotencji, TA SAMA aktywna para → zwraca ISTNIEJĄCĄ propozycję (bez dubletu).
+select public.send_offer(:'JOBA'::uuid, :'CANDA'::uuid, 'x-off-key-2', 'Ponownie', null) as xoff2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'xoff1' = :'xoff2',
+  'X1 idempotencja po aktywnej parze (inny klucz → ta sama propozycja)');
+select pg_temp.assert(
+  (select count(*) from public.offers
+     where job_id = :'JOBA' and candidate_id = :'CANDA' and status in ('sent','viewed')) = 1,
+  'X1b dokładnie jedna aktywna propozycja na parę (partial unique)');
+
+-- Wygaśnięcie: ustaw expires_at w przeszłości i spróbuj zaakceptować (kandydat).
+reset role;
+update public.offers set expires_at = now() - interval '1 day' where id = :'xoff1';
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.expect_error(
+  'select public.respond_to_offer('''|| :'xoff1' ||'''::uuid, true)',
+  'VALIDATION_FAILED', 'X2 wygasłej propozycji nie można zaakceptować (P1-23)');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
