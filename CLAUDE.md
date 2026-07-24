@@ -375,10 +375,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > **Wave C1 (0032) — ZROBIONE:** SEC-10 (owner invariants) — trigger `enforce_owner_invariants`
 > na company_members: rolę owner nadaje/odbiera tylko aktywny owner; nie można zdemotować/
 > usunąć/dezaktywować OSTATNIEGO aktywnego ownera (koniec przejęcia firmy przez admina i
-> osierocenia firmy). Dowód: `rls.sql` sekcja Q. **Do zrobienia:** C2 (capability RBAC SEC-09:
-> job/candidate/offer tylko recruiter+), Wave F (matching FUN-06, multi-company FUN-07,
-> fail-closed env SEC-19), billing (decyzja), CI (separacja runnerów, twarda bramka RLS,
-> SCA/SAST, a11y/perf).
+> osierocenia firmy). Dowód: `rls.sql` sekcja Q.
+> **Wave C2 (0033) — ZROBIONE:** SEC-09 (capability RBAC) — `can_manage_jobs`/`is_job_manager`
+> (recruiter+ = owner/admin/recruiter). ZAPIS ofert (jobs + job_translations/requirements/skills/
+> languages/certificates), `publish_job` i dostęp do PII kandydata (`company_can_view_candidate`)
+> wymagają recruiter+ — zwykły `member` traci prawa rekrutacyjne (odczyt ofert firmowych zostaje).
+> Dowód: `rls.sql` sekcja R. Bramkowanie propozycji/zmian statusu do recruiter+ = follow-up C3
+> (te ścieżki już wymagają członkostwa i idą przez SECURITY DEFINER RPC). **Do zrobienia:**
+> Wave F (matching FUN-06, multi-company FUN-07, fail-closed env SEC-19), billing (decyzja),
+> CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)

@@ -716,4 +716,33 @@ select pg_temp.assert(
   'Q5 owner może zejść z roli, gdy istnieje inny aktywny owner');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- R. Capability RBAC 0033 (SEC-09) — zarządzanie ofertami/PII tylko recruiter+
+-- ============================================================================
+-- CANDB zostaje ZWYKŁYM członkiem (member) COMPA. EMPC jest ownerem COMPA (z sekcji Q).
+reset role;
+insert into public.company_members(company_id, profile_id, role, is_active)
+  values (:'COMPA', :'CANDB', 'member', true);
+
+-- R1: plain member nie utworzy oferty firmy (can_manage_jobs=false → RLS with-check).
+set role authenticated; set app.current_uid = :'CANDB';
+select pg_temp.expect_error(
+  'insert into public.jobs(company_id, slug, title, category, contract_type, city, region, status, default_locale) '
+  || 'values ('''|| :'COMPA' ||''',''rbac-1'',''X'',''warehouse'',''permanent'',''Gent'',''Flandria'',''draft'',''pl'')',
+  'row-level security', 'R1 plain member nie tworzy oferty (RBAC recruiter+)');
+-- R2: plain member nie widzi PII kandydata firmy (mimo istniejącej aplikacji do COMPA).
+select pg_temp.assert(public.company_can_view_candidate(:'CANDA'::uuid) is false,
+  'R2 plain member nie widzi PII kandydata (recruiter+ only)');
+select pg_temp.assert(public.can_manage_jobs(:'COMPA'::uuid) is false,
+  'R2b plain member: can_manage_jobs=false');
+reset role; reset app.current_uid;
+
+-- R3: recruiter+ (EMPC owner COMPA) zarządza ofertami i widzi kandydatów z relacją.
+set role authenticated; set app.current_uid = :'EMPC';
+select pg_temp.assert(public.can_manage_jobs(:'COMPA'::uuid) is true,
+  'R3 owner/recruiter zarządza ofertami');
+select pg_temp.assert(public.company_can_view_candidate(:'CANDA'::uuid) is true,
+  'R3b recruiter+ widzi PII kandydata z relacją (CANDA aplikował do COMPA)');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
