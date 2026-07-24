@@ -358,15 +358,18 @@ select pg_temp.assert((select count(*) from public.claim_email_batch(100)) = 0,
   'I8b drugi natychmiastowy claim nie zwraca tych samych wierszy (dzierżawa locked_at)');
 
 -- I9: get_applied_jobs_display (0023) zwraca ofertę własnej aplikacji NIEZALEŻNIE od statusu
--- oferty/firmy. CANDB aplikował do JOBC (firma COMPC=unverified) — get_public_jobs by ją odfiltrował,
--- więc lista aplikacji miałaby pusty tytuł. RPC musi zwrócić tytuł/firmę mimo braku weryfikacji.
+-- oferty. Zamykamy JOBC (status=closed → NIEwidoczna publicznie przez get_public_jobs); mimo to
+-- CANDB (który aplikował) musi widzieć jej tytuł/firmę na liście „moje aplikacje" (fix P3 —
+-- stare wzbogacanie mapą publiczną dawało tu pusty tytuł). Stan `closed` gwarantuje, że test
+-- realnie sprawdza obejście filtra publicznego (H2 wcześniej zweryfikował COMPC).
+update public.jobs set status = 'closed' where id = :'JOBC';
 set role authenticated; set app.current_uid = :'CANDB';
 select pg_temp.assert(
   (select count(*) from public.get_applied_jobs_display('pl')) = 1,
   'I9 get_applied_jobs_display zwraca tylko własne aplikacje (CANDB=1)');
 select pg_temp.assert(
   (select title from public.get_applied_jobs_display('pl') where job_id = :'JOBC') = 'Pomocnik C',
-  'I9b tytuł oferty widoczny mimo firmy unverified (fix P3 pustych tytułów)');
+  'I9b tytuł oferty widoczny mimo statusu closed (fix P3 pustych tytułów)');
 select pg_temp.assert(
   (select company_name from public.get_applied_jobs_display('pl') where job_id = :'JOBC') = 'Firma C',
   'I9c nazwa firmy widoczna dla oferty własnej aplikacji');
@@ -377,5 +380,28 @@ select pg_temp.assert(
   (select count(*) from public.get_applied_jobs_display('pl') where job_id = :'JOBC') = 0,
   'I9d RPC ograniczone do WŁASNYCH aplikacji (CANDA nie widzi JOBC)');
 reset role; reset app.current_uid;
+
+-- I10: get_job_match_profile (0024) zwraca profil dopasowania TYLKO dla ofert widocznych
+-- publicznie (active + firma verified) — jak get_public_job. Świeża firma unverified + oferta
+-- active (COMPD/JOBD) izoluje test od mutacji COMPC (H2). Personalizacja tylko dla authenticated.
+insert into public.companies(id,name,status)
+  values ('dddddddd-dddd-dddd-dddd-dddddddddddd','Firma D','unverified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale)
+  values ('d1111111-1111-1111-1111-111111111111','dddddddd-dddd-dddd-dddd-dddddddddddd',
+          'job-d','Pakowacz D','warehouse','permanent','Brugia','Flandria','active','pl');
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.assert(
+  (select count(*) from public.get_job_match_profile(:'JOBA')) = 1,
+  'I10 get_job_match_profile zwraca profil dla oferty active+verified (JOBA)');
+select pg_temp.assert(
+  (select count(*) from public.get_job_match_profile('d1111111-1111-1111-1111-111111111111')) = 0,
+  'I10b get_job_match_profile NIE zwraca oferty firmy unverified (JOBD)');
+reset role; reset app.current_uid;
+-- anon nie ma grantu do RPC — wywołanie kończy się błędem uprawnień.
+set role anon; reset app.current_uid;
+select pg_temp.expect_error(
+  'select count(*) from public.get_job_match_profile(''a1111111-1111-1111-1111-111111111111'')',
+  'permission denied', 'I10c anon nie może wołać get_job_match_profile');
+reset role;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

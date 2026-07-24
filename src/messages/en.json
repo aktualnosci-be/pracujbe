@@ -1086,5 +1086,29 @@
     "catAdmin": "Formalities",
     "catDriving": "Driving licence",
     "catSafety": "Safety"
+  },
+  "match": {
+    "title": "Your match",
+    "summary": {
+      "good": "Great match — you meet most of the key requirements.",
+      "partial": "Partial match — you meet some of the requirements.",
+      "low": "Low match — this job is a limited fit for your profile."
+    },
+    "mandatory": "Mandatory requirements: {met} of {total}",
+    "strengthsTitle": "Your strengths",
+    "gapsTitle": "To improve",
+    "criteria": {
+      "allMandatorySkills": "You meet all mandatory requirements",
+      "localCandidate": "You live near the workplace",
+      "experienceExceeds": "Your experience exceeds what's required",
+      "immediateStart": "You can start immediately",
+      "noLanguageBarrier": "No language requirements",
+      "ownTransport": "You have your own transport",
+      "location": "Location",
+      "experience": "Experience",
+      "availability": "Availability",
+      "drivingLicense": "Driving licence",
+      "contractType": "Contract type"
+    }
   }
 }

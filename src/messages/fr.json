@@ -1086,5 +1086,29 @@
     "catAdmin": "Formalités",
     "catDriving": "Permis de conduire",
     "catSafety": "Sécurité"
+  },
+  "match": {
+    "title": "Votre correspondance",
+    "summary": {
+      "good": "Excellente correspondance — vous remplissez la plupart des critères importants.",
+      "partial": "Correspondance partielle — vous remplissez une partie des critères.",
+      "low": "Faible correspondance — cette offre correspond peu à votre profil."
+    },
+    "mandatory": "Exigences obligatoires : {met} sur {total}",
+    "strengthsTitle": "Vos atouts",
+    "gapsTitle": "À compléter",
+    "criteria": {
+      "allMandatorySkills": "Vous remplissez toutes les exigences obligatoires",
+      "localCandidate": "Vous habitez à proximité du lieu de travail",
+      "experienceExceeds": "Votre expérience dépasse celle requise",
+      "immediateStart": "Vous pouvez commencer immédiatement",
+      "noLanguageBarrier": "Aucune exigence linguistique",
+      "ownTransport": "Vous avez votre propre moyen de transport",
+      "location": "Localisation",
+      "experience": "Expérience",
+      "availability": "Disponibilité",
+      "drivingLicense": "Permis de conduire",
+      "contractType": "Type de contrat"
+    }
   }
 }

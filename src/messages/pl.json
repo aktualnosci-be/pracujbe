@@ -1086,5 +1086,29 @@
     "catAdmin": "Formalności",
     "catDriving": "Prawo jazdy",
     "catSafety": "Bezpieczeństwo"
+  },
+  "match": {
+    "title": "Twoje dopasowanie",
+    "summary": {
+      "good": "Świetne dopasowanie — spełniasz większość najważniejszych wymagań.",
+      "partial": "Częściowe dopasowanie — spełniasz część wymagań.",
+      "low": "Niskie dopasowanie — ta oferta pasuje w ograniczonym stopniu."
+    },
+    "mandatory": "Wymagania obowiązkowe: {met} z {total}",
+    "strengthsTitle": "Twoje atuty",
+    "gapsTitle": "Do uzupełnienia",
+    "criteria": {
+      "allMandatorySkills": "Spełniasz wszystkie wymagania obowiązkowe",
+      "localCandidate": "Mieszkasz w okolicy miejsca pracy",
+      "experienceExceeds": "Twoje doświadczenie przewyższa wymagane",
+      "immediateStart": "Możesz zacząć od zaraz",
+      "noLanguageBarrier": "Brak wymagań językowych",
+      "ownTransport": "Masz własny transport",
+      "location": "Lokalizacja",
+      "experience": "Doświadczenie",
+      "availability": "Dostępność",
+      "drivingLicense": "Prawo jazdy",
+      "contractType": "Typ umowy"
+    }
   }
 }

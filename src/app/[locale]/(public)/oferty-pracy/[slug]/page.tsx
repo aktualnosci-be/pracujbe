@@ -28,6 +28,7 @@ import { getJobBySlug, getJobs, type ContractType, type JobDetail, type JobListI
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
+import { JobMatchCard } from '@/components/public/JobMatchCard';
 
 /**
  * Szczegóły oferty pracy (SSR) wg makiety 03-job-detail.
@@ -499,6 +500,9 @@ export default async function JobDetailPage({ params }: PageProps) {
         {/* Panel boczny */}
         <aside className="lg:col-span-1">
           <div className="space-y-4 lg:sticky lg:top-24">
+            {/* Dopasowanie do profilu (tylko dla zalogowanego kandydata; wyspa kliencka) */}
+            <JobMatchCard jobId={job.id} />
+
             {/* Aplikuj (desktop — mobile ma dolny pasek) */}
             <div className="hidden rounded-lg border border-border bg-card p-5 shadow-sm lg:block">
               <ApplyModal

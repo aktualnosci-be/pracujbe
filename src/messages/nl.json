@@ -1086,5 +1086,29 @@
     "catAdmin": "Formaliteiten",
     "catDriving": "Rijbewijs",
     "catSafety": "Veiligheid"
+  },
+  "match": {
+    "title": "Jouw match",
+    "summary": {
+      "good": "Uitstekende match — je voldoet aan de meeste belangrijke vereisten.",
+      "partial": "Gedeeltelijke match — je voldoet aan een deel van de vereisten.",
+      "low": "Lage match — deze vacature past beperkt bij je profiel."
+    },
+    "mandatory": "Verplichte vereisten: {met} van {total}",
+    "strengthsTitle": "Jouw troeven",
+    "gapsTitle": "Aan te vullen",
+    "criteria": {
+      "allMandatorySkills": "Je voldoet aan alle verplichte vereisten",
+      "localCandidate": "Je woont in de buurt van de werkplek",
+      "experienceExceeds": "Je ervaring overtreft de vereiste",
+      "immediateStart": "Je kunt onmiddellijk starten",
+      "noLanguageBarrier": "Geen taalvereisten",
+      "ownTransport": "Je hebt eigen vervoer",
+      "location": "Locatie",
+      "experience": "Ervaring",
+      "availability": "Beschikbaarheid",
+      "drivingLicense": "Rijbewijs",
+      "contractType": "Contracttype"
+    }
   }
 }
