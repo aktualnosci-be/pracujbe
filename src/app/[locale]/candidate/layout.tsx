@@ -17,9 +17,12 @@ import { getUnreadConversationsCount } from '@/lib/data/messages';
  * kliencki `CandidateShell`, który — dla ścieżek kreatora onboardingu — świadomie
  * przepuszcza treść bez sidebara (kreator ma własny lekki layout).
  *
- * GUARD: przy skonfigurowanym Supabase wymaga zalogowanego użytkownika (getUser) —
- * brak sesji → redirect na /logowanie (z prefiksem locale). Bez env → tryb demo
- * (przepuszczamy, panel na danych DEMO). `force-dynamic`, bo guard zależy od sesji.
+ * GUARD: przy skonfigurowanym Supabase wymaga (1) zalogowanego użytkownika (getUser) —
+ * brak sesji → redirect na /logowanie; (2) roli innej niż `employer` — pracodawca trafiający
+ * na panel kandydata → redirect do /employer (symetria z guardem panelu pracodawcy, który
+ * odsyła użytkownika bez firmy). Kandydat/admin/rola nieustalona → przepuszczamy (nie
+ * blokujemy świeżo zarejestrowanego kandydata przed onboardingiem). Bez env → tryb demo.
+ * `force-dynamic`, bo guard zależy od sesji.
  *
  * NOINDEX dla całego poddrzewa panelu (Invariant #9): metadata dziedziczy się do stron
  * i podlayoutów, o ile nie zostanie nadpisana.
@@ -50,6 +53,19 @@ export default async function CandidateLayout({
     } = await supabase.auth.getUser();
     if (!user) {
       redirect({ href: '/logowanie', locale: locale as Locale });
+      return null; // nieosiągalne (redirect rzuca) — zawęża typ `user` dla TS
+    }
+
+    // Pracodawca nie ma czego szukać w panelu kandydata — odsyłamy do jego panelu.
+    // Odczyt własnej roli pod sesją (RLS: self-select). Rolę 'candidate'/'admin'/nieustaloną
+    // przepuszczamy (świeży kandydat przed onboardingiem nie może zostać zablokowany).
+    const { data: profileRow } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (((profileRow ?? {}) as Record<string, unknown>)['role'] === 'employer') {
+      redirect({ href: '/employer', locale: locale as Locale });
     }
 
     // Realne powiadomienia + licznik nieprzeczytanych konwersacji (pod sesją/RLS).
