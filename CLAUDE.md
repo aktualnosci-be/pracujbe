@@ -361,10 +361,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > **Wave E1b (0029) — ZROBIONE:** FUN-05 — kompletność liczona w DB (`finish_onboarding`), a nie
 > ustawiana przez klienta; guard trigger blokuje `authenticated` przed zmianą `profile_completed`/
 > `is_searchable` (kolumnowy REVOKE nie działa przy grancie table-level); `set_candidate_searchable`
-> (opt-in tylko dla kompletnego profilu). Dowód: `rls.sql` sekcja N. **Do zrobienia:** FUN-03
-> (job_languages/job_certificates), FUN-01/02 (transakcyjne save/publish oferty), Wave C (RBAC +
-> owner invariants SEC-09/10), Wave F (matching FUN-06, multi-company FUN-07, fail-closed env SEC-19),
-> billing (decyzja), CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
+> (opt-in tylko dla kompletnego profilu). Dowód: `rls.sql` sekcja N.
+> **Wave E2 (0030) — ZROBIONE:** FUN-03 — relacje `job_languages`/`job_certificates` (RLS jak
+> job_skills); kreator (krok 7) realnie zapisuje języki i certyfikaty; `get_public_job` zwraca
+> języki (koniec pustej listy), `get_job_match_profile` zwraca języki+certyfikaty → matching je
+> uwzględnia. Dowód: `rls.sql` sekcja O. **Do zrobienia:** FUN-01/02 (transakcyjne save/publish
+> oferty), Wave C (RBAC + owner invariants SEC-09/10), Wave F (matching FUN-06, multi-company
+> FUN-07, fail-closed env SEC-19), billing (decyzja), CI (separacja runnerów, twarda bramka RLS,
+> SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)

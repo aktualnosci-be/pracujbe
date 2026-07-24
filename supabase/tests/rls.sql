@@ -602,4 +602,26 @@ select pg_temp.assert(
   'N5b is_searchable ustawione przez RPC');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- O. Języki/certyfikaty oferty 0030 (FUN-03) — persystencja + detal + matching
+-- ============================================================================
+-- EMPA (członek COMPA, właściciel JOBA) dodaje wymagania językowe/certyfikatowe (jak kreator).
+set role authenticated; set app.current_uid = :'EMPA';
+insert into public.job_languages(job_id, language_label, level) values (:'JOBA', 'Niderlandzki', 'intermediate');
+insert into public.job_certificates(job_id, certificate_label) values (:'JOBA', 'VCA');
+select pg_temp.assert(
+  (select 'Niderlandzki' = any(languages) from public.get_public_job('job-a', 'pl')),
+  'O1 get_public_job zwraca języki oferty (koniec pustej listy, FUN-03)');
+select pg_temp.assert(
+  (select 'Niderlandzki' = any(languages) and 'VCA' = any(certificates)
+     from public.get_job_match_profile(:'JOBA'::uuid)),
+  'O2 get_job_match_profile zwraca języki i certyfikaty oferty (matching)');
+reset role; reset app.current_uid;
+-- O3: nie-członek firmy nie doda wymagania do cudzej oferty (RLS insert member).
+set role authenticated; set app.current_uid = :'EMPB';
+select pg_temp.expect_error(
+  'insert into public.job_languages(job_id, language_label) values ('''|| :'JOBA' ||''',''hak'')',
+  'row-level security', 'O3 nie-członek nie dodaje języka do cudzej oferty (RLS)');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

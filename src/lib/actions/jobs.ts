@@ -53,9 +53,9 @@ import {
  *
  * Bez technikaliów dla użytkownika (Invariant #8) — błędy mapujemy na stabilny kod użytkowy.
  *
- * TODO(data): języki oferty oraz wymagane certyfikaty (krok 7) są walidowane, ale NIE utrwalane
- * — brak dedykowanej relacji (job_languages / job_certificates). Analogicznie do onboardingu
- * kandydata; do domknięcia gdy powstaną tabele słownikowe i publiczny widok je zwróci.
+ * Języki oferty i wymagane certyfikaty (krok 7) są REALNIE zapisywane w relacjach
+ * job_languages / job_certificates (0030, FUN-03); publiczny detal zwraca języki, a matching
+ * uwzględnia wymagania językowe/certyfikatowe (RPC get_job_match_profile).
  */
 
 export type CreateDraftResult =
@@ -351,6 +351,50 @@ async function replaceSkills(
   );
 }
 
+/** Replace-all języków wymaganych oferty (job_languages, 0030). */
+async function replaceLanguages(
+  supabase: SupabaseClient,
+  jobId: string,
+  langs: ReadonlyArray<{ language: string; level: string }>,
+): Promise<ErrorCode | null> {
+  const delErr = await write(supabase.from('job_languages').delete().eq('job_id', jobId));
+  if (delErr) return delErr;
+
+  const seen = new Set<string>();
+  const rows: Array<{ job_id: string; language_label: string; level: string }> = [];
+  for (const l of langs) {
+    const label = l.language.trim();
+    if (!label || seen.has(label.toLowerCase())) continue;
+    seen.add(label.toLowerCase());
+    rows.push({ job_id: jobId, language_label: label, level: l.level });
+  }
+  if (rows.length === 0) return null;
+  return write(
+    supabase
+      .from('job_languages')
+      .upsert(rows, { onConflict: 'job_id,language_label', ignoreDuplicates: true }),
+  );
+}
+
+/** Replace-all certyfikatów wymaganych oferty (job_certificates, 0030). */
+async function replaceCertificates(
+  supabase: SupabaseClient,
+  jobId: string,
+  labels: string[],
+): Promise<ErrorCode | null> {
+  const delErr = await write(supabase.from('job_certificates').delete().eq('job_id', jobId));
+  if (delErr) return delErr;
+
+  const unique = [...new Set(labels.map((l) => l.trim()).filter(Boolean))];
+  if (unique.length === 0) return null;
+  const rows = unique.map((certificate_label) => ({ job_id: jobId, certificate_label }));
+  return write(
+    supabase
+      .from('job_certificates')
+      .upsert(rows, { onConflict: 'job_id,certificate_label', ignoreDuplicates: true }),
+  );
+}
+
 /** Utrwala pojedynczy krok kreatora. Zwraca kod błędu albo null (sukces). */
 async function applyStep(
   supabase: SupabaseClient,
@@ -468,8 +512,12 @@ async function applyStep(
         v.requirementsOptional,
       );
       if (reqErr) return reqErr;
-      // v.languages / v.requiredCertificates — patrz TODO(data) na górze pliku (brak relacji).
-      return replaceSkills(supabase, jobId, false, v.skills);
+      const skErr = await replaceSkills(supabase, jobId, false, v.skills);
+      if (skErr) return skErr;
+      // Języki i certyfikaty oferty są teraz REALNIE zapisywane (FUN-03, relacje 0030).
+      const langErr = await replaceLanguages(supabase, jobId, v.languages);
+      if (langErr) return langErr;
+      return replaceCertificates(supabase, jobId, v.requiredCertificates);
     }
 
     case 8: {

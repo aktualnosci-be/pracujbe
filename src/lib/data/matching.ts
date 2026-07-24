@@ -111,10 +111,9 @@ export async function getMyJobMatch(jobId: string): Promise<MatchResult | null> 
       city: asStr(jr['city']) || undefined,
       region: asStr(jr['region']) || undefined,
       minExperienceYears: asNum(jr['min_experience_years']),
-      // Brak relacji job_languages/job_certificates w schemacie — silnik traktuje puste
-      // wymagania jako spełnione (pełne punkty), zgodnie z `scoreMatch`.
-      requiredLanguages: [],
-      requiredCertificates: [],
+      // Realne wymagania językowe/certyfikatowe oferty (relacje 0030, RPC get_job_match_profile).
+      requiredLanguages: asStrArr(jr['languages']),
+      requiredCertificates: asStrArr(jr['certificates']),
       requiresDrivingLicense: jr['requires_driving_license'] === true,
       contractType: asStr(jr['contract_type']) || undefined,
       startImmediately: jr['start_immediately'] === true,
