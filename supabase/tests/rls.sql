@@ -793,4 +793,58 @@ select pg_temp.assert(
   (select status::text from public.applications where id = :'appa') = 'viewed',
   'U3 recruiter+ zmienia status aplikacji (transition_application)');
 
+-- ============================================================================
+-- V. Audyt produkcyjny 0039 (P1-01/P1-02) — ODCZYT rekrutacyjny i rozmowy: recruiter+
+-- ============================================================================
+-- CANDB = zwykły member COMPA; EMPC = owner (recruiter+) COMPA; EMPA = admin (recruiter+)
+-- COMPA i uczestnik rozmowy :conv (utworzonej w sekcji I dla aplikacji appa); CANDA = kandydat.
+
+-- V1: plain member NIE widzi aplikacji firmowej (P1-01; wcześniej: widział pełny rekord).
+set role authenticated; set app.current_uid = :'CANDB';
+select pg_temp.assert((select count(*) from public.applications where id = :'appa') = 0,
+  'V1 plain member nie widzi aplikacji firmowej (recruiter+ only)');
+select pg_temp.assert(public.can_access_application(:'appa'::uuid) is false,
+  'V1b can_access_application=false dla plain member');
+reset role; reset app.current_uid;
+
+-- V2: recruiter+ (EMPC owner) widzi aplikację (P1-01 kontrola pozytywna).
+set role authenticated; set app.current_uid = :'EMPC';
+select pg_temp.assert((select count(*) from public.applications where id = :'appa') = 1,
+  'V2 recruiter+ widzi aplikację firmową');
+select pg_temp.assert(public.can_access_application(:'appa'::uuid) is true,
+  'V2b can_access_application=true dla recruiter+');
+reset role; reset app.current_uid;
+
+-- V3: recruiter+ uczestnik (EMPA admin, aktywny) widzi podsumowanie rozmowy :conv.
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.assert(
+  (select count(*) from public.get_conversation_summaries() where conversation_id = :'conv') = 1,
+  'V3 recruiter+ uczestnik widzi podsumowanie rozmowy');
+reset role; reset app.current_uid;
+
+-- V4: dezaktywacja członkostwa EMPA (admin, NIE ostatni owner) → były członek.
+reset role;
+update public.company_members set is_active = false where company_id = :'COMPA' and profile_id = :'EMPA';
+
+-- V4a: były członek (EMPA) NIE widzi podsumowań mimo historycznego wiersza uczestnika (P1-02).
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.assert(
+  (select count(*) from public.get_conversation_summaries() where conversation_id = :'conv') = 0,
+  'V4a były członek nie widzi podsumowań rozmowy (P1-02)');
+select pg_temp.expect_error(
+  'select public.send_message('''|| :'conv' ||'''::uuid, ''próba b. członka'')',
+  'PERMISSION_DENIED', 'V4b były członek nie wysyła wiadomości w rozmowie');
+reset role; reset app.current_uid;
+
+-- V4c: kandydat (strona kandydata) NADAL widzi swoją rozmowę.
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.assert(
+  (select count(*) from public.get_conversation_summaries() where conversation_id = :'conv') = 1,
+  'V4c kandydat nadal widzi podsumowanie swojej rozmowy');
+reset role; reset app.current_uid;
+
+-- Przywróć EMPA (porządek dla ewentualnych kolejnych sekcji).
+reset role;
+update public.company_members set is_active = true where company_id = :'COMPA' and profile_id = :'EMPA';
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
