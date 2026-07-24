@@ -19,6 +19,11 @@ tam, gdzie wskazano). Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
 ## 2. Zmienne środowiskowe (Production)
 
 - [ ] Wszystkie zmienne ustawione w Vercel (Production) — patrz [`DEPLOYMENT.md`](./DEPLOYMENT.md) §3.
+- [ ] **`APP_MODE=production`** (SEC-19, fail-closed). Na Vercel produkcja wykrywana jest z
+      `VERCEL_ENV`, ale na self-hosted USTAW to jawnie — inaczej brak konfiguracji Supabase
+      cicho degraduje do trybu demo. W trybie production brak konfiguracji → **503 maintenance**
+      (middleware) oraz `GET /api/health` → 503. Zweryfikuj `GET /api/health` = `{status:"ok"}`
+      po wdrożeniu (readiness dla load-balancera/monitoringu).
 - [ ] `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `EMAIL_QUEUE_SECRET`,
       `SENTRY_AUTH_TOKEN` jako **sekrety** (nie `NEXT_PUBLIC_*`).
 - [ ] Klucze produkcyjne różne od staging.

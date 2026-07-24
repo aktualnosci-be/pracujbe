@@ -25,6 +25,17 @@ export const env = {
   get supabaseAnonKey(): string | undefined {
     return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || undefined;
   },
+  /**
+   * Tryb aplikacji (SEC-19): 'production' | 'demo'. Jawny `APP_MODE` ma priorytet; w innym
+   * wypadku produkcja jest wykrywana z `VERCEL_ENV==='production'`. Self-hosted produkcja
+   * MUSI ustawić `APP_MODE=production` (patrz docs/LAUNCH_CHECKLIST.md) — inaczej brak
+   * konfiguracji cicho degraduje do trybu demo (fikcyjne panele).
+   */
+  get appMode(): 'production' | 'demo' {
+    const m = process.env.APP_MODE;
+    if (m === 'production' || m === 'demo') return m;
+    return process.env.VERCEL_ENV === 'production' ? 'production' : 'demo';
+  },
 };
 
 /**
@@ -33,4 +44,18 @@ export const env = {
  */
 export function isSupabaseConfigured(): boolean {
   return Boolean(env.supabaseUrl && env.supabaseAnonKey);
+}
+
+/** Czy aplikacja działa w trybie produkcyjnym (fail-closed zamiast demo). SEC-19. */
+export function isProductionMode(): boolean {
+  return env.appMode === 'production';
+}
+
+/**
+ * Gotowość do obsługi ruchu (SEC-19). W trybie produkcyjnym wymagana jest realna konfiguracja
+ * Supabase — jej brak oznacza „nieskonfigurowany" (fail-closed: 503/maintenance, nie demo).
+ * W trybie demo zawsze gotowe (lokalnie / staging / E2E). Nie ujawnia sekretów.
+ */
+export function isAppReady(): boolean {
+  return !isProductionMode() || isSupabaseConfigured();
 }

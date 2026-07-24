@@ -381,8 +381,13 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > languages/certificates), `publish_job` i dostęp do PII kandydata (`company_can_view_candidate`)
 > wymagają recruiter+ — zwykły `member` traci prawa rekrutacyjne (odczyt ofert firmowych zostaje).
 > Dowód: `rls.sql` sekcja R. Bramkowanie propozycji/zmian statusu do recruiter+ = follow-up C3
-> (te ścieżki już wymagają członkostwa i idą przez SECURITY DEFINER RPC). **Do zrobienia:**
-> Wave F (matching FUN-06, multi-company FUN-07, fail-closed env SEC-19), billing (decyzja),
+> (te ścieżki już wymagają członkostwa i idą przez SECURITY DEFINER RPC).
+> **Wave F — SEC-19 (fail-closed env) — ZROBIONE:** jawny `APP_MODE` (`env.appMode`/`isProductionMode`/
+> `isAppReady`); w trybie produkcyjnym brak konfiguracji Supabase → middleware zwraca **503
+> maintenance** (nie fikcyjny tryb demo), a `GET /api/health` → 503 `{status:"unconfigured"}`
+> (readiness dla monitoringu). Demo (lokalnie/staging/E2E) bez zmian. Zweryfikowane runtime
+> (503 na stronie i /api/health). **Do zrobienia:** FUN-06 (matching), FUN-07 (multi-company),
+> C3 (propozycje/statusy recruiter+), P2/P3 (SEC-12/14/15/16), billing (decyzja),
 > CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
