@@ -50,6 +50,20 @@ export interface CandidateShellProps {
   notifUnread?: number;
   /** Liczba konwersacji z nieprzeczytanymi (badge pozycji „Wiadomości"). */
   unreadMessages?: number;
+  /** Nazwa zalogowanego kandydata (topbar). Puste → neutralna etykieta „Twoje konto". */
+  userName?: string;
+}
+
+/** Inicjały z nazwy (max 2 litery); „•", gdy brak nazwy (P1-09: nigdy zmyślona osoba). */
+function initialsOf(name: string): string {
+  const letters = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join('');
+  return letters || '•';
 }
 
 export function CandidateShell({
@@ -57,6 +71,7 @@ export function CandidateShell({
   notifItems,
   notifUnread,
   unreadMessages,
+  userName,
 }: CandidateShellProps): React.JSX.Element {
   const td = useTranslations('dashboard');
   const pathname = usePathname();
@@ -84,12 +99,14 @@ export function CandidateShell({
     return item.href.length > best.length ? item.href : best;
   }, HREF.summary);
 
-  // TODO(data): realne dane użytkownika z sesji/backendu (powiadomienia już realne).
+  // P1-09: realne dane użytkownika z sesji (layout). Bez nazwy → neutralna etykieta,
+  // NIGDY zmyślona osoba („Adam Kowalski"). Powiadomienia już realne.
+  const displayName = userName && userName.trim().length > 0 ? userName.trim() : td('accountLabel');
   return (
     <DashboardShell
       nav={nav}
       active={active}
-      user={{ name: 'Adam Kowalski', subtitle: td('viewProfile'), initials: 'AK' }}
+      user={{ name: displayName, subtitle: td('viewProfile'), initials: initialsOf(displayName) }}
       notifications={notifUnread}
       notifItems={notifItems}
       unreadMessages={unreadMessages}

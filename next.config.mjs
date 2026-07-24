@@ -2,6 +2,20 @@ import createNextIntlPlugin from 'next-intl/plugin';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
+// P3-02: wylicz host projektu Supabase z NEXT_PUBLIC_SUPABASE_URL i zawęź do niego zarówno
+// allowlistę next/image, jak i CSP img-src (koniec wildcardu `*.supabase.co` / `https:`).
+// Bez env (build/demo) pozostaje wildcard, by nie wywalić builda — produkcja ustawia URL.
+function supabaseHost() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) return null;
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+const SUPABASE_HOST = supabaseHost();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -10,8 +24,8 @@ const nextConfig = {
     // WebP/AVIF automatycznie; ogranicz rozmiary do sensownych breakpointów (wydajność).
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
-      // Supabase Storage (publiczne assety firm/ofert) — uzupełnij host projektu.
-      { protocol: 'https', hostname: '*.supabase.co' },
+      // Supabase Storage (publiczne assety firm/ofert): dokładny host projektu, gdy znany.
+      { protocol: 'https', hostname: SUPABASE_HOST ?? '*.supabase.co' },
     ],
   },
   experimental: {
@@ -49,7 +63,9 @@ const nextConfig = {
       // Dev dokłada 'unsafe-eval' (React Refresh/HMR Next dev).
       `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://www.googletagmanager.com https://connect.facebook.net`,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https:",
+      // P3-02: obrazy z własnego origin, data:/blob:, host Supabase (assety) i piksele trackerów
+      // (po zgodzie). Zamiast otwartego `https:`. Bez skonfigurowanego hosta Supabase — wildcard.
+      `img-src 'self' data: blob: ${SUPABASE_HOST ? `https://${SUPABASE_HOST}` : 'https://*.supabase.co'} https://www.google-analytics.com https://www.facebook.com`,
       "font-src 'self' data:",
       // XHR/fetch/WS: API własne, Supabase (REST/Realtime), Sentry ingest, GA/Meta.
       `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://connect.facebook.net${isDev ? ' ws: http://localhost:*' : ''}`,

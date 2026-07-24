@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { ArrowRight, MapPin } from 'lucide-react';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
-import type { LocationKey } from '@/lib/jobs';
+import { getCityCounts, type LocationKey } from '@/lib/jobs';
 
 /**
  * LocationGrid — blok „Popularne lokalizacje" wg makiety `01-home`.
@@ -13,24 +13,22 @@ import type { LocationKey } from '@/lib/jobs';
  * ofert filtrowanej po mieście (wartość = nazwa miasta w bieżącym języku, zgodna z danymi
  * ofert). Komponent serwerowy; renderowany w kolumnie przez `page.tsx`.
  *
- * TODO(data): liczniki ofert są danymi demonstracyjnymi — podłączyć realne zliczanie z DB.
+ * P1-09: liczniki są REALNE (get_public_jobs_count z tym samym filtrem miasta, którym link
+ * kieruje na listę) — spójne z widokiem docelowym. W trybie demo (bez env) `getCityCounts`
+ * zwraca null → pomijamy badge zamiast zmyślonej liczby.
  */
 
 const JOBS_PATH = '/oferty-pracy';
 
-const LOCATIONS: { key: LocationKey; count: number }[] = [
-  { key: 'antwerp', count: 1856 },
-  { key: 'brussels', count: 1412 },
-  { key: 'ghent', count: 1038 },
-  { key: 'liege', count: 876 },
-  { key: 'charleroi', count: 664 },
-  { key: 'hasselt', count: 512 },
-];
+const LOCATIONS: LocationKey[] = ['antwerp', 'brussels', 'ghent', 'liege', 'charleroi', 'hasselt'];
 
 export async function LocationGrid(): Promise<React.JSX.Element> {
   const t = await getTranslations('locations');
   const tHome = await getTranslations('home');
   const tCommon = await getTranslations('common');
+  const locale = await getLocale();
+  const cityNames = LOCATIONS.map((key) => t(key));
+  const counts = await getCityCounts(locale, cityNames);
 
   return (
     <div>
@@ -48,7 +46,7 @@ export async function LocationGrid(): Promise<React.JSX.Element> {
       </div>
 
       <ul className="mt-4 grid grid-cols-1 gap-1 sm:grid-flow-col sm:grid-cols-2 sm:grid-rows-3">
-        {LOCATIONS.map(({ key, count }) => {
+        {LOCATIONS.map((key) => {
           const name = t(key);
           return (
             <li key={key}>
@@ -62,9 +60,11 @@ export async function LocationGrid(): Promise<React.JSX.Element> {
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                   {name}
                 </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {tHome('offersCount', { count })}
-                </span>
+                {counts ? (
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {tHome('offersCount', { count: counts[name] ?? 0 })}
+                  </span>
+                ) : null}
               </Link>
             </li>
           );

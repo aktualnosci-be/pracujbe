@@ -496,6 +496,7 @@
     "onboardingIncomplete": "Uzupełnij wszystkie wymagane pola profilu, aby zakończyć konfigurację.",
     "jobNotDraft": "Tę ofertę można edytować tylko w wersji roboczej.",
     "billingUnavailable": "Płatności są chwilowo niedostępne. Spróbuj ponownie później.",
+    "checkoutInProgress": "Masz już rozpoczętą płatność. Dokończ ją lub spróbuj ponownie za chwilę.",
     "notFound": "Nie znaleziono tego, czego szukasz.",
     "internal": "Wystąpił błąd po naszej stronie. Pracujemy nad tym.",
     "generic": "Coś poszło nie tak. Spróbuj ponownie."
@@ -519,6 +520,7 @@
   "dashboard": {
     "greeting": "Witaj, {name}",
     "viewProfile": "Zobacz profil",
+    "accountLabel": "Twoje konto",
     "newJobs": "Nowe oferty",
     "newJobsSub": "Dopasowane do Ciebie",
     "activeApplications": "Aktywne aplikacje",
@@ -555,6 +557,7 @@
     "logout": "Wyloguj się",
     "greetingEmployer": "Podsumowanie",
     "employerGreetingSub": "Witaj {name}! Sprawdź, co dzieje się w Twojej rekrutacji.",
+    "employerGreetingSubGeneric": "Sprawdź, co dzieje się w Twojej rekrutacji.",
     "addJob": "Dodaj ofertę pracy",
     "activeOffers": "Aktywne oferty",
     "newApplications": "Nowe aplikacje",

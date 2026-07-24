@@ -24,6 +24,7 @@ export const ErrorCodes = {
   ONBOARDING_INCOMPLETE: 'ONBOARDING_INCOMPLETE',
   JOB_NOT_DRAFT: 'JOB_NOT_DRAFT',
   BILLING_UNAVAILABLE: 'BILLING_UNAVAILABLE',
+  CHECKOUT_IN_PROGRESS: 'CHECKOUT_IN_PROGRESS',
   NOT_FOUND: 'NOT_FOUND',
   INTERNAL: 'INTERNAL',
 } as const;
@@ -52,6 +53,7 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   ONBOARDING_INCOMPLETE: 'onboardingIncomplete',
   JOB_NOT_DRAFT: 'jobNotDraft',
   BILLING_UNAVAILABLE: 'billingUnavailable',
+  CHECKOUT_IN_PROGRESS: 'checkoutInProgress',
   NOT_FOUND: 'notFound',
   INTERNAL: 'internal',
 };

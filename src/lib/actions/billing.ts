@@ -147,10 +147,16 @@ export async function startCheckout(
         { idempotencyKey: `cust-${ctx.companyId}` },
       );
       customerId = customer.id;
-      await admin
+      // P3-04: nie ignoruj błędu zapisu — bez utrwalenia provider_customer_id kolejny checkout
+      // utworzyłby duplikat klienta Stripe. Błąd infra = INTERNAL (retryable), nie cichy sukces.
+      const { error: custErr } = await admin
         .from('companies')
         .update({ provider_customer_id: customerId })
         .eq('id', ctx.companyId);
+      if (custErr) {
+        captureError(custErr, { area: 'billing.startCheckout.persistCustomer' });
+        return { ok: false, error: 'INTERNAL' };
+      }
     }
 
     // Opcjonalny kod rabatowy → REZERWACJA (P1-15: atomowa, limit + per-firma unikat) → kupon.
@@ -185,38 +191,74 @@ export async function startCheckout(
       discounts.push({ coupon: coupon.id });
     }
 
+    // P0-02: serwerowa idempotencja startu checkoutu. begin_checkout serializuje w BAZIE
+    // (advisory lock + partial-unique 'pending' per firma + kontrola aktywnej subskrypcji) —
+    // dwa równoległe żądania nie utworzą dwóch sesji/subskrypcji. Zwraca stabilny intent_id,
+    // którego używamy jako idempotency key Stripe.
+    const { data: intentData, error: intentErr } = await admin.rpc('begin_checkout', {
+      p_company_id: ctx.companyId,
+      p_plan: plan,
+    });
+    if (intentErr) {
+      const msg = intentErr.message ?? '';
+      if (msg.includes('CHECKOUT_IN_PROGRESS')) return { ok: false, error: 'CHECKOUT_IN_PROGRESS' };
+      if (msg.includes('ACTIVE_SUBSCRIPTION')) return { ok: false, error: 'VALIDATION_FAILED' };
+      if (msg.includes('VALIDATION_FAILED')) return { ok: false, error: 'VALIDATION_FAILED' };
+      captureError(intentErr, { area: 'billing.startCheckout.beginCheckout' });
+      return { ok: false, error: 'INTERNAL' };
+    }
+    const intentId = asStr(intentData);
+    if (!intentId) return { ok: false, error: 'INTERNAL' };
+
     const base = env.siteUrl;
     // P1-16: URL-e sukcesu/anulowania w języku użytkownika (było na sztywno /pl).
     const { routing } = await import('@/i18n/routing');
     const loc = (routing.locales as readonly string[]).includes(locale ?? '')
       ? (locale as string)
       : routing.defaultLocale;
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer: customerId,
-      line_items: [
+
+    let session: Awaited<ReturnType<typeof stripe.checkout.sessions.create>>;
+    try {
+      session = await stripe.checkout.sessions.create(
         {
-          quantity: 1,
-          price_data: {
-            currency: price.currency,
-            unit_amount: price.unitAmount,
-            recurring: { interval: 'month' },
-            product_data: { name: `Pracuj.be — ${plan}` },
+          mode: 'subscription',
+          customer: customerId,
+          line_items: [
+            {
+              quantity: 1,
+              price_data: {
+                currency: price.currency,
+                unit_amount: price.unitAmount,
+                recurring: { interval: 'month' },
+                product_data: { name: `Pracuj.be — ${plan}` },
+              },
+            },
+          ],
+          ...(discounts.length ? { discounts } : { allow_promotion_codes: true }),
+          // checkout_intent_id → webhook checkout.session.completed domyka intent (P0-02);
+          // discount_code_id → finalizacja rezerwacji kodu (P1-15).
+          metadata: {
+            company_id: ctx.companyId,
+            plan,
+            checkout_intent_id: intentId,
+            ...(discountCodeId ? { discount_code_id: discountCodeId } : {}),
           },
+          subscription_data: { metadata: { company_id: ctx.companyId, plan } },
+          success_url: `${base}/${loc}/employer/platnosci?checkout=success`,
+          cancel_url: `${base}/${loc}/employer/platnosci?checkout=cancel`,
         },
-      ],
-      ...(discounts.length ? { discounts } : { allow_promotion_codes: true }),
-      // discount_code_id → webhook checkout.session.completed finalizuje rezerwację (P1-15).
-      metadata: {
-        company_id: ctx.companyId,
-        plan,
-        ...(discountCodeId ? { discount_code_id: discountCodeId } : {}),
-      },
-      subscription_data: { metadata: { company_id: ctx.companyId, plan } },
-      success_url: `${base}/${loc}/employer/platnosci?checkout=success`,
-      cancel_url: `${base}/${loc}/employer/platnosci?checkout=cancel`,
-    });
-    if (!session.url) return { ok: false, error: 'INTERNAL' };
+        // Stabilny klucz idempotencji: powtórka tego samego intentu zwraca tę samą sesję Stripe.
+        { idempotencyKey: `subscription-checkout:${ctx.companyId}:${intentId}` },
+      );
+    } catch (stripeErr) {
+      // Błąd API Stripe — zwolnij intent, by użytkownik mógł natychmiast spróbować ponownie.
+      await admin.rpc('release_checkout_intent', { p_intent_id: intentId });
+      throw stripeErr;
+    }
+    if (!session.url) {
+      await admin.rpc('release_checkout_intent', { p_intent_id: intentId });
+      return { ok: false, error: 'INTERNAL' };
+    }
     return { ok: true, url: session.url };
   } catch (e) {
     captureError(e, { area: 'billing.startCheckout' });
@@ -339,7 +381,7 @@ export async function cancelSubscription(): Promise<CancelResult> {
     if (!ctx) return { ok: false, error: 'PERMISSION_DENIED' };
 
     const admin = createAdminClient();
-    const { data } = await admin
+    const { data, error: selErr } = await admin
       .from('subscriptions')
       .select('provider_subscription_id')
       .eq('company_id', ctx.companyId)
@@ -347,6 +389,11 @@ export async function cancelSubscription(): Promise<CancelResult> {
       .not('provider_subscription_id', 'is', null)
       .order('created_at', { ascending: false })
       .limit(1);
+    // P3-04: rozróżnij błąd infra (INTERNAL, retryable) od realnego braku subskrypcji (NOT_FOUND).
+    if (selErr) {
+      captureError(selErr, { area: 'billing.cancelSubscription.select' });
+      return { ok: false, error: 'INTERNAL' };
+    }
     const subId = asStr(asRecord(asArr(data)[0])['provider_subscription_id']);
     if (!subId) return { ok: false, error: 'NOT_FOUND' };
 

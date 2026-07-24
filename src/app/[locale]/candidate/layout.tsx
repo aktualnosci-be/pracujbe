@@ -45,6 +45,7 @@ export default async function CandidateLayout({
   let notifItems: NotificationItem[] | undefined;
   let notifUnread: number | undefined;
   let unreadMessages: number | undefined;
+  let userName: string | undefined;
 
   if (isSupabaseConfigured()) {
     const supabase = await createServerClient();
@@ -57,14 +58,20 @@ export default async function CandidateLayout({
     }
 
     // Pracodawca nie ma czego szukać w panelu kandydata — odsyłamy do jego panelu.
-    // Odczyt własnej roli pod sesją (RLS: self-select). Rolę 'candidate'/'admin'/nieustaloną
-    // przepuszczamy (świeży kandydat przed onboardingiem nie może zostać zablokowany).
+    // Odczyt własnej roli + nazwy pod sesją (RLS: self-select). Rolę 'candidate'/'admin'/
+    // nieustaloną przepuszczamy (świeży kandydat przed onboardingiem nie może zostać zablokowany).
     const { data: profileRow } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, first_name, last_name')
       .eq('id', user.id)
       .maybeSingle();
     const role = ((profileRow ?? {}) as Record<string, unknown>)['role'];
+    // P1-09: realna nazwa kandydata (topbar), bez zmyślonej „Adam Kowalski".
+    const pr = (profileRow ?? {}) as Record<string, unknown>;
+    const first = typeof pr['first_name'] === 'string' ? pr['first_name'] : '';
+    const last = typeof pr['last_name'] === 'string' ? pr['last_name'] : '';
+    const fullName = `${first} ${last}`.trim();
+    userName = fullName.length > 0 ? fullName : undefined;
     // Pracodawca → jego panel; administrator → panel admina. Rolę 'candidate'/nieustaloną
     // przepuszczamy (świeży kandydat przed onboardingiem nie może zostać zablokowany).
     // Twarda granica roli kandydata jest w RPC (ensure_candidate_profile/apply_to_job, P1-04).
@@ -94,6 +101,7 @@ export default async function CandidateLayout({
       notifItems={notifItems}
       notifUnread={notifUnread}
       unreadMessages={unreadMessages}
+      userName={userName}
     >
       {children}
     </CandidateShell>

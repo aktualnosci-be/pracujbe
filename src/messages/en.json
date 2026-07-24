@@ -496,6 +496,7 @@
     "onboardingIncomplete": "Complete all required profile fields to finish setup.",
     "jobNotDraft": "This job can only be edited while it's a draft.",
     "billingUnavailable": "Payments are temporarily unavailable. Please try again later.",
+    "checkoutInProgress": "You already have a checkout in progress. Finish it or try again shortly.",
     "notFound": "We couldn't find what you're looking for.",
     "internal": "Something went wrong on our end. We're working on it.",
     "generic": "Something went wrong. Please try again."
@@ -519,6 +520,7 @@
   "dashboard": {
     "greeting": "Welcome, {name}",
     "viewProfile": "View profile",
+    "accountLabel": "Your account",
     "newJobs": "New jobs",
     "newJobsSub": "Matched to you",
     "activeApplications": "Active applications",
@@ -555,6 +557,7 @@
     "logout": "Log out",
     "greetingEmployer": "Summary",
     "employerGreetingSub": "Welcome {name}! See what's happening in your recruitment.",
+    "employerGreetingSubGeneric": "See what's happening in your recruitment.",
     "addJob": "Post a job",
     "activeOffers": "Active offers",
     "newApplications": "New applications",

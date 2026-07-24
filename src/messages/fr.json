@@ -496,6 +496,7 @@
     "onboardingIncomplete": "Complétez tous les champs requis du profil pour terminer la configuration.",
     "jobNotDraft": "Cette offre ne peut être modifiée qu'à l'état de brouillon.",
     "billingUnavailable": "Les paiements sont momentanément indisponibles. Réessayez plus tard.",
+    "checkoutInProgress": "Un paiement est déjà en cours. Terminez-le ou réessayez dans un instant.",
     "notFound": "Nous n'avons pas trouvé ce que vous cherchez.",
     "internal": "Une erreur est survenue de notre côté. Nous y travaillons.",
     "generic": "Une erreur est survenue. Réessayez."
@@ -519,6 +520,7 @@
   "dashboard": {
     "greeting": "Bonjour, {name}",
     "viewProfile": "Voir le profil",
+    "accountLabel": "Votre compte",
     "newJobs": "Nouvelles offres",
     "newJobsSub": "Adaptées à vous",
     "activeApplications": "Candidatures actives",
@@ -555,6 +557,7 @@
     "logout": "Se déconnecter",
     "greetingEmployer": "Résumé",
     "employerGreetingSub": "Bonjour {name} ! Découvrez ce qui se passe dans votre recrutement.",
+    "employerGreetingSubGeneric": "Découvrez ce qui se passe dans votre recrutement.",
     "addJob": "Publier une offre",
     "activeOffers": "Offres actives",
     "newApplications": "Nouvelles candidatures",

@@ -5,6 +5,7 @@ import { renderEmail } from '@/emails/templates';
 import type { EmailType } from '@/emails/copy';
 import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { readTextWithLimit } from '@/lib/http/read-limited';
 import { captureError } from '@/lib/sentry';
 import { verifyStandardWebhook } from '@/lib/webhooks';
 
@@ -90,13 +91,11 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'not configured' }, { status: 500 });
   }
 
-  // SEC-14: odrzuć oversize body przed alokacją (ochrona pamięci/CPU).
-  const contentLength = Number(request.headers.get('content-length') ?? '0');
-  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-    return Response.json({ error: 'payload too large' }, { status: 413 });
-  }
-
-  const rawBody = await request.text();
+  // SEC-14 + P2-05: twardy limit body przy STREAMINGU (nie tylko po nagłówku Content-Length,
+  // który bywa nieobecny/chunked/sfałszowany) — oversize odrzucany przed pełną alokacją i podpisem.
+  const bodyRead = await readTextWithLimit(request, MAX_BODY_BYTES);
+  if (!bodyRead.ok) return Response.json({ error: 'payload too large' }, { status: 413 });
+  const rawBody = bodyRead.text;
   if (!verifySignature(secret, request.headers, rawBody)) {
     return Response.json({ error: 'invalid signature' }, { status: 401 });
   }

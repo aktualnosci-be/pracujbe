@@ -160,6 +160,9 @@ select pg_temp.assert(:'offa' is not null, 'D2 propozycja utworzona');
 select pg_temp.assert(:'offa' = :'offa2', 'D3 send_offer idempotentne');
 select pg_temp.assert((select count(*) from public.offers where idempotency_key = 'offa-1') = 1,
   'D4 jedna propozycja dla klucza offa-1');
+-- P2-03 (0049): propozycja bez jawnego terminu dostaje DOMYŚLNY expires_at (least(job,now()+30d)).
+select pg_temp.assert((select expires_at is not null from public.offers where id = :'offa'),
+  'D4b propozycja ma domyślny termin ważności (P2-03)');
 
 -- D5: obcy kandydat nie odpowiada; właściwy kandydat akceptuje.
 set role authenticated; set app.current_uid = :'CANDB';
@@ -1058,5 +1061,55 @@ select pg_temp.assert(
 reset role;
 select pg_temp.assert(public.job_is_public(:'JOBA'::uuid) is false,
   'CC3 job_is_public=false dla wygasłej oferty (blokuje apply_to_job)');
+
+-- ============================================================================
+-- DD. AUDIT_REPORT 0050 (P0-02) — serwerowa idempotencja checkoutu (checkout_intents)
+-- ============================================================================
+-- DD1: DML na checkout_intents odebrany anon/authenticated (RPC-only).
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'insert into public.checkout_intents (company_id, plan) values ('''|| :'COMPA' ||''', ''standard'')',
+  'permission denied', 'DD1 authenticated nie pisze checkout_intents (RPC-only)');
+select pg_temp.expect_error(
+  'select public.begin_checkout('''|| :'COMPA' ||'''::uuid, ''standard'')',
+  'permission denied', 'DD1b begin_checkout tylko service_role');
+reset role; reset app.current_uid;
+
+-- DD2: begin_checkout tworzy 'pending'; drugi otwarty dla tej samej firmy → CHECKOUT_IN_PROGRESS.
+set role service_role;
+select public.begin_checkout(:'COMPA'::uuid, 'standard') as cintent \gset
+select pg_temp.assert(:'cintent' is not null, 'DD2 begin_checkout zwraca intent_id');
+-- (rola nadal service_role) expect_error wywoła begin_checkout jako service_role.
+select pg_temp.expect_error(
+  'select public.begin_checkout('''|| :'COMPA' ||'''::uuid, ''standard'')',
+  'CHECKOUT_IN_PROGRESS', 'DD3 drugi otwarty checkout tej samej firmy odrzucony');
+reset role;
+
+-- DD4: complete_checkout domyka 'pending'→'completed' (idempotentnie); po tym nowy checkout możliwy.
+set role service_role;
+select public.complete_checkout(:'cintent'::uuid, 'sess-cc-1');
+select public.complete_checkout(:'cintent'::uuid, 'sess-cc-1'); -- idempotentny reprocessing
+reset role;
+select pg_temp.assert(
+  (select status from public.checkout_intents where id = :'cintent') = 'completed',
+  'DD4 complete_checkout oznacza completed');
+set role service_role;
+select public.begin_checkout(:'COMPA'::uuid, 'standard') as cintent2 \gset
+reset role;
+select pg_temp.assert(:'cintent2' is not null and :'cintent2' <> :'cintent',
+  'DD5 po ukończeniu można rozpocząć nowy checkout');
+
+-- DD6: aktywna subskrypcja blokuje begin_checkout (ACTIVE_SUBSCRIPTION).
+set role service_role;
+select public.release_checkout_intent(:'cintent2'::uuid); -- zwolnij otwarty, by test dotyczył sub
+insert into public.subscriptions (company_id, plan, status, provider)
+  values (:'COMPA', 'standard', 'active', 'stripe');
+-- (rola nadal service_role) begin_checkout jako service_role — powinno odrzucić przez aktywną sub.
+select pg_temp.expect_error(
+  'select public.begin_checkout('''|| :'COMPA' ||'''::uuid, ''standard'')',
+  'ACTIVE_SUBSCRIPTION', 'DD6 aktywna subskrypcja blokuje nowy checkout');
+-- sprzątanie: usuń testową subskrypcję, by nie zaburzać ewentualnych kolejnych sekcji
+delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe' and status = 'active';
+reset role;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -428,3 +428,84 @@ export async function getLatestJobs(
   const result = await getJobs({ locale, page: 1, pageSize: safeLimit });
   return result.jobs;
 }
+
+/** Wspólne, „puste" argumenty licznika (get_public_jobs_count) — nadpisujemy tylko wybrany filtr. */
+function emptyCountArgs(locale: string): Record<string, unknown> {
+  return {
+    p_locale: locale,
+    p_keyword: null,
+    p_city: null,
+    p_categories: null,
+    p_locations: null,
+    p_contract_types: null,
+    p_salary_min: null,
+    p_salary_max: null,
+    p_accommodation: null,
+    p_immediate: null,
+    p_no_language: null,
+    p_since: null,
+  };
+}
+
+/**
+ * P1-09: REALNE liczniki ofert per kategoria (koniec zmyślonych liczb na stronie głównej).
+ * Zwraca `null` w trybie demo (brak env) — komponent pomija wtedy badge zamiast pokazywać
+ * konkretną, nieprawdziwą liczbę. Liczy dokładnie tym samym filtrem, którym link kieruje na
+ * listę (`category=<key>`), więc licznik odpowiada temu, co użytkownik zobaczy po kliknięciu.
+ */
+export async function getCategoryCounts(
+  locale: string,
+  keys: readonly string[],
+): Promise<Record<string, number> | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { createServerClient } = await import('@/lib/supabase/server');
+    const supabase = await createServerClient();
+    const resolved = toLocale(locale);
+    const entries = await Promise.all(
+      keys.map(async (key) => {
+        const { data, error } = await supabase.rpc('get_public_jobs_count', {
+          ...emptyCountArgs(resolved),
+          p_categories: [key],
+        });
+        if (error) throw error;
+        return [key, typeof data === 'number' ? data : 0] as const;
+      }),
+    );
+    return Object.fromEntries(entries);
+  } catch (error) {
+    captureError(error, { area: 'jobs.getCategoryCounts' });
+    return null;
+  }
+}
+
+/**
+ * P1-09: REALNE liczniki ofert per miasto. Liczy filtrem `p_city` (ilike) — dokładnie tak, jak
+ * link kieruje na listę (`city=<nazwa>`), więc licznik jest spójny z widokiem docelowym niezależnie
+ * od znanego niedopasowania nazw miast (P1-10 — odrębne ustalenie). `null` w trybie demo.
+ */
+export async function getCityCounts(
+  locale: string,
+  cities: readonly string[],
+): Promise<Record<string, number> | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { createServerClient } = await import('@/lib/supabase/server');
+    const supabase = await createServerClient();
+    const resolved = toLocale(locale);
+    const entries = await Promise.all(
+      cities.map(async (city) => {
+        const { data, error } = await supabase.rpc('get_public_jobs_count', {
+          ...emptyCountArgs(resolved),
+          p_city: city,
+        });
+        if (error) throw error;
+        return [city, typeof data === 'number' ? data : 0] as const;
+      }),
+    );
+    return Object.fromEntries(entries);
+  } catch (error) {
+    captureError(error, { area: 'jobs.getCityCounts' });
+    return null;
+  }
+}

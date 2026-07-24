@@ -111,7 +111,8 @@ export function EmployerShell({
     />
   );
 
-  const displayUser = userName && userName.trim().length > 0 ? userName : 'Jan Kowalski';
+  // P1-09: bez realnej nazwy → neutralna etykieta, NIGDY zmyślona osoba („Jan Kowalski").
+  const displayUser = userName && userName.trim().length > 0 ? userName : td('accountLabel');
   return (
     <DashboardShell
       nav={nav}

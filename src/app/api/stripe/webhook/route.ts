@@ -4,6 +4,7 @@ import { getStripe } from '@/lib/stripe';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { captureError } from '@/lib/sentry';
 import { isProductionMode } from '@/lib/env';
+import { readTextWithLimit } from '@/lib/http/read-limited';
 import { claimWebhook, completeWebhook } from '@/lib/webhook-inbox';
 
 /**
@@ -221,13 +222,12 @@ export async function POST(request: Request): Promise<Response> {
   const sig = request.headers.get('stripe-signature');
   if (!sig) return Response.json({ error: 'missing signature' }, { status: 400 });
 
-  // SEC-14: odrzuć oversize body przed alokacją (ochrona pamięci/CPU).
-  const contentLength = Number(request.headers.get('content-length') ?? '0');
-  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-    return Response.json({ error: 'payload too large' }, { status: 413 });
-  }
-
-  const rawBody = await request.text();
+  // SEC-14 + P2-05: twardy limit body egzekwowany PRZY STREAMINGU (nie tylko po nagłówku
+  // Content-Length, który bywa nieobecny/chunked/sfałszowany) — niepodpisane żądanie nie zbuforuje
+  // dowolnej ilości danych przed weryfikacją podpisu.
+  const bodyRead = await readTextWithLimit(request, MAX_BODY_BYTES);
+  if (!bodyRead.ok) return Response.json({ error: 'payload too large' }, { status: 413 });
+  const rawBody = bodyRead.text;
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, secret);
@@ -256,6 +256,15 @@ export async function POST(request: Request): Promise<Response> {
         if (subId) {
           const sub = await stripe.subscriptions.retrieve(subId);
           await upsertSubscription(admin, sub);
+        }
+        // P0-02: domknij intent checkoutu (pending → completed). Idempotentne przy reprocessingu.
+        const intentId = session.metadata?.['checkout_intent_id'];
+        if (intentId) {
+          const { error: intentErr } = await admin.rpc('complete_checkout', {
+            p_intent_id: intentId,
+            p_session_id: session.id,
+          });
+          assertNoDbError(intentErr, 'complete_checkout');
         }
         // P1-15: finalizacja rezerwacji kodu rabatowego (reserved → finalized + licznik).
         const codeId = session.metadata?.['discount_code_id'];

@@ -9,10 +9,10 @@ import {
   SprayCan,
   UtensilsCrossed,
 } from 'lucide-react';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
-import type { CategoryKey } from '@/lib/jobs';
+import { getCategoryCounts, type CategoryKey } from '@/lib/jobs';
 
 /**
  * CategoryGrid — blok „Popularne kategorie" wg makiety `01-home`.
@@ -21,24 +21,30 @@ import type { CategoryKey } from '@/lib/jobs';
  * + licznik ofert. Nagłówek z linkiem „Zobacz wszystkie →". Każdy wiersz linkuje do listy
  * ofert z filtrem kategorii. Komponent serwerowy; renderowany w kolumnie przez `page.tsx`.
  *
- * TODO(data): liczniki ofert są danymi demonstracyjnymi — podłączyć realne zliczanie z DB.
+ * P1-09: liczniki są REALNE (get_public_jobs_count per kategoria). W trybie demo (bez env)
+ * `getCategoryCounts` zwraca null → pomijamy badge zamiast pokazywać zmyśloną liczbę.
  */
 
 const JOBS_PATH = '/oferty-pracy';
 
-const CATEGORIES: { key: CategoryKey; Icon: LucideIcon; count: number }[] = [
-  { key: 'production', Icon: Factory, count: 1248 },
-  { key: 'logistics', Icon: Boxes, count: 982 },
-  { key: 'construction', Icon: HardHat, count: 764 },
-  { key: 'care', Icon: HeartHandshake, count: 612 },
-  { key: 'cleaning', Icon: SprayCan, count: 540 },
-  { key: 'hospitality', Icon: UtensilsCrossed, count: 428 },
+const CATEGORIES: { key: CategoryKey; Icon: LucideIcon }[] = [
+  { key: 'production', Icon: Factory },
+  { key: 'logistics', Icon: Boxes },
+  { key: 'construction', Icon: HardHat },
+  { key: 'care', Icon: HeartHandshake },
+  { key: 'cleaning', Icon: SprayCan },
+  { key: 'hospitality', Icon: UtensilsCrossed },
 ];
 
 export async function CategoryGrid(): Promise<React.JSX.Element> {
   const t = await getTranslations('categories');
   const tHome = await getTranslations('home');
   const tCommon = await getTranslations('common');
+  const locale = await getLocale();
+  const counts = await getCategoryCounts(
+    locale,
+    CATEGORIES.map((c) => c.key),
+  );
 
   return (
     <div>
@@ -56,7 +62,7 @@ export async function CategoryGrid(): Promise<React.JSX.Element> {
       </div>
 
       <ul className="mt-4 grid grid-cols-1 gap-1 sm:grid-flow-col sm:grid-cols-2 sm:grid-rows-3">
-        {CATEGORIES.map(({ key, Icon, count }) => (
+        {CATEGORIES.map(({ key, Icon }) => (
           <li key={key}>
             <Link
               href={{ pathname: JOBS_PATH, query: { category: key } }}
@@ -68,9 +74,11 @@ export async function CategoryGrid(): Promise<React.JSX.Element> {
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                 {t(key)}
               </span>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {tHome('offersCount', { count })}
-              </span>
+              {counts ? (
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {tHome('offersCount', { count: counts[key] ?? 0 })}
+                </span>
+              ) : null}
             </Link>
           </li>
         ))}

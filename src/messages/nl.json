@@ -496,6 +496,7 @@
     "onboardingIncomplete": "Vul alle vereiste profielvelden in om de configuratie te voltooien.",
     "jobNotDraft": "Deze vacature kan alleen als concept worden bewerkt.",
     "billingUnavailable": "Betalingen zijn tijdelijk niet beschikbaar. Probeer het later opnieuw.",
+    "checkoutInProgress": "Je hebt al een betaling gestart. Rond die af of probeer het zo opnieuw.",
     "notFound": "We konden dit niet vinden.",
     "internal": "Er is een fout aan onze kant opgetreden. We werken eraan.",
     "generic": "Er ging iets mis. Probeer opnieuw."
@@ -519,6 +520,7 @@
   "dashboard": {
     "greeting": "Welkom, {name}",
     "viewProfile": "Profiel bekijken",
+    "accountLabel": "Jouw account",
     "newJobs": "Nieuwe vacatures",
     "newJobsSub": "Op jou afgestemd",
     "activeApplications": "Actieve sollicitaties",
@@ -555,6 +557,7 @@
     "logout": "Uitloggen",
     "greetingEmployer": "Overzicht",
     "employerGreetingSub": "Welkom {name}! Bekijk wat er gebeurt in je rekrutering.",
+    "employerGreetingSubGeneric": "Bekijk wat er gebeurt in je rekrutering.",
     "addJob": "Vacature plaatsen",
     "activeOffers": "Actieve vacatures",
     "newApplications": "Nieuwe sollicitaties",

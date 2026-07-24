@@ -15,6 +15,7 @@ import { isSupabaseConfigured } from '@/lib/env';
 import {
   getCompanyJobs,
   getEmployerOverview,
+  getEmployerShellData,
   getFunnelStats,
   getRecentApplications,
   getTopMatchedCandidates,
@@ -76,13 +77,16 @@ export default async function EmployerDashboardPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
 
   const configured = isSupabaseConfigured();
-  const [overview, jobs, applications, candidates, funnel] = await Promise.all([
+  const [overview, jobs, applications, candidates, funnel, shell] = await Promise.all([
     getEmployerOverview(),
     getCompanyJobs(),
     getRecentApplications(),
     getTopMatchedCandidates(),
     getFunnelStats(),
+    getEmployerShellData(),
   ]);
+  // P1-09: realne imię pracodawcy w powitaniu (bez zmyślonego „Jan"). Brak → wariant bez imienia.
+  const firstName = shell?.userName?.trim().split(/\s+/)[0] ?? '';
 
   const conversions: [number, number, number] = [
     conversionPct(funnel.applications, funnel.views),
@@ -99,7 +103,9 @@ export default async function EmployerDashboardPage({
             {td('greetingEmployer')}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {td('employerGreetingSub', { name: 'Jan' })}
+            {firstName
+              ? td('employerGreetingSub', { name: firstName })
+              : td('employerGreetingSubGeneric')}
           </p>
         </div>
         {/* Kreator oferty (Etap 5) — 9 kroków z autozapisem szkicu. */}
