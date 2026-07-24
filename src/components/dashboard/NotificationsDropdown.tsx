@@ -48,7 +48,6 @@ export function NotificationsDropdown({
 
   return (
     <div
-      role="menu"
       aria-label={t('title')}
       className="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-background text-left shadow-lg"
     >

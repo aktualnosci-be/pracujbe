@@ -98,6 +98,8 @@ export function ApplyModal({
   const [errors, setErrors] = React.useState<{ phone?: boolean; consent?: boolean }>({});
   const [formError, setFormError] = React.useState<FormError | null>(null);
   const [sent, setSent] = React.useState(false);
+  const phoneRef = React.useRef<HTMLInputElement>(null);
+  const consentRef = React.useRef<HTMLButtonElement>(null);
 
   const availabilityLabel = (value: Availability): string => {
     switch (value) {
@@ -139,7 +141,13 @@ export function ApplyModal({
 
     const nextErrors = { phone: phone.trim().length === 0, consent: !consent };
     setErrors(nextErrors);
-    if (nextErrors.phone || nextErrors.consent) return;
+    if (nextErrors.phone || nextErrors.consent) {
+      // Fokus + przewinięcie do pierwszego błędnego pola (Invariant #11).
+      const firstInvalid = nextErrors.phone ? phoneRef.current : consentRef.current;
+      firstInvalid?.focus();
+      firstInvalid?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
 
     setFormError(null);
     setSubmitting(true);
@@ -239,6 +247,7 @@ export function ApplyModal({
                     </SelectContent>
                   </Select>
                   <Input
+                    ref={phoneRef}
                     id="apply-phone"
                     type="tel"
                     inputMode="tel"
@@ -246,11 +255,14 @@ export function ApplyModal({
                     onChange={(event) => setPhone(event.target.value)}
                     placeholder={t('phonePlaceholder')}
                     aria-invalid={errors.phone ? true : undefined}
+                    aria-describedby={errors.phone ? 'apply-phone-error' : undefined}
                     className={cn('flex-1', errors.phone ? 'border-error' : undefined)}
                   />
                 </div>
                 {errors.phone ? (
-                  <p className="text-sm text-error">{t('phoneRequired')}</p>
+                  <p id="apply-phone-error" className="text-sm text-error">
+                    {t('phoneRequired')}
+                  </p>
                 ) : null}
               </div>
 
@@ -292,10 +304,12 @@ export function ApplyModal({
 
               <div className="flex items-start gap-2.5">
                 <Checkbox
+                  ref={consentRef}
                   id="apply-consent"
                   checked={consent}
                   onCheckedChange={(value) => setConsent(value === true)}
                   aria-invalid={errors.consent ? true : undefined}
+                  aria-describedby={errors.consent ? 'apply-consent-error' : undefined}
                   className={errors.consent ? 'border-error' : undefined}
                 />
                 <Label
@@ -306,7 +320,9 @@ export function ApplyModal({
                 </Label>
               </div>
               {errors.consent ? (
-                <p className="-mt-2 text-sm text-error">{t('consentRequired')}</p>
+                <p id="apply-consent-error" className="-mt-2 text-sm text-error">
+                  {t('consentRequired')}
+                </p>
               ) : null}
 
               {formError ? (

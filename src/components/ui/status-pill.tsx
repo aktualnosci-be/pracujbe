@@ -40,12 +40,12 @@ const STATUS_TONE: Record<string, Tone> = {
 
 const TONE_CLASS: Record<Tone, string> = {
   blue: 'bg-accent/10 text-accent',
-  amber: 'bg-warning/10 text-warning',
-  green: 'bg-success/10 text-success',
+  amber: 'bg-warning/10 text-warning-text',
+  green: 'bg-success/10 text-success-text',
   red: 'bg-error/10 text-error',
   neutral: 'bg-muted text-muted-foreground',
-  activeDot: 'bg-success/10 text-success',
-  pausedDot: 'bg-warning/10 text-warning',
+  activeDot: 'bg-success/10 text-success-text',
+  pausedDot: 'bg-warning/10 text-warning-text',
 };
 
 /** snake_case / kebab-case → camelCase (dla kluczy i18n). */

@@ -110,7 +110,11 @@ export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
         <p className="text-xs text-muted-foreground">{t('empty')}</p>
       )}
 
-      {error ? <p className="mt-2 text-xs text-error">{error}</p> : null}
+      {error ? (
+        <p role="alert" aria-live="polite" className="mt-2 text-xs text-error">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

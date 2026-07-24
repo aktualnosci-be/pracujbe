@@ -32,17 +32,41 @@ export interface RateLimitOptions {
 const DEFAULT_MAX = 30;
 const DEFAULT_WINDOW_SECONDS = 60;
 
-/** Adres IP klienta z `x-forwarded-for` (pierwszy wpis) z fallbackiem na `x-real-ip`. */
+/**
+ * Akcje wrażliwe (uwierzytelnianie), dla których stosujemy fail-SAFE: gdy limiter
+ * jest niedostępny (błąd RPC/wyjątek), blokujemy żądanie, zamiast otwierać ścieżkę
+ * do bruteforce logowania / spamu rejestracji / resetu hasła. Dla pozostałych akcji
+ * zachowujemy fail-open (awaria limitera nie odcina zwykłego ruchu).
+ */
+const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set(['signin', 'register', 'password-reset']);
+
+/**
+ * Adres IP klienta. Głównym źródłem jest `x-real-ip` (ustawiane przez platformę/proxy,
+ * niespoofowalne przez klienta). Dopiero w razie jego braku sięgamy po `x-forwarded-for`,
+ * ale bierzemy PRAWY (ostatni) token — dopisany przez najbliższe zaufane proxy — a nie
+ * lewy, który klient może dowolnie sfałszować. Fallback: `unknown`.
+ */
 async function clientIp(): Promise<string> {
   const store = await headers();
+
+  const realIp = store.get('x-real-ip')?.trim();
+  if (realIp) {
+    return realIp;
+  }
+
   const forwarded = store.get('x-forwarded-for');
   if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) {
-      return first;
+    const parts = forwarded
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) {
+      return last;
     }
   }
-  return store.get('x-real-ip')?.trim() || 'unknown';
+
+  return 'unknown';
 }
 
 /**
@@ -72,13 +96,15 @@ export async function checkRateLimit(action: string, opts?: RateLimitOptions): P
 
     if (error) {
       captureError(error, { area: 'rate-limit', action });
-      return true; // fail-open
+      // Akcje wrażliwe: fail-safe (blokuj). Pozostałe: fail-open.
+      return !FAIL_SAFE_ACTIONS.has(action);
     }
 
     // RPC zwraca boolean (true = w limicie). Tylko jawne `false` blokuje.
     return data !== false;
   } catch (e) {
     captureError(e, { area: 'rate-limit', action });
-    return true; // fail-open
+    // Akcje wrażliwe: fail-safe (blokuj). Pozostałe: fail-open.
+    return !FAIL_SAFE_ACTIONS.has(action);
   }
 }

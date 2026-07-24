@@ -15,6 +15,8 @@
  * noindex i per-użytkownik, więc pusty realny wynik jest prawdziwy (nie „udaje" ofert).
  */
 
+import { cache } from 'react';
+
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isSupabaseConfigured } from '@/lib/env';
@@ -136,12 +138,77 @@ async function getAuthUserId(supabase: SupabaseClient): Promise<string | null> {
   return user?.id ?? null;
 }
 
-/** Mapa job_id → bezpieczne dane publiczne oferty (RPC `get_public_jobs`). */
-async function fetchPublicJobsMap(
+/**
+ * Klient serwerowy + sesja rozwiązywane RAZ na żądanie. `cache()` (React) memoizuje wynik
+ * per-request — sześć loaderów panelu współdzieli jeden `createServerClient` + jedno
+ * `auth.getUser()` zamiast tworzyć osobny klient i pytać o sesję każdy z osobna.
+ */
+const getServerContext = cache(
+  async (): Promise<{ supabase: SupabaseClient; userId: string | null }> => {
+    const { createServerClient } = await import('@/lib/supabase/server');
+    const supabase = await createServerClient();
+    const userId = await getAuthUserId(supabase);
+    return { supabase, userId };
+  },
+);
+
+/**
+ * Liczba konwersacji z nieprzeczytanymi wiadomościami (model `conversation_members.last_read_at`,
+ * spójny z `messages.getUnreadConversationsCount`). NIE liczymy po `messages.read_at` — ta kolumna
+ * nie jest ustawiana, więc licznik po niej byłby zawyżony.
+ */
+async function countUnreadConversations(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  const { data: memberData, error: memberError } = await supabase
+    .from('conversation_members')
+    .select('conversation_id, last_read_at')
+    .eq('profile_id', userId);
+  if (memberError) throw memberError;
+
+  const lastReadByConv = new Map<string, string | null>();
+  for (const row of asArr(memberData)) {
+    const r = asRecord(row);
+    const cid = asStr(r['conversation_id']);
+    if (cid) {
+      lastReadByConv.set(cid, typeof r['last_read_at'] === 'string' ? (r['last_read_at'] as string) : null);
+    }
+  }
+  if (lastReadByConv.size === 0) return 0;
+
+  const { data: msgData, error: msgError } = await supabase
+    .from('messages')
+    .select('conversation_id, sender_id, created_at')
+    .in('conversation_id', [...lastReadByConv.keys()])
+    .is('deleted_at', null);
+  if (msgError) throw msgError;
+
+  const unreadConvs = new Set<string>();
+  for (const row of asArr(msgData)) {
+    const r = asRecord(row);
+    const cid = asStr(r['conversation_id']);
+    if (!cid || unreadConvs.has(cid)) continue;
+    const senderId = asStr(r['sender_id']);
+    const createdAt = asStr(r['created_at']);
+    const lastRead = lastReadByConv.get(cid) ?? null;
+    if (senderId !== userId && createdAt && (!lastRead || createdAt > lastRead)) {
+      unreadConvs.add(cid);
+    }
+  }
+  return unreadConvs.size;
+}
+
+/**
+ * Mapa job_id → bezpieczne dane publiczne oferty (RPC `get_public_jobs`).
+ * `cache()` per-request — gdy kilka loaderów potrzebuje tej samej mapy (te same argumenty:
+ * ten sam klient z `getServerContext`, locale, limit) RPC wykona się tylko raz.
+ */
+const fetchPublicJobsMap = cache(async (
   supabase: SupabaseClient,
   locale: Locale,
   limit: number,
-): Promise<Map<string, PublicJobLite>> {
+): Promise<Map<string, PublicJobLite>> => {
   const { data, error } = await supabase.rpc('get_public_jobs', {
     p_locale: locale,
     p_keyword: null,
@@ -167,7 +234,7 @@ async function fetchPublicJobsMap(
     });
   }
   return map;
-}
+});
 
 /** Zbiór job_id zapisanych przez kandydata. */
 async function fetchSavedJobIds(supabase: SupabaseClient, userId: string): Promise<Set<string>> {
@@ -185,11 +252,15 @@ async function fetchSavedJobIds(supabase: SupabaseClient, userId: string): Promi
   return set;
 }
 
-/** Liczy kompletność profilu + checklistę + imię (jedno źródło dla overview i summary). */
-async function computeProfileSummary(
+/**
+ * Liczy kompletność profilu + checklistę + imię (jedno źródło dla overview i summary).
+ * `cache()` per-request — gdy overview i summary renderują się w tym samym żądaniu,
+ * komplet zapytań profilu policzy się tylko raz.
+ */
+const computeProfileSummary = cache(async (
   supabase: SupabaseClient,
   userId: string,
-): Promise<CandidateProfileSummary> {
+): Promise<CandidateProfileSummary> => {
   const [{ data: profileRow }, { data: cpRow }] = await Promise.all([
     supabase.from('profiles').select('first_name, last_name, avatar_url').eq('id', userId).maybeSingle(),
     supabase
@@ -235,7 +306,7 @@ async function computeProfileSummary(
   const firstName = asStr(profile['first_name']) || null;
 
   return { firstName, completionPct, checklist };
-}
+});
 
 /* ---------------------------------------------------------------------------
  * Dane DEMO (fallback bez bazy) — złożone z ofert demonstracyjnych (lokalizowane, z realnymi slugami)
@@ -320,14 +391,12 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
   if (!isSupabaseConfigured()) return DEMO_OVERVIEW;
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const userId = await getAuthUserId(supabase);
+    const { supabase, userId } = await getServerContext();
     if (!userId) {
       return { newJobsCount: 0, activeApplicationsCount: 0, unreadMessagesCount: 0, profileCompletionPct: 0 };
     }
 
-    const [newJobs, activeApps, unreadMsgs, profile] = await Promise.all([
+    const [newJobs, activeApps, unreadCount, profile] = await Promise.all([
       supabase.rpc('get_public_jobs_count', {
         p_keyword: null,
         p_city: null,
@@ -340,22 +409,17 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
         .eq('candidate_id', userId)
         .is('deleted_at', null)
         .in('status', [...ACTIVE_APPLICATION_STATUSES]),
-      supabase
-        .from('messages')
-        .select('id', { count: 'exact', head: true })
-        .is('read_at', null)
-        .neq('sender_id', userId),
+      countUnreadConversations(supabase, userId),
       computeProfileSummary(supabase, userId),
     ]);
 
     if (newJobs.error) throw newJobs.error;
     if (activeApps.error) throw activeApps.error;
-    if (unreadMsgs.error) throw unreadMsgs.error;
 
     return {
       newJobsCount: asNum(newJobs.data),
       activeApplicationsCount: activeApps.count ?? 0,
-      unreadMessagesCount: unreadMsgs.count ?? 0,
+      unreadMessagesCount: unreadCount,
       profileCompletionPct: profile.completionPct,
     };
   } catch (error) {
@@ -369,9 +433,7 @@ export async function getCandidateProfileSummary(): Promise<CandidateProfileSumm
   if (!isSupabaseConfigured()) return DEMO_PROFILE_SUMMARY;
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const userId = await getAuthUserId(supabase);
+    const { supabase, userId } = await getServerContext();
     if (!userId) {
       return {
         firstName: null,
@@ -396,9 +458,7 @@ export async function getRecommendedJobs(locale: string): Promise<RecommendedJob
   if (!isSupabaseConfigured()) return demoRecommended(resolvedLocale);
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const userId = await getAuthUserId(supabase);
+    const { supabase, userId } = await getServerContext();
     if (!userId) return [];
 
     const [matchRes, jobsMap, savedIds] = await Promise.all([
@@ -444,9 +504,7 @@ export async function getMyApplications(locale: string = routing.defaultLocale):
   if (!isSupabaseConfigured()) return demoApplications(resolvedLocale);
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const userId = await getAuthUserId(supabase);
+    const { supabase, userId } = await getServerContext();
     if (!userId) return [];
 
     const { data, error } = await supabase
@@ -485,9 +543,7 @@ export async function getLatestMessages(): Promise<LatestMessage[]> {
   if (!isSupabaseConfigured()) return demoMessages(routing.defaultLocale);
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const userId = await getAuthUserId(supabase);
+    const { supabase, userId } = await getServerContext();
     if (!userId) return [];
 
     const { data: memberData, error: memberError } = await supabase
@@ -573,10 +629,8 @@ export interface CandidateFile {
 export async function getCandidateFiles(): Promise<CandidateFile[]> {
   if (!isSupabaseConfigured()) return [];
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
     const { getSignedFileUrl } = await import('@/lib/storage');
-    const supabase = await createServerClient();
-    const userId = await getAuthUserId(supabase);
+    const { supabase, userId } = await getServerContext();
     if (!userId) return [];
 
     const { data, error } = await supabase

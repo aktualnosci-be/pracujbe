@@ -2,6 +2,7 @@
 
 import { createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/env';
+import { checkRateLimit } from '@/lib/rate-limit';
 import type { ConsentCategories, ConsentCategory, ConsentSource } from '@/lib/consent';
 
 /**
@@ -50,6 +51,11 @@ export async function recordConsent(
 ): Promise<{ ok: boolean }> {
   // Tryb demo / brak konfiguracji — cookie w przeglądarce pozostaje dowodem zgody.
   if (!isSupabaseConfigured()) {
+    return { ok: false };
+  }
+
+  // Anonimowy zapis (profile_id null) — limit per IP chroni tabelę consents przed zalewaniem.
+  if (!(await checkRateLimit('consent', { max: 30, windowSeconds: 3600 }))) {
     return { ok: false };
   }
 

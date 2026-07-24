@@ -70,6 +70,15 @@ export function DashboardShell({
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [, startMarkTransition] = React.useTransition();
   const notifRef = React.useRef<HTMLDivElement>(null);
+  const drawerRef = React.useRef<HTMLDivElement>(null);
+  const drawerCloseRef = React.useRef<HTMLButtonElement>(null);
+  // Element, na który wraca fokus po zamknięciu szuflady (przycisk, który ją otworzył).
+  const drawerReturnFocusRef = React.useRef<HTMLElement | null>(null);
+
+  function openDrawer(event: React.MouseEvent<HTMLButtonElement>): void {
+    drawerReturnFocusRef.current = event.currentTarget;
+    setDrawerOpen(true);
+  }
 
   // Powiadomienia realne (`notifItems`), a bez nich — fallback DEMO (tryb bez backendu).
   const demoNotifItems: NotificationItem[] = [
@@ -132,6 +141,39 @@ export function DashboardShell({
     };
   }, [drawerOpen]);
 
+  // Focus trap szuflady (role=dialog aria-modal): po otwarciu fokus na przycisk zamknięcia,
+  // Tab/Shift+Tab zapętlone wewnątrz dialogu, po zamknięciu fokus wraca na przycisk otwierający.
+  React.useEffect(() => {
+    if (!drawerOpen) return;
+    drawerCloseRef.current?.focus();
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key !== 'Tab') return;
+      const drawer = drawerRef.current;
+      if (!drawer) return;
+      const focusable = drawer.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      const activeEl = document.activeElement;
+      if (event.shiftKey) {
+        if (activeEl === first || !drawer.contains(activeEl)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (activeEl === last || !drawer.contains(activeEl)) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      drawerReturnFocusRef.current?.focus();
+    };
+  }, [drawerOpen]);
+
   const defaultBrand = (
     <span className="text-lg font-semibold tracking-tight text-white">{tc('appName')}</span>
   );
@@ -170,8 +212,10 @@ export function DashboardShell({
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background px-4 lg:px-8">
           <button
             type="button"
-            onClick={() => setDrawerOpen(true)}
+            onClick={openDrawer}
             aria-label={tnav('menu')}
+            aria-haspopup="dialog"
+            aria-expanded={drawerOpen}
             className="inline-flex size-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-soft lg:hidden"
           >
             <Menu className="size-5" aria-hidden="true" />
@@ -190,7 +234,7 @@ export function DashboardShell({
               type="button"
               onClick={() => setNotifOpen((open) => !open)}
               aria-label={tn('title')}
-              aria-haspopup="menu"
+              aria-haspopup="true"
               aria-expanded={notifOpen}
               className="relative inline-flex size-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-soft"
             >
@@ -239,7 +283,9 @@ export function DashboardShell({
         {hasMore ? (
           <button
             type="button"
-            onClick={() => setDrawerOpen(true)}
+            onClick={openDrawer}
+            aria-haspopup="dialog"
+            aria-expanded={drawerOpen}
             className="flex flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
           >
             <Menu className="size-5" aria-hidden="true" />
@@ -257,6 +303,7 @@ export function DashboardShell({
             onClick={() => setDrawerOpen(false)}
           />
           <div
+            ref={drawerRef}
             role="dialog"
             aria-modal="true"
             aria-label={tnav('menu')}
@@ -265,6 +312,7 @@ export function DashboardShell({
             <div className="flex h-16 items-center justify-between px-6">
               {brand ?? defaultBrand}
               <button
+                ref={drawerCloseRef}
                 type="button"
                 onClick={() => setDrawerOpen(false)}
                 aria-label={tc('cancel')}

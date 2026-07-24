@@ -51,6 +51,14 @@ const BASE_PATH = '/oferty-pracy';
 const PAGE_SIZE = 12;
 const MAX_FACET = 200;
 
+/** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). Spójne z layoutem/stroną główną. */
+const OG_LOCALE: Record<string, string> = {
+  pl: 'pl_PL',
+  nl: 'nl_BE',
+  fr: 'fr_BE',
+  en: 'en_GB',
+};
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 type PageProps = {
@@ -100,7 +108,7 @@ export async function generateMetadata({
       url,
       siteName: 'Pracuj.be',
       type: 'website',
-      locale,
+      locale: OG_LOCALE[locale] ?? locale,
     },
   };
 }
@@ -276,7 +284,7 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
   return (
     <div className="container py-6 md:py-10">
       {/* Breadcrumb */}
-      <nav aria-label="breadcrumb" className="mb-4 text-sm text-muted-foreground">
+      <nav aria-label={tCommon('breadcrumb')} className="mb-4 text-sm text-muted-foreground">
         <ol className="flex items-center gap-1.5">
           <li>
             <Link href="/" className="transition-colors hover:text-foreground">

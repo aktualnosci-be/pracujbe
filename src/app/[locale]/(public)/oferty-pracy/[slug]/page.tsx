@@ -49,6 +49,14 @@ import { ApplyModal } from '@/components/public/ApplyModal';
 
 const BASE_PATH = '/oferty-pracy';
 const LOGIN_HREF = '/logowanie';
+
+/** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). Spójne z layoutem/stroną główną. */
+const OG_LOCALE: Record<string, string> = {
+  pl: 'pl_PL',
+  nl: 'nl_BE',
+  fr: 'fr_BE',
+  en: 'en_GB',
+};
 const DAY_MS = 24 * 60 * 60 * 1000;
 const VALID_DAYS = 60;
 const SIMILAR_LIMIT = 3;
@@ -112,7 +120,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url,
       siteName: 'Pracuj.be',
       type: 'article',
-      locale,
+      locale: OG_LOCALE[locale] ?? locale,
       publishedTime: job.publishedAt,
     },
   };
@@ -143,6 +151,12 @@ function buildJsonLd(job: JobDetail, url: string): Record<string, unknown> {
     '@type': 'JobPosting',
     title: job.title,
     description: [job.description, ...job.responsibilities].join(' '),
+    identifier: {
+      '@type': 'PropertyValue',
+      name: job.companyName,
+      value: job.id,
+      propertyID: job.slug,
+    },
     datePosted: job.publishedAt,
     ...(validThrough ? { validThrough } : {}),
     employmentType: EMPLOYMENT_TYPE[job.contractType],

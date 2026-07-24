@@ -116,7 +116,8 @@
     "new": "New",
     "yes": "Yes",
     "no": "No",
-    "home": "Home"
+    "home": "Home",
+    "breadcrumb": "Breadcrumb"
   },
   "nav": {
     "jobs": "Jobs",

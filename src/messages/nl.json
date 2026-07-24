@@ -116,7 +116,8 @@
     "new": "Nieuw",
     "yes": "Ja",
     "no": "Nee",
-    "home": "Startpagina"
+    "home": "Startpagina",
+    "breadcrumb": "Broodkruimelpad"
   },
   "nav": {
     "jobs": "Vacatures",

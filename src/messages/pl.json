@@ -116,7 +116,8 @@
     "new": "Nowe",
     "yes": "Tak",
     "no": "Nie",
-    "home": "Strona główna"
+    "home": "Strona główna",
+    "breadcrumb": "Ścieżka nawigacji"
   },
   "nav": {
     "jobs": "Oferty pracy",

@@ -26,6 +26,27 @@ const ALLOWED = new Map<string, string>([
   ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx'],
 ]);
 
+/**
+ * Sygnatury (magic bytes) na typ. Weryfikujemy zawartość, bo MIME z klienta jest
+ * niezaufany. DOCX to kontener ZIP (`PK`), stary DOC to OLE (`D0 CF 11 E0`).
+ */
+const SIGNATURES: Record<string, readonly number[][]> = {
+  pdf: [[0x25, 0x50, 0x44, 0x46]], // %PDF
+  docx: [[0x50, 0x4b]], // PK (zip)
+  doc: [[0xd0, 0xcf, 0x11, 0xe0]], // OLE compound file
+};
+
+/** Sprawdza, czy początek pliku pasuje do którejkolwiek sygnatury danego rozszerzenia. */
+async function hasValidSignature(file: File, ext: string): Promise<boolean> {
+  const sigs = SIGNATURES[ext];
+  if (!sigs) return false;
+  const maxLen = Math.max(...sigs.map((s) => s.length));
+  const header = new Uint8Array(await file.slice(0, maxLen).arrayBuffer());
+  return sigs.some(
+    (sig) => sig.length <= header.length && sig.every((byte, i) => header[i] === byte),
+  );
+}
+
 /** Upload CV kandydata (PDF/DOC/DOCX, <=5MB). */
 export async function uploadCandidateCv(formData: FormData): Promise<UploadResult> {
   if (!(await checkRateLimit('upload', { max: 20, windowSeconds: 3600 }))) {
@@ -37,6 +58,9 @@ export async function uploadCandidateCv(formData: FormData): Promise<UploadResul
   if (file.size > MAX_BYTES) return { ok: false, error: 'VALIDATION_FAILED' };
   const ext = ALLOWED.get(file.type);
   if (!ext) return { ok: false, error: 'VALIDATION_FAILED' };
+
+  // Weryfikacja sygnatury zawartości (magic bytes) — MIME z klienta jest niezaufany.
+  if (!(await hasValidSignature(file, ext))) return { ok: false, error: 'VALIDATION_FAILED' };
 
   if (!isSupabaseConfigured()) return { ok: true, id: 'demo', path: 'demo/cv.pdf' };
 

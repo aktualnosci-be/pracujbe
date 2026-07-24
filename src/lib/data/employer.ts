@@ -14,6 +14,8 @@
  * do bundla trybu DEMO.
  */
 
+import { cache } from 'react';
+
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isSupabaseConfigured } from '@/lib/env';
@@ -118,6 +120,20 @@ const EMPTY_OVERVIEW: EmployerOverview = {
 
 const EMPTY_FUNNEL: FunnelStats = { views: 0, applications: 0, interviews: 0, hired: 0 };
 
+/**
+ * Statusy z `application_status_history` traktowane jako „osiągnięto etap rozmowy".
+ * Zawiera `hired` oraz etapy ofertowe (następują PO rozmowie), więc licznik rozmów jest
+ * kumulatywny i gwarantuje monotoniczność lejka: hired ⊆ interviews ⊆ applications
+ * (żadna inwersja typu hired > interviews).
+ */
+const FUNNEL_INTERVIEW_STAGES = [
+  'interview',
+  'offer_sent',
+  'offer_accepted',
+  'offer_declined',
+  'hired',
+] as const;
+
 /* ---------------------------------------------------------------------------
  * Pomocnicze parsowanie (klient Supabase jest nietypowany → dane `any`)
  * ------------------------------------------------------------------------- */
@@ -164,7 +180,12 @@ interface EmployerContext {
   companyStatus: string;
 }
 
-async function loadContext(): Promise<EmployerContext | null> {
+/**
+ * Kontekst pracodawcy (sesja + aktywna firma) rozwiązywany RAZ na żądanie.
+ * `cache()` (React) memoizuje wynik per-request — wołany przez wszystkie loadery panelu
+ * (~5×/żądanie) wykonuje `auth.getUser()` + odczyt `company_members` tylko jeden raz.
+ */
+const loadContext = cache(async (): Promise<EmployerContext | null> => {
   const { createServerClient } = await import('@/lib/supabase/server');
   const supabase = await createServerClient();
 
@@ -193,7 +214,7 @@ async function loadContext(): Promise<EmployerContext | null> {
   const companyStatus = asString(company['status'], 'unverified');
 
   return { supabase, userId: user.id, companyId, companyStatus };
-}
+});
 
 /** Identyfikatory (nie usuniętych) ofert aktywnej firmy — do zapytań o aplikacje/dopasowania. */
 async function companyJobIds(supabase: SupabaseClient, companyId: string): Promise<string[]> {
@@ -446,37 +467,45 @@ export async function getFunnelStats(): Promise<FunnelStats> {
     if (!ctx) return EMPTY_FUNNEL;
     const { supabase, companyId } = ctx;
 
-    // Wyświetlenia = suma views_count ofert firmy; pozostałe etapy = liczba aplikacji wg statusu.
-    const [{ data: viewsData, error: viewsError }, applications, interviews, hired] =
+    // Wyświetlenia = suma views_count ofert firmy; aplikacje = wszystkie aplikacje firmy.
+    const [{ data: viewsData, error: viewsError }, { data: appData, error: appError }] =
       await Promise.all([
         supabase.from('jobs').select('views_count').eq('company_id', companyId).is('deleted_at', null),
-        supabase
-          .from('applications')
-          .select('id', { count: 'exact', head: true })
-          .eq('company_id', companyId)
-          .is('deleted_at', null),
-        supabase
-          .from('applications')
-          .select('id', { count: 'exact', head: true })
-          .eq('company_id', companyId)
-          .eq('status', 'interview')
-          .is('deleted_at', null),
-        supabase
-          .from('applications')
-          .select('id', { count: 'exact', head: true })
-          .eq('company_id', companyId)
-          .eq('status', 'hired')
-          .is('deleted_at', null),
+        supabase.from('applications').select('id').eq('company_id', companyId).is('deleted_at', null),
       ]);
     if (viewsError) throw viewsError;
+    if (appError) throw appError;
 
     const views = asRows(viewsData).reduce((sum, r) => sum + asNumber(r['views_count']), 0);
-    return {
-      views,
-      applications: pickCount(applications),
-      interviews: pickCount(interviews),
-      hired: pickCount(hired),
-    };
+    const appIds = asRows(appData)
+      .map((r) => asString(r['id']))
+      .filter((id) => id.length > 0);
+
+    // Rozmowy i zatrudnieni liczone KUMULATYWNIE z historii statusów (kandydat, który
+    // KIEDYKOLWIEK osiągnął etap) — nie po bieżącym statusie — co eliminuje inwersję lejka.
+    let interviews = 0;
+    let hired = 0;
+    if (appIds.length > 0) {
+      const { data: historyData, error: historyError } = await supabase
+        .from('application_status_history')
+        .select('application_id, to_status')
+        .in('application_id', appIds)
+        .in('to_status', [...FUNNEL_INTERVIEW_STAGES]);
+      if (historyError) throw historyError;
+
+      const interviewSet = new Set<string>();
+      const hiredSet = new Set<string>();
+      for (const r of asRows(historyData)) {
+        const appId = asString(r['application_id']);
+        if (!appId) continue;
+        interviewSet.add(appId);
+        if (asString(r['to_status']) === 'hired') hiredSet.add(appId);
+      }
+      interviews = interviewSet.size;
+      hired = hiredSet.size;
+    }
+
+    return { views, applications: appIds.length, interviews, hired };
   } catch (error) {
     captureError(error, { area: 'employer.getFunnelStats' });
     return EMPTY_FUNNEL;

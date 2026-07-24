@@ -63,7 +63,8 @@ const LOCATION_KEYS: readonly LocationKey[] = [
   'kortrijk',
 ];
 
-/** Buduje mapę hreflang { locale -> absolutny URL } dla ścieżki (opcjonalnie zależnej od języka). */
+/** Buduje mapę hreflang { locale -> absolutny URL } dla ścieżki (opcjonalnie zależnej od języka).
+ *  Dodaje wpis `x-default` wskazujący na język domyślny — spójnie z hreflang stron. */
 function buildLanguages(
   base: string,
   locales: readonly string[],
@@ -73,6 +74,7 @@ function buildLanguages(
   for (const locale of locales) {
     languages[locale] = `${base}${pathForLocale(locale)}`;
   }
+  languages['x-default'] = `${base}${pathForLocale(routing.defaultLocale)}`;
   return languages;
 }
 

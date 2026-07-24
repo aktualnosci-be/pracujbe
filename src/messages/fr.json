@@ -116,7 +116,8 @@
     "new": "Nouveau",
     "yes": "Oui",
     "no": "Non",
-    "home": "Accueil"
+    "home": "Accueil",
+    "breadcrumb": "Fil d'Ariane"
   },
   "nav": {
     "jobs": "Offres d'emploi",

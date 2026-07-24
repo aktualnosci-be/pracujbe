@@ -57,7 +57,7 @@ export async function HomeFaq(): Promise<React.JSX.Element> {
       <script
         type="application/ld+json"
         // Dane strukturalne (nie tekst UI) — bezpiecznie serializowane z tłumaczeń.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
     </section>
   );

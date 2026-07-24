@@ -184,7 +184,7 @@ export async function getNotifications(
     const userId = user?.id ?? null;
     if (!userId) return { items: [], unread: 0 };
 
-    const [profileRes, notifRes] = await Promise.all([
+    const [profileRes, notifRes, unreadRes] = await Promise.all([
       supabase.from('profiles').select('role').eq('id', userId).maybeSingle(),
       supabase
         .from('notifications')
@@ -192,27 +192,32 @@ export async function getNotifications(
         .eq('profile_id', userId)
         .order('created_at', { ascending: false })
         .limit(20),
+      // Licznik nieprzeczytanych osobnym zapytaniem count — NIE z pobranej listy (limit 20),
+      // która zaniżałaby wynik przy >20 nieprzeczytanych.
+      supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('profile_id', userId)
+        .is('read_at', null),
     ]);
     if (notifRes.error) throw notifRes.error;
+    if (unreadRes.error) throw unreadRes.error;
 
     const role = asStr(asRecord(profileRes.data)['role'], 'candidate');
 
-    let unread = 0;
     const items: NotificationView[] = asArr(notifRes.data).map((row) => {
       const r = asRecord(row);
       const type = asStr(r['type'], 'system');
-      const isUnread = r['read_at'] == null;
-      if (isUnread) unread += 1;
       return {
         id: asStr(r['id']),
         title: t(titleKeyForType(type)),
         meta: formatRelativeTime(asStr(r['created_at']), resolvedLocale),
-        unread: isUnread,
+        unread: r['read_at'] == null,
         href: resolveHref(asStr(r['entity_type']), role),
       };
     });
 
-    return { items, unread };
+    return { items, unread: unreadRes.count ?? 0 };
   } catch (error) {
     captureError(error, { area: 'notifications.getNotifications' });
     return { items: [], unread: 0 };

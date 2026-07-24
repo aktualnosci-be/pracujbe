@@ -160,7 +160,7 @@ export default async function GuideArticlePage({ params }: PageProps) {
       />
 
       {/* Breadcrumb */}
-      <nav aria-label="breadcrumb" className="mb-4 text-sm text-muted-foreground">
+      <nav aria-label={tCommon('breadcrumb')} className="mb-4 text-sm text-muted-foreground">
         <ol className="flex flex-wrap items-center gap-1.5">
           <li>
             <Link href="/" className="transition-colors hover:text-foreground">

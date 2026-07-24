@@ -55,11 +55,15 @@ export default function GlobalError({
           >
             P
           </div>
-          <h1 style={{ fontSize: '1.25rem', margin: '0 0 8px' }}>Coś poszło nie tak</h1>
+          <h1 style={{ fontSize: '1.25rem', margin: '0 0 8px' }}>
+            Coś poszło nie tak · Er ging iets mis · Une erreur s&apos;est produite · Something went
+            wrong
+          </h1>
           <p style={{ color: '#64748B', margin: '0 0 20px', lineHeight: 1.5 }}>
             Wystąpił nieoczekiwany błąd. Spróbuj ponownie.
             <br />
-            Er ging iets mis · Une erreur s&apos;est produite · Something went wrong.
+            Er is een onverwachte fout opgetreden · Une erreur inattendue s&apos;est produite · An
+            unexpected error occurred.
           </p>
           <button
             type="button"
@@ -75,7 +79,7 @@ export default function GlobalError({
               cursor: 'pointer',
             }}
           >
-            Spróbuj ponownie
+            Spróbuj ponownie · Opnieuw proberen · Réessayer · Try again
           </button>
         </div>
       </body>

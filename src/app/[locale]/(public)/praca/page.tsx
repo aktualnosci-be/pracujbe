@@ -188,7 +188,7 @@ export default async function JobsHubPage({ params }: PageProps) {
       />
 
       {/* Breadcrumb */}
-      <nav aria-label="breadcrumb" className="mb-4 text-sm text-muted-foreground">
+      <nav aria-label={tCommon('breadcrumb')} className="mb-4 text-sm text-muted-foreground">
         <ol className="flex items-center gap-1.5">
           <li>
             <Link href="/" className="transition-colors hover:text-foreground">
