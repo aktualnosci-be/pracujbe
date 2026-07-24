@@ -21,6 +21,8 @@ export const ErrorCodes = {
   EMAIL_DELIVERY_FAILED: 'EMAIL_DELIVERY_FAILED',
   RATE_LIMITED: 'RATE_LIMITED',
   COMPANY_NOT_VERIFIED: 'COMPANY_NOT_VERIFIED',
+  ONBOARDING_INCOMPLETE: 'ONBOARDING_INCOMPLETE',
+  JOB_NOT_DRAFT: 'JOB_NOT_DRAFT',
   NOT_FOUND: 'NOT_FOUND',
   INTERNAL: 'INTERNAL',
 } as const;
@@ -46,6 +48,8 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   EMAIL_DELIVERY_FAILED: 'emailDeliveryFailed',
   RATE_LIMITED: 'rateLimited',
   COMPANY_NOT_VERIFIED: 'companyNotVerified',
+  ONBOARDING_INCOMPLETE: 'onboardingIncomplete',
+  JOB_NOT_DRAFT: 'jobNotDraft',
   NOT_FOUND: 'notFound',
   INTERNAL: 'internal',
 };

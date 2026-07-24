@@ -138,8 +138,11 @@ export async function saveOnboardingStep(
     if (step === 6) {
       // Kompletność liczy DB z obecności wymaganych danych (FUN-05) — klient nie może już
       // sam ustawić profile_completed (kolumna odebrana; RPC definer waliduje i ustawia).
-      const { error: fe } = await supabase.rpc('finish_onboarding');
+      const { data: complete, error: fe } = await supabase.rpc('finish_onboarding');
       if (fe) return { ok: false, error: mapPgError(fe.message) };
+      // P1-07: NIE zgłaszaj sukcesu, gdy baza uznała profil za niekompletny — inaczej kreator
+      // przekierowuje, a profil pozostaje niewyszukiwalny bez żadnego komunikatu (pozorna awaria).
+      if (complete !== true) return { ok: false, error: 'ONBOARDING_INCOMPLETE' };
     }
     return { ok: true };
   } catch {

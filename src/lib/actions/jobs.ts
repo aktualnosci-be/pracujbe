@@ -257,7 +257,7 @@ export async function updateJobDraft(
     // Odczyt oferty (RLS jobs_select_member) — potwierdza własność i daje default_locale/tytuł.
     const { data: jobData, error: jobErr } = await supabase
       .from('jobs')
-      .select('id, default_locale, title')
+      .select('id, default_locale, title, status')
       .eq('id', jobId)
       .is('deleted_at', null)
       .maybeSingle();
@@ -265,6 +265,11 @@ export async function updateJobDraft(
 
     const job = asRecord(jobData);
     if (!asString(job['id'])) return { ok: false, error: 'NOT_FOUND' };
+
+    // P1-10: kreator edytuje WYŁĄCZNIE szkic. Aktywnej/wstrzymanej/zamkniętej oferty nie wolno
+    // modyfikować krok po kroku (publiczna oferta zawierałaby mieszankę starych i nowych danych,
+    // a nieudany replace-all mógłby ją opróżnić). Rewizję aktywnej oferty publikuje się atomowo.
+    if (asString(job['status']) !== 'draft') return { ok: false, error: 'JOB_NOT_DRAFT' };
 
     const locale = normalizeLocale(asString(job['default_locale'], routing.defaultLocale));
     const anchorTitle = asString(job['title']);

@@ -493,6 +493,8 @@
     "emailDeliveryFailed": "The email could not be sent. Please try again later.",
     "rateLimited": "Too many attempts. Please wait a moment and try again.",
     "companyNotVerified": "Your company hasn't been verified yet.",
+    "onboardingIncomplete": "Complete all required profile fields to finish setup.",
+    "jobNotDraft": "This job can only be edited while it's a draft.",
     "notFound": "We couldn't find what you're looking for.",
     "internal": "Something went wrong on our end. We're working on it.",
     "generic": "Something went wrong. Please try again."

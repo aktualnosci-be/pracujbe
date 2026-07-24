@@ -493,6 +493,8 @@
     "emailDeliveryFailed": "Nie udało się wysłać wiadomości e-mail. Spróbuj ponownie później.",
     "rateLimited": "Zbyt wiele prób. Odczekaj chwilę i spróbuj ponownie.",
     "companyNotVerified": "Twoja firma nie została jeszcze zweryfikowana.",
+    "onboardingIncomplete": "Uzupełnij wszystkie wymagane pola profilu, aby zakończyć konfigurację.",
+    "jobNotDraft": "Tę ofertę można edytować tylko w wersji roboczej.",
     "notFound": "Nie znaleziono tego, czego szukasz.",
     "internal": "Wystąpił błąd po naszej stronie. Pracujemy nad tym.",
     "generic": "Coś poszło nie tak. Spróbuj ponownie."

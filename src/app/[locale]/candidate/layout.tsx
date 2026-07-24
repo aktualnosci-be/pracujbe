@@ -64,8 +64,15 @@ export default async function CandidateLayout({
       .select('role')
       .eq('id', user.id)
       .maybeSingle();
-    if (((profileRow ?? {}) as Record<string, unknown>)['role'] === 'employer') {
+    const role = ((profileRow ?? {}) as Record<string, unknown>)['role'];
+    // Pracodawca → jego panel; administrator → panel admina. Rolę 'candidate'/nieustaloną
+    // przepuszczamy (świeży kandydat przed onboardingiem nie może zostać zablokowany).
+    // Twarda granica roli kandydata jest w RPC (ensure_candidate_profile/apply_to_job, P1-04).
+    if (role === 'employer') {
       redirect({ href: '/employer', locale: locale as Locale });
+    }
+    if (role === 'admin') {
+      redirect({ href: '/admin', locale: locale as Locale });
     }
 
     // Realne powiadomienia + licznik nieprzeczytanych konwersacji (pod sesją/RLS).
