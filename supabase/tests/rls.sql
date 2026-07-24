@@ -785,12 +785,16 @@ select pg_temp.expect_error(
   'select public.send_offer('''|| :'JOBA' ||'''::uuid, '''|| :'CANDA' ||'''::uuid, ''c3-x'', ''hej'', null)',
   'PERMISSION_DENIED', 'U2 zwykły member nie wysyła propozycji (recruiter+)');
 reset role; reset app.current_uid;
--- Kontrola pozytywna: recruiter+ (EMPC owner COMPA) MOŻE zmienić status aplikacji.
+-- Kontrola pozytywna: recruiter+ (EMPC owner COMPA) MOŻE zmienić status ŚWIEŻEJ aplikacji.
+-- (appa jest już 'withdrawn' po J7 — stan końcowy; tworzymy nową aplikację CANDB->JOBA.)
+set role authenticated; set app.current_uid = :'CANDB';
+select public.apply_to_job(:'JOBA'::uuid, 'candb-joba-1', null, null, 'chętnie') as appcb \gset
+reset role; reset app.current_uid;
 set role authenticated; set app.current_uid = :'EMPC';
-select public.transition_application(:'appa'::uuid, 'viewed');
+select public.transition_application(:'appcb'::uuid, 'viewed');  -- submitted->viewed OK
 reset role; reset app.current_uid;
 select pg_temp.assert(
-  (select status::text from public.applications where id = :'appa') = 'viewed',
+  (select status::text from public.applications where id = :'appcb') = 'viewed',
   'U3 recruiter+ zmienia status aplikacji (transition_application)');
 
 -- ============================================================================
@@ -846,5 +850,56 @@ reset role; reset app.current_uid;
 -- Przywróć EMPA (porządek dla ewentualnych kolejnych sekcji).
 reset role;
 update public.company_members set is_active = true where company_id = :'COMPA' and profile_id = :'EMPA';
+
+-- ============================================================================
+-- W. Audyt produkcyjny 0040 (P1-03/P1-04/P1-05/P1-06)
+-- ============================================================================
+-- P1-03: edycja danych firmy tylko owner/admin (CANDB=member, EMPC=owner COMPA).
+-- Uwaga: RLS UPDATE z fałszywym USING trafia 0 wierszy (bez błędu) — sprawdzamy brak zmiany.
+set role authenticated; set app.current_uid = :'CANDB';
+update public.companies set name = 'Hack' where id = :'COMPA';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select name from public.companies where id = :'COMPA') <> 'Hack',
+  'W1 plain member nie zmienia danych firmy (P1-03; UPDATE trafia 0 wierszy)');
+set role authenticated; set app.current_uid = :'EMPC';
+update public.companies set name = 'Firma A (edit)' where id = :'COMPA';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select name from public.companies where id = :'COMPA') = 'Firma A (edit)',
+  'W2 owner/admin edytuje dane firmy (P1-03)');
+
+-- P1-04: konto pracodawcy nie aplikuje ani nie zakłada profilu kandydata (EMPB role=employer).
+set role authenticated; set app.current_uid = :'EMPB';
+select pg_temp.expect_error(
+  'select public.apply_to_job('''|| :'JOBB' ||'''::uuid, ''emp-apply'', null, null, ''x'')',
+  'PERMISSION_DENIED', 'W3 pracodawca nie aplikuje (rola candidate wymagana, P1-04)');
+select pg_temp.expect_error(
+  'select public.set_candidate_skills(array[''x''])',
+  'PERMISSION_DENIED', 'W3b pracodawca nie zakłada profilu kandydata (P1-04)');
+reset role; reset app.current_uid;
+
+-- P1-05: maszyna stanów aplikacji (appcb='viewed' po sekcji U3; EMPC=recruiter+ COMPA).
+set role authenticated; set app.current_uid = :'EMPC';
+select pg_temp.expect_error(
+  'select public.transition_application('''|| :'appcb' ||'''::uuid, ''withdrawn'')',
+  'VALIDATION_FAILED', 'W4 status docelowy poza allow-listą odrzucony (P1-05)');
+select public.transition_application(:'appcb'::uuid, 'rejected');  -- viewed->rejected OK
+select pg_temp.expect_error(
+  'select public.transition_application('''|| :'appcb' ||'''::uuid, ''hired'')',
+  'VALIDATION_FAILED', 'W5 stan końcowy bez wyjścia: rejected->hired zablokowane (P1-05)');
+reset role; reset app.current_uid;
+
+-- P1-06: wycofanie tylko ze stanów aktywnych.
+set role authenticated; set app.current_uid = :'CANDB';
+select pg_temp.expect_error(  -- appcb='rejected' (końcowy) → kandydat nie wycofa
+  'select public.withdraw_application('''|| :'appcb' ||'''::uuid)',
+  'VALIDATION_FAILED', 'W6 nie można wycofać aplikacji w stanie końcowym (P1-06)');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDA';
+select public.apply_to_job(:'JOBB'::uuid, 'cand-jobb-1', null, null, 'chętnie') as appjb \gset
+select public.withdraw_application(:'appjb'::uuid) as wres \gset
+select pg_temp.assert(:'wres' = 'withdrawn', 'W7 wycofanie aplikacji aktywnej OK (P1-06)');
+reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
