@@ -11,11 +11,11 @@ import { startCheckout } from '@/lib/actions/billing';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 
 /**
- * CheckoutButton — wybór pakietu (panel pracodawcy → płatności, Etap 7h scaffold).
+ * CheckoutButton — wybór pakietu (panel pracodawcy → płatności).
  *
- * Woła PROVIDER-GATED server action `startCheckout`. Bez dostawcy płatności akcja zwraca
- * `{ ok: true, demo: true }` → pokazujemy toast „płatności w przygotowaniu". Gdy w przyszłości
- * dostawca zwróci `url`, przekierujemy do sesji płatności. Przycisk zablokowany w trakcie
+ * Woła PROVIDER-GATED server action `startCheckout`. Ze skonfigurowanym Stripe akcja zwraca
+ * `url` realnej sesji Checkout → przekierowujemy (`window.location.assign`). Bez dostawcy zwraca
+ * `{ ok: true, demo: true }` → toast „płatności w przygotowaniu". Przycisk zablokowany w trakcie
  * (useTransition); dla bieżącego pakietu renderujemy nieaktywny stan „Twój plan".
  */
 

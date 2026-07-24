@@ -4,25 +4,24 @@ import { z } from 'zod';
 
 import { createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isSupabaseConfigured } from '@/lib/env';
+import { env, isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
-import { PLAN_IDS, isBillingProviderConfigured } from '@/lib/data/billing';
+import { PLAN_IDS, type BillingPlanId } from '@/lib/data/billing';
+import { getStripe, planPriceData } from '@/lib/stripe';
 
 /**
- * Server Actions płatności/subskrypcji — Pracuj.be (Etap 7h, scaffold PROVIDER-GATED).
+ * Server Actions płatności/subskrypcji — Pracuj.be (Etap 7h, REALNY Stripe, provider-gated).
  *
- *   - `startCheckout`      — placeholder sesji płatności dostawcy (np. Stripe Checkout).
+ *   - `startCheckout`      — tworzy realną sesję Stripe Checkout (subskrypcja) i zwraca URL.
  *   - `applyDiscount`      — waliduje kod rabatowy w `discount_codes` (bez redempcji).
- *   - `cancelSubscription` — placeholder anulowania subskrypcji u dostawcy.
+ *   - `cancelSubscription` — anuluje subskrypcję u dostawcy (cancel_at_period_end).
  *
- * PROVIDER-GATED: bez klucza dostawcy (`STRIPE_SECRET_KEY`) NIE tworzymy realnej płatności —
- * akcje zwracają `{ ok: true, demo: true }`, a UI informuje, że rozliczenia są w przygotowaniu.
- * Ten moduł celowo NIE integruje Stripe (brak klucza) — jest czystym scaffoldem.
- *
- * Błędy mapowane na stabilny `ErrorCode` (Invariant #8, bez technikaliów). Bez env → tryb DEMO
- * (build/UX działa bez backendu).
+ * PROVIDER-GATED: bez `STRIPE_SECRET_KEY` (albo bez env) akcje zwracają `{ ok: true, demo: true }`,
+ * a UI informuje, że rozliczenia są w przygotowaniu. ŹRÓDŁEM PRAWDY o stanie subskrypcji/faktur/
+ * płatności jest webhook `/api/stripe/webhook` (zapis service-rolem) — akcje tylko inicjują operacje.
+ * Billing = rola owner/admin (capability). Błędy → stabilny `ErrorCode` (Invariant #8, bez technikaliów).
  */
 
 export type CheckoutResult =
@@ -50,25 +49,119 @@ const discountCodeSchema = z
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
+function asArr(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+function asStr(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+/** Aktywna firma + rola billingowa (owner/admin). Zwraca null, gdy brak uprawnień. */
+async function billingContext(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  userId: string,
+): Promise<{ companyId: string } | null> {
+  const { getActiveCompany } = await import('@/lib/company-context');
+  const ctx = await getActiveCompany(supabase, userId);
+  if (!ctx.activeId) return null;
+  if (ctx.activeRole !== 'owner' && ctx.activeRole !== 'admin') return null; // can_manage_billing
+  return { companyId: ctx.activeId };
+}
 
 /* ---------------------------------------------------------------------------
  * startCheckout — placeholder sesji płatności (Stripe Checkout w przyszłości)
  * ------------------------------------------------------------------------- */
 
 /**
- * Rozpoczyna „checkout" dla wybranego pakietu. Waliduje identyfikator pakietu, po czym — dopóki
- * dostawca płatności nie jest skonfigurowany — zwraca `{ ok: true, demo: true }` (UI pokaże, że
- * płatności są w przygotowaniu). Miejsce na integrację Stripe Checkout jest oznaczone niżej.
+ * Tworzy realną sesję Stripe Checkout (subskrypcja miesięczna) dla wybranego pakietu i zwraca URL.
+ * Cena z `PLANS` (inline price_data). Opcjonalny kod rabatowy → efemeryczny kupon Stripe. Wymaga
+ * roli owner/admin. Provider-gated: bez klucza/env → `{ ok: true, demo: true }`.
  */
-export async function startCheckout(plan: string): Promise<CheckoutResult> {
+export async function startCheckout(plan: string, code?: string): Promise<CheckoutResult> {
   if (!PLAN_IDS.has(plan)) return { ok: false, error: 'VALIDATION_FAILED' };
 
-  // Provider-gated: bez klucza dostawcy nie tworzymy realnej sesji płatności.
-  if (!isBillingProviderConfigured()) return { ok: true, demo: true };
+  const stripe = getStripe();
+  if (!isSupabaseConfigured() || !stripe) return { ok: true, demo: true };
 
-  // TODO(payments): utworzyć sesję Stripe Checkout dla `plan` i zwrócić `{ ok: true, url }`.
-  // Do czasu integracji zachowujemy zachowanie DEMO (brak realnej płatności).
-  return { ok: true, demo: true };
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const ctx = await billingContext(supabase, user.id);
+    if (!ctx) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    if (!(await checkRateLimit('checkout', { identifier: user.id, max: 20, windowSeconds: 3600 }))) {
+      return { ok: false, error: 'RATE_LIMITED' };
+    }
+
+    const price = planPriceData(plan as BillingPlanId);
+    if (!price) return { ok: false, error: 'VALIDATION_FAILED' };
+
+    const admin = createAdminClient();
+
+    // Reużyj istniejącego Stripe customer firmy; inaczej utwórz nowego (metadata = company_id).
+    const { data: existing } = await admin
+      .from('subscriptions')
+      .select('provider_customer_id')
+      .eq('company_id', ctx.companyId)
+      .not('provider_customer_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    let customerId = asStr(asRecord(asArr(existing)[0])['provider_customer_id']);
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email ?? undefined,
+        metadata: { company_id: ctx.companyId },
+      });
+      customerId = customer.id;
+    }
+
+    // Opcjonalny kod rabatowy → efemeryczny kupon (once). Zniżka procentowa lub kwotowa.
+    const discounts: { coupon: string }[] = [];
+    if (code) {
+      const disc = await applyDiscount(code);
+      if (disc.ok && (disc.percentOff || disc.amountOffCents)) {
+        const coupon = disc.percentOff
+          ? await stripe.coupons.create({ duration: 'once', percent_off: disc.percentOff })
+          : await stripe.coupons.create({
+              duration: 'once',
+              amount_off: disc.amountOffCents as number,
+              currency: (disc.currency ?? price.currency).toLowerCase(),
+            });
+        discounts.push({ coupon: coupon.id });
+      }
+    }
+
+    const base = env.siteUrl;
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: customerId,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: price.currency,
+            unit_amount: price.unitAmount,
+            recurring: { interval: 'month' },
+            product_data: { name: `Pracuj.be — ${plan}` },
+          },
+        },
+      ],
+      ...(discounts.length ? { discounts } : { allow_promotion_codes: true }),
+      metadata: { company_id: ctx.companyId, plan },
+      subscription_data: { metadata: { company_id: ctx.companyId, plan } },
+      success_url: `${base}/pl/employer/platnosci?checkout=success`,
+      cancel_url: `${base}/pl/employer/platnosci?checkout=cancel`,
+    });
+    if (!session.url) return { ok: false, error: 'INTERNAL' };
+    return { ok: true, url: session.url };
+  } catch (e) {
+    captureError(e, { area: 'billing.startCheckout' });
+    return { ok: false, error: 'INTERNAL' };
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -172,20 +265,37 @@ export async function applyDiscount(code: string): Promise<DiscountResult> {
  * jedynie, że żądanie pochodzi od zalogowanego użytkownika (lekki guard).
  */
 export async function cancelSubscription(): Promise<CancelResult> {
-  if (isSupabaseConfigured()) {
-    try {
-      const supabase = await createServerClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
-    } catch (e) {
-      captureError(e, { area: 'billing.cancelSubscription' });
-      return { ok: false, error: 'INTERNAL' };
-    }
-  }
+  const stripe = getStripe();
+  if (!isSupabaseConfigured() || !stripe) return { ok: true, demo: true };
 
-  // Provider-gated: realna anulacja u dostawcy — poza zakresem scaffoldu.
-  // TODO(payments): wywołać API dostawcy (cancel_at_period_end) i zaktualizować subskrypcję.
-  return { ok: true, demo: true };
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const ctx = await billingContext(supabase, user.id);
+    if (!ctx) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from('subscriptions')
+      .select('provider_subscription_id')
+      .eq('company_id', ctx.companyId)
+      .in('status', ['active', 'trialing', 'past_due'])
+      .not('provider_subscription_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const subId = asStr(asRecord(asArr(data)[0])['provider_subscription_id']);
+    if (!subId) return { ok: false, error: 'NOT_FOUND' };
+
+    // cancel_at_period_end: użytkownik zachowuje dostęp do końca okresu. Stan zsynchronizuje
+    // webhook customer.subscription.updated (źródło prawdy).
+    await stripe.subscriptions.update(subId, { cancel_at_period_end: true });
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'billing.cancelSubscription' });
+    return { ok: false, error: 'INTERNAL' };
+  }
 }

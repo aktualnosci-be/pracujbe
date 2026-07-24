@@ -403,9 +403,10 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > bazie z realnymi (nie-demo) firmami/ofertami (ochrona przed przypadkowym seedem znanych kont
 > na staging/produkcji); czysta/lokalna/CI baza przechodzi. Test negatywny w `test-seed.sh`.
 > **P1 możliwe autonomicznie — ZAMKNIĘTE** (SEC-01/03/04/05/06/07/08/09/10/17/19, FUN-01/03/04/
-> 05/06(część)/07). **P1 wymagające decyzji/infra (otwarte):** FUN-08 (billing — wdrożyć Stripe
-> vs ukryć), CI-01/02/07 (separacja runnerów + twarda bramka RLS/Storage — infra), FUN-09 (realna
-> treść prawna — noindex safe default zrobiony). **P2/P3/follow-up:** C3 (propozycje/statusy →
+> 05/06(część)/07). **FUN-08 (billing) — ZROBIONE:** realny Stripe (checkout/webhook/cancel,
+> webhook = źródło prawdy, provider-gated). **P1 wymagające infra/treści (otwarte):** CI-01/02/07
+> (separacja runnerów + twarda bramka RLS/Storage — infra), FUN-09 (realna treść prawna — noindex
+> safe default zrobiony). **P2/P3/follow-up:** C3 (propozycje/statusy →
 > recruiter+), SEC-14 (dedup replay webhooka), SEC-15 (reconciliation outboxa), SEC-16
 > (`in_app_enabled`), SEC-12 (skan CV — AV), FUN-02 (pełna transakcyjność kroków kreatora).
 
@@ -461,8 +462,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Panel administratora — `/admin/**` (guard role='admin'→notFound, noindex): dashboard, firmy
   (weryfikuj/odrzuć/zawieś), zgłoszenia (moderacja), użytkownicy; odczyt service-role, zapis przez RPC (0019)
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
-- [~] Płatności / subskrypcje / faktury / kody rabatowe — `/employer/platnosci` (plany, faktury, kod rabatowy),
-  provider-gated (bez `STRIPE_SECRET_KEY` = tryb demo „w przygotowaniu"); realna integracja dostawcy = follow-up
+- [x] Płatności / subskrypcje / faktury / kody rabatowe — REALNY Stripe (FUN-08), provider-gated:
+  `startCheckout` tworzy sesję Stripe Checkout (subskrypcja, inline `price_data` z `PLANS`, kupon z
+  kodu rabatowego), `cancelSubscription` = `cancel_at_period_end`, webhook `/api/stripe/webhook`
+  (weryfikacja podpisu) = ŹRÓDŁO PRAWDY: synchronizuje `subscriptions/invoices/payments` service-rolem
+  (klient nie pisze tych tabel). Billing = rola owner/admin. Bez `STRIPE_SECRET_KEY` = tryb demo.
 
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
