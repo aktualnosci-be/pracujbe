@@ -412,8 +412,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > dowód rls.sql T). **C3 (0037) — ZROBIONE:** propozycje (enforce_offer_integrity
 > INSERT → can_manage_jobs) i zmiany statusu aplikacji (transition_application → is_job_manager)
 > wymagają recruiter+; respond_to_offer (kandydat) bez zmian. Dowód: rls.sql sekcja U.
-> **CI-08 (SCA) — ZROBIONE:** osobny job `sca` (`npm audit --audit-level=high`) na self-hosted
-> runnerze blokuje CI przy podatności o severity >= high (obecnie 0). **QA-01 (a11y w CI) —
+> **CI-08 (SCA) — ZROBIONE:** osobny job `sca` (`scripts/sca-audit.sh`, `npm audit
+> --package-lock-only`) na self-hosted runnerze blokuje CI przy PRAWDZIWYCH podatnościach
+> high/critical (obecnie 0). Audyt z lockfile = deterministyczne drzewo (omija błąd „Invalid
+> package tree" przy artefakcie node_modules); skrypt parsuje JSON i blokuje tylko na realnych
+> podatnościach — niestabilny/wygaszany endpoint audytu npm (400/5xx) nie wywala CI. **QA-01 (a11y w CI) —
 > ZROBIONE:** bramka axe-core (`@axe-core/playwright`) w `tests/e2e/a11y.spec.ts` (uruchamiana w
 > jobie `e2e`) blokuje przy naruszeniach WCAG 2.x A/AA critical/serious na home/liście ofert/
 > logowaniu/rejestracji; domknięte realne naruszenia kontrastu tokenami: `--muted-foreground`
