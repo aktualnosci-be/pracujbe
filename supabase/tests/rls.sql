@@ -642,8 +642,11 @@ reset role; reset app.current_uid;
 -- Uzupełnienie wymaganych danych (jak kreator: tytuł/miasto/region + tłumaczenie + wymaganie).
 update public.jobs set title = 'Operator produkcji', city = 'Antwerpia', region = 'Flandria'
   where id = 'e1111111-1111-1111-1111-111111111111';
-insert into public.job_translations(job_id, locale, title)
-  values ('e1111111-1111-1111-1111-111111111111', 'pl', 'Operator produkcji');
+-- Tłumaczenie z NIEPUSTYM opisem i obowiązkami (P1-11: twardsza walidacja publikacji, 0042).
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values ('e1111111-1111-1111-1111-111111111111', 'pl', 'Operator produkcji',
+          'Praca przy linii produkcyjnej w Antwerpii, system dwuzmianowy.',
+          array['Obsługa maszyn', 'Kontrola jakości']);
 insert into public.job_requirements(job_id, locale, kind, position, content)
   values ('e1111111-1111-1111-1111-111111111111', 'pl', 'mandatory', 0, 'Dyspozycyjność');
 

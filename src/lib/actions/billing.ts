@@ -77,7 +77,11 @@ async function billingContext(
  * Cena z `PLANS` (inline price_data). Opcjonalny kod rabatowy → efemeryczny kupon Stripe. Wymaga
  * roli owner/admin. Provider-gated: bez klucza/env → `{ ok: true, demo: true }`.
  */
-export async function startCheckout(plan: string, code?: string): Promise<CheckoutResult> {
+export async function startCheckout(
+  plan: string,
+  code?: string,
+  locale?: string,
+): Promise<CheckoutResult> {
   if (!PLAN_IDS.has(plan)) return { ok: false, error: 'VALIDATION_FAILED' };
 
   const stripe = getStripe();
@@ -102,21 +106,44 @@ export async function startCheckout(plan: string, code?: string): Promise<Checko
 
     const admin = createAdminClient();
 
-    // Reużyj istniejącego Stripe customer firmy; inaczej utwórz nowego (metadata = company_id).
-    const { data: existing } = await admin
+    // P1-16: nie zakładaj drugiej płatnej subskrypcji, gdy firma ma już aktywną/trialing.
+    const { data: activeSub } = await admin
       .from('subscriptions')
-      .select('provider_customer_id')
+      .select('id')
       .eq('company_id', ctx.companyId)
-      .not('provider_customer_id', 'is', null)
-      .order('created_at', { ascending: false })
+      .in('status', ['active', 'trialing'])
       .limit(1);
-    let customerId = asStr(asRecord(asArr(existing)[0])['provider_customer_id']);
+    if (Array.isArray(activeSub) && activeSub[0]) return { ok: false, error: 'VALIDATION_FAILED' };
+
+    // P1-16: reużyj jednego klienta Stripe firmy — najpierw trwałe companies.provider_customer_id,
+    // potem (legacy) z subscriptions; inaczej utwórz i UTRWAL na firmie (koniec duplikatów klientów
+    // przy porzuconych checkoutach). Idempotency key chroni przed dubletem przy współbieżności.
+    const { data: companyRow } = await admin
+      .from('companies')
+      .select('provider_customer_id')
+      .eq('id', ctx.companyId)
+      .maybeSingle();
+    let customerId = asStr(asRecord(companyRow)['provider_customer_id']);
     if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email ?? undefined,
-        metadata: { company_id: ctx.companyId },
-      });
+      const { data: existing } = await admin
+        .from('subscriptions')
+        .select('provider_customer_id')
+        .eq('company_id', ctx.companyId)
+        .not('provider_customer_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      customerId = asStr(asRecord(asArr(existing)[0])['provider_customer_id']);
+    }
+    if (!customerId) {
+      const customer = await stripe.customers.create(
+        { email: user.email ?? undefined, metadata: { company_id: ctx.companyId } },
+        { idempotencyKey: `cust-${ctx.companyId}` },
+      );
       customerId = customer.id;
+      await admin
+        .from('companies')
+        .update({ provider_customer_id: customerId })
+        .eq('id', ctx.companyId);
     }
 
     // Opcjonalny kod rabatowy → efemeryczny kupon (once). Zniżka procentowa lub kwotowa.
@@ -136,6 +163,11 @@ export async function startCheckout(plan: string, code?: string): Promise<Checko
     }
 
     const base = env.siteUrl;
+    // P1-16: URL-e sukcesu/anulowania w języku użytkownika (było na sztywno /pl).
+    const { routing } = await import('@/i18n/routing');
+    const loc = (routing.locales as readonly string[]).includes(locale ?? '')
+      ? (locale as string)
+      : routing.defaultLocale;
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -153,8 +185,8 @@ export async function startCheckout(plan: string, code?: string): Promise<Checko
       ...(discounts.length ? { discounts } : { allow_promotion_codes: true }),
       metadata: { company_id: ctx.companyId, plan },
       subscription_data: { metadata: { company_id: ctx.companyId, plan } },
-      success_url: `${base}/pl/employer/platnosci?checkout=success`,
-      cancel_url: `${base}/pl/employer/platnosci?checkout=cancel`,
+      success_url: `${base}/${loc}/employer/platnosci?checkout=success`,
+      cancel_url: `${base}/${loc}/employer/platnosci?checkout=cancel`,
     });
     if (!session.url) return { ok: false, error: 'INTERNAL' };
     return { ok: true, url: session.url };

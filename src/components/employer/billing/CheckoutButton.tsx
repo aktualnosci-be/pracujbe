@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Check, Loader2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
 import { Toast } from '@/components/ui/toast';
@@ -38,6 +38,7 @@ export function CheckoutButton({
 }: CheckoutButtonProps): React.JSX.Element {
   const t = useTranslations('billing');
   const tRoot = useTranslations();
+  const locale = useLocale();
 
   const [pending, startTransition] = React.useTransition();
   const [toast, setToast] = React.useState<{ tone: 'success' | 'error'; message: string } | null>(
@@ -55,7 +56,7 @@ export function CheckoutButton({
     if (pending || isCurrent) return;
     startTransition(async () => {
       try {
-        const res = await startCheckout(plan);
+        const res = await startCheckout(plan, undefined, locale);
         if (res.ok) {
           if (res.url) {
             window.location.assign(res.url);
