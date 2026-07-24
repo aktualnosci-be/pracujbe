@@ -344,4 +344,17 @@ select pg_temp.expect_error(
   'new row violates', 'I6 self-insert roli admin blokowany przez RLS');
 reset role; reset app.current_uid;
 
+-- I7: get_conversation_summaries (0021) zwraca konwersację uczestnika z ostatnią wiadomością.
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.assert(
+  (select count(*) from public.get_conversation_summaries()) >= 1,
+  'I7 get_conversation_summaries zwraca konwersacje uczestnika');
+reset role; reset app.current_uid;
+
+-- I8: claim_email_batch (0021) atomowo claimuje kolejkę; drugi claim (dzierżawa) nie dubluje.
+select pg_temp.assert((select count(*) from public.claim_email_batch(100)) >= 1,
+  'I8 claim_email_batch zwraca zakolejkowane e-maile');
+select pg_temp.assert((select count(*) from public.claim_email_batch(100)) = 0,
+  'I8b drugi natychmiastowy claim nie zwraca tych samych wierszy (dzierżawa locked_at)');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

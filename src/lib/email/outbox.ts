@@ -59,19 +59,14 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   }
 
   const admin = createAdminClient();
-  const nowIso = new Date().toISOString();
 
-  const { data: rows, error } = await admin
-    .from('email_deliveries')
-    .select('id, to_email, template, locale, payload, attempts')
-    .eq('status', 'queued')
-    .lte('next_attempt_at', nowIso)
-    .order('queued_at', { ascending: true })
-    .limit(limit);
+  // Atomowy claim (RPC 0021: FOR UPDATE SKIP LOCKED + dzierżawa locked_at) — dwa równoległe
+  // workery NIE pobiorą tego samego wiersza, więc brak podwójnej wysyłki (P2#6).
+  const { data: rows, error } = await admin.rpc('claim_email_batch', { p_limit: limit });
 
   if (error) {
-    captureError(error, { area: 'email.outbox.fetch' });
-    return { processed: 0, sent: 0, failed: 0, skipped: 'fetch error' };
+    captureError(error, { area: 'email.outbox.claim' });
+    return { processed: 0, sent: 0, failed: 0, skipped: 'claim error' };
   }
 
   const queue = (rows ?? []) as DeliveryRow[];

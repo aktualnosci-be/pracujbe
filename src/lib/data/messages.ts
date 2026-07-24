@@ -311,36 +311,26 @@ export async function getConversations(): Promise<ConversationListItem[]> {
       if (companyId) companyIds.add(companyId);
     }
 
-    // 4) Nazwy stron (profile widoczne pod RLS) + firmy (fallback) + ostatnie wiadomości.
-    const [nameByProfile, companyNameById, msgResult] = await Promise.all([
+    // 4) Nazwy stron (profile widoczne pod RLS) + firmy (fallback) + PODSUMOWANIA konwersacji.
+    // Ostatnia wiadomość i licznik nieprzeczytanych liczone PO STRONIE SQL (RPC 0021,
+    // DISTINCT/LATERAL) — koniec pobierania WSZYSTKICH wiadomości do UI (P2#10). Nazwę drugiej
+    // strony nadal rozwiązujemy pod RLS (nie z RPC, który omija RLS) — bez zmiany prywatności.
+    const [nameByProfile, companyNameById, summaryResult] = await Promise.all([
       fetchProfileNames(supabase, [...allOtherIds]),
       fetchCompanyNames(supabase, [...companyIds]),
-      supabase
-        .from('messages')
-        .select('conversation_id, body, sender_id, created_at')
-        .in('conversation_id', orderedIds)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false }),
+      supabase.rpc('get_conversation_summaries'),
     ]);
-    if (msgResult.error) throw msgResult.error;
+    if (summaryResult.error) throw summaryResult.error;
 
     const lastMsgByConv = new Map<string, { body: string; createdAt: string }>();
     const unreadByConv = new Map<string, number>();
-    for (const row of asArr(msgResult.data)) {
+    for (const row of asArr(summaryResult.data)) {
       const r = asRecord(row);
       const cid = asStr(r['conversation_id']);
       if (!cid) continue;
-      const createdAt = asStr(r['created_at']);
-      const senderId = asStr(r['sender_id']);
-
-      // Zapytanie sortowane malejąco — pierwszy napotkany = najnowszy.
-      if (!lastMsgByConv.has(cid)) {
-        lastMsgByConv.set(cid, { body: asStr(r['body']), createdAt });
-      }
-      const lastRead = lastReadByConv.get(cid) ?? null;
-      if (senderId !== uid && createdAt && (!lastRead || createdAt > lastRead)) {
-        unreadByConv.set(cid, (unreadByConv.get(cid) ?? 0) + 1);
-      }
+      lastMsgByConv.set(cid, { body: asStr(r['last_body']), createdAt: asStr(r['last_at']) });
+      const n = r['unread_count'];
+      unreadByConv.set(cid, typeof n === 'number' ? n : Number(n ?? 0) || 0);
     }
 
     return convs.map((c) => {
