@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { routing } from '@/i18n/routing';
 import {
   step1Schema,
@@ -150,30 +150,6 @@ async function write(op: PromiseLike<{ error: unknown }>): Promise<ErrorCode | n
   return error ? mapPgError(errorMessage(error)) : null;
 }
 
-/** RPC `rate_limit_hit` — true, gdy w limicie. Błąd limitera nie blokuje (fail-open, log). */
-async function checkRateLimit(
-  supabase: SupabaseClient,
-  key: string,
-  max: number,
-  windowSeconds: number,
-): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.rpc('rate_limit_hit', {
-      p_key: key,
-      p_max: max,
-      p_window_seconds: windowSeconds,
-    });
-    if (error) {
-      captureError(error, { area: 'jobs.rateLimit', key });
-      return true;
-    }
-    return data !== false;
-  } catch (e) {
-    captureError(e, { area: 'jobs.rateLimit', key });
-    return true;
-  }
-}
-
 /** Waliduje dane kroku właściwym `stepNSchema`; zwraca sparsowaną wartość albo null. */
 function validateJobStep(step: number, data: unknown): unknown | null {
   const schema = {
@@ -214,12 +190,11 @@ export async function createJobDraft(locale?: string): Promise<CreateDraftResult
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const allowed = await checkRateLimit(
-      supabase,
-      `job-draft:${user.id}`,
-      DRAFT_RATE_MAX,
-      RATE_WINDOW_SECONDS,
-    );
+    const allowed = await checkRateLimit('job-draft', {
+      identifier: user.id,
+      max: DRAFT_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
     // Pierwsze aktywne członkostwo = aktywna firma (RLS: własny wiersz company_members).
@@ -548,12 +523,11 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const allowed = await checkRateLimit(
-      supabase,
-      `job-publish:${user.id}`,
-      PUBLISH_RATE_MAX,
-      RATE_WINDOW_SECONDS,
-    );
+    const allowed = await checkRateLimit('job-publish', {
+      identifier: user.id,
+      max: PUBLISH_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
     // Odczyt oferty + statusu firmy (RLS: członek firmy). Weryfikacja jest warunkiem publikacji.

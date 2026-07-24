@@ -285,18 +285,20 @@ reset role; reset app.current_uid;
 -- ============================================================================
 -- Stan wejściowy: appa='viewed' (C2), offa='accepted' (D6).
 
--- I1: FIRMA nie sfałszuje odpowiedzi na propozycję bezpośrednim UPDATE (P1#1/#3).
+-- I1: FIRMA nie sfałszuje odpowiedzi na propozycję bezpośrednim UPDATE. Po 0025 (granica
+-- zaufania) bezpośredni DML jest odebrany `authenticated` na poziomie grantu — błąd pada
+-- ZANIM zadziała trigger (mocniejsza gwarancja). Zostaje jako defense-in-depth.
 set role authenticated; set app.current_uid = :'EMPA';
 select pg_temp.expect_error(
   'update public.offers set status=''declined'' where id=current_setting(''my.offa'')::uuid',
-  'PERMISSION_DENIED', 'I1 firma nie ustawia accepted/declined oferty (PATCH)');
+  'permission denied', 'I1 firma nie ustawia accepted/declined oferty (PATCH → grant deny)');
 reset role; reset app.current_uid;
 
--- I2: FIRMA nie przeskoczy aplikacji poza allow-listę bezpośrednim UPDATE (P1#4).
+-- I2: FIRMA nie przeskoczy aplikacji bezpośrednim UPDATE (po 0025 grant deny, wcześniej trigger).
 set role authenticated; set app.current_uid = :'EMPA';
 select pg_temp.expect_error(
   'update public.applications set status=''offer_accepted'' where id=current_setting(''my.appa'')::uuid',
-  'PERMISSION_DENIED', 'I2 firma nie ustawia statusu spoza allow-listy (PATCH)');
+  'permission denied', 'I2 firma nie robi bezpośredniego PATCH aplikacji (grant deny)');
 reset role; reset app.current_uid;
 
 -- I2b: kontrola — RPC transition_application do allow-listy nadal działa.
@@ -402,6 +404,71 @@ set role anon; reset app.current_uid;
 select pg_temp.expect_error(
   'select count(*) from public.get_job_match_profile(''a1111111-1111-1111-1111-111111111111'')',
   'permission denied', 'I10c anon nie może wołać get_job_match_profile');
+reset role;
+
+-- ============================================================================
+-- J. Granica zaufania 0025 — RPC-only DML na tabelach procesowych (SEC-05/06/07)
+-- ============================================================================
+-- `authenticated` może TYLKO czytać (RLS) i mutować przez SECURITY DEFINER RPC.
+-- Bezpośredni INSERT/UPDATE/DELETE musi być odrzucony na poziomie grantu.
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.expect_error(
+  'insert into public.applications(job_id, candidate_id, company_id, status) values ('''
+  || :'JOBB' || ''','''|| :'CANDA' ||''','''|| :'COMPB' ||''',''submitted'')',
+  'permission denied', 'J1 authenticated nie robi bezpośredniego INSERT do applications');
+select pg_temp.expect_error(
+  'insert into public.offers(job_id, candidate_id, company_id, sender_id, status, idempotency_key) '
+  || 'values ('''|| :'JOBA' ||''','''|| :'CANDA' ||''','''|| :'COMPA' ||''','''|| :'EMPA' ||''',''sent'',''x'')',
+  'permission denied', 'J2 authenticated nie robi bezpośredniego INSERT do offers');
+select pg_temp.expect_error(
+  'insert into public.conversations(subject) values (''wtargniecie'')',
+  'permission denied', 'J3 authenticated nie robi bezpośredniego INSERT do conversations');
+select pg_temp.expect_error(
+  'insert into public.messages(conversation_id, sender_id, body) values ('''
+  || current_setting('my.conv') ||''','''|| :'CANDA' ||''',''bezpośrednio'')',
+  'permission denied', 'J4 authenticated nie robi bezpośredniego INSERT do messages');
+-- Niezmienność wysłanej wiadomości: właściciel nie może jej edytować/usunąć bezpośrednio (SEC-07).
+select pg_temp.expect_error(
+  'update public.messages set body=''zmiana'' where id='''|| :'msg' ||'''::uuid',
+  'permission denied', 'J5 authenticated nie edytuje wysłanej wiadomości (PATCH deny)');
+select pg_temp.expect_error(
+  'delete from public.messages where id='''|| :'msg' ||'''::uuid',
+  'permission denied', 'J6 authenticated nie usuwa wysłanej wiadomości (DELETE deny)');
+select pg_temp.expect_error(
+  'delete from public.conversation_members where conversation_id=current_setting(''my.conv'')::uuid',
+  'permission denied', 'J6b authenticated nie usuwa uczestników bezpośrednio');
+reset role; reset app.current_uid;
+
+-- J7: withdraw_application (0025) — kandydat wycofuje WŁASNĄ aplikację przez RPC (bez DML).
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.assert(
+  public.withdraw_application(:'appa'::uuid) = 'withdrawn',
+  'J7 withdraw_application wycofuje własną aplikację');
+select pg_temp.assert(
+  public.withdraw_application(:'appa'::uuid) = 'withdrawn',
+  'J7b withdraw_application idempotentne (drugie wywołanie bez błędu)');
+reset role; reset app.current_uid;
+-- Cudza aplikacja: CANDB nie może wycofać aplikacji CANDA (NOT_FOUND, brak dostępu).
+set role authenticated; set app.current_uid = :'CANDB';
+select pg_temp.expect_error(
+  'select public.withdraw_application(current_setting(''my.appa'')::uuid)',
+  'NOT_FOUND', 'J7c withdraw_application nie wycofa cudzej aplikacji');
+reset role; reset app.current_uid;
+
+-- J8: rate_limit_hit (SEC-01) odebrany anon/authenticated; działa dla service_role.
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.expect_error(
+  'select public.rate_limit_hit(''k'', 5, 60)',
+  'permission denied', 'J8 authenticated nie woła rate_limit_hit');
+reset role; reset app.current_uid;
+set role anon; reset app.current_uid;
+select pg_temp.expect_error(
+  'select public.rate_limit_hit(''k'', 5, 60)',
+  'permission denied', 'J8b anon nie woła rate_limit_hit');
+reset role;
+set role service_role;
+select pg_temp.assert(public.rate_limit_hit('svc-key', 5, 60) is true,
+  'J8c service_role woła rate_limit_hit (limiter działa z backendu)');
 reset role;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

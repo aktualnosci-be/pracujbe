@@ -17,7 +17,7 @@ import { headers } from 'next/headers';
 
 import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 /** Opcje limitu dla pojedynczej akcji. */
 export interface RateLimitOptions {
@@ -87,7 +87,9 @@ export async function checkRateLimit(action: string, opts?: RateLimitOptions): P
     const ip = await clientIp();
     const key = [action, ip, opts?.identifier].filter(Boolean).join(':');
 
-    const supabase = await createServerClient();
+    // Limiter woła się wyłącznie zaufanym klientem service_role (SEC-01): RPC `rate_limit_hit`
+    // jest odebrany anon/authenticated, a klucz/limit/okno budujemy po stronie serwera.
+    const supabase = createAdminClient();
     const { data, error } = await supabase.rpc('rate_limit_hit', {
       p_key: key,
       p_max: max,

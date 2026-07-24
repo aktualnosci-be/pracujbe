@@ -97,12 +97,10 @@ export async function withdrawApplication(applicationId: string): Promise<Withdr
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    // RLS + trigger zapewniają, że kandydat może zmienić TYLKO własną aplikację i TYLKO na 'withdrawn'.
-    const { error } = await supabase
-      .from('applications')
-      .update({ status: 'withdrawn' })
-      .eq('id', applicationId)
-      .eq('candidate_id', user.id);
+    // Bezpośredni DML na `applications` jest odebrany klientowi (0025, granica zaufania) —
+    // wycofanie idzie przez SECURITY DEFINER RPC (autoryzacja auth.uid()=candidate_id,
+    // idempotentne, historia z triggera). Zwraca finalny status.
+    const { error } = await supabase.rpc('withdraw_application', { p_application_id: applicationId });
     if (error) return { ok: false, error: mapPgError(error.message) };
     return { ok: true };
   } catch {

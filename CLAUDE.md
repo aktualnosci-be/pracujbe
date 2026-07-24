@@ -331,6 +331,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > dryfcie env; (P3) `getMyApplications` używa nowego `get_applied_jobs_display` (własne aplikacje niezależnie
 > od statusu oferty — koniec pustych tytułów dla ofert zamkniętych/unverified; dowód: `rls.sql` I9); (P3)
 > nieaktualny komentarz outbox.ts. Weryfikacja: tsc/lint/vitest/build + RLS+seed (PG16) + Playwright — zielone.
+>
+> 🔒 **Audyt zewnętrzny 2026-07-24** (`AUDYT_APLIKACJI_PRACUJBE_...md`, ~60 ustaleń: 0×P0, ~14×P1,
+> ~20×P2, reszta P3; NO-GO na produkcję). Teza: **niespójna granica zaufania** — flow mają bezpieczne
+> RPC, ale RLS/granty pozwalały klientowi na bezpośredni DML omijający walidację/limity/powiadomienia.
+> Remediacja falami (weryfikacja adwersaryjna na PG16 przed każdą naprawą):
+> **Wave A (0025) — ZROBIONE:** RPC-only DML — `revoke insert/update/delete` na applications/offers/
+> conversations/conversation_members/messages od anon/authenticated (zostaje SELECT pod RLS; SECURITY
+> DEFINER RPC + triggery integralności piszą dalej). `withdraw_application` RPC (koniec bezpośredniego
+> PATCH aplikacji). SEC-01: `rate_limit_hit` odebrany anon/authenticated → woła go tylko service_role
+> (admin client); usunięto zduplikowany limiter w `actions/jobs.ts`. Dowód: `rls.sql` sekcja J
+> (J1–J8: bezpośredni INSERT/UPDATE/DELETE odrzucany, withdraw RPC działa/idempotentny/nie-cudzy,
+> limiter tylko service_role). **Do zrobienia (Wave B–F+):** hardening publicznych RPC (limity), RBAC
+> firmy + owner invariants, wygaszanie dostępu b. członka, persystencja/transakcyjność kreatorów,
+> matching (brak danych ≠ pełne punkty), aktywny kontekst firmy, fail-closed env, legal/billing, CI
+> (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
