@@ -82,6 +82,10 @@ export interface JobDetail extends JobListItem {
   transport: boolean;
   startDate?: string;
   companyDescription: string;
+  /** Okres pensji (hour/month/year) — do JSON-LD unitText (P1-12). */
+  salaryPeriod?: 'hour' | 'month' | 'year';
+  /** Data wygaśnięcia oferty (ISO) — do JSON-LD validThrough (P1-12). */
+  expiresAt?: string;
 }
 
 export interface GetJobsParams {
@@ -303,6 +307,9 @@ function rowToJobListItem(row: unknown): JobListItem {
 
 function rowToJobDetail(row: unknown): JobDetail {
   const r = asRecord(row);
+  const period = asOptString(r['salary_period']);
+  const salaryPeriod =
+    period === 'hour' || period === 'month' || period === 'year' ? period : undefined;
   return {
     ...rowToJobListItem(row),
     description: asString(r['description']),
@@ -316,6 +323,8 @@ function rowToJobDetail(row: unknown): JobDetail {
     transport: asBool(r['transport']),
     startDate: asOptString(r['start_date']),
     companyDescription: asString(r['company_description']),
+    ...(salaryPeriod ? { salaryPeriod } : {}),
+    ...(asOptString(r['expires_at']) ? { expiresAt: asOptString(r['expires_at']) } : {}),
   };
 }
 

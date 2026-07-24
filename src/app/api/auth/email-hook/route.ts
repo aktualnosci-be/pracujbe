@@ -117,6 +117,8 @@ export async function POST(request: Request): Promise<Response> {
       admin = makeAdmin();
       const claim = await claimWebhook(admin, inboxId, 'auth-email-hook');
       if (claim === 'duplicate') return Response.json({ ok: true, duplicate: true });
+      // P2-06: inny worker trzyma świeżą dzierżawę → pomiń, by nie wysłać e-maila dwa razy.
+      if (claim === 'locked') return Response.json({ ok: true, locked: true });
       // 'claimed' | 'error' → wysyłamy dalej (dla 'error' inbox nieosiągalny; podpis+świeżość chronią).
     } catch {
       admin = null; // best-effort — awaria infry inboxu nie blokuje e-maila.

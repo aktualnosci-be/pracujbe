@@ -128,10 +128,21 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 function buildJsonLd(job: JobDetail, url: string): Record<string, unknown> {
+  // P1-12: validThrough z REALNEGO expires_at oferty; fallback (brak daty) = datePosted + 60 dni.
   const publishedTs = Date.parse(job.publishedAt);
-  const validThrough = Number.isNaN(publishedTs)
-    ? undefined
-    : new Date(publishedTs + VALID_DAYS * DAY_MS).toISOString();
+  const validThrough = job.expiresAt
+    ? job.expiresAt
+    : Number.isNaN(publishedTs)
+      ? undefined
+      : new Date(publishedTs + VALID_DAYS * DAY_MS).toISOString();
+
+  // P1-12: unitText z realnego okresu pensji (godzina/miesiąc/rok), nie na sztywno „MONTH".
+  const SALARY_UNIT: Record<NonNullable<JobDetail['salaryPeriod']>, string> = {
+    hour: 'HOUR',
+    month: 'MONTH',
+    year: 'YEAR',
+  };
+  const unitText = SALARY_UNIT[job.salaryPeriod ?? 'month'];
 
   const hasSalary = job.salaryMin !== undefined || job.salaryMax !== undefined;
   const baseSalary = hasSalary
@@ -142,7 +153,7 @@ function buildJsonLd(job: JobDetail, url: string): Record<string, unknown> {
           '@type': 'QuantitativeValue',
           ...(job.salaryMin !== undefined ? { minValue: job.salaryMin } : {}),
           ...(job.salaryMax !== undefined ? { maxValue: job.salaryMax } : {}),
-          unitText: 'MONTH',
+          unitText,
         },
       }
     : undefined;

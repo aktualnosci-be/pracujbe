@@ -244,6 +244,10 @@ export async function POST(request: Request): Promise<Response> {
     // w trakcie NIE blokuje ponowienia (zapisy poniżej są idempotentne po stabilnych ID Stripe).
     const claim = await claimWebhook(admin, inboxId, 'stripe');
     if (claim === 'duplicate') return Response.json({ received: true, duplicate: true });
+    if (claim === 'locked') {
+      // P2-06: inny worker trzyma świeżą dzierżawę — pomijamy, by nie zdublować skutków ubocznych.
+      return Response.json({ received: true, locked: true });
+    }
     if (claim === 'error') {
       // Inbox nieosiągalny — przetwarzamy mimo to (idempotentnie), by nie zgubić zdarzenia.
       captureError(new Error('webhook inbox unreachable'), { area: 'stripe.webhook.claim', type: event.type });
@@ -302,7 +306,11 @@ export async function POST(request: Request): Promise<Response> {
         break;
     }
     // Przetworzono bez błędu → oznacz `completed` (dopiero teraz duplikat będzie pomijany).
-    await completeWebhook(admin, inboxId);
+    // P2-06: błąd oznaczenia (DB) → 500/retry, nie cichy sukces (event zostaje 'processing').
+    if (!(await completeWebhook(admin, inboxId))) {
+      captureError(new Error('completeWebhook failed'), { area: 'stripe.webhook.complete', type: event.type });
+      return Response.json({ error: 'processing failed' }, { status: 500 });
+    }
     return Response.json({ received: true });
   } catch (err) {
     captureError(err, { area: 'stripe.webhook', type: event.type });

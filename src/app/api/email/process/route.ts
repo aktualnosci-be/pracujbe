@@ -6,7 +6,10 @@ import { processEmailQueue } from '@/lib/email/outbox';
 
 /**
  * Route handler przetwarzający kolejkę e-mail (outbox) — wywoływany przez cron/worker.
- * Chroniony sekretem `EMAIL_QUEUE_SECRET` (nagłówek `Authorization: Bearer <secret>`).
+ * Chroniony sekretem `EMAIL_QUEUE_SECRET` lub `CRON_SECRET` (nagłówek `Authorization: Bearer`).
+ *
+ * P1-20: obsługuje GET (Vercel Cron wysyła GET z `Authorization: Bearer <CRON_SECRET>`) oraz POST
+ * (ręczne/inne wywołania z `EMAIL_QUEUE_SECRET`). Harmonogram w `vercel.json` (co 5 min).
  * Nigdy nie jest indeksowany ani cache'owany.
  */
 
@@ -20,15 +23,17 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
+/** Autoryzacja: Bearer == EMAIL_QUEUE_SECRET (worker) LUB CRON_SECRET (Vercel Cron). */
 function authorized(request: Request): boolean {
-  const secret = process.env.EMAIL_QUEUE_SECRET;
-  if (!secret) return false;
   const header = request.headers.get('authorization');
   if (!header) return false;
-  return safeEqual(header, `Bearer ${secret}`);
+  const secrets = [process.env.EMAIL_QUEUE_SECRET, process.env.CRON_SECRET].filter(
+    (s): s is string => Boolean(s),
+  );
+  return secrets.some((s) => safeEqual(header, `Bearer ${s}`));
 }
 
-export async function POST(request: Request): Promise<Response> {
+async function run(request: Request): Promise<Response> {
   if (!authorized(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
@@ -36,4 +41,14 @@ export async function POST(request: Request): Promise<Response> {
   // P1-17: realny problem workera (brak konfiguracji w produkcji, błąd claimu) → 503, aby
   // cron/monitoring NIE widział „zielonego" przebiegu, gdy żaden e-mail nie wychodzi.
   return NextResponse.json(result, { status: result.ok ? 200 : 503 });
+}
+
+/** Vercel Cron (GET). */
+export async function GET(request: Request): Promise<Response> {
+  return run(request);
+}
+
+/** Ręczny worker / inne wywołania (POST). */
+export async function POST(request: Request): Promise<Response> {
+  return run(request);
 }
