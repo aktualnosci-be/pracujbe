@@ -2,11 +2,9 @@ import type { Metadata } from 'next';
 import {
   ArrowRight,
   Briefcase,
-  ChevronDown,
   ClipboardList,
   MapPin,
   MessageSquare,
-  MoreHorizontal,
   Plus,
   Star,
 } from 'lucide-react';
@@ -167,19 +165,13 @@ export default async function EmployerDashboardPage({
               <p className="p-6 text-center text-sm text-muted-foreground">{td('emptyState')}</p>
             ) : (
               <>
-                {/* Desktop: tabela */}
+                {/* P1-14: podgląd READ-ONLY (bez nieaktywnych checkboxów/menu/działań zbiorczych,
+                    które „udawały" funkcje). Pełne zarządzanie na /employer/oferty (link wyżej). */}
                 <div className="hidden overflow-x-auto md:block">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-left">
-                        <th scope="col" className="w-10 py-3 pl-4 pr-0">
-                          <input
-                            type="checkbox"
-                            aria-label={td('selectAll')}
-                            className="size-4 rounded border-border accent-accent"
-                          />
-                        </th>
-                        <th scope="col" className="px-3 py-3 font-medium text-muted-foreground">
+                        <th scope="col" className="px-3 py-3 pl-4 font-medium text-muted-foreground">
                           {td('colOffer')}
                         </th>
                         <th scope="col" className="px-3 py-3 font-medium text-muted-foreground">
@@ -191,29 +183,16 @@ export default async function EmployerDashboardPage({
                         <th scope="col" className="px-3 py-3 text-center font-medium text-muted-foreground">
                           {td('colMatched')}
                         </th>
-                        <th scope="col" className="px-3 py-3 font-medium text-muted-foreground">
+                        <th scope="col" className="px-3 py-3 pr-4 font-medium text-muted-foreground">
                           {td('colStatusEmp')}
-                        </th>
-                        <th scope="col" className="w-10 py-3 pr-4">
-                          <span className="sr-only">{td('rowActions')}</span>
                         </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {jobs.map((offer) => (
                         <tr key={offer.id}>
-                          <td className="py-3 pl-4 pr-0 align-middle">
-                            <input
-                              type="checkbox"
-                              aria-label={td('selectOffer')}
-                              className="size-4 rounded border-border accent-accent"
-                            />
-                          </td>
-                          <td className="px-3 py-3 align-middle">
+                          <td className="px-3 py-3 pl-4 align-middle">
                             <p className="font-medium text-foreground">{offer.title}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {td('offerId')}: {offer.id}
-                            </p>
                           </td>
                           <td className="px-3 py-3 align-middle">
                             <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -227,18 +206,8 @@ export default async function EmployerDashboardPage({
                           <td className="px-3 py-3 text-center align-middle tabular-nums text-foreground">
                             {offer.matched}
                           </td>
-                          <td className="px-3 py-3 align-middle">
+                          <td className="px-3 py-3 pr-4 align-middle">
                             <StatusPill status={offer.status} />
-                          </td>
-                          <td className="py-3 pr-4 text-right align-middle">
-                            {/* TODO(data): menu akcji oferty (Zobacz/Edytuj/Zatrzymaj/Usuń) — Etap 5. */}
-                            <button
-                              type="button"
-                              aria-label={td('rowActions')}
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-soft hover:text-foreground"
-                            >
-                              <MoreHorizontal className="size-4" aria-hidden="true" />
-                            </button>
                           </td>
                         </tr>
                       ))}
@@ -249,52 +218,23 @@ export default async function EmployerDashboardPage({
                 {/* Mobile: karty */}
                 <ul className="divide-y divide-border md:hidden">
                   {jobs.map((offer) => (
-                    <li key={offer.id} className="flex items-start gap-3 p-4">
-                      <input
-                        type="checkbox"
-                        aria-label={td('selectOffer')}
-                        className="mt-1 size-4 shrink-0 rounded border-border accent-accent"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium text-foreground">{offer.title}</p>
-                            <p className="mt-0.5 inline-flex items-center gap-1 text-sm text-muted-foreground">
-                              <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-                              {offer.city}
-                            </p>
-                          </div>
-                          {/* TODO(data): menu akcji oferty — Etap 5. */}
-                          <button
-                            type="button"
-                            aria-label={td('rowActions')}
-                            className="-mt-1 shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-soft hover:text-foreground"
-                          >
-                            <MoreHorizontal className="size-4" aria-hidden="true" />
-                          </button>
-                        </div>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {td('offersApplications', { count: offer.newApplications })}{' '}
-                          <span className="text-border">·</span>{' '}
-                          {td('offersMatched', { count: offer.matched })}
-                        </p>
-                        <div className="mt-2">
-                          <StatusPill status={offer.status} />
-                        </div>
+                    <li key={offer.id} className="p-4">
+                      <p className="truncate font-medium text-foreground">{offer.title}</p>
+                      <p className="mt-0.5 inline-flex items-center gap-1 text-sm text-muted-foreground">
+                        <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+                        {offer.city}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {td('offersApplications', { count: offer.newApplications })}{' '}
+                        <span className="text-border">·</span>{' '}
+                        {td('offersMatched', { count: offer.matched })}
+                      </p>
+                      <div className="mt-2">
+                        <StatusPill status={offer.status} />
                       </div>
                     </li>
                   ))}
                 </ul>
-
-                {/* Pasek działań zbiorczych */}
-                <div className="flex items-center justify-between gap-3 border-t border-border p-4 sm:px-5">
-                  <p className="text-sm text-muted-foreground">{td('selected', { count: 0 })}</p>
-                  {/* TODO(data): działania zbiorcze — podpiąć w osobnym etapie. */}
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    {td('bulkActions')}
-                    <ChevronDown className="size-4" aria-hidden="true" />
-                  </Button>
-                </div>
               </>
             )}
           </section>
