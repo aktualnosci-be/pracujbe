@@ -99,23 +99,35 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         throw new Error(result.error.message);
       }
 
-      await admin
+      const providerMessageId = result.data?.id ?? null;
+      const { error: markErr } = await admin
         .from('email_deliveries')
         .update({
           status: 'sent',
           sent_at: new Date().toISOString(),
           provider: 'resend',
-          provider_message_id: result.data?.id ?? null,
+          provider_message_id: providerMessageId,
           attempts: row.attempts + 1,
           locked_at: null,
         })
         .eq('id', row.id);
+      // SEC-15: e-mail WYSŁANY, ale zapis „sent" się nie powiódł — stan niejednoznaczny.
+      // Bez tego rekord wróciłby do 'queued' (po wygaśnięciu dzierżawy) i został wysłany PONOWNIE
+      // (duplikat). Nie da się tu bezpiecznie ponowić; logujemy z provider_message_id do
+      // ręcznej reconciliacji (i liczymy jako wysłany, by nie zawyżać 'failed').
+      if (markErr) {
+        captureError(markErr, {
+          area: 'email.outbox.markSent',
+          deliveryId: row.id,
+          providerMessageId: providerMessageId ?? 'unknown',
+        });
+      }
       sent += 1;
     } catch (err) {
       const attempts = row.attempts + 1;
       const isFinal = attempts >= MAX_ATTEMPTS;
       const backoffMin = Math.min(2 ** attempts, 60);
-      await admin
+      const { error: failErr } = await admin
         .from('email_deliveries')
         .update({
           status: isFinal ? 'failed' : 'queued',
@@ -125,6 +137,8 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
           locked_at: null,
         })
         .eq('id', row.id);
+      // SEC-15: sprawdzamy też błąd zapisu stanu porażki (inaczej rekord utknąłby zablokowany).
+      if (failErr) captureError(failErr, { area: 'email.outbox.markFailed', deliveryId: row.id });
       captureError(err, { area: 'email.outbox.send', deliveryId: row.id });
       failed += 1;
     }

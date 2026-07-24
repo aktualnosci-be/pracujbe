@@ -30,6 +30,9 @@ export const runtime = 'nodejs';
 // Maksymalna dopuszczalna różnica wieku żądania (Standard Webhooks, ochrona przed replayem).
 const TIMESTAMP_TOLERANCE_SECONDS = 300;
 
+/** Limit rozmiaru body (SEC-14): payloady Auth są małe; oversize odrzucamy przed alokacją. */
+const MAX_BODY_BYTES = 200_000;
+
 interface HookPayload {
   user?: { id?: string; email?: string; user_metadata?: Record<string, unknown> };
   email_data?: {
@@ -86,9 +89,32 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'not configured' }, { status: 500 });
   }
 
+  // SEC-14: odrzuć oversize body przed alokacją (ochrona pamięci/CPU).
+  const contentLength = Number(request.headers.get('content-length') ?? '0');
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+    return Response.json({ error: 'payload too large' }, { status: 413 });
+  }
+
   const rawBody = await request.text();
   if (!verifySignature(secret, request.headers, rawBody)) {
     return Response.json({ error: 'invalid signature' }, { status: 401 });
+  }
+
+  // SEC-14: dedup po webhook-id (anty-replay w oknie tolerancji). Best-effort — awaria dedup
+  // (np. brak service-role) nie blokuje e-maila Auth; podpis + świeżość i tak ograniczają replay.
+  const webhookId = request.headers.get('webhook-id');
+  if (webhookId) {
+    try {
+      const { createAdminClient } = await import('@/lib/supabase/admin');
+      const { error: dupErr } = await createAdminClient()
+        .from('processed_webhooks')
+        .insert({ id: `auth:${webhookId}`, source: 'auth-email-hook' });
+      if (dupErr && (dupErr as { code?: string }).code === '23505') {
+        return Response.json({ ok: true, duplicate: true });
+      }
+    } catch {
+      // best-effort — pomijamy dedup przy błędzie infry.
+    }
   }
 
   let payload: HookPayload;

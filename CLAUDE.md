@@ -406,9 +406,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > 05/06(część)/07). **FUN-08 (billing) — ZROBIONE:** realny Stripe (checkout/webhook/cancel,
 > webhook = źródło prawdy, provider-gated). **P1 wymagające infra/treści (otwarte):** CI-01/02/07
 > (separacja runnerów + twarda bramka RLS/Storage — infra), FUN-09 (realna treść prawna — noindex
-> safe default zrobiony). **P2/P3/follow-up:** C3 (propozycje/statusy →
-> recruiter+), SEC-14 (dedup replay webhooka), SEC-15 (reconciliation outboxa), SEC-16
-> (`in_app_enabled`), SEC-12 (skan CV — AV), FUN-02 (pełna transakcyjność kroków kreatora).
+> safe default zrobiony). **P2/P3 — ZROBIONE:** SEC-16 (0035, in_app opt-out trigger),
+> SEC-15 (outbox: sprawdzanie błędów zapisu po wysyłce + log do reconciliacji), SEC-14 (0036,
+> `processed_webhooks` dedup po event.id/webhook-id + limit rozmiaru body dla Stripe/email-hook;
+> dowód rls.sql T). **Pozostałe follow-up:** C3 (propozycje/statusy → recruiter+), SEC-12 (skan
+> CV — wymaga AV/usługi zewn.), FUN-02 (pełna transakcyjność kroków kreatora), CI-01/02/07 (infra),
+> FUN-09 (treść prawna).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)

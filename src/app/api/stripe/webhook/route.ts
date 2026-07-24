@@ -16,6 +16,9 @@ import { captureError } from '@/lib/sentry';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+/** Limit rozmiaru body (SEC-14): zdarzenia Stripe są małe; odrzucamy oversize przed alokacją. */
+const MAX_BODY_BYTES = 1_000_000;
+
 type Admin = ReturnType<typeof createAdminClient>;
 
 function toIso(unix: number | null | undefined): string | null {
@@ -154,6 +157,12 @@ export async function POST(request: Request): Promise<Response> {
   const sig = request.headers.get('stripe-signature');
   if (!sig) return Response.json({ error: 'missing signature' }, { status: 400 });
 
+  // SEC-14: odrzuć oversize body przed alokacją (ochrona pamięci/CPU).
+  const contentLength = Number(request.headers.get('content-length') ?? '0');
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+    return Response.json({ error: 'payload too large' }, { status: 413 });
+  }
+
   const rawBody = await request.text();
   let event: Stripe.Event;
   try {
@@ -164,6 +173,19 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const admin = createAdminClient();
+
+    // SEC-14: dedup po event.id (anty-replay). Pierwszy insert wygrywa; duplikat → 200 no-op.
+    const { error: dupErr } = await admin
+      .from('processed_webhooks')
+      .insert({ id: `stripe:${event.id}`, source: 'stripe' });
+    if (dupErr) {
+      if ((dupErr as { code?: string }).code === '23505') {
+        return Response.json({ received: true, duplicate: true });
+      }
+      captureError(dupErr, { area: 'stripe.webhook.dedup', type: event.type });
+      // best-effort: przy innym błędzie dedup przetwarzamy dalej (zapisy są idempotentne).
+    }
+
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;

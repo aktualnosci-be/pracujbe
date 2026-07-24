@@ -761,4 +761,17 @@ select pg_temp.assert(
   (select count(*) from public.notifications where profile_id = :'CANDA' and title = 'x') = 1,
   'S1b in_app domyślnie włączone → powiadomienie utworzone');
 
+-- ============================================================================
+-- T. Dedup webhooków 0036 (SEC-14) — brak dostępu klienta + unikat id
+-- ============================================================================
+set role authenticated; reset app.current_uid;
+select pg_temp.expect_error('select count(*) from public.processed_webhooks',
+  'permission denied', 'T1 authenticated nie ma dostępu do processed_webhooks');
+reset role;
+-- Unikat id = dedup: drugi insert tego samego id odrzucony.
+insert into public.processed_webhooks(id, source) values ('t:evt-1', 'test');
+select pg_temp.expect_error(
+  'insert into public.processed_webhooks(id, source) values (''t:evt-1'', ''test'')',
+  'duplicate key', 'T2 duplikat id odrzucony (dedup replay)');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
