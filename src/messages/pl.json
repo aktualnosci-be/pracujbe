@@ -631,6 +631,9 @@
   "onboarding": {
     "title": "Twój profil kandydata",
     "subtitle": "Utwórz swój profil, a my dopasujemy do Ciebie najlepsze oferty pracy w Belgii.",
+    "loadError": "Nie udało się wczytać Twojego profilu",
+    "loadErrorHint": "Aby nie stracić zapisanych danych, nie otwieramy pustego formularza. Odśwież stronę i spróbuj ponownie.",
+    "retry": "Spróbuj ponownie",
     "saved": "Zapisano",
     "savedHint": "Twoje zmiany zostały zapisane.",
     "completeness": "Kompletność profilu",

@@ -631,6 +631,9 @@
   "onboarding": {
     "title": "Je kandidatenprofiel",
     "subtitle": "Maak je profiel aan en wij matchen de beste vacatures in België met jou.",
+    "loadError": "Je profiel kon niet worden geladen",
+    "loadErrorHint": "Om je opgeslagen gegevens niet te verliezen, openen we geen leeg formulier. Vernieuw de pagina en probeer het opnieuw.",
+    "retry": "Opnieuw proberen",
     "saved": "Opgeslagen",
     "savedHint": "Je wijzigingen zijn opgeslagen.",
     "completeness": "Volledigheid profiel",

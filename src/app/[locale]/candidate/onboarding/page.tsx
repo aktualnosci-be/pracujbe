@@ -5,6 +5,7 @@ import {
   OnboardingWizard,
   type OnboardingInitialValues,
 } from '@/components/candidate/OnboardingWizard';
+import { OnboardingLoadError } from '@/components/candidate/OnboardingLoadError';
 import { isSupabaseConfigured } from '@/lib/env';
 import { createServerClient } from '@/lib/supabase/server';
 
@@ -52,16 +53,27 @@ interface CandidateProfileRow {
   bio: string | null;
 }
 
-/** Wczytuje wartości początkowe z DB (best-effort). Zwraca undefined w trybie demo / bez sesji. */
-async function loadInitialValues(): Promise<OnboardingInitialValues | undefined> {
-  if (!isSupabaseConfigured()) return undefined;
+/**
+ * Wynik wczytania (P1-07): jawnie rozróżniamy stany, by NIGDY nie zmieniać przejściowego błędu
+ * odczytu w pusty edytor (zapis „replace-all" skasowałby istniejące dane):
+ *   - 'demo'  — brak env / brak sesji → kreator startuje pusty (nie ma czego stracić),
+ *   - 'ok'    — wczytano poprawnie (dla nowego profilu wartości mogą być puste),
+ *   - 'error' — którykolwiek odczyt zawiódł → pokazujemy retry, NIE montujemy edytora.
+ */
+type LoadResult =
+  | { status: 'demo' }
+  | { status: 'ok'; values: OnboardingInitialValues }
+  | { status: 'error' };
+
+async function loadInitialValues(): Promise<LoadResult> {
+  if (!isSupabaseConfigured()) return { status: 'demo' };
 
   try {
     const supabase = await createServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return undefined;
+    if (!user) return { status: 'demo' }; // guard layoutu i tak przekieruje niezalogowanego
 
     const [profileRes, candidateRes] = await Promise.all([
       supabase.from('profiles').select('first_name,last_name,phone').eq('id', user.id).maybeSingle(),
@@ -74,13 +86,15 @@ async function loadInitialValues(): Promise<OnboardingInitialValues | undefined>
         .maybeSingle(),
     ]);
 
+    // P1-07: błąd odczytu profilu/candidate_profiles → stan błędu (NIE pusty formularz).
+    if (profileRes.error || candidateRes.error) return { status: 'error' };
+
     const p = profileRes.data as ProfileRow | null;
     const c = candidateRes.data as (CandidateProfileRow & { id: string }) | null;
 
     // P1-08: WCZYTAJ relacje (umiejętności/języki/certyfikaty), bo krok 3/5 zapisuje je przez
     // replace-all RPC — bez wczytania kreator startowałby z pustymi tablicami i przy „Dalej"
-    // SKASOWAŁBY istniejące dane. Kluczujemy po candidate_profiles.id. Błąd odczytu relacji
-    // rzuca → obsłużone niżej jako całościowy fallback (nie mieszamy „brak" z „błąd").
+    // SKASOWAŁBY istniejące dane. Kluczujemy po candidate_profiles.id.
     let skills: string[] | undefined;
     let languages: OnboardingInitialValues['languages'] | undefined;
     let certificates: string[] | undefined;
@@ -96,10 +110,9 @@ async function loadInitialValues(): Promise<OnboardingInitialValues | undefined>
           .select('certificate_label')
           .eq('candidate_profile_id', c.id),
       ]);
-      // Rozróżniamy „brak danych" (data=[]) od „błąd odczytu" (error) — przy błędzie rzucamy,
-      // by NIE wystartować z pustych relacji i nie skasować ich przypadkiem przy zapisie.
+      // P1-07/P1-08: błąd odczytu relacji → stan błędu, by nie skasować danych przy zapisie.
       if (skillsRes.error || langsRes.error || certsRes.error) {
-        throw new Error('relations read failed');
+        return { status: 'error' };
       }
       skills = (skillsRes.data ?? []).map((r) => (r as { skill_label: string }).skill_label);
       languages = (langsRes.data ?? []).map((r) => {
@@ -112,29 +125,32 @@ async function loadInitialValues(): Promise<OnboardingInitialValues | undefined>
     }
 
     return {
-      firstName: p?.first_name ?? undefined,
-      lastName: p?.last_name ?? undefined,
-      phone: p?.phone ?? undefined,
-      occupations: c?.occupations ?? undefined,
-      categories: c?.categories ?? undefined,
-      experienceYears: c?.experience_years ?? undefined,
-      skills,
-      city: c?.city ?? undefined,
-      region: c?.region ?? undefined,
-      radiusKm: c?.radius_km ?? undefined,
-      hasDrivingLicense: c?.has_driving_license ?? undefined,
-      hasCar: c?.has_car ?? undefined,
-      availability: c?.availability ?? undefined,
-      languages,
-      certificates,
-      preferredContractTypes: c?.preferred_contract_types ?? undefined,
-      expectedSalaryMin: c?.expected_salary_min ?? undefined,
-      expectedSalaryCurrency: c?.expected_salary_currency ?? undefined,
-      bio: c?.bio ?? undefined,
+      status: 'ok',
+      values: {
+        firstName: p?.first_name ?? undefined,
+        lastName: p?.last_name ?? undefined,
+        phone: p?.phone ?? undefined,
+        occupations: c?.occupations ?? undefined,
+        categories: c?.categories ?? undefined,
+        experienceYears: c?.experience_years ?? undefined,
+        skills,
+        city: c?.city ?? undefined,
+        region: c?.region ?? undefined,
+        radiusKm: c?.radius_km ?? undefined,
+        hasDrivingLicense: c?.has_driving_license ?? undefined,
+        hasCar: c?.has_car ?? undefined,
+        availability: c?.availability ?? undefined,
+        languages,
+        certificates,
+        preferredContractTypes: c?.preferred_contract_types ?? undefined,
+        expectedSalaryMin: c?.expected_salary_min ?? undefined,
+        expectedSalaryCurrency: c?.expected_salary_currency ?? undefined,
+        bio: c?.bio ?? undefined,
+      },
     };
   } catch {
-    // Onboarding musi działać nawet gdy odczyt profilu się nie powiedzie — startujemy z pustych pól.
-    return undefined;
+    // P1-07: wyjątek odczytu → stan błędu (retry), NIGDY pusty edytor kasujący dane.
+    return { status: 'error' };
   }
 }
 
@@ -146,7 +162,10 @@ export default async function CandidateOnboardingPage({
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const initialValues = await loadInitialValues();
+  const result = await loadInitialValues();
+  if (result.status === 'error') return <OnboardingLoadError />;
 
-  return <OnboardingWizard initialValues={initialValues} />;
+  return (
+    <OnboardingWizard initialValues={result.status === 'ok' ? result.values : undefined} />
+  );
 }

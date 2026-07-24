@@ -631,6 +631,9 @@
   "onboarding": {
     "title": "Votre profil de candidat",
     "subtitle": "Créez votre profil et nous vous proposerons les meilleures offres en Belgique.",
+    "loadError": "Impossible de charger votre profil",
+    "loadErrorHint": "Pour ne pas perdre vos données enregistrées, nous n'ouvrons pas de formulaire vide. Actualisez la page et réessayez.",
+    "retry": "Réessayer",
     "saved": "Enregistré",
     "savedHint": "Vos modifications ont été enregistrées.",
     "completeness": "Complétude du profil",

@@ -631,6 +631,9 @@
   "onboarding": {
     "title": "Your candidate profile",
     "subtitle": "Create your profile and we will match the best jobs in Belgium to you.",
+    "loadError": "We couldn't load your profile",
+    "loadErrorHint": "To avoid losing your saved data, we don't open an empty form. Refresh the page and try again.",
+    "retry": "Try again",
     "saved": "Saved",
     "savedHint": "Your changes have been saved.",
     "completeness": "Profile completeness",
