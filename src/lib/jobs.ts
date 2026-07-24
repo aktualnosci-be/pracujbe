@@ -88,8 +88,24 @@ export interface GetJobsParams {
   locale: string;
   keyword?: string;
   city?: string;
+  /** Pojedyncza kategoria (landing pages) — łączona z `categories` przy zapytaniu. */
   category?: CategoryKey;
+  /** Pojedynczy typ umowy (landing pages) — łączony z `contractTypes`. */
   contractType?: ContractType;
+  // --- Filtry zaawansowane sidebara (P1-12: liczone w SQL, nie w pamięci) ---
+  categories?: CategoryKey[];
+  locations?: string[];
+  contractTypes?: ContractType[];
+  salaryMin?: number;
+  salaryMax?: number;
+  /** true=tylko z zakwaterowaniem, false=tylko bez, undefined=bez filtra. */
+  accommodation?: boolean;
+  immediate?: boolean;
+  noLanguageRequired?: boolean;
+  /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
+  since?: string;
+  /** Sortowanie wyników: 'newest' (domyślne) lub 'salary'. */
+  sort?: 'newest' | 'salary';
   page?: number;
   pageSize?: number;
 }
@@ -136,11 +152,18 @@ function getJobsFromDemo(
 ): GetJobsResult {
   let jobs: JobDetail[] = resolveDemoJobs(locale);
 
-  if (params.category) {
-    jobs = jobs.filter((job) => job.category === params.category);
+  // Kategorie/typy umów: pojedyncze (landing) + tablice (sidebar) połączone (P1-12).
+  const categories = params.categories ?? (params.category ? [params.category] : undefined);
+  const contractTypes = params.contractTypes ?? (params.contractType ? [params.contractType] : undefined);
+  if (categories && categories.length > 0) {
+    jobs = jobs.filter((job) => categories.includes(job.category));
   }
-  if (params.contractType) {
-    jobs = jobs.filter((job) => job.contractType === params.contractType);
+  if (contractTypes && contractTypes.length > 0) {
+    jobs = jobs.filter((job) => contractTypes.includes(job.contractType));
+  }
+  if (params.locations && params.locations.length > 0) {
+    const locs = params.locations;
+    jobs = jobs.filter((job) => locs.includes(job.city));
   }
   if (params.city) {
     const q = params.city.trim().toLowerCase();
@@ -162,8 +185,37 @@ function getJobsFromDemo(
       );
     }
   }
+  // Widełki: oferta bez podanego wynagrodzenia NIE jest wykluczana.
+  if (params.salaryMin !== undefined || params.salaryMax !== undefined) {
+    const lo = params.salaryMin ?? 0;
+    const hi = params.salaryMax ?? Number.POSITIVE_INFINITY;
+    jobs = jobs.filter((job) => {
+      if (job.salaryMin === undefined && job.salaryMax === undefined) return true;
+      const iMax = job.salaryMax ?? job.salaryMin ?? 0;
+      const iMin = job.salaryMin ?? job.salaryMax ?? 0;
+      return iMax >= lo && iMin <= hi;
+    });
+  }
+  if (params.accommodation !== undefined) {
+    jobs = jobs.filter((job) => job.accommodation === params.accommodation);
+  }
+  if (params.immediate) jobs = jobs.filter((job) => job.immediate);
+  if (params.noLanguageRequired) jobs = jobs.filter((job) => job.noLanguageRequired);
+  if (params.since) {
+    const sinceTs = Date.parse(params.since);
+    if (!Number.isNaN(sinceTs)) {
+      jobs = jobs.filter((job) => {
+        const ts = Date.parse(job.publishedAt);
+        return !Number.isNaN(ts) && ts >= sinceTs;
+      });
+    }
+  }
 
-  const sorted = [...jobs].sort(newestFirst);
+  const sorted = [...jobs].sort(
+    params.sort === 'salary'
+      ? (a, b) => (b.salaryMax ?? b.salaryMin ?? 0) - (a.salaryMax ?? a.salaryMin ?? 0) || newestFirst(a, b)
+      : newestFirst,
+  );
   const total = sorted.length;
   const start = (page - 1) * pageSize;
   const paged = sorted.slice(start, start + pageSize);
@@ -275,28 +327,35 @@ async function getJobsFromDb(
   const { createServerClient } = await import('@/lib/supabase/server');
   const supabase = await createServerClient();
 
-  // Publiczne dane WYŁĄCZNIE przez RPC get_public_jobs (0014): join firmy+tłumaczeń+wymagań,
-  // fallback locale, tylko bezpieczne kolumny (bez VAT/e-mail/contact_email). Anon nie ma
-  // dostępu do tabel bazowych. Filtrowanie/paginacja/licznik po stronie SQL (P1-02/P2-04).
-  const rpcArgs = {
+  // Publiczne dane WYŁĄCZNIE przez RPC get_public_jobs (0014/0046): join firmy+tłumaczeń,
+  // fallback locale, tylko bezpieczne kolumny. KOMPLET filtrów/sort/paginacja/licznik w SQL
+  // (P1-12: koniec liczenia w pamięci nad wycinkiem 200). Kategorie/typy: pojedyncze (landing)
+  // scalone z tablicami (sidebar).
+  const categories = params.categories ?? (params.category ? [params.category] : null);
+  const contractTypes = params.contractTypes ?? (params.contractType ? [params.contractType] : null);
+  const filterArgs = {
     p_locale: params.locale,
     p_keyword: params.keyword ?? null,
     p_city: params.city ?? null,
-    p_category: params.category ?? null,
-    p_contract_type: params.contractType ?? null,
-    p_limit: pageSize,
-    p_offset: (page - 1) * pageSize,
+    p_categories: categories && categories.length > 0 ? categories : null,
+    p_locations: params.locations && params.locations.length > 0 ? params.locations : null,
+    p_contract_types: contractTypes && contractTypes.length > 0 ? contractTypes : null,
+    p_salary_min: params.salaryMin ?? null,
+    p_salary_max: params.salaryMax ?? null,
+    p_accommodation: params.accommodation ?? null,
+    p_immediate: params.immediate ?? null,
+    p_no_language: params.noLanguageRequired ?? null,
+    p_since: params.since ?? null,
   };
 
   const [{ data, error }, { data: countData, error: countError }] = await Promise.all([
-    supabase.rpc('get_public_jobs', rpcArgs),
-    supabase.rpc('get_public_jobs_count', {
-      p_locale: params.locale,
-      p_keyword: params.keyword ?? null,
-      p_city: params.city ?? null,
-      p_category: params.category ?? null,
-      p_contract_type: params.contractType ?? null,
+    supabase.rpc('get_public_jobs', {
+      ...filterArgs,
+      p_sort: params.sort ?? 'newest',
+      p_limit: pageSize,
+      p_offset: (page - 1) * pageSize,
     }),
+    supabase.rpc('get_public_jobs_count', filterArgs),
   ]);
 
   if (error) throw error;

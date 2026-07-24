@@ -225,8 +225,6 @@ const fetchPublicJobsMap = cache(async (
     p_locale: locale,
     p_keyword: null,
     p_city: null,
-    p_category: null,
-    p_contract_type: null,
     p_limit: limit,
     p_offset: 0,
   });
@@ -476,8 +474,6 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
       supabase.rpc('get_public_jobs_count', {
         p_keyword: null,
         p_city: null,
-        p_category: null,
-        p_contract_type: null,
       }),
       supabase
         .from('applications')

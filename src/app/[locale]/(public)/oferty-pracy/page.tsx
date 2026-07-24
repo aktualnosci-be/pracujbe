@@ -15,11 +15,9 @@ import { Pagination } from '@/components/public/Pagination';
 import {
   SALARY_MAX_BOUND,
   isSalaryNarrowed,
-  matchesSidebar,
   parseSidebarFilters,
   parseSort,
   sidebarFiltersToParams,
-  sortJobs,
   splitParam,
   toFacetItem,
   type DateValue,
@@ -35,13 +33,14 @@ import {
  * pasek „Filtry (n)” (bottom-sheet `FilterSheet`) + sortowanie, oferty i paginacja.
  *
  * Wszystkie filtry trzymane są w URL. Słowo kluczowe i miasto zawężają zbiór natywnie przez
- * `getJobs`; pozostałe (kategoria/lokalizacja/wynagrodzenie/umowa/zakwaterowanie/od zaraz/
- * bez języka/data) filtrowane są nad wynikiem — reguły wspólne dla serwera i klienta
- * (`job-filters`). Działa BEZ zmiennych środowiskowych (dane demonstracyjne z `getJobs`).
+ * `getJobs`. WYNIKI (lista + licznik + paginacja + sort + KOMPLET filtrów sidebara:
+ * kategoria/lokalizacja/widełki/umowa/zakwaterowanie/od zaraz/bez języka/data) liczone są w
+ * SQL (get_public_jobs, 0046 — P1-12), więc skalują się na dowolny wolumen ofert. Działa BEZ
+ * zmiennych środowiskowych (dane demonstracyjne z `getJobs`).
  *
- * TODO(data): faceting + filtrowanie zaawansowane wykonywane są nad ograniczonym zbiorem
- * (`MAX_FACET`). Docelowo powinny zejść do warstwy danych (SQL, count po stronie serwera),
- * by skalować się na duże wolumeny ofert.
+ * Uwaga (facets): liczniki przy opcjach filtrów w sidebarze to PODPOWIEDZI liczone nad próbką
+ * (`MAX_FACET`) — mogą być przybliżone dla bardzo dużych wolumenów; wyniki/licznik/paginacja
+ * są dokładne (SQL). Dokładne liczniki facetów per opcja = follow-up (osobne agregaty SQL).
  *
  * TODO(i18n-slugs): jeden segment `oferty-pracy` dla wszystkich języków; lokalizowane slugi
  * (vacatures/offres-emploi/jobs) w mapie drogowej (spec 12).
@@ -137,15 +136,41 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
     getTranslations('nav'),
   ]);
 
-  // Zbiór bazowy: zawężony słowem kluczowym / miastem (natywnie), reszta filtrowana niżej.
-  const base = await getJobs({ locale, keyword, city, page: 1, pageSize: MAX_FACET });
-  const items: FacetItem[] = base.jobs.map(toFacetItem);
+  // Podpowiedzi liczników w sidebarze (facets): próbka zawężona keyword/miastem nad zbiorem
+  // MAX_FACET. Przybliżone dla bardzo dużych wolumenów — to tylko hinty przy opcjach filtrów.
+  const facetBase = await getJobs({ locale, keyword, city, page: 1, pageSize: MAX_FACET });
+  const items: FacetItem[] = facetBase.jobs.map(toFacetItem);
 
-  const filtered = base.jobs.filter((job) => matchesSidebar(toFacetItem(job), sf));
-  const sorted = sortJobs(filtered, sort);
-  const total = sorted.length;
-  const start = (page - 1) * PAGE_SIZE;
-  const pageItems = sorted.slice(start, start + PAGE_SIZE);
+  // Data „od" dla filtra świeżości (P1-12: liczone w SQL).
+  const DAY_MS = 86_400_000;
+  const sinceWindow =
+    sf.date === '24h' ? DAY_MS : sf.date === '7d' ? 7 * DAY_MS : sf.date === '30d' ? 30 * DAY_MS : 0;
+  const since = sinceWindow ? new Date(Date.now() - sinceWindow).toISOString() : undefined;
+
+  // WYNIKI: komplet filtrów sidebara + sort + paginacja + licznik PO STRONIE SQL (P1-12) —
+  // koniec liczenia w pamięci nad wycinkiem 200 (oferty nie znikają, liczba stron poprawna).
+  const narrowed = isSalaryNarrowed(sf);
+  const results = await getJobs({
+    locale,
+    keyword,
+    city,
+    categories: sf.categories,
+    locations: sf.locations,
+    contractTypes: sf.contractTypes,
+    ...(narrowed ? { salaryMin: sf.salaryMin } : {}),
+    ...(narrowed && sf.salaryMax < SALARY_MAX_BOUND ? { salaryMax: sf.salaryMax } : {}),
+    ...(sf.accommodation.length === 1
+      ? { accommodation: sf.accommodation.includes('provided') }
+      : {}),
+    ...(sf.immediate ? { immediate: true } : {}),
+    ...(sf.noLanguageRequired ? { noLanguageRequired: true } : {}),
+    ...(since ? { since } : {}),
+    sort,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+  const pageItems = results.jobs;
+  const total = results.total;
 
   const currency = new Intl.NumberFormat(locale, {
     style: 'currency',

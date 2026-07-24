@@ -92,7 +92,7 @@ set role anon; reset app.current_uid;
 select pg_temp.expect_error('select count(*) from public.companies', 'permission denied', 'A1 anon->companies');
 select pg_temp.expect_error('select count(*) from public.jobs',      'permission denied', 'A2 anon->jobs');
 select pg_temp.assert(
-  (select count(*) from public.get_public_jobs('pl',null,null,null,null,50,0)) >= 2,
+  (select count(*) from public.get_public_jobs('pl', p_limit => 50, p_offset => 0)) >= 2,
   'A3 anon get_public_jobs >=2');
 reset role;
 
@@ -477,13 +477,13 @@ reset role;
 -- SEC-03: ogromny p_limit i długie wejścia nie wywracają zapytania (clamp/left).
 set role anon; reset app.current_uid;
 select pg_temp.assert(
-  (select count(*) from public.get_public_jobs('pl',null,null,null,null, 999999, 0)) >= 2,
+  (select count(*) from public.get_public_jobs('pl', p_limit => 999999, p_offset => 0)) >= 2,
   'K1 get_public_jobs z ogromnym limitem działa (clamp do 100)');
 select pg_temp.assert(
-  (select count(*) from public.get_public_jobs('pl', repeat('x', 5000), null, null, null, 20, 0)) = 0,
+  (select count(*) from public.get_public_jobs('pl', repeat('x', 5000), p_limit => 20)) = 0,
   'K1b get_public_jobs z bardzo długim keyword nie błądzi (left→100, brak dopasowań)');
 select pg_temp.assert(
-  (select count(*) from public.get_public_jobs('xx',null,null,null,null, 20, 0)) >= 2,
+  (select count(*) from public.get_public_jobs('xx', p_limit => 20)) >= 2,
   'K1c nieznane locale nie psuje zapytania (allow-lista → pl)');
 reset role;
 -- SEC-04: twarde sufity długości egzekwowane przez CHECK niezależnie od ścieżki (nawet superuser).
@@ -998,5 +998,29 @@ reset role;
 select pg_temp.assert(
   (select times_redeemed from public.discount_codes where id = 'dc000000-0000-0000-0000-0000000000dc') = 1,
   'Z4b times_redeemed=1 po finalizacji');
+
+-- ============================================================================
+-- AA. Audyt produkcyjny 0046 (P1-12) — filtry/sort/paginacja get_public_jobs w SQL
+-- ============================================================================
+set role anon; reset app.current_uid;
+-- AA1: filtr kategorii zwraca wyłącznie oferty tej kategorii (JOBA = warehouse, publiczna).
+select pg_temp.assert(
+  (select bool_and(category = 'warehouse')
+     from public.get_public_jobs('pl', p_categories => array['warehouse'], p_limit => 100)),
+  'AA1 p_categories filtruje po kategorii');
+-- AA2: licznik spójny z listą dla tego samego filtra.
+select pg_temp.assert(
+  (select count(*)::bigint from public.get_public_jobs('pl', p_categories => array['warehouse'], p_limit => 100))
+    = public.get_public_jobs_count('pl', p_categories => array['warehouse']),
+  'AA2 licznik spójny z listą (filtr kategorii)');
+-- AA3: sort po wynagrodzeniu nie błądzi i zwraca rekordy.
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs('pl', p_sort => 'salary', p_limit => 100)) >= 1,
+  'AA3 sort=salary działa');
+-- AA4: widełki — oferty BEZ podanego wynagrodzenia nie są wykluczane (semantyka jak w UI).
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs('pl', p_salary_min => 999999, p_limit => 100)) >= 1,
+  'AA4 widełki nie wykluczają ofert bez wynagrodzenia');
+reset role;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
