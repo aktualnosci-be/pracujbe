@@ -745,4 +745,20 @@ select pg_temp.assert(public.company_can_view_candidate(:'CANDA'::uuid) is true,
   'R3b recruiter+ widzi PII kandydata z relacją (CANDA aplikował do COMPA)');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- S. Powiadomienia in-app respektują preferencje 0035 (SEC-16)
+-- ============================================================================
+-- CANDB wyłącza in-app; insert powiadomienia dla CANDB jest pomijany. CANDA (default true) wstawia.
+update public.notification_preferences set in_app_enabled = false where profile_id = :'CANDB';
+insert into public.notifications (profile_id, type, title, entity_type, entity_id)
+  values (:'CANDB', 'application_status_changed', 'x', 'application', :'appa');
+insert into public.notifications (profile_id, type, title, entity_type, entity_id)
+  values (:'CANDA', 'application_status_changed', 'x', 'application', :'appa');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'CANDB' and title = 'x') = 0,
+  'S1 in_app_enabled=false → powiadomienie pominięte (SEC-16)');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'CANDA' and title = 'x') = 1,
+  'S1b in_app domyślnie włączone → powiadomienie utworzone');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
