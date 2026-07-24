@@ -65,6 +65,18 @@ export interface LatestMessage {
   unread: boolean;
 }
 
+export interface MyOffer {
+  id: string;
+  jobTitle: string;
+  companyName: string;
+  slug: string | null;
+  /** Treść propozycji od pracodawcy (może być pusta w danych DEMO). */
+  message: string;
+  /** Data wysłania propozycji (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
+  date: string;
+  status: string;
+}
+
 export interface CandidateProfileSummary {
   firstName: string | null;
   completionPct: number;
@@ -379,6 +391,41 @@ function demoApplications(locale: Locale): MyApplication[] {
   });
 }
 
+function demoSaved(locale: Locale): RecommendedJob[] {
+  return resolveDemoJobs(locale)
+    .slice(0, 4)
+    .map((job) => ({
+      id: job.id,
+      slug: job.slug,
+      title: job.title,
+      companyName: job.companyName,
+      city: job.city,
+      match: null,
+      saved: true,
+    }));
+}
+
+const DEMO_OFFER_PICKS = [
+  { idx: 1, status: 'sent', daysAgo: 1 },
+  { idx: 5, status: 'accepted', daysAgo: 7 },
+] as const;
+
+function demoOffers(locale: Locale): MyOffer[] {
+  const jobs = resolveDemoJobs(locale);
+  return DEMO_OFFER_PICKS.map((pick, index) => {
+    const job = jobs[pick.idx];
+    return {
+      id: `demo-offer-${index}`,
+      jobTitle: job?.title ?? '',
+      companyName: job?.companyName ?? '',
+      slug: job?.slug ?? null,
+      message: '',
+      date: new Date(Date.now() - pick.daysAgo * 86_400_000).toISOString(),
+      status: pick.status,
+    };
+  });
+}
+
 function demoMessages(locale: Locale): LatestMessage[] {
   const jobs = resolveDemoJobs(locale);
   const previews = [jobs[0]?.title ?? '', jobs[2]?.title ?? '', jobs[4]?.title ?? ''];
@@ -567,6 +614,97 @@ export async function getMyApplications(locale: string = routing.defaultLocale):
     });
   } catch (error) {
     captureError(error, { area: 'candidate.getMyApplications' });
+    return [];
+  }
+}
+
+/**
+ * Zapisane oferty kandydata (`saved_jobs`) wzbogacone o dane publiczne oferty.
+ * Odczyt pod sesją (RLS: kandydat widzi wyłącznie własne `saved_jobs`); tytuł/firmę/miasto
+ * bierzemy z RPC `get_public_jobs` (kandydat nie czyta tabel bazowych — P1-01), więc pokazujemy
+ * te zapisy, które są wciąż aktywne/publiczne. Kolejność: najnowiej zapisane pierwsze.
+ */
+export async function getSavedJobs(locale: string = routing.defaultLocale): Promise<RecommendedJob[]> {
+  const resolvedLocale = toLocale(locale);
+  if (!isSupabaseConfigured()) return demoSaved(resolvedLocale);
+
+  try {
+    const { supabase, userId } = await getServerContext();
+    if (!userId) return [];
+
+    const [savedRes, jobsMap] = await Promise.all([
+      supabase
+        .from('saved_jobs')
+        .select('job_id, created_at')
+        .eq('candidate_id', userId)
+        .order('created_at', { ascending: false }),
+      fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT),
+    ]);
+    if (savedRes.error) throw savedRes.error;
+
+    const result: RecommendedJob[] = [];
+    for (const row of asArr(savedRes.data)) {
+      const jobId = asStr(asRecord(row)['job_id']);
+      const job = jobId ? jobsMap.get(jobId) : undefined;
+      if (!job) continue;
+      result.push({ ...job, match: null, saved: true });
+    }
+    return result;
+  } catch (error) {
+    captureError(error, { area: 'candidate.getSavedJobs' });
+    return [];
+  }
+}
+
+/**
+ * Propozycje pracy wysłane do kandydata (`offers`) + dane oferty.
+ * Odczyt pod sesją (RLS `offers_select`: kandydat widzi wyłącznie własne propozycje). Tytuł/firmę
+ * rozwiązujemy z RPC `get_applied_jobs_display` (własne aplikacje, niezależnie od statusu oferty),
+ * a jako uzupełnienie z `get_public_jobs` (propozycja może dotyczyć oferty, do której kandydat nie
+ * aplikował) — kandydat nie czyta tabel bazowych wprost (P1-01).
+ */
+export async function getMyOffers(locale: string = routing.defaultLocale): Promise<MyOffer[]> {
+  const resolvedLocale = toLocale(locale);
+  if (!isSupabaseConfigured()) return demoOffers(resolvedLocale);
+
+  try {
+    const { supabase, userId } = await getServerContext();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('offers')
+      .select('id, job_id, status, message, sent_at, created_at')
+      .eq('candidate_id', userId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) throw error;
+
+    const rows = asArr(data);
+    if (rows.length === 0) return [];
+
+    const [appliedMap, publicMap] = await Promise.all([
+      fetchAppliedJobsMap(supabase, resolvedLocale),
+      fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT),
+    ]);
+
+    return rows.map((row) => {
+      const r = asRecord(row);
+      const jobId = asStr(r['job_id']);
+      const job = appliedMap.get(jobId) ?? publicMap.get(jobId);
+      const sentAt = asStr(r['sent_at']);
+      return {
+        id: asStr(r['id']),
+        jobTitle: job?.title ?? '',
+        companyName: job?.companyName ?? '',
+        slug: job?.slug ?? null,
+        message: asStr(r['message']),
+        date: sentAt || asStr(r['created_at']),
+        status: asStr(r['status'], 'sent'),
+      };
+    });
+  } catch (error) {
+    captureError(error, { area: 'candidate.getMyOffers' });
     return [];
   }
 }

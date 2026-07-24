@@ -196,7 +196,7 @@ export function DashboardShell({
         </nav>
         <div className="space-y-1 border-t border-white/10 px-3 py-4">
           <Link
-            href="/help"
+            href="/pomoc"
             className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
           >
             <HelpCircle className="size-5 shrink-0" aria-hidden="true" />
@@ -333,7 +333,7 @@ export function DashboardShell({
             </nav>
             <div className="space-y-1 border-t border-white/10 px-3 py-4">
               <Link
-                href="/help"
+                href="/pomoc"
                 onClick={() => setDrawerOpen(false)}
                 className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
               >
