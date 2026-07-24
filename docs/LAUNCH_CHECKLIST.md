@@ -40,6 +40,10 @@ tam, gdzie wskazano). Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
 ## 4. Auth
 
 - [ ] Confirm email = ON; szablony e-mail Auth w PL/NL/FR/EN i z brandingiem.
+- [ ] **Send Email Hook** (Authentication → Hooks → Send Email) ustawiony na
+      `https://pracuj.be/api/auth/email-hook` z sekretem `SEND_EMAIL_HOOK_SECRET` —
+      e-maile Auth (potwierdzenie/reset) idą w JĘZYKU ODBIORCY (Invariant #1). Zweryfikuj
+      na staging, że mail przychodzi w języku rejestracji (a nie domyślnym GoTrue).
 - [ ] Site URL = `https://pracuj.be`; Redirect URLs (allow list) obejmują produkcję.
 - [ ] Rate limits i (opcjonalnie) CAPTCHA włączone.
 - [ ] Reset hasła nie ujawnia istnienia konta.
