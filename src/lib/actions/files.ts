@@ -47,6 +47,17 @@ async function hasValidSignature(file: File, ext: string): Promise<boolean> {
   );
 }
 
+/**
+ * Głębsza weryfikacja DOCX (P1-22): samo `PK` (ZIP) to za mało — dowolne archiwum przeszłoby
+ * jako DOCX. Sprawdzamy, że kontener OOXML zawiera `[Content_Types].xml` oraz katalog `word/`.
+ * Nazwy wpisów są w nagłówkach lokalnych ZIP jako tekst — skan bufora (latin1) je wykrywa.
+ * (AV/CDR = follow-up: skan treści przez usługę zewnętrzną.)
+ */
+async function isOoxmlDocx(file: File): Promise<boolean> {
+  const bytes = Buffer.from(await file.arrayBuffer()).toString('latin1');
+  return bytes.includes('[Content_Types].xml') && bytes.includes('word/');
+}
+
 /** Upload CV kandydata (PDF/DOC/DOCX, <=5MB). */
 export async function uploadCandidateCv(formData: FormData): Promise<UploadResult> {
   if (!(await checkRateLimit('upload', { max: 20, windowSeconds: 3600 }))) {
@@ -61,6 +72,8 @@ export async function uploadCandidateCv(formData: FormData): Promise<UploadResul
 
   // Weryfikacja sygnatury zawartości (magic bytes) — MIME z klienta jest niezaufany.
   if (!(await hasValidSignature(file, ext))) return { ok: false, error: 'VALIDATION_FAILED' };
+  // P1-22: DOCX musi być realnym kontenerem OOXML (nie dowolnym ZIP-em).
+  if (ext === 'docx' && !(await isOoxmlDocx(file))) return { ok: false, error: 'VALIDATION_FAILED' };
 
   if (!isSupabaseConfigured()) return { ok: true, id: 'demo', path: 'demo/cv.pdf' };
 
@@ -88,6 +101,8 @@ export async function uploadCandidateCv(formData: FormData): Promise<UploadResul
       size_bytes: file.size,
       visibility: 'private',
       entity_type: 'candidate_cv',
+      // AV odłożone → 'skipped' (walidacja treści przeszła). Po wpięciu skanera: 'pending'→'clean'.
+      scan_status: 'skipped',
     })
     .select('id')
     .single();
@@ -113,8 +128,19 @@ export async function deleteCandidateFile(fileId: string): Promise<SimpleResult>
     .single();
   if (selErr || !row) return { ok: false, error: 'NOT_FOUND' };
 
-  await removeFile(String(row.path), String(row.bucket));
+  // P1-22: usuń NAJPIERW metadane (pod RLS — potwierdza własność), potem obiekt Storage.
+  // Odwrotna kolejność mogła zostawić rekord wskazujący na nieistniejący obiekt (gdy DB delete
+  // padnie po udanym Storage remove). Osierocony obiekt (gdy Storage padnie) jest mniej szkodliwy
+  // i usuwalny GC — logujemy wynik removeFile zamiast go ignorować.
   const { error } = await supabase.from('files').delete().eq('id', fileId);
   if (error) return { ok: false, error: 'PERMISSION_DENIED' };
+  const removed = await removeFile(String(row.path), String(row.bucket));
+  if (!removed) {
+    const { captureError } = await import('@/lib/sentry');
+    captureError(new Error('storage remove failed after db delete'), {
+      area: 'files.deleteCandidateFile',
+      path: String(row.path),
+    });
+  }
   return { ok: true };
 }
