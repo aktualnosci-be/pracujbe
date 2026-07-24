@@ -7,6 +7,7 @@ import { renderEmail } from '@/emails/templates';
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
 import { captureError } from '@/lib/sentry';
+import { isProductionMode } from '@/lib/env';
 
 /**
  * Worker kolejki e-mail (outbox) — P1-13.
@@ -48,6 +49,13 @@ export interface ProcessResult {
   sent: number;
   failed: number;
   skipped?: string;
+  /**
+   * P1-17: sygnał zdrowia dla endpointu (200 vs 503). `false` = realny problem
+   * (brak konfiguracji w produkcji, błąd claimu) — monitoring NIE może widzieć „zielonego"
+   * cronu, gdy nic nie wychodzi. `true` = przetworzono (także pustą kolejkę) albo oczekiwane
+   * pominięcie w trybie demo.
+   */
+  ok: boolean;
 }
 
 export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
@@ -56,7 +64,14 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
   if (!apiKey) {
-    return { processed: 0, sent: 0, failed: 0, skipped: 'RESEND_API_KEY not set' };
+    // Brak klucza w PRODUKCJI = błąd konfiguracji (503, alarm). W demo = oczekiwane (200).
+    return {
+      processed: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 'RESEND_API_KEY not set',
+      ok: !isProductionMode(),
+    };
   }
 
   const admin = createAdminClient();
@@ -67,7 +82,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
 
   if (error) {
     captureError(error, { area: 'email.outbox.claim' });
-    return { processed: 0, sent: 0, failed: 0, skipped: 'claim error' };
+    return { processed: 0, sent: 0, failed: 0, skipped: 'claim error', ok: false };
   }
 
   const queue = (rows ?? []) as DeliveryRow[];
@@ -93,7 +108,12 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         row.locale as Locale,
         data,
       );
-      const result = await resend.emails.send({ from, to: row.to_email, subject, html });
+      // P1-17: idempotency key = delivery.id — jeśli po wysyłce zapis 'sent' zawiedzie i
+      // wiersz wróci do puli, ponowna wysyłka jest deduplikowana po stronie Resend (bez dubletu).
+      const result = await resend.emails.send(
+        { from, to: row.to_email, subject, html },
+        { idempotencyKey: row.id },
+      );
 
       if (result.error) {
         throw new Error(result.error.message);
@@ -144,5 +164,5 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     }
   }
 
-  return { processed: queue.length, sent, failed };
+  return { processed: queue.length, sent, failed, ok: true };
 }

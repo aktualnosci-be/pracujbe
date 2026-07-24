@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 
 import { routing } from '@/i18n/routing';
-import { env } from '@/lib/env';
+import { env, isProductionDeployment } from '@/lib/env';
 import { getJobs, type CategoryKey, type LocationKey } from '@/lib/jobs';
 import { getAllGuideSlugs } from '@/lib/guides/guides';
 
@@ -74,16 +74,10 @@ function buildLanguages(
   return languages;
 }
 
-/** Środowiska nieprodukcyjne (staging/preview/local) nie publikują mapy strony. */
-function isNonProduction(): boolean {
-  const vercelEnv = process.env.VERCEL_ENV;
-  if (vercelEnv && vercelEnv !== 'production') return true;
-  return /localhost|127\.0\.0\.1|0\.0\.0\.0|staging|preview/i.test(env.siteUrl);
-}
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Staging/preview: pusty sitemap (spójne z robots.ts Disallow:/ i X-Robots-Tag).
-  if (isNonProduction()) return [];
+  // Staging/preview/local: pusty sitemap (spójne z robots.ts Disallow:/ i X-Robots-Tag).
+  // JEDNO źródło prawdy o środowisku (P1-19): isProductionDeployment().
+  if (!isProductionDeployment()) return [];
 
   const base = env.siteUrl;
   const locales = routing.locales;

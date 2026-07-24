@@ -22,7 +22,13 @@ const nextConfig = {
   // (z wykrywaniem Accept-Language i fallbackiem na 'pl'). Nie dubluj go tutaj.
 
   async headers() {
-    const isProd = process.env.VERCEL_ENV === 'production';
+    // P1-19: JEDNO źródło prawdy o środowisku wdrożenia — MUSI być spójne z
+    // `isProductionDeployment()` w src/lib/env.ts (build-time nie importuje TS, stąd powielenie).
+    // „Publiczna produkcja" = tryb produkcyjny (APP_MODE/VERCEL_ENV) ORAZ realny publiczny URL.
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const isProdMode =
+      process.env.APP_MODE === 'production' || process.env.VERCEL_ENV === 'production';
+    const isProd = isProdMode && !/localhost|127\.0\.0\.1|0\.0\.0\.0|staging|preview/i.test(siteUrl);
     const isDev = process.env.NODE_ENV !== 'production';
 
     // --- Content-Security-Policy (P2-01) -------------------------------------
@@ -57,7 +63,8 @@ const nextConfig = {
     const security = [
       { key: 'Content-Security-Policy', value: csp.join('; ') },
       { key: 'X-Content-Type-Options', value: 'nosniff' },
-      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+      // P3-03: spójnie z CSP `frame-ancestors 'none'` (było SAMEORIGIN — konflikt).
+      { key: 'X-Frame-Options', value: 'DENY' },
       { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
       { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
     ];

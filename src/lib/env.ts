@@ -51,11 +51,60 @@ export function isProductionMode(): boolean {
   return env.appMode === 'production';
 }
 
+/** Wzorzec adresów nieprodukcyjnych (lokalne/staging/preview). */
+const NON_PROD_HOST_RE = /localhost|127\.0\.0\.1|0\.0\.0\.0|staging|preview/i;
+
 /**
- * Gotowość do obsługi ruchu (SEC-19). W trybie produkcyjnym wymagana jest realna konfiguracja
- * Supabase — jej brak oznacza „nieskonfigurowany" (fail-closed: 503/maintenance, nie demo).
- * W trybie demo zawsze gotowe (lokalnie / staging / E2E). Nie ujawnia sekretów.
+ * P1-19: JEDNO źródło prawdy o środowisku wdrożenia dla nagłówków (HSTS/X-Robots-Tag),
+ * robots.txt i sitemap. „Publiczna produkcja" = tryb produkcyjny (APP_MODE/VERCEL_ENV)
+ * ORAZ realny publiczny URL (nie localhost/staging/preview). Dzięki temu self-hosted
+ * produkcja (APP_MODE=production, bez VERCEL_ENV) jest spójnie traktowana wszędzie:
+ * HSTS wł., brak globalnego noindex, robots/sitemap indeksowalne.
+ *
+ * UWAGA: `next.config.mjs` (build-time, bez importu TS) powiela tę regułę — zmieniając ją,
+ * zaktualizuj OBA miejsca.
+ */
+export function isProductionDeployment(): boolean {
+  if (!isProductionMode()) return false;
+  return !NON_PROD_HOST_RE.test(env.siteUrl);
+}
+
+/** Klucz service-role obecny (operacje serwerowe: admin, webhooki, worker e-mail). */
+export function hasServiceRoleKey(): boolean {
+  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+/** Publiczny URL jest realny (https, nie localhost) — wymagane w produkcji (linki, e-maile). */
+export function hasPublicHttpsUrl(): boolean {
+  const u = env.siteUrl;
+  return /^https:\/\//i.test(u) && !NON_PROD_HOST_RE.test(u);
+}
+
+/**
+ * Zależności KRYTYCZNE dla gotowości (P1-18). W produkcji aplikacja nie może obsługiwać ruchu
+ * bez rdzenia: Supabase (URL+anon), klucz service-role (operacje serwerowe) oraz realny https URL.
+ * Dostawcy opcjonalni (Stripe/Resend/webhooki) NIE blokują gotowości — ich stan raportuje
+ * /api/health jako `checks` (obserwowalność bez twardego 503 na starcie bez płatności/e-maili).
+ */
+export function readinessChecks(): Record<string, boolean> {
+  return {
+    supabase: isSupabaseConfigured(),
+    serviceRole: hasServiceRoleKey(),
+    httpsSiteUrl: hasPublicHttpsUrl(),
+    stripe: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
+    resend: Boolean(process.env.RESEND_API_KEY),
+    emailHook: Boolean(process.env.SEND_EMAIL_HOOK_SECRET),
+    queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),
+    sentry: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN),
+  };
+}
+
+/**
+ * Gotowość do obsługi ruchu (SEC-19 + P1-18). Tryb demo: zawsze gotowe (lokalnie/staging/E2E).
+ * Tryb produkcyjny: wymaga rdzenia (Supabase + service-role + realny https URL) — brak =
+ * „nieskonfigurowany" (fail-closed: 503/maintenance, nie fikcyjne demo). Nie ujawnia sekretów.
  */
 export function isAppReady(): boolean {
-  return !isProductionMode() || isSupabaseConfigured();
+  if (!isProductionMode()) return true;
+  return isSupabaseConfigured() && hasServiceRoleKey() && hasPublicHttpsUrl();
 }

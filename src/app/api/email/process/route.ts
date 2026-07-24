@@ -33,5 +33,7 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const result = await processEmailQueue();
-  return NextResponse.json(result);
+  // P1-17: realny problem workera (brak konfiguracji w produkcji, błąd claimu) → 503, aby
+  // cron/monitoring NIE widział „zielonego" przebiegu, gdy żaden e-mail nie wychodzi.
+  return NextResponse.json(result, { status: result.ok ? 200 : 503 });
 }
