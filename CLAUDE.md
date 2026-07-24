@@ -342,10 +342,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > PATCH aplikacji). SEC-01: `rate_limit_hit` odebrany anon/authenticated → woła go tylko service_role
 > (admin client); usunięto zduplikowany limiter w `actions/jobs.ts`. Dowód: `rls.sql` sekcja J
 > (J1–J8: bezpośredni INSERT/UPDATE/DELETE odrzucany, withdraw RPC działa/idempotentny/nie-cudzy,
-> limiter tylko service_role). **Do zrobienia (Wave B–F+):** hardening publicznych RPC (limity), RBAC
-> firmy + owner invariants, wygaszanie dostępu b. członka, persystencja/transakcyjność kreatorów,
-> matching (brak danych ≠ pełne punkty), aktywny kontekst firmy, fail-closed env, legal/billing, CI
-> (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
+> limiter tylko service_role).
+> **Wave B (0026) — ZROBIONE:** SEC-03 — `get_public_jobs`/`_count` clamp p_limit∈[1,100],
+> p_offset≤10000, keyword/city ≤100 znaków (`left`), locale z allow-listy. SEC-04 — twarde sufity
+> długości pól tekstowych jako CHECK na tabelach (applications.message/phone/idem, offers.message/idem,
+> messages.body, companies.name/vat) — egzekwowane niezależnie od ścieżki (RPC/trigger/definer). Dowód:
+> `rls.sql` sekcja K (K1 clamp limitu, K1b długi keyword, K1c allow-lista locale, K2/K2b CHECK długości).
+> **Do zrobienia (Wave C–F+):** RBAC firmy + owner invariants, wygaszanie dostępu b. członka,
+> persystencja/transakcyjność kreatorów, matching (brak danych ≠ pełne punkty), aktywny kontekst firmy,
+> fail-closed env, legal/billing, CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)

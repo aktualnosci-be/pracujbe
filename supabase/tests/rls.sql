@@ -471,4 +471,28 @@ select pg_temp.assert(public.rate_limit_hit('svc-key', 5, 60) is true,
   'J8c service_role woła rate_limit_hit (limiter działa z backendu)');
 reset role;
 
+-- ============================================================================
+-- K. Hardening publicznych/procesowych RPC 0026 (SEC-03 limity, SEC-04 długości)
+-- ============================================================================
+-- SEC-03: ogromny p_limit i długie wejścia nie wywracają zapytania (clamp/left).
+set role anon; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs('pl',null,null,null,null, 999999, 0)) >= 2,
+  'K1 get_public_jobs z ogromnym limitem działa (clamp do 100)');
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs('pl', repeat('x', 5000), null, null, null, 20, 0)) = 0,
+  'K1b get_public_jobs z bardzo długim keyword nie błądzi (left→100, brak dopasowań)');
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs('xx',null,null,null,null, 20, 0)) >= 2,
+  'K1c nieznane locale nie psuje zapytania (allow-lista → pl)');
+reset role;
+-- SEC-04: twarde sufity długości egzekwowane przez CHECK niezależnie od ścieżki (nawet superuser).
+select pg_temp.expect_error(
+  'insert into public.messages(conversation_id, sender_id, body) values ('''
+  || current_setting('my.conv') ||''','''|| :'CANDA' ||''', repeat(''a'', 5000))',
+  'messages_body_len', 'K2 CHECK długości messages.body egzekwowany (path-independent)');
+select pg_temp.expect_error(
+  'update public.applications set message = repeat(''a'', 5000) where id = '''|| :'appa' ||'''::uuid',
+  'applications_message_len', 'K2b CHECK długości applications.message egzekwowany');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
