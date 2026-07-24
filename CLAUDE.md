@@ -428,6 +428,37 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > (separacja runnerów + twarda bramka RLS/Storage — infra), FUN-09 (treść prawna do zatwierdzenia),
 > perf/CWV (Lighthouse w CI — pozostała część audytu H).
 
+> 🔒 **Audyt gotowości produkcyjnej 2026-07-24** (`audyt_produkcja_pracujbe.md`, NO-GO: 4×P0,
+> 25×P1, 22×P2, 5×P3; teza „krytyczne procesy zwracają sukces mimo niespójnego zapisu").
+> Remediacja falami, każda weryfikowana adwersaryjnie na PG16 (sekcje rls.sql V–X) + tsc/lint/
+> vitest/build/E2E:
+> **P0 (0038 + webhook-inbox.ts) — WSZYSTKIE ZAMKNIĘTE:** P0-01/02 — inbox webhooków ze stanem
+> (processing→completed); duplikatem do pominięcia jest tylko `completed`, więc awaria w trakcie
+> pozwala na reprocessing (koniec trwałej utraty płatności/e-maili Auth). P0-03 — Stripe sync
+> sprawdza KAŻDY błąd DB i propaguje (500→retry); płatność idempotentna per faktura (koniec
+> dubletów invoice.paid+payment_succeeded). P0-04 — nieskonfigurowany webhook w produkcji → 503
+> (nie „ciche" 200 gubiące płatności). Testy: webhook-inbox (6).
+> **P1 — ZAMKNIĘTE (autonomiczne, DB+app, dowód rls.sql V–X):** P1-01 (0039: odczyt applications/
+> offers/matches/rozmów tylko recruiter+ — koniec wycieku PII do zwykłego membera; apply_to_job
+> powiadamia tylko recruiter+), P1-02 (get_conversation_summaries gejtowane bieżącym dostępem —
+> b. członek nie widzi podglądu), P1-03 (0040: edycja firmy tylko owner/admin), P1-04 (rola
+> candidate egzekwowana w ensure_candidate_profile/apply_to_job; layout odsyła admina), P1-05
+> (transition_application: macierz przejść + FOR UPDATE + CAS — koniec hired→rejected itp.),
+> P1-06 (withdraw tylko ze stanów aktywnych), P1-07 (onboarding sprawdza wynik finish_onboarding),
+> P1-08 (onboarding wczytuje relacje — koniec kasowania skills/languages/certs przy wznowieniu),
+> P1-10 (kreator edytuje tylko draft — JOB_NOT_DRAFT), P1-17 (worker e-mail 503 przy realnym
+> problemie + idempotency key Resend), P1-18 (readiness: service-role + https URL; /api/health
+> checks), P1-19 (jedno źródło środowiska isProductionDeployment — spójne HSTS/noindex/robots/
+> sitemap), P1-23 (0041: idempotencja aktywnej pary + wygaśnięcie + CAS propozycji). P2-19 (UUID
+> w respondToOffer), P3-03 (X-Frame-Options DENY).
+> **P1 OTWARTE (świadomie):** P1-09 (pełna transakcyjność każdego kroku — duży refactor; publish
+> atomowy, relacje replace-all), P1-11 (twardsza walidacja publikacji: widełki/opis), P1-12
+> (filtrowanie/paginacja >200 w SQL — refactor listy ofert), P1-13 (404 z nawigacji paneli —
+> braki tras/linków), P1-14 (resztki atrap/nieaktywnych elementów UI), P1-15 (realizacja kodów
+> rabatowych), P1-16 (deduplikacja klienta/subskrypcji Stripe). **P1 NIE-AUTONOMICZNE:** P1-20/21/25
+> (twarda bramka RLS + migracje/rollback w deployu + ephemeral runners = infra), P1-22 (skan AV
+> uploadu = usługa zewn.), P1-24 (realna treść prawna + receipt zgód = prawnik).
+
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
 - [x] System wizualny: tokeny kolorów, typografia (Inter), globals.css
