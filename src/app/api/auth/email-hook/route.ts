@@ -15,15 +15,21 @@ import { captureError } from '@/lib/sentry';
  *
  * Konfiguracja (operacyjna, Supabase Dashboard → Authentication → Hooks → Send Email):
  *   URL:   https://<domena>/api/auth/email-hook
- *   Secret: SEND_EMAIL_HOOK_SECRET (format Standard Webhooks: 'whsec_<base64>')
- * Bez tej konfiguracji hook nie jest wołany, a GoTrue używa swoich szablonów (bezpieczny fallback).
+ *   Secret: SEND_EMAIL_HOOK_SECRET — wartość Standard Webhooks. Można wkleić DOKŁADNIE tak,
+ *           jak podaje Supabase ('v1,whsec_<base64>') albo samo 'whsec_<base64>' — oba prefiksy
+ *           są obcinane przed dekodowaniem base64.
+ * Dopóki hook nie jest WŁĄCZONY w Supabase, nie jest wołany, a GoTrue używa swoich szablonów.
  *
- * Bezpieczeństwo: weryfikacja podpisu Standard Webhooks (HMAC-SHA256, porównanie stałoczasowe).
- * Bez sekretu / bez klucza Resend → 500 (misconfiguracja) lub 200 no-op (patrz niżej), NIGDY nie
- * ujawniamy technikaliów w treści.
+ * Bezpieczeństwo: weryfikacja podpisu Standard Webhooks (HMAC-SHA256, porównanie stałoczasowe)
+ * + kontrola świeżości znacznika czasu (okno ±300 s przeciw replayowi). Jeśli hook zostanie
+ * wołany, a deployment nie ma sekretu/klucza (dryf env) → 500 (błąd widoczny w GoTrue/Sentry,
+ * nie „cichy" 200), NIGDY nie ujawniamy technikaliów w treści.
  */
 
 export const runtime = 'nodejs';
+
+// Maksymalna dopuszczalna różnica wieku żądania (Standard Webhooks, ochrona przed replayem).
+const TIMESTAMP_TOLERANCE_SECONDS = 300;
 
 interface HookPayload {
   user?: { id?: string; email?: string; user_metadata?: Record<string, unknown> };
@@ -47,7 +53,14 @@ function verifySignature(secret: string, headers: Headers, rawBody: string): boo
   const sigHeader = headers.get('webhook-signature');
   if (!id || !timestamp || !sigHeader) return false;
 
-  const base64Secret = secret.startsWith('whsec_') ? secret.slice(6) : secret;
+  // Świeżość znacznika czasu: odrzuć nieparsowalny lub spoza okna ±tolerancja (anty-replay).
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > TIMESTAMP_TOLERANCE_SECONDS) {
+    return false;
+  }
+
+  // Supabase podaje sekret jako 'v1,whsec_<base64>'; akceptujemy też samo 'whsec_<base64>'.
+  const base64Secret = secret.replace(/^v1,/, '').replace(/^whsec_/, '');
   let key: Buffer;
   try {
     key = Buffer.from(base64Secret, 'base64');
@@ -88,9 +101,12 @@ export async function POST(request: Request): Promise<Response> {
   const from = process.env.EMAIL_FROM ?? 'Pracuj.be <no-reply@pracuj.be>';
   const supabaseUrl = env.supabaseUrl;
 
-  // Hook nieskonfigurowany — nie powinien być wołany; zwróć 200 no-op (bez ujawniania).
+  // Hook został wołany, ale ten deployment nie ma pełnej konfiguracji (dryf env: brak sekretu/
+  // klucza/URL). NIE zwracamy „cichego" 200 — GoTrue uznałby e-mail za dostarczony i porzucił
+  // go bez śladu. 500 czyni błąd widocznym (GoTrue retry / Sentry), bez ujawniania technikaliów.
   if (!secret || !apiKey || !supabaseUrl) {
-    return Response.json({ ok: true, skipped: true });
+    captureError(new Error('email-hook called without full configuration'), { area: 'auth.email-hook' });
+    return Response.json({ error: 'not configured' }, { status: 500 });
   }
 
   const rawBody = await request.text();

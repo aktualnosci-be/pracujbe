@@ -321,6 +321,16 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > timingSafeEqual, magic-bytes uploadu, JSON-LD escape, noindex auth, OG/hreflang. **Odłożone (P3, świadomie):**
 > `is_demo` na tabelach procesowych (Inv. #12 — prod nie ładuje seed), retencja `email_deliveries` (cron),
 > nonce/strict-dynamic CSP (E2E). Weryfikacja: tsc/lint/vitest/build + RLS+seed (PG16) + Playwright — zielone.
+>
+> 🔒 **Weryfikacja remediacji 2026-07-24** (adwersaryjna kontrola napraw 0020–0022 + email-hook; 6 potwierdzonych:
+> 0×P0, 0×P1, 2×P2, 4×P3). Domknięte migracją `0023` + app-layer: (P2) `get_conversation_summaries` usunięto
+> `counterparty_name` (SECURITY DEFINER omijało RLS na `profiles` — kandydat mógł wprost pobrać imię+nazwisko
+> rekrutera; app-layer i tak rozwiązuje drugą stronę pod RLS); (P2) email-hook obcina prefiks `v1,whsec_`
+> (Supabase podaje sekret z `v1,`) — inaczej wszystkie e-maile Auth failowały weryfikację; (P3) email-hook:
+> kontrola świeżości `webhook-timestamp` (±300 s, anty-replay) + fail-closed 500 zamiast „cichego" 200 przy
+> dryfcie env; (P3) `getMyApplications` używa nowego `get_applied_jobs_display` (własne aplikacje niezależnie
+> od statusu oferty — koniec pustych tytułów dla ofert zamkniętych/unverified; dowód: `rls.sql` I9); (P3)
+> nieaktualny komentarz outbox.ts. Weryfikacja: tsc/lint/vitest/build + RLS+seed (PG16) + Playwright — zielone.
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)

@@ -357,4 +357,25 @@ select pg_temp.assert((select count(*) from public.claim_email_batch(100)) >= 1,
 select pg_temp.assert((select count(*) from public.claim_email_batch(100)) = 0,
   'I8b drugi natychmiastowy claim nie zwraca tych samych wierszy (dzierżawa locked_at)');
 
+-- I9: get_applied_jobs_display (0023) zwraca ofertę własnej aplikacji NIEZALEŻNIE od statusu
+-- oferty/firmy. CANDB aplikował do JOBC (firma COMPC=unverified) — get_public_jobs by ją odfiltrował,
+-- więc lista aplikacji miałaby pusty tytuł. RPC musi zwrócić tytuł/firmę mimo braku weryfikacji.
+set role authenticated; set app.current_uid = :'CANDB';
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display('pl')) = 1,
+  'I9 get_applied_jobs_display zwraca tylko własne aplikacje (CANDB=1)');
+select pg_temp.assert(
+  (select title from public.get_applied_jobs_display('pl') where job_id = :'JOBC') = 'Pomocnik C',
+  'I9b tytuł oferty widoczny mimo firmy unverified (fix P3 pustych tytułów)');
+select pg_temp.assert(
+  (select company_name from public.get_applied_jobs_display('pl') where job_id = :'JOBC') = 'Firma C',
+  'I9c nazwa firmy widoczna dla oferty własnej aplikacji');
+reset role; reset app.current_uid;
+-- kontrola: kandydat bez aplikacji (CANDA) nie widzi cudzych ofert przez to RPC.
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display('pl') where job_id = :'JOBC') = 0,
+  'I9d RPC ograniczone do WŁASNYCH aplikacji (CANDA nie widzi JOBC)');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

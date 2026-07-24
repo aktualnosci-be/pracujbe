@@ -236,6 +236,35 @@ const fetchPublicJobsMap = cache(async (
   return map;
 });
 
+/**
+ * Mapa job_id → bezpieczne dane oferty dla WŁASNYCH aplikacji kandydata (RPC
+ * `get_applied_jobs_display`, 0023). W odróżnieniu od `fetchPublicJobsMap` zwraca też
+ * oferty nieaktywne/wygasłe/spoza top-N — kandydat ma prawo widzieć ofertę, do której
+ * aplikował. `cache()` per-request (te same argumenty → jedno wywołanie RPC).
+ */
+const fetchAppliedJobsMap = cache(async (
+  supabase: SupabaseClient,
+  locale: Locale,
+): Promise<Map<string, PublicJobLite>> => {
+  const { data, error } = await supabase.rpc('get_applied_jobs_display', { p_locale: locale });
+  if (error) throw error;
+
+  const map = new Map<string, PublicJobLite>();
+  for (const row of asArr(data)) {
+    const r = asRecord(row);
+    const id = asStr(r['job_id']);
+    if (!id) continue;
+    map.set(id, {
+      id,
+      slug: asStr(r['slug']),
+      title: asStr(r['title']),
+      companyName: asStr(r['company_name']),
+      city: asStr(r['city']),
+    });
+  }
+  return map;
+});
+
 /** Zbiór job_id zapisanych przez kandydata. */
 async function fetchSavedJobIds(supabase: SupabaseClient, userId: string): Promise<Set<string>> {
   const { data, error } = await supabase
@@ -519,7 +548,11 @@ export async function getMyApplications(locale: string = routing.defaultLocale):
     const rows = asArr(data);
     if (rows.length === 0) return [];
 
-    const jobsMap = await fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT);
+    // Wzbogacamy danymi oferty przez dedykowane RPC ograniczone do WŁASNYCH aplikacji
+    // (auth.uid()) — zwraca tytuł/firmę/slug NIEZALEŻNIE od statusu oferty, więc aplikacje
+    // do ofert zamkniętych/wstrzymanych/wygasłych nie tracą nazwy (get_public_jobs zwraca
+    // tylko active+verified top-N, przez co dawały puste wiersze).
+    const jobsMap = await fetchAppliedJobsMap(supabase, resolvedLocale);
     return rows.map((row) => {
       const r = asRecord(row);
       const job = jobsMap.get(asStr(r['job_id']));

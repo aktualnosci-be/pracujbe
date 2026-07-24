@@ -19,8 +19,9 @@ import { captureError } from '@/lib/sentry';
  * zwiększa `attempts` i planuje ponowienie (backoff), a po `MAX_ATTEMPTS` oznacza `failed`.
  *
  * Uruchamiany przez chroniony sekretem route handler `/api/email/process` (cron/worker).
- * Zakłada pojedynczego workera na tick (brak równoległych claimów) — przy skalowaniu dodać
- * atomowy claim (SELECT ... FOR UPDATE SKIP LOCKED przez RPC).
+ * Claim paczki jest ATOMOWY (RPC `claim_email_batch`, 0021: FOR UPDATE SKIP LOCKED + dzierżawa
+ * `locked_at`), więc dwa równoległe workery NIE pobiorą tego samego wiersza — brak podwójnej
+ * wysyłki. Wiersz z wygasłą dzierżawą (padły worker) wraca do puli po `p_lease_seconds`.
  */
 
 const MAX_ATTEMPTS = 5;
