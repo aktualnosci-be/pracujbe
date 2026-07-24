@@ -257,6 +257,17 @@ export async function POST(request: Request): Promise<Response> {
           const sub = await stripe.subscriptions.retrieve(subId);
           await upsertSubscription(admin, sub);
         }
+        // P1-15: finalizacja rezerwacji kodu rabatowego (reserved → finalized + licznik).
+        const codeId = session.metadata?.['discount_code_id'];
+        const companyId = session.metadata?.['company_id'];
+        if (codeId && companyId) {
+          const { error: finErr } = await admin.rpc('finalize_discount', {
+            p_code_id: codeId,
+            p_company_id: companyId,
+            p_session_id: session.id,
+          });
+          if (finErr) captureError(finErr, { area: 'stripe.webhook.finalizeDiscount' });
+        }
         break;
       }
       case 'customer.subscription.created':

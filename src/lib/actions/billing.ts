@@ -146,20 +146,36 @@ export async function startCheckout(
         .eq('id', ctx.companyId);
     }
 
-    // Opcjonalny kod rabatowy → efemeryczny kupon (once). Zniżka procentowa lub kwotowa.
+    // Opcjonalny kod rabatowy → REZERWACJA (P1-15: atomowa, limit + per-firma unikat) → kupon.
+    // Nieprawidłowy/wyczerpany kod ZATRZYMUJE checkout czytelnym błędem (koniec cichego pełnopłatu).
     const discounts: { coupon: string }[] = [];
+    let discountCodeId: string | null = null;
     if (code) {
-      const disc = await applyDiscount(code);
-      if (disc.ok && (disc.percentOff || disc.amountOffCents)) {
-        const coupon = disc.percentOff
-          ? await stripe.coupons.create({ duration: 'once', percent_off: disc.percentOff })
+      const parsedCode = discountCodeSchema.safeParse(code);
+      if (!parsedCode.success) return { ok: false, error: 'VALIDATION_FAILED' };
+      const { data: resv, error: resvErr } = await admin.rpc('reserve_discount', {
+        p_code: parsedCode.data,
+        p_company_id: ctx.companyId,
+      });
+      if (resvErr) {
+        return {
+          ok: false,
+          error: resvErr.message.includes('VALIDATION_FAILED') ? 'VALIDATION_FAILED' : 'NOT_FOUND',
+        };
+      }
+      const r = asRecord(resv);
+      const percentOff = typeof r['percent_off'] === 'number' ? r['percent_off'] : 0;
+      const amountOff = typeof r['amount_off_cents'] === 'number' ? r['amount_off_cents'] : 0;
+      discountCodeId = asStr(r['code_id']) || null;
+      const coupon =
+        percentOff > 0
+          ? await stripe.coupons.create({ duration: 'once', percent_off: percentOff })
           : await stripe.coupons.create({
               duration: 'once',
-              amount_off: disc.amountOffCents as number,
-              currency: (disc.currency ?? price.currency).toLowerCase(),
+              amount_off: amountOff,
+              currency: (asStr(r['currency']) || price.currency).toLowerCase(),
             });
-        discounts.push({ coupon: coupon.id });
-      }
+      discounts.push({ coupon: coupon.id });
     }
 
     const base = env.siteUrl;
@@ -183,7 +199,12 @@ export async function startCheckout(
         },
       ],
       ...(discounts.length ? { discounts } : { allow_promotion_codes: true }),
-      metadata: { company_id: ctx.companyId, plan },
+      // discount_code_id → webhook checkout.session.completed finalizuje rezerwację (P1-15).
+      metadata: {
+        company_id: ctx.companyId,
+        plan,
+        ...(discountCodeId ? { discount_code_id: discountCodeId } : {}),
+      },
       subscription_data: { metadata: { company_id: ctx.companyId, plan } },
       success_url: `${base}/${loc}/employer/platnosci?checkout=success`,
       cancel_url: `${base}/${loc}/employer/platnosci?checkout=cancel`,

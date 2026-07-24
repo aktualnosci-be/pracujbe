@@ -957,4 +957,46 @@ select pg_temp.assert(
   (select host(ip_address) from public.consents where visitor_id = 'vis-123' limit 1) = '203.0.113.7',
   'Y2d IP zapisane w receipcie');
 
+-- ============================================================================
+-- Z. Audyt produkcyjny 0045 (P1-15) — realizacja kodów rabatowych (rezerwacja + limit)
+-- ============================================================================
+reset role;
+insert into public.discount_codes(id, code, percent_off, max_redemptions, is_active)
+  values ('dc000000-0000-0000-0000-0000000000dc', 'ZTEST10', 10, 1, true);
+
+-- Z1: klient nie ma dostępu do tabeli realizacji (RPC-only).
+set role authenticated; reset app.current_uid;
+select pg_temp.expect_error('select count(*) from public.discount_redemptions',
+  'permission denied', 'Z1 authenticated nie widzi discount_redemptions');
+reset role;
+
+-- Z2: rezerwacja (service_role) zwraca zniżkę; ponowna dla tej samej firmy jest idempotentna.
+set role service_role;
+select (public.reserve_discount('ZTEST10', :'COMPA') ->> 'percent_off') as z_pct \gset
+select public.reserve_discount('ZTEST10', :'COMPA'); -- idempotentny retry (bez błędu, bez dubletu)
+reset role;
+select pg_temp.assert(:'z_pct' = '10', 'Z2 reserve_discount zwraca zniżkę 10%');
+select pg_temp.assert(
+  (select count(*) from public.discount_redemptions
+     where company_id = :'COMPA' and discount_code_id = 'dc000000-0000-0000-0000-0000000000dc') = 1,
+  'Z2b jedna rezerwacja mimo retry (idempotencja per firma)');
+
+-- Z3: limit=1 wyczerpany → inna firma nie zarezerwuje.
+set role service_role;
+select pg_temp.expect_error(
+  'select public.reserve_discount(''ZTEST10'', '''|| :'COMPB' ||''')',
+  'VALIDATION_FAILED', 'Z3 limit wykorzystania kodu (druga firma odrzucona)');
+reset role;
+
+-- Z4: finalizacja inkrementuje times_redeemed; po niej ta firma nie zarezerwuje ponownie.
+set role service_role;
+select public.finalize_discount('dc000000-0000-0000-0000-0000000000dc', :'COMPA', 'sess-1');
+select pg_temp.expect_error(
+  'select public.reserve_discount(''ZTEST10'', '''|| :'COMPA' ||''')',
+  'VALIDATION_FAILED', 'Z4 kod już zrealizowany przez firmę (finalized)');
+reset role;
+select pg_temp.assert(
+  (select times_redeemed from public.discount_codes where id = 'dc000000-0000-0000-0000-0000000000dc') = 1,
+  'Z4b times_redeemed=1 po finalizacji');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
