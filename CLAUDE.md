@@ -451,13 +451,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > checks), P1-19 (jedno źródło środowiska isProductionDeployment — spójne HSTS/noindex/robots/
 > sitemap), P1-23 (0041: idempotencja aktywnej pary + wygaśnięcie + CAS propozycji). P2-19 (UUID
 > w respondToOffer), P3-03 (X-Frame-Options DENY).
-> **P1 OTWARTE (świadomie):** P1-09 (pełna transakcyjność każdego kroku — duży refactor; publish
-> atomowy, relacje replace-all), P1-11 (twardsza walidacja publikacji: widełki/opis), P1-12
-> (filtrowanie/paginacja >200 w SQL — refactor listy ofert), P1-13 (404 z nawigacji paneli —
-> braki tras/linków), P1-14 (resztki atrap/nieaktywnych elementów UI), P1-15 (realizacja kodów
-> rabatowych), P1-16 (deduplikacja klienta/subskrypcji Stripe). **P1 NIE-AUTONOMICZNE:** P1-20/21/25
-> (twarda bramka RLS + migracje/rollback w deployu + ephemeral runners = infra), P1-22 (skan AV
-> uploadu = usługa zewn.), P1-24 (realna treść prawna + receipt zgód = prawnik).
+> **P1 — DOMKNIĘTE w kolejnej fali (0042–0044 + strony paneli):** P1-11 (0042: publikacja wymaga
+> opisu+obowiązków; widełki już CHECK-iem), P1-13 (realne strony paneli: kandydat aplikacje/
+> oferty-polecane/zapisane/propozycje/profil + getSavedJobs/getMyOffers; pracodawca oferty/
+> kandydaci/aplikacje/statystyki; /help→/pomoc), P1-14 (usunięte nieaktywne UI z dashboardu —
+> checkboxy/bulk/menu-TODO → podgląd read-only), P1-16 (0042: companies.provider_customer_id +
+> reużycie klienta + idempotency key + guard aktywnej subskrypcji + locale URL), P1-22 (0044:
+> głębsza walidacja OOXML DOCX + flaga scan_status/kwarantanna; kolejność delete DB→Storage;
+> **AV = świadomie odłożone, usługa zewn.**), P1-24 (0043: RPC-only record_consent — niezmienny
+> receipt visitor/wersja/IP/UA; **treść prawna nadal placeholder+noindex, do zatwierdzenia**).
+> Dowód: rls.sql sekcje P (0042), Y (0043). **P1 OTWARTE (świadomie, większe refactory):** P1-09
+> (pełna transakcyjność każdego kroku — publish atomowy, relacje replace-all), P1-12 (filtrowanie/
+> paginacja >200 w SQL — refactor listy ofert), P1-15 (transakcyjna realizacja kodów rabatowych).
+> **P1 NIE-AUTONOMICZNE:** P1-20/21/25 (twarda bramka RLS + migracje/rollback w deployu +
+> ephemeral runners = infra), P1-22-AV (skan antywirusowy = usługa zewn.), P1-24-treść (realna
+> treść prawna = prawnik).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
