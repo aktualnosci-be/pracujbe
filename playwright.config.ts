@@ -30,6 +30,10 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
+  // Świeżo zbudowany serwer (next start) hydratuje pierwsze żądania „na zimno" — elementy
+  // montowane po stronie klienta (np. baner cookies) mogą pojawić się nieco później niż
+  // domyślne 5 s. Dajemy asercjom 10 s, by uniknąć flaky na zimnym starcie/pod obciążeniem.
+  expect: { timeout: 10_000 },
   use: {
     baseURL: BASE_URL,
     trace: 'on-first-retry',
