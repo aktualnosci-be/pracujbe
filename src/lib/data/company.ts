@@ -89,14 +89,17 @@ export async function getMyCompany(): Promise<MyCompany | null> {
     } = await supabase.auth.getUser();
     if (!user) return null;
 
-    // Pierwsze aktywne członkostwo = aktywna firma. RLS: własny wiersz company_members
-    // (profile_id = auth.uid()) + odczyt firmy jako członek (companies_select_member).
+    // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
+    const { getActiveCompanyId } = await import('@/lib/company-context');
+    const activeId = await getActiveCompanyId(supabase, user.id);
+    if (!activeId) return null;
+
     const { data, error } = await supabase
       .from('company_members')
       .select('company_id, companies(id, name, slug, status, vat_number, verified_at)')
       .eq('profile_id', user.id)
+      .eq('company_id', activeId)
       .eq('is_active', true)
-      .order('created_at', { ascending: true })
       .limit(1);
     if (error) throw error;
 

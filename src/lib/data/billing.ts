@@ -195,18 +195,10 @@ function asInt(value: unknown, fallback = 0): number {
  * Pomocnicze — aktywna firma i signed URL faktury
  * ------------------------------------------------------------------------- */
 
-/** Pierwsze aktywne członkostwo zalogowanego = id aktywnej firmy (albo null). */
+/** Id aktywnej firmy zalogowanego (cookie-aware, zwalidowane — FUN-07) albo null. */
 async function activeCompanyId(supabase: SupabaseClient, userId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('company_members')
-    .select('company_id')
-    .eq('profile_id', userId)
-    .eq('is_active', true)
-    .order('created_at', { ascending: true })
-    .limit(1);
-  if (error) throw error;
-  const id = asString(asRows(data)[0]?.['company_id']);
-  return id || null;
+  const { getActiveCompanyId } = await import('@/lib/company-context');
+  return getActiveCompanyId(supabase, userId);
 }
 
 /**

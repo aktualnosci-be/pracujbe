@@ -9,6 +9,8 @@ import { isSupabaseConfigured } from '@/lib/env';
 import { createServerClient } from '@/lib/supabase/server';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
+import { getEmployerShellData } from '@/lib/data/employer';
+import type { CompanySwitcherCompany } from '@/components/employer/CompanySwitcher';
 
 /**
  * Layout panelu pracodawcy (grupa tras `/employer/*`).
@@ -42,6 +44,10 @@ export default async function EmployerLayout({
   let notifItems: NotificationItem[] | undefined;
   let notifUnread: number | undefined;
   let unreadMessages: number | undefined;
+  let companies: CompanySwitcherCompany[] | undefined;
+  let activeCompanyId: string | null | undefined;
+  let activeCompanyName: string | undefined;
+  let userName: string | undefined;
 
   if (isSupabaseConfigured()) {
     const supabase = await createServerClient();
@@ -66,10 +72,11 @@ export default async function EmployerLayout({
       redirect({ href: '/rejestracja-pracodawca', locale: locale as Locale });
     }
 
-    // Realne powiadomienia + licznik nieprzeczytanych konwersacji (pod sesją/RLS).
-    const [notif, unread] = await Promise.all([
+    // Realne powiadomienia + licznik nieprzeczytanych konwersacji + kontekst firmy (FUN-07).
+    const [notif, unread, shell] = await Promise.all([
       getNotifications(locale),
       getUnreadConversationsCount(),
+      getEmployerShellData(),
     ]);
     notifItems = notif.items.map((item) => ({
       title: item.title,
@@ -78,6 +85,12 @@ export default async function EmployerLayout({
     }));
     notifUnread = notif.unread;
     unreadMessages = unread;
+    if (shell) {
+      companies = shell.companies;
+      activeCompanyId = shell.activeId;
+      activeCompanyName = shell.activeName;
+      userName = shell.userName;
+    }
   }
 
   return (
@@ -85,6 +98,10 @@ export default async function EmployerLayout({
       notifItems={notifItems}
       notifUnread={notifUnread}
       unreadMessages={unreadMessages}
+      companies={companies}
+      activeCompanyId={activeCompanyId}
+      activeCompanyName={activeCompanyName}
+      userName={userName}
     >
       {children}
     </EmployerShell>

@@ -3,7 +3,6 @@
 import * as React from 'react';
 import {
   Building2,
-  ChevronDown,
   ClipboardList,
   CreditCard,
   LayoutDashboard,
@@ -16,15 +15,13 @@ import { useTranslations } from 'next-intl';
 import { usePathname } from '@/i18n/navigation';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
+import { CompanySwitcher, type CompanySwitcherCompany } from '@/components/employer/CompanySwitcher';
 
 /**
- * EmployerShell — chrome panelu pracodawcy (makieta 05): granatowy sidebar z przełącznikiem
- * firmy + topbar z powiadomieniami i danymi użytkownika (DashboardShell). Renderowane przez
- * `employer/layout.tsx` (serwerowy, ustawia NOINDEX). Osobny komponent kliencki, bo aktywna
- * pozycja nawigacji wyznaczana jest z `usePathname`, a metadata (noindex) musi zostać
- * wyeksportowana z komponentu serwerowego — analogicznie do `CandidateShell`.
- *
- * Dane firmy/użytkownika/liczników są DEMO (backend niepodpięty) — TODO(data).
+ * EmployerShell — chrome panelu pracodawcy (makieta 05): granatowy sidebar z REALNYM
+ * przełącznikiem firmy (FUN-07) + topbar z powiadomieniami i danymi użytkownika. Renderowane
+ * przez `employer/layout.tsx` (serwerowy, ustawia NOINDEX). Dane firmy/użytkownika pochodzą
+ * z sesji (props); bez env layout podaje fallback demo.
  */
 
 /** Ścieżki nawigacji panelu (bez prefiksu locale — dokłada go next-intl Link). */
@@ -39,9 +36,8 @@ const HREF = {
   settings: '/employer/ustawienia',
 } as const;
 
-// TODO(data): dane firmy z sesji/backendu (przełącznik firmy).
-const COMPANY_NAME = 'AGO Jobs & HR';
-const COMPANY_INITIALS = 'AGO';
+// Fallback DEMO (bez env / bez sesji) — panel działa bez backendu.
+const DEMO_COMPANY_NAME = 'AGO Jobs & HR';
 
 export interface EmployerShellProps {
   children: React.ReactNode;
@@ -51,6 +47,25 @@ export interface EmployerShellProps {
   notifUnread?: number;
   /** Liczba konwersacji z nieprzeczytanymi (badge pozycji „Wiadomości"). */
   unreadMessages?: number;
+  /** Firmy użytkownika (przełącznik). Puste/undefined → fallback demo. */
+  companies?: CompanySwitcherCompany[];
+  /** Id aktywnej firmy (z kontekstu cookie). */
+  activeCompanyId?: string | null;
+  /** Nazwa aktywnej firmy (nagłówek sidebara). */
+  activeCompanyName?: string;
+  /** Nazwa zalogowanego użytkownika (topbar). */
+  userName?: string;
+}
+
+function initialsOf(name: string): string {
+  const letters = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join('');
+  return letters || '•';
 }
 
 export function EmployerShell({
@@ -58,6 +73,10 @@ export function EmployerShell({
   notifItems,
   notifUnread,
   unreadMessages,
+  companies,
+  activeCompanyId,
+  activeCompanyName,
+  userName,
 }: EmployerShellProps): React.JSX.Element {
   const td = useTranslations('dashboard');
   const pathname = usePathname();
@@ -80,35 +99,25 @@ export function EmployerShell({
     return item.href.length > best.length ? item.href : best;
   }, HREF.summary);
 
-  // Przełącznik firmy w nagłówku sidebara.
-  // TODO(data): realna lista firm użytkownika + zmiana aktywnej firmy.
+  // Realny przełącznik firmy (FUN-07). Bez danych z sesji → fallback demo (jedna firma).
+  const shellCompanies: CompanySwitcherCompany[] =
+    companies && companies.length > 0 ? companies : [{ id: 'demo', name: DEMO_COMPANY_NAME, role: 'owner' }];
+  const activeName = activeCompanyName || shellCompanies[0]?.name || DEMO_COMPANY_NAME;
   const brand = (
-    <button
-      type="button"
-      aria-label={td('switchCompany')}
-      className="flex w-full items-center gap-2.5 rounded-md p-1 text-left transition-colors hover:bg-white/5"
-    >
-      <span
-        className="flex size-9 shrink-0 items-center justify-center rounded-md bg-white/10 text-xs font-semibold text-white"
-        aria-hidden="true"
-      >
-        {COMPANY_INITIALS}
-      </span>
-      <span className="min-w-0 flex-1 leading-tight">
-        <span className="block truncate text-sm font-semibold text-white">{COMPANY_NAME}</span>
-        <span className="block truncate text-xs text-white/60">{td('employerRole')}</span>
-      </span>
-      <ChevronDown className="size-4 shrink-0 text-white/60" aria-hidden="true" />
-    </button>
+    <CompanySwitcher
+      companies={shellCompanies}
+      activeId={activeCompanyId ?? shellCompanies[0]?.id ?? null}
+      activeName={activeName}
+    />
   );
 
-  // TODO(data): realne dane użytkownika/firmy z sesji/backendu (powiadomienia już realne).
+  const displayUser = userName && userName.trim().length > 0 ? userName : 'Jan Kowalski';
   return (
     <DashboardShell
       nav={nav}
       active={active}
       brand={brand}
-      user={{ name: 'Jan Kowalski', subtitle: COMPANY_NAME, initials: 'JK' }}
+      user={{ name: displayUser, subtitle: activeName, initials: initialsOf(displayUser) }}
       notifications={notifUnread}
       notifItems={notifItems}
       unreadMessages={unreadMessages}

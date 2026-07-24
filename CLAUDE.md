@@ -393,8 +393,16 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > cap 65). `get_job_match_profile` zwraca `remote` (0034). i18n `match.criteria` (remoteJob/
 > withinCommuteRadius). Testy: matching.test 10 (było 7). **Odłożone (FUN-06):** poziomy
 > języków/certyfikatów (wymaga rozszerzenia MatchCandidate/MatchJob o levele) + geokodowanie.
-> **Do zrobienia:** FUN-07 (multi-company), C3 (propozycje/statusy recruiter+), P2/P3
-> (SEC-12/14/15/16), billing (decyzja), CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
+> **Wave F — FUN-07 (multi-company) — ZROBIONE:** jeden cookie-aware kontekst aktywnej firmy
+> (`src/lib/company-context.ts`, cookie `pb_active_company` WALIDOWANA względem członkostw —
+> nie ufamy jej), akcja `setActiveCompany` (walidacja + cookie + revalidate), REALNY przełącznik
+> `CompanySwitcher` w sidebarze; wszystkie pickery (jobs createDraft, employer/company/billing
+> loadContext, company action) czytają aktywną firmę zamiast „pierwszego członkostwa"; panel
+> pokazuje realną firmę i użytkownika (koniec atrapy „AGO Jobs & HR / Jan Kowalski" — FUN-13).
+> **WSZYSTKIE P1 z audytu 2026-07-24 ZAMKNIĘTE.** **Do zrobienia (P2/P3/follow-up):** C3
+> (propozycje/statusy → recruiter+), SEC-14 (dedup replay webhooka), SEC-15 (reconciliation
+> outboxa), SEC-16 (`in_app_enabled` respektowane), SEC-12 (skan CV — wymaga AV), billing
+> (decyzja), CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)

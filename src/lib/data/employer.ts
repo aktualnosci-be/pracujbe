@@ -194,27 +194,60 @@ const loadContext = cache(async (): Promise<EmployerContext | null> => {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // Pierwsze aktywne członkostwo = aktywna firma. RLS: własny wiersz company_members
-  // (profile_id = auth.uid()) + odczyt firmy jako członek (companies_select_member).
-  const { data, error } = await supabase
-    .from('company_members')
-    .select('company_id, companies(id, status)')
-    .eq('profile_id', user.id)
-    .eq('is_active', true)
-    .order('created_at', { ascending: true })
-    .limit(1);
+  // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
+  const { getActiveCompany } = await import('@/lib/company-context');
+  const ctx = await getActiveCompany(supabase, user.id);
+  if (!ctx.activeId) return null;
 
-  if (error) throw error;
-  const row = asRows(data)[0];
-  if (!row) return null;
-
-  const companyId = asString(row['company_id']);
-  if (!companyId) return null;
-  const company = asEmbeddedRecord(row['companies']);
-  const companyStatus = asString(company['status'], 'unverified');
-
-  return { supabase, userId: user.id, companyId, companyStatus };
+  return { supabase, userId: user.id, companyId: ctx.activeId, companyStatus: ctx.activeStatus };
 });
+
+/**
+ * Dane do chrome panelu pracodawcy (FUN-07/FUN-13): lista firm użytkownika + aktywna firma +
+ * dane użytkownika. Bez env → null (layout użyje fallbacku demo).
+ */
+export async function getEmployerShellData(): Promise<{
+  companies: { id: string; name: string; role: string }[];
+  activeId: string | null;
+  activeName: string;
+  activeRole: string;
+  userName: string;
+} | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { createServerClient } = await import('@/lib/supabase/server');
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { getActiveCompany } = await import('@/lib/company-context');
+    const ctx = await getActiveCompany(supabase, user.id);
+
+    const { data: profileRow } = await supabase
+      .from('profiles')
+      .select('first_name, last_name')
+      .eq('id', user.id)
+      .maybeSingle();
+    const p = asRecord(profileRow);
+    const userName = [asString(p['first_name']), asString(p['last_name'])]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(' ');
+
+    return {
+      companies: ctx.companies.map((c) => ({ id: c.id, name: c.name, role: c.role })),
+      activeId: ctx.activeId,
+      activeName: ctx.activeName,
+      activeRole: ctx.activeRole,
+      userName,
+    };
+  } catch (error) {
+    captureError(error, { area: 'employer.getEmployerShellData' });
+    return null;
+  }
+}
 
 /** Identyfikatory (nie usuniętych) ofert aktywnej firmy — do zapytań o aplikacje/dopasowania. */
 async function companyJobIds(supabase: SupabaseClient, companyId: string): Promise<string[]> {

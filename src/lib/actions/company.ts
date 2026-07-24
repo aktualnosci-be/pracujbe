@@ -1,5 +1,7 @@
 'use server';
 
+import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createServerClient } from '@/lib/supabase/server';
@@ -7,6 +9,10 @@ import { isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
+import { ACTIVE_COMPANY_COOKIE, getActiveCompanyId } from '@/lib/company-context';
+
+/** UUID v4 (walidacja identyfikatorów przekazywanych z klienta). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import {
   companyFormSchema,
   companyUpdateSchema,
@@ -89,18 +95,49 @@ function nullIfEmpty(value: string | undefined | null): string | null {
   return v ? v : null;
 }
 
-/** Pierwsze aktywne członkostwo zalogowanego = id aktywnej firmy (albo null). */
+/** Id aktywnej firmy zalogowanego (cookie-aware, zwalidowane — FUN-07) albo null. */
 async function activeCompanyId(supabase: SupabaseClient, userId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('company_members')
-    .select('company_id')
-    .eq('profile_id', userId)
-    .eq('is_active', true)
-    .order('created_at', { ascending: true })
-    .limit(1);
-  if (error) throw error;
-  const id = asString(asRecord((data ?? [])[0])['company_id']);
-  return id || null;
+  return getActiveCompanyId(supabase, userId);
+}
+
+/**
+ * Ustawia aktywną firmę użytkownika (FUN-07). Waliduje AKTYWNE członkostwo w danej firmie
+ * (nie ufamy wartości od klienta), zapisuje cookie i odświeża panel. Zwraca `{ ok }`.
+ */
+export async function setActiveCompany(companyId: string): Promise<{ ok: boolean }> {
+  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) return { ok: false };
+  if (!isSupabaseConfigured()) return { ok: true }; // demo: bez sesji nie utrwalamy
+
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false };
+
+    // Autoryzacja: użytkownik musi mieć AKTYWNE członkostwo w tej firmie.
+    const { data, error } = await supabase
+      .from('company_members')
+      .select('id')
+      .eq('profile_id', user.id)
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .limit(1);
+    if (error || !asRecord((data ?? [])[0])['id']) return { ok: false };
+
+    const store = await cookies();
+    store.set(ACTIVE_COMPANY_COOKIE, companyId, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+    });
+    revalidatePath('/employer', 'layout');
+    return { ok: true };
+  } catch (error) {
+    captureError(error, { area: 'company.setActiveCompany' });
+    return { ok: false };
+  }
 }
 
 /* ---------------------------------------------------------------------------

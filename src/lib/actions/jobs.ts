@@ -191,17 +191,9 @@ export async function createJobDraft(locale?: string): Promise<CreateDraftResult
     });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
-    // Pierwsze aktywne członkostwo = aktywna firma (RLS: własny wiersz company_members).
-    const { data: memberships, error: mErr } = await supabase
-      .from('company_members')
-      .select('company_id')
-      .eq('profile_id', user.id)
-      .eq('is_active', true)
-      .order('created_at', { ascending: true })
-      .limit(1);
-    if (mErr) return { ok: false, error: mapPgError(mErr.message) };
-
-    const companyId = asString(asRecord((memberships ?? [])[0])['company_id']);
+    // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
+    const { getActiveCompanyId } = await import('@/lib/company-context');
+    const companyId = await getActiveCompanyId(supabase, user.id);
     if (!companyId) return { ok: false, error: 'PERMISSION_DENIED' };
 
     const { data: inserted, error: insErr } = await supabase
