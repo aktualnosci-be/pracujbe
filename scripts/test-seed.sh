@@ -46,5 +46,15 @@ begin
 end $$;
 SQL
 
+echo ">> SEC-17: seed DEMO odmawia uruchomienia na bazie z realnymi danymi"
+"${psql_base[@]}" -d "$DB" -c \
+  "insert into public.companies (name, status, is_demo) values ('REAL Corp', 'unverified', false);" >/dev/null
+if "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/seed.sql" >/dev/null 2>&1; then
+  echo "SEC-17 FAIL: seed powinien był odmówić przy realnych (nie-demo) danych" >&2
+  "${psql_base[@]}" -d postgres -c "drop database if exists ${DB};" >/dev/null 2>&1 || true
+  exit 1
+fi
+echo ">> SEC-17: odmowa OK"
+
 "${psql_base[@]}" -d postgres -c "drop database if exists ${DB};" >/dev/null
 echo "SEED load test: PASS"

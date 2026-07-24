@@ -24,6 +24,25 @@
 begin;
 
 -- ==========================================================================
+-- SEC-17: bezpiecznik przed przypadkowym seedem DEMO na staging/produkcji.
+-- Seed tworzy konta o znanym haśle ('DemoPass123!'), więc NIE wolno go uruchomić
+-- na bazie z realnymi danymi. Odmawiamy, jeśli istnieją realne (nie-demo) firmy lub oferty.
+-- Na czystej/lokalnej/CI bazie (0 realnych rekordów) przechodzi normalnie; ponowny seed też
+-- (dane demo mają is_demo=true). Cały seed jest w jednej transakcji — abort = pełny rollback.
+-- ==========================================================================
+do $$
+declare v_real_companies int; v_real_jobs int;
+begin
+  select count(*) into v_real_companies from public.companies where is_demo = false;
+  select count(*) into v_real_jobs from public.jobs where is_demo = false;
+  if v_real_companies > 0 or v_real_jobs > 0 then
+    raise exception
+      'SEED DEMO odmowa (SEC-17): baza zawiera realne dane (firmy=%, oferty=%). Seed tylko na czystej/lokalnej bazie.',
+      v_real_companies, v_real_jobs using errcode = '42501';
+  end if;
+end $$;
+
+-- ==========================================================================
 -- auth.users - konta uwierzytelniania (haslo demo: DemoPass123!)
 -- ==========================================================================
 -- Minimalny, uniwersalny zestaw kolumn (zgodny ze standardowym schematem

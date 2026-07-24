@@ -399,10 +399,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > `CompanySwitcher` w sidebarze; wszystkie pickery (jobs createDraft, employer/company/billing
 > loadContext, company action) czytają aktywną firmę zamiast „pierwszego członkostwa"; panel
 > pokazuje realną firmę i użytkownika (koniec atrapy „AGO Jobs & HR / Jan Kowalski" — FUN-13).
-> **WSZYSTKIE P1 z audytu 2026-07-24 ZAMKNIĘTE.** **Do zrobienia (P2/P3/follow-up):** C3
-> (propozycje/statusy → recruiter+), SEC-14 (dedup replay webhooka), SEC-15 (reconciliation
-> outboxa), SEC-16 (`in_app_enabled` respektowane), SEC-12 (skan CV — wymaga AV), billing
-> (decyzja), CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
+> **Wave F — SEC-17 (seed) — ZROBIONE:** seed DEMO ma bezpiecznik — odmawia uruchomienia na
+> bazie z realnymi (nie-demo) firmami/ofertami (ochrona przed przypadkowym seedem znanych kont
+> na staging/produkcji); czysta/lokalna/CI baza przechodzi. Test negatywny w `test-seed.sh`.
+> **P1 możliwe autonomicznie — ZAMKNIĘTE** (SEC-01/03/04/05/06/07/08/09/10/17/19, FUN-01/03/04/
+> 05/06(część)/07). **P1 wymagające decyzji/infra (otwarte):** FUN-08 (billing — wdrożyć Stripe
+> vs ukryć), CI-01/02/07 (separacja runnerów + twarda bramka RLS/Storage — infra), FUN-09 (realna
+> treść prawna — noindex safe default zrobiony). **P2/P3/follow-up:** C3 (propozycje/statusy →
+> recruiter+), SEC-14 (dedup replay webhooka), SEC-15 (reconciliation outboxa), SEC-16
+> (`in_app_enabled`), SEC-12 (skan CV — AV), FUN-02 (pełna transakcyjność kroków kreatora).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
