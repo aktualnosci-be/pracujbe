@@ -2248,6 +2248,24 @@ update jobs j set applications_count = sub.cnt
 from (select job_id, count(*)::int as cnt from applications group by job_id) sub
 where sub.job_id = j.id;
 
+-- ==========================================================================
+-- Oznaczenie danych DEMO (Invariant #12) — całość seeda to dane demonstracyjne.
+-- Kolumny is_demo dodane w 0022 (domyślnie false = dane realne z RPC/RLS).
+-- ==========================================================================
+update applications set is_demo = true;
+update offers set is_demo = true;
+update matches set is_demo = true;
+update saved_jobs set is_demo = true;
+update conversations set is_demo = true;
+update conversation_members set is_demo = true;
+update messages set is_demo = true;
+update notifications set is_demo = true;
+update application_status_history set is_demo = true;
+update offer_status_history set is_demo = true;
+update subscriptions set is_demo = true;
+update invoices set is_demo = true;
+update payments set is_demo = true;
+
 commit;
 
 -- ==========================================================================

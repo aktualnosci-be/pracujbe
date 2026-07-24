@@ -89,7 +89,10 @@ tam, gdzie wskazano). Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
 - [ ] Polityka prywatności, regulamin, polityka cookies opublikowane (PL/NL/FR/EN),
       wersjonowane w `consent_versions` (`is_current`).
 - [ ] Mechanizm eksportu/usunięcia danych na żądanie.
-- [ ] Minimalizacja danych; retencja zdefiniowana.
+- [ ] Minimalizacja danych; retencja zdefiniowana. **Retencja e-maili:** zaplanuj dzienny cron
+      wywołujący RPC `email_deliveries_gc(90)` (usuwa zakończone dostawy > 90 dni — adresy/treści;
+      RODO). Dane demo są oznaczone `is_demo=true` na tabelach procesowych (0022) — łatwe do
+      odfiltrowania/usunięcia (Invariant #12).
 
 ## 10. Monitoring i obserwowalność
 
