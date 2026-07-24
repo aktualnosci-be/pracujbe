@@ -267,7 +267,64 @@ function toErrorKey(field: string, message: string): string {
   return 'job.error.invalid';
 }
 
-export function JobWizard(): React.JSX.Element {
+/**
+ * Wartości wejściowe wznawianego szkicu (P1-04). Pola enumeryczne przyjmujemy jako `string`
+ * (surowe z DB) i ZAWĘŻAMY tutaj wg tych samych allow-list, których używa walidacja kroków —
+ * kreator jest właścicielem tych unii, więc konwersja DB→UI ma jedno miejsce.
+ */
+export interface JobWizardInitialValues
+  extends Omit<
+    Partial<FormValues>,
+    'category' | 'contractType' | 'currency' | 'salaryPeriod' | 'languages'
+  > {
+  category?: string;
+  contractType?: string;
+  currency?: string;
+  salaryPeriod?: string;
+  languages?: { language: string; level: string }[];
+}
+
+export interface JobWizardProps {
+  /**
+   * P1-04: wznowienie ISTNIEJĄCEGO szkicu — id oferty i zapisane wartości z DB. Bez nich kreator
+   * tworzy nowy szkic przy pierwszym zapisie (dotychczasowe zachowanie „nowa oferta").
+   */
+  initialJobId?: string;
+  initialValues?: JobWizardInitialValues;
+}
+
+/** Zawężenie surowych wartości z DB do unii formularza (nieznane wartości → domyślne/puste). */
+function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> {
+  if (!raw) return {};
+  const { category, contractType, currency, salaryPeriod, languages, ...rest } = raw;
+  const narrowed: Partial<FormValues> = { ...rest };
+  if (category && (CATEGORY_KEYS as readonly string[]).includes(category)) {
+    narrowed.category = category as CategoryKey;
+  }
+  if (contractType && (CONTRACT_TYPES as readonly string[]).includes(contractType)) {
+    narrowed.contractType = contractType as ContractType;
+  }
+  if (currency === 'EUR' || currency === 'PLN') narrowed.currency = currency;
+  if (salaryPeriod && (SALARY_PERIODS as readonly string[]).includes(salaryPeriod)) {
+    narrowed.salaryPeriod = salaryPeriod as SalaryPeriod;
+  }
+  if (languages) {
+    narrowed.languages = languages
+      .filter((l) => l.language.trim() !== '')
+      .map((l) => ({
+        language: l.language,
+        level: ((LANGUAGE_LEVELS as readonly string[]).includes(l.level)
+          ? l.level
+          : 'basic') as LanguageLevel,
+      }));
+  }
+  return narrowed;
+}
+
+export function JobWizard({
+  initialJobId,
+  initialValues,
+}: JobWizardProps = {}): React.JSX.Element {
   const t = useTranslations('jobWizard');
   const tRoot = useTranslations();
   const tn = useTranslations('nav');
@@ -284,12 +341,16 @@ export function JobWizard(): React.JSX.Element {
     setError,
     clearErrors,
     formState: { errors },
-  } = useForm<FormValues>({ defaultValues: DEFAULT_VALUES, mode: 'onSubmit' });
+  } = useForm<FormValues>({
+    // Wznowienie szkicu: zapisane wartości nadpisują domyślne (pola nieuzupełnione zostają puste).
+    defaultValues: { ...DEFAULT_VALUES, ...narrowInitialValues(initialValues) },
+    mode: 'onSubmit',
+  });
 
   const values = watch();
 
   const [step, setStep] = React.useState<WizardStep>(1);
-  const [jobId, setJobId] = React.useState<string | null>(null);
+  const [jobId, setJobId] = React.useState<string | null>(initialJobId ?? null);
   const [saveState, setSaveState] = React.useState<SaveState>('idle');
   const [demo, setDemo] = React.useState(false);
   const [badgeVisible, setBadgeVisible] = React.useState(false);

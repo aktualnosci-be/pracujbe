@@ -1221,4 +1221,76 @@ select pg_temp.assert(
 reset role;
 delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe';
 
+-- ============================================================================
+-- HH. AUDIT_REPORT 0056 (P1-04) — cykl życia oferty (maszyna stanów set_job_status)
+-- ============================================================================
+-- Punkt wyjścia: 'a2222222…' jest AKTYWNA (opublikowana w GG4).
+-- HH1: klient nie zmienia statusu bezpośrednim UPDATE (guard_job_status — dotąd chroniona
+-- była tylko zmiana na 'active'; teraz KAŻDA zmiana idzie przez RPC).
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'update public.jobs set status = ''paused'' where id = ''a2222222-2222-2222-2222-222222222222''',
+  'PERMISSION_DENIED', 'HH1 klient nie zmienia statusu oferty bezpośrednio');
+
+-- HH2: niedozwolone przejście (resume z active) odrzucone macierzą.
+select pg_temp.expect_error(
+  'select public.set_job_status(''a2222222-2222-2222-2222-222222222222''::uuid, ''resume'')',
+  'VALIDATION_FAILED', 'HH2 resume z active odrzucone (macierz przejść)');
+
+-- HH3: pauza działa (active → paused), oferta znika z warstwy publicznej.
+select public.set_job_status('a2222222-2222-2222-2222-222222222222'::uuid, 'pause');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = 'a2222222-2222-2222-2222-222222222222') = 'paused',
+  'HH3 pause: active → paused');
+select pg_temp.assert(public.job_is_public('a2222222-2222-2222-2222-222222222222'::uuid) is false,
+  'HH3b wstrzymana oferta nie jest publiczna');
+
+-- HH4: wznowienie wymaga limitu planu — bez subskrypcji (free=1) i z aktywnymi ofertami → odmowa.
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'select public.set_job_status(''a2222222-2222-2222-2222-222222222222''::uuid, ''resume'')',
+  'ENTITLEMENT_LIMIT', 'HH4 resume ponad limit planu odrzucone');
+reset role; reset app.current_uid;
+
+-- HH5: z planem 'pro' wznowienie przechodzi (paused → active).
+reset role;
+insert into public.subscriptions (company_id, plan, status, provider)
+  values (:'COMPA', 'pro', 'active', 'stripe');
+set role authenticated; set app.current_uid = :'EMPA';
+select public.set_job_status('a2222222-2222-2222-2222-222222222222'::uuid, 'resume');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = 'a2222222-2222-2222-2222-222222222222') = 'active',
+  'HH5 resume: paused → active (w ramach planu)');
+
+-- HH6: zamknięcie (active → closed) i ponowne otwarcie (closed → active) z kompletnością.
+set role authenticated; set app.current_uid = :'EMPA';
+select public.set_job_status('a2222222-2222-2222-2222-222222222222'::uuid, 'close');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = 'a2222222-2222-2222-2222-222222222222') = 'closed',
+  'HH6 close: active → closed');
+set role authenticated; set app.current_uid = :'EMPA';
+select public.set_job_status('a2222222-2222-2222-2222-222222222222'::uuid, 'reopen');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = 'a2222222-2222-2222-2222-222222222222') = 'active',
+  'HH7 reopen: closed → active (kompletna oferta)');
+
+-- HH8: zwykły member (bez recruiter+) nie zarządza cyklem życia oferty.
+reset role;
+insert into public.company_members(company_id, profile_id, role, is_active)
+  values (:'COMPA', :'CANDB', 'member', true)
+  on conflict do nothing;
+set role authenticated; set app.current_uid = :'CANDB';
+select pg_temp.expect_error(
+  'select public.set_job_status(''a2222222-2222-2222-2222-222222222222''::uuid, ''pause'')',
+  'PERMISSION_DENIED', 'HH8 zwykły member nie zmienia statusu oferty (recruiter+)');
+reset role; reset app.current_uid;
+-- sprzątanie
+reset role;
+delete from public.company_members where company_id = :'COMPA' and profile_id = :'CANDB';
+delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe';
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

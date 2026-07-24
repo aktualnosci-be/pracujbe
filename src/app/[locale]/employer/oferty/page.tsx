@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/status-pill';
+import { JobLifecycleActions } from '@/components/employer/JobLifecycleActions';
 import { getCompanyJobs } from '@/lib/data/employer';
 
 /**
@@ -12,7 +13,11 @@ import { getCompanyJobs } from '@/lib/data/employer';
  * `navOffers` (P1-13: wcześniej 404, istniała tylko podtrasa `oferty/nowa`).
  *
  * Realne dane pod sesją/RLS (getCompanyJobs — recruiter+). Panel = noindex, force-dynamic.
- * Świadomie BEZ nieaktywnych checkboxów/menu akcji z dashboardu (P1-14) — czysta lista + CTA.
+ * Świadomie BEZ nieaktywnych checkboxów/menu akcji z dashboardu (P1-14).
+ *
+ * P1-04 (cykl życia): szkic ma link „Dokończ szkic" (wznowienie kreatora — koniec osieroconych
+ * draftów), a oferta opublikowana/wstrzymana/zamknięta realne akcje statusu (wstrzymaj/wznów/
+ * zamknij/otwórz ponownie) egzekwowane w RPC `set_job_status`.
  */
 export const dynamic = 'force-dynamic';
 
@@ -63,7 +68,7 @@ export default async function EmployerOffersPage({
                 <p className="truncate font-medium text-foreground">{offer.title}</p>
                 <p className="truncate text-xs text-muted-foreground">{offer.city}</p>
               </div>
-              <div className="flex shrink-0 items-center gap-4 text-sm">
+              <div className="flex shrink-0 flex-wrap items-center gap-4 text-sm">
                 <span className="text-muted-foreground">
                   {td('offersApplications', { count: offer.newApplications })}
                 </span>
@@ -71,6 +76,13 @@ export default async function EmployerOffersPage({
                   {td('colMatched')}: {offer.matched}
                 </span>
                 <StatusPill status={offer.status} />
+                {offer.status === 'draft' ? (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/employer/oferty/${offer.id}/edycja`}>{td('resumeDraft')}</Link>
+                  </Button>
+                ) : (
+                  <JobLifecycleActions jobId={offer.id} status={offer.status} />
+                )}
               </div>
             </li>
           ))}

@@ -355,6 +355,189 @@ export async function getCompanyEntitlements(): Promise<CompanyEntitlements | nu
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * P1-04: wznowienie/edycja szkicu oferty (kreator startuje z zapisanych danych)
+ * ------------------------------------------------------------------------- */
+
+/** Wartości szkicu oferty w kształcie pól kreatora (JobWizard). Puste = nieuzupełnione. */
+export interface JobDraftValues {
+  title: string;
+  category: string;
+  occupation: string;
+  contractType: string;
+  workingHours: string;
+  shifts: string;
+  startImmediately: boolean;
+  startDate: string;
+  city: string;
+  region: string;
+  address: string;
+  remote: boolean;
+  salaryMin: string;
+  salaryMax: string;
+  currency: string;
+  salaryPeriod: string;
+  description: string;
+  responsibilities: string[];
+  requirementsMandatory: string[];
+  mandatorySkills: string[];
+  minExperienceYears: string;
+  requirementsOptional: string[];
+  skills: string[];
+  languages: { language: string; level: string }[];
+  requiredCertificates: string[];
+  requiresDrivingLicense: boolean;
+  noLanguageRequired: boolean;
+  conditions: string[];
+  benefits: string[];
+  accommodation: boolean;
+  transport: boolean;
+  companyDescription: string;
+  contactEmail: string;
+}
+
+/** Wynik wczytania szkicu: jawnie rozdziela „brak/obcy", „nie-szkic" i błąd odczytu. */
+export type JobDraftLoad =
+  | { status: 'ok'; jobId: string; jobStatus: string; values: JobDraftValues }
+  | { status: 'not-found' }
+  | { status: 'not-draft'; jobStatus: string }
+  | { status: 'error' };
+
+function numToText(value: unknown): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+}
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
+/**
+ * Wczytuje szkic oferty firmy do kształtu pól kreatora (P1-04: koniec osieroconych draftów —
+ * „Zapisz i wyjdź" nie gubi już pracy). Czyta POD SESJĄ (RLS: tylko oferty własnej firmy), więc
+ * członek innej firmy dostanie `not-found`. Relacje (wymagania/umiejętności/języki/certyfikaty)
+ * są wczytywane, bo kreator zapisuje je przez replace-all — bez nich „Dalej" by je wyczyścił
+ * (ta sama pułapka co P1-07/P1-08). Błąd odczytu → 'error' (UI pokazuje retry, nie pusty kreator).
+ */
+export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
+  if (!isSupabaseConfigured()) return { status: 'not-found' };
+  try {
+    const ctx = await loadContext();
+    if (!ctx) return { status: 'not-found' };
+    const { supabase, companyId } = ctx;
+
+    const { data: jobRow, error: jobErr } = await supabase
+      .from('jobs')
+      .select(
+        'id, company_id, status, title, category, occupation, contract_type, working_hours, shifts, ' +
+          'start_immediately, start_date, city, region, address, remote, salary_min, salary_max, ' +
+          'currency, salary_period, min_experience_years, requires_driving_license, ' +
+          'no_language_required, accommodation, transport, contact_email, default_locale',
+      )
+      .eq('id', jobId)
+      .eq('company_id', companyId)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (jobErr) return { status: 'error' };
+    const job = asRecord(jobRow);
+    if (!asString(job['id'])) return { status: 'not-found' };
+
+    const jobStatus = asString(job['status']);
+    if (jobStatus !== 'draft') return { status: 'not-draft', jobStatus };
+
+    const locale = asString(job['default_locale'], 'pl');
+    const [translation, requirements, skills, languages, certificates] = await Promise.all([
+      supabase
+        .from('job_translations')
+        .select('description, responsibilities, conditions, benefits, company_description')
+        .eq('job_id', jobId)
+        .eq('locale', locale)
+        .maybeSingle(),
+      supabase.from('job_requirements').select('kind, content, position').eq('job_id', jobId),
+      supabase.from('job_skills').select('skill_label, is_mandatory').eq('job_id', jobId),
+      supabase.from('job_languages').select('language_label, level').eq('job_id', jobId),
+      supabase.from('job_certificates').select('certificate_label').eq('job_id', jobId),
+    ]);
+    // Każdy błąd relacji → 'error': kreator startujący z pustych relacji SKASOWAŁBY je przy zapisie.
+    if (
+      translation.error ||
+      requirements.error ||
+      skills.error ||
+      languages.error ||
+      certificates.error
+    ) {
+      return { status: 'error' };
+    }
+
+    const tr = asRecord(translation.data);
+    const reqRows = Array.isArray(requirements.data) ? requirements.data : [];
+    const byKind = (kind: string): string[] =>
+      reqRows
+        .map((r) => asRecord(r))
+        .filter((r) => asString(r['kind']) === kind)
+        .sort((a, b) => asNumber(a['position']) - asNumber(b['position']))
+        .map((r) => asString(r['content']))
+        .filter(Boolean);
+    const skillRows = (Array.isArray(skills.data) ? skills.data : []).map((r) => asRecord(r));
+
+    return {
+      status: 'ok',
+      jobId,
+      jobStatus,
+      values: {
+        title: asString(job['title']),
+        category: asString(job['category']),
+        occupation: asString(job['occupation']),
+        contractType: asString(job['contract_type']),
+        workingHours: asString(job['working_hours']),
+        shifts: asString(job['shifts']),
+        startImmediately: job['start_immediately'] === true,
+        startDate: asString(job['start_date']),
+        city: asString(job['city']),
+        region: asString(job['region']),
+        address: asString(job['address']),
+        remote: job['remote'] === true,
+        salaryMin: numToText(job['salary_min']),
+        salaryMax: numToText(job['salary_max']),
+        currency: asString(job['currency'], 'EUR'),
+        salaryPeriod: asString(job['salary_period'], 'month'),
+        description: asString(tr['description']),
+        responsibilities: asStringArray(tr['responsibilities']),
+        requirementsMandatory: byKind('mandatory'),
+        mandatorySkills: skillRows
+          .filter((r) => r['is_mandatory'] === true)
+          .map((r) => asString(r['skill_label']))
+          .filter(Boolean),
+        minExperienceYears: numToText(job['min_experience_years']),
+        requirementsOptional: byKind('optional'),
+        skills: skillRows
+          .filter((r) => r['is_mandatory'] !== true)
+          .map((r) => asString(r['skill_label']))
+          .filter(Boolean),
+        languages: (Array.isArray(languages.data) ? languages.data : [])
+          .map((r) => asRecord(r))
+          .map((r) => ({
+            language: asString(r['language_label']),
+            level: asString(r['level'], 'basic'),
+          }))
+          .filter((l) => l.language !== ''),
+        requiredCertificates: (Array.isArray(certificates.data) ? certificates.data : [])
+          .map((r) => asString(asRecord(r)['certificate_label']))
+          .filter(Boolean),
+        requiresDrivingLicense: job['requires_driving_license'] === true,
+        noLanguageRequired: job['no_language_required'] === true,
+        conditions: asStringArray(tr['conditions']),
+        benefits: asStringArray(tr['benefits']),
+        accommodation: job['accommodation'] === true,
+        transport: job['transport'] === true,
+        companyDescription: asString(tr['company_description']),
+        contactEmail: asString(job['contact_email']),
+      },
+    };
+  } catch (error) {
+    captureError(error, { area: 'employer.getJobDraft' });
+    return { status: 'error' };
+  }
+}
+
 /** Lista ofert firmy z liczbą nowych aplikacji i dopasowań na ofertę. */
 export async function getCompanyJobs(): Promise<EmployerJob[]> {
   if (!isSupabaseConfigured()) return DEMO_JOBS;

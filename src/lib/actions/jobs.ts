@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { revalidatePath } from 'next/cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createServerClient } from '@/lib/supabase/server';
@@ -558,6 +559,70 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     if (pubErr) return { ok: false, error: mapPgError(pubErr.message) };
 
     return { ok: true };
+  } catch {
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * setJobStatus — cykl życia opublikowanej oferty (P1-04)
+ * ------------------------------------------------------------------------- */
+
+/** Dozwolone operacje cyklu życia oferty (macierz przejść egzekwowana w RPC 0056). */
+export type JobLifecycleAction = 'pause' | 'resume' | 'close' | 'reopen';
+
+const LIFECYCLE_ACTIONS: ReadonlySet<string> = new Set<JobLifecycleAction>([
+  'pause',
+  'resume',
+  'close',
+  'reopen',
+]);
+
+export type JobStatusResult =
+  | { ok: true; demo?: boolean; status?: string }
+  | { ok: false; error: ErrorCode };
+
+/**
+ * Zmienia status oferty w cyklu życia (P1-04): pauza / wznowienie / zamknięcie / ponowne otwarcie.
+ * Cała logika (macierz przejść, capability recruiter+, firma verified, limit planu, kompletność
+ * przy reopenie, CAS) jest w transakcyjnym RPC `set_job_status`; klient nie zmienia statusu
+ * bezpośrednio (guard trigger `guard_job_status`).
+ */
+export async function setJobStatus(
+  jobId: string,
+  action: JobLifecycleAction,
+): Promise<JobStatusResult> {
+  if (typeof jobId !== 'string' || !UUID_RE.test(jobId)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  if (!LIFECYCLE_ACTIONS.has(action)) return { ok: false, error: 'VALIDATION_FAILED' };
+
+  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const allowed = await checkRateLimit('job-status', {
+      identifier: user.id,
+      max: PUBLISH_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
+    if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
+
+    const { data, error } = await supabase.rpc('set_job_status', {
+      p_job_id: jobId,
+      p_action: action,
+    });
+    if (error) return { ok: false, error: mapPgError(error.message) };
+
+    // Lista ofert firmy i publiczne widoki muszą pokazać nowy stan.
+    revalidatePath('/employer/oferty');
+    revalidatePath('/employer');
+    return { ok: true, status: typeof data === 'string' ? data : undefined };
   } catch {
     return { ok: false, error: 'INTERNAL' };
   }
