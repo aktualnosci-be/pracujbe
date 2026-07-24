@@ -1,9 +1,11 @@
 'use server';
 
+import { cookies, headers } from 'next/headers';
+
 import { createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
-import type { ConsentCategories, ConsentCategory, ConsentSource } from '@/lib/consent';
+import type { ConsentCategories, ConsentSource } from '@/lib/consent';
 
 /**
  * Serwerowy log zgód (RODO art. 7 ust. 1 — rozliczalność).
@@ -19,15 +21,7 @@ import type { ConsentCategories, ConsentCategory, ConsentSource } from '@/lib/co
  * NIE blokujemy UX i NIE ujawniamy technikaliów (Invariant #8) — cookie pozostaje dowodem.
  */
 
-/** Kolejność i komplet kategorii logowanych do bazy (zgodna z enumem `consent_category`). */
-const LOGGED_CATEGORIES: readonly ConsentCategory[] = [
-  'necessary',
-  'preferences',
-  'analytics',
-  'marketing',
-];
-
-/** Dozwolone źródła zgody; nieznane wartości sprowadzamy do banera (defensywnie). */
+/** Dozwolone źródła (RPC też normalizuje — tu tylko dla czytelności typu). */
 const KNOWN_SOURCES: readonly ConsentSource[] = [
   'cookie_banner',
   'cookie_settings',
@@ -35,49 +29,50 @@ const KNOWN_SOURCES: readonly ConsentSource[] = [
   'onboarding',
 ];
 
-function normalizeSource(source: string): ConsentSource {
-  return (KNOWN_SOURCES as readonly string[]).includes(source)
-    ? (source as ConsentSource)
-    : 'cookie_banner';
+/** Pierwszy adres z X-Forwarded-For (klient), fallback X-Real-IP. */
+function clientIp(h: Headers): string | null {
+  const xff = h.get('x-forwarded-for');
+  if (xff) {
+    const first = xff.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return h.get('x-real-ip');
 }
 
 /**
- * Utrwala zgodę po stronie serwera. Zwraca `{ ok }` — wołający (klient) ignoruje wynik
- * (best-effort), ale zwracamy status na potrzeby ewentualnych testów/diagnostyki.
+ * Utrwala NIEZMIENNY receipt zgody po stronie serwera (RODO art. 7 — rozliczalność), przez
+ * zaufane RPC `record_consent` (RPC-only: klient nie pisze wprost do `consents`). Zapisuje
+ * profile_id (auth.uid()/null), visitor_id (cookie), per-kategoria granted, wersję dokumentu
+ * (RPC dobiera aktualną), źródło, IP i user-agent. Best-effort: awaria nie blokuje UX (cookie
+ * pozostaje dowodem w przeglądarce), bez ujawniania technikaliów (Invariant #8).
  */
 export async function recordConsent(
   categories: ConsentCategories,
   source: string,
 ): Promise<{ ok: boolean }> {
-  // Tryb demo / brak konfiguracji — cookie w przeglądarce pozostaje dowodem zgody.
-  if (!isSupabaseConfigured()) {
-    return { ok: false };
-  }
+  if (!isSupabaseConfigured()) return { ok: false };
 
-  // Anonimowy zapis (profile_id null) — limit per IP chroni tabelę consents przed zalewaniem.
+  // Limit per IP — dodatkowa warstwa; RPC-only i tak zamyka bezpośredni flood.
   if (!(await checkRateLimit('consent', { max: 30, windowSeconds: 3600 }))) {
     return { ok: false };
   }
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const [supabase, hdrs, cookieStore] = await Promise.all([
+      createServerClient(),
+      headers(),
+      cookies(),
+    ]);
+    const src = (KNOWN_SOURCES as readonly string[]).includes(source) ? source : 'cookie_banner';
+    const visitorId = cookieStore.get('pracujbe_visitor')?.value ?? null;
 
-    // Zalogowany: profile_id = auth.uid() (profiles 1:1 z auth.users).
-    // Anonimowy: profile_id null — zgoda sesji przed logowaniem (dopuszczona przez RLS).
-    const profileId = user?.id ?? null;
-    const src = normalizeSource(source);
-
-    const rows = LOGGED_CATEGORIES.map((category) => ({
-      profile_id: profileId,
-      category,
-      granted: category === 'necessary' ? true : categories?.[category] === true,
-      source: src,
-    }));
-
-    const { error } = await supabase.from('consents').insert(rows);
+    const { error } = await supabase.rpc('record_consent', {
+      p_categories: categories ?? {},
+      p_source: src,
+      p_visitor_id: visitorId,
+      p_ip: clientIp(hdrs),
+      p_user_agent: hdrs.get('user-agent') ?? null,
+    });
     return { ok: !error };
   } catch {
     // Log zgód jest pomocniczy — awaria nie może przerwać zapisu zgody w przeglądarce.

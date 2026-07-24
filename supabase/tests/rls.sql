@@ -930,4 +930,31 @@ select pg_temp.expect_error(
   'VALIDATION_FAILED', 'X2 wygasłej propozycji nie można zaakceptować (P1-23)');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- Y. Audyt produkcyjny 0043 (P1-24) — receipt zgód RPC-only (koniec floodowania)
+-- ============================================================================
+-- Y1: klient nie zapisuje wprost do consents (bezpośredni INSERT odebrany).
+set role authenticated; reset app.current_uid;
+select pg_temp.expect_error(
+  'insert into public.consents(category, granted) values (''analytics'', true)',
+  'permission denied', 'Y1 authenticated nie robi bezpośredniego INSERT do consents');
+reset role;
+-- Y2: record_consent (anon) zapisuje 4 kategorie z metadanymi receiptu.
+set role anon; reset app.current_uid;
+select public.record_consent('{"analytics":true,"marketing":false,"preferences":true}'::jsonb,
+  'cookie_banner', 'vis-123', '203.0.113.7', 'UA/1.0');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.consents where visitor_id = 'vis-123') = 4,
+  'Y2 record_consent zapisuje 4 kategorie (receipt)');
+select pg_temp.assert(
+  (select granted from public.consents where visitor_id = 'vis-123' and category = 'necessary') = true,
+  'Y2b necessary zawsze granted');
+select pg_temp.assert(
+  (select granted from public.consents where visitor_id = 'vis-123' and category = 'marketing') = false,
+  'Y2c marketing=false zapisane w receipcie');
+select pg_temp.assert(
+  (select host(ip_address) from public.consents where visitor_id = 'vis-123' limit 1) = '203.0.113.7',
+  'Y2d IP zapisane w receipcie');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
