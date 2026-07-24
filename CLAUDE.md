@@ -64,7 +64,7 @@ autoodtwarzanych filmów, przeładowanych dashboardów, zbędnych cieni.
 | primary | `#2563EB` | akcje główne, linki |
 | primary-dark | `#1D4ED8` | hover/active |
 | text | `#172033` | tekst podstawowy |
-| muted | `#64748B` | tekst drugorzędny |
+| muted (foreground) | `#566881` | tekst drugorzędny (przyciemniony z `#64748B` dla WCAG AA ≥4.5:1 na tle soft/białym) |
 | background | `#FFFFFF` | tło |
 | soft | `#F8FAFC` | sekcje/tła kart |
 | border | `#E2E8F0` | obramowania |
@@ -412,9 +412,18 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > dowód rls.sql T). **C3 (0037) — ZROBIONE:** propozycje (enforce_offer_integrity
 > INSERT → can_manage_jobs) i zmiany statusu aplikacji (transition_application → is_job_manager)
 > wymagają recruiter+; respond_to_offer (kandydat) bez zmian. Dowód: rls.sql sekcja U.
-> **Pozostałe follow-up (nieautonomiczne):** SEC-12 (skan CV — wymaga AV/usługi zewn.), FUN-02
-> (pełna transakcyjność każdego kroku kreatora — duży refactor), CI-01/02/07 (separacja runnerów +
-> twarda bramka RLS/Storage — infra), FUN-09 (treść prawna do zatwierdzenia).
+> **CI-08 (SCA) — ZROBIONE:** osobny job `sca` (`npm audit --audit-level=high`) na self-hosted
+> runnerze blokuje CI przy podatności o severity >= high (obecnie 0). **QA-01 (a11y w CI) —
+> ZROBIONE:** bramka axe-core (`@axe-core/playwright`) w `tests/e2e/a11y.spec.ts` (uruchamiana w
+> jobie `e2e`) blokuje przy naruszeniach WCAG 2.x A/AA critical/serious na home/liście ofert/
+> logowaniu/rejestracji; domknięte realne naruszenia kontrastu tokenami: `--muted-foreground`
+> przyciemniony do AA (`#566881`), nowy `--accent-on-dark` (`#60A5FA`) dla „.be" na granatowej
+> stopce, tekst akcentu na tincie `bg-accent/10` → `text-accent-dark`, tekst stanu (verified/%,
+> „zawsze wł.") → `-text` warianty (`text-success-text`), usunięty zdublowany landmark `<main>`
+> na stronie głównej. **Pozostałe follow-up (nieautonomiczne):** SEC-12 (skan CV — wymaga AV/usługi
+> zewn.), FUN-02 (pełna transakcyjność każdego kroku kreatora — duży refactor), CI-01/02/07
+> (separacja runnerów + twarda bramka RLS/Storage — infra), FUN-09 (treść prawna do zatwierdzenia),
+> perf/CWV (Lighthouse w CI — pozostała część audytu H).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
@@ -486,7 +495,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 ### Etap 8 — jakość
 - [x] Testy: Vitest (matching, recipient-locale, i18n keys, error-keys), integracyjne RLS+seed w CI (`postgres:16`), Playwright (smoke/seo/flows)
 - [~] Testy Playwright: języki/detal oferty/CTA/noindex paneli/cookies/SEO gotowe (`flows.spec`+smoke+seo, 12 pass); do rozbudowy: aplikowanie/propozycje pod realną sesją
-- [ ] Wydajność / Core Web Vitals / dostępność (audyt)
+- [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
+  axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
+  WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
+  logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny). **Do zrobienia:**
+  Core Web Vitals / audyt wydajności (Lighthouse w CI).
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 

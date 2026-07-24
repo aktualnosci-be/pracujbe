@@ -82,7 +82,8 @@ export default async function HomePage({ params }: HomePageProps) {
   const latestJobs = await getLatestJobs(locale, LATEST_JOBS_LIMIT);
 
   return (
-    <main>
+    // Bez własnego <main> — layout (public) już dostarcza landmark <main> (unikamy duplikatu, a11y).
+    <>
       {/* Hero — lekki, nie na cały ekran; ilustracja Brukseli po prawej (desktop). */}
       <section className="relative overflow-hidden border-b border-border bg-soft">
         <div className="container py-12 md:py-16">
@@ -154,6 +155,6 @@ export default async function HomePage({ params }: HomePageProps) {
           <ForCompanies />
         </div>
       </section>
-    </main>
+    </>
   );
 }

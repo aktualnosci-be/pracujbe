@@ -390,7 +390,7 @@ export default async function EmployerDashboardPage({
                         <p className="truncate text-xs text-muted-foreground">{candidate.city}</p>
                       ) : null}
                     </div>
-                    <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-success">
+                    <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-success-text">
                       {candidate.match}%
                     </span>
                     <SendOfferButton

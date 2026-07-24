@@ -49,7 +49,7 @@ export async function Footer() {
           <div className="space-y-3 lg:col-span-2">
             <Link href="/" className="inline-flex rounded-sm" aria-label={tCommon('appName')}>
               <span className="text-lg font-bold tracking-tight text-primary-foreground">
-                Pracuj<span className="text-accent">.be</span>
+                Pracuj<span className="text-accent-on-dark">.be</span>
               </span>
             </Link>
             <p className="max-w-xs text-sm text-primary-foreground/70">{t('tagline')}</p>

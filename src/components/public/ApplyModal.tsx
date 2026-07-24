@@ -223,7 +223,7 @@ export function ApplyModal({
               </Dialog.Close>
             </div>
 
-            <div className="mb-4 flex items-start gap-2 rounded-lg bg-success/10 p-3 text-sm text-success">
+            <div className="mb-4 flex items-start gap-2 rounded-lg bg-success/10 p-3 text-sm text-success-text">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{t('profileNote')}</span>
             </div>

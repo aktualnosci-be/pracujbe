@@ -23,7 +23,7 @@ export function MatchBar({ value, showLabel, className }: MatchBarProps): React.
   return (
     <div className={cn('flex items-center gap-2', className)}>
       {showLabel ? (
-        <span className="w-10 shrink-0 text-sm font-semibold tabular-nums text-success">
+        <span className="w-10 shrink-0 text-sm font-semibold tabular-nums text-success-text">
           {label}
         </span>
       ) : null}

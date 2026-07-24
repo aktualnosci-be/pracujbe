@@ -224,7 +224,7 @@ export function CookieConsent() {
                     </div>
                     <div className="flex shrink-0 items-center pt-0.5">
                       {category.locked ? (
-                        <span className="whitespace-nowrap text-xs font-medium text-success">
+                        <span className="whitespace-nowrap text-xs font-medium text-success-text">
                           {t('alwaysOn')}
                         </span>
                       ) : (

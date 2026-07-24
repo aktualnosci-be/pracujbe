@@ -19,7 +19,7 @@
 
     /* Neutralne / stonowane */
     --muted: 210 40% 96%; /* #F1F5F9 */
-    --muted-foreground: 215 16% 47%; /* #64748B */
+    --muted-foreground: 215 20% 42%; /* #566881 — przyciemnione dla WCAG AA (≥4.5:1) na tle soft/białym */
     --secondary: 210 40% 96%; /* #F1F5F9 */
     --secondary-foreground: 221 38% 15%; /* #172033 */
 
@@ -28,8 +28,9 @@
     --primary-dark: 213 70% 13%; /* #0A1F38 hover granatu */
     --primary-foreground: 0 0% 100%; /* #FFFFFF */
     --accent: 221 83% 53%; /* #2563EB niebieski — linki, ".be", aktywne akcenty */
-    --accent-dark: 224 76% 48%; /* #1D4ED8 */
+    --accent-dark: 224 76% 48%; /* #1D4ED8 — hover + tekst akcentu na tincie bg-accent/10 (AA) */
     --accent-foreground: 0 0% 100%; /* #FFFFFF */
+    --accent-on-dark: 213 94% 68%; /* #60A5FA — akcent na ciemnym (granatowym) tle, np. ".be" w stopce (AA ≥4.5:1) */
 
     /* Stany — wersje bazowe (tła, kropki statusu, ikony na kolorowym tle) */
     --success: 142 76% 36%; /* #16A34A */

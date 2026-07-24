@@ -39,7 +39,7 @@ const STATUS_TONE: Record<string, Tone> = {
 };
 
 const TONE_CLASS: Record<Tone, string> = {
-  blue: 'bg-accent/10 text-accent',
+  blue: 'bg-accent/10 text-accent-dark',
   amber: 'bg-warning/10 text-warning-text',
   green: 'bg-success/10 text-success-text',
   red: 'bg-error/10 text-error',

@@ -34,6 +34,7 @@ const config: Config = {
           DEFAULT: 'hsl(var(--accent))',
           dark: 'hsl(var(--accent-dark))',
           foreground: 'hsl(var(--accent-foreground))',
+          'on-dark': 'hsl(var(--accent-on-dark))',
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',

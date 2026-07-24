@@ -309,7 +309,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
                   {job.companyName}
                   {job.companyVerified ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
                       <BadgeCheck className="h-4 w-4" aria-hidden="true" />
                       {t('verified')}
                     </span>

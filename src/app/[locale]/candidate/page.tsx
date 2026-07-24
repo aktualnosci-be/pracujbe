@@ -178,7 +178,7 @@ export default async function CandidateDashboardPage({
                         </span>
                         {job.match !== null ? (
                           <span className="ml-auto flex min-w-0 max-w-[11rem] flex-1 items-center gap-2">
-                            <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-success">
+                            <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-success-text">
                               {job.match}%
                             </span>
                             <MatchBar value={job.match} className="flex-1" />

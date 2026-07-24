@@ -127,7 +127,7 @@ export function JobCard({
             </Link>
           </h3>
           {job.isNew ? (
-            <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+            <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent-dark">
               {t('newBadge')}
             </span>
           ) : null}
@@ -136,7 +136,7 @@ export function JobCard({
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{job.companyName}</span>
           {job.companyVerified ? (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
               <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
               {tJob('verified')}
             </span>

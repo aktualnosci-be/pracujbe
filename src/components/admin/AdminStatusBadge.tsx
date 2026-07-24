@@ -14,9 +14,9 @@ import { cn } from '@/lib/utils';
 type Tone = 'blue' | 'amber' | 'green' | 'red' | 'neutral';
 
 const TONE_CLASS: Record<Tone, string> = {
-  blue: 'bg-accent/10 text-accent',
-  amber: 'bg-warning/10 text-warning',
-  green: 'bg-success/10 text-success',
+  blue: 'bg-accent/10 text-accent-dark',
+  amber: 'bg-warning/10 text-warning-text',
+  green: 'bg-success/10 text-success-text',
   red: 'bg-error/10 text-error',
   neutral: 'bg-muted text-muted-foreground',
 };

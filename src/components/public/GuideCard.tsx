@@ -49,7 +49,7 @@ export function GuideCard({ guide, className }: GuideCardProps): React.JSX.Eleme
       )}
     >
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">
+        <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent-dark">
           {t(CATEGORY_LABEL_KEY[guide.category])}
         </span>
       </div>
