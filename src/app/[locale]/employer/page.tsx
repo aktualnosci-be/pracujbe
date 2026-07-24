@@ -13,6 +13,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { isSupabaseConfigured } from '@/lib/env';
 import {
+  getCompanyEntitlements,
   getCompanyJobs,
   getEmployerOverview,
   getEmployerShellData,
@@ -77,16 +78,20 @@ export default async function EmployerDashboardPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
 
   const configured = isSupabaseConfigured();
-  const [overview, jobs, applications, candidates, funnel, shell] = await Promise.all([
+  const [overview, jobs, applications, candidates, funnel, shell, entitlements] = await Promise.all([
     getEmployerOverview(),
     getCompanyJobs(),
     getRecentApplications(),
     getTopMatchedCandidates(),
     getFunnelStats(),
     getEmployerShellData(),
+    getCompanyEntitlements(),
   ]);
   // P1-09: realne imię pracodawcy w powitaniu (bez zmyślonego „Jan"). Brak → wariant bez imienia.
   const firstName = shell?.userName?.trim().split(/\s+/)[0] ?? '';
+  // P1-01/P1-09: realny limit i zużycie ofert z planu (fallback statyczny tylko w demo).
+  const offersTotal = entitlements?.maxActiveJobs ?? PACKAGE_OFFERS_TOTAL;
+  const offersUsed = entitlements?.activeJobsUsed ?? overview.activeOffersCount;
 
   const conversions: [number, number, number] = [
     conversionPct(funnel.applications, funnel.views),
@@ -355,12 +360,11 @@ export default async function EmployerDashboardPage({
             </div>
           </section>
 
-          {/* Karta pakietu */}
-          {/* TODO(data): realny pakiet/subskrypcja — Etap 7 (płatności). */}
+          {/* Karta pakietu — realny limit/zużycie ofert z planu (P1-01/P1-09). */}
           <PricingPackageCard
             activeUntil={configured ? '—' : '24.06.2025'}
-            offersUsed={overview.activeOffersCount}
-            offersTotal={PACKAGE_OFFERS_TOTAL}
+            offersUsed={offersUsed}
+            offersTotal={offersTotal}
           />
         </div>
       </div>

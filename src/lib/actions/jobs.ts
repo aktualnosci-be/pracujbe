@@ -103,6 +103,7 @@ function errorMessage(error: unknown): string | undefined {
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
+  if (m.includes('ENTITLEMENT_LIMIT')) return 'ENTITLEMENT_LIMIT';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
   if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (

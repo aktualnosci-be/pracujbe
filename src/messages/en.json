@@ -497,6 +497,7 @@
     "jobNotDraft": "This job can only be edited while it's a draft.",
     "billingUnavailable": "Payments are temporarily unavailable. Please try again later.",
     "checkoutInProgress": "You already have a checkout in progress. Finish it or try again shortly.",
+    "entitlementLimit": "You've reached your plan's active job limit. Upgrade your plan to publish more.",
     "notFound": "We couldn't find what you're looking for.",
     "internal": "Something went wrong on our end. We're working on it.",
     "generic": "Something went wrong. Please try again."

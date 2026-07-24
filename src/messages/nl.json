@@ -497,6 +497,7 @@
     "jobNotDraft": "Deze vacature kan alleen als concept worden bewerkt.",
     "billingUnavailable": "Betalingen zijn tijdelijk niet beschikbaar. Probeer het later opnieuw.",
     "checkoutInProgress": "Je hebt al een betaling gestart. Rond die af of probeer het zo opnieuw.",
+    "entitlementLimit": "Je hebt de limiet van actieve vacatures in je plan bereikt. Upgrade om er meer te plaatsen.",
     "notFound": "We konden dit niet vinden.",
     "internal": "Er is een fout aan onze kant opgetreden. We werken eraan.",
     "generic": "Er ging iets mis. Probeer opnieuw."

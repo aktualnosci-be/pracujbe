@@ -497,6 +497,7 @@
     "jobNotDraft": "Tę ofertę można edytować tylko w wersji roboczej.",
     "billingUnavailable": "Płatności są chwilowo niedostępne. Spróbuj ponownie później.",
     "checkoutInProgress": "Masz już rozpoczętą płatność. Dokończ ją lub spróbuj ponownie za chwilę.",
+    "entitlementLimit": "Osiągnięto limit aktywnych ofert w Twoim planie. Zmień plan, aby opublikować więcej.",
     "notFound": "Nie znaleziono tego, czego szukasz.",
     "internal": "Wystąpił błąd po naszej stronie. Pracujemy nad tym.",
     "generic": "Coś poszło nie tak. Spróbuj ponownie."

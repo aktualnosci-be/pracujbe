@@ -653,6 +653,11 @@ insert into public.job_translations(job_id, locale, title, description, responsi
 insert into public.job_requirements(job_id, locale, kind, position, content)
   values ('e1111111-1111-1111-1111-111111111111', 'pl', 'mandatory', 0, 'Dyspozycyjność');
 
+-- Ta sekcja bada KOMPLETNOŚĆ publikacji, nie limity planu (P1-01 → sekcja GG). Nadajemy więc
+-- firmie plan z zapasem, by limit aktywnych ofert nie mieszał się do asercji; usuwamy po P2b.
+insert into public.subscriptions (company_id, plan, status, provider)
+  values (:'COMPA', 'pro', 'active', 'stripe');
+
 -- P2: kompletny szkic publikuje się (status → active).
 set role authenticated; set app.current_uid = :'EMPA';
 select pg_temp.assert(
@@ -662,6 +667,8 @@ reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text from public.jobs where id = 'e1111111-1111-1111-1111-111111111111') = 'active',
   'P2b oferta aktywna po publish_job');
+-- Zdejmij plan testowy — dalsze sekcje (GG) zakładają brak subskrypcji (plan 'free').
+delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe';
 
 -- P3: klient nie aktywuje oferty bezpośrednim UPDATE (guard trigger). Świeży szkic.
 reset role;
@@ -1166,5 +1173,52 @@ select pg_temp.assert(
   (select count(*) from public.document_acceptances where profile_id = :'CANDA') = 0,
   'FF4 obcy nie widzi cudzych akceptacji (RLS)');
 reset role; reset app.current_uid;
+
+-- ============================================================================
+-- GG. AUDIT_REPORT 0055 (P1-01) — entitlements: limit aktywnych ofert per plan
+-- ============================================================================
+-- GG1: członek widzi uprawnienia — bez subskrypcji plan 'free', limit 1.
+set role authenticated; set app.current_uid = :'EMPA';
+select max_active_jobs as gg_max, plan as gg_plan
+  from public.get_company_entitlements(:'COMPA'::uuid) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'gg_plan' = 'free' and :'gg_max' = '1', 'GG1 plan free → limit 1');
+
+-- GG2: nie-członek nie widzi uprawnień firmy.
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.expect_error(
+  'select * from public.get_company_entitlements('''|| :'COMPA' ||'''::uuid)',
+  'PERMISSION_DENIED', 'GG2 nie-członek nie widzi entitlements');
+reset role; reset app.current_uid;
+
+-- Przygotuj KOMPLETNY szkic dla COMPA (superuser) — COMPA ma już JOBA aktywne (limit free = 1).
+reset role;
+insert into public.jobs (id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values ('a2222222-2222-2222-2222-222222222222', :'COMPA', 'draft-gg', 'Nowa oferta', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+insert into public.job_translations (job_id, locale, title, description, responsibilities)
+  values ('a2222222-2222-2222-2222-222222222222', 'pl', 'Nowa oferta', 'Dłuższy opis stanowiska magazynowego.', array['Obsługa magazynu']);
+insert into public.job_requirements (job_id, kind, locale, content, position)
+  values ('a2222222-2222-2222-2222-222222222222', 'mandatory', 'pl', 'Doświadczenie', 1);
+
+-- GG3: publikacja przy planie free (JOBA już aktywne = limit 1) → ENTITLEMENT_LIMIT.
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'select public.publish_job(''a2222222-2222-2222-2222-222222222222''::uuid, ''nowa-oferta'')',
+  'ENTITLEMENT_LIMIT', 'GG3 free: publikacja ponad limit odrzucona');
+reset role; reset app.current_uid;
+
+-- GG4: po upgrade do 'standard' (limit 10) publikacja przechodzi.
+reset role;
+insert into public.subscriptions (company_id, plan, status, provider)
+  values (:'COMPA', 'standard', 'active', 'stripe');
+set role authenticated; set app.current_uid = :'EMPA';
+select public.publish_job('a2222222-2222-2222-2222-222222222222'::uuid, 'nowa-oferta');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = 'a2222222-2222-2222-2222-222222222222') = 'active',
+  'GG4 standard: publikacja w ramach limitu działa');
+-- sprzątanie testowej subskrypcji
+reset role;
+delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe';
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

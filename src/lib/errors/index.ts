@@ -25,6 +25,7 @@ export const ErrorCodes = {
   JOB_NOT_DRAFT: 'JOB_NOT_DRAFT',
   BILLING_UNAVAILABLE: 'BILLING_UNAVAILABLE',
   CHECKOUT_IN_PROGRESS: 'CHECKOUT_IN_PROGRESS',
+  ENTITLEMENT_LIMIT: 'ENTITLEMENT_LIMIT',
   NOT_FOUND: 'NOT_FOUND',
   INTERNAL: 'INTERNAL',
 } as const;
@@ -54,6 +55,7 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   JOB_NOT_DRAFT: 'jobNotDraft',
   BILLING_UNAVAILABLE: 'billingUnavailable',
   CHECKOUT_IN_PROGRESS: 'checkoutInProgress',
+  ENTITLEMENT_LIMIT: 'entitlementLimit',
   NOT_FOUND: 'notFound',
   INTERNAL: 'internal',
 };

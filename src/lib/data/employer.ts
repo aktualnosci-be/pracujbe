@@ -319,6 +319,42 @@ export async function getEmployerOverview(): Promise<EmployerOverview> {
   }
 }
 
+/** Uprawnienia planu aktywnej firmy (P1-01): limit aktywnych ofert + dostęp do bazy kandydatów. */
+export interface CompanyEntitlements {
+  plan: string;
+  maxActiveJobs: number;
+  candidateAccess: boolean;
+  activeJobsUsed: number;
+}
+
+/**
+ * Realne uprawnienia planu aktywnej firmy (get_company_entitlements pod RLS). Zwraca `null` w
+ * trybie demo / bez kontekstu — UI używa wtedy statycznego fallbacku (P1-09).
+ */
+export async function getCompanyEntitlements(): Promise<CompanyEntitlements | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const ctx = await loadContext();
+    if (!ctx) return null;
+    const { supabase, companyId } = ctx;
+    const { data, error } = await supabase.rpc('get_company_entitlements', {
+      p_company_id: companyId,
+    });
+    if (error) throw error;
+    const row = asRecord(Array.isArray(data) ? data[0] : data);
+    if (!row['plan']) return null;
+    return {
+      plan: asString(row['plan'], 'free'),
+      maxActiveJobs: asNumber(row['max_active_jobs']),
+      candidateAccess: row['candidate_access'] === true,
+      activeJobsUsed: asNumber(row['active_jobs_used']),
+    };
+  } catch (error) {
+    captureError(error, { area: 'employer.getCompanyEntitlements' });
+    return null;
+  }
+}
+
 /** Lista ofert firmy z liczbą nowych aplikacji i dopasowań na ofertę. */
 export async function getCompanyJobs(): Promise<EmployerJob[]> {
   if (!isSupabaseConfigured()) return DEMO_JOBS;
