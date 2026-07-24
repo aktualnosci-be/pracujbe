@@ -624,4 +624,55 @@ select pg_temp.expect_error(
   'row-level security', 'O3 nie-członek nie dodaje języka do cudzej oferty (RLS)');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- P. Transakcyjna publikacja oferty 0031 (FUN-01) — kompletność + active-only-RPC
+-- ============================================================================
+reset role;
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values ('e1111111-1111-1111-1111-111111111111', :'COMPA', 'draft-e', 'draft placeholder',
+          'warehouse', 'permanent', '', '', 'draft', 'pl');
+
+-- P1: niekompletny szkic (placeholder title, puste miasto/region) nie przechodzi publikacji.
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'select public.publish_job(''e1111111-1111-1111-1111-111111111111''::uuid, ''op-x'')',
+  'VALIDATION_FAILED', 'P1 publish_job odrzuca niekompletny szkic');
+reset role; reset app.current_uid;
+
+-- Uzupełnienie wymaganych danych (jak kreator: tytuł/miasto/region + tłumaczenie + wymaganie).
+update public.jobs set title = 'Operator produkcji', city = 'Antwerpia', region = 'Flandria'
+  where id = 'e1111111-1111-1111-1111-111111111111';
+insert into public.job_translations(job_id, locale, title)
+  values ('e1111111-1111-1111-1111-111111111111', 'pl', 'Operator produkcji');
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values ('e1111111-1111-1111-1111-111111111111', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+
+-- P2: kompletny szkic publikuje się (status → active).
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.assert(
+  public.publish_job('e1111111-1111-1111-1111-111111111111'::uuid, 'operator-produkcji-abc') is not null,
+  'P2 publish_job publikuje kompletny szkic');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = 'e1111111-1111-1111-1111-111111111111') = 'active',
+  'P2b oferta aktywna po publish_job');
+
+-- P3: klient nie aktywuje oferty bezpośrednim UPDATE (guard trigger). Świeży szkic.
+reset role;
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values ('e2222222-2222-2222-2222-222222222222', :'COMPA', 'draft-e2', 'Szkic 2',
+          'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'update public.jobs set status=''active'' where id=''e2222222-2222-2222-2222-222222222222''',
+  'PERMISSION_DENIED', 'P3 klient nie aktywuje oferty bezpośrednim UPDATE (guard)');
+reset role; reset app.current_uid;
+
+-- P4: nie-członek nie opublikuje cudzego szkicu.
+set role authenticated; set app.current_uid = :'EMPB';
+select pg_temp.expect_error(
+  'select public.publish_job(''e2222222-2222-2222-2222-222222222222''::uuid, ''x'')',
+  'PERMISSION_DENIED', 'P4 nie-członek nie publikuje cudzej oferty');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

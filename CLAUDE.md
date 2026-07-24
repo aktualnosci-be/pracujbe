@@ -365,10 +365,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > **Wave E2 (0030) — ZROBIONE:** FUN-03 — relacje `job_languages`/`job_certificates` (RLS jak
 > job_skills); kreator (krok 7) realnie zapisuje języki i certyfikaty; `get_public_job` zwraca
 > języki (koniec pustej listy), `get_job_match_profile` zwraca języki+certyfikaty → matching je
-> uwzględnia. Dowód: `rls.sql` sekcja O. **Do zrobienia:** FUN-01/02 (transakcyjne save/publish
-> oferty), Wave C (RBAC + owner invariants SEC-09/10), Wave F (matching FUN-06, multi-company
-> FUN-07, fail-closed env SEC-19), billing (decyzja), CI (separacja runnerów, twarda bramka RLS,
-> SCA/SAST, a11y/perf).
+> uwzględnia. Dowód: `rls.sql` sekcja O.
+> **Wave E3 (0031) — ZROBIONE:** FUN-01 — transakcyjne `publish_job` (autoryzacja + firma
+> verified + status=draft + KOMPLETNOŚĆ: tytuł/miasto/region bez placeholderów, tłumaczenie,
+> wymaganie obowiązkowe) + guard trigger `guard_job_publish` (aktywacja oferty tylko przez RPC;
+> klient nie ustawi status='active' bezpośrednio). Dowód: `rls.sql` sekcja P. FUN-02 (pełna
+> transakcyjność per-krok) — częściowo: publish atomowy, relacje replace-all; pełne owinięcie
+> każdego kroku w RPC = follow-up. **Do zrobienia:** Wave C (RBAC + owner invariants SEC-09/10),
+> Wave F (matching FUN-06, multi-company FUN-07, fail-closed env SEC-19), billing (decyzja),
+> CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)

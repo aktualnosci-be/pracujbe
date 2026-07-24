@@ -90,12 +90,6 @@ function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
-/** Embed PostgREST bywa obiektem (to-one) lub tablicą — normalizujemy do pierwszego rekordu. */
-function asEmbeddedRecord(value: unknown): Record<string, unknown> {
-  if (Array.isArray(value)) return asRecord(value[0]);
-  return asRecord(value);
-}
-
 /** Wyciąga `message` z nieznanego błędu Postgresa/PostgREST (bez rzucania). */
 function errorMessage(error: unknown): string | undefined {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -578,33 +572,24 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
-    // Odczyt oferty + statusu firmy (RLS: członek firmy). Weryfikacja jest warunkiem publikacji.
+    // Odczyt tytułu (do zbudowania slug-a); pełna walidacja/kompletność/aktywacja atomowo w RPC.
     const { data: jobData, error: jobErr } = await supabase
       .from('jobs')
-      .select('id, slug, title, companies(status)')
+      .select('id, title')
       .eq('id', jobId)
       .is('deleted_at', null)
       .maybeSingle();
     if (jobErr) return { ok: false, error: mapPgError(jobErr.message) };
-
     const job = asRecord(jobData);
     if (!asString(job['id'])) return { ok: false, error: 'NOT_FOUND' };
 
-    const companyStatus = asString(asEmbeddedRecord(job['companies'])['status'], 'unverified');
-    if (companyStatus !== 'verified') return { ok: false, error: 'COMPANY_NOT_VERIFIED' };
+    // Kandydat na slug (RPC użyje go tylko, gdy bieżący slug jest techniczny: draft-…).
+    const slug = `${slugify(asString(job['title'])) || 'oferta'}-${randomUUID().slice(0, 8)}`;
 
-    // Szkic ma slug techniczny (draft-…) — przy publikacji nadajemy slug z tytułu.
-    const currentSlug = asString(job['slug']);
-    const title = asString(job['title']);
-    const slug = currentSlug.startsWith('draft-')
-      ? `${slugify(title) || 'oferta'}-${randomUUID().slice(0, 8)}`
-      : currentSlug;
-
-    const { error: updErr } = await supabase
-      .from('jobs')
-      .update({ status: 'active', published_at: new Date().toISOString(), slug })
-      .eq('id', jobId);
-    if (updErr) return { ok: false, error: mapPgError(updErr.message) };
+    // Transakcyjna publikacja: autoryzacja + firma verified + status=draft + KOMPLETNOŚĆ (FUN-01).
+    // Aktywacja poza tym RPC jest zablokowana triggerem (guard_job_publish).
+    const { error: pubErr } = await supabase.rpc('publish_job', { p_job_id: jobId, p_slug: slug });
+    if (pubErr) return { ok: false, error: mapPgError(pubErr.message) };
 
     return { ok: true };
   } catch {
