@@ -134,6 +134,13 @@ export async function saveOnboardingStep(
       .from('candidate_profiles')
       .upsert({ profile_id: user.id, ...row }, { onConflict: 'profile_id' });
     if (error) return { ok: false, error: mapPgError(error.message) };
+
+    if (step === 6) {
+      // Kompletność liczy DB z obecności wymaganych danych (FUN-05) — klient nie może już
+      // sam ustawić profile_completed (kolumna odebrana; RPC definer waliduje i ustawia).
+      const { error: fe } = await supabase.rpc('finish_onboarding');
+      if (fe) return { ok: false, error: mapPgError(fe.message) };
+    }
     return { ok: true };
   } catch {
     // Nieoczekiwany błąd — bez technikaliów dla użytkownika (Invariant #8).
@@ -193,12 +200,12 @@ function buildCandidateProfileRow(
       ? rawObj.expectedSalaryCurrency
       : undefined;
 
+  // Uwaga: profile_completed NIE jest ustawiane tutaj — liczy je DB (finish_onboarding, FUN-05).
   const row: Record<string, unknown> = {
     availability: v.availability,
     preferred_contract_types: v.preferredContractTypes,
     expected_salary_min: v.expectedSalaryMin ?? null,
     bio: nullIfEmpty(v.bio),
-    profile_completed: true,
   };
   if (currency) row.expected_salary_currency = currency;
   return row;

@@ -560,4 +560,46 @@ select pg_temp.expect_error(
   'permission denied', 'M4 bezpośredni INSERT do candidate_skills odrzucony (RPC-only)');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- N. Kompletność onboardingu 0029 (FUN-05) — liczona w DB, klient nie ustawia flag
+-- ============================================================================
+set role authenticated; set app.current_uid = :'CANDA';
+-- CANDA nie ma jeszcze occupations/categories/city/availability → profil niekompletny.
+select pg_temp.assert(public.finish_onboarding() is false,
+  'N1 finish_onboarding=false dla niekompletnego profilu');
+select pg_temp.assert(
+  (select profile_completed from public.candidate_profiles where profile_id = :'CANDA') is false,
+  'N1b profile_completed=false ustawione przez DB');
+-- Opt-in wyszukiwalności zablokowany dla niekompletnego profilu.
+select pg_temp.expect_error('select public.set_candidate_searchable(true)',
+  'VALIDATION_FAILED', 'N2 set_candidate_searchable(true) blokowany dla niekompletnego profilu');
+-- Klient nie może wprost ustawić flag kompletności (kolumny odebrane, 0029).
+select pg_temp.expect_error(
+  'update public.candidate_profiles set profile_completed = true where profile_id = '''|| :'CANDA' ||'''::uuid',
+  'PERMISSION_DENIED', 'N3 klient nie ustawia profile_completed bezpośrednio (guard trigger)');
+-- (CANDA.is_searchable=true z seeda → zmiana na false jest realną zmianą, którą guard blokuje)
+select pg_temp.expect_error(
+  'update public.candidate_profiles set is_searchable = false where profile_id = '''|| :'CANDA' ||'''::uuid',
+  'PERMISSION_DENIED', 'N3b klient nie ustawia is_searchable bezpośrednio (guard trigger)');
+reset role; reset app.current_uid;
+
+-- Uzupełnienie wymaganych danych (jak kroki 2/4/6; tu wprost jako superuser dla testu).
+update public.candidate_profiles
+  set occupations = array['spawacz'], categories = array['warehouse']::public.job_category[],
+      city = 'Antwerpia', availability = 'immediate'
+  where profile_id = :'CANDA';
+
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.assert(public.finish_onboarding() is true,
+  'N4 finish_onboarding=true po uzupełnieniu wymaganych danych');
+select pg_temp.assert(
+  (select profile_completed from public.candidate_profiles where profile_id = :'CANDA') is true,
+  'N4b profile_completed=true ustawione przez DB');
+select pg_temp.assert(public.set_candidate_searchable(true) is true,
+  'N5 opt-in wyszukiwalności działa dla kompletnego profilu');
+select pg_temp.assert(
+  (select is_searchable from public.candidate_profiles where profile_id = :'CANDA') is true,
+  'N5b is_searchable ustawione przez RPC');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -354,10 +354,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > SEC-11 (część) — `company_can_view_candidate` filtruje `deleted_at is null` (soft-deleted relacja nie
 > daje PII; okno retencji czasowej = decyzja polityki, odłożone). Dowód: `rls.sql` sekcja L. **Legal
 > (FUN-09) — safe default:** strony prawne/informacyjne (placeholder) → `noindex` (`_legal/legal-page.tsx`)
-> i usunięte z sitemap; E2E asercja noindex regulaminu. **Do zrobienia (Wave C, E, F+):** RBAC firmy +
-> owner invariants (SEC-09/10), persystencja/transakcyjność kreatorów (FUN-01..05), matching (FUN-06),
-> aktywny kontekst firmy (FUN-07), fail-closed env (SEC-19), billing (decyzja), CI (separacja runnerów,
-> twarda bramka RLS, SCA/SAST, a11y/perf).
+> i usunięte z sitemap; E2E asercja noindex regulaminu.
+> **Wave E1 (0028) — ZROBIONE:** FUN-04 — koniec cichej utraty danych onboardingu: transakcyjne RPC
+> `set_candidate_skills/languages/certificates` (replace-all, dedup, RPC-only DML na relacjach
+> kandydata); kroki 3/5 realnie zapisują. Dowód: `rls.sql` sekcja M.
+> **Wave E1b (0029) — ZROBIONE:** FUN-05 — kompletność liczona w DB (`finish_onboarding`), a nie
+> ustawiana przez klienta; guard trigger blokuje `authenticated` przed zmianą `profile_completed`/
+> `is_searchable` (kolumnowy REVOKE nie działa przy grancie table-level); `set_candidate_searchable`
+> (opt-in tylko dla kompletnego profilu). Dowód: `rls.sql` sekcja N. **Do zrobienia:** FUN-03
+> (job_languages/job_certificates), FUN-01/02 (transakcyjne save/publish oferty), Wave C (RBAC +
+> owner invariants SEC-09/10), Wave F (matching FUN-06, multi-company FUN-07, fail-closed env SEC-19),
+> billing (decyzja), CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
