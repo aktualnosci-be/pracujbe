@@ -18,6 +18,7 @@
  */
 
 import { getLocale } from 'next-intl/server';
+import { headers } from 'next/headers';
 import { z } from 'zod';
 
 import { redirect } from '@/i18n/navigation';
@@ -25,6 +26,7 @@ import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { captureError } from '@/lib/sentry';
 import { createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -168,8 +170,27 @@ async function signUpUser(args: SignUpArgs): Promise<void> {
     try {
       const admin = createAdminClient();
       await admin.from('profiles').update({ preferred_locale: args.locale }).eq('id', userId);
-    } catch {
-      // celowo pominięte — konto zostało utworzone poprawnie
+      // P1-16: niezmienny receipt akceptacji regulaminu i polityki prywatności (checkbox był
+      // walidowany na formularzu). Kluczujemy po userId — auth.uid() jest jeszcze null (konto
+      // czeka na potwierdzenie e-mail), więc zapis idzie service-rolem. Best-effort: awaria
+      // receiptu nie może cofnąć utworzonego konta, ale logujemy do Sentry (audytowalność).
+      const store = await headers();
+      const ip =
+        store.get('x-real-ip')?.trim() ||
+        store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
+        null;
+      const userAgent = store.get('user-agent');
+      const { error: rcErr } = await admin.rpc('record_document_acceptance', {
+        p_profile_id: userId,
+        p_documents: ['terms', 'privacy'],
+        p_locale: args.locale,
+        p_ip: ip,
+        p_user_agent: userAgent,
+      });
+      if (rcErr) captureError(rcErr, { area: 'auth.recordDocumentAcceptance' });
+    } catch (e) {
+      // celowo nie blokujemy rejestracji, ale logujemy (receipt to wymóg rozliczalności).
+      captureError(e, { area: 'auth.signUpUser.postCreate' });
     }
   }
 }

@@ -1138,4 +1138,33 @@ select pg_temp.assert(
   (select is_mandatory from public.job_skills where job_id = :'JOBA' and skill_label = 'Python') = false,
   'EE4 Python nietknięty (nadal optional)');
 
+-- ============================================================================
+-- FF. AUDIT_REPORT 0054 (P1-16) — niezmienny receipt akceptacji regulaminu/polityki
+-- ============================================================================
+-- FF1: bezpośredni DML odebrany authenticated (RPC-only).
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.expect_error(
+  'insert into public.document_acceptances (profile_id, document) values ('''|| :'CANDA' ||''', ''terms'')',
+  'permission denied', 'FF1 authenticated nie pisze document_acceptances (RPC-only)');
+reset role; reset app.current_uid;
+
+-- FF2: record_document_acceptance (service_role) tworzy receipt dla terms+privacy.
+set role service_role;
+select public.record_document_acceptance(:'CANDA'::uuid, array['terms','privacy'], 'pl', '203.0.113.7', 'UA/1.0');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CANDA') = 2,
+  'FF2 receipt dla terms+privacy utworzony');
+
+-- FF3: kandydat widzi WŁASNE akceptacje; obcy nie.
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances) = 2, 'FF3 CANDA widzi swoje akceptacje');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDB';
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CANDA') = 0,
+  'FF4 obcy nie widzi cudzych akceptacji (RLS)');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
