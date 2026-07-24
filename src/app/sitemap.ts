@@ -22,19 +22,15 @@ const HUB_PATH = '/praca';
 const GUIDES_PATH = '/poradniki';
 
 /** Publiczne strony statyczne (segment bez prefiksu języka). '' = strona główna.
- *  Tylko trasy zwracające 200 (zweryfikowane smoke). */
+ *  Tylko trasy zwracające 200 (zweryfikowane smoke) i z REALNĄ treścią.
+ *  Strony prawne/informacyjne (regulamin, prywatność, cookies, o-nas, faq, kontakt, pomoc)
+ *  mają obecnie treść placeholder → są `noindex` i CELOWO poza sitemap (audyt FUN-09).
+ *  Po zatwierdzeniu treści dodać je tu z powrotem i zdjąć `noindex` w `_legal/legal-page.tsx`. */
 const STATIC_PATHS: readonly string[] = [
   '',
   JOBS_PATH,
   HUB_PATH,
   GUIDES_PATH,
-  '/o-nas',
-  '/faq',
-  '/kontakt',
-  '/pomoc',
-  '/regulamin',
-  '/polityka-prywatnosci',
-  '/polityka-cookies',
 ];
 
 const CATEGORY_KEYS: readonly CategoryKey[] = [

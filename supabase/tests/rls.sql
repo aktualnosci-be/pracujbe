@@ -495,4 +495,31 @@ select pg_temp.expect_error(
   'update public.applications set message = repeat(''a'', 5000) where id = '''|| :'appa' ||'''::uuid',
   'applications_message_len', 'K2b CHECK długości applications.message egzekwowany');
 
+-- ============================================================================
+-- L. SEC-08 (0027) — były członek firmy traci dostęp do rozmów firmowych
+-- ============================================================================
+-- conv (get_or_create_conversation(appa)) należy do COMPA; uczestnicy: CANDA (kandydat)
+-- + EMPA (aktywny owner COMPA). Dowód, że dostęp firmowy wygasa wraz z dezaktywacją.
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.assert(public.is_conversation_member(:'conv'::uuid) is true,
+  'L0 aktywny członek firmy ma dostęp do rozmowy firmowej');
+reset role; reset app.current_uid;
+
+-- Dezaktywacja członkostwa EMPA (symulacja: admin firmy wyłącza pracownika).
+update public.company_members set is_active = false where company_id = :'COMPA' and profile_id = :'EMPA';
+
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.assert(public.is_conversation_member(:'conv'::uuid) is false,
+  'L1 były członek (is_active=false) traci dostęp do rozmowy firmowej (SEC-08)');
+reset role; reset app.current_uid;
+
+-- Kandydat (strona nie-firmowa) zachowuje dostęp mimo zmian po stronie firmy.
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.assert(public.is_conversation_member(:'conv'::uuid) is true,
+  'L2 kandydat zachowuje dostęp do własnej rozmowy');
+reset role; reset app.current_uid;
+
+-- Przywrócenie stanu (gdyby doszły kolejne asercje na EMPA).
+update public.company_members set is_active = true where company_id = :'COMPA' and profile_id = :'EMPA';
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

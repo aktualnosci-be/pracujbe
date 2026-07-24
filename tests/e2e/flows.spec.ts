@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test';
  *  2. Szczegóły oferty: z listy -> detal (H1) + widoczne CTA aplikowania.
  *  3. Panele = noindex (Invariant #9): candidate/employer mają meta robots noindex,
  *     i renderują się w trybie demo (bez sesji przepuszczane).
- *  4. Strony prawne dostępne (regulamin) — indeksowalne.
+ *  4. Strony prawne dostępne (regulamin), ale noindex — treść placeholder (FUN-09).
  */
 
 type LocaleMessages = { home: { heroTitle: string } };
@@ -54,8 +54,10 @@ for (const panel of ['candidate', 'employer']) {
   });
 }
 
-test('strona regulaminu jest dostępna (publiczna)', async ({ page }) => {
+test('strona regulaminu jest dostępna, ale noindex (placeholder, FUN-09)', async ({ page }) => {
   const res = await page.goto('/pl/regulamin');
   expect(res?.status()).toBeLessThan(400);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  // Treść prawna to placeholder → strona jest noindex do czasu zatwierdzenia (audyt FUN-09).
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
 });

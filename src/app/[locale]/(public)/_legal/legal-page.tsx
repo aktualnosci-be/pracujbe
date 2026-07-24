@@ -8,9 +8,11 @@ import { env } from '@/lib/env';
  * Wspólny szkielet stron prawnych/informacyjnych (regulamin, prywatność, cookies,
  * o nas, FAQ, kontakt, pomoc).
  *
- * Strony są INDEKSOWALNE (bez noindex) — to publiczne treści witryny. Treść to placeholder
- * z i18n (namespace `legal`): nagłówek + wprowadzenie + informacja o przygotowaniu + data
- * ostatniej aktualizacji. NIE wymyślamy tu treści prawnej — właściwe zapisy uzupełnia człowiek.
+ * Strony mają obecnie treść PLACEHOLDER (i18n namespace `legal`: nagłówek + wprowadzenie +
+ * informacja o przygotowaniu + data). Dopóki treść nie jest zatwierdzona prawnie, są `noindex`
+ * i poza sitemap (audyt FUN-09 — nie indeksujemy „w przygotowaniu"; dla regulaminu/prywatności
+ * to także wymóg zgodności). NIE wymyślamy tu treści prawnej — właściwe zapisy uzupełnia człowiek;
+ * po zatwierdzeniu należy zdjąć `noindex` (i dodać trasy do sitemap).
  *
  * Renderuje się BEZ zmiennych środowiskowych (tylko i18n + `env.siteUrl` z fallbackiem).
  *
@@ -59,6 +61,8 @@ export async function buildLegalMetadata({
     title: t(titleKey),
     description: t('intro'),
     alternates: { canonical: `${base}/${locale}${path}`, languages },
+    // Treść placeholder → nie indeksujemy do czasu zatwierdzenia prawnego (FUN-09).
+    robots: { index: false, follow: false },
   };
 }
 

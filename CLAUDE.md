@@ -348,9 +348,16 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > długości pól tekstowych jako CHECK na tabelach (applications.message/phone/idem, offers.message/idem,
 > messages.body, companies.name/vat) — egzekwowane niezależnie od ścieżki (RPC/trigger/definer). Dowód:
 > `rls.sql` sekcja K (K1 clamp limitu, K1b długi keyword, K1c allow-lista locale, K2/K2b CHECK długości).
-> **Do zrobienia (Wave C–F+):** RBAC firmy + owner invariants, wygaszanie dostępu b. członka,
-> persystencja/transakcyjność kreatorów, matching (brak danych ≠ pełne punkty), aktywny kontekst firmy,
-> fail-closed env, legal/billing, CI (separacja runnerów, twarda bramka RLS, SCA/SAST, a11y/perf).
+> **Wave D (0027) — ZROBIONE:** SEC-08 — dostęp do rozmowy firmowej wymaga AKTYWNEGO członkostwa
+> (`is_conversation_member` gejtuje po `company_id`: aktywny członek LUB strona kandydata; były pracownik
+> z `is_active=false` traci dostęp — jeden chokepoint domyka RLS odczytu i RPC send_message/mark_read).
+> SEC-11 (część) — `company_can_view_candidate` filtruje `deleted_at is null` (soft-deleted relacja nie
+> daje PII; okno retencji czasowej = decyzja polityki, odłożone). Dowód: `rls.sql` sekcja L. **Legal
+> (FUN-09) — safe default:** strony prawne/informacyjne (placeholder) → `noindex` (`_legal/legal-page.tsx`)
+> i usunięte z sitemap; E2E asercja noindex regulaminu. **Do zrobienia (Wave C, E, F+):** RBAC firmy +
+> owner invariants (SEC-09/10), persystencja/transakcyjność kreatorów (FUN-01..05), matching (FUN-06),
+> aktywny kontekst firmy (FUN-07), fail-closed env (SEC-19), billing (decyzja), CI (separacja runnerów,
+> twarda bramka RLS, SCA/SAST, a11y/perf).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
