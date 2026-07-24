@@ -1023,4 +1023,23 @@ select pg_temp.assert(
   'AA4 widełki nie wykluczają ofert bez wynagrodzenia');
 reset role;
 
+-- ============================================================================
+-- BB. Audyt produkcyjny 0047 (P1-09) — atomowe RPC replace relacji oferty (recruiter+)
+-- ============================================================================
+-- EMPA (recruiter+ COMPA, właściciel JOBA) zastępuje języki atomowo (JOBA miało 'Niderlandzki').
+set role authenticated; set app.current_uid = :'EMPA';
+select public.set_job_languages(:'JOBA'::uuid, '[{"language":"Francuski","level":"basic"}]'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.job_languages where job_id = :'JOBA') = 1
+    and (select language_label from public.job_languages where job_id = :'JOBA' limit 1) = 'Francuski',
+  'BB1 set_job_languages zastępuje atomowo (replace-all)');
+
+-- BB2: zwykły member (CANDB w COMPA) nie zapisze relacji oferty (recruiter+ only).
+set role authenticated; set app.current_uid = :'CANDB';
+select pg_temp.expect_error(
+  'select public.set_job_skills('''|| :'JOBA' ||'''::uuid, true, array[''x''])',
+  'PERMISSION_DENIED', 'BB2 zwykły member nie zapisuje relacji oferty (recruiter+)');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

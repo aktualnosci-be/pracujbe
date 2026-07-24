@@ -298,6 +298,10 @@ async function upsertTranslation(
 }
 
 /** Zastępuje linie wymagań danego rodzaju (mandatory/optional) w locale oferty. */
+// P1-09: zamiana relacji oferty przez ATOMOWE RPC replace-all (DELETE+INSERT w jednym ciele
+// funkcji = transakcja). Wcześniej kliencki DELETE, a potem INSERT jako dwa żądania — awaria
+// drugiego OPRÓŻNIAŁA relację (utrata danych). RPC gejtowane recruiter+ (is_job_manager).
+
 async function replaceRequirements(
   supabase: SupabaseClient,
   jobId: string,
@@ -305,85 +309,49 @@ async function replaceRequirements(
   kind: 'mandatory' | 'optional',
   lines: string[],
 ): Promise<ErrorCode | null> {
-  const delErr = await write(
-    supabase
-      .from('job_requirements')
-      .delete()
-      .eq('job_id', jobId)
-      .eq('kind', kind)
-      .eq('locale', locale),
+  return write(
+    supabase.rpc('set_job_requirements', {
+      p_job_id: jobId,
+      p_locale: locale,
+      p_kind: kind,
+      p_lines: lines,
+    }),
   );
-  if (delErr) return delErr;
-  if (lines.length === 0) return null;
-
-  const rows = lines.map((content, position) => ({ job_id: jobId, locale, kind, position, content }));
-  return write(supabase.from('job_requirements').insert(rows));
 }
 
-/** Zastępuje umiejętności danego zakresu (obowiązkowe / dodatkowe). */
+/** Zastępuje umiejętności danego zakresu (obowiązkowe / dodatkowe) — atomowo (RPC). */
 async function replaceSkills(
   supabase: SupabaseClient,
   jobId: string,
   mandatory: boolean,
   labels: string[],
 ): Promise<ErrorCode | null> {
-  const delErr = await write(
-    supabase.from('job_skills').delete().eq('job_id', jobId).eq('is_mandatory', mandatory),
-  );
-  if (delErr) return delErr;
-
-  const unique = [...new Set(labels.map((l) => l.trim()).filter(Boolean))];
-  if (unique.length === 0) return null;
-
-  const rows = unique.map((skill_label) => ({ job_id: jobId, skill_label, is_mandatory: mandatory }));
-  // ignoreDuplicates: etykieta obecna już w drugim zakresie (unique job_id,skill_label) jest pomijana.
   return write(
-    supabase.from('job_skills').upsert(rows, { onConflict: 'job_id,skill_label', ignoreDuplicates: true }),
+    supabase.rpc('set_job_skills', { p_job_id: jobId, p_mandatory: mandatory, p_labels: labels }),
   );
 }
 
-/** Replace-all języków wymaganych oferty (job_languages, 0030). */
+/** Replace-all języków wymaganych oferty (job_languages) — atomowo (RPC). */
 async function replaceLanguages(
   supabase: SupabaseClient,
   jobId: string,
   langs: ReadonlyArray<{ language: string; level: string }>,
 ): Promise<ErrorCode | null> {
-  const delErr = await write(supabase.from('job_languages').delete().eq('job_id', jobId));
-  if (delErr) return delErr;
-
-  const seen = new Set<string>();
-  const rows: Array<{ job_id: string; language_label: string; level: string }> = [];
-  for (const l of langs) {
-    const label = l.language.trim();
-    if (!label || seen.has(label.toLowerCase())) continue;
-    seen.add(label.toLowerCase());
-    rows.push({ job_id: jobId, language_label: label, level: l.level });
-  }
-  if (rows.length === 0) return null;
   return write(
-    supabase
-      .from('job_languages')
-      .upsert(rows, { onConflict: 'job_id,language_label', ignoreDuplicates: true }),
+    supabase.rpc('set_job_languages', {
+      p_job_id: jobId,
+      p_languages: langs.map((l) => ({ language: l.language, level: l.level })),
+    }),
   );
 }
 
-/** Replace-all certyfikatów wymaganych oferty (job_certificates, 0030). */
+/** Replace-all certyfikatów wymaganych oferty (job_certificates) — atomowo (RPC). */
 async function replaceCertificates(
   supabase: SupabaseClient,
   jobId: string,
   labels: string[],
 ): Promise<ErrorCode | null> {
-  const delErr = await write(supabase.from('job_certificates').delete().eq('job_id', jobId));
-  if (delErr) return delErr;
-
-  const unique = [...new Set(labels.map((l) => l.trim()).filter(Boolean))];
-  if (unique.length === 0) return null;
-  const rows = unique.map((certificate_label) => ({ job_id: jobId, certificate_label }));
-  return write(
-    supabase
-      .from('job_certificates')
-      .upsert(rows, { onConflict: 'job_id,certificate_label', ignoreDuplicates: true }),
-  );
+  return write(supabase.rpc('set_job_certificates', { p_job_id: jobId, p_labels: labels }));
 }
 
 /** Utrwala pojedynczy krok kreatora. Zwraca kod błędu albo null (sukces). */
