@@ -23,6 +23,7 @@ export const ErrorCodes = {
   COMPANY_NOT_VERIFIED: 'COMPANY_NOT_VERIFIED',
   ONBOARDING_INCOMPLETE: 'ONBOARDING_INCOMPLETE',
   JOB_NOT_DRAFT: 'JOB_NOT_DRAFT',
+  BILLING_UNAVAILABLE: 'BILLING_UNAVAILABLE',
   NOT_FOUND: 'NOT_FOUND',
   INTERNAL: 'INTERNAL',
 } as const;
@@ -50,6 +51,7 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   COMPANY_NOT_VERIFIED: 'companyNotVerified',
   ONBOARDING_INCOMPLETE: 'onboardingIncomplete',
   JOB_NOT_DRAFT: 'jobNotDraft',
+  BILLING_UNAVAILABLE: 'billingUnavailable',
   NOT_FOUND: 'notFound',
   INTERNAL: 'internal',
 };

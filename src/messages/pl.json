@@ -495,6 +495,7 @@
     "companyNotVerified": "Twoja firma nie została jeszcze zweryfikowana.",
     "onboardingIncomplete": "Uzupełnij wszystkie wymagane pola profilu, aby zakończyć konfigurację.",
     "jobNotDraft": "Tę ofertę można edytować tylko w wersji roboczej.",
+    "billingUnavailable": "Płatności są chwilowo niedostępne. Spróbuj ponownie później.",
     "notFound": "Nie znaleziono tego, czego szukasz.",
     "internal": "Wystąpił błąd po naszej stronie. Pracujemy nad tym.",
     "generic": "Coś poszło nie tak. Spróbuj ponownie."

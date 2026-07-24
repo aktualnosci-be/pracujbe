@@ -1042,4 +1042,21 @@ select pg_temp.expect_error(
   'PERMISSION_DENIED', 'BB2 zwykły member nie zapisuje relacji oferty (recruiter+)');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- CC. AUDIT_REPORT 0048 (P1-11) — wygasłe oferty znikają publicznie i blokują apply
+-- ============================================================================
+reset role;
+update public.jobs set expires_at = now() - interval '1 day' where id = :'JOBA';
+
+set role anon; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.get_public_job('job-a', 'pl')) = 0,
+  'CC1 wygasła oferta nie ma detalu publicznego (get_public_job)');
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs('pl', p_limit => 100) where slug = 'job-a') = 0,
+  'CC2 wygasła oferta znika z listy publicznej (get_public_jobs)');
+reset role;
+select pg_temp.assert(public.job_is_public(:'JOBA'::uuid) is false,
+  'CC3 job_is_public=false dla wygasłej oferty (blokuje apply_to_job)');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

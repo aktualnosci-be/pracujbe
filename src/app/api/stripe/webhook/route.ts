@@ -266,7 +266,11 @@ export async function POST(request: Request): Promise<Response> {
             p_company_id: companyId,
             p_session_id: session.id,
           });
-          if (finErr) captureError(finErr, { area: 'stripe.webhook.finalizeDiscount' });
+          // P1-22: błąd finalizacji rabatu NIE może być cicho połknięty — inaczej rezerwacja
+          // utknie w 'reserved' (limit zablokowany na stałe), a licznik times_redeemed nie
+          // wzrośnie. Rzut → 500 → Stripe ponawia; finalize_discount jest idempotentny
+          // (aktualizuje tylko 'reserved', licznik rośnie raz), więc reprocessing jest bezpieczny.
+          assertNoDbError(finErr, 'finalize_discount');
         }
         break;
       }

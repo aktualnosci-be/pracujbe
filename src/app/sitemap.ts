@@ -90,7 +90,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const locale of locales) {
       entries.push({
         url: `${base}/${locale}${path}`,
-        lastModified: now,
         changeFrequency: path === '' ? 'daily' : 'weekly',
         priority: path === '' ? 1 : path === JOBS_PATH ? 0.9 : 0.6,
         alternates: { languages },
@@ -105,7 +104,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const locale of locales) {
       entries.push({
         url: `${base}/${locale}${path}`,
-        lastModified: now,
         changeFrequency: 'weekly',
         priority: 0.6,
         alternates: { languages },
@@ -120,7 +118,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const locale of locales) {
       entries.push({
         url: `${base}/${locale}${path}`,
-        lastModified: now,
         changeFrequency: 'weekly',
         priority: 0.5,
         alternates: { languages },
@@ -135,7 +132,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const locale of locales) {
       entries.push({
         url: `${base}/${locale}${path}`,
-        lastModified: now,
         changeFrequency: 'monthly',
         priority: 0.5,
         alternates: { languages },
@@ -143,22 +139,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  // --- Szczegóły ofert ---
-  const result = await getJobs({ locale: routing.defaultLocale, page: 1, pageSize: 1000 });
-  for (const job of result.jobs) {
-    const path = `${JOBS_PATH}/${job.slug}`;
-    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
-    const publishedTs = Date.parse(job.publishedAt);
-    const lastModified = Number.isNaN(publishedTs) ? now : new Date(publishedTs);
-    for (const locale of locales) {
-      entries.push({
-        url: `${base}/${locale}${path}`,
-        lastModified,
-        changeFrequency: 'daily',
-        priority: 0.8,
-        alternates: { languages },
-      });
+  // --- Szczegóły ofert (P1-13: paginacja — get_public_jobs klampuje limit do 100/stronę,
+  // więc iterujemy stronami do rozsądnego sufitu, zamiast brać tylko pierwszą setkę). ---
+  const SITEMAP_PAGE = 100;
+  const SITEMAP_MAX_JOBS = 5000; // sufit anty-abuse; powyżej rozważ sitemap index
+  for (let page = 1; entries.length < SITEMAP_MAX_JOBS * locales.length; page += 1) {
+    const result = await getJobs({ locale: routing.defaultLocale, page, pageSize: SITEMAP_PAGE });
+    if (result.jobs.length === 0) break;
+    for (const job of result.jobs) {
+      const path = `${JOBS_PATH}/${job.slug}`;
+      const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
+      const publishedTs = Date.parse(job.publishedAt);
+      const lastModified = Number.isNaN(publishedTs) ? now : new Date(publishedTs);
+      for (const locale of locales) {
+        entries.push({
+          url: `${base}/${locale}${path}`,
+          lastModified,
+          changeFrequency: 'daily',
+          priority: 0.8,
+          alternates: { languages },
+        });
+      }
     }
+    if (result.jobs.length < SITEMAP_PAGE) break; // ostatnia strona
+    if (page * SITEMAP_PAGE >= SITEMAP_MAX_JOBS) break;
   }
 
   return entries;

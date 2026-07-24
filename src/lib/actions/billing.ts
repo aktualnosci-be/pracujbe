@@ -4,12 +4,12 @@ import { z } from 'zod';
 
 import { createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { env, isSupabaseConfigured } from '@/lib/env';
+import { env, isProductionMode, isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
 import { PLAN_IDS, type BillingPlanId } from '@/lib/data/billing';
-import { getStripe, planPriceData } from '@/lib/stripe';
+import { getStripe, isBillingProviderReady, planPriceData } from '@/lib/stripe';
 
 /**
  * Server Actions płatności/subskrypcji — Pracuj.be (Etap 7h, REALNY Stripe, provider-gated).
@@ -86,6 +86,13 @@ export async function startCheckout(
 
   const stripe = getStripe();
   if (!isSupabaseConfigured() || !stripe) return { ok: true, demo: true };
+
+  // P0-01: nie inicjuj checkoutu w produkcji bez sekretu webhooka. Webhook jest źródłem prawdy
+  // o subskrypcji/fakturach/płatnościach — bez niego checkout pobrałby pieniądze, ale żaden zapis
+  // nigdy by się nie zsynchronizował. Fail-closed: czytelny komunikat zamiast cichej utraty.
+  if (isProductionMode() && !isBillingProviderReady()) {
+    return { ok: false, error: 'BILLING_UNAVAILABLE' };
+  }
 
   try {
     const supabase = await createServerClient();

@@ -495,6 +495,7 @@
     "companyNotVerified": "Je bedrijf is nog niet geverifieerd.",
     "onboardingIncomplete": "Vul alle vereiste profielvelden in om de configuratie te voltooien.",
     "jobNotDraft": "Deze vacature kan alleen als concept worden bewerkt.",
+    "billingUnavailable": "Betalingen zijn tijdelijk niet beschikbaar. Probeer het later opnieuw.",
     "notFound": "We konden dit niet vinden.",
     "internal": "Er is een fout aan onze kant opgetreden. We werken eraan.",
     "generic": "Er ging iets mis. Probeer opnieuw."

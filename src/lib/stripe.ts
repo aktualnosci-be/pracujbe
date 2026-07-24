@@ -20,6 +20,17 @@ export function isStripeConfigured(): boolean {
   return Boolean(process.env.STRIPE_SECRET_KEY);
 }
 
+/**
+ * Czy Stripe jest w PEŁNI skonfigurowany do przyjmowania płatności: klucz sekretny ORAZ
+ * sekret webhooka. Webhook (`/api/stripe/webhook`) jest ŹRÓDŁEM PRAWDY o stanie subskrypcji/
+ * faktur/płatności — bez `STRIPE_WEBHOOK_SECRET` checkout pobrałby płatność, ale żaden zapis
+ * (subscriptions/invoices/payments) nigdy by się nie zsynchronizował. W produkcji taki stan =
+ * „billing niedostępny" (nie inicjujemy checkoutu), zamiast cicho brać pieniądze bez rekordu.
+ */
+export function isBillingProviderReady(): boolean {
+  return Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET);
+}
+
 export function getStripe(): Stripe | null {
   if (!process.env.STRIPE_SECRET_KEY) return null;
   if (!cached) {

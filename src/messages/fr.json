@@ -495,6 +495,7 @@
     "companyNotVerified": "Votre entreprise n'a pas encore été vérifiée.",
     "onboardingIncomplete": "Complétez tous les champs requis du profil pour terminer la configuration.",
     "jobNotDraft": "Cette offre ne peut être modifiée qu'à l'état de brouillon.",
+    "billingUnavailable": "Les paiements sont momentanément indisponibles. Réessayez plus tard.",
     "notFound": "Nous n'avons pas trouvé ce que vous cherchez.",
     "internal": "Une erreur est survenue de notre côté. Nous y travaillons.",
     "generic": "Une erreur est survenue. Réessayez."
