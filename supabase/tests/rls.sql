@@ -78,6 +78,11 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
 insert into public.candidate_profiles(profile_id, is_searchable) values
   (:'CANDA', true), (:'CANDB', true);
 
+-- CANDB aplikuje do JOBC (COMPC) — relacja firma–kandydat istnieje, ale firma jest unverified
+-- (test D1 sprawdza bramkę weryfikacji, nie relacji). auth.uid()=null => trigger nie nadpisuje pól.
+insert into public.applications(id, job_id, candidate_id, company_id, status)
+  values ('cc000000-0000-0000-0000-0000000000cb', :'JOBC', :'CANDB', :'COMPC', 'submitted');
+
 \echo '=================== RLS INTEGRATION TESTS ==================='
 
 -- ============================================================================
@@ -273,6 +278,70 @@ set role authenticated; set app.current_uid = :'EMPA';
 select pg_temp.expect_error(
   'update public.companies set status=''suspended'' where id=''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa''',
   'PERMISSION_DENIED', 'H4 zmiana statusu firmy przez właściciela zablokowana');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- I. Remediacja audytu 0020: maszyna stanów w DB, relacja send_offer, opt-out e-mail
+-- ============================================================================
+-- Stan wejściowy: appa='viewed' (C2), offa='accepted' (D6).
+
+-- I1: FIRMA nie sfałszuje odpowiedzi na propozycję bezpośrednim UPDATE (P1#1/#3).
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'update public.offers set status=''declined'' where id=current_setting(''my.offa'')::uuid',
+  'PERMISSION_DENIED', 'I1 firma nie ustawia accepted/declined oferty (PATCH)');
+reset role; reset app.current_uid;
+
+-- I2: FIRMA nie przeskoczy aplikacji poza allow-listę bezpośrednim UPDATE (P1#4).
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'update public.applications set status=''offer_accepted'' where id=current_setting(''my.appa'')::uuid',
+  'PERMISSION_DENIED', 'I2 firma nie ustawia statusu spoza allow-listy (PATCH)');
+reset role; reset app.current_uid;
+
+-- I2b: kontrola — RPC transition_application do allow-listy nadal działa.
+set role authenticated; set app.current_uid = :'EMPA';
+select public.transition_application(:'appa'::uuid, 'shortlisted');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.applications where id = :'appa') = 'shortlisted',
+  'I2b transition_application (allow-lista) działa');
+
+-- I3: send_offer do NIEpowiązanego kandydata blokowany (P2#2). CANDB: bez aplikacji do COMPA,
+-- profil is_searchable=true ale profile_completed=false -> brak relacji.
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'select public.send_offer(''a1111111-1111-1111-1111-111111111111''::uuid, ''22222222-2222-2222-2222-222222222222''::uuid, ''offb-x'', ''hej'', null)',
+  'PERMISSION_DENIED', 'I3 send_offer bez relacji firma–kandydat blokowany');
+reset role; reset app.current_uid;
+
+-- I4: respond_to_offer na już rozstrzygniętej propozycji blokowany (P3#1). offa='accepted'.
+set role authenticated; set app.current_uid = :'CANDA';
+select pg_temp.expect_error(
+  'select public.respond_to_offer(current_setting(''my.offa'')::uuid, false)',
+  'VALIDATION_FAILED', 'I4 respond_to_offer na nieaktywnej propozycji blokowany');
+reset role; reset app.current_uid;
+
+-- I5: opt-out e-mail honorowany (P1#2). Wyłącz CANDA email_applications, zmień status -> brak maila.
+update public.notification_preferences set email_applications = false where profile_id = :'CANDA';
+set role authenticated; set app.current_uid = :'EMPA';
+select public.transition_application(:'appa'::uuid, 'interview');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where profile_id = :'CANDA' and template = 'statusChanged'
+       and idempotency_key like '%interview%') = 0,
+  'I5 opt-out email_applications honorowany (brak maila statusChanged)');
+-- kontrola: powiadomienie in-app nadal powstaje (opt-out dotyczy tylko e-maila)
+select pg_temp.assert(
+  (select count(*) from public.notifications
+     where profile_id = :'CANDA' and type = 'application_status_changed') >= 1,
+  'I5b powiadomienie in-app nadal tworzone');
+
+-- I6: profiles_insert_own nie pozwala nadać sobie roli admin (P3#2).
+set role authenticated; set app.current_uid = '88888888-8888-8888-8888-888888888888';
+select pg_temp.expect_error(
+  'insert into public.profiles (id, role) values (''88888888-8888-8888-8888-888888888888'', ''admin'')',
+  'new row violates', 'I6 self-insert roli admin blokowany przez RLS');
 reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

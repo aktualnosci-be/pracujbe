@@ -291,6 +291,7 @@ async function getJobsFromDb(
   const [{ data, error }, { data: countData, error: countError }] = await Promise.all([
     supabase.rpc('get_public_jobs', rpcArgs),
     supabase.rpc('get_public_jobs_count', {
+      p_locale: params.locale,
       p_keyword: params.keyword ?? null,
       p_city: params.city ?? null,
       p_category: params.category ?? null,
