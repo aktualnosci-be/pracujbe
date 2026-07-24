@@ -309,6 +309,18 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > Dependabot 0 critical / 0 high (23 moderate wymagają majorów next-intl v4 / Sentry v9+ — osobna
 > migracja). Statusy poniżej rozdzielają `schema/scaffold` od `backend flow` i `tested` —
 > nie oznaczaj funkcji jako gotowej bez działającego przepływu.
+>
+> 🔒 **Audyt multidyscyplinarny 2026-07-24** (8 dziedzin, adwersaryjna weryfikacja; 45 potwierdzonych:
+> 0×P0, 7×P1, 14×P2, 24×P3). Remediacja: migracje `0020`/`0021` + naprawy app-layer. Zamknięte P1:
+> maszyna stanów offers/applications egzekwowana w BAZIE (koniec fałszowania akceptacji oferty i skoków
+> statusu przez pracodawcę bezpośrednim PATCH — dowód: `supabase/tests/rls.sql` sekcja I), opt-out e-mail
+> (`enqueue_email` czyta `notification_preferences`), spójny `get_public_jobs_count` (locale), StatusPill
+> kontrast AA, e-maile Auth w języku odbiorcy (Send Email Hook `/api/auth/email-hook`). P2/P3: revoke PII,
+> relacja send_offer, respond_to_offer guard, atomowy claim outboxa + `get_conversation_summaries` (0021),
+> indeksy trigram, React `cache()` w panelach, lejek z historii, focus-trap/aria/ARIA, rate-limit IP,
+> timingSafeEqual, magic-bytes uploadu, JSON-LD escape, noindex auth, OG/hreflang. **Odłożone (P3, świadomie):**
+> `is_demo` na tabelach procesowych (Inv. #12 — prod nie ładuje seed), retencja `email_deliveries` (cron),
+> nonce/strict-dynamic CSP (E2E). Weryfikacja: tsc/lint/vitest/build + RLS+seed (PG16) + Playwright — zielone.
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
