@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 
+import type { createAdminClient } from '@/lib/supabase/admin';
 import { renderEmail } from '@/emails/templates';
 import type { EmailType } from '@/emails/copy';
 import { routing, type Locale } from '@/i18n/routing';
@@ -100,20 +101,26 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'invalid signature' }, { status: 401 });
   }
 
-  // SEC-14: dedup po webhook-id (anty-replay w oknie tolerancji). Best-effort — awaria dedup
-  // (np. brak service-role) nie blokuje e-maila Auth; podpis + świeżość i tak ograniczają replay.
+  // P0-02 + SEC-14: inbox ze stanem (anty-replay). Duplikatem do pominięcia jest WYŁĄCZNIE wpis
+  // `completed`. Claim wstawia `processing`; oznaczamy `completed` dopiero po udanej WYSYŁCE —
+  // awaria przed wysyłką NIE blokuje ponowienia (koniec „duplicate", które gubiło potwierdzenie/
+  // reset konta na zawsze). Ponowna wysyłka to mniejsze zło niż trwała utrata; okno retry GoTrue
+  // jest krótkie. Bez `webhook-id` claim pomijamy (podpis + świeżość ograniczają replay).
   const webhookId = request.headers.get('webhook-id');
-  if (webhookId) {
+  const inboxId = webhookId ? `auth:${webhookId}` : null;
+  let admin: ReturnType<typeof createAdminClient> | null = null;
+  if (inboxId) {
     try {
-      const { createAdminClient } = await import('@/lib/supabase/admin');
-      const { error: dupErr } = await createAdminClient()
-        .from('processed_webhooks')
-        .insert({ id: `auth:${webhookId}`, source: 'auth-email-hook' });
-      if (dupErr && (dupErr as { code?: string }).code === '23505') {
-        return Response.json({ ok: true, duplicate: true });
-      }
+      const [{ createAdminClient: makeAdmin }, { claimWebhook }] = await Promise.all([
+        import('@/lib/supabase/admin'),
+        import('@/lib/webhook-inbox'),
+      ]);
+      admin = makeAdmin();
+      const claim = await claimWebhook(admin, inboxId, 'auth-email-hook');
+      if (claim === 'duplicate') return Response.json({ ok: true, duplicate: true });
+      // 'claimed' | 'error' → wysyłamy dalej (dla 'error' inbox nieosiągalny; podpis+świeżość chronią).
     } catch {
-      // best-effort — pomijamy dedup przy błędzie infry.
+      admin = null; // best-effort — awaria infry inboxu nie blokuje e-maila.
     }
   }
 
@@ -151,8 +158,24 @@ export async function POST(request: Request): Promise<Response> {
     ) => Promise<{ subject: string; html: string }>;
     const { subject, html } = await render(type, locale, data);
     const resend = new Resend(apiKey);
-    const result = await resend.emails.send({ from, to: email, subject, html });
+    // Idempotency key = stabilny webhook-id (P0-02): ponowna wysyłka tego samego zdarzenia jest
+    // deduplikowana po stronie Resend, gdyby GoTrue ponowił po tym, jak wysyłka się powiodła,
+    // a oznaczenie `completed` nie.
+    const idempotencyKey = webhookId ?? undefined;
+    const result = await resend.emails.send(
+      { from, to: email, subject, html },
+      idempotencyKey ? { idempotencyKey } : undefined,
+    );
     if (result.error) throw new Error(result.error.message);
+    // Wysłano → oznacz inbox `completed` (dopiero teraz duplikat będzie pomijany).
+    if (admin && inboxId) {
+      try {
+        const { completeWebhook } = await import('@/lib/webhook-inbox');
+        await completeWebhook(admin, inboxId);
+      } catch {
+        // best-effort — brak oznaczenia najwyżej dopuści (idempotentne po Resend) ponowienie.
+      }
+    }
     return Response.json({ ok: true });
   } catch (err) {
     captureError(err, { area: 'auth.email-hook', actionType });

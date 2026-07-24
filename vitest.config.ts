@@ -24,6 +24,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
+      // `server-only` to strażnik bundlera (rzuca w kodzie klienta) — w testach jednostkowych
+      // zastępujemy go no-opem, by móc importować moduły server-only (np. webhook-inbox).
+      'server-only': resolve(__dirname, './tests/stubs/server-only.ts'),
     },
   },
 });
