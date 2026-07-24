@@ -1112,4 +1112,30 @@ select pg_temp.expect_error(
 delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe' and status = 'active';
 reset role;
 
+-- ============================================================================
+-- EE. AUDIT_REPORT 0051 (P1-08) — umiejętność realnie przechodzi mandatory↔optional
+-- ============================================================================
+-- Punkt wyjścia: EMPA (recruiter+ w COMPA, właściciel JOBA) ustawia zakresy jak kreator.
+set role authenticated; set app.current_uid = :'EMPA';
+select public.set_job_skills(:'JOBA'::uuid, false, array['Java', 'Python']); -- optional
+select public.set_job_skills(:'JOBA'::uuid, true,  array['SQL']);            -- mandatory
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select is_mandatory from public.job_skills where job_id = :'JOBA' and skill_label = 'Java') = false,
+  'EE1 Java startuje jako optional');
+
+-- Przeniesienie Java optional → mandatory: musi zniknąć z optional i pojawić się w mandatory (1 wiersz).
+set role authenticated; set app.current_uid = :'EMPA';
+select public.set_job_skills(:'JOBA'::uuid, true, array['SQL', 'Java']); -- Java dołącza do mandatory
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.job_skills where job_id = :'JOBA' and skill_label = 'Java') = 1,
+  'EE2 Java istnieje dokładnie raz po przeniesieniu (koniec dubletu/blokady)');
+select pg_temp.assert(
+  (select is_mandatory from public.job_skills where job_id = :'JOBA' and skill_label = 'Java') = true,
+  'EE3 Java realnie przeniesiona do mandatory (P1-08)');
+select pg_temp.assert(
+  (select is_mandatory from public.job_skills where job_id = :'JOBA' and skill_label = 'Python') = false,
+  'EE4 Python nietknięty (nadal optional)');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
