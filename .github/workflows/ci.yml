@@ -40,16 +40,18 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit --fund=false
-      # node_modules przekazujemy dalej jako artefakt, by nie instalować w każdym jobie.
-      - name: Archive node_modules
-        run: tar -czf node_modules.tar.gz node_modules
-      - uses: actions/upload-artifact@v4
+      # node_modules współdzielimy między jobami przez cache Actions, NIE artefakt:
+      # cache nie liczy się do płatnego limitu storage (osobny limit 10 GB/repo),
+      # a artefakty node_modules zjadały cały miesięczny limit storage organizacji.
+      - name: Cache node_modules
+        id: node-modules
+        uses: actions/cache@v4
         with:
-          name: node_modules
-          path: node_modules.tar.gz
-          retention-days: 1
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
 
   lint:
     name: Lint
@@ -61,9 +63,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - uses: actions/download-artifact@v4
-        with: { name: node_modules }
-      - run: tar -xzf node_modules.tar.gz
+      - name: Restore node_modules
+        id: node-modules
+        uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies (cache miss)
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
       - run: npm run lint
 
   typecheck:
@@ -76,9 +84,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - uses: actions/download-artifact@v4
-        with: { name: node_modules }
-      - run: tar -xzf node_modules.tar.gz
+      - name: Restore node_modules
+        id: node-modules
+        uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies (cache miss)
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
       - run: npm run typecheck
 
   unit:
@@ -91,9 +105,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - uses: actions/download-artifact@v4
-        with: { name: node_modules }
-      - run: tar -xzf node_modules.tar.gz
+      - name: Restore node_modules
+        id: node-modules
+        uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies (cache miss)
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
       - run: npm run test
 
   sca:
@@ -121,9 +141,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - uses: actions/download-artifact@v4
-        with: { name: node_modules }
-      - run: tar -xzf node_modules.tar.gz
+      - name: Restore node_modules
+        id: node-modules
+        uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies (cache miss)
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
       - run: npm run build
 
   rls:
@@ -177,18 +203,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - uses: actions/download-artifact@v4
-        with: { name: node_modules }
-      - run: tar -xzf node_modules.tar.gz
+      - name: Restore node_modules
+        id: node-modules
+        uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies (cache miss)
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
       # Przeglądarki Playwrighta powinny być zainstalowane na runnerze (patrz docs).
       # Poniższe jest bezpiecznym no-op, jeśli już są; --with-deps pomijamy, bo wymaga sudo.
       - name: Ensure Playwright browsers
         run: npx playwright install chromium
       - name: Run E2E
         run: npm run test:e2e
+      # Raport tylko przy porażce i z krótką retencją — oszczędza płatny storage.
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: failure()
         with:
           name: playwright-report
           path: playwright-report/
-          retention-days: 7
+          retention-days: 2
