@@ -4,7 +4,6 @@ import * as React from 'react';
 import {
   Building2,
   ClipboardList,
-  CreditCard,
   LayoutDashboard,
   MessageSquare,
   Settings,
@@ -32,7 +31,6 @@ const HREF = {
   applications: '/employer/aplikacje',
   messages: '/employer/wiadomosci',
   company: '/employer/firma',
-  payments: '/employer/platnosci',
   settings: '/employer/ustawienia',
 } as const;
 
@@ -88,7 +86,6 @@ export function EmployerShell({
     { href: HREF.applications, label: td('navApplications'), icon: <ClipboardList /> },
     { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
     { href: HREF.company, label: td('navCompany'), icon: <Building2 /> },
-    { href: HREF.payments, label: td('navPayments'), icon: <CreditCard /> },
     { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },
   ];
 
