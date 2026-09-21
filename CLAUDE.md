@@ -41,45 +41,17 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 ## 2. System wizualny (identyfikacja)
 
-> 🎨 **ŹRÓDŁO PRAWDY DLA UI:** zatwierdzone makiety w `docs/design/screens/` + specyfikacja
-> `docs/DESIGN_SCREENS.md` (7 ekranów: home, lista ofert, szczegóły oferty, panel kandydata,
-> panel pracodawcy, onboarding, stany UI — desktop + mobile). Gdy cokolwiek tu różni się od makiet,
-> **makiety wygrywają**.
->
-> **KOREKTA PALETY (potwierdzona przez użytkownika):** kolorem MARKI/AKCJI jest **granat `#0F2A47`**
-> (przyciski, sidebar paneli, stopka), a jasny niebieski `#2563EB` to **akcent** (linki, „.be" w logo,
-> aktywny krok). To odwrotnie niż w pierwotnej specyfikacji — pełna tabela w `docs/DESIGN_SCREENS.md §0`.
-> Makiety są pionowo rozciągnięte (artefakt generatora) — odstępy rób normalnie, nie kopiuj rozciągnięcia.
+> AKTUALIZACJA 2026-09-21: nowym źródłem wyglądu jest docs/design/people-passport/README.md i zatwierdzony prototyp. Biel, czerwień, czerń i logo .be na czerwonym kafelku zastępują historyczną paletę. Wdrożenie etapowe: issues #2–#7; historyczne checklisty nie oznaczają ukończenia nowego stylu.
 
-Całkowicie nowa identyfikacja — **nie** kopiujemy Work-Volume.com.
+Źródło wyglądu: `docs/design/people-passport/README.md` i prototyp w tym katalogu. Starsze makiety w `docs/design/screens/` mają wartość historyczną.
 
-**Zasady:** minimalizm, jasność, mobile-first, dużo pustej przestrzeni, wysoka czytelność.
-**Unikaj:** ciężkich gradientów, ciemnych ekranów, glassmorphism, dużych animacji,
-autoodtwarzanych filmów, przeładowanych dashboardów, zbędnych cieni.
+**Zasady:** białe tło, oszczędna czerwień, czarny tekst, zaokrąglone elementy i fotografie ludzi w pracy. Bez ciężkich gradientów i nadmiaru dekoracji. Karty ofert mają układ paszportu z czytelnymi polami; przy braku wynagrodzenia pozostałe pola wykorzystują miejsce.
 
-**Paleta (tokeny CSS w `src/app/globals.css`, mapowane w Tailwind):**
+**Paleta:** tokeny w `src/app/globals.css`, mapowane przez Tailwind. Kolor marki: czerwień około `#D92932`, tekst około `#151515`, tło `#FFFFFF`. Kolory semantyczne sukcesu, ostrzeżeń i błędów zachowują swoje znaczenie. Nie wpisuj hexów w komponentach. Kontrast WCAG 2.2 AA obowiązkowy.
 
-| token | hex | użycie |
-|---|---|---|
-| primary | `#2563EB` | akcje główne, linki |
-| primary-dark | `#1D4ED8` | hover/active |
-| text | `#172033` | tekst podstawowy |
-| muted (foreground) | `#566881` | tekst drugorzędny (przyciemniony z `#64748B` dla WCAG AA ≥4.5:1 na tle soft/białym) |
-| background | `#FFFFFF` | tło |
-| soft | `#F8FAFC` | sekcje/tła kart |
-| border | `#E2E8F0` | obramowania |
-| success | `#16A34A` | sukces / firma zweryfikowana |
-| warning | `#EA580C` | ostrzeżenia |
-| error | `#DC2626` | błędy |
+**Typografia:** obecnie lokalny Inter z polskimi znakami. Zmiana fontu wymaga sprawdzenia czytelności i wpływu na układ.
 
-Kontrast **WCAG 2.2 AA** obowiązkowy. Paleta zdefiniowana raz jako zmienne — nie wpisuj hexów w komponentach.
-
-**Typografia:** **Inter** przez `next/font` (self-hosted, subset `latin` + `latin-ext` dla PL/znaków
-diakrytycznych). Maksymalnie 2 rodziny fontów (na razie jedna). Nagłówki wyraźne, nie przesadzone.
-
-**Logo:** tekstowo-symboliczne „Pracuj.be" — znak „P" + subtelny pin/strzałka. Czytelne w małym
-rozmiarze, działa jako favicon i w social media. **Zakazane** stereotypy: krawat, teczka, uścisk dłoni,
-sylwetka w kasku. Komponent: `src/components/brand/Logo.tsx`. Favicon/OG generowane z tego znaku.
+**Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Zasoby favicon/PWA/OG wymagają spójnej aktualizacji w etapie #7.
 
 ---
 

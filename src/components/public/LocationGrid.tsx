@@ -54,7 +54,7 @@ export async function LocationGrid(): Promise<React.JSX.Element> {
                 href={{ pathname: JOBS_PATH, query: { city: name } }}
                 className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent-dark">
                   <MapPin className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">

@@ -1,17 +1,11 @@
-import { getTranslations } from 'next-intl/server';
+import { Logo } from '@/components/brand/Logo';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
 import { LocaleSwitcher } from './LocaleSwitcher';
 import { CookieSettingsButton } from './CookieSettingsButton';
 
-/**
- * Stopka (server component) — granatowa, wg makiety 01-home.
- *
- * Tło `--primary` (granat), tekst jasny. Znak marki renderowany jako wordmark (biały
- * „Pracuj" + akcentowe „.be") — komponent `Logo` ma granatowy znak, więc byłby niewidoczny
- * na granatowym tle. Kolumny linków wg namespace `footer`, ponowne otwarcie ustawień cookies
- * oraz przełącznik języka. Teksty wyłącznie z i18n (footer + common.appName).
- */
+/** Jasna stopka nowej identyfikacji. Linki i zgody zachowują dotychczasowe działanie. */
 export async function Footer() {
   const [t, tCommon] = await Promise.all([
     getTranslations('footer'),
@@ -38,21 +32,22 @@ export async function Footer() {
   ] as const;
 
   const linkClass =
-    'text-sm text-primary-foreground/70 transition-colors hover:text-primary-foreground';
-  const headingClass = 'text-sm font-semibold text-primary-foreground';
+    'text-sm text-muted-foreground transition-colors hover:text-foreground';
+  const headingClass = 'text-sm font-semibold text-foreground';
   const year = new Date().getFullYear();
+  const locale = await getLocale();
+  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME;
+  const version = process.env.NEXT_PUBLIC_APP_VERSION;
 
   return (
-    <footer className="bg-primary text-primary-foreground">
+    <footer className="border-t border-border bg-soft text-foreground">
       <div className="container py-12">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-3 lg:col-span-2">
             <Link href="/" className="inline-flex rounded-sm" aria-label={tCommon('appName')}>
-              <span className="text-lg font-bold tracking-tight text-primary-foreground">
-                Pracuj<span className="text-accent-on-dark">.be</span>
-              </span>
+              <Logo />
             </Link>
-            <p className="max-w-xs text-sm text-primary-foreground/70">{t('tagline')}</p>
+            <p className="max-w-xs text-sm text-muted-foreground">{t('tagline')}</p>
           </div>
 
           {columns.map((column) => (
@@ -95,12 +90,20 @@ export async function Footer() {
           </nav>
         </div>
 
-        <div className="mt-10 flex flex-col gap-4 border-t border-primary-foreground/10 pt-6 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm text-primary-foreground/70">
+        <div className="mt-10 flex flex-col gap-4 border-t border-border pt-6 md:flex-row md:items-center md:justify-between">
+          <p className="text-sm text-muted-foreground">
             © {year} {tCommon('appName')}. {t('rights')}
           </p>
           <LocaleSwitcher />
         </div>
+        {version && buildTime ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            v{version} · <time dateTime={buildTime}>{new Intl.DateTimeFormat(locale, {
+              timeZone: 'Europe/Warsaw', day: '2-digit', month: '2-digit', year: 'numeric',
+              hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short',
+            }).format(new Date(buildTime))}</time>
+          </p>
+        ) : null}
       </div>
     </footer>
   );

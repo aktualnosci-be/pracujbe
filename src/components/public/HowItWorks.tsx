@@ -35,7 +35,7 @@ export async function HowItWorks(): Promise<React.JSX.Element> {
       <ol className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
         {STEPS.map(({ titleKey, descKey, Icon }, index) => (
           <li key={titleKey} className="relative flex flex-col items-center text-center">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent-dark">
               <Icon className="h-5 w-5" aria-hidden="true" />
             </span>
             <h3 className="mt-3 text-sm font-semibold text-foreground">

@@ -1,4 +1,6 @@
+import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { ArrowRight } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
@@ -6,7 +8,6 @@ import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getLatestJobs } from '@/lib/jobs';
-import { BelgiumSkyline } from '@/components/brand/BelgiumSkyline';
 import { Benefits } from '@/components/public/Benefits';
 import { CategoryGrid } from '@/components/public/CategoryGrid';
 import { ForCompanies } from '@/components/public/ForCompanies';
@@ -16,10 +17,10 @@ import { JobCard } from '@/components/public/JobCard';
 import { LocationGrid } from '@/components/public/LocationGrid';
 
 /**
- * Strona główna Pracuj.be — redesign wg makiety `docs/design/screens/01-home.png`.
+ * Strona główna Pracuj.be — hero według `docs/design/people-passport`.
  *
  * Lekka, mobile-first, w większości serwerowa (RSC). Sekcje w kolejności z makiety:
- * Hero (nagłówek + ilustracja Brukseli + wyszukiwarka + linki-akcje) → pasek zaufania →
+ * Hero (nagłówek + fotografia zespołu + wyszukiwarka + linki-akcje) → pasek zaufania →
  * najnowsze oferty (lista-tabela) → popularne kategorie + lokalizacje (2 kolumny) →
  * „Jak to działa?" obok karty „Jesteś pracodawcą?". Stopka jest w layoucie `(public)`.
  *
@@ -83,25 +84,31 @@ export default async function HomePage({ params }: HomePageProps) {
 
   return (
     // Bez własnego <main> — layout (public) już dostarcza landmark <main> (unikamy duplikatu, a11y).
-    <>
-      {/* Hero — lekki, nie na cały ekran; ilustracja Brukseli po prawej (desktop). */}
-      <section className="relative overflow-hidden border-b border-border bg-soft">
-        <div className="container py-12 md:py-16">
-          <BelgiumSkyline className="pointer-events-none absolute right-0 top-6 hidden w-2/5 max-w-md text-accent/20 lg:block" />
-
-          <div className="relative max-w-2xl">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl">
-              {t('heroTitle')}
-            </h1>
-            <p className="mt-3 max-w-xl text-base text-muted-foreground sm:text-lg">
-              {t('heroSubtitle')}
-            </p>
+    <PublicSavedJobsProvider key={JSON.stringify(latestJobs.map(job => job.id))} jobIds={latestJobs.map(job => job.id)}>
+      {/* Fotografia jest ilustracyjna, nie przedstawia konkretnej oferty ani pracodawcy. */}
+      <section className="border-b border-border bg-background">
+        <div className="container py-8 md:py-12">
+          <div className="grid items-center gap-8 md:grid-cols-[1.16fr_1fr] lg:gap-12">
+            <div className="min-w-0">
+              <h1 className="text-4xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+                {t('heroTitle')}
+              </h1>
+              <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
+                {t('heroSubtitle')}
+              </p>
+            </div>
+            <div className="relative aspect-[3/2] overflow-hidden rounded-3xl rounded-tl-[5rem] bg-soft md:aspect-[4/3] lg:rounded-tl-[6rem]">
+              <Image
+                src="/images/people/team.webp"
+                alt=""
+                fill
+                priority
+                sizes="(min-width: 1280px) 520px, (min-width: 768px) 45vw, 100vw"
+                className="object-cover"
+              />
+            </div>
           </div>
-
-          {/* Ilustracja pod tekstem na mobile. */}
-          <BelgiumSkyline className="mt-8 w-full text-accent/20 lg:hidden" />
-
-          <div className="relative mt-8">
+          <div className="mt-8">
             <HeroSearch />
           </div>
         </div>
@@ -155,6 +162,6 @@ export default async function HomePage({ params }: HomePageProps) {
           <ForCompanies />
         </div>
       </section>
-    </>
+    </PublicSavedJobsProvider>
   );
 }

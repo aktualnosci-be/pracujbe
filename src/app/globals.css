@@ -11,44 +11,44 @@
 @layer base {
   :root {
     /* Powierzchnie */
-    --background: 0 0% 100%; /* #FFFFFF */
-    --foreground: 221 38% 15%; /* #172033 */
-    --card: 0 0% 100%; /* #FFFFFF */
-    --card-foreground: 221 38% 15%; /* #172033 */
-    --soft: 210 40% 98%; /* #F8FAFC */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 8%;
+    --soft: 0 0% 97%;
 
     /* Neutralne / stonowane */
-    --muted: 210 40% 96%; /* #F1F5F9 */
-    --muted-foreground: 215 20% 42%; /* #566881 — przyciemnione dla WCAG AA (≥4.5:1) na tle soft/białym */
-    --secondary: 210 40% 96%; /* #F1F5F9 */
-    --secondary-foreground: 221 38% 15%; /* #172033 */
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 38%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 8%;
 
-    /* Marka — paleta z makiet: primary = granat, accent = niebieski. */
-    --primary: 211 65% 17%; /* #0F2A47 granat — akcje/marka, sidebar, stopka */
-    --primary-dark: 213 70% 13%; /* #0A1F38 hover granatu */
-    --primary-foreground: 0 0% 100%; /* #FFFFFF */
-    --accent: 221 83% 53%; /* #2563EB niebieski — linki, ".be", aktywne akcenty */
-    --accent-dark: 224 76% 48%; /* #1D4ED8 — hover + tekst akcentu na tincie bg-accent/10 (AA) */
-    --accent-foreground: 0 0% 100%; /* #FFFFFF */
-    --accent-on-dark: 213 94% 68%; /* #60A5FA — akcent na ciemnym (granatowym) tle, np. ".be" w stopce (AA ≥4.5:1) */
+    /* Marka — zatwierdzony paszport pracy: biel, czerwień i czerń. */
+    --primary: 357 68% 51%;
+    --primary-dark: 357 72% 41%;
+    --primary-foreground: 0 0% 100%;
+    --accent: 357 68% 51%;
+    --accent-dark: 357 72% 39%;
+    --accent-foreground: 0 0% 100%;
+    --accent-on-dark: 0 0% 100%;
 
     /* Stany — wersje bazowe (tła, kropki statusu, ikony na kolorowym tle) */
-    --success: 142 76% 36%; /* #16A34A */
-    --warning: 33 94% 43%; /* #D97706 — status "Obejrzana" itp. */
-    --error: 0 72% 51%; /* #DC2626 */
+    --success: 142 76% 36%;
+    --warning: 33 94% 43%;
+    --error: 0 72% 51%;
 
     /* Stany — wersje TEKSTOWE spełniające kontrast WCAG 2.2 AA na białym tle.
        Używaj do tekstu/linków na jasnym tle; --success/--warning zostają na tła i kropki. */
-    --success-text: 142 72% 29%; /* #15803D */
-    --warning-text: 26 90% 37%; /* #B45309 */
+    --success-text: 142 72% 29%;
+    --warning-text: 26 90% 37%;
 
     /* Obrysy / kontrolki / focus */
-    --border: 214 32% 91%; /* #E2E8F0 */
-    --input: 214 32% 91%; /* #E2E8F0 */
-    --ring: 221 83% 53%; /* #2563EB — akcent na focusie */
+    --border: 0 0% 87%;
+    --input: 0 0% 87%;
+    --ring: 357 68% 51%;
 
     /* Promień zaokrągleń */
-    --radius: 0.625rem;
+    --radius: 0.875rem;
   }
 
   /* Domyślny kolor obrysu dla elementów używających klasy `border`. */

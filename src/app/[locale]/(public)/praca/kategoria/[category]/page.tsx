@@ -1,3 +1,4 @@
+import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ArrowRight, SearchX } from 'lucide-react';
@@ -141,6 +142,7 @@ export default async function CategoryLandingPage({ params }: PageProps) {
   };
 
   return (
+    <PublicSavedJobsProvider key={JSON.stringify(result.jobs.map(job => job.id))} jobIds={result.jobs.map(job => job.id)}>
     <div className="container py-6 md:py-10">
       <script
         type="application/ld+json"
@@ -229,5 +231,6 @@ export default async function CategoryLandingPage({ params }: PageProps) {
         </ul>
       </section>
     </div>
+    </PublicSavedJobsProvider>
   );
 }

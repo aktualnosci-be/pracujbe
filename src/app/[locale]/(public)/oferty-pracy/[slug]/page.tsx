@@ -1,3 +1,5 @@
+import { formatSalaryRange } from '@/lib/salary';
+import { PublicSavedJobsProvider, PublicSaveJobButton } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server';
@@ -12,7 +14,6 @@ import {
   ChevronDown,
   Clock,
   FileText,
-  Heart,
   Home,
   Languages as LanguagesIcon,
   MapPin,
@@ -211,18 +212,10 @@ export default async function JobDetailPage({ params }: PageProps) {
     getFormatter(),
   ]);
 
-  const currencyOptions: Intl.NumberFormatOptions = {
-    style: 'currency',
-    currency: job.currency,
-    maximumFractionDigits: 0,
-  };
-  const salaryLabel = (() => {
-    if (job.salaryMin !== undefined && job.salaryMax !== undefined) {
-      return `${format.number(job.salaryMin, currencyOptions)} – ${format.number(job.salaryMax, currencyOptions)}`;
-    }
-    const single = job.salaryMin ?? job.salaryMax;
-    return single !== undefined ? format.number(single, currencyOptions) : t('salaryNotProvided');
-  })();
+  const salaryLabel = formatSalaryRange(job, locale, {
+    from: value => tJobs('passport.salaryFrom', { value }),
+    to: value => tJobs('passport.salaryTo', { value }),
+  });
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
 
@@ -242,7 +235,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
   const metaItems: Array<{ icon: React.ComponentType<{ className?: string }>; text: string }> = [
     { icon: MapPin, text: `${job.city}, ${job.region}` },
-    { icon: Wallet, text: salaryLabel },
+    ...(salaryLabel === null ? [] : [{ icon: Wallet, text: salaryLabel }]),
     { icon: FileText, text: tContract(job.contractType) },
     { icon: Clock, text: job.workingHours },
   ];
@@ -292,6 +285,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   );
 
   return (
+    <PublicSavedJobsProvider key={JSON.stringify([job.id])} jobIds={[job.id]}>
     <div className="container py-6 md:py-10">
       <script
         type="application/ld+json"
@@ -334,13 +328,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           </div>
 
           {/* Zapisz (desktop) */}
-          <Link
-            href={LOGIN_HREF}
-            className={cn(buttonVariants({ variant: 'outline' }), 'hidden lg:inline-flex')}
-          >
-            <Heart className="h-4 w-4" aria-hidden="true" />
-            {t('saveJob')}
-          </Link>
+          <PublicSaveJobButton jobId={job.id} className="hidden lg:inline-flex" />
         </div>
 
         {/* Meta */}
@@ -523,13 +511,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 triggerHint={applyHint}
                 triggerClassName="w-full"
               />
-              <Link
-                href={LOGIN_HREF}
-                className={cn(buttonVariants({ variant: 'outline' }), 'mt-3 w-full')}
-              >
-                <Heart className="h-4 w-4" aria-hidden="true" />
-                {t('saveJob')}
-              </Link>
+              <PublicSaveJobButton jobId={job.id} className="mt-3 w-full" />
             </div>
 
             {/* Kontakt */}
@@ -562,10 +544,10 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <h2 className="mb-3 text-base font-semibold text-foreground">{t('similarJobs')}</h2>
                 <ul className="divide-y divide-border">
                   {similarJobs.map((item) => {
-                    const itemSalary =
-                      item.salaryMin !== undefined && item.salaryMax !== undefined
-                        ? `${format.number(item.salaryMin, { style: 'currency', currency: item.currency, maximumFractionDigits: 0 })} – ${format.number(item.salaryMax, { style: 'currency', currency: item.currency, maximumFractionDigits: 0 })}`
-                        : null;
+                    const itemSalary = formatSalaryRange(item, locale, {
+                      from: value => tJobs('passport.salaryFrom', { value }),
+                      to: value => tJobs('passport.salaryTo', { value }),
+                    });
                     return (
                       <li key={item.id} className="py-3 first:pt-0 last:pb-0">
                         <Link href={`${BASE_PATH}/${item.slug}`} className="group flex gap-3">
@@ -607,13 +589,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
       {/* Dolny pasek (mobile) */}
       <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background/95 p-3 shadow-[0_-4px_12px_rgba(15,42,71,0.08)] backdrop-blur lg:hidden">
-        <Link
-          href={LOGIN_HREF}
-          className={cn(buttonVariants({ variant: 'outline' }), 'flex-1')}
-        >
-          <Heart className="h-4 w-4" aria-hidden="true" />
-          {t('saveJob')}
-        </Link>
+        <PublicSaveJobButton jobId={job.id} className="flex-1" />
         <ApplyModal
           jobId={job.id}
           companyName={job.companyName}
@@ -625,5 +601,6 @@ export default async function JobDetailPage({ params }: PageProps) {
       {/* Odstęp, aby dolny pasek nie zasłaniał treści na mobile. */}
       <div className="h-20 lg:hidden" aria-hidden="true" />
     </div>
+    </PublicSavedJobsProvider>
   );
 }

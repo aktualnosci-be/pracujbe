@@ -664,7 +664,7 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
                           className={cn(
                             'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
                             active
-                              ? 'border-accent bg-accent/10 text-accent'
+                              ? 'border-accent bg-accent/10 text-accent-dark'
                               : 'border-input text-foreground hover:bg-soft',
                           )}
                         >
@@ -690,7 +690,7 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
                       className={cn(
                         'rounded px-5 py-1.5 text-sm font-medium transition-colors',
                         !values.hasCar
-                          ? 'bg-accent/10 text-accent'
+                          ? 'bg-accent/10 text-accent-dark'
                           : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
@@ -703,7 +703,7 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
                       className={cn(
                         'rounded px-5 py-1.5 text-sm font-medium transition-colors',
                         values.hasCar
-                          ? 'bg-accent/10 text-accent'
+                          ? 'bg-accent/10 text-accent-dark'
                           : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
@@ -1018,7 +1018,7 @@ function TogglePill({
       className={cn(
         'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
         active
-          ? 'border-accent bg-accent/10 text-accent'
+          ? 'border-accent bg-accent/10 text-accent-dark'
           : 'border-input text-foreground hover:bg-soft',
       )}
     >

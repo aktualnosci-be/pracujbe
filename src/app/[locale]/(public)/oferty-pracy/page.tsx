@@ -1,3 +1,4 @@
+import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { ChevronDown, MapPin, Search, SearchX, X } from 'lucide-react';
@@ -307,6 +308,7 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
   );
 
   return (
+    <PublicSavedJobsProvider key={JSON.stringify(pageItems.map(job => job.id))} jobIds={pageItems.map(job => job.id)}>
     <div className="container py-6 md:py-10">
       {/* Breadcrumb */}
       <nav aria-label={tCommon('breadcrumb')} className="mb-4 text-sm text-muted-foreground">
@@ -483,5 +485,6 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
         </div>
       </div>
     </div>
+    </PublicSavedJobsProvider>
   );
 }

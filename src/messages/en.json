@@ -226,6 +226,14 @@
     "seasonal": "Seasonal"
   },
   "jobs": {
+    "passport": {
+      "location": "Location",
+      "salary": "Salary",
+      "conditions": "Conditions",
+      "viewOffer": "View job",
+      "salaryFrom": "from {value}",
+      "salaryTo": "up to {value}"
+    },
     "pageTitle": "Jobs in Belgium",
     "search": "Search",
     "filtersTitle": "Filters",
@@ -257,7 +265,12 @@
     "subtitle": "Find a job that fits you. Browse thousands of current offers.",
     "searchJobs": "Search jobs",
     "keywordPlaceholder": "e.g. mechanic, warehouse worker, carer",
-    "locationPlaceholder": "e.g. Antwerp, Brussels, Ghent"
+    "locationPlaceholder": "e.g. Antwerp, Brussels, Ghent",
+    "saveLogin": "Sign in to save this job",
+    "saveUnavailable": "Saving is available for candidate accounts with a connected service",
+    "saveLoading": "Loading saved jobs",
+    "saveRetry": "Could not load saved jobs. Retry",
+    "saveFailed": "Could not save the change. Try again."
   },
   "job": {
     "apply": "Apply for this job",

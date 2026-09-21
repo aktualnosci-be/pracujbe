@@ -1,3 +1,5 @@
+> HISTORYCZNE MAKIETY: od 2026-09-21 kierunek wizualny zastępuje [Paszport pracy](design/people-passport/README.md). Poniższy opis zachowuje kontekst funkcji; dawna paleta nie jest aktualną decyzją właściciela.
+
 # Pracuj.be — specyfikacja ekranów (źródło prawdy dla UI)
 
 > **To jest wizualny kontrakt UI.** Odwzorowuje 7 zatwierdzonych makiet w `docs/design/screens/`.

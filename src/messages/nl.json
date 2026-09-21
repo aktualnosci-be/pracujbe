@@ -226,6 +226,14 @@
     "seasonal": "Seizoenswerk"
   },
   "jobs": {
+    "passport": {
+      "location": "Locatie",
+      "salary": "Loon",
+      "conditions": "Voorwaarden",
+      "viewOffer": "Bekijk vacature",
+      "salaryFrom": "vanaf {value}",
+      "salaryTo": "tot {value}"
+    },
     "pageTitle": "Vacatures in België",
     "search": "Zoeken",
     "filtersTitle": "Filters",
@@ -257,7 +265,12 @@
     "subtitle": "Vind werk dat bij je past. Blader door duizenden actuele vacatures.",
     "searchJobs": "Werk zoeken",
     "keywordPlaceholder": "bijv. monteur, magazijnier, verzorgende",
-    "locationPlaceholder": "bijv. Antwerpen, Brussel, Gent"
+    "locationPlaceholder": "bijv. Antwerpen, Brussel, Gent",
+    "saveLogin": "Log in om deze vacature op te slaan",
+    "saveUnavailable": "Opslaan is beschikbaar voor kandidaten met een verbonden dienst",
+    "saveLoading": "Opgeslagen vacatures laden",
+    "saveRetry": "Laden mislukt. Probeer opnieuw",
+    "saveFailed": "Wijziging opslaan mislukt. Probeer opnieuw."
   },
   "job": {
     "apply": "Solliciteer op deze functie",

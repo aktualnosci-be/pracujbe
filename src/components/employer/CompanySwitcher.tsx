@@ -51,7 +51,7 @@ export function CompanySwitcher({
 
   const badge = (
     <span
-      className="flex size-9 shrink-0 items-center justify-center rounded-md bg-white/10 text-xs font-semibold text-white"
+      className="flex size-9 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-foreground"
       aria-hidden="true"
     >
       {initials}
@@ -64,8 +64,8 @@ export function CompanySwitcher({
       <div className="flex w-full items-center gap-2.5 rounded-md p-1">
         {badge}
         <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate text-sm font-semibold text-white">{name}</span>
-          <span className="block truncate text-xs text-white/60">{td('employerRole')}</span>
+          <span className="block truncate text-sm font-semibold text-foreground">{name}</span>
+          <span className="block truncate text-xs text-muted-foreground">{td('employerRole')}</span>
         </span>
       </div>
     );
@@ -87,14 +87,14 @@ export function CompanySwitcher({
     <details ref={detailsRef} className="relative w-full">
       <summary
         aria-label={td('switchCompany')}
-        className="flex w-full cursor-pointer list-none items-center gap-2.5 rounded-md p-1 text-left transition-colors hover:bg-white/5 [&::-webkit-details-marker]:hidden"
+        className="flex w-full cursor-pointer list-none items-center gap-2.5 rounded-md p-1 text-left transition-colors hover:bg-soft [&::-webkit-details-marker]:hidden"
       >
         {badge}
         <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate text-sm font-semibold text-white">{name}</span>
-          <span className="block truncate text-xs text-white/60">{td('employerRole')}</span>
+          <span className="block truncate text-sm font-semibold text-foreground">{name}</span>
+          <span className="block truncate text-xs text-muted-foreground">{td('employerRole')}</span>
         </span>
-        <ChevronDown className="size-4 shrink-0 text-white/60" aria-hidden="true" />
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </summary>
 
       <div className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-md border border-border bg-background py-1 shadow-lg">

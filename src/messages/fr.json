@@ -226,6 +226,14 @@
     "seasonal": "Travail saisonnier"
   },
   "jobs": {
+    "passport": {
+      "location": "Lieu",
+      "salary": "Rémunération",
+      "conditions": "Conditions",
+      "viewOffer": "Voir l’offre",
+      "salaryFrom": "à partir de {value}",
+      "salaryTo": "jusqu’à {value}"
+    },
     "pageTitle": "Offres d'emploi en Belgique",
     "search": "Rechercher",
     "filtersTitle": "Filtres",
@@ -257,7 +265,12 @@
     "subtitle": "Trouvez un emploi qui vous correspond. Parcourez des milliers d’offres actuelles.",
     "searchJobs": "Rechercher un emploi",
     "keywordPlaceholder": "p. ex. mécanicien, magasinier, aide-soignante",
-    "locationPlaceholder": "p. ex. Anvers, Bruxelles, Gand"
+    "locationPlaceholder": "p. ex. Anvers, Bruxelles, Gand",
+    "saveLogin": "Connectez-vous pour enregistrer cette offre",
+    "saveUnavailable": "Un compte candidat et un service connecté sont nécessaires",
+    "saveLoading": "Chargement des offres enregistrées",
+    "saveRetry": "Chargement impossible. Réessayer",
+    "saveFailed": "Modification non enregistrée. Réessayez."
   },
   "job": {
     "apply": "Postuler à ce poste",

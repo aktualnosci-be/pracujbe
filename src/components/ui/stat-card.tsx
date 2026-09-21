@@ -23,7 +23,7 @@ const ICON_TONE: Record<Tone, string> = {
   success: 'bg-success/10 text-success',
   warning: 'bg-warning/10 text-warning',
   error: 'bg-error/10 text-error',
-  accent: 'bg-accent/10 text-accent',
+  accent: 'bg-accent/10 text-accent-dark',
 };
 
 const VALUE_TONE: Record<Tone, string> = {

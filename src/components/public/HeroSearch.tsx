@@ -103,7 +103,7 @@ export function HeroSearch(): React.JSX.Element {
             href={href}
             className="group flex items-center gap-3 rounded-xl border border-border bg-background p-3 transition-colors hover:border-accent/40 hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent-dark">
               <Icon className="h-5 w-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">

@@ -55,7 +55,7 @@ sudo ./svc.sh status
 | Przeglądarki Playwright | Chromium | zainstaluj raz: `npx playwright install --with-deps chromium` |
 | biblioteki systemowe | zależności Chromium | na Ubuntu: `npx playwright install-deps` (wymaga sudo) |
 | Docker | dowolna aktualna | wymagane przez job `rls` (usługa kontenerowa `postgres:16`) |
-| Klient `psql` | 16 (lub zgodny) | job `rls`: na Ubuntu `sudo apt-get install -y postgresql-client` |
+| Klient `psql` | dostarczany przez `postgres:16` | job `rls` wykonuje testy wewnątrz kontenera; instalacja na hoście nie jest potrzebna |
 | Vercel CLI | pobierane w jobie | `npm i -g vercel@latest` (deploy) |
 
 > **Playwright:** job `e2e` wykonuje `npx playwright install chromium` (bez `--with-deps`,
@@ -66,13 +66,14 @@ sudo ./svc.sh status
 >
 > **RLS (`rls`):** job uruchamia `scripts/test-rls.sh` — nakłada `supabase/tests/shim.sql`
 > + wszystkie migracje na kontener `postgres:16` (usługa GH Actions) i wykonuje adwersaryjne
-> asercje `supabase/tests/rls.sql`. Runner musi mieć **Docker** (usługi kontenerowe) oraz
-> klienta **`psql`**. Job nie wymaga `node_modules`. Lokalnie: `npm run test:rls`
+> asercje `supabase/tests/rls.sql`. Runner musi mieć **Docker**. Skrypty i migracje są
+> kopiowane do kontenera usługi, gdzie działają Bash i `psql`. Nie publikujemy portu bazy
+> na hoście; każdy job ma własną bazę. Job nie wymaga `node_modules`. Lokalnie: `npm run test:rls`
 > (peer auth: `sudo -u postgres bash scripts/test-rls.sh`).
 >
-> **Advisory → gate:** job ma na start `continue-on-error: true` — uruchamia się i raportuje,
-> ale NIE blokuje CI/deploy, dopóki runner nie ma Dockera/psql. Po doprovisionowaniu runnera
-> USUŃ `continue-on-error` z joba `rls` w `ci.yml`, aby stał się twardą bramką (wymóg audytu).
+> **Bramka CI:** błąd RLS lub danych demonstracyjnych kończy job niepowodzeniem.
+> Wynik trzeba sprawdzić w rzeczywistym przebiegu; poprawna konfiguracja nie jest dowodem
+> przejścia asercji. Wdrożenie ma wymagać zielonego wyniku tego joba.
 
 ---
 
