@@ -20,6 +20,9 @@ Sentry · Vitest + Playwright · Railway.
 **CI działa na self-hosted runnerach, a produkcję z `main` wdraża Railway po zielonym CI** —
 patrz [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
 
+Migracja backendu, bazy, logowania i prywatnych plików do Railway nadal trwa.
+Skonfigurowana ścieżka wdrożenia nie oznacza jeszcze gotowości produkcyjnej portalu.
+
 ## Szybki start
 
 ```bash

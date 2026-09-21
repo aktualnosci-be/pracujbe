@@ -7,11 +7,10 @@ model wdrożeń [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 ## Konfiguracja Railway
 
 W środowisku `production`, w usłudze `pracujbe`, dodaj domenę niestandardową
-`pracuj.be`. Railway wskazuje bieżącą wartość rekordu DNS; w chwili przygotowania
-tej instrukcji jest to CNAME `xetenf6j.up.railway.app`.
+`pracuj.be`. U operatora DNS ustaw dokładnie bieżące `requiredValue` zwrócone
+przez API Railway albo wartość wymaganą w panelu usługi.
 
-U operatora DNS ustaw dokładnie rekord pokazany przez Railway. Gdy dostawca DNS
-nie pozwala na zwykły CNAME dla domeny głównej, użyj flatteningu CNAME,
+Gdy dostawca DNS nie pozwala na zwykły CNAME dla domeny głównej, użyj flatteningu CNAME,
 ALIAS albo ANAME zgodnie z jego instrukcją. Nie kopiuj dawnych rekordów Vercela.
 
 `www.pracuj.be` powinno przekierowywać trwale do kanonicznego
@@ -22,7 +21,7 @@ nie uruchamiaj w tym celu drugiej aplikacji.
 
 Nie uznawaj samego dodania domeny w panelu za gotowy cutover. Sprawdź:
 
-- status domeny w Railway po propagacji DNS;
+- status domeny w API Railway albo panelu po propagacji DNS;
 - poprawny certyfikat TLS i przekierowanie HTTP do HTTPS;
 - odpowiedź `GET https://pracuj.be/api/health`;
 - kanoniczny adres oraz przekierowanie z `www`;

@@ -6,6 +6,9 @@ Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
 [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md), [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md),
 [`PERFORMANCE_CHECKLIST.md`](./PERFORMANCE_CHECKLIST.md).
 
+Migracja backendu do Railway jest w toku. Ta lista opisuje warunki przyszłego
+odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
+
 ---
 
 ## 1. Domena i DNS
