@@ -59,8 +59,8 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
 
   const brand = (
     <div className="flex flex-col leading-tight">
-      <span className="text-lg font-semibold tracking-tight text-white">{tc('appName')}</span>
-      <span className="text-xs text-white/60">{t('brandTag')}</span>
+      <span className="text-lg font-semibold tracking-tight text-foreground">{tc('appName')}</span>
+      <span className="text-xs text-muted-foreground">{t('brandTag')}</span>
     </div>
   );
 

@@ -5,8 +5,8 @@ import type { MetadataRoute } from 'next';
  * Serwowany pod /manifest.webmanifest. Middleware i18n go pomija (ścieżka z kropką),
  * więc nie dostaje prefiksu locale.
  *
- * Ikony to statyczne pliki w /public — instrukcja ich wygenerowania: public/ICONS_README.md.
- * Kolory zgodne z design tokens: theme #2563EB (primary), background #FFFFFF.
+ * Ikony są generowane z zatwierdzonego czerwonego kafelka `.be`; instrukcja: public/ICONS_README.md.
+ * Kolory zgodne z design tokens: theme #D92932 (primary), background #FFFFFF.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
