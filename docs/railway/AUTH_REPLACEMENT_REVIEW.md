@@ -87,3 +87,83 @@ Wysyłka musi mieć trwałą kolejkę/retry i idempotencję Resend. Zapisać ż�
 Wymagane testy integracyjne na prawdziwym PostgreSQL: rejestracja kandydat/pracodawca we wszystkich czterech językach; ten sam UUID w users/profiles/accounts/sessions; role admin i dowolne metadata odrzucane; bezpośredni HTTP signup nie omija zgód/walidacji; awaria triggera nie zostawia konta częściowego; brak sesji przed weryfikacją; odwołanie, wygaśnięcie i fałszywe cookie; reset obcego konta nie zmienia języka, token działa raz, sesje unieważnione; bootstrap firmy ponowiony bez duplikatu; brak PII firmy B, nieaktywny członek odcięty; podmieniony callback/origin odrzucony; limiter zachowany w Server Actions; różne UUID na ponownie użytym połączeniu; niedostępna DB daje fail-closed. Dodatkowo E2E obecnych formularzy, SSR i a11y.
 
 Nie wykonano tych testów w tym przeglądzie. Pozostają warunkami odbioru implementacji, a nie zaliczonym wynikiem.
+
+## Doprecyzowanie implementacji po schemacie 0057
+
+Ponowny odczyt bieżącego kodu: 21 września 2026. Ten rozdział jest planem następnego PR, nie listą wykonanych zmian. Schemat `database/auth/0057_better_auth_core.sql` zawiera wyłącznie core auth i zachowuje `raw_user_meta_data`; **nie zawiera jeszcze pól signup_role/signup_locale ani nowego triggera zgód** proponowanych wyżej. Najpierw trzeba wybrać i przetestować jeden sposób przekazania danych rejestracji do triggera. Nie dopisywać tych pól do konfiguracji SDK, zakładając, że już istnieją w bazie.
+
+### Dokładny zakres plików
+
+| Plik | Następna zmiana i warunek odbioru |
+|---|---|
+| `package.json`, `package-lock.json` | Przypięte Better Auth 1.7.5; kompilacja na istniejącym Next/React; bez wymiany frameworka lub ORM |
+| nowy `src/lib/auth/server.ts` | Leniwa inicjalizacja server-only, jawne mapowania z 0057, auth Pool, sekret/baseURL, weryfikacja e-maila, cookies, ograniczenie endpointów; import nie łączy się z DB podczas builda |
+| nowy `src/lib/auth/session.ts` | Zweryfikowana sesja + aktywny profil; jeden helper dla akcji i loaderów; brak cookie cache i brak zaufania do roli zwróconej z klienta |
+| nowy `src/lib/auth/errors.ts` | Mapowanie stabilnych kodów SDK do istniejącego ErrorCode; żaden message/body dostawcy nie trafia do UI |
+| nowy `src/app/api/auth/[...all]/route.ts` | Node runtime, handler biblioteki z jawną listą dopuszczonych metod/operacji; origin, limity, rozmiar body; callback auth poza next-intl |
+| `src/lib/actions/auth.ts` | Zachować sygnatury formularzy oprócz rozszerzenia UpdatePasswordInput o token; podmienić dostawcę, odczyt profilu, bootstrap firmy, limiter i wysyłkę |
+| `src/lib/validation/auth.ts` | Wspólny schemat resetu z tokenem używany także przez NewPasswordForm; nadal 8–72 znaki, litera+cyfra, zgodne powtórzenie, zgody przy signup |
+| `src/components/auth/AuthForm.tsx` | Zachować układ i tłumaczenia. Zmiany tylko jeśli wymaga ich mapowanie błędów; sprawdzić, że unchecked agreeTerms zatrzymuje wywołanie, bo payload obecnie buduje `agreeTerms: true` dopiero po udanej walidacji RHF |
+| `src/app/[locale]/(auth)/ustaw-nowe-haslo/page.tsx` | Dodać Next15 `searchParams: Promise<...>`, wydobyć pojedynczy token/error i przekazać do formularza; utrzymać noindex |
+| `src/app/[locale]/(auth)/ustaw-nowe-haslo/NewPasswordForm.tsx` | Token w wywołaniu updatePassword, obsługa braku/wygaśnięcia bez pozornego sukcesu; zachować focus, wartości pól i komunikaty |
+| `src/app/auth/callback/route.ts` | Usunąć PKCE Supabase; callback weryfikuje nową sesję, stan profilu i dozwolony redirect, ewentualnie bootstrap firmy; nie używa dowolnego next do decydowania o roli |
+| `src/app/[locale]/(auth)/potwierdzenie/page.tsx` | Przynajmniej skorygować opis starej wymiany kodu w komentarzu; strona pozostaje informacyjna, nie tworzy sesji |
+| `src/middleware.ts` | next-intl + fail-closed zostają; brak klienta Supabase i rotacji JWT. Nie importować pg/auth serwera do Edge middleware |
+| `src/lib/rate-limit.ts` | Trwały limiter PostgreSQL bez isSupabaseConfigured i bez createAdminClient; nadal osobna ścieżka uprzywilejowana, nie auth Pool |
+| nowy `src/lib/auth/email.ts` | Callbacki weryfikacji/resetu, profil odbiorcy, resolveRecipientLocale, trwały zapis zlecenia i bezpieczne linki |
+| `src/lib/email/outbox.ts` | Zastąpić adapter Supabase; utrzymać atomowy claim, retry i idempotencyKey=delivery.id; dla maili auth kontrolować termin tokenu i usuwanie wrażliwego payloadu |
+| `src/lib/env.ts`, `src/app/api/health/route.ts`, `.env.example` | Nowe zależności gotowości zamiast Supabase; bez sekretów NEXT_PUBLIC; health nadal nie ujawnia szczegółów anonimowo |
+| `src/app/api/auth/email-hook/route.ts` | Wycofać po odbiorze nowej wysyłki; nie przenosić zależności od podpisu GoTrue do Better Auth |
+| `src/app/[locale]/{candidate,employer,admin}/layout.tsx`, `candidate/onboarding/{layout,page}.tsx` | Guard nowej sesji; zachować force-dynamic/noindex i reguły roli; adaptery danych panelu to zależność #25 |
+
+`src/lib/db/transaction.ts` już udostępnia `withUserTransaction(pool, trustedUserId, action)` i ustawia `app.current_uid` lokalnie w transakcji. Użyć tej implementacji zamiast tworzyć drugi mechanizm tożsamości. Trzeba nadal dostarczyć rzeczywisty ograniczony Pool domenowy i typowane repozytorium profilu. **Auth Pool nie może używać helpera domenowego**: jego tabele i rola są osobne. Zwykły login NOINHERIT auth wymaga jawnego ustawienia roli na połączeniu; samo podanie jego URL do pg.Pool bez tego kroku nie daje uprawnień z 0057. Adapter i test muszą wykazać poprawną inicjalizację KAŻDEGO nowego połączenia, nie tylko pierwszego.
+
+Zmiany w `src/messages/{pl,nl,fr,en}.json` i `src/lib/errors/index.ts` tylko przy rzeczywiście nowym stanie UI. Obecne AUTH_INVALID_CREDENTIALS, VALIDATION_FAILED, RATE_LIMITED, EMAIL_DELIVERY_FAILED i INTERNAL pokrywają większość potrzeb; nie kopiować komunikatów angielskich z SDK.
+
+Aby zachować obecną ścieżkę „link potwierdzenia → panel”, ustawić jawnie `emailAndPassword.requireEmailVerification=true`, `emailAndPassword.autoSignIn=false` oraz `emailVerification.autoSignInAfterVerification=true`. Brak sesji przed potwierdzeniem i jej zapis po potwierdzeniu są osobnymi testami. Opcje potwierdza [referencja konfiguracji](https://better-auth.com/docs/reference/options). Na tym etapie nie włączać zmiany adresu ani usuwania użytkownika przez domyślne endpointy SDK: aplikacja ma soft delete i kopię e-maila w profiles, a auth.users ma kaskadowy FK. Takie operacje wymagają osobnych akcji domenowych, nie samej opcji w bibliotece.
+
+### Rejestracja: nie przenosić ukrytych założeń
+
+1. Obecne publiczne akcje same wybierają candidate/employer, a Zod usuwa nieznane pola. Zachować tę granicę: podpis formularza nie przyjmuje role=admin. Wspólny helper wewnętrzny nie powinien zostać dodatkowym eksportem Server Action przyjmującym dowolną rolę.
+2. Bezpośredni endpoint biblioteki może ominąć Server Actions. W pierwszej wersji preferowane ograniczenie publicznego catch-all: rejestracja wyłącznie przez akcje aplikacji; publiczna weryfikacja/get-session i niezbędne ścieżki resetu według rzeczywistej listy endpointów 1.7.5. Sprawdzić testem, że blokada HTTP nie wyłącza wewnętrznego `auth.api` i nie blokuje callbacków biblioteki. Alternatywą jest pełna ta sama walidacja w endpointach — nie wolno zostawić wariantu połowicznego.
+3. Dla bridge do starego `handle_new_user` dane first_name/last_name/locale/company_name/role muszą zostać dodane przed INSERT auth.users. Jeśli przechodzą przez hook konfiguracji, użyć izolowanego kontekstu pojedynczego żądania; zakaz modułowej zmiennej `currentSignup`, bo równoległa rejestracja pomiesza role i języki. Potwierdzić w teście adaptera obsługę dodatkowego JSON metadata i `input:false`; nie zgadywać zachowania SDK.
+4. Obecny preferred_locale i receipt zapisują się po signUp metodą best-effort. `record_document_acceptance` w 0054 jest dostępny tylko service_role; pracujbe_auth z 0057 celowo NIE ma tych praw. Nie nadawać całego service_role auth. Osobna migracja wąskiego triggera/funkcji musi atomowo dodać preferowany język i dwa receipty po walidacji zgód, albo jasno zablokować możliwość aktywacji częściowo utworzonego konta. Nie interpretować każdego INSERT users jako zgody człowieka, bo to mogłoby tworzyć fikcyjne receipty w narzędziach administracyjnych.
+5. Konflikt tego samego adresu (także różna wielkość liter) nie może zmienić roli ani danych istniejącego konta. Nie wykonywać aktualizacji na podstawie syntetycznego success/id ze ścieżki antyenumeracyjnej. Weryfikacja adresu i utworzenie profilu muszą być dowodem rzeczywistego nowego konta.
+
+### Bootstrap pracodawcy: konkretna luka we współbieżności
+
+Odczyt kodu wykazał, że `bootstrapCompany()` wykonuje najpierw SELECT członkostwa, a później oddzielne RPC. `create_company_with_owner` w 0011 zawsze tworzy nową firmę i ownera; sprawdza tylko obecność auth.uid(), nie rolę employer ani wcześniejsze członkostwo. Opis „idempotentny” nie obejmuje dwóch równoległych callbacków.
+
+W następnej implementacji zamknąć bootstrap w jednym `withUserTransaction`: zablokować własny wiersz profiles `FOR UPDATE`, sprawdzić aktywność i role=employer, ponownie odczytać członkostwo, a dopiero potem wywołać RPC. Oba wywołania muszą użyć tego samego klienta transakcji. Nie zmieniać ogólnej możliwości posiadania wielu firm: ograniczenie dotyczy wyłącznie automatycznego bootstrapu po signup. Przy istniejącym nieaktywnym członkostwie nie reaktywować go ani nie tworzyć zastępczej firmy automatycznie.
+
+Test: dwa jednoczesne wywołania bootstrapu świeżego pracodawcy → dokładnie jedna firma i jedno członkostwo owner. Kandydat z podmienionym company_name → brak firmy. Błąd INSERT członkostwa → brak pozostawionej firmy. Awaria bootstrapu po weryfikacji → konto pozostaje możliwe do zalogowania i bezpiecznego ponowienia.
+
+### Reset, locale i limiter: kontrakty do sprawdzenia
+
+- `NewPasswordForm` dziś wysyła wyłącznie dwa hasła; page nie czyta searchParams. `updatePassword` uznaje dowolną aktywną sesję za recovery. Nowy token musi wskazywać resetowane konto niezależnie od sesji przeglądarki: otwarcie linku B w przeglądarce zalogowanej na A zmienia hasło B, nigdy A. Bez tokenu sesja A nie daje prawa do resetu. Osobna zmiana hasła w ustawieniach wymaga currentPassword i nie może korzystać z tego endpointu.
+- Przy zgubionym, wygasłym lub ponownie użytym tokenie nie pokazywać `auth.passwordUpdated`. Nie tworzyć automatycznej sesji resetem; po sukcesie obecny link do logowania jest właściwym zakończeniem. Unieważnić wszystkie sesje resetowanego konta.
+- `requestPasswordReset` dziś buduje docelową ścieżkę z currentLocale, zaś GoTrue email-hook wybiera meta.locale z fallbackiem pl. Nowy mail ORAZ docelowy formularz należy zbudować z locale odbiorcy. Test: konto fr/preferred nl, formularz resetu pl → wiadomość nl i link do `/nl/ustaw-nowe-haslo`.
+- `src/emails/templates.tsx` już obsługuje accountConfirmation `{firstName, confirmationUrl}` i passwordReset `{firstName, resetUrl}`. Nie trzeba nowych szablonów. Obecny outbox rozkłada payload, a następnie nadpisuje tylko linki application/offer/action/message, więc zachowuje resetUrl/confirmationUrl; nadal trzeba sprawdzić prywatność i TTL tych poświadczeń przed wykorzystaniem tej tabeli.
+- `checkRateLimit` dziś omija wszystko bez isSupabaseConfigured. Po usunięciu Supabase ta gałąź wyłączyłaby limiter na produkcji. Bypass musi zależeć wyłącznie od jawnego trybu demo; błąd DB dla auth blokuje próbę. Nie przekazywać auth roli do RPC limitera tylko po to, żeby ominąć brak uprawnień.
+- Lepiej nie wysyłać e-maila bezpośrednio z obsługi resetu istniejącego konta, kiedy ścieżka nieistniejącego wraca natychmiast. Kolejka, neutralny wynik i testy czasowe muszą ograniczać tę różnicę bez opóźniania utrwalania zlecenia. Odrębny limit na ponowne wysłanie weryfikacji chroni przed spamem przez endpoint biblioteki.
+
+### Konkretny zestaw nowych testów
+
+| Proponowany plik | Dowód, którego dziś brakuje |
+|---|---|
+| `tests/unit/auth-actions.test.ts` | Serwerowy Zod przed SDK; kandydat/pracodawca bez przyjęcia admina; stabilne błędy; limity mimo auth.api; redirect poza catch |
+| `tests/unit/auth-rate-limit.test.ts` | Brak zmiennych Supabase przy skonfigurowanej Railway nie wyłącza limitera; błąd DB signin/register/reset blokuje |
+| `tests/unit/auth-session.test.ts` | Profil zamknięty/usunięty, niepotwierdzony e-mail, odwołana sesja i błąd DB nie dają tożsamości; brak zaufania do cookie/role z wejścia |
+| `tests/unit/auth-email.test.ts` | Pełny fallback locale, gotowe szablony, bezpieczny origin i docelowy locale linku; kolejka zamiast pozornej wysyłki |
+| `tests/unit/auth-callback.test.ts` | Fałszywy code/cookie, obcy origin, `//`, backslash i zakodowany separator odrzucone; rola nie pochodzi z next |
+| `tests/unit/new-password-form.test.tsx` | Token przekazany, brak tokenu nie wywołuje mutacji, błąd nie czyści poprawnych pól i nie wyświetla sukcesu |
+| nowy test integracyjny `scripts/db/test-auth-runtime.mjs` lub równoważny runner TS | Rzeczywiste Better Auth + SQL0057 + adapter: signup, hash credential, verify, cookie, getSession, revoke, reset, równoległy bootstrap i rollback błędnego triggera |
+| `tests/e2e/auth-real.spec.ts` z oddzielną konfiguracją lokalną | Przeglądarka przechodzi rejestrację → testowa skrzynka → weryfikacja → panel → logout → reset; role i PL/NL/FR/EN; lokalna testowa wysyłka zamiast listów do realnych odbiorców |
+
+Istniejące `tests/e2e/flows.spec.ts` jawnie uruchamia panele bez sesji w trybie demo, a `a11y.spec.ts` sprawdza wygląd formularzy. Zielony wynik tych testów **nie dowodzi nowego auth**. Nowa konfiguracja integracyjna musi korzystać z rzeczywistej izolowanej bazy i aktywnej bramki sesji. Nie używać bypassu demo do ułatwienia testów logowania.
+
+Kontrole ujemne nowych testów: chwilowe usunięcie sprawdzenia tokenu → reset-test oblewa; zamiana recipient locale na currentLocale → email-test oblewa; wyłączenie blokady profilu w bootstrapie → test współbieżny wykrywa duplikat; pominięcie limitera Server Action → test limitu oblewa. To plan testów — żadna z tych mutacji nie została wykonana w tym uzupełnieniu.
+
+### Granica następnego etapu
+
+Można zakończyć osobny PR konfiguracją, adapterem i testami integracyjnymi bez przepinania publicznego ruchu. Nie można ogłosić auth ukończonym ani przełączyć middleware na nowe cookie, dopóki guardy oraz loadery/actiony #25 dalej czytają Supabase. Włączenie produkcyjne wymaga jednej spójnej wersji aplikacji: nowe sesje, profile, dane, limity, mail i readiness. Ten dokument nie tworzy nowego środowiska, nie wymaga stagingu i nie upoważnia do tworzenia usług.
