@@ -1,0 +1,89 @@
+# Zastąpienie Supabase Auth — przegląd i plan #24
+
+Stan przeglądu: 21 września 2026. Odczyt kodu i aktualnych źródeł dostawcy; bez instalacji biblioteki, zmian aplikacji, bazy lub usług. Decyzja właściciela: pusty portal, Railway PostgreSQL, tylko production wdrażane z main. Nie trzeba przenosić haseł ani sesji dotychczasowych kont.
+
+## Wniosek
+
+Rekomendowany kandydat: **Better Auth 1.7.5**, sesje w PostgreSQL, adapter przez istniejący pakiet `pg`. Nie potrzeba Prisma, Drizzle, Redisa ani osobnego serwera auth. Wersję należy przypiąć i zatwierdzić w lockfile. To propozycja integracji, nie dowód działającego zamiennika.
+
+Bezpośredni odczyt publicznego rejestru npm (`https://registry.npmjs.org/better-auth/latest`) zwrócił 1.7.5; peer dependencies obejmują Next `^14 || ^15 || ^16`, React i React DOM `^18 || ^19`, pg `^8`. Repo używa Next 15.5.24, React 19 i pg 8.23.0. Aktualne [oficjalne instrukcje Next.js](https://better-auth.com/docs/integrations/next) opisują App Router, `toNextJsHandler`, `auth.api.getSession` i plugin `nextCookies()` dla Server Actions. Plugin musi być ostatni w konfiguracji. Odczyt RSC sam nie zapisuje cookies, więc trzeba osobno sprawdzić odświeżanie sesji przez trasę HTTP.
+
+## Kontrakt bazy i UUID
+
+Zachować `auth.users.id = public.profiles.id` jako UUID. Migracja 0002 ma prawdziwy FK z kaskadą, a 0012 i 0020 odczytują adres odbiorcy z `auth.users.email`. Nie mapować modelu użytkownika Better Auth bezpośrednio na `public.profiles`: profil zawiera własne role, soft delete, preferencje i ochronę domenową.
+
+Proponowana konfiguracja: dedykowany serwerowy Pool z `search_path=auth`, `user.modelName='users'`, pozostałe modele nazwane `sessions`, `accounts`, `verifications`; kolumny core mapowane jawnie na snake_case. `advanced.database.generateId='uuid'`. Adapter wspiera PostgreSQL bez ORM i wskazanie schematu. [Adapter PostgreSQL](https://better-auth.com/docs/adapters/postgresql).
+
+Better Auth obsługuje własne nazwy tabel i kolumn, dodatkowe pola oraz UUID. Wygenerować SQL z konkretnej przypiętej wersji i konfiguracji, przejrzeć go i włączyć do naszego runnera migracji; nie wykonywać automatycznego `migrate latest` przy każdym starcie. [Schemat i UUID](https://better-auth.com/docs/concepts/database).
+
+Minimalny podział danych projektowych:
+
+| Tabela | Kontrakt integracyjny |
+|---|---|
+| `auth.users` | UUID, email, name, email_verified, image, created_at, updated_at oraz jawne pola rejestracji opisane niżej |
+| `auth.accounts` | konto credential, hash hasła, UUID użytkownika; komplet kolumn wymaganych przez wygenerowany schemat |
+| `auth.sessions` | losowy token sesji, UUID użytkownika, termin ważności, czas aktualizacji; nigdy identyfikator podany przez formularz |
+| `auth.verifications` | dane weryfikacji/resetu według schematu biblioteki, bez dostępu użytkowników aplikacji |
+| `public.profiles` | niezmienne ID, role i stan konta jako autorytatywna domena, języki komunikacji |
+
+Nie wpisywać hashy do historycznego `encrypted_password` tylko po to, żeby udawać GoTrue. Hasło Better Auth należy do accounts. Istniejące `raw_user_meta_data` może pozostać dla zgodności bootstrapu, ale nie może być publicznie zapisywanym źródłem roli.
+
+Migrator jest właścicielem DDL. Osobna rola auth zapisuje wyłącznie wymagane tabele auth; zwykły runtime domenowy nie czyta hashy, tokenów ani sessions. Rola auth nie może mieć ogólnego BYPASSRLS nad danymi aplikacji. Uprawnienia triggera bootstrapującego profil nadaje się wąsko i jawnie.
+
+## Rejestracja i bootstrap profilu
+
+Obecny `handle_new_user()` (0008) czyta role/imiona/locale z `raw_user_meta_data`, tworzy profil i notification_preferences. To trzeba dostosować, nie usunąć bez zamiennika.
+
+Proponowany wariant: jawne dodatkowe pola użytkownika auth: first_name, last_name, signup_role, signup_locale, company_name. Walidacja wspólna dla Server Actions i bezpośredniej trasy biblioteki wymaga pełnego istniejącego schematu rejestracji (łącznie z potwierdzeniem hasła i agreeTerms). Signup_role dopuszcza WYŁĄCZNIE candidate/employer; nie jest aktualizowalną rolą aplikacji. BEFORE-hook tworzenia użytkownika buduje te dane z walidowanego kontekstu rejestracji. Dopasowany trigger SQL tworzy profil, preferencje i receipt dokumentów w tej samej operacji utworzenia użytkownika; brak receiptu powinien przerwać tworzenie, zamiast pozostawić niezapisane zobowiązanie.
+
+Przed implementacją potwierdzić małym testem adaptera, że hook przekazuje dodatkowe pola przed INSERT oraz że błąd triggera nie pozostawia osieroconego konta credential. Jeśli potrzebny jest kompatybilny JSON metadata, budować go po stronie serwera/triggera z tych pól; nigdy przyjmować dowolnego JSON roli z przeglądarki. Nie polegać na `after` hooku wykonującym zapis przez osobny Pool jako gwarancji wspólnej transakcji.
+
+Publiczna trasa `update-user` nie może aktualizować signup_role ani metadanych inicjalizacji. Najprościej ograniczyć handler HTTP do potrzebnych endpointów i zachować mutujące formularze przez istniejące Server Actions; wtedy dodatkowa walidacja bezpośredniego API musi objąć wszystkie pozostawione endpointy. Nie otwierać domyślnego catch-all bez przeglądu dostępnych operacji.
+
+Wymagać weryfikacji adresu, bez automatycznego logowania po rejestracji. Firma może powstać idempotentnie po potwierdzeniu konta przez `create_company_with_owner`; nazwa z bezpiecznych danych rejestracji, rola z profiles. Ponowne zgłoszenie istniejącego adresu nie może nadpisywać jego profilu, roli, firmy ani zgód — sukces antyenumeracyjny biblioteki nie jest dowodem utworzenia nowego użytkownika.
+
+## Mapa istniejących funkcji
+
+| Obecnie | Docelowo |
+|---|---|
+| `signIn` w `src/lib/actions/auth.ts` | Zachować Zod, limiter i AuthActionResult; `auth.api.signInEmail`, headers z bieżącego żądania, rola odczytana z profiles, redirect przez next-intl |
+| `registerCandidate` / `registerEmployer` | Te same formularze, walidacja i strona potwierdzenia; `signUpEmail` z wymaganym name z istniejących pól imienia i nazwiska; wspólny bootstrap powyżej |
+| `requestPasswordReset` | `requestPasswordReset` biblioteki, neutralny wynik dla nieistniejącego konta, limit 5/h, link i język odbiorcy |
+| `updatePassword` | Przyjmuje także token resetu; wywołuje `resetPassword({newPassword, token})`. Sama zalogowana sesja nie jest dowodem recovery |
+| `NewPasswordForm` + strona ustaw-nowe-haslo | Odczyt tokenu z linku, przekazanie go do akcji, obsługa wygasłego/użytego tokenu; nie logować tokenu w analityce lub Sentry |
+| `bootstrapCompany` | Zweryfikowana sesja → profil → transakcyjny RPC pod tym samym UUID; bez parametru SupabaseClient i bez user_metadata z klienta |
+| `signOut` | Unieważnienie sesji w DB przez bibliotekę, usunięcie cookie, redirect; awaria DB nie może być raportowana jako potwierdzone globalne wylogowanie |
+| `/auth/callback` | Koniec wymiany GoTrue PKCE. Callback aplikacyjny po weryfikacji sprawdza sesję, rolę i bezpieczny cel; stary code nie może tworzyć sesji |
+| `/api/auth/email-hook` | Usunąć po odbiorze nowych callbacków wysyłki; nie zostawiać martwej zależności SEND_EMAIL_HOOK_SECRET |
+| `supabase.auth.getUser()` w loaderach/akcjach | Jeden serwerowy helper sesji i profilu, potem tożsamość do warstwy PostgreSQL #25 |
+
+Oficjalny mechanizm resetu używa tokenu i `resetPassword`. Ustawić `revokeSessionsOnPasswordReset=true`, ponieważ nie jest to zachowanie domyślne. Formularz zachowuje obecne ograniczenie 8–72 znaków, litera i cyfra; biblioteka nie zastępuje tej walidacji. [Email i hasło](https://better-auth.com/docs/authentication/email-password).
+
+## Sesja, RLS i zabezpieczenia tras
+
+Nowy helper `getCurrentSession()` ma być server-only i sprawdzać sesję w PostgreSQL, następnie `profiles.is_active=true`, `deleted_at IS NULL` i potwierdzenie e-maila. Nie używać cookie cache na etapie migracji: cofnięcie sesji ma działać od następnego żądania. Biblioteka dokumentuje opóźnienie odwołania przy cache; [sesje](https://better-auth.com/docs/concepts/session-management).
+
+`middleware.ts` zachowuje next-intl i fail-closed gotowość, usuwa rotację Supabase. Obecność cookie może służyć wyłącznie do szybkiego redirectu. Guardy pozostają w layoutach ORAZ każdej chronionej akcji/trasie. Candidate odsyła employer/admin do właściwych paneli; employer wymaga aktywnego członkostwa; admin wymaga aktualnej roli z profiles. Weryfikację company_members i cookie pb_active_company z `company-context.ts` trzeba zachować. Role owner/admin/recruiter/member firmy nie stają się rolami sesji auth.
+
+Do #25 przekazywać tylko UUID uzyskany ze zweryfikowanej sesji. `auth.uid()` w SQL odtwarza się z ustawienia transakcyjnego, np. claim sub ustawionego przez zaufany serwer. Nigdy z nagłówka użytkownika lub JSON body. Każde żądanie: BEGIN → SET LOCAL rola i parametr tożsamości → zapytania/RPC → COMMIT/ROLLBACK → oddanie połączenia. Anonim ma NULL. Próby kolejnych użytkowników na jednym połączeniu muszą dowieść braku wycieku. Auth Pool i Pool domenowy mają oddzielne zadania.
+
+W konfiguracji produkcji: stały baseURL `https://pracuj.be`, silny sekret tylko na serwerze, dokładna allowlista origin, cookies Secure/HttpOnly/SameSite, bez wildcard Railway i bez localhost. Nie wyłączać kontroli CSRF/origin. Sprawdzić nagłówki proxy Railway eksperymentalnie przed zaufaniem x-real-ip; obecny komentarz w limiterze nie jest dowodem kontraktu nowego hosta. [Zabezpieczenia Better Auth](https://better-auth.com/docs/reference/security).
+
+Zachować limiter aplikacyjny: signin 10/300s, register i password-reset 5/3600s, awaria limitera auth blokuje próbę. Wywołania `auth.api` na serwerze nie korzystają automatycznie z limitera HTTP biblioteki, więc nie wolno usuwać `checkRateLimit`. Dla pozostawionych tras HTTP zapewnić trwały limiter DB i test bezpośredniego wywołania. [Limity](https://better-auth.com/docs/concepts/rate-limit).
+
+## E-mail i język odbiorcy
+
+Zastąpić GoTrue webhook callbackami `sendVerificationEmail` i `sendResetPassword`. Zachować Resend i istniejące szablony React Email. Język wybiera `resolveRecipientLocale(profile)` w kolejności preferred_locale → account_locale → signup_locale → en. Rejestracja zapisuje locale przed wysłaniem; reset czyta konto odbiorcy, nawet gdy formularz otwarto w innym języku. Obecny email-hook czyta tylko metadata.locale — tego uproszczenia nie przenosić.
+
+Wysyłka musi mieć trwałą kolejkę/retry i idempotencję Resend. Zapisać żądanie wysyłki przed potwierdzeniem sukcesu; nie zostawiać nieobsłużonej obietnicy `void sendEmail`. Jeżeli kolejka przechowuje URL z tokenem, to jest poświadczenie: dane dostępne wyłącznie workerowi, bez logowania, krótka retencja po wysyłce i termin ważności zgodny z biblioteką. Nie wkładać tokenu do publicznego payloadu powiadomień. Niedostępna wysyłka nie może pozorować dostarczenia listu. Limity i neutralne odpowiedzi nie mogą ujawniać istnienia adresu.
+
+## Kolejność i bramka odbioru
+
+1. #23: bootstrap ról i istniejących migracji; izolowana baza testowa. #24: przypięta biblioteka, wygenerowany schemat i test zgodności UUID/triggerów.
+2. Helper sesji, endpointy i cookies; rejestracja/profile/zgody; weryfikacja i wysyłka. Potem logowanie/wylogowanie/reset oraz idempotentny bootstrap firmy.
+3. #25: wszystkie odczyty i akcje z getUser oraz gałęzie isSupabaseConfigured przełączyć na nowy backend. Nie wdrażać do produkcji samych nowych cookies, gdy reszta aplikacji oczekuje Supabase JWT.
+4. Gotowość produkcji zależy od nowej DB, auth secret i HTTPS; dostępność wysyłki potwierdzona przed otwarciem rejestracji. Brak konfiguracji nie uruchamia demo. #27 usuwa SDK i stare endpointy dopiero po odbiorze całości.
+
+Wymagane testy integracyjne na prawdziwym PostgreSQL: rejestracja kandydat/pracodawca we wszystkich czterech językach; ten sam UUID w users/profiles/accounts/sessions; role admin i dowolne metadata odrzucane; bezpośredni HTTP signup nie omija zgód/walidacji; awaria triggera nie zostawia konta częściowego; brak sesji przed weryfikacją; odwołanie, wygaśnięcie i fałszywe cookie; reset obcego konta nie zmienia języka, token działa raz, sesje unieważnione; bootstrap firmy ponowiony bez duplikatu; brak PII firmy B, nieaktywny członek odcięty; podmieniony callback/origin odrzucony; limiter zachowany w Server Actions; różne UUID na ponownie użytym połączeniu; niedostępna DB daje fail-closed. Dodatkowo E2E obecnych formularzy, SSR i a11y.
+
+Nie wykonano tych testów w tym przeglądzie. Pozostają warunkami odbioru implementacji, a nie zaliczonym wynikiem.
