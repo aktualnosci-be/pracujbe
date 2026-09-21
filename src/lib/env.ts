@@ -26,15 +26,13 @@ export const env = {
     return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || undefined;
   },
   /**
-   * Tryb aplikacji (SEC-19): 'production' | 'demo'. Jawny `APP_MODE` ma priorytet; w innym
-   * wypadku produkcja jest wykrywana z `VERCEL_ENV==='production'`. Self-hosted produkcja
+   * Tryb aplikacji (SEC-19): 'production' | 'demo'. Jedynym źródłem jest APP_MODE. Produkcja
    * MUSI ustawić `APP_MODE=production` (patrz docs/LAUNCH_CHECKLIST.md) — inaczej brak
    * konfiguracji cicho degraduje do trybu demo (fikcyjne panele).
    */
   get appMode(): 'production' | 'demo' {
     const m = process.env.APP_MODE;
-    if (m === 'production' || m === 'demo') return m;
-    return process.env.VERCEL_ENV === 'production' ? 'production' : 'demo';
+    return m === 'production' ? 'production' : 'demo';
   },
 };
 
@@ -44,6 +42,11 @@ export const env = {
  */
 export function isSupabaseConfigured(): boolean {
   return Boolean(env.supabaseUrl && env.supabaseAnonKey);
+}
+
+/** Publiczne oferty korzystają z ograniczonego loginu PostgreSQL Railway. */
+export function isDatabaseConfigured(): boolean {
+  return Boolean(process.env.DATABASE_APP_URL);
 }
 
 /** Czy aplikacja działa w trybie produkcyjnym (fail-closed zamiast demo). SEC-19. */
@@ -56,9 +59,9 @@ const NON_PROD_HOST_RE = /localhost|127\.0\.0\.1|0\.0\.0\.0|staging|preview/i;
 
 /**
  * P1-19: JEDNO źródło prawdy o środowisku wdrożenia dla nagłówków (HSTS/X-Robots-Tag),
- * robots.txt i sitemap. „Publiczna produkcja" = tryb produkcyjny (APP_MODE/VERCEL_ENV)
+ * robots.txt i sitemap. „Publiczna produkcja" = tryb produkcyjny (APP_MODE)
  * ORAZ realny publiczny URL (nie localhost/staging/preview). Dzięki temu self-hosted
- * produkcja (APP_MODE=production, bez VERCEL_ENV) jest spójnie traktowana wszędzie:
+ * produkcja (APP_MODE=production) jest spójnie traktowana wszędzie:
  * HSTS wł., brak globalnego noindex, robots/sitemap indeksowalne.
  *
  * UWAGA: `next.config.mjs` (build-time, bez importu TS) powiela tę regułę — zmieniając ją,
@@ -76,8 +79,14 @@ export function hasServiceRoleKey(): boolean {
 
 /** Publiczny URL jest realny (https, nie localhost) — wymagane w produkcji (linki, e-maile). */
 export function hasPublicHttpsUrl(): boolean {
-  const u = env.siteUrl;
-  return /^https:\/\//i.test(u) && !NON_PROD_HOST_RE.test(u);
+  try {
+    const url = new URL(env.siteUrl);
+    // Gotowość stagingu jest niezależna od indeksowania przez wyszukiwarki.
+    return url.protocol === 'https:' && !url.username && !url.password &&
+      !/^(localhost|.*\.localhost|127(?:\.\d+){3}|0\.0\.0\.0|\[::1\]|\[::\])$/i.test(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 /**
