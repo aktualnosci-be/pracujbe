@@ -226,6 +226,14 @@
     "seasonal": "Praca sezonowa"
   },
   "jobs": {
+    "passport": {
+      "location": "Gdzie",
+      "salary": "Wynagrodzenie",
+      "conditions": "Warunki",
+      "viewOffer": "Poznaj ofertę",
+      "salaryFrom": "od {value}",
+      "salaryTo": "do {value}"
+    },
     "pageTitle": "Oferty pracy w Belgii",
     "search": "Szukaj",
     "filtersTitle": "Filtry",

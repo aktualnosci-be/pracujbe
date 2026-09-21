@@ -226,6 +226,14 @@
     "seasonal": "Seasonal"
   },
   "jobs": {
+    "passport": {
+      "location": "Location",
+      "salary": "Salary",
+      "conditions": "Conditions",
+      "viewOffer": "View job",
+      "salaryFrom": "from {value}",
+      "salaryTo": "up to {value}"
+    },
     "pageTitle": "Jobs in Belgium",
     "search": "Search",
     "filtersTitle": "Filters",

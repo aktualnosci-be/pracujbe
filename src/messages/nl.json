@@ -226,6 +226,14 @@
     "seasonal": "Seizoenswerk"
   },
   "jobs": {
+    "passport": {
+      "location": "Locatie",
+      "salary": "Loon",
+      "conditions": "Voorwaarden",
+      "viewOffer": "Bekijk vacature",
+      "salaryFrom": "vanaf {value}",
+      "salaryTo": "tot {value}"
+    },
     "pageTitle": "Vacatures in België",
     "search": "Zoeken",
     "filtersTitle": "Filters",

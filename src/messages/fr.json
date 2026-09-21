@@ -226,6 +226,14 @@
     "seasonal": "Travail saisonnier"
   },
   "jobs": {
+    "passport": {
+      "location": "Lieu",
+      "salary": "Rémunération",
+      "conditions": "Conditions",
+      "viewOffer": "Voir l’offre",
+      "salaryFrom": "à partir de {value}",
+      "salaryTo": "jusqu’à {value}"
+    },
     "pageTitle": "Offres d'emploi en Belgique",
     "search": "Rechercher",
     "filtersTitle": "Filtres",

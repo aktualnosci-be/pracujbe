@@ -27,3 +27,5 @@ Paczka dostarczona. Wdrożenie aplikacji etapowe; prototyp nie jest dowodem uko�
 - #7 — weryfikacja i wdrożenie
 
 Pierwsza zmiana aplikacji: tokeny kolorów, logo, jasna stopka i sidebar, wysokość głównego przycisku oraz kolor manifestu. Typografia pozostaje lokalnym Inter do osobnego sprawdzenia fontu DM Sans. Ikony PWA/OG i pełny przegląd widoków pozostają w etapie #7.
+
+Etap #3 rozpoczęty: karty ofert w układzie paszportu, opcjonalne wynagrodzenie i etykiety w czterech językach. Ograniczenia nadal otwarte: okres stawki nie jest przekazywany przez model listy; prawdziwy zapis ofert na publicznych kartach wymaga #9. Szczegóły ofert pozostają do przebudowy.
