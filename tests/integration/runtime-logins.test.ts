@@ -8,6 +8,7 @@ import {
   inspectRuntimeLogins,
   LOGIN_SPECS,
   provisionRuntimeLogins,
+  resolveDryRun,
   rotateRuntimeLoginPasswords,
 } from "../../scripts/db/runtime-logins.mjs";
 
@@ -120,6 +121,16 @@ afterAll(async () => {
 });
 
 describe("operator ograniczonych loginów PostgreSQL", () => {
+  it("domyślnie wybiera dry-run i wymaga jawnego no do zapisu", () => {
+    expect(resolveDryRun("provision", {})).toBe(true);
+    expect(resolveDryRun("rotate", {})).toBe(true);
+    expect(resolveDryRun("provision", { DB_LOGIN_DRY_RUN: "yes" })).toBe(true);
+    expect(resolveDryRun("provision", { DB_LOGIN_DRY_RUN: "no" })).toBe(false);
+    expect(() =>
+      resolveDryRun("provision", { DB_LOGIN_DRY_RUN: "false" }),
+    ).toThrow();
+  });
+
   it("dry-run jest tylko odczytem, a konflikt trzeciego loginu nie zostawia częściowego provisioningu", async () => {
     const preview = await provisionRuntimeLogins(admin!, environment(), {
       dryRun: true,
@@ -211,6 +222,15 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
       inspectRuntimeLogins(admin!, environment(), { requireAll: true }),
     ).rejects.toThrow("niezgodne uprawnienia");
     await admin!.query("REVOKE USAGE ON SCHEMA auth FROM pracujbe_web");
+
+    await admin!.query(
+      "CREATE SCHEMA runtime_login_illicit AUTHORIZATION pracujbe_web",
+    );
+    await expect(
+      inspectRuntimeLogins(admin!, environment(), { requireAll: true }),
+    ).rejects.toThrow("niezgodne uprawnienia");
+    await admin!.query(`ALTER SCHEMA runtime_login_illicit OWNER TO postgres;
+      DROP SCHEMA runtime_login_illicit`);
 
     await admin!.query("ALTER ROLE pracujbe_web REPLICATION");
     await expect(

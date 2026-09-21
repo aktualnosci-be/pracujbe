@@ -286,9 +286,9 @@ export async function provisionRuntimeLogins(
   env,
   { dryRun = false } = {},
 ) {
-  const state = await inspectRuntimeLogins(client, env);
-  const pending = LOGIN_SPECS.filter((spec) => !state.has(spec.login));
   if (dryRun) {
+    const state = await inspectRuntimeLogins(client, env);
+    const pending = LOGIN_SPECS.filter((spec) => !state.has(spec.login));
     for (const spec of pending)
       validatePassword(required(env, spec.passwordEnv));
     return { changed: 0, pending: pending.map((spec) => spec.key) };
@@ -298,12 +298,8 @@ export async function provisionRuntimeLogins(
     await client.query("SET LOCAL lock_timeout = '10s'");
     await client.query("SELECT pg_advisory_xact_lock(724031, 23)");
     await installPasswordHelpers(client);
-    // Cały preflight powtarzamy pod blokadą; zmiana celu lub ról nie może się prześlizgnąć.
+    // Cel, role i lista braków powstają dopiero pod blokadą transakcyjną.
     const lockedState = await inspectRuntimeLogins(client, env);
-    for (const spec of LOGIN_SPECS) {
-      if (state.has(spec.login) && !lockedState.has(spec.login))
-        throw new Error(`Login ${spec.key} zniknął podczas operacji.`);
-    }
     const lockedPending = LOGIN_SPECS.filter(
       (spec) => !lockedState.has(spec.login),
     );
@@ -327,13 +323,14 @@ export async function rotateRuntimeLoginPasswords(
   env,
   { dryRun = false } = {},
 ) {
-  await inspectRuntimeLogins(client, env, { requireAll: true });
   const passwords = LOGIN_SPECS.map((spec) => [
     spec,
     validatePassword(required(env, spec.nextPasswordEnv)),
   ]);
-  if (dryRun)
+  if (dryRun) {
+    await inspectRuntimeLogins(client, env, { requireAll: true });
     return { changed: 0, pending: LOGIN_SPECS.map((spec) => spec.key) };
+  }
   await client.query("BEGIN");
   try {
     await client.query("SET LOCAL lock_timeout = '10s'");
@@ -361,6 +358,15 @@ export async function rotateRuntimeLoginPasswords(
   }
 }
 
+export function resolveDryRun(mode, env) {
+  const value = env.DB_LOGIN_DRY_RUN;
+  if (value && !["yes", "no"].includes(value)) {
+    throw new Error("Nieprawidłowy tryb dry-run.");
+  }
+  // Brak zmiennej nigdy nie oznacza zgody na zapis.
+  return ["provision", "rotate"].includes(mode) ? value !== "no" : false;
+}
+
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const mode = argv[0];
   if (
@@ -372,19 +378,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     );
     return 2;
   }
-  const mutating = ["provision", "rotate"].includes(mode);
-  if (mutating && !["yes", "no"].includes(env.DB_LOGIN_DRY_RUN)) {
-    console.error(
-      "Dla provision/rotate ustaw jawnie DB_LOGIN_DRY_RUN=yes albo no.",
-    );
-    return 2;
-  }
-  const dryRun = env.DB_LOGIN_DRY_RUN === "yes";
-  if (
-    !mutating &&
-    env.DB_LOGIN_DRY_RUN &&
-    !["yes", "no"].includes(env.DB_LOGIN_DRY_RUN)
-  ) {
+  let dryRun;
+  try {
+    dryRun = resolveDryRun(mode, env);
+  } catch {
     console.error("DB_LOGIN_DRY_RUN przyjmuje wyłącznie yes albo no.");
     return 2;
   }

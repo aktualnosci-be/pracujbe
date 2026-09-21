@@ -24,7 +24,8 @@ pojedynczą transakcją. Błąd wycofuje cały przebieg.
 Preflight i verify są tylko odczytem. Wszystkie sekrety pochodzą ze zmiennych
 środowiskowych. Nie wpisuj URL-i ani haseł po nazwie polecenia i nie włączaj
 trace/debug powłoki. Skrypt wypisuje wyłącznie stałe komunikaty bez wartości
-połączenia, loginów i haseł.
+połączenia, loginów i haseł. Brak `DB_LOGIN_DRY_RUN` oznacza bezpieczny dry-run;
+rzeczywisty zapis wymaga jawnego `DB_LOGIN_DRY_RUN=no`.
 
 ## 1. Ustaw jawny cel i sekrety w bieżącej sesji operatora
 
