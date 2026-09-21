@@ -51,7 +51,7 @@ export function LandingHubGrid({
           <div className="group relative flex h-full flex-col rounded-lg border border-border bg-card p-4 transition-colors hover:bg-soft focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
             <div className="flex items-center gap-3">
               {item.icon ? (
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent-dark">
                   {item.icon}
                 </span>
               ) : null}

@@ -28,7 +28,7 @@ export async function ForCompanies(): Promise<React.JSX.Element> {
           <p className="text-sm leading-relaxed text-muted-foreground">{t('companiesDesc')}</p>
         </div>
         <span
-          className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent sm:flex"
+          className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent-dark sm:flex"
           aria-hidden="true"
         >
           <UsersRound className="h-6 w-6" />

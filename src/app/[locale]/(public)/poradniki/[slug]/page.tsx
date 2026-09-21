@@ -180,7 +180,7 @@ export default async function GuideArticlePage({ params }: PageProps) {
 
       <article className="mx-auto max-w-3xl">
         <header>
-          <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">
+          <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent-dark">
             {t(CATEGORY_LABEL_KEY[guide.category])}
           </span>
           <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground md:text-4xl">
