@@ -31,7 +31,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0",
-    "next": "^15.1.6",
+    "next": "^15.5.24",
     "next-intl": "^4.13.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -56,9 +56,9 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
-    "eslint-config-next": "^15.1.6",
+    "eslint-config-next": "^15.5.24",
     "jsdom": "^25.0.1",
-    "postcss": "^8.5.22",
+    "postcss": "^8.5.23",
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.6.9",
     "tailwindcss": "^3.4.17",
@@ -70,7 +70,7 @@
     "rollup": "^4.62.2",
     "vite": "^7.1.5",
     "esbuild": "^0.25.10",
-    "sharp": "^0.35.3",
+    "sharp": "0.35.4",
     "prismjs": "^1.30.0"
   }
 }
