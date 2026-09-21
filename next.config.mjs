@@ -31,6 +31,8 @@ const nextConfig = {
   experimental: {
     // Ograniczenie JS na stronach publicznych: optymalizacja importów ikon.
     optimizePackageImports: ['lucide-react'],
+    // Plik CV ma limit 5 MB; multipart potrzebuje dodatkowego miejsca.
+    serverActions: { bodySizeLimit: '6mb' },
   },
   // Uwaga: przekierowanie "/" → "/{locale}" obsługuje middleware next-intl
   // (z wykrywaniem Accept-Language i fallbackiem na 'pl'). Nie dubluj go tutaj.
@@ -38,10 +40,9 @@ const nextConfig = {
   async headers() {
     // P1-19: JEDNO źródło prawdy o środowisku wdrożenia — MUSI być spójne z
     // `isProductionDeployment()` w src/lib/env.ts (build-time nie importuje TS, stąd powielenie).
-    // „Publiczna produkcja" = tryb produkcyjny (APP_MODE/VERCEL_ENV) ORAZ realny publiczny URL.
+    // „Publiczna produkcja" = tryb produkcyjny (APP_MODE) ORAZ realny publiczny URL.
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-    const isProdMode =
-      process.env.APP_MODE === 'production' || process.env.VERCEL_ENV === 'production';
+    const isProdMode = process.env.APP_MODE === 'production';
     const isProd = isProdMode && !/localhost|127\.0\.0\.1|0\.0\.0\.0|staging|preview/i.test(siteUrl);
     const isDev = process.env.NODE_ENV !== 'production';
 
