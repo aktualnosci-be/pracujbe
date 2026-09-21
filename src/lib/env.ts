@@ -44,6 +44,11 @@ export function isSupabaseConfigured(): boolean {
   return Boolean(env.supabaseUrl && env.supabaseAnonKey);
 }
 
+/** Publiczne oferty korzystają z ograniczonego loginu PostgreSQL Railway. */
+export function isDatabaseConfigured(): boolean {
+  return Boolean(process.env.DATABASE_APP_URL);
+}
+
 /** Czy aplikacja działa w trybie produkcyjnym (fail-closed zamiast demo). SEC-19. */
 export function isProductionMode(): boolean {
   return env.appMode === 'production';
