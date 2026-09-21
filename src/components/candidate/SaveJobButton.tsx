@@ -41,10 +41,14 @@ export function SaveJobButton({
     setError(false);
 
     startTransition(async () => {
-      const res = await toggleSavedJob(jobId);
-      if (res.ok) {
-        if (typeof res.saved === 'boolean') setSaved(res.saved);
-        return;
+      try {
+        const res = await toggleSavedJob(jobId);
+        if (res.ok) {
+          if (typeof res.saved === 'boolean') setSaved(res.saved);
+          return;
+        }
+      } catch {
+        // Błąd transportu akcji także musi cofnąć optymistyczny zapis.
       }
       setSaved(!next); // cofnięcie
       setError(true);
