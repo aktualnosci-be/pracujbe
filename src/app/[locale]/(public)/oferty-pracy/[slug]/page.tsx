@@ -1,3 +1,4 @@
+import { formatSalaryRange } from '@/lib/salary';
 import { PublicSavedJobsProvider, PublicSaveJobButton } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -211,18 +212,10 @@ export default async function JobDetailPage({ params }: PageProps) {
     getFormatter(),
   ]);
 
-  const currencyOptions: Intl.NumberFormatOptions = {
-    style: 'currency',
-    currency: job.currency,
-    maximumFractionDigits: 0,
-  };
-  const salaryLabel = (() => {
-    if (job.salaryMin !== undefined && job.salaryMax !== undefined) {
-      return `${format.number(job.salaryMin, currencyOptions)} – ${format.number(job.salaryMax, currencyOptions)}`;
-    }
-    const single = job.salaryMin ?? job.salaryMax;
-    return single !== undefined ? format.number(single, currencyOptions) : t('salaryNotProvided');
-  })();
+  const salaryLabel = formatSalaryRange(job, locale, {
+    from: value => tJobs('passport.salaryFrom', { value }),
+    to: value => tJobs('passport.salaryTo', { value }),
+  });
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
 
@@ -242,7 +235,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
   const metaItems: Array<{ icon: React.ComponentType<{ className?: string }>; text: string }> = [
     { icon: MapPin, text: `${job.city}, ${job.region}` },
-    { icon: Wallet, text: salaryLabel },
+    ...(salaryLabel === null ? [] : [{ icon: Wallet, text: salaryLabel }]),
     { icon: FileText, text: tContract(job.contractType) },
     { icon: Clock, text: job.workingHours },
   ];
@@ -551,10 +544,10 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <h2 className="mb-3 text-base font-semibold text-foreground">{t('similarJobs')}</h2>
                 <ul className="divide-y divide-border">
                   {similarJobs.map((item) => {
-                    const itemSalary =
-                      item.salaryMin !== undefined && item.salaryMax !== undefined
-                        ? `${format.number(item.salaryMin, { style: 'currency', currency: item.currency, maximumFractionDigits: 0 })} – ${format.number(item.salaryMax, { style: 'currency', currency: item.currency, maximumFractionDigits: 0 })}`
-                        : null;
+                    const itemSalary = formatSalaryRange(item, locale, {
+                      from: value => tJobs('passport.salaryFrom', { value }),
+                      to: value => tJobs('passport.salaryTo', { value }),
+                    });
                     return (
                       <li key={item.id} className="py-3 first:pt-0 last:pb-0">
                         <Link href={`${BASE_PATH}/${item.slug}`} className="group flex gap-3">
