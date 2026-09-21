@@ -19,7 +19,7 @@
 
 import { getLocale } from 'next-intl/server';
 import { headers } from 'next/headers';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';

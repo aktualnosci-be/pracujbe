@@ -11,7 +11,7 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocale, useTranslations } from 'next-intl';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
