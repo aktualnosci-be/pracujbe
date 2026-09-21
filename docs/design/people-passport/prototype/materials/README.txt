@@ -1,0 +1,1 @@
+Materiały demonstracyjne Pracuj.be. Newsletter: zamień {{offers_url}}, {{preferences_url}}, {{unsubscribe_url}} i {{sender_name_and_address}} przed wysyłką. Ustawienia i wypisanie muszą działać. Szablon nie został przetestowany w rzeczywistych klientach pocztowych. SVG używają Arial; przed emisją można zamienić tekst na krzywe lub wyeksportować PNG. Dane ofert są przykładowe.

@@ -6,6 +6,7 @@ import { Bell, HelpCircle, LogOut, Menu, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
+import { Logo } from '@/components/brand/Logo';
 import { signOut } from '@/lib/actions/auth';
 import { markNotificationsRead } from '@/lib/actions/notifications';
 import { cn } from '@/lib/utils';
@@ -15,7 +16,7 @@ import { NotificationsDropdown, type NotificationItem } from './NotificationsDro
 /**
  * DashboardShell — współdzielony szkielet paneli (kandydat / pracodawca).
  * Odwzorowuje makiety 04 (kandydat) i 05 (pracodawca):
- *  - granatowy sidebar (desktop, lg+) z brandem, nawigacją (aktywna pozycja + badge)
+ *  - jasny sidebar (desktop, lg+) z brandem, nawigacją (aktywna pozycja + badge)
  *    oraz stopką Pomoc/Wyloguj,
  *  - topbar z dzwonkiem powiadomień (badge + dropdown) i avatarem użytkownika,
  *  - dolny tab bar (mobile) z pozycjami nawigacji (nadmiar → „Menu" otwierające szufladę).
@@ -175,7 +176,7 @@ export function DashboardShell({
   }, [drawerOpen]);
 
   const defaultBrand = (
-    <span className="text-lg font-semibold tracking-tight text-white">{tc('appName')}</span>
+    <Logo />
   );
 
   const tabItems =
@@ -187,17 +188,17 @@ export function DashboardShell({
   return (
     <div className="min-h-screen bg-soft">
       {/* Sidebar — desktop */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-primary text-white lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-background text-foreground lg:flex">
         <div className="flex h-16 items-center px-6">{brand ?? defaultBrand}</div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {effectiveNav.map((item) => (
             <SidebarLink key={item.href} item={item} active={item.href === active} />
           ))}
         </nav>
-        <div className="space-y-1 border-t border-white/10 px-3 py-4">
+        <div className="space-y-1 border-t border-border px-3 py-4">
           <Link
             href="/pomoc"
-            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground"
           >
             <HelpCircle className="size-5 shrink-0" aria-hidden="true" />
             <span>{td('help')}</span>
@@ -307,7 +308,7 @@ export function DashboardShell({
             role="dialog"
             aria-modal="true"
             aria-label={tnav('menu')}
-            className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col bg-primary text-white shadow-xl"
+            className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col border-r border-border bg-background text-foreground shadow-xl"
           >
             <div className="flex h-16 items-center justify-between px-6">
               {brand ?? defaultBrand}
@@ -316,7 +317,7 @@ export function DashboardShell({
                 type="button"
                 onClick={() => setDrawerOpen(false)}
                 aria-label={tc('cancel')}
-                className="inline-flex size-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-soft hover:text-foreground"
               >
                 <X className="size-5" aria-hidden="true" />
               </button>
@@ -331,11 +332,11 @@ export function DashboardShell({
                 />
               ))}
             </nav>
-            <div className="space-y-1 border-t border-white/10 px-3 py-4">
+            <div className="space-y-1 border-t border-border px-3 py-4">
               <Link
                 href="/pomoc"
                 onClick={() => setDrawerOpen(false)}
-                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground"
               >
                 <HelpCircle className="size-5 shrink-0" aria-hidden="true" />
                 <span>{td('help')}</span>
@@ -372,7 +373,7 @@ function LogoutButton({
           await signOut();
         });
       }}
-      className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+      className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
     >
       <LogOut className="size-5 shrink-0" aria-hidden="true" />
       <span>{label}</span>
@@ -396,7 +397,7 @@ function SidebarLink({
       aria-current={active ? 'page' : undefined}
       className={cn(
         'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors [&_svg]:size-5 [&_svg]:shrink-0',
-        active ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white',
+        active ? 'bg-primary/10 text-primary-dark' : 'text-muted-foreground hover:bg-soft hover:text-foreground',
       )}
     >
       <span className="shrink-0" aria-hidden="true">

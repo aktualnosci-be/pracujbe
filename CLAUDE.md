@@ -41,6 +41,8 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 ## 2. System wizualny (identyfikacja)
 
+> AKTUALIZACJA 2026-09-21: nowym źródłem wyglądu jest docs/design/people-passport/README.md i zatwierdzony prototyp. Biel, czerwień, czerń i logo .be na czerwonym kafelku zastępują historyczną paletę opisaną poniżej. Wdrożenie etapowe: issues #2–#7; historyczne checklisty nie oznaczają ukończenia nowego stylu.
+
 > 🎨 **ŹRÓDŁO PRAWDY DLA UI:** zatwierdzone makiety w `docs/design/screens/` + specyfikacja
 > `docs/DESIGN_SCREENS.md` (7 ekranów: home, lista ofert, szczegóły oferty, panel kandydata,
 > panel pracodawcy, onboarding, stany UI — desktop + mobile). Gdy cokolwiek tu różni się od makiet,
