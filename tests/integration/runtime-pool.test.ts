@@ -71,9 +71,13 @@ describe('Runtime Pool — rzeczywiste loginy PostgreSQL 16', () => {
     ('odrzuca niebezpieczny login %s i zamyka jego połączenie', async (user) => {
       await expect(createRuntimePool(connectionString(user), 'domain'))
         .rejects.toThrow('Nie można uruchomić ograniczonej puli połączeń.');
+      // pool.end() zamyka socket klienta; backend PostgreSQL znika asynchronicznie.
+      // Nadal wymagamy braku wycieku, ale czekamy na potwierdzenie po stronie serwera.
       // Dla postgres istnieje jedna sesja administratora samego testu.
-      const active = await admin!.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE usename=$1 AND backend_type='client backend'", [user]);
-      expect(active.rows[0]?.count).toBe(user === 'postgres' ? 1 : 0);
+      await expect.poll(async () => {
+        const active = await admin!.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE usename=$1 AND backend_type='client backend'", [user]);
+        return active.rows[0]?.count;
+      }, { timeout: 2_000, interval: 25 }).toBe(user === 'postgres' ? 1 : 0);
     });
 
   it.each(['domain', 'auth'] as const)('inicjalizuje rolę %s na dwóch różnych połączeniach', async (purpose) => {
