@@ -46,7 +46,10 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     description: tMeta('homeDescription'),
     manifest: '/manifest.webmanifest',
     icons: {
-      icon: [{ url: '/icon-32.png', sizes: '32x32', type: 'image/png' }],
+      icon: [
+        { url: '/icon.svg', type: 'image/svg+xml' },
+        { url: '/icon-32.png', sizes: '32x32', type: 'image/png' },
+      ],
       apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
     },
     appleWebApp: { capable: true, statusBarStyle: 'default', title: tCommon('appName') },

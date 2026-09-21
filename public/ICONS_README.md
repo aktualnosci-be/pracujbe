@@ -1,8 +1,8 @@
-# Ikony PWA / favicon — do wygenerowania z logo Pracuj.be
+# Ikony PWA i Open Graph marki Pracuj.be
 
 Te pliki są **statycznymi assetami** i muszą trafić do katalogu `public/` (serwowane z roota, np. `/icon-192.png`).
-Generujemy je z marki (znak „P" + subtelny pin, kolory: primary `#2563EB`, tło `#FFFFFF`).
-Nie są w repozytorium jako binaria — wygeneruj je z projektu graficznego (Claude design / eksport z logo).
+Generujemy je z zatwierdzonego znaku: biały `.be` na czerwonym kafelku `#D92932`.
+Pliki można odtworzyć poleceniem `node scripts/generate-icons.mjs` (zależność `sharp`).
 
 ## Wymagane pliki (referencjonowane przez `src/app/manifest.ts`)
 
@@ -29,7 +29,7 @@ Nie są w repozytorium jako binaria — wygeneruj je z projektu graficznego (Cla
 ## Wskazówki generowania
 
 - Format: PNG 24-bit z kanałem alfa dla `any`; PNG bez przezroczystości (pełne tło) dla `maskable` i `apple-touch-icon`.
-- Kolory zgodne z design tokens: primary `#2563EB`, tło `#FFFFFF` (patrz `tailwind.config.ts`).
+- Kolory zgodne z design tokens: primary `#D92932`, tło `#FFFFFF` (patrz `tailwind.config.ts`).
 - Eksportuj z jednego źródła wektorowego, żeby wszystkie rozmiary były ostre.
 - Weryfikacja maskable: https://maskable.app/ (podgląd przycięć).
 - Po dodaniu plików sprawdź `/manifest.webmanifest` (generowany przez `src/app/manifest.ts`) —

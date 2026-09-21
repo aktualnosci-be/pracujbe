@@ -24,7 +24,7 @@ const ROLE_LABEL: Record<string, string> = {
 /** Ton wizualny roli (kolory tokenami). */
 const ROLE_TONE: Record<string, string> = {
   candidate: 'bg-accent/10 text-accent-dark',
-  employer: 'bg-primary/10 text-primary',
+  employer: 'bg-primary/10 text-primary-dark',
   admin: 'bg-warning/10 text-warning',
   moderator: 'bg-success/10 text-success',
 };
