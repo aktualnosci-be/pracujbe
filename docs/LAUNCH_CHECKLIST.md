@@ -1,8 +1,8 @@
 # Checklista uruchomienia produkcyjnego
 
 Kompletna lista kontrolna przed startem `pracuj.be` w produkcji. Przejdź w kolejności;
-nie oznaczaj `[x]`, dopóki nie zweryfikowano na środowisku produkcyjnym (lub staging
-tam, gdzie wskazano). Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
+nie oznaczaj `[x]`, dopóki nie zweryfikowano na środowisku produkcyjnym.
+Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
 [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md), [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md),
 [`PERFORMANCE_CHECKLIST.md`](./PERFORMANCE_CHECKLIST.md).
 
@@ -10,23 +10,22 @@ tam, gdzie wskazano). Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
 
 ## 1. Domena i DNS
 
-- [ ] Domena `pracuj.be` dodana w Vercel i zweryfikowana (patrz [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md)).
-- [ ] Rekordy DNS (A/CNAME) wskazują na Vercel; propagacja zakończona.
+- [ ] Domena `pracuj.be` dodana w Railway i zweryfikowana (patrz [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md)).
+- [ ] Rekordy DNS wskazują na domenę Railway; propagacja zakończona.
 - [ ] Przekierowanie `www.pracuj.be` → `pracuj.be` (lub odwrotnie) — jedna wersja kanoniczna.
 - [ ] SSL aktywny (certyfikat wystawiony), HTTP→HTTPS wymuszone, HSTS.
 - [ ] `NEXT_PUBLIC_SITE_URL=https://pracuj.be` w środowisku Production.
 
 ## 2. Zmienne środowiskowe (Production)
 
-- [ ] Wszystkie zmienne ustawione w Vercel (Production) — patrz [`DEPLOYMENT.md`](./DEPLOYMENT.md) §3.
-- [ ] **`APP_MODE=production`** (SEC-19, fail-closed). Na Vercel produkcja wykrywana jest z
-      `VERCEL_ENV`, ale na self-hosted USTAW to jawnie — inaczej brak konfiguracji Supabase
+- [ ] Wszystkie zmienne ustawione w Railway (`production`) — patrz [`DEPLOYMENT.md`](./DEPLOYMENT.md).
+- [ ] **`APP_MODE=production`** (SEC-19, fail-closed) ustawione jawnie w Railway — inaczej brak konfiguracji Supabase
       cicho degraduje do trybu demo. W trybie production brak konfiguracji → **503 maintenance**
       (middleware) oraz `GET /api/health` → 503. Zweryfikuj `GET /api/health` = `{status:"ok"}`
       po wdrożeniu (readiness dla load-balancera/monitoringu).
 - [ ] `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `EMAIL_QUEUE_SECRET`,
       `SENTRY_AUTH_TOKEN` jako **sekrety** (nie `NEXT_PUBLIC_*`).
-- [ ] Klucze produkcyjne różne od staging.
+- [ ] Użyte są wyłącznie produkcyjne klucze i sekrety.
 - [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` zgodny z aktualną polityką.
 
 ## 3. Baza danych (Supabase produkcja)
@@ -103,15 +102,15 @@ tam, gdzie wskazano). Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
 
 - [ ] Sentry (client + server + edge) odbiera zdarzenia z produkcji; source maps uploadowane.
 - [ ] Alerty Sentry na wzrost błędów krytycznych.
-- [ ] Vercel Analytics / Web Vitals aktywne.
+- [ ] Web Vitals są mierzone wybranym mechanizmem produkcyjnym.
 - [ ] `system_events` / `audit_logs` zapisują operacje wrażliwe.
 - [ ] Logi dispatchera kolejki e-mail obserwowane (brak narastającego `queued`/`failed`).
 
 ## 11. CI/CD
 
 - [ ] `ci.yml` zielony na `main` (lint/typecheck/unit/e2e/build) na self-hosted runnerach.
-- [ ] `deploy.yml` wdraża produkcję z `main`; sekrety Vercel ustawione.
-- [ ] (Opcjonalnie) required reviewers dla environment `production`.
+- [ ] Railway śledzi `main`, a `Wait for CI` jest włączone.
+- [ ] Udane CI i wdrożenie Railway wskazują ten sam SHA.
 
 ## 12. Bezpieczeństwo (skrót)
 
@@ -171,7 +170,7 @@ tam, gdzie wskazano). Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
 ## Powiązane
 
 - [`DEPLOYMENT.md`](./DEPLOYMENT.md) · [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md) ·
-  [`STAGING.md`](./STAGING.md) · [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) ·
+  [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) ·
   [`PERFORMANCE_CHECKLIST.md`](./PERFORMANCE_CHECKLIST.md) ·
   [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) · [`RESEND_SETUP.md`](./RESEND_SETUP.md).
 </content>

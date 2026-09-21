@@ -1,7 +1,8 @@
-# Self-hosted runnery CI/CD — Pracuj.be
+# Self-hosted runnery CI — Pracuj.be
 
-Cały CI/CD (`.github/workflows/ci.yml`, `deploy.yml`) działa na **self-hosted runnerach**.
-To wymóg projektu. Poniżej jak je postawić, jakie etykiety i narzędzia są wymagane.
+CI (`.github/workflows/ci.yml`) działa na **self-hosted runnerach**. Wdrożenie
+produkcji obsługuje natywna integracja Railway po zielonym CI. Poniżej jak
+postawić runnery oraz jakie etykiety i narzędzia są wymagane.
 
 ---
 
@@ -109,7 +110,6 @@ do końca każdego joba. Pojedynczy zielony job nie potwierdza izolacji dwóch r
 | biblioteki systemowe | zależności Chromium | na Ubuntu: `npx playwright install-deps` (wymaga sudo) |
 | Docker | dowolna aktualna | wymagane przez job `rls` (usługa kontenerowa `postgres:16`) |
 | Klient `psql` | dostarczany przez `postgres:16` | job `rls` wykonuje testy wewnątrz kontenera; instalacja na hoście nie jest potrzebna |
-| Vercel CLI | pobierane w jobie | `npm i -g vercel@latest` (deploy) |
 
 > **Playwright:** job `e2e` wykonuje `npx playwright install chromium` (bez `--with-deps`,
 > bo tamto wymaga sudo w trakcie CI). Zależności systemowe zainstaluj **raz** przy provisioningu runnera.
@@ -147,9 +147,6 @@ Ustaw w **Settings → Secrets and variables → Actions** (repo lub organizacja
 
 | sekret | używany przez | opis |
 |---|---|---|
-| `VERCEL_TOKEN` | deploy.yml | token API Vercel |
-| `VERCEL_ORG_ID` | deploy.yml | ID organizacji Vercel |
-| `VERCEL_PROJECT_ID` | deploy.yml | ID projektu Vercel |
 | `SENTRY_AUTH_TOKEN` | (opcjonalnie build) | upload source maps |
 
 Build w `ci.yml` używa placeholderów env i **nie wymaga** sekretów Supabase —
@@ -165,7 +162,8 @@ Testy e2e używające prawdziwej bazy wymagają osobnego, testowego projektu Sup
   Repo `pracujbe` jest prywatne; jeśli to się zmieni, wyłącz uruchamianie workflowów z forków
   lub wymagaj approvala (Settings → Actions → Fork pull request workflows).
 - Runner ma dostęp do sekretów — trzymaj go w izolowanym środowisku (kontener/VM), regularnie aktualizuj.
-- Zasada least privilege: osobny runner/grupa dla deployu (dostęp do `VERCEL_TOKEN`).
+- Railway nie wymaga sekretu wdrożeniowego na runnerze; połączenie repozytorium
+  i bramka `Wait for CI` są konfigurowane po stronie projektu Railway.
 
 ---
 

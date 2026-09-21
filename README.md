@@ -14,10 +14,11 @@ propozycje pracy. Interfejs w **PL / NL / FR / EN**.
 ## Stack
 
 Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind CSS + shadcn/ui ·
-Supabase (Postgres + Auth + Storage + RLS) · Zod · React Hook Form · Resend + React Email ·
-Sentry · Vitest + Playwright · Vercel.
+Supabase (przejściowo) · PostgreSQL Railway · Zod · React Hook Form · Resend + React Email ·
+Sentry · Vitest + Playwright · Railway.
 
-**CI/CD działa na self-hosted runnerach** — patrz [`docs/SELF_HOSTED_RUNNERS.md`](./docs/SELF_HOSTED_RUNNERS.md).
+**CI działa na self-hosted runnerach, a produkcję z `main` wdraża Railway po zielonym CI** —
+patrz [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
 
 ## Szybki start
 
@@ -65,7 +66,7 @@ Patrz [`CLAUDE.md` → „Struktura katalogów"](./CLAUDE.md). Skrótowo:
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — architektura i decyzje
 - [`docs/SELF_HOSTED_RUNNERS.md`](./docs/SELF_HOSTED_RUNNERS.md) — konfiguracja runnerów CI
 - [`docs/SUPABASE_SETUP.md`](./docs/SUPABASE_SETUP.md) · [`docs/RESEND_SETUP.md`](./docs/RESEND_SETUP.md)
-- [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) · [`docs/STAGING.md`](./docs/STAGING.md)
+- [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) · [`docs/railway/README.md`](./docs/railway/README.md)
 - [`docs/SECURITY_CHECKLIST.md`](./docs/SECURITY_CHECKLIST.md) · [`docs/PERFORMANCE_CHECKLIST.md`](./docs/PERFORMANCE_CHECKLIST.md) · [`docs/LAUNCH_CHECKLIST.md`](./docs/LAUNCH_CHECKLIST.md)
 
 ## Licencja

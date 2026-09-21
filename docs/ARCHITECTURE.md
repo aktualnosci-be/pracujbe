@@ -22,8 +22,8 @@ przegląda aplikacje i wysyła proaktywne propozycje pracy.
 | E-mail | Resend + React Email, przez kolejkę `email_deliveries` | wysyłka rozłączna z zapisem w DB, ponawialna |
 | i18n | next-intl, routing z prefiksem `/{locale}` | teksty w `src/messages/*.json`, hreflang |
 | Błędy | centralny `AppError` (`src/lib/errors`) + Sentry | użytkownik nie widzi technikaliów |
-| Hosting | Vercel (prod + staging) | integracja z Next.js, preview deploymenty |
-| CI/CD | GitHub Actions na **self-hosted** runnerach | wymóg projektu (patrz `SELF_HOSTED_RUNNERS.md`) |
+| Hosting | Railway (jedna produkcja z `main`) | natywna integracja GitHub z `Wait for CI` |
+| CI/CD | GitHub Actions na **self-hosted** runnerach + Railway | CI w Actions, wdrożenie produkcji po zielonym CI |
 
 **Zasada nadrzędna:** aplikacja MUSI się budować i renderować strony publiczne **bez
 żadnych zmiennych środowiskowych**. Gdy `isSupabaseConfigured()` zwraca `false`, warstwa
