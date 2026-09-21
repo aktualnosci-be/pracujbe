@@ -16,6 +16,32 @@ Testy integracyjne nadal wymagają izolowanych danych testowych. Brak stagingu
 nie upoważnia do uruchamiania seedów lub destrukcyjnych testów na produkcji.
 Dokładna domena i jej obecne wykorzystanie pozostają do ustalenia.
 
+## 22 września 2026 — Railway jest jedyną platformą docelową
+
+Docelowy runtime, PostgreSQL, zadania cykliczne i prywatny magazyn plików
+utrzymujemy w Railway. Cloudflare obsługuje DNS domeny `pracuj.be`, ale nie jest
+drugim środowiskiem aplikacji. Vercel i Supabase są wyłącznie elementami
+zastępowanego stanu kodu; nie rozwijamy dla nich nowych integracji. Ich usunięcie
+następuje po przełączeniu odpowiadających przepływów i testach regresyjnych,
+żeby nie zostawić martwych formularzy ani pozornie działających zapisów.
+
+Produkcja wdraża się z `main` po zielonym CI. Nie tworzymy stagingu. Testy
+integracyjne i migracyjne korzystają z izolowanych, nietrwałych baz testowych,
+a nie z produkcyjnego PostgreSQL Railway.
+
+## 22 września 2026 — bezpłatny MVP, bez monetyzacji
+
+Na obecnym etapie portal rozwijamy bez sprzedaży ofert, abonamentów, pakietów
+ani dostępu premium. Stripe, checkout, cennik oraz ograniczenia zależne od
+subskrypcji nie są częścią aktywnego produktu. Kod finansowy może zostać
+zachowany tymczasowo wyłącznie na potrzeby bezpiecznego, osobnego usunięcia;
+nie wolno go konfigurować ani eksponować użytkownikom. Szczegóły i kryteria
+odbioru prowadzi issue #51.
+
+Powrót do monetyzacji wymaga nowej, jawnej decyzji właściciela i osobnego planu.
+Nie realizujemy zaleceń audytu dotyczących Stripe, pakietów, płatnego pilota,
+faktur ani celów przychodowych.
+
 ## Supabase — zatwierdzone zastąpienie, pusta instalacja
 
 Właściciel zatwierdził PostgreSQL na Railway i potwierdził, że portal jest
@@ -35,7 +61,7 @@ Bootstrap musi uwzględnić role i właścicieli funkcji SECURITY DEFINER oraz
 oddzielić migratora od zwykłych żądań. Testy muszą dowieść braku wycieku
 tożsamości w puli połączeń i prywatności nowego magazynu CV.
 
-PLAN_MIGRACJI.md zachowuje oryginalny dokument jako materiał źródłowy.
-Przy sprzeczności jego zaleceń o stagingu z niniejszą decyzją obowiązuje
-jedna produkcja z main. Historyczne instrukcje stagingu w README nie są
-już zadaniami do wykonania.
+PLAN_MIGRACJI.md zachowuje oryginalny dokument jako materiał historyczny.
+Przy sprzeczności jego zaleceń o Supabase, Vercelu, stagingu, Stripe lub
+monetyzacji z niniejszą decyzją obowiązuje Railway-only, bezpłatna produkcja
+z `main`. Historyczne instrukcje nie są zadaniami do wykonania.

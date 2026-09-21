@@ -1,14 +1,14 @@
 # Railway — przygotowanie przed uruchomieniem
 
-Status: istnieje projekt captivating-vision, usługa pracujbe w production, źródło main i Wait for CI. Domena pracuj.be została dodana w Railway; potwierdzenie DNS i gotowego backendu pozostaje otwarte. Pełny plan właściciela jest w PLAN_MIGRACJI.md; kolejność issues w STATUS.md. Plan opisuje cel, a nie aktualnie wdrożoną infrastrukturę.
+Status: istnieje projekt captivating-vision, usługa pracujbe w production, źródło main i Wait for CI. Domena pracuj.be została dodana w Railway; potwierdzenie DNS i gotowego backendu pozostaje otwarte. Aktualne decyzje właściciela są w DECYZJE.md, a kolejność issues w STATUS.md. PLAN_MIGRACJI.md jest zachowanym materiałem historycznym i nie opisuje już celu.
 
-Aktualna decyzja: wyłącznie production z main, bez stagingu. Patrz [DECYZJE.md](DECYZJE.md). Właściciel zatwierdził zastąpienie Supabase i potwierdził pusty portal. Supabase pozostaje w kodzie do realizacji issues #23–#27.
+Aktualna decyzja: wyłącznie bezpłatna produkcja z `main` na Railway, bez stagingu, Vercela, Supabase i monetyzacji. Patrz [DECYZJE.md](DECYZJE.md). Portal jest pusty, więc nie przenosimy kont ani danych. Supabase i Stripe pozostają jeszcze w kodzie tylko do kontrolowanego usunięcia w issues #23–#27 i #51.
 
 ## Pierwsze wdrożenie
 
-Przed wdrożeniem zmian także na dotychczasowym hostingu ustaw APP_MODE=production w produkcji. Automatyczne wykrywanie przez VERCEL_ENV zostaje usunięte. NEXT_PUBLIC_SITE_URL musi być docelowym adresem HTTPS produkcji. Po jego zmianie wymagany jest ponowny build.
+`APP_MODE=production` i `NEXT_PUBLIC_SITE_URL=https://pracuj.be` ustaw w usłudze Railway. Automatyczne wykrywanie przez `VERCEL_ENV` zostaje usunięte. Po zmianie publicznego adresu wymagany jest ponowny build.
 
-Web: Node22, Railpack, npm run build, npm run start, PORT dostarczony przez platformę, health /api/health. Przed połączeniem prywatnych cronów sprawdź nasłuch IPv4/IPv6 i referencję portu w rzeczywistej konfiguracji. PostgreSQL Railway jest docelową bazą zgodnie z nową decyzją. Nie twórz płatnych usług bez upoważnienia; konfiguracja plików i bazy wymaga realizacji #23–#27.
+Web: Node22, Railpack, npm run build, npm run start, PORT dostarczony przez platformę, health /api/health. Przed połączeniem prywatnych cronów sprawdź nasłuch IPv4/IPv6 i referencję portu w rzeczywistej konfiguracji. PostgreSQL Railway jest docelową bazą, a prywatne pliki przechodzą do Railway Bucket. Nie konfiguruj Stripe ani płatnych funkcji; konfiguracja plików i bazy wymaga realizacji #23–#27.
 
 ## Cron
 
@@ -16,9 +16,13 @@ Komenda: node scripts/railway-cron-call.mjs. Zmienne tylko CRON_TARGET_URL i CRO
 
 Skrypt kończy się kodem0 przy sukcesie,1 przy błędzie żądania/HTTP,2 przy błędnej konfiguracji. Timeout120s, bez przekierowań. Loguje kod HTTP, bez URL, tokenów i treści odpowiedzi. Wynik HTTP nie zastępuje sprawdzenia dostarczenia e-maila w outboxie.
 
-## Bezpieczny okres przejściowy
+## Stan przejściowy kodu
 
-CRON_SECRET, vercel.json i workflow Vercela pozostają do czasu potwierdzenia Railway i procedury rollbacku (#13,#18,#19). Nie usuwaj sekretów z kont ani nie włączaj retencji produkcyjnej przy wdrożeniu samego kodu. Przyszłe IaC pobierz z działającego projektu; nie zapisuj sekretów w repo. Informację o terminie zakończenia starszego Config as Code z planu trzeba ponownie potwierdzić przed cleanupem.
+`vercel.json`, workflow Vercela, integracje Supabase i Stripe są długiem migracyjnym,
+nie wspieranym wariantem wdrożenia. Usuwamy je dopiero razem z zastępującym je
+przepływem i testem regresyjnym. Nie konfiguruj ich sekretów ani nie uruchamiaj
+drugiej produkcji. Przyszłe IaC pobierz z działającego projektu Railway; nie
+zapisuj sekretów w repo.
 
 ## Źródła sprawdzone podczas implementacji
 

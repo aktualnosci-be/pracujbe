@@ -1,5 +1,13 @@
 # Plan migracji Pracuj.be z Vercel na Railway
 
+> **Dokument historyczny — nie wdrażać według niego.** Powstał przed decyzją
+> właściciela z 22 września 2026. Aktualny kierunek to jedna bezpłatna produkcja
+> z `main`, całość na Railway: runtime, PostgreSQL, zadania cykliczne i prywatne
+> pliki. Bez stagingu, Vercela, Supabase i Stripe. Obowiązujące decyzje oraz
+> bieżący status są w [DECYZJE.md](DECYZJE.md) i [STATUS.md](STATUS.md).
+> Treść poniżej pozostaje wyłącznie jako ślad pierwotnego audytu i nie tworzy
+> zadań implementacyjnych.
+
 **Repozytorium:** `aktualnosci-be/pracujbe`  
 **Stack:** Next.js 15 / React 19 / Node 22 / Supabase / Resend / Stripe / Sentry  
 **Cel:** Railway Pro jako hosting aplikacji i zadań cyklicznych, bez migracji Supabase  

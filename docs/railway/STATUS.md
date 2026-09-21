@@ -2,6 +2,11 @@
 
 Aktualizacja właściciela: jedna produkcja z main, bez stagingu. [Decyzje](DECYZJE.md) zastępują ten fragment pierwotnego planu.
 
+Aktualizacja 22 września 2026: Railway jest jedyną platformą docelową dla
+runtime, PostgreSQL, cronów i prywatnych plików. MVP pozostaje bezpłatny:
+nie uruchamiamy Stripe, checkoutu, pakietów ani ograniczeń subskrypcyjnych.
+Usunięcie powierzchni sprzedażowych i zależności prowadzi issue #51.
+
 Baza: b35087b, gałąź infra/railway oparta na pracach PR #8. Zmiany migracyjne są osobne; PR migracyjny zależy od tej bazy. Nie skonfigurowano jeszcze usług Railway ani DNS.
 
 - [P0: Railway — plan migracji i pomiar bazowy](https://github.com/aktualnosci-be/pracujbe/issues/11)
@@ -47,4 +52,4 @@ Pule runtime (`src/lib/db/pool.ts`) używają oddzielnych loginów i ról startu
 - Zależności auth wymagają Zod 4. Istniejące schematy aplikacji pozostają na oficjalnym eksporcie `zod/v3`; resolver formularzy obsługuje obie wersje. Nie zmieniono reguł formularzy. Test kompatybilności sprawdza normalizację i klucze błędów zgody/hasła.
 - Test braku wycieku puli oczekuje do 2 sekund na zamknięcie backendu PostgreSQL. Nadal wymaga zera obcych połączeń; usuwa wyścig między zamknięciem socketu i aktualizacją `pg_stat_activity`, wykryty w CI `35650817175`.
 
-Nie potwierdzono jeszcze utworzenia PostgreSQL/bucketu na Railway, DNS ani gotowości produkcyjnych przepływów po zmianie dostawcy. Samo scalenie stylu nie jest potwierdzeniem deployu.
+Nie potwierdzono jeszcze utworzenia PostgreSQL/bucketu na Railway, DNS ani gotowości produkcyjnych przepływów po zmianie dostawcy. Samo scalenie stylu nie jest potwierdzeniem deployu. Historyczny plan Vercel/Supabase/Stripe nie wyznacza dalszych prac.
