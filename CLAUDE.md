@@ -10,14 +10,14 @@
 
 ## 0. TL;DR dla modelu kontynuującego pracę
 
-Trwa przygotowanie migracji hostingu do Railway: plan, issues i instrukcje w
-`docs/railway/README.md` oraz `docs/railway/STATUS.md`. Nie przełączono jeszcze
-infrastruktury. Przed wdrożeniem tej gałęzi ustaw jawnie `APP_MODE=production`
-także na dotychczasowym hostingu; `VERCEL_ENV` nie wybiera już trybu aplikacji.
-Zachowaj konfigurację Vercela do zakończenia odbioru Railway i okresu rollbacku.
+Railway jest jedynym docelowym hostingiem: jedna usługa `production` wdrażana
+z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
+`docs/railway/README.md` oraz `docs/railway/STATUS.md`. `APP_MODE=production`
+ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
+Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
 
-1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · Supabase (Postgres/Auth/Storage/RLS) · Zod · React Hook Form · Resend + React Email · Sentry · Vitest + Playwright · Vercel.
-2. **CI/CD działa na self-hosted runnerach** (patrz `.github/workflows/*` i sekcja „CI/CD" niżej). Nie zmieniaj `runs-on` z powrotem na `ubuntu-latest` bez wyraźnej prośby.
+1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · Supabase (przejściowo) · PostgreSQL Railway · Zod · React Hook Form · Resend + React Email · Sentry · Vitest + Playwright · Railway.
+2. **CI działa na self-hosted runnerach; wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Nie zmieniaj `runs-on` z powrotem na `ubuntu-latest` bez wyraźnej prośby.
 3. **Niezmienne reguły (NIGDY nie łam):** patrz sekcja „Invariants". Najważniejsze: język e-maili = język odbiorcy; wysyłka propozycji idempotentna; brak service-role key w przeglądarce; brak trackingu przed zgodą; RLS na wszystkim; żadnych tekstów UI na sztywno.
 4. **Gdzie co jest:** patrz „Struktura katalogów".
 5. **Co dalej:** patrz „Roadmapa / status" — sekcja z checkboxami. Wybierz kolejny niezaznaczony punkt.
@@ -77,7 +77,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 - **E-mail:** **Resend** + **React Email** (szablony w `src/emails`), wysyłka przez kolejkę (`email_deliveries`).
 - **Błędy/monitoring:** **Sentry** (client + server + edge). Centralny system błędów `src/lib/errors`.
 - **Testy:** **Vitest** (unit/integration) + **Playwright** (e2e). Patrz `tests/`.
-- **Hosting:** **Vercel** (produkcja + staging). Migracje SQL wersjonowane w `supabase/migrations`.
+- **Hosting:** **Railway**, jedna produkcja z `main`; natywne `Wait for CI` blokuje wdrożenie do zielonego CI. Migracje SQL są wersjonowane w repozytorium.
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
@@ -88,9 +88,8 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 pracujbe/
 ├─ CLAUDE.md                      # ten plik — mapa/kontrakt projektu
 ├─ README.md                      # szybki start + skrypty
-├─ .github/workflows/             # CI/CD na self-hosted runnerach
-│  ├─ ci.yml                      # lint · typecheck · unit · e2e · build
-│  └─ deploy.yml                  # deploy na Vercel (staging/prod)
+├─ .github/workflows/             # CI na self-hosted runnerach
+│  └─ ci.yml                      # lint · typecheck · unit · e2e · build
 ├─ docs/                          # dokumentacja rozszerzona
 │  ├─ ARCHITECTURE.md
 │  ├─ SELF_HOSTED_RUNNERS.md      # jak postawić i zarejestrować runnery
@@ -259,15 +258,16 @@ historia → notyfikacja → enqueue e-mail.
 
 ## 10. CI/CD — self-hosted (WAŻNE)
 
-Cały CI/CD chodzi na **self-hosted runnerach** (wymóg projektu). Zobacz:
+CI chodzi na **self-hosted runnerach** (wymóg projektu), a wdrożenie obsługuje
+natywna integracja Railway. Zobacz:
 - `.github/workflows/ci.yml` — `runs-on: [self-hosted, linux, x64]`, joby: install → lint → typecheck → unit → e2e → build.
-- `.github/workflows/deploy.yml` — deploy na Vercel (staging na `develop`/PR, prod na `main`), też self-hosted.
+- `docs/DEPLOYMENT.md` — jedna produkcja Railway z `main`, z włączonym `Wait for CI`.
 - `docs/SELF_HOSTED_RUNNERS.md` — jak zarejestrować runner (repo/org), wymagane labele, narzędzia (Node 22, przeglądarki Playwright), sekrety.
 
 **Reguły CI:**
 - `runs-on` używa labeli `self-hosted` + `linux` + `x64` (dostosuj etykiety do swoich maszyn).
 - Nie przełączaj na `ubuntu-latest` bez wyraźnej prośby użytkownika.
-- Runner musi mieć: Node 22 (`.nvmrc`), zależności systemowe Playwrighta, dostęp do sekretów (Supabase test, Vercel token).
+- Runner musi mieć: Node 22 (`.nvmrc`), zależności systemowe Playwrighta i dostęp do sekretów wymaganych przez testy. Nie potrzebuje tokenu wdrożeniowego Railway.
 - Cache zależności (`~/.npm`) — na self-hosted zwykle przez `actions/cache` lub trwały wolumen.
 
 ---
@@ -498,7 +498,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Model danych: migracje SQL (schemat + enumy + indeksy)
 - [x] RLS: polityki bazowe
 - [x] Role i routing paneli (candidate/employer/admin, noindex)
-- [x] CI/CD na self-hosted (ci.yml, deploy.yml) + docs
+- [x] CI na self-hosted (`ci.yml`) + natywne wdrożenie Railway z `main`
 - [x] Centralny system błędów + kody + Sentry (config)
 - [ ] shadcn/ui — pełny zestaw komponentów (na razie podstawowe)
 

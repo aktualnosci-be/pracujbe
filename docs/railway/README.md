@@ -18,11 +18,13 @@ Skrypt kończy się kodem0 przy sukcesie,1 przy błędzie żądania/HTTP,2 przy 
 
 ## Stan przejściowy kodu
 
-`vercel.json`, workflow Vercela, integracje Supabase i Stripe są długiem migracyjnym,
-nie wspieranym wariantem wdrożenia. Usuwamy je dopiero razem z zastępującym je
-przepływem i testem regresyjnym. Nie konfiguruj ich sekretów ani nie uruchamiaj
-drugiej produkcji. Przyszłe IaC pobierz z działającego projektu Railway; nie
-zapisuj sekretów w repo.
+Workflow Vercela został usunięty: repozytorium nie publikuje już zielonego
+wyniku „Deploy”, gdy wdrożenie zostało pominięte z powodu braku tokenu.
+`vercel.json` oraz integracje Supabase i Stripe pozostają długiem migracyjnym,
+bo ich przepływy są jeszcze używane. Usuwamy je dopiero razem z zastępującym
+je przepływem i testem regresyjnym. Nie konfiguruj sekretów Vercela ani nie
+uruchamiaj drugiej produkcji. Przyszłe IaC pobierz z działającego projektu
+Railway; nie zapisuj sekretów w repo.
 
 ## Źródła sprawdzone podczas implementacji
 
