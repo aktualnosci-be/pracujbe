@@ -1,5 +1,7 @@
 'use client';
 
+import { formatSalaryRange } from '@/lib/salary';
+
 import * as React from 'react';
 import { ArrowUpRight, BadgeCheck } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -35,23 +37,6 @@ function formatRelative(iso: string, locale: string): string {
   return rtf.format(Math.round(days / 30), 'month');
 }
 
-function formatSalary(job: JobListItem, locale: string): string | null {
-  const currency = job.currency || 'EUR';
-  const fmt = (value: number): string =>
-    new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 2,
-      minimumFractionDigits: 0,
-    }).format(value);
-
-  if (job.salaryMin !== undefined && job.salaryMax !== undefined) {
-    return `${fmt(job.salaryMin)} – ${fmt(job.salaryMax)}`;
-  }
-  if (job.salaryMin !== undefined) return fmt(job.salaryMin);
-  if (job.salaryMax !== undefined) return fmt(job.salaryMax);
-  return null;
-}
 
 export interface JobCardProps {
   job: JobListItem;
@@ -73,11 +58,10 @@ export function JobCard({
   const tCategory = useTranslations('categories');
 
 
-  const salaryValue = formatSalary(job, locale);
-  const salary = salaryValue === null ? null
-    : job.salaryMax === undefined ? t('passport.salaryFrom', { value: salaryValue })
-    : job.salaryMin === undefined ? t('passport.salaryTo', { value: salaryValue })
-    : salaryValue;
+  const salary = formatSalaryRange(job, locale, {
+    from: value => t('passport.salaryFrom', { value }),
+    to: value => t('passport.salaryTo', { value }),
+  });
   const highlights = job.highlights.slice(0, 2);
   const relative = formatRelative(job.publishedAt, locale);
   const withMatch = showMatch === true && typeof matchScore === 'number';

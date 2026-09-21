@@ -1,5 +1,5 @@
 import { Logo } from '@/components/brand/Logo';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
 import { LocaleSwitcher } from './LocaleSwitcher';
@@ -35,6 +35,9 @@ export async function Footer() {
     'text-sm text-muted-foreground transition-colors hover:text-foreground';
   const headingClass = 'text-sm font-semibold text-foreground';
   const year = new Date().getFullYear();
+  const locale = await getLocale();
+  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME;
+  const version = process.env.NEXT_PUBLIC_APP_VERSION;
 
   return (
     <footer className="border-t border-border bg-soft text-foreground">
@@ -93,6 +96,14 @@ export async function Footer() {
           </p>
           <LocaleSwitcher />
         </div>
+        {version && buildTime ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            v{version} · <time dateTime={buildTime}>{new Intl.DateTimeFormat(locale, {
+              timeZone: 'Europe/Warsaw', day: '2-digit', month: '2-digit', year: 'numeric',
+              hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short',
+            }).format(new Date(buildTime))}</time>
+          </p>
+        ) : null}
       </div>
     </footer>
   );
