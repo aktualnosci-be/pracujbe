@@ -13,7 +13,6 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { isSupabaseConfigured } from '@/lib/env';
 import {
-  getCompanyEntitlements,
   getCompanyJobs,
   getEmployerOverview,
   getEmployerShellData,
@@ -26,7 +25,6 @@ import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatusPill } from '@/components/ui/status-pill';
 import { RecruitmentFunnel } from '@/components/employer/RecruitmentFunnel';
-import { PricingPackageCard } from '@/components/employer/PricingPackageCard';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import { SendOfferButton } from '@/components/employer/SendOfferButton';
 
@@ -37,7 +35,7 @@ import { SendOfferButton } from '@/components/employer/SendOfferButton';
  * struktury z danymi DEMO (build/preview bez konfiguracji). Układ zgodny z makietą: rząd
  * kafelków statystyk (StatCard), tabela ofert firmy, sekcja najnowszych aplikacji (menu zmiany
  * statusu → `transitionApplication`), lejek rekrutacyjny, top dopasowani kandydaci (wysyłka
- * propozycji → `sendOffer`) i karta pakietu. NOINDEX (panel, dziedziczone z layoutu).
+ * propozycji → `sendOffer`). NOINDEX (panel, dziedziczone z layoutu).
  */
 
 export async function generateMetadata({
@@ -65,8 +63,6 @@ function conversionPct(numerator: number, denominator: number): number {
   return Math.round((numerator / denominator) * 1000) / 10;
 }
 
-const PACKAGE_OFFERS_TOTAL = 10;
-
 export default async function EmployerDashboardPage({
   params,
 }: {
@@ -78,21 +74,16 @@ export default async function EmployerDashboardPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
 
   const configured = isSupabaseConfigured();
-  const [overview, jobs, applications, candidates, funnel, shell, entitlements] = await Promise.all([
+  const [overview, jobs, applications, candidates, funnel, shell] = await Promise.all([
     getEmployerOverview(),
     getCompanyJobs(),
     getRecentApplications(),
     getTopMatchedCandidates(),
     getFunnelStats(),
     getEmployerShellData(),
-    getCompanyEntitlements(),
   ]);
   // P1-09: realne imię pracodawcy w powitaniu (bez zmyślonego „Jan"). Brak → wariant bez imienia.
   const firstName = shell?.userName?.trim().split(/\s+/)[0] ?? '';
-  // P1-01/P1-09: realny limit i zużycie ofert z planu (fallback statyczny tylko w demo).
-  const offersTotal = entitlements?.maxActiveJobs ?? PACKAGE_OFFERS_TOTAL;
-  const offersUsed = entitlements?.activeJobsUsed ?? overview.activeOffersCount;
-
   const conversions: [number, number, number] = [
     conversionPct(funnel.applications, funnel.views),
     conversionPct(funnel.interviews, funnel.applications),
@@ -359,13 +350,6 @@ export default async function EmployerDashboardPage({
               </Button>
             </div>
           </section>
-
-          {/* Karta pakietu — realny limit/zużycie ofert z planu (P1-01/P1-09). */}
-          <PricingPackageCard
-            activeUntil={configured ? '—' : '24.06.2025'}
-            offersUsed={offersUsed}
-            offersTotal={offersTotal}
-          />
         </div>
       </div>
     </div>
