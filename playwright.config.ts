@@ -48,7 +48,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run build && npm run start',
+    // CI buduje w osobnym kroku; limit gotowości mierzy wyłącznie start serwera.
+    command: process.env.PLAYWRIGHT_SKIP_BUILD === '1' ? 'npm run start' : 'npm run build && npm run start',
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

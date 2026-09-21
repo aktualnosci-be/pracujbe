@@ -219,7 +219,12 @@ jobs:
       # Poniższe jest bezpiecznym no-op, jeśli już są; --with-deps pomijamy, bo wymaga sudo.
       - name: Ensure Playwright browsers
         run: npx playwright install chromium
+      - name: Build application for E2E
+        timeout-minutes: 15
+        run: npm run build
       - name: Run E2E
+        env:
+          PLAYWRIGHT_SKIP_BUILD: '1'
         run: npm run test:e2e
       # Raport tylko przy porażce i z krótką retencją — oszczędza płatny storage.
       - uses: actions/upload-artifact@v4
