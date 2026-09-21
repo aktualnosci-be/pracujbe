@@ -3,6 +3,8 @@ name: CI
 # CI Pracuj.be — uruchamiane WYŁĄCZNIE na self-hosted runnerach.
 # Etykiety (labels) runnera: self-hosted + linux + x64.
 # Rejestracja i wymagania runnera: docs/SELF_HOSTED_RUNNERS.md
+# Joby są równoległe z założenia. Każda usługa runnera musi mieć osobny `_work`,
+# a hook kończący job nie może asynchronicznie usuwać workspace ani `_work/_temp`.
 #
 # Nie zmieniaj `runs-on` na `ubuntu-latest` bez wyraźnej decyzji — to wymóg projektu.
 

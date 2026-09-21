@@ -44,6 +44,59 @@ sudo ./svc.sh start
 sudo ./svc.sh status
 ```
 
+### Kilka runnerów na jednym hoście — obowiązkowa izolacja katalogów
+
+Każda usługa runnera musi mieć **własny katalog instalacji i własny katalog roboczy**.
+Dwie usługi nie mogą korzystać z tego samego `_work`, nawet jeśli GitHub zwykle nie
+przydziela im tego samego joba. Workflow CI celowo uruchamia niezależne joby równolegle.
+
+Przykładowy poprawny układ dla dwóch runnerów:
+
+```text
+/opt/actions-runner-pracujbe-1/        # pierwsza instalacja runnera
+└── _work/
+/opt/actions-runner-pracujbe-2/        # druga instalacja runnera
+└── _work/
+```
+
+Przy rejestracji można nadać katalog roboczy jawnie (`./config.sh ... --work _work`).
+Sam katalog `_work` może mieć tę samą nazwę tylko dlatego, że znajduje się wewnątrz
+innego katalogu instalacji. Niedozwolony jest wspólny katalog w rodzaju
+`/home/debian/actions-runner/_work` wskazany przez dwie usługi.
+
+Po rejestracji sprawdź definicje obu usług i rzeczywiste katalogi procesów. Każda
+usługa ma wskazywać inną instalację runnera. Jeśli ścieżki się pokrywają, zatrzymaj
+drugą usługę i zarejestruj ją ponownie w osobnym katalogu przed uruchomieniem CI.
+
+### Hook kończący job — kontrakt bezpieczeństwa
+
+Hook wskazany przez `ACTIONS_RUNNER_HOOK_JOB_COMPLETED` działa w cyklu życia runnera,
+więc musi zakończyć całą pracę **synchronicznie przed zwrotem sterowania**. Po wyjściu
+hooka runner może natychmiast przyjąć następny job.
+
+Hook kończący job:
+
+- nie uruchamia sprzątania w tle (`&`, `nohup`, timer, opóźniony `sleep`, osobna usługa),
+- nie usuwa `GITHUB_WORKSPACE`, katalogu `_work` ani `_work/_temp`,
+- nie usuwa katalogów należących do innej usługi runnera,
+- zwraca kod różny od zera, jeśli jego własna, bezpieczna czynność się nie powiodła,
+- kończy się dopiero wtedy, gdy wszystkie uruchomione przez niego procesy zakończyły pracę.
+
+Nie jest potrzebne ręczne kasowanie workspace między jobami: `actions/checkout`
+przygotowuje checkout dla bieżącego joba. Jeśli host wymaga dodatkowego sprzątania
+zasobów spoza workspace (na przykład własnych kontenerów testowych), musi ono być
+ograniczone do zasobów utworzonych przez zakończony job i wykonać się synchronicznie.
+
+Szczególnie niebezpieczny jest hook, który uruchamia opóźnione `rm -rf`, kończy się,
+a po kilkudziesięciu sekundach kasuje katalog nowego joba. Objawem jest poprawny start
+testu, po którym kolejne polecenie zgłasza brak bieżącego katalogu lub plików checkoutu.
+Serializacja workflow nie naprawia tej konfiguracji: hook może usunąć workspace
+następnego joba także wtedy, gdy joby wykonują się jeden po drugim.
+
+Po zmianie hooka zrestartuj wszystkie usługi runnerów i uruchom pełny CI. Weryfikacja
+jest zakończona dopiero wtedy, gdy równoległe joby przechodzą, a ich katalogi istnieją
+do końca każdego joba. Pojedynczy zielony job nie potwierdza izolacji dwóch runnerów.
+
 ---
 
 ## 3. Wymagane oprogramowanie na runnerze
