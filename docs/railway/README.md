@@ -1,14 +1,14 @@
 # Railway — przygotowanie przed uruchomieniem
 
-Status: kod przygotowywany; nie utworzono usług ani nie przełączono DNS. Pełny plan właściciela jest w PLAN_MIGRACJI.md; kolejność issues w STATUS.md. Plan opisuje cel, a nie aktualnie wdrożoną infrastrukturę.
+Status: istnieje projekt captivating-vision, usługa pracujbe w production, źródło main i Wait for CI. Domena pracuj.be została dodana w Railway; potwierdzenie DNS i gotowego backendu pozostaje otwarte. Pełny plan właściciela jest w PLAN_MIGRACJI.md; kolejność issues w STATUS.md. Plan opisuje cel, a nie aktualnie wdrożoną infrastrukturę.
 
-Aktualna decyzja: wyłącznie production z main, bez stagingu. Patrz [DECYZJE.md](DECYZJE.md). Supabase pozostaje w kodzie do osobnej decyzji i realizacji migracji.
+Aktualna decyzja: wyłącznie production z main, bez stagingu. Patrz [DECYZJE.md](DECYZJE.md). Właściciel zatwierdził zastąpienie Supabase i potwierdził pusty portal. Supabase pozostaje w kodzie do realizacji issues #23–#27.
 
 ## Pierwsze wdrożenie
 
 Przed wdrożeniem zmian także na dotychczasowym hostingu ustaw APP_MODE=production w produkcji. Automatyczne wykrywanie przez VERCEL_ENV zostaje usunięte. NEXT_PUBLIC_SITE_URL musi być docelowym adresem HTTPS produkcji. Po jego zmianie wymagany jest ponowny build.
 
-Web: Node22, Railpack, npm run build, npm run start, PORT dostarczony przez platformę, health /api/health. Przed połączeniem prywatnych cronów sprawdź nasłuch IPv4/IPv6 i referencję portu w rzeczywistej konfiguracji. Nie dodawaj Dockerfile, bazy, Redis ani wolumenu.
+Web: Node22, Railpack, npm run build, npm run start, PORT dostarczony przez platformę, health /api/health. Przed połączeniem prywatnych cronów sprawdź nasłuch IPv4/IPv6 i referencję portu w rzeczywistej konfiguracji. PostgreSQL Railway jest docelową bazą zgodnie z nową decyzją. Nie twórz płatnych usług bez upoważnienia; konfiguracja plików i bazy wymaga realizacji #23–#27.
 
 ## Cron
 

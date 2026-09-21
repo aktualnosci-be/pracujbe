@@ -23,3 +23,7 @@ Kontrola lokalna: lint, typecheck i 101 testów jednostkowych zaliczone. Testy r
 Build produkcyjny i Playwright: 20 zaliczonych, 1 pominięty. Testy przeglądarkowe używają danych demo, nie stanowią odbioru infrastruktury Railway.
 
 Bramka CI (#15): automatyczne anulowanie ograniczono do PR. Push i uruchomienia ręczne mają osobne grupy run_id, aby nie usuwać również oczekujących przebiegów. Weryfikacja zachowania w rzeczywistych kolejnych pushach pozostaje częścią odbioru integracji Railway.
+
+Nowy backend zatwierdzony dla pustego portalu: #23 migracje, #24 auth, #25 dane/RLS, #26 pliki, #27 odbiór i usunięcie Supabase. Railway: projekt captivating-vision, production/pracujbe, main, Wait for CI potwierdzone odczytem API. Domena pracuj.be dodana; wymagany CNAME xetenf6j.up.railway.app. Nie potwierdzono jeszcze DNS ani gotowości backendu.
+
+Poprawka CI: build E2E przeniesiony do osobnego kroku z limitem 15 minut. Poprzednia awaria była timeoutem180s kompilacji w webServer. Lokalnie wariant startu istniejącego buildu: 20 E2E zaliczonych,1 pominięty; verify101 zaliczone. Wynik zdalnego CI po poprawce pozostaje do potwierdzenia.

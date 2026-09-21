@@ -16,15 +16,24 @@ Testy integracyjne nadal wymagają izolowanych danych testowych. Brak stagingu
 nie upoważnia do uruchamiania seedów lub destrukcyjnych testów na produkcji.
 Dokładna domena i jej obecne wykorzystanie pozostają do ustalenia.
 
-## Supabase — ocena zastąpienia
+## Supabase — zatwierdzone zastąpienie, pusta instalacja
 
-Właściciel zapytał o rezygnację z Supabase na rzecz Railway. Jest to osobna
-zmiana architektury, nie wykonana migracja. Obecny kod nadal korzysta
-z Supabase Auth, PostgreSQL/RLS, API i prywatnego Storage.
+Właściciel zatwierdził PostgreSQL na Railway i potwierdził, że portal jest
+pusty. Nie ma istniejących kont ani danych do migracji. Docelowo usuwamy
+Supabase Auth, API i Storage, zastępując wszystkie ich funkcje. Obecny kod
+nadal korzysta z Supabase — decyzja nie oznacza zakończonej implementacji.
 
-Przed wyborem sposobu migracji trzeba ustalić, czy istnieją konta, CV,
-płatności i inne dane do zachowania. Nie usuwamy integracji, polityk RLS,
-sekretów ani danych na podstawie założenia, że instalacja jest pusta.
+Etapy: #23 bootstrap bazy i migracje, #24 konta/sesje, #25 serwerowa warstwa
+danych i RLS, #26 prywatne pliki, #27 odbiór całości i usunięcie SDK.
+Nie tworzymy płatnych usług bez osobnego upoważnienia. Zachowujemy kontrolę
+dostępu i procesy domenowe podczas wymiany backendu.
+
+Odczyt kodu wykazał 44 pliki src odwołujące się do Supabase. Testowy shim
+nie jest produkcyjnym backendem: nie ma haseł ani sesji, tożsamość ustawia
+parametrem testu, a migracja Storage pomija wykonanie bez schematu storage.
+Bootstrap musi uwzględnić role i właścicieli funkcji SECURITY DEFINER oraz
+oddzielić migratora od zwykłych żądań. Testy muszą dowieść braku wycieku
+tożsamości w puli połączeń i prywatności nowego magazynu CV.
 
 PLAN_MIGRACJI.md zachowuje oryginalny dokument jako materiał źródłowy.
 Przy sprzeczności jego zaleceń o stagingu z niniejszą decyzją obowiązuje
