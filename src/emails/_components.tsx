@@ -1,7 +1,7 @@
 /**
  * Wspólne komponenty layoutu wiadomości e-mail Pracuj.be (React Email).
  *
- * Styl: jasny, prosty, responsywny; tekstowe logo „Pracuj.be”, jeden przycisk CTA, stopka.
+ * Styl: jasny, prosty, responsywny; tekstowe logo „pracuj.be”, jeden przycisk CTA, stopka.
  * Bez ciężkich grafik i bez zewnętrznych zasobów (maile muszą działać offline w kliencie).
  *
  * WYJĄTEK OD ZASADY KOLORÓW: klasy Tailwind (bg-primary itd.) mapowane są na zmienne CSS,
@@ -33,13 +33,13 @@ import { interpolate, layoutCopy } from '@/emails/copy';
  * Paleta marki (spójna z design tokenami globals.css). Jedyne źródło kolorów w mailach.
  */
 const palette = {
-  primary: '#2563EB',
-  primaryDark: '#1D4ED8',
-  foreground: '#172033',
-  muted: '#64748B',
+  primary: '#D92932',
+  primaryDark: '#B91D25',
+  foreground: '#151515',
+  muted: '#616161',
   background: '#FFFFFF',
-  soft: '#F8FAFC',
-  border: '#E2E8F0',
+  soft: '#F7F7F7',
+  border: '#DEDEDE',
   success: '#16A34A',
   warning: '#EA580C',
   error: '#DC2626',
@@ -72,28 +72,20 @@ const styles = {
     textDecoration: 'none',
     display: 'inline-block',
   } satisfies CSSProperties,
-  logoMark: {
+  logoTile: {
     display: 'inline-block',
-    width: '28px',
-    height: '28px',
-    lineHeight: '28px',
-    textAlign: 'center',
     backgroundColor: palette.primary,
     color: palette.background,
     borderRadius: '8px',
     fontWeight: 700,
-    fontSize: '16px',
-    marginRight: '8px',
+    fontSize: '18px',
+    lineHeight: '22px',
+    padding: '4px 6px',
+    marginLeft: '2px',
     verticalAlign: 'middle',
   } satisfies CSSProperties,
   logoWordFirst: {
     color: palette.foreground,
-    fontWeight: 700,
-    fontSize: '18px',
-    verticalAlign: 'middle',
-  } satisfies CSSProperties,
-  logoWordSecond: {
-    color: palette.primary,
     fontWeight: 700,
     fontSize: '18px',
     verticalAlign: 'middle',
@@ -185,14 +177,13 @@ const styles = {
   } satisfies CSSProperties,
 } as const;
 
-/** Tekstowe logo „Pracuj.be” (znak P + wordmark). */
+/** Tekstowe logo „pracuj.be” z białym sufiksem na czerwonym kafelku. */
 function EmailLogo({ locale }: { locale: Locale }): ReactNode {
   const href = `${env.siteUrl}/${locale}`;
   return (
     <Link href={href} style={styles.logoLink}>
-      <span style={styles.logoMark}>P</span>
-      <span style={styles.logoWordFirst}>Pracuj</span>
-      <span style={styles.logoWordSecond}>.be</span>
+      <span style={styles.logoWordFirst}>pracuj</span>
+      <span style={styles.logoTile}>.be</span>
     </Link>
   );
 }
