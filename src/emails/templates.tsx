@@ -11,8 +11,9 @@
  * `renderEmail(type, locale, data)` zwraca `{ subject, html }` (render przez @react-email/render).
  */
 
-import { createElement, type FunctionComponent, type ReactElement } from 'react';
+import { createElement, type CSSProperties, type FunctionComponent, type ReactElement } from 'react';
 import { render } from '@react-email/render';
+import { Section, Text } from '@react-email/components';
 
 import type { Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
@@ -26,7 +27,7 @@ import {
   EmailText,
 } from '@/emails/_components';
 import type { EmailType } from '@/emails/copy';
-import { emailCopy, greetings, interpolate, layoutCopy } from '@/emails/copy';
+import { emailCopy, greetings, interpolate, jobOfferPassportCopy, layoutCopy } from '@/emails/copy';
 
 /**
  * Dane wejściowe każdego typu maila. Nazwy pól odpowiadają tokenom `{...}` w `copy.ts`.
@@ -103,8 +104,10 @@ function EmailShell(props: {
   ctaHref: string;
   greetingName?: string;
   quote?: string;
-  /** Nadpisanie wyróżnienia (gdy zależy od danych, np. tytuł + wynagrodzenie). */
+  /** Nadpisanie wyróżnienia (gdy zależy od danych). */
   highlight?: string;
+  /** Własny blok treści renderowany zamiast standardowego wyróżnienia. */
+  detail?: ReactElement;
 }): ReactElement {
   const { locale, type, vars, ctaHref, greetingName, quote } = props;
   const copy = emailCopy[type][locale];
@@ -134,13 +137,85 @@ function EmailShell(props: {
       {paragraphs.map((paragraph, index) => (
         <EmailText key={index}>{paragraph}</EmailText>
       ))}
-      {showHighlight ? <EmailHighlight>{resolvedHighlight}</EmailHighlight> : null}
+      {props.detail ??
+        (showHighlight ? <EmailHighlight>{resolvedHighlight}</EmailHighlight> : null)}
       {showQuote ? <EmailQuote>{trimmedQuote}</EmailQuote> : null}
       <EmailButton href={ctaHref}>{copy.cta}</EmailButton>
       <EmailText muted>{lc.buttonFallback}</EmailText>
       <EmailRawLink href={ctaHref} />
       {outro ? <EmailText muted>{outro}</EmailText> : null}
     </EmailLayout>
+  );
+}
+
+const passportStyles = {
+  card: {
+    backgroundColor: '#F7F7F7',
+    border: '1px solid #DEDEDE',
+    borderTop: '4px solid #D92932',
+    borderRadius: '10px',
+    margin: '4px 0 18px 0',
+    padding: '18px 18px 4px 18px',
+  } satisfies CSSProperties,
+  title: {
+    color: '#D92932',
+    fontSize: '12px',
+    fontWeight: 700,
+    letterSpacing: '1px',
+    lineHeight: '18px',
+    margin: '0 0 12px 0',
+    textTransform: 'uppercase',
+  } satisfies CSSProperties,
+  row: {
+    borderTop: '1px solid #DEDEDE',
+    padding: '12px 0',
+  } satisfies CSSProperties,
+  label: {
+    color: '#616161',
+    fontSize: '11px',
+    fontWeight: 600,
+    letterSpacing: '0.7px',
+    lineHeight: '16px',
+    margin: '0 0 2px 0',
+    textTransform: 'uppercase',
+  } satisfies CSSProperties,
+  value: {
+    color: '#151515',
+    fontSize: '16px',
+    fontWeight: 700,
+    lineHeight: '22px',
+    margin: 0,
+  } satisfies CSSProperties,
+} as const;
+
+function PassportRow({
+  label,
+  value,
+  field,
+}: {
+  label: string;
+  value: string;
+  field: 'job-title' | 'company-name' | 'salary';
+}): ReactElement {
+  return (
+    <Section style={passportStyles.row} data-passport-field={field}>
+      <Text style={passportStyles.label}>{label}</Text>
+      <Text style={passportStyles.value}>{value}</Text>
+    </Section>
+  );
+}
+
+function JobOfferPassport(props: EmailProps<'jobOffer'>): ReactElement {
+  const labels = jobOfferPassportCopy[props.locale];
+  const salary = props.salary?.trim();
+
+  return (
+    <Section style={passportStyles.card} data-email-component="job-offer-passport">
+      <Text style={passportStyles.title}>{labels.title}</Text>
+      <PassportRow label={labels.jobTitle} value={props.jobTitle} field="job-title" />
+      <PassportRow label={labels.companyName} value={props.companyName} field="company-name" />
+      {salary ? <PassportRow label={labels.salary} value={salary} field="salary" /> : null}
+    </Section>
   );
 }
 
@@ -235,7 +310,6 @@ export function NewMessageEmail(props: EmailProps<'newMessage'>): ReactElement {
 }
 
 export function JobOfferEmail(props: EmailProps<'jobOffer'>): ReactElement {
-  const highlight = props.salary ? `${props.jobTitle} · ${props.salary}` : undefined;
   return (
     <EmailShell
       locale={props.locale}
@@ -243,7 +317,7 @@ export function JobOfferEmail(props: EmailProps<'jobOffer'>): ReactElement {
       vars={props}
       ctaHref={props.offerUrl}
       greetingName={props.firstName}
-      highlight={highlight}
+      detail={<JobOfferPassport {...props} />}
     />
   );
 }
