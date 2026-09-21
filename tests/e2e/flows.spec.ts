@@ -28,6 +28,18 @@ for (const locale of ['pl', 'nl', 'fr', 'en']) {
   });
 }
 
+test('zmiana języka zachowuje aktywne filtry ofert', async ({ page }) => {
+  const query =
+    'keyword=spawacz&city=Bruksela&category=construction&contractType=permanent&salaryMin=20&salaryMax=35&accommodation=provided&immediate=1&noLang=1&date=7d&sort=salary&page=2';
+  await page.goto(`/pl/oferty-pracy?${query}#wyniki`);
+  await page.getByRole('button', { name: 'Tylko niezbędne' }).click();
+
+  await page.getByRole('combobox', { name: 'Język' }).last().click();
+  await page.getByRole('option', { name: 'Nederlands' }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/nl/oferty-pracy\\?${query}#wyniki$`));
+});
+
 test('szczegóły oferty otwierają się z listy i mają CTA aplikowania', async ({ page }) => {
   await page.goto('/pl/oferty-pracy');
   const firstJob = page.locator('a[href*="/oferty-pracy/"]').first();
