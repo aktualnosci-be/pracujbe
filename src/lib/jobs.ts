@@ -1,17 +1,12 @@
 /**
  * Warstwa dostępu do danych ofert pracy — Pracuj.be.
  *
- * Strategia (zgodna z Invariant #3): jeśli `isSupabaseConfigured()` — dane czytane są
- * z bazy (Supabase). W bloku `catch` (błąd zapytania / niepełny schemat) LUB gdy Supabase
- * NIE jest skonfigurowane — używamy danych demonstracyjnych z `@/lib/data/demo`
- * (z filtrowaniem i paginacją). Dzięki temu strona główna i lista ofert renderują się
- * BEZ zmiennych środowiskowych.
- *
- * Klient Supabase importowany jest LENIWIE (dynamic import) tylko na ścieżce bazodanowej —
- * moduł nie ciągnie `next/headers` do bundla trybu demo.
+ * Publiczne RPC PostgreSQL działają pod ograniczoną rolą anon. Adapter importowany
+ * jest leniwie. Demo działa wyłącznie poza APP_MODE=production i bez konfiguracji DB;
+ * awaria skonfigurowanej bazy nigdy nie pokazuje fikcyjnych ofert.
  */
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { isDatabaseConfigured, isProductionMode } from '@/lib/env';
 import { AppError } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
@@ -228,7 +223,7 @@ function getJobsFromDemo(
 }
 
 /* ---------------------------------------------------------------------------
- * Ścieżka BAZODANOWA (Supabase) — najlepszy wysiłek, z fallbackiem do demo
+ * Ścieżka PostgreSQL — błąd propagowany, bez fallbacku do fikcyjnych ofert
  * ------------------------------------------------------------------------- */
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -333,61 +328,18 @@ async function getJobsFromDb(
   page: number,
   pageSize: number,
 ): Promise<GetJobsResult> {
-  const { createServerClient } = await import('@/lib/supabase/server');
-  const supabase = await createServerClient();
-
-  // Publiczne dane WYŁĄCZNIE przez RPC get_public_jobs (0014/0046): join firmy+tłumaczeń,
-  // fallback locale, tylko bezpieczne kolumny. KOMPLET filtrów/sort/paginacja/licznik w SQL
-  // (P1-12: koniec liczenia w pamięci nad wycinkiem 200). Kategorie/typy: pojedyncze (landing)
-  // scalone z tablicami (sidebar).
-  const categories = params.categories ?? (params.category ? [params.category] : null);
-  const contractTypes = params.contractTypes ?? (params.contractType ? [params.contractType] : null);
-  const filterArgs = {
-    p_locale: params.locale,
-    p_keyword: params.keyword ?? null,
-    p_city: params.city ?? null,
-    p_categories: categories && categories.length > 0 ? categories : null,
-    p_locations: params.locations && params.locations.length > 0 ? params.locations : null,
-    p_contract_types: contractTypes && contractTypes.length > 0 ? contractTypes : null,
-    p_salary_min: params.salaryMin ?? null,
-    p_salary_max: params.salaryMax ?? null,
-    p_accommodation: params.accommodation ?? null,
-    p_immediate: params.immediate ?? null,
-    p_no_language: params.noLanguageRequired ?? null,
-    p_since: params.since ?? null,
-  };
-
-  const [{ data, error }, { data: countData, error: countError }] = await Promise.all([
-    supabase.rpc('get_public_jobs', {
-      ...filterArgs,
-      p_sort: params.sort ?? 'newest',
-      p_limit: pageSize,
-      p_offset: (page - 1) * pageSize,
-    }),
-    supabase.rpc('get_public_jobs_count', filterArgs),
+  const [{ getDomainPool }, { getPublicJobs }] = await Promise.all([
+    import('@/lib/db/runtime'), import('@/lib/db/public-jobs'),
   ]);
-
-  if (error) throw error;
-  if (countError) throw countError;
-
-  const rows: unknown[] = Array.isArray(data) ? data : [];
-  const jobs = rows.map(rowToJobListItem);
-  const total = typeof countData === 'number' ? countData : jobs.length;
-  return { jobs, total, page, pageSize };
+  const result = await getPublicJobs(await getDomainPool(), { ...params, page, pageSize });
+  return { jobs: result.rows.map(rowToJobListItem), total: result.total, page: result.page, pageSize: result.pageSize };
 }
 
 async function getJobBySlugFromDb(slug: string, locale: string): Promise<JobDetail | null> {
-  const { createServerClient } = await import('@/lib/supabase/server');
-  const supabase = await createServerClient();
-
-  const { data, error } = await supabase.rpc('get_public_job', {
-    p_slug: slug,
-    p_locale: locale,
-  });
-
-  if (error) throw error;
-  const rows: unknown[] = Array.isArray(data) ? data : [];
-  const first = rows[0];
+  const [{ getDomainPool }, { getPublicJob }] = await Promise.all([
+    import('@/lib/db/runtime'), import('@/lib/db/public-jobs'),
+  ]);
+  const first = await getPublicJob(await getDomainPool(), slug, locale);
   return first ? rowToJobDetail(first) : null;
 }
 
@@ -400,7 +352,7 @@ export async function getJobs(params: GetJobsParams): Promise<GetJobsResult> {
   const page = Math.max(1, Math.trunc(params.page ?? 1));
   const pageSize = Math.max(1, Math.trunc(params.pageSize ?? DEFAULT_PAGE_SIZE));
 
-  if (isSupabaseConfigured()) {
+  if (isDatabaseConfigured()) {
     try {
       return await getJobsFromDb(params, page, pageSize);
     } catch (error) {
@@ -411,13 +363,14 @@ export async function getJobs(params: GetJobsParams): Promise<GetJobsResult> {
     }
   }
 
+  if (isProductionMode()) throw new AppError('INTERNAL');
   return getJobsFromDemo(locale, params, page, pageSize);
 }
 
 export async function getJobBySlug(slug: string, locale: string): Promise<JobDetail | null> {
   const resolvedLocale = toLocale(locale);
 
-  if (isSupabaseConfigured()) {
+  if (isDatabaseConfigured()) {
     try {
       return await getJobBySlugFromDb(slug, resolvedLocale);
     } catch (error) {
@@ -426,6 +379,7 @@ export async function getJobBySlug(slug: string, locale: string): Promise<JobDet
     }
   }
 
+  if (isProductionMode()) throw new AppError('INTERNAL');
   return resolveDemoJobBySlug(slug, resolvedLocale);
 }
 
@@ -438,24 +392,6 @@ export async function getLatestJobs(
   return result.jobs;
 }
 
-/** Wspólne, „puste" argumenty licznika (get_public_jobs_count) — nadpisujemy tylko wybrany filtr. */
-function emptyCountArgs(locale: string): Record<string, unknown> {
-  return {
-    p_locale: locale,
-    p_keyword: null,
-    p_city: null,
-    p_categories: null,
-    p_locations: null,
-    p_contract_types: null,
-    p_salary_min: null,
-    p_salary_max: null,
-    p_accommodation: null,
-    p_immediate: null,
-    p_no_language: null,
-    p_since: null,
-  };
-}
-
 /**
  * P1-09: REALNE liczniki ofert per kategoria (koniec zmyślonych liczb na stronie głównej).
  * Zwraca `null` w trybie demo (brak env) — komponent pomija wtedy badge zamiast pokazywać
@@ -466,19 +402,19 @@ export async function getCategoryCounts(
   locale: string,
   keys: readonly string[],
 ): Promise<Record<string, number> | null> {
-  if (!isSupabaseConfigured()) return null;
+  if (!isDatabaseConfigured()) return null;
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
+    const [{ getDomainPool }, { getPublicJobsCount }] = await Promise.all([
+      import('@/lib/db/runtime'), import('@/lib/db/public-jobs'),
+    ]);
+    const pool = await getDomainPool();
     const resolved = toLocale(locale);
     const entries = await Promise.all(
       keys.map(async (key) => {
-        const { data, error } = await supabase.rpc('get_public_jobs_count', {
-          ...emptyCountArgs(resolved),
-          p_categories: [key],
-        });
-        if (error) throw error;
-        return [key, typeof data === 'number' ? data : 0] as const;
+        const total = CATEGORY_KEYS.includes(key as CategoryKey)
+          ? await getPublicJobsCount(pool, { locale: resolved, categories: [key as CategoryKey] })
+          : 0;
+        return [key, total] as const;
       }),
     );
     return Object.fromEntries(entries);
@@ -497,19 +433,17 @@ export async function getCityCounts(
   locale: string,
   cities: readonly string[],
 ): Promise<Record<string, number> | null> {
-  if (!isSupabaseConfigured()) return null;
+  if (!isDatabaseConfigured()) return null;
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
+    const [{ getDomainPool }, { getPublicJobsCount }] = await Promise.all([
+      import('@/lib/db/runtime'), import('@/lib/db/public-jobs'),
+    ]);
+    const pool = await getDomainPool();
     const resolved = toLocale(locale);
     const entries = await Promise.all(
       cities.map(async (city) => {
-        const { data, error } = await supabase.rpc('get_public_jobs_count', {
-          ...emptyCountArgs(resolved),
-          p_city: city,
-        });
-        if (error) throw error;
-        return [city, typeof data === 'number' ? data : 0] as const;
+        const total = await getPublicJobsCount(pool, { locale: resolved, city });
+        return [city, total] as const;
       }),
     );
     return Object.fromEntries(entries);

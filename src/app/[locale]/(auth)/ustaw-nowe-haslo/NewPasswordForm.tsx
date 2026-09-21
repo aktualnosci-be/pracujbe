@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';

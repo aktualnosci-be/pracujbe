@@ -3,6 +3,8 @@ name: CI
 # CI Pracuj.be — uruchamiane WYŁĄCZNIE na self-hosted runnerach.
 # Etykiety (labels) runnera: self-hosted + linux + x64.
 # Rejestracja i wymagania runnera: docs/SELF_HOSTED_RUNNERS.md
+# Joby są równoległe z założenia. Każda usługa runnera musi mieć osobny `_work`,
+# a hook kończący job nie może asynchronicznie usuwać workspace ani `_work/_temp`.
 #
 # Nie zmieniaj `runs-on` na `ubuntu-latest` bez wyraźnej decyzji — to wymóg projektu.
 
@@ -17,10 +19,12 @@ on:
 permissions:
   contents: read
 
-# Anuluj starsze przebiegi dla tej samej gałęzi/PR (oszczędza czas runnerów).
+# Anuluj tylko starsze testy PR. CI gałęzi wdrożeniowych musi zakończyć się
+# wynikiem: Railway Wait for CI może zignorować anulowany workflow,
+# jeżeli inny workflow tego samego commita zakończył się sukcesem.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Placeholdery pozwalające na build bez prawdziwych sekretów (strony publiczne mają fallback).
@@ -195,6 +199,77 @@ jobs:
         run: >-
           docker exec -e PGHOST=127.0.0.1 -e PGPORT=5432 -e PGUSER=postgres -e PGPASSWORD=postgres
           "$POSTGRES_CONTAINER" bash /tmp/pracujbe-tests/scripts/test-seed.sh
+
+  migrations:
+    name: Migration runner (PostgreSQL 16)
+    needs: install
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64]
+    services:
+      auth:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: pracujbe_auth_schema_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      bootstrap:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: pracujbe_bootstrap_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: pracujbe_migration_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/cache/restore@v4
+        id: node-modules
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Verify migrations on isolated database
+        env:
+          MIGRATION_TEST_DATABASE_URL: postgresql://postgres:isolated-test-only@127.0.0.1:${{ job.services.postgres.ports[5432] }}/pracujbe_migration_test
+        run: node scripts/db/test-migrations.mjs
+      - name: Verify production bootstrap and domain migrations
+        env:
+          BOOTSTRAP_TEST_DATABASE_URL: postgresql://postgres:isolated-test-only@127.0.0.1:${{ job.services.bootstrap.ports[5432] }}/pracujbe_bootstrap_test
+          BOOTSTRAP_TEST_ISOLATED_CLUSTER: 'yes'
+        run: node scripts/db/test-bootstrap.mjs
+      - name: Verify auth schema and credential isolation
+        env:
+          AUTH_SCHEMA_TEST_DATABASE_URL: postgresql://postgres:isolated-test-only@127.0.0.1:${{ job.services.auth.ports[5432] }}/pracujbe_auth_schema_test
+          AUTH_SCHEMA_TEST_ISOLATED_CLUSTER: 'yes'
+        run: node scripts/db/test-auth-schema.mjs
+      - name: Verify runtime PostgreSQL isolation
+        run: node node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts
 
   e2e:
     name: E2E (Playwright)

@@ -10,6 +10,12 @@
 
 ## 0. TL;DR dla modelu kontynuującego pracę
 
+Trwa przygotowanie migracji hostingu do Railway: plan, issues i instrukcje w
+`docs/railway/README.md` oraz `docs/railway/STATUS.md`. Nie przełączono jeszcze
+infrastruktury. Przed wdrożeniem tej gałęzi ustaw jawnie `APP_MODE=production`
+także na dotychczasowym hostingu; `VERCEL_ENV` nie wybiera już trybu aplikacji.
+Zachowaj konfigurację Vercela do zakończenia odbioru Railway i okresu rollbacku.
+
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · Supabase (Postgres/Auth/Storage/RLS) · Zod · React Hook Form · Resend + React Email · Sentry · Vitest + Playwright · Vercel.
 2. **CI/CD działa na self-hosted runnerach** (patrz `.github/workflows/*` i sekcja „CI/CD" niżej). Nie zmieniaj `runs-on` z powrotem na `ubuntu-latest` bez wyraźnej prośby.
 3. **Niezmienne reguły (NIGDY nie łam):** patrz sekcja „Invariants". Najważniejsze: język e-maili = język odbiorcy; wysyłka propozycji idempotentna; brak service-role key w przeglądarce; brak trackingu przed zgodą; RLS na wszystkim; żadnych tekstów UI na sztywno.

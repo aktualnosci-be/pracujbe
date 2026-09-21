@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { localeSchema } from '@/lib/validation/auth';
 import { availabilitySchema } from '@/lib/validation/candidate';
 
