@@ -5,6 +5,7 @@ import { createAuthMiddleware } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
 import type { Pool } from 'pg';
 import { authorizeSignupRequest, signupMetadataForUser } from './signup-context';
+import { authEmailOutboxPlugin, createAuthEmailSenders } from './email-outbox';
 
 type VerificationSender = NonNullable<NonNullable<BetterAuthOptions['emailVerification']>['sendVerificationEmail']>;
 type ResetSender = NonNullable<NonNullable<BetterAuthOptions['emailAndPassword']>['sendResetPassword']>;
@@ -15,10 +16,11 @@ export interface AuthServerDependencies {
   /** Kanoniczny origin HTTPS. Nie pochodzi z Host ani nagłówków proxy. */
   baseURL: string;
   secret: string;
-  /** Callback utrwala wysyłkę; sam wybiera język odbiorcy z profilu. */
-  sendVerificationEmail: VerificationSender;
-  sendResetPassword: ResetSender;
+  /** Domyślnie trwała kolejka 0061; nadpisanie służy kontrolowanym adapterom/testom. */
+  sendVerificationEmail?: VerificationSender;
+  sendResetPassword?: ResetSender;
 }
+
 
 /**
  * Adapter schematu 0057. Bez globalnej instancji, odczytu env i publicznej trasy.
@@ -41,11 +43,19 @@ export function createAuthServer(dependencies: AuthServerDependencies) {
     throw new Error('Auth wymaga osobnego sekretu o długości co najmniej 32 znaków.');
   }
 
-  return betterAuth({
+  const senders = createAuthEmailSenders(dependencies.secret);
+  const auth = betterAuth({
     database: dependencies.pool,
     baseURL: origin.origin,
     secret: dependencies.secret,
     trustedOrigins: [origin.origin],
+    logger: {
+      // SDK bywa wywoływane z surowym pg.Error; ani message, ani args nie są bezpieczne.
+      log: level => {
+        if (level === 'error') console.error('AUTH_SDK_ERROR');
+        else if (level === 'warn') console.warn('AUTH_SDK_WARNING');
+      },
+    },
     advanced: {
       database: { generateId: 'uuid' },
       useSecureCookies: true,
@@ -110,12 +120,12 @@ export function createAuthServer(dependencies: AuthServerDependencies) {
       minPasswordLength: 8,
       maxPasswordLength: 72,
       revokeSessionsOnPasswordReset: true,
-      sendResetPassword: dependencies.sendResetPassword,
+      sendResetPassword: dependencies.sendResetPassword ?? senders.sendResetPassword,
     },
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
-      sendVerificationEmail: dependencies.sendVerificationEmail,
+      sendVerificationEmail: dependencies.sendVerificationEmail ?? senders.sendVerificationEmail,
     },
     hooks: {
       before: createAuthMiddleware(async context => {
@@ -130,6 +140,8 @@ export function createAuthServer(dependencies: AuthServerDependencies) {
       },
     },
     // auth.api nie stosuje limitera HTTP SDK. Akcje nadal wymagają checkRateLimit.
-    plugins: [nextCookies()],
+    plugins: [authEmailOutboxPlugin, nextCookies()],
   });
+
+  return auth;
 }

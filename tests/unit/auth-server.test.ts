@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { Pool } from 'pg';
+import type { BetterAuthOptions } from 'better-auth';
 import { describe, expect, it, vi } from 'vitest';
 import { createAuthServer } from '@/lib/auth/server';
 import {
@@ -31,6 +32,24 @@ describe('Fabryka auth odrzuca konfigurację przed otwarciem połączenia', () =
       expect(() => createAuthServer({ pool, baseURL, secret: 'short', sendVerificationEmail: async () => {}, sendResetPassword: async () => {} })).toThrow('co najmniej 32 znaków');
       expect(connect).not.toHaveBeenCalled();
     } finally {
+      await pool.end();
+    }
+  });
+
+  it('logger SDK nie wypisuje surowych komunikatów, parametrów SQL ani poświadczeń', async () => {
+    const pool = new Pool();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const auth = createAuthServer({ pool, baseURL, secret });
+      const logger: NonNullable<BetterAuthOptions['logger']> = auth.options.logger!;
+      logger.log?.('error', 'sensitive-token@example.invalid', { token: 'private-reset-token', sql: 'secret query' });
+      logger.log?.('warn', 'private-reset-token');
+      expect(error.mock.calls).toEqual([['AUTH_SDK_ERROR']]);
+      expect(warning.mock.calls).toEqual([['AUTH_SDK_WARNING']]);
+    } finally {
+      error.mockRestore();
+      warning.mockRestore();
       await pool.end();
     }
   });
