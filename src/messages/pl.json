@@ -265,7 +265,12 @@
     "subtitle": "Znajdź pracę dopasowaną do Ciebie. Przeglądaj tysiące aktualnych ofert.",
     "searchJobs": "Szukaj pracy",
     "keywordPlaceholder": "np. mechanik, magazynier, opiekunka",
-    "locationPlaceholder": "np. Antwerpia, Bruksela, Gandawa"
+    "locationPlaceholder": "np. Antwerpia, Bruksela, Gandawa",
+    "saveLogin": "Zaloguj się, aby zapisać ofertę",
+    "saveUnavailable": "Zapisywanie wymaga konta kandydata i połączenia z serwisem",
+    "saveLoading": "Wczytywanie zapisanych ofert",
+    "saveRetry": "Nie udało się wczytać zapisanych ofert. Spróbuj ponownie",
+    "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie."
   },
   "job": {
     "apply": "Aplikuj na to stanowisko",

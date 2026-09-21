@@ -11,6 +11,9 @@ for (const locale of ["pl", "nl", "fr", "en"]) {
       .first();
     await expect(card).toBeVisible();
     await expect(card.locator("dl")).toBeVisible();
+    // Tryb demonstracyjny nie potwierdza zapisu na prawdziwym koncie.
+    await expect(card.getByRole("button")).toBeDisabled();
+    await expect(card.getByRole("button")).not.toHaveAttribute("aria-pressed", "true");
     expect(await card.locator("dt").count()).toBeGreaterThanOrEqual(2);
     const fits = await card.evaluate((element) => {
       const bounds = element.getBoundingClientRect();

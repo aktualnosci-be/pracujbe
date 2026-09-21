@@ -31,7 +31,7 @@ describe("Zapis oferty przy błędzie transportu", () => {
         expect(screen.getByRole("status")).toHaveTextContent("generic"),
       );
       expect(button).toHaveAttribute("aria-pressed", String(initialSaved));
-      expect(button).toBeEnabled();
+      await waitFor(() => expect(button).toBeEnabled());
       expect(screen.queryByText("network failure")).not.toBeInTheDocument();
       toggleSavedJob.mockResolvedValueOnce({ ok: true, saved: !initialSaved });
       fireEvent.click(button);

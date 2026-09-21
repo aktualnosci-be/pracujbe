@@ -1,3 +1,4 @@
+import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { ArrowRight } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
@@ -83,7 +84,7 @@ export default async function HomePage({ params }: HomePageProps) {
 
   return (
     // Bez własnego <main> — layout (public) już dostarcza landmark <main> (unikamy duplikatu, a11y).
-    <>
+    <PublicSavedJobsProvider key={JSON.stringify(latestJobs.map(job => job.id))} jobIds={latestJobs.map(job => job.id)}>
       {/* Hero — lekki, nie na cały ekran; ilustracja Brukseli po prawej (desktop). */}
       <section className="relative overflow-hidden border-b border-border bg-soft">
         <div className="container py-12 md:py-16">
@@ -155,6 +156,6 @@ export default async function HomePage({ params }: HomePageProps) {
           <ForCompanies />
         </div>
       </section>
-    </>
+    </PublicSavedJobsProvider>
   );
 }

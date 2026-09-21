@@ -1,12 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowUpRight, BadgeCheck, Bookmark, BookmarkCheck } from 'lucide-react';
+import { ArrowUpRight, BadgeCheck } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import { MatchBar } from '@/components/ui/match-bar';
+import { PublicSaveJobButton } from './PublicSavedJobs';
 import type { JobListItem } from '@/lib/jobs';
 
 /** Paszport oferty: lokalizacja, opcjonalna stawka i warunki z rzeczywistych danych. */
@@ -71,7 +72,6 @@ export function JobCard({
   const tJob = useTranslations('job');
   const tCategory = useTranslations('categories');
 
-  const [saved, setSaved] = React.useState(false);
 
   const salaryValue = formatSalary(job, locale);
   const salary = salaryValue === null ? null
@@ -80,7 +80,6 @@ export function JobCard({
     : salaryValue;
   const highlights = job.highlights.slice(0, 2);
   const relative = formatRelative(job.publishedAt, locale);
-  const SaveIcon = saved ? BookmarkCheck : Bookmark;
   const withMatch = showMatch === true && typeof matchScore === 'number';
   const showRegion = job.region.length > 0 && job.region !== job.city;
 
@@ -96,19 +95,7 @@ export function JobCard({
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
           {tCategory(job.category)}
         </p>
-        <button
-          type="button"
-          onClick={() => setSaved((value) => !value)}
-          aria-pressed={saved}
-          aria-label={saved ? t('saved') : t('save')}
-          title={saved ? t('saved') : t('save')}
-          className={cn(
-            'relative z-10 inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-background transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-            saved ? 'text-accent' : 'text-muted-foreground',
-          )}
-        >
-          <SaveIcon className="h-5 w-5" aria-hidden="true" />
-        </button>
+        <PublicSaveJobButton jobId={job.id} iconOnly />
       </header>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">

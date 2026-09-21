@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +9,9 @@ import pl from '@/messages/pl.json';
 import en from '@/messages/en.json';
 import nl from '@/messages/nl.json';
 import fr from '@/messages/fr.json';
+
+vi.mock('@/lib/actions/public-saved-jobs', () => ({ getPublicSavedJobs: vi.fn() }));
+vi.mock('@/lib/actions/candidate', () => ({ toggleSavedJob: vi.fn() }));
 
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
@@ -82,9 +85,9 @@ describe('Paszport oferty', () => {
     renderCard({ region: job.city, companyVerified: false });
     expect(screen.getAllByText('Antwerp')).toHaveLength(1);
     expect(screen.queryByText(en.job.verified)).not.toBeInTheDocument();
-    const button = screen.getByRole('button', { name: en.jobs.save });
+    const button = screen.getByRole('button', { name: en.jobs.saveUnavailable });
     expect(button.closest('a')).toBeNull();
-    fireEvent.click(button);
-    expect(screen.getByRole('button', { name: en.jobs.saved })).toHaveAttribute('aria-pressed', 'true');
+    expect(button).toBeDisabled();
+    expect(button).not.toHaveAttribute('aria-pressed');
   });
 });

@@ -1,4 +1,4 @@
-﻿# Zatwierdzony styl „Ludzie i praca / Paszport pracy”
+# Zatwierdzony styl „Ludzie i praca / Paszport pracy”
 
 Decyzja właściciela z rozmowy projektowej 21 września 2026: biel, czerwień #D92932, czerń #151515; logo z białym .be na czerwonym kafelku; karty paszportowe z opcjonalnym polem wynagrodzenia. Ten kierunek zastępuje historyczne granatowe makiety w zakresie wyglądu. Funkcje, bezpieczeństwo i i18n aplikacji pozostają obowiązujące.
 
@@ -28,4 +28,6 @@ Paczka dostarczona. Wdrożenie aplikacji etapowe; prototyp nie jest dowodem uko�
 
 Pierwsza zmiana aplikacji: tokeny kolorów, logo, jasna stopka i sidebar, wysokość głównego przycisku oraz kolor manifestu. Typografia pozostaje lokalnym Inter do osobnego sprawdzenia fontu DM Sans. Ikony PWA/OG i pełny przegląd widoków pozostają w etapie #7.
 
-Etap #3 rozpoczęty: karty ofert w układzie paszportu, opcjonalne wynagrodzenie i etykiety w czterech językach. Ograniczenia nadal otwarte: okres stawki nie jest przekazywany przez model listy; prawdziwy zapis ofert na publicznych kartach wymaga #9. Szczegóły ofert pozostają do przebudowy.
+Etap #3 rozpoczęty: karty ofert w układzie paszportu, opcjonalne wynagrodzenie i etykiety w czterech językach. Ograniczenia nadal otwarte: okres stawki nie jest przekazywany przez model listy; zapis ofert jest podłączany w #9 i wymaga końcowej weryfikacji na sesji kandydata. Szczegóły ofert pozostają do przebudowy.
+
+Zapis publiczny: wspólny odczyt pod sesją/RLS dla kolekcji, przyciski detalu synchronizowane w jednym stanie, anonimowy użytkownik kierowany do logowania, tryb demonstracyjny nie udaje trwałego zapisu. Testy przeglądarkowe demo nie dowodzą trwałości na prawdziwej bazie.
