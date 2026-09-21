@@ -17,10 +17,12 @@ on:
 permissions:
   contents: read
 
-# Anuluj starsze przebiegi dla tej samej gałęzi/PR (oszczędza czas runnerów).
+# Anuluj tylko starsze testy PR. CI gałęzi wdrożeniowych musi zakończyć się
+# wynikiem: Railway Wait for CI może zignorować anulowany workflow,
+# jeżeli inny workflow tego samego commita zakończył się sukcesem.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Placeholdery pozwalające na build bez prawdziwych sekretów (strony publiczne mają fallback).

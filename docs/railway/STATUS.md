@@ -19,3 +19,5 @@ Przygotowano jawny APP_MODE, gotowość stagingu niezależną od indeksowania, l
 Kontrola lokalna: lint, typecheck i 101 testów jednostkowych zaliczone. Testy regresyjne trybu i gotowości uruchomione przed poprawką wykazały 4 błędy, po poprawce wszystkie przechodzą. Nie potwierdzono jeszcze rzeczywistego uploadu CV z zalogowanym kontem ani integracji i prywatnej sieci Railway — odbiór w issues #14 i #16.
 
 Build produkcyjny i Playwright: 20 zaliczonych, 1 pominięty. Testy przeglądarkowe używają danych demo, nie stanowią odbioru infrastruktury Railway.
+
+Bramka CI (#15): automatyczne anulowanie ograniczono do PR. Push i uruchomienia ręczne mają osobne grupy run_id, aby nie usuwać również oczekujących przebiegów. Weryfikacja zachowania w rzeczywistych kolejnych pushach pozostaje częścią odbioru integracji Railway.
