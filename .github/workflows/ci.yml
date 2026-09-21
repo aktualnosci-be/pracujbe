@@ -158,40 +158,43 @@ jobs:
     # na CZYSTYM PostgreSQL 16 (shim Supabase + wszystkie migracje + adwersaryjne asercje).
     # Domyka lukę audytu „migracje/RLS niezweryfikowane w CI". Nie wymaga node_modules.
     #
-    # Wymagania runnera: Docker (usługi kontenerowe) + klient `psql` (postgresql-client).
-    # Patrz docs/SELF_HOSTED_RUNNERS.md.
+    # Klient psql i testy działają w izolowanym kontenerze usługi.
+    # Nie wymagamy instalacji klienta na hoście ani wspólnego portu 5432.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
-    # ADVISORY na start: job URUCHAMIA się i raportuje, ale NIE blokuje CI/deploy, dopóki
-    # runner nie zostanie doprovisionowany w Docker + klienta psql (patrz docs). Gdy runner
-    # jest gotowy — USUŃ `continue-on-error`, by uczynić z tego twardą bramkę (audyt: RLS w CI).
-    continue-on-error: true
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
-    env:
-      PGHOST: localhost
-      PGPORT: '5432'
-      PGUSER: postgres
-      PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
-      - name: Verify psql client
-        run: psql --version
+      - name: Prepare isolated database tests
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$POSTGRES_CONTAINER" mkdir -p /tmp/pracujbe-tests
+          docker cp scripts "$POSTGRES_CONTAINER:/tmp/pracujbe-tests/scripts"
+          docker cp supabase "$POSTGRES_CONTAINER:/tmp/pracujbe-tests/supabase"
+          docker exec "$POSTGRES_CONTAINER" psql --version
       - name: RLS/triggers adversarial tests
-        run: bash scripts/test-rls.sh
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: >-
+          docker exec -e PGHOST=127.0.0.1 -e PGPORT=5432 -e PGUSER=postgres -e PGPASSWORD=postgres
+          "$POSTGRES_CONTAINER" bash /tmp/pracujbe-tests/scripts/test-rls.sh
       - name: Seed data load test (10 firm / 50 ofert / 40 kandydatów)
-        run: bash scripts/test-seed.sh
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: >-
+          docker exec -e PGHOST=127.0.0.1 -e PGPORT=5432 -e PGUSER=postgres -e PGPASSWORD=postgres
+          "$POSTGRES_CONTAINER" bash /tmp/pracujbe-tests/scripts/test-seed.sh
 
   e2e:
     name: E2E (Playwright)
