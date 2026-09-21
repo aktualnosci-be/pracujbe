@@ -1,13 +1,15 @@
 # Migracja Railway — kolejność pracy
 
+Aktualizacja właściciela: jedna produkcja z main, bez stagingu. [Decyzje](DECYZJE.md) zastępują ten fragment pierwotnego planu.
+
 Baza: b35087b, gałąź infra/railway oparta na pracach PR #8. Zmiany migracyjne są osobne; PR migracyjny zależy od tej bazy. Nie skonfigurowano jeszcze usług Railway ani DNS.
 
 - [P0: Railway — plan migracji i pomiar bazowy](https://github.com/aktualnosci-be/pracujbe/issues/11)
 - [P0: Railway — jawny APP_MODE i upload CV 5 MB](https://github.com/aktualnosci-be/pracujbe/issues/12)
 - [P0: Railway — cron caller i oddzielne sekrety](https://github.com/aktualnosci-be/pracujbe/issues/13)
-- [P0: Railway — staging web i konfiguracja usług](https://github.com/aktualnosci-be/pracujbe/issues/14)
-- [P1: Railway — CI, gałęzie i ochrona staging](https://github.com/aktualnosci-be/pracujbe/issues/15)
-- [P1: Railway — odbiór staging i integracji](https://github.com/aktualnosci-be/pracujbe/issues/16)
+- [P0: Railway — production web i konfiguracja usług](https://github.com/aktualnosci-be/pracujbe/issues/14)
+- [P1: Railway — CI i wdrażanie produkcji z main](https://github.com/aktualnosci-be/pracujbe/issues/15)
+- [P1: Railway — odbiór produkcji i integracji](https://github.com/aktualnosci-be/pracujbe/issues/16)
 - [P2: Railway — dzienna retencja i GC](https://github.com/aktualnosci-be/pracujbe/issues/17)
 - [P1: Railway — domeny, cutover, rollback i obserwacja](https://github.com/aktualnosci-be/pracujbe/issues/18)
 - [P2: Railway — IaC i cleanup po okresie stabilności](https://github.com/aktualnosci-be/pracujbe/issues/19)
