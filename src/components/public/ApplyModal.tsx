@@ -197,7 +197,12 @@ export function ApplyModal({
             {triggerLabel}
           </span>
           {triggerHint ? (
-            <span className="text-xs font-normal opacity-90">{triggerHint}</span>
+            <span
+              className={cn(
+                "text-sm font-normal",
+                triggerVariant === "outline" ? "text-muted-foreground" : "text-primary-foreground",
+              )}
+            >{triggerHint}</span>
           ) : null}
         </Dialog.Trigger>
 

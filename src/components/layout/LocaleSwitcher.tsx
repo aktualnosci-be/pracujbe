@@ -29,7 +29,9 @@ export function LocaleSwitcher() {
     const target = routing.locales.find((loc) => loc === next);
     if (!target || target === locale) return;
     startTransition(() => {
-      router.replace(pathname, { locale: target });
+      router.replace(`${pathname}${window.location.search}${window.location.hash}`, {
+        locale: target,
+      });
     });
   }
 
