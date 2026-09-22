@@ -39,33 +39,46 @@ export function ProposalActions({
 
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState(false);
+  const requestPendingRef = React.useRef(false);
 
   if (!RESPONDABLE.has(status)) return null;
 
   const respond = (accept: boolean) => {
-    if (pending) return;
+    if (pending || requestPendingRef.current) return;
+    requestPendingRef.current = true;
     setError(false);
     startTransition(async () => {
-      const res = await respondToOffer(offerId, accept);
-      if (res.ok) {
-        router.refresh();
-        return;
+      try {
+        const res = await respondToOffer(offerId, accept);
+        if (res.ok) {
+          router.refresh();
+          return;
+        }
+        setError(true);
+      } catch {
+        setError(true);
+      } finally {
+        requestPendingRef.current = false;
       }
-      setError(true);
     });
   };
 
   return (
     <div className={className}>
-      <div className="flex items-center gap-2">
-        <Button type="button" size="sm" onClick={() => respond(true)} disabled={pending}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Button
+          type="button"
+          className="w-full sm:w-auto"
+          onClick={() => respond(true)}
+          disabled={pending}
+        >
           <Check className="h-4 w-4" aria-hidden="true" />
           {td('acceptProposal')}
         </Button>
         <Button
           type="button"
-          size="sm"
           variant="outline"
+          className="w-full sm:w-auto"
           onClick={() => respond(false)}
           disabled={pending}
         >
