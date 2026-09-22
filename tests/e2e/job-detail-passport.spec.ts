@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 const locales = ["pl", "nl", "fr", "en"] as const;
 type Locale = (typeof locales)[number];
@@ -19,9 +19,6 @@ type Messages = {
     title: string;
     close: string;
   };
-  cookies: {
-    acceptAll: string;
-  };
 };
 
 const DEMO_JOB_SLUG = "warehouse-worker-antwerp-1001";
@@ -34,6 +31,33 @@ function messages(locale: Locale): Messages {
     ),
   ) as Messages;
 }
+
+async function setNecessaryConsent(context: BrowserContext): Promise<void> {
+  await context.addCookies([
+    {
+      name: "pracujbe_consent",
+      value: JSON.stringify({
+        v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? "1.0",
+        categories: {
+          necessary: true,
+          preferences: false,
+          analytics: false,
+          marketing: false,
+        },
+        ts: "2026-01-01T00:00:00.000Z",
+        id: "job-detail-passport-e2e",
+      }),
+      url: "http://localhost:3000",
+      sameSite: "Lax",
+    },
+  ]);
+}
+
+test.beforeEach(async ({ context }) => {
+  // Ten plik sprawdza paszport oferty, więc każdy test zaczyna od jawnego,
+  // ważnego stanu zgody. Zachowanie banera bez zgody pilnuje smoke.spec.ts.
+  await setNecessaryConsent(context);
+});
 
 async function stableDemoJobDetail(page: Page, locale: Locale): Promise<void> {
   await page.goto(`/${locale}/oferty-pracy/${DEMO_JOB_SLUG}`);
@@ -74,10 +98,6 @@ for (const locale of locales) {
     await stableDemoJobDetail(page, locale);
 
     const t = messages(locale);
-    const acceptCookies = page.getByRole("button", {
-      name: t.cookies.acceptAll,
-    });
-    if (await acceptCookies.isVisible()) await acceptCookies.click();
     const passport = page.getByTestId("job-detail-passport");
     await expect(passport).toBeVisible();
     await expect(passport.getByRole("heading", { level: 1 })).toBeVisible();
