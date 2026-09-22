@@ -173,3 +173,19 @@ Można zakończyć osobny PR konfiguracją, adapterem i testami integracyjnymi b
 `src/lib/auth/server.ts` udostępnia fabrykę Better Auth 1.7.5 ze wstrzykiwaną pulą `pg`, osobnym sekretem, kanonicznym origin HTTPS i callbackami trwałej wysyłki. Mapuje schemat 0057, generuje UUID, wymaga potwierdzenia e-maila, wyłącza cache cookie i usuwa wszystkie sesje po resecie hasła. Ochrona origin oraz CSRF jest jawnie włączona również w testach (SDK domyślnie pomija origin w środowisku testowym). Rejestracja, zmiana e-maila i usuwanie konta pozostają wyłączone do spięcia reguł domenowych.
 
 Wykonano 6 test?w konfiguracji `tests/unit/auth-server.test.ts` oraz test rzeczywistego SDK w `tests/integration/auth-server.test.ts` na osobnym PostgreSQL 16: wszystkie przesz?y. Test korzysta z ograniczonego loginu i roli `pracujbe_auth`, sprawdza blokadę signup, odmowę logowania przed weryfikacją, callback maila, weryfikację, UUID i cookie sesji, odrzucenie fałszywego cookie oraz obcego origin, jednorazowy reset, unieważnienie obu wcześniejszych sesji, stare/nowe hasło i wylogowanie. Kontrolowany użytkownik testowy powstaje jawnie w fixture; test nie dowodzi działającej rejestracji portalu. Bez zmiennej `AUTH_RUNTIME_TEST_DATABASE_URL` test integracyjny jest jawnie pomijany. Uruchomienie wymaga pustej lokalnej bazy `pracujbe_auth_runtime_test`, jawnego portu oraz `AUTH_RUNTIME_TEST_ISOLATED_CLUSTER=yes`. Kontener testowy usunięto. TypeScript i lint obu plików przeszły. Nie dodano publicznej trasy, globalnej instancji ani przełączenia istniejących akcji.
+
+### Leniwa kompozycja runtime (22 września 2026)
+
+`src/lib/auth/runtime.ts` składa istniejącą fabrykę Better Auth z ograniczoną
+pulą `pracujbe_auth` dopiero przy pierwszym wywołaniu `getAuthRuntime()`.
+Konfiguracja jest prywatna i jawna: `DATABASE_AUTH_URL`, `BETTER_AUTH_URL`
+oraz `BETTER_AUTH_SECRET`. Sam import modułu ani brak konfiguracji nie otwiera
+połączenia. Równoległe wywołania współdzielą jeden promise procesu; po błędzie
+utworzona pula jest zamykana, odrzucony promise usuwany, a następne wywołanie
+może ponowić inicjalizację. Błąd zewnętrzny jest zastępowany stałym komunikatem,
+aby URL, hasło loginu i sekret nie trafiły do odpowiedzi lub logu wyższego poziomu.
+
+To nadal nie jest przełączenie auth. Nie ma route handlera, importu runtime z
+middleware, Server Actions, guardów, health checku ani konfiguracji Railway.
+Zmienne w `.env.example` dokumentują kontrakt przyszłego wdrożenia; dopóki
+wywołujący nie zostanie dodany w osobnym PR, moduł pozostaje nieaktywny.
