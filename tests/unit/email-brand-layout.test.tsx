@@ -37,6 +37,17 @@ describe('wspólny layout e-maili', () => {
     expect((logoParts?.[1] as HTMLElement).style.color).toBe('rgb(255, 255, 255)');
     expect((logoParts?.[1] as HTMLElement).textContent).toBe('.be');
     expect(brandButton?.style.backgroundColor).toBe('rgb(217, 41, 50)');
+    expect(brandButton?.getAttribute('href')).toBe(
+      'https://pracuj.be/pl/oferty-pracy/test',
+    );
+
+    const readPixels = (value: string | undefined) =>
+      value?.endsWith('px') ? Number.parseFloat(value) : Number.NaN;
+    const lineHeight = readPixels(brandButton?.style.lineHeight);
+    const paddingTop = readPixels(brandButton?.style.paddingTop);
+    const paddingBottom = readPixels(brandButton?.style.paddingBottom);
+    expect(lineHeight + paddingTop + paddingBottom).toBeGreaterThanOrEqual(48);
+
     expect(quote?.style.borderLeftColor).toBe('rgb(217, 41, 50)');
     expect(document.body.style.backgroundColor).toBe('rgb(247, 247, 247)');
   });
