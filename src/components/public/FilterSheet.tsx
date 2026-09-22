@@ -78,7 +78,7 @@ function NoScriptFilterForm({
     sort,
   });
   const controlClass =
-    'min-h-12 w-full rounded-md border border-input bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+    'min-h-12 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
   const optionClass = 'flex min-h-12 items-center gap-3';
   const selectedCategories = initial.categories.join(',');
   const selectedLocations = initial.locations.join(',');

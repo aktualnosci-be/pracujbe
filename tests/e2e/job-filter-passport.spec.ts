@@ -175,6 +175,9 @@ for (const locale of locales) {
     ).toBeChecked();
     await noJsForm.getByRole("checkbox", { name: /.+/ }).last().check();
     await noJsForm.locator('button[type="submit"]').click();
+    await expect(noJs).toHaveURL(/(?:\?|&)noLang=1(?:&|$)/);
+    await noJs.waitForLoadState("domcontentloaded");
+    await expect(noJs.locator("html")).toBeAttached();
     const submittedParams = new URL(noJs.url()).searchParams;
     for (const [key, value] of expectedNoJsParams) {
       expect(submittedParams.get(key), key).toBe(value);
