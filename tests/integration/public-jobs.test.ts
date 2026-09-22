@@ -409,12 +409,12 @@ describe('Publiczne oferty — pełne migracje i rzeczywisty PostgreSQL 16', () 
   it.each(filters)(
     'filtr %s daje ten sam wynik listy i licznika',
     async (_label, filter, slugs) => {
-      const params = { locale: 'pl', ...filter };
-      const result = await getPublicJobs(app!, params);
+    const params = { locale: 'pl', ...filter };
+    const result = await getPublicJobs(app!, params);
       expect(result.rows.map((row) => row.slug)).toEqual(slugs);
-      expect(result.total).toBe(slugs.length);
-      expect(Number.isSafeInteger(result.total)).toBe(true);
-      expect(await getPublicJobsCount(app!, params)).toBe(slugs.length);
+    expect(result.total).toBe(slugs.length);
+    expect(Number.isSafeInteger(result.total)).toBe(true);
+    expect(await getPublicJobsCount(app!, params)).toBe(slugs.length);
     },
   );
 
@@ -549,19 +549,19 @@ describe('Publiczne oferty — pełne migracje i rzeczywisty PostgreSQL 16', () 
     const observed: { role: string; uid: string | null }[] = [];
     const checkedPool: TransactionPool = {
       connect: async () => {
-        const client = await app!.connect();
-        return {
-          query: async (sql, values) => {
-            if (sql.startsWith('SELECT to_jsonb')) {
+      const client = await app!.connect();
+      return {
+        query: async (sql, values) => {
+          if (sql.startsWith('SELECT to_jsonb')) {
               const state = await client.query(
                 "SELECT current_user AS role, nullif(current_setting('app.current_uid',true),'') AS uid",
               );
-              observed.push(state.rows[0]);
-            }
-            return client.query(sql, values);
-          },
-          release: (destroy) => client.release(destroy),
-        };
+            observed.push(state.rows[0]);
+          }
+          return client.query(sql, values);
+        },
+        release: (destroy) => client.release(destroy),
+      };
       },
     };
     await getPublicJobs(checkedPool, { locale: 'pl' });

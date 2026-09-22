@@ -362,203 +362,203 @@ export default async function JobsListPage({
       key={JSON.stringify(pageItems.map((job) => job.id))}
       jobIds={pageItems.map((job) => job.id)}
     >
-      <div className="container py-6 md:py-10">
-        {/* Breadcrumb */}
+    <div className="container py-6 md:py-10">
+      {/* Breadcrumb */}
         <nav
           aria-label={tCommon('breadcrumb')}
           className="mb-4 text-sm text-muted-foreground"
         >
-          <ol className="flex items-center gap-1.5">
-            <li>
+        <ol className="flex items-center gap-1.5">
+          <li>
               <Link
                 href="/"
                 className="transition-colors hover:text-foreground"
               >
-                {tCommon('home')}
-              </Link>
-            </li>
-            <li aria-hidden="true">/</li>
-            <li className="text-foreground">{tNav('jobs')}</li>
-          </ol>
-        </nav>
+              {tCommon('home')}
+            </Link>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li className="text-foreground">{tNav('jobs')}</li>
+        </ol>
+      </nav>
 
-        {/* Prosty nagłówek zatwierdzonego kierunku „Ludzie i praca”. */}
-        <header className="mb-6 max-w-2xl">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            {t('pageTitle')}
-          </h1>
+      {/* Prosty nagłówek zatwierdzonego kierunku „Ludzie i praca”. */}
+      <header className="mb-6 max-w-2xl">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+          {t('pageTitle')}
+        </h1>
           <p className="mt-2 text-base leading-relaxed text-muted-foreground">
             {t('subtitle')}
           </p>
-        </header>
+      </header>
 
-        {/* Wyszukiwarka (GET — działa bez JS, zachowuje aktywne filtry) */}
-        <form
-          action={`/${locale}${BASE_PATH}`}
-          method="get"
-          role="search"
-          className="grid gap-3 rounded-[17px] border border-border bg-background p-2.5 md:grid-cols-[1.5fr_1.2fr_auto] md:items-end"
-        >
-          <div className="space-y-1.5 px-1.5 pt-1.5 md:py-1.5">
+      {/* Wyszukiwarka (GET — działa bez JS, zachowuje aktywne filtry) */}
+      <form
+        action={`/${locale}${BASE_PATH}`}
+        method="get"
+        role="search"
+        className="grid gap-3 rounded-[17px] border border-border bg-background p-2.5 md:grid-cols-[1.5fr_1.2fr_auto] md:items-end"
+      >
+        <div className="space-y-1.5 px-1.5 pt-1.5 md:py-1.5">
             <label
               htmlFor="q-keyword"
               className="text-xs font-semibold text-muted-foreground"
             >
-              {t('keyword')}
-            </label>
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <input
-                id="q-keyword"
-                name="keyword"
-                defaultValue={keyword ?? ''}
-                placeholder={t('keywordPlaceholder')}
-                autoComplete="off"
-                className="flex h-12 w-full rounded-[11px] border border-input bg-background pl-9 pr-3 text-base text-foreground transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-            </div>
+            {t('keyword')}
+          </label>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <input
+              id="q-keyword"
+              name="keyword"
+              defaultValue={keyword ?? ''}
+              placeholder={t('keywordPlaceholder')}
+              autoComplete="off"
+              className="flex h-12 w-full rounded-[11px] border border-input bg-background pl-9 pr-3 text-base text-foreground transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
           </div>
+        </div>
 
-          <div className="space-y-1.5 px-1.5 md:py-1.5">
+        <div className="space-y-1.5 px-1.5 md:py-1.5">
             <label
               htmlFor="q-city"
               className="text-xs font-semibold text-muted-foreground"
             >
-              {t('location')}
-            </label>
-            <div className="relative">
-              <MapPin
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <input
-                id="q-city"
-                name="city"
-                defaultValue={city ?? ''}
-                placeholder={t('locationPlaceholder')}
-                autoComplete="off"
-                className="flex h-12 w-full rounded-[11px] border border-input bg-background pl-9 pr-3 text-base text-foreground transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-            </div>
+            {t('location')}
+          </label>
+          <div className="relative">
+            <MapPin
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <input
+              id="q-city"
+              name="city"
+              defaultValue={city ?? ''}
+              placeholder={t('locationPlaceholder')}
+              autoComplete="off"
+              className="flex h-12 w-full rounded-[11px] border border-input bg-background pl-9 pr-3 text-base text-foreground transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+        </div>
+
+        {Object.entries(hiddenSearchParams).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+
+        <button
+          type="submit"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[11px] bg-primary px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:min-h-[58px]"
+        >
+          <Search className="h-4 w-4" aria-hidden="true" />
+          {t('searchJobs')}
+        </button>
+      </form>
+
+      {/* Układ wyników */}
+      <div className="mt-6 lg:grid lg:grid-cols-[288px_1fr] lg:gap-8">
+        {/* Sidebar (desktop) */}
+        <aside className="hidden lg:block">
+          <div className="sticky top-24">
+            <FilterSidebar
+                facets={facets}
+              initial={sf}
+              keyword={keyword}
+              city={city}
+              sort={sort}
+            />
+          </div>
+        </aside>
+
+        {/* Kolumna wyników */}
+        <div className="min-w-0">
+          {/* Pasek narzędzi (mobile) */}
+          <div className="mb-4 flex flex-col items-stretch gap-3 lg:hidden [&>details]:w-full [&>details>summary]:justify-between">
+            <FilterSheet
+                facets={facets}
+              initial={sf}
+              keyword={keyword}
+              city={city}
+              sort={sort}
+              className="w-full"
+            />
+            {sortMenu()}
           </div>
 
-          {Object.entries(hiddenSearchParams).map(([key, value]) => (
-            <input key={key} type="hidden" name={key} value={value} />
-          ))}
+          {/* Nagłówek wyników (desktop) */}
+          <div className="mb-4 hidden items-center justify-between gap-3 lg:flex">
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {t('resultsCount', { count: total })}
+            </p>
+            {sortMenu()}
+          </div>
 
-          <button
-            type="submit"
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[11px] bg-primary px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:min-h-[58px]"
-          >
-            <Search className="h-4 w-4" aria-hidden="true" />
-            {t('searchJobs')}
-          </button>
-        </form>
-
-        {/* Układ wyników */}
-        <div className="mt-6 lg:grid lg:grid-cols-[288px_1fr] lg:gap-8">
-          {/* Sidebar (desktop) */}
-          <aside className="hidden lg:block">
-            <div className="sticky top-24">
-              <FilterSidebar
-                facets={facets}
-                initial={sf}
-                keyword={keyword}
-                city={city}
-                sort={sort}
-              />
-            </div>
-          </aside>
-
-          {/* Kolumna wyników */}
-          <div className="min-w-0">
-            {/* Pasek narzędzi (mobile) */}
-            <div className="mb-4 flex flex-col items-stretch gap-3 lg:hidden [&>details]:w-full [&>details>summary]:justify-between">
-              <FilterSheet
-                facets={facets}
-                initial={sf}
-                keyword={keyword}
-                city={city}
-                sort={sort}
-                className="w-full"
-              />
-              {sortMenu()}
-            </div>
-
-            {/* Nagłówek wyników (desktop) */}
-            <div className="mb-4 hidden items-center justify-between gap-3 lg:flex">
-              <p className="text-sm text-muted-foreground" aria-live="polite">
-                {t('resultsCount', { count: total })}
-              </p>
-              {sortMenu()}
-            </div>
-
-            {/* Liczba wyników (mobile) */}
+          {/* Liczba wyników (mobile) */}
             <p
               className="mb-3 text-sm text-muted-foreground lg:hidden"
               aria-live="polite"
             >
-              {t('resultsCount', { count: total })}
-            </p>
+            {t('resultsCount', { count: total })}
+          </p>
 
-            {/* Chipy aktywnych filtrów */}
-            {chips.length > 0 ? (
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                {chips.map((chip) => (
-                  <Link
-                    key={chip.id}
-                    href={chip.href}
-                    aria-label={`${tFilters('removeFilter')}: ${chip.label}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-soft py-1 pl-3 pr-2 text-sm text-foreground transition-colors hover:bg-muted"
-                  >
-                    <span>{chip.label}</span>
+          {/* Chipy aktywnych filtrów */}
+          {chips.length > 0 ? (
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {chips.map((chip) => (
+                <Link
+                  key={chip.id}
+                  href={chip.href}
+                  aria-label={`${tFilters('removeFilter')}: ${chip.label}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-soft py-1 pl-3 pr-2 text-sm text-foreground transition-colors hover:bg-muted"
+                >
+                  <span>{chip.label}</span>
                     <X
                       className="h-3.5 w-3.5 text-muted-foreground"
                       aria-hidden="true"
                     />
-                  </Link>
-                ))}
-                <Link
-                  href={clearFiltersHref}
-                  className="ml-1 text-sm font-medium text-accent hover:text-accent-dark"
-                >
-                  {tFilters('clear')}
                 </Link>
-              </div>
-            ) : null}
+              ))}
+              <Link
+                href={clearFiltersHref}
+                className="ml-1 text-sm font-medium text-accent hover:text-accent-dark"
+              >
+                {tFilters('clear')}
+              </Link>
+            </div>
+          ) : null}
 
-            {/* Wyniki */}
-            {pageItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-soft px-6 py-16 text-center">
+          {/* Wyniki */}
+          {pageItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-soft px-6 py-16 text-center">
                 <SearchX
                   className="h-10 w-10 text-muted-foreground"
                   aria-hidden="true"
                 />
-                <p className="max-w-md text-muted-foreground">{t('empty')}</p>
-              </div>
-            ) : (
-              <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
-                {pageItems.map((job) => (
-                  <li key={job.id}>
-                    <JobCard job={job} />
-                  </li>
-                ))}
-              </ul>
-            )}
+              <p className="max-w-md text-muted-foreground">{t('empty')}</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+              {pageItems.map((job) => (
+                <li key={job.id}>
+                  <JobCard job={job} />
+                </li>
+              ))}
+            </ul>
+          )}
 
-            <Pagination
-              basePath={BASE_PATH}
-              page={page}
-              total={total}
-              pageSize={PAGE_SIZE}
-              filters={activeParams}
-            />
-          </div>
+          <Pagination
+            basePath={BASE_PATH}
+            page={page}
+            total={total}
+            pageSize={PAGE_SIZE}
+            filters={activeParams}
+          />
         </div>
       </div>
+    </div>
     </PublicSavedJobsProvider>
   );
 }

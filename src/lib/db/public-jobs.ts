@@ -244,7 +244,7 @@ export async function getPublicJob(
     const result = (await transaction.query(
       `SELECT to_jsonb(job) AS job
       FROM public.get_public_job(p_slug => $1::text, p_locale => $2::text) AS job`,
-      [slug, locale(requestedLocale)],
+    [slug, locale(requestedLocale)],
     )) as { rows: { job: PublicJobRow }[] };
     return result.rows[0]?.job ?? null;
   });

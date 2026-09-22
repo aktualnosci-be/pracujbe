@@ -302,7 +302,7 @@ export function FilterSheet({
   };
 
   const activeCount = countActiveSidebar(initial);
-  const facets = useLiveFacets(initialFacets, initial, pending, {
+  const liveFacets = useLiveFacets(initialFacets, initial, pending, {
     keyword,
     city,
   });
@@ -380,7 +380,7 @@ export function FilterSheet({
 
             <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5">
               <FilterFields
-                facets={facets}
+                facets={liveFacets.facets}
                 value={pending}
                 onChange={setPending}
                 idPrefix="m"
@@ -388,12 +388,26 @@ export function FilterSheet({
             </div>
 
             <div className="sticky bottom-0 z-10 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              {liveFacets.status === 'error' ? (
+                <div className="mb-3 space-y-2" role="alert">
+                  <p className="text-sm text-destructive">{t('countError')}</p>
+                  <Button type="button" variant="outline" onClick={liveFacets.retry} className="w-full">
+                    {t('retryCount')}
+                  </Button>
+                </div>
+              ) : null}
               <Button
                 type="button"
                 onClick={apply}
+                disabled={liveFacets.status !== 'idle'}
+                aria-busy={liveFacets.status === 'loading'}
                 className="min-h-12 w-full rounded-xl"
               >
-                {t('showResults', { count: facets.total })}
+                {liveFacets.status === 'idle'
+                  ? t('showResults', { count: liveFacets.facets.total })
+                  : liveFacets.status === 'loading'
+                    ? t('countLoading')
+                    : t('countUnavailable')}
               </Button>
             </div>
           </Dialog.Content>

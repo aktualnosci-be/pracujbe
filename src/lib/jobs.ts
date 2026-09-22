@@ -474,7 +474,7 @@ export async function getCategoryCounts(
       await Promise.all([
         import('@/lib/db/runtime'),
         import('@/lib/db/public-jobs'),
-      ]);
+    ]);
     const pool = await getDomainPool();
     const validKeys = keys.filter((key) =>
       CATEGORY_KEYS.includes(key as CategoryKey),

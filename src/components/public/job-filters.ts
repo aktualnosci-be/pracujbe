@@ -138,7 +138,7 @@ export function parseSidebarFilters(
 
   f.accommodation = splitParam(sp['accommodation']).filter(
     (v): v is AccommodationValue =>
-      (ACCOMMODATION_VALUES as readonly string[]).includes(v),
+    (ACCOMMODATION_VALUES as readonly string[]).includes(v),
   );
   f.immediate = sp['immediate'] === '1';
   f.noLanguageRequired = sp['noLang'] === '1';

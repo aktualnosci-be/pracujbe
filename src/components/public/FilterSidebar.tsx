@@ -63,9 +63,13 @@ export function useLiveFacets(
   initialFilters: SidebarFilters,
   filters: SidebarFilters,
   base: { keyword?: string; city?: string },
-): JobFilterFacets {
+): {
+  facets: JobFilterFacets;
+  status: 'idle' | 'loading' | 'error';
+  retry: () => void;
+} {
   const locale = useLocale();
-  const [facets, setFacets] = React.useState(initial);
+  const [retryAttempt, setRetryAttempt] = React.useState(0);
   const query = React.useMemo(() => {
     const params = new URLSearchParams(sidebarFiltersToParams(filters));
     params.set('locale', locale);
@@ -81,11 +85,22 @@ export function useLiveFacets(
     return params.toString();
   }, [base.city, base.keyword, initialFilters, locale]);
   const requestSequence = React.useRef(0);
+  const [result, setResult] = React.useState({
+    query: initialQuery,
+    retryAttempt,
+    facets: initial,
+    error: false,
+  });
 
   React.useEffect(() => {
     const sequence = ++requestSequence.current;
     if (query === initialQuery) {
-      setFacets(initial);
+      setResult({
+        query,
+        retryAttempt,
+        facets: initial,
+        error: false,
+      });
       return;
     }
     const controller = new AbortController();
@@ -98,22 +113,39 @@ export function useLiveFacets(
           return response.json() as Promise<JobFilterFacets>;
         })
         .then((next) => {
-          if (sequence === requestSequence.current) setFacets(next);
+          if (sequence === requestSequence.current)
+            setResult({
+              query,
+              retryAttempt,
+              facets: next,
+              error: false,
+            });
         })
         .catch((error: unknown) => {
           if (
             sequence === requestSequence.current &&
             !(error instanceof DOMException && error.name === 'AbortError')
           )
-            setFacets(initial);
+            setResult({
+              query,
+              retryAttempt,
+              facets: initial,
+              error: true,
+            });
         });
     }, 150);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [initial, initialQuery, query]);
-  return facets;
+  }, [initial, initialQuery, query, retryAttempt]);
+
+  const current = result.query === query && result.retryAttempt === retryAttempt;
+  return {
+    facets: query === initialQuery ? initial : result.facets,
+    status: current ? (result.error ? 'error' : 'idle') : 'loading',
+    retry: React.useCallback(() => setRetryAttempt((value) => value + 1), []),
+  };
 }
 
 /* --------------------------------------------------------------- wiersz check */
@@ -229,7 +261,13 @@ export function FilterFields({
     : CATEGORY_KEYS.slice(0, COLLAPSED_COUNT);
   const hiddenCategoryCount = CATEGORY_KEYS.length - COLLAPSED_COUNT;
 
-  const filteredLocations = facets.locations.filter((opt) =>
+  const locationOptions = [
+    ...value.locations
+      .filter((city) => !facets.locations.some((option) => option.city === city))
+      .map((city) => ({ city, count: 0 })),
+    ...facets.locations,
+  ];
+  const filteredLocations = locationOptions.filter((opt) =>
     opt.city.toLowerCase().includes(locationQuery.trim().toLowerCase()),
   );
   const visibleLocations =
@@ -505,7 +543,7 @@ export function FilterSidebar({
   const [pending, setPending] = React.useState<SidebarFilters>(initial);
   React.useEffect(() => setPending(initial), [initialKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const facets = useLiveFacets(initialFacets, initial, pending, {
+  const liveFacets = useLiveFacets(initialFacets, initial, pending, {
     keyword,
     city,
   });
@@ -538,14 +576,32 @@ export function FilterSidebar({
       </div>
 
       <FilterFields
-        facets={facets}
+        facets={liveFacets.facets}
         value={pending}
         onChange={setPending}
         idPrefix="d"
       />
 
-      <Button type="button" onClick={apply} className="mt-6 w-full rounded-xl">
-        {t('showResults', { count: facets.total })}
+      {liveFacets.status === 'error' ? (
+        <div className="mt-6 space-y-2" role="alert">
+          <p className="text-sm text-destructive">{t('countError')}</p>
+          <Button type="button" variant="outline" onClick={liveFacets.retry} className="w-full">
+            {t('retryCount')}
+          </Button>
+        </div>
+      ) : null}
+      <Button
+        type="button"
+        onClick={apply}
+        disabled={liveFacets.status !== 'idle'}
+        aria-busy={liveFacets.status === 'loading'}
+        className="mt-6 w-full rounded-xl"
+      >
+        {liveFacets.status === 'idle'
+          ? t('showResults', { count: liveFacets.facets.total })
+          : liveFacets.status === 'loading'
+            ? t('countLoading')
+            : t('countUnavailable')}
       </Button>
     </div>
   );
