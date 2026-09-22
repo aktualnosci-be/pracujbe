@@ -76,6 +76,7 @@ export interface MyOffer {
   /** Data wysłania propozycji (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
   date: string;
   status: string;
+  expiresAt: string | null;
 }
 
 export interface CandidateProfileSummary {
@@ -421,6 +422,7 @@ function demoOffers(locale: Locale): MyOffer[] {
       message: '',
       date: new Date(Date.now() - pick.daysAgo * 86_400_000).toISOString(),
       status: pick.status,
+      expiresAt: null,
     };
   });
 }
@@ -684,7 +686,7 @@ export async function getMyOffers(locale: string = routing.defaultLocale): Promi
 
     const { data, error } = await supabase
       .from('offers')
-      .select('id, job_id, status, message, sent_at, created_at')
+      .select('id, job_id, status, message, sent_at, created_at, expires_at')
       .eq('candidate_id', userId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
@@ -712,6 +714,7 @@ export async function getMyOffers(locale: string = routing.defaultLocale): Promi
         message: asStr(r['message']),
         date: sentAt || asStr(r['created_at']),
         status: asStr(r['status'], 'sent'),
+        expiresAt: asStr(r['expires_at']) || null,
       };
     });
   } catch (error) {
@@ -766,6 +769,7 @@ export async function getLatestActiveOffer(
       message: asStr(row['message']),
       date: asStr(row['sent_at']),
       status: asStr(row['status']),
+      expiresAt: asStr(row['expires_at']) || null,
     };
   } catch (error) {
     captureError(error, { area: 'candidate.getLatestActiveOffer' });

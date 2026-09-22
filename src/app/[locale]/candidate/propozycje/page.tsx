@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ProposalActions } from '@/components/candidate/ProposalActions';
+import { canRespondToProposal } from '@/lib/candidate-offers';
 import { getMyOffers } from '@/lib/data/candidate';
 
 /**
@@ -98,7 +99,11 @@ export default async function CandidateProposalsPage({
                 ) : null}
 
                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <ProposalActions offerId={offer.id} status={offer.status} />
+                  <ProposalActions
+                    offerId={offer.id}
+                    expiresAt={offer.expiresAt}
+                    initialCanRespond={canRespondToProposal(offer.status, offer.expiresAt)}
+                  />
                   <Link
                     href="/candidate/wiadomosci"
                     className="text-sm font-medium text-accent hover:underline"

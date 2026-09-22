@@ -9,6 +9,8 @@ import { respondToOffer } from '@/lib/actions/offers';
 import { Button } from '@/components/ui/button';
 import { Toast } from '@/components/ui/toast';
 
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
 /**
  * ProposalActions — odpowiedź kandydata na propozycję pracy (przyjmij / odrzuć).
  *
@@ -21,16 +23,15 @@ import { Toast } from '@/components/ui/toast';
  * na które można jeszcze odpowiedzieć (sent/viewed).
  */
 
-/** Statusy propozycji, na które kandydat może jeszcze odpowiedzieć. */
-const RESPONDABLE = new Set(['sent', 'viewed']);
-
 export function ProposalActions({
   offerId,
-  status,
+  expiresAt,
+  initialCanRespond,
   className,
 }: {
   offerId: string;
-  status: string;
+  expiresAt: string | null;
+  initialCanRespond: boolean;
   className?: string;
 }): React.JSX.Element | null {
   const td = useTranslations('dashboard');
@@ -39,33 +40,76 @@ export function ProposalActions({
 
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState(false);
+  const [canRespond, setCanRespond] = React.useState(initialCanRespond);
+  const requestPendingRef = React.useRef(false);
 
-  if (!RESPONDABLE.has(status)) return null;
+  React.useEffect(() => {
+    if (!initialCanRespond) {
+      setCanRespond(false);
+      return;
+    }
+    if (expiresAt === null) return;
 
-  const respond = (accept: boolean) => {
-    if (pending) return;
-    setError(false);
-    startTransition(async () => {
-      const res = await respondToOffer(offerId, accept);
-      if (res.ok) {
-        router.refresh();
+    const expiresAtMs = Date.parse(expiresAt);
+    if (!Number.isFinite(expiresAtMs)) {
+      setCanRespond(false);
+      return;
+    }
+
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const scheduleExpiry = () => {
+      const remaining = expiresAtMs - Date.now();
+      if (remaining <= 0) {
+        setCanRespond(false);
         return;
       }
-      setError(true);
+      timeout = setTimeout(scheduleExpiry, Math.min(remaining, MAX_TIMEOUT_MS));
+    };
+    scheduleExpiry();
+
+    return () => {
+      if (timeout !== undefined) clearTimeout(timeout);
+    };
+  }, [expiresAt, initialCanRespond]);
+
+  if (!initialCanRespond || !canRespond) return null;
+
+  const respond = (accept: boolean) => {
+    if (pending || requestPendingRef.current) return;
+    requestPendingRef.current = true;
+    setError(false);
+    startTransition(async () => {
+      try {
+        const res = await respondToOffer(offerId, accept);
+        if (res.ok) {
+          router.refresh();
+          return;
+        }
+        setError(true);
+      } catch {
+        setError(true);
+      } finally {
+        requestPendingRef.current = false;
+      }
     });
   };
 
   return (
     <div className={className}>
-      <div className="flex items-center gap-2">
-        <Button type="button" size="sm" onClick={() => respond(true)} disabled={pending}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Button
+          type="button"
+          className="w-full sm:w-auto"
+          onClick={() => respond(true)}
+          disabled={pending}
+        >
           <Check className="h-4 w-4" aria-hidden="true" />
           {td('acceptProposal')}
         </Button>
         <Button
           type="button"
-          size="sm"
           variant="outline"
+          className="w-full sm:w-auto"
           onClick={() => respond(false)}
           disabled={pending}
         >
