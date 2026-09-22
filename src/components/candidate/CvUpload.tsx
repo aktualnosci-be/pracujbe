@@ -54,14 +54,14 @@ export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-background p-4">
+    <div className="min-w-0 rounded-lg border border-border bg-background p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">{t('cvTitle')}</h3>
         <button
           type="button"
           onClick={onPick}
           disabled={pending}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex min-h-12 items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
         >
           <UploadCloud className="h-3.5 w-3.5" aria-hidden="true" />
           {pending ? t('uploading') : t('upload')}
@@ -84,7 +84,7 @@ export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
               key={item.id}
               className="flex items-center justify-between gap-2 rounded-md border border-border bg-soft px-3 py-2"
             >
-              <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
+              <span className="flex min-w-0 items-center gap-2 overflow-hidden text-sm text-foreground">
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 {item.url ? (
                   <a href={item.url} target="_blank" rel="noopener noreferrer" className="truncate text-accent hover:underline">
@@ -98,8 +98,8 @@ export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
                 type="button"
                 onClick={() => onDelete(item.id)}
                 disabled={pending}
-                aria-label={t('delete')}
-                className="rounded p-1 text-muted-foreground hover:text-error disabled:opacity-60"
+                aria-label={`${t('delete')}: ${item.fileName}`}
+                className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-error disabled:opacity-60"
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </button>
