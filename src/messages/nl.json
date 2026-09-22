@@ -653,6 +653,7 @@
     "emptyState": "Geen gegevens om weer te geven."
   },
   "onboarding": {
+    "stepProgress": "Stap {current} van {total}",
     "title": "Je kandidatenprofiel",
     "subtitle": "Maak je profiel aan en wij matchen de beste vacatures in België met jou.",
     "loadError": "Je profiel kon niet worden geladen",
@@ -888,6 +889,7 @@
     }
   },
   "jobWizard": {
+    "stepProgress": "Stap {current} van {total}",
     "title": "Vacature plaatsen",
     "subtitle": "Vul negen korte stappen in. Het concept wordt na elke stap opgeslagen.",
     "saveHint": "Wijzigingen worden opgeslagen bij de volgende stap.",

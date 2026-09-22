@@ -653,6 +653,7 @@
     "emptyState": "No data to display."
   },
   "onboarding": {
+    "stepProgress": "Step {current} of {total}",
     "title": "Your candidate profile",
     "subtitle": "Create your profile and we will match the best jobs in Belgium to you.",
     "loadError": "We couldn't load your profile",
@@ -888,6 +889,7 @@
     }
   },
   "jobWizard": {
+    "stepProgress": "Step {current} of {total}",
     "title": "Post a job",
     "subtitle": "Complete nine short steps. The draft is saved after each step.",
     "saveHint": "Changes are saved when you move to the next step.",

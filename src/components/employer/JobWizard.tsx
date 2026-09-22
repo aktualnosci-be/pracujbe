@@ -538,11 +538,12 @@ export function JobWizard({
       <Stepper
         steps={steps}
         current={step - 1}
-        className="rounded-lg border border-border bg-card p-4 sm:p-6"
+        progressLabel={t('stepProgress', { current: step, total: steps.length })}
+        className="rounded-3xl border border-border bg-card p-5 sm:p-7"
       />
 
       {/* Formularz bieżącego kroku */}
-      <section className="rounded-lg border border-border bg-card p-4 sm:p-6">
+      <section className="min-w-0 rounded-3xl border border-border bg-card p-5 sm:p-7">
         <h2 className="text-lg font-semibold text-foreground">{steps[step - 1]?.title}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{steps[step - 1]?.desc}</p>
 

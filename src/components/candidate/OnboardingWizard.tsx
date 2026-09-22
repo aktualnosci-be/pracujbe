@@ -442,13 +442,14 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
       <Stepper
         steps={steps}
         current={step - 1}
-        className="rounded-lg border border-border bg-card p-4 sm:p-6"
+        progressLabel={t('stepProgress', { current: step, total: steps.length })}
+        className="rounded-3xl border border-border bg-card p-5 sm:p-7"
       />
 
       {/* Kolumny: boczna + formularz */}
-      <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
         {/* Kolumna boczna */}
-        <aside className="space-y-6">
+        <aside className="min-w-0 space-y-6">
           <section className="rounded-lg border border-border bg-card p-4 sm:p-5">
             <h2 className="text-base font-semibold text-foreground">{t('completeness')}</h2>
             <ProfileCompleteness
@@ -473,7 +474,7 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
         </aside>
 
         {/* Formularz bieżącego kroku */}
-        <section className="rounded-lg border border-border bg-card p-4 sm:p-6">
+        <section className="min-w-0 rounded-3xl border border-border bg-card p-5 sm:p-7">
           <h2 className="text-lg font-semibold text-foreground">{steps[step - 1]?.title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{steps[step - 1]?.desc}</p>
 
@@ -932,7 +933,7 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
             error: t('saveError'),
           }}
         />
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
           <Button asChild variant="ghost" disabled={busy}>
             <Link href="/candidate">{t('cancel')}</Link>
           </Button>
