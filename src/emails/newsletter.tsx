@@ -11,6 +11,7 @@ import {
   emailPalette,
 } from "@/emails/_components";
 import { newsletterCopy } from "@/emails/newsletter-copy";
+import { interpolate, layoutCopy } from "@/emails/copy";
 import type { Locale } from "@/i18n/routing";
 import { env } from "@/lib/env";
 
@@ -34,12 +35,13 @@ export interface NewsletterEmailProps {
 /**
  * Wynik służy wyłącznie do przeglądu/renderowania. Nie jest kontraktem transportu.
  * Issue #45 musi najpierw dodać ponowną kontrolę zgody tuż przed wysyłką,
- * one-click unsubscribe URL i nagłówki RFC 8058, tożsamość/adres nadawcy oraz text/plain.
+ * one-click unsubscribe URL i nagłówki RFC 8058 oraz tożsamość/adres nadawcy.
  */
 export interface NewsletterRenderFoundation {
   readonly transportReady: false;
   readonly subject: string;
   readonly html: string;
+  readonly text: string;
 }
 
 const placeholderPattern = /\{\{[^}]+\}\}/;
@@ -171,14 +173,45 @@ export function NewsletterEmail({
   );
 }
 
+function renderNewsletterText(locale: Locale, jobs: readonly NewsletterJob[]): string {
+  const copy = newsletterCopy[locale];
+  const footer = layoutCopy[locale];
+  const site = `${env.siteUrl}/${locale}`;
+  const lines = [copy.heading, "", copy.intro];
+
+  for (const job of jobs) {
+    lines.push("", copy.passport, job.title, `${copy.location}: ${job.city}`);
+    if (job.salary?.trim()) {
+      lines.push(`${copy.salary}: ${job.salary.trim()}`);
+    }
+    lines.push(`${copy.viewJob}: ${site}/oferty-pracy/${job.slug}`);
+  }
+
+  lines.push(
+    "",
+    `${copy.viewAll}: ${site}/oferty-pracy`,
+    "",
+    copy.preferencesNote,
+    `${copy.preferences}: ${site}/candidate/ustawienia`,
+    "",
+    footer.tagline,
+    footer.footerNote,
+    interpolate(footer.rights, { year: new Date().getFullYear() }),
+  );
+
+  return `${lines.join("\n")}\n`;
+}
+
 export async function renderNewsletterEmail(
   locale: Locale,
   jobs: readonly NewsletterJob[],
 ): Promise<NewsletterRenderFoundation> {
   assertRenderableJobs(jobs, locale);
+  const html = await render(<NewsletterEmail locale={locale} jobs={jobs} />);
   return {
     transportReady: false,
     subject: newsletterCopy[locale].subject,
-    html: await render(<NewsletterEmail locale={locale} jobs={jobs} />),
+    html,
+    text: renderNewsletterText(locale, jobs),
   };
 }

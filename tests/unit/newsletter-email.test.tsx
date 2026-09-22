@@ -113,6 +113,57 @@ function parse(html: string): Document {
 
 describe("renderer newslettera", () => {
   it.each(routing.locales)(
+    "renderuje tekst z tymi samymi ofertami, linkami i kolejnością co HTML (%s)",
+    async (locale: Locale) => {
+      const jobs = localizedJobs[locale];
+      const { html, text, transportReady } = await renderNewsletterEmail(
+        locale,
+        jobs,
+      );
+      const document = parse(html);
+      const htmlJobs = Array.from(
+        document.querySelectorAll("[data-newsletter-job]"),
+      );
+
+      expect(transportReady).toBe(false);
+      expect(htmlJobs.map((card) => card.getAttribute("data-newsletter-job"))).toEqual(
+        jobs.map((job) => job.slug),
+      );
+      expect(text).toContain(newsletterCopy[locale].heading);
+      expect(text).toContain(newsletterCopy[locale].intro);
+      expect(text).not.toMatch(/<\/?(?:html|body|section|a|p|span)\b|\{\{[^}]+\}\}/i);
+
+      let previousPosition = -1;
+      for (const job of jobs) {
+        const titlePosition = text.indexOf(job.title);
+        expect(titlePosition).toBeGreaterThan(previousPosition);
+        previousPosition = titlePosition;
+        expect(text).toContain(job.city);
+        expect(text).toContain(
+          `http://localhost:3000/${locale}/oferty-pracy/${job.slug}`,
+        );
+        if (job.salary) {
+          expect(text).toContain(job.salary);
+        }
+      }
+
+      expect(text).toContain(`http://localhost:3000/${locale}/oferty-pracy`);
+      expect(text).toContain(
+        `http://localhost:3000/${locale}/candidate/ustawienia`,
+      );
+    },
+  );
+
+  it.each(routing.locales)(
+    "nie dopisuje pensji, gdy oferta nie podaje stawki (%s)",
+    async (locale: Locale) => {
+      const { text } = await renderNewsletterEmail(locale, [localizedJobs[locale][1]!]);
+      expect(text).toContain(localizedJobs[locale][1]!.title);
+      expect(text).not.toContain(`${newsletterCopy[locale].salary}:`);
+    },
+  );
+
+  it.each(routing.locales)(
     "renderuje 1–3 realne oferty i lokalizowane linki (%s)",
     async (locale: Locale) => {
       for (const count of [1, 3]) {
