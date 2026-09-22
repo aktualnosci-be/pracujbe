@@ -87,6 +87,7 @@ export async function generateMetadata({
   ]);
 
   const base = env.siteUrl;
+  const shareImage = new URL('/og.png', base).href;
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
     languages[supported] = `${base}/${supported}${BASE_PATH}`;
@@ -106,6 +107,13 @@ export async function generateMetadata({
       siteName: 'Pracuj.be',
       type: 'website',
       locale: OG_LOCALE[locale] ?? locale,
+      images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: tMeta('jobsTitle'),
+      description: tMeta('jobsDescription'),
+      images: [shareImage],
     },
   };
 }

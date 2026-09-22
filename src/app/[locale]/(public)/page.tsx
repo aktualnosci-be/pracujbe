@@ -51,6 +51,7 @@ export async function generateMetadata({ params }: HomePageProps): Promise<Metad
   const description = t('homeDescription');
   const baseUrl = env.siteUrl;
   const canonical = `${baseUrl}/${locale}`;
+  const shareImage = new URL('/og.png', baseUrl).href;
 
   const languages: Record<string, string> = {};
   for (const loc of routing.locales) {
@@ -69,7 +70,9 @@ export async function generateMetadata({ params }: HomePageProps): Promise<Metad
       url: canonical,
       siteName: 'Pracuj.be',
       locale: OG_LOCALE[locale] ?? locale,
+      images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
+    twitter: { card: 'summary_large_image', title, description, images: [shareImage] },
   };
 }
 
