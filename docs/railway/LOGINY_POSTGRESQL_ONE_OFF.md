@@ -16,7 +16,8 @@ produkcji w ramach PR-a, który go dodaje.
 | `pracujbe_auth_mail_runtime` | `pracujbe_auth_mail`  | worker poczty auth |
 
 Każdy login ma `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB
-NOCREATEROLE`, bez `ADMIN OPTION` i bez własności bazy. Skrypt odmawia działania,
+NOCREATEROLE NOREPLICATION`, bez `ADMIN OPTION`, z `INHERIT FALSE` i `SET TRUE`
+na jedynym członkostwie oraz bez własności bazy. Skrypt odmawia działania,
 jeśli zastany login ma dodatkowe członkostwo, silniejszą flagę, bezpośredni
 grant do obiektu albo jest właścicielem obiektu bazy. Provisioning i rotacja są
 pojedynczą transakcją. Błąd wycofuje cały przebieg.
@@ -26,6 +27,11 @@ Preflight i verify są tylko odczytem. Wszystkie sekrety pochodzą ze zmiennych
 trace/debug powłoki. Skrypt wypisuje wyłącznie stałe komunikaty bez wartości
 połączenia, loginów i haseł. Brak `DB_LOGIN_DRY_RUN` oznacza bezpieczny dry-run;
 rzeczywisty zapis wymaga jawnego `DB_LOGIN_DRY_RUN=no`.
+
+Hasło nigdy nie jest przekazywane do PostgreSQL. Proces oblicza lokalnie losowo
+solony verifier `SCRAM-SHA-256` i dopiero verifier wysyła jako parametr protokołu.
+Dynamiczny DDL może więc zawierać wyłącznie verifier, z którego nie da się
+odzyskać hasła jawnego.
 
 ## 1. Ustaw jawny cel i sekrety w bieżącej sesji operatora
 
@@ -47,7 +53,8 @@ AUTH_MAIL_DATABASE_PASSWORD
 `MIGRATION_DATABASE_URL` jest osobnym połączeniem administratora migracji.
 Skrypt nie używa `DATABASE_APP_URL` jako awaryjnego źródła. Oczekiwane wartości
 muszą odpowiadać odczytowi Railway; dla obecnego schematu PostgreSQL major musi
-mieć co najmniej 16. Każde hasło musi mieć co najmniej 32 znaki.
+mieć co najmniej 16. Każde hasło musi mieć 32–1024 drukowalne znaki ASCII bez
+spacji; ten jawny zakres zapobiega różnicom SASLprep przy lokalnym liczeniu SCRAM.
 
 ## 2. Preflight i dry-run
 

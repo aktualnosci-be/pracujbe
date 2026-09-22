@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { applyMigrations } from "../../scripts/db/migrate.mjs";
 import { loadProductionMigrations } from "../../scripts/db/production-migrations.mjs";
 import {
+  createScramVerifier,
   inspectRuntimeLogins,
   LOGIN_SPECS,
   provisionRuntimeLogins,
@@ -129,6 +130,7 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
     expect(() =>
       resolveDryRun("provision", { DB_LOGIN_DRY_RUN: "false" }),
     ).toThrow();
+    expect(() => createScramVerifier("ą".repeat(32))).toThrow("ASCII");
   });
 
   it("dry-run jest tylko odczytem, a konflikt trzeciego loginu nie zostawia częściowego provisioningu", async () => {
@@ -150,8 +152,10 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
     ).toBe(0);
 
     let creates = 0;
+    const databaseCalls: Array<{ sql: string; parameters?: unknown[] }> = [];
     const interrupted = {
       query: async (sql: string, parameters?: unknown[]) => {
+        databaseCalls.push({ sql, parameters });
         if (
           sql.startsWith("SELECT pg_temp.create_runtime_login") &&
           ++creates === 3
@@ -164,6 +168,9 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
     await expect(
       provisionRuntimeLogins(interrupted, environment()),
     ).rejects.toThrow("kontrolowana awaria");
+    const serializedCalls = JSON.stringify(databaseCalls);
+    expect(serializedCalls).not.toContain(initialPassword);
+    expect(serializedCalls).toContain("SCRAM-SHA-256");
     expect(
       (
         await admin!.query(
@@ -194,7 +201,8 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
     ).toBe(1);
 
     await admin!.query(`ALTER ROLE pracujbe_limiter NOINHERIT;
-      REVOKE service_role FROM pracujbe_limiter`);
+      REVOKE service_role FROM pracujbe_limiter;
+      GRANT pracujbe_rate_limit TO pracujbe_limiter WITH INHERIT FALSE, SET TRUE`);
     expect((await provisionRuntimeLogins(admin!, environment())).changed).toBe(
       3,
     );
@@ -217,6 +225,12 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
     ).rejects.toThrow("niezgodne uprawnienia");
     await admin!.query("REVOKE service_role FROM pracujbe_web");
 
+    await admin!.query("GRANT pracujbe_app TO pracujbe_web WITH SET FALSE");
+    await expect(
+      inspectRuntimeLogins(admin!, environment(), { requireAll: true }),
+    ).rejects.toThrow("niezgodne uprawnienia");
+    await admin!.query("GRANT pracujbe_app TO pracujbe_web WITH SET TRUE");
+
     await admin!.query("GRANT USAGE ON SCHEMA auth TO pracujbe_web");
     await expect(
       inspectRuntimeLogins(admin!, environment(), { requireAll: true }),
@@ -232,6 +246,23 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
     await admin!.query(`ALTER SCHEMA runtime_login_illicit OWNER TO postgres;
       DROP SCHEMA runtime_login_illicit`);
 
+    await admin!.query("GRANT SET ON PARAMETER work_mem TO pracujbe_web");
+    await expect(
+      inspectRuntimeLogins(admin!, environment(), { requireAll: true }),
+    ).rejects.toThrow("niezgodne uprawnienia");
+    await admin!.query("REVOKE SET ON PARAMETER work_mem FROM pracujbe_web");
+
+    const largeObject = (await admin!.query("SELECT lo_create(0) AS oid"))
+      .rows[0]?.oid;
+    await admin!.query(
+      `ALTER LARGE OBJECT ${largeObject} OWNER TO pracujbe_web`,
+    );
+    await expect(
+      inspectRuntimeLogins(admin!, environment(), { requireAll: true }),
+    ).rejects.toThrow("niezgodne uprawnienia");
+    await admin!.query(`ALTER LARGE OBJECT ${largeObject} OWNER TO postgres`);
+    await admin!.query("SELECT lo_unlink($1)", [largeObject]);
+
     await admin!.query("ALTER ROLE pracujbe_web REPLICATION");
     await expect(
       inspectRuntimeLogins(admin!, environment(), { requireAll: true }),
@@ -243,6 +274,12 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
       inspectRuntimeLogins(admin!, environment(), { requireAll: true }),
     ).rejects.toThrow("Role bazowe mają niezgodne członkostwa");
     await admin!.query("REVOKE service_role FROM pracujbe_auth");
+
+    await admin!.query("GRANT anon TO pracujbe_app WITH SET FALSE");
+    await expect(
+      inspectRuntimeLogins(admin!, environment(), { requireAll: true }),
+    ).rejects.toThrow("Role bazowe mają niezgodne członkostwa");
+    await admin!.query("GRANT anon TO pracujbe_app WITH SET TRUE");
   });
 
   it("rotuje cztery hasła atomowo i może zostać bezpiecznie ponowione", async () => {

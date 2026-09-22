@@ -1,3 +1,4 @@
+import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import pg from "pg";
@@ -41,26 +42,62 @@ function required(env, name) {
 }
 
 function validatePassword(value) {
-  if (value.length < 32 || value.includes("\0")) {
+  // ASCII nie wymaga SASLprep, więc verifier jest identyczny z tym liczonym przez PostgreSQL/libpq.
+  if (
+    value.length < 32 ||
+    value.length > 1024 ||
+    !/^[\x21-\x7e]+$/.test(value)
+  ) {
     throw new Error(
-      "Hasło loginu bazy musi mieć co najmniej 32 znaki i nie może zawierać NUL.",
+      "Hasło loginu bazy musi mieć 32–1024 drukowalne znaki ASCII bez spacji.",
     );
   }
   return value;
 }
 
+export function createScramVerifier(
+  password,
+  salt = randomBytes(16),
+  iterations = 4096,
+) {
+  validatePassword(password);
+  if (
+    !Buffer.isBuffer(salt) ||
+    salt.length < 16 ||
+    !Number.isInteger(iterations) ||
+    iterations < 4096
+  ) {
+    throw new Error("Nieprawidłowe parametry verifiera SCRAM.");
+  }
+  const saltedPassword = pbkdf2Sync(
+    Buffer.from(password, "utf8"),
+    salt,
+    iterations,
+    32,
+    "sha256",
+  );
+  const clientKey = createHmac("sha256", saltedPassword)
+    .update("Client Key")
+    .digest();
+  const storedKey = createHash("sha256").update(clientKey).digest("base64");
+  const serverKey = createHmac("sha256", saltedPassword)
+    .update("Server Key")
+    .digest("base64");
+  return `SCRAM-SHA-256$${iterations}:${salt.toString("base64")}$${storedKey}:${serverKey}`;
+}
+
 async function installPasswordHelpers(client) {
-  // Sekret idzie jako parametr protokołu, nigdy jako fragment tekstu SQL/argv/logu skryptu.
+  // PostgreSQL dostaje wyłącznie jednokierunkowy verifier SCRAM, nigdy hasło jawne.
   await client.query(`CREATE OR REPLACE FUNCTION pg_temp.create_runtime_login(
-      target name, membership name, secret text) RETURNS void LANGUAGE plpgsql AS $$
+      target name, membership name, verifier text) RETURNS void LANGUAGE plpgsql AS $$
     BEGIN
-      EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION', target, secret);
-      EXECUTE format('GRANT %I TO %I', membership, target);
+      EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION', target, verifier);
+      EXECUTE format('GRANT %I TO %I WITH ADMIN FALSE, INHERIT FALSE, SET TRUE', membership, target);
     END $$`);
   await client.query(`CREATE OR REPLACE FUNCTION pg_temp.rotate_runtime_password(
-      target name, secret text) RETURNS void LANGUAGE plpgsql AS $$
+      target name, verifier text) RETURNS void LANGUAGE plpgsql AS $$
     BEGIN
-      EXECUTE format('ALTER ROLE %I PASSWORD %L', target, secret);
+      EXECUTE format('ALTER ROLE %I PASSWORD %L', target, verifier);
     END $$`);
 }
 
@@ -162,7 +199,7 @@ async function verifyTarget(client, env, migrations) {
   const baseMemberships = (
     await client.query(
       `SELECT member_role.rolname AS member, parent_role.rolname AS parent,
-      m.admin_option
+      m.admin_option, m.inherit_option, m.set_option
     FROM pg_auth_members m
     JOIN pg_roles member_role ON member_role.oid=m.member
     JOIN pg_roles parent_role ON parent_role.oid=m.roleid
@@ -177,7 +214,9 @@ async function verifyTarget(client, env, migrations) {
       (membership) =>
         membership.member !== "pracujbe_app" ||
         !["anon", "authenticated"].includes(membership.parent) ||
-        membership.admin_option,
+        membership.admin_option ||
+        membership.inherit_option ||
+        !membership.set_option,
     ) ||
     !baseMemberships.some((membership) => membership.parent === "anon") ||
     !baseMemberships.some((membership) => membership.parent === "authenticated")
@@ -219,6 +258,8 @@ async function readLoginState(client) {
       coalesce(json_agg(parent.rolname ORDER BY parent.rolname)
         FILTER (WHERE parent.rolname IS NOT NULL), '[]'::json) AS memberships,
       coalesce(bool_or(m.admin_option), false) AS has_admin_option,
+      coalesce(bool_and(m.inherit_option), false) AS has_inherit_option,
+      coalesce(bool_and(m.set_option), false) AS has_set_option,
       EXISTS (SELECT 1 FROM pg_database d WHERE d.datdba=r.oid) AS owns_database,
       (EXISTS (SELECT 1 FROM pg_database d WHERE d.datdba=r.oid OR EXISTS (
           SELECT 1 FROM aclexplode(d.datacl) a WHERE a.grantee=r.oid))
@@ -231,7 +272,10 @@ async function readLoginState(client) {
        OR EXISTS (SELECT 1 FROM pg_type t WHERE t.typowner=r.oid OR EXISTS (
           SELECT 1 FROM aclexplode(t.typacl) a WHERE a.grantee=r.oid))
        OR EXISTS (SELECT 1 FROM pg_default_acl d WHERE d.defaclrole=r.oid OR EXISTS (
-          SELECT 1 FROM aclexplode(d.defaclacl) a WHERE a.grantee=r.oid))) AS has_direct_object_authority
+          SELECT 1 FROM aclexplode(d.defaclacl) a WHERE a.grantee=r.oid))
+       OR EXISTS (SELECT 1 FROM pg_shdepend sd
+          WHERE sd.refclassid='pg_authid'::regclass AND sd.refobjid=r.oid
+            AND sd.deptype IN ('o','a'))) AS has_direct_object_authority
     FROM pg_roles r
     LEFT JOIN pg_auth_members m ON m.member=r.oid
     LEFT JOIN pg_roles parent ON parent.oid=m.roleid
@@ -255,6 +299,8 @@ function assertSafeLogin(row, spec) {
     row.rolinherit ||
     row.rolbypassrls ||
     row.has_admin_option ||
+    row.has_inherit_option ||
+    !row.has_set_option ||
     row.owns_database ||
     row.has_direct_object_authority ||
     row.memberships.length !== 1 ||
@@ -307,7 +353,7 @@ export async function provisionRuntimeLogins(
       await client.query("SELECT pg_temp.create_runtime_login($1, $2, $3)", [
         spec.login,
         spec.role,
-        validatePassword(required(env, spec.passwordEnv)),
+        createScramVerifier(required(env, spec.passwordEnv)),
       ]);
     }
     await client.query("COMMIT");
@@ -325,7 +371,7 @@ export async function rotateRuntimeLoginPasswords(
 ) {
   const passwords = LOGIN_SPECS.map((spec) => [
     spec,
-    validatePassword(required(env, spec.nextPasswordEnv)),
+    createScramVerifier(required(env, spec.nextPasswordEnv)),
   ]);
   if (dryRun) {
     await inspectRuntimeLogins(client, env, { requireAll: true });
