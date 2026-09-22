@@ -283,6 +283,19 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
     await admin!.query("GRANT anon TO pracujbe_app WITH SET TRUE");
   });
 
+  it("preflight odrzuca własność tabeli nadaną roli bazowej runtime", async () => {
+    await inspectRuntimeLogins(admin!, environment(), { requireAll: true });
+    await admin!.query("ALTER TABLE public.profiles OWNER TO authenticated");
+    try {
+      await expect(
+        inspectRuntimeLogins(admin!, environment(), { requireAll: true }),
+      ).rejects.toThrow("Własność bazy lub obiektów aplikacji");
+    } finally {
+      await admin!.query("ALTER TABLE public.profiles OWNER TO postgres");
+    }
+    await inspectRuntimeLogins(admin!, environment(), { requireAll: true });
+  });
+
   it("rotuje cztery hasła atomowo i może zostać bezpiecznie ponowione", async () => {
     expect(
       (await rotateRuntimeLoginPasswords(admin!, environment())).changed,
