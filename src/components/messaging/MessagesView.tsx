@@ -96,10 +96,10 @@ export async function MessagesView({
               <div className="shrink-0 border-b border-border p-2 lg:hidden">
                 <Link
                   href={basePath}
-                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-accent hover:underline"
+                  className="inline-flex min-h-12 max-w-full items-center gap-1.5 rounded-md px-3 py-2 text-base font-medium whitespace-normal text-accent hover:underline"
                 >
-                  <ArrowLeft className="size-4" aria-hidden="true" />
-                  {t('back')}
+                  <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 break-words">{t('back')}</span>
                 </Link>
               </div>
               <MessageThread thread={thread} locale={locale} />
