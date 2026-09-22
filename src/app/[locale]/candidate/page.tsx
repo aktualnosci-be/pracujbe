@@ -13,14 +13,13 @@ import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
 import { CvUpload } from '@/components/candidate/CvUpload';
 import { SaveJobButton } from '@/components/candidate/SaveJobButton';
 import { ApplicationActions } from '@/components/candidate/ApplicationActions';
-import { findNewProposal } from '@/lib/candidate-offers';
 import {
   getCandidateOverview,
   getCandidateProfileSummary,
   getCandidateFiles,
   getLatestMessages,
   getMyApplications,
-  getMyOffers,
+  getLatestActiveOffer,
   getRecommendedJobs,
 } from '@/lib/data/candidate';
 
@@ -80,17 +79,15 @@ export default async function CandidateDashboardPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tj = await getTranslations({ locale, namespace: 'jobs' });
 
-  const [overview, profile, recommended, applications, messages, files, offers] = await Promise.all([
+  const [overview, profile, recommended, applications, messages, files, newProposal] = await Promise.all([
     getCandidateOverview(),
     getCandidateProfileSummary(),
     getRecommendedJobs(locale),
     getMyApplications(locale),
     getLatestMessages(),
     getCandidateFiles(),
-    getMyOffers(locale),
+    getLatestActiveOffer(locale),
   ]);
-
-  const newProposal = findNewProposal(offers);
 
   const checklist = [
     { label: td('checkBasicInfo'), done: profile.checklist.basicInfo, action: td('add') },

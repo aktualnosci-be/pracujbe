@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
-import { findNewProposal } from '@/lib/candidate-offers';
+import { findLatestActiveProposal } from '@/lib/candidate-offers';
 import en from '@/messages/en.json';
 
 vi.mock('@/i18n/navigation', () => ({
@@ -24,16 +24,41 @@ function show(status: string, href = '/jobs/real-offer') {
 }
 
 describe('NewProposalBanner', () => {
-  it('selects only a real proposal that still awaits a response', () => {
-    expect(findNewProposal([])).toBeNull();
-    expect(findNewProposal([{ id: 'old', status: 'accepted' }])).toBeNull();
-    expect(findNewProposal([{ id: 'old', status: 'declined' }])).toBeNull();
+  it('sorts active proposals by sent_at and then by id', () => {
+    const base = { status: 'sent', expiresAt: null };
     expect(
-      findNewProposal([
-        { id: 'finished', status: 'accepted' },
-        { id: 'real', status: 'viewed' },
-      ]),
-    ).toEqual({ id: 'real', status: 'viewed' });
+      findLatestActiveProposal([
+        { ...base, id: 'z', sentAt: '2026-09-20T10:00:00Z' },
+        { ...base, id: 'a', sentAt: '2026-09-21T10:00:00Z' },
+        { ...base, id: 'b', sentAt: '2026-09-21T10:00:00Z' },
+      ], new Date('2026-09-22T10:00:00Z')),
+    ).toMatchObject({ id: 'b' });
+  });
+
+  it('excludes proposals at and before the expiry boundary', () => {
+    const now = new Date('2026-09-22T10:00:00.000Z');
+    expect(
+      findLatestActiveProposal([
+        { id: 'past', status: 'sent', sentAt: '2026-09-22T09:00:00Z', expiresAt: '2026-09-22T09:59:59Z' },
+        { id: 'equal', status: 'viewed', sentAt: '2026-09-22T08:00:00Z', expiresAt: now.toISOString() },
+        { id: 'future', status: 'sent', sentAt: '2026-09-22T07:00:00Z', expiresAt: '2026-09-22T10:00:00.001Z' },
+      ], now),
+    ).toMatchObject({ id: 'future' });
+  });
+
+  it('finds an active proposal behind more than twenty final records', () => {
+    const finalOffers = Array.from({ length: 25 }, (_, index) => ({
+      id: `final-${index}`,
+      status: index % 2 ? 'accepted' : 'declined',
+      sentAt: `2026-09-${String(22 - (index % 9)).padStart(2, '0')}T12:00:00Z`,
+      expiresAt: null,
+    }));
+    expect(
+      findLatestActiveProposal([
+        ...finalOffers,
+        { id: 'active', status: 'viewed', sentAt: '2026-09-01T12:00:00Z', expiresAt: null },
+      ], new Date('2026-09-22T10:00:00Z')),
+    ).toMatchObject({ id: 'active' });
   });
 
   it.each(['accepted', 'declined', 'withdrawn', 'expired'])(
