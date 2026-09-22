@@ -653,6 +653,7 @@
     "emptyState": "Aucune donnée à afficher."
   },
   "onboarding": {
+    "stepProgress": "Étape {current} sur {total}",
     "title": "Votre profil de candidat",
     "subtitle": "Créez votre profil et nous vous proposerons les meilleures offres en Belgique.",
     "loadError": "Impossible de charger votre profil",
@@ -888,6 +889,7 @@
     }
   },
   "jobWizard": {
+    "stepProgress": "Étape {current} sur {total}",
     "title": "Publier une offre",
     "subtitle": "Complétez neuf étapes courtes. Le brouillon est enregistré après chaque étape.",
     "saveHint": "Les modifications sont enregistrées au passage à l'étape suivante.",

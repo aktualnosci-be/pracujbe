@@ -653,6 +653,7 @@
     "emptyState": "Brak danych do wyświetlenia."
   },
   "onboarding": {
+    "stepProgress": "Krok {current} z {total}",
     "title": "Twój profil kandydata",
     "subtitle": "Utwórz swój profil, a my dopasujemy do Ciebie najlepsze oferty pracy w Belgii.",
     "loadError": "Nie udało się wczytać Twojego profilu",
@@ -888,6 +889,7 @@
     }
   },
   "jobWizard": {
+    "stepProgress": "Krok {current} z {total}",
     "title": "Dodaj ofertę pracy",
     "subtitle": "Wypełnij dziewięć krótkich kroków. Wersję roboczą zapisujemy po każdym kroku.",
     "saveHint": "Zmiany zapiszą się po przejściu do kolejnego kroku.",
