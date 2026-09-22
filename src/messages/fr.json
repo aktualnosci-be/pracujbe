@@ -652,6 +652,18 @@
     "candidateFallback": "Candidat",
     "emptyState": "Aucune donnée à afficher."
   },
+  "candidatePassport": {
+    "eyebrow": "PASSEPORT EMPLOI",
+    "title": "Votre profil professionnel",
+    "intro": "Retrouvez les informations utilisées pour vous proposer des emplois adaptés à vos compétences.",
+    "edit": "Modifier le profil",
+    "sectionTitle": "Vos compétences et l’emploi recherché",
+    "sectionHint": "Vous pouvez modifier ces informations à tout moment.",
+    "emptyField": "Pas encore indiqué",
+    "loadError": "Impossible de charger votre profil. Actualisez la page et réessayez.",
+    "radius": "Déplacement jusqu’à {count} km",
+    "years": "{count, plural, one {# an} other {# ans}}"
+  },
   "onboarding": {
     "stepProgress": "Étape {current} sur {total}",
     "title": "Votre profil de candidat",

@@ -652,6 +652,18 @@
     "candidateFallback": "Candidate",
     "emptyState": "No data to display."
   },
+  "candidatePassport": {
+    "eyebrow": "WORK PASSPORT",
+    "title": "Your work profile",
+    "intro": "See the information used to match jobs with your skills.",
+    "edit": "Edit profile",
+    "sectionTitle": "Your skills and the work you want",
+    "sectionHint": "You can update this information at any time.",
+    "emptyField": "Not added yet",
+    "loadError": "We couldn't load your profile. Refresh the page and try again.",
+    "radius": "Travel up to {count} km",
+    "years": "{count, plural, one {# year} other {# years}}"
+  },
   "onboarding": {
     "stepProgress": "Step {current} of {total}",
     "title": "Your candidate profile",
