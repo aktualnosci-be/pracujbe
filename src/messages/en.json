@@ -234,7 +234,11 @@
       "viewOffer": "View job",
       "salaryFrom": "from {value}",
       "salaryTo": "up to {value}",
-      "salaryPeriods": { "hour": "gross / hour", "month": "gross / month", "year": "gross / year" }
+      "salaryPeriods": {
+        "hour": "gross / hour",
+        "month": "gross / month",
+        "year": "gross / year"
+      }
     },
     "pageTitle": "Jobs in Belgium",
     "search": "Search",
@@ -531,7 +535,8 @@
     "hired": "Hired",
     "active": "Active",
     "paused": "Paused",
-    "closed": "Closed"
+    "closed": "Closed",
+    "expired": "Expired"
   },
   "dashboard": {
     "greeting": "Welcome, {name}",
@@ -663,7 +668,14 @@
     "employerApplicationsPage": "Page {page}",
     "employerApplicationsNewer": "Newer applications",
     "employerApplicationsOlder": "Older applications",
-    "emptyState": "No data to display."
+    "emptyState": "No data to display.",
+    "employerOffersIntro": "Manage your jobs and see how candidates respond.",
+    "employerOffersApplicationsLabel": "New applications",
+    "employerOffersEmptyTitle": "You have no jobs yet",
+    "employerOffersEmptyHint": "Post your first job to start recruiting.",
+    "employerOffersLoadError": "We couldn't load your jobs",
+    "employerOffersLoadErrorHint": "Refresh the page and try again. Your jobs are still saved.",
+    "employerOffersRetry": "Try again"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
