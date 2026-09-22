@@ -1,18 +1,15 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Krytyczny przepływ kreatora profilu kandydata w rzeczywistej aplikacji.
+ * Kliencki przepływ kreatora profilu kandydata w jawnym trybie demo.
  *
- * Test nie podmienia komponentu ani Server Action. Przy konfiguracji E2E bez bazy
- * aplikacja korzysta ze swojego jawnego trybu demo, ale przechodzi przez ten sam
- * formularz, walidację Zod i `saveOnboardingStep` co wdrożenie produkcyjne.
+ * Ten test dowodzi walidacji i zachowania stanu w zamontowanym komponencie. Nie dowodzi
+ * zapisu do bazy, ponownego wczytania profilu ani działania RPC `finish_onboarding`.
  */
-test('kandydat kończy sześć kroków bez utraty poprawnych danych', async ({ page }) => {
+test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async ({ page }) => {
   await page.goto('/pl/candidate/onboarding');
 
-  const cookieChoice = page.getByRole('button', { name: 'Tylko niezbędne' });
-  await cookieChoice.waitFor({ state: 'visible' });
-  if (await cookieChoice.isVisible()) await cookieChoice.click();
+  await page.getByRole('button', { name: 'Tylko niezbędne' }).click();
 
   await expect(page.getByRole('heading', { level: 1, name: 'Twój profil kandydata' })).toBeVisible();
 
@@ -49,7 +46,7 @@ test('kandydat kończy sześć kroków bez utraty poprawnych danych', async ({ p
   await page.getByRole('option', { name: 'Od zaraz' }).click();
   await page.getByLabel('Akceptuję regulamin i politykę prywatności.').click();
 
-  // Powrót sprawdza, że stan poprzednich kroków nadal żyje w kreatorze.
+  // Powrót sprawdza wyłącznie stan zamontowanego komponentu (bez reloadu i bez dowodu DB).
   await page.getByRole('button', { name: 'Wstecz' }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'Języki i certyfikaty' })).toBeVisible();
   await page.getByRole('button', { name: /Dalej: Preferencje i podsumowanie/ }).click();
