@@ -104,7 +104,7 @@ do końca każdego joba. Pojedynczy zielony job nie potwierdza izolacji dwóch r
 
 | narzędzie | wersja | uwagi |
 |---|---|---|
-| GitHub Actions Runner | co najmniej 2.329.0 | wymagane przez używane oficjalne akcje z runtime Node 24; oba runnery raportowały 2.337.0 w CI 22.09.2026 |
+| GitHub Actions Runner | co najmniej 2.329.0 | projekt przyjmuje wyższe minimum uwzględniające `checkout@v7` i uwierzytelnione komendy Git z akcji kontenerowych; sam runtime Node 24 wymaga 2.327.1. Oba runnery raportowały 2.337.0 w CI 22.09.2026 |
 | Node.js | 22 (patrz `.nvmrc`) | `actions/setup-node@v7` dobierze wersję aplikacji; runtime samej akcji to niezależny Node 24 |
 | git | dowolna aktualna | checkout |
 | Przeglądarki Playwright | Chromium | zainstaluj raz: `npx playwright install --with-deps chromium` |
