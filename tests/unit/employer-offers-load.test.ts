@@ -31,16 +31,23 @@ function client(
         }),
       ),
   };
-  const relatedQuery = (rows: unknown[]) => ({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    is: vi.fn().mockReturnThis(),
-    in: vi.fn().mockReturnThis(),
-    then: (resolve: (value: unknown) => unknown) =>
-      Promise.resolve({ data: rows, error: null }).then(resolve),
-  });
-  const appsQuery = relatedQuery(appRows);
-  const matchesQuery = relatedQuery(matchRows);
+  const appQueries: Array<{ select: ReturnType<typeof vi.fn>; eq: ReturnType<typeof vi.fn> }> = [];
+  const matchQueries: Array<{ select: ReturnType<typeof vi.fn>; eq: ReturnType<typeof vi.fn> }> = [];
+  const relatedQuery = (rows: unknown[], queries: typeof appQueries) => {
+    let jobId = "";
+    const query = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockImplementation((key: string, value: string) => {
+        if (key === "job_id") jobId = value;
+        return query;
+      }),
+      is: vi.fn().mockReturnThis(),
+      then: (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({ count: rows.filter((row) => (row as { job_id: string }).job_id === jobId).length, error: null }).then(resolve),
+    };
+    queries.push(query);
+    return query;
+  };
   const supabase = {
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
@@ -51,12 +58,12 @@ function client(
         table === "jobs"
           ? query
           : table === "applications"
-            ? appsQuery
-            : matchesQuery,
+            ? relatedQuery(appRows, appQueries)
+            : relatedQuery(matchRows, matchQueries),
       ),
   };
   vi.mocked(createServerClient).mockResolvedValue(supabase as never);
-  return { supabase, query, appsQuery, matchesQuery };
+  return { supabase, query, appQueries, matchQueries };
 }
 
 beforeEach(() => {
@@ -100,7 +107,7 @@ describe("employer offers read state", () => {
       city: "Brussels",
       status: "active",
     }));
-    const { query, appsQuery, matchesQuery } = client(
+    const { query, appQueries, matchQueries } = client(
       rows,
       null,
       [{ job_id: "job-12" }, { job_id: "job-12" }],
@@ -136,15 +143,12 @@ describe("employer offers read state", () => {
       [12, 24],
       [24, 36],
     ]);
-    expect(appsQuery.eq).toHaveBeenCalledWith("company_id", "company-1");
-    expect(appsQuery.in).toHaveBeenCalledWith(
-      "job_id",
-      rows.slice(12, 24).map((job) => job.id),
-    );
-    expect(matchesQuery.in).toHaveBeenCalledWith(
-      "job_id",
-      rows.slice(12, 24).map((job) => job.id),
-    );
+    expect(appQueries).toHaveLength(25);
+    expect(matchQueries).toHaveLength(25);
+    expect(appQueries[12]!.eq).toHaveBeenCalledWith("company_id", "company-1");
+    expect(appQueries[12]!.eq).toHaveBeenCalledWith("job_id", "job-12");
+    expect(matchQueries[12]!.eq).toHaveBeenCalledWith("job_id", "job-12");
+    expect(appQueries[12]!.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
     expect(query.order.mock.calls).toEqual([
       ["created_at", { ascending: false }],
       ["id", { ascending: false }],
