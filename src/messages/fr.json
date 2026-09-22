@@ -521,6 +521,16 @@
     "internal": "Une erreur est survenue de notre côté. Nous y travaillons.",
     "generic": "Une erreur est survenue. Réessayez."
   },
+  "offerStatus": {
+    "draft": "Brouillon",
+    "sent": "Envoyée",
+    "viewed": "Consultée",
+    "accepted": "Acceptée",
+    "declined": "Refusée",
+    "expired": "Expirée",
+    "cancelled": "Annulée",
+    "unknown": "Statut indisponible"
+  },
   "status": {
     "draft": "Brouillon",
     "submitted": "Envoyée",

@@ -521,6 +521,16 @@
     "internal": "Er is een fout aan onze kant opgetreden. We werken eraan.",
     "generic": "Er ging iets mis. Probeer opnieuw."
   },
+  "offerStatus": {
+    "draft": "Concept",
+    "sent": "Verzonden",
+    "viewed": "Bekeken",
+    "accepted": "Geaccepteerd",
+    "declined": "Afgewezen",
+    "expired": "Verlopen",
+    "cancelled": "Geannuleerd",
+    "unknown": "Status niet beschikbaar"
+  },
   "status": {
     "draft": "Concept",
     "submitted": "Verzonden",

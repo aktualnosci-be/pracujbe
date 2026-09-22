@@ -521,6 +521,16 @@
     "internal": "Wystąpił błąd po naszej stronie. Pracujemy nad tym.",
     "generic": "Coś poszło nie tak. Spróbuj ponownie."
   },
+  "offerStatus": {
+    "draft": "Szkic",
+    "sent": "Wysłana",
+    "viewed": "Obejrzana",
+    "accepted": "Przyjęta",
+    "declined": "Odrzucona",
+    "expired": "Wygasła",
+    "cancelled": "Anulowana",
+    "unknown": "Status niedostępny"
+  },
   "status": {
     "draft": "Szkic",
     "submitted": "Wysłana",

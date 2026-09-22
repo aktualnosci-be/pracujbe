@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
-import { StatusPill } from "@/components/ui/status-pill";
+import { ProposalStatusPill } from "@/components/candidate/ProposalStatusPill";
 import { ProposalActions } from "@/components/candidate/ProposalActions";
 import { canRespondToProposal } from "@/lib/candidate-offers";
 import { getMyOffers } from "@/lib/data/candidate";
@@ -112,7 +112,10 @@ export default async function CandidateProposalsPage({
                         </p>
                       ) : null}
                     </div>
-                    <StatusPill status={offer.status} className="shrink-0" />
+                    <ProposalStatusPill
+                      status={offer.status}
+                      className="shrink-0"
+                    />
                   </div>
 
                   {offer.message ? (

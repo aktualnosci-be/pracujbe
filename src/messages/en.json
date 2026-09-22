@@ -521,6 +521,16 @@
     "internal": "Something went wrong on our end. We're working on it.",
     "generic": "Something went wrong. Please try again."
   },
+  "offerStatus": {
+    "draft": "Draft",
+    "sent": "Sent",
+    "viewed": "Viewed",
+    "accepted": "Accepted",
+    "declined": "Declined",
+    "expired": "Expired",
+    "cancelled": "Cancelled",
+    "unknown": "Status unavailable"
+  },
   "status": {
     "draft": "Draft",
     "submitted": "Sent",
