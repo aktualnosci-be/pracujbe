@@ -80,4 +80,9 @@ test('małe akcje kreatora oferty mają dostępny cel dotykowy', async ({
   await expectMinimumTarget(
     page.getByRole('button', { name: 'Usuń: Niderlandzki' }),
   );
+
+  const horizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(horizontalOverflow, 'Kreator nie powinien przewijać się poziomo przy 320 px.').toBeLessThanOrEqual(1);
 });
