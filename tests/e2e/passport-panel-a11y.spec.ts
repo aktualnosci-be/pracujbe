@@ -29,19 +29,21 @@ for (const locale of locales) {
 
       const main = page.getByRole('main');
       await expect(main.getByRole('heading', { level: 1 })).toBeVisible();
-      const firstField = main.getByRole('textbox').first();
-      if (await firstField.count()) {
-        await firstField.focus();
-        await expect(firstField).toBeFocused();
-        const focusStyle = await firstField.evaluate((element) => ({
-          outlineStyle: getComputedStyle(element).outlineStyle,
-          boxShadow: getComputedStyle(element).boxShadow,
-        }));
-        expect(
-          focusStyle.outlineStyle !== 'none' || focusStyle.boxShadow !== 'none',
-          `${locale}/${panel.path}: fokus pola formularza musi być widoczny`,
-        ).toBe(true);
-      }
+      const focusTarget = panel.path === 'candidate/profil'
+        ? main.getByRole('link').first()
+        : main.getByRole('textbox').first();
+      await expect(focusTarget).toBeVisible();
+      await page.keyboard.press('Tab');
+      await focusTarget.focus();
+      await expect(focusTarget).toBeFocused();
+      const focusStyle = await focusTarget.evaluate((element) => ({
+        outlineStyle: getComputedStyle(element).outlineStyle,
+        boxShadow: getComputedStyle(element).boxShadow,
+      }));
+      expect(
+        focusStyle.outlineStyle !== 'none' || focusStyle.boxShadow !== 'none',
+        `${locale}/${panel.path}: fokus elementu sterującego musi być widoczny`,
+      ).toBe(true);
 
       const result = await new AxeBuilder({ page }).withTags(tags).analyze();
       const blocking = result.violations.filter((violation) =>
