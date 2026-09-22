@@ -866,7 +866,9 @@ export interface CandidateFile {
  * Bez env / błąd -> pusta lista (panel działa dalej).
  */
 export async function getCandidateFiles(): Promise<CandidateFile[]> {
-  if (!isSupabaseConfigured()) return [];
+  if (!isSupabaseConfigured()) {
+    return [{ id: 'demo-cv', fileName: 'CV-Mateusz-Kowalski.pdf', url: null }];
+  }
   try {
     const { getSignedFileUrl } = await import('@/lib/storage');
     const { supabase, userId } = await getServerContext();
