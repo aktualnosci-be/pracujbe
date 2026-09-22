@@ -54,7 +54,9 @@ type ContractTypeT = ContractType;
 const COLLAPSED_COUNT = 5;
 
 function toggle<T>(list: readonly T[], value: T): T[] {
-  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+  return list.includes(value)
+    ? list.filter((item) => item !== value)
+    : [...list, value];
 }
 
 /* ------------------------------------------------------------------ liczniki */
@@ -71,7 +73,10 @@ function useFacetCounts(items: readonly FacetItem[]) {
     for (const item of items) {
       category.set(item.category, (category.get(item.category) ?? 0) + 1);
       location.set(item.city, (location.get(item.city) ?? 0) + 1);
-      contract.set(item.contractType, (contract.get(item.contractType) ?? 0) + 1);
+      contract.set(
+        item.contractType,
+        (contract.get(item.contractType) ?? 0) + 1,
+      );
       if (item.accommodation) accommodationProvided += 1;
       if (item.immediate) immediate += 1;
       if (item.noLanguageRequired) noLanguage += 1;
@@ -109,20 +114,37 @@ function CheckRow({
   onChange: (checked: boolean) => void;
 }): React.JSX.Element {
   return (
-    <div className="flex items-center gap-2.5 py-1">
-      <Checkbox id={id} checked={checked} onCheckedChange={(v) => onChange(v === true)} />
-      <Label htmlFor={id} className="flex-1 cursor-pointer font-normal text-foreground">
+    <div className="flex min-h-9 items-center gap-2.5 py-1">
+      <Checkbox
+        id={id}
+        checked={checked}
+        onCheckedChange={(v) => onChange(v === true)}
+      />
+      <Label
+        htmlFor={id}
+        className="flex-1 cursor-pointer font-normal text-foreground"
+      >
         {label}
       </Label>
       {count !== undefined ? (
-        <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {count}
+        </span>
       ) : null}
     </div>
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <h3 className="mb-2 text-sm font-semibold text-foreground">{children}</h3>;
+function SectionTitle({
+  children,
+}: {
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+      {children}
+    </h3>
+  );
 }
 
 /* --------------------------------------------------------------- FilterFields */
@@ -194,7 +216,8 @@ export function FilterFields({
     showAllLocations || locationQuery.length > 0
       ? filteredLocations
       : filteredLocations.slice(0, COLLAPSED_COUNT);
-  const hiddenLocationCount = filteredLocations.length - visibleLocations.length;
+  const hiddenLocationCount =
+    filteredLocations.length - visibleLocations.length;
 
   const maxLabel =
     value.salaryMax >= SALARY_MAX_BOUND
@@ -202,7 +225,7 @@ export function FilterFields({
       : currency.format(value.salaryMax);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 [&>section+section]:border-t [&>section+section]:border-border/70 [&>section+section]:pt-5">
       {/* Kategoria */}
       <section>
         <SectionTitle>{t('category')}</SectionTitle>
@@ -214,7 +237,9 @@ export function FilterFields({
               label={tCat(key)}
               count={counts.category.get(key) ?? 0}
               checked={value.categories.includes(key)}
-              onChange={() => patch({ categories: toggle(value.categories, key) })}
+              onChange={() =>
+                patch({ categories: toggle(value.categories, key) })
+              }
             />
           ))}
         </div>
@@ -222,9 +247,11 @@ export function FilterFields({
           <button
             type="button"
             onClick={() => setShowAllCategories((prev) => !prev)}
-            className="mt-1 text-sm font-medium text-accent hover:text-accent-dark"
+            className="mt-1 rounded-sm text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            {showAllCategories ? t('showLess') : t('showMore', { count: hiddenCategoryCount })}
+            {showAllCategories
+              ? t('showLess')
+              : t('showMore', { count: hiddenCategoryCount })}
           </button>
         ) : null}
       </section>
@@ -247,18 +274,22 @@ export function FilterFields({
               label={opt.city}
               count={opt.count}
               checked={value.locations.includes(opt.city)}
-              onChange={() => patch({ locations: toggle(value.locations, opt.city) })}
+              onChange={() =>
+                patch({ locations: toggle(value.locations, opt.city) })
+              }
             />
           ))}
           {visibleLocations.length === 0 ? (
-            <p className="py-1 text-sm text-muted-foreground">{t('noLocations')}</p>
+            <p className="py-1 text-sm text-muted-foreground">
+              {t('noLocations')}
+            </p>
           ) : null}
         </div>
         {hiddenLocationCount > 0 && locationQuery.length === 0 ? (
           <button
             type="button"
             onClick={() => setShowAllLocations(true)}
-            className="mt-1 text-sm font-medium text-accent hover:text-accent-dark"
+            className="mt-1 rounded-sm text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {t('showMore', { count: hiddenLocationCount })}
           </button>
@@ -269,8 +300,8 @@ export function FilterFields({
       <section>
         <SectionTitle>{t('salary')}</SectionTitle>
         <p className="mb-2 text-sm font-medium text-foreground">
-          {currency.format(value.salaryMin)} <span className="text-muted-foreground">–</span>{' '}
-          {maxLabel}
+          {currency.format(value.salaryMin)}{' '}
+          <span className="text-muted-foreground">–</span> {maxLabel}
         </p>
         <div className="space-y-2">
           <input
@@ -280,7 +311,12 @@ export function FilterFields({
             step={SALARY_STEP}
             value={value.salaryMin}
             onChange={(event) =>
-              patch({ salaryMin: Math.min(Number(event.target.value), value.salaryMax) })
+              patch({
+                salaryMin: Math.min(
+                  Number(event.target.value),
+                  value.salaryMax,
+                ),
+              })
             }
             aria-label={t('salaryMin')}
             className="w-full accent-accent"
@@ -292,7 +328,12 @@ export function FilterFields({
             step={SALARY_STEP}
             value={value.salaryMax}
             onChange={(event) =>
-              patch({ salaryMax: Math.max(Number(event.target.value), value.salaryMin) })
+              patch({
+                salaryMax: Math.max(
+                  Number(event.target.value),
+                  value.salaryMin,
+                ),
+              })
             }
             aria-label={t('salaryMax')}
             className="w-full accent-accent"
@@ -311,7 +352,9 @@ export function FilterFields({
               label={tContract(key)}
               count={counts.contract.get(key) ?? 0}
               checked={value.contractTypes.includes(key)}
-              onChange={() => patch({ contractTypes: toggle(value.contractTypes, key) })}
+              onChange={() =>
+                patch({ contractTypes: toggle(value.contractTypes, key) })
+              }
             />
           ))}
         </div>
@@ -327,7 +370,10 @@ export function FilterFields({
           checked={value.accommodation.includes('provided')}
           onChange={() =>
             patch({
-              accommodation: toggle<AccommodationValue>(value.accommodation, 'provided'),
+              accommodation: toggle<AccommodationValue>(
+                value.accommodation,
+                'provided',
+              ),
             })
           }
         />
@@ -338,7 +384,10 @@ export function FilterFields({
           checked={value.accommodation.includes('unavailable')}
           onChange={() =>
             patch({
-              accommodation: toggle<AccommodationValue>(value.accommodation, 'unavailable'),
+              accommodation: toggle<AccommodationValue>(
+                value.accommodation,
+                'unavailable',
+              ),
             })
           }
         />
@@ -429,7 +478,8 @@ export function FilterSidebar({
 
   const total = countMatches(items, pending);
 
-  const apply = () => router.push(buildHref(pathname, pending, { keyword, city, sort }));
+  const apply = () =>
+    router.push(buildHref(pathname, pending, { keyword, city, sort }));
   const clearAll = () => {
     const cleared = emptySidebarFilters();
     setPending(cleared);
@@ -437,21 +487,31 @@ export function FilterSidebar({
   };
 
   return (
-    <div className={cn('rounded-lg border border-border bg-card p-5', className)}>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-foreground">{t('title')}</h2>
+    <div
+      data-filter-passport="desktop"
+      className={cn('min-w-0 border-l border-border pl-5', className)}
+    >
+      <div className="mb-5 flex items-center justify-between gap-3 border-b border-border pb-4">
+        <h2 className="flex items-center gap-2.5 text-base font-semibold text-foreground before:h-2 before:w-2 before:shrink-0 before:rounded-full before:bg-primary">
+          {t('title')}
+        </h2>
         <button
           type="button"
           onClick={clearAll}
-          className="text-sm font-medium text-accent hover:text-accent-dark"
+          className="min-h-11 rounded-sm px-1 text-right text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           {t('clearAll')}
         </button>
       </div>
 
-      <FilterFields items={items} value={pending} onChange={setPending} idPrefix="d" />
+      <FilterFields
+        items={items}
+        value={pending}
+        onChange={setPending}
+        idPrefix="d"
+      />
 
-      <Button type="button" onClick={apply} className="mt-6 w-full">
+      <Button type="button" onClick={apply} className="mt-6 w-full rounded-xl">
         {t('showResults', { count: total })}
       </Button>
     </div>

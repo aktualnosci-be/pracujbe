@@ -83,7 +83,12 @@ export function FilterSheet({
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger
-        className={cn(buttonVariants({ variant: 'outline' }), 'gap-2', className)}
+        data-filter-passport="mobile-trigger"
+        className={cn(
+          buttonVariants({ variant: 'outline' }),
+          'min-h-12 gap-2 rounded-xl border-border bg-background',
+          className,
+        )}
       >
         <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
         <span>{t('title')}</span>
@@ -98,35 +103,48 @@ export function FilterSheet({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed inset-x-0 bottom-0 z-50 flex max-h-[90vh] flex-col rounded-t-2xl border-t border-border bg-background shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
+          data-filter-passport="mobile-sheet"
+          className="fixed inset-x-0 bottom-0 z-50 flex max-h-[90vh] min-w-0 flex-col overflow-hidden rounded-t-2xl border-t border-border bg-background shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
         >
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <Dialog.Title className="text-base font-semibold text-foreground">
+          <div className="sticky top-0 z-10 flex min-h-16 items-center justify-between gap-2 border-b border-border bg-background px-4 py-2">
+            <Dialog.Title className="flex items-center gap-2.5 text-base font-semibold text-foreground before:h-2 before:w-2 before:shrink-0 before:rounded-full before:bg-primary">
               {t('title')}
             </Dialog.Title>
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-1">
               <button
                 type="button"
                 onClick={clearAll}
-                className="text-sm font-medium text-accent hover:text-accent-dark"
+                className="min-h-12 rounded-md px-2 text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 {t('clearAll')}
               </button>
               <Dialog.Close
                 aria-label={t('close')}
-                className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-9 w-9')}
+                className={cn(
+                  buttonVariants({ variant: 'ghost', size: 'icon' }),
+                  'h-12 w-12 shrink-0 rounded-xl',
+                )}
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </Dialog.Close>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4">
-            <FilterFields items={items} value={pending} onChange={setPending} idPrefix="m" />
+          <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5">
+            <FilterFields
+              items={items}
+              value={pending}
+              onChange={setPending}
+              idPrefix="m"
+            />
           </div>
 
-          <div className="border-t border-border p-4">
-            <Button type="button" onClick={apply} className="w-full">
+          <div className="sticky bottom-0 z-10 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <Button
+              type="button"
+              onClick={apply}
+              className="min-h-12 w-full rounded-xl"
+            >
               {t('showResults', { count: total })}
             </Button>
           </div>
