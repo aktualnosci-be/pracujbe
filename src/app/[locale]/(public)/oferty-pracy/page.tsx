@@ -6,7 +6,7 @@ import { ChevronDown, MapPin, Search, SearchX, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { getJobs } from '@/lib/jobs';
+import { getJobFilterFacets, getJobs } from '@/lib/jobs';
 import { cn } from '@/lib/utils';
 import { FilterSidebar } from '@/components/public/FilterSidebar';
 import { FilterSheet } from '@/components/public/FilterSheet';
@@ -14,6 +14,7 @@ import { JobCard } from '@/components/public/JobCard';
 import { Pagination } from '@/components/public/Pagination';
 import {
   SALARY_MAX_BOUND,
+  buildDemoFacets,
   isSalaryNarrowed,
   parseSidebarFilters,
   parseSort,
@@ -21,7 +22,6 @@ import {
   splitParam,
   toFacetItem,
   type DateValue,
-  type FacetItem,
   type SortValue,
 } from '@/components/public/job-filters';
 
@@ -38,9 +38,8 @@ import {
  * SQL (get_public_jobs, 0046 — P1-12), więc skalują się na dowolny wolumen ofert. Działa BEZ
  * zmiennych środowiskowych (dane demonstracyjne z `getJobs`).
  *
- * Uwaga (facets): liczniki przy opcjach filtrów w sidebarze to PODPOWIEDZI liczone nad próbką
- * (`MAX_FACET`) — mogą być przybliżone dla bardzo dużych wolumenów; wyniki/licznik/paginacja
- * są dokładne (SQL). Dokładne liczniki facetów per opcja = follow-up (osobne agregaty SQL).
+ * Liczniki opcji filtrów pochodzą z jednego dokładnego agregatu SQL i zachowują pozostałe
+ * aktywne filtry. Nie zależą od strony wyników ani od próbki ofert.
  *
  * TODO(i18n-slugs): jeden segment `oferty-pracy` dla wszystkich języków; lokalizowane slugi
  * (vacatures/offres-emploi/jobs) w mapie drogowej (spec 12).
@@ -48,7 +47,6 @@ import {
 
 const BASE_PATH = '/oferty-pracy';
 const PAGE_SIZE = 12;
-const MAX_FACET = 200;
 
 /** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). Spójne z layoutem/stroną główną. */
 const OG_LOCALE: Record<string, string> = {
@@ -112,7 +110,10 @@ export async function generateMetadata({
   };
 }
 
-export default async function JobsListPage({ params, searchParams }: PageProps) {
+export default async function JobsListPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
 
@@ -125,7 +126,8 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
   const sf = parseSidebarFilters(flat);
 
   const pageRaw = Number(flat['page']);
-  const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.trunc(pageRaw) : 1;
+  const page =
+    Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.trunc(pageRaw) : 1;
 
   const [t, tFilters, tCat, tContract, tCommon, tNav] = await Promise.all([
     getTranslations('jobs'),
@@ -136,21 +138,24 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
     getTranslations('nav'),
   ]);
 
-  // Podpowiedzi liczników w sidebarze (facets): próbka zawężona keyword/miastem nad zbiorem
-  // MAX_FACET. Przybliżone dla bardzo dużych wolumenów — to tylko hinty przy opcjach filtrów.
-  const facetBase = await getJobs({ locale, keyword, city, page: 1, pageSize: MAX_FACET });
-  const items: FacetItem[] = facetBase.jobs.map(toFacetItem);
-
   // Data „od" dla filtra świeżości (P1-12: liczone w SQL).
   const DAY_MS = 86_400_000;
   const sinceWindow =
-    sf.date === '24h' ? DAY_MS : sf.date === '7d' ? 7 * DAY_MS : sf.date === '30d' ? 30 * DAY_MS : 0;
-  const since = sinceWindow ? new Date(Date.now() - sinceWindow).toISOString() : undefined;
+    sf.date === '24h'
+      ? DAY_MS
+      : sf.date === '7d'
+        ? 7 * DAY_MS
+        : sf.date === '30d'
+          ? 30 * DAY_MS
+          : 0;
+  const since = sinceWindow
+    ? new Date(Date.now() - sinceWindow).toISOString()
+    : undefined;
 
   // WYNIKI: komplet filtrów sidebara + sort + paginacja + licznik PO STRONIE SQL (P1-12) —
   // koniec liczenia w pamięci nad wycinkiem 200 (oferty nie znikają, liczba stron poprawna).
   const narrowed = isSalaryNarrowed(sf);
-  const results = await getJobs({
+  const filterParams = {
     locale,
     keyword,
     city,
@@ -158,17 +163,28 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
     locations: sf.locations,
     contractTypes: sf.contractTypes,
     ...(narrowed ? { salaryMin: sf.salaryMin } : {}),
-    ...(narrowed && sf.salaryMax < SALARY_MAX_BOUND ? { salaryMax: sf.salaryMax } : {}),
+    ...(narrowed && sf.salaryMax < SALARY_MAX_BOUND
+      ? { salaryMax: sf.salaryMax }
+      : {}),
     ...(sf.accommodation.length === 1
       ? { accommodation: sf.accommodation.includes('provided') }
       : {}),
     ...(sf.immediate ? { immediate: true } : {}),
     ...(sf.noLanguageRequired ? { noLanguageRequired: true } : {}),
     ...(since ? { since } : {}),
-    sort,
-    page,
-    pageSize: PAGE_SIZE,
-  });
+  };
+  const [results, databaseFacets] = await Promise.all([
+    getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }),
+    getJobFilterFacets(filterParams),
+  ]);
+  const facets =
+    databaseFacets ??
+    buildDemoFacets(
+      (
+        await getJobs({ locale, keyword, city, page: 1, pageSize: 100 })
+      ).jobs.map(toFacetItem),
+      sf,
+    );
   const pageItems = results.jobs;
   const total = results.total;
 
@@ -179,7 +195,9 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
   });
 
   // Zestaw aktywnych parametrów (spójny z tym, co zapisuje sidebar) do budowy linków.
-  const activeParams: Record<string, string> = { ...sidebarFiltersToParams(sf) };
+  const activeParams: Record<string, string> = {
+    ...sidebarFiltersToParams(sf),
+  };
   if (keyword) activeParams['keyword'] = keyword;
   if (city) activeParams['city'] = city;
   if (sort !== 'newest') activeParams['sort'] = sort;
@@ -233,26 +251,49 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
 
   // Chipy aktywnych filtrów (odzwierciedlają activeParams).
   const chips: Array<{ id: string; label: string; href: string }> = [];
-  if (keyword) chips.push({ id: 'kw', label: keyword, href: withoutKey('keyword') });
+  if (keyword)
+    chips.push({ id: 'kw', label: keyword, href: withoutKey('keyword') });
   if (city) chips.push({ id: 'city', label: city, href: withoutKey('city') });
   for (const cat of sf.categories) {
-    chips.push({ id: `cat-${cat}`, label: tCat(cat), href: withoutValue('category', cat) });
+    chips.push({
+      id: `cat-${cat}`,
+      label: tCat(cat),
+      href: withoutValue('category', cat),
+    });
   }
   for (const loc of sf.locations) {
-    chips.push({ id: `loc-${loc}`, label: loc, href: withoutValue('location', loc) });
+    chips.push({
+      id: `loc-${loc}`,
+      label: loc,
+      href: withoutValue('location', loc),
+    });
   }
   for (const ct of sf.contractTypes) {
-    chips.push({ id: `ct-${ct}`, label: tContract(ct), href: withoutValue('contractType', ct) });
+    chips.push({
+      id: `ct-${ct}`,
+      label: tContract(ct),
+      href: withoutValue('contractType', ct),
+    });
   }
   if (isSalaryNarrowed(sf)) {
     chips.push({ id: 'salary', label: salaryChipLabel, href: withoutSalary() });
   }
   if (sf.accommodation.length === 1) {
-    const value = sf.accommodation.includes('provided') ? 'provided' : 'unavailable';
-    chips.push({ id: 'acc', label: tFilters(value), href: withoutKey('accommodation') });
+    const value = sf.accommodation.includes('provided')
+      ? 'provided'
+      : 'unavailable';
+    chips.push({
+      id: 'acc',
+      label: tFilters(value),
+      href: withoutKey('accommodation'),
+    });
   }
   if (sf.immediate) {
-    chips.push({ id: 'immediate', label: tFilters('immediate'), href: withoutKey('immediate') });
+    chips.push({
+      id: 'immediate',
+      label: tFilters('immediate'),
+      href: withoutKey('immediate'),
+    });
   }
   if (sf.noLanguageRequired) {
     chips.push({
@@ -262,7 +303,11 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
     });
   }
   if (sf.date !== 'any') {
-    chips.push({ id: 'date', label: dateChipLabel(sf.date), href: withoutKey('date') });
+    chips.push({
+      id: 'date',
+      label: dateChipLabel(sf.date),
+      href: withoutKey('date'),
+    });
   }
 
   const clearFiltersHref = hrefFrom({
@@ -276,7 +321,8 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
   delete hiddenSearchParams['keyword'];
   delete hiddenSearchParams['city'];
 
-  const currentSortLabel = sort === 'salary' ? tFilters('sortSalary') : tFilters('sortNewest');
+  const currentSortLabel =
+    sort === 'salary' ? tFilters('sortSalary') : tFilters('sortNewest');
   const sortOptions: Array<{ value: SortValue; label: string }> = [
     { value: 'newest', label: tFilters('sortNewest') },
     { value: 'salary', label: tFilters('sortSalary') },
@@ -287,7 +333,10 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
       <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-soft [&::-webkit-details-marker]:hidden">
         <span className="text-muted-foreground">{tFilters('sortBy')}:</span>
         <span className="font-medium">{currentSortLabel}</span>
-        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+        <ChevronDown
+          className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
       </summary>
       <div className="absolute right-0 z-20 mt-1 w-60 rounded-md border border-border bg-background p-1 shadow-md">
         {sortOptions.map((option) => (
@@ -296,7 +345,9 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
             href={sortHref(option.value)}
             className={cn(
               'block rounded-sm px-3 py-2 text-sm transition-colors hover:bg-soft',
-              option.value === sort ? 'font-medium text-accent' : 'text-foreground',
+              option.value === sort
+                ? 'font-medium text-accent'
+                : 'text-foreground',
             )}
           >
             {option.label}
@@ -307,13 +358,22 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
   );
 
   return (
-    <PublicSavedJobsProvider key={JSON.stringify(pageItems.map(job => job.id))} jobIds={pageItems.map(job => job.id)}>
+    <PublicSavedJobsProvider
+      key={JSON.stringify(pageItems.map((job) => job.id))}
+      jobIds={pageItems.map((job) => job.id)}
+    >
     <div className="container py-6 md:py-10">
       {/* Breadcrumb */}
-      <nav aria-label={tCommon('breadcrumb')} className="mb-4 text-sm text-muted-foreground">
+        <nav
+          aria-label={tCommon('breadcrumb')}
+          className="mb-4 text-sm text-muted-foreground"
+        >
         <ol className="flex items-center gap-1.5">
           <li>
-            <Link href="/" className="transition-colors hover:text-foreground">
+              <Link
+                href="/"
+                className="transition-colors hover:text-foreground"
+              >
               {tCommon('home')}
             </Link>
           </li>
@@ -327,7 +387,9 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
         <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
           {t('pageTitle')}
         </h1>
-        <p className="mt-2 text-base leading-relaxed text-muted-foreground">{t('subtitle')}</p>
+          <p className="mt-2 text-base leading-relaxed text-muted-foreground">
+            {t('subtitle')}
+          </p>
       </header>
 
       {/* Wyszukiwarka (GET — działa bez JS, zachowuje aktywne filtry) */}
@@ -338,7 +400,10 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
         className="grid gap-3 rounded-[17px] border border-border bg-background p-2.5 md:grid-cols-[1.5fr_1.2fr_auto] md:items-end"
       >
         <div className="space-y-1.5 px-1.5 pt-1.5 md:py-1.5">
-          <label htmlFor="q-keyword" className="text-xs font-semibold text-muted-foreground">
+            <label
+              htmlFor="q-keyword"
+              className="text-xs font-semibold text-muted-foreground"
+            >
             {t('keyword')}
           </label>
           <div className="relative">
@@ -358,7 +423,10 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
         </div>
 
         <div className="space-y-1.5 px-1.5 md:py-1.5">
-          <label htmlFor="q-city" className="text-xs font-semibold text-muted-foreground">
+            <label
+              htmlFor="q-city"
+              className="text-xs font-semibold text-muted-foreground"
+            >
             {t('location')}
           </label>
           <div className="relative">
@@ -396,7 +464,7 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
         <aside className="hidden lg:block">
           <div className="sticky top-24">
             <FilterSidebar
-              items={items}
+                facets={facets}
               initial={sf}
               keyword={keyword}
               city={city}
@@ -410,7 +478,7 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
           {/* Pasek narzędzi (mobile) */}
           <div className="mb-4 flex flex-col items-stretch gap-3 lg:hidden [&>details]:w-full [&>details>summary]:justify-between">
             <FilterSheet
-              items={items}
+                facets={facets}
               initial={sf}
               keyword={keyword}
               city={city}
@@ -429,7 +497,10 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
           </div>
 
           {/* Liczba wyników (mobile) */}
-          <p className="mb-3 text-sm text-muted-foreground lg:hidden" aria-live="polite">
+            <p
+              className="mb-3 text-sm text-muted-foreground lg:hidden"
+              aria-live="polite"
+            >
             {t('resultsCount', { count: total })}
           </p>
 
@@ -444,7 +515,10 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
                   className="inline-flex items-center gap-1.5 rounded-full border border-border bg-soft py-1 pl-3 pr-2 text-sm text-foreground transition-colors hover:bg-muted"
                 >
                   <span>{chip.label}</span>
-                  <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <X
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                 </Link>
               ))}
               <Link
@@ -459,7 +533,10 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
           {/* Wyniki */}
           {pageItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-soft px-6 py-16 text-center">
-              <SearchX className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
+                <SearchX
+                  className="h-10 w-10 text-muted-foreground"
+                  aria-hidden="true"
+                />
               <p className="max-w-md text-muted-foreground">{t('empty')}</p>
             </div>
           ) : (

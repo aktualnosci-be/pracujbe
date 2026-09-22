@@ -122,11 +122,24 @@ const DEFAULT_LATEST_LIMIT = 6;
 const NEW_DAYS = 10;
 
 const CONTRACT_TYPES: readonly ContractType[] = [
-  'permanent', 'temporary', 'interim', 'freelance', 'internship', 'seasonal',
+  'permanent',
+  'temporary',
+  'interim',
+  'freelance',
+  'internship',
+  'seasonal',
 ];
 const CATEGORY_KEYS: readonly CategoryKey[] = [
-  'construction', 'transport', 'warehouse', 'production', 'technical',
-  'cleaning', 'hospitality', 'care', 'logistics', 'seasonal',
+  'construction',
+  'transport',
+  'warehouse',
+  'production',
+  'technical',
+  'cleaning',
+  'hospitality',
+  'care',
+  'logistics',
+  'seasonal',
 ];
 
 /** Zawęża dowolny string do obsługiwanego `Locale` (fallback: język domyślny). */
@@ -153,8 +166,11 @@ function getJobsFromDemo(
   let jobs: JobDetail[] = resolveDemoJobs(locale);
 
   // Kategorie/typy umów: pojedyncze (landing) + tablice (sidebar) połączone (P1-12).
-  const categories = params.categories ?? (params.category ? [params.category] : undefined);
-  const contractTypes = params.contractTypes ?? (params.contractType ? [params.contractType] : undefined);
+  const categories =
+    params.categories ?? (params.category ? [params.category] : undefined);
+  const contractTypes =
+    params.contractTypes ??
+    (params.contractType ? [params.contractType] : undefined);
   if (categories && categories.length > 0) {
     jobs = jobs.filter((job) => categories.includes(job.category));
   }
@@ -169,7 +185,9 @@ function getJobsFromDemo(
     const q = params.city.trim().toLowerCase();
     if (q) {
       jobs = jobs.filter(
-        (job) => job.city.toLowerCase().includes(q) || job.slug.toLowerCase().includes(q),
+        (job) =>
+          job.city.toLowerCase().includes(q) ||
+          job.slug.toLowerCase().includes(q),
       );
     }
   }
@@ -190,7 +208,8 @@ function getJobsFromDemo(
     const lo = params.salaryMin ?? 0;
     const hi = params.salaryMax ?? Number.POSITIVE_INFINITY;
     jobs = jobs.filter((job) => {
-      if (job.salaryMin === undefined && job.salaryMax === undefined) return true;
+      if (job.salaryMin === undefined && job.salaryMax === undefined)
+        return true;
       const iMax = job.salaryMax ?? job.salaryMin ?? 0;
       const iMin = job.salaryMin ?? job.salaryMax ?? 0;
       return iMax >= lo && iMin <= hi;
@@ -200,7 +219,8 @@ function getJobsFromDemo(
     jobs = jobs.filter((job) => job.accommodation === params.accommodation);
   }
   if (params.immediate) jobs = jobs.filter((job) => job.immediate);
-  if (params.noLanguageRequired) jobs = jobs.filter((job) => job.noLanguageRequired);
+  if (params.noLanguageRequired)
+    jobs = jobs.filter((job) => job.noLanguageRequired);
   if (params.since) {
     const sinceTs = Date.parse(params.since);
     if (!Number.isNaN(sinceTs)) {
@@ -213,7 +233,9 @@ function getJobsFromDemo(
 
   const sorted = [...jobs].sort(
     params.sort === 'salary'
-      ? (a, b) => (b.salaryMax ?? b.salaryMin ?? 0) - (a.salaryMax ?? a.salaryMin ?? 0) || newestFirst(a, b)
+      ? (a, b) =>
+          (b.salaryMax ?? b.salaryMin ?? 0) -
+            (a.salaryMax ?? a.salaryMin ?? 0) || newestFirst(a, b)
       : newestFirst,
   );
   const total = sorted.length;
@@ -262,16 +284,22 @@ function asStringArray(value: unknown): string[] {
 
 function asContractType(value: unknown): ContractType {
   const v = asString(value);
-  return CONTRACT_TYPES.includes(v as ContractType) ? (v as ContractType) : 'permanent';
+  return CONTRACT_TYPES.includes(v as ContractType)
+    ? (v as ContractType)
+    : 'permanent';
 }
 
 function asCategory(value: unknown): CategoryKey {
   const v = asString(value);
-  return CATEGORY_KEYS.includes(v as CategoryKey) ? (v as CategoryKey) : 'logistics';
+  return CATEGORY_KEYS.includes(v as CategoryKey)
+    ? (v as CategoryKey)
+    : 'logistics';
 }
 
 function asSalaryPeriod(value: unknown): SalaryPeriod | undefined {
-  return value === 'hour' || value === 'month' || value === 'year' ? value : undefined;
+  return value === 'hour' || value === 'month' || value === 'year'
+    ? value
+    : undefined;
 }
 
 function computeIsNew(publishedAt: string): boolean {
@@ -322,7 +350,9 @@ function rowToJobDetail(row: unknown): JobDetail {
     transport: asBool(r['transport']),
     startDate: asOptString(r['start_date']),
     companyDescription: asString(r['company_description']),
-    ...(asOptString(r['expires_at']) ? { expiresAt: asOptString(r['expires_at']) } : {}),
+    ...(asOptString(r['expires_at'])
+      ? { expiresAt: asOptString(r['expires_at']) }
+      : {}),
   };
 }
 
@@ -332,15 +362,29 @@ async function getJobsFromDb(
   pageSize: number,
 ): Promise<GetJobsResult> {
   const [{ getDomainPool }, { getPublicJobs }] = await Promise.all([
-    import('@/lib/db/runtime'), import('@/lib/db/public-jobs'),
+    import('@/lib/db/runtime'),
+    import('@/lib/db/public-jobs'),
   ]);
-  const result = await getPublicJobs(await getDomainPool(), { ...params, page, pageSize });
-  return { jobs: result.rows.map(rowToJobListItem), total: result.total, page: result.page, pageSize: result.pageSize };
+  const result = await getPublicJobs(await getDomainPool(), {
+    ...params,
+    page,
+    pageSize,
+  });
+  return {
+    jobs: result.rows.map(rowToJobListItem),
+    total: result.total,
+    page: result.page,
+    pageSize: result.pageSize,
+  };
 }
 
-async function getJobBySlugFromDb(slug: string, locale: string): Promise<JobDetail | null> {
+async function getJobBySlugFromDb(
+  slug: string,
+  locale: string,
+): Promise<JobDetail | null> {
   const [{ getDomainPool }, { getPublicJob }] = await Promise.all([
-    import('@/lib/db/runtime'), import('@/lib/db/public-jobs'),
+    import('@/lib/db/runtime'),
+    import('@/lib/db/public-jobs'),
   ]);
   const first = await getPublicJob(await getDomainPool(), slug, locale);
   return first ? rowToJobDetail(first) : null;
@@ -353,7 +397,10 @@ async function getJobBySlugFromDb(slug: string, locale: string): Promise<JobDeta
 export async function getJobs(params: GetJobsParams): Promise<GetJobsResult> {
   const locale = toLocale(params.locale);
   const page = Math.max(1, Math.trunc(params.page ?? 1));
-  const pageSize = Math.max(1, Math.trunc(params.pageSize ?? DEFAULT_PAGE_SIZE));
+  const pageSize = Math.max(
+    1,
+    Math.trunc(params.pageSize ?? DEFAULT_PAGE_SIZE),
+  );
 
   if (isDatabaseConfigured()) {
     try {
@@ -370,7 +417,10 @@ export async function getJobs(params: GetJobsParams): Promise<GetJobsResult> {
   return getJobsFromDemo(locale, params, page, pageSize);
 }
 
-export async function getJobBySlug(slug: string, locale: string): Promise<JobDetail | null> {
+export async function getJobBySlug(
+  slug: string,
+  locale: string,
+): Promise<JobDetail | null> {
   const resolvedLocale = toLocale(locale);
 
   if (isDatabaseConfigured()) {
@@ -395,6 +445,19 @@ export async function getLatestJobs(
   return result.jobs;
 }
 
+export async function getJobFilterFacets(params: GetJobsParams) {
+  if (!isDatabaseConfigured()) return null;
+  try {
+    const [{ getDomainPool }, { getPublicJobFilterFacets }] = await Promise.all(
+      [import('@/lib/db/runtime'), import('@/lib/db/public-jobs')],
+    );
+    return await getPublicJobFilterFacets(await getDomainPool(), params);
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobFilterFacets' });
+    throw new AppError('INTERNAL');
+  }
+}
+
 /**
  * P1-09: REALNE liczniki ofert per kategoria (koniec zmyślonych liczb na stronie głównej).
  * Zwraca `null` w trybie demo (brak env) — komponent pomija wtedy badge zamiast pokazywać
@@ -407,11 +470,15 @@ export async function getCategoryCounts(
 ): Promise<Record<string, number> | null> {
   if (!isDatabaseConfigured()) return null;
   try {
-    const [{ getDomainPool }, { getPublicJobCategoryCounts }] = await Promise.all([
-      import('@/lib/db/runtime'), import('@/lib/db/public-jobs'),
+    const [{ getDomainPool }, { getPublicJobCategoryCounts }] =
+      await Promise.all([
+        import('@/lib/db/runtime'),
+        import('@/lib/db/public-jobs'),
     ]);
     const pool = await getDomainPool();
-    const validKeys = keys.filter((key) => CATEGORY_KEYS.includes(key as CategoryKey));
+    const validKeys = keys.filter((key) =>
+      CATEGORY_KEYS.includes(key as CategoryKey),
+    );
     const counts = await getPublicJobCategoryCounts(pool, validKeys);
     return Object.fromEntries(keys.map((key) => [key, counts[key] ?? 0]));
   } catch (error) {
@@ -432,7 +499,8 @@ export async function getCityCounts(
   if (!isDatabaseConfigured()) return null;
   try {
     const [{ getDomainPool }, { getPublicJobCityCounts }] = await Promise.all([
-      import('@/lib/db/runtime'), import('@/lib/db/public-jobs'),
+      import('@/lib/db/runtime'),
+      import('@/lib/db/public-jobs'),
     ]);
     const pool = await getDomainPool();
     return getPublicJobCityCounts(pool, cities);
