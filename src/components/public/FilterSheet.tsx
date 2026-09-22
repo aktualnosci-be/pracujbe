@@ -68,8 +68,10 @@ function NoScriptFilterForm({
   const t = useTranslations('filters');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
-  const locations = facets.locations
-    .map((item) => item.city)
+  const locations = [...new Set([
+    ...initial.locations,
+    ...facets.locations.map((item) => item.city),
+  ])]
     .sort((a, b) => a.localeCompare(b));
   const clearHref = buildHref(pathname, emptySidebarFilters(), {
     keyword,

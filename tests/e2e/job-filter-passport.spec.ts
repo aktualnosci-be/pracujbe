@@ -15,6 +15,7 @@ type Messages = {
   };
   jobs: {
     pageTitle: string;
+    empty: string;
   };
 };
 
@@ -62,6 +63,34 @@ async function expectTargetsAtLeast48(root: Locator): Promise<void> {
 function resultsPattern(template: string): RegExp {
   return new RegExp(`^${template.replace('{count}', '\\d+')}$`);
 }
+
+test('formularz no-JS zachowuje pojedynczą lokalizację spoza facetów przy zerowym wyniku', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    javaScriptEnabled: false,
+    viewport: { width: 320, height: 800 },
+  });
+  const page = await context.newPage();
+  const location = 'Zero Jobs Place';
+  const t = messages('en');
+
+  await page.goto(`/en/oferty-pracy?location=${encodeURIComponent(location)}`);
+  await expect(page.getByText(t.jobs.empty)).toBeVisible();
+
+  const form = page.locator('[data-filter-passport="no-js"]');
+  const select = form.locator('select[name="location"]');
+  await expect(select).toHaveValue(location);
+  await expect(select.locator(`option[value="${location}"]`)).toHaveCount(1);
+
+  await form.locator('button[type="submit"]').click();
+  await page.waitForLoadState('domcontentloaded');
+  expect(new URL(page.url()).searchParams.get('location')).toBe(location);
+  await expect(page.getByText(t.jobs.empty)).toBeVisible();
+  await expect(page.locator('select[name="location"]')).toHaveValue(location);
+
+  await context.close();
+});
 
 for (const locale of locales) {
   test(`filtry paszportowe zachowują SSR i hierarchię na desktopie i mobile: ${locale}`, async ({
