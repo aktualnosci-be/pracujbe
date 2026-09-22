@@ -82,22 +82,26 @@ export function Stepper({ steps, current, className }: StepperProps): React.JSX.
 
       {/* Mobile — numerowane kropki + tytuł/opis aktywnego kroku */}
       <div className="md:hidden">
-        <ol className="flex items-center gap-2">
+        <ol className="flex items-center gap-1">
           {steps.map((step, index) => {
             const state = stateOf(index, current);
+            const isLast = index === steps.length - 1;
             return (
-              <li key={step.title} className="flex items-center gap-2">
+              <li
+                key={step.title}
+                className={cn('flex min-w-0 items-center gap-1', isLast ? 'shrink-0' : 'flex-1')}
+              >
                 <span
                   className={cn(
-                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
                     CIRCLE_CLASS[state],
                   )}
                   aria-current={state === 'active' ? 'step' : undefined}
                 >
                   {state === 'done' ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : index + 1}
                 </span>
-                {index < steps.length - 1 ? (
-                  <span className={cn('h-px w-4', index < current ? 'bg-primary' : 'bg-border')} />
+                {!isLast ? (
+                  <span className={cn('h-px min-w-1 flex-1', index < current ? 'bg-primary' : 'bg-border')} />
                 ) : null}
               </li>
             );
