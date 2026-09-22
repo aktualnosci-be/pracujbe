@@ -141,7 +141,7 @@ export default async function CandidateDashboardPage({
 
       {/* Główna siatka: lewa (2/3) + prawa (1/3) */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
           {/* Polecane oferty pracy */}
           <section className="rounded-lg border border-border bg-card">
             <div className="flex items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
@@ -171,7 +171,7 @@ export default async function CandidateDashboardPage({
                           {job.slug ? (
                             <Link
                               href={`/oferty-pracy/${job.slug}`}
-                              className="truncate text-sm font-semibold text-foreground hover:text-accent hover:underline"
+                              className="block max-w-full truncate text-sm font-semibold text-foreground hover:text-accent hover:underline"
                             >
                               {job.title}
                             </Link>
@@ -226,7 +226,7 @@ export default async function CandidateDashboardPage({
                         {app.slug ? (
                           <Link
                             href={`/oferty-pracy/${app.slug}`}
-                            className="truncate text-sm font-medium text-foreground hover:text-accent hover:underline"
+                            className="block max-w-full truncate text-sm font-medium text-foreground hover:text-accent hover:underline"
                           >
                             {app.jobTitle || '—'}
                           </Link>

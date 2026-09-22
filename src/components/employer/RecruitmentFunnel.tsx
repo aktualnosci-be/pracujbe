@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
  *
  * Cztery etapy (Wyświetlenia ofert → Aplikacje → Rozmowy → Zatrudnieni) z trzema
  * współczynnikami konwersji między nimi. „Prosty lejek, bez ciężkich wykresów":
- *  - desktop (sm+): etapy w poziomie, konwersje jako pigułki między blokami (strzałka →),
+ *  - desktop (lg+): etapy w poziomie, konwersje jako pigułki między blokami (strzałka →),
  *  - mobile: etapy w pionie, konwersje między nimi (strzałka ↓).
  *
  * Komponent samowystarczalny: etykiety etapów i chrome (tytuł/okres/„Zobacz szczegóły")
@@ -48,7 +48,7 @@ export function RecruitmentFunnel({
 
   return (
     <section className={cn('rounded-lg border border-border bg-card', className)}>
-      <div className="flex items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 border-b border-border p-4 sm:px-5">
         <h2 className="text-base font-semibold text-foreground">
           {td('funnelTitle')}{' '}
           <span className="text-sm font-normal text-muted-foreground">
@@ -57,7 +57,7 @@ export function RecruitmentFunnel({
         </h2>
         <Link
           href="/employer/statystyki"
-          className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-accent hover:underline"
+          className="ml-auto inline-flex min-h-12 shrink-0 items-center gap-1 text-sm font-medium text-accent hover:underline"
         >
           {td('funnelDetails')}
           <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -65,7 +65,7 @@ export function RecruitmentFunnel({
       </div>
 
       <div className="p-4 sm:p-5">
-        <ol className="flex flex-col sm:flex-row sm:items-stretch">
+        <ol className="flex flex-col lg:flex-row lg:items-stretch">
           {stages.map((stage, index) => {
             const conversion = conversions[index];
             return (
@@ -77,10 +77,10 @@ export function RecruitmentFunnel({
                   <p className="mt-0.5 text-sm text-muted-foreground">{stage.label}</p>
                 </li>
                 {index < stages.length - 1 && conversion !== undefined ? (
-                  <li className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-muted-foreground sm:w-28 sm:flex-col sm:gap-1 sm:py-0">
-                    <ArrowDown className="size-3.5 shrink-0 sm:hidden" aria-hidden="true" />
+                  <li className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-muted-foreground lg:w-28 lg:flex-col lg:gap-1 lg:py-0">
+                    <ArrowDown className="size-3.5 shrink-0 lg:hidden" aria-hidden="true" />
                     <ArrowRight
-                      className="hidden size-3.5 shrink-0 sm:block"
+                      className="hidden size-3.5 shrink-0 lg:block"
                       aria-hidden="true"
                     />
                     <span className="whitespace-nowrap text-center">
