@@ -13,12 +13,14 @@ import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
 import { CvUpload } from '@/components/candidate/CvUpload';
 import { SaveJobButton } from '@/components/candidate/SaveJobButton';
 import { ApplicationActions } from '@/components/candidate/ApplicationActions';
+import { findNewProposal } from '@/lib/candidate-offers';
 import {
   getCandidateOverview,
   getCandidateProfileSummary,
   getCandidateFiles,
   getLatestMessages,
   getMyApplications,
+  getMyOffers,
   getRecommendedJobs,
 } from '@/lib/data/candidate';
 
@@ -78,14 +80,17 @@ export default async function CandidateDashboardPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tj = await getTranslations({ locale, namespace: 'jobs' });
 
-  const [overview, profile, recommended, applications, messages, files] = await Promise.all([
+  const [overview, profile, recommended, applications, messages, files, offers] = await Promise.all([
     getCandidateOverview(),
     getCandidateProfileSummary(),
     getRecommendedJobs(locale),
     getMyApplications(locale),
     getLatestMessages(),
     getCandidateFiles(),
+    getMyOffers(locale),
   ]);
+
+  const newProposal = findNewProposal(offers);
 
   const checklist = [
     { label: td('checkBasicInfo'), done: profile.checklist.basicInfo, action: td('add') },
@@ -103,8 +108,17 @@ export default async function CandidateDashboardPage({
         {td('greeting', { name: profile.firstName ?? '' })} <span aria-hidden="true">👋</span>
       </h1>
 
-      {/* Baner nowej propozycji (zamykany) */}
-      <NewProposalBanner />
+      {/* Baner wyłącznie dla rzeczywistej propozycji oczekującej na odpowiedź. */}
+      {newProposal ? (
+        <NewProposalBanner
+          status={newProposal.status}
+          href={
+            newProposal.slug
+              ? `/oferty-pracy/${newProposal.slug}`
+              : '/candidate/propozycje'
+          }
+        />
+      ) : null}
 
       {/* Statystyki */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
