@@ -1210,6 +1210,13 @@ select pg_temp.assert(
   (select status::text from public.jobs where id = 'a2222222-2222-2222-2222-222222222222') = 'active',
   'GG3 bez subskrypcji: druga kompletna oferta jest aktywna');
 
+-- GG4: ponowne żądanie publikacji nie może udawać drugiego sukcesu.
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'select public.publish_job(''a2222222-2222-2222-2222-222222222222''::uuid, ''inna-nazwa'')',
+  'VALIDATION_FAILED', 'GG4 ponowna publikacja aktywnej oferty jest odrzucona');
+reset role; reset app.current_uid;
+
 -- ============================================================================
 -- HH. AUDIT_REPORT 0056 (P1-04) — cykl życia oferty (maszyna stanów set_job_status)
 -- ============================================================================

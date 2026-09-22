@@ -21,7 +21,8 @@ begin
   select j.company_id, c.status::text, j.status::text, j.title, j.city, j.region, j.slug
     into v_company, v_cstatus, v_status, v_title, v_city, v_region, v_slug
     from public.jobs j join public.companies c on c.id = j.company_id
-    where j.id = p_job_id and j.deleted_at is null;
+    where j.id = p_job_id and j.deleted_at is null
+    for update of j;
 
   if v_company is null then raise exception 'NOT_FOUND: oferta nie istnieje' using errcode = 'P0002'; end if;
   if not public.can_manage_jobs(v_company) then
@@ -68,7 +69,10 @@ begin
 
   update public.jobs
     set status = 'active', published_at = now(), slug = v_new_slug
-    where id = p_job_id;
+    where id = p_job_id and status = 'draft';
+  if not found then
+    raise exception 'VALIDATION_FAILED: oferta zmieniła stan równolegle' using errcode = '42501';
+  end if;
 
   return v_new_slug;
 end $$;
