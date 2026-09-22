@@ -234,7 +234,11 @@
       "viewOffer": "Voir l’offre",
       "salaryFrom": "à partir de {value}",
       "salaryTo": "jusqu’à {value}",
-      "salaryPeriods": { "hour": "brut / heure", "month": "brut / mois", "year": "brut / an" }
+      "salaryPeriods": {
+        "hour": "brut / heure",
+        "month": "brut / mois",
+        "year": "brut / an"
+      }
     },
     "pageTitle": "Offres d'emploi en Belgique",
     "search": "Rechercher",
@@ -564,6 +568,20 @@
     "navSummary": "Résumé",
     "navRecommended": "Offres recommandées",
     "navSaved": "Offres enregistrées",
+    "applicationsIntro": "Consultez le statut actuel de vos candidatures.",
+    "applicationsEmptyTitle": "Aucune candidature pour le moment",
+    "applicationsEmptyBody": "Trouvez une offre et envoyez votre première candidature.",
+    "applicationsFindJobs": "Voir les offres",
+    "applicationUnknownJob": "Offre d’emploi",
+    "applicationCurrentStatus": "Statut actuel",
+    "applicationSentOn": "Envoyée le {date}",
+    "proposalsIntro": "Les employeurs peuvent vous envoyer des propositions d’emploi.",
+    "proposalsEmptyTitle": "Aucune proposition pour le moment",
+    "proposalsEmptyBody": "Complétez votre profil pour présenter votre expérience aux employeurs.",
+    "proposalSentOn": "Reçue le {date}",
+    "candidateListErrorTitle": "Impossible de charger les données",
+    "candidateListErrorBody": "Actualisez la page et réessayez.",
+    "candidateListRetry": "Réessayer",
     "navApplications": "Mes candidatures",
     "navProposals": "Propositions",
     "navMessages": "Messages",

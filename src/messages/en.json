@@ -234,7 +234,11 @@
       "viewOffer": "View job",
       "salaryFrom": "from {value}",
       "salaryTo": "up to {value}",
-      "salaryPeriods": { "hour": "gross / hour", "month": "gross / month", "year": "gross / year" }
+      "salaryPeriods": {
+        "hour": "gross / hour",
+        "month": "gross / month",
+        "year": "gross / year"
+      }
     },
     "pageTitle": "Jobs in Belgium",
     "search": "Search",
@@ -564,6 +568,20 @@
     "navSummary": "Summary",
     "navRecommended": "Recommended jobs",
     "navSaved": "Saved jobs",
+    "applicationsIntro": "Check the current status of your applications.",
+    "applicationsEmptyTitle": "No applications yet",
+    "applicationsEmptyBody": "Find a job and send your first application.",
+    "applicationsFindJobs": "Find jobs",
+    "applicationUnknownJob": "Job listing",
+    "applicationCurrentStatus": "Current status",
+    "applicationSentOn": "Sent on {date}",
+    "proposalsIntro": "Employers can send you job proposals.",
+    "proposalsEmptyTitle": "No proposals yet",
+    "proposalsEmptyBody": "Complete your profile so employers can see your experience.",
+    "proposalSentOn": "Received on {date}",
+    "candidateListErrorTitle": "Could not load your information",
+    "candidateListErrorBody": "Refresh the page and try again.",
+    "candidateListRetry": "Try again",
     "navApplications": "My applications",
     "navProposals": "Proposals",
     "navMessages": "Messages",

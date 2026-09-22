@@ -657,7 +657,7 @@ export async function getRecommendedJobs(locale: string): Promise<RecommendedJob
 }
 
 /** Ostatnie aplikacje kandydata (applications + publiczne dane oferty). */
-export async function getMyApplications(locale: string = routing.defaultLocale): Promise<MyApplication[]> {
+export async function getMyApplications(locale: string = routing.defaultLocale, throwOnError = false): Promise<MyApplication[]> {
   const resolvedLocale = toLocale(locale);
   if (!isSupabaseConfigured()) return demoApplications(resolvedLocale);
 
@@ -696,6 +696,7 @@ export async function getMyApplications(locale: string = routing.defaultLocale):
     });
   } catch (error) {
     captureError(error, { area: 'candidate.getMyApplications' });
+    if (throwOnError) throw error;
     return [];
   }
 }
@@ -745,7 +746,7 @@ export async function getSavedJobs(locale: string = routing.defaultLocale): Prom
  * a jako uzupełnienie z `get_public_jobs` (propozycja może dotyczyć oferty, do której kandydat nie
  * aplikował) — kandydat nie czyta tabel bazowych wprost (P1-01).
  */
-export async function getMyOffers(locale: string = routing.defaultLocale): Promise<MyOffer[]> {
+export async function getMyOffers(locale: string = routing.defaultLocale, throwOnError = false): Promise<MyOffer[]> {
   const resolvedLocale = toLocale(locale);
   if (!isSupabaseConfigured()) return demoOffers(resolvedLocale);
 
@@ -788,6 +789,7 @@ export async function getMyOffers(locale: string = routing.defaultLocale): Promi
     });
   } catch (error) {
     captureError(error, { area: 'candidate.getMyOffers' });
+    if (throwOnError) throw error;
     return [];
   }
 }

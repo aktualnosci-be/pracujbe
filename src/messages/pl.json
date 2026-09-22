@@ -234,7 +234,11 @@
       "viewOffer": "Poznaj ofertę",
       "salaryFrom": "od {value}",
       "salaryTo": "do {value}",
-      "salaryPeriods": { "hour": "brutto / godz.", "month": "brutto / mies.", "year": "brutto / rok" }
+      "salaryPeriods": {
+        "hour": "brutto / godz.",
+        "month": "brutto / mies.",
+        "year": "brutto / rok"
+      }
     },
     "pageTitle": "Oferty pracy w Belgii",
     "search": "Szukaj",
@@ -564,6 +568,20 @@
     "navSummary": "Podsumowanie",
     "navRecommended": "Polecane oferty",
     "navSaved": "Zapisane oferty",
+    "applicationsIntro": "Sprawdź aktualny stan swoich zgłoszeń.",
+    "applicationsEmptyTitle": "Nie masz jeszcze zgłoszeń",
+    "applicationsEmptyBody": "Znajdź ofertę i wyślij pierwsze zgłoszenie.",
+    "applicationsFindJobs": "Znajdź oferty",
+    "applicationUnknownJob": "Oferta pracy",
+    "applicationCurrentStatus": "Aktualny status",
+    "applicationSentOn": "Wysłano {date}",
+    "proposalsIntro": "Pracodawcy mogą przesłać Ci propozycję pracy.",
+    "proposalsEmptyTitle": "Nie masz jeszcze propozycji",
+    "proposalsEmptyBody": "Uzupełnij profil, aby pracodawcy mogli poznać Twoje doświadczenie.",
+    "proposalSentOn": "Otrzymano {date}",
+    "candidateListErrorTitle": "Nie udało się wczytać danych",
+    "candidateListErrorBody": "Odśwież stronę i spróbuj ponownie.",
+    "candidateListRetry": "Spróbuj ponownie",
     "navApplications": "Moje aplikacje",
     "navProposals": "Propozycje",
     "navMessages": "Wiadomości",
