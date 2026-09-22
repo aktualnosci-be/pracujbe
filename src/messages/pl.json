@@ -117,7 +117,8 @@
     "yes": "Tak",
     "no": "Nie",
     "home": "Strona główna",
-    "breadcrumb": "Ścieżka nawigacji"
+    "breadcrumb": "Ścieżka nawigacji",
+    "skipToContent": "Przejdź do treści"
   },
   "nav": {
     "jobs": "Oferty pracy",

@@ -117,7 +117,8 @@
     "yes": "Yes",
     "no": "No",
     "home": "Home",
-    "breadcrumb": "Breadcrumb"
+    "breadcrumb": "Breadcrumb",
+    "skipToContent": "Skip to content"
   },
   "nav": {
     "jobs": "Jobs",
