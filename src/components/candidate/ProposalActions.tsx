@@ -8,7 +8,8 @@ import { useRouter } from '@/i18n/navigation';
 import { respondToOffer } from '@/lib/actions/offers';
 import { Button } from '@/components/ui/button';
 import { Toast } from '@/components/ui/toast';
-import { canRespondToProposal } from '@/lib/candidate-offers';
+
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
 /**
  * ProposalActions — odpowiedź kandydata na propozycję pracy (przyjmij / odrzuć).
@@ -24,13 +25,13 @@ import { canRespondToProposal } from '@/lib/candidate-offers';
 
 export function ProposalActions({
   offerId,
-  status,
   expiresAt,
+  initialCanRespond,
   className,
 }: {
   offerId: string;
-  status: string;
   expiresAt: string | null;
+  initialCanRespond: boolean;
   className?: string;
 }): React.JSX.Element | null {
   const td = useTranslations('dashboard');
@@ -39,9 +40,39 @@ export function ProposalActions({
 
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState(false);
+  const [canRespond, setCanRespond] = React.useState(initialCanRespond);
   const requestPendingRef = React.useRef(false);
 
-  if (!canRespondToProposal(status, expiresAt)) return null;
+  React.useEffect(() => {
+    if (!initialCanRespond) {
+      setCanRespond(false);
+      return;
+    }
+    if (expiresAt === null) return;
+
+    const expiresAtMs = Date.parse(expiresAt);
+    if (!Number.isFinite(expiresAtMs)) {
+      setCanRespond(false);
+      return;
+    }
+
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const scheduleExpiry = () => {
+      const remaining = expiresAtMs - Date.now();
+      if (remaining <= 0) {
+        setCanRespond(false);
+        return;
+      }
+      timeout = setTimeout(scheduleExpiry, Math.min(remaining, MAX_TIMEOUT_MS));
+    };
+    scheduleExpiry();
+
+    return () => {
+      if (timeout !== undefined) clearTimeout(timeout);
+    };
+  }, [expiresAt, initialCanRespond]);
+
+  if (!initialCanRespond || !canRespond) return null;
 
   const respond = (accept: boolean) => {
     if (pending || requestPendingRef.current) return;

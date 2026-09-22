@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProposalActions } from '@/components/candidate/ProposalActions';
+import { canRespondToProposal } from '@/lib/candidate-offers';
 import { respondToOffer } from '@/lib/actions/offers';
 import en from '@/messages/en.json';
 
@@ -18,13 +19,17 @@ afterEach(() => {
 });
 beforeEach(() => vi.resetAllMocks());
 
-function show(status = 'sent', expiresAt: string | null = null) {
+function show(
+  status = 'sent',
+  expiresAt: string | null = null,
+  initialCanRespond = canRespondToProposal(status, expiresAt),
+) {
   return render(
     <NextIntlClientProvider locale="en" messages={en}>
       <ProposalActions
         offerId="11111111-1111-4111-8111-111111111111"
-        status={status}
         expiresAt={expiresAt}
+        initialCanRespond={initialCanRespond}
       />
     </NextIntlClientProvider>,
   );
@@ -57,6 +62,40 @@ describe('ProposalActions', () => {
       expect(screen.getByRole('button', { name: en.dashboard.declineProposal })).toBeVisible();
     },
   );
+
+  it('keeps the server decision on the first render and hides actions exactly at expiry', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-22T10:00:00.000Z'));
+
+    show('sent', '2026-09-22T10:00:01.000Z', true);
+    expect(screen.getByRole('button', { name: en.dashboard.acceptProposal })).toBeVisible();
+
+    act(() => vi.advanceTimersByTime(999));
+    expect(screen.getByRole('button', { name: en.dashboard.acceptProposal })).toBeVisible();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('does not override a conservative server decision during the first render', () => {
+    show('sent', '2999-01-01T00:00:00.000Z', false);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('renews the expiry timer when the delay exceeds the platform maximum', () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-09-22T10:00:00.000Z');
+    vi.setSystemTime(now);
+    const maxTimeoutMs = 2_147_483_647;
+    const expiresAt = new Date(now.getTime() + maxTimeoutMs + 1_000).toISOString();
+
+    show('sent', expiresAt, true);
+    act(() => vi.advanceTimersByTime(maxTimeoutMs));
+    expect(screen.getByRole('button', { name: en.dashboard.acceptProposal })).toBeVisible();
+
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
 
   it('allows only one request while the first click is unresolved and refreshes once', async () => {
     let resolveRequest!: (result: { ok: true }) => void;
