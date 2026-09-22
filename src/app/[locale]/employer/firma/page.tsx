@@ -60,12 +60,29 @@ export default async function EmployerCompanyPage({
       : null;
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {company ? t('detailsSubtitle') : t('createSubtitle')}
+    <div className="max-w-4xl space-y-6">
+      <header className="overflow-hidden rounded-3xl bg-foreground px-5 py-7 text-background sm:px-8 sm:py-9">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-background/70">
+          {t('title')}
         </p>
+        <div className="mt-4 flex min-w-0 flex-wrap items-center gap-4">
+          {company ? (
+            <span
+              className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-xl font-bold text-primary-foreground"
+              aria-hidden="true"
+            >
+              {company.name.trim().charAt(0).toLocaleUpperCase(locale) || '•'}
+            </span>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <h1 className="break-words text-2xl font-bold tracking-tight sm:text-3xl">
+              {company?.name || t('title')}
+            </h1>
+            <p className="mt-1 text-sm text-background/80">
+              {company ? t('detailsSubtitle') : t('createSubtitle')}
+            </p>
+          </div>
+        </div>
       </header>
 
       {company ? (
@@ -73,34 +90,34 @@ export default async function EmployerCompanyPage({
           <CompanyStatusBanner status={company.status} />
 
           {/* Dane read-only (nieedytowalne przez pracodawcę: identyfikator, status, weryfikacja). */}
-          <section className="rounded-lg border border-border bg-card p-5">
+          <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
             <h2 className="text-base font-semibold text-foreground">{t('detailsTitle')}</h2>
-            <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
+            <dl className="mt-5 grid grid-cols-1 gap-px overflow-hidden rounded-2xl bg-border sm:grid-cols-2">
+              <div className="min-w-0 bg-card p-4 sm:p-5">
                 <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {t('slug')}
                 </dt>
-                <dd className="mt-0.5 break-all text-sm text-foreground">{company.slug || '—'}</dd>
+                <dd className="mt-2 break-all text-base font-medium text-foreground">{company.slug || '—'}</dd>
               </div>
-              <div>
+              <div className="min-w-0 bg-card p-4 sm:p-5">
                 <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {t('statusLabel')}
                 </dt>
-                <dd className="mt-0.5 text-sm text-foreground">{statusLabel}</dd>
+                <dd className="mt-2 break-words text-base font-medium text-foreground">{statusLabel}</dd>
               </div>
               {verifiedLabel ? (
-                <div>
+                <div className="min-w-0 bg-card p-4 sm:p-5">
                   <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {t('verifiedAt')}
                   </dt>
-                  <dd className="mt-0.5 text-sm text-foreground">{verifiedLabel}</dd>
+                  <dd className="mt-2 break-words text-base font-medium text-foreground">{verifiedLabel}</dd>
                 </div>
               ) : null}
             </dl>
           </section>
 
           {/* Edycja danych podstawowych (nazwa, VAT) — status pozostaje po stronie admina. */}
-          <section className="rounded-lg border border-border bg-card p-5">
+          <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
             <h2 className="text-base font-semibold text-foreground">{t('editTitle')}</h2>
             <div className="mt-4">
               <CompanyForm
@@ -110,10 +127,10 @@ export default async function EmployerCompanyPage({
             </div>
           </section>
 
-          <p className="text-sm text-muted-foreground">{t('verificationNote')}</p>
+          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{t('verificationNote')}</p>
         </>
       ) : (
-        <section className="rounded-lg border border-border bg-card p-5">
+        <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
           <h2 className="text-base font-semibold text-foreground">{t('createTitle')}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{t('verificationNote')}</p>
           <div className="mt-4">
