@@ -32,7 +32,7 @@ import { interpolate, layoutCopy } from '@/emails/copy';
 /**
  * Paleta marki (spójna z design tokenami globals.css). Jedyne źródło kolorów w mailach.
  */
-const palette = {
+export const emailPalette = {
   primary: '#D92932',
   primaryDark: '#B91D25',
   foreground: '#151515',
@@ -44,6 +44,8 @@ const palette = {
   warning: '#EA580C',
   error: '#DC2626',
 } as const;
+
+const palette = emailPalette;
 
 const fontStack =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif";
