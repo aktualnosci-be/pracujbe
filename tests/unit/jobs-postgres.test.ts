@@ -1,9 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getJobs, getJobBySlug, getCategoryCounts, getCityCounts } from '@/lib/jobs';
 
-const adapters = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn(), count: vi.fn(), pool: {} }));
+const adapters = vi.hoisted(() => ({
+  list: vi.fn(),
+  detail: vi.fn(),
+  categoryCounts: vi.fn(),
+  cityCounts: vi.fn(),
+  pool: {},
+}));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
-vi.mock('@/lib/db/public-jobs', () => ({ getPublicJobs: adapters.list, getPublicJob: adapters.detail, getPublicJobsCount: adapters.count }));
+vi.mock('@/lib/db/public-jobs', () => ({
+  getPublicJobs: adapters.list,
+  getPublicJob: adapters.detail,
+  getPublicJobCategoryCounts: adapters.categoryCounts,
+  getPublicJobCityCounts: adapters.cityCounts,
+}));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
 
@@ -49,10 +60,23 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
   });
   it('liczniki używają tych samych filtrów bazy co lista', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
-    adapters.count.mockResolvedValueOnce(4).mockResolvedValueOnce(2);
-    expect(await getCategoryCounts('pl', ['construction'])).toEqual({ construction: 4 });
-    expect(await getCityCounts('pl', ['Brussels'])).toEqual({ Brussels: 2 });
-    expect(adapters.count).toHaveBeenNthCalledWith(1, adapters.pool, { locale: 'pl', categories: ['construction'] });
-    expect(adapters.count).toHaveBeenNthCalledWith(2, adapters.pool, { locale: 'pl', city: 'Brussels' });
+    adapters.categoryCounts.mockResolvedValue({ construction: 204, transport: 7 });
+    adapters.cityCounts.mockResolvedValue({ Brussels: 122, Antwerp: 31 });
+
+    expect(await getCategoryCounts('pl', ['construction', 'transport'])).toEqual({
+      construction: 204,
+      transport: 7,
+    });
+    expect(await getCityCounts('pl', ['Brussels', 'Antwerp'])).toEqual({
+      Brussels: 122,
+      Antwerp: 31,
+    });
+    expect(adapters.categoryCounts).toHaveBeenCalledTimes(1);
+    expect(adapters.categoryCounts).toHaveBeenCalledWith(adapters.pool, [
+      'construction',
+      'transport',
+    ]);
+    expect(adapters.cityCounts).toHaveBeenCalledTimes(1);
+    expect(adapters.cityCounts).toHaveBeenCalledWith(adapters.pool, ['Brussels', 'Antwerp']);
   });
 });
