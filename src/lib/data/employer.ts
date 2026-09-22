@@ -570,30 +570,18 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
     const jobIds = jobs.map((r) => asString(r['id'])).filter((id) => id.length > 0);
     if (jobIds.length === 0) return { status: 'ok', jobs: [], hasNext: false };
 
-    const [{ data: appRows, error: appError }, { data: matchRows, error: matchError }] =
-      await Promise.all([
-        supabase
-          .from('applications')
-          .select('job_id')
-          .eq('company_id', companyId)
-          .in('job_id', jobIds)
-          .eq('status', 'submitted')
-          .is('deleted_at', null),
-        supabase.from('matches').select('job_id').in('job_id', jobIds),
+    // Exact head counts avoid Supabase's row limit and transfer no application/match rows.
+    const counts = await Promise.all(jobIds.map(async (id) => {
+      const [applications, matches] = await Promise.all([
+        supabase.from('applications').select('id', { count: 'exact', head: true })
+          .eq('company_id', companyId).eq('job_id', id).eq('status', 'submitted').is('deleted_at', null),
+        supabase.from('matches').select('id', { count: 'exact', head: true }).eq('job_id', id),
       ]);
-    if (appError) throw appError;
-    if (matchError) throw matchError;
-
-    const newApps = new Map<string, number>();
-    for (const r of asRows(appRows)) {
-      const id = asString(r['job_id']);
-      newApps.set(id, (newApps.get(id) ?? 0) + 1);
-    }
-    const matched = new Map<string, number>();
-    for (const r of asRows(matchRows)) {
-      const id = asString(r['job_id']);
-      matched.set(id, (matched.get(id) ?? 0) + 1);
-    }
+      if (applications.error) throw applications.error;
+      if (matches.error) throw matches.error;
+      return { id, newApplications: applications.count ?? 0, matched: matches.count ?? 0 };
+    }));
+    const countsByJob = new Map(counts.map((row) => [row.id, row]));
 
     return { status: 'ok', hasNext, jobs: jobs.map((r) => {
       const id = asString(r['id']);
@@ -602,8 +590,8 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
         title: asString(r['title']),
         city: asString(r['city']),
         status: asString(r['status'], 'draft'),
-        newApplications: newApps.get(id) ?? 0,
-        matched: matched.get(id) ?? 0,
+        newApplications: countsByJob.get(id)?.newApplications ?? 0,
+        matched: countsByJob.get(id)?.matched ?? 0,
       };
     }) };
   } catch (error) {
