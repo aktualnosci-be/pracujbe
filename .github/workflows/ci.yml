@@ -3,8 +3,8 @@ name: CI
 # CI Pracuj.be — uruchamiane WYŁĄCZNIE na self-hosted runnerach.
 # Etykiety (labels) runnera: self-hosted + linux + x64.
 # Rejestracja i wymagania runnera: docs/SELF_HOSTED_RUNNERS.md
-# Joby są równoległe z założenia. Każda usługa runnera musi mieć osobny `_work`,
-# a hook kończący job nie może asynchronicznie usuwać workspace ani `_work/_temp`.
+# Do czasu izolacji katalogów runnerów (#50) joby i przebiegi są sekwencyjne.
+# Hook kończący job nadal nie może asynchronicznie usuwać workspace ani `_work/_temp`.
 #
 # Nie zmieniaj `runs-on` na `ubuntu-latest` bez wyraźnej decyzji — to wymóg projektu.
 
@@ -19,12 +19,12 @@ on:
 permissions:
   contents: read
 
-# Anuluj tylko starsze testy PR. CI gałęzi wdrożeniowych musi zakończyć się
-# wynikiem: Railway Wait for CI może zignorować anulowany workflow,
-# jeżeli inny workflow tego samego commita zakończył się sukcesem.
+# Jedna grupa także z delete-old-runs.yml. Railway Wait for CI potrzebuje
+# terminalnego wyniku każdego przebiegu main; aktywnego CI nie anulujemy.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: pracujbe-shared-runner-workspace
+  queue: max
+  cancel-in-progress: false
 
 env:
   # Placeholdery pozwalające na build bez prawdziwych sekretów (strony publiczne mają fallback).
@@ -76,11 +76,12 @@ jobs:
       - name: Install dependencies (cache miss)
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
+      - run: node scripts/check-ci-serialization.mjs
       - run: npm run lint
 
   typecheck:
     name: Typecheck
-    needs: install
+    needs: lint
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:
@@ -101,7 +102,7 @@ jobs:
 
   unit:
     name: Unit tests (Vitest)
-    needs: install
+    needs: typecheck
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:
@@ -124,8 +125,9 @@ jobs:
     name: SCA (npm audit)
     # Software Composition Analysis — twarda bramka na PRAWDZIWE podatności high/critical (audyt CI-08).
     # Audyt z package-lock.json (`--package-lock-only`) — deterministyczne drzewo, nie wymaga
-    # node_modules (stąd brak `needs: install` i pobierania artefaktu). Skrypt blokuje tylko przy
+    # node_modules. Skrypt blokuje tylko przy
     # realnych podatnościach; niestabilny/wygaszany endpoint audytu npm nie wywala całego CI.
+    needs: unit
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:
@@ -137,7 +139,7 @@ jobs:
 
   build:
     name: Build (Next.js)
-    needs: [lint, typecheck, unit]
+    needs: sca
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:
@@ -158,12 +160,13 @@ jobs:
 
   rls:
     name: RLS integration (PostgreSQL 16)
-    # Niezależny od buildu aplikacji: weryfikuje polityki RLS i triggery integralności
+    # Weryfikuje polityki RLS i triggery integralności
     # na CZYSTYM PostgreSQL 16 (shim Supabase + wszystkie migracje + adwersaryjne asercje).
     # Domyka lukę audytu „migracje/RLS niezweryfikowane w CI". Nie wymaga node_modules.
     #
     # Klient psql i testy działają w izolowanym kontenerze usługi.
     # Nie wymagamy instalacji klienta na hoście ani wspólnego portu 5432.
+    needs: build
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     services:
@@ -202,7 +205,7 @@ jobs:
 
   migrations:
     name: Migration runner (PostgreSQL 16)
-    needs: install
+    needs: rls
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     services:
@@ -273,7 +276,7 @@ jobs:
 
   e2e:
     name: E2E (Playwright)
-    needs: install
+    needs: migrations
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:

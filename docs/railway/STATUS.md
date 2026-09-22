@@ -27,7 +27,7 @@ Kontrola lokalna: lint, typecheck i 101 testów jednostkowych zaliczone. Testy r
 
 Build produkcyjny i Playwright: 20 zaliczonych, 1 pominięty. Testy przeglądarkowe używają danych demo, nie stanowią odbioru infrastruktury Railway.
 
-Bramka CI (#15): automatyczne anulowanie ograniczono do PR. Push i uruchomienia ręczne mają osobne grupy run_id, aby nie usuwać również oczekujących przebiegów. Railway `production/pracujbe` śledzi `main` i ma włączone natywne `Wait for CI`; stary workflow Vercela, który mógł być zielony mimo pominiętego wdrożenia, został usunięty. Odbiór nadal wymaga potwierdzenia, że CI i wdrożenie dotyczą tego samego SHA.
+Brama CI (#15, #50): CI i sprzątanie przebiegów mają wspólną kolejkę `queue: max`, bez anulowania uruchomionych zadań; joby CI wykonują się liniowo do czasu izolacji runnerów. Railway `production/pracujbe` śledzi `main` i ma włączone natywne `Wait for CI`; stary workflow Vercela, który mógł być zielony mimo pominiętego wdrożenia, został usunięty. Odbiór nadal wymaga potwierdzenia, że CI i wdrożenie dotyczą tego samego SHA.
 
 Nowy backend zatwierdzony dla pustego portalu: #23 migracje, #24 auth, #25 dane/RLS, #26 pliki, #27 odbiór i usunięcie Supabase. Railway: projekt captivating-vision, production/pracujbe, main, Wait for CI potwierdzone odczytem API. Domena pracuj.be dodana; wymagany CNAME xetenf6j.up.railway.app. Nie potwierdzono jeszcze DNS ani gotowości backendu.
 
