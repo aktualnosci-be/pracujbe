@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
+import { buildHubFacet } from "../../src/lib/jobs-hub";
+
 const locales = ["pl", "nl", "fr", "en"] as const;
 const viewportWidths = [320, 640] as const;
 
@@ -147,9 +149,6 @@ for (const locale of locales) {
       ).not.toBeNull();
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(48);
 
-      await expect(
-        categories.locator("p").filter({ hasText: /\d/ }).first(),
-      ).toBeVisible();
       await expectNoOverflow(page, `${locale}/praca przy ${width}px`);
 
       if (width === 640) {
@@ -181,9 +180,6 @@ for (const locale of locales) {
       const { categories, cities } = hubLists(page, locale);
       await expect(categories.getByRole("link")).toHaveCount(10);
       await expect(cities.getByRole("link")).toHaveCount(10);
-      await expect(
-        categories.locator("p").filter({ hasText: /\d/ }).first(),
-      ).toBeVisible();
       await expect(categories.getByRole("link").first()).toHaveAttribute(
         "href",
         `/${locale}/praca/kategoria/construction`,
@@ -198,6 +194,42 @@ for (const locale of locales) {
     }
   });
 }
+
+test("kontrakt licznika przypisuje agregat do właściwego href", () => {
+  const categoryCounts = { construction: 237, transport: 4 };
+  const cityCounts = { Bruxelles: 91, Anvers: 12 };
+
+  expect(
+    buildHubFacet(
+      "/praca/kategoria",
+      "construction",
+      "construction",
+      categoryCounts,
+    ),
+  ).toEqual({ href: "/praca/kategoria/construction", count: 237 });
+  expect(
+    buildHubFacet("/praca/kategoria", "transport", "transport", categoryCounts),
+  ).toEqual({
+    href: "/praca/kategoria/transport",
+    count: 4,
+  });
+  expect(
+    buildHubFacet("/praca/miasto", "brussels", "Bruxelles", cityCounts),
+  ).toEqual({
+    href: "/praca/miasto/brussels",
+    count: 91,
+  });
+  expect(
+    buildHubFacet("/praca/miasto", "antwerp", "Anvers", cityCounts),
+  ).toEqual({
+    href: "/praca/miasto/antwerp",
+    count: 12,
+  });
+  expect(buildHubFacet("/praca/miasto", "ghent", "Gand", cityCounts)).toEqual({
+    href: "/praca/miasto/ghent",
+    count: undefined,
+  });
+});
 
 test("kontrola ujemna wykrywa kafel szerszy od viewportu", async ({ page }) => {
   await setNecessaryConsent(page.context());
