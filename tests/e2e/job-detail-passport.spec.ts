@@ -15,7 +15,16 @@ type Messages = {
     applyNow: string;
     saveUnavailable: string;
   };
+  apply: {
+    title: string;
+    close: string;
+  };
+  cookies: {
+    acceptAll: string;
+  };
 };
+
+const DEMO_JOB_SLUG = "warehouse-worker-antwerp-1001";
 
 function messages(locale: Locale): Messages {
   return JSON.parse(
@@ -26,14 +35,11 @@ function messages(locale: Locale): Messages {
   ) as Messages;
 }
 
-async function firstJobDetail(page: Page, locale: Locale): Promise<void> {
-  await page.goto(`/${locale}/oferty-pracy`);
-  const href = await page
-    .locator('article a[href*="/oferty-pracy/"]')
-    .first()
-    .getAttribute("href");
-  expect(href).toBeTruthy();
-  await page.goto(href!);
+async function stableDemoJobDetail(page: Page, locale: Locale): Promise<void> {
+  await page.goto(`/${locale}/oferty-pracy/${DEMO_JOB_SLUG}`);
+  await expect(page).toHaveURL(
+    new RegExp(`/${locale}/oferty-pracy/${DEMO_JOB_SLUG}$`),
+  );
 }
 
 async function expectNoDocumentOverflow(page: Page): Promise<void> {
@@ -65,9 +71,13 @@ for (const locale of locales) {
     page,
   }) => {
     await page.setViewportSize({ width: 320, height: 900 });
-    await firstJobDetail(page, locale);
+    await stableDemoJobDetail(page, locale);
 
     const t = messages(locale);
+    const acceptCookies = page.getByRole("button", {
+      name: t.cookies.acceptAll,
+    });
+    if (await acceptCookies.isVisible()) await acceptCookies.click();
     const passport = page.getByTestId("job-detail-passport");
     await expect(passport).toBeVisible();
     await expect(passport.getByRole("heading", { level: 1 })).toBeVisible();
@@ -80,13 +90,29 @@ for (const locale of locales) {
     ]);
     await expect(passport.locator("dd")).toHaveCount(3);
 
-    // Zapis i aplikowanie pozostają prawdziwymi kontrolkami detalu, poza paszportem.
+    // Demo dowodzi połączenia kontrolek z detalem, ale nie trwałości sesji/RLS.
+    // Te ścieżki mają osobne testy akcji/integracji; tutaj nie wykonujemy mutacji.
+    const save = page
+      .getByRole("button", { name: t.jobs.saveUnavailable })
+      .last();
+    await expect(save).toBeVisible();
+    await expect(save).toBeDisabled();
+    await expect(save).not.toHaveAttribute("aria-pressed");
+
+    const matchSlot = page.getByTestId("job-match-slot");
+    await expect(matchSlot).toBeAttached();
+    await expect(matchSlot.getByRole("progressbar")).toHaveCount(0);
+
+    const apply = page.getByRole("button", { name: t.jobs.applyNow }).last();
+    await expect(apply).toBeVisible();
+    await expect(apply).toBeEnabled();
+    await apply.click();
+    const dialog = page.getByRole("dialog");
     await expect(
-      page.getByRole("button", { name: t.jobs.saveUnavailable }).last(),
+      dialog.getByRole("heading", { name: t.apply.title }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: t.jobs.applyNow }).last(),
-    ).toBeVisible();
+    await dialog.getByRole("button", { name: t.apply.close }).click();
+    await expect(dialog).toBeHidden();
     await expectNoDocumentOverflow(page);
   });
 }
@@ -95,7 +121,7 @@ test("paszport szczegółu ma trzy czytelne kolumny na desktopie", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await firstJobDetail(page, "pl");
+  await stableDemoJobDetail(page, "pl");
 
   const passport = page.getByTestId("job-detail-passport");
   const fields = passport.locator("dl > div");

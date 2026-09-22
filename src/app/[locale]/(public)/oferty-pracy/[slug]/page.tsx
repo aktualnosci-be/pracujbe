@@ -22,6 +22,7 @@ import {
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
 import { getJobBySlug, getJobs, type ContractType, type JobDetail, type JobListItem } from '@/lib/jobs';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
@@ -209,10 +210,14 @@ export default async function JobDetailPage({ params }: PageProps) {
     getFormatter(),
   ]);
 
-  const salaryLabel = formatSalaryRange(job, locale, {
-    from: value => tJobs('passport.salaryFrom', { value }),
-    to: value => tJobs('passport.salaryTo', { value }),
-    period: period => tJobs(`passport.salaryPeriods.${period}`),
+  const passportFields = buildJobDetailPassportFields(job, locale, {
+    location: tJobs('passport.location'),
+    salary: tJobs('passport.salary'),
+    conditions: tJobs('passport.conditions'),
+    contract: type => tContract(type),
+    salaryFrom: value => tJobs('passport.salaryFrom', { value }),
+    salaryTo: value => tJobs('passport.salaryTo', { value }),
+    salaryPeriod: period => tJobs(`passport.salaryPeriods.${period}`),
   });
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
@@ -326,39 +331,34 @@ export default async function JobDetailPage({ params }: PageProps) {
         <dl
           className={cn(
             'mt-7 grid min-w-0 border-y border-border',
-            salaryLabel === null ? 'sm:grid-cols-2' : 'sm:grid-cols-3',
+            passportFields.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3',
           )}
         >
-          <div className="min-w-0 py-5 sm:pr-5">
-            <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {tJobs('passport.location')}
-            </dt>
-            <dd className="break-words text-base font-semibold text-foreground">
-              {job.city}
-              {job.region && job.region !== job.city ? (
-                <span className="mt-1 block text-sm font-normal text-muted-foreground">{job.region}</span>
-              ) : null}
-            </dd>
-          </div>
-          {salaryLabel !== null ? (
-            <div className="min-w-0 border-t border-border py-5 sm:border-l sm:border-t-0 sm:px-5">
+          {passportFields.map((field, index) => (
+            <div
+              key={field.key}
+              data-passport-field={field.key}
+              className={cn(
+                'min-w-0 py-5',
+                index === 0
+                  ? 'sm:pr-5'
+                  : 'border-t border-border sm:border-l sm:border-t-0 sm:pl-5',
+                index > 0 && index < passportFields.length - 1 ? 'sm:pr-5' : undefined,
+              )}
+            >
               <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {tJobs('passport.salary')}
+                {field.label}
               </dt>
-              <dd className="break-words text-base font-semibold text-foreground">{salaryLabel}</dd>
+              <dd className="break-words text-base font-semibold text-foreground">
+                {field.primary}
+                {field.secondary ? (
+                  <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                    {field.secondary}
+                  </span>
+                ) : null}
+              </dd>
             </div>
-          ) : null}
-          <div className="min-w-0 border-t border-border py-5 sm:border-l sm:border-t-0 sm:pl-5">
-            <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {tJobs('passport.conditions')}
-            </dt>
-            <dd className="break-words text-base font-semibold text-foreground">
-              {tContract(job.contractType)}
-              <span className="mt-1 block text-sm font-normal text-muted-foreground">
-                {[job.workingHours, job.shifts].filter(Boolean).join(' · ')}
-              </span>
-            </dd>
-          </div>
+          ))}
         </dl>
 
         <p className="mt-4 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
@@ -389,9 +389,9 @@ export default async function JobDetailPage({ params }: PageProps) {
         </ul>
       </nav>
 
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-8 lg:grid-cols-3">
         {/* Treść */}
-        <div className="lg:col-span-2 lg:space-y-8">
+        <div className="min-w-0 lg:col-span-2 lg:space-y-8">
           <Section id="opis" title={t('aboutRole')}>
             <p className="whitespace-pre-line leading-relaxed text-foreground">{job.description}</p>
           </Section>
@@ -518,10 +518,12 @@ export default async function JobDetailPage({ params }: PageProps) {
         </div>
 
         {/* Panel boczny */}
-        <aside className="lg:col-span-1">
+        <aside className="min-w-0 lg:col-span-1">
           <div className="space-y-4 lg:sticky lg:top-24">
             {/* Dopasowanie do profilu (tylko dla zalogowanego kandydata; wyspa kliencka) */}
-            <JobMatchCard jobId={job.id} />
+            <div data-testid="job-match-slot">
+              <JobMatchCard jobId={job.id} />
+            </div>
 
             {/* Aplikuj (desktop — mobile ma dolny pasek) */}
             <div className="hidden rounded-lg border border-border bg-card p-5 shadow-sm lg:block">
