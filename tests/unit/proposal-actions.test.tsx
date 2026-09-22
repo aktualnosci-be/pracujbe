@@ -12,13 +12,20 @@ const router = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => router }));
 vi.mock('@/lib/actions/offers', () => ({ respondToOffer: vi.fn() }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 beforeEach(() => vi.resetAllMocks());
 
-function show(status = 'sent') {
+function show(status = 'sent', expiresAt: string | null = null) {
   return render(
     <NextIntlClientProvider locale="en" messages={en}>
-      <ProposalActions offerId="11111111-1111-4111-8111-111111111111" status={status} />
+      <ProposalActions
+        offerId="11111111-1111-4111-8111-111111111111"
+        status={status}
+        expiresAt={expiresAt}
+      />
     </NextIntlClientProvider>,
   );
 }
@@ -29,6 +36,25 @@ describe('ProposalActions', () => {
     (status) => {
       show(status);
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ['past', '2020-01-01T00:00:00.000Z'],
+    ['equal', '2026-09-22T10:00:00.000Z'],
+  ])('does not render actions when expiry is %s', (_label, expiresAt) => {
+    vi.setSystemTime(new Date('2026-09-22T10:00:00.000Z'));
+    show('sent', expiresAt);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it.each([null, '2026-09-22T10:00:00.001Z'])(
+    'renders actions when expiry is %s',
+    (expiresAt) => {
+      vi.setSystemTime(new Date('2026-09-22T10:00:00.000Z'));
+      show('viewed', expiresAt);
+      expect(screen.getByRole('button', { name: en.dashboard.acceptProposal })).toBeVisible();
+      expect(screen.getByRole('button', { name: en.dashboard.declineProposal })).toBeVisible();
     },
   );
 

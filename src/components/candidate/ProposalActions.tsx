@@ -8,6 +8,7 @@ import { useRouter } from '@/i18n/navigation';
 import { respondToOffer } from '@/lib/actions/offers';
 import { Button } from '@/components/ui/button';
 import { Toast } from '@/components/ui/toast';
+import { canRespondToProposal } from '@/lib/candidate-offers';
 
 /**
  * ProposalActions — odpowiedź kandydata na propozycję pracy (przyjmij / odrzuć).
@@ -21,16 +22,15 @@ import { Toast } from '@/components/ui/toast';
  * na które można jeszcze odpowiedzieć (sent/viewed).
  */
 
-/** Statusy propozycji, na które kandydat może jeszcze odpowiedzieć. */
-const RESPONDABLE = new Set(['sent', 'viewed']);
-
 export function ProposalActions({
   offerId,
   status,
+  expiresAt,
   className,
 }: {
   offerId: string;
   status: string;
+  expiresAt: string | null;
   className?: string;
 }): React.JSX.Element | null {
   const td = useTranslations('dashboard');
@@ -41,7 +41,7 @@ export function ProposalActions({
   const [error, setError] = React.useState(false);
   const requestPendingRef = React.useRef(false);
 
-  if (!RESPONDABLE.has(status)) return null;
+  if (!canRespondToProposal(status, expiresAt)) return null;
 
   const respond = (accept: boolean) => {
     if (pending || requestPendingRef.current) return;

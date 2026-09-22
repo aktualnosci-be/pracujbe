@@ -4,6 +4,18 @@ export function isNewProposalStatus(status: string): boolean {
   return NEW_PROPOSAL_STATUSES.has(status);
 }
 
+export function canRespondToProposal(
+  status: string,
+  expiresAt: string | null,
+  now: Date = new Date(),
+): boolean {
+  if (!isNewProposalStatus(status)) return false;
+  if (expiresAt === null) return true;
+
+  const expiresAtMs = Date.parse(expiresAt);
+  return Number.isFinite(expiresAtMs) && expiresAtMs > now.getTime();
+}
+
 /**
  * Wybiera aktywną propozycję tak samo jak zapytanie bazodanowe: po `sent_at`, a przy remisie
  * po stabilnym identyfikatorze. Przydaje się wyłącznie ścieżce demonstracyjnej i testom domeny.
