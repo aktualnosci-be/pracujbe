@@ -48,6 +48,9 @@ export function ApplicationStatusMenu({
   );
 
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const restoreFocusAfterTransitionRef = React.useRef(false);
+  const panelId = React.useId();
   const router = useRouter();
 
   // Zamknięcie po kliknięciu poza obszarem.
@@ -70,9 +73,18 @@ export function ApplicationStatusMenu({
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  // Wybranie opcji odmontowuje panel, a trigger jest chwilowo disabled podczas zapisu.
+  // Fokus wraca więc dopiero po zakończeniu transition, gdy kontrolka znów może go przyjąć.
+  React.useEffect(() => {
+    if (pending || !restoreFocusAfterTransitionRef.current) return;
+    restoreFocusAfterTransitionRef.current = false;
+    triggerRef.current?.focus();
+  }, [pending]);
+
   const handleSelect = (target: TargetStatus) => {
-    setOpen(false);
     if (pending) return;
+    restoreFocusAfterTransitionRef.current = true;
+    setOpen(false);
     startTransition(async () => {
       try {
         const res = await transitionApplication(applicationId, target);
@@ -89,42 +101,55 @@ export function ApplicationStatusMenu({
   };
 
   return (
-    <div ref={containerRef} className={cn('relative', className)}>
+    <div
+      ref={containerRef}
+      className={cn('relative', className)}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open) {
+          event.preventDefault();
+          setOpen(false);
+          triggerRef.current?.focus();
+        }
+      }}
+    >
       <button
+        ref={triggerRef}
         type="button"
-        aria-haspopup="menu"
+        aria-controls={panelId}
         aria-expanded={open}
         disabled={pending}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex min-h-12 items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
       >
         {td('colStatusEmp')}
         <ChevronDown className="size-3.5" aria-hidden="true" />
       </button>
 
       {open ? (
-        <div
-          role="menu"
+        <ul
+          id={panelId}
+          aria-label={td('colStatusEmp')}
           className="absolute right-0 top-[calc(100%+0.25rem)] z-50 min-w-[10rem] overflow-hidden rounded-md border border-border bg-background p-1 shadow-md"
         >
           {TARGET_STATUSES.map((target) => {
             const isCurrent = target === status;
             return (
-              <button
-                key={target}
-                type="button"
-                role="menuitem"
-                onClick={() => handleSelect(target)}
-                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-soft"
-              >
-                <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
-                  {isCurrent ? <Check className="size-4 text-primary" /> : null}
-                </span>
-                <span className="truncate">{ts(target)}</span>
-              </button>
+              <li key={target}>
+                <button
+                  type="button"
+                  aria-current={isCurrent ? 'true' : undefined}
+                  onClick={() => handleSelect(target)}
+                  className="flex min-h-12 w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-soft"
+                >
+                  <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
+                    {isCurrent ? <Check className="size-4 text-primary" /> : null}
+                  </span>
+                  <span className="truncate">{ts(target)}</span>
+                </button>
+              </li>
             );
           })}
-        </div>
+        </ul>
       ) : null}
 
       {toast ? (
