@@ -61,7 +61,7 @@ export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
           type="button"
           onClick={onPick}
           disabled={pending}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex min-h-12 items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
         >
           <UploadCloud className="h-3.5 w-3.5" aria-hidden="true" />
           {pending ? t('uploading') : t('upload')}
