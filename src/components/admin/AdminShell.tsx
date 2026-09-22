@@ -5,6 +5,7 @@ import { Building2, Flag, LayoutDashboard, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
+import { Logo } from '@/components/brand/Logo';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 
 /**
@@ -38,7 +39,6 @@ export interface AdminShellProps {
 
 export function AdminShell({ children, userName }: AdminShellProps): React.JSX.Element {
   const t = useTranslations('admin');
-  const tc = useTranslations('common');
   const pathname = usePathname();
 
   const nav: DashboardNavItem[] = [
@@ -59,7 +59,7 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
 
   const brand = (
     <div className="flex flex-col leading-tight">
-      <span className="text-lg font-semibold tracking-tight text-foreground">{tc('appName')}</span>
+      <Logo />
       <span className="text-xs text-muted-foreground">{t('brandTag')}</span>
     </div>
   );
