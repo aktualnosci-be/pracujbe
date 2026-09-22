@@ -545,7 +545,7 @@ export type CompanyJobsLoad =
 
 /** Lista ofert firmy z liczbą nowych aplikacji i dopasowań na ofertę. */
 export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
-  const safePage = Number.isSafeInteger(page) && page > 0 ? page : 1;
+  const safePage = Number.isSafeInteger(page) && page > 0 && page <= Math.floor(Number.MAX_SAFE_INTEGER / 12) ? page : 1;
   const start = (safePage - 1) * 12;
   if (!isSupabaseConfigured()) return { status: 'ok', jobs: DEMO_JOBS.slice(start, start + 12), hasNext: DEMO_JOBS.length > start + 12 };
 

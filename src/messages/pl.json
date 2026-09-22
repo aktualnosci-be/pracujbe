@@ -677,6 +677,7 @@
     "employerOffersLoadErrorHint": "Odśwież stronę i spróbuj ponownie. Twoje oferty pozostały zapisane.",
     "employerOffersPaginationLabel": "Paginacja ofert",
     "employerOffersPrevious": "Poprzednia strona",
+    "employerOffersFirstPage": "Wróć do pierwszej strony",
     "employerOffersPage": "Strona {page}",
     "employerOffersNext": "Następna strona",
     "employerOffersPageEmpty": "Na tej stronie nie ma już ofert.",

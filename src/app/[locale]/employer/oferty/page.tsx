@@ -101,11 +101,10 @@ export default async function EmployerOffersPage({
             {td("employerOffersPageEmpty")}
           </h2>
           <Link
-            href={pageHref(page - 1)}
-            rel="prev"
+            href={pageHref(1)}
             className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-border px-5 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            {td("employerOffersPrevious")}
+            {td("employerOffersFirstPage")}
           </Link>
         </section>
       ) : result.jobs.length === 0 ? (
