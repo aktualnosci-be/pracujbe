@@ -4,7 +4,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { ProposalStatusPill } from "@/components/candidate/ProposalStatusPill";
 import { ProposalActions } from "@/components/candidate/ProposalActions";
-import { canRespondToProposal } from "@/lib/candidate-offers";
+import { canRespondToProposal, proposalDisplayStatus } from "@/lib/candidate-offers";
 import { getMyOffers } from "@/lib/data/candidate";
 
 /**
@@ -52,6 +52,7 @@ export default async function CandidateProposalsPage({
 
   const t = await getTranslations({ locale, namespace: "dashboard" });
   const offers = await getMyOffers(locale, true);
+  const now = new Date();
 
   return (
     <div className="space-y-6">
@@ -113,7 +114,7 @@ export default async function CandidateProposalsPage({
                       ) : null}
                     </div>
                     <ProposalStatusPill
-                      status={offer.status}
+                      status={proposalDisplayStatus(offer.status, offer.expiresAt, now)}
                       className="shrink-0"
                     />
                   </div>
@@ -131,6 +132,7 @@ export default async function CandidateProposalsPage({
                       initialCanRespond={canRespondToProposal(
                         offer.status,
                         offer.expiresAt,
+                        now,
                       )}
                     />
                     <Link
