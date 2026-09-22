@@ -48,6 +48,8 @@ export function ApplicationStatusMenu({
   );
 
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const panelId = React.useId();
   const router = useRouter();
 
   // Zamknięcie po kliknięciu poza obszarem.
@@ -89,10 +91,21 @@ export function ApplicationStatusMenu({
   };
 
   return (
-    <div ref={containerRef} className={cn('relative', className)}>
+    <div
+      ref={containerRef}
+      className={cn('relative', className)}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open) {
+          event.preventDefault();
+          setOpen(false);
+          triggerRef.current?.focus();
+        }
+      }}
+    >
       <button
+        ref={triggerRef}
         type="button"
-        aria-haspopup="menu"
+        aria-controls={panelId}
         aria-expanded={open}
         disabled={pending}
         onClick={() => setOpen((v) => !v)}
@@ -103,28 +116,30 @@ export function ApplicationStatusMenu({
       </button>
 
       {open ? (
-        <div
-          role="menu"
+        <ul
+          id={panelId}
+          aria-label={td('colStatusEmp')}
           className="absolute right-0 top-[calc(100%+0.25rem)] z-50 min-w-[10rem] overflow-hidden rounded-md border border-border bg-background p-1 shadow-md"
         >
           {TARGET_STATUSES.map((target) => {
             const isCurrent = target === status;
             return (
-              <button
-                key={target}
-                type="button"
-                role="menuitem"
-                onClick={() => handleSelect(target)}
-                className="flex min-h-12 w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-soft"
-              >
-                <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
-                  {isCurrent ? <Check className="size-4 text-primary" /> : null}
-                </span>
-                <span className="truncate">{ts(target)}</span>
-              </button>
+              <li key={target}>
+                <button
+                  type="button"
+                  aria-current={isCurrent ? 'true' : undefined}
+                  onClick={() => handleSelect(target)}
+                  className="flex min-h-12 w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-soft"
+                >
+                  <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
+                    {isCurrent ? <Check className="size-4 text-primary" /> : null}
+                  </span>
+                  <span className="truncate">{ts(target)}</span>
+                </button>
+              </li>
             );
           })}
-        </div>
+        </ul>
       ) : null}
 
       {toast ? (
