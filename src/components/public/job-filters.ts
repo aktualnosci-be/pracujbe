@@ -6,15 +6,13 @@
  *
  * Zakres: filtry sterowane sidebarem (kategoria, lokalizacja, wynagrodzenie, rodzaj umowy,
  * zakwaterowanie, „od zaraz”, bez wymogu językowego, data dodania). Słowo kluczowe i miasto
- * z górnej wyszukiwarki są stosowane wcześniej (natywnie przez `getJobs`), więc `FacetItem[]`
- * przekazywane do klienta jest już zawężone o te dwa pola.
- *
- * TODO(data): przy dużych zbiorach faceting i filtrowanie powinny zejść do warstwy danych
- * (SQL / count po stronie serwera). Tutaj działamy na ograniczonym zbiorze (patrz MAX_FACET
- * w stronie listy) — realne dane, ale bez skalowania na dziesiątki tysięcy ofert.
+ * z górnej wyszukiwarki są zachowywane przy obliczaniu facetów. Produkcyjny listing pobiera
+ * dokładne wartości z jednego agregatu SQL; logika tablicowa jest pełnym fallbackiem wyłącznie
+ * dla małego zestawu danych demonstracyjnych.
  */
 
 import type { CategoryKey, ContractType, JobListItem } from '@/lib/jobs';
+import type { JobFilterFacets } from '@/types/job-filter-facets';
 
 /** Widełki suwaka wynagrodzenia (brutto/mies., EUR). `SALARY_MAX_BOUND` oznacza „i więcej”. */
 export const SALARY_MIN_BOUND = 1500;
@@ -52,15 +50,31 @@ export interface FacetItem {
 }
 
 export const CATEGORY_KEYS: readonly CategoryKey[] = [
-  'construction', 'transport', 'warehouse', 'production', 'technical',
-  'cleaning', 'hospitality', 'care', 'logistics', 'seasonal',
+  'construction',
+  'transport',
+  'warehouse',
+  'production',
+  'technical',
+  'cleaning',
+  'hospitality',
+  'care',
+  'logistics',
+  'seasonal',
 ];
 
 export const CONTRACT_TYPES: readonly ContractType[] = [
-  'permanent', 'temporary', 'interim', 'freelance', 'internship', 'seasonal',
+  'permanent',
+  'temporary',
+  'interim',
+  'freelance',
+  'internship',
+  'seasonal',
 ];
 
-export const ACCOMMODATION_VALUES: readonly AccommodationValue[] = ['provided', 'unavailable'];
+export const ACCOMMODATION_VALUES: readonly AccommodationValue[] = [
+  'provided',
+  'unavailable',
+];
 export const DATE_VALUES: readonly DateValue[] = ['any', '24h', '7d', '30d'];
 const SORT_VALUES: readonly SortValue[] = ['newest', 'salary'];
 
@@ -100,15 +114,17 @@ function clampSalary(value: number): number {
 }
 
 /** Odczyt filtrów sidebara z płaskiego zestawu parametrów zapytania. */
-export function parseSidebarFilters(sp: Record<string, string | undefined>): SidebarFilters {
+export function parseSidebarFilters(
+  sp: Record<string, string | undefined>,
+): SidebarFilters {
   const f = emptySidebarFilters();
 
   f.categories = splitParam(sp['category']).filter((v): v is CategoryKey =>
     (CATEGORY_KEYS as readonly string[]).includes(v),
   );
   f.locations = splitParam(sp['location']);
-  f.contractTypes = splitParam(sp['contractType']).filter((v): v is ContractType =>
-    (CONTRACT_TYPES as readonly string[]).includes(v),
+  f.contractTypes = splitParam(sp['contractType']).filter(
+    (v): v is ContractType => (CONTRACT_TYPES as readonly string[]).includes(v),
   );
 
   const min = Number(sp['salaryMin']);
@@ -120,14 +136,17 @@ export function parseSidebarFilters(sp: Record<string, string | undefined>): Sid
     f.salaryMax = SALARY_MAX_BOUND;
   }
 
-  f.accommodation = splitParam(sp['accommodation']).filter((v): v is AccommodationValue =>
-    (ACCOMMODATION_VALUES as readonly string[]).includes(v),
+  f.accommodation = splitParam(sp['accommodation']).filter(
+    (v): v is AccommodationValue =>
+      (ACCOMMODATION_VALUES as readonly string[]).includes(v),
   );
   f.immediate = sp['immediate'] === '1';
   f.noLanguageRequired = sp['noLang'] === '1';
 
   const date = sp['date'];
-  f.date = (DATE_VALUES as readonly string[]).includes(date ?? '') ? (date as DateValue) : 'any';
+  f.date = (DATE_VALUES as readonly string[]).includes(date ?? '')
+    ? (date as DateValue)
+    : 'any';
 
   return f;
 }
@@ -145,12 +164,18 @@ export function isSalaryNarrowed(f: SidebarFilters): boolean {
 
 /** Predykat dopasowania oferty do filtrów sidebara (używany serwerowo i klienckim liczniku). */
 export function matchesSidebar(item: FacetItem, f: SidebarFilters): boolean {
-  if (f.categories.length > 0 && !f.categories.includes(item.category)) return false;
+  if (f.categories.length > 0 && !f.categories.includes(item.category))
+    return false;
   if (f.locations.length > 0 && !f.locations.includes(item.city)) return false;
-  if (f.contractTypes.length > 0 && !f.contractTypes.includes(item.contractType)) return false;
+  if (
+    f.contractTypes.length > 0 &&
+    !f.contractTypes.includes(item.contractType)
+  )
+    return false;
 
   if (isSalaryNarrowed(f)) {
-    const maxEff = f.salaryMax >= SALARY_MAX_BOUND ? Number.POSITIVE_INFINITY : f.salaryMax;
+    const maxEff =
+      f.salaryMax >= SALARY_MAX_BOUND ? Number.POSITIVE_INFINITY : f.salaryMax;
     const iMin = item.salaryMin ?? item.salaryMax;
     const iMax = item.salaryMax ?? item.salaryMin;
     if (iMin !== undefined && iMax !== undefined) {
@@ -176,12 +201,68 @@ export function matchesSidebar(item: FacetItem, f: SidebarFilters): boolean {
   return true;
 }
 
-export function countMatches(items: readonly FacetItem[], f: SidebarFilters): number {
+export function countMatches(
+  items: readonly FacetItem[],
+  f: SidebarFilters,
+): number {
   let count = 0;
   for (const item of items) {
     if (matchesSidebar(item, f)) count += 1;
   }
   return count;
+}
+
+/** Pełny fallback wyłącznie dla małego, kompletnego zbioru demonstracyjnego. */
+export function buildDemoFacets(
+  items: readonly FacetItem[],
+  filters: SidebarFilters,
+): JobFilterFacets {
+  const without = (key: keyof SidebarFilters): SidebarFilters => ({
+    ...filters,
+    ...(key === 'categories' ? { categories: [] } : {}),
+    ...(key === 'locations' ? { locations: [] } : {}),
+    ...(key === 'contractTypes' ? { contractTypes: [] } : {}),
+    ...(key === 'accommodation' ? { accommodation: [] } : {}),
+    ...(key === 'immediate' ? { immediate: false } : {}),
+    ...(key === 'noLanguageRequired' ? { noLanguageRequired: false } : {}),
+  });
+  const grouped = (
+    field: 'category' | 'city' | 'contractType',
+    own: keyof SidebarFilters,
+  ) => {
+    const result: Record<string, number> = {};
+    for (const item of items)
+      if (matchesSidebar(item, without(own))) {
+        const value = item[field];
+        result[value] = (result[value] ?? 0) + 1;
+      }
+    return result;
+  };
+  const accommodationItems = items.filter((item) =>
+    matchesSidebar(item, without('accommodation')),
+  );
+  const locations = Object.entries(grouped('city', 'locations'))
+    .map(([city, count]) => ({ city, count }))
+    .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city));
+  return {
+    total: countMatches(items, filters),
+    categories: grouped('category', 'categories'),
+    locations,
+    contracts: grouped('contractType', 'contractTypes'),
+    accommodation: {
+      provided: accommodationItems.filter((item) => item.accommodation).length,
+      unavailable: accommodationItems.filter((item) => !item.accommodation)
+        .length,
+    },
+    immediate: items.filter(
+      (item) => matchesSidebar(item, without('immediate')) && item.immediate,
+    ).length,
+    noLanguage: items.filter(
+      (item) =>
+        matchesSidebar(item, without('noLanguageRequired')) &&
+        item.noLanguageRequired,
+    ).length,
+  };
 }
 
 /** Rzutuje pełny element listy na minimalny rekord facetu. */
@@ -200,17 +281,21 @@ export function toFacetItem(job: JobListItem): FacetItem {
 }
 
 /** Serializacja filtrów sidebara do parametrów URL (pomija wartości domyślne). */
-export function sidebarFiltersToParams(f: SidebarFilters): Record<string, string> {
+export function sidebarFiltersToParams(
+  f: SidebarFilters,
+): Record<string, string> {
   const params: Record<string, string> = {};
   if (f.categories.length) params['category'] = f.categories.join(',');
   if (f.locations.length) params['location'] = f.locations.join(',');
-  if (f.contractTypes.length) params['contractType'] = f.contractTypes.join(',');
+  if (f.contractTypes.length)
+    params['contractType'] = f.contractTypes.join(',');
   if (isSalaryNarrowed(f)) {
     params['salaryMin'] = String(f.salaryMin);
     params['salaryMax'] = String(f.salaryMax);
   }
   // Zaznaczenie obu opcji zakwaterowania nie zawęża wyników — zapisujemy tylko realne filtry.
-  if (f.accommodation.length === 1) params['accommodation'] = f.accommodation.join(',');
+  if (f.accommodation.length === 1)
+    params['accommodation'] = f.accommodation.join(',');
   if (f.immediate) params['immediate'] = '1';
   if (f.noLanguageRequired) params['noLang'] = '1';
   if (f.date !== 'any') params['date'] = f.date;
@@ -236,14 +321,15 @@ function salaryKey(job: { salaryMin?: number; salaryMax?: number }): number {
 }
 
 /** Sortowanie ofert: najnowsze (domyślnie) lub najwyższe wynagrodzenie. */
-export function sortJobs<T extends { publishedAt: string; salaryMin?: number; salaryMax?: number }>(
-  jobs: readonly T[],
-  sort: SortValue,
-): T[] {
+export function sortJobs<
+  T extends { publishedAt: string; salaryMin?: number; salaryMax?: number },
+>(jobs: readonly T[], sort: SortValue): T[] {
   const copy = [...jobs];
   if (sort === 'salary') {
     copy.sort(
-      (a, b) => salaryKey(b) - salaryKey(a) || b.publishedAt.localeCompare(a.publishedAt),
+      (a, b) =>
+        salaryKey(b) - salaryKey(a) ||
+        b.publishedAt.localeCompare(a.publishedAt),
     );
   } else {
     copy.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));

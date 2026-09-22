@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { useRouter, usePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { FilterFields } from '@/components/public/FilterSidebar';
+import { FilterFields, useLiveFacets } from '@/components/public/FilterSidebar';
 import {
   CATEGORY_KEYS,
   CONTRACT_TYPES,
@@ -17,13 +17,12 @@ import {
   SALARY_MIN_BOUND,
   SALARY_STEP,
   countActiveSidebar,
-  countMatches,
   emptySidebarFilters,
   sidebarFiltersToParams,
-  type FacetItem,
   type SidebarFilters,
   type SortValue,
 } from '@/components/public/job-filters';
+import type { JobFilterFacets } from '@/types/job-filter-facets';
 
 /**
  * Mobilny panel filtrów (bottom-sheet na Radix Dialog) wg makiety 02-jobs-list.
@@ -35,7 +34,7 @@ import {
  */
 
 export interface FilterSheetProps {
-  items: FacetItem[];
+  facets: JobFilterFacets;
   initial: SidebarFilters;
   keyword?: string;
   city?: string;
@@ -57,7 +56,7 @@ function buildHref(
 }
 
 function NoScriptFilterForm({
-  items,
+  facets,
   initial,
   keyword,
   city,
@@ -69,9 +68,9 @@ function NoScriptFilterForm({
   const t = useTranslations('filters');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
-  const locations = [...new Set(items.map((item) => item.city))].sort((a, b) =>
-    a.localeCompare(b),
-  );
+  const locations = facets.locations
+    .map((item) => item.city)
+    .sort((a, b) => a.localeCompare(b));
   const clearHref = buildHref(pathname, emptySidebarFilters(), {
     keyword,
     city,
@@ -275,14 +274,14 @@ function NoScriptFilterForm({
         type="submit"
         className="inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-primary px-6 text-sm font-medium text-primary-foreground"
       >
-        {t('showResults', { count: countMatches(items, initial) })}
+        {t('showResults', { count: facets.total })}
       </button>
     </form>
   );
 }
 
 export function FilterSheet({
-  items,
+  facets: initialFacets,
   initial,
   keyword,
   city,
@@ -303,7 +302,10 @@ export function FilterSheet({
   };
 
   const activeCount = countActiveSidebar(initial);
-  const total = countMatches(items, pending);
+  const facets = useLiveFacets(initialFacets, initial, pending, {
+    keyword,
+    city,
+  });
 
   const apply = () => {
     router.push(buildHref(pathname, pending, { keyword, city, sort }));
@@ -318,7 +320,7 @@ export function FilterSheet({
           {'[data-filter-passport="mobile-trigger"]{display:none!important}'}
         </style>
         <NoScriptFilterForm
-          items={items}
+          facets={initialFacets}
           initial={initial}
           keyword={keyword}
           city={city}
@@ -378,7 +380,7 @@ export function FilterSheet({
 
             <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5">
               <FilterFields
-                items={items}
+                facets={facets}
                 value={pending}
                 onChange={setPending}
                 idPrefix="m"
@@ -391,7 +393,7 @@ export function FilterSheet({
                 onClick={apply}
                 className="min-h-12 w-full rounded-xl"
               >
-                {t('showResults', { count: total })}
+                {t('showResults', { count: facets.total })}
               </Button>
             </div>
           </Dialog.Content>

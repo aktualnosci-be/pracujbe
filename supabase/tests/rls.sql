@@ -1323,4 +1323,29 @@ select pg_temp.expect_error('select count(*) from public.companies', 'permission
   'II6 RPC nie przywraca anon bezpośredniego SELECT companies');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- JJ. Dokładne facety listingu (0065) — pełny zbiór, jeden publiczny RPC
+-- ============================================================================
+insert into public.jobs(company_id,slug,title,category,contract_type,city,region,status,default_locale,
+  published_at,expires_at,accommodation,immediate,no_language_required)
+select :'COMPA','facet-rls-'||n,'Facet '||n,'warehouse','permanent','Antwerpia','Flandria','active','pl',
+  now(),now()+interval '30 days',n%2=0,n%3=0,n%5=0 from generate_series(1,205) n;
+set role anon; reset app.current_uid;
+select pg_temp.assert(
+  (select total from public.get_public_job_filter_facets('pl',p_locations=>array['Antwerpia'],
+    p_contract_types=>array['permanent']) where dimension='total' and key='all') > 200,
+  'JJ1 dokładny total nie zatrzymuje się na 200');
+select pg_temp.assert(
+  (select total from public.get_public_job_filter_facets('pl',p_locations=>array['Antwerpia'],
+    p_contract_types=>array['permanent']) where dimension='category' and key='warehouse') > 200,
+  'JJ2 widoczny badge kategorii zachowuje pozostałe aktywne filtry');
+select pg_temp.assert(
+  (select count(*) from public.get_public_job_filter_facets('pl')
+    where dimension in ('category','location','contract','accommodation','additional')) >= 7,
+  'JJ3 RPC zwraca wszystkie widoczne wymiary filtrów');
+select pg_temp.expect_error('select count(*) from public.jobs', 'permission denied',
+  'JJ4 facet RPC nie daje anon SELECT jobs');
+reset role; reset app.current_uid;
+delete from public.jobs where slug like 'facet-rls-%';
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
