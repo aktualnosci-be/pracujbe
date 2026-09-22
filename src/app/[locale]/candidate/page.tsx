@@ -24,7 +24,7 @@ import {
 } from '@/lib/data/candidate';
 
 /**
- * Panel kandydata — Podsumowanie (makieta 04).
+ * Panel kandydata — Podsumowanie w stylu Paszportu pracy.
  *
  * Dane realne z bazy pod sesją użytkownika (RLS) przez `@/lib/data/candidate`; bez env te same
  * struktury z danymi DEMO. NOINDEX (dziedziczone z layoutu panelu). Akcje (zapis oferty, wycofanie
@@ -99,11 +99,13 @@ export default async function CandidateDashboardPage({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       {/* Powitanie */}
-      <h1 className="text-2xl font-bold tracking-tight text-foreground">
-        {td('greeting', { name: profile.firstName ?? '' })} <span aria-hidden="true">👋</span>
-      </h1>
+      <header className="min-w-0 rounded-[1.75rem] border border-border bg-card p-5 sm:p-8">
+        <h1 className="break-words text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          {td('greeting', { name: profile.firstName ?? '' })}
+        </h1>
+      </header>
 
       {/* Baner wyłącznie dla rzeczywistej propozycji oczekującej na odpowiedź. */}
       {newProposal ? (
@@ -118,7 +120,7 @@ export default async function CandidateDashboardPage({
       ) : null}
 
       {/* Statystyki */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label={td('newJobs')} value={overview.newJobsCount} sub={td('newJobsSub')} />
         <StatCard
           label={td('activeApplications')}
@@ -140,15 +142,15 @@ export default async function CandidateDashboardPage({
       </div>
 
       {/* Główna siatka: lewa (2/3) + prawa (1/3) */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="min-w-0 space-y-6 lg:col-span-2">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+        <div className="min-w-0 space-y-6">
           {/* Polecane oferty pracy */}
-          <section className="rounded-lg border border-border bg-card">
-            <div className="flex items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
-              <h2 className="text-base font-semibold text-foreground">{td('recommendedJobs')}</h2>
+          <section className="min-w-0 rounded-[1.75rem] border border-border bg-card">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-[1.75rem] border-b border-border bg-soft p-5 sm:px-7">
+              <h2 className="text-xl font-bold text-foreground">{td('recommendedJobs')}</h2>
               <Link
                 href="/candidate/oferty-polecane"
-                className="shrink-0 text-sm font-medium text-accent hover:underline"
+                className="inline-flex min-h-11 items-center break-words text-sm font-semibold text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 {td('seeAll')}
               </Link>
@@ -158,7 +160,7 @@ export default async function CandidateDashboardPage({
             ) : (
               <ul className="divide-y divide-border">
                 {recommended.map((job) => (
-                  <li key={job.id} className="flex items-start gap-3 p-4 sm:px-5">
+                  <li key={job.id} className="flex min-w-0 items-start gap-3 p-5 sm:px-7">
                     <span
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
                       aria-hidden="true"
@@ -166,29 +168,29 @@ export default async function CandidateDashboardPage({
                       {initials(job.companyName)}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-start justify-between gap-2">
                         <div className="min-w-0">
                           {job.slug ? (
                             <Link
                               href={`/oferty-pracy/${job.slug}`}
-                              className="block max-w-full truncate text-sm font-semibold text-foreground hover:text-accent hover:underline"
+                              className="block max-w-full break-words text-base font-semibold text-foreground hover:text-accent hover:underline"
                             >
                               {job.title}
                             </Link>
                           ) : (
-                            <p className="truncate text-sm font-semibold text-foreground">{job.title}</p>
+                            <p className="break-words text-base font-semibold text-foreground">{job.title}</p>
                           )}
-                          <p className="truncate text-sm text-muted-foreground">{job.companyName}</p>
+                          <p className="break-words text-sm text-muted-foreground">{job.companyName}</p>
                         </div>
                         <SaveJobButton jobId={job.id} initialSaved={job.saved} className="-mt-1" />
                       </div>
-                      <div className="mt-2 flex items-center gap-3">
-                        <span className="inline-flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
-                          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <span className="inline-flex min-w-0 items-center gap-1 break-words text-sm text-muted-foreground">
+                          <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                           {job.city}
                         </span>
                         {job.match !== null ? (
-                          <span className="ml-auto flex min-w-0 max-w-[11rem] flex-1 items-center gap-2">
+                          <span className="flex min-w-[7rem] max-w-[11rem] flex-1 items-center gap-2">
                             <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-success-text">
                               {job.match}%
                             </span>
@@ -204,12 +206,12 @@ export default async function CandidateDashboardPage({
           </section>
 
           {/* Moje ostatnie aplikacje */}
-          <section className="rounded-lg border border-border bg-card">
-            <div className="flex items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
-              <h2 className="text-base font-semibold text-foreground">{td('myApplications')}</h2>
+          <section className="min-w-0 rounded-[1.75rem] border border-border bg-card">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-[1.75rem] border-b border-border bg-soft p-5 sm:px-7">
+              <h2 className="text-xl font-bold text-foreground">{td('myApplications')}</h2>
               <Link
                 href="/candidate/aplikacje"
-                className="shrink-0 text-sm font-medium text-accent hover:underline"
+                className="inline-flex min-h-11 items-center break-words text-sm font-semibold text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 {td('seeAll')}
               </Link>
@@ -221,21 +223,21 @@ export default async function CandidateDashboardPage({
                 {applications.map((app) => {
                   const date = formatDate(app.date, locale);
                   return (
-                    <li key={app.id} className="flex items-center gap-3 p-4 sm:px-5">
+                    <li key={app.id} className="flex min-w-0 flex-wrap items-start gap-3 p-5 sm:px-7">
                       <div className="min-w-0 flex-1">
                         {app.slug ? (
                           <Link
                             href={`/oferty-pracy/${app.slug}`}
-                            className="block max-w-full truncate text-sm font-medium text-foreground hover:text-accent hover:underline"
+                            className="block max-w-full break-words text-base font-semibold text-foreground hover:text-accent hover:underline"
                           >
                             {app.jobTitle || '—'}
                           </Link>
                         ) : (
-                          <p className="truncate text-sm font-medium text-foreground">
+                          <p className="break-words text-base font-semibold text-foreground">
                             {app.jobTitle || '—'}
                           </p>
                         )}
-                        <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                        <p className="mt-1 break-words text-sm text-muted-foreground">
                           {app.companyName ? (
                             <>
                               {app.companyName} <span className="text-border">·</span> {date}
@@ -260,10 +262,10 @@ export default async function CandidateDashboardPage({
         </div>
 
         {/* Kolumna boczna */}
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {/* Kompletność profilu */}
-          <section className="rounded-lg border border-border bg-card p-4 sm:p-5">
-            <h2 className="text-base font-semibold text-foreground">{td('profileCompleteness')}</h2>
+          <section className="min-w-0 rounded-[1.75rem] border border-border bg-card p-5 sm:p-6">
+            <h2 className="text-xl font-bold text-foreground">{td('profileCompleteness')}</h2>
             <ProfileCompleteness
               className="mt-4"
               value={profile.completionPct}
@@ -271,7 +273,7 @@ export default async function CandidateDashboardPage({
               hint={td('completenessHint')}
             />
             <ProfileChecklist className="mt-5" items={checklist} />
-            <Button asChild className="mt-5 w-full">
+            <Button asChild className="mt-5 min-h-12 w-full whitespace-normal rounded-xl text-center">
               <Link href="/candidate/profil">{td('completeProfile')}</Link>
             </Button>
           </section>
@@ -280,16 +282,16 @@ export default async function CandidateDashboardPage({
           <CvUpload items={files} />
 
           {/* Najnowsze wiadomości */}
-          <section className="rounded-lg border border-border bg-card">
-            <div className="border-b border-border p-4 sm:px-5">
-              <h2 className="text-base font-semibold text-foreground">{td('latestMessages')}</h2>
+          <section className="min-w-0 rounded-[1.75rem] border border-border bg-card">
+            <div className="rounded-t-[1.75rem] border-b border-border bg-soft p-5 sm:px-6">
+              <h2 className="text-xl font-bold text-foreground">{td('latestMessages')}</h2>
             </div>
             {messages.length === 0 ? (
               <p className="p-4 text-sm text-muted-foreground sm:px-5">{td('noMessages')}</p>
             ) : (
               <ul className="divide-y divide-border">
                 {messages.map((msg) => (
-                  <li key={msg.id} className="flex gap-3 p-4 sm:px-5">
+                  <li key={msg.id} className="flex min-w-0 gap-3 p-5 sm:px-6">
                     <span
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
                       aria-hidden="true"
@@ -297,13 +299,13 @@ export default async function CandidateDashboardPage({
                       {initials(msg.title)}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-medium text-foreground">{msg.title}</p>
-                        <span className="shrink-0 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <p className="min-w-0 break-words text-sm font-semibold text-foreground">{msg.title}</p>
+                        <span className="text-xs text-muted-foreground">
                           {formatShort(msg.time, locale)}
                         </span>
                       </div>
-                      <p className="mt-0.5 truncate text-sm text-muted-foreground">{msg.preview}</p>
+                      <p className="mt-1 break-words text-sm text-muted-foreground">{msg.preview}</p>
                     </div>
                     {msg.unread ? (
                       <span
@@ -316,7 +318,7 @@ export default async function CandidateDashboardPage({
               </ul>
             )}
             <div className="border-t border-border p-3">
-              <Button asChild variant="outline" className="w-full">
+              <Button asChild variant="outline" className="min-h-12 w-full whitespace-normal rounded-xl text-center">
                 <Link href="/candidate/wiadomosci">{td('seeAllMessages')}</Link>
               </Button>
             </div>

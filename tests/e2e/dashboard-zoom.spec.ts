@@ -17,6 +17,8 @@ type Messages = {
     addJob: string;
     navSummary: string;
     recommendedJobs: string;
+    myApplications: string;
+    latestMessages: string;
     seeAll: string;
   };
   nav: { menu: string };
@@ -218,34 +220,32 @@ for (const locale of locales) {
   }
 }
 
-test("kontrola ujemna wykrywa cofnięcie min-w-0 kolumny kandydata", async ({
+test("długie nazwy w panelu kandydata są w całości widoczne bez przewijania poziomego", async ({
   page,
 }) => {
   await setNecessaryCookieConsent(page);
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto("/pl/candidate");
-  const repairedColumn = page
-    .getByRole("main")
-    .locator("div.grid.gap-6.lg\\:grid-cols-3 > div")
-    .first();
-  await expect(repairedColumn).toHaveClass(/min-w-0/);
-  await expectNoHorizontalOverflow(page, "kontrola ujemna: stan początkowy");
+  const main = page.getByRole("main");
+  const t = messages("pl").dashboard;
+  const section = (name: string) => main.getByRole("heading", { name }).locator("../..");
+  const labels = [
+    section(t.recommendedJobs).locator("ul li:first-child a").first(),
+    section(t.myApplications).locator("ul li:first-child a").first(),
+    section(t.latestMessages).locator("ul li:first-child p").first(),
+  ];
+  const longTitle = "Koordynator ds. obsługi międzynarodowych zamówień i procesów magazynowych w belgijskim centrum dystrybucji";
+  for (const [index, title] of labels.entries()) {
+    await expect(title).toBeVisible();
+    await title.evaluate((element, value) => { element.textContent = value; }, longTitle);
+    await expect(title).toHaveText(longTitle);
+    await expectNoHorizontalOverflow(page, `długa nazwa w sekcji ${index}`);
+    const wraps = await title.evaluate((element) => element.getBoundingClientRect().height > parseFloat(getComputedStyle(element).lineHeight) * 1.5);
+    expect(wraps).toBe(true);
+  }
 
-  await repairedColumn.evaluate((element) =>
-    element.classList.remove("min-w-0"),
-  );
-  const broken = await measureHorizontalOverflow(page);
-
-  expect(broken.documentWidth).toBeGreaterThan(broken.viewportWidth + 1);
-  expect(
-    broken.offenders.some((offender) =>
-      offender.className.includes("space-y-6"),
-    ),
-  ).toBe(true);
-
-  await repairedColumn.evaluate((element) => element.classList.add("min-w-0"));
-  await expectNoHorizontalOverflow(
-    page,
-    "kontrola ujemna: po przywróceniu min-w-0",
-  );
+  // Kontrola ujemna: dawna klasa obcinająca tekst powinna złamać asercję zawijania.
+  await labels[0].evaluate((element) => { element.classList.remove("break-words"); element.classList.add("truncate"); });
+  const truncated = await labels[0].evaluate((element) => element.getBoundingClientRect().height <= parseFloat(getComputedStyle(element).lineHeight) * 1.5);
+  expect(truncated).toBe(true);
 });
