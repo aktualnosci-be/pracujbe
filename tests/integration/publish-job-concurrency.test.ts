@@ -51,15 +51,55 @@ async function insertCompleteDraft(id: string): Promise<void> {
   );
 }
 
-async function authenticatedClient(): Promise<Client> {
-  const client = new Client(connection);
+async function authenticatedClient(applicationName: string): Promise<Client> {
+  const client = new Client({
+    ...connection,
+    application_name: applicationName,
+  });
   await client.connect();
   await client.query("BEGIN");
+  await client.query("SET LOCAL statement_timeout = '10s'");
   await client.query("SET ROLE authenticated");
   await client.query(`SELECT set_config('app.current_uid', $1, true)`, [
     employerId,
   ]);
   return client;
+}
+
+async function waitUntilBothPublishersAreBlocked(
+  applicationNames: string[],
+): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  let observed: Array<{
+    application_name: string;
+    state: string;
+    wait_event_type: string | null;
+    wait_event: string | null;
+  }> = [];
+
+  while (Date.now() < deadline) {
+    observed = (
+      await admin!.query(
+        `SELECT application_name, state, wait_event_type, wait_event
+           FROM pg_stat_activity
+          WHERE application_name = ANY($1::text[])`,
+        [applicationNames],
+      )
+    ).rows;
+    if (
+      observed.length === applicationNames.length &&
+      observed.every(
+        (session) =>
+          session.state === "active" && session.wait_event_type === "Lock",
+      )
+    )
+      return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  throw new Error(
+    `Obie publikacje nie czekały równolegle na blokadę: ${JSON.stringify(observed)}`,
+  );
 }
 
 async function publish(client: Client, slug: string) {
@@ -185,14 +225,38 @@ afterAll(async () => {
 
 describe("publish_job — równoległa publikacja na PostgreSQL 16", () => {
   it("dopuszcza dokładnie jednego zwycięzcę i zachowuje jego slug oraz czas transakcji", async () => {
-    const first = await authenticatedClient();
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const second = await authenticatedClient();
+    const applicationNames = [
+      `publish-race-a-${randomUUID()}`,
+      `publish-race-b-${randomUUID()}`,
+    ];
+    const locker = new Client({
+      ...connection,
+      application_name: `publish-race-locker-${randomUUID()}`,
+    });
+    await locker.connect();
+    await locker.query("BEGIN");
+    await locker.query("SELECT id FROM public.jobs WHERE id = $1 FOR UPDATE", [
+      jobId,
+    ]);
 
-    const results = await Promise.all([
+    const first = await authenticatedClient(applicationNames[0]!);
+    const second = await authenticatedClient(applicationNames[1]!);
+    const pendingResults = Promise.all([
       publish(first, "zwyciezca-a"),
       publish(second, "zwyciezca-b"),
     ]);
+    let overlapError: unknown;
+    try {
+      await waitUntilBothPublishersAreBlocked(applicationNames);
+    } catch (error) {
+      overlapError = error;
+    } finally {
+      await locker.query("ROLLBACK");
+      await locker.end();
+    }
+
+    const results = await pendingResults;
+    if (overlapError) throw overlapError;
     const successes = results.filter((result) => result.ok);
     const failures = results.filter((result) => !result.ok);
     expect(successes).toHaveLength(1);
