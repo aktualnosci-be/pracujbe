@@ -10,7 +10,7 @@ describe("Grupowane liczniki publicznych ofert", () => {
   it("wykonuje najwyżej po jednym agregacie na wymiar i zachowuje publiczny zakres", async () => {
     const aggregateSql: string[] = [];
     const query = vi.fn(async (text: string) => {
-      if (text.includes("GROUP BY j.category::text")) {
+      if (text.includes("get_public_job_category_counts")) {
         aggregateSql.push(text);
         return {
           rows: [
@@ -19,7 +19,7 @@ describe("Grupowane liczniki publicznych ofert", () => {
           ],
         };
       }
-      if (text.includes("GROUP BY requested.city")) {
+      if (text.includes("get_public_job_city_counts")) {
         aggregateSql.push(text);
         return {
           rows: [
@@ -50,20 +50,16 @@ describe("Grupowane liczniki publicznych ofert", () => {
     });
 
     expect(aggregateSql).toHaveLength(2);
-    expect(aggregateSql[0]).toMatch(/j\.status = 'active'/);
-    expect(aggregateSql[0]).toMatch(/j\.deleted_at IS NULL/);
-    expect(aggregateSql[0]).toMatch(
-      /j\.expires_at IS NULL OR j\.expires_at > now\(\)/,
+    expect(aggregateSql[0]).toContain(
+      "public.get_public_job_category_counts($1::text[])",
     );
-    expect(aggregateSql[0]).toMatch(/c\.status = 'verified'/);
-    expect(aggregateSql[0]).toMatch(/c\.deleted_at IS NULL/);
-    expect(aggregateSql[1]).toMatch(
-      /j\.city ILIKE '%' \|\| left\(requested\.city, 100\) \|\| '%'/,
+    expect(aggregateSql[1]).toContain(
+      "public.get_public_job_city_counts($1::text[])",
     );
-    expect(aggregateSql[1]).toMatch(/c\.status = 'verified'/);
-    expect(aggregateSql.join("\n")).not.toMatch(/\bLIMIT\b|\bOFFSET\b/);
     expect(
-      query.mock.calls.filter(([sql]) => String(sql).includes("GROUP BY")),
+      query.mock.calls.filter(([sql]) =>
+        String(sql).includes("_counts($1::text[])"),
+      ),
     ).toHaveLength(2);
     expect(
       query.mock.calls.filter(([sql]) => sql === "SET LOCAL ROLE anon"),

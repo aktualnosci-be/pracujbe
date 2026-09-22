@@ -111,14 +111,8 @@ export async function getPublicJobCategoryCounts(
   if (keys.length === 0) return {};
   return withUserTransaction(pool, null, async (transaction) => {
     const result = (await transaction.query(
-      `SELECT j.category::text AS key, to_jsonb(count(*)) AS total
-       FROM public.jobs j
-       JOIN public.companies c ON c.id = j.company_id
-       WHERE j.status = 'active' AND j.deleted_at IS NULL
-         AND (j.expires_at IS NULL OR j.expires_at > now())
-         AND c.status = 'verified' AND c.deleted_at IS NULL
-         AND j.category::text = ANY($1::text[])
-       GROUP BY j.category::text`,
+      `SELECT key, to_jsonb(total) AS total
+       FROM public.get_public_job_category_counts($1::text[])`,
       [keys],
     )) as { rows: FacetCountRow[] };
     return facetCounts(keys, result.rows);
@@ -133,16 +127,8 @@ export async function getPublicJobCityCounts(
   if (cities.length === 0) return {};
   return withUserTransaction(pool, null, async (transaction) => {
     const result = (await transaction.query(
-      `SELECT requested.city AS key, to_jsonb(count(j.id)) AS total
-       FROM unnest($1::text[]) AS requested(city)
-       LEFT JOIN public.jobs j
-         ON j.city ILIKE '%' || left(requested.city, 100) || '%'
-        AND j.status = 'active' AND j.deleted_at IS NULL
-        AND (j.expires_at IS NULL OR j.expires_at > now())
-       LEFT JOIN public.companies c
-         ON c.id = j.company_id AND c.status = 'verified' AND c.deleted_at IS NULL
-       WHERE j.id IS NULL OR c.id IS NOT NULL
-       GROUP BY requested.city`,
+      `SELECT key, to_jsonb(total) AS total
+       FROM public.get_public_job_city_counts($1::text[])`,
       [cities],
     )) as { rows: FacetCountRow[] };
     return facetCounts(cities, result.rows);

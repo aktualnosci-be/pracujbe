@@ -1288,4 +1288,26 @@ reset role; reset app.current_uid;
 reset role;
 delete from public.company_members where company_id = :'COMPA' and profile_id = :'CANDB';
 
+-- ============================================================================
+-- II. Grupowane liczniki publicznych ofert (0064) — anon bez SELECT na tabelach
+-- ============================================================================
+set role anon; reset app.current_uid;
+select pg_temp.assert(
+  (select total from public.get_public_job_category_counts(array['warehouse']) where key = 'warehouse') = 2,
+  'II1 anon widzi pełny grupowany licznik kategorii przez SECURITY DEFINER');
+select pg_temp.assert(
+  (select total from public.get_public_job_category_counts(array['transport']) where key = 'transport') = 1,
+  'II2 licznik kategorii obejmuje właściwy publiczny zakres');
+select pg_temp.assert(
+  (select total from public.get_public_job_category_counts(array['construction']) where key = 'construction') = 0,
+  'II3 licznik wyklucza ofertę niezweryfikowanej firmy');
+select pg_temp.assert(
+  (select total from public.get_public_job_city_counts(array['Gandawa']) where key = 'Gandawa') = 2,
+  'II4 anon widzi pełny grupowany licznik miasta');
+select pg_temp.expect_error('select count(*) from public.jobs', 'permission denied',
+  'II5 RPC nie przywraca anon bezpośredniego SELECT jobs');
+select pg_temp.expect_error('select count(*) from public.companies', 'permission denied',
+  'II6 RPC nie przywraca anon bezpośredniego SELECT companies');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
