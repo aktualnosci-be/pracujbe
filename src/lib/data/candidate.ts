@@ -92,6 +92,23 @@ export interface CandidateProfileSummary {
   };
 }
 
+/** Pola zawodowe widoczne dla właściciela profilu, odczytywane pod jego sesją. */
+export interface CandidatePassport {
+  occupations: string[];
+  city: string | null;
+  radiusKm: number | null;
+  experienceYears: number | null;
+  availability: string | null;
+  skills: string[];
+  languages: string[];
+  certificates: string[];
+}
+
+const EMPTY_PASSPORT: CandidatePassport = {
+  occupations: [], city: null, radiusKm: null, experienceYears: null,
+  availability: null, skills: [], languages: [], certificates: [],
+};
+
 /* ---------------------------------------------------------------------------
  * Pomocnicze konwersje (bez `any`, wzorzec z @/lib/jobs)
  * ------------------------------------------------------------------------- */
@@ -538,6 +555,53 @@ export async function getCandidateProfileSummary(): Promise<CandidateProfileSumm
       completionPct: 0,
       checklist: { basicInfo: false, experience: false, education: false, skills: false, languages: false, photo: false },
     };
+  }
+}
+
+/** Własny paszport zawodowy; przy błędzie nie podstawiamy fikcyjnych danych demonstracyjnych. */
+export async function getCandidatePassport(): Promise<CandidatePassport> {
+  if (!isSupabaseConfigured()) return EMPTY_PASSPORT;
+
+  try {
+    const { supabase, userId } = await getServerContext();
+    if (!userId) return EMPTY_PASSPORT;
+
+    const { data, error } = await supabase
+      .from('candidate_profiles')
+      .select('id, occupations, city, radius_km, experience_years, availability')
+      .eq('profile_id', userId)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return EMPTY_PASSPORT;
+
+    const profile = asRecord(data);
+    const candidateProfileId = asStr(profile['id']);
+    const [skills, languages, certificates] = await Promise.all([
+      supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', candidateProfileId),
+      supabase.from('candidate_languages').select('language_label').eq('candidate_profile_id', candidateProfileId),
+      supabase.from('candidate_certificates').select('certificate_label').eq('candidate_profile_id', candidateProfileId),
+    ]);
+    if (skills.error) throw skills.error;
+    if (languages.error) throw languages.error;
+    if (certificates.error) throw certificates.error;
+
+    const labels = (rows: unknown, key: string): string[] => asArr(rows)
+      .map((row) => asStr(asRecord(row)[key]).trim())
+      .filter(Boolean);
+    return {
+      occupations: asArr(profile['occupations']).filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
+      city: asStr(profile['city']) || null,
+      radiusKm: typeof profile['radius_km'] === 'number' ? profile['radius_km'] : null,
+      experienceYears: typeof profile['experience_years'] === 'number' ? profile['experience_years'] : null,
+      availability: asStr(profile['availability']) || null,
+      skills: labels(skills.data, 'skill_label'),
+      languages: labels(languages.data, 'language_label'),
+      certificates: labels(certificates.data, 'certificate_label'),
+    };
+  } catch (error) {
+    captureError(error, { area: 'candidate.getCandidatePassport' });
+    return EMPTY_PASSPORT;
   }
 }
 

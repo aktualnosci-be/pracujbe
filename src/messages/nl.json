@@ -652,6 +652,17 @@
     "candidateFallback": "Kandidaat",
     "emptyState": "Geen gegevens om weer te geven."
   },
+  "candidatePassport": {
+    "eyebrow": "WERKPASPOORT",
+    "title": "Je werkprofiel",
+    "intro": "Hier zie je de gegevens waarmee we vacatures afstemmen op je vaardigheden.",
+    "edit": "Profiel bewerken",
+    "sectionTitle": "Wat je kunt en welk werk je zoekt",
+    "sectionHint": "Je kunt deze gegevens op elk moment aanpassen.",
+    "emptyField": "Nog niet ingevuld",
+    "radius": "Reizen tot {count} km",
+    "years": "{count, plural, one {# jaar} other {# jaar}}"
+  },
   "onboarding": {
     "stepProgress": "Stap {current} van {total}",
     "title": "Je kandidatenprofiel",
