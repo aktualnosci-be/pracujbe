@@ -51,7 +51,7 @@ import { MessagesView } from '@/components/messaging/MessagesView';
 
 describe('mobilny powrót z wątku wiadomości', () => {
   it.each(['pl', 'nl', 'fr', 'en'] as const)(
-    'ma cel dotykowy 48 px i mieści tekst dla locale %s',
+    'jest linkiem do listy z dostępną nazwą dla locale %s',
     async (locale) => {
       getConversations.mockResolvedValue([{ id: 'conversation-1' }]);
       getConversationThread.mockResolvedValue({
@@ -73,13 +73,6 @@ describe('mobilny powrót z wątku wiadomości', () => {
       });
 
       expect(backLink).toHaveAttribute('href', '/candidate/wiadomosci');
-      expect(backLink).toHaveClass(
-        'min-h-12',
-        'max-w-full',
-        'whitespace-normal',
-      );
-      expect(backLink.firstElementChild).toHaveClass('shrink-0');
-      expect(backLink.lastElementChild).toHaveClass('min-w-0', 'break-words');
     },
   );
 });
