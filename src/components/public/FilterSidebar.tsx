@@ -24,15 +24,14 @@ import {
   SALARY_MAX_BOUND,
   SALARY_MIN_BOUND,
   SALARY_STEP,
-  countMatches,
   emptySidebarFilters,
   sidebarFiltersToParams,
   type AccommodationValue,
   type DateValue,
-  type FacetItem,
   type SidebarFilters,
   type SortValue,
 } from '@/components/public/job-filters';
+import type { JobFilterFacets } from '@/types/job-filter-facets';
 
 /**
  * Panel filtrów listy ofert (wg makiety 02-jobs-list).
@@ -40,7 +39,7 @@ import {
  * `FilterFields` to KONTROLOWANY zestaw pól (kategoria, lokalizacja, wynagrodzenie, rodzaj
  * umowy, zakwaterowanie, dodatkowe, data) — współdzielony przez wariant desktopowy
  * (`FilterSidebar`) i mobilny bottom-sheet (`FilterSheet`). Liczniki przy pozycjach są
- * niezależne (liczone z przekazanego zbioru `items`), a przycisk „Pokaż N ofert” pokazuje
+ * niezależne (liczone dokładnie po stronie bazy), a przycisk „Pokaż N ofert” pokazuje
  * liczbę pasującą do BIEŻĄCEGO (edytowanego) wyboru — na żywo.
  *
  * Model: zmiany są PENDING (lokalny stan), zatwierdzane dopiero przyciskiem „Pokaż N ofert”,
@@ -54,43 +53,99 @@ type ContractTypeT = ContractType;
 const COLLAPSED_COUNT = 5;
 
 function toggle<T>(list: readonly T[], value: T): T[] {
-  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+  return list.includes(value)
+    ? list.filter((item) => item !== value)
+    : [...list, value];
 }
 
-/* ------------------------------------------------------------------ liczniki */
+export function useLiveFacets(
+  initial: JobFilterFacets,
+  initialFilters: SidebarFilters,
+  filters: SidebarFilters,
+  base: { keyword?: string; city?: string },
+): {
+  facets: JobFilterFacets;
+  status: 'idle' | 'loading' | 'error';
+  retry: () => void;
+} {
+  const locale = useLocale();
+  const [retryAttempt, setRetryAttempt] = React.useState(0);
+  const query = React.useMemo(() => {
+    const params = new URLSearchParams(sidebarFiltersToParams(filters));
+    params.set('locale', locale);
+    if (base.keyword) params.set('keyword', base.keyword);
+    if (base.city) params.set('city', base.city);
+    return params.toString();
+  }, [base.city, base.keyword, filters, locale]);
+  const initialQuery = React.useMemo(() => {
+    const params = new URLSearchParams(sidebarFiltersToParams(initialFilters));
+    params.set('locale', locale);
+    if (base.keyword) params.set('keyword', base.keyword);
+    if (base.city) params.set('city', base.city);
+    return params.toString();
+  }, [base.city, base.keyword, initialFilters, locale]);
+  const requestSequence = React.useRef(0);
+  const [result, setResult] = React.useState({
+    query: initialQuery,
+    retryAttempt,
+    facets: initial,
+    error: false,
+  });
 
-function useFacetCounts(items: readonly FacetItem[]) {
-  return React.useMemo(() => {
-    const category = new Map<string, number>();
-    const location = new Map<string, number>();
-    const contract = new Map<string, number>();
-    let accommodationProvided = 0;
-    let immediate = 0;
-    let noLanguage = 0;
-
-    for (const item of items) {
-      category.set(item.category, (category.get(item.category) ?? 0) + 1);
-      location.set(item.city, (location.get(item.city) ?? 0) + 1);
-      contract.set(item.contractType, (contract.get(item.contractType) ?? 0) + 1);
-      if (item.accommodation) accommodationProvided += 1;
-      if (item.immediate) immediate += 1;
-      if (item.noLanguageRequired) noLanguage += 1;
+  React.useEffect(() => {
+    const sequence = ++requestSequence.current;
+    if (query === initialQuery) {
+      setResult({
+        query,
+        retryAttempt,
+        facets: initial,
+        error: false,
+      });
+      return;
     }
-
-    const locationOptions = [...location.entries()]
-      .map(([city, count]) => ({ city, count }))
-      .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city));
-
-    return {
-      category,
-      contract,
-      locationOptions,
-      accommodationProvided,
-      accommodationUnavailable: items.length - accommodationProvided,
-      immediate,
-      noLanguage,
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/job-filter-facets?${query}`, {
+        signal: controller.signal,
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error('facet request failed');
+          return response.json() as Promise<JobFilterFacets>;
+        })
+        .then((next) => {
+          if (sequence === requestSequence.current)
+            setResult({
+              query,
+              retryAttempt,
+              facets: next,
+              error: false,
+            });
+        })
+        .catch((error: unknown) => {
+          if (
+            sequence === requestSequence.current &&
+            !(error instanceof DOMException && error.name === 'AbortError')
+          )
+            setResult({
+              query,
+              retryAttempt,
+              facets: initial,
+              error: true,
+            });
+        });
+    }, 150);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
     };
-  }, [items]);
+  }, [initial, initialQuery, query, retryAttempt]);
+
+  const current = result.query === query && result.retryAttempt === retryAttempt;
+  return {
+    facets: query === initialQuery ? initial : result.facets,
+    status: current ? (result.error ? 'error' : 'idle') : 'loading',
+    retry: React.useCallback(() => setRetryAttempt((value) => value + 1), []),
+  };
 }
 
 /* --------------------------------------------------------------- wiersz check */
@@ -109,33 +164,54 @@ function CheckRow({
   onChange: (checked: boolean) => void;
 }): React.JSX.Element {
   return (
-    <div className="flex items-center gap-2.5 py-1">
-      <Checkbox id={id} checked={checked} onCheckedChange={(v) => onChange(v === true)} />
-      <Label htmlFor={id} className="flex-1 cursor-pointer font-normal text-foreground">
+    <div className="flex min-h-12 items-center gap-2.5">
+      <Checkbox
+        id={id}
+        checked={checked}
+        onCheckedChange={(v) => onChange(v === true)}
+      />
+      <Label
+        htmlFor={id}
+        data-filter-target="checkbox-label"
+        className="flex min-h-12 flex-1 cursor-pointer items-center font-normal text-foreground"
+      >
         {label}
       </Label>
       {count !== undefined ? (
-        <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+        <span
+          data-filter-count={id}
+          className="text-xs tabular-nums text-muted-foreground"
+        >
+          {count}
+        </span>
       ) : null}
     </div>
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <h3 className="mb-2 text-sm font-semibold text-foreground">{children}</h3>;
+function SectionTitle({
+  children,
+}: {
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+      {children}
+    </h3>
+  );
 }
 
 /* --------------------------------------------------------------- FilterFields */
 
 export interface FilterFieldsProps {
-  items: readonly FacetItem[];
+  facets: JobFilterFacets;
   value: SidebarFilters;
   onChange: (next: SidebarFilters) => void;
   idPrefix: string;
 }
 
 export function FilterFields({
-  items,
+  facets,
   value,
   onChange,
   idPrefix,
@@ -144,8 +220,6 @@ export function FilterFields({
   const t = useTranslations('filters');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
-
-  const counts = useFacetCounts(items);
 
   const dateLabel = React.useCallback(
     (option: DateValue): string => {
@@ -187,14 +261,21 @@ export function FilterFields({
     : CATEGORY_KEYS.slice(0, COLLAPSED_COUNT);
   const hiddenCategoryCount = CATEGORY_KEYS.length - COLLAPSED_COUNT;
 
-  const filteredLocations = counts.locationOptions.filter((opt) =>
+  const locationOptions = [
+    ...value.locations
+      .filter((city) => !facets.locations.some((option) => option.city === city))
+      .map((city) => ({ city, count: 0 })),
+    ...facets.locations,
+  ];
+  const filteredLocations = locationOptions.filter((opt) =>
     opt.city.toLowerCase().includes(locationQuery.trim().toLowerCase()),
   );
   const visibleLocations =
     showAllLocations || locationQuery.length > 0
       ? filteredLocations
       : filteredLocations.slice(0, COLLAPSED_COUNT);
-  const hiddenLocationCount = filteredLocations.length - visibleLocations.length;
+  const hiddenLocationCount =
+    filteredLocations.length - visibleLocations.length;
 
   const maxLabel =
     value.salaryMax >= SALARY_MAX_BOUND
@@ -202,7 +283,7 @@ export function FilterFields({
       : currency.format(value.salaryMax);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 [&>section+section]:border-t [&>section+section]:border-border/70 [&>section+section]:pt-5">
       {/* Kategoria */}
       <section>
         <SectionTitle>{t('category')}</SectionTitle>
@@ -212,9 +293,11 @@ export function FilterFields({
               key={key}
               id={`${idPrefix}-cat-${key}`}
               label={tCat(key)}
-              count={counts.category.get(key) ?? 0}
+              count={facets.categories[key] ?? 0}
               checked={value.categories.includes(key)}
-              onChange={() => patch({ categories: toggle(value.categories, key) })}
+              onChange={() =>
+                patch({ categories: toggle(value.categories, key) })
+              }
             />
           ))}
         </div>
@@ -222,9 +305,12 @@ export function FilterFields({
           <button
             type="button"
             onClick={() => setShowAllCategories((prev) => !prev)}
-            className="mt-1 text-sm font-medium text-accent hover:text-accent-dark"
+            data-filter-target="show-more"
+            className="mt-1 inline-flex min-h-12 items-center rounded-sm text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            {showAllCategories ? t('showLess') : t('showMore', { count: hiddenCategoryCount })}
+            {showAllCategories
+              ? t('showLess')
+              : t('showMore', { count: hiddenCategoryCount })}
           </button>
         ) : null}
       </section>
@@ -236,7 +322,8 @@ export function FilterFields({
           value={locationQuery}
           onChange={(event) => setLocationQuery(event.target.value)}
           placeholder={t('chooseLocation')}
-          className="mb-2 h-10"
+          data-filter-target="location"
+          className="mb-2 h-12"
           aria-label={t('chooseLocation')}
         />
         <div>
@@ -247,18 +334,23 @@ export function FilterFields({
               label={opt.city}
               count={opt.count}
               checked={value.locations.includes(opt.city)}
-              onChange={() => patch({ locations: toggle(value.locations, opt.city) })}
+              onChange={() =>
+                patch({ locations: toggle(value.locations, opt.city) })
+              }
             />
           ))}
           {visibleLocations.length === 0 ? (
-            <p className="py-1 text-sm text-muted-foreground">{t('noLocations')}</p>
+            <p className="py-1 text-sm text-muted-foreground">
+              {t('noLocations')}
+            </p>
           ) : null}
         </div>
         {hiddenLocationCount > 0 && locationQuery.length === 0 ? (
           <button
             type="button"
             onClick={() => setShowAllLocations(true)}
-            className="mt-1 text-sm font-medium text-accent hover:text-accent-dark"
+            data-filter-target="show-more"
+            className="mt-1 inline-flex min-h-12 items-center rounded-sm text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {t('showMore', { count: hiddenLocationCount })}
           </button>
@@ -269,8 +361,8 @@ export function FilterFields({
       <section>
         <SectionTitle>{t('salary')}</SectionTitle>
         <p className="mb-2 text-sm font-medium text-foreground">
-          {currency.format(value.salaryMin)} <span className="text-muted-foreground">–</span>{' '}
-          {maxLabel}
+          {currency.format(value.salaryMin)}{' '}
+          <span className="text-muted-foreground">–</span> {maxLabel}
         </p>
         <div className="space-y-2">
           <input
@@ -280,10 +372,16 @@ export function FilterFields({
             step={SALARY_STEP}
             value={value.salaryMin}
             onChange={(event) =>
-              patch({ salaryMin: Math.min(Number(event.target.value), value.salaryMax) })
+              patch({
+                salaryMin: Math.min(
+                  Number(event.target.value),
+                  value.salaryMax,
+                ),
+              })
             }
             aria-label={t('salaryMin')}
-            className="w-full accent-accent"
+            data-filter-target="range"
+            className="h-12 w-full accent-accent"
           />
           <input
             type="range"
@@ -292,10 +390,16 @@ export function FilterFields({
             step={SALARY_STEP}
             value={value.salaryMax}
             onChange={(event) =>
-              patch({ salaryMax: Math.max(Number(event.target.value), value.salaryMin) })
+              patch({
+                salaryMax: Math.max(
+                  Number(event.target.value),
+                  value.salaryMin,
+                ),
+              })
             }
             aria-label={t('salaryMax')}
-            className="w-full accent-accent"
+            data-filter-target="range"
+            className="h-12 w-full accent-accent"
           />
         </div>
       </section>
@@ -309,9 +413,11 @@ export function FilterFields({
               key={key}
               id={`${idPrefix}-ct-${key}`}
               label={tContract(key)}
-              count={counts.contract.get(key) ?? 0}
+              count={facets.contracts[key] ?? 0}
               checked={value.contractTypes.includes(key)}
-              onChange={() => patch({ contractTypes: toggle(value.contractTypes, key) })}
+              onChange={() =>
+                patch({ contractTypes: toggle(value.contractTypes, key) })
+              }
             />
           ))}
         </div>
@@ -323,22 +429,28 @@ export function FilterFields({
         <CheckRow
           id={`${idPrefix}-acc-provided`}
           label={t('provided')}
-          count={counts.accommodationProvided}
+          count={facets.accommodation.provided}
           checked={value.accommodation.includes('provided')}
           onChange={() =>
             patch({
-              accommodation: toggle<AccommodationValue>(value.accommodation, 'provided'),
+              accommodation: toggle<AccommodationValue>(
+                value.accommodation,
+                'provided',
+              ),
             })
           }
         />
         <CheckRow
           id={`${idPrefix}-acc-unavailable`}
           label={t('unavailable')}
-          count={counts.accommodationUnavailable}
+          count={facets.accommodation.unavailable}
           checked={value.accommodation.includes('unavailable')}
           onChange={() =>
             patch({
-              accommodation: toggle<AccommodationValue>(value.accommodation, 'unavailable'),
+              accommodation: toggle<AccommodationValue>(
+                value.accommodation,
+                'unavailable',
+              ),
             })
           }
         />
@@ -350,14 +462,14 @@ export function FilterFields({
         <CheckRow
           id={`${idPrefix}-immediate`}
           label={t('immediate')}
-          count={counts.immediate}
+          count={facets.immediate}
           checked={value.immediate}
           onChange={(checked) => patch({ immediate: checked })}
         />
         <CheckRow
           id={`${idPrefix}-nolang`}
           label={t('noLanguageRequired')}
-          count={counts.noLanguage}
+          count={facets.noLanguage}
           checked={value.noLanguageRequired}
           onChange={(checked) => patch({ noLanguageRequired: checked })}
         />
@@ -370,7 +482,11 @@ export function FilterFields({
           value={value.date}
           onValueChange={(next) => patch({ date: next as DateValue })}
         >
-          <SelectTrigger aria-label={t('datePosted')}>
+          <SelectTrigger
+            aria-label={t('datePosted')}
+            data-filter-target="select"
+            className="h-12"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -389,7 +505,7 @@ export function FilterFields({
 /* -------------------------------------------------------------- FilterSidebar */
 
 export interface FilterSidebarProps {
-  items: FacetItem[];
+  facets: JobFilterFacets;
   initial: SidebarFilters;
   keyword?: string;
   city?: string;
@@ -412,7 +528,7 @@ function buildHref(
 }
 
 export function FilterSidebar({
-  items,
+  facets: initialFacets,
   initial,
   keyword,
   city,
@@ -427,9 +543,13 @@ export function FilterSidebar({
   const [pending, setPending] = React.useState<SidebarFilters>(initial);
   React.useEffect(() => setPending(initial), [initialKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const total = countMatches(items, pending);
+  const liveFacets = useLiveFacets(initialFacets, initial, pending, {
+    keyword,
+    city,
+  });
 
-  const apply = () => router.push(buildHref(pathname, pending, { keyword, city, sort }));
+  const apply = () =>
+    router.push(buildHref(pathname, pending, { keyword, city, sort }));
   const clearAll = () => {
     const cleared = emptySidebarFilters();
     setPending(cleared);
@@ -437,22 +557,51 @@ export function FilterSidebar({
   };
 
   return (
-    <div className={cn('rounded-lg border border-border bg-card p-5', className)}>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-foreground">{t('title')}</h2>
+    <div
+      data-filter-passport="desktop"
+      className={cn('min-w-0 border-r border-border pr-5', className)}
+    >
+      <div className="mb-5 flex items-center justify-between gap-3 border-b border-border pb-4">
+        <h2 className="flex items-center gap-2.5 text-base font-semibold text-foreground before:h-2 before:w-2 before:shrink-0 before:rounded-full before:bg-primary">
+          {t('title')}
+        </h2>
         <button
           type="button"
           onClick={clearAll}
-          className="text-sm font-medium text-accent hover:text-accent-dark"
+          data-filter-target="clear"
+          className="min-h-12 rounded-sm px-1 text-right text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           {t('clearAll')}
         </button>
       </div>
 
-      <FilterFields items={items} value={pending} onChange={setPending} idPrefix="d" />
+      <FilterFields
+        facets={liveFacets.facets}
+        value={pending}
+        onChange={setPending}
+        idPrefix="d"
+      />
 
-      <Button type="button" onClick={apply} className="mt-6 w-full">
-        {t('showResults', { count: total })}
+      {liveFacets.status === 'error' ? (
+        <div className="mt-6 space-y-2" role="alert">
+          <p className="text-sm text-destructive">{t('countError')}</p>
+          <Button type="button" variant="outline" onClick={liveFacets.retry} className="w-full">
+            {t('retryCount')}
+          </Button>
+        </div>
+      ) : null}
+      <Button
+        type="button"
+        onClick={apply}
+        disabled={liveFacets.status !== 'idle'}
+        aria-busy={liveFacets.status === 'loading'}
+        className="mt-6 w-full rounded-xl"
+      >
+        {liveFacets.status === 'idle'
+          ? t('showResults', { count: liveFacets.facets.total })
+          : liveFacets.status === 'loading'
+            ? t('countLoading')
+            : t('countUnavailable')}
       </Button>
     </div>
   );

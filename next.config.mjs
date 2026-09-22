@@ -1,5 +1,5 @@
 import createNextIntlPlugin from 'next-intl/plugin';
-import { readFileSync } from 'node:fs';
+import { createBuildMetadata } from './scripts/build-version.mjs';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
@@ -16,13 +16,18 @@ function supabaseHost() {
   }
 }
 const SUPABASE_HOST = supabaseHost();
+const BUILD = createBuildMetadata(
+  new Date(),
+  process.env.RAILWAY_GIT_COMMIT_SHA,
+  process.env.GITHUB_SHA,
+);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Wartości wbudowane w artefakt: odświeżenie strony nie zmienia daty wydania.
   env: {
-    NEXT_PUBLIC_APP_VERSION: JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version,
-    NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
+    NEXT_PUBLIC_APP_VERSION: BUILD.version,
+    NEXT_PUBLIC_BUILD_TIME: BUILD.buildTime,
   },
   reactStrictMode: true,
   poweredByHeader: false,

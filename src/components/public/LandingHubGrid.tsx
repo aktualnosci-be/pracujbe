@@ -1,8 +1,8 @@
-import * as React from 'react';
-import { ArrowRight } from 'lucide-react';
+import * as React from "react";
+import { ArrowRight } from "lucide-react";
 
-import { Link } from '@/i18n/navigation';
-import { cn } from '@/lib/utils';
+import { Link } from "@/i18n/navigation";
+import { cn } from "@/lib/utils";
 
 /**
  * LandingHubGrid — siatka kafli linkujących do landing-page'y (branże / miasta).
@@ -44,35 +44,37 @@ export function LandingHubGrid({
   return (
     <ul
       aria-label={ariaLabel}
-      className={cn('grid gap-3 sm:grid-cols-2 lg:grid-cols-3', className)}
+      className={cn("grid gap-3 sm:grid-cols-2 lg:grid-cols-3", className)}
     >
       {items.map((item) => (
         <li key={item.key} className="min-w-0">
-          <div className="group relative flex h-full flex-col rounded-lg border border-border bg-card p-4 transition-colors hover:bg-soft focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+          <Link
+            href={item.href}
+            className="group flex min-h-12 h-full min-w-0 flex-col rounded-sm border border-border border-l-4 border-l-accent bg-white p-4 text-foreground transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
             <div className="flex items-center gap-3">
               {item.icon ? (
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent-dark">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm bg-accent text-white [&>svg]:h-5 [&>svg]:w-5">
                   {item.icon}
                 </span>
               ) : null}
-              <h3 className="min-w-0 flex-1 text-base font-semibold text-foreground">
-                <Link
-                  href={item.href}
-                  className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
-                >
-                  {item.title}
-                </Link>
+              <h3 className="min-w-0 flex-1 text-lg font-bold leading-snug">
+                {item.title}
               </h3>
               <ArrowRight
-                className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                className="h-5 w-5 shrink-0 text-accent transition-transform group-hover:translate-x-0.5"
                 aria-hidden="true"
               />
             </div>
-            <p className="mt-2 text-sm text-muted-foreground">{item.description}</p>
+            <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+              {item.description}
+            </p>
             {item.meta ? (
-              <p className="mt-3 text-xs font-medium text-muted-foreground">{item.meta}</p>
+              <p className="mt-3 text-sm font-semibold text-accent-dark">
+                {item.meta}
+              </p>
             ) : null}
-          </div>
+          </Link>
         </li>
       ))}
     </ul>

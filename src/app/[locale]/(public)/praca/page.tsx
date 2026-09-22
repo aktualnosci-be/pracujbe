@@ -19,7 +19,13 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { getJobs, type CategoryKey, type LocationKey } from '@/lib/jobs';
+import {
+  getCategoryCounts,
+  getCityCounts,
+  type CategoryKey,
+  type LocationKey,
+} from '@/lib/jobs';
+import { buildHubFacet } from '@/lib/jobs-hub';
 import { LandingHubGrid, type LandingHubItem } from '@/components/public/LandingHubGrid';
 
 /**
@@ -27,8 +33,8 @@ import { LandingHubGrid, type LandingHubItem } from '@/components/public/Landing
  *
  * Spis wszystkich branż i miast z krótkimi opisami i linkami do dedykowanych landing-page'y
  * (`/praca/kategoria/<klucz>`, `/praca/miasto/<klucz>`). Wewnętrzne linkowanie wspiera SEO,
- * a użytkownikowi daje szybki przegląd. Liczniki ofert liczone są z realnego zbioru (`getJobs`),
- * z fallbackiem do danych demonstracyjnych bez zmiennych środowiskowych.
+ * a użytkownikowi daje szybki przegląd. Liczniki ofert pochodzą z pełnych zapytań agregujących;
+ * w trybie demonstracyjnym są pomijane zamiast udawać dane produkcyjne.
  *
  * Dane strukturalne: BreadcrumbList (Strona główna → Praca).
  */
@@ -37,8 +43,6 @@ const HUB_PATH = '/praca';
 const CATEGORY_BASE = '/praca/kategoria';
 const CITY_BASE = '/praca/miasto';
 const JOBS_PATH = '/oferty-pracy';
-const FACET_LIMIT = 200;
-
 const CATEGORY_KEYS: readonly CategoryKey[] = [
   'construction',
   'transport',
@@ -125,38 +129,37 @@ export default async function JobsHubPage({ params }: PageProps) {
     getTranslations('home'),
   ]);
 
-  // Realne liczniki ofert — pojedyncze pobranie zbioru facetowego (DB lub demo).
-  const base = await getJobs({ locale, page: 1, pageSize: FACET_LIMIT });
-  const categoryCounts = new Map<CategoryKey, number>();
-  const cityCounts = new Map<string, number>();
-  for (const job of base.jobs) {
-    categoryCounts.set(job.category, (categoryCounts.get(job.category) ?? 0) + 1);
-    cityCounts.set(job.city, (cityCounts.get(job.city) ?? 0) + 1);
-  }
+  const cityNames = LOCATION_KEYS.map((key) => tLoc(key));
+  const [categoryCounts, cityCounts] = await Promise.all([
+    getCategoryCounts(locale, CATEGORY_KEYS),
+    getCityCounts(locale, cityNames),
+  ]);
 
   const countLabel = (n: number): string | undefined =>
     n > 0 ? tHome('offersCount', { count: n }) : undefined;
 
   const categoryItems: LandingHubItem[] = CATEGORY_KEYS.map((key) => {
     const Icon = CATEGORY_ICON[key];
+    const facet = buildHubFacet(CATEGORY_BASE, key, key, categoryCounts);
     return {
       key,
-      href: `${CATEGORY_BASE}/${key}`,
+      href: facet.href,
       title: tCat(key),
       description: t(`cat_${key}`),
-      meta: countLabel(categoryCounts.get(key) ?? 0),
+      meta: facet.count === undefined ? undefined : countLabel(facet.count),
       icon: <Icon className="h-4 w-4" aria-hidden="true" />,
     };
   });
 
   const cityItems: LandingHubItem[] = LOCATION_KEYS.map((key) => {
     const name = tLoc(key);
+    const facet = buildHubFacet(CITY_BASE, key, name, cityCounts);
     return {
       key,
-      href: `${CITY_BASE}/${key}`,
+      href: facet.href,
       title: name,
       description: t(`city_${key}`),
-      meta: countLabel(cityCounts.get(name) ?? 0),
+      meta: facet.count === undefined ? undefined : countLabel(facet.count),
       icon: <MapPin className="h-4 w-4" aria-hidden="true" />,
     };
   });
