@@ -34,6 +34,18 @@ export const env = {
     const m = process.env.APP_MODE;
     return m === 'production' ? 'production' : 'demo';
   },
+  /** Ograniczone połączenie używane wyłącznie przez runtime Better Auth. */
+  get authDatabaseUrl(): string | undefined {
+    return process.env.DATABASE_AUTH_URL || undefined;
+  },
+  /** Prywatny sekret podpisujący dane Better Auth. */
+  get authSecret(): string | undefined {
+    return process.env.BETTER_AUTH_SECRET || undefined;
+  },
+  /** Kanoniczny origin Better Auth; nie jest wyprowadzany z nagłówków żądania. */
+  get authBaseUrl(): string | undefined {
+    return process.env.BETTER_AUTH_URL || undefined;
+  },
 };
 
 /**
@@ -47,6 +59,11 @@ export function isSupabaseConfigured(): boolean {
 /** Publiczne oferty korzystają z ograniczonego loginu PostgreSQL Railway. */
 export function isDatabaseConfigured(): boolean {
   return Boolean(process.env.DATABASE_APP_URL);
+}
+
+/** Czy komplet prywatnej konfiguracji runtime Better Auth jest obecny. */
+export function isAuthRuntimeConfigured(): boolean {
+  return Boolean(env.authDatabaseUrl && env.authSecret && env.authBaseUrl);
 }
 
 /** Czy aplikacja działa w trybie produkcyjnym (fail-closed zamiast demo). SEC-19. */
