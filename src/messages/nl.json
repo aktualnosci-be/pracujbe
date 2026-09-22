@@ -675,6 +675,11 @@
     "employerOffersEmptyHint": "Plaats uw eerste vacature om kandidaten te vinden.",
     "employerOffersLoadError": "Uw vacatures konden niet worden geladen",
     "employerOffersLoadErrorHint": "Vernieuw de pagina en probeer het opnieuw. Uw vacatures zijn nog opgeslagen.",
+    "employerOffersPaginationLabel": "Paginering van vacatures",
+    "employerOffersPrevious": "Vorige pagina",
+    "employerOffersPage": "Pagina {page}",
+    "employerOffersNext": "Volgende pagina",
+    "employerOffersPageEmpty": "Op deze pagina staan geen vacatures meer.",
     "employerOffersRetry": "Opnieuw proberen"
   },
   "candidatePassport": {

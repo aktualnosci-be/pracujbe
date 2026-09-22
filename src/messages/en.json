@@ -675,6 +675,11 @@
     "employerOffersEmptyHint": "Post your first job to start recruiting.",
     "employerOffersLoadError": "We couldn't load your jobs",
     "employerOffersLoadErrorHint": "Refresh the page and try again. Your jobs are still saved.",
+    "employerOffersPaginationLabel": "Job pagination",
+    "employerOffersPrevious": "Previous page",
+    "employerOffersPage": "Page {page}",
+    "employerOffersNext": "Next page",
+    "employerOffersPageEmpty": "There are no more jobs on this page.",
     "employerOffersRetry": "Try again"
   },
   "candidatePassport": {

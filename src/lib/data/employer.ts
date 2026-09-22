@@ -540,16 +540,18 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
 
 /** Jawny stan odczytu dla ekranu ofert — błąd bazy nie może udawać pustej listy. */
 export type CompanyJobsLoad =
-  | { status: 'ok'; jobs: EmployerJob[] }
+  | { status: 'ok'; jobs: EmployerJob[]; hasNext: boolean }
   | { status: 'error' };
 
 /** Lista ofert firmy z liczbą nowych aplikacji i dopasowań na ofertę. */
-export async function getCompanyJobsLoad(): Promise<CompanyJobsLoad> {
-  if (!isSupabaseConfigured()) return { status: 'ok', jobs: DEMO_JOBS };
+export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
+  const safePage = Number.isSafeInteger(page) && page > 0 ? page : 1;
+  const start = (safePage - 1) * 12;
+  if (!isSupabaseConfigured()) return { status: 'ok', jobs: DEMO_JOBS.slice(start, start + 12), hasNext: DEMO_JOBS.length > start + 12 };
 
   try {
     const ctx = await loadContext();
-    if (!ctx) return { status: 'ok', jobs: [] };
+    if (!ctx) return { status: 'ok', jobs: [], hasNext: false };
     const { supabase, companyId } = ctx;
 
     const { data: jobsData, error: jobsError } = await supabase
@@ -558,12 +560,15 @@ export async function getCompanyJobsLoad(): Promise<CompanyJobsLoad> {
       .eq('company_id', companyId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
-      .limit(12);
+      .order('id', { ascending: false })
+      .range(start, start + 12);
     if (jobsError) throw jobsError;
 
-    const jobs = asRows(jobsData);
+    const rows = asRows(jobsData);
+    const hasNext = rows.length > 12;
+    const jobs = rows.slice(0, 12);
     const jobIds = jobs.map((r) => asString(r['id'])).filter((id) => id.length > 0);
-    if (jobIds.length === 0) return { status: 'ok', jobs: [] };
+    if (jobIds.length === 0) return { status: 'ok', jobs: [], hasNext: false };
 
     const [{ data: appRows, error: appError }, { data: matchRows, error: matchError }] =
       await Promise.all([
@@ -571,6 +576,7 @@ export async function getCompanyJobsLoad(): Promise<CompanyJobsLoad> {
           .from('applications')
           .select('job_id')
           .eq('company_id', companyId)
+          .in('job_id', jobIds)
           .eq('status', 'submitted')
           .is('deleted_at', null),
         supabase.from('matches').select('job_id').in('job_id', jobIds),
@@ -589,7 +595,7 @@ export async function getCompanyJobsLoad(): Promise<CompanyJobsLoad> {
       matched.set(id, (matched.get(id) ?? 0) + 1);
     }
 
-    return { status: 'ok', jobs: jobs.map((r) => {
+    return { status: 'ok', hasNext, jobs: jobs.map((r) => {
       const id = asString(r['id']);
       return {
         id,
