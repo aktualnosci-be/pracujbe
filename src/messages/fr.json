@@ -117,7 +117,8 @@
     "yes": "Oui",
     "no": "Non",
     "home": "Accueil",
-    "breadcrumb": "Fil d'Ariane"
+    "breadcrumb": "Fil d'Ariane",
+    "skipToContent": "Aller au contenu"
   },
   "nav": {
     "jobs": "Offres d'emploi",

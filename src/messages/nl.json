@@ -117,7 +117,8 @@
     "yes": "Ja",
     "no": "Nee",
     "home": "Startpagina",
-    "breadcrumb": "Broodkruimelpad"
+    "breadcrumb": "Broodkruimelpad",
+    "skipToContent": "Ga naar de inhoud"
   },
   "nav": {
     "jobs": "Vacatures",
