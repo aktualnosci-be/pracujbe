@@ -233,7 +233,8 @@
       "conditions": "Voorwaarden",
       "viewOffer": "Bekijk vacature",
       "salaryFrom": "vanaf {value}",
-      "salaryTo": "tot {value}"
+      "salaryTo": "tot {value}",
+      "salaryPeriods": { "hour": "bruto / uur", "month": "bruto / maand", "year": "bruto / jaar" }
     },
     "pageTitle": "Vacatures in België",
     "search": "Zoeken",
