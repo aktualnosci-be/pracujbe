@@ -6,6 +6,7 @@ const titles = {
   fr: 'Votre profil professionnel',
   nl: 'Je werkprofiel',
 } as const;
+const emptyFields = { pl: 'Jeszcze nie podano', en: 'Not added yet', fr: 'Pas encore indiqué', nl: 'Nog niet ingevuld' } as const;
 
 for (const [locale, title] of Object.entries(titles)) {
   for (const width of [320, 640]) {
@@ -16,6 +17,8 @@ for (const [locale, title] of Object.entries(titles)) {
       await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
       await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();
       await expect(page.locator(`a[href="/${locale}/candidate/onboarding"]`).first()).toBeVisible();
+      await expect(page.getByText(emptyFields[locale as keyof typeof emptyFields]).first()).toBeVisible();
+      await expect(page.getByText('0%', { exact: true }).first()).toBeVisible();
 
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

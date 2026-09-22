@@ -660,6 +660,7 @@
     "sectionTitle": "Vos compétences et l’emploi recherché",
     "sectionHint": "Vous pouvez modifier ces informations à tout moment.",
     "emptyField": "Pas encore indiqué",
+    "loadError": "Impossible de charger votre profil. Actualisez la page et réessayez.",
     "radius": "Déplacement jusqu’à {count} km",
     "years": "{count, plural, one {# an} other {# ans}}"
   },

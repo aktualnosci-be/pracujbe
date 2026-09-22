@@ -660,6 +660,7 @@
     "sectionTitle": "Wat je kunt en welk werk je zoekt",
     "sectionHint": "Je kunt deze gegevens op elk moment aanpassen.",
     "emptyField": "Nog niet ingevuld",
+    "loadError": "Je profiel kon niet worden geladen. Vernieuw de pagina en probeer het opnieuw.",
     "radius": "Reizen tot {count} km",
     "years": "{count, plural, one {# jaar} other {# jaar}}"
   },

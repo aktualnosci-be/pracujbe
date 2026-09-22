@@ -94,6 +94,7 @@ export interface CandidateProfileSummary {
 
 /** Pola zawodowe widoczne dla właściciela profilu, odczytywane pod jego sesją. */
 export interface CandidatePassport {
+  loadFailed: boolean;
   occupations: string[];
   city: string | null;
   radiusKm: number | null;
@@ -105,9 +106,12 @@ export interface CandidatePassport {
 }
 
 const EMPTY_PASSPORT: CandidatePassport = {
+  loadFailed: false,
   occupations: [], city: null, radiusKm: null, experienceYears: null,
   availability: null, skills: [], languages: [], certificates: [],
 };
+
+const FAILED_PASSPORT: CandidatePassport = { ...EMPTY_PASSPORT, loadFailed: true };
 
 /* ---------------------------------------------------------------------------
  * Pomocnicze konwersje (bez `any`, wzorzec z @/lib/jobs)
@@ -474,17 +478,17 @@ const DEMO_OVERVIEW: CandidateOverview = {
   newJobsCount: 24,
   activeApplicationsCount: 5,
   unreadMessagesCount: 2,
-  profileCompletionPct: 78,
+  profileCompletionPct: 0,
 };
 
 const DEMO_PROFILE_SUMMARY: CandidateProfileSummary = {
-  firstName: 'Adam',
-  completionPct: 78,
+  firstName: null,
+  completionPct: 0,
   checklist: {
-    basicInfo: true,
-    experience: true,
-    education: true,
-    skills: true,
+    basicInfo: false,
+    experience: false,
+    education: false,
+    skills: false,
     languages: false,
     photo: false,
   },
@@ -590,6 +594,7 @@ export async function getCandidatePassport(): Promise<CandidatePassport> {
       .map((row) => asStr(asRecord(row)[key]).trim())
       .filter(Boolean);
     return {
+      loadFailed: false,
       occupations: asArr(profile['occupations']).filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
       city: asStr(profile['city']) || null,
       radiusKm: typeof profile['radius_km'] === 'number' ? profile['radius_km'] : null,
@@ -601,7 +606,7 @@ export async function getCandidatePassport(): Promise<CandidatePassport> {
     };
   } catch (error) {
     captureError(error, { area: 'candidate.getCandidatePassport' });
-    return EMPTY_PASSPORT;
+    return FAILED_PASSPORT;
   }
 }
 

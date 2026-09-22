@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCandidatePassport } from '@/lib/data/candidate';
 import { isSupabaseConfigured } from '@/lib/env';
 import { createServerClient } from '@/lib/supabase/server';
+import { captureError } from '@/lib/sentry';
 
 vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
@@ -45,6 +46,7 @@ describe('paszport zawodowy kandydata', () => {
     vi.mocked(createServerClient).mockResolvedValue(supabase as never);
 
     await expect(getCandidatePassport()).resolves.toMatchObject({
+      loadFailed: false,
       occupations: ['Magazynier'], city: 'Gent', radiusKm: 25, experienceYears: 0,
       skills: ['VCA'], languages: ['Nederlands'], certificates: ['ADR'],
     });
@@ -59,7 +61,36 @@ describe('paszport zawodowy kandydata', () => {
     };
     vi.mocked(createServerClient).mockResolvedValue(supabase as never);
 
-    await expect(getCandidatePassport()).resolves.toMatchObject({ occupations: [], skills: [] });
+    await expect(getCandidatePassport()).resolves.toMatchObject({ loadFailed: false, occupations: [], skills: [] });
     expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it('pusty profil oznacza brak danych, a nie awarię', async () => {
+    const query = {
+      select: vi.fn(() => query), eq: vi.fn(() => query), is: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => ({ data: null, error: null })),
+    };
+    vi.mocked(createServerClient).mockResolvedValue({
+      auth: { getUser: async () => ({ data: { user: { id: 'owner-1' } } }) },
+      from: vi.fn(() => query),
+    } as never);
+
+    await expect(getCandidatePassport()).resolves.toMatchObject({ loadFailed: false, occupations: [] });
+  });
+
+  it('błąd odczytu relacji nie udaje pustego pola', async () => {
+    const query = {
+      select: vi.fn(() => query), eq: vi.fn(() => query), is: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => ({ data: { id: 'candidate-profile-1' }, error: null })),
+    };
+    const failedRead = { code: 'database-unavailable' };
+    const relation = { select: vi.fn(() => ({ eq: vi.fn(async () => ({ data: null, error: failedRead })) })) };
+    vi.mocked(createServerClient).mockResolvedValue({
+      auth: { getUser: async () => ({ data: { user: { id: 'owner-1' } } }) },
+      from: vi.fn((table: string) => table === 'candidate_profiles' ? query : relation),
+    } as never);
+
+    await expect(getCandidatePassport()).resolves.toMatchObject({ loadFailed: true });
+    expect(captureError).toHaveBeenCalledWith(failedRead, { area: 'candidate.getCandidatePassport' });
   });
 });

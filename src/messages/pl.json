@@ -660,6 +660,7 @@
     "sectionTitle": "Co umiesz i jakiej pracy szukasz",
     "sectionHint": "W każdej chwili możesz uzupełnić lub poprawić te informacje.",
     "emptyField": "Jeszcze nie podano",
+    "loadError": "Nie udało się wczytać profilu. Odśwież stronę i spróbuj ponownie.",
     "radius": "Dojazd do {count} km",
     "years": "{count, plural, one {# rok} few {# lata} many {# lat} other {# lat}}"
   },
