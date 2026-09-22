@@ -12,14 +12,11 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  Clock,
-  FileText,
   Home,
   Languages as LanguagesIcon,
   MapPin,
   MessageSquare,
   Truck,
-  Wallet,
 } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
@@ -234,14 +231,6 @@ export default async function JobDetailPage({ params }: PageProps) {
     .filter((item) => item.slug !== job.slug)
     .slice(0, SIMILAR_LIMIT);
 
-  const metaItems: Array<{ icon: React.ComponentType<{ className?: string }>; text: string }> = [
-    { icon: MapPin, text: `${job.city}, ${job.region}` },
-    ...(salaryLabel === null ? [] : [{ icon: Wallet, text: salaryLabel }]),
-    { icon: FileText, text: tContract(job.contractType) },
-    { icon: Clock, text: job.workingHours },
-  ];
-  if (job.shifts) metaItems.push({ icon: Clock, text: job.shifts });
-
   const applyLabel = tJobs('applyNow');
   const applyHint = tApply('hint');
 
@@ -302,49 +291,80 @@ export default async function JobDetailPage({ params }: PageProps) {
         {t('backToResults')}
       </Link>
 
-      {/* Nagłówek */}
-      <header className="mb-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      {/* Paszport oferty: nagłówek i stała metryka z rzeczywistych danych. */}
+      <header
+        data-testid="job-detail-passport"
+        className="mb-6 min-w-0 overflow-hidden rounded-3xl border border-border bg-card p-5 sm:p-7 lg:p-8"
+      >
+        <div className="flex min-w-0 items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+            <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+              {tCategory(job.category)}
+            </p>
+            <h1 className="mt-3 break-words text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl">
               {job.title}
             </h1>
-            <div className="mt-3 flex items-center gap-3">
+            <div className="mt-4 flex min-w-0 items-center gap-3">
               {companyLogo}
-              <div className="min-w-0">
-                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
-                  {job.companyName}
-                  {job.companyVerified ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
-                      <BadgeCheck className="h-4 w-4" aria-hidden="true" />
-                      {t('verified')}
-                    </span>
-                  ) : null}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {tCategory(job.category)}
-                </p>
-              </div>
+              <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
+                <span className="break-words">{job.companyName}</span>
+                {job.companyVerified ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
+                    <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {t('verified')}
+                  </span>
+                ) : null}
+              </p>
             </div>
           </div>
 
-          {/* Zapisz (desktop) */}
+          {/* Zapisz (desktop); na mobile pozostaje w dolnym pasku. */}
           <PublicSaveJobButton jobId={job.id} className="hidden lg:inline-flex" />
         </div>
 
-        {/* Meta */}
-        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-          {metaItems.map((item, index) => (
-            <span key={index} className="inline-flex items-center gap-1.5">
-              <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {item.text}
-            </span>
-          ))}
-          <span className="inline-flex items-center gap-1.5">
-            <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />
-            {t('publishedOn')} {publishedLabel}
-          </span>
-        </div>
+        <dl
+          className={cn(
+            'mt-7 grid min-w-0 border-y border-border',
+            salaryLabel === null ? 'sm:grid-cols-2' : 'sm:grid-cols-3',
+          )}
+        >
+          <div className="min-w-0 py-5 sm:pr-5">
+            <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {tJobs('passport.location')}
+            </dt>
+            <dd className="break-words text-base font-semibold text-foreground">
+              {job.city}
+              {job.region && job.region !== job.city ? (
+                <span className="mt-1 block text-sm font-normal text-muted-foreground">{job.region}</span>
+              ) : null}
+            </dd>
+          </div>
+          {salaryLabel !== null ? (
+            <div className="min-w-0 border-t border-border py-5 sm:border-l sm:border-t-0 sm:px-5">
+              <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {tJobs('passport.salary')}
+              </dt>
+              <dd className="break-words text-base font-semibold text-foreground">{salaryLabel}</dd>
+            </div>
+          ) : null}
+          <div className="min-w-0 border-t border-border py-5 sm:border-l sm:border-t-0 sm:pl-5">
+            <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {tJobs('passport.conditions')}
+            </dt>
+            <dd className="break-words text-base font-semibold text-foreground">
+              {tContract(job.contractType)}
+              <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                {[job.workingHours, job.shifts].filter(Boolean).join(' · ')}
+              </span>
+            </dd>
+          </div>
+        </dl>
+
+        <p className="mt-4 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
+          <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="break-words">{t('publishedOn')} {publishedLabel}</span>
+        </p>
       </header>
 
       {/* Zakładki (kotwice do sekcji) */}
