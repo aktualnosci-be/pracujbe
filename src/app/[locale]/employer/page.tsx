@@ -149,7 +149,7 @@ export default async function EmployerDashboardPage({
 
       {/* Główna siatka: lewa (2/3) + prawa (1/3) */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
           {/* Twoje aktywne oferty */}
           <section className="rounded-lg border border-border bg-card">
             <div className="flex items-center justify-between gap-3 border-b border-border p-4 sm:px-5">

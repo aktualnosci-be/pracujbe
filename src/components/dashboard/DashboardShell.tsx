@@ -273,7 +273,7 @@ export function DashboardShell({
         </header>
 
         {/* Treść */}
-        <main className="flex-1 px-4 py-6 pb-24 lg:px-8 lg:pb-8">{children}</main>
+        <main className="min-w-0 flex-1 px-4 py-6 pb-24 lg:px-8 lg:pb-8">{children}</main>
       </div>
 
       {/* Dolny tab bar — mobile */}
@@ -287,7 +287,7 @@ export function DashboardShell({
             onClick={openDrawer}
             aria-haspopup="dialog"
             aria-expanded={drawerOpen}
-            className="flex flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
           >
             <Menu className="size-5" aria-hidden="true" />
             <span className="text-[11px] leading-none">{tnav('menu')}</span>
@@ -425,7 +425,7 @@ function BottomTab({
       href={item.href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'relative flex flex-1 flex-col items-center justify-center gap-1 transition-colors [&_svg]:size-5 [&_svg]:shrink-0',
+        'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 transition-colors [&_svg]:size-5 [&_svg]:shrink-0',
         active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
       )}
     >
