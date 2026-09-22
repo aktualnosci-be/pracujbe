@@ -637,6 +637,57 @@ export async function getRecentApplications(): Promise<EmployerApplication[]> {
   }
 }
 
+/** Pełna lista aplikacji w małych stronach; osobny wynik błędu chroni przed fałszywym pustym stanem. */
+export type EmployerApplicationsLoad =
+  | { status: 'ok'; applications: EmployerApplication[]; hasMore: boolean; isDemo: boolean }
+  | { status: 'error' };
+
+export const EMPLOYER_APPLICATIONS_PAGE_SIZE = 12;
+
+export async function getEmployerApplicationsPage(page: number): Promise<EmployerApplicationsLoad> {
+  if (!Number.isSafeInteger(page) || page < 1 || page > 1000) return { status: 'error' };
+
+  if (!isSupabaseConfigured()) {
+    return { status: 'ok', applications: page === 1 ? DEMO_APPLICATIONS : [], hasMore: false, isDemo: true };
+  }
+
+  try {
+    const ctx = await loadContext();
+    if (!ctx) return { status: 'ok', applications: [], hasMore: false, isDemo: false };
+    const { supabase, companyId } = ctx;
+    const start = (page - 1) * EMPLOYER_APPLICATIONS_PAGE_SIZE;
+    const { data, error } = await supabase
+      .from('applications')
+      .select('id, status, profiles(first_name, last_name), jobs(title)')
+      .eq('company_id', companyId)
+      .is('deleted_at', null)
+      .order('submitted_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(start, start + EMPLOYER_APPLICATIONS_PAGE_SIZE);
+    if (error) throw error;
+
+    const rows = asRows(data);
+    return {
+      status: 'ok',
+      isDemo: false,
+      hasMore: rows.length > EMPLOYER_APPLICATIONS_PAGE_SIZE,
+      applications: rows.slice(0, EMPLOYER_APPLICATIONS_PAGE_SIZE).map((row) => {
+        const profile = asEmbeddedRecord(row['profiles']);
+        const job = asEmbeddedRecord(row['jobs']);
+        return {
+          id: asString(row['id']),
+          candidateName: fullName(profile['first_name'], profile['last_name']),
+          jobTitle: asString(job['title']),
+          status: asString(row['status'], 'submitted'),
+        };
+      }),
+    };
+  } catch (error) {
+    captureError(error, { area: 'employer.getEmployerApplicationsPage' });
+    return { status: 'error' };
+  }
+}
+
 /** Top dopasowani kandydaci (matches × candidate_profiles). Tylko dla firmy zweryfikowanej. */
 export async function getTopMatchedCandidates(): Promise<EmployerMatchedCandidate[]> {
   if (!isSupabaseConfigured()) return DEMO_CANDIDATES;
