@@ -59,6 +59,14 @@ describe('Paszport oferty', () => {
     expect(container.querySelectorAll('dt')).toHaveLength(3);
   });
 
+  it('dla starego wiersza bez okresu pokazuje stawkę bez domyślnego miesiąca', () => {
+    renderCard({ salaryMin: 18.75, salaryPeriod: undefined });
+    const salaryField = screen.getByText('Salary', { selector: 'dt' }).parentElement!;
+
+    expect(within(salaryField).getByText('from €18.75')).toBeVisible();
+    expect(salaryField).not.toHaveTextContent(/month|gross \/ month/i);
+  });
+
   it.each(['pl', 'en', 'nl', 'fr'] as const)('tłumaczy pola i granice stawki: %s', (locale) => {
     renderCard({ salaryMin: 18.75, salaryPeriod: 'hour' }, locale);
     const labels = messages[locale].jobs.passport;

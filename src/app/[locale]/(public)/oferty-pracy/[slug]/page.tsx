@@ -143,7 +143,7 @@ function buildJsonLd(job: JobDetail, url: string): Record<string, unknown> {
     month: 'MONTH',
     year: 'YEAR',
   };
-  const unitText = SALARY_UNIT[job.salaryPeriod ?? 'month'];
+  const unitText = job.salaryPeriod ? SALARY_UNIT[job.salaryPeriod] : undefined;
 
   const hasSalary = job.salaryMin !== undefined || job.salaryMax !== undefined;
   const baseSalary = hasSalary
@@ -154,7 +154,7 @@ function buildJsonLd(job: JobDetail, url: string): Record<string, unknown> {
           '@type': 'QuantitativeValue',
           ...(job.salaryMin !== undefined ? { minValue: job.salaryMin } : {}),
           ...(job.salaryMax !== undefined ? { maxValue: job.salaryMax } : {}),
-          unitText,
+          ...(unitText ? { unitText } : {}),
         },
       }
     : undefined;

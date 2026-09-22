@@ -58,7 +58,7 @@ export interface JobListItem {
   salaryMin?: number;
   salaryMax?: number;
   currency: string;
-  salaryPeriod: SalaryPeriod;
+  salaryPeriod?: SalaryPeriod;
   publishedAt: string;
   isNew: boolean;
   highlights: string[];
@@ -270,8 +270,8 @@ function asCategory(value: unknown): CategoryKey {
   return CATEGORY_KEYS.includes(v as CategoryKey) ? (v as CategoryKey) : 'logistics';
 }
 
-function asSalaryPeriod(value: unknown): SalaryPeriod {
-  return value === 'hour' || value === 'year' ? value : 'month';
+function asSalaryPeriod(value: unknown): SalaryPeriod | undefined {
+  return value === 'hour' || value === 'month' || value === 'year' ? value : undefined;
 }
 
 function computeIsNew(publishedAt: string): boolean {
@@ -283,6 +283,7 @@ function computeIsNew(publishedAt: string): boolean {
 function rowToJobListItem(row: unknown): JobListItem {
   const r = asRecord(row);
   const publishedAt = asString(r['published_at'], new Date().toISOString());
+  const salaryPeriod = asSalaryPeriod(r['salary_period']);
   return {
     id: asString(r['id']),
     slug: asString(r['slug']),
@@ -295,7 +296,7 @@ function rowToJobListItem(row: unknown): JobListItem {
     salaryMin: asNumberOpt(r['salary_min']),
     salaryMax: asNumberOpt(r['salary_max']),
     currency: asString(r['currency'], 'EUR'),
-    salaryPeriod: asSalaryPeriod(r['salary_period']),
+    ...(salaryPeriod ? { salaryPeriod } : {}),
     publishedAt,
     isNew: computeIsNew(publishedAt),
     highlights: asStringArray(r['highlights']),

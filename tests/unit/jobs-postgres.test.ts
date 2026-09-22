@@ -22,6 +22,20 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
     expect(adapters.list).toHaveBeenCalledWith(adapters.pool, { locale: 'nl', page: 2, keyword: 'Elektryk', pageSize: 12 });
     expect(result).toMatchObject({ total: 17, page: 2, jobs: [{ title: 'Elektryk', salaryMin: 18.59, salaryPeriod: 'hour', publishedAt: '2026-01-01T00:00:00Z' }] });
   });
+  it.each([
+    ['stary wiersz RPC bez pola', {}],
+    ['wiersz RPC z nieznanym okresem', { salary_period: 'week' }],
+  ])('%s nie zgaduje okresu miesięcznego', async (_case, periodFields) => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.list.mockResolvedValue({
+      rows: [{ id: 'legacy', slug: 'stara-oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z', salary_min: 18.59, ...periodFields }],
+      total: 1, page: 1, pageSize: 12,
+    });
+
+    const result = await getJobs({ locale: 'pl' });
+
+    expect(result.jobs[0]).not.toHaveProperty('salaryPeriod');
+  });
   it('awaria skonfigurowanej bazy nie wraca do demo', async () => {
     vi.stubEnv('APP_MODE', 'demo');
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');

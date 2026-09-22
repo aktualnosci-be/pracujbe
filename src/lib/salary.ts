@@ -2,7 +2,7 @@ import type { SalaryPeriod } from '@/lib/jobs';
 
 /** Wspólny zapis widełek i okresu na liście, szczegółach oraz w podobnych ofertach. */
 export function formatSalaryRange(
-  salary: { salaryMin?: number; salaryMax?: number; currency: string; salaryPeriod: SalaryPeriod },
+  salary: { salaryMin?: number; salaryMax?: number; currency: string; salaryPeriod?: SalaryPeriod },
   locale: string,
   labels: { from: (value: string) => string; to: (value: string) => string; period: (period: SalaryPeriod) => string },
 ): string | null {
@@ -14,5 +14,6 @@ export function formatSalaryRange(
   if (salary.salaryMin !== undefined && salary.salaryMax !== undefined) amount = `${format.format(salary.salaryMin)} – ${format.format(salary.salaryMax)}`;
   else if (salary.salaryMin !== undefined) amount = labels.from(format.format(salary.salaryMin));
   else if (salary.salaryMax !== undefined) amount = labels.to(format.format(salary.salaryMax));
-  return amount === null ? null : `${amount} ${labels.period(salary.salaryPeriod)}`;
+  if (amount === null) return null;
+  return salary.salaryPeriod ? `${amount} ${labels.period(salary.salaryPeriod)}` : amount;
 }
