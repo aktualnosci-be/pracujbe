@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { WifiOff } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { Logo } from '@/components/brand/Logo';
 import { Link } from '@/i18n/navigation';
 
 /**
@@ -8,8 +9,8 @@ import { Link } from '@/i18n/navigation';
  *
  * Prosta, samowystarczalna strona pokazywana przy braku połączenia. Celowo minimalna
  * i odporna: używa wyłącznie istniejących kluczy i18n z namespace 'common'
- * (appName, error, retry) oraz ikony do zasygnalizowania braku sieci — bez literałów
- * tekstu UI i bez zależności od komponentów innych agentów. "Spróbuj ponownie" prowadzi
+ * (error, retry), wspólnego komponentu Logo oraz ikony do zasygnalizowania braku sieci —
+ * bez literałów tekstu UI. "Spróbuj ponownie" prowadzi
  * do strony głównej w bieżącym języku (zadziała po przywróceniu połączenia).
  */
 
@@ -35,7 +36,7 @@ export default async function OfflinePage({ params }: OfflinePageProps) {
         <WifiOff className="h-8 w-8" />
       </span>
       <div className="space-y-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-primary">{t('appName')}</p>
+        <Logo />
         <h1 className="text-2xl font-semibold text-foreground">{t('error')}</h1>
       </div>
       <Link
