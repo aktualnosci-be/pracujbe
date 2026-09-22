@@ -54,3 +54,24 @@ historię akceptacji i poświadczenia; nie usuwa tych danych automatycznie.
 Włącz pre-deploy dopiero wraz ze spójnym wydaniem backendu i po przygotowaniu
 ograniczonych loginów oraz konfiguracji auth/storage. Test nie potwierdza
 gotowości produkcyjnej instancji Railway.
+
+## Bezpłatny cykl życia ofert — część #51
+
+Migracja `0062_free_job_lifecycle.sql` zastępuje funkcje `publish_job` i
+`set_job_status`, usuwając z publikacji, wznowienia i ponownego otwarcia kontrolę
+planu oraz subskrypcji. Nie usuwa tabel billingowych, katalogu
+`plan_entitlements`, funkcji odczytujących uprawnienia ani obsługi błędu
+`ENTITLEMENT_LIMIT`, dzięki czemu zachowuje zgodność podczas etapowego wyłączania
+monetyzacji.
+
+Pozostają wymagane: sesja użytkownika, rola recruiter+ w firmie, status firmy
+`verified`, kompletność publikowanej lub ponownie otwieranej oferty, dozwolona
+zmiana stanu, blokada wiersza i zapis CAS. Aplikacyjny limit publikacji i zmian
+statusu pozostaje równy 20 operacji na godzinę na użytkownika.
+
+Rollback aplikacji nie cofa automatycznie tej migracji, bo pliki zastosowanych
+migracji są niezmienne. Jeśli decyzja produktowa zostanie odwrócona, należy
+dodać kolejną migrację przywracającą funkcje z kontrolą
+`company_max_active_jobs`, razem z testem limitu i sprawdzeniem istniejących
+aktywnych ofert. Tabele billingowe pozostają na miejscu, więc rollback nie
+wymaga odtwarzania danych finansowych.
