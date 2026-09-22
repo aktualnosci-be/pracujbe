@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   languages['x-default'] = `${base}/${routing.defaultLocale}${GUIDES_PATH}`;
 
   return {
-    title: t('metaTitle'),
+    title: { absolute: t('metaTitle') },
     description: t('metaDescription'),
     alternates: { canonical: url, languages },
     openGraph: {
