@@ -526,7 +526,7 @@ export function JobWizard({
               type="button"
               onClick={() => setBadgeVisible(false)}
               aria-label={tn('close')}
-              className="-mr-1 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+              className="-mr-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -951,7 +951,7 @@ export function JobWizard({
                               { shouldDirty: true },
                             )
                           }
-                          className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                          className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
                         >
                           <X className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
@@ -1373,7 +1373,7 @@ function ChipInput({
                 type="button"
                 aria-label={`${removeLabel}: ${value}`}
                 onClick={() => onChange(values.filter((v) => v !== value))}
-                className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>

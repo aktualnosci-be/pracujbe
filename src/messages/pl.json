@@ -233,7 +233,8 @@
       "conditions": "Warunki",
       "viewOffer": "Poznaj ofertę",
       "salaryFrom": "od {value}",
-      "salaryTo": "do {value}"
+      "salaryTo": "do {value}",
+      "salaryPeriods": { "hour": "brutto / godz.", "month": "brutto / mies.", "year": "brutto / rok" }
     },
     "pageTitle": "Oferty pracy w Belgii",
     "search": "Szukaj",
@@ -763,6 +764,10 @@
     "datePosted": "Data dodania oferty",
     "any": "Dowolna",
     "showResults": "Pokaż {count} ofert",
+    "countLoading": "Liczymy oferty…",
+    "countUnavailable": "Liczba ofert niedostępna",
+    "countError": "Nie udało się policzyć ofert. Spróbuj ponownie.",
+    "retryCount": "Policz ponownie",
     "showMore": "Pokaż więcej ({count})",
     "radius": "Promień",
     "experience": "Doświadczenie",

@@ -233,7 +233,8 @@
       "conditions": "Conditions",
       "viewOffer": "View job",
       "salaryFrom": "from {value}",
-      "salaryTo": "up to {value}"
+      "salaryTo": "up to {value}",
+      "salaryPeriods": { "hour": "gross / hour", "month": "gross / month", "year": "gross / year" }
     },
     "pageTitle": "Jobs in Belgium",
     "search": "Search",
@@ -763,6 +764,10 @@
     "datePosted": "Date posted",
     "any": "Any",
     "showResults": "Show {count} jobs",
+    "countLoading": "Counting jobs…",
+    "countUnavailable": "Job count unavailable",
+    "countError": "We could not count the jobs. Try again.",
+    "retryCount": "Count again",
     "showMore": "Show more ({count})",
     "radius": "Radius",
     "experience": "Experience",

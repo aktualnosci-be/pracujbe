@@ -36,6 +36,15 @@ test('strona główna /pl pokazuje nagłówek i wyszukiwarkę', async ({ page })
   await expect(
     search.getByRole('button', { name: pl.home.searchButton }),
   ).toBeVisible();
+
+  // Metryczka pochodzi z tego samego artefaktu co strona i pozostaje pre-1.0.
+  const buildTime = page.locator('footer time[datetime]').last();
+  const release = buildTime.locator('..');
+  await expect(release).toContainText(/v0\.\d{8}\.\d+(?:\+[0-9a-f]{7,8})?/);
+  await expect(buildTime).toHaveAttribute(
+    'datetime',
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+  );
 });
 
 test('lista ofert /pl/oferty-pracy renderuje wyniki', async ({ page }) => {

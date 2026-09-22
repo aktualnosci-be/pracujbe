@@ -61,6 +61,7 @@ export function JobCard({
   const salary = formatSalaryRange(job, locale, {
     from: value => t('passport.salaryFrom', { value }),
     to: value => t('passport.salaryTo', { value }),
+    period: period => t(`passport.salaryPeriods.${period}`),
   });
   const highlights = job.highlights.slice(0, 2);
   const relative = formatRelative(job.publishedAt, locale);

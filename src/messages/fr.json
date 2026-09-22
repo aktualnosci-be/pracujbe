@@ -233,7 +233,8 @@
       "conditions": "Conditions",
       "viewOffer": "Voir l’offre",
       "salaryFrom": "à partir de {value}",
-      "salaryTo": "jusqu’à {value}"
+      "salaryTo": "jusqu’à {value}",
+      "salaryPeriods": { "hour": "brut / heure", "month": "brut / mois", "year": "brut / an" }
     },
     "pageTitle": "Offres d'emploi en Belgique",
     "search": "Rechercher",
@@ -763,6 +764,10 @@
     "datePosted": "Date de publication",
     "any": "Toutes",
     "showResults": "Afficher {count} offres",
+    "countLoading": "Comptage des offres…",
+    "countUnavailable": "Nombre d’offres indisponible",
+    "countError": "Impossible de compter les offres. Réessayez.",
+    "retryCount": "Recompter",
     "showMore": "Afficher plus ({count})",
     "radius": "Rayon",
     "experience": "Expérience",

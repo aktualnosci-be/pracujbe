@@ -108,9 +108,10 @@ beforeAll(async () => {
     }
   }
   if (!ready) throw new Error("Izolowany PostgreSQL nie uruchomił się.");
-  expect(
-    (await applyMigrations(admin, await loadProductionMigrations())).applied,
-  ).toBe(62);
+  const migrations = await loadProductionMigrations();
+  expect((await applyMigrations(admin, migrations)).applied).toBe(
+    migrations.length,
+  );
 }, 90_000);
 
 afterAll(async () => {

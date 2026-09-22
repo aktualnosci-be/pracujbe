@@ -17,7 +17,7 @@ import { Toast } from '@/components/ui/toast';
  * Dostępne akcje wynikają ze STANU oferty i odpowiadają macierzy przejść w RPC `set_job_status`
  * (0056) — UI nie zgaduje: pokazuje tylko dozwolone przejścia, a DB i tak je egzekwuje (klient nie
  * zmienia statusu bezpośrednio — guard trigger). Przyciski blokowane w trakcie zapisu (useTransition),
- * błędy → toast z komunikatem i18n (np. ENTITLEMENT_LIMIT przy wznowieniu ponad limit planu).
+ * błędy → toast z komunikatem i18n.
  */
 
 const TOAST_MS = 4000;

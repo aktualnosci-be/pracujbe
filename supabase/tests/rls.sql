@@ -653,22 +653,15 @@ insert into public.job_translations(job_id, locale, title, description, responsi
 insert into public.job_requirements(job_id, locale, kind, position, content)
   values ('e1111111-1111-1111-1111-111111111111', 'pl', 'mandatory', 0, 'Dyspozycyjność');
 
--- Ta sekcja bada KOMPLETNOŚĆ publikacji, nie limity planu (P1-01 → sekcja GG). Nadajemy więc
--- firmie plan z zapasem, by limit aktywnych ofert nie mieszał się do asercji; usuwamy po P2b.
-insert into public.subscriptions (company_id, plan, status, provider)
-  values (:'COMPA', 'pro', 'active', 'stripe');
-
--- P2: kompletny szkic publikuje się (status → active).
+-- P2: kompletny drugi szkic publikuje się bez subskrypcji (status → active).
 set role authenticated; set app.current_uid = :'EMPA';
 select pg_temp.assert(
   public.publish_job('e1111111-1111-1111-1111-111111111111'::uuid, 'operator-produkcji-abc') is not null,
-  'P2 publish_job publikuje kompletny szkic');
+  'P2 publish_job publikuje drugi kompletny szkic bez subskrypcji');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text from public.jobs where id = 'e1111111-1111-1111-1111-111111111111') = 'active',
   'P2b oferta aktywna po publish_job');
--- Zdejmij plan testowy — dalsze sekcje (GG) zakładają brak subskrypcji (plan 'free').
-delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe';
 
 -- P3: klient nie aktywuje oferty bezpośrednim UPDATE (guard trigger). Świeży szkic.
 reset role;
@@ -681,11 +674,20 @@ select pg_temp.expect_error(
   'PERMISSION_DENIED', 'P3 klient nie aktywuje oferty bezpośrednim UPDATE (guard)');
 reset role; reset app.current_uid;
 
--- P4: nie-członek nie opublikuje cudzego szkicu.
+-- P4: bezpłatność nie omija wymagania zweryfikowanej firmy.
+update public.companies set status = 'unverified' where id = :'COMPA';
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'select public.publish_job(''e2222222-2222-2222-2222-222222222222''::uuid, ''x'')',
+  'COMPANY_NOT_VERIFIED', 'P4 niezweryfikowana firma nie publikuje bezpłatnej oferty');
+reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'COMPA';
+
+-- P5: nie-członek nie opublikuje cudzego szkicu.
 set role authenticated; set app.current_uid = :'EMPB';
 select pg_temp.expect_error(
   'select public.publish_job(''e2222222-2222-2222-2222-222222222222''::uuid, ''x'')',
-  'PERMISSION_DENIED', 'P4 nie-członek nie publikuje cudzej oferty');
+  'PERMISSION_DENIED', 'P5 nie-członek nie publikuje cudzej oferty');
 reset role; reset app.current_uid;
 
 -- ============================================================================
@@ -1175,7 +1177,7 @@ select pg_temp.assert(
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- GG. AUDIT_REPORT 0055 (P1-01) — entitlements: limit aktywnych ofert per plan
+-- GG. Część #51 — billing pozostaje kompatybilny, publikacja jest bezpłatna
 -- ============================================================================
 -- GG1: członek widzi uprawnienia — bez subskrypcji plan 'free', limit 1.
 set role authenticated; set app.current_uid = :'EMPA';
@@ -1200,26 +1202,20 @@ insert into public.job_translations (job_id, locale, title, description, respons
 insert into public.job_requirements (job_id, kind, locale, content, position)
   values ('a2222222-2222-2222-2222-222222222222', 'mandatory', 'pl', 'Doświadczenie', 1);
 
--- GG3: publikacja przy planie free (JOBA już aktywne = limit 1) → ENTITLEMENT_LIMIT.
-set role authenticated; set app.current_uid = :'EMPA';
-select pg_temp.expect_error(
-  'select public.publish_job(''a2222222-2222-2222-2222-222222222222''::uuid, ''nowa-oferta'')',
-  'ENTITLEMENT_LIMIT', 'GG3 free: publikacja ponad limit odrzucona');
-reset role; reset app.current_uid;
-
--- GG4: po upgrade do 'standard' (limit 10) publikacja przechodzi.
-reset role;
-insert into public.subscriptions (company_id, plan, status, provider)
-  values (:'COMPA', 'standard', 'active', 'stripe');
+-- GG3: brak subskrypcji nie blokuje publikacji kolejnej kompletnej oferty.
 set role authenticated; set app.current_uid = :'EMPA';
 select public.publish_job('a2222222-2222-2222-2222-222222222222'::uuid, 'nowa-oferta');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text from public.jobs where id = 'a2222222-2222-2222-2222-222222222222') = 'active',
-  'GG4 standard: publikacja w ramach limitu działa');
--- sprzątanie testowej subskrypcji
-reset role;
-delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe';
+  'GG3 bez subskrypcji: druga kompletna oferta jest aktywna');
+
+-- GG4: ponowne żądanie publikacji nie może udawać drugiego sukcesu.
+set role authenticated; set app.current_uid = :'EMPA';
+select pg_temp.expect_error(
+  'select public.publish_job(''a2222222-2222-2222-2222-222222222222''::uuid, ''inna-nazwa'')',
+  'VALIDATION_FAILED', 'GG4 ponowna publikacja aktywnej oferty jest odrzucona');
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- HH. AUDIT_REPORT 0056 (P1-04) — cykl życia oferty (maszyna stanów set_job_status)
@@ -1246,23 +1242,23 @@ select pg_temp.assert(
 select pg_temp.assert(public.job_is_public('a2222222-2222-2222-2222-222222222222'::uuid) is false,
   'HH3b wstrzymana oferta nie jest publiczna');
 
--- HH4: wznowienie wymaga limitu planu — bez subskrypcji (free=1) i z aktywnymi ofertami → odmowa.
+-- HH4: bezpłatność nie omija wymagania zweryfikowanej firmy przy aktywacji.
+reset role;
+update public.companies set status = 'unverified' where id = :'COMPA';
 set role authenticated; set app.current_uid = :'EMPA';
 select pg_temp.expect_error(
   'select public.set_job_status(''a2222222-2222-2222-2222-222222222222''::uuid, ''resume'')',
-  'ENTITLEMENT_LIMIT', 'HH4 resume ponad limit planu odrzucone');
+  'COMPANY_NOT_VERIFIED', 'HH4 niezweryfikowana firma nie wznawia bezpłatnej oferty');
 reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'COMPA';
 
--- HH5: z planem 'pro' wznowienie przechodzi (paused → active).
-reset role;
-insert into public.subscriptions (company_id, plan, status, provider)
-  values (:'COMPA', 'pro', 'active', 'stripe');
+-- HH5: wznowienie bez subskrypcji przechodzi (paused → active).
 set role authenticated; set app.current_uid = :'EMPA';
 select public.set_job_status('a2222222-2222-2222-2222-222222222222'::uuid, 'resume');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text from public.jobs where id = 'a2222222-2222-2222-2222-222222222222') = 'active',
-  'HH5 resume: paused → active (w ramach planu)');
+  'HH5 resume: paused → active bez subskrypcji');
 
 -- HH6: zamknięcie (active → closed) i ponowne otwarcie (closed → active) z kompletnością.
 set role authenticated; set app.current_uid = :'EMPA';
@@ -1276,7 +1272,7 @@ select public.set_job_status('a2222222-2222-2222-2222-222222222222'::uuid, 'reop
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text from public.jobs where id = 'a2222222-2222-2222-2222-222222222222') = 'active',
-  'HH7 reopen: closed → active (kompletna oferta)');
+  'HH7 reopen: closed → active bez subskrypcji (kompletna oferta)');
 
 -- HH8: zwykły member (bez recruiter+) nie zarządza cyklem życia oferty.
 reset role;
@@ -1291,6 +1287,65 @@ reset role; reset app.current_uid;
 -- sprzątanie
 reset role;
 delete from public.company_members where company_id = :'COMPA' and profile_id = :'CANDB';
-delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe';
+
+-- ============================================================================
+-- II. Grupowane liczniki publicznych ofert (0064) — anon bez SELECT na tabelach
+-- ============================================================================
+reset role;
+-- Jedyny pasujący rekord construction jest aktywny, ale firma pozostaje unverified.
+-- RPC musi zachować requested row i zwrócić 0, zamiast usunąć grupę przez WHERE po LEFT JOIN.
+update public.companies set status = 'unverified' where id = :'COMPC';
+update public.jobs set status = 'active', expires_at = null where id = :'JOBC';
+set role anon; reset app.current_uid;
+select pg_temp.assert(
+  (select total from public.get_public_job_category_counts(array['warehouse']) where key = 'warehouse') = 2,
+  'II1 anon widzi pełny grupowany licznik kategorii przez SECURITY DEFINER');
+select pg_temp.assert(
+  (select total from public.get_public_job_category_counts(array['transport']) where key = 'transport') = 1,
+  'II2 licznik kategorii obejmuje właściwy publiczny zakres');
+select pg_temp.assert(
+  (select total from public.get_public_job_category_counts(array['construction']) where key = 'construction') = 0,
+  'II3 licznik wyklucza ofertę niezweryfikowanej firmy');
+select pg_temp.assert(
+  (select count(*) from public.get_public_job_category_counts(array['construction'])
+    where key = 'construction' and total = 0) = 1,
+  'II3b jedyne niezweryfikowane dopasowanie zwraca jawny wiersz construction=0');
+select pg_temp.assert(
+  (select count(*) from public.get_public_job_category_counts(array[repeat('x', 150)])
+    where length(key) = 100 and total = 0) = 1,
+  'II3c klucz kategorii jest ograniczony do 100 znaków tak jak miasto');
+select pg_temp.assert(
+  (select total from public.get_public_job_city_counts(array['Gandawa']) where key = 'Gandawa') = 2,
+  'II4 anon widzi pełny grupowany licznik miasta');
+select pg_temp.expect_error('select count(*) from public.jobs', 'permission denied',
+  'II5 RPC nie przywraca anon bezpośredniego SELECT jobs');
+select pg_temp.expect_error('select count(*) from public.companies', 'permission denied',
+  'II6 RPC nie przywraca anon bezpośredniego SELECT companies');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- JJ. Dokładne facety listingu (0065) — pełny zbiór, jeden publiczny RPC
+-- ============================================================================
+insert into public.jobs(company_id,slug,title,category,contract_type,city,region,status,default_locale,
+  published_at,expires_at,accommodation,immediate,no_language_required)
+select :'COMPA','facet-rls-'||n,'Facet '||n,'warehouse','permanent','Antwerpia','Flandria','active','pl',
+  now(),now()+interval '30 days',n%2=0,n%3=0,n%5=0 from generate_series(1,205) n;
+set role anon; reset app.current_uid;
+select pg_temp.assert(
+  (select total from public.get_public_job_filter_facets('pl',p_locations=>array['Antwerpia'],
+    p_contract_types=>array['permanent']) where dimension='total' and key='all') > 200,
+  'JJ1 dokładny total nie zatrzymuje się na 200');
+select pg_temp.assert(
+  (select total from public.get_public_job_filter_facets('pl',p_locations=>array['Antwerpia'],
+    p_contract_types=>array['permanent']) where dimension='category' and key='warehouse') > 200,
+  'JJ2 widoczny badge kategorii zachowuje pozostałe aktywne filtry');
+select pg_temp.assert(
+  (select count(*) from public.get_public_job_filter_facets('pl')
+    where dimension in ('category','location','contract','accommodation','additional')) >= 7,
+  'JJ3 RPC zwraca wszystkie widoczne wymiary filtrów');
+select pg_temp.expect_error('select count(*) from public.jobs', 'permission denied',
+  'JJ4 facet RPC nie daje anon SELECT jobs');
+reset role; reset app.current_uid;
+delete from public.jobs where slug like 'facet-rls-%';
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

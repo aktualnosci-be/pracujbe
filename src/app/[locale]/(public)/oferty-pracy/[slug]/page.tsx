@@ -12,19 +12,17 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  Clock,
-  FileText,
   Home,
   Languages as LanguagesIcon,
   MapPin,
   MessageSquare,
   Truck,
-  Wallet,
 } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
 import { getJobBySlug, getJobs, type ContractType, type JobDetail, type JobListItem } from '@/lib/jobs';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
@@ -143,7 +141,7 @@ function buildJsonLd(job: JobDetail, url: string): Record<string, unknown> {
     month: 'MONTH',
     year: 'YEAR',
   };
-  const unitText = SALARY_UNIT[job.salaryPeriod ?? 'month'];
+  const unitText = job.salaryPeriod ? SALARY_UNIT[job.salaryPeriod] : undefined;
 
   const hasSalary = job.salaryMin !== undefined || job.salaryMax !== undefined;
   const baseSalary = hasSalary
@@ -154,7 +152,7 @@ function buildJsonLd(job: JobDetail, url: string): Record<string, unknown> {
           '@type': 'QuantitativeValue',
           ...(job.salaryMin !== undefined ? { minValue: job.salaryMin } : {}),
           ...(job.salaryMax !== undefined ? { maxValue: job.salaryMax } : {}),
-          unitText,
+          ...(unitText ? { unitText } : {}),
         },
       }
     : undefined;
@@ -212,9 +210,14 @@ export default async function JobDetailPage({ params }: PageProps) {
     getFormatter(),
   ]);
 
-  const salaryLabel = formatSalaryRange(job, locale, {
-    from: value => tJobs('passport.salaryFrom', { value }),
-    to: value => tJobs('passport.salaryTo', { value }),
+  const passportFields = buildJobDetailPassportFields(job, locale, {
+    location: tJobs('passport.location'),
+    salary: tJobs('passport.salary'),
+    conditions: tJobs('passport.conditions'),
+    contract: type => tContract(type),
+    salaryFrom: value => tJobs('passport.salaryFrom', { value }),
+    salaryTo: value => tJobs('passport.salaryTo', { value }),
+    salaryPeriod: period => tJobs(`passport.salaryPeriods.${period}`),
   });
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
@@ -232,14 +235,6 @@ export default async function JobDetailPage({ params }: PageProps) {
   const similarJobs: JobListItem[] = similarResult.jobs
     .filter((item) => item.slug !== job.slug)
     .slice(0, SIMILAR_LIMIT);
-
-  const metaItems: Array<{ icon: React.ComponentType<{ className?: string }>; text: string }> = [
-    { icon: MapPin, text: `${job.city}, ${job.region}` },
-    ...(salaryLabel === null ? [] : [{ icon: Wallet, text: salaryLabel }]),
-    { icon: FileText, text: tContract(job.contractType) },
-    { icon: Clock, text: job.workingHours },
-  ];
-  if (job.shifts) metaItems.push({ icon: Clock, text: job.shifts });
 
   const applyLabel = tJobs('applyNow');
   const applyHint = tApply('hint');
@@ -301,49 +296,75 @@ export default async function JobDetailPage({ params }: PageProps) {
         {t('backToResults')}
       </Link>
 
-      {/* Nagłówek */}
-      <header className="mb-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      {/* Paszport oferty: nagłówek i stała metryka z rzeczywistych danych. */}
+      <header
+        data-testid="job-detail-passport"
+        className="mb-6 min-w-0 overflow-hidden rounded-3xl border border-border bg-card p-5 sm:p-7 lg:p-8"
+      >
+        <div className="flex min-w-0 items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+            <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+              {tCategory(job.category)}
+            </p>
+            <h1 className="mt-3 break-words text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl">
               {job.title}
             </h1>
-            <div className="mt-3 flex items-center gap-3">
+            <div className="mt-4 flex min-w-0 items-center gap-3">
               {companyLogo}
-              <div className="min-w-0">
-                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
-                  {job.companyName}
-                  {job.companyVerified ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
-                      <BadgeCheck className="h-4 w-4" aria-hidden="true" />
-                      {t('verified')}
-                    </span>
-                  ) : null}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {tCategory(job.category)}
-                </p>
-              </div>
+              <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
+                <span className="break-words">{job.companyName}</span>
+                {job.companyVerified ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
+                    <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {t('verified')}
+                  </span>
+                ) : null}
+              </p>
             </div>
           </div>
 
-          {/* Zapisz (desktop) */}
+          {/* Zapisz (desktop); na mobile pozostaje w dolnym pasku. */}
           <PublicSaveJobButton jobId={job.id} className="hidden lg:inline-flex" />
         </div>
 
-        {/* Meta */}
-        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-          {metaItems.map((item, index) => (
-            <span key={index} className="inline-flex items-center gap-1.5">
-              <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {item.text}
-            </span>
+        <dl
+          className={cn(
+            'mt-7 grid min-w-0 border-y border-border',
+            passportFields.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3',
+          )}
+        >
+          {passportFields.map((field, index) => (
+            <div
+              key={field.key}
+              data-passport-field={field.key}
+              className={cn(
+                'min-w-0 py-5',
+                index === 0
+                  ? 'sm:pr-5'
+                  : 'border-t border-border sm:border-l sm:border-t-0 sm:pl-5',
+                index > 0 && index < passportFields.length - 1 ? 'sm:pr-5' : undefined,
+              )}
+            >
+              <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {field.label}
+              </dt>
+              <dd className="break-words text-base font-semibold text-foreground">
+                {field.primary}
+                {field.secondary ? (
+                  <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                    {field.secondary}
+                  </span>
+                ) : null}
+              </dd>
+            </div>
           ))}
-          <span className="inline-flex items-center gap-1.5">
-            <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />
-            {t('publishedOn')} {publishedLabel}
-          </span>
-        </div>
+        </dl>
+
+        <p className="mt-4 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
+          <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="break-words">{t('publishedOn')} {publishedLabel}</span>
+        </p>
       </header>
 
       {/* Zakładki (kotwice do sekcji) */}
@@ -368,9 +389,9 @@ export default async function JobDetailPage({ params }: PageProps) {
         </ul>
       </nav>
 
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-8 lg:grid-cols-3">
         {/* Treść */}
-        <div className="lg:col-span-2 lg:space-y-8">
+        <div className="min-w-0 lg:col-span-2 lg:space-y-8">
           <Section id="opis" title={t('aboutRole')}>
             <p className="whitespace-pre-line leading-relaxed text-foreground">{job.description}</p>
           </Section>
@@ -497,10 +518,12 @@ export default async function JobDetailPage({ params }: PageProps) {
         </div>
 
         {/* Panel boczny */}
-        <aside className="lg:col-span-1">
+        <aside className="min-w-0 lg:col-span-1">
           <div className="space-y-4 lg:sticky lg:top-24">
             {/* Dopasowanie do profilu (tylko dla zalogowanego kandydata; wyspa kliencka) */}
-            <JobMatchCard jobId={job.id} />
+            <div data-testid="job-match-slot">
+              <JobMatchCard jobId={job.id} />
+            </div>
 
             {/* Aplikuj (desktop — mobile ma dolny pasek) */}
             <div className="hidden rounded-lg border border-border bg-card p-5 shadow-sm lg:block">
@@ -547,6 +570,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                     const itemSalary = formatSalaryRange(item, locale, {
                       from: value => tJobs('passport.salaryFrom', { value }),
                       to: value => tJobs('passport.salaryTo', { value }),
+                      period: period => tJobs(`passport.salaryPeriods.${period}`),
                     });
                     return (
                       <li key={item.id} className="py-3 first:pt-0 last:pb-0">

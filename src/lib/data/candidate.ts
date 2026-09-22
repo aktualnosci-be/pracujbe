@@ -23,6 +23,7 @@ import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
+import { findLatestActiveProposal } from '@/lib/candidate-offers';
 
 /* ---------------------------------------------------------------------------
  * Kontrakt danych panelu kandydata
@@ -75,6 +76,7 @@ export interface MyOffer {
   /** Data wysłania propozycji (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
   date: string;
   status: string;
+  expiresAt: string | null;
 }
 
 export interface CandidateProfileSummary {
@@ -420,8 +422,23 @@ function demoOffers(locale: Locale): MyOffer[] {
       message: '',
       date: new Date(Date.now() - pick.daysAgo * 86_400_000).toISOString(),
       status: pick.status,
+      expiresAt: null,
     };
   });
+}
+
+function latestDemoOffer(locale: Locale): MyOffer | null {
+  const offers = demoOffers(locale);
+  const latest = findLatestActiveProposal(
+    offers.map((offer) => ({
+      offer,
+      id: offer.id,
+      status: offer.status,
+      sentAt: offer.date,
+      expiresAt: null,
+    })),
+  );
+  return latest?.offer ?? null;
 }
 
 function demoMessages(locale: Locale): LatestMessage[] {
@@ -669,7 +686,7 @@ export async function getMyOffers(locale: string = routing.defaultLocale): Promi
 
     const { data, error } = await supabase
       .from('offers')
-      .select('id, job_id, status, message, sent_at, created_at')
+      .select('id, job_id, status, message, sent_at, created_at, expires_at')
       .eq('candidate_id', userId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
@@ -697,11 +714,66 @@ export async function getMyOffers(locale: string = routing.defaultLocale): Promi
         message: asStr(r['message']),
         date: sentAt || asStr(r['created_at']),
         status: asStr(r['status'], 'sent'),
+        expiresAt: asStr(r['expires_at']) || null,
       };
     });
   } catch (error) {
     captureError(error, { area: 'candidate.getMyOffers' });
     return [];
+  }
+}
+
+/**
+ * Najnowsza niewygasła propozycja oczekująca na odpowiedź. Filtry, kolejność i limit działają
+ * w bazie przed pobraniem wiersza; odczyt pozostaje pod sesją i polityką RLS `offers_select`.
+ */
+export async function getLatestActiveOffer(
+  locale: string = routing.defaultLocale,
+): Promise<MyOffer | null> {
+  const resolvedLocale = toLocale(locale);
+  if (!isSupabaseConfigured()) return latestDemoOffer(resolvedLocale);
+
+  try {
+    const { supabase, userId } = await getServerContext();
+    if (!userId) return null;
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('offers')
+      .select('id, job_id, status, message, sent_at, expires_at')
+      .eq('candidate_id', userId)
+      .is('deleted_at', null)
+      .in('status', ['sent', 'viewed'])
+      .not('sent_at', 'is', null)
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .order('sent_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+
+    const row = asRecord(data);
+    const jobId = asStr(row['job_id']);
+    const [appliedMap, publicMap] = await Promise.all([
+      fetchAppliedJobsMap(supabase, resolvedLocale),
+      fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT),
+    ]);
+    const job = appliedMap.get(jobId) ?? publicMap.get(jobId);
+
+    return {
+      id: asStr(row['id']),
+      jobTitle: job?.title ?? '',
+      companyName: job?.companyName ?? '',
+      slug: job?.slug ?? null,
+      message: asStr(row['message']),
+      date: asStr(row['sent_at']),
+      status: asStr(row['status']),
+      expiresAt: asStr(row['expires_at']) || null,
+    };
+  } catch (error) {
+    captureError(error, { area: 'candidate.getLatestActiveOffer' });
+    return null;
   }
 }
 
