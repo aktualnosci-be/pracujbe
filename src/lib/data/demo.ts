@@ -755,6 +755,7 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     salaryMin: raw.salaryMin,
     salaryMax: raw.salaryMax,
     currency: CURRENCY,
+    salaryPeriod: 'month',
     publishedAt,
     isNew: raw.postedDaysAgo <= NEW_DAYS,
     highlights: raw.highlightKeys.map((k) => HL[k][locale]),

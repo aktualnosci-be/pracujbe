@@ -28,7 +28,7 @@ Paczka dostarczona. Wdrożenie aplikacji etapowe; prototyp nie jest dowodem uko�
 
 Pierwsza zmiana aplikacji: tokeny kolorów, logo, jasna stopka i sidebar, wysokość głównego przycisku oraz kolor manifestu. Typografia pozostaje lokalnym Inter do osobnego sprawdzenia fontu DM Sans. Ikony PWA/OG i pełny przegląd widoków pozostają w etapie #7.
 
-Etap #3 rozpoczęty: karty ofert w układzie paszportu, opcjonalne wynagrodzenie i etykiety w czterech językach. Ograniczenia nadal otwarte: okres stawki nie jest przekazywany przez model listy; zapis ofert jest podłączany w #9 i wymaga końcowej weryfikacji na sesji kandydata. Szczegóły ofert pozostają do przebudowy.
+Etap #3 rozpoczęty: karty ofert w układzie paszportu, opcjonalne wynagrodzenie i etykiety w czterech językach. Okres stawki jest przekazywany przez publiczny model listy i wspólnie formatowany na karcie, detalu oraz w podobnych ofertach. Zapis ofert jest podłączany w #9 i wymaga końcowej weryfikacji na sesji kandydata. Szczegóły ofert pozostają do przebudowy.
 
 Zapis publiczny: wspólny odczyt pod sesją/RLS dla kolekcji, przyciski detalu synchronizowane w jednym stanie, anonimowy użytkownik kierowany do logowania, tryb demonstracyjny nie udaje trwałego zapisu. Testy przeglądarkowe demo nie dowodzą trwałości na prawdziwej bazie.
 

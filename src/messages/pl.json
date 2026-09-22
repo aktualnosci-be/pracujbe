@@ -233,7 +233,8 @@
       "conditions": "Warunki",
       "viewOffer": "Poznaj ofertę",
       "salaryFrom": "od {value}",
-      "salaryTo": "do {value}"
+      "salaryTo": "do {value}",
+      "salaryPeriods": { "hour": "brutto / godz.", "month": "brutto / mies.", "year": "brutto / rok" }
     },
     "pageTitle": "Oferty pracy w Belgii",
     "search": "Szukaj",

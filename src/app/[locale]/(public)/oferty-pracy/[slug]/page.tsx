@@ -215,6 +215,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   const salaryLabel = formatSalaryRange(job, locale, {
     from: value => tJobs('passport.salaryFrom', { value }),
     to: value => tJobs('passport.salaryTo', { value }),
+    period: period => tJobs(`passport.salaryPeriods.${period}`),
   });
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
@@ -547,6 +548,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                     const itemSalary = formatSalaryRange(item, locale, {
                       from: value => tJobs('passport.salaryFrom', { value }),
                       to: value => tJobs('passport.salaryTo', { value }),
+                      period: period => tJobs(`passport.salaryPeriods.${period}`),
                     });
                     return (
                       <li key={item.id} className="py-3 first:pt-0 last:pb-0">

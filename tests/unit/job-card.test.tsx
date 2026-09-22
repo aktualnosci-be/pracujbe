@@ -22,7 +22,7 @@ afterEach(cleanup);
 const job: JobListItem = {
   id: 'test-job', slug: 'electrician', title: 'Electrician', companyName: 'Test Company',
   companyVerified: true, city: 'Antwerp', region: 'Flanders', contractType: 'permanent',
-  currency: 'EUR', publishedAt: '2026-09-20T10:00:00Z', isNew: true,
+  currency: 'EUR', salaryPeriod: 'month', publishedAt: '2026-09-20T10:00:00Z', isNew: true,
   highlights: ['Transport'], category: 'technical', accommodation: false,
   immediate: false, noLanguageRequired: false,
 };
@@ -48,34 +48,33 @@ describe('Paszport oferty', () => {
   });
 
   it.each([
-    [{ salaryMin: 18.75, salaryMax: 22.5 }, '€18.75 – €22.5'],
-    [{ salaryMin: 18.75 }, 'from €18.75'],
-    [{ salaryMax: 22.5 }, 'up to €22.5'],
-    [{ salaryMin: 0 }, 'from €0'],
-  ])('pokazuje podane granice bez zgadywania okresu: %j', (salary, expected) => {
+    [{ salaryMin: 18.75, salaryMax: 22.5, salaryPeriod: 'hour' as const }, '€18.75 – €22.5 gross / hour'],
+    [{ salaryMin: 18.75, salaryPeriod: 'month' as const }, 'from €18.75 gross / month'],
+    [{ salaryMax: 22.5, salaryPeriod: 'year' as const }, 'up to €22.5 gross / year'],
+    [{ salaryMin: 0, salaryPeriod: 'hour' as const }, 'from €0 gross / hour'],
+  ])('pokazuje podane granice i okres: %j', (salary, expected) => {
     const { container } = renderCard(salary);
     const salaryField = screen.getByText('Salary', { selector: 'dt' }).parentElement!;
     expect(within(salaryField).getByText(expected)).toBeVisible();
     expect(container.querySelectorAll('dt')).toHaveLength(3);
-    expect(salaryField.textContent).not.toMatch(/month|hour|gross/i);
   });
 
   it.each(['pl', 'en', 'nl', 'fr'] as const)('tłumaczy pola i granice stawki: %s', (locale) => {
-    renderCard({ salaryMin: 18.75 }, locale);
+    renderCard({ salaryMin: 18.75, salaryPeriod: 'hour' }, locale);
     const labels = messages[locale].jobs.passport;
     for (const label of [labels.location, labels.salary, labels.conditions]) {
       expect(screen.getByText(label, { selector: 'dt' })).toBeVisible();
     }
     const amount = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(18.75);
     const field = screen.getByText(labels.salary, { selector: 'dt' }).parentElement!;
-    expect(field.querySelector('dd')?.textContent).toBe(labels.salaryFrom.replace('{value}', amount));
+    expect(field.querySelector('dd')?.textContent).toBe(`${labels.salaryFrom.replace('{value}', amount)} ${labels.salaryPeriods.hour}`);
     expect(screen.getByText(labels.viewOffer)).toBeVisible();
   });
 
   it('zachowuje dopasowanie także przy podanej stawce, weryfikację i datę', () => {
     const { container } = renderCard({ salaryMin: 18 }, 'en', 82);
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '82');
-    expect(screen.getByText('from €18')).toBeVisible();
+    expect(screen.getByText('from €18 gross / month')).toBeVisible();
     expect(screen.getByText(en.job.verified)).toBeVisible();
     expect(container.querySelector('time')).toHaveAttribute('datetime', job.publishedAt);
     expect(screen.getByRole('link', { name: job.title })).toHaveAttribute('href', '/oferty-pracy/electrician');

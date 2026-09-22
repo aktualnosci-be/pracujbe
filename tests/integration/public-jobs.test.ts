@@ -214,6 +214,7 @@ describe('Publiczne oferty — pełne migracje i rzeczywisty PostgreSQL 16', () 
     expect(Date.parse(detail!.expires_at as string)).toBe(Date.parse(expiresAt));
     expect((await getPublicJob(app!, 'without-salary', 'pl'))?.salary_min).toBeNull();
     const list = await getPublicJobs(app!, { locale: 'pl' });
+    expect(list.rows.find(row => row.slug === 'warehouse-rich')).toMatchObject({ salary_period: 'hour' });
     for (const row of [...list.rows, detail!]) {
       expect(JSON.stringify(row)).not.toContain('private');
       for (const field of ['company_id', 'created_by', 'contact_email', 'email', 'phone', 'address', 'vat_number',

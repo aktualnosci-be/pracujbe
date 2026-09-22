@@ -20,6 +20,8 @@ export type ContractType =
   | 'internship'
   | 'seasonal';
 
+export type SalaryPeriod = 'hour' | 'month' | 'year';
+
 export type CategoryKey =
   | 'construction'
   | 'transport'
@@ -56,6 +58,7 @@ export interface JobListItem {
   salaryMin?: number;
   salaryMax?: number;
   currency: string;
+  salaryPeriod: SalaryPeriod;
   publishedAt: string;
   isNew: boolean;
   highlights: string[];
@@ -77,8 +80,6 @@ export interface JobDetail extends JobListItem {
   transport: boolean;
   startDate?: string;
   companyDescription: string;
-  /** Okres pensji (hour/month/year) — do JSON-LD unitText (P1-12). */
-  salaryPeriod?: 'hour' | 'month' | 'year';
   /** Data wygaśnięcia oferty (ISO) — do JSON-LD validThrough (P1-12). */
   expiresAt?: string;
 }
@@ -269,6 +270,10 @@ function asCategory(value: unknown): CategoryKey {
   return CATEGORY_KEYS.includes(v as CategoryKey) ? (v as CategoryKey) : 'logistics';
 }
 
+function asSalaryPeriod(value: unknown): SalaryPeriod {
+  return value === 'hour' || value === 'year' ? value : 'month';
+}
+
 function computeIsNew(publishedAt: string): boolean {
   const ts = Date.parse(publishedAt);
   if (Number.isNaN(ts)) return false;
@@ -290,6 +295,7 @@ function rowToJobListItem(row: unknown): JobListItem {
     salaryMin: asNumberOpt(r['salary_min']),
     salaryMax: asNumberOpt(r['salary_max']),
     currency: asString(r['currency'], 'EUR'),
+    salaryPeriod: asSalaryPeriod(r['salary_period']),
     publishedAt,
     isNew: computeIsNew(publishedAt),
     highlights: asStringArray(r['highlights']),
@@ -302,9 +308,6 @@ function rowToJobListItem(row: unknown): JobListItem {
 
 function rowToJobDetail(row: unknown): JobDetail {
   const r = asRecord(row);
-  const period = asOptString(r['salary_period']);
-  const salaryPeriod =
-    period === 'hour' || period === 'month' || period === 'year' ? period : undefined;
   return {
     ...rowToJobListItem(row),
     description: asString(r['description']),
@@ -318,7 +321,6 @@ function rowToJobDetail(row: unknown): JobDetail {
     transport: asBool(r['transport']),
     startDate: asOptString(r['start_date']),
     companyDescription: asString(r['company_description']),
-    ...(salaryPeriod ? { salaryPeriod } : {}),
     ...(asOptString(r['expires_at']) ? { expiresAt: asOptString(r['expires_at']) } : {}),
   };
 }

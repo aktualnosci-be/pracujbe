@@ -17,10 +17,10 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
   });
   it('przekazuje filtry do PostgreSQL i mapuje rzeczywiste dane bez Supabase', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
-    adapters.list.mockResolvedValue({ rows: [{ id: 'id', slug: 'oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z', salary_min: 18.59 }], total: 17, page: 2, pageSize: 12 });
+    adapters.list.mockResolvedValue({ rows: [{ id: 'id', slug: 'oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z', salary_min: 18.59, salary_period: 'hour' }], total: 17, page: 2, pageSize: 12 });
     const result = await getJobs({ locale: 'nl', page: 2, keyword: 'Elektryk' });
     expect(adapters.list).toHaveBeenCalledWith(adapters.pool, { locale: 'nl', page: 2, keyword: 'Elektryk', pageSize: 12 });
-    expect(result).toMatchObject({ total: 17, page: 2, jobs: [{ title: 'Elektryk', salaryMin: 18.59, publishedAt: '2026-01-01T00:00:00Z' }] });
+    expect(result).toMatchObject({ total: 17, page: 2, jobs: [{ title: 'Elektryk', salaryMin: 18.59, salaryPeriod: 'hour', publishedAt: '2026-01-01T00:00:00Z' }] });
   });
   it('awaria skonfigurowanej bazy nie wraca do demo', async () => {
     vi.stubEnv('APP_MODE', 'demo');

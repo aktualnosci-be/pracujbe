@@ -29,3 +29,13 @@ for (const locale of ["pl", "nl", "fr", "en"]) {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 }
+
+test('rzeczywista karta demo pokazuje miesięczny okres także na detalu', async ({ page }) => {
+  await page.goto('/pl/oferty-pracy');
+  const card = page.locator('article').filter({ hasText: 'Magazynier' }).first();
+  await expect(card).toBeVisible();
+  await expect(card.getByText(/brutto \/ mies\./)).toBeVisible();
+  await card.getByRole('heading').getByRole('link').click();
+  await expect(page.getByText(/brutto \/ mies\./).first()).toBeVisible();
+  await expect(page.getByText(/brutto \/ godz\./)).toHaveCount(0);
+});
