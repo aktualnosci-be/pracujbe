@@ -1,8 +1,9 @@
 # Jednorazowe przygotowanie loginów PostgreSQL na Railway
 
 Ta instrukcja tworzy i rotuje cztery ograniczone loginy runtime po migracjach
-`0000..0061`. Nie uruchamia migracji, nie usuwa ról ani danych i nie wykonuje
-żadnego `DROP`. Polecenia należy uruchomić lokalnie przez operatora, po ręcznym
+od `0000` do aktualnego ostatniego pliku, bez luk i duplikatów. Nie uruchamia
+migracji, nie usuwa ról ani danych i nie wykonuje żadnego `DROP`. Polecenia
+należy uruchomić lokalnie przez operatora, po ręcznym
 sprawdzeniu nazwy usługi i bazy w Railway. Skrypt nie został uruchomiony na
 produkcji w ramach PR-a, który go dodaje.
 
@@ -65,7 +66,8 @@ DB_LOGIN_DRY_RUN=yes npm run db:logins -- provision
 
 Oba polecenia odmawiają działania, jeżeli połączenie wskazuje inną bazę,
 użytkownika albo wersję, serwer jest repliką tylko do odczytu, historia i sumy
-migracji nie są dokładnie zgodne z `0000..0061`, role bazowe lub RLS są
+migracji nie są dokładnie zgodne z pełnym, ciągłym zakresem plików
+w repozytorium, role bazowe lub RLS są
 niezgodne albo portal nie jest pusty (`auth.users`, profile, firmy, oferty,
 aplikacje i propozycje mają mieć zero wierszy).
 
