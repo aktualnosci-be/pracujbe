@@ -20,11 +20,11 @@ test('akcje propozycji są mobilne i nie udają zapisu w trybie demo', async ({ 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 
   const card = accept.locator('xpath=ancestor::li[1]');
-  await expect(card).toContainText('sent');
+  await expect(card).toContainText('Wysłana');
   await accept.click();
 
   await expect(page.getByText('Coś poszło nie tak. Spróbuj ponownie.')).toBeVisible();
-  await expect(card).toContainText('sent');
+  await expect(card).toContainText('Wysłana');
   await expect(accept).toBeEnabled();
   await expect(page).toHaveURL('/pl/candidate/propozycje');
 });
