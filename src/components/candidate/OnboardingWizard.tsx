@@ -414,7 +414,7 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
       {/* Nagłówek + znacznik zapisu */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('title')}</h1>
           <p className="mt-1 max-w-2xl text-muted-foreground">{t('subtitle')}</p>
         </div>
         {saveState === 'saved' && badgeVisible ? (
@@ -443,14 +443,14 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
         steps={steps}
         current={step - 1}
         progressLabel={t('stepProgress', { current: step, total: steps.length })}
-        className="rounded-3xl border border-border bg-card p-5 sm:p-7"
+        className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-7"
       />
 
       {/* Kolumny: boczna + formularz */}
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
         {/* Kolumna boczna */}
         <aside className="min-w-0 space-y-6">
-          <section className="rounded-lg border border-border bg-card p-4 sm:p-5">
+          <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
             <h2 className="text-base font-semibold text-foreground">{t('completeness')}</h2>
             <ProfileCompleteness
               className="mt-4"
@@ -461,7 +461,7 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
             <ProfileChecklist className="mt-5" items={checklist} />
           </section>
 
-          <section className="rounded-lg border border-border bg-soft p-4 sm:p-5">
+          <section className="rounded-3xl border border-border bg-soft p-5">
             <h2 className="text-base font-semibold text-foreground">{t('needHelp')}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{t('helpText')}</p>
             <Button asChild variant="outline" size="sm" className="mt-4 w-full bg-background">
@@ -474,8 +474,9 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
         </aside>
 
         {/* Formularz bieżącego kroku */}
-        <section className="min-w-0 rounded-3xl border border-border bg-card p-5 sm:p-7">
-          <h2 className="text-lg font-semibold text-foreground">{steps[step - 1]?.title}</h2>
+        <section className="min-w-0 rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-7">
+          <div className="mb-5 h-1 w-12 rounded-full bg-primary" aria-hidden="true" />
+          <h2 className="text-xl font-semibold text-foreground">{steps[step - 1]?.title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{steps[step - 1]?.desc}</p>
 
           <form

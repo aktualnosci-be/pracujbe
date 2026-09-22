@@ -46,7 +46,7 @@ export default async function OnboardingLayout({
   const tc = await getTranslations({ locale, namespace: 'common' });
 
   return (
-    <div className="flex min-h-screen flex-col bg-soft">
+    <div className="flex min-h-screen flex-col bg-background">
       <header className="flex h-16 items-center border-b border-border bg-background px-4 lg:px-8">
         <Link href="/" aria-label={tc('home')} className="rounded-sm">
           <Logo />
