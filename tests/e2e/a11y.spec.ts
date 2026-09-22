@@ -18,7 +18,10 @@ const BLOCKING = new Set(['critical', 'serious']);
 
 /** Uruchamia axe na aktualnej stronie i zwraca naruszenia pogrupowane wg wagi. */
 async function analyze(page: import('@playwright/test').Page) {
-  const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+  const results = await new AxeBuilder({ page })
+    .options({ rules: { 'target-size': { enabled: true } } })
+    .withTags(WCAG_TAGS)
+    .analyze();
   const blocking = results.violations.filter((v) => BLOCKING.has(v.impact ?? ''));
   const advisory = results.violations.filter((v) => !BLOCKING.has(v.impact ?? ''));
   return { blocking, advisory };
