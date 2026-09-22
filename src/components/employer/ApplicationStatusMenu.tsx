@@ -96,7 +96,7 @@ export function ApplicationStatusMenu({
         aria-expanded={open}
         disabled={pending}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex min-h-12 items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
       >
         {td('colStatusEmp')}
         <ChevronDown className="size-3.5" aria-hidden="true" />
@@ -115,7 +115,7 @@ export function ApplicationStatusMenu({
                 type="button"
                 role="menuitem"
                 onClick={() => handleSelect(target)}
-                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-soft"
+                className="flex min-h-12 w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-soft"
               >
                 <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
                   {isCurrent ? <Check className="size-4 text-primary" /> : null}
