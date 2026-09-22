@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const locales = ["pl", "nl", "fr", "en"] as const;
 
@@ -15,6 +15,19 @@ type Messages = {
   };
 };
 
+const activeFilters = {
+  category: "warehouse",
+  location: "Antwerpia",
+  contractType: "temporary",
+  salaryMin: "1800",
+  salaryMax: "3200",
+  accommodation: "provided",
+  immediate: "1",
+  noLang: "1",
+  date: "30d",
+  sort: "salary",
+} as const;
+
 function messages(locale: Locale): Messages {
   return JSON.parse(
     readFileSync(
@@ -24,13 +37,43 @@ function messages(locale: Locale): Messages {
   ) as Messages;
 }
 
+async function expectNoDocumentOverflow(page: Page): Promise<void> {
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth,
+    offenders: [...document.querySelectorAll<HTMLElement>("body *")]
+      .filter(
+        (element) =>
+          element.getBoundingClientRect().right >
+          document.documentElement.clientWidth + 1,
+      )
+      .slice(0, 5)
+      .map((element) => ({
+        tag: element.tagName.toLowerCase(),
+        className: String(element.className),
+        right: Math.round(element.getBoundingClientRect().right),
+      })),
+  }));
+
+  expect(
+    dimensions.document,
+    JSON.stringify(dimensions.offenders, null, 2),
+  ).toBeLessThanOrEqual(dimensions.viewport + 1);
+}
+
 for (const locale of locales) {
-  test(`nagłówek listy ofert zachowuje wyszukiwanie GET i układ 320 px: ${locale}`, async ({
-    page,
+  test(`wyszukiwarka GET bez JavaScriptu zachowuje filtry i reflow: ${locale}`, async ({
+    browser,
   }) => {
+    const context = await browser.newContext({
+      javaScriptEnabled: false,
+      viewport: { width: 320, height: 900 },
+    });
+    const page = await context.newPage();
     const t = messages(locale);
-    await page.setViewportSize({ width: 320, height: 900 });
-    await page.goto(`/${locale}/oferty-pracy?immediate=1`);
+    const initial = new URLSearchParams({ ...activeFilters, page: "4" });
+
+    await page.goto(`/${locale}/oferty-pracy?${initial.toString()}`);
 
     await expect(
       page.getByRole("heading", { level: 1, name: t.jobs.pageTitle }),
@@ -52,22 +95,25 @@ for (const locale of locales) {
     );
 
     await keyword.fill("magazyn");
-    await location.fill("Antwerpia");
-    await submit.click();
+    await location.fill("Bruksela");
+    await Promise.all([
+      page.waitForURL(new RegExp(`/${locale}/oferty-pracy\\?`)),
+      submit.click(),
+    ]);
 
-    await expect(page).toHaveURL(new RegExp(`/${locale}/oferty-pracy\\?`));
-    await page.waitForLoadState("domcontentloaded");
-    await expect(
-      page.getByRole("heading", { level: 1, name: t.jobs.pageTitle }),
-    ).toBeVisible();
     const url = new URL(page.url());
     expect(url.searchParams.get("keyword")).toBe("magazyn");
-    expect(url.searchParams.get("city")).toBe("Antwerpia");
-    expect(url.searchParams.get("immediate")).toBe("1");
+    expect(url.searchParams.get("city")).toBe("Bruksela");
+    for (const [key, value] of Object.entries(activeFilters)) {
+      expect(url.searchParams.get(key), key).toBe(value);
+    }
+    expect(url.searchParams.has("page")).toBe(false);
 
-    const bounds = await search.boundingBox();
-    expect(bounds).not.toBeNull();
-    expect(bounds!.x).toBeGreaterThanOrEqual(0);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(321);
+    await expectNoDocumentOverflow(page);
+    // 640 CSS px odpowiada obszarowi 1280 px przy powiększeniu przeglądarki do 200%.
+    await page.setViewportSize({ width: 640, height: 900 });
+    await expectNoDocumentOverflow(page);
+
+    await context.close();
   });
 }

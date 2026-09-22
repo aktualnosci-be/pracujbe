@@ -408,14 +408,14 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
         {/* Kolumna wyników */}
         <div className="min-w-0">
           {/* Pasek narzędzi (mobile) */}
-          <div className="mb-4 flex items-center gap-3 lg:hidden">
+          <div className="mb-4 flex flex-col items-stretch gap-3 lg:hidden [&>details]:w-full [&>details>summary]:justify-between">
             <FilterSheet
               items={items}
               initial={sf}
               keyword={keyword}
               city={city}
               sort={sort}
-              className="flex-1"
+              className="w-full"
             />
             {sortMenu()}
           </div>
