@@ -12,7 +12,7 @@ const viewports = [
 type Locale = (typeof locales)[number];
 
 type Messages = {
-  common: { cancel: string };
+  common: { appName: string; cancel: string };
   dashboard: {
     addJob: string;
     navSummary: string;
@@ -168,6 +168,11 @@ for (const locale of locales) {
         const main = page.getByRole("main");
         await expect(main.getByRole("heading", { level: 1 })).toBeVisible();
         await expect(dashboard.mainAction(page, t)).toBeVisible();
+        await expect(
+          page
+            .getByRole("banner")
+            .getByRole("img", { name: t.common.appName, exact: true }),
+        ).toBeVisible();
         await expectNoHorizontalOverflow(
           page,
           `${locale}/${dashboard.role} (${viewport.label}): panel`,
