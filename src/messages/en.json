@@ -677,6 +677,7 @@
     "employerOffersLoadErrorHint": "Refresh the page and try again. Your jobs are still saved.",
     "employerOffersPaginationLabel": "Job pagination",
     "employerOffersPrevious": "Previous page",
+    "employerOffersFirstPage": "Back to the first page",
     "employerOffersPage": "Page {page}",
     "employerOffersNext": "Next page",
     "employerOffersPageEmpty": "There are no more jobs on this page.",

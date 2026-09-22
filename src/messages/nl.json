@@ -677,6 +677,7 @@
     "employerOffersLoadErrorHint": "Vernieuw de pagina en probeer het opnieuw. Uw vacatures zijn nog opgeslagen.",
     "employerOffersPaginationLabel": "Paginering van vacatures",
     "employerOffersPrevious": "Vorige pagina",
+    "employerOffersFirstPage": "Terug naar de eerste pagina",
     "employerOffersPage": "Pagina {page}",
     "employerOffersNext": "Volgende pagina",
     "employerOffersPageEmpty": "Op deze pagina staan geen vacatures meer.",

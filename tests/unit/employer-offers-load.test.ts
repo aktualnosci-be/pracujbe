@@ -16,6 +16,7 @@ function client(
   jobError: unknown = null,
   appRows: unknown[] = [],
   matchRows: unknown[] = [],
+  countError: unknown = null,
 ) {
   const query = {
     select: vi.fn().mockReturnThis(),
@@ -33,7 +34,7 @@ function client(
   };
   const appQueries: Array<{ select: ReturnType<typeof vi.fn>; eq: ReturnType<typeof vi.fn> }> = [];
   const matchQueries: Array<{ select: ReturnType<typeof vi.fn>; eq: ReturnType<typeof vi.fn> }> = [];
-  const relatedQuery = (rows: unknown[], queries: typeof appQueries) => {
+  const relatedQuery = (rows: unknown[], queries: typeof appQueries, error: unknown = null) => {
     let jobId = "";
     const query = {
       select: vi.fn().mockReturnThis(),
@@ -43,7 +44,7 @@ function client(
       }),
       is: vi.fn().mockReturnThis(),
       then: (resolve: (value: unknown) => unknown) =>
-        Promise.resolve({ count: rows.filter((row) => (row as { job_id: string }).job_id === jobId).length, error: null }).then(resolve),
+        Promise.resolve({ count: rows.filter((row) => (row as { job_id: string }).job_id === jobId).length, error }).then(resolve),
     };
     queries.push(query);
     return query;
@@ -58,7 +59,7 @@ function client(
         table === "jobs"
           ? query
           : table === "applications"
-            ? relatedQuery(appRows, appQueries)
+            ? relatedQuery(appRows, appQueries, countError)
             : relatedQuery(matchRows, matchQueries),
       ),
   };
@@ -98,6 +99,20 @@ describe("employer offers read state", () => {
     });
     expect(query.range).toHaveBeenCalledWith(0, 12);
     expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("does not show zero counts when a count request fails", async () => {
+    const error = { code: "COUNT_UNAVAILABLE" };
+    client([{ id: "job-1", title: "Offer", city: "Brussels", status: "active" }], null, [], [], error);
+    expect(await getCompanyJobsLoad()).toEqual({ status: "error" });
+    expect(captureError).toHaveBeenCalledWith(error, { area: "employer.getCompanyJobs" });
+  });
+
+  it("bounds invalid page numbers to the first page", async () => {
+    const { query } = client([]);
+    await getCompanyJobsLoad(0);
+    await getCompanyJobsLoad(Number.MAX_SAFE_INTEGER);
+    expect(query.range.mock.calls).toEqual([[0, 12], [0, 12]]);
   });
 
   it("reveals jobs beyond twelve without repeating page one", async () => {
