@@ -13,7 +13,7 @@ import { expect, test } from '@playwright/test';
  * ten test jest regresyjną strażą, a nie jednorazowym audytem.
  */
 
-const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const BLOCKING = new Set(['critical', 'serious']);
 
 /** Uruchamia axe na aktualnej stronie i zwraca naruszenia pogrupowane wg wagi. */
@@ -61,5 +61,25 @@ for (const p of PAGES) {
     expect(blocking, `Naruszenia a11y (critical/serious) na ${p.path}:\n${describe(blocking)}`).toEqual(
       [],
     );
+  });
+}
+
+for (const locale of ['pl', 'nl', 'fr', 'en']) {
+  test(`a11y: lista ofert, ekran 320 px (${locale}) — brak naruszeń critical/serious`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(`/${locale}/oferty-pracy`);
+    await page.getByRole('main').first().waitFor();
+    await page.waitForTimeout(1000);
+
+    const { blocking, advisory } = await analyze(page);
+    if (advisory.length > 0) {
+      console.log(`[a11y advisory] /${locale}/oferty-pracy (320 px):\n${describe(advisory)}`);
+    }
+    expect(
+      blocking,
+      `Naruszenia a11y (critical/serious) na /${locale}/oferty-pracy przy 320 px:\n${describe(blocking)}`,
+    ).toEqual([]);
   });
 }
