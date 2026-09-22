@@ -49,6 +49,7 @@ export function ApplicationStatusMenu({
 
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const restoreFocusAfterTransitionRef = React.useRef(false);
   const panelId = React.useId();
   const router = useRouter();
 
@@ -72,9 +73,18 @@ export function ApplicationStatusMenu({
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  // Wybranie opcji odmontowuje panel, a trigger jest chwilowo disabled podczas zapisu.
+  // Fokus wraca więc dopiero po zakończeniu transition, gdy kontrolka znów może go przyjąć.
+  React.useEffect(() => {
+    if (pending || !restoreFocusAfterTransitionRef.current) return;
+    restoreFocusAfterTransitionRef.current = false;
+    triggerRef.current?.focus();
+  }, [pending]);
+
   const handleSelect = (target: TargetStatus) => {
-    setOpen(false);
     if (pending) return;
+    restoreFocusAfterTransitionRef.current = true;
+    setOpen(false);
     startTransition(async () => {
       try {
         const res = await transitionApplication(applicationId, target);
