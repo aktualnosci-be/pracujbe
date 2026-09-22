@@ -223,9 +223,7 @@ export function DashboardShell({
           </button>
 
           <div className="flex flex-1 justify-center lg:hidden">
-            <span className="text-lg font-semibold tracking-tight text-foreground">
-              {tc('appName')}
-            </span>
+            <Logo />
           </div>
           <div className="hidden flex-1 lg:block" />
 
