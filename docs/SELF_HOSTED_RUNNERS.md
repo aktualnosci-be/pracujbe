@@ -104,7 +104,8 @@ do końca każdego joba. Pojedynczy zielony job nie potwierdza izolacji dwóch r
 
 | narzędzie | wersja | uwagi |
 |---|---|---|
-| Node.js | 22 (patrz `.nvmrc`) | `actions/setup-node@v4` dobierze wersję, ale bazowy Node przyspiesza |
+| GitHub Actions Runner | co najmniej 2.329.0 | projekt przyjmuje wyższe minimum uwzględniające `checkout@v7` i uwierzytelnione komendy Git z akcji kontenerowych; sam runtime Node 24 wymaga 2.327.1. Oba runnery raportowały 2.337.0 w CI 22.09.2026 |
+| Node.js | 22 (patrz `.nvmrc`) | `actions/setup-node@v7` dobierze wersję aplikacji; runtime samej akcji to niezależny Node 24 |
 | git | dowolna aktualna | checkout |
 | Przeglądarki Playwright | Chromium | zainstaluj raz: `npx playwright install --with-deps chromium` |
 | biblioteki systemowe | zależności Chromium | na Ubuntu: `npx playwright install-deps` (wymaga sudo) |
@@ -132,10 +133,10 @@ do końca każdego joba. Pojedynczy zielony job nie potwierdza izolacji dwóch r
 
 ## 4. Cache i wydajność
 
-- `actions/setup-node@v4` z `cache: npm` cache'uje `~/.npm`. Na self-hosted katalog `~` jest trwały,
+- `actions/setup-node@v7` z `cache: npm` cache'uje `~/.npm`. Na self-hosted katalog `~` jest trwały,
   więc kolejne przebiegi instalują szybciej.
-- Job `install` buduje `node_modules` raz i przekazuje je jako artefakt do pozostałych jobów
-  (`upload-artifact`/`download-artifact`), by nie instalować wielokrotnie.
+- Job `install` buduje `node_modules` raz i zapisuje je przez `actions/cache@v6`; pozostałe
+  joby odtwarzają ten sam klucz przez `actions/cache/restore@v6`.
 - Alternatywnie (jeden runner, sekwencyjnie) można scalić joby w jeden, by pominąć pakowanie artefaktu —
   aktualny podział daje równoległość, gdy runnerów jest kilka.
 
