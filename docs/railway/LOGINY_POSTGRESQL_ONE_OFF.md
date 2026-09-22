@@ -70,6 +70,12 @@ migracji nie są dokładnie zgodne z pełnym, ciągłym zakresem plików
 w repozytorium, role bazowe lub RLS są
 niezgodne albo portal nie jest pusty (`auth.users`, profile, firmy, oferty,
 aplikacje i propozycje mają mieć zero wierszy).
+Preflight sprawdza też właściciela bazy, schematów i wszystkich relacji,
+funkcji, typów oraz domyślnych ACL w schematach aplikacji. Własność ma należeć
+do migratora; w PostgreSQL schemat `public` może należeć do specjalnej roli
+`pg_database_owner`, pod warunkiem że samą bazę posiada migrator. Nawet
+pojedyncza tabela należąca do `authenticated` lub `anon` przerywa kontrolę,
+ponieważ właściciel tabeli omija jej RLS.
 
 ## 3. Provisioning i kontrola
 

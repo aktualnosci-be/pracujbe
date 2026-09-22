@@ -147,6 +147,44 @@ async function verifyTarget(client, env, migrations) {
     );
   }
 
+  // Sam brak własności loginów nie wystarcza: członkostwo pracujbe_app w anon
+  // i authenticated pozwoliłoby ominąć RLS, gdyby któraś z tych ról dostała
+  // własność tabeli. Sprawdzamy właściciela całego DDL aplikacji.
+  const ownershipDrift = (
+    await client.query(
+      `WITH expected AS (SELECT oid FROM pg_roles WHERE rolname = $1),
+      app_schemas AS (
+        SELECT oid, nspname, nspowner FROM pg_namespace
+        WHERE nspname IN ('public', 'auth', 'app_migrations')
+      ), drift AS (
+        SELECT 'database' AS kind FROM pg_database
+          WHERE datname = current_database() AND datdba <> (SELECT oid FROM expected)
+        UNION ALL
+        SELECT 'schema' FROM app_schemas
+          WHERE nspowner <> (SELECT oid FROM expected)
+            AND NOT (nspname = 'public'
+              AND nspowner = 'pg_database_owner'::regrole)
+        UNION ALL
+        SELECT 'relation' FROM pg_class c JOIN app_schemas n ON n.oid = c.relnamespace
+          WHERE c.relowner <> (SELECT oid FROM expected)
+        UNION ALL
+        SELECT 'function' FROM pg_proc p JOIN app_schemas n ON n.oid = p.pronamespace
+          WHERE p.proowner <> (SELECT oid FROM expected)
+        UNION ALL
+        SELECT 'type' FROM pg_type t JOIN app_schemas n ON n.oid = t.typnamespace
+          WHERE t.typowner <> (SELECT oid FROM expected)
+        UNION ALL
+        SELECT 'default_acl' FROM pg_default_acl d
+          JOIN app_schemas n ON n.oid = d.defaclnamespace
+          WHERE d.defaclrole <> (SELECT oid FROM expected)
+      ) SELECT count(*)::integer AS count FROM drift`,
+      [expectedUser],
+    )
+  ).rows[0];
+  if (ownershipDrift?.count !== 0) {
+    throw new Error("Własność bazy lub obiektów aplikacji odbiega od migratora.");
+  }
+
   const history = (
     await client.query(
       `SELECT name, checksum FROM app_migrations.history ORDER BY name`,
