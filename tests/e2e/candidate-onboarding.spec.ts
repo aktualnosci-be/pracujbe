@@ -62,6 +62,14 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   await page.getByRole('button', { name: 'Dodaj', exact: true }).click();
   await expectMinimumTarget(page.getByRole('button', { name: 'Usuń: VCA' }));
 
+  const horizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(
+    horizontalOverflow,
+    'Kreator nie powinien przewijać się poziomo przy 320 px.',
+  ).toBeLessThanOrEqual(1);
+
   await page.getByRole('button', { name: /Dalej: Preferencje i podsumowanie/ }).click();
 
   // Krok 6: wymagane są dostępność i zgoda.
