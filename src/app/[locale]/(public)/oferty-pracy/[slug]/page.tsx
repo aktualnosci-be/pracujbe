@@ -143,7 +143,7 @@ function buildJsonLd(job: JobDetail, url: string): Record<string, unknown> {
     month: 'MONTH',
     year: 'YEAR',
   };
-  const unitText = SALARY_UNIT[job.salaryPeriod ?? 'month'];
+  const unitText = job.salaryPeriod ? SALARY_UNIT[job.salaryPeriod] : undefined;
 
   const hasSalary = job.salaryMin !== undefined || job.salaryMax !== undefined;
   const baseSalary = hasSalary
@@ -154,7 +154,7 @@ function buildJsonLd(job: JobDetail, url: string): Record<string, unknown> {
           '@type': 'QuantitativeValue',
           ...(job.salaryMin !== undefined ? { minValue: job.salaryMin } : {}),
           ...(job.salaryMax !== undefined ? { maxValue: job.salaryMax } : {}),
-          unitText,
+          ...(unitText ? { unitText } : {}),
         },
       }
     : undefined;
@@ -215,6 +215,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   const salaryLabel = formatSalaryRange(job, locale, {
     from: value => tJobs('passport.salaryFrom', { value }),
     to: value => tJobs('passport.salaryTo', { value }),
+    period: period => tJobs(`passport.salaryPeriods.${period}`),
   });
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
@@ -547,6 +548,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                     const itemSalary = formatSalaryRange(item, locale, {
                       from: value => tJobs('passport.salaryFrom', { value }),
                       to: value => tJobs('passport.salaryTo', { value }),
+                      period: period => tJobs(`passport.salaryPeriods.${period}`),
                     });
                     return (
                       <li key={item.id} className="py-3 first:pt-0 last:pb-0">
