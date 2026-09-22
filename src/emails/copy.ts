@@ -114,6 +114,37 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
   },
 };
 
+/** Etykiety markowej karty w wiadomości z propozycją pracy. */
+export const jobOfferPassportCopy: Record<
+  Locale,
+  { title: string; jobTitle: string; companyName: string; salary: string }
+> = {
+  pl: {
+    title: 'Paszport pracy',
+    jobTitle: 'Stanowisko',
+    companyName: 'Firma',
+    salary: 'Wynagrodzenie',
+  },
+  nl: {
+    title: 'Werkpaspoort',
+    jobTitle: 'Functie',
+    companyName: 'Bedrijf',
+    salary: 'Loon',
+  },
+  fr: {
+    title: 'Passeport emploi',
+    jobTitle: 'Poste',
+    companyName: 'Entreprise',
+    salary: 'Rémunération',
+  },
+  en: {
+    title: 'Job passport',
+    jobTitle: 'Position',
+    companyName: 'Company',
+    salary: 'Salary',
+  },
+};
+
 /**
  * Podstawia tokeny `{token}` w szablonie wartościami z `vars`.
  * Brakujące / puste (undefined | null) wartości podstawiane są jako pusty ciąg.
