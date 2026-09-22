@@ -1291,6 +1291,11 @@ delete from public.company_members where company_id = :'COMPA' and profile_id = 
 -- ============================================================================
 -- II. Grupowane liczniki publicznych ofert (0064) — anon bez SELECT na tabelach
 -- ============================================================================
+reset role;
+-- Jedyny pasujący rekord construction jest aktywny, ale firma pozostaje unverified.
+-- RPC musi zachować requested row i zwrócić 0, zamiast usunąć grupę przez WHERE po LEFT JOIN.
+update public.companies set status = 'unverified' where id = :'COMPC';
+update public.jobs set status = 'active', expires_at = null where id = :'JOBC';
 set role anon; reset app.current_uid;
 select pg_temp.assert(
   (select total from public.get_public_job_category_counts(array['warehouse']) where key = 'warehouse') = 2,
@@ -1301,6 +1306,14 @@ select pg_temp.assert(
 select pg_temp.assert(
   (select total from public.get_public_job_category_counts(array['construction']) where key = 'construction') = 0,
   'II3 licznik wyklucza ofertę niezweryfikowanej firmy');
+select pg_temp.assert(
+  (select count(*) from public.get_public_job_category_counts(array['construction'])
+    where key = 'construction' and total = 0) = 1,
+  'II3b jedyne niezweryfikowane dopasowanie zwraca jawny wiersz construction=0');
+select pg_temp.assert(
+  (select count(*) from public.get_public_job_category_counts(array[repeat('x', 150)])
+    where length(key) = 100 and total = 0) = 1,
+  'II3c klucz kategorii jest ograniczony do 100 znaków tak jak miasto');
 select pg_temp.assert(
   (select total from public.get_public_job_city_counts(array['Gandawa']) where key = 'Gandawa') = 2,
   'II4 anon widzi pełny grupowany licznik miasta');

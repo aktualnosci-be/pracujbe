@@ -5,12 +5,12 @@ create or replace function public.get_public_job_category_counts(p_categories te
 returns table (key text, total bigint)
 language sql stable security definer set search_path = public as $$
   with requested(key) as (
-    select distinct value
+    select distinct left(value, 100)
     from unnest(coalesce(p_categories, '{}'::text[])) value
     where value is not null and value <> ''
     limit 100
   )
-  select requested.key, count(j.id)::bigint
+  select requested.key, count(c.id)::bigint
   from requested
   left join public.jobs j
     on j.category::text = requested.key
@@ -18,7 +18,6 @@ language sql stable security definer set search_path = public as $$
    and (j.expires_at is null or j.expires_at > now())
   left join public.companies c
     on c.id = j.company_id and c.status = 'verified' and c.deleted_at is null
-  where j.id is null or c.id is not null
   group by requested.key;
 $$;
 
@@ -31,7 +30,7 @@ language sql stable security definer set search_path = public as $$
     where value is not null and value <> ''
     limit 100
   )
-  select requested.key, count(j.id)::bigint
+  select requested.key, count(c.id)::bigint
   from requested
   left join public.jobs j
     on j.city ilike '%' || requested.key || '%'
@@ -39,7 +38,6 @@ language sql stable security definer set search_path = public as $$
    and (j.expires_at is null or j.expires_at > now())
   left join public.companies c
     on c.id = j.company_id and c.status = 'verified' and c.deleted_at is null
-  where j.id is null or c.id is not null
   group by requested.key;
 $$;
 

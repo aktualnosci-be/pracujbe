@@ -10,7 +10,9 @@ Kafle `/praca` odczytują liczniki przez dwa RPC `SECURITY DEFINER`:
 Każde RPC wykonuje jedno grupowane zapytanie dla całego przekazanego zestawu. Zwraca wyłącznie
 klucz filtra i liczbę ofert spełniających publiczny zakres listy: oferta aktywna, niewygasła i
 nieusunięta oraz zweryfikowana, nieusunięta firma. Licznik miasta zachowuje semantykę filtra
-listy (`ILIKE %miasto%`). Role `anon` i `authenticated` mają tylko `EXECUTE`; bezpośredni
+listy (`ILIKE %miasto%`). Klucze obu wymiarów są ograniczane do 100 znaków. Żądany klucz
+zwraca jawne `0`, także gdy jedyne pasujące oferty należą do niezweryfikowanych firm. Role
+`anon` i `authenticated` mają tylko `EXECUTE`; bezpośredni
 `SELECT` z `jobs` i `companies` pozostaje odebrany.
 
 Migracja: `supabase/migrations/0064_public_job_facet_counts.sql`.
