@@ -143,10 +143,11 @@ const styles = {
     color: palette.background,
     borderRadius: '8px',
     fontSize: '15px',
+    lineHeight: '18px',
     fontWeight: 600,
     textDecoration: 'none',
     textAlign: 'center',
-    padding: '12px 24px',
+    padding: '15px 24px',
     display: 'inline-block',
   } satisfies CSSProperties,
   rawLink: {
