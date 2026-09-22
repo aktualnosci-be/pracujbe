@@ -24,15 +24,14 @@ import {
   SALARY_MAX_BOUND,
   SALARY_MIN_BOUND,
   SALARY_STEP,
-  countMatches,
   emptySidebarFilters,
   sidebarFiltersToParams,
   type AccommodationValue,
   type DateValue,
-  type FacetItem,
   type SidebarFilters,
   type SortValue,
 } from '@/components/public/job-filters';
+import type { JobFilterFacets } from '@/types/job-filter-facets';
 
 /**
  * Panel filtrów listy ofert (wg makiety 02-jobs-list).
@@ -40,7 +39,7 @@ import {
  * `FilterFields` to KONTROLOWANY zestaw pól (kategoria, lokalizacja, wynagrodzenie, rodzaj
  * umowy, zakwaterowanie, dodatkowe, data) — współdzielony przez wariant desktopowy
  * (`FilterSidebar`) i mobilny bottom-sheet (`FilterSheet`). Liczniki przy pozycjach są
- * niezależne (liczone z przekazanego zbioru `items`), a przycisk „Pokaż N ofert” pokazuje
+ * niezależne (liczone dokładnie po stronie bazy), a przycisk „Pokaż N ofert” pokazuje
  * liczbę pasującą do BIEŻĄCEGO (edytowanego) wyboru — na żywo.
  *
  * Model: zmiany są PENDING (lokalny stan), zatwierdzane dopiero przyciskiem „Pokaż N ofert”,
@@ -59,43 +58,94 @@ function toggle<T>(list: readonly T[], value: T): T[] {
     : [...list, value];
 }
 
-/* ------------------------------------------------------------------ liczniki */
+export function useLiveFacets(
+  initial: JobFilterFacets,
+  initialFilters: SidebarFilters,
+  filters: SidebarFilters,
+  base: { keyword?: string; city?: string },
+): {
+  facets: JobFilterFacets;
+  status: 'idle' | 'loading' | 'error';
+  retry: () => void;
+} {
+  const locale = useLocale();
+  const [retryAttempt, setRetryAttempt] = React.useState(0);
+  const query = React.useMemo(() => {
+    const params = new URLSearchParams(sidebarFiltersToParams(filters));
+    params.set('locale', locale);
+    if (base.keyword) params.set('keyword', base.keyword);
+    if (base.city) params.set('city', base.city);
+    return params.toString();
+  }, [base.city, base.keyword, filters, locale]);
+  const initialQuery = React.useMemo(() => {
+    const params = new URLSearchParams(sidebarFiltersToParams(initialFilters));
+    params.set('locale', locale);
+    if (base.keyword) params.set('keyword', base.keyword);
+    if (base.city) params.set('city', base.city);
+    return params.toString();
+  }, [base.city, base.keyword, initialFilters, locale]);
+  const requestSequence = React.useRef(0);
+  const [result, setResult] = React.useState({
+    query: initialQuery,
+    retryAttempt,
+    facets: initial,
+    error: false,
+  });
 
-function useFacetCounts(items: readonly FacetItem[]) {
-  return React.useMemo(() => {
-    const category = new Map<string, number>();
-    const location = new Map<string, number>();
-    const contract = new Map<string, number>();
-    let accommodationProvided = 0;
-    let immediate = 0;
-    let noLanguage = 0;
-
-    for (const item of items) {
-      category.set(item.category, (category.get(item.category) ?? 0) + 1);
-      location.set(item.city, (location.get(item.city) ?? 0) + 1);
-      contract.set(
-        item.contractType,
-        (contract.get(item.contractType) ?? 0) + 1,
-      );
-      if (item.accommodation) accommodationProvided += 1;
-      if (item.immediate) immediate += 1;
-      if (item.noLanguageRequired) noLanguage += 1;
+  React.useEffect(() => {
+    const sequence = ++requestSequence.current;
+    if (query === initialQuery) {
+      setResult({
+        query,
+        retryAttempt,
+        facets: initial,
+        error: false,
+      });
+      return;
     }
-
-    const locationOptions = [...location.entries()]
-      .map(([city, count]) => ({ city, count }))
-      .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city));
-
-    return {
-      category,
-      contract,
-      locationOptions,
-      accommodationProvided,
-      accommodationUnavailable: items.length - accommodationProvided,
-      immediate,
-      noLanguage,
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/job-filter-facets?${query}`, {
+        signal: controller.signal,
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error('facet request failed');
+          return response.json() as Promise<JobFilterFacets>;
+        })
+        .then((next) => {
+          if (sequence === requestSequence.current)
+            setResult({
+              query,
+              retryAttempt,
+              facets: next,
+              error: false,
+            });
+        })
+        .catch((error: unknown) => {
+          if (
+            sequence === requestSequence.current &&
+            !(error instanceof DOMException && error.name === 'AbortError')
+          )
+            setResult({
+              query,
+              retryAttempt,
+              facets: initial,
+              error: true,
+            });
+        });
+    }, 150);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
     };
-  }, [items]);
+  }, [initial, initialQuery, query, retryAttempt]);
+
+  const current = result.query === query && result.retryAttempt === retryAttempt;
+  return {
+    facets: query === initialQuery ? initial : result.facets,
+    status: current ? (result.error ? 'error' : 'idle') : 'loading',
+    retry: React.useCallback(() => setRetryAttempt((value) => value + 1), []),
+  };
 }
 
 /* --------------------------------------------------------------- wiersz check */
@@ -128,7 +178,10 @@ function CheckRow({
         {label}
       </Label>
       {count !== undefined ? (
-        <span className="text-xs tabular-nums text-muted-foreground">
+        <span
+          data-filter-count={id}
+          className="text-xs tabular-nums text-muted-foreground"
+        >
           {count}
         </span>
       ) : null}
@@ -151,14 +204,14 @@ function SectionTitle({
 /* --------------------------------------------------------------- FilterFields */
 
 export interface FilterFieldsProps {
-  items: readonly FacetItem[];
+  facets: JobFilterFacets;
   value: SidebarFilters;
   onChange: (next: SidebarFilters) => void;
   idPrefix: string;
 }
 
 export function FilterFields({
-  items,
+  facets,
   value,
   onChange,
   idPrefix,
@@ -167,8 +220,6 @@ export function FilterFields({
   const t = useTranslations('filters');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
-
-  const counts = useFacetCounts(items);
 
   const dateLabel = React.useCallback(
     (option: DateValue): string => {
@@ -210,7 +261,13 @@ export function FilterFields({
     : CATEGORY_KEYS.slice(0, COLLAPSED_COUNT);
   const hiddenCategoryCount = CATEGORY_KEYS.length - COLLAPSED_COUNT;
 
-  const filteredLocations = counts.locationOptions.filter((opt) =>
+  const locationOptions = [
+    ...value.locations
+      .filter((city) => !facets.locations.some((option) => option.city === city))
+      .map((city) => ({ city, count: 0 })),
+    ...facets.locations,
+  ];
+  const filteredLocations = locationOptions.filter((opt) =>
     opt.city.toLowerCase().includes(locationQuery.trim().toLowerCase()),
   );
   const visibleLocations =
@@ -236,7 +293,7 @@ export function FilterFields({
               key={key}
               id={`${idPrefix}-cat-${key}`}
               label={tCat(key)}
-              count={counts.category.get(key) ?? 0}
+              count={facets.categories[key] ?? 0}
               checked={value.categories.includes(key)}
               onChange={() =>
                 patch({ categories: toggle(value.categories, key) })
@@ -356,7 +413,7 @@ export function FilterFields({
               key={key}
               id={`${idPrefix}-ct-${key}`}
               label={tContract(key)}
-              count={counts.contract.get(key) ?? 0}
+              count={facets.contracts[key] ?? 0}
               checked={value.contractTypes.includes(key)}
               onChange={() =>
                 patch({ contractTypes: toggle(value.contractTypes, key) })
@@ -372,7 +429,7 @@ export function FilterFields({
         <CheckRow
           id={`${idPrefix}-acc-provided`}
           label={t('provided')}
-          count={counts.accommodationProvided}
+          count={facets.accommodation.provided}
           checked={value.accommodation.includes('provided')}
           onChange={() =>
             patch({
@@ -386,7 +443,7 @@ export function FilterFields({
         <CheckRow
           id={`${idPrefix}-acc-unavailable`}
           label={t('unavailable')}
-          count={counts.accommodationUnavailable}
+          count={facets.accommodation.unavailable}
           checked={value.accommodation.includes('unavailable')}
           onChange={() =>
             patch({
@@ -405,14 +462,14 @@ export function FilterFields({
         <CheckRow
           id={`${idPrefix}-immediate`}
           label={t('immediate')}
-          count={counts.immediate}
+          count={facets.immediate}
           checked={value.immediate}
           onChange={(checked) => patch({ immediate: checked })}
         />
         <CheckRow
           id={`${idPrefix}-nolang`}
           label={t('noLanguageRequired')}
-          count={counts.noLanguage}
+          count={facets.noLanguage}
           checked={value.noLanguageRequired}
           onChange={(checked) => patch({ noLanguageRequired: checked })}
         />
@@ -448,7 +505,7 @@ export function FilterFields({
 /* -------------------------------------------------------------- FilterSidebar */
 
 export interface FilterSidebarProps {
-  items: FacetItem[];
+  facets: JobFilterFacets;
   initial: SidebarFilters;
   keyword?: string;
   city?: string;
@@ -471,7 +528,7 @@ function buildHref(
 }
 
 export function FilterSidebar({
-  items,
+  facets: initialFacets,
   initial,
   keyword,
   city,
@@ -486,7 +543,10 @@ export function FilterSidebar({
   const [pending, setPending] = React.useState<SidebarFilters>(initial);
   React.useEffect(() => setPending(initial), [initialKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const total = countMatches(items, pending);
+  const liveFacets = useLiveFacets(initialFacets, initial, pending, {
+    keyword,
+    city,
+  });
 
   const apply = () =>
     router.push(buildHref(pathname, pending, { keyword, city, sort }));
@@ -516,14 +576,32 @@ export function FilterSidebar({
       </div>
 
       <FilterFields
-        items={items}
+        facets={liveFacets.facets}
         value={pending}
         onChange={setPending}
         idPrefix="d"
       />
 
-      <Button type="button" onClick={apply} className="mt-6 w-full rounded-xl">
-        {t('showResults', { count: total })}
+      {liveFacets.status === 'error' ? (
+        <div className="mt-6 space-y-2" role="alert">
+          <p className="text-sm text-destructive">{t('countError')}</p>
+          <Button type="button" variant="outline" onClick={liveFacets.retry} className="w-full">
+            {t('retryCount')}
+          </Button>
+        </div>
+      ) : null}
+      <Button
+        type="button"
+        onClick={apply}
+        disabled={liveFacets.status !== 'idle'}
+        aria-busy={liveFacets.status === 'loading'}
+        className="mt-6 w-full rounded-xl"
+      >
+        {liveFacets.status === 'idle'
+          ? t('showResults', { count: liveFacets.facets.total })
+          : liveFacets.status === 'loading'
+            ? t('countLoading')
+            : t('countUnavailable')}
       </Button>
     </div>
   );

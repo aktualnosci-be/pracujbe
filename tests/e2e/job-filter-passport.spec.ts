@@ -1,8 +1,8 @@
-import { readFileSync } from "fs";
-import { resolve } from "path";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
-const locales = ["pl", "nl", "fr", "en"] as const;
+const locales = ['pl', 'nl', 'fr', 'en'] as const;
 
 type Locale = (typeof locales)[number];
 
@@ -15,14 +15,15 @@ type Messages = {
   };
   jobs: {
     pageTitle: string;
+    empty: string;
   };
 };
 
 function messages(locale: Locale): Messages {
   return JSON.parse(
     readFileSync(
-      resolve(process.cwd(), "src", "messages", `${locale}.json`),
-      "utf-8",
+      resolve(process.cwd(), 'src', 'messages', `${locale}.json`),
+      'utf-8',
     ),
   ) as Messages;
 }
@@ -38,7 +39,7 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
 async function undersizedTargets(
   root: Locator,
 ): Promise<Array<{ target: string | null; height: number }>> {
-  const targets = root.locator("[data-filter-target]");
+  const targets = root.locator('[data-filter-target]');
   expect(await targets.count()).toBeGreaterThanOrEqual(8);
 
   return targets.evaluateAll((elements) =>
@@ -46,7 +47,7 @@ async function undersizedTargets(
       .map((element) => {
         const bounds = element.getBoundingClientRect();
         return {
-          target: element.getAttribute("data-filter-target"),
+          target: element.getAttribute('data-filter-target'),
           width: Math.round(bounds.width),
           height: Math.round(bounds.height),
         };
@@ -60,8 +61,36 @@ async function expectTargetsAtLeast48(root: Locator): Promise<void> {
 }
 
 function resultsPattern(template: string): RegExp {
-  return new RegExp(`^${template.replace("{count}", "\\d+")}$`);
+  return new RegExp(`^${template.replace('{count}', '\\d+')}$`);
 }
+
+test('formularz no-JS zachowuje pojedynczą lokalizację spoza facetów przy zerowym wyniku', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    javaScriptEnabled: false,
+    viewport: { width: 320, height: 800 },
+  });
+  const page = await context.newPage();
+  const location = 'Zero Jobs Place';
+  const t = messages('en');
+
+  await page.goto(`/en/oferty-pracy?location=${encodeURIComponent(location)}`);
+  await expect(page.getByText(t.jobs.empty)).toBeVisible();
+
+  const form = page.locator('[data-filter-passport="no-js"]');
+  const select = form.locator('select[name="location"]');
+  await expect(select).toHaveValue(location);
+  await expect(select.locator(`option[value="${location}"]`)).toHaveCount(1);
+
+  await form.locator('button[type="submit"]').click();
+  await page.waitForLoadState('domcontentloaded');
+  expect(new URL(page.url()).searchParams.get('location')).toBe(location);
+  await expect(page.getByText(t.jobs.empty)).toBeVisible();
+  await expect(page.locator('select[name="location"]')).toHaveValue(location);
+
+  await context.close();
+});
 
 for (const locale of locales) {
   test(`filtry paszportowe zachowują SSR i hierarchię na desktopie i mobile: ${locale}`, async ({
@@ -77,24 +106,38 @@ for (const locale of locales) {
 
     const rail = desktop.locator('[data-filter-passport="desktop"]');
     await expect(rail).toBeVisible();
-    await expect(rail).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-    await expect(rail).toHaveCSS("border-right-style", "solid");
-    await expect(rail).toHaveCSS("border-left-width", "0px");
-    await expect(rail.locator("section").nth(1)).toHaveCSS(
-      "border-top-style",
-      "solid",
+    await expect(rail).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(rail).toHaveCSS('border-right-style', 'solid');
+    await expect(rail).toHaveCSS('border-left-width', '0px');
+    await expect(rail.locator('section').nth(1)).toHaveCSS(
+      'border-top-style',
+      'solid',
     );
     await expectTargetsAtLeast48(rail);
+    const visibleLabels = rail.locator(
+      '[data-filter-target="checkbox-label"]:visible',
+    );
+    for (let index = 0; index < (await visibleLabels.count()); index += 1) {
+      const id = await visibleLabels.nth(index).getAttribute('for');
+      expect(
+        id,
+        'każda widoczna opcja filtra ma powiązany identyfikator',
+      ).toBeTruthy();
+      await expect(rail.locator(`[data-filter-count="${id}"]`)).toHaveCount(1);
+      await expect(rail.locator(`[data-filter-count="${id}"]`)).toHaveText(
+        /^\d+$/,
+      );
+    }
     await expectNoHorizontalOverflow(desktop);
 
-    const desktopImmediate = rail.getByRole("checkbox", {
+    const desktopImmediate = rail.getByRole('checkbox', {
       name: t.filters.immediate,
     });
     await desktopImmediate.focus();
     await expect(desktopImmediate).toBeFocused();
     await desktopImmediate.click();
     await rail
-      .getByRole("button", { name: resultsPattern(t.filters.showResults) })
+      .getByRole('button', { name: resultsPattern(t.filters.showResults) })
       .click();
     await expect(desktop).toHaveURL(/(?:\?|&)immediate=1(?:&|$)/);
     await desktopContext.close();
@@ -106,25 +149,25 @@ for (const locale of locales) {
     await mobile.goto(`/${locale}/oferty-pracy`);
     const trigger = mobile.locator('[data-filter-passport="mobile-trigger"]');
     await expect(trigger).toBeVisible();
-    await expect(trigger).toHaveCSS("min-height", "48px");
+    await expect(trigger).toHaveCSS('min-height', '48px');
     // Przy pierwszym, zimnym wejściu czekamy na podpięcie wyspy klienckiej Radix.
     await mobile.waitForTimeout(500);
     await trigger.click();
 
     const sheet = mobile.locator('[data-filter-passport="mobile-sheet"]');
     await expect(sheet).toBeVisible();
-    const close = sheet.getByRole("button", { name: t.filters.close });
+    const close = sheet.getByRole('button', { name: t.filters.close });
     const closeBox = await close.boundingBox();
     expect(closeBox?.width).toBeGreaterThanOrEqual(48);
     expect(closeBox?.height).toBeGreaterThanOrEqual(48);
-    await expect(sheet.locator("section").nth(1)).toHaveCSS(
-      "border-top-style",
-      "solid",
+    await expect(sheet.locator('section').nth(1)).toHaveCSS(
+      'border-top-style',
+      'solid',
     );
     await expectTargetsAtLeast48(sheet);
     await expectNoHorizontalOverflow(mobile);
 
-    const mobileImmediate = sheet.getByRole("checkbox", {
+    const mobileImmediate = sheet.getByRole('checkbox', {
       name: t.filters.immediate,
     });
     await mobileImmediate.click();
@@ -134,13 +177,13 @@ for (const locale of locales) {
     // Kontrola ujemna: zamknięcie odrzuca stan oczekujący zamiast potajemnie zmieniać URL.
     await trigger.click();
     await expect(
-      sheet.getByRole("checkbox", { name: t.filters.immediate }),
+      sheet.getByRole('checkbox', { name: t.filters.immediate }),
     ).not.toBeChecked();
-    await sheet.getByRole("checkbox", { name: t.filters.immediate }).click();
-    const mobileCta = sheet.getByRole("button", {
+    await sheet.getByRole('checkbox', { name: t.filters.immediate }).click();
+    const mobileCta = sheet.getByRole('button', {
       name: resultsPattern(t.filters.showResults),
     });
-    await expect(mobileCta).toHaveCSS("min-height", "48px");
+    await expect(mobileCta).toHaveCSS('min-height', '48px');
     await mobileCta.click();
     await expect(mobile).toHaveURL(/(?:\?|&)immediate=1(?:&|$)/);
     await expectNoHorizontalOverflow(mobile);
@@ -152,18 +195,18 @@ for (const locale of locales) {
     });
     const noJs = await noJsContext.newPage();
     const expectedNoJsParams = new URLSearchParams({
-      keyword: "operator",
-      city: "Brussels",
-      sort: "salary",
-      category: "construction,transport",
-      location: "Brussels,Antwerp",
-      contractType: "permanent,temporary",
-      accommodation: "provided,unavailable",
-      immediate: "1",
+      keyword: 'operator',
+      city: 'Brussels',
+      sort: 'salary',
+      category: 'construction,transport',
+      location: 'Brussels,Antwerp',
+      contractType: 'permanent,temporary',
+      accommodation: 'provided,unavailable',
+      immediate: '1',
     });
     await noJs.goto(`/${locale}/oferty-pracy?${expectedNoJsParams.toString()}`);
     await expect(
-      noJs.getByRole("heading", { level: 1, name: t.jobs.pageTitle }),
+      noJs.getByRole('heading', { level: 1, name: t.jobs.pageTitle }),
     ).toBeVisible();
     await expect(
       noJs.locator('[data-filter-passport="mobile-trigger"]'),
@@ -171,26 +214,26 @@ for (const locale of locales) {
     const noJsForm = noJs.locator('[data-filter-passport="no-js"]');
     await expect(noJsForm).toBeVisible();
     await expect(
-      noJsForm.getByRole("checkbox", { name: t.filters.immediate }),
+      noJsForm.getByRole('checkbox', { name: t.filters.immediate }),
     ).toBeChecked();
-    await noJsForm.getByRole("checkbox", { name: /.+/ }).last().check();
+    await noJsForm.getByRole('checkbox', { name: /.+/ }).last().check();
     await noJsForm.locator('button[type="submit"]').click();
     await expect(noJs).toHaveURL(/(?:\?|&)noLang=1(?:&|$)/);
-    await noJs.waitForLoadState("domcontentloaded");
-    await expect(noJs.locator("html")).toBeAttached();
+    await noJs.waitForLoadState('domcontentloaded');
+    await expect(noJs.locator('html')).toBeAttached();
     const submittedParams = new URL(noJs.url()).searchParams;
     for (const [key, value] of expectedNoJsParams) {
       expect(submittedParams.get(key), key).toBe(value);
     }
-    expect(submittedParams.get("noLang")).toBe("1");
+    expect(submittedParams.get('noLang')).toBe('1');
     await expectNoHorizontalOverflow(noJs);
     await noJsContext.close();
   });
 }
 
-test("kontrola ujemna wykrywa zbyt mały cel filtra", async ({ page }) => {
+test('kontrola ujemna wykrywa zbyt mały cel filtra', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/pl/oferty-pracy");
+  await page.goto('/pl/oferty-pracy');
   const rail = page.locator('[data-filter-passport="desktop"]');
   await expectTargetsAtLeast48(rail);
 
@@ -201,7 +244,7 @@ test("kontrola ujemna wykrywa zbyt mały cel filtra", async ({ page }) => {
   await expect
     .poll(async () =>
       (await undersizedTargets(rail)).some(
-        ({ target, height }) => target === "checkbox-label" && height < 48,
+        ({ target, height }) => target === 'checkbox-label' && height < 48,
       ),
     )
     .toBe(true);

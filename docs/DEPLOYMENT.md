@@ -54,3 +54,20 @@ produkcyjnej bazy. Zmiany schematu wymagają osobnego, jawnego planu zgodnego z
 Nie uruchamiaj drugiej produkcji w Vercel. `vercel.json` pozostaje przejściowo,
 ponieważ istniejące trasy cron są jeszcze migrowane; nie jest konfiguracją
 docelowego hostingu.
+
+## Wersja widoczna w stopce
+
+Każdy build otrzymuje automatyczny identyfikator w formacie
+`0.YYYYMMDD.M+SHA`, na przykład `0.20260922.41945987+1e4b285f`.
+Data i liczba milisekund od północy są liczone w UTC, a skrócony SHA pochodzi z
+`RAILWAY_GIT_COMMIT_SHA` (lokalnie również z `GITHUB_SHA`). Wersja oraz czas
+pokazywany obok niej powstają z tego samego momentu. Produkcyjny build Railway
+uruchomiony z GitHuba zawsze zawiera SHA; lokalny build bez tych zmiennych ma
+samą część liczbową i nadal da się go odróżnić po czasie.
+
+Automatyczne wersje mają zawsze major `0`. Upływ czasu, liczba wdrożeń ani
+ukończenie pojedynczego etapu nie mogą samodzielnie utworzyć `1.0.0`.
+Wersja `1.0.0` wymaga jawnej decyzji właściciela po odbiorze checklisty
+premiery; jej wprowadzenie będzie osobną zmianą w mechanizmie wersjonowania.
+Wartość `version` w `package.json` opisuje prywatny pakiet Node i nie jest
+numerem wdrożenia widocznym dla użytkownika.
