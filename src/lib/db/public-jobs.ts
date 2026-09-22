@@ -84,6 +84,71 @@ export async function getPublicJobsCount(pool: TransactionPool, params: GetJobsP
   return withUserTransaction(pool, null, (transaction) => readCount(transaction, filterValues(params)));
 }
 
+type FacetCountRow = { key: unknown; total: unknown };
+
+function facetCounts(keys: readonly string[], rows: FacetCountRow[]): Record<string, number> {
+  const counts = Object.fromEntries(keys.map((key) => [key, 0]));
+  for (const row of rows) {
+    if (
+      typeof row.key !== 'string' ||
+      !Object.hasOwn(counts, row.key) ||
+      typeof row.total !== 'number' ||
+      !Number.isSafeInteger(row.total) ||
+      row.total < 0
+    ) {
+      throw new Error('Nieprawidłowy agregat publicznych ofert.');
+    }
+    counts[row.key] = row.total;
+  }
+  return counts;
+}
+
+/** Jeden grupowany odczyt dla całego zestawu kategorii, w publicznym zakresie listy ofert. */
+export async function getPublicJobCategoryCounts(
+  pool: TransactionPool,
+  keys: readonly string[],
+): Promise<Record<string, number>> {
+  if (keys.length === 0) return {};
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT j.category::text AS key, to_jsonb(count(*)) AS total
+       FROM public.jobs j
+       JOIN public.companies c ON c.id = j.company_id
+       WHERE j.status = 'active' AND j.deleted_at IS NULL
+         AND (j.expires_at IS NULL OR j.expires_at > now())
+         AND c.status = 'verified' AND c.deleted_at IS NULL
+         AND j.category::text = ANY($1::text[])
+       GROUP BY j.category::text`,
+      [keys],
+    )) as { rows: FacetCountRow[] };
+    return facetCounts(keys, result.rows);
+  });
+}
+
+/** Jeden grupowany odczyt zachowujący semantykę filtra miasta (`ILIKE %wartość%`). */
+export async function getPublicJobCityCounts(
+  pool: TransactionPool,
+  cities: readonly string[],
+): Promise<Record<string, number>> {
+  if (cities.length === 0) return {};
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT requested.city AS key, to_jsonb(count(j.id)) AS total
+       FROM unnest($1::text[]) AS requested(city)
+       LEFT JOIN public.jobs j
+         ON j.city ILIKE '%' || left(requested.city, 100) || '%'
+        AND j.status = 'active' AND j.deleted_at IS NULL
+        AND (j.expires_at IS NULL OR j.expires_at > now())
+       LEFT JOIN public.companies c
+         ON c.id = j.company_id AND c.status = 'verified' AND c.deleted_at IS NULL
+       WHERE j.id IS NULL OR c.id IS NOT NULL
+       GROUP BY requested.city`,
+      [cities],
+    )) as { rows: FacetCountRow[] };
+    return facetCounts(cities, result.rows);
+  });
+}
+
 export async function getPublicJob(pool: TransactionPool, slug: string, requestedLocale: string): Promise<PublicJobRow | null> {
   return withUserTransaction(pool, null, async (transaction) => {
     const result = await transaction.query(`SELECT to_jsonb(job) AS job
