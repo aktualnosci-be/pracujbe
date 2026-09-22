@@ -8,7 +8,6 @@ import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getJobs } from '@/lib/jobs';
 import { cn } from '@/lib/utils';
-import { BelgiumSkyline } from '@/components/brand/BelgiumSkyline';
 import { FilterSidebar } from '@/components/public/FilterSidebar';
 import { FilterSheet } from '@/components/public/FilterSheet';
 import { JobCard } from '@/components/public/JobCard';
@@ -323,25 +322,23 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
         </ol>
       </nav>
 
-      {/* Nagłówek + panorama */}
-      <header className="relative mb-6 overflow-hidden">
-        <div className="max-w-2xl">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            {t('pageTitle')}
-          </h1>
-          <p className="mt-2 text-muted-foreground">{t('subtitle')}</p>
-        </div>
-        <BelgiumSkyline className="pointer-events-none absolute -right-4 top-0 hidden h-24 w-80 text-accent/20 lg:block" />
+      {/* Prosty nagłówek zatwierdzonego kierunku „Ludzie i praca”. */}
+      <header className="mb-6 max-w-2xl">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+          {t('pageTitle')}
+        </h1>
+        <p className="mt-2 text-base leading-relaxed text-muted-foreground">{t('subtitle')}</p>
       </header>
 
       {/* Wyszukiwarka (GET — działa bez JS, zachowuje aktywne filtry) */}
       <form
         action={`/${locale}${BASE_PATH}`}
         method="get"
-        className="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm md:grid-cols-[1.5fr_1.2fr_auto] md:items-end"
+        role="search"
+        className="grid gap-3 rounded-[17px] border border-border bg-background p-2.5 md:grid-cols-[1.5fr_1.2fr_auto] md:items-end"
       >
-        <div className="space-y-1.5">
-          <label htmlFor="q-keyword" className="text-sm font-medium text-foreground">
+        <div className="space-y-1.5 px-1.5 pt-1.5 md:py-1.5">
+          <label htmlFor="q-keyword" className="text-xs font-semibold text-muted-foreground">
             {t('keyword')}
           </label>
           <div className="relative">
@@ -355,13 +352,13 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
               defaultValue={keyword ?? ''}
               placeholder={t('keywordPlaceholder')}
               autoComplete="off"
-              className="flex h-11 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="flex h-12 w-full rounded-[11px] border border-input bg-background pl-9 pr-3 text-base text-foreground transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <label htmlFor="q-city" className="text-sm font-medium text-foreground">
+        <div className="space-y-1.5 px-1.5 md:py-1.5">
+          <label htmlFor="q-city" className="text-xs font-semibold text-muted-foreground">
             {t('location')}
           </label>
           <div className="relative">
@@ -375,7 +372,7 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
               defaultValue={city ?? ''}
               placeholder={t('locationPlaceholder')}
               autoComplete="off"
-              className="flex h-11 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="flex h-12 w-full rounded-[11px] border border-input bg-background pl-9 pr-3 text-base text-foreground transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </div>
         </div>
@@ -386,7 +383,7 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
 
         <button
           type="submit"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[11px] bg-primary px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:min-h-[58px]"
         >
           <Search className="h-4 w-4" aria-hidden="true" />
           {t('searchJobs')}
@@ -411,14 +408,14 @@ export default async function JobsListPage({ params, searchParams }: PageProps) 
         {/* Kolumna wyników */}
         <div className="min-w-0">
           {/* Pasek narzędzi (mobile) */}
-          <div className="mb-4 flex items-center gap-3 lg:hidden">
+          <div className="mb-4 flex flex-col items-stretch gap-3 lg:hidden [&>details]:w-full [&>details>summary]:justify-between">
             <FilterSheet
               items={items}
               initial={sf}
               keyword={keyword}
               city={city}
               sort={sort}
-              className="flex-1"
+              className="w-full"
             />
             {sortMenu()}
           </div>

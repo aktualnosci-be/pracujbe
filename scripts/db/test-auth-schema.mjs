@@ -51,6 +51,10 @@ try {
   const bootstrap = await loadMigrations(fileURLToPath(new URL('../../database/bootstrap/', import.meta.url)));
   const domain = await loadMigrations(fileURLToPath(new URL('../../supabase/migrations/', import.meta.url)));
   const auth = await loadMigrations(fileURLToPath(new URL('../../database/auth/', import.meta.url)));
+  const allMigrations = [...domain, ...auth].sort((a, b) => a.name.localeCompare(b.name, 'en'));
+  const firstAuthName = auth[0]?.name;
+  assert.ok(firstAuthName, 'Test wymaga migracji auth.');
+  const domainBeforeAuth = domain.filter(migration => migration.name < firstAuthName);
   await admin.query('BEGIN');
   try {
     for (const file of bootstrap) await admin.query(file.sql);
@@ -59,7 +63,9 @@ try {
     await admin.query('ROLLBACK');
     throw error;
   }
-  await applyMigrations(admin, domain);
+  // Odtwórz stan sprzed migracji auth, aby potwierdzić zachowanie istniejących auth.users.
+  // Późniejsze migracje domenowe muszą wejść razem z auth w globalnej kolejności numerów.
+  await applyMigrations(admin, domainBeforeAuth);
   const originalId = randomUUID();
   await admin.query('INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES ($1,$2,$3)',
     [originalId, 'existing@example.invalid', { first_name: 'Jan', last_name: 'Testowy', role: 'candidate', locale: 'pl' }]);
@@ -67,12 +73,15 @@ try {
 
   // Zastana uprzywilejowana rola nie może zostać po cichu użyta jako runtime auth.
   await admin.query('CREATE ROLE pracujbe_auth NOLOGIN BYPASSRLS');
-  await assert.rejects(applyMigrations(admin, [...domain, ...auth]), /niezgodne uprawnienia/);
+  await assert.rejects(applyMigrations(admin, allMigrations), /niezgodne uprawnienia/);
   assert.equal((await admin.query("SELECT to_regclass('auth.sessions') AS table_name")).rows[0].table_name, null);
   await admin.query('DROP ROLE pracujbe_auth');
 
-  assert.equal((await applyMigrations(admin, [...domain, ...auth])).applied, auth.length);
-  assert.equal((await applyMigrations(admin, [...domain, ...auth])).applied, 0);
+  assert.equal(
+    (await applyMigrations(admin, allMigrations)).applied,
+    allMigrations.length - domainBeforeAuth.length,
+  );
+  assert.equal((await applyMigrations(admin, allMigrations)).applied, 0);
   assert.equal((await admin.query("SELECT 'auth.users'::regclass::oid AS oid")).rows[0].oid, originalOid);
   const original = await admin.query('SELECT u.id, p.id AS profile_id, u.name, u.email_verified FROM auth.users u JOIN public.profiles p ON p.id=u.id WHERE u.id=$1', [originalId]);
   assert.deepEqual(original.rows[0], { id: originalId, profile_id: originalId, name: 'Jan Testowy', email_verified: false });

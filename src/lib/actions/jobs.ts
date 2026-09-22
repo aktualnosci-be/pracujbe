@@ -584,7 +584,7 @@ export type JobStatusResult =
 
 /**
  * Zmienia status oferty w cyklu życia (P1-04): pauza / wznowienie / zamknięcie / ponowne otwarcie.
- * Cała logika (macierz przejść, capability recruiter+, firma verified, limit planu, kompletność
+ * Cała logika (macierz przejść, capability recruiter+, firma verified, kompletność
  * przy reopenie, CAS) jest w transakcyjnym RPC `set_job_status`; klient nie zmienia statusu
  * bezpośrednio (guard trigger `guard_job_status`).
  */

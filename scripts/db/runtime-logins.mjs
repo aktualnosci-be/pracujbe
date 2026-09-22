@@ -101,26 +101,28 @@ async function installPasswordHelpers(client) {
     END $$`);
 }
 
-function assertExpectedMigrations(migrations) {
-  if (
-    migrations[0]?.name !== "0000_bootstrap_roles_and_identity.sql" ||
-    migrations.at(-1)?.name !== "0061_auth_email_outbox.sql"
-  ) {
-    throw new Error(
-      "Repozytorium nie zawiera oczekiwanego zakresu migracji 0000..0061.",
-    );
+export function assertExpectedMigrations(migrations) {
+  if (migrations[0]?.name !== "0000_bootstrap_roles_and_identity.sql") {
+    throw new Error("Pierwszą migracją musi być stały bootstrap 0000.");
   }
-  for (let number = 0; number <= 61; number++) {
-    const prefix = String(number).padStart(4, "0");
-    if (
-      !migrations.some((migration) => migration.name.startsWith(`${prefix}_`))
-    ) {
-      throw new Error(`Brak migracji ${prefix}.`);
+  for (let index = 0; index < migrations.length; index++) {
+    const migration = migrations[index];
+    const expectedPrefix = String(index).padStart(4, "0");
+    if (!/^\d{4}_[a-z0-9_]+\.sql$/.test(migration?.name ?? "")) {
+      throw new Error("Nieprawidłowa nazwa migracji w ciągu produkcyjnym.");
+    }
+    const actualPrefix = migration.name.slice(0, 4);
+    if (actualPrefix !== expectedPrefix) {
+      throw new Error(
+        `Nieciągły zakres migracji: oczekiwano ${expectedPrefix}, znaleziono ${actualPrefix}.`,
+      );
     }
   }
+  return `0000..${migrations.at(-1).name.slice(0, 4)}`;
 }
 
 async function verifyTarget(client, env, migrations) {
+  const migrationRange = assertExpectedMigrations(migrations);
   const expectedDatabase = required(env, "EXPECTED_DATABASE_NAME");
   const expectedUser = required(env, "EXPECTED_MIGRATION_USER");
   const expectedMajor = Number(required(env, "EXPECTED_POSTGRES_MAJOR"));
@@ -159,7 +161,7 @@ async function verifyTarget(client, env, migrations) {
     )
   ) {
     throw new Error(
-      "Historia migracji nie odpowiada dokładnie plikom 0000..0061.",
+      `Historia migracji nie odpowiada dokładnie plikom ${migrationRange}.`,
     );
   }
 
@@ -316,7 +318,6 @@ export async function inspectRuntimeLogins(
   { requireAll = false } = {},
 ) {
   const migrations = await loadProductionMigrations();
-  assertExpectedMigrations(migrations);
   await verifyTarget(client, env, migrations);
   const state = await readLoginState(client);
   for (const spec of LOGIN_SPECS) {
