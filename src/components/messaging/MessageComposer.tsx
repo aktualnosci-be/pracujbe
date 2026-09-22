@@ -76,7 +76,7 @@ export function MessageComposer({ conversationId }: MessageComposerProps): React
           onClick={submit}
           disabled={disabled}
           className={cn(
-            'inline-flex h-11 shrink-0 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90',
+            'inline-flex h-12 shrink-0 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90',
             'disabled:cursor-not-allowed disabled:opacity-60',
           )}
         >
