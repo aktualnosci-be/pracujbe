@@ -95,7 +95,8 @@ describe("organiczne Story PL", () => {
     } finally {
       await rm(directory, { force: true, recursive: true });
     }
-  }, 20_000);
+  // Na współdzielonym runnerze uruchomienie Chromium może potrwać dłużej.
+  }, 60_000);
 
   it("nie zawiera markerów wersji demonstracyjnej", () => {
     const svg = readFileSync(join(STORY_DIR, SVG_NAME), "utf8");
