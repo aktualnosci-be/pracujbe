@@ -402,25 +402,18 @@ export async function getLatestJobs(
  * listę (`category=<key>`), więc licznik odpowiada temu, co użytkownik zobaczy po kliknięciu.
  */
 export async function getCategoryCounts(
-  locale: string,
+  _locale: string,
   keys: readonly string[],
 ): Promise<Record<string, number> | null> {
   if (!isDatabaseConfigured()) return null;
   try {
-    const [{ getDomainPool }, { getPublicJobsCount }] = await Promise.all([
+    const [{ getDomainPool }, { getPublicJobCategoryCounts }] = await Promise.all([
       import('@/lib/db/runtime'), import('@/lib/db/public-jobs'),
     ]);
     const pool = await getDomainPool();
-    const resolved = toLocale(locale);
-    const entries = await Promise.all(
-      keys.map(async (key) => {
-        const total = CATEGORY_KEYS.includes(key as CategoryKey)
-          ? await getPublicJobsCount(pool, { locale: resolved, categories: [key as CategoryKey] })
-          : 0;
-        return [key, total] as const;
-      }),
-    );
-    return Object.fromEntries(entries);
+    const validKeys = keys.filter((key) => CATEGORY_KEYS.includes(key as CategoryKey));
+    const counts = await getPublicJobCategoryCounts(pool, validKeys);
+    return Object.fromEntries(keys.map((key) => [key, counts[key] ?? 0]));
   } catch (error) {
     captureError(error, { area: 'jobs.getCategoryCounts' });
     return null;
@@ -433,23 +426,16 @@ export async function getCategoryCounts(
  * od znanego niedopasowania nazw miast (P1-10 — odrębne ustalenie). `null` w trybie demo.
  */
 export async function getCityCounts(
-  locale: string,
+  _locale: string,
   cities: readonly string[],
 ): Promise<Record<string, number> | null> {
   if (!isDatabaseConfigured()) return null;
   try {
-    const [{ getDomainPool }, { getPublicJobsCount }] = await Promise.all([
+    const [{ getDomainPool }, { getPublicJobCityCounts }] = await Promise.all([
       import('@/lib/db/runtime'), import('@/lib/db/public-jobs'),
     ]);
     const pool = await getDomainPool();
-    const resolved = toLocale(locale);
-    const entries = await Promise.all(
-      cities.map(async (city) => {
-        const total = await getPublicJobsCount(pool, { locale: resolved, city });
-        return [city, total] as const;
-      }),
-    );
-    return Object.fromEntries(entries);
+    return getPublicJobCityCounts(pool, cities);
   } catch (error) {
     captureError(error, { area: 'jobs.getCityCounts' });
     return null;

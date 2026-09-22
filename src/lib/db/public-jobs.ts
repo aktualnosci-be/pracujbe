@@ -84,6 +84,57 @@ export async function getPublicJobsCount(pool: TransactionPool, params: GetJobsP
   return withUserTransaction(pool, null, (transaction) => readCount(transaction, filterValues(params)));
 }
 
+type FacetCountRow = { key: unknown; total: unknown };
+
+function facetCounts(keys: readonly string[], rows: FacetCountRow[]): Record<string, number> {
+  const counts = Object.fromEntries(keys.map((key) => [key, 0]));
+  for (const row of rows) {
+    if (
+      typeof row.key !== 'string' ||
+      !Object.hasOwn(counts, row.key) ||
+      typeof row.total !== 'number' ||
+      !Number.isSafeInteger(row.total) ||
+      row.total < 0
+    ) {
+      throw new Error('Nieprawidłowy agregat publicznych ofert.');
+    }
+    counts[row.key] = row.total;
+  }
+  return counts;
+}
+
+/** Jeden grupowany odczyt dla całego zestawu kategorii, w publicznym zakresie listy ofert. */
+export async function getPublicJobCategoryCounts(
+  pool: TransactionPool,
+  keys: readonly string[],
+): Promise<Record<string, number>> {
+  if (keys.length === 0) return {};
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT key, to_jsonb(total) AS total
+       FROM public.get_public_job_category_counts($1::text[])`,
+      [keys],
+    )) as { rows: FacetCountRow[] };
+    return facetCounts(keys, result.rows);
+  });
+}
+
+/** Jeden grupowany odczyt zachowujący semantykę filtra miasta (`ILIKE %wartość%`). */
+export async function getPublicJobCityCounts(
+  pool: TransactionPool,
+  cities: readonly string[],
+): Promise<Record<string, number>> {
+  if (cities.length === 0) return {};
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT key, to_jsonb(total) AS total
+       FROM public.get_public_job_city_counts($1::text[])`,
+      [cities],
+    )) as { rows: FacetCountRow[] };
+    return facetCounts(cities, result.rows);
+  });
+}
+
 export async function getPublicJob(pool: TransactionPool, slug: string, requestedLocale: string): Promise<PublicJobRow | null> {
   return withUserTransaction(pool, null, async (transaction) => {
     const result = await transaction.query(`SELECT to_jsonb(job) AS job
