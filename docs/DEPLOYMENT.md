@@ -13,8 +13,11 @@ może uruchomić produkcyjnego wdrożenia.
 
 CI działa w `.github/workflows/ci.yml` na self-hosted runnerach i obejmuje
 lint, typecheck, testy jednostkowe, testy PostgreSQL/RLS, E2E oraz build.
-Automatyczne anulowanie dotyczy tylko kolejnych wersji tego samego Pull Requesta;
-przebiegi po pushu do `main` nie są anulowane przez następny push.
+Do czasu izolacji runnerów (#50) joby są ułożone liniowo, a CI i workflow
+sprzątania korzystają z jednej kolejki GitHub Actions (`queue: max`). Aktywny
+przebieg nie jest anulowany przez następny push; oczekujące przebiegi także
+pozostają w kolejce (do limitu 100). Railway wdraża po zielonym CI dla SHA
+na `main` przez natywne `Wait for CI`; nie uruchamiamy deployu jako joba Actions.
 
 ## Konfiguracja usługi
 

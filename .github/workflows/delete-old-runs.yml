@@ -5,6 +5,12 @@ on:
     - cron: '0 0 * * 1'
 # Run at 00:00 on Monday.
 
+# Wspólny katalog runnerów: sprzątanie nie może wejść w środek CI.
+concurrency:
+  group: pracujbe-shared-runner-workspace
+  queue: max
+  cancel-in-progress: false
+
 jobs:
   del_runs:
     name: ♻ Delete old workflow runs

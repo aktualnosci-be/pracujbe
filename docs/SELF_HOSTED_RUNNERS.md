@@ -49,7 +49,8 @@ sudo ./svc.sh status
 
 Każda usługa runnera musi mieć **własny katalog instalacji i własny katalog roboczy**.
 Dwie usługi nie mogą korzystać z tego samego `_work`, nawet jeśli GitHub zwykle nie
-przydziela im tego samego joba. Workflow CI celowo uruchamia niezależne joby równolegle.
+przydziela im tego samego joba. Do czasu naprawy hosta (#50) workflow CI uruchamia
+joby i całe przebiegi po kolei. To zabezpieczenie nie zastępuje osobnych katalogów.
 
 Przykładowy poprawny układ dla dwóch runnerów:
 
