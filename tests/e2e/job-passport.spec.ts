@@ -38,4 +38,9 @@ test('rzeczywista karta demo pokazuje miesięczny okres także na detalu', async
   await card.getByRole('heading').getByRole('link').click();
   await expect(page.getByText(/brutto \/ mies\./).first()).toBeVisible();
   await expect(page.getByText(/brutto \/ godz\./)).toHaveCount(0);
+
+  const jsonLd = (await page.locator('script[type="application/ld+json"]').allTextContents())
+    .map(raw => JSON.parse(raw) as { '@type'?: string; baseSalary?: { value?: { unitText?: string } } })
+    .find(item => item['@type'] === 'JobPosting');
+  expect(jsonLd?.baseSalary?.value?.unitText).toBe('MONTH');
 });
