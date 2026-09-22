@@ -300,7 +300,9 @@ jobs:
       - name: Run E2E
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'
-        run: npm run test:e2e
+        # Dwie usługi runnera na jednym hoście współdzielą porty TCP. Blokada obejmuje tylko
+        # Playwrighta wraz z `next start`; build pozostaje równoległy z innymi workflow.
+        run: flock --exclusive /tmp/pracujbe-playwright-3000.lock npm run test:e2e
       # Raport tylko przy porażce i z krótką retencją — oszczędza płatny storage.
       - uses: actions/upload-artifact@v4
         if: failure()
