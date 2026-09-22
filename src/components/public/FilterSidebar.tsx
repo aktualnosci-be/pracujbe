@@ -114,7 +114,10 @@ function CheckRow({
   onChange: (checked: boolean) => void;
 }): React.JSX.Element {
   return (
-    <div className="flex min-h-9 items-center gap-2.5 py-1">
+    <div
+      data-filter-target="checkbox-row"
+      className="flex min-h-12 items-center gap-2.5"
+    >
       <Checkbox
         id={id}
         checked={checked}
@@ -122,7 +125,7 @@ function CheckRow({
       />
       <Label
         htmlFor={id}
-        className="flex-1 cursor-pointer font-normal text-foreground"
+        className="flex min-h-12 flex-1 cursor-pointer items-center font-normal text-foreground"
       >
         {label}
       </Label>
@@ -247,7 +250,8 @@ export function FilterFields({
           <button
             type="button"
             onClick={() => setShowAllCategories((prev) => !prev)}
-            className="mt-1 rounded-sm text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            data-filter-target="show-more"
+            className="mt-1 inline-flex min-h-12 items-center rounded-sm text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {showAllCategories
               ? t('showLess')
@@ -263,7 +267,8 @@ export function FilterFields({
           value={locationQuery}
           onChange={(event) => setLocationQuery(event.target.value)}
           placeholder={t('chooseLocation')}
-          className="mb-2 h-10"
+          data-filter-target="location"
+          className="mb-2 h-12"
           aria-label={t('chooseLocation')}
         />
         <div>
@@ -289,7 +294,8 @@ export function FilterFields({
           <button
             type="button"
             onClick={() => setShowAllLocations(true)}
-            className="mt-1 rounded-sm text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            data-filter-target="show-more"
+            className="mt-1 inline-flex min-h-12 items-center rounded-sm text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {t('showMore', { count: hiddenLocationCount })}
           </button>
@@ -319,7 +325,8 @@ export function FilterFields({
               })
             }
             aria-label={t('salaryMin')}
-            className="w-full accent-accent"
+            data-filter-target="range"
+            className="h-12 w-full accent-accent"
           />
           <input
             type="range"
@@ -336,7 +343,8 @@ export function FilterFields({
               })
             }
             aria-label={t('salaryMax')}
-            className="w-full accent-accent"
+            data-filter-target="range"
+            className="h-12 w-full accent-accent"
           />
         </div>
       </section>
@@ -419,7 +427,11 @@ export function FilterFields({
           value={value.date}
           onValueChange={(next) => patch({ date: next as DateValue })}
         >
-          <SelectTrigger aria-label={t('datePosted')}>
+          <SelectTrigger
+            aria-label={t('datePosted')}
+            data-filter-target="select"
+            className="h-12"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -489,7 +501,7 @@ export function FilterSidebar({
   return (
     <div
       data-filter-passport="desktop"
-      className={cn('min-w-0 border-l border-border pl-5', className)}
+      className={cn('min-w-0 border-r border-border pr-5', className)}
     >
       <div className="mb-5 flex items-center justify-between gap-3 border-b border-border pb-4">
         <h2 className="flex items-center gap-2.5 text-base font-semibold text-foreground before:h-2 before:w-2 before:shrink-0 before:rounded-full before:bg-primary">
@@ -498,7 +510,8 @@ export function FilterSidebar({
         <button
           type="button"
           onClick={clearAll}
-          className="min-h-11 rounded-sm px-1 text-right text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          data-filter-target="clear"
+          className="min-h-12 rounded-sm px-1 text-right text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           {t('clearAll')}
         </button>
