@@ -1,5 +1,22 @@
 import { expect, test } from '@playwright/test';
 
+for (const locale of ['pl', 'nl', 'fr', 'en']) {
+  for (const path of ['', '/oferty-pracy']) {
+    test(`obraz udostępniania ${locale}${path || '/'} pochodzi z publicznego zasobu`, async ({ page, request }) => {
+      await page.goto(`/${locale}${path}`);
+      const expectedImage = new URL('/og.png', process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').href;
+
+      await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', expectedImage);
+      await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute('content', expectedImage);
+      expect(new URL(expectedImage).protocol).toMatch(/^https?:$/);
+
+      const image = await request.get(expectedImage);
+      expect(image.status()).toBe(200);
+      expect(image.headers()['content-type']).toMatch(/^image\/png/);
+    });
+  }
+}
+
 /**
  * Testy SEO — działają na danych demonstracyjnych (bez Supabase).
  *
