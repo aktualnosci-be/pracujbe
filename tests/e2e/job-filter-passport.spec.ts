@@ -151,7 +151,17 @@ for (const locale of locales) {
       viewport: { width: 320, height: 800 },
     });
     const noJs = await noJsContext.newPage();
-    await noJs.goto(`/${locale}/oferty-pracy?immediate=1`);
+    const expectedNoJsParams = new URLSearchParams({
+      keyword: "operator",
+      city: "Brussels",
+      sort: "salary",
+      category: "construction,transport",
+      location: "Brussels,Antwerp",
+      contractType: "permanent,temporary",
+      accommodation: "provided,unavailable",
+      immediate: "1",
+    });
+    await noJs.goto(`/${locale}/oferty-pracy?${expectedNoJsParams.toString()}`);
     await expect(
       noJs.getByRole("heading", { level: 1, name: t.jobs.pageTitle }),
     ).toBeVisible();
@@ -165,9 +175,11 @@ for (const locale of locales) {
     ).toBeChecked();
     await noJsForm.getByRole("checkbox", { name: /.+/ }).last().check();
     await noJsForm.locator('button[type="submit"]').click();
-    await expect(noJs).toHaveURL(/(?:\?|&)immediate=1(?:&|$)/);
-    await expect(noJs).toHaveURL(/(?:\?|&)noLang=1(?:&|$)/);
-    await expect(noJs.locator("article").first()).toBeVisible();
+    const submittedParams = new URL(noJs.url()).searchParams;
+    for (const [key, value] of expectedNoJsParams) {
+      expect(submittedParams.get(key), key).toBe(value);
+    }
+    expect(submittedParams.get("noLang")).toBe("1");
     await expectNoHorizontalOverflow(noJs);
     await noJsContext.close();
   });
@@ -181,12 +193,12 @@ test("kontrola ujemna wykrywa zbyt mały cel filtra", async ({ page }) => {
 
   const mutation = await page.addStyleTag({
     content:
-      '[data-filter-target="location"]{height:32px!important;min-height:32px!important}',
+      '[data-filter-target="checkbox-label"]{height:24px!important;min-height:0!important}',
   });
   await expect
     .poll(async () =>
       (await undersizedTargets(rail)).some(
-        ({ target, height }) => target === "location" && height === 32,
+        ({ target, height }) => target === "checkbox-label" && height < 48,
       ),
     )
     .toBe(true);

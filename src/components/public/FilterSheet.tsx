@@ -80,6 +80,10 @@ function NoScriptFilterForm({
   const controlClass =
     'min-h-12 w-full rounded-md border border-input bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
   const optionClass = 'flex min-h-12 items-center gap-3';
+  const selectedCategories = initial.categories.join(',');
+  const selectedLocations = initial.locations.join(',');
+  const selectedContracts = initial.contractTypes.join(',');
+  const selectedAccommodation = initial.accommodation.join(',');
 
   const dateLabel = (option: (typeof DATE_VALUES)[number]): string => {
     if (option === '24h') return t('date24h');
@@ -117,10 +121,15 @@ function NoScriptFilterForm({
         <span>{t('category')}</span>
         <select
           name="category"
-          defaultValue={initial.categories[0] ?? ''}
+          defaultValue={selectedCategories}
           className={controlClass}
         >
           <option value="">{t('any')}</option>
+          {initial.categories.length > 1 ? (
+            <option value={selectedCategories}>
+              {initial.categories.map((key) => tCat(key)).join(', ')}
+            </option>
+          ) : null}
           {CATEGORY_KEYS.map((key) => (
             <option key={key} value={key}>
               {tCat(key)}
@@ -133,10 +142,15 @@ function NoScriptFilterForm({
         <span>{t('location')}</span>
         <select
           name="location"
-          defaultValue={initial.locations[0] ?? ''}
+          defaultValue={selectedLocations}
           className={controlClass}
         >
           <option value="">{t('any')}</option>
+          {initial.locations.length > 1 ? (
+            <option value={selectedLocations}>
+              {initial.locations.join(', ')}
+            </option>
+          ) : null}
           {locations.map((location) => (
             <option key={location} value={location}>
               {location}
@@ -179,10 +193,15 @@ function NoScriptFilterForm({
         <span>{t('contractType')}</span>
         <select
           name="contractType"
-          defaultValue={initial.contractTypes[0] ?? ''}
+          defaultValue={selectedContracts}
           className={controlClass}
         >
           <option value="">{t('any')}</option>
+          {initial.contractTypes.length > 1 ? (
+            <option value={selectedContracts}>
+              {initial.contractTypes.map((key) => tContract(key)).join(', ')}
+            </option>
+          ) : null}
           {CONTRACT_TYPES.map((key) => (
             <option key={key} value={key}>
               {tContract(key)}
@@ -195,10 +214,19 @@ function NoScriptFilterForm({
         <span>{t('accommodation')}</span>
         <select
           name="accommodation"
-          defaultValue={initial.accommodation[0] ?? ''}
+          defaultValue={selectedAccommodation}
           className={controlClass}
         >
           <option value="">{t('any')}</option>
+          {initial.accommodation.length > 1 ? (
+            <option value={selectedAccommodation}>
+              {initial.accommodation
+                .map((value) =>
+                  value === 'provided' ? t('provided') : t('unavailable'),
+                )
+                .join(', ')}
+            </option>
+          ) : null}
           <option value="provided">{t('provided')}</option>
           <option value="unavailable">{t('unavailable')}</option>
         </select>

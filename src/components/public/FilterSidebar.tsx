@@ -114,10 +114,7 @@ function CheckRow({
   onChange: (checked: boolean) => void;
 }): React.JSX.Element {
   return (
-    <div
-      data-filter-target="checkbox-row"
-      className="flex min-h-12 items-center gap-2.5"
-    >
+    <div className="flex min-h-12 items-center gap-2.5">
       <Checkbox
         id={id}
         checked={checked}
@@ -125,6 +122,7 @@ function CheckRow({
       />
       <Label
         htmlFor={id}
+        data-filter-target="checkbox-label"
         className="flex min-h-12 flex-1 cursor-pointer items-center font-normal text-foreground"
       >
         {label}
