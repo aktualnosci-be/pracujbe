@@ -220,6 +220,12 @@ jobs:
         run: >-
           docker exec -e PGHOST=127.0.0.1 -e PGPORT=5432 -e PGUSER=postgres -e PGPASSWORD=postgres
           "$POSTGRES_CONTAINER" bash /tmp/pracujbe-tests/scripts/test-rls.sh
+      - name: Backup restore verification (pg_dump -> izolowana baza)
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: >-
+          docker exec -e PGHOST=127.0.0.1 -e PGPORT=5432 -e PGUSER=postgres -e PGPASSWORD=postgres
+          "$POSTGRES_CONTAINER" bash /tmp/pracujbe-tests/scripts/db/test-restore.sh
       - name: Seed data load test (10 firm / 50 ofert / 40 kandydatów)
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
@@ -327,13 +333,23 @@ jobs:
       # Hostowany runner nie ma przeglądarki Playwrighta ani jej bibliotek systemowych.
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      # Testowe ID trackerów (tests/e2e/fixtures/trackers.ts) muszą trafić do builda,
+      # inaczej playwright.config.ts przebuduje aplikację (test zgód, #234).
       - name: Build application for E2E
         timeout-minutes: 15
+        env:
+          NEXT_PUBLIC_GA_MEASUREMENT_ID: G-TEST000000
+          NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'
         run: npm run build
       - name: Run E2E
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'
         run: npm run test:e2e
+      # Historia aplikacji kandydata: osobny serwer z danymi fikcyjnymi (15 zgłoszeń / wymuszony błąd).
+      - name: Run E2E on application fixtures
+        run: |
+          TEST_APPLICATIONS_FIXTURE=full npx playwright test --config playwright.applications-fixture.config.ts
+          TEST_APPLICATIONS_FIXTURE=error npx playwright test --config playwright.applications-fixture.config.ts
       # Raport tylko przy porażce i z krótką retencją — oszczędza płatny storage.
       - uses: actions/upload-artifact@v4
         if: failure()

@@ -514,6 +514,7 @@
   },
   "errors": {
     "authInvalidCredentials": "Onjuist e-mailadres of wachtwoord.",
+    "authEmailNotConfirmed": "Bevestig eerst je e-mailadres — klik op de link die we je hebben gestuurd.",
     "permissionDenied": "Je hebt geen toestemming voor deze actie.",
     "validationFailed": "Controleer je gegevens en probeer opnieuw.",
     "jobNotActive": "Deze vacature is niet meer actief.",
@@ -602,6 +603,10 @@
     "applicationsEmptyTitle": "Nog geen sollicitaties",
     "applicationsEmptyBody": "Zoek een vacature en verstuur je eerste sollicitatie.",
     "applicationsFindJobs": "Vacatures zoeken",
+    "applicationsMore": "Meer sollicitaties tonen",
+    "applicationsLoading": "Sollicitaties laden…",
+    "applicationsMoreError": "Meer sollicitaties laden is niet gelukt. Probeer het opnieuw.",
+    "applicationsEnd": "Dit zijn al je sollicitaties.",
     "applicationUnknownJob": "Vacature",
     "applicationCurrentStatus": "Huidige status",
     "applicationSentOn": "Verzonden op {date}",
@@ -1261,6 +1266,29 @@
       "contractType": "Contracttype",
       "remoteJob": "Werk op afstand — locatie speelt geen rol",
       "withinCommuteRadius": "Werkplek binnen jouw reisafstand"
+    }
+  },
+  "application": {
+    "error": {
+      "jobRequired": "Kies de vacature waarop je wilt solliciteren.",
+      "jobInvalid": "Deze vacature is niet gevonden. Vernieuw de pagina en probeer het opnieuw.",
+      "messageTooLong": "Het bericht is te lang.",
+      "phoneInvalid": "Vul een geldig telefoonnummer in.",
+      "termsRequired": "Je moet de toestemming aanvaarden om je sollicitatie te versturen.",
+      "idempotencyKeyInvalid": "Het formulier kon niet worden verzonden. Vernieuw de pagina en probeer het opnieuw."
+    }
+  },
+  "offer": {
+    "error": {
+      "jobRequired": "Kies een vacature.",
+      "jobInvalid": "Deze vacature is niet gevonden. Vernieuw de pagina en probeer het opnieuw.",
+      "candidateRequired": "Kies een kandidaat.",
+      "candidateInvalid": "Deze kandidaat is niet gevonden. Vernieuw de pagina en probeer het opnieuw.",
+      "messageRequired": "Schrijf een bericht aan de kandidaat.",
+      "messageTooShort": "Het bericht is te kort (minstens 10 tekens).",
+      "messageTooLong": "Het bericht is te lang.",
+      "idempotencyKeyRequired": "Het formulier kon niet worden verzonden. Vernieuw de pagina en probeer het opnieuw.",
+      "idempotencyKeyInvalid": "Het formulier kon niet worden verzonden. Vernieuw de pagina en probeer het opnieuw."
     }
   }
 }

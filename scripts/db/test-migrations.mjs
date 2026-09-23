@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import pg from 'pg';
-import { applyMigrations } from './migrate.mjs';
+import { applyMigrations, planMigrations } from './migrate.mjs';
 
 // Wyłącznie jednorazowy kontener testowy, nigdy URL aplikacji ani produkcji.
 const url = process.env.MIGRATION_TEST_DATABASE_URL;
@@ -14,12 +14,25 @@ try {
   assert.equal(occupied.rows[0].history, null, 'Test wymaga nowej bazy.');
   assert.equal(occupied.rows[0].probe, null, 'Test wymaga nowej bazy.');
   const first = { name: '0001_probe.sql', checksum: 'first', sql: 'CREATE TABLE migration_probe (id integer PRIMARY KEY)' };
-  assert.deepEqual(await applyMigrations(client, [first]), { applied: 1, total: 1 });
+  // status na pustej bazie: tylko odczyt — nie tworzy schematu historii.
+  assert.deepEqual(await planMigrations(client, [first]), { applied: 0, total: 1, pending: ['0001_probe.sql'] });
+  assert.equal((await client.query("SELECT to_regclass('app_migrations.history') AS h")).rows[0].h, null);
+  // dry-run nakłada i wycofuje: brak tabeli, brak historii.
+  assert.deepEqual(await applyMigrations(client, [first], { dryRun: true }), { applied: 0, total: 1, pending: ['0001_probe.sql'] });
+  assert.equal((await client.query("SELECT to_regclass('public.migration_probe') AS p, to_regclass('app_migrations.history') AS h")).rows[0].p, null);
+  assert.deepEqual(await applyMigrations(client, [first]), { applied: 1, total: 1, pending: ['0001_probe.sql'] });
+  assert.deepEqual(await planMigrations(client, [first]), { applied: 1, total: 1, pending: [] });
+  await assert.rejects(planMigrations(client, [{ ...first, checksum: 'changed' }]));
   assert.equal((await applyMigrations(client, [first])).applied, 0);
   await assert.rejects(applyMigrations(client, [{ ...first, checksum: 'changed' }]));
   await assert.rejects(applyMigrations(client, [{ ...first, name: '0000_inserted.sql' }, first]));
   const second = { name: '0002_insert.sql', checksum: 'second', sql: 'INSERT INTO migration_probe VALUES (1)' };
   const invalid = { name: '0003_invalid.sql', checksum: 'invalid', sql: 'INSERT INTO missing_migration_table VALUES (1)' };
+  // dry-run z błędnym plikiem pada tak samo jak apply, a udany dry-run niczego nie zostawia.
+  await assert.rejects(applyMigrations(client, [first, second, invalid], { dryRun: true }));
+  assert.deepEqual((await applyMigrations(client, [first, second], { dryRun: true })).pending, ['0002_insert.sql']);
+  assert.equal((await client.query('SELECT count(*)::int AS n FROM migration_probe')).rows[0].n, 0);
+  assert.deepEqual((await planMigrations(client, [first, second])).pending, ['0002_insert.sql']);
   await assert.rejects(applyMigrations(client, [first, second, invalid]));
   assert.equal((await client.query('SELECT count(*)::int AS n FROM migration_probe')).rows[0].n, 0);
   assert.equal((await client.query('SELECT count(*)::int AS n FROM app_migrations.history')).rows[0].n, 1);
@@ -34,7 +47,7 @@ try {
   }
   await assert.rejects(applyMigrations(client, [first]));
   assert.equal((await client.query('SELECT count(*)::int AS n FROM migration_probe')).rows[0].n, 1);
-  console.log('PostgreSQL: migracje, historia, rollback i współbieżność — PASS');
+  console.log('PostgreSQL: migracje, status, dry-run, historia, rollback i współbieżność — PASS');
 } finally {
   await client.end();
 }

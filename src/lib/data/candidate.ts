@@ -57,6 +57,18 @@ export interface MyApplication {
   status: string;
 }
 
+export interface ApplicationCursor {
+  submittedAt: string;
+  id: string;
+}
+
+export interface MyApplicationsPage {
+  items: MyApplication[];
+  nextCursor: ApplicationCursor | null;
+}
+
+const APPLICATION_PAGE_SIZE = 10;
+
 export interface LatestMessage {
   id: string;
   title: string;
@@ -663,33 +675,59 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
   }
 }
 
-/** Ostatnie aplikacje kandydata (applications + publiczne dane oferty). */
-export async function getMyApplications(locale: string = routing.defaultLocale, throwOnError = false): Promise<MyApplication[]> {
+/** Historia własnych zgłoszeń, stronicowana stabilnym kursorem (czas + UUID). */
+export async function getMyApplicationsPage(
+  locale: string = routing.defaultLocale,
+  cursor: ApplicationCursor | null = null,
+): Promise<MyApplicationsPage> {
   const resolvedLocale = toLocale(locale);
-  if (!isSupabaseConfigured()) return demoApplications(resolvedLocale);
+  if (!isSupabaseConfigured()) {
+    // Test przeglądarkowy uruchamia osobny serwer Next dev. Ta gałąź nie działa w buildzie produkcyjnym.
+    if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full') {
+      return developmentApplicationFixture(resolvedLocale, cursor);
+    }
+    if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error') {
+      throw new Error('Isolated application history fixture failure');
+    }
+    return { items: cursor ? [] : demoApplications(resolvedLocale), nextCursor: null };
+  }
 
   try {
     const { supabase, userId } = await getServerContext();
-    if (!userId) return [];
+    if (!userId) return { items: [], nextCursor: null };
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('applications')
       .select('id, job_id, status, submitted_at')
       .eq('candidate_id', userId)
       .is('deleted_at', null)
       .order('submitted_at', { ascending: false })
-      .limit(10);
+      .order('id', { ascending: false });
+    if (cursor) {
+      // PostgREST wymaga cudzysłowu dla wartości z dwukropkiem i kropką (ISO 8601).
+      // Kursor z Server Action jest sprawdzany przez Zod przed trafieniem tutaj.
+      const timestamp = `"${cursor.submittedAt}"`;
+      query = query.or(
+        `submitted_at.lt.${timestamp},and(submitted_at.eq.${timestamp},id.lt.${cursor.id})`,
+      );
+    }
+    const { data, error } = await query.limit(APPLICATION_PAGE_SIZE + 1);
     if (error) throw error;
 
     const rows = asArr(data);
-    if (rows.length === 0) return [];
+    if (rows.length === 0) return { items: [], nextCursor: null };
+    const visibleRows = rows.slice(0, APPLICATION_PAGE_SIZE);
+    const last = asRecord(visibleRows[visibleRows.length - 1]);
+    const nextCursor = rows.length > APPLICATION_PAGE_SIZE
+      ? { submittedAt: asStr(last['submitted_at']), id: asStr(last['id']) }
+      : null;
 
     // Wzbogacamy danymi oferty przez dedykowane RPC ograniczone do WŁASNYCH aplikacji
     // (auth.uid()) — zwraca tytuł/firmę/slug NIEZALEŻNIE od statusu oferty, więc aplikacje
     // do ofert zamkniętych/wstrzymanych/wygasłych nie tracą nazwy (get_public_jobs zwraca
     // tylko active+verified top-N, przez co dawały puste wiersze).
     const jobsMap = await fetchAppliedJobsMap(supabase, resolvedLocale);
-    return rows.map((row) => {
+    const items = visibleRows.map((row) => {
       const r = asRecord(row);
       const job = jobsMap.get(asStr(r['job_id']));
       return {
@@ -701,8 +739,41 @@ export async function getMyApplications(locale: string = routing.defaultLocale, 
         status: asStr(r['status'], 'submitted'),
       };
     });
+    return { items, nextCursor };
   } catch (error) {
-    captureError(error, { area: 'candidate.getMyApplications' });
+    captureError(error, { area: 'candidate.getMyApplicationsPage' });
+    throw error;
+  }
+}
+
+/** Dane wyłącznie dla izolowanego testu Next dev; produkcyjny kompilator usuwa tę ścieżkę. */
+function developmentApplicationFixture(locale: Locale, cursor: ApplicationCursor | null): MyApplicationsPage {
+  const jobs = resolveDemoJobs(locale);
+  const submittedAt = '2026-09-20T09:00:00+00:00';
+  const all = Array.from({ length: 15 }, (_, index) => {
+    const job = jobs[index];
+    return {
+      id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(15 - index).padStart(12, '0')}`,
+      jobTitle: job?.title ?? '',
+      companyName: job?.companyName ?? '',
+      slug: job?.slug ?? null,
+      date: submittedAt,
+      status: 'submitted',
+    };
+  });
+  const remaining = cursor
+    ? all.filter((item) => item.date < cursor.submittedAt || (item.date === cursor.submittedAt && item.id < cursor.id))
+    : all;
+  const items = remaining.slice(0, APPLICATION_PAGE_SIZE);
+  const last = items[items.length - 1];
+  return { items, nextCursor: remaining.length > APPLICATION_PAGE_SIZE && last ? { submittedAt: last.date, id: last.id } : null };
+}
+
+/** Krótki podgląd na pulpicie; pełna historia jest stronicowana na ekranie zgłoszeń. */
+export async function getMyApplications(locale: string = routing.defaultLocale, throwOnError = false): Promise<MyApplication[]> {
+  try {
+    return (await getMyApplicationsPage(locale)).items;
+  } catch (error) {
     if (throwOnError) throw error;
     return [];
   }

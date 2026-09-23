@@ -12,6 +12,7 @@
  */
 export const ErrorCodes = {
   AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
+  AUTH_EMAIL_NOT_CONFIRMED: 'AUTH_EMAIL_NOT_CONFIRMED',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   VALIDATION_FAILED: 'VALIDATION_FAILED',
   JOB_NOT_ACTIVE: 'JOB_NOT_ACTIVE',
@@ -42,6 +43,7 @@ export type ErrorCode = keyof typeof ErrorCodes;
  */
 const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   AUTH_INVALID_CREDENTIALS: 'authInvalidCredentials',
+  AUTH_EMAIL_NOT_CONFIRMED: 'authEmailNotConfirmed',
   PERMISSION_DENIED: 'permissionDenied',
   VALIDATION_FAILED: 'validationFailed',
   JOB_NOT_ACTIVE: 'jobNotActive',
