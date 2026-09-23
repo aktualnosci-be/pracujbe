@@ -113,7 +113,7 @@ export function JobCard({
         salary !== null && 'sm:grid-cols-3',
       )}>
         <div className="min-w-0">
-          <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('passport.location')}</dt>
+          <dt className="mb-2 break-words hyphens-auto text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('passport.location')}</dt>
           <dd className="break-words text-base font-semibold text-foreground">
             {job.city}
             {showRegion ? <span className="mt-1 block text-sm font-normal text-muted-foreground">{job.region}</span> : null}
@@ -121,7 +121,7 @@ export function JobCard({
         </div>
         {salary !== null ? (
           <div className="min-w-0 border-l border-border pl-4">
-            <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('passport.salary')}</dt>
+            <dt className="mb-2 break-words hyphens-auto text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('passport.salary')}</dt>
             <dd className="break-words text-base font-semibold text-foreground">{salary}</dd>
           </div>
         ) : null}
@@ -131,7 +131,7 @@ export function JobCard({
             ? 'col-span-2 border-t border-border pt-4 sm:col-span-1 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0'
             : 'border-l border-border pl-4',
         )}>
-          <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('passport.conditions')}</dt>
+          <dt className="mb-2 break-words hyphens-auto text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('passport.conditions')}</dt>
           <dd className="break-words text-base font-semibold text-foreground">
             {tContract(job.contractType)}
             {highlights.length > 0 ? <span className="mt-1 block text-sm font-normal text-muted-foreground">{highlights.join(' · ')}</span> : null}

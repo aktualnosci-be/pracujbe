@@ -514,6 +514,7 @@
   },
   "errors": {
     "authInvalidCredentials": "Nieprawidłowy e-mail lub hasło.",
+    "authEmailNotConfirmed": "Najpierw potwierdź adres e-mail — kliknij link, który wysłaliśmy na Twoją skrzynkę.",
     "permissionDenied": "Nie masz uprawnień do tej operacji.",
     "validationFailed": "Sprawdź wprowadzone dane i spróbuj ponownie.",
     "jobNotActive": "Ta oferta nie jest już aktywna.",
@@ -602,6 +603,10 @@
     "applicationsEmptyTitle": "Nie masz jeszcze zgłoszeń",
     "applicationsEmptyBody": "Znajdź ofertę i wyślij pierwsze zgłoszenie.",
     "applicationsFindJobs": "Znajdź oferty",
+    "applicationsMore": "Pokaż więcej zgłoszeń",
+    "applicationsLoading": "Wczytywanie zgłoszeń…",
+    "applicationsMoreError": "Nie udało się wczytać kolejnych zgłoszeń. Spróbuj ponownie.",
+    "applicationsEnd": "To wszystkie Twoje zgłoszenia.",
     "applicationUnknownJob": "Oferta pracy",
     "applicationCurrentStatus": "Aktualny status",
     "applicationSentOn": "Wysłano {date}",
@@ -1261,6 +1266,29 @@
       "contractType": "Typ umowy",
       "remoteJob": "Praca zdalna — lokalizacja bez znaczenia",
       "withinCommuteRadius": "Miejsce pracy w Twoim promieniu dojazdu"
+    }
+  },
+  "application": {
+    "error": {
+      "jobRequired": "Wybierz ofertę, na którą chcesz aplikować.",
+      "jobInvalid": "Nie znaleziono tej oferty. Odśwież stronę i spróbuj ponownie.",
+      "messageTooLong": "Wiadomość jest za długa.",
+      "phoneInvalid": "Podaj poprawny numer telefonu.",
+      "termsRequired": "Musisz zaakceptować zgodę, aby wysłać aplikację.",
+      "idempotencyKeyInvalid": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie."
+    }
+  },
+  "offer": {
+    "error": {
+      "jobRequired": "Wybierz ofertę pracy.",
+      "jobInvalid": "Nie znaleziono tej oferty pracy. Odśwież stronę i spróbuj ponownie.",
+      "candidateRequired": "Wybierz kandydata.",
+      "candidateInvalid": "Nie znaleziono tego kandydata. Odśwież stronę i spróbuj ponownie.",
+      "messageRequired": "Napisz wiadomość do kandydata.",
+      "messageTooShort": "Wiadomość jest za krótka (co najmniej 10 znaków).",
+      "messageTooLong": "Wiadomość jest za długa.",
+      "idempotencyKeyRequired": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie.",
+      "idempotencyKeyInvalid": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie."
     }
   }
 }

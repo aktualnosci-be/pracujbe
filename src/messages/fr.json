@@ -514,6 +514,7 @@
   },
   "errors": {
     "authInvalidCredentials": "Adresse e-mail ou mot de passe incorrect.",
+    "authEmailNotConfirmed": "Confirmez d’abord votre adresse e-mail en cliquant sur le lien que nous vous avons envoyé.",
     "permissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action.",
     "validationFailed": "Vérifiez vos informations et réessayez.",
     "jobNotActive": "Cette offre n'est plus active.",
@@ -602,6 +603,10 @@
     "applicationsEmptyTitle": "Aucune candidature pour le moment",
     "applicationsEmptyBody": "Trouvez une offre et envoyez votre première candidature.",
     "applicationsFindJobs": "Voir les offres",
+    "applicationsMore": "Afficher plus de candidatures",
+    "applicationsLoading": "Chargement des candidatures…",
+    "applicationsMoreError": "Impossible de charger d’autres candidatures. Réessayez.",
+    "applicationsEnd": "Vous avez vu toutes vos candidatures.",
     "applicationUnknownJob": "Offre d’emploi",
     "applicationCurrentStatus": "Statut actuel",
     "applicationSentOn": "Envoyée le {date}",
@@ -1261,6 +1266,29 @@
       "contractType": "Type de contrat",
       "remoteJob": "Télétravail — la localisation importe peu",
       "withinCommuteRadius": "Lieu de travail dans votre rayon de déplacement"
+    }
+  },
+  "application": {
+    "error": {
+      "jobRequired": "Choisissez l'offre à laquelle vous souhaitez postuler.",
+      "jobInvalid": "Cette offre est introuvable. Actualisez la page et réessayez.",
+      "messageTooLong": "Le message est trop long.",
+      "phoneInvalid": "Indiquez un numéro de téléphone valide.",
+      "termsRequired": "Vous devez accepter le consentement pour envoyer votre candidature.",
+      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez."
+    }
+  },
+  "offer": {
+    "error": {
+      "jobRequired": "Choisissez une offre d'emploi.",
+      "jobInvalid": "Cette offre d'emploi est introuvable. Actualisez la page et réessayez.",
+      "candidateRequired": "Choisissez un candidat.",
+      "candidateInvalid": "Ce candidat est introuvable. Actualisez la page et réessayez.",
+      "messageRequired": "Écrivez un message au candidat.",
+      "messageTooShort": "Le message est trop court (au moins 10 caractères).",
+      "messageTooLong": "Le message est trop long.",
+      "idempotencyKeyRequired": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez.",
+      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez."
     }
   }
 }
