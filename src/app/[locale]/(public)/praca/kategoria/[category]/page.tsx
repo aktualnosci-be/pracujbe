@@ -180,7 +180,10 @@ export default async function CategoryLandingPage({ params }: PageProps) {
       </header>
 
       {/* Lista ofert */}
-      <section className="mt-6" aria-label={t('availableJobs')}>
+      <section className="mt-6" aria-labelledby="landing-jobs-heading">
+        <h2 id="landing-jobs-heading" className="sr-only">
+          {t('availableJobs')}
+        </h2>
         {result.jobs.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-soft px-6 py-16 text-center">
             <SearchX className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
