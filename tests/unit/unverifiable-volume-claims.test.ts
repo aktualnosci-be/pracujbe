@@ -22,7 +22,7 @@ describe('brak nieweryfikowalnych liczb na stronie głównej i liście ofert (#3
   for (const [locale, messages] of Object.entries({ pl, nl, fr, en })) {
     it(locale, () => {
       for (const [ns, key] of KEYS) {
-        const value = (messages as Record<string, Record<string, string>>)[ns]![key]!;
+        const value = (messages as unknown as Record<string, Record<string, string>>)[ns]![key]!;
         expect(value, `${ns}.${key}`).toBeTruthy();
         expect(value, `${ns}.${key}`).not.toMatch(VOLUME_CLAIM);
       }
