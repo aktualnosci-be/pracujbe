@@ -1262,5 +1262,28 @@
       "remoteJob": "Télétravail — la localisation importe peu",
       "withinCommuteRadius": "Lieu de travail dans votre rayon de déplacement"
     }
+  },
+  "application": {
+    "error": {
+      "jobRequired": "Choisissez l'offre à laquelle vous souhaitez postuler.",
+      "jobInvalid": "Cette offre est introuvable. Actualisez la page et réessayez.",
+      "messageTooLong": "Le message est trop long.",
+      "phoneInvalid": "Indiquez un numéro de téléphone valide.",
+      "termsRequired": "Vous devez accepter le consentement pour envoyer votre candidature.",
+      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez."
+    }
+  },
+  "offer": {
+    "error": {
+      "jobRequired": "Choisissez une offre d'emploi.",
+      "jobInvalid": "Cette offre d'emploi est introuvable. Actualisez la page et réessayez.",
+      "candidateRequired": "Choisissez un candidat.",
+      "candidateInvalid": "Ce candidat est introuvable. Actualisez la page et réessayez.",
+      "messageRequired": "Écrivez un message au candidat.",
+      "messageTooShort": "Le message est trop court (au moins 10 caractères).",
+      "messageTooLong": "Le message est trop long.",
+      "idempotencyKeyRequired": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez.",
+      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez."
+    }
   }
 }
