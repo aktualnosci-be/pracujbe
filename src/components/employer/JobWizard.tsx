@@ -506,12 +506,12 @@ export function JobWizard({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-5 pb-8 sm:space-y-6">
       {/* Nagłówek + znacznik zapisu */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between sm:pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
-          <p className="mt-1 max-w-2xl text-muted-foreground">{t('subtitle')}</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{t('title')}</h1>
+          <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground">{t('subtitle')}</p>
         </div>
         {saveState === 'saved' && badgeVisible ? (
           <div
@@ -539,16 +539,16 @@ export function JobWizard({
         steps={steps}
         current={step - 1}
         progressLabel={t('stepProgress', { current: step, total: steps.length })}
-        className="rounded-3xl border border-border bg-card p-5 sm:p-7"
+        className="rounded-[1.75rem] border border-border bg-card p-5 shadow-sm sm:p-7"
       />
 
       {/* Formularz bieżącego kroku */}
-      <section className="min-w-0 rounded-3xl border border-border bg-card p-5 sm:p-7">
-        <h2 className="text-lg font-semibold text-foreground">{steps[step - 1]?.title}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{steps[step - 1]?.desc}</p>
+      <section className="min-w-0 rounded-[1.75rem] border border-border border-t-4 border-t-primary bg-card p-5 shadow-sm sm:p-8">
+        <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{steps[step - 1]?.title}</h2>
+        <p className="mt-1 text-base leading-relaxed text-muted-foreground">{steps[step - 1]?.desc}</p>
 
         <form
-          className="mt-5"
+          className="mt-6 [&_input]:min-h-12 [&_textarea]:text-base [&_[role=combobox]]:min-h-12"
           noValidate
           onSubmit={(e) => {
             e.preventDefault();
@@ -1065,7 +1065,7 @@ export function JobWizard({
               </div>
 
               {/* Podgląd oferty */}
-              <div className="rounded-lg border border-border bg-soft p-4 sm:p-5">
+              <div className="rounded-2xl border border-border bg-soft p-5 sm:p-6">
                 <h3 className="text-base font-semibold text-foreground">{t('previewTitle')}</h3>
                 <p className="mt-0.5 text-sm text-muted-foreground">{t('previewNote')}</p>
                 <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
@@ -1157,7 +1157,7 @@ export function JobWizard({
       </section>
 
       {/* Stopka: wskaźnik zapisu + nawigacja */}
-      <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <SaveIndicator
           state={saveState}
           labels={{
@@ -1167,7 +1167,7 @@ export function JobWizard({
             error: t('saveError'),
           }}
         />
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end [&_button]:min-h-12">
           <Button asChild variant="ghost" disabled={busy}>
             <Link href="/employer">{t('cancel')}</Link>
           </Button>
