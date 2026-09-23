@@ -17,8 +17,12 @@ import {
  * Przełącznik języka (client component).
  * Zmienia locale, zachowując bieżącą ścieżkę (usePathname/useRouter z @/i18n/navigation).
  * Bez pełnego przeładowania — nawigacja w tranzycji. Etykieta z i18n (footer.langLabel).
+ *
+ * `side="top"` otwiera listę nad przyciskiem — dla miejsc przy dolnej krawędzi ekranu
+ * (panel menu mobilnego), gdzie lista otwierana w dół wychodziłaby poza viewport i nie
+ * dałoby się wybrać języka dotykiem.
  */
-export function LocaleSwitcher() {
+export function LocaleSwitcher({ side = 'bottom' }: { side?: 'top' | 'bottom' } = {}) {
   const t = useTranslations('footer');
   const locale = useLocale();
   const pathname = usePathname();
@@ -41,7 +45,9 @@ export function LocaleSwitcher() {
         <Languages className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <SelectValue />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent
+        className={side === 'top' ? 'bottom-[calc(100%+0.25rem)] top-auto' : undefined}
+      >
         {routing.locales.map((loc) => (
           <SelectItem key={loc} value={loc}>
             {localeNames[loc]}
