@@ -588,7 +588,8 @@ export async function renderEmail<T extends EmailType>(
   // Rejestr jest w pełni typowany; tu kasujemy generyk wyłącznie na potrzeby createElement
   // (TS nie potrafi skorelować EmailDataMap[T] z sygnaturą createElement).
   const Component = templates[type] as unknown as FunctionComponent<Record<string, unknown>>;
-  const element = createElement(Component, { locale, ...data });
+  // `locale` PO danych: klucz `locale` w payloadzie kolejki nie może nadpisać języka odbiorcy (#348).
+  const element = createElement(Component, { ...data, locale });
   const html = await render(element);
   const vars = prepareVars(type, locale, data as Record<string, unknown>);
   const subject = interpolate(resolveCopy(type, locale, vars).subject, vars);

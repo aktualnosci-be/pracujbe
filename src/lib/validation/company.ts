@@ -13,6 +13,8 @@ import { z } from 'zod/v3';
 const nameSchema = z
   .string({ required_error: 'company.error.nameRequired' })
   .trim()
+  // Pusty string (formularz wysyła '') → „wymagane", „za krótka" dopiero dla 1 znaku (#367).
+  .min(1, 'company.error.nameRequired')
   .min(2, 'company.error.nameTooShort')
   .max(120, 'company.error.nameTooLong');
 

@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, expect, test } from '@playwright/test';
 
+import { rejectOptionalCookies } from './fixtures/messages';
+
 const extensionPath = resolve(__dirname, 'fixtures/browser-zoom');
 
 const headings = {
@@ -28,7 +30,7 @@ for (const [locale, heading] of Object.entries(headings)) {
   test(`candidate application history fits 320px in ${locale}`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await page.goto(`/${locale}/candidate/aplikacje`);
-    await page.locator('[aria-labelledby="cookie-banner-title"] button').first().click();
+    await rejectOptionalCookies(page, locale);
     await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
     const cards = page.getByRole('main').getByRole('listitem');
     await expect(cards).toHaveCount(10);
@@ -58,7 +60,7 @@ for (const [locale, heading] of Object.entries(headings)) {
       const baseURL = test.info().project.use.baseURL;
       expect(baseURL).toBeTruthy();
       await page.goto(new URL(`/${locale}/candidate/aplikacje`, baseURL).toString());
-      await page.locator('[aria-labelledby="cookie-banner-title"] button').first().click();
+      await rejectOptionalCookies(page, locale);
       const tabId = await worker.evaluate(async (url) => {
         const tab = (await chrome.tabs.query({})).find((entry) => entry.url?.startsWith(url));
         if (!tab?.id) throw new Error('Application tab missing');

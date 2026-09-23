@@ -35,6 +35,7 @@ import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness'
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
 import {
   AVAILABILITY_VALUES,
+  CANDIDATE_ITEM_LIMITS,
   CATEGORY_KEYS,
   CONTRACT_TYPES,
   LANGUAGE_LEVELS,
@@ -47,6 +48,7 @@ import {
   step6Schema,
 } from '@/lib/validation/candidate';
 import type { CategoryKey, ContractType } from '@/lib/jobs';
+import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { saveOnboardingStep, type OnboardingStep } from '@/lib/actions/onboarding';
 
 /**
@@ -272,6 +274,8 @@ export function OnboardingWizard({
 
   const [step, setStep] = React.useState<OnboardingStep>(initialStep);
   const [saveState, setSaveState] = React.useState<SaveState>('idle');
+  // #363: kod błędu z serwera → własny komunikat (zamiast zawsze „Nie udało się zapisać”).
+  const [saveError, setSaveError] = React.useState<ErrorCode | null>(null);
   // Blokada ponownego wysłania bez czekania na render (podwójne kliknięcie / Enter, Invariant #11).
   const savingRef = React.useRef(false);
   // #323: po zmianie kroku fokus na nagłówku nowego kroku + komunikat dla czytnika ekranu.
@@ -323,6 +327,14 @@ export function OnboardingWizard({
     values.languages.length > 0 || values.certificates.length > 0,
     Boolean(values.availability) && values.agreeTerms,
   ];
+  // Kroki z polami, których wymaga `finish_onboarding` (0029): imię, zawody+branże, miasto,
+  // dostępność. Przy ONBOARDING_INCOMPLETE prowadzimy kandydata do pierwszego brakującego (#363).
+  const requiredDone: Partial<Record<OnboardingStep, boolean>> = {
+    1: Boolean(values.firstName.trim() && values.lastName.trim()),
+    2: values.occupations.length > 0 && values.categories.length > 0,
+    4: values.city.trim() !== '',
+    6: Boolean(values.availability),
+  };
   const completeness = Math.round((stepDone.filter(Boolean).length / stepDone.length) * 100);
   const checklist = steps.map((s, i) => ({
     label: s.title,
@@ -377,7 +389,9 @@ export function OnboardingWizard({
       const erroredFields = new Set<string>();
       for (const issue of result.error.issues) {
         const field = String(issue.path[0] ?? '');
-        if (!field) continue;
+        // Pierwsza niespełniona reguła pola jest najtrafniejsza („wymagane” przed „za krótkie”,
+        // #367) — kolejne nie mogą jej nadpisać.
+        if (!field || erroredFields.has(field)) continue;
         erroredFields.add(field);
         if ((STEP_FIELDS[current] as string[]).includes(field)) {
           setError(field as keyof FormValues, {
@@ -392,11 +406,19 @@ export function OnboardingWizard({
     }
 
     savingRef.current = true;
+    setSaveError(null);
     setSaveState('saving');
     try {
       const res = await saveOnboardingStep(current, data, { finish });
       if (!res.ok) {
+        setSaveError(res.error);
         setSaveState('error');
+        if (res.error === 'ONBOARDING_INCOMPLETE') {
+          const missing = (Object.keys(requiredDone).map(Number) as OnboardingStep[]).find(
+            (s) => !requiredDone[s],
+          );
+          if (missing && missing !== current) setStep(missing);
+        }
         return false;
       }
       setDemoSaved(Boolean(res.demo));
@@ -404,6 +426,7 @@ export function OnboardingWizard({
       setBadgeVisible(true);
       return true;
     } catch {
+      setSaveError('INTERNAL');
       setSaveState('error');
       return false;
     } finally {
@@ -419,6 +442,7 @@ export function OnboardingWizard({
   function handleBack(): void {
     if (step <= 1 || savingRef.current) return;
     clearErrors();
+    setSaveError(null);
     setSaveState('idle');
     setStep((step - 1) as OnboardingStep);
   }
@@ -478,9 +502,9 @@ export function OnboardingWizard({
           <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('title')}</h1>
           <p className="mt-1 max-w-2xl text-muted-foreground">{t('subtitle')}</p>
         </div>
+        {/* Bez `role="status"`: stan zapisu ogłasza jeden region — SaveIndicator w stopce (#402). */}
         {saveState === 'saved' && badgeVisible ? (
           <div
-            role="status"
             className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-success/30 bg-success/5 px-3 py-2"
           >
             <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
@@ -611,6 +635,8 @@ export function OnboardingWizard({
                     addLabel={t('add')}
                     removeLabel={t('remove')}
                     invalid={Boolean(errors.occupations)}
+                    maxItemLength={CANDIDATE_ITEM_LIMITS.occupation}
+                    tooLongLabel={t('itemTooLongMax', { max: CANDIDATE_ITEM_LIMITS.occupation })}
                     describedBy={describedBy('occupations', true)}
                   />
                   <p id={hintId('occupations')} className="text-xs text-muted-foreground">
@@ -678,6 +704,8 @@ export function OnboardingWizard({
                     addLabel={t('add')}
                     removeLabel={t('remove')}
                     invalid={Boolean(errors.skills)}
+                    maxItemLength={CANDIDATE_ITEM_LIMITS.skill}
+                    tooLongLabel={t('itemTooLongMax', { max: CANDIDATE_ITEM_LIMITS.skill })}
                     describedBy={describedBy('skills', true)}
                   />
                   <p id={hintId('skills')} className="text-xs text-muted-foreground">
@@ -907,6 +935,8 @@ export function OnboardingWizard({
                     addLabel={t('add')}
                     removeLabel={t('remove')}
                     invalid={Boolean(errors.certificates)}
+                    maxItemLength={CANDIDATE_ITEM_LIMITS.certificate}
+                    tooLongLabel={t('itemTooLongMax', { max: CANDIDATE_ITEM_LIMITS.certificate })}
                     describedBy={describedBy('certificates')}
                   />
                   <FieldError name="certificates" />
@@ -1061,7 +1091,8 @@ export function OnboardingWizard({
             idle: t('saveHint'),
             saving: t('saving'),
             saved: demoSaved ? t('savedDemo') : t('saved'),
-            error: t('saveError'),
+            // Kod z serwera ma własny komunikat; brak kodu (np. zerwane połączenie) → ogólny.
+            error: saveError ? tRoot(toUserMessageKey(saveError)) : t('saveError'),
           }}
         />
         <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
@@ -1221,6 +1252,8 @@ function ChipInput({
   removeLabel,
   invalid,
   describedBy,
+  maxItemLength,
+  tooLongLabel,
 }: {
   id: string;
   values: string[];
@@ -1230,14 +1263,25 @@ function ChipInput({
   removeLabel: string;
   invalid?: boolean;
   describedBy?: string;
+  maxItemLength: number;
+  tooLongLabel: string;
 }): React.JSX.Element {
   const [draft, setDraft] = React.useState('');
+  const [tooLong, setTooLong] = React.useState(false);
+  const draftErrorId = `${id}-draft-error`;
 
   function add(): void {
     const value = draft.trim();
     if (!value) return;
+    // Za długa pozycja nie trafia na listę (baza by ją po cichu obcięła — #364). Wpis zostaje
+    // w polu do skrócenia; bez twardego `maxLength`, który obcinałby wklejony tekst bez komunikatu.
+    if (value.length > maxItemLength) {
+      setTooLong(true);
+      return;
+    }
     if (!values.includes(value)) onChange([...values, value]);
     setDraft('');
+    setTooLong(false);
   }
 
   return (
@@ -1247,9 +1291,15 @@ function ChipInput({
           id={id}
           value={draft}
           placeholder={placeholder}
-          aria-invalid={invalid ? true : undefined}
-          aria-describedby={describedBy}
-          onChange={(e) => setDraft(e.target.value)}
+          aria-invalid={invalid || tooLong ? true : undefined}
+          aria-describedby={
+            [tooLong ? draftErrorId : undefined, describedBy].filter(Boolean).join(' ') ||
+            undefined
+          }
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (tooLong) setTooLong(false);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
@@ -1262,6 +1312,11 @@ function ChipInput({
           {addLabel}
         </Button>
       </div>
+      {tooLong ? (
+        <p id={draftErrorId} className="mt-1.5 text-sm text-error">
+          {tooLongLabel}
+        </p>
+      ) : null}
       {values.length > 0 ? (
         <ul className="mt-3 flex flex-wrap gap-2">
           {values.map((value) => (
