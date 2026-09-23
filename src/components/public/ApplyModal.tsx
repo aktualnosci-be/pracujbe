@@ -100,6 +100,7 @@ export function ApplyModal({
   const [sent, setSent] = React.useState(false);
   const phoneRef = React.useRef<HTMLInputElement>(null);
   const consentRef = React.useRef<HTMLButtonElement>(null);
+  const formErrorRef = React.useRef<HTMLDivElement>(null);
 
   const availabilityLabel = (value: Availability): string => {
     switch (value) {
@@ -128,6 +129,12 @@ export function ApplyModal({
     if (next) reset();
     setOpen(next);
   };
+
+  // Po błędzie z serwera przycisk był zablokowany (fokus spadał na kontener dialogu) —
+  // przenosimy fokus na komunikat, aby użytkownik klawiatury/czytnika wiedział, co się stało.
+  React.useEffect(() => {
+    if (formError) formErrorRef.current?.focus();
+  }, [formError]);
 
   React.useEffect(() => {
     if (!sent) return;
@@ -236,11 +243,11 @@ export function ApplyModal({
             <form className="space-y-4" onSubmit={handleSubmit} noValidate>
               <div className="space-y-1.5">
                 <Label htmlFor="apply-phone">
-                  {t('phone')} <span className="text-error">*</span>
+                  {t('phone')} <span className="text-error" aria-hidden="true">*</span>
                 </Label>
                 <div className="flex gap-2">
                   <Select value={dial} onValueChange={setDial}>
-                    <SelectTrigger aria-label={t('phone')} className="w-28 shrink-0">
+                    <SelectTrigger aria-label={t('dialCode')} className="w-28 shrink-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -259,6 +266,7 @@ export function ApplyModal({
                     value={phone}
                     onChange={(event) => setPhone(event.target.value)}
                     placeholder={t('phonePlaceholder')}
+                    aria-required="true"
                     aria-invalid={errors.phone ? true : undefined}
                     aria-describedby={errors.phone ? 'apply-phone-error' : undefined}
                     className={cn('flex-1', errors.phone ? 'border-error' : undefined)}
@@ -273,7 +281,7 @@ export function ApplyModal({
 
               <div className="space-y-1.5">
                 <Label htmlFor="apply-availability">
-                  {t('availability')} <span className="text-error">*</span>
+                  {t('availability')} <span className="text-error" aria-hidden="true">*</span>
                 </Label>
                 <Select
                   value={availability}
@@ -313,6 +321,7 @@ export function ApplyModal({
                   id="apply-consent"
                   checked={consent}
                   onCheckedChange={(value) => setConsent(value === true)}
+                  aria-required="true"
                   aria-invalid={errors.consent ? true : undefined}
                   aria-describedby={errors.consent ? 'apply-consent-error' : undefined}
                   className={errors.consent ? 'border-error' : undefined}
@@ -332,8 +341,10 @@ export function ApplyModal({
 
               {formError ? (
                 <div
+                  ref={formErrorRef}
                   role="alert"
-                  className="rounded-lg bg-error/10 p-3 text-sm text-error"
+                  tabIndex={-1}
+                  className="rounded-lg bg-error/10 p-3 text-sm text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {formError === 'login' ? (
                     <Link href={LOGIN_HREF} className="font-medium underline">
