@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import pg from 'pg';
 import { loadMigrations } from './migration-files.mjs';
-import { applyMigrations } from './migrate.mjs';
+import { applyMigrations, planMigrations } from './migrate.mjs';
 
 /** Jedna historia bootstrapu i domeny; kolejne zmiany dopisujemy po ostatnim numerze. */
 export async function loadProductionMigrations(root = fileURLToPath(new URL('../../', import.meta.url))) {
@@ -26,20 +26,42 @@ export async function loadProductionMigrations(root = fileURLToPath(new URL('../
   return [{ ...initial, name: '0000_bootstrap_roles_and_identity.sql' }, ...combined];
 }
 
+/**
+ * MIGRATION_MODE:
+ *   status  — tylko odczyt: ile migracji zastosowano i które czekają (domyślne, bezpieczne);
+ *   dry-run — nakłada oczekujące migracje w transakcji i zawsze ją wycofuje;
+ *   apply   — nakłada i zatwierdza (wymaga jawnego wyboru).
+ */
 export async function main() {
   const connectionString = process.env.MIGRATION_DATABASE_URL;
+  const mode = process.env.MIGRATION_MODE ?? 'status';
   if (!connectionString) {
     console.error('Ustaw osobny MIGRATION_DATABASE_URL migratora.');
+    return 2;
+  }
+  if (!['status', 'dry-run', 'apply'].includes(mode)) {
+    console.error('MIGRATION_MODE musi mieć wartość status, dry-run albo apply.');
     return 2;
   }
   const client = new pg.Client({ connectionString, connectionTimeoutMillis: 10_000 });
   try {
     const migrations = await loadProductionMigrations();
     await client.connect();
-    const result = await applyMigrations(client, migrations);
-    console.log(`Migracja produkcyjna: ${result.applied} nowych, ${result.total} łącznie.`);
+    if (mode === 'status') {
+      const plan = await planMigrations(client, migrations);
+      console.log(`Stan migracji: ${plan.applied} zastosowanych, ${plan.pending.length} oczekujących, ${plan.total} łącznie.`);
+      for (const name of plan.pending) console.log(`  oczekuje: ${name}`);
+      return 0;
+    }
+    const result = await applyMigrations(client, migrations, { dryRun: mode === 'dry-run' });
+    if (mode === 'dry-run') {
+      console.log(`Próba migracji: ${result.pending.length} oczekujących przeszło i zostało wycofanych (ROLLBACK), ${result.total} łącznie.`);
+    } else {
+      console.log(`Migracja produkcyjna: ${result.applied} nowych, ${result.total} łącznie.`);
+    }
     return 0;
   } catch {
+    // Sterownik może umieścić dane i parametry SQL w błędzie — nie wypisujemy ich.
     console.error('Migracja produkcyjna nie powiodła się. Sprawdź historię i uprawnienia migratora.');
     return 1;
   } finally {
