@@ -689,7 +689,7 @@ export async function getEmployerApplicationsPage(page: number): Promise<Employe
 }
 
 /** Top dopasowani kandydaci (matches × candidate_profiles). Tylko dla firmy zweryfikowanej. */
-export async function getTopMatchedCandidates(): Promise<EmployerMatchedCandidate[]> {
+export async function getTopMatchedCandidates(options?: { throwOnError?: boolean }): Promise<EmployerMatchedCandidate[]> {
   if (!isSupabaseConfigured()) return DEMO_CANDIDATES;
 
   try {
@@ -757,6 +757,7 @@ export async function getTopMatchedCandidates(): Promise<EmployerMatchedCandidat
     });
   } catch (error) {
     captureError(error, { area: 'employer.getTopMatchedCandidates' });
+    if (options?.throwOnError) throw error;
     return [];
   }
 }
