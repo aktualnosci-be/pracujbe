@@ -10,7 +10,7 @@ export default defineConfig({
   testDir: './tests/e2e',
   testMatch: mode === 'error'
     ? '**/candidate-applications-error.spec.ts'
-    : '**/candidate-applications-pagination.spec.ts',
+    : ['**/candidate-applications-pagination.spec.ts', '**/candidate-proposals-pagination.spec.ts'],
   workers: 1,
   // next dev kompiluje trasę przy pierwszym żądaniu; na zimnym starcie trwa to ponad 30 s.
   timeout: 120_000,
