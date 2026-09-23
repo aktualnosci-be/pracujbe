@@ -71,15 +71,16 @@ function ConsentSwitch({
       aria-describedby={describedBy}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
-        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        checked ? 'bg-accent' : 'bg-muted-foreground/30',
+        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 transition-colors ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        // WCAG 1.4.11: stan „wył." ma obrys i gałkę w kolorze muted-foreground (≥ 3:1 z tłem).
+        checked ? 'border-transparent bg-accent' : 'border-muted-foreground bg-background',
       )}
     >
       <span
         aria-hidden="true"
         className={cn(
-          'pointer-events-none block h-5 w-5 rounded-full bg-background shadow-sm transition-transform',
-          checked ? 'translate-x-5' : 'translate-x-0',
+          'pointer-events-none block h-5 w-5 rounded-full shadow-sm transition-transform',
+          checked ? 'translate-x-5 bg-background' : 'translate-x-0 bg-muted-foreground',
         )}
       />
     </button>
