@@ -935,6 +935,7 @@
     "subtitle": "Utilisez votre profil pour postuler rapidement.",
     "profileNote": "Les données de votre profil seront jointes à la candidature.",
     "phone": "Téléphone",
+    "dialCode": "Indicatif du pays",
     "phonePlaceholder": "512 345 678",
     "availability": "Disponibilité",
     "availImmediate": "Immédiatement",
