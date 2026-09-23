@@ -3,7 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import manifest from "@/app/manifest";
+import { createManifest } from "@/lib/pwa/manifest";
+import plMessages from "@/messages/pl.json";
 
 const PUBLIC = join(process.cwd(), "public");
 
@@ -29,7 +30,7 @@ describe("zasoby marki Pracuj.be", () => {
   });
 
   it("manifest odwołuje się wyłącznie do istniejących ikon PNG", () => {
-    const value = manifest();
+    const value = createManifest('pl', plMessages.common.appName, plMessages.metadata.homeDescription);
     expect(value.theme_color).toBe("#D92932");
     for (const icon of value.icons ?? []) {
       const name = String(icon.src).replace(/^\//, "");

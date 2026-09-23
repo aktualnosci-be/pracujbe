@@ -28,6 +28,8 @@ Paczka dostarczona. Wdrożenie aplikacji etapowe; prototyp nie jest dowodem uko�
 
 Pierwsza zmiana aplikacji: tokeny kolorów, logo, jasna stopka i sidebar, wysokość głównego przycisku oraz kolor manifestu. Typografia pozostaje lokalnym Inter do osobnego sprawdzenia fontu DM Sans. Ikony PWA/OG i pełny przegląd widoków pozostają w etapie #7.
 
+Manifest PWA jest podłączany osobno dla każdego aktywnego języka (`/{locale}/manifest.webmanifest`). Instalacja z PL/NL/FR/EN otwiera właściwy adres i opis; logo, ikony oraz barwy są wspólne. Dotychczasowy `/manifest.webmanifest` zostaje dla wcześniejszych polskich instalacji. Dodanie języka do routingu wymaga tłumaczeń `common.appName` i `metadata.homeDescription`, ale nie kopiowania generatora manifestu.
+
 Etap #3 zakończony: karty ofert i szczegóły działają w układzie paszportu, z opcjonalnym wynagrodzeniem i etykietami w czterech językach. Okres stawki jest przekazywany przez publiczny model listy i wspólnie formatowany na karcie, detalu oraz w podobnych ofertach. Zapis ofert jest podłączany w #9 i wymaga końcowej weryfikacji na sesji kandydata.
 
 Zapis publiczny: wspólny odczyt pod sesją/RLS dla kolekcji, przyciski detalu synchronizowane w jednym stanie, anonimowy użytkownik kierowany do logowania, tryb demonstracyjny nie udaje trwałego zapisu. Testy przeglądarkowe demo nie dowodzą trwałości na prawdziwej bazie.
