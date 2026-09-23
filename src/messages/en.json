@@ -813,6 +813,7 @@
   },
   "onboarding": {
     "stepProgress": "Step {current} of {total}",
+    "stepAnnounce": "Step {current} of {total}: {title}",
     "title": "Your candidate profile",
     "subtitle": "Create your profile and we will match the best jobs in Belgium to you.",
     "loadError": "We couldn't load your profile",
@@ -903,7 +904,9 @@
     "contractTypesLabel": "Preferred contract types",
     "bioLabel": "About me (optional)",
     "bioPlaceholder": "Write a few sentences about yourself, your experience and expectations.",
-    "agreeTerms": "I accept the terms of use and the privacy policy."
+    "agreeTerms": "I accept the terms of use and the privacy policy.",
+    "agreeTermsLinks": "I accept the <terms>terms of use</terms> and the <privacy>privacy policy</privacy>.",
+    "opensInNewTab": "(opens in a new tab)"
   },
   "filters": {
     "title": "Filters",

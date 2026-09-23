@@ -813,6 +813,7 @@
   },
   "onboarding": {
     "stepProgress": "Stap {current} van {total}",
+    "stepAnnounce": "Stap {current} van {total}: {title}",
     "title": "Je kandidatenprofiel",
     "subtitle": "Maak je profiel aan en wij matchen de beste vacatures in België met jou.",
     "loadError": "Je profiel kon niet worden geladen",
@@ -903,7 +904,9 @@
     "contractTypesLabel": "Gewenste contracttypes",
     "bioLabel": "Over mij (optioneel)",
     "bioPlaceholder": "Schrijf enkele zinnen over jezelf, je ervaring en verwachtingen.",
-    "agreeTerms": "Ik aanvaard de gebruiksvoorwaarden en het privacybeleid."
+    "agreeTerms": "Ik aanvaard de gebruiksvoorwaarden en het privacybeleid.",
+    "agreeTermsLinks": "Ik aanvaard de <terms>gebruiksvoorwaarden</terms> en het <privacy>privacybeleid</privacy>.",
+    "opensInNewTab": "(opent in een nieuw tabblad)"
   },
   "filters": {
     "title": "Filters",

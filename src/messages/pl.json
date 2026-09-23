@@ -813,6 +813,7 @@
   },
   "onboarding": {
     "stepProgress": "Krok {current} z {total}",
+    "stepAnnounce": "Krok {current} z {total}: {title}",
     "title": "Twój profil kandydata",
     "subtitle": "Utwórz swój profil, a my dopasujemy do Ciebie najlepsze oferty pracy w Belgii.",
     "loadError": "Nie udało się wczytać Twojego profilu",
@@ -903,7 +904,9 @@
     "contractTypesLabel": "Preferowane rodzaje umów",
     "bioLabel": "O mnie (opcjonalnie)",
     "bioPlaceholder": "Napisz kilka zdań o sobie, doświadczeniu i oczekiwaniach.",
-    "agreeTerms": "Akceptuję regulamin i politykę prywatności."
+    "agreeTerms": "Akceptuję regulamin i politykę prywatności.",
+    "agreeTermsLinks": "Akceptuję <terms>regulamin</terms> i <privacy>politykę prywatności</privacy>.",
+    "opensInNewTab": "(otwiera się w nowej karcie)"
   },
   "filters": {
     "title": "Filtry",

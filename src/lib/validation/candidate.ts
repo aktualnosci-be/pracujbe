@@ -152,6 +152,12 @@ export const step6Schema = z.object({
   }),
 });
 
+/**
+ * Krok 6 zapisywany bez zakończenia („Zapisz i wyjdź”, #337) — te same pola bez zgody. Zgoda
+ * jest wymagana dopiero przy „Zakończ”, więc nie blokuje zapisu wpisanych danych.
+ */
+export const step6DraftSchema = step6Schema.omit({ agreeTerms: true });
+
 /** Pełny profil kandydata — złączenie wszystkich kroków. */
 export const candidateProfileSchema = step1Schema
   .merge(step2Schema)

@@ -43,6 +43,7 @@ import {
   step3Schema,
   step4Schema,
   step5Schema,
+  step6DraftSchema,
   step6Schema,
 } from '@/lib/validation/candidate';
 import type { CategoryKey, ContractType } from '@/lib/jobs';
@@ -143,6 +144,22 @@ const SCHEMAS = {
 
 function domId(field: keyof FormValues): string {
   return `onb-${field}`;
+}
+
+/** Id podpowiedzi pod polem (część `aria-describedby`, #320). */
+function hintId(field: keyof FormValues): string {
+  return `${domId(field)}-hint`;
+}
+
+/** Id komunikatu błędu pola — ten sam, który renderuje `FieldError`. */
+function errorId(field: keyof FormValues): string {
+  return `${domId(field)}-error`;
+}
+
+/** Pierwszy element, który może przyjąć fokus: sam element albo pierwszy kontrolka w grupie. */
+function focusTarget(el: HTMLElement): HTMLElement | null {
+  if (el.matches('input, textarea, button, select, [tabindex]')) return el;
+  return el.querySelector<HTMLElement>('input, textarea, button, select, [tabindex]');
 }
 
 /** '' → NaN (wymagane pole: NaN da błąd typu z i18n), inaczej liczba. */
@@ -255,6 +272,12 @@ export function OnboardingWizard({
 
   const [step, setStep] = React.useState<OnboardingStep>(initialStep);
   const [saveState, setSaveState] = React.useState<SaveState>('idle');
+  // Blokada ponownego wysłania bez czekania na render (podwójne kliknięcie / Enter, Invariant #11).
+  const savingRef = React.useRef(false);
+  // #323: po zmianie kroku fokus na nagłówku nowego kroku + komunikat dla czytnika ekranu.
+  const stepHeadingRef = React.useRef<HTMLHeadingElement>(null);
+  const isFirstRenderRef = React.useRef(true);
+  const [stepAnnouncement, setStepAnnouncement] = React.useState('');
   const [demoSaved, setDemoSaved] = React.useState(false);
   const [badgeVisible, setBadgeVisible] = React.useState(false);
 
@@ -307,21 +330,48 @@ export function OnboardingWizard({
     hint: stepDone[i] ? undefined : t('none'),
   }));
 
+  React.useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    stepHeadingRef.current?.focus();
+    setStepAnnouncement(
+      t('stepAnnounce', { current: step, total: steps.length, title: steps[step - 1]?.title ?? '' }),
+    );
+    // Reaguje wyłącznie na zmianę kroku; tytuły kroków są stałe w obrębie locale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  /** `aria-describedby` pola: podpowiedź (gdy jest) + komunikat błędu (gdy widoczny), #320. */
+  function describedBy(field: keyof FormValues, withHint = false): string | undefined {
+    const ids = [withHint ? hintId(field) : null, errors[field] ? errorId(field) : null].filter(
+      Boolean,
+    );
+    return ids.length > 0 ? ids.join(' ') : undefined;
+  }
+
   function scrollToFirstError(current: OnboardingStep, erroredFields: Set<string>): void {
     const first = STEP_FIELDS[current].find((f) => erroredFields.has(f));
     if (!first) return;
     const el = document.getElementById(domId(first));
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) el.focus();
+      // Grupy (branże, typy umów, zgoda, dostępność) → pierwsza kontrolka w grupie (#320).
+      focusTarget(el)?.focus();
     }
   }
 
-  /** Waliduje i zapisuje bieżący krok. Zwraca true przy sukcesie. */
-  async function persistStep(current: OnboardingStep): Promise<boolean> {
+  /**
+   * Waliduje i zapisuje bieżący krok. Zwraca true przy sukcesie. Krok 6 bez `finish`
+   * („Zapisz i wyjdź”) nie wymaga zgody (#337) — zgoda blokuje tylko „Zakończ”.
+   */
+  async function persistStep(current: OnboardingStep, finish = false): Promise<boolean> {
+    if (savingRef.current) return false;
     clearErrors(STEP_FIELDS[current]);
     const data = buildStepData(current, getValues());
-    const result = SCHEMAS[current].safeParse(data);
+    const schema = current === 6 && !finish ? step6DraftSchema : SCHEMAS[current];
+    const result = schema.safeParse(data);
 
     if (!result.success) {
       const erroredFields = new Set<string>();
@@ -341,9 +391,10 @@ export function OnboardingWizard({
       return false;
     }
 
+    savingRef.current = true;
     setSaveState('saving');
     try {
-      const res = await saveOnboardingStep(current, data);
+      const res = await saveOnboardingStep(current, data, { finish });
       if (!res.ok) {
         setSaveState('error');
         return false;
@@ -355,6 +406,8 @@ export function OnboardingWizard({
     } catch {
       setSaveState('error');
       return false;
+    } finally {
+      savingRef.current = false;
     }
   }
 
@@ -364,7 +417,7 @@ export function OnboardingWizard({
   }
 
   function handleBack(): void {
-    if (step <= 1) return;
+    if (step <= 1 || savingRef.current) return;
     clearErrors();
     setSaveState('idle');
     setStep((step - 1) as OnboardingStep);
@@ -376,11 +429,12 @@ export function OnboardingWizard({
   }
 
   async function handleFinish(): Promise<void> {
-    const ok = await persistStep(6);
+    const ok = await persistStep(6, true);
     if (ok) router.push('/candidate');
   }
 
   const busy = saveState === 'saving';
+  const busyClass = busy ? 'cursor-not-allowed opacity-50' : undefined;
 
   function toggleInArray<T>(field: keyof FormValues, value: T): void {
     const current = getValues(field) as unknown as T[];
@@ -410,7 +464,7 @@ export function OnboardingWizard({
     const message = errors[name]?.message;
     if (!message) return null;
     return (
-      <p id={`${domId(name)}-error`} className="text-sm text-error">
+      <p id={errorId(name)} className="text-sm text-error">
         {tRoot(String(message))}
       </p>
     );
@@ -483,7 +537,16 @@ export function OnboardingWizard({
         {/* Formularz bieżącego kroku */}
         <section className="min-w-0 rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-7">
           <div className="mb-5 h-1 w-12 rounded-full bg-primary" aria-hidden="true" />
-          <h2 className="text-xl font-semibold text-foreground">{steps[step - 1]?.title}</h2>
+          <h2
+            ref={stepHeadingRef}
+            tabIndex={-1}
+            className="text-xl font-semibold text-foreground focus:outline-none"
+          >
+            {steps[step - 1]?.title}
+          </h2>
+          <p className="sr-only" aria-live="polite" aria-atomic="true">
+            {stepAnnouncement}
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">{steps[step - 1]?.desc}</p>
 
           <form
@@ -502,6 +565,7 @@ export function OnboardingWizard({
                     id={domId('firstName')}
                     autoComplete="given-name"
                     aria-invalid={errors.firstName ? true : undefined}
+                    aria-describedby={describedBy('firstName')}
                     {...register('firstName')}
                   />
                   <FieldError name="firstName" />
@@ -512,6 +576,7 @@ export function OnboardingWizard({
                     id={domId('lastName')}
                     autoComplete="family-name"
                     aria-invalid={errors.lastName ? true : undefined}
+                    aria-describedby={describedBy('lastName')}
                     {...register('lastName')}
                   />
                   <FieldError name="lastName" />
@@ -523,9 +588,12 @@ export function OnboardingWizard({
                     type="tel"
                     autoComplete="tel"
                     aria-invalid={errors.phone ? true : undefined}
+                    aria-describedby={describedBy('phone', true)}
                     {...register('phone')}
                   />
-                  <p className="text-xs text-muted-foreground">{t('phoneHint')}</p>
+                  <p id={hintId('phone')} className="text-xs text-muted-foreground">
+                    {t('phoneHint')}
+                  </p>
                   <FieldError name="phone" />
                 </div>
               </div>
@@ -543,13 +611,22 @@ export function OnboardingWizard({
                     addLabel={t('add')}
                     removeLabel={t('remove')}
                     invalid={Boolean(errors.occupations)}
+                    describedBy={describedBy('occupations', true)}
                   />
-                  <p className="text-xs text-muted-foreground">{t('occupationsHint')}</p>
+                  <p id={hintId('occupations')} className="text-xs text-muted-foreground">
+                    {t('occupationsHint')}
+                  </p>
                   <FieldError name="occupations" />
                 </div>
 
-                <div id={domId('categories')} className="space-y-2">
-                  <Label>{t('categoriesLabel')}</Label>
+                <div
+                  id={domId('categories')}
+                  role="group"
+                  aria-labelledby={`${domId('categories')}-label`}
+                  aria-describedby={describedBy('categories', true)}
+                  className="space-y-2"
+                >
+                  <Label id={`${domId('categories')}-label`}>{t('categoriesLabel')}</Label>
                   <div className="flex flex-wrap gap-2">
                     {CATEGORY_KEYS.map((key) => {
                       const active = values.categories.includes(key);
@@ -563,7 +640,9 @@ export function OnboardingWizard({
                       );
                     })}
                   </div>
-                  <p className="text-xs text-muted-foreground">{t('categoriesHint')}</p>
+                  <p id={hintId('categories')} className="text-xs text-muted-foreground">
+                    {t('categoriesHint')}
+                  </p>
                   <FieldError name="categories" />
                 </div>
               </div>
@@ -580,9 +659,12 @@ export function OnboardingWizard({
                     min={0}
                     max={60}
                     aria-invalid={errors.experienceYears ? true : undefined}
+                    aria-describedby={describedBy('experienceYears', true)}
                     {...register('experienceYears')}
                   />
-                  <p className="text-xs text-muted-foreground">{t('experienceHint')}</p>
+                  <p id={hintId('experienceYears')} className="text-xs text-muted-foreground">
+                    {t('experienceHint')}
+                  </p>
                   <FieldError name="experienceYears" />
                 </div>
 
@@ -596,8 +678,11 @@ export function OnboardingWizard({
                     addLabel={t('add')}
                     removeLabel={t('remove')}
                     invalid={Boolean(errors.skills)}
+                    describedBy={describedBy('skills', true)}
                   />
-                  <p className="text-xs text-muted-foreground">{t('skillsHint')}</p>
+                  <p id={hintId('skills')} className="text-xs text-muted-foreground">
+                    {t('skillsHint')}
+                  </p>
                   <FieldError name="skills" />
                 </div>
               </div>
@@ -614,6 +699,7 @@ export function OnboardingWizard({
                         className="pr-10"
                         autoComplete="address-level2"
                         aria-invalid={errors.city ? true : undefined}
+                        aria-describedby={describedBy('city')}
                         {...register('city')}
                       />
                       <MapPin
@@ -628,6 +714,7 @@ export function OnboardingWizard({
                     <Input
                       id={domId('region')}
                       aria-invalid={errors.region ? true : undefined}
+                      aria-describedby={describedBy('region')}
                       {...register('region')}
                     />
                     <FieldError name="region" />
@@ -641,14 +728,19 @@ export function OnboardingWizard({
                       min={0}
                       max={300}
                       aria-invalid={errors.radiusKm ? true : undefined}
+                      aria-describedby={describedBy('radiusKm')}
                       {...register('radiusKm')}
                     />
                     <FieldError name="radiusKm" />
                   </div>
                 </div>
 
-                <div id={domId('hasDrivingLicense')}>
-                  <Label>{t('drivingLicense')}</Label>
+                <div
+                  id={domId('hasDrivingLicense')}
+                  role="group"
+                  aria-labelledby={`${domId('hasDrivingLicense')}-label`}
+                >
+                  <Label id={`${domId('hasDrivingLicense')}-label`}>{t('drivingLicense')}</Label>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(
                       [
@@ -733,7 +825,12 @@ export function OnboardingWizard({
                       className="flex-1"
                       value={langDraft}
                       placeholder={t('languageNamePlaceholder')}
-                      aria-invalid={langError ? true : undefined}
+                      aria-invalid={langError || errors.languages ? true : undefined}
+                      aria-describedby={
+                        [langError ? 'onb-language-draft-error' : null, describedBy('languages')]
+                          .filter(Boolean)
+                          .join(' ') || undefined
+                      }
                       onChange={(e) => {
                         setLangDraft(e.target.value);
                         if (langError) setLangError(false);
@@ -767,7 +864,9 @@ export function OnboardingWizard({
                     </Button>
                   </div>
                   {langError ? (
-                    <p className="text-sm text-error">{tRoot('candidate.error.languageInvalid')}</p>
+                    <p id="onb-language-draft-error" className="text-sm text-error">
+                      {tRoot('candidate.error.languageInvalid')}
+                    </p>
                   ) : null}
                   {values.languages.length > 0 ? (
                     <ul className="mt-1 flex flex-wrap gap-2">
@@ -808,6 +907,7 @@ export function OnboardingWizard({
                     addLabel={t('add')}
                     removeLabel={t('remove')}
                     invalid={Boolean(errors.certificates)}
+                    describedBy={describedBy('certificates')}
                   />
                   <FieldError name="certificates" />
                 </div>
@@ -827,6 +927,7 @@ export function OnboardingWizard({
                     <SelectTrigger
                       id="onb-availability-trigger"
                       aria-invalid={errors.availability ? true : undefined}
+                      aria-describedby={describedBy('availability')}
                     >
                       <SelectValue placeholder={t('availabilityLabel')} />
                     </SelectTrigger>
@@ -841,8 +942,16 @@ export function OnboardingWizard({
                   <FieldError name="availability" />
                 </div>
 
-                <div id={domId('preferredContractTypes')} className="space-y-2">
-                  <Label>{t('contractTypesLabel')}</Label>
+                <div
+                  id={domId('preferredContractTypes')}
+                  role="group"
+                  aria-labelledby={`${domId('preferredContractTypes')}-label`}
+                  aria-describedby={describedBy('preferredContractTypes')}
+                  className="space-y-2"
+                >
+                  <Label id={`${domId('preferredContractTypes')}-label`}>
+                    {t('contractTypesLabel')}
+                  </Label>
                   <div className="flex flex-wrap gap-2">
                     {CONTRACT_TYPES.map((ct) => {
                       const active = values.preferredContractTypes.includes(ct);
@@ -869,6 +978,7 @@ export function OnboardingWizard({
                         inputMode="numeric"
                         min={0}
                         aria-invalid={errors.expectedSalaryMin ? true : undefined}
+                        aria-describedby={describedBy('expectedSalaryMin')}
                         {...register('expectedSalaryMin')}
                       />
                     </div>
@@ -899,6 +1009,7 @@ export function OnboardingWizard({
                     rows={4}
                     placeholder={t('bioPlaceholder')}
                     aria-invalid={errors.bio ? true : undefined}
+                    aria-describedby={describedBy('bio')}
                     {...register('bio')}
                   />
                   <FieldError name="bio" />
@@ -913,13 +1024,25 @@ export function OnboardingWizard({
                         setValue('agreeTerms', checked === true, { shouldDirty: true })
                       }
                       aria-invalid={errors.agreeTerms ? true : undefined}
+                      aria-describedby={describedBy('agreeTerms')}
                       className="mt-0.5"
                     />
                     <Label
                       htmlFor="onb-agreeTerms-box"
                       className="text-sm font-normal leading-snug text-muted-foreground"
                     >
-                      {t('agreeTerms')}
+                      {t.rich('agreeTermsLinks', {
+                        terms: (chunks) => (
+                          <TermsLink href="/regulamin" newTabHint={t('opensInNewTab')}>
+                            {chunks}
+                          </TermsLink>
+                        ),
+                        privacy: (chunks) => (
+                          <TermsLink href="/polityka-prywatnosci" newTabHint={t('opensInNewTab')}>
+                            {chunks}
+                          </TermsLink>
+                        ),
+                      })}
                     </Label>
                   </div>
                   <FieldError name="agreeTerms" />
@@ -945,17 +1068,36 @@ export function OnboardingWizard({
           <Button asChild variant="ghost" disabled={busy}>
             <Link href="/candidate">{t('cancel')}</Link>
           </Button>
-          <Button type="button" variant="outline" onClick={() => void handleSaveExit()} disabled={busy}>
+          {/* #323: `aria-disabled` zamiast `disabled` — przycisk zachowuje fokus podczas zapisu;
+              blokadę ponownego wysłania egzekwuje `savingRef` w handlerach (Invariant #11). */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void handleSaveExit()}
+            aria-disabled={busy || undefined}
+            className={busyClass}
+          >
             {t('saveExit')}
           </Button>
           {step > 1 ? (
-            <Button type="button" variant="outline" onClick={handleBack} disabled={busy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleBack}
+              aria-disabled={busy || undefined}
+              className={busyClass}
+            >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               {t('back')}
             </Button>
           ) : null}
           {step < 6 ? (
-            <Button type="button" onClick={() => void handleNext()} disabled={busy}>
+            <Button
+              type="button"
+              onClick={() => void handleNext()}
+              aria-disabled={busy || undefined}
+              className={busyClass}
+            >
               {busy ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : null}
@@ -963,7 +1105,12 @@ export function OnboardingWizard({
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Button>
           ) : (
-            <Button type="button" onClick={() => void handleFinish()} disabled={busy}>
+            <Button
+              type="button"
+              onClick={() => void handleFinish()}
+              aria-disabled={busy || undefined}
+              className={busyClass}
+            >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
               {t('finish')}
             </Button>
@@ -971,6 +1118,33 @@ export function OnboardingWizard({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Link do dokumentu prawnego w etykiecie zgody (#337, wzorzec z rejestracji #229). Nowa karta,
+ * żeby nie gubić wpisanych danych; klik w link nie przełącza checkboxa.
+ */
+function TermsLink({
+  href,
+  newTabHint,
+  children,
+}: {
+  href: '/regulamin' | '/polityka-prywatnosci';
+  newTabHint: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <Link
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(event) => event.stopPropagation()}
+      className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+    >
+      {children}
+      <span className="sr-only"> {newTabHint}</span>
+    </Link>
   );
 }
 
@@ -1046,6 +1220,7 @@ function ChipInput({
   addLabel,
   removeLabel,
   invalid,
+  describedBy,
 }: {
   id: string;
   values: string[];
@@ -1054,6 +1229,7 @@ function ChipInput({
   addLabel: string;
   removeLabel: string;
   invalid?: boolean;
+  describedBy?: string;
 }): React.JSX.Element {
   const [draft, setDraft] = React.useState('');
 
@@ -1072,6 +1248,7 @@ function ChipInput({
           value={draft}
           placeholder={placeholder}
           aria-invalid={invalid ? true : undefined}
+          aria-describedby={describedBy}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
