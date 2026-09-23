@@ -93,3 +93,19 @@ test('szczegóły oferty zawierają JSON-LD JobPosting oraz <html lang="pl">', a
   }
   expect(foundJobPosting, 'Brak danych strukturalnych JobPosting (JSON-LD)').toBe(true);
 });
+
+// #118: tytuł z nazwą marki nie może dodatkowo przejść przez szablon layoutu
+// („… | Pracuj.be · Pracuj.be”). Sprawdzamy każdą trasę, której tytuł z
+// komunikatów już zawiera markę.
+const brandTitleRoutes = ['', '/praca', '/poradniki', '/praca/kategoria/construction', '/praca/miasto/brussels'];
+
+for (const locale of ['pl', 'nl', 'fr', 'en']) {
+  for (const route of brandTitleRoutes) {
+    test(`${locale}${route || '/'} ma dokładnie jedną nazwę marki w <title>`, async ({ page }) => {
+      await page.goto(`/${locale}${route}`);
+      const title = await page.title();
+      expect(title.match(/Pracuj\.be/g) ?? [], title).toHaveLength(1);
+      expect(title).not.toMatch(/·\s*Pracuj\.be$/);
+    });
+  }
+}

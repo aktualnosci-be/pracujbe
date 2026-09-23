@@ -83,7 +83,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = t(`cat_${category}`);
 
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: { canonical: url, languages },
     openGraph: {
