@@ -37,7 +37,7 @@ export function LocaleSwitcher() {
 
   return (
     <Select value={locale} onValueChange={handleChange} disabled={isPending}>
-      <SelectTrigger className="h-9 w-auto gap-2" aria-label={t('langLabel')}>
+      <SelectTrigger className="h-11 w-auto gap-2" aria-label={t('langLabel')}>
         <Languages className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <SelectValue />
       </SelectTrigger>
