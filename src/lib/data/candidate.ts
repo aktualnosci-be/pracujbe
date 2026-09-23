@@ -707,35 +707,39 @@ export async function getMyApplications(locale: string = routing.defaultLocale, 
  * bierzemy z RPC `get_public_jobs` (kandydat nie czyta tabel bazowych — P1-01), więc pokazujemy
  * te zapisy, które są wciąż aktywne/publiczne. Kolejność: najnowiej zapisane pierwsze.
  */
-export async function getSavedJobs(locale: string = routing.defaultLocale): Promise<RecommendedJob[]> {
+export type SavedJobsResult =
+  | { status: 'ready'; jobs: RecommendedJob[] }
+  | { status: 'error' };
+
+export async function getSavedJobs(locale: string = routing.defaultLocale): Promise<SavedJobsResult> {
   const resolvedLocale = toLocale(locale);
-  if (!isSupabaseConfigured()) return demoSaved(resolvedLocale);
+  if (!isSupabaseConfigured()) return { status: 'ready', jobs: demoSaved(resolvedLocale) };
 
   try {
     const { supabase, userId } = await getServerContext();
-    if (!userId) return [];
+    if (!userId) return { status: 'error' };
 
-    const [savedRes, jobsMap] = await Promise.all([
-      supabase
-        .from('saved_jobs')
-        .select('job_id, created_at')
-        .eq('candidate_id', userId)
-        .order('created_at', { ascending: false }),
-      fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT),
-    ]);
+    const savedRes = await supabase
+      .from('saved_jobs')
+      .select('job_id, created_at')
+      .eq('candidate_id', userId)
+      .order('created_at', { ascending: false });
     if (savedRes.error) throw savedRes.error;
+    const rows = asArr(savedRes.data);
+    if (rows.length === 0) return { status: 'ready', jobs: [] };
+    const jobsMap = await fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT);
 
     const result: RecommendedJob[] = [];
-    for (const row of asArr(savedRes.data)) {
+    for (const row of rows) {
       const jobId = asStr(asRecord(row)['job_id']);
       const job = jobId ? jobsMap.get(jobId) : undefined;
       if (!job) continue;
       result.push({ ...job, match: null, saved: true });
     }
-    return result;
+    return { status: 'ready', jobs: result };
   } catch (error) {
     captureError(error, { area: 'candidate.getSavedJobs' });
-    return [];
+    return { status: 'error' };
   }
 }
 
