@@ -44,7 +44,6 @@ export interface Guide {
   readonly category: GuideCategory;
   /** Data publikacji (ISO, `YYYY-MM-DD`) — stabilna między buildami. */
   readonly publishedAt: string;
-  readonly readingMinutes: number;
   readonly translations: Record<Locale, GuideTranslation>;
 }
 
@@ -53,6 +52,7 @@ export interface GuideListEntry {
   readonly slug: string;
   readonly category: GuideCategory;
   readonly publishedAt: string;
+  /** Szacowany czas czytania wersji w TYM języku (wyliczany z treści, min. 1). */
   readonly readingMinutes: number;
   readonly title: string;
   readonly excerpt: string;
@@ -87,7 +87,6 @@ const GUIDES: readonly Guide[] = [
     slug: 'praca-w-belgii-bez-znajomosci-jezyka',
     category: 'jobSearch',
     publishedAt: '2026-07-15',
-    readingMinutes: 6,
     translations: {
       pl: {
         title: 'Jak znaleźć pracę w Belgii bez znajomości języka',
@@ -193,7 +192,6 @@ const GUIDES: readonly Guide[] = [
     slug: 'umowa-interim-co-warto-wiedziec',
     category: 'contracts',
     publishedAt: '2026-07-08',
-    readingMinutes: 7,
     translations: {
       pl: {
         title: 'Umowa interim — co warto wiedzieć',
@@ -292,7 +290,6 @@ const GUIDES: readonly Guide[] = [
     slug: 'zakwaterowanie-od-pracodawcy',
     category: 'housing',
     publishedAt: '2026-06-28',
-    readingMinutes: 6,
     translations: {
       pl: {
         title: 'Zakwaterowanie od pracodawcy — na co uważać',
@@ -383,7 +380,6 @@ const GUIDES: readonly Guide[] = [
     slug: 'numer-niss-i-podatki',
     category: 'admin',
     publishedAt: '2026-06-18',
-    readingMinutes: 8,
     translations: {
       pl: {
         title: 'Numer rejestrowy (NISS) i podatki w Belgii',
@@ -484,7 +480,6 @@ const GUIDES: readonly Guide[] = [
     slug: 'prawo-jazdy-i-praca-kierowcy',
     category: 'driving',
     publishedAt: '2026-06-05',
-    readingMinutes: 7,
     translations: {
       pl: {
         title: 'Prawo jazdy i praca kierowcy w Belgii',
@@ -579,7 +574,6 @@ const GUIDES: readonly Guide[] = [
     slug: 'bezpieczenstwo-na-budowie-vca',
     category: 'safety',
     publishedAt: '2026-05-22',
-    readingMinutes: 6,
     translations: {
       pl: {
         title: 'Bezpieczeństwo na budowie i certyfikat VCA',
@@ -681,6 +675,29 @@ const GUIDES: readonly Guide[] = [
  * Publiczne API (kontrakt @/lib/guides/guides)
  * ------------------------------------------------------------------------- */
 
+/**
+ * Tempo czytania użyte do szacowania czasu (słowa/min). Wartość zachowawcza dla czytelnika,
+ * który czyta w drugim języku; ta sama dla wszystkich języków, by różnice wynikały z treści.
+ */
+const WORDS_PER_MINUTE = 200;
+
+function countWords(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+/**
+ * Czas czytania liczony z treści danej wersji językowej (tytuł + zajawka + bloki).
+ * Wersje nl/fr/en są skrócone, więc stała wartość na poradnik zawyżałaby ich czas.
+ */
+function readingMinutesOf(translation: GuideTranslation): number {
+  const words = [
+    translation.title,
+    translation.excerpt,
+    ...translation.body.flatMap((block) => (block.type === 'list' ? block.items : [block.text])),
+  ].reduce((sum, text) => sum + countWords(text), 0);
+  return Math.max(1, Math.ceil(words / WORDS_PER_MINUTE));
+}
+
 function newestFirst(a: Guide, b: Guide): number {
   return b.publishedAt.localeCompare(a.publishedAt);
 }
@@ -694,7 +711,7 @@ export function getAllGuides(locale: string): GuideListEntry[] {
       slug: guide.slug,
       category: guide.category,
       publishedAt: guide.publishedAt,
-      readingMinutes: guide.readingMinutes,
+      readingMinutes: readingMinutesOf(t),
       title: t.title,
       excerpt: t.excerpt,
     };
@@ -710,7 +727,7 @@ export function getGuideBySlug(slug: string, locale: string): GuideFull | null {
     slug: guide.slug,
     category: guide.category,
     publishedAt: guide.publishedAt,
-    readingMinutes: guide.readingMinutes,
+    readingMinutes: readingMinutesOf(t),
     title: t.title,
     excerpt: t.excerpt,
     body: t.body,
