@@ -18,13 +18,33 @@ import {
 export const SALARY_PERIODS = ['hour', 'month', 'year'] as const;
 export const salaryPeriodSchema = z.enum(SALARY_PERIODS);
 
-const nonEmptyLine = z.string().trim().min(1);
+/**
+ * Limity długości pojedynczej pozycji list kreatora (#364). Wymagania, umiejętności i certyfikaty
+ * odpowiadają `left(btrim(...), N)` w RPC relacji oferty (0047/0051) — walidacja odrzuca za długą
+ * pozycję, zanim baza by ją po cichu obcięła. Obowiązki/warunki/benefity nie mają limitu w DB;
+ * dostają ten sam sufit co wymaganie, by lista w UI zachowywała się spójnie.
+ */
+export const JOB_ITEM_LIMITS = {
+  requirement: 500,
+  line: 500,
+  skill: 120,
+  certificate: 160,
+} as const;
+
+const itemLine = (max: number) =>
+  z.string().trim().min(1).max(max, 'job.error.itemTooLong');
+const requirementLine = itemLine(JOB_ITEM_LIMITS.requirement);
+const textLine = itemLine(JOB_ITEM_LIMITS.line);
+const skillLine = itemLine(JOB_ITEM_LIMITS.skill);
+const certificateLine = itemLine(JOB_ITEM_LIMITS.certificate);
 
 /** Krok 1 — podstawy: tytuł, kategoria, zawód. */
 const step1Base = z.object({
   title: z
     .string({ required_error: 'job.error.titleRequired' })
     .trim()
+    // Pusty string (formularz wysyła '') → „wymagane", a „za krótkie" dopiero dla 1–4 znaków (#367).
+    .min(1, 'job.error.titleRequired')
     .min(5, 'job.error.titleTooShort')
     .max(120, 'job.error.titleTooLong'),
   category: categoryKeySchema,
@@ -104,10 +124,11 @@ const step5Base = z.object({
   description: z
     .string({ required_error: 'job.error.descriptionRequired' })
     .trim()
+    .min(1, 'job.error.descriptionRequired')
     .min(30, 'job.error.descriptionTooShort')
     .max(5000, 'job.error.descriptionTooLong'),
   responsibilities: z
-    .array(nonEmptyLine)
+    .array(textLine)
     .min(1, 'job.error.responsibilitiesRequired')
     .max(20, 'job.error.responsibilitiesTooMany'),
 });
@@ -116,11 +137,11 @@ export const step5Schema = step5Base;
 /** Krok 6 — wymagania obowiązkowe. */
 const step6Base = z.object({
   requirementsMandatory: z
-    .array(nonEmptyLine)
+    .array(requirementLine)
     .min(1, 'job.error.requirementsMandatoryRequired')
     .max(20, 'job.error.requirementsTooMany'),
   mandatorySkills: z
-    .array(nonEmptyLine)
+    .array(skillLine)
     .max(30, 'job.error.skillsTooMany')
     .default([]),
   minExperienceYears: z
@@ -135,16 +156,16 @@ export const step6Schema = step6Base;
 /** Krok 7 — wymagania dodatkowe, języki, transport. */
 const step7Base = z.object({
   requirementsOptional: z
-    .array(nonEmptyLine)
+    .array(requirementLine)
     .max(20, 'job.error.requirementsTooMany')
     .default([]),
-  skills: z.array(nonEmptyLine).max(30, 'job.error.skillsTooMany').default([]),
+  skills: z.array(skillLine).max(30, 'job.error.skillsTooMany').default([]),
   languages: z
     .array(candidateLanguageSchema)
     .max(10, 'job.error.languagesTooMany')
     .default([]),
   requiredCertificates: z
-    .array(nonEmptyLine)
+    .array(certificateLine)
     .max(20, 'job.error.certificatesTooMany')
     .default([]),
   requiresDrivingLicense: z.boolean().default(false),
@@ -154,21 +175,31 @@ export const step7Schema = step7Base;
 
 /** Krok 8 — warunki i benefity. */
 const step8Base = z.object({
-  conditions: z.array(nonEmptyLine).max(20, 'job.error.conditionsTooMany').default([]),
-  benefits: z.array(nonEmptyLine).max(20, 'job.error.benefitsTooMany').default([]),
+  conditions: z.array(textLine).max(20, 'job.error.conditionsTooMany').default([]),
+  benefits: z.array(textLine).max(20, 'job.error.benefitsTooMany').default([]),
   accommodation: z.boolean().default(false),
   transport: z.boolean().default(false),
 });
 export const step8Schema = step8Base;
 
-/** Krok 9 — firma i publikacja. */
-const step9Base = z.object({
+/**
+ * Krok 9 — firma i publikacja. Szkic (`step9DraftSchema`) zapisuje opis firmy i kontakt BEZ
+ * zgody na publikację (#193) — zgoda nie jest polem szkicu, tylko decyzją o publikacji, więc
+ * wymaga jej wyłącznie `step9Schema` (ścieżka „Publikuj").
+ */
+const step9DraftBase = z.object({
   companyDescription: z
     .string({ required_error: 'job.error.companyDescriptionRequired' })
     .trim()
+    .min(1, 'job.error.companyDescriptionRequired')
     .min(20, 'job.error.companyDescriptionTooShort')
     .max(3000, 'job.error.companyDescriptionTooLong'),
   contactEmail: z.string().trim().email('job.error.contactEmailInvalid').optional(),
+  agreePublish: z.boolean().optional(),
+});
+export const step9DraftSchema = step9DraftBase;
+
+const step9Base = step9DraftBase.extend({
   agreePublish: z.literal(true, {
     errorMap: () => ({ message: 'job.error.publishAgreementRequired' }),
   }),
@@ -199,4 +230,5 @@ export type JobStep6 = z.infer<typeof step6Schema>;
 export type JobStep7 = z.infer<typeof step7Schema>;
 export type JobStep8 = z.infer<typeof step8Schema>;
 export type JobStep9 = z.infer<typeof step9Schema>;
+export type JobStep9Draft = z.infer<typeof step9DraftSchema>;
 export type JobInput = z.infer<typeof jobSchema>;

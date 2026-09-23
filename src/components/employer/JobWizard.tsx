@@ -43,7 +43,9 @@ import {
   step6Schema,
   step7Schema,
   step8Schema,
+  step9DraftSchema,
   step9Schema,
+  JOB_ITEM_LIMITS,
 } from '@/lib/validation/job';
 import type { CategoryKey, ContractType } from '@/lib/jobs';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
@@ -188,6 +190,27 @@ const SCHEMAS = {
   8: step8Schema,
   9: step9Schema,
 } as const;
+
+/** Pola list (ChipInput) → maksymalna długość jednej pozycji (#364, zgodna z walidacją Zod). */
+type ChipField =
+  | 'responsibilities'
+  | 'requirementsMandatory'
+  | 'mandatorySkills'
+  | 'requirementsOptional'
+  | 'skills'
+  | 'requiredCertificates'
+  | 'conditions'
+  | 'benefits';
+const ITEM_MAX: Record<ChipField, number> = {
+  responsibilities: JOB_ITEM_LIMITS.line,
+  requirementsMandatory: JOB_ITEM_LIMITS.requirement,
+  mandatorySkills: JOB_ITEM_LIMITS.skill,
+  requirementsOptional: JOB_ITEM_LIMITS.requirement,
+  skills: JOB_ITEM_LIMITS.skill,
+  requiredCertificates: JOB_ITEM_LIMITS.certificate,
+  conditions: JOB_ITEM_LIMITS.line,
+  benefits: JOB_ITEM_LIMITS.line,
+};
 
 function domId(field: keyof FormValues): string {
   return `job-${field}`;
@@ -403,17 +426,27 @@ export function JobWizard({
     }
   }
 
-  /** Waliduje i zapisuje bieżący krok (tworzy szkic przy pierwszym zapisie). Zwraca true. */
-  async function persistStep(current: WizardStep): Promise<boolean> {
+  /**
+   * Waliduje i zapisuje bieżący krok (tworzy szkic przy pierwszym zapisie). Zwraca true.
+   * `intent='publish'` dokłada w kroku 9 wymóg zgody na publikację; zwykły zapis szkicu
+   * („Zapisz i wyjdź") jej nie wymaga (#193).
+   */
+  async function persistStep(
+    current: WizardStep,
+    intent: 'draft' | 'publish' = 'draft',
+  ): Promise<boolean> {
     clearErrors(STEP_FIELDS[current]);
     const data = buildStepData(current, getValues());
-    const result = SCHEMAS[current].safeParse(data);
+    const schema = current === 9 && intent === 'draft' ? step9DraftSchema : SCHEMAS[current];
+    const result = schema.safeParse(data);
 
     if (!result.success) {
       const erroredFields = new Set<string>();
       for (const issue of result.error.issues) {
         const field = String(issue.path[0] ?? '');
-        if (!field) continue;
+        // Zod zgłasza wszystkie niespełnione reguły pola (np. „wymagane" i „za krótkie" dla ''),
+        // a pierwsza jest najtrafniejsza — kolejne nie mogą jej nadpisać (#367).
+        if (!field || erroredFields.has(field)) continue;
         erroredFields.add(field);
         if ((STEP_FIELDS[current] as string[]).includes(field)) {
           setError(field as keyof FormValues, {
@@ -476,7 +509,7 @@ export function JobWizard({
 
   async function handlePublish(): Promise<void> {
     setPublishError(null);
-    const ok = await persistStep(9);
+    const ok = await persistStep(9, 'publish');
     if (!ok) return;
 
     const id = jobId;
@@ -824,6 +857,8 @@ export function JobWizard({
                 <Label htmlFor={domId('responsibilities')}>{t('responsibilitiesLabel')}</Label>
                 <ChipInput
                   id={domId('responsibilities')}
+                  maxItemLength={ITEM_MAX.responsibilities}
+                  tooLongLabel={t('itemTooLongMax', { max: ITEM_MAX.responsibilities })}
                   values={values.responsibilities}
                   onChange={(next) => setValue('responsibilities', next, { shouldDirty: true })}
                   placeholder={t('responsibilitiesPlaceholder')}
@@ -846,6 +881,8 @@ export function JobWizard({
                 </Label>
                 <ChipInput
                   id={domId('requirementsMandatory')}
+                  maxItemLength={ITEM_MAX.requirementsMandatory}
+                  tooLongLabel={t('itemTooLongMax', { max: ITEM_MAX.requirementsMandatory })}
                   values={values.requirementsMandatory}
                   onChange={(next) => setValue('requirementsMandatory', next, { shouldDirty: true })}
                   placeholder={t('requirementsMandatoryPlaceholder')}
@@ -860,6 +897,8 @@ export function JobWizard({
                 <Label htmlFor={domId('mandatorySkills')}>{t('mandatorySkillsLabel')}</Label>
                 <ChipInput
                   id={domId('mandatorySkills')}
+                  maxItemLength={ITEM_MAX.mandatorySkills}
+                  tooLongLabel={t('itemTooLongMax', { max: ITEM_MAX.mandatorySkills })}
                   values={values.mandatorySkills}
                   onChange={(next) => setValue('mandatorySkills', next, { shouldDirty: true })}
                   placeholder={t('mandatorySkillsPlaceholder')}
@@ -896,6 +935,8 @@ export function JobWizard({
                 </Label>
                 <ChipInput
                   id={domId('requirementsOptional')}
+                  maxItemLength={ITEM_MAX.requirementsOptional}
+                  tooLongLabel={t('itemTooLongMax', { max: ITEM_MAX.requirementsOptional })}
                   values={values.requirementsOptional}
                   onChange={(next) => setValue('requirementsOptional', next, { shouldDirty: true })}
                   placeholder={t('requirementsOptionalPlaceholder')}
@@ -910,6 +951,8 @@ export function JobWizard({
                 <Label htmlFor={domId('skills')}>{t('skillsLabel')}</Label>
                 <ChipInput
                   id={domId('skills')}
+                  maxItemLength={ITEM_MAX.skills}
+                  tooLongLabel={t('itemTooLongMax', { max: ITEM_MAX.skills })}
                   values={values.skills}
                   onChange={(next) => setValue('skills', next, { shouldDirty: true })}
                   placeholder={t('skillsPlaceholder')}
@@ -1000,6 +1043,8 @@ export function JobWizard({
                 <Label htmlFor={domId('requiredCertificates')}>{t('certificatesLabel')}</Label>
                 <ChipInput
                   id={domId('requiredCertificates')}
+                  maxItemLength={ITEM_MAX.requiredCertificates}
+                  tooLongLabel={t('itemTooLongMax', { max: ITEM_MAX.requiredCertificates })}
                   values={values.requiredCertificates}
                   onChange={(next) => setValue('requiredCertificates', next, { shouldDirty: true })}
                   placeholder={t('certificatesPlaceholder')}
@@ -1034,6 +1079,8 @@ export function JobWizard({
                 <Label htmlFor={domId('conditions')}>{t('conditionsLabel')}</Label>
                 <ChipInput
                   id={domId('conditions')}
+                  maxItemLength={ITEM_MAX.conditions}
+                  tooLongLabel={t('itemTooLongMax', { max: ITEM_MAX.conditions })}
                   values={values.conditions}
                   onChange={(next) => setValue('conditions', next, { shouldDirty: true })}
                   placeholder={t('conditionsPlaceholder')}
@@ -1048,6 +1095,8 @@ export function JobWizard({
                 <Label htmlFor={domId('benefits')}>{t('benefitsLabel')}</Label>
                 <ChipInput
                   id={domId('benefits')}
+                  maxItemLength={ITEM_MAX.benefits}
+                  tooLongLabel={t('itemTooLongMax', { max: ITEM_MAX.benefits })}
                   values={values.benefits}
                   onChange={(next) => setValue('benefits', next, { shouldDirty: true })}
                   placeholder={t('benefitsPlaceholder')}
@@ -1363,6 +1412,8 @@ function ChipInput({
   removeLabel,
   invalid,
   errorDescription,
+  maxItemLength,
+  tooLongLabel,
 }: {
   id: string;
   values: string[];
@@ -1372,14 +1423,25 @@ function ChipInput({
   removeLabel: string;
   invalid?: boolean;
   errorDescription?: string;
+  maxItemLength: number;
+  tooLongLabel: string;
 }): React.JSX.Element {
   const [draft, setDraft] = React.useState('');
+  const [tooLong, setTooLong] = React.useState(false);
+  const draftErrorId = `${id}-draft-error`;
 
   function add(): void {
     const value = draft.trim();
     if (!value) return;
+    // Za długa pozycja nie trafia na listę (baza by ją po cichu obcięła — #364). Wpis zostaje
+    // w polu do skrócenia; bez twardego `maxLength`, który obcinałby wklejony tekst bez komunikatu.
+    if (value.length > maxItemLength) {
+      setTooLong(true);
+      return;
+    }
     if (!values.includes(value)) onChange([...values, value]);
     setDraft('');
+    setTooLong(false);
   }
 
   return (
@@ -1389,9 +1451,15 @@ function ChipInput({
           id={id}
           value={draft}
           placeholder={placeholder}
-          aria-invalid={invalid ? true : undefined}
-          aria-describedby={errorDescription}
-          onChange={(e) => setDraft(e.target.value)}
+          aria-invalid={invalid || tooLong ? true : undefined}
+          aria-describedby={
+            [tooLong ? draftErrorId : undefined, errorDescription].filter(Boolean).join(' ') ||
+            undefined
+          }
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (tooLong) setTooLong(false);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
@@ -1404,6 +1472,11 @@ function ChipInput({
           {addLabel}
         </Button>
       </div>
+      {tooLong ? (
+        <p id={draftErrorId} className="mt-1.5 text-sm text-error">
+          {tooLongLabel}
+        </p>
+      ) : null}
       {values.length > 0 ? (
         <ul className="mt-3 flex flex-wrap gap-2">
           {values.map((value) => (

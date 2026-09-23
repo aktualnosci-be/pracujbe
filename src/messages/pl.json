@@ -367,7 +367,8 @@
       "companyDescriptionTooLong": "Opis firmy jest za długi.",
       "contactEmailInvalid": "Nieprawidłowy adres e-mail.",
       "publishAgreementRequired": "Potwierdź, aby opublikować ofertę.",
-      "invalid": "Nieprawidłowa wartość."
+      "invalid": "Nieprawidłowa wartość.",
+      "itemTooLong": "Jedna z pozycji listy jest za długa. Skróć ją."
     },
     "contentLanguageNotice": "Treść tej oferty jest dostępna tylko w języku: {language}.",
     "contentLanguageNames": {
@@ -1145,7 +1146,8 @@
     "previewNote": "Sprawdź dane przed publikacją.",
     "previewNothing": "—",
     "previewSalaryNotProvided": "Nie podano",
-    "notVerifiedNote": "Wersja robocza została zapisana. Publikacja będzie możliwa po weryfikacji firmy."
+    "notVerifiedNote": "Wersja robocza została zapisana. Publikacja będzie możliwa po weryfikacji firmy.",
+    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy."
   },
   "messages": {
     "title": "Wiadomości",

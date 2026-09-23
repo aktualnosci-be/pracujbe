@@ -19,7 +19,7 @@ import {
   step6Schema,
   step7Schema,
   step8Schema,
-  step9Schema,
+  step9DraftSchema,
   type JobStep1,
   type JobStep2,
   type JobStep3,
@@ -28,7 +28,7 @@ import {
   type JobStep6,
   type JobStep7,
   type JobStep8,
-  type JobStep9,
+  type JobStep9Draft,
 } from '@/lib/validation/job';
 
 /**
@@ -157,7 +157,9 @@ function validateJobStep(step: number, data: unknown): unknown | null {
     6: step6Schema,
     7: step7Schema,
     8: step8Schema,
-    9: step9Schema,
+    // Szkic kroku 9 nie wymaga zgody na publikację (#193) — zgoda nie jest utrwalana,
+    // a publikacja idzie osobną akcją `publishJob` (transakcyjne RPC `publish_job`).
+    9: step9DraftSchema,
   }[step];
   if (!schema) return null;
   const result = schema.safeParse(data);
@@ -498,7 +500,7 @@ async function applyStep(
     }
 
     case 9: {
-      const v = parsed as JobStep9;
+      const v = parsed as JobStep9Draft;
       const e = await write(
         supabase.from('jobs').update({ contact_email: nullIfEmpty(v.contactEmail) }).eq('id', jobId),
       );

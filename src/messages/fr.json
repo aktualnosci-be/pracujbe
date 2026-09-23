@@ -367,7 +367,8 @@
       "companyDescriptionTooLong": "La description de l'entreprise est trop longue.",
       "contactEmailInvalid": "Adresse e-mail invalide.",
       "publishAgreementRequired": "Confirmez pour publier l'offre.",
-      "invalid": "Valeur invalide."
+      "invalid": "Valeur invalide.",
+      "itemTooLong": "Un des éléments de la liste est trop long. Raccourcissez-le."
     },
     "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
     "contentLanguageNames": {
@@ -1145,7 +1146,8 @@
     "previewNote": "Vérifiez les informations avant publication.",
     "previewNothing": "—",
     "previewSalaryNotProvided": "Non précisé",
-    "notVerifiedNote": "Le brouillon est enregistré. La publication sera possible une fois l'entreprise vérifiée."
+    "notVerifiedNote": "Le brouillon est enregistré. La publication sera possible une fois l'entreprise vérifiée.",
+    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste."
   },
   "messages": {
     "title": "Messages",

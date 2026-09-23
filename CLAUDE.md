@@ -537,6 +537,11 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
 - [x] Panel pracodawcy — realne dane pod sesją (RLS) + akcje (zmiana statusu aplikacji, wysyłka propozycji), noindex; fallback demo bez env
 - [x] Kreator oferty (9 kroków, autozapis draftu, publikacja z kontrolą `verified`) — `src/lib/actions/jobs.ts` + `JobWizard`
+  Krok 9: „Zapisz i wyjdź” zapisuje szkic bez zgody na publikację (`step9DraftSchema`, także
+  w `updateJobDraft`); zgodę wymaga tylko „Opublikuj” (`step9Schema`) (#193). Pozycje list mają
+  limity `JOB_ITEM_LIMITS` równe obcięciom w RPC relacji (test porównuje z migracjami) — za długa
+  pozycja nie trafia na listę (#364, część kreatora). Błędy pól: `aria-invalid` + `aria-describedby`
+  + fokus na pierwszym błędzie; puste pole → komunikat „wymagane” (#160, #367 część kreatora).
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.

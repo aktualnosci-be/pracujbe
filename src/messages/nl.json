@@ -367,7 +367,8 @@
       "companyDescriptionTooLong": "De bedrijfsomschrijving is te lang.",
       "contactEmailInvalid": "Ongeldig e-mailadres.",
       "publishAgreementRequired": "Bevestig om de vacature te publiceren.",
-      "invalid": "Ongeldige waarde."
+      "invalid": "Ongeldige waarde.",
+      "itemTooLong": "Een van de items in de lijst is te lang. Maak het korter."
     },
     "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
     "contentLanguageNames": {
@@ -1145,7 +1146,8 @@
     "previewNote": "Controleer de gegevens vóór publicatie.",
     "previewNothing": "—",
     "previewSalaryNotProvided": "Niet opgegeven",
-    "notVerifiedNote": "Het concept is opgeslagen. Publiceren kan zodra het bedrijf is geverifieerd."
+    "notVerifiedNote": "Het concept is opgeslagen. Publiceren kan zodra het bedrijf is geverifieerd.",
+    "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen."
   },
   "messages": {
     "title": "Berichten",
