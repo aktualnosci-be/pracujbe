@@ -246,7 +246,7 @@ export default async function EmployerDashboardPage({
             <div className="flex items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
               <h2 className="text-base font-semibold text-foreground">{td('recentApplications')}</h2>
               <Link
-                href="/employer/kandydaci"
+                href="/employer/aplikacje"
                 className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-accent hover:underline"
               >
                 {td('seeAll')}
