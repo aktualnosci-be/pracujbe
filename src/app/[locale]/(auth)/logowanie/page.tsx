@@ -56,7 +56,7 @@ export default async function LoginPage({ params, searchParams }: PageProps) {
       <div className="w-full max-w-md">
         <Card>
           <CardHeader className="space-y-2 text-center">
-            <CardTitle className="text-2xl">{t('loginTitle')}</CardTitle>
+            <CardTitle as="h1" className="text-2xl">{t('loginTitle')}</CardTitle>
             <CardDescription>{t('loginSubtitle')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -76,6 +76,14 @@ export default async function LoginPage({ params, searchParams }: PageProps) {
                   className="font-medium text-primary underline-offset-4 hover:underline"
                 >
                   {t('submitRegister')}
+                </Link>
+              </p>
+              <p>
+                <Link
+                  href="/rejestracja-pracodawca"
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {t('registerAsEmployer')}
                 </Link>
               </p>
             </div>
