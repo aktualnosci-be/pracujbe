@@ -327,8 +327,13 @@ jobs:
       # Hostowany runner nie ma przeglądarki Playwrighta ani jej bibliotek systemowych.
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      # Testowe ID trackerów (tests/e2e/fixtures/trackers.ts) muszą trafić do builda,
+      # inaczej playwright.config.ts przebuduje aplikację (test zgód, #234).
       - name: Build application for E2E
         timeout-minutes: 15
+        env:
+          NEXT_PUBLIC_GA_MEASUREMENT_ID: G-TEST000000
+          NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'
         run: npm run build
       - name: Run E2E
         env:
