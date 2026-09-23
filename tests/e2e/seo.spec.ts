@@ -109,3 +109,88 @@ for (const locale of ['pl', 'nl', 'fr', 'en']) {
     });
   }
 }
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+const canonical = (page: import('@playwright/test').Page) => page.locator('link[rel="canonical"]');
+const hreflang = (page: import('@playwright/test').Page, lang: string) =>
+  page.locator(`link[rel="alternate"][hreflang="${lang}"]`);
+
+async function jobPostingCount(page: import('@playwright/test').Page): Promise<number> {
+  const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
+  return blocks.filter((raw) => (JSON.parse(raw) as { '@type'?: unknown })['@type'] === 'JobPosting').length;
+}
+
+// #314: sama paginacja jest kanoniczna sama dla siebie; filtry → lista bazowa; page=1 → bez parametru.
+test('lista ofert ?page=2 ma canonical i hreflang ze stroną 2', async ({ page }) => {
+  await page.goto('/pl/oferty-pracy?page=2');
+  await expect(canonical(page)).toHaveAttribute('href', `${SITE}/pl/oferty-pracy?page=2`);
+  await expect(hreflang(page, 'nl')).toHaveAttribute('href', `${SITE}/nl/oferty-pracy?page=2`);
+  await expect(hreflang(page, 'x-default')).toHaveAttribute('href', `${SITE}/pl/oferty-pracy?page=2`);
+});
+
+for (const query of ['?page=1', '?keyword=kierowca&page=2', '?sort=salary&page=2']) {
+  test(`lista ofert ${query} kanonizuje się do listy bazowej`, async ({ page }) => {
+    await page.goto(`/pl/oferty-pracy${query}`);
+    await expect(canonical(page)).toHaveAttribute('href', `${SITE}/pl/oferty-pracy`);
+  });
+}
+
+// #308: strony noindex nie dziedziczą canonicala strony głównej.
+for (const path of ['/pl/logowanie', '/pl/rejestracja', '/pl/rejestracja-pracodawca', '/pl/reset-hasla', '/pl/nie-ma-takiej', '/pl/oferty-pracy/nie-istnieje', '/pl/offline']) {
+  test(`${path} (noindex) nie ma link[rel=canonical]`, async ({ page }) => {
+    await page.goto(path);
+    // 404 z notFound() może mieć dwa meta robots (strona + Next) — wystarczy, że któreś ma noindex.
+    await expect(page.locator('meta[name="robots"][content*="noindex"]').first()).toBeAttached();
+    await expect(canonical(page)).toHaveCount(0);
+  });
+}
+
+test('strona główna nadal deklaruje własny canonical', async ({ page }) => {
+  await page.goto('/nl');
+  await expect(canonical(page)).toHaveAttribute('href', `${SITE}/nl`);
+  await expect(page.locator('meta[property="og:url"]')).toHaveAttribute('content', `${SITE}/nl`);
+});
+
+// #299: landing z ofertami pozostaje indeksowalny (pusty — patrz tests/unit/landing-empty-noindex.test.ts).
+test('landing kategorii z ofertami jest indeksowalny z canonicalem', async ({ page }) => {
+  await page.goto('/pl/praca/kategoria/construction');
+  await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0);
+  await expect(canonical(page)).toHaveAttribute('href', `${SITE}/pl/praca/kategoria/construction`);
+});
+
+// #301: oferta demo 1026 ma treść tylko po niderlandzku.
+const NL_ONLY_JOB = '/oferty-pracy/logistics-intern-ghent-1026';
+
+test('oferta bez tłumaczenia: wersja PL kanonizuje się do NL, bez hreflang i JobPosting', async ({ page }) => {
+  await page.goto(`/pl${NL_ONLY_JOB}`);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'pl');
+  await expect(canonical(page)).toHaveAttribute('href', `${SITE}/nl${NL_ONLY_JOB}`);
+  await expect(page.locator('link[rel="alternate"][hreflang]')).toHaveCount(0);
+  expect(await jobPostingCount(page)).toBe(0);
+
+  // Treść oznaczona językiem oryginału (WCAG 3.1.2) + etykieta w języku strony.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('lang', 'nl');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Stagiair logistiek');
+  await expect(page.locator('#opis p[lang="nl"]')).toBeVisible();
+  await expect(page.getByTestId('job-content-language')).toContainText('niderlandzki');
+  await expect(page.getByTestId('job-content-language')).not.toHaveAttribute('lang', /.+/);
+});
+
+test('oferta bez tłumaczenia: wersja NL jest kanoniczna, hreflang tylko dla NL', async ({ page }) => {
+  await page.goto(`/nl${NL_ONLY_JOB}`);
+  await expect(canonical(page)).toHaveAttribute('href', `${SITE}/nl${NL_ONLY_JOB}`);
+  await expect(hreflang(page, 'nl')).toHaveAttribute('href', `${SITE}/nl${NL_ONLY_JOB}`);
+  await expect(hreflang(page, 'x-default')).toHaveAttribute('href', `${SITE}/nl${NL_ONLY_JOB}`);
+  for (const lang of ['pl', 'fr', 'en']) await expect(hreflang(page, lang)).toHaveCount(0);
+  expect(await jobPostingCount(page)).toBe(1);
+  await expect(page.getByRole('heading', { level: 1 })).not.toHaveAttribute('lang', /.+/);
+  await expect(page.getByTestId('job-content-language')).toHaveCount(0);
+});
+
+test('oferta z kompletem tłumaczeń ma hreflang dla 4 języków i canonical na siebie', async ({ page }) => {
+  await page.goto(`/fr/oferty-pracy/${(await firstJobSlugHref(page)).split('/').pop()}`);
+  const url = page.url().replace(/^https?:\/\/[^/]+/, '');
+  await expect(canonical(page)).toHaveAttribute('href', `${SITE}${url}`);
+  for (const lang of ['pl', 'nl', 'fr', 'en', 'x-default']) await expect(hreflang(page, lang)).toHaveCount(1);
+  await expect(page.getByTestId('job-content-language')).toHaveCount(0);
+});

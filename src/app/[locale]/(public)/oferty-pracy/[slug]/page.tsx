@@ -20,9 +20,10 @@ import {
 } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
-import { routing } from '@/i18n/routing';
+import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
+import { defaultAlternateLocale } from '@/lib/job-content-locale';
 import { getJobBySlug, getJobs, type ContractType, type JobDetail, type JobListItem } from '@/lib/jobs';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
@@ -92,6 +93,31 @@ function initials(name: string): string {
   return letters || '•';
 }
 
+/**
+ * Wersja językowa oferty (#301). `fallback` = strona w języku, dla którego oferta nie ma
+ * tłumaczenia (treść w innym języku). Taka wersja wskazuje canonical na język oryginału i nie
+ * należy do zbioru hreflang. Nieznane języki tłumaczeń = zachowanie jak dla pełnej oferty.
+ */
+function contentLanguage(job: JobDetail, locale: string): {
+  fallback: boolean;
+  contentLocale?: Locale;
+  canonicalLocale: string;
+  alternates: readonly Locale[];
+} {
+  const available = job.availableLocales;
+  if (!available || available.length === 0) {
+    return { fallback: false, canonicalLocale: locale, alternates: routing.locales };
+  }
+  const fallback = !(available as readonly string[]).includes(locale);
+  const contentLocale = fallback ? (job.contentLocale ?? defaultAlternateLocale(available)) : undefined;
+  return {
+    fallback,
+    contentLocale,
+    canonicalLocale: contentLocale ?? locale,
+    alternates: available,
+  };
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { locale, slug } = await params;
   const job = await getJobBySlug(slug, locale);
@@ -101,27 +127,33 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const base = env.siteUrl;
   const path = `${BASE_PATH}/${slug}`;
-  const url = `${base}/${locale}${path}`;
+  const version = contentLanguage(job, locale);
+  // Wersja bez tłumaczenia kanonizuje się do języka oryginału (bez duplikatów treści, #301).
+  const url = `${base}/${version.canonicalLocale}${path}`;
   const description = truncate(job.description, 160);
   const shareImage = new URL('/og.png', base).href;
 
+  // hreflang tylko dla języków z tłumaczeniem; strona fallback nie należy do tego zbioru.
   const languages: Record<string, string> = {};
-  for (const supported of routing.locales) {
-    languages[supported] = `${base}/${supported}${path}`;
+  const xDefault = defaultAlternateLocale(version.alternates);
+  if (!version.fallback) {
+    for (const supported of version.alternates) {
+      languages[supported] = `${base}/${supported}${path}`;
+    }
+    if (xDefault) languages['x-default'] = `${base}/${xDefault}${path}`;
   }
-  languages['x-default'] = `${base}/${routing.defaultLocale}${path}`;
 
   return {
     title: job.title,
     description,
-    alternates: { canonical: url, languages },
+    alternates: version.fallback ? { canonical: url } : { canonical: url, languages },
     openGraph: {
       title: job.title,
       description,
       url,
       siteName: 'Pracuj.be',
       type: 'article',
-      locale: OG_LOCALE[locale] ?? locale,
+      locale: OG_LOCALE[version.canonicalLocale] ?? version.canonicalLocale,
       publishedTime: job.publishedAt,
       images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
@@ -231,7 +263,11 @@ export default async function JobDetailPage({ params }: PageProps) {
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
 
   const url = `${env.siteUrl}/${locale}${BASE_PATH}/${slug}`;
-  const jsonLd = buildJsonLd(job, url);
+  const version = contentLanguage(job, locale);
+  // JobPosting tylko na wersji kanonicznej — wersja bez tłumaczenia nie powiela danych (#301).
+  const jsonLd = version.fallback ? null : buildJsonLd(job, url);
+  // Treść w innym języku niż strona → `lang` na fragmentach treści (WCAG 3.1.2).
+  const contentLang = version.fallback ? version.contentLocale : undefined;
 
   // Podobne oferty (ta sama kategoria, bez bieżącej).
   const similarResult = await getJobs({
@@ -298,11 +334,13 @@ export default async function JobDetailPage({ params }: PageProps) {
   return (
     <PublicSavedJobsProvider key={JSON.stringify([job.id])} jobIds={[job.id]}>
     <div className="container py-6 md:py-10">
-      <script
-        type="application/ld+json"
-        // Escapowanie „<" chroni przed wyjściem z tagu <script> dla danych z bazy.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
-      />
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          // Escapowanie „<" chroni przed wyjściem z tagu <script> dla danych z bazy.
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+        />
+      ) : null}
 
       <Link
         href={BASE_PATH}
@@ -323,7 +361,10 @@ export default async function JobDetailPage({ params }: PageProps) {
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
               {tCategory(job.category)}
             </p>
-            <h1 className="mt-3 break-words text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl">
+            <h1
+              lang={contentLang}
+              className="mt-3 break-words text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl"
+            >
               {job.title}
             </h1>
             <div className="mt-4 flex min-w-0 items-center gap-3">
@@ -381,6 +422,15 @@ export default async function JobDetailPage({ params }: PageProps) {
           <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="break-words">{t('publishedOn')} {publishedLabel}</span>
         </p>
+
+        {contentLang ? (
+          <p data-testid="job-content-language" className="mt-3 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
+            <LanguagesIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="break-words">
+              {t('contentLanguageNotice', { language: t(`contentLanguageNames.${contentLang}`) })}
+            </span>
+          </p>
+        ) : null}
       </header>
 
       {/*
@@ -406,12 +456,12 @@ export default async function JobDetailPage({ params }: PageProps) {
         {/* Treść */}
         <div className="min-w-0 lg:col-span-2 lg:space-y-8">
           <Section id="opis" title={t('aboutRole')}>
-            <p className="whitespace-pre-line leading-relaxed text-foreground">{job.description}</p>
+            <p lang={contentLang} className="whitespace-pre-line leading-relaxed text-foreground">{job.description}</p>
           </Section>
 
           {job.responsibilities.length > 0 ? (
             <Section title={t('responsibilities')}>
-              <ul className="space-y-2">
+              <ul lang={contentLang} className="space-y-2">
                 {job.responsibilities.map((item) => (
                   <li key={item} className="flex items-start gap-2.5">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
@@ -424,7 +474,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
           {job.requirementsMandatory.length > 0 || job.requirementsOptional.length > 0 ? (
             <Section title={t('requirementsMandatory')}>
-              <ul className="space-y-2">
+              <ul lang={contentLang} className="space-y-2">
                 {job.requirementsMandatory.map((item) => (
                   <li key={item} className="flex items-start gap-2.5">
                     <Check className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
@@ -437,7 +487,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                   <h3 className="mb-2 mt-4 text-sm font-semibold text-muted-foreground">
                     {t('requirementsOptional')}
                   </h3>
-                  <ul className="space-y-2">
+                  <ul lang={contentLang} className="space-y-2">
                     {job.requirementsOptional.map((item) => (
                       <li key={item} className="flex items-start gap-2.5">
                         <span
@@ -455,7 +505,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
           {job.conditions.length > 0 ? (
             <Section title={t('conditions')}>
-              <ul className="grid gap-3 sm:grid-cols-2">
+              <ul lang={contentLang} className="grid gap-3 sm:grid-cols-2">
                 {job.conditions.map((item) => (
                   <li key={item} className="flex items-start gap-2.5">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
@@ -528,7 +578,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                   </p>
                 </div>
               </div>
-              <p className="mt-3 leading-relaxed text-muted-foreground">{job.companyDescription}</p>
+              <p lang={contentLang} className="mt-3 leading-relaxed text-muted-foreground">{job.companyDescription}</p>
               <Link
                 href={`${BASE_PATH}?keyword=${encodeURIComponent(job.companyName)}`}
                 className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-dark"
