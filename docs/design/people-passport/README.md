@@ -5,6 +5,8 @@ Decyzja właściciela z rozmowy projektowej 21 września 2026: biel, czerwień #
 ## Paczka
 `prototype/index.html` — komplet interaktywnej makiety i historycznych kierunków porównawczych. Zatwierdzony kierunek: `#people/home`. `prototype/materials/` — newsletter HTML, banery i social media SVG, instrukcja przygotowania do emisji. `prototype/assets/` — fotografie; autorzy i licencje w `prototype/photo-sources.html`.
 
+Lokalny eksport konkretnego baneru 1200 × 300 z jawnych danych kampanii opisuje [BANNER-EXPORT.md](BANNER-EXPORT.md). Pozostałe pliki w `prototype/materials/` są nadal demonstracyjne.
+
 Uruchom dowolny serwer statyczny w katalogu prototype. Dane w prototypie są demonstracyjne. Nie przenosić skryptów mockujących procesy do aplikacji produkcyjnej.
 
 ## Etapy
