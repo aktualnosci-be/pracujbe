@@ -56,7 +56,7 @@ export default async function LoginPage({ params, searchParams }: PageProps) {
       <div className="w-full max-w-md">
         <Card>
           <CardHeader className="space-y-2 text-center">
-            <CardTitle className="text-2xl">{t('loginTitle')}</CardTitle>
+            <CardTitle as="h1" className="text-2xl">{t('loginTitle')}</CardTitle>
             <CardDescription>{t('loginSubtitle')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">

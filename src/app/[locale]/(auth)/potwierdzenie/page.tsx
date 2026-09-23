@@ -42,7 +42,7 @@ export default async function ConfirmationPage({ params }: PageProps) {
             >
               <MailCheck className="h-7 w-7" />
             </span>
-            <CardTitle className="text-2xl">{t('verifyTitle')}</CardTitle>
+            <CardTitle as="h1" className="text-2xl">{t('verifyTitle')}</CardTitle>
             <CardDescription>{t('verifySubtitle')}</CardDescription>
           </CardHeader>
           <CardContent className="text-center text-sm">
