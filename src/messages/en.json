@@ -477,6 +477,8 @@
     "verifySubtitle": "We've sent a link to your email address. Click it to complete your registration.",
     "orContinue": "or continue with",
     "agreeTerms": "By creating an account, you agree to the terms and privacy policy.",
+    "agreeTermsLinks": "I accept the <terms>terms and conditions</terms> and the <privacy>privacy policy</privacy>.",
+    "opensInNewTab": "(opens in a new tab)",
     "passwordHint": "At least 8 characters, including a letter and a number.",
     "registerAsEmployer": "Hiring? Create an employer account",
     "registerAsCandidate": "Looking for work? Create a candidate account",

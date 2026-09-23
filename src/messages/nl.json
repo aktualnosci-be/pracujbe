@@ -477,6 +477,8 @@
     "verifySubtitle": "We hebben een link naar je e-mailadres gestuurd. Klik erop om je registratie af te ronden.",
     "orContinue": "of ga verder met",
     "agreeTerms": "Door een account aan te maken ga je akkoord met de algemene voorwaarden en het privacybeleid.",
+    "agreeTermsLinks": "Ik aanvaard de <terms>algemene voorwaarden</terms> en het <privacy>privacybeleid</privacy>.",
+    "opensInNewTab": "(opent in een nieuw tabblad)",
     "passwordHint": "Minimaal 8 tekens, met een letter en een cijfer.",
     "registerAsEmployer": "Werkgever? Maak een werkgeversaccount aan",
     "registerAsCandidate": "Op zoek naar werk? Maak een kandidatenaccount aan",

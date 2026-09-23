@@ -477,6 +477,8 @@
     "verifySubtitle": "Nous avons envoyé un lien à votre adresse e-mail. Cliquez dessus pour terminer votre inscription.",
     "orContinue": "ou continuez avec",
     "agreeTerms": "En créant un compte, vous acceptez les conditions générales et la politique de confidentialité.",
+    "agreeTermsLinks": "J’accepte les <terms>conditions générales</terms> et la <privacy>politique de confidentialité</privacy>.",
+    "opensInNewTab": "(s’ouvre dans un nouvel onglet)",
     "passwordHint": "Au moins 8 caractères, dont une lettre et un chiffre.",
     "registerAsEmployer": "Vous recrutez ? Créez un compte employeur",
     "registerAsCandidate": "Vous cherchez un emploi ? Créez un compte candidat",
