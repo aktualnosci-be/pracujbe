@@ -21,6 +21,11 @@ import { cn } from '@/lib/utils';
  * linkiem — klik/Enter prowadzi do obiektu, a nieprzeczytana pozycja zgłasza `onItemOpen`
  * (rodzic oznacza JEDNO powiadomienie, bez blokowania nawigacji). „Zobacz wszystkie" pojawia
  * się tylko z dedykowaną listą (`seeAllHref`) — nie kierujemy wszystkiego do wiadomości.
+ *
+ * #353: kontener to nazwany region (`aria-labelledby` → tytuł), nieprzeczytana pozycja ma
+ * tekst tylko dla czytnika. #354: „oznacz wszystkie" ma stan zapisu (`aria-busy`, etykieta
+ * „Zapisywanie…"), błąd `role="alert"` (komunikat już przetłumaczony przez rodzica, bez
+ * technikaliów) i sukces `role="status"`; po sukcesie fokus trafia na tytuł panelu, nie na `body`.
  */
 
 export interface NotificationItem {
@@ -49,6 +54,12 @@ export interface NotificationsDropdownProps {
   onItemOpen?: (item: NotificationItem) => void;
   /** Dedykowana lista powiadomień (bez prefiksu locale). Bez niej akcja jest ukryta. */
   seeAllHref?: string;
+  /** Trwa zapis „oznacz wszystkie" — przycisk zajęty (bez utraty fokusu), klik ignorowany. */
+  markAllPending?: boolean;
+  /** Zapis „oznacz wszystkie" udany — komunikat statusu + fokus na tytule panelu. */
+  markAllDone?: boolean;
+  /** Przetłumaczony komunikat błędu zapisu „oznacz wszystkie" (Invariant #8). */
+  markAllError?: string | null;
 }
 
 export function NotificationsDropdown({
@@ -59,20 +70,40 @@ export function NotificationsDropdown({
   onMarkAllRead,
   onItemOpen,
   seeAllHref,
+  markAllPending = false,
+  markAllDone = false,
+  markAllError = null,
 }: NotificationsDropdownProps): React.JSX.Element {
   const t = useTranslations('notifications');
   const unread = count ?? items.filter((item) => item.unread).length;
+  const titleId = React.useId();
+  const titleRef = React.useRef<HTMLHeadingElement>(null);
+
+  // Po sukcesie przycisk staje się nieaktywny (licznik 0) — fokus przenosimy na tytuł panelu.
+  React.useEffect(() => {
+    if (markAllDone) titleRef.current?.focus();
+  }, [markAllDone]);
 
   return (
     <div
-      aria-label={t('title')}
+      role="region"
+      aria-labelledby={titleId}
       className="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-background text-left shadow-lg"
     >
       <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-foreground">{t('title')}</span>
+          <h2
+            id={titleId}
+            ref={titleRef}
+            tabIndex={-1}
+            className="text-sm font-semibold text-foreground focus:outline-none"
+          >
+            {t('title')}
+          </h2>
           {!error && unread > 0 ? (
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-medium text-accent-foreground">
+            <span
+              aria-hidden="true"
+              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-medium text-accent-foreground">
               {unread}
             </span>
           ) : null}
@@ -80,14 +111,30 @@ export function NotificationsDropdown({
         {!error ? (
           <button
             type="button"
-            onClick={onMarkAllRead}
-            disabled={unread === 0}
-            className="rounded text-xs font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+            onClick={() => {
+              if (!markAllPending) onMarkAllRead?.();
+            }}
+            disabled={unread === 0 && !markAllPending}
+            // `aria-disabled` zamiast `disabled` w trakcie zapisu: fokus zostaje na przycisku.
+            aria-disabled={markAllPending || undefined}
+            aria-busy={markAllPending || undefined}
+            className="rounded text-xs font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline aria-disabled:cursor-wait aria-disabled:opacity-60"
           >
-            {t('markAllRead')}
+            {markAllPending ? t('markingAllRead') : t('markAllRead')}
           </button>
         ) : null}
       </div>
+
+      {!error && markAllError ? (
+        <p role="alert" className="border-b border-border px-4 py-2 text-sm text-error">
+          {markAllError}
+        </p>
+      ) : null}
+      {!error && markAllDone && !markAllError ? (
+        <p role="status" className="border-b border-border px-4 py-2 text-sm text-foreground">
+          {t('markedAllRead')}
+        </p>
+      ) : null}
 
       {error ? (
         <div role="alert" className="px-4 py-6 text-sm text-foreground">
@@ -123,6 +170,7 @@ export function NotificationsDropdown({
                         : 'text-muted-foreground',
                     )}
                   >
+                    {item.unread ? <span className="sr-only">{`${t('unreadItem')}: `}</span> : null}
                     {item.title}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{item.meta}</p>

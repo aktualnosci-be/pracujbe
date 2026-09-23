@@ -26,13 +26,32 @@ import type { NotificationPreferences } from '@/lib/data/notification-preference
 /** Nazwy pól = jednocześnie bazy kluczy i18n (`<field>Label` / `<field>Description`). */
 type ToggleField = keyof NotificationPreferences;
 
-const EMAIL_FIELDS: readonly ToggleField[] = [
+export type NotificationPreferencesRole = 'candidate' | 'employer';
+
+/**
+ * Pola e-mail wg roli (#357). Pracodawca nie dostaje e-maili `jobMatch`, więc przełącznik
+ * dopasowanych ofert byłby atrapą — ukrywamy go (wartość z bazy przechodzi bez zmian
+ * w `defaultValues`). Ta sama flaga `email_offers` u pracodawcy steruje e-mailami
+ * `offerAccepted`/`offerDeclined` (0020) — stąd osobne opisy z perspektywy pracodawcy.
+ */
+const EMAIL_FIELDS: Record<NotificationPreferencesRole, readonly ToggleField[]> = {
+  candidate: ['emailApplications', 'emailOffers', 'emailMessages', 'emailJobMatches', 'emailMarketing'],
+  employer: ['emailApplications', 'emailOffers', 'emailMessages', 'emailMarketing'],
+};
+
+/** Pola z opisem z perspektywy pracodawcy (`employer<Field>Description`). */
+const EMPLOYER_DESCRIPTION_FIELDS: ReadonlySet<ToggleField> = new Set([
   'emailApplications',
   'emailOffers',
   'emailMessages',
-  'emailJobMatches',
-  'emailMarketing',
-];
+]);
+
+function descriptionKey(field: ToggleField, role: NotificationPreferencesRole): string {
+  if (role === 'employer' && EMPLOYER_DESCRIPTION_FIELDS.has(field)) {
+    return `employer${field.charAt(0).toUpperCase()}${field.slice(1)}Description`;
+  }
+  return `${field}Description`;
+}
 
 /**
  * `pushEnabled` celowo pominięte (#312): Web Push nie jest zaimplementowany, więc kontrolka
@@ -44,10 +63,13 @@ const CHANNEL_FIELDS: readonly ToggleField[] = ['inAppEnabled'];
 export interface NotificationPreferencesFormProps {
   /** Wartości początkowe (odczytane pod sesją; bez env — domyślne). */
   defaultValues: NotificationPreferences;
+  /** Rola panelu — wybiera pola i opisy (#357). Domyślnie kandydat. */
+  role?: NotificationPreferencesRole;
 }
 
 export function NotificationPreferencesForm({
   defaultValues,
+  role = 'candidate',
 }: NotificationPreferencesFormProps): React.JSX.Element {
   const t = useTranslations('settings');
   const tRoot = useTranslations();
@@ -89,13 +111,16 @@ export function NotificationPreferencesForm({
 
   const renderToggle = (field: ToggleField): React.JSX.Element => {
     const id = `pref-${field}`;
+    const descriptionId = `${id}-description`;
     return (
       <div key={field} className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <Label htmlFor={id} className="cursor-pointer">
             {t(`${field}Label`)}
           </Label>
-          <p className="mt-0.5 text-sm text-muted-foreground">{t(`${field}Description`)}</p>
+          <p id={descriptionId} className="mt-0.5 text-sm text-muted-foreground">
+            {t(descriptionKey(field, role))}
+          </p>
         </div>
         <Controller
           control={control}
@@ -103,6 +128,7 @@ export function NotificationPreferencesForm({
           render={({ field: f }) => (
             <Checkbox
               id={id}
+              aria-describedby={descriptionId}
               checked={f.value}
               onCheckedChange={(checked) => f.onChange(checked === true)}
               onBlur={f.onBlur}
@@ -145,7 +171,7 @@ export function NotificationPreferencesForm({
         </legend>
         <p className="text-sm text-muted-foreground">{t('emailSectionDescription')}</p>
         <div className="divide-y divide-border rounded-lg border border-border">
-          {EMAIL_FIELDS.map((field) => (
+          {EMAIL_FIELDS[role].map((field) => (
             <div key={field} className="p-4">
               {renderToggle(field)}
             </div>

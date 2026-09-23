@@ -49,7 +49,7 @@ export default async function EmployerSettingsPage({
 
       <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
         {load.status === 'ready' ? (
-          <NotificationPreferencesForm defaultValues={load.preferences} />
+          <NotificationPreferencesForm defaultValues={load.preferences} role="employer" />
         ) : (
           <NotificationPreferencesLoadError />
         )}

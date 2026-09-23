@@ -11,12 +11,14 @@ const { markNotificationsRead, refresh } = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 
-vi.mock('next-intl', () => ({
-  useTranslations: (ns: string) => (key: string) => {
-    const table = (pl as unknown as Record<string, Record<string, unknown>>)[ns] ?? {};
-    return typeof table[key] === 'string' ? (table[key] as string) : `${ns}.${key}`;
-  },
-}));
+// Prawdziwy formater ICU (nazwa dzwonka ma liczbę nieprzeczytanych z odmianą, #353).
+vi.mock('next-intl', async () => {
+  const actual = await vi.importActual<typeof import('next-intl')>('next-intl');
+  return {
+    useTranslations: (ns?: string) =>
+      actual.createTranslator({ locale: 'pl', messages: pl, namespace: ns as never }),
+  };
+});
 vi.mock('next-intl/server', () => ({ getTranslations: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 vi.mock('@/i18n/navigation', () => ({
@@ -124,7 +126,7 @@ describe('DashboardShell — otwarcie powiadomienia (#148)', () => {
         <p>treść</p>
       </DashboardShell>,
     );
-    fireEvent.click(screen.getByRole('button', { name: pl.notifications.title }));
+    fireEvent.click(screen.getByRole('button', { name: 'Powiadomienia, 2 nieprzeczytane' }));
   }
 
   it('oznacza wyłącznie otwarte powiadomienie i odświeża licznik', async () => {

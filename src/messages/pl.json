@@ -990,9 +990,6 @@
     "title": "Powiadomienia",
     "markAllRead": "Oznacz wszystkie jako przeczytane",
     "seeAll": "Zobacz wszystkie",
-    "sampleNewJob": "Nowa oferta pracy dopasowana do Twojego profilu",
-    "sampleAppViewed": "Twoja aplikacja została obejrzana",
-    "sampleMessage": "Masz nową wiadomość od pracodawcy",
     "itemApplicationReceived": "Otrzymano nową aplikację",
     "itemApplicationStatusChanged": "Status Twojej aplikacji uległ zmianie",
     "itemOfferReceived": "Otrzymałeś propozycję pracy",
@@ -1003,7 +1000,11 @@
     "itemSystem": "Powiadomienie systemowe",
     "empty": "Brak powiadomień",
     "loadError": "Nie udało się wczytać powiadomień. Spróbuj ponownie.",
-    "retry": "Spróbuj ponownie"
+    "retry": "Spróbuj ponownie",
+    "bellLabel": "{count, plural, =0 {Powiadomienia} one {Powiadomienia, 1 nieprzeczytane} few {Powiadomienia, # nieprzeczytane} many {Powiadomienia, # nieprzeczytanych} other {Powiadomienia, # nieprzeczytanych}}",
+    "unreadItem": "Nieprzeczytane",
+    "markingAllRead": "Zapisywanie…",
+    "markedAllRead": "Oznaczono wszystkie powiadomienia jako przeczytane."
   },
   "pricing": {
     "standard": "Standard",
@@ -1229,7 +1230,9 @@
     "loadOlder": "Wczytaj starsze wiadomości",
     "loadingOlder": "Wczytuję starsze wiadomości…",
     "loadOlderError": "Nie udało się wczytać starszych wiadomości. Spróbuj ponownie.",
-    "threadStart": "To początek rozmowy."
+    "threadStart": "To początek rozmowy.",
+    "senderCompanyFallback": "Pracodawca",
+    "senderCandidateFallback": "Kandydat"
   },
   "files": {
     "cvTitle": "Twoje CV / dokumenty",
@@ -1345,7 +1348,10 @@
     "loadError": "Nie udało się wczytać Twoich preferencji powiadomień.",
     "loadErrorHint": "Nie pokazujemy formularza, żeby zapis nie nadpisał Twoich wcześniejszych wyborów. Spróbuj ponownie za chwilę.",
     "pushEnabledLabel": "Powiadomienia push",
-    "pushEnabledDescription": "Powiadomienia na urządzeniu, gdy dzieje się coś ważnego."
+    "pushEnabledDescription": "Powiadomienia na urządzeniu, gdy dzieje się coś ważnego.",
+    "employerEmailApplicationsDescription": "Nowe zgłoszenia kandydatów na Twoje oferty.",
+    "employerEmailOffersDescription": "Gdy kandydat przyjmie lub odrzuci Twoją propozycję pracy.",
+    "employerEmailMessagesDescription": "Nowe wiadomości od kandydatów w Twoich konwersacjach."
   },
   "guides": {
     "pageTitle": "Poradniki",
