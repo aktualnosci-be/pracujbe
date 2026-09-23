@@ -137,9 +137,14 @@ export interface AuthFormProps {
   variant: AuthFormVariant;
   /** Kod błędu do pokazania od razu (np. nieudany callback e-maila). */
   initialError?: ErrorCode | null;
+  /**
+   * Zwalidowany cel po zalogowaniu / potwierdzeniu e-maila (`?next=`, np. oferta pracy).
+   * Serwer waliduje go ponownie (`safeNextPath`). Używany przy logowaniu i rejestracji kandydata.
+   */
+  next?: string | null;
 }
 
-export function AuthForm({ variant, initialError = null }: AuthFormProps): React.JSX.Element {
+export function AuthForm({ variant, initialError = null, next = null }: AuthFormProps): React.JSX.Element {
   const t = useTranslations('auth');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -179,7 +184,10 @@ export function AuthForm({ variant, initialError = null }: AuthFormProps): React
     try {
       switch (variant) {
         case 'login':
-          result = await signIn({ email: values.email ?? '', password: values.password ?? '' });
+          result = await signIn(
+            { email: values.email ?? '', password: values.password ?? '' },
+            next,
+          );
           break;
         case 'registerCandidate':
           result = await registerCandidate({
@@ -190,7 +198,7 @@ export function AuthForm({ variant, initialError = null }: AuthFormProps): React
             lastName: values.lastName ?? '',
             agreeTerms: true,
             locale: locale as Locale,
-          });
+          }, next);
           break;
         case 'registerEmployer':
           result = await registerEmployer({
