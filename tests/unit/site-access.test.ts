@@ -146,7 +146,7 @@ describe('bramka dostępu — POST /api/site-access', () => {
       formRequest({ password: PASSWORD, next: '/nl/oferty-pracy?q=a', locale: 'nl' }),
     );
     expect(res.status).toBe(303);
-    expect(new URL(res.headers.get('location')!).pathname).toBe('/nl/oferty-pracy');
+    expect(new URL(res.headers.get('location')!, ORIGIN).pathname).toBe('/nl/oferty-pracy');
     const cookie = res.headers.get('set-cookie') ?? '';
     expect(cookie).toContain(`${SITE_ACCESS_COOKIE}=${await siteAccessToken(PASSWORD)}`);
     expect(cookie.toLowerCase()).toContain('httponly');
@@ -157,17 +157,37 @@ describe('bramka dostępu — POST /api/site-access', () => {
   it('błędne hasło: brak cookie i powrót z flagą błędu', async () => {
     const res = await POST(formRequest({ password: 'zle', next: '/fr', locale: 'fr' }));
     expect(res.status).toBe(303);
-    const location = new URL(res.headers.get('location')!);
+    const location = new URL(res.headers.get('location')!, ORIGIN);
     expect(location.pathname).toBe('/fr');
     expect(location.searchParams.get('pb_access')).toBe('denied');
     expect(res.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('przekierowania są względne — za proxy (request.url = adres wewnętrzny) nie wyciekają na localhost', async () => {
+    const body = new URLSearchParams({ password: PASSWORD, next: '/pl/oferty-pracy', locale: 'pl' });
+    const internal = new Request('https://localhost:8080/api/site-access', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-forwarded-proto': 'https' },
+      body,
+    });
+    const ok = await POST(internal);
+    expect(ok.headers.get('location')).toBe('/pl/oferty-pracy');
+    expect((ok.headers.get('set-cookie') ?? '').toLowerCase()).toContain('secure');
+    const bad = await POST(
+      new Request('https://localhost:8080/api/site-access', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password: 'zle', next: '/pl', locale: 'pl' }),
+      }),
+    );
+    expect(bad.headers.get('location')).toBe('/pl?pb_access=denied');
   });
 
   it('niebezpieczny cel powrotu zamieniany na stronę główną języka', async () => {
     const res = await POST(
       formRequest({ password: PASSWORD, next: '//evil.example/x', locale: 'en' }),
     );
-    const location = new URL(res.headers.get('location')!);
+    const location = new URL(res.headers.get('location')!, ORIGIN);
     expect(location.origin).toBe(ORIGIN);
     expect(location.pathname).toBe('/en');
   });
