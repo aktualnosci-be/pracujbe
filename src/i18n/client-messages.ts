@@ -33,6 +33,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'nav',
   'notifications',
   'offer',
+  'offerStatus',
   'onboarding',
   'settings',
   'status',
