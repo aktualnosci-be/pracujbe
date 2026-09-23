@@ -5,7 +5,6 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
-import { StatusPill } from '@/components/ui/status-pill';
 import { MatchBar } from '@/components/ui/match-bar';
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
@@ -13,14 +12,16 @@ import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
 import { ProfileSummaryError } from '@/components/candidate/ProfileSummaryError';
 import { CvUpload } from '@/components/candidate/CvUpload';
 import { SaveJobButton } from '@/components/candidate/SaveJobButton';
-import { ApplicationActions } from '@/components/candidate/ApplicationActions';
+import { CandidateApplicationsPreview } from '@/components/candidate/CandidateApplicationsPreview';
+import { CandidateMessagesPreview } from '@/components/candidate/CandidateMessagesPreview';
+import { CandidateSectionError } from '@/components/candidate/CandidateSectionError';
 import { getProfileLevelTitle } from '@/lib/profile-completeness';
 import {
   getCandidateOverview,
   getCandidateProfileSummary,
   getCandidateFiles,
   getLatestMessages,
-  getMyApplications,
+  getMyApplicationsPreview,
   getLatestActiveOffer,
   getRecommendedJobs,
 } from '@/lib/data/candidate';
@@ -52,24 +53,6 @@ function initials(name: string): string {
   return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '•';
 }
 
-/** Formatuje datę ISO do krótkiej postaci wg locale (bez rzucania na złej wartości). */
-function formatDate(iso: string, locale: string): string {
-  const ts = Date.parse(iso);
-  if (Number.isNaN(ts)) return '';
-  return new Intl.DateTimeFormat(locale, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(ts);
-}
-
-/** Formatuje czas ostatniej wiadomości do krótkiej postaci wg locale. */
-function formatShort(iso: string, locale: string): string {
-  const ts = Date.parse(iso);
-  if (Number.isNaN(ts)) return '';
-  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit' }).format(ts);
-}
-
 export default async function CandidateDashboardPage({
   params,
 }: {
@@ -87,11 +70,16 @@ export default async function CandidateDashboardPage({
     getCandidateOverview(),
     getCandidateProfileSummary(),
     getRecommendedJobs(locale),
-    getMyApplications(locale),
+    getMyApplicationsPreview(locale),
     getLatestMessages(),
     getCandidateFiles(),
     getLatestActiveOffer(locale),
   ]);
+
+  const overviewFailed =
+    overview.newJobsCount === null ||
+    overview.activeApplicationsCount === null ||
+    overview.unreadMessagesCount === null;
 
   const checklist = [
     { label: td('checkBasicInfo'), done: profile.checklist.basicInfo, action: td('add') },
@@ -123,19 +111,28 @@ export default async function CandidateDashboardPage({
         />
       ) : null}
 
-      {/* Statystyki */}
+      {/* Statystyki — licznik bez udanego odczytu pokazuje „—", nigdy fałszywe zero (#244). */}
+      {overviewFailed ? (
+        <div className="rounded-[1.75rem] border border-border bg-card">
+          <CandidateSectionError message={td('candidateOverviewLoadError')} retry={td('candidateListRetry')} />
+        </div>
+      ) : null}
       <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label={td('newJobs')} value={overview.newJobsCount} sub={td('newJobsSub')} />
+        <StatCard
+          label={td('newJobs')}
+          value={overview.newJobsCount ?? '—'}
+          sub={overview.newJobsCount === null ? td('candidateStatLoadError') : td('newJobsSub')}
+        />
         <StatCard
           label={td('activeApplications')}
-          value={overview.activeApplicationsCount}
-          sub={td('activeApplicationsSub')}
+          value={overview.activeApplicationsCount ?? '—'}
+          sub={overview.activeApplicationsCount === null ? td('candidateStatLoadError') : td('activeApplicationsSub')}
         />
         <StatCard
           label={td('unreadMessages')}
-          value={overview.unreadMessagesCount}
-          sub={td('unreadMessagesSub')}
-          tone="error"
+          value={overview.unreadMessagesCount ?? '—'}
+          sub={overview.unreadMessagesCount === null ? td('candidateStatLoadError') : td('unreadMessagesSub')}
+          tone={overview.unreadMessagesCount === null ? undefined : 'error'}
         />
         {profile.loadFailed ? (
           <StatCard label={td('profileCompleteness')} value="—" sub={tp('loadError')} />
@@ -209,59 +206,17 @@ export default async function CandidateDashboardPage({
           </section>
 
           {/* Moje ostatnie aplikacje */}
-          <section className="min-w-0 rounded-[1.75rem] border border-border bg-card">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-[1.75rem] border-b border-border bg-soft p-5 sm:px-7">
-              <h2 className="text-xl font-bold text-foreground">{td('myApplications')}</h2>
-              <Link
-                href="/candidate/aplikacje"
-                className="inline-flex min-h-11 items-center break-words text-sm font-semibold text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                {td('seeAll')}
-              </Link>
-            </div>
-            {applications.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground sm:px-5">{td('noApplications')}</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {applications.map((app) => {
-                  const date = formatDate(app.date, locale);
-                  return (
-                    <li key={app.id} className="flex min-w-0 flex-wrap items-start gap-3 p-5 sm:px-7">
-                      <div className="min-w-0 flex-1">
-                        {app.slug ? (
-                          <Link
-                            href={`/oferty-pracy/${app.slug}`}
-                            className="block max-w-full break-words text-base font-semibold text-foreground hover:text-accent hover:underline"
-                          >
-                            {app.jobTitle || '—'}
-                          </Link>
-                        ) : (
-                          <p className="break-words text-base font-semibold text-foreground">
-                            {app.jobTitle || '—'}
-                          </p>
-                        )}
-                        <p className="mt-1 break-words text-sm text-muted-foreground">
-                          {app.companyName ? (
-                            <>
-                              {app.companyName} <span className="text-border">·</span> {date}
-                            </>
-                          ) : (
-                            date
-                          )}
-                        </p>
-                      </div>
-                      <StatusPill status={app.status} className="shrink-0" />
-                      <ApplicationActions
-                        applicationId={app.id}
-                        status={app.status}
-                        slug={app.slug}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+          <CandidateApplicationsPreview
+            result={applications}
+            locale={locale}
+            labels={{
+              title: td('myApplications'),
+              seeAll: td('seeAll'),
+              empty: td('noApplications'),
+              loadError: td('candidateApplicationsLoadError'),
+              retry: td('candidateListRetry'),
+            }}
+          />
         </div>
 
         {/* Kolumna boczna */}
@@ -285,47 +240,17 @@ export default async function CandidateDashboardPage({
           <CvUpload items={files} />
 
           {/* Najnowsze wiadomości */}
-          <section className="min-w-0 rounded-[1.75rem] border border-border bg-card">
-            <div className="rounded-t-[1.75rem] border-b border-border bg-soft p-5 sm:px-6">
-              <h2 className="text-xl font-bold text-foreground">{td('latestMessages')}</h2>
-            </div>
-            {messages.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground sm:px-5">{td('noMessages')}</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {messages.map((msg) => (
-                  <li key={msg.id} className="flex min-w-0 gap-3 p-5 sm:px-6">
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-                      aria-hidden="true"
-                    >
-                      {initials(msg.title)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <p className="min-w-0 break-words text-sm font-semibold text-foreground">{msg.title}</p>
-                        <span className="text-xs text-muted-foreground">
-                          {formatShort(msg.time, locale)}
-                        </span>
-                      </div>
-                      <p className="mt-1 break-words text-sm text-muted-foreground">{msg.preview}</p>
-                    </div>
-                    {msg.unread ? (
-                      <span
-                        className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent"
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="border-t border-border p-3">
-              <Button asChild variant="outline" className="min-h-12 w-full whitespace-normal rounded-xl text-center">
-                <Link href="/candidate/wiadomosci">{td('seeAllMessages')}</Link>
-              </Button>
-            </div>
-          </section>
+          <CandidateMessagesPreview
+            result={messages}
+            locale={locale}
+            labels={{
+              title: td('latestMessages'),
+              empty: td('noMessages'),
+              loadError: td('candidateMessagesLoadError'),
+              retry: td('candidateListRetry'),
+              seeAll: td('seeAllMessages'),
+            }}
+          />
         </div>
       </div>
     </div>

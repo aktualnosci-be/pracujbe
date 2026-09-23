@@ -26,8 +26,9 @@ import {
   EmailRawLink,
   EmailText,
 } from '@/emails/_components';
-import type { EmailType } from '@/emails/copy';
+import type { EmailCopy, EmailType } from '@/emails/copy';
 import { emailCopy, greetings, interpolate, jobOfferPassportCopy, layoutCopy } from '@/emails/copy';
+import { applicationStatusLabel } from '@/emails/status-labels';
 
 /**
  * Dane wejściowe każdego typu maila. Nazwy pól odpowiadają tokenom `{...}` w `copy.ts`.
@@ -37,9 +38,13 @@ export interface EmailDataMap {
   accountConfirmation: { firstName?: string; confirmationUrl: string };
   welcome: { firstName?: string; dashboardUrl: string };
   passwordReset: { firstName?: string; resetUrl: string };
+  magicLink: { firstName?: string; loginUrl: string };
+  emailChange: { firstName?: string; confirmationUrl: string };
+  invite: { firstName?: string; inviteUrl: string };
   newApplication: {
     recipientName?: string;
-    candidateName: string;
+    /** Brak / placeholder (`—`) → neutralny wariant treści (#294). */
+    candidateName?: string | null;
     jobTitle: string;
     applicationUrl: string;
   };
@@ -56,23 +61,32 @@ export interface EmailDataMap {
     message?: string;
     actionUrl: string;
   };
-  newMessage: { firstName?: string; senderName: string; preview?: string; messageUrl: string };
+  newMessage: {
+    firstName?: string;
+    senderName?: string | null;
+    preview?: string;
+    messageUrl: string;
+  };
   jobOffer: {
     firstName?: string;
     companyName: string;
     jobTitle: string;
     salary?: string;
+    /** Wiadomość od pracodawcy — renderowana jako cytat (#293). */
+    message?: string | null;
+    /** Termin odpowiedzi (ISO 8601) — formatowany w locale odbiorcy (#293). */
+    expiresAt?: string | null;
     offerUrl: string;
   };
   offerAccepted: {
     recipientName?: string;
-    candidateName: string;
+    candidateName?: string | null;
     jobTitle: string;
     actionUrl: string;
   };
   offerDeclined: {
     recipientName?: string;
-    candidateName: string;
+    candidateName?: string | null;
     jobTitle: string;
     actionUrl: string;
   };
@@ -80,6 +94,7 @@ export interface EmailDataMap {
     firstName?: string;
     companyName: string;
     jobTitle: string;
+    /** Surowa wartość enuma `application_status` — mapowana na etykietę w języku odbiorcy (#288). */
     status: string;
     applicationUrl: string;
   };
@@ -92,6 +107,73 @@ export interface EmailDataMap {
 
 /** Propsy komponentu szablonu: język + dane danego typu. */
 export type EmailProps<T extends EmailType> = { locale: Locale } & EmailDataMap[T];
+
+/**
+ * Pole, od którego zależy zdanie w treści danego typu maila. Gdy jest puste albo jest
+ * placeholderem z bazy (`—`), używamy neutralnego wariantu `EmailCopy.anonymous` (#288/#294).
+ */
+const SUBJECT_FIELD: Partial<Record<EmailType, string>> = {
+  newApplication: 'candidateName',
+  offerAccepted: 'candidateName',
+  offerDeclined: 'candidateName',
+  newMessage: 'senderName',
+  statusChanged: 'status',
+};
+
+/** Pusta wartość albo sam placeholder (myślniki/spacje), np. `'—'` z `coalesce(..., '—')` w RPC. */
+function isBlank(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  return String(value).replace(/[\s\-\u2010-\u2015]/g, '').length === 0;
+}
+
+/**
+ * Przygotowuje dane do interpolacji w języku odbiorcy: status aplikacji → przetłumaczona
+ * etykieta (nieznany → pusty), placeholdery nazw → puste.
+ */
+function prepareVars(
+  type: EmailType,
+  locale: Locale,
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  const vars: Record<string, unknown> = { ...data };
+  if (type === 'statusChanged') {
+    vars.status = applicationStatusLabel(locale, data.status) ?? '';
+  }
+  const field = SUBJECT_FIELD[type];
+  if (field && isBlank(vars[field])) vars[field] = '';
+  return vars;
+}
+
+/** Treść maila w języku odbiorcy — z neutralnym wariantem, gdy brak kluczowej danej. */
+function resolveCopy(type: EmailType, locale: Locale, vars: Record<string, unknown>): EmailCopy {
+  const copy = emailCopy[type][locale];
+  const field = SUBJECT_FIELD[type];
+  if (field && copy.anonymous && isBlank(vars[field])) {
+    return { ...copy, ...copy.anonymous };
+  }
+  return copy;
+}
+
+/** Tag BCP 47 do formatowania dat w e-mailu (Belgia dla nl/fr). */
+const DATE_LOCALE: Record<Locale, string> = {
+  pl: 'pl-PL',
+  nl: 'nl-BE',
+  fr: 'fr-BE',
+  en: 'en-GB',
+};
+
+/** Data ISO → długi format w języku odbiorcy (strefa Europe/Brussels); zła wartość → undefined. */
+function formatEmailDate(value: unknown, locale: Locale): string | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0) return undefined;
+  const ts = Date.parse(value);
+  if (Number.isNaN(ts)) return undefined;
+  return new Intl.DateTimeFormat(DATE_LOCALE[locale], {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Europe/Brussels',
+  }).format(ts);
+}
 
 /**
  * Wspólny „szkielet” treści maila: nagłówek, powitanie, akapity, opcjonalne wyróżnienie
@@ -109,8 +191,9 @@ function EmailShell(props: {
   /** Własny blok treści renderowany zamiast standardowego wyróżnienia. */
   detail?: ReactElement;
 }): ReactElement {
-  const { locale, type, vars, ctaHref, greetingName, quote } = props;
-  const copy = emailCopy[type][locale];
+  const { locale, type, ctaHref, greetingName, quote } = props;
+  const vars = prepareVars(type, locale, props.vars);
+  const copy = resolveCopy(type, locale, vars);
   const lc = layoutCopy[locale];
 
   const preview = interpolate(copy.preview, vars);
@@ -128,7 +211,8 @@ function EmailShell(props: {
   const showQuote = trimmedQuote !== undefined && trimmedQuote.length > 0;
 
   const outro = copy.outro ? interpolate(copy.outro, vars) : undefined;
-  const greeting = `${greetings[locale]}${greetingName ? ` ${greetingName}` : ''},`;
+  const name = greetingName?.trim();
+  const greeting = `${greetings[locale]}${name ? ` ${name}` : ''},`;
 
   return (
     <EmailLayout locale={locale} preview={preview}>
@@ -195,7 +279,7 @@ function PassportRow({
 }: {
   label: string;
   value: string;
-  field: 'job-title' | 'company-name' | 'salary';
+  field: 'job-title' | 'company-name' | 'salary' | 'expires-at';
 }): ReactElement {
   return (
     <Section style={passportStyles.row} data-passport-field={field}>
@@ -208,6 +292,7 @@ function PassportRow({
 function JobOfferPassport(props: EmailProps<'jobOffer'>): ReactElement {
   const labels = jobOfferPassportCopy[props.locale];
   const salary = props.salary?.trim();
+  const expiresAt = formatEmailDate(props.expiresAt, props.locale);
 
   return (
     <Section style={passportStyles.card} data-email-component="job-offer-passport">
@@ -215,6 +300,9 @@ function JobOfferPassport(props: EmailProps<'jobOffer'>): ReactElement {
       <PassportRow label={labels.jobTitle} value={props.jobTitle} field="job-title" />
       <PassportRow label={labels.companyName} value={props.companyName} field="company-name" />
       {salary ? <PassportRow label={labels.salary} value={salary} field="salary" /> : null}
+      {expiresAt ? (
+        <PassportRow label={labels.expiresAt} value={expiresAt} field="expires-at" />
+      ) : null}
     </Section>
   );
 }
@@ -254,6 +342,42 @@ export function PasswordResetEmail(props: EmailProps<'passwordReset'>): ReactEle
       type="passwordReset"
       vars={props}
       ctaHref={props.resetUrl}
+      greetingName={props.firstName}
+    />
+  );
+}
+
+export function MagicLinkEmail(props: EmailProps<'magicLink'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="magicLink"
+      vars={props}
+      ctaHref={props.loginUrl}
+      greetingName={props.firstName}
+    />
+  );
+}
+
+export function EmailChangeEmail(props: EmailProps<'emailChange'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="emailChange"
+      vars={props}
+      ctaHref={props.confirmationUrl}
+      greetingName={props.firstName}
+    />
+  );
+}
+
+export function InviteEmail(props: EmailProps<'invite'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="invite"
+      vars={props}
+      ctaHref={props.inviteUrl}
       greetingName={props.firstName}
     />
   );
@@ -317,6 +441,7 @@ export function JobOfferEmail(props: EmailProps<'jobOffer'>): ReactElement {
       vars={props}
       ctaHref={props.offerUrl}
       greetingName={props.firstName}
+      quote={props.message ?? undefined}
       detail={<JobOfferPassport {...props} />}
     />
   );
@@ -433,6 +558,9 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   accountConfirmation: AccountConfirmationEmail,
   welcome: WelcomeEmail,
   passwordReset: PasswordResetEmail,
+  magicLink: MagicLinkEmail,
+  emailChange: EmailChangeEmail,
+  invite: InviteEmail,
   newApplication: NewApplicationEmail,
   applicationViewed: ApplicationViewedEmail,
   contactInvitation: ContactInvitationEmail,
@@ -462,6 +590,7 @@ export async function renderEmail<T extends EmailType>(
   const Component = templates[type] as unknown as FunctionComponent<Record<string, unknown>>;
   const element = createElement(Component, { locale, ...data });
   const html = await render(element);
-  const subject = interpolate(emailCopy[type][locale].subject, data as Record<string, unknown>);
+  const vars = prepareVars(type, locale, data as Record<string, unknown>);
+  const subject = interpolate(resolveCopy(type, locale, vars).subject, vars);
   return { subject, html };
 }

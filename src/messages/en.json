@@ -477,6 +477,8 @@
     "verifySubtitle": "We've sent a link to your email address. Click it to complete your registration.",
     "orContinue": "or continue with",
     "agreeTerms": "By creating an account, you agree to the terms and privacy policy.",
+    "agreeTermsLinks": "I accept the <terms>terms and conditions</terms> and the <privacy>privacy policy</privacy>.",
+    "opensInNewTab": "(opens in a new tab)",
     "passwordHint": "At least 8 characters, including a letter and a number.",
     "registerAsEmployer": "Hiring? Create an employer account",
     "registerAsCandidate": "Looking for work? Create a candidate account",
@@ -532,7 +534,8 @@
     "entitlementLimit": "You've reached your plan's active job limit. Upgrade your plan to publish more.",
     "notFound": "We couldn't find what you're looking for.",
     "internal": "Something went wrong on our end. We're working on it.",
-    "generic": "Something went wrong. Please try again."
+    "generic": "Something went wrong. Please try again.",
+    "demoUnavailable": "This feature is not available in the demo version of the site."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -614,10 +617,18 @@
     "proposalsIntro": "Employers can send you job proposals.",
     "proposalsEmptyTitle": "No proposals yet",
     "proposalsEmptyBody": "Complete your profile so employers can see your experience.",
+    "proposalsMore": "Show more proposals",
+    "proposalsLoading": "Loading proposals…",
+    "proposalsMoreError": "We couldn’t load more proposals. Try again.",
+    "proposalsEnd": "These are all your proposals.",
     "proposalSentOn": "Received on {date}",
     "candidateListErrorTitle": "Could not load your information",
     "candidateListErrorBody": "Refresh the page and try again.",
     "candidateListRetry": "Try again",
+    "candidateOverviewLoadError": "Some counters couldn’t be loaded. Refresh the page and try again.",
+    "candidateStatLoadError": "Could not load",
+    "candidateApplicationsLoadError": "We couldn’t load your applications. Refresh the page and try again.",
+    "candidateMessagesLoadError": "We couldn’t load your messages. Refresh the page and try again.",
     "savedIntro": "Review jobs you saved for later.",
     "savedEmpty": "You haven't saved any jobs yet. Find a job that interests you and save it here.",
     "savedBrowse": "Browse jobs",
@@ -871,7 +882,7 @@
     "available": "Available",
     "datePosted": "Date posted",
     "any": "Any",
-    "showResults": "Show {count} jobs",
+    "showResults": "{count, plural, one {Show # job} other {Show # jobs}}",
     "countLoading": "Counting jobs…",
     "countUnavailable": "Job count unavailable",
     "countError": "We could not count the jobs. Try again.",
@@ -949,7 +960,9 @@
     "errorGeneric": "The application could not be sent. Please try again.",
     "alreadyApplied": "You've already applied for this job.",
     "submitting": "Sending...",
-    "close": "Close"
+    "close": "Close",
+    "phoneInvalid": "Enter a valid phone number: a national number for the selected country or the full number with the country code, e.g. +32 470 12 34 56.",
+    "demoUnavailable": "This is a demo version — applying for jobs is turned off."
   },
   "legal": {
     "termsTitle": "Terms of Service",

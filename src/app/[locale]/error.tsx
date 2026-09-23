@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
+import { useErrorRetry } from '@/components/errors/use-error-retry';
 import { buttonVariants } from '@/components/ui/button';
 import { captureError } from '@/lib/sentry';
 
@@ -22,6 +23,7 @@ export default function LocaleError({
 }): React.JSX.Element {
   const t = useTranslations('errors');
   const tc = useTranslations('common');
+  const { retry } = useErrorRetry(reset);
 
   useEffect(() => {
     captureError(error, { area: 'app.error-boundary', digest: error.digest });
@@ -34,7 +36,7 @@ export default function LocaleError({
       </h1>
       <p className="max-w-md text-muted-foreground">{t('generic')}</p>
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <button type="button" onClick={reset} className={buttonVariants({ size: 'lg' })}>
+        <button type="button" onClick={retry} className={buttonVariants({ size: 'lg' })}>
           {tc('retry')}
         </button>
         <Link href="/" className={buttonVariants({ size: 'lg', variant: 'outline' })}>
