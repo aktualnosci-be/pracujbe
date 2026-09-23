@@ -1149,7 +1149,16 @@
     "you": "Ty",
     "systemLabel": "System",
     "back": "Wróć do listy",
-    "unreadBadge": "Nieprzeczytane"
+    "unreadBadge": "Nieprzeczytane",
+    "conversationsHeading": "Rozmowy",
+    "threadListLabel": "Wiadomości z: {name}",
+    "composerLabel": "Wiadomość do: {name}",
+    "composerCounter": "{count} / {max} znaków",
+    "composerTooLong": "Wiadomość może mieć najwyżej {max} znaków. Skróć ją i wyślij ponownie.",
+    "loadOlder": "Wczytaj starsze wiadomości",
+    "loadingOlder": "Wczytuję starsze wiadomości…",
+    "loadOlderError": "Nie udało się wczytać starszych wiadomości. Spróbuj ponownie.",
+    "threadStart": "To początek rozmowy."
   },
   "files": {
     "cvTitle": "Twoje CV / dokumenty",

@@ -7,8 +7,11 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
     test(`lista rozmów paszport: ${role}, ${locale}, 320 px`, async ({ page }) => {
       await page.setViewportSize({ width: 320, height: 720 });
       await page.goto(`/${locale}/${role}/wiadomosci`);
+      const translations = JSON.parse(readFileSync(resolve('src/messages', `${locale}.json`), 'utf8')) as {
+        messages: { conversationsHeading: string };
+      };
 
-      const list = page.locator('aside').getByRole('list');
+      const list = page.getByRole('region', { name: translations.messages.conversationsHeading }).getByRole('list');
       await expect(list).toBeVisible();
       await expect(list.getByRole('link').first()).toBeVisible();
 
@@ -27,20 +30,22 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
   for (const role of ['candidate', 'employer'] as const) {
     test(`rozmowa ${role}, ${locale}: reflow przy 640 CSS px`, async ({ page }) => {
       const translations = JSON.parse(readFileSync(resolve('src/messages', `${locale}.json`), 'utf8')) as {
-        messages: { back: string; send: string; composerPlaceholder: string };
+        messages: { back: string; send: string; conversationsHeading: string; composerLabel: string };
       };
       const listPath = `/${locale}/${role}/wiadomosci`;
       // Testuje układ przy 640 CSS px, bez zmiany powiększenia przeglądarki.
       await page.setViewportSize({ width: 640, height: 900 });
       await page.goto(listPath);
 
-      const conversation = page.locator('aside').getByRole('list').getByRole('link').first();
+      const conversations = page.getByRole('region', { name: translations.messages.conversationsHeading });
+      const conversation = conversations.getByRole('list').getByRole('link').first();
       await expect(conversation).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 
       await conversation.click();
       await expect(page.getByRole('link', { name: translations.messages.back, exact: true })).toBeVisible();
-      const composer = page.getByRole('textbox', { name: translations.messages.composerPlaceholder });
+      const composerPrefix = translations.messages.composerLabel.split('{name}')[0]!;
+      const composer = page.getByRole('textbox', { name: composerPrefix });
       const send = page.getByRole('button', { name: translations.messages.send, exact: true });
       await expect(send).toBeDisabled();
       await composer.fill('Test');
@@ -49,7 +54,7 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
 
       await page.getByRole('link', { name: translations.messages.back, exact: true }).click();
       await expect(page).toHaveURL(listPath);
-      await expect(page.locator('aside').getByRole('list').getByRole('link').first()).toBeVisible();
+      await expect(conversations.getByRole('list').getByRole('link').first()).toBeVisible();
     });
   }
 }
