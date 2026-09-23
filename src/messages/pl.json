@@ -368,6 +368,13 @@
       "contactEmailInvalid": "Nieprawidłowy adres e-mail.",
       "publishAgreementRequired": "Potwierdź, aby opublikować ofertę.",
       "invalid": "Nieprawidłowa wartość."
+    },
+    "contentLanguageNotice": "Treść tej oferty jest dostępna tylko w języku: {language}.",
+    "contentLanguageNames": {
+      "pl": "polski",
+      "nl": "niderlandzki",
+      "fr": "francuski",
+      "en": "angielski"
     }
   },
   "landing": {

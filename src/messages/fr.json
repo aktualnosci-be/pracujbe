@@ -368,6 +368,13 @@
       "contactEmailInvalid": "Adresse e-mail invalide.",
       "publishAgreementRequired": "Confirmez pour publier l'offre.",
       "invalid": "Valeur invalide."
+    },
+    "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
+    "contentLanguageNames": {
+      "pl": "polonais",
+      "nl": "néerlandais",
+      "fr": "français",
+      "en": "anglais"
     }
   },
   "landing": {

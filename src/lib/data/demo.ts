@@ -530,6 +530,8 @@ interface DemoJobRaw {
   workingHoursKey: WhKey;
   shiftsKey?: ShKey;
   contextKeys: CtxKey[];
+  /** Języki, w których oferta ma treść; brak = wszystkie (#301). */
+  contentLocales?: readonly Locale[];
 }
 
 const RAW_JOBS: DemoJobRaw[] = [
@@ -714,6 +716,8 @@ const RAW_JOBS: DemoJobRaw[] = [
     languageKeys: ['nl'], responsibilityKeys: ['stock', 'orderPick', 'planLogistics'], mandatoryKeys: ['student', 'reliable', 'dutch'],
     optionalKeys: ['computer', 'langBonus'], conditionKeys: ['training', 'mealVouchers', 'youngTeam'], highlightKeys: ['student', 'training'],
     workingHoursKey: 'parttime', shiftsKey: 'day', contextKeys: ['growth', 'team'],
+    // Pracodawca z Flandrii opublikował treść tylko po niderlandzku (scenariusz #301).
+    contentLocales: ['nl'],
   },
 ];
 
@@ -741,12 +745,16 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
   const regionKey = REGION_OF[raw.locationKey];
   const city = CITY[raw.locationKey][locale];
   const region = REGION[regionKey][locale];
+  // Oferta może mieć treść tylko w części języków (#301) — jak `get_public_job`, pokazujemy
+  // wtedy tłumaczenie w pierwszym dostępnym języku, a dane oferty (miasto, region) w języku strony.
+  const available = raw.contentLocales ?? routing.locales;
+  const content: Locale = available.includes(locale) ? locale : available[0]!;
   const publishedAt = new Date(NOW_MS - raw.postedDaysAgo * DAY_MS).toISOString();
 
   const base: JobListItem = {
     id: raw.id,
     slug: buildSlug(raw),
-    title: `${OCCUPATION[raw.occKey][locale]} – ${city}`,
+    title: `${OCCUPATION[raw.occKey][content]} – ${CITY[raw.locationKey][content]}`,
     companyName: company.name,
     companyVerified: company.verified,
     city,
@@ -758,7 +766,7 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     salaryPeriod: 'month',
     publishedAt,
     isNew: raw.postedDaysAgo <= NEW_DAYS,
-    highlights: raw.highlightKeys.map((k) => HL[k][locale]),
+    highlights: raw.highlightKeys.map((k) => HL[k][content]),
     category: raw.category,
     accommodation: raw.accommodation,
     immediate: raw.immediate,
@@ -767,17 +775,19 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
 
   return {
     ...base,
-    description: composeDescription(raw, locale, company.name),
-    responsibilities: raw.responsibilityKeys.map((k) => RESP[k][locale]),
-    requirementsMandatory: raw.mandatoryKeys.map((k) => MAND[k][locale]),
-    requirementsOptional: raw.optionalKeys.map((k) => OPT[k][locale]),
-    conditions: raw.conditionKeys.map((k) => COND[k][locale]),
-    workingHours: WH[raw.workingHoursKey][locale],
-    shifts: raw.shiftsKey ? SH[raw.shiftsKey][locale] : undefined,
+    description: composeDescription(raw, content, company.name),
+    responsibilities: raw.responsibilityKeys.map((k) => RESP[k][content]),
+    requirementsMandatory: raw.mandatoryKeys.map((k) => MAND[k][content]),
+    requirementsOptional: raw.optionalKeys.map((k) => OPT[k][content]),
+    conditions: raw.conditionKeys.map((k) => COND[k][content]),
+    workingHours: WH[raw.workingHoursKey][content],
+    shifts: raw.shiftsKey ? SH[raw.shiftsKey][content] : undefined,
     languages: raw.languageKeys.map((k) => LANG[k][locale]),
     transport: raw.transport,
     startDate: raw.startDate,
-    companyDescription: company.description[locale],
+    companyDescription: company.description[content],
+    contentLocale: content,
+    availableLocales: [...available],
   };
 }
 
@@ -794,6 +804,12 @@ export function resolveDemoJobs(locale: Locale): JobDetail[] {
 export function resolveDemoJobBySlug(slug: string, locale: Locale): JobDetail | null {
   const raw = RAW_JOBS.find((job) => buildSlug(job) === slug);
   return raw ? resolveJobDetail(raw, locale) : null;
+}
+
+/** Języki z treścią dla oferty demonstracyjnej (sitemap, #301). */
+export function demoJobContentLocales(id: string): Locale[] {
+  const raw = RAW_JOBS.find((job) => job.id === id);
+  return [...(raw?.contentLocales ?? routing.locales)];
 }
 
 const CATEGORY_KEYS: CategoryKey[] = [

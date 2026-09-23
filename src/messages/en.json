@@ -368,6 +368,13 @@
       "contactEmailInvalid": "Invalid email address.",
       "publishAgreementRequired": "Confirm to publish the job.",
       "invalid": "Invalid value."
+    },
+    "contentLanguageNotice": "This job’s content is only available in {language}.",
+    "contentLanguageNames": {
+      "pl": "Polish",
+      "nl": "Dutch",
+      "fr": "French",
+      "en": "English"
     }
   },
   "landing": {

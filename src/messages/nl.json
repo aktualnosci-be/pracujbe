@@ -368,6 +368,13 @@
       "contactEmailInvalid": "Ongeldig e-mailadres.",
       "publishAgreementRequired": "Bevestig om de vacature te publiceren.",
       "invalid": "Ongeldige waarde."
+    },
+    "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
+    "contentLanguageNames": {
+      "pl": "Pools",
+      "nl": "Nederlands",
+      "fr": "Frans",
+      "en": "Engels"
     }
   },
   "landing": {

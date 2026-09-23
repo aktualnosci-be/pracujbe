@@ -1,8 +1,16 @@
 import type { MetadataRoute } from 'next';
+import { getTranslations } from 'next-intl/server';
 
 import { routing } from '@/i18n/routing';
 import { env, isProductionDeployment } from '@/lib/env';
-import { getJobs, type CategoryKey, type LocationKey } from '@/lib/jobs';
+import {
+  getCategoryCounts,
+  getCityCounts,
+  getJobs,
+  getJobsAvailableLocales,
+  type CategoryKey,
+  type LocationKey,
+} from '@/lib/jobs';
 import { getAllGuideSlugs } from '@/lib/guides/guides';
 
 /**
@@ -70,8 +78,37 @@ function buildLanguages(
   for (const locale of locales) {
     languages[locale] = `${base}${pathForLocale(locale)}`;
   }
-  languages['x-default'] = `${base}${pathForLocale(routing.defaultLocale)}`;
+  const xDefault = locales.includes(routing.defaultLocale) ? routing.defaultLocale : locales[0];
+  if (xDefault) languages['x-default'] = `${base}${pathForLocale(xDefault)}`;
   return languages;
+}
+
+/**
+ * Języki, w których landing ma ≥1 ofertę (#299). Liczniki używają tego samego filtra co strona
+ * (kategoria; miasto po nazwie w danym języku), więc sitemap nie zgłasza pustych landingów,
+ * które same mają `noindex`. `null` z licznika = błąd odczytu: sitemap nie może zgadywać.
+ */
+async function nonEmptyLandingLocales(
+  locales: readonly string[],
+): Promise<{ categories: Map<string, string[]>; cities: Map<string, string[]> }> {
+  const categoryCounts = await getCategoryCounts(routing.defaultLocale, CATEGORY_KEYS);
+  if (!categoryCounts) throw new Error('sitemap: brak liczników kategorii');
+  const categories = new Map<string, string[]>();
+  for (const key of CATEGORY_KEYS) {
+    categories.set(key, (categoryCounts[key] ?? 0) > 0 ? [...locales] : []);
+  }
+
+  const cities = new Map<string, string[]>(LOCATION_KEYS.map((key) => [key, []]));
+  for (const locale of locales) {
+    const tLoc = await getTranslations({ locale, namespace: 'locations' });
+    const names = LOCATION_KEYS.map((key) => tLoc(key));
+    const counts = await getCityCounts(locale, names);
+    if (!counts) throw new Error('sitemap: brak liczników miast');
+    LOCATION_KEYS.forEach((key, index) => {
+      if ((counts[names[index]!] ?? 0) > 0) cities.get(key)!.push(locale);
+    });
+  }
+  return { categories, cities };
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -97,11 +134,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
+  const landings = await nonEmptyLandingLocales(locales);
+
   // --- Landing-page'e kategorii (dedykowana trasa /praca/kategoria/<klucz>, slug stabilny) ---
+  // Tylko z ≥1 ofertą (#299).
   for (const key of CATEGORY_KEYS) {
     const path = `${HUB_PATH}/kategoria/${key}`;
-    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
-    for (const locale of locales) {
+    const withJobs = landings.categories.get(key) ?? [];
+    const languages = buildLanguages(base, withJobs, (locale) => `/${locale}${path}`);
+    for (const locale of withJobs) {
       entries.push({
         url: `${base}/${locale}${path}`,
         changeFrequency: 'weekly',
@@ -112,10 +153,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // --- Landing-page'e miast (dedykowana trasa /praca/miasto/<slug>, slug stabilny) ---
+  // Tylko języki, w których filtr miasta znajduje ≥1 ofertę (#299).
   for (const key of LOCATION_KEYS) {
     const path = `${HUB_PATH}/miasto/${key}`;
-    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
-    for (const locale of locales) {
+    const withJobs = landings.cities.get(key) ?? [];
+    const languages = buildLanguages(base, withJobs, (locale) => `/${locale}${path}`);
+    for (const locale of withJobs) {
       entries.push({
         url: `${base}/${locale}${path}`,
         changeFrequency: 'weekly',
@@ -146,12 +189,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   for (let page = 1; entries.length < SITEMAP_MAX_JOBS * locales.length; page += 1) {
     const result = await getJobs({ locale: routing.defaultLocale, page, pageSize: SITEMAP_PAGE });
     if (result.jobs.length === 0) break;
+    // Tylko wersje językowe z tłumaczeniem (#301); nieznane (błąd odczytu) = wszystkie, jak dotąd.
+    const availableByJob = await getJobsAvailableLocales(result.jobs.map((job) => job.id));
     for (const job of result.jobs) {
       const path = `${JOBS_PATH}/${job.slug}`;
-      const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
+      const available = availableByJob?.[job.id];
+      const jobLocales = availableByJob && available?.length ? available : locales;
+      const languages = buildLanguages(base, jobLocales, (locale) => `/${locale}${path}`);
       const publishedTs = Date.parse(job.publishedAt);
       const lastModified = Number.isNaN(publishedTs) ? now : new Date(publishedTs);
-      for (const locale of locales) {
+      for (const locale of jobLocales) {
         entries.push({
           url: `${base}/${locale}${path}`,
           lastModified,
