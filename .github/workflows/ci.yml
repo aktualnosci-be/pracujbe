@@ -8,7 +8,8 @@ name: CI
 # - nowy push do PR anuluje trwający przebieg tego PR (main nigdy — Railway
 #   `Wait for CI` potrzebuje wyniku każdego SHA na main);
 # - drogie joby (build, e2e) startują dopiero po zielonym lint/typecheck/unit;
-# - każdy job ma `timeout-minutes`, więc zawieszony krok nie zjada puli.
+# - każdy job ma `timeout-minutes`, więc zawieszony krok nie zjada puli;
+# - e2e odtwarza `.next` z jobu build (cache Actions) zamiast budować drugi raz (#127).
 
 on:
   push:
@@ -178,7 +179,25 @@ jobs:
       - name: Install dependencies (cache miss)
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
-      - run: npm run build
+      # Ten sam build służy jobowi e2e (#127) — dlatego z testowymi ID trackerów
+      # (tests/e2e/fixtures/trackers.ts), inaczej playwright.config.ts przebuduje go (#234).
+      # Artefakt nie trafia na produkcję: Railway buduje sam ze źródeł i własnych zmiennych.
+      - name: Build application
+        env:
+          NEXT_PUBLIC_GA_MEASUREMENT_ID: G-TEST000000
+          NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'
+        run: npm run build
+      - name: Verify build output
+        run: node scripts/check-next-build.mjs
+      # Cache Actions, NIE artefakt: nie zjada płatnego storage organizacji.
+      # Bez .next/cache (cache kompilatora nie jest potrzebny do `next start`).
+      - name: Save build for E2E
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .next
+            !.next/cache
+          key: next-build-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   rls:
     name: RLS integration (PostgreSQL 16)
@@ -333,14 +352,29 @@ jobs:
       # Hostowany runner nie ma przeglądarki Playwrighta ani jej bibliotek systemowych.
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      # Testowe ID trackerów (tests/e2e/fixtures/trackers.ts) muszą trafić do builda,
-      # inaczej playwright.config.ts przebuduje aplikację (test zgód, #234).
-      - name: Build application for E2E
+      # Build z jobu `build` tego przebiegu (#127). restore-keys łapie też build
+      # z wcześniejszej próby, gdy ponawiany jest sam e2e.
+      - name: Restore build from build job
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .next
+            !.next/cache
+          key: next-build-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: next-build-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-
+      - name: Verify restored build
+        id: next-build
+        continue-on-error: true
+        run: node scripts/check-next-build.mjs
+      # Fallback: brak lub niekompletny build → budujemy tutaj. Testowe ID trackerów
+      # muszą trafić do builda, inaczej playwright.config.ts przebuduje aplikację (#234).
+      - name: Build application for E2E (fallback)
+        if: steps.next-build.outcome != 'success'
         timeout-minutes: 15
         env:
           NEXT_PUBLIC_GA_MEASUREMENT_ID: G-TEST000000
           NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'
-        run: npm run build
+        run: rm -rf .next && npm run build
       - name: Run E2E
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'
