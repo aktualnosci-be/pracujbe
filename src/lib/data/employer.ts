@@ -191,7 +191,9 @@ const loadContext = cache(async (): Promise<EmployerContext | null> => {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
+  if (authError) throw authError;
   if (!user) return null;
 
   // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
