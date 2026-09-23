@@ -24,7 +24,8 @@ import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
 import { defaultAlternateLocale } from '@/lib/job-content-locale';
-import { getJobBySlug, getSimilarJobs, type ContractType, type JobDetail } from '@/lib/jobs';
+import { getJobBySlug, getSimilarJobs, type JobDetail } from '@/lib/jobs';
+import { brandShareImageUrl, buildJobPostingJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
@@ -59,19 +60,7 @@ const OG_LOCALE: Record<string, string> = {
   fr: 'fr_BE',
   en: 'en_GB',
 };
-const DAY_MS = 24 * 60 * 60 * 1000;
-const VALID_DAYS = 60;
 const SIMILAR_LIMIT = 3;
-
-/** Mapowanie rodzaju umowy na schema.org employmentType. */
-const EMPLOYMENT_TYPE: Record<ContractType, string> = {
-  permanent: 'FULL_TIME',
-  temporary: 'TEMPORARY',
-  interim: 'TEMPORARY',
-  freelance: 'CONTRACTOR',
-  internship: 'INTERN',
-  seasonal: 'TEMPORARY',
-};
 
 type PageProps = {
   params: Promise<{ locale: string; slug: string }>;
@@ -132,7 +121,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // Wersja bez tłumaczenia kanonizuje się do języka oryginału (bez duplikatów treści, #301).
   const url = `${base}/${version.canonicalLocale}${path}`;
   const description = truncate(job.description, 160);
-  const shareImage = new URL('/og.png', base).href;
+  const shareImage = brandShareImageUrl(base);
 
   // hreflang tylko dla języków z tłumaczeniem; strona fallback nie należy do tego zbioru.
   const languages: Record<string, string> = {};
@@ -164,71 +153,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description,
       images: [shareImage],
     },
-  };
-}
-
-function buildJsonLd(job: JobDetail, url: string): Record<string, unknown> {
-  // P1-12: validThrough z REALNEGO expires_at oferty; fallback (brak daty) = datePosted + 60 dni.
-  const publishedTs = Date.parse(job.publishedAt);
-  const validThrough = job.expiresAt
-    ? job.expiresAt
-    : Number.isNaN(publishedTs)
-      ? undefined
-      : new Date(publishedTs + VALID_DAYS * DAY_MS).toISOString();
-
-  // P1-12: unitText z realnego okresu pensji (godzina/miesiąc/rok), nie na sztywno „MONTH".
-  const SALARY_UNIT: Record<NonNullable<JobDetail['salaryPeriod']>, string> = {
-    hour: 'HOUR',
-    month: 'MONTH',
-    year: 'YEAR',
-  };
-  const unitText = job.salaryPeriod ? SALARY_UNIT[job.salaryPeriod] : undefined;
-
-  const hasSalary = job.salaryMin !== undefined || job.salaryMax !== undefined;
-  const baseSalary = hasSalary
-    ? {
-        '@type': 'MonetaryAmount',
-        currency: job.currency,
-        value: {
-          '@type': 'QuantitativeValue',
-          ...(job.salaryMin !== undefined ? { minValue: job.salaryMin } : {}),
-          ...(job.salaryMax !== undefined ? { maxValue: job.salaryMax } : {}),
-          ...(unitText ? { unitText } : {}),
-        },
-      }
-    : undefined;
-
-  return {
-    '@context': 'https://schema.org/',
-    '@type': 'JobPosting',
-    title: job.title,
-    description: [job.description, ...job.responsibilities].join(' '),
-    identifier: {
-      '@type': 'PropertyValue',
-      name: job.companyName,
-      value: job.id,
-      propertyID: job.slug,
-    },
-    datePosted: job.publishedAt,
-    ...(validThrough ? { validThrough } : {}),
-    employmentType: EMPLOYMENT_TYPE[job.contractType],
-    hiringOrganization: {
-      '@type': 'Organization',
-      name: job.companyName,
-    },
-    jobLocation: {
-      '@type': 'Place',
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: job.city,
-        addressRegion: job.region,
-        addressCountry: 'BE',
-      },
-    },
-    ...(baseSalary ? { baseSalary } : {}),
-    ...(job.startDate ? { jobStartDate: job.startDate } : {}),
-    url,
-    directApply: false,
   };
 }
 
@@ -266,7 +190,16 @@ export default async function JobDetailPage({ params }: PageProps) {
   const url = `${env.siteUrl}/${locale}${BASE_PATH}/${slug}`;
   const version = contentLanguage(job, locale);
   // JobPosting tylko na wersji kanonicznej — wersja bez tłumaczenia nie powiela danych (#301).
-  const jsonLd = version.fallback ? null : buildJsonLd(job, url);
+  const jsonLd = version.fallback
+    ? null
+    : buildJobPostingJsonLd(job, url, {
+        responsibilities: t('responsibilities'),
+        requirementsMandatory: t('requirementsMandatory'),
+        requirementsOptional: t('requirementsOptional'),
+        conditions: t('conditions'),
+        workingHours: t('workingHours'),
+        shifts: t('shifts'),
+      });
   // Treść w innym języku niż strona → `lang` na fragmentach treści (WCAG 3.1.2).
   const contentLang = version.fallback ? version.contentLocale : undefined;
 
@@ -334,7 +267,7 @@ export default async function JobDetailPage({ params }: PageProps) {
         <script
           type="application/ld+json"
           // Escapowanie „<" chroni przed wyjściem z tagu <script> dla danych z bazy.
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
       ) : null}
 
