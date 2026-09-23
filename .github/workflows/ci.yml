@@ -171,7 +171,8 @@ jobs:
   rls:
     name: RLS integration (PostgreSQL 16)
     # Weryfikuje polityki RLS i triggery integralności
-    # na CZYSTYM PostgreSQL 16 (shim Supabase + wszystkie migracje + adwersaryjne asercje).
+    # na CZYSTYM PostgreSQL 16 (produkcyjny bootstrap ról + wszystkie migracje + strażnik roli
+    # z kontrolami ujemnymi + adwersaryjne asercje).
     # Domyka lukę audytu „migracje/RLS niezweryfikowane w CI". Nie wymaga node_modules.
     #
     # Klient psql i testy działają w izolowanym kontenerze usługi.
@@ -199,6 +200,7 @@ jobs:
           docker exec "$POSTGRES_CONTAINER" mkdir -p /tmp/pracujbe-tests
           docker cp scripts "$POSTGRES_CONTAINER:/tmp/pracujbe-tests/scripts"
           docker cp supabase "$POSTGRES_CONTAINER:/tmp/pracujbe-tests/supabase"
+          docker cp database "$POSTGRES_CONTAINER:/tmp/pracujbe-tests/database"
           docker exec "$POSTGRES_CONTAINER" psql --version
       - name: RLS/triggers adversarial tests
         env:
