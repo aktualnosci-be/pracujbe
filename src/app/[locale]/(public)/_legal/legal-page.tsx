@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 
 import { routing } from '@/i18n/routing';
@@ -70,9 +71,12 @@ export async function buildLegalMetadata({
 export async function LegalPage({
   locale,
   titleKey,
+  actions,
 }: {
   locale: string;
   titleKey: LegalTitleKey;
+  /** Opcjonalne działania związane ze stroną (np. otwarcie centrum zgód na polityce cookies). */
+  actions?: ReactNode;
 }) {
   const t = await getTranslations({ locale, namespace: 'legal' });
 
@@ -88,6 +92,7 @@ export async function LegalPage({
         </h1>
         <p className="mt-4 text-base text-muted-foreground">{t('intro')}</p>
         <p className="mt-4 text-base text-muted-foreground">{t('placeholder')}</p>
+        {actions ? <div className="mt-6 flex flex-wrap gap-3">{actions}</div> : null}
         <p className="mt-8 text-sm text-muted-foreground">
           {t('lastUpdated', { date: lastUpdated })}
         </p>
