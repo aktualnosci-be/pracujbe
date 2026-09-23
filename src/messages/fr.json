@@ -740,6 +740,9 @@
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
+    "identityEyebrow": "VOTRE PASSEPORT EMPLOI",
+    "identityEmptyName": "Prénom non indiqué",
+    "identityEmpty": "Ajoutez vos informations pour afficher votre passeport emploi.",
     "title": "Votre profil professionnel",
     "intro": "Retrouvez les informations utilisées pour vous proposer des emplois adaptés à vos compétences.",
     "edit": "Modifier le profil",
