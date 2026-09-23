@@ -37,5 +37,14 @@ for (let index = 0; index < jobs.length; index += 1) {
   assert.match(body, /^    runs-on: \[self-hosted, linux, x64\]\s*$/m, `${name}: użyj tej samej puli runnerów`);
 }
 
+// Vitest ma startować z drzewa odtworzonego przez npm ci, także przy trafieniu
+// cache. Sam cache node_modules może być niekompletny po pracy hosta.
+const unit = jobs.find(([name]) => name === 'unit')?.[1];
+assert.ok(unit, 'brak joba unit');
+assert.match(unit, /^          cache: npm\s*$/m, 'unit: użyj cache pobrań npm');
+assert.match(unit, /^        run: npm ci --prefer-offline --no-audit --fund=false\s*$/m, 'unit: npm ci musi uruchomić się zawsze');
+assert.doesNotMatch(unit, /actions\/cache\/restore@v4/, 'unit: nie odtwarzaj node_modules');
+assert.match(unit, /require\.resolve\('ms'\)/, 'unit: sprawdź zależność przed Vitest');
+
 assert.match(sources.get('delete-old-runs.yml'), /^    runs-on: self-hosted\s*$/m);
 console.log('CI i sprzątanie mają wspólną blokadę, a joby CI tworzą jedną kolejkę.');

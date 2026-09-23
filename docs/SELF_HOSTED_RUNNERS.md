@@ -135,10 +135,15 @@ do końca każdego joba. Pojedynczy zielony job nie potwierdza izolacji dwóch r
 
 - `actions/setup-node@v4` z `cache: npm` cache'uje `~/.npm`. Na self-hosted katalog `~` jest trwały,
   więc kolejne przebiegi instalują szybciej.
-- Job `install` buduje `node_modules` raz i przekazuje je jako artefakt do pozostałych jobów
-  (`upload-artifact`/`download-artifact`), by nie instalować wielokrotnie.
-- Alternatywnie (jeden runner, sekwencyjnie) można scalić joby w jeden, by pominąć pakowanie artefaktu —
-  aktualny podział daje równoległość, gdy runnerów jest kilka.
+- Job `install` zapisuje `node_modules` w cache Actions; większość kolejnych jobów
+  odtwarza to drzewo, a po chybieniu cache uruchamia `npm ci`. Nie używamy
+  artefaktu `node_modules`.
+- Job `unit` zawsze wykonuje `npm ci` z `package-lock.json` po odtworzeniu cache
+  pobrań npm (`~/.npm`), bez przywracania `node_modules`. Przed Vitest sprawdza,
+  czy Node odnajduje pakiet `ms`; przy awarii zapisuje diagnostykę jego obecności.
+  To ogranicza zależność tego joba od kompletności cache `node_modules`, ale nie
+  zabezpiecza przed usunięciem katalogu **w trakcie** testów przez proces hosta.
+  Przy takim objawie nadal trzeba skontrolować hooki i katalogi runnerów z §2.
 
 ---
 
