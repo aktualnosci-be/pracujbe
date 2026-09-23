@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { useRouter, usePathname } from '@/i18n/navigation';
+import { Link, useRouter, usePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import type { CategoryKey, ContractType } from '@/lib/jobs';
 import { Button } from '@/components/ui/button';
@@ -604,5 +605,85 @@ export function FilterSidebar({
             : t('countUnavailable')}
       </Button>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ SortMenu */
+
+export interface SortMenuOption {
+  value: SortValue;
+  label: string;
+  href: string;
+}
+
+export interface SortMenuProps {
+  sortByLabel: string;
+  current: SortValue;
+  options: readonly SortMenuOption[];
+}
+
+/**
+ * Menu sortowania listy ofert. `<details>` działa bez JS; po hydratacji Escape i kliknięcie poza
+ * menu je zamykają (Escape zwraca fokus na przycisk), a bieżąca opcja ma `aria-current` (#233).
+ */
+export function SortMenu({
+  sortByLabel,
+  current,
+  options,
+}: SortMenuProps): React.JSX.Element {
+  const ref = React.useRef<HTMLDetailsElement>(null);
+  const currentLabel =
+    options.find((option) => option.value === current)?.label ?? '';
+
+  React.useEffect(() => {
+    const details = ref.current;
+    if (!details) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !details.open) return;
+      event.preventDefault();
+      details.open = false;
+      details.querySelector('summary')?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (details.open && !details.contains(event.target as Node)) {
+        details.open = false;
+      }
+    };
+    details.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      details.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, []);
+
+  return (
+    <details ref={ref} data-sort-menu className="group relative">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+        <span className="text-muted-foreground">{sortByLabel}:</span>
+        <span className="font-medium">{currentLabel}</span>
+        <ChevronDown
+          className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 w-60 rounded-md border border-border bg-background p-1 shadow-md">
+        {options.map((option) => (
+          <Link
+            key={option.value}
+            href={option.href}
+            aria-current={option.value === current ? 'true' : undefined}
+            className={cn(
+              'flex min-h-11 items-center rounded-sm px-3 py-2 text-sm transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              option.value === current
+                ? 'font-medium text-accent'
+                : 'text-foreground',
+            )}
+          >
+            {option.label}
+          </Link>
+        ))}
+      </div>
+    </details>
   );
 }

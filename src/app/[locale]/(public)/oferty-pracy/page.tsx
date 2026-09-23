@@ -1,14 +1,13 @@
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { ChevronDown, MapPin, Search, SearchX, X } from 'lucide-react';
+import { MapPin, Search, SearchX, X } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getJobFilterFacets, getJobs } from '@/lib/jobs';
-import { cn } from '@/lib/utils';
-import { FilterSidebar } from '@/components/public/FilterSidebar';
+import { FilterSidebar, SortMenu } from '@/components/public/FilterSidebar';
 import { FilterSheet } from '@/components/public/FilterSheet';
 import { JobCard } from '@/components/public/JobCard';
 import { Pagination } from '@/components/public/Pagination';
@@ -329,40 +328,17 @@ export default async function JobsListPage({
   delete hiddenSearchParams['keyword'];
   delete hiddenSearchParams['city'];
 
-  const currentSortLabel =
-    sort === 'salary' ? tFilters('sortSalary') : tFilters('sortNewest');
-  const sortOptions: Array<{ value: SortValue; label: string }> = [
-    { value: 'newest', label: tFilters('sortNewest') },
-    { value: 'salary', label: tFilters('sortSalary') },
-  ];
+  const sortOptions = [
+    { value: 'newest', label: tFilters('sortNewest'), href: sortHref('newest') },
+    { value: 'salary', label: tFilters('sortSalary'), href: sortHref('salary') },
+  ] as const;
 
   const sortMenu = () => (
-    <details className="group relative">
-      <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-soft [&::-webkit-details-marker]:hidden">
-        <span className="text-muted-foreground">{tFilters('sortBy')}:</span>
-        <span className="font-medium">{currentSortLabel}</span>
-        <ChevronDown
-          className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
-          aria-hidden="true"
-        />
-      </summary>
-      <div className="absolute right-0 z-20 mt-1 w-60 rounded-md border border-border bg-background p-1 shadow-md">
-        {sortOptions.map((option) => (
-          <Link
-            key={option.value}
-            href={sortHref(option.value)}
-            className={cn(
-              'block rounded-sm px-3 py-2 text-sm transition-colors hover:bg-soft',
-              option.value === sort
-                ? 'font-medium text-accent'
-                : 'text-foreground',
-            )}
-          >
-            {option.label}
-          </Link>
-        ))}
-      </div>
-    </details>
+    <SortMenu
+      sortByLabel={tFilters('sortBy')}
+      current={sort}
+      options={sortOptions}
+    />
   );
 
   return (
@@ -531,7 +507,7 @@ export default async function JobsListPage({
               ))}
               <Link
                 href={clearFiltersHref}
-                className="ml-1 text-sm font-medium text-accent hover:text-accent-dark"
+                className="ml-1 inline-flex min-h-11 items-center rounded-sm text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 {tFilters('clear')}
               </Link>
