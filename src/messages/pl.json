@@ -783,7 +783,18 @@
     "statusFinalLabel": "Status końcowy: {name} — {job} ({status})",
     "statusConfirmQuestion": "Zmienić status na „{status}”? Tej zmiany nie można cofnąć.",
     "statusConfirmAction": "Potwierdź",
-    "offerForJob": "Oferta: {job}"
+    "offerForJob": "Oferta: {job}",
+    "withdrawConfirmTitle": "Wycofać aplikację?",
+    "withdrawConfirmDescription": "Pracodawca nie będzie już rozpatrywać tego zgłoszenia. Nie będzie można ponownie aplikować na tę ofertę.",
+    "withdrawConfirmDescriptionNamed": "Zgłoszenie na ofertę „{title}” zostanie wycofane. Nie będzie można ponownie aplikować na tę ofertę.",
+    "withdrawConfirm": "Wycofaj",
+    "withdrawSuccess": "Aplikacja została wycofana.",
+    "declineConfirmTitle": "Odrzucić propozycję?",
+    "declineConfirmDescription": "Pracodawca otrzyma odmowę. Tej odpowiedzi nie można później zmienić.",
+    "declineConfirmDescriptionNamed": "Propozycja „{title}” zostanie odrzucona. Tej odpowiedzi nie można później zmienić.",
+    "declineConfirm": "Odrzuć",
+    "acceptProposalSuccess": "Propozycja została przyjęta.",
+    "declineProposalSuccess": "Propozycja została odrzucona."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -892,7 +903,10 @@
     "contractTypesLabel": "Preferowane rodzaje umów",
     "bioLabel": "O mnie (opcjonalnie)",
     "bioPlaceholder": "Napisz kilka zdań o sobie, doświadczeniu i oczekiwaniach.",
-    "agreeTerms": "Akceptuję regulamin i politykę prywatności."
+    "agreeTerms": "Akceptuję regulamin i politykę prywatności.",
+    "stepAnnounce": "Krok {current} z {total}: {title}",
+    "agreeTermsLinks": "Akceptuję <terms>regulamin</terms> i <privacy>politykę prywatności</privacy>.",
+    "opensInNewTab": "(otwiera się w nowej karcie)"
   },
   "filters": {
     "title": "Filtry",
@@ -1191,7 +1205,11 @@
     "empty": "Brak wgranych dokumentów.",
     "delete": "Usuń",
     "uploadError": "Nie udało się wgrać pliku. Sprawdź format i rozmiar.",
-    "deleteError": "Nie udało się usunąć pliku."
+    "deleteError": "Nie udało się usunąć pliku.",
+    "loadError": "Nie udało się wczytać dokumentów. Twoje pliki nie zostały usunięte.",
+    "deleteConfirmTitle": "Usunąć dokument?",
+    "deleteConfirmDescription": "Plik „{name}” zostanie trwale usunięty. Tej operacji nie można cofnąć.",
+    "deleteSuccess": "Dokument został usunięty."
   },
   "admin": {
     "adminName": "Administrator",
@@ -1291,7 +1309,9 @@
     "inAppEnabledDescription": "Powiadomienia widoczne po zalogowaniu w panelu.",
     "save": "Zapisz preferencje",
     "saving": "Zapisywanie...",
-    "savedSuccess": "Preferencje powiadomień zostały zapisane."
+    "savedSuccess": "Preferencje powiadomień zostały zapisane.",
+    "loadError": "Nie udało się wczytać Twoich preferencji powiadomień.",
+    "loadErrorHint": "Nie pokazujemy formularza, żeby zapis nie nadpisał Twoich wcześniejszych wyborów. Spróbuj ponownie za chwilę."
   },
   "guides": {
     "pageTitle": "Poradniki",

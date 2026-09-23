@@ -34,7 +34,12 @@ const EMAIL_FIELDS: readonly ToggleField[] = [
   'emailMarketing',
 ];
 
-const CHANNEL_FIELDS: readonly ToggleField[] = ['pushEnabled', 'inAppEnabled'];
+/**
+ * `pushEnabled` celowo pominięte (#312): Web Push nie jest zaimplementowany, więc kontrolka
+ * obiecywałaby funkcję, której nie ma. Wartość z bazy przechodzi bez zmian w `defaultValues`
+ * (zapis jej nie zmienia). Przywróć pole razem z realną subskrypcją push.
+ */
+const CHANNEL_FIELDS: readonly ToggleField[] = ['inAppEnabled'];
 
 export interface NotificationPreferencesFormProps {
   /** Wartości początkowe (odczytane pod sesją; bez env — domyślne). */

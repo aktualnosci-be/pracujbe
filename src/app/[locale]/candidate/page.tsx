@@ -19,12 +19,13 @@ import { getProfileLevelTitle } from '@/lib/profile-completeness';
 import {
   getCandidateOverview,
   getCandidateProfileSummary,
-  getCandidateFiles,
   getLatestMessages,
   getMyApplicationsPreview,
   getLatestActiveOffer,
   getRecommendedJobs,
 } from '@/lib/data/candidate';
+import { loadCandidateFiles } from '@/lib/data/candidate-files';
+import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 
 /**
  * Panel kandydata — Podsumowanie w stylu Paszportu pracy.
@@ -65,6 +66,7 @@ export default async function CandidateDashboardPage({
   const tj = await getTranslations({ locale, namespace: 'jobs' });
   const tp = await getTranslations({ locale, namespace: 'candidatePassport' });
   const tc = await getTranslations({ locale, namespace: 'common' });
+  const to = await getTranslations({ locale, namespace: 'onboarding' });
 
   const [overview, profile, recommended, applications, messages, files, newProposal] = await Promise.all([
     getCandidateOverview(),
@@ -72,7 +74,7 @@ export default async function CandidateDashboardPage({
     getRecommendedJobs(locale),
     getMyApplicationsPreview(locale),
     getLatestMessages(),
-    getCandidateFiles(),
+    loadCandidateFiles(),
     getLatestActiveOffer(locale),
   ]);
 
@@ -81,14 +83,7 @@ export default async function CandidateDashboardPage({
     overview.activeApplicationsCount === null ||
     overview.unreadMessagesCount === null;
 
-  const checklist = [
-    { label: td('checkBasicInfo'), done: profile.checklist.basicInfo, action: td('add') },
-    { label: td('checkExperience'), done: profile.checklist.experience, action: td('add') },
-    { label: td('checkEducation'), done: profile.checklist.education, action: td('add') },
-    { label: td('checkSkills'), done: profile.checklist.skills, action: td('add') },
-    { label: td('checkLanguages'), done: profile.checklist.languages, action: td('add') },
-    { label: td('checkPhoto'), done: profile.checklist.photo, action: td('add') },
-  ];
+  const checklist = profileChecklistItems(profile.checklist, td, to('none'));
 
   return (
     <div className="min-w-0 space-y-6">
@@ -237,7 +232,10 @@ export default async function CandidateDashboardPage({
           </section>}
 
           {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
-          <CvUpload items={files} />
+          <CvUpload
+            items={files.status === 'ready' ? files.items : []}
+            loadFailed={files.status === 'error'}
+          />
 
           {/* Najnowsze wiadomości */}
           <CandidateMessagesPreview

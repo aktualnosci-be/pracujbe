@@ -20,6 +20,7 @@
 import { getLocale } from 'next-intl/server';
 import { headers } from 'next/headers';
 import { z } from 'zod/v3';
+import type { User } from '@supabase/supabase-js';
 
 import { redirect as redirectPath } from 'next/navigation';
 
@@ -110,15 +111,22 @@ interface SignUpArgs {
   lastName: string;
   companyName?: string;
   locale: Locale;
+  /** Zgoda na regulamin i politykę prywatności z walidowanego wejścia akcji. */
+  agreeTerms: boolean;
   /** Zwalidowany cel po potwierdzeniu e-maila (np. oferta); brak → panel wg roli. */
   next?: string | null;
 }
 
 /**
  * Tworzy konto Auth (signUp) z metadanymi dla triggera i linkiem potwierdzenia do
- * `/auth/callback`. Po utworzeniu dopisuje `preferred_locale` (best-effort, service-role).
+ * `/auth/callback`. Wymaga zgody na regulamin; receipt akceptacji jest obowiązkowy (jego
+ * brak cofa niepotwierdzone konto). `preferred_locale` dopisuje best-effort (service-role).
  */
 async function signUpUser(args: SignUpArgs): Promise<void> {
+  // Zgoda sprawdzana na serwerze niezależnie od formularza: bez niej nie tworzymy konta.
+  if (args.agreeTerms !== true) {
+    throw new AppError('VALIDATION_FAILED', { context: { reason: 'terms_not_accepted' } });
+  }
   const supabase = await createServerClient();
 
   const next = args.next ?? `/${args.locale}${panelPath(args.role)}`;
@@ -146,36 +154,60 @@ async function signUpUser(args: SignUpArgs): Promise<void> {
     throw mapAuthError(error);
   }
 
-  // preferred_locale nie jest ustawiany przez trigger — dopisujemy go osobno.
-  // Best-effort: brak klucza service-role nie może zablokować rejestracji (email i tak
-  // trafi do właściwego języka dzięki account_locale/signup_locale).
-  const userId = data.user?.id;
-  if (userId) {
-    try {
-      const admin = createAdminClient();
-      await admin.from('profiles').update({ preferred_locale: args.locale }).eq('id', userId);
-      // P1-16: niezmienny receipt akceptacji regulaminu i polityki prywatności (checkbox był
-      // walidowany na formularzu). Kluczujemy po userId — auth.uid() jest jeszcze null (konto
-      // czeka na potwierdzenie e-mail), więc zapis idzie service-rolem. Best-effort: awaria
-      // receiptu nie może cofnąć utworzonego konta, ale logujemy do Sentry (audytowalność).
-      const store = await headers();
-      const ip =
-        store.get('x-real-ip')?.trim() ||
-        store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
-        null;
-      const userAgent = store.get('user-agent');
-      const { error: rcErr } = await admin.rpc('record_document_acceptance', {
-        p_profile_id: userId,
-        p_documents: ['terms', 'privacy'],
-        p_locale: args.locale,
-        p_ip: ip,
-        p_user_agent: userAgent,
-      });
-      if (rcErr) captureError(rcErr, { area: 'auth.recordDocumentAcceptance' });
-    } catch (e) {
-      // celowo nie blokujemy rejestracji, ale logujemy (receipt to wymóg rozliczalności).
-      captureError(e, { area: 'auth.signUpUser.postCreate' });
-    }
+  // Brak tożsamości = adres już zarejestrowany (odpowiedź neutralna dostawcy): nie ma nowego
+  // konta ani receiptu do zapisania, a błąd ujawniałby istnienie konta.
+  const user = data.user;
+  if (!user?.identities?.length) return;
+
+  // Receipt akceptacji regulaminu i polityki prywatności jest WARUNKIEM konta: bez niego
+  // rejestracja się nie kończy. Kluczujemy po userId — auth.uid() jest jeszcze null (konto
+  // czeka na potwierdzenie e-mail), więc zapis idzie service-rolem.
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+    const store = await headers();
+    const ip =
+      store.get('x-real-ip')?.trim() ||
+      store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
+      null;
+    const { error: rcErr } = await admin.rpc('record_document_acceptance', {
+      p_profile_id: user.id,
+      p_documents: ['terms', 'privacy'],
+      p_locale: args.locale,
+      p_ip: ip,
+      p_user_agent: store.get('user-agent'),
+    });
+    if (rcErr) throw rcErr;
+  } catch (e) {
+    captureError(e, { area: 'auth.recordDocumentAcceptance' });
+    await discardUnconfirmedSignup(user);
+    throw new AppError('INTERNAL', { context: { reason: 'signup_receipt_failed' } });
+  }
+
+  // preferred_locale nie jest ustawiany przez trigger — dopisujemy go osobno. Best-effort:
+  // e-mail i tak trafi do właściwego języka dzięki account_locale/signup_locale.
+  try {
+    const { error: localeErr } = await admin
+      .from('profiles')
+      .update({ preferred_locale: args.locale })
+      .eq('id', user.id);
+    if (localeErr) captureError(localeErr, { area: 'auth.signUpUser.preferredLocale' });
+  } catch (e) {
+    captureError(e, { area: 'auth.signUpUser.preferredLocale' });
+  }
+}
+
+/**
+ * Cofa świeżo utworzone, NIEpotwierdzone konto, gdy nie udało się zapisać receiptu.
+ * Konto już potwierdzone zostaje nietknięte.
+ */
+async function discardUnconfirmedSignup(user: User): Promise<void> {
+  if (user.email_confirmed_at) return;
+  try {
+    const { error } = await createAdminClient().auth.admin.deleteUser(user.id);
+    if (error) captureError(error, { area: 'auth.signUpUser.discard' });
+  } catch (e) {
+    captureError(e, { area: 'auth.signUpUser.discard' });
   }
 }
 
@@ -261,6 +293,7 @@ export async function registerCandidate(
       firstName: parsed.data.firstName,
       lastName: parsed.data.lastName,
       locale,
+      agreeTerms: parsed.data.agreeTerms,
       next: safeNextPath(next),
     });
   } catch (e) {
@@ -293,6 +326,7 @@ export async function registerEmployer(input: RegisterEmployerInput): Promise<Au
       lastName: parsed.data.lastName,
       companyName: parsed.data.companyName,
       locale,
+      agreeTerms: parsed.data.agreeTerms,
     });
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };

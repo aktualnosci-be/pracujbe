@@ -783,7 +783,18 @@
     "statusFinalLabel": "Eindstatus: {name} — {job} ({status})",
     "statusConfirmQuestion": "Status wijzigen naar „{status}”? Deze wijziging kan niet ongedaan worden gemaakt.",
     "statusConfirmAction": "Bevestigen",
-    "offerForJob": "Vacature: {job}"
+    "offerForJob": "Vacature: {job}",
+    "withdrawConfirmTitle": "Sollicitatie intrekken?",
+    "withdrawConfirmDescription": "De werkgever behandelt deze sollicitatie niet meer. Je kunt daarna niet opnieuw op deze vacature solliciteren.",
+    "withdrawConfirmDescriptionNamed": "Je sollicitatie voor „{title}” wordt ingetrokken. Je kunt daarna niet opnieuw op deze vacature solliciteren.",
+    "withdrawConfirm": "Intrekken",
+    "withdrawSuccess": "Je sollicitatie is ingetrokken.",
+    "declineConfirmTitle": "Voorstel afwijzen?",
+    "declineConfirmDescription": "De werkgever krijgt een weigering. Dit antwoord kun je later niet meer wijzigen.",
+    "declineConfirmDescriptionNamed": "Het voorstel „{title}” wordt afgewezen. Dit antwoord kun je later niet meer wijzigen.",
+    "declineConfirm": "Afwijzen",
+    "acceptProposalSuccess": "Het voorstel is aanvaard.",
+    "declineProposalSuccess": "Het voorstel is afgewezen."
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -892,7 +903,10 @@
     "contractTypesLabel": "Gewenste contracttypes",
     "bioLabel": "Over mij (optioneel)",
     "bioPlaceholder": "Schrijf enkele zinnen over jezelf, je ervaring en verwachtingen.",
-    "agreeTerms": "Ik aanvaard de gebruiksvoorwaarden en het privacybeleid."
+    "agreeTerms": "Ik aanvaard de gebruiksvoorwaarden en het privacybeleid.",
+    "stepAnnounce": "Stap {current} van {total}: {title}",
+    "agreeTermsLinks": "Ik aanvaard de <terms>gebruiksvoorwaarden</terms> en het <privacy>privacybeleid</privacy>.",
+    "opensInNewTab": "(opent in een nieuw tabblad)"
   },
   "filters": {
     "title": "Filters",
@@ -1191,7 +1205,11 @@
     "empty": "Nog geen documenten geüpload.",
     "delete": "Verwijderen",
     "uploadError": "Uploaden mislukt. Controleer formaat en grootte.",
-    "deleteError": "Verwijderen mislukt."
+    "deleteError": "Verwijderen mislukt.",
+    "loadError": "De documenten konden niet worden geladen. Je bestanden zijn niet verwijderd.",
+    "deleteConfirmTitle": "Document verwijderen?",
+    "deleteConfirmDescription": "Het bestand „{name}” wordt definitief verwijderd. Dit kan niet ongedaan worden gemaakt.",
+    "deleteSuccess": "Het document is verwijderd."
   },
   "admin": {
     "adminName": "Beheerder",
@@ -1291,7 +1309,9 @@
     "inAppEnabledDescription": "Meldingen die je ziet wanneer je bent ingelogd.",
     "save": "Voorkeuren opslaan",
     "saving": "Opslaan...",
-    "savedSuccess": "Je meldingsvoorkeuren zijn opgeslagen."
+    "savedSuccess": "Je meldingsvoorkeuren zijn opgeslagen.",
+    "loadError": "Je meldingsvoorkeuren konden niet worden geladen.",
+    "loadErrorHint": "We tonen het formulier niet, zodat opslaan je eerdere keuzes niet overschrijft. Probeer het zo meteen opnieuw."
   },
   "guides": {
     "pageTitle": "Gidsen",

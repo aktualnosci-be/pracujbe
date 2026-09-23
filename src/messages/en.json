@@ -783,7 +783,18 @@
     "statusFinalLabel": "Final status: {name} — {job} ({status})",
     "statusConfirmQuestion": "Change the status to “{status}”? This cannot be undone.",
     "statusConfirmAction": "Confirm",
-    "offerForJob": "Job: {job}"
+    "offerForJob": "Job: {job}",
+    "withdrawConfirmTitle": "Withdraw this application?",
+    "withdrawConfirmDescription": "The employer will no longer consider this application. You won’t be able to apply to this job again.",
+    "withdrawConfirmDescriptionNamed": "Your application for “{title}” will be withdrawn. You won’t be able to apply to this job again.",
+    "withdrawConfirm": "Withdraw",
+    "withdrawSuccess": "Your application has been withdrawn.",
+    "declineConfirmTitle": "Decline this proposal?",
+    "declineConfirmDescription": "The employer will receive your refusal. You can’t change this answer later.",
+    "declineConfirmDescriptionNamed": "The proposal “{title}” will be declined. You can’t change this answer later.",
+    "declineConfirm": "Decline",
+    "acceptProposalSuccess": "The proposal has been accepted.",
+    "declineProposalSuccess": "The proposal has been declined."
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -892,7 +903,10 @@
     "contractTypesLabel": "Preferred contract types",
     "bioLabel": "About me (optional)",
     "bioPlaceholder": "Write a few sentences about yourself, your experience and expectations.",
-    "agreeTerms": "I accept the terms of use and the privacy policy."
+    "agreeTerms": "I accept the terms of use and the privacy policy.",
+    "stepAnnounce": "Step {current} of {total}: {title}",
+    "agreeTermsLinks": "I accept the <terms>terms of use</terms> and the <privacy>privacy policy</privacy>.",
+    "opensInNewTab": "(opens in a new tab)"
   },
   "filters": {
     "title": "Filters",
@@ -1191,7 +1205,11 @@
     "empty": "No documents uploaded yet.",
     "delete": "Delete",
     "uploadError": "Upload failed. Check the format and size.",
-    "deleteError": "Delete failed."
+    "deleteError": "Delete failed.",
+    "loadError": "We couldn’t load your documents. Your files have not been deleted.",
+    "deleteConfirmTitle": "Delete this document?",
+    "deleteConfirmDescription": "The file “{name}” will be permanently deleted. This cannot be undone.",
+    "deleteSuccess": "The document has been deleted."
   },
   "admin": {
     "adminName": "Administrator",
@@ -1291,7 +1309,9 @@
     "inAppEnabledDescription": "Notifications you see while signed in.",
     "save": "Save preferences",
     "saving": "Saving...",
-    "savedSuccess": "Your notification preferences have been saved."
+    "savedSuccess": "Your notification preferences have been saved.",
+    "loadError": "We couldn’t load your notification preferences.",
+    "loadErrorHint": "We are not showing the form so that saving cannot overwrite your earlier choices. Please try again in a moment."
   },
   "guides": {
     "pageTitle": "Guides",

@@ -60,10 +60,48 @@ describe('Lista CV', () => {
     renderCv('pl');
 
     fireEvent.click(screen.getByRole('button', { name: `Usuń: ${fileName}` }));
+    const dialog = screen.getByRole('alertdialog', { name: messages.pl.files.deleteConfirmTitle });
+    expect(dialog).toHaveTextContent(fileName);
+    fireEvent.click(screen.getByRole('button', { name: messages.pl.files.delete }));
 
     await waitFor(() => expect(deleteCandidateFile).toHaveBeenCalledExactlyOnceWith('fixture-cv'));
     expect(refresh).toHaveBeenCalledOnce();
+    expect(await screen.findByRole('status')).toHaveTextContent(messages.pl.files.deleteSuccess);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: messages.pl.files.upload })).toHaveFocus(),
+    );
   });
+
+  it('anulowanie usunięcia nie woła akcji i oddaje fokus przyciskowi kosza', async () => {
+    renderCv('pl');
+    const trash = screen.getByRole('button', { name: `Usuń: ${fileName}` });
+    fireEvent.click(trash);
+    expect(screen.getByRole('button', { name: messages.pl.common.cancel })).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: messages.pl.common.cancel }));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(deleteCandidateFile).not.toHaveBeenCalled();
+    await waitFor(() => expect(trash).toHaveFocus());
+  });
+
+  it.each(['pl', 'nl', 'fr', 'en'] as const)(
+    'błąd odczytu listy nie udaje pustej listy i nie proponuje ponownego wgrania: %s',
+    (locale) => {
+      render(
+        <NextIntlClientProvider locale={locale} messages={messages[locale]}>
+          <CvUpload items={[]} loadFailed />
+        </NextIntlClientProvider>,
+      );
+      const m = messages[locale];
+      expect(screen.getByRole('alert')).toHaveTextContent(m.files.loadError);
+      expect(screen.queryByText(m.files.empty)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: m.files.upload })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: m.common.retry }));
+      expect(refresh).toHaveBeenCalledOnce();
+      refresh.mockClear();
+      cleanup();
+    },
+  );
 
   it('dla pustej listy nie renderuje akcji usuwania', () => {
     renderCv('pl', []);

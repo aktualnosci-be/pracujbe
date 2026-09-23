@@ -29,9 +29,9 @@ function job(id: string) {
 describe('sitemap', () => {
   it('pomija puste landingi i nieistniejące tłumaczenia ofert', async () => {
     jobs.getCategoryCounts.mockResolvedValue({ construction: 2 });
-    // Oferta w Kortrijk pasuje tylko do nazwy NL („Kortrijk”); w innych językach filtr nic nie znajduje.
-    jobs.getCityCounts.mockImplementation(async (_locale: string, names: string[]) =>
-      Object.fromEntries(names.map((name) => [name, name === 'Kortrijk' ? 1 : 0])),
+    // #189: licznik per klucz miasta — oferta w Kortrijk jest na landingu w każdym języku.
+    jobs.getCityCounts.mockImplementation(async (_locale: string, keys: string[]) =>
+      Object.fromEntries(keys.map((key) => [key, key === 'kortrijk' ? 1 : 0])),
     );
     jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
     jobs.getJobsAvailableLocales.mockResolvedValue({ a: ['nl'], b: ['pl', 'nl', 'fr', 'en'] });
@@ -42,7 +42,9 @@ describe('sitemap', () => {
     expect(byPrefix('/praca/kategoria/')).toEqual(
       ['pl', 'nl', 'fr', 'en'].map((l) => `https://pracuj.be/${l}/praca/kategoria/construction`),
     );
-    expect(byPrefix('/praca/miasto/')).toEqual(['https://pracuj.be/nl/praca/miasto/kortrijk']);
+    expect(byPrefix('/praca/miasto/')).toEqual(
+      ['pl', 'nl', 'fr', 'en'].map((l) => `https://pracuj.be/${l}/praca/miasto/kortrijk`),
+    );
     expect(byPrefix('/oferty-pracy/oferta-a')).toEqual(['https://pracuj.be/nl/oferty-pracy/oferta-a']);
     expect(byPrefix('/oferty-pracy/oferta-b')).toHaveLength(4);
 

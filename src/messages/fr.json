@@ -783,7 +783,18 @@
     "statusFinalLabel": "Statut final : {name} — {job} ({status})",
     "statusConfirmQuestion": "Passer le statut à « {status} » ? Ce changement est définitif.",
     "statusConfirmAction": "Confirmer",
-    "offerForJob": "Offre : {job}"
+    "offerForJob": "Offre : {job}",
+    "withdrawConfirmTitle": "Retirer la candidature ?",
+    "withdrawConfirmDescription": "L’employeur ne traitera plus cette candidature. Vous ne pourrez plus postuler à cette offre.",
+    "withdrawConfirmDescriptionNamed": "Votre candidature pour « {title} » sera retirée. Vous ne pourrez plus postuler à cette offre.",
+    "withdrawConfirm": "Retirer",
+    "withdrawSuccess": "La candidature a été retirée.",
+    "declineConfirmTitle": "Refuser la proposition ?",
+    "declineConfirmDescription": "L’employeur recevra un refus. Cette réponse ne pourra pas être modifiée.",
+    "declineConfirmDescriptionNamed": "La proposition « {title} » sera refusée. Cette réponse ne pourra pas être modifiée.",
+    "declineConfirm": "Refuser",
+    "acceptProposalSuccess": "La proposition a été acceptée.",
+    "declineProposalSuccess": "La proposition a été refusée."
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -892,7 +903,10 @@
     "contractTypesLabel": "Types de contrat souhaités",
     "bioLabel": "À propos de moi (facultatif)",
     "bioPlaceholder": "Écrivez quelques phrases sur vous, votre expérience et vos attentes.",
-    "agreeTerms": "J'accepte les conditions d'utilisation et la politique de confidentialité."
+    "agreeTerms": "J'accepte les conditions d'utilisation et la politique de confidentialité.",
+    "stepAnnounce": "Étape {current} sur {total} : {title}",
+    "agreeTermsLinks": "J'accepte les <terms>conditions d'utilisation</terms> et la <privacy>politique de confidentialité</privacy>.",
+    "opensInNewTab": "(s’ouvre dans un nouvel onglet)"
   },
   "filters": {
     "title": "Filtres",
@@ -1191,7 +1205,11 @@
     "empty": "Aucun document téléversé.",
     "delete": "Supprimer",
     "uploadError": "Échec du téléversement. Vérifiez le format et la taille.",
-    "deleteError": "Échec de la suppression."
+    "deleteError": "Échec de la suppression.",
+    "loadError": "Impossible de charger les documents. Vos fichiers n’ont pas été supprimés.",
+    "deleteConfirmTitle": "Supprimer le document ?",
+    "deleteConfirmDescription": "Le fichier « {name} » sera définitivement supprimé. Cette action est irréversible.",
+    "deleteSuccess": "Le document a été supprimé."
   },
   "admin": {
     "adminName": "Administrateur",
@@ -1291,7 +1309,9 @@
     "inAppEnabledDescription": "Notifications visibles lorsque vous êtes connecté.",
     "save": "Enregistrer les préférences",
     "saving": "Enregistrement...",
-    "savedSuccess": "Vos préférences de notification ont été enregistrées."
+    "savedSuccess": "Vos préférences de notification ont été enregistrées.",
+    "loadError": "Impossible de charger vos préférences de notification.",
+    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant."
   },
   "guides": {
     "pageTitle": "Guides",

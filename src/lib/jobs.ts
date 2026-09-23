@@ -587,22 +587,25 @@ export async function getCategoryCounts(
 }
 
 /**
- * P1-09: REALNE liczniki ofert per miasto. Liczy filtrem `p_city` (ilike) — dokładnie tak, jak
- * link kieruje na listę (`city=<nazwa>`), więc licznik jest spójny z widokiem docelowym niezależnie
- * od znanego niedopasowania nazw miast (P1-10 — odrębne ustalenie). `null` w trybie demo.
+ * P1-09 / #189: REALNE liczniki ofert per KLUCZ miasta (nie per przetłumaczona nazwa). Liczy z
+ * facetu lokalizacji i sumuje dokładne aliasy klucza (Bruksela/Brussel/Bruxelles/Brussels) —
+ * tą samą regułą, którą landing i lista filtrują oferty, więc licznik nie zależy od języka
+ * strony ani języka, w którym wpisano miasto oferty. `null` w trybie demo.
  */
 export async function getCityCounts(
-  _locale: string,
-  cities: readonly string[],
-): Promise<Record<string, number> | null> {
+  locale: string,
+  keys: readonly LocationKey[],
+): Promise<Record<LocationKey, number> | null> {
   if (!isDatabaseConfigured()) return null;
   try {
-    const [{ getDomainPool }, { getPublicJobCityCounts }] = await Promise.all([
-      import('@/lib/db/runtime'),
-      import('@/lib/db/public-jobs'),
-    ]);
-    const pool = await getDomainPool();
-    return getPublicJobCityCounts(pool, cities);
+    const [{ getDomainPool }, { getPublicJobFilterFacets }, { countByLocationKey }] =
+      await Promise.all([
+        import('@/lib/db/runtime'),
+        import('@/lib/db/public-jobs'),
+        import('@/lib/locations/city-aliases'),
+      ]);
+    const facets = await getPublicJobFilterFacets(await getDomainPool(), { locale });
+    return countByLocationKey(facets.locations, keys);
   } catch (error) {
     captureError(error, { area: 'jobs.getCityCounts' });
     return null;

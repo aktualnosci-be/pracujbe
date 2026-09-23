@@ -5,6 +5,7 @@ import { Link } from '@/i18n/navigation';
 import { Logo } from '@/components/brand/Logo';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { HEADER_ICON_BUTTON_FIXED } from './header-sizing';
 import { MobileNav, PrimaryNav } from './MobileNav';
 
 /**
@@ -36,9 +37,10 @@ export async function Header() {
           />
         </div>
 
-        {/* Logo wyśrodkowane — tylko mobile. */}
-        <Link href="/" className="rounded-sm md:hidden">
-          <Logo />
+        {/* Logo wyśrodkowane — tylko mobile. Stały rozmiar (24 px = text-2xl przy 100%):
+            logotyp nie rośnie z tekstem, więc przy 320 px i 200% nagłówek się mieści. */}
+        <Link href="/" className="min-w-0 rounded-sm md:hidden">
+          <Logo className="text-[24px]" />
         </Link>
 
         {/* Prawa strefa: akcje (desktop) + ikona konta (mobile). */}
@@ -58,7 +60,7 @@ export async function Header() {
           <Link
             href="/logowanie"
             aria-label={t('login')}
-            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'md:hidden')}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), HEADER_ICON_BUTTON_FIXED, 'md:hidden')}
           >
             <UserRound className="h-5 w-5" aria-hidden="true" />
           </Link>
