@@ -713,6 +713,12 @@
     "employerOffersEmptyHint": "Publiez votre première offre pour commencer à recruter.",
     "employerOffersLoadError": "Impossible de charger vos offres",
     "employerOffersLoadErrorHint": "Actualisez la page et réessayez. Vos offres sont toujours enregistrées.",
+    "employerOffersPaginationLabel": "Pagination des offres",
+    "employerOffersPrevious": "Page précédente",
+    "employerOffersFirstPage": "Retour à la première page",
+    "employerOffersPage": "Page {page}",
+    "employerOffersNext": "Page suivante",
+    "employerOffersPageEmpty": "Il n’y a plus d’offres sur cette page.",
     "employerOffersRetry": "Réessayer"
   },
   "candidatePassport": {
