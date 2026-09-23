@@ -936,7 +936,8 @@
     "bioPlaceholder": "Écrivez quelques phrases sur vous, votre expérience et vos attentes.",
     "agreeTerms": "J'accepte les conditions d'utilisation et la politique de confidentialité.",
     "agreeTermsLinks": "J'accepte les <terms>conditions d'utilisation</terms> et la <privacy>politique de confidentialité</privacy>.",
-    "opensInNewTab": "(s’ouvre dans un nouvel onglet)"
+    "opensInNewTab": "(s’ouvre dans un nouvel onglet)",
+    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste."
   },
   "filters": {
     "title": "Filtres",
@@ -1087,7 +1088,8 @@
       "bioTooLong": "La description est trop longue.",
       "termsRequired": "Vous devez accepter les conditions et la politique de confidentialité.",
       "availabilityRequired": "Choisissez votre disponibilité.",
-      "invalid": "Valeur invalide."
+      "invalid": "Valeur invalide.",
+      "itemTooLong": "Un des éléments de la liste est trop long. Raccourcissez-le."
     }
   },
   "jobWizard": {
@@ -1196,7 +1198,9 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Non précisé",
     "notVerifiedNote": "Le brouillon est enregistré. La publication sera possible une fois l'entreprise vérifiée.",
-    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste."
+    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste.",
+    "stepAnnounce": "Étape {current} sur {total} : {title}",
+    "goToOffers": "Voir la liste des offres"
   },
   "messages": {
     "title": "Messages",

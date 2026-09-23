@@ -936,7 +936,8 @@
     "bioPlaceholder": "Schrijf enkele zinnen over jezelf, je ervaring en verwachtingen.",
     "agreeTerms": "Ik aanvaard de gebruiksvoorwaarden en het privacybeleid.",
     "agreeTermsLinks": "Ik aanvaard de <terms>gebruiksvoorwaarden</terms> en het <privacy>privacybeleid</privacy>.",
-    "opensInNewTab": "(opent in een nieuw tabblad)"
+    "opensInNewTab": "(opent in een nieuw tabblad)",
+    "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen."
   },
   "filters": {
     "title": "Filters",
@@ -1087,7 +1088,8 @@
       "bioTooLong": "Beschrijving is te lang.",
       "termsRequired": "Je moet de voorwaarden en het privacybeleid aanvaarden.",
       "availabilityRequired": "Kies je beschikbaarheid.",
-      "invalid": "Ongeldige waarde."
+      "invalid": "Ongeldige waarde.",
+      "itemTooLong": "Een van de items in de lijst is te lang. Maak het korter."
     }
   },
   "jobWizard": {
@@ -1196,7 +1198,9 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Niet opgegeven",
     "notVerifiedNote": "Het concept is opgeslagen. Publiceren kan zodra het bedrijf is geverifieerd.",
-    "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen."
+    "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen.",
+    "stepAnnounce": "Stap {current} van {total}: {title}",
+    "goToOffers": "Naar je vacatures"
   },
   "messages": {
     "title": "Berichten",
