@@ -12,6 +12,7 @@ import {
   getGuideBySlug,
   type GuideCategory,
 } from '@/lib/guides/guides';
+import { brandShareImageUrl, buildArticleJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { GuideCard } from '@/components/public/GuideCard';
 import { GuideContent } from '@/components/public/GuideContent';
 
@@ -20,8 +21,8 @@ import { GuideContent } from '@/components/public/GuideContent';
  *
  * Treść statyczna z `@/lib/guides/guides` (bez CMS/DB) — renderuje się BEZ zmiennych
  * środowiskowych. `generateStaticParams` generuje strony dla każdego języka × slug; nieznany
- * slug → 404 (i `noindex` w metadanych). Dane strukturalne: Article (headline, datePublished,
- * inLanguage, author = Pracuj.be) + BreadcrumbList. Slug wspólny między językami → hreflang
+ * slug → 404 (i `noindex` w metadanych). Dane strukturalne: Article (headline, image, datePublished,
+ * dateModified, inLanguage, author/publisher = Pracuj.be z url i logo) + BreadcrumbList. Slug wspólny między językami → hreflang
  * mapuje ten sam segment.
  */
 
@@ -63,7 +64,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const base = env.siteUrl;
   const path = `${GUIDES_PATH}/${slug}`;
   const url = `${base}/${locale}${path}`;
-  const shareImage = new URL('/og.png', base).href;
+  const shareImage = brandShareImageUrl(base);
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
     languages[supported] = `${base}/${supported}${path}`;
@@ -115,17 +116,7 @@ export default async function GuideArticlePage({ params }: PageProps) {
 
   const canonical = `${env.siteUrl}/${locale}${GUIDES_PATH}/${slug}`;
 
-  const articleJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Article',
-    headline: guide.title,
-    description: guide.excerpt,
-    datePublished: guide.publishedAt,
-    inLanguage: locale,
-    author: { '@type': 'Organization', name: 'Pracuj.be' },
-    publisher: { '@type': 'Organization', name: 'Pracuj.be' },
-    mainEntityOfPage: canonical,
-  };
+  const articleJsonLd = buildArticleJsonLd(guide, { base: env.siteUrl, locale, canonical });
 
   const breadcrumbJsonLd = {
     '@context': 'https://schema.org/',
@@ -157,13 +148,13 @@ export default async function GuideArticlePage({ params }: PageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(articleJsonLd).replace(/</g, '\\u003c'),
+          __html: serializeJsonLd(articleJsonLd),
         }}
       />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, '\\u003c'),
+          __html: serializeJsonLd(breadcrumbJsonLd),
         }}
       />
 
