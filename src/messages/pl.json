@@ -542,7 +542,8 @@
     "notFound": "Nie znaleziono tego, czego szukasz.",
     "internal": "Wystąpił błąd po naszej stronie. Pracujemy nad tym.",
     "generic": "Coś poszło nie tak. Spróbuj ponownie.",
-    "demoUnavailable": "Ta funkcja nie działa w wersji demonstracyjnej serwisu."
+    "demoUnavailable": "Ta funkcja nie działa w wersji demonstracyjnej serwisu.",
+    "invalidTransition": "Tej zmiany statusu nie można wykonać na obecnym etapie. Odśwież stronę i wybierz inną opcję."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -763,7 +764,24 @@
     "employerOffersPage": "Strona {page}",
     "employerOffersNext": "Następna strona",
     "employerOffersPageEmpty": "Na tej stronie nie ma już ofert.",
-    "employerOffersRetry": "Spróbuj ponownie"
+    "employerOffersRetry": "Spróbuj ponownie",
+    "sendOfferTo": "Wyślij propozycję: {name} — {job}",
+    "offerMatchedJob": "Dopasowanie do oferty",
+    "offerSentOn": "Propozycja wysłana {date}",
+    "offerDialogTitle": "Wysłać propozycję?",
+    "offerDialogDescription": "Sprawdź kandydata i ofertę, zanim wyślesz zaproszenie.",
+    "offerDialogCandidate": "Kandydat",
+    "offerDialogJob": "Oferta pracy",
+    "offerDialogDefaultInfo": "Jeśli nie dodasz własnej wiadomości, kandydat zobaczy to zaproszenie w swoim języku:",
+    "offerDialogMessageLabel": "Własna wiadomość (opcjonalnie)",
+    "offerDialogMessageHint": "Własną wiadomość kandydat zobaczy dokładnie tak, jak ją napiszesz.",
+    "statusMenuTrigger": "Zmień status: {name} — {job} ({status})",
+    "statusMenuOptions": "Statusy: {name} — {job}",
+    "statusFinal": "Status końcowy",
+    "statusFinalLabel": "Status końcowy: {name} — {job} ({status})",
+    "statusConfirmQuestion": "Zmienić status na „{status}”? Tej zmiany nie można cofnąć.",
+    "statusConfirmAction": "Potwierdź",
+    "offerForJob": "Oferta: {job}"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",

@@ -30,6 +30,11 @@ function mapPgError(message: string | undefined): ErrorCode {
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
   if (m.includes('JOB_NOT_ACTIVE')) return 'JOB_NOT_ACTIVE';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
+  // transition_application (0040): przejście spoza macierzy albo wyścig (CAS). Użytkownik niczego
+  // nie wpisywał, więc nie mówimy „sprawdź dane" — osobny kod z jasnym komunikatem (#306).
+  if (m.includes('niedozwolone przejście') || m.includes('zmienił się równolegle')) {
+    return 'INVALID_TRANSITION';
+  }
   if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (
     m.includes('PERMISSION_DENIED') ||

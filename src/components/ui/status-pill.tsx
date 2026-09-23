@@ -50,7 +50,7 @@ const TONE_CLASS: Record<Tone, string> = {
 };
 
 /** snake_case / kebab-case → camelCase (dla kluczy i18n). */
-function toCamel(value: string): string {
+export function toCamel(value: string): string {
   return value.replace(/[_-]([a-z])/g, (_, char: string) => char.toUpperCase());
 }
 

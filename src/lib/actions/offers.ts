@@ -41,7 +41,9 @@ export async function sendOffer(input: OfferInput): Promise<SendOfferResult> {
     p_job_id: v.jobId,
     p_candidate_id: v.candidateId,
     p_idempotency_key: v.idempotencyKey ?? randomUUID(),
-    p_message: v.message,
+    // Brak własnej treści → NULL: zaproszenie renderuje się po stronie odbiorcy w JEGO języku
+    // (panel kandydata / e-mail), nie w języku sesji pracodawcy (Invariant #1, #289).
+    p_message: v.message ?? null,
     p_expires_at: null,
   });
 

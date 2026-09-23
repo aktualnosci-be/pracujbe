@@ -56,6 +56,12 @@ export interface EmployerMatchedCandidate {
   candidateId: string;
   /** Oferta o najwyższym dopasowaniu do kandydata (cel wysyłki propozycji). */
   jobId: string;
+  /** Tytuł tej oferty — pracodawca widzi, na które stanowisko zaprasza (#327). */
+  jobTitle: string;
+  /** Slug oferty do linku; pusty, gdy nieznany. */
+  jobSlug: string;
+  /** Data wysłania aktywnej propozycji (sent/viewed) dla pary kandydat × oferta, z DB; inaczej null. */
+  offerSentAt: string | null;
   /** Imię i nazwisko, o ile widoczne przez RLS; inaczej pusty string (UI podstawia etykietę). */
   name: string;
   role: string;
@@ -106,9 +112,9 @@ const DEMO_APPLICATIONS: EmployerApplication[] = [
 ];
 
 const DEMO_CANDIDATES: EmployerMatchedCandidate[] = [
-  { candidateId: 'demo-c-1', jobId: '12343', name: 'Piotr Nowak', role: 'Elektryk przemysłowy', city: 'Charleroi', match: 92 },
-  { candidateId: 'demo-c-2', jobId: '12345', name: 'Katarzyna Zielińska', role: 'Operator wózka widłowego', city: 'Liège', match: 88 },
-  { candidateId: 'demo-c-3', jobId: '12344', name: 'Michał Wiśniewski', role: 'Pracownik magazynu', city: 'Antwerpia', match: 85 },
+  { candidateId: 'demo-c-1', jobId: '12343', jobTitle: 'Elektryk przemysłowy', jobSlug: '', offerSentAt: null, name: 'Piotr Nowak', role: 'Elektryk przemysłowy', city: 'Charleroi', match: 92 },
+  { candidateId: 'demo-c-2', jobId: '12345', jobTitle: 'Operator wózka widłowego', jobSlug: '', offerSentAt: null, name: 'Katarzyna Zielińska', role: 'Operator wózka widłowego', city: 'Liège', match: 88 },
+  { candidateId: 'demo-c-3', jobId: '12344', jobTitle: 'Pracownik magazynu', jobSlug: '', offerSentAt: null, name: 'Michał Wiśniewski', role: 'Pracownik magazynu', city: 'Antwerpia', match: 85 },
 ];
 
 const DEMO_FUNNEL: FunnelStats = { views: 4126, applications: 287, interviews: 38, hired: 6 };
@@ -749,18 +755,49 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
     const candidateIds = [...best.keys()].slice(0, 5);
     if (candidateIds.length === 0) return [];
 
+    const targetJobIds = [...new Set(candidateIds.map((id) => best.get(id)?.jobId ?? ''))].filter(
+      (id) => id.length > 0,
+    );
+
     // candidate_profiles: is_searchable=true jest publicznie czytelne; profiles(imię) tylko
     // dla powiązanych relacją kandydatów (best-effort — brak imienia → UI podstawia etykietę).
-    const [{ data: cpData, error: cpError }, { data: profData, error: profError }] =
-      await Promise.all([
-        supabase
-          .from('candidate_profiles')
-          .select('profile_id, headline, city, occupations')
-          .in('profile_id', candidateIds),
-        supabase.from('profiles').select('id, first_name, last_name').in('id', candidateIds),
-      ]);
+    // jobs/offers: tytuł oferty docelowej i aktywna propozycja (stan „wysłano" z DB, #327).
+    const [
+      { data: cpData, error: cpError },
+      { data: profData, error: profError },
+      { data: jobData, error: jobError },
+      { data: offerData, error: offerError },
+    ] = await Promise.all([
+      supabase
+        .from('candidate_profiles')
+        .select('profile_id, headline, city, occupations')
+        .in('profile_id', candidateIds),
+      supabase.from('profiles').select('id, first_name, last_name').in('id', candidateIds),
+      supabase.from('jobs').select('id, title, slug').in('id', targetJobIds),
+      supabase
+        .from('offers')
+        .select('candidate_id, job_id, sent_at, created_at')
+        .in('candidate_id', candidateIds)
+        .in('job_id', targetJobIds)
+        .in('status', ['sent', 'viewed'])
+        .is('deleted_at', null),
+    ]);
     if (cpError) throw cpError;
     if (profError) throw profError;
+    if (jobError) throw jobError;
+    if (offerError) throw offerError;
+
+    const jobMap = new Map<string, { title: string; slug: string }>();
+    for (const r of asRows(jobData)) {
+      jobMap.set(asString(r['id']), { title: asString(r['title']), slug: asString(r['slug']) });
+    }
+    const offerMap = new Map<string, string>();
+    for (const r of asRows(offerData)) {
+      offerMap.set(
+        `${asString(r['candidate_id'])}:${asString(r['job_id'])}`,
+        asString(r['sent_at']) || asString(r['created_at']),
+      );
+    }
 
     const cpMap = new Map<string, Record<string, unknown>>();
     for (const r of asRows(cpData)) cpMap.set(asString(r['profile_id']), r);
@@ -774,9 +811,14 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
       const cp = cpMap.get(candidateId) ?? {};
       const occupations = Array.isArray(cp['occupations']) ? (cp['occupations'] as unknown[]) : [];
       const firstOccupation = asString(occupations[0]);
+      const jobId = entry?.jobId ?? '';
+      const job = jobMap.get(jobId);
       return {
         candidateId,
-        jobId: entry?.jobId ?? '',
+        jobId,
+        jobTitle: job?.title ?? '',
+        jobSlug: job?.slug ?? '',
+        offerSentAt: offerMap.get(`${candidateId}:${jobId}`) ?? null,
         name: nameMap.get(candidateId) ?? '',
         role: asString(cp['headline']) || firstOccupation,
         city: asString(cp['city']),
