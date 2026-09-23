@@ -121,5 +121,21 @@ export function safeNextPath(value: unknown): string | null {
   if (!(LOCALE_VALUES as readonly string[]).includes(firstSegment)) {
     return null;
   }
-  return `${url.pathname}${url.search}${url.hash}`;
+  const normalized = `${url.pathname}${url.search}${url.hash}`;
+  // Parser URL koduje procentowo znaki spoza ASCII (np. `é` → `%C3%A9`), więc wynik może urosnąć.
+  return normalized.length > NEXT_PATH_MAX_LENGTH ? null : normalized;
+}
+
+/** Ścieżka logowania (bez prefiksu języka — dokłada go `Link` z `@/i18n/navigation`). */
+const LOGIN_PATH = '/logowanie';
+
+/**
+ * Link do logowania, po którym użytkownik wraca na `returnTo` (np. bieżącą ofertę).
+ * `returnTo` musi być ścieżką z prefiksem języka; niebezpieczna wartość → zwykły link logowania.
+ */
+export function loginHref(
+  returnTo: string | null | undefined,
+): string | { pathname: string; query: { next: string } } {
+  const next = safeNextPath(returnTo);
+  return next ? { pathname: LOGIN_PATH, query: { next } } : LOGIN_PATH;
 }
