@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { GetJobsParams } from '../jobs';
+import { isLocale, routing } from '@/i18n/routing';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 import {
   withUserTransaction,
@@ -34,7 +35,7 @@ const FILTER_ARGUMENTS = `
   p_since => $12::timestamptz`;
 
 function locale(value: string): string {
-  return ['pl', 'nl', 'fr', 'en'].includes(value) ? value : 'pl';
+  return isLocale(value) ? value : routing.defaultLocale;
 }
 
 function filterValues(params: GetJobsParams): unknown[] {

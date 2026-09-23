@@ -6,6 +6,7 @@ import { APIError, createAuthEndpoint, requestPasswordReset } from 'better-auth/
 import { verifyJWT } from 'better-auth/crypto';
 import type { Pool } from 'pg';
 import { z } from 'zod/v3';
+import { routing } from '@/i18n/routing';
 
 type VerificationSender = NonNullable<NonNullable<BetterAuthOptions['emailVerification']>['sendVerificationEmail']>;
 type ResetSender = NonNullable<NonNullable<BetterAuthOptions['emailAndPassword']>['sendResetPassword']>;
@@ -89,7 +90,7 @@ const deliverySchema = z.object({
   kind: z.enum(['verification', 'password_reset']),
   recipient_email: z.string().email(), first_name: z.string(),
   recipient_role: z.enum(['candidate', 'employer', 'admin']),
-  locale: z.enum(['pl', 'nl', 'fr', 'en']),
+  locale: z.enum(routing.locales),
   token: z.string().min(1).max(4096), expires_at: z.date(),
   lease_id: z.string().uuid(), lease_expires_at: z.date(),
 });
