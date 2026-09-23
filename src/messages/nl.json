@@ -368,6 +368,13 @@
       "contactEmailInvalid": "Ongeldig e-mailadres.",
       "publishAgreementRequired": "Bevestig om de vacature te publiceren.",
       "invalid": "Ongeldige waarde."
+    },
+    "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
+    "contentLanguageNames": {
+      "pl": "Pools",
+      "nl": "Nederlands",
+      "fr": "Frans",
+      "en": "Engels"
     }
   },
   "landing": {
@@ -477,6 +484,8 @@
     "verifySubtitle": "We hebben een link naar je e-mailadres gestuurd. Klik erop om je registratie af te ronden.",
     "orContinue": "of ga verder met",
     "agreeTerms": "Door een account aan te maken ga je akkoord met de algemene voorwaarden en het privacybeleid.",
+    "agreeTermsLinks": "Ik aanvaard de <terms>algemene voorwaarden</terms> en het <privacy>privacybeleid</privacy>.",
+    "opensInNewTab": "(opent in een nieuw tabblad)",
     "passwordHint": "Minimaal 8 tekens, met een letter en een cijfer.",
     "registerAsEmployer": "Werkgever? Maak een werkgeversaccount aan",
     "registerAsCandidate": "Op zoek naar werk? Maak een kandidatenaccount aan",
@@ -616,10 +625,18 @@
     "proposalsIntro": "Werkgevers kunnen je een baanvoorstel sturen.",
     "proposalsEmptyTitle": "Nog geen voorstellen",
     "proposalsEmptyBody": "Vul je profiel aan zodat werkgevers je ervaring kunnen zien.",
+    "proposalsMore": "Meer voorstellen tonen",
+    "proposalsLoading": "Voorstellen laden…",
+    "proposalsMoreError": "Meer voorstellen konden niet worden geladen. Probeer het opnieuw.",
+    "proposalsEnd": "Dit zijn al je voorstellen.",
     "proposalSentOn": "Ontvangen op {date}",
     "candidateListErrorTitle": "Gegevens konden niet worden geladen",
     "candidateListErrorBody": "Vernieuw de pagina en probeer het opnieuw.",
     "candidateListRetry": "Opnieuw proberen",
+    "candidateOverviewLoadError": "Een deel van de tellers kon niet worden geladen. Vernieuw de pagina en probeer het opnieuw.",
+    "candidateStatLoadError": "Kon niet worden geladen",
+    "candidateApplicationsLoadError": "Je sollicitaties konden niet worden geladen. Vernieuw de pagina en probeer het opnieuw.",
+    "candidateMessagesLoadError": "Je berichten konden niet worden geladen. Vernieuw de pagina en probeer het opnieuw.",
     "savedIntro": "Bekijk vacatures die je voor later hebt bewaard.",
     "savedEmpty": "Je hebt nog geen vacatures bewaard. Zoek een interessante vacature en bewaar die hier.",
     "savedBrowse": "Bekijk vacatures",
@@ -699,7 +716,6 @@
     "seeAllOffers": "Bekijk alle vacatures",
     "seeAllCandidates": "Bekijk allemaal",
     "funnelDetails": "Details bekijken",
-    "offerId": "ID",
     "selectOffer": "Vacature selecteren",
     "selectAll": "Alles selecteren",
     "saveCandidate": "Kandidaat opslaan",
@@ -707,6 +723,10 @@
     "offersMatched": "{count} matches",
     "recentApplications": "Recente sollicitaties",
     "recentApplicationsError": "De recente sollicitaties konden niet worden geladen. Probeer het opnieuw.",
+    "navEmployerApplications": "Ontvangen sollicitaties",
+    "employerOverviewLoadError": "De statistieken konden niet worden geladen. Probeer het opnieuw.",
+    "employerFunnelLoadError": "De recruteringstrechter kon niet worden geladen. Probeer het opnieuw.",
+    "employerOffersCreatedLabel": "Aangemaakt op {date}",
     "sendOffer": "Voorstel versturen",
     "offerSentSuccess": "Voorstel is verzonden.",
     "statusChanged": "Status is gewijzigd.",
@@ -890,8 +910,9 @@
     "available": "Beschikbaar",
     "datePosted": "Datum plaatsing",
     "any": "Alle",
-    "showResults": "Toon {count} vacatures",
+    "showResults": "{count, plural, one {Toon # vacature} other {Toon # vacatures}}",
     "countLoading": "Vacatures tellen…",
+    "resultsLoading": "Vacatures laden…",
     "countUnavailable": "Aantal vacatures niet beschikbaar",
     "countError": "De vacatures konden niet worden geteld. Probeer het opnieuw.",
     "retryCount": "Opnieuw tellen",
@@ -949,6 +970,7 @@
     "subtitle": "Gebruik je profiel om snel te solliciteren.",
     "profileNote": "Je profielgegevens worden aan de sollicitatie toegevoegd.",
     "phone": "Telefoon",
+    "dialCode": "Landnummer",
     "phonePlaceholder": "512 345 678",
     "availability": "Beschikbaarheid",
     "availImmediate": "Onmiddellijk",
@@ -1219,7 +1241,20 @@
     "actionReview": "In behandeling nemen",
     "actionResolve": "Oplossen",
     "actionDismiss": "Verwerpen",
-    "actionReopen": "Heropenen"
+    "actionReopen": "Heropenen",
+    "filterAwaiting": "Te verifiëren",
+    "loadErrorTitle": "De gegevens konden niet worden geladen",
+    "loadErrorHint": "Dit betekent niet dat de lijst leeg is. Probeer het zo meteen opnieuw.",
+    "loadErrorRetry": "Opnieuw proberen",
+    "listTruncated": "De {count} nieuwste items worden getoond.",
+    "detailVat": "Btw-nummer",
+    "detailRegistration": "KBO-nummer",
+    "detailEmail": "E-mail bedrijf",
+    "detailCity": "Stad",
+    "confirmTitle": "{action}: statuswijziging bevestigen",
+    "confirmDescription": "Bedrijf „{name}”: {from} → {to}. Controleer de gegevens voordat je bevestigt.",
+    "confirmCancel": "Annuleren",
+    "confirmSaving": "Opslaan…"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",
@@ -1312,5 +1347,13 @@
       "idempotencyKeyRequired": "Het formulier kon niet worden verzonden. Vernieuw de pagina en probeer het opnieuw.",
       "idempotencyKeyInvalid": "Het formulier kon niet worden verzonden. Vernieuw de pagina en probeer het opnieuw."
     }
+  },
+  "siteAccess": {
+    "pageTitle": "Pracuj.be — toegang met wachtwoord",
+    "title": "Pracuj.be is in voorbereiding",
+    "lead": "De website is nog niet openbaar. Heb je een toegangswachtwoord, vul het dan hieronder in.",
+    "passwordLabel": "Toegangswachtwoord",
+    "submit": "Doorgaan",
+    "error": "Onjuist wachtwoord. Probeer het opnieuw."
   }
 }

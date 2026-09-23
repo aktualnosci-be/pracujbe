@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { useRouter, usePathname } from '@/i18n/navigation';
+import { Link, useRouter, usePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import type { CategoryKey, ContractType } from '@/lib/jobs';
 import { Button } from '@/components/ui/button';
@@ -146,6 +147,31 @@ export function useLiveFacets(
     status: current ? (result.error ? 'error' : 'idle') : 'loading',
     retry: React.useCallback(() => setRetryAttempt((value) => value + 1), []),
   };
+}
+
+/* ------------------------------------------------ fokus po zatwierdzeniu (#224) */
+
+/**
+ * Po zatwierdzeniu filtrów lista wyników renderuje się od nowa (panel filtrów jest montowany
+ * ponownie), więc fokus klawiatury trafiał na `<body>`. Flaga modułu przetrwa ponowny montaż
+ * i przenosi fokus na widoczny nagłówek wyników (`[data-results-heading]`).
+ */
+let focusResultsAfterNavigation = false;
+
+export function requestResultsFocus(): void {
+  focusResultsAfterNavigation = true;
+}
+
+export function useFocusResultsAfterNavigation(filtersKey: string): void {
+  React.useEffect(() => {
+    if (!focusResultsAfterNavigation) return;
+    const heading = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-results-heading]'),
+    ).find((element) => element.offsetParent !== null);
+    if (!heading) return;
+    focusResultsAfterNavigation = false;
+    heading.focus();
+  }, [filtersKey]);
 }
 
 /* --------------------------------------------------------------- wiersz check */
@@ -504,6 +530,36 @@ export function FilterFields({
 
 /* -------------------------------------------------------------- FilterSidebar */
 
+/**
+ * Nawigacja do wyników filtrów jako przejście Reacta (#222): `isNavigating` trwa, dopóki
+ * nowe wyniki (RSC) nie zostaną wyrenderowane. W tym czasie kolejne zatwierdzenia są
+ * ignorowane — ref blokuje też dwa kliknięcia w tej samej klatce, zanim stan się odświeży.
+ */
+export function useFilterNavigation(): {
+  isNavigating: boolean;
+  navigate: (href: string) => boolean;
+} {
+  const router = useRouter();
+  const [isNavigating, startTransition] = React.useTransition();
+  const inFlight = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!isNavigating) inFlight.current = false;
+  }, [isNavigating]);
+
+  const navigate = React.useCallback(
+    (href: string) => {
+      if (inFlight.current) return false;
+      inFlight.current = true;
+      startTransition(() => router.push(href));
+      return true;
+    },
+    [router],
+  );
+
+  return { isNavigating, navigate };
+}
+
 export interface FilterSidebarProps {
   facets: JobFilterFacets;
   initial: SidebarFilters;
@@ -537,8 +593,8 @@ export function FilterSidebar({
 }: FilterSidebarProps): React.JSX.Element {
   const t = useTranslations('filters');
   const tJobs = useTranslations('jobs');
-  const router = useRouter();
   const pathname = usePathname();
+  const { isNavigating, navigate } = useFilterNavigation();
 
   const initialKey = JSON.stringify(initial);
   const [pending, setPending] = React.useState<SidebarFilters>(initial);
@@ -549,12 +605,20 @@ export function FilterSidebar({
     city,
   });
 
-  const apply = () =>
-    router.push(buildHref(pathname, pending, { keyword, city, sort }));
+  useFocusResultsAfterNavigation(initialKey);
+
+  const apply = () => {
+    if (navigate(buildHref(pathname, pending, { keyword, city, sort }))) {
+      requestResultsFocus();
+    }
+  };
   const clearAll = () => {
+    if (isNavigating) return;
     const cleared = emptySidebarFilters();
     setPending(cleared);
-    router.push(buildHref(pathname, cleared, { keyword, city, sort }));
+    if (navigate(buildHref(pathname, cleared, { keyword, city, sort }))) {
+      requestResultsFocus();
+    }
   };
 
   return (
@@ -572,8 +636,9 @@ export function FilterSidebar({
         <button
           type="button"
           onClick={clearAll}
+          aria-disabled={isNavigating}
           data-filter-target="clear"
-          className="min-h-12 rounded-sm px-1 text-right text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="min-h-12 rounded-sm aria-disabled:cursor-not-allowed aria-disabled:opacity-60 px-1 text-right text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           {t('clearAll')}
         </button>
@@ -600,25 +665,114 @@ export function FilterSidebar({
           </Button>
         </div>
       ) : null}
+      {/* `aria-disabled` zamiast `disabled`: fokus zostaje na przycisku w trakcie nawigacji (#222). */}
       <Button
         type="button"
         onClick={apply}
-        aria-busy={liveFacets.status === 'loading'}
-        className="mt-6 w-full rounded-xl"
+        aria-busy={isNavigating || liveFacets.status === 'loading'}
+        aria-disabled={isNavigating}
+        data-filter-apply="desktop"
+        className="mt-6 w-full rounded-xl aria-disabled:cursor-not-allowed aria-disabled:opacity-70"
       >
         {/* Licznik to tylko podpowiedź: bez aktualnej liczby zatwierdzenie nadal działa (#220). */}
-        {liveFacets.status === 'idle'
-          ? t('showResults', { count: liveFacets.facets.total })
-          : tJobs('filterButton')}
+        {isNavigating
+          ? t('resultsLoading')
+          : liveFacets.status === 'idle'
+            ? t('showResults', { count: liveFacets.facets.total })
+            : tJobs('filterButton')}
       </Button>
-      {liveFacets.status === 'loading' ? (
-        <p
-          role="status"
-          className="mt-2 text-center text-xs text-muted-foreground"
-        >
-          {t('countLoading')}
-        </p>
-      ) : null}
+      {/* Region stale w DOM, żeby czytnik ekranu ogłosił ładowanie wyników. */}
+      <p
+        role="status"
+        data-filter-status="desktop"
+        className="mt-2 min-h-4 text-center text-xs text-muted-foreground"
+      >
+        {isNavigating
+          ? t('resultsLoading')
+          : liveFacets.status === 'loading'
+            ? t('countLoading')
+            : null}
+      </p>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ SortMenu */
+
+export interface SortMenuOption {
+  value: SortValue;
+  label: string;
+  href: string;
+}
+
+export interface SortMenuProps {
+  sortByLabel: string;
+  current: SortValue;
+  options: readonly SortMenuOption[];
+}
+
+/**
+ * Menu sortowania listy ofert. `<details>` działa bez JS; po hydratacji Escape i kliknięcie poza
+ * menu je zamykają (Escape zwraca fokus na przycisk), a bieżąca opcja ma `aria-current` (#233).
+ */
+export function SortMenu({
+  sortByLabel,
+  current,
+  options,
+}: SortMenuProps): React.JSX.Element {
+  const ref = React.useRef<HTMLDetailsElement>(null);
+  const currentLabel =
+    options.find((option) => option.value === current)?.label ?? '';
+
+  React.useEffect(() => {
+    const details = ref.current;
+    if (!details) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !details.open) return;
+      event.preventDefault();
+      details.open = false;
+      details.querySelector('summary')?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (details.open && !details.contains(event.target as Node)) {
+        details.open = false;
+      }
+    };
+    details.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      details.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, []);
+
+  return (
+    <details ref={ref} data-sort-menu className="group relative">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+        <span className="text-muted-foreground">{sortByLabel}:</span>
+        <span className="font-medium">{currentLabel}</span>
+        <ChevronDown
+          className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 w-60 rounded-md border border-border bg-background p-1 shadow-md">
+        {options.map((option) => (
+          <Link
+            key={option.value}
+            href={option.href}
+            aria-current={option.value === current ? 'true' : undefined}
+            className={cn(
+              'flex min-h-11 items-center rounded-sm px-3 py-2 text-sm transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              option.value === current
+                ? 'font-medium text-accent'
+                : 'text-foreground',
+            )}
+          >
+            {option.label}
+          </Link>
+        ))}
+      </div>
+    </details>
   );
 }

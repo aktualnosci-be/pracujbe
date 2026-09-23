@@ -4,14 +4,16 @@ import { ArrowRight, Building2, Clock, Flag, Users } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
-import { getAdminStats } from '@/lib/data/admin';
+import { AWAITING_FILTER, getAdminStats } from '@/lib/data/admin';
+import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import { StatCard } from '@/components/ui/stat-card';
 
 /**
  * Panel administratora — Podsumowanie (Etap 7g).
  *
  * Kafelki statystyk (firmy / oczekujące na weryfikację / użytkownicy / otwarte zgłoszenia)
- * czytane service-rolem po potwierdzeniu roli admina w layoucie (guard). Skróty do
+ * czytane service-rolem po potwierdzeniu roli admina w layoucie (guard). Błąd odczytu → jawny
+ * stan błędu zamiast zer (#311). Kafelek kolejki weryfikacji prowadzi do listy (#307). Skróty do
  * poszczególnych sekcji. NOINDEX + `force-dynamic` (dziedziczone z layoutu).
  */
 
@@ -38,9 +40,24 @@ interface QuickLink {
 }
 
 const QUICK_LINKS: QuickLink[] = [
-  { href: '/admin/firmy', labelKey: 'navCompanies', descKey: 'companiesSubtitle', icon: <Building2 /> },
-  { href: '/admin/zgloszenia', labelKey: 'navReports', descKey: 'reportsSubtitle', icon: <Flag /> },
-  { href: '/admin/uzytkownicy', labelKey: 'navUsers', descKey: 'usersSubtitle', icon: <Users /> },
+  {
+    href: '/admin/firmy',
+    labelKey: 'navCompanies',
+    descKey: 'companiesSubtitle',
+    icon: <Building2 />,
+  },
+  {
+    href: '/admin/zgloszenia',
+    labelKey: 'navReports',
+    descKey: 'reportsSubtitle',
+    icon: <Flag />,
+  },
+  {
+    href: '/admin/uzytkownicy',
+    labelKey: 'navUsers',
+    descKey: 'usersSubtitle',
+    icon: <Users />,
+  },
 ];
 
 export default async function AdminDashboardPage({
@@ -52,7 +69,7 @@ export default async function AdminDashboardPage({
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'admin' });
-  const stats = await getAdminStats();
+  const statsResult = await getAdminStats();
 
   return (
     <div className="space-y-6">
@@ -62,22 +79,44 @@ export default async function AdminDashboardPage({
       </header>
 
       {/* Statystyki */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label={t('statCompanies')} value={stats.companies} icon={<Building2 />} tone="primary" />
-        <StatCard
-          label={t('statPending')}
-          value={stats.pendingCompanies}
-          icon={<Clock />}
-          tone="warning"
-        />
-        <StatCard label={t('statUsers')} value={stats.users} icon={<Users />} tone="accent" />
-        <StatCard
-          label={t('statOpenReports')}
-          value={stats.openReports}
-          icon={<Flag />}
-          tone="error"
-        />
-      </div>
+      {statsResult.status === 'error' ? (
+        <AdminLoadError retryHref={`/${locale}/admin`} />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label={t('statCompanies')}
+            value={statsResult.stats.companies}
+            icon={<Building2 />}
+            tone="primary"
+          />
+          <Link
+            href={{
+              pathname: '/admin/firmy',
+              query: { status: AWAITING_FILTER },
+            }}
+            className="block rounded-lg transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <StatCard
+              label={t('statPending')}
+              value={statsResult.stats.pendingCompanies}
+              icon={<Clock />}
+              tone="warning"
+            />
+          </Link>
+          <StatCard
+            label={t('statUsers')}
+            value={statsResult.stats.users}
+            icon={<Users />}
+            tone="accent"
+          />
+          <StatCard
+            label={t('statOpenReports')}
+            value={statsResult.stats.openReports}
+            icon={<Flag />}
+            tone="error"
+          />
+        </div>
+      )}
 
       {/* Szybkie przejścia */}
       <section className="grid grid-cols-1 gap-4 md:grid-cols-3">

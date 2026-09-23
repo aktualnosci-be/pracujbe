@@ -57,6 +57,24 @@ function placeBannerHost(host: HTMLElement) {
   }
 }
 
+/**
+ * Cel fokusu, gdy element, który miał fokus, znika razem z banerem (#212, WCAG 2.4.3):
+ * główna treść strony (`#main-content`, a bez niej pierwszy `<main>`), nigdy `<body>`.
+ */
+function focusMainContent() {
+  const main =
+    document.getElementById('main-content') ?? document.querySelector<HTMLElement>('main');
+  if (!main) return;
+  if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+  main.focus({ preventScroll: true });
+}
+
+/** Element, który miał fokus przed otwarciem centrum zgód (poza samym `<body>`). */
+function currentFocus(): HTMLElement | null {
+  const active = document.activeElement;
+  return active instanceof HTMLElement && active !== document.body ? active : null;
+}
+
 type CategoryMeta = {
   key: ConsentCategory;
   nameKey: string;
@@ -127,6 +145,9 @@ export function CookieConsent() {
   const [bannerHost, setBannerHost] = useState<HTMLElement | null>(null);
   const hostRef = useRef<HTMLElement | null>(null);
   const bannerRef = useRef<HTMLDivElement | null>(null);
+  // Centrum zgód otwierane jest zdarzeniem, bez Dialog.Trigger — Radix nie wie, gdzie oddać
+  // fokus, więc zapamiętujemy element otwierający sami (#212).
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const pathname = usePathname();
 
   // Odczyt istniejącej zgody po stronie klienta.
@@ -140,6 +161,7 @@ export function CookieConsent() {
   // Otwarcie panelu na żądanie z zewnątrz (np. przycisk w stopce).
   useEffect(() => {
     function onOpenSettings() {
+      returnFocusRef.current = currentFocus();
       const existing = getConsent();
       setDraft(existing ? existing.categories : necessaryOnly());
       setSettingsOpen(true);
@@ -203,7 +225,31 @@ export function CookieConsent() {
   const handleRejectOptional = useCallback(() => persist(necessaryOnly()), [persist]);
   const handleSaveSelection = useCallback(() => persist(draft), [persist, draft]);
 
+  // Wybór w banerze usuwa baner razem z przyciskiem, który miał fokus → fokus na treść.
+  const handleBannerAcceptAll = useCallback(() => {
+    handleAcceptAll();
+    focusMainContent();
+  }, [handleAcceptAll]);
+  const handleBannerRejectOptional = useCallback(() => {
+    handleRejectOptional();
+    focusMainContent();
+  }, [handleRejectOptional]);
+
+  // Po zamknięciu centrum: fokus wraca na element otwierający, a gdy zniknął (np. „Dostosuj”
+  // po zapisaniu zgody z banera) — na główną treść.
+  const restoreFocus = useCallback((event: Event) => {
+    event.preventDefault();
+    const target = returnFocusRef.current;
+    returnFocusRef.current = null;
+    if (target?.isConnected) {
+      target.focus();
+      if (document.activeElement === target) return;
+    }
+    focusMainContent();
+  }, []);
+
   const openCustomize = useCallback(() => {
+    returnFocusRef.current = currentFocus();
     const existing = getConsent();
     setDraft(existing ? existing.categories : necessaryOnly());
     setSettingsOpen(true);
@@ -245,7 +291,7 @@ export function CookieConsent() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:max-w-[60%] lg:shrink-0">
                   <Button
                     variant="outline"
-                    onClick={handleRejectOptional}
+                    onClick={handleBannerRejectOptional}
                     className={BANNER_BUTTON}
                   >
                     {t('rejectOptional')}
@@ -253,7 +299,7 @@ export function CookieConsent() {
                   <Button variant="outline" onClick={openCustomize} className={BANNER_BUTTON}>
                     {t('customize')}
                   </Button>
-                  <Button variant="outline" onClick={handleAcceptAll} className={BANNER_BUTTON}>
+                  <Button variant="outline" onClick={handleBannerAcceptAll} className={BANNER_BUTTON}>
                     {t('acceptAll')}
                   </Button>
                 </div>
@@ -267,6 +313,7 @@ export function CookieConsent() {
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
           <Dialog.Content
+            onCloseAutoFocus={restoreFocus}
             className="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-xl border border-border bg-background p-6 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           >
             <div className="flex items-start justify-between gap-4">

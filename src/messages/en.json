@@ -368,6 +368,13 @@
       "contactEmailInvalid": "Invalid email address.",
       "publishAgreementRequired": "Confirm to publish the job.",
       "invalid": "Invalid value."
+    },
+    "contentLanguageNotice": "This job’s content is only available in {language}.",
+    "contentLanguageNames": {
+      "pl": "Polish",
+      "nl": "Dutch",
+      "fr": "French",
+      "en": "English"
     }
   },
   "landing": {
@@ -477,6 +484,8 @@
     "verifySubtitle": "We've sent a link to your email address. Click it to complete your registration.",
     "orContinue": "or continue with",
     "agreeTerms": "By creating an account, you agree to the terms and privacy policy.",
+    "agreeTermsLinks": "I accept the <terms>terms and conditions</terms> and the <privacy>privacy policy</privacy>.",
+    "opensInNewTab": "(opens in a new tab)",
     "passwordHint": "At least 8 characters, including a letter and a number.",
     "registerAsEmployer": "Hiring? Create an employer account",
     "registerAsCandidate": "Looking for work? Create a candidate account",
@@ -616,10 +625,18 @@
     "proposalsIntro": "Employers can send you job proposals.",
     "proposalsEmptyTitle": "No proposals yet",
     "proposalsEmptyBody": "Complete your profile so employers can see your experience.",
+    "proposalsMore": "Show more proposals",
+    "proposalsLoading": "Loading proposals…",
+    "proposalsMoreError": "We couldn’t load more proposals. Try again.",
+    "proposalsEnd": "These are all your proposals.",
     "proposalSentOn": "Received on {date}",
     "candidateListErrorTitle": "Could not load your information",
     "candidateListErrorBody": "Refresh the page and try again.",
     "candidateListRetry": "Try again",
+    "candidateOverviewLoadError": "Some counters couldn’t be loaded. Refresh the page and try again.",
+    "candidateStatLoadError": "Could not load",
+    "candidateApplicationsLoadError": "We couldn’t load your applications. Refresh the page and try again.",
+    "candidateMessagesLoadError": "We couldn’t load your messages. Refresh the page and try again.",
     "savedIntro": "Review jobs you saved for later.",
     "savedEmpty": "You haven't saved any jobs yet. Find a job that interests you and save it here.",
     "savedBrowse": "Browse jobs",
@@ -699,7 +716,6 @@
     "seeAllOffers": "See all offers",
     "seeAllCandidates": "See all",
     "funnelDetails": "View details",
-    "offerId": "ID",
     "selectOffer": "Select offer",
     "selectAll": "Select all",
     "saveCandidate": "Save candidate",
@@ -707,6 +723,10 @@
     "offersMatched": "{count} matches",
     "recentApplications": "Recent applications",
     "recentApplicationsError": "Could not load recent applications. Please try again.",
+    "navEmployerApplications": "Applications",
+    "employerOverviewLoadError": "Could not load statistics. Please try again.",
+    "employerFunnelLoadError": "Could not load the recruitment funnel. Please try again.",
+    "employerOffersCreatedLabel": "Created {date}",
     "sendOffer": "Send offer",
     "offerSentSuccess": "Offer has been sent.",
     "statusChanged": "Status has been updated.",
@@ -890,8 +910,9 @@
     "available": "Available",
     "datePosted": "Date posted",
     "any": "Any",
-    "showResults": "Show {count} jobs",
+    "showResults": "{count, plural, one {Show # job} other {Show # jobs}}",
     "countLoading": "Counting jobs…",
+    "resultsLoading": "Loading jobs…",
     "countUnavailable": "Job count unavailable",
     "countError": "We could not count the jobs. Try again.",
     "retryCount": "Count again",
@@ -949,6 +970,7 @@
     "subtitle": "Use your profile to apply quickly.",
     "profileNote": "Your profile details will be attached to the application.",
     "phone": "Phone",
+    "dialCode": "Country calling code",
     "phonePlaceholder": "512 345 678",
     "availability": "Availability",
     "availImmediate": "Immediately",
@@ -1219,7 +1241,20 @@
     "actionReview": "Start review",
     "actionResolve": "Resolve",
     "actionDismiss": "Dismiss",
-    "actionReopen": "Reopen"
+    "actionReopen": "Reopen",
+    "filterAwaiting": "To verify",
+    "loadErrorTitle": "We couldn't load the data",
+    "loadErrorHint": "This doesn't mean the list is empty. Please try again in a moment.",
+    "loadErrorRetry": "Try again",
+    "listTruncated": "Showing the {count} most recent items.",
+    "detailVat": "VAT number",
+    "detailRegistration": "Company number (KBO/BCE)",
+    "detailEmail": "Company email",
+    "detailCity": "City",
+    "confirmTitle": "{action}: confirm status change",
+    "confirmDescription": "Company “{name}”: {from} → {to}. Check the details before confirming.",
+    "confirmCancel": "Cancel",
+    "confirmSaving": "Saving…"
   },
   "settings": {
     "title": "Notification preferences",
@@ -1312,5 +1347,13 @@
       "idempotencyKeyRequired": "The form couldn't be sent. Refresh the page and try again.",
       "idempotencyKeyInvalid": "The form couldn't be sent. Refresh the page and try again."
     }
+  },
+  "siteAccess": {
+    "pageTitle": "Pracuj.be — password-protected access",
+    "title": "Pracuj.be is being prepared",
+    "lead": "The website is not open to the public yet. If you have an access password, enter it below.",
+    "passwordLabel": "Access password",
+    "submit": "Enter",
+    "error": "Incorrect password. Please try again."
   }
 }

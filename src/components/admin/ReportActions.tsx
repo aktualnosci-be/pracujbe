@@ -43,9 +43,10 @@ const ACTIONS_BY_STATUS: Record<string, ReportAction[]> = {
   dismissed: [{ target: 'reviewing', labelKey: 'actionReopen', tone: 'blue' }],
 };
 
+/** Tekst na białym tle → warianty `-text`/`-dark` (WCAG AA 4,5:1 — #316). */
 const TONE_CLASS: Record<ActionTone, string> = {
-  blue: 'border-accent/30 text-accent hover:bg-accent/10',
-  success: 'border-success/30 text-success hover:bg-success/10',
+  blue: 'border-accent/40 text-accent-dark hover:bg-accent/10',
+  success: 'border-success/40 text-success-text hover:bg-success/10',
   neutral: 'border-border text-muted-foreground hover:bg-soft hover:text-foreground',
 };
 
@@ -64,9 +65,10 @@ export function ReportActions({
   const tRoot = useTranslations();
 
   const [pending, startTransition] = React.useTransition();
-  const [toast, setToast] = React.useState<{ tone: 'success' | 'error'; message: string } | null>(
-    null,
-  );
+  const [toast, setToast] = React.useState<{
+    tone: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const router = useRouter();
 
   React.useEffect(() => {
@@ -86,10 +88,16 @@ export function ReportActions({
           setToast({ tone: 'success', message: t('reportResolved') });
           router.refresh();
         } else {
-          setToast({ tone: 'error', message: tRoot(toUserMessageKey(res.error as ErrorCode)) });
+          setToast({
+            tone: 'error',
+            message: tRoot(toUserMessageKey(res.error as ErrorCode)),
+          });
         }
       } catch {
-        setToast({ tone: 'error', message: tRoot(toUserMessageKey('INTERNAL')) });
+        setToast({
+          tone: 'error',
+          message: tRoot(toUserMessageKey('INTERNAL')),
+        });
       }
     });
   };
@@ -107,7 +115,7 @@ export function ReportActions({
           disabled={pending}
           onClick={() => handle(action.target)}
           className={cn(
-            'inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+            'inline-flex min-h-11 items-center rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
             TONE_CLASS[action.tone],
           )}
         >

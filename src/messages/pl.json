@@ -368,6 +368,13 @@
       "contactEmailInvalid": "Nieprawidłowy adres e-mail.",
       "publishAgreementRequired": "Potwierdź, aby opublikować ofertę.",
       "invalid": "Nieprawidłowa wartość."
+    },
+    "contentLanguageNotice": "Treść tej oferty jest dostępna tylko w języku: {language}.",
+    "contentLanguageNames": {
+      "pl": "polski",
+      "nl": "niderlandzki",
+      "fr": "francuski",
+      "en": "angielski"
     }
   },
   "landing": {
@@ -477,6 +484,8 @@
     "verifySubtitle": "Wysłaliśmy link na Twój adres e-mail. Kliknij go, aby dokończyć rejestrację.",
     "orContinue": "lub kontynuuj przez",
     "agreeTerms": "Zakładając konto, akceptujesz regulamin i politykę prywatności.",
+    "agreeTermsLinks": "Akceptuję <terms>regulamin</terms> i <privacy>politykę prywatności</privacy>.",
+    "opensInNewTab": "(otwiera się w nowej karcie)",
     "passwordHint": "Minimum 8 znaków, w tym litera i cyfra.",
     "registerAsEmployer": "Rekrutujesz? Załóż konto pracodawcy",
     "registerAsCandidate": "Szukasz pracy? Załóż konto kandydata",
@@ -616,10 +625,18 @@
     "proposalsIntro": "Pracodawcy mogą przesłać Ci propozycję pracy.",
     "proposalsEmptyTitle": "Nie masz jeszcze propozycji",
     "proposalsEmptyBody": "Uzupełnij profil, aby pracodawcy mogli poznać Twoje doświadczenie.",
+    "proposalsMore": "Pokaż więcej propozycji",
+    "proposalsLoading": "Wczytywanie propozycji…",
+    "proposalsMoreError": "Nie udało się wczytać kolejnych propozycji. Spróbuj ponownie.",
+    "proposalsEnd": "To wszystkie Twoje propozycje.",
     "proposalSentOn": "Otrzymano {date}",
     "candidateListErrorTitle": "Nie udało się wczytać danych",
     "candidateListErrorBody": "Odśwież stronę i spróbuj ponownie.",
     "candidateListRetry": "Spróbuj ponownie",
+    "candidateOverviewLoadError": "Nie udało się wczytać części liczników. Odśwież stronę i spróbuj ponownie.",
+    "candidateStatLoadError": "Nie udało się wczytać",
+    "candidateApplicationsLoadError": "Nie udało się wczytać Twoich zgłoszeń. Odśwież stronę i spróbuj ponownie.",
+    "candidateMessagesLoadError": "Nie udało się wczytać wiadomości. Odśwież stronę i spróbuj ponownie.",
     "savedIntro": "Przeglądaj oferty, które chcesz zachować na później.",
     "savedEmpty": "Nie masz jeszcze zapisanych ofert. Znajdź pracę, która Cię interesuje, i zapisz ją tutaj.",
     "savedBrowse": "Przeglądaj oferty",
@@ -699,7 +716,6 @@
     "seeAllOffers": "Zobacz wszystkie oferty",
     "seeAllCandidates": "Zobacz wszystkich",
     "funnelDetails": "Zobacz szczegóły",
-    "offerId": "ID",
     "selectOffer": "Zaznacz ofertę",
     "selectAll": "Zaznacz wszystkie",
     "saveCandidate": "Zapisz kandydata",
@@ -707,6 +723,10 @@
     "offersMatched": "{count} dopas.",
     "recentApplications": "Najnowsze aplikacje",
     "recentApplicationsError": "Nie udało się wczytać najnowszych aplikacji. Spróbuj ponownie.",
+    "navEmployerApplications": "Aplikacje kandydatów",
+    "employerOverviewLoadError": "Nie udało się wczytać statystyk. Spróbuj ponownie.",
+    "employerFunnelLoadError": "Nie udało się wczytać lejka rekrutacyjnego. Spróbuj ponownie.",
+    "employerOffersCreatedLabel": "Utworzono {date}",
     "sendOffer": "Wyślij propozycję",
     "offerSentSuccess": "Propozycja została wysłana.",
     "statusChanged": "Status został zmieniony.",
@@ -890,8 +910,9 @@
     "available": "Dostępny",
     "datePosted": "Data dodania oferty",
     "any": "Dowolna",
-    "showResults": "Pokaż {count} ofert",
+    "showResults": "{count, plural, one {Pokaż # ofertę} few {Pokaż # oferty} many {Pokaż # ofert} other {Pokaż # oferty}}",
     "countLoading": "Liczymy oferty…",
+    "resultsLoading": "Wczytujemy oferty…",
     "countUnavailable": "Liczba ofert niedostępna",
     "countError": "Nie udało się policzyć ofert. Spróbuj ponownie.",
     "retryCount": "Policz ponownie",
@@ -949,6 +970,7 @@
     "subtitle": "Użyj swojego profilu, aby szybko aplikować.",
     "profileNote": "Twoje dane z profilu zostaną dołączone do aplikacji.",
     "phone": "Telefon",
+    "dialCode": "Kierunkowy kraju",
     "phonePlaceholder": "512 345 678",
     "availability": "Dostępność",
     "availImmediate": "Od zaraz",
@@ -1219,7 +1241,20 @@
     "actionReview": "Weź do analizy",
     "actionResolve": "Rozwiąż",
     "actionDismiss": "Odrzuć",
-    "actionReopen": "Otwórz ponownie"
+    "actionReopen": "Otwórz ponownie",
+    "filterAwaiting": "Do weryfikacji",
+    "loadErrorTitle": "Nie udało się wczytać danych",
+    "loadErrorHint": "To nie oznacza, że lista jest pusta. Spróbuj ponownie za chwilę.",
+    "loadErrorRetry": "Spróbuj ponownie",
+    "listTruncated": "Pokazano {count} najnowszych pozycji.",
+    "detailVat": "Numer VAT",
+    "detailRegistration": "Numer KBO",
+    "detailEmail": "E-mail firmy",
+    "detailCity": "Miasto",
+    "confirmTitle": "{action}: potwierdź zmianę statusu",
+    "confirmDescription": "Firma „{name}”: {from} → {to}. Sprawdź dane przed zatwierdzeniem.",
+    "confirmCancel": "Anuluj",
+    "confirmSaving": "Zapisywanie…"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -1312,5 +1347,13 @@
       "idempotencyKeyRequired": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie.",
       "idempotencyKeyInvalid": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie."
     }
+  },
+  "siteAccess": {
+    "pageTitle": "Pracuj.be — dostęp chroniony hasłem",
+    "title": "Pracuj.be jest w przygotowaniu",
+    "lead": "Serwis nie jest jeszcze publicznie dostępny. Jeśli masz hasło dostępu, wpisz je poniżej.",
+    "passwordLabel": "Hasło dostępu",
+    "submit": "Wejdź",
+    "error": "Nieprawidłowe hasło. Spróbuj ponownie."
   }
 }

@@ -24,17 +24,25 @@ import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 import { findLatestActiveProposal } from '@/lib/candidate-offers';
+import { customOfferMessage } from '@/lib/offers/default-message';
 
 /* ---------------------------------------------------------------------------
  * Kontrakt danych panelu kandydata
  * ------------------------------------------------------------------------- */
 
+/**
+ * Liczniki pulpitu. `null` = odczyt tego licznika się nie udał — ekran pokazuje błąd,
+ * a nie zero udające potwierdzony wynik (#244). Każdy licznik zawodzi niezależnie.
+ */
 export interface CandidateOverview {
-  newJobsCount: number;
-  activeApplicationsCount: number;
-  unreadMessagesCount: number;
+  newJobsCount: number | null;
+  activeApplicationsCount: number | null;
+  unreadMessagesCount: number | null;
   profileCompletionPct: number;
 }
+
+/** Wynik odczytu sekcji pulpitu: awaria nigdy nie jest zamieniana na pustą listę (#244). */
+export type CandidateSectionLoad<T> = { status: 'ok'; items: T[] } | { status: 'error' };
 
 export interface RecommendedJob {
   id: string;
@@ -90,6 +98,18 @@ export interface MyOffer {
   status: string;
   expiresAt: string | null;
 }
+
+export interface OfferCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface MyOffersPage {
+  items: MyOffer[];
+  nextCursor: OfferCursor | null;
+}
+
+const OFFER_PAGE_SIZE = 10;
 
 export interface CandidateProfileSummary {
   loadFailed: boolean;
@@ -523,7 +543,22 @@ const FAILED_PROFILE_SUMMARY: CandidateProfileSummary = {
 
 /** Kafelki podsumowania: nowe oferty / aktywne aplikacje / nieprzeczytane wiadomości / kompletność profilu. */
 export async function getCandidateOverview(): Promise<CandidateOverview> {
-  if (!isSupabaseConfigured()) return DEMO_OVERVIEW;
+  if (!isSupabaseConfigured()) {
+    if (isDashboardErrorFixture()) {
+      return { newJobsCount: null, activeApplicationsCount: null, unreadMessagesCount: null, profileCompletionPct: 0 };
+    }
+    return DEMO_OVERVIEW;
+  }
+
+  /** Awaria jednego licznika daje `null` tylko dla niego; pozostałe zachowują prawdziwe wartości. */
+  const settle = async (area: string, read: () => Promise<number>): Promise<number | null> => {
+    try {
+      return await read();
+    } catch (error) {
+      captureError(error, { area: `candidate.getCandidateOverview.${area}` });
+      return null;
+    }
+  };
 
   try {
     const { supabase, userId } = await getServerContext();
@@ -531,36 +566,41 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
       return { newJobsCount: 0, activeApplicationsCount: 0, unreadMessagesCount: 0, profileCompletionPct: 0 };
     }
 
-    const [newJobs, activeApps, unreadCount, profile] = await Promise.all([
-      supabase.rpc('get_public_jobs_count', {
-        p_keyword: null,
-        p_city: null,
+    const [newJobsCount, activeApplicationsCount, unreadMessagesCount, profile] = await Promise.all([
+      settle('newJobs', async () => {
+        const { data, error } = await supabase.rpc('get_public_jobs_count', {
+          p_keyword: null,
+          p_city: null,
+        });
+        if (error) throw error;
+        return asNum(data);
       }),
-      supabase
-        .from('applications')
-        .select('id', { count: 'exact', head: true })
-        .eq('candidate_id', userId)
-        .is('deleted_at', null)
-        .in('status', [...ACTIVE_APPLICATION_STATUSES]),
-      countUnreadConversations(supabase, userId),
+      settle('activeApplications', async () => {
+        const { count, error } = await supabase
+          .from('applications')
+          .select('id', { count: 'exact', head: true })
+          .eq('candidate_id', userId)
+          .is('deleted_at', null)
+          .in('status', [...ACTIVE_APPLICATION_STATUSES]);
+        if (error) throw error;
+        return count ?? 0;
+      }),
+      settle('unreadMessages', () => countUnreadConversations(supabase, userId)),
       computeProfileSummary(supabase, userId).catch((error: unknown) => {
         captureError(error, { area: 'candidate.getCandidateOverview.profileSummary' });
         return FAILED_PROFILE_SUMMARY;
       }),
     ]);
 
-    if (newJobs.error) throw newJobs.error;
-    if (activeApps.error) throw activeApps.error;
-
     return {
-      newJobsCount: asNum(newJobs.data),
-      activeApplicationsCount: activeApps.count ?? 0,
-      unreadMessagesCount: unreadCount,
+      newJobsCount,
+      activeApplicationsCount,
+      unreadMessagesCount,
       profileCompletionPct: profile.completionPct,
     };
   } catch (error) {
     captureError(error, { area: 'candidate.getCandidateOverview' });
-    return { newJobsCount: 0, activeApplicationsCount: 0, unreadMessagesCount: 0, profileCompletionPct: 0 };
+    return { newJobsCount: null, activeApplicationsCount: null, unreadMessagesCount: null, profileCompletionPct: 0 };
   }
 }
 
@@ -675,6 +715,14 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
   }
 }
 
+/**
+ * Izolowany test przeglądarkowy (osobny serwer Next dev, bez bazy) wymusza błędy odczytu pulpitu.
+ * Ta gałąź nie działa w buildzie produkcyjnym.
+ */
+function isDashboardErrorFixture(): boolean {
+  return process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error';
+}
+
 /** Historia własnych zgłoszeń, stronicowana stabilnym kursorem (czas + UUID). */
 export async function getMyApplicationsPage(
   locale: string = routing.defaultLocale,
@@ -769,13 +817,18 @@ function developmentApplicationFixture(locale: Locale, cursor: ApplicationCursor
   return { items, nextCursor: remaining.length > APPLICATION_PAGE_SIZE && last ? { submittedAt: last.date, id: last.id } : null };
 }
 
-/** Krótki podgląd na pulpicie; pełna historia jest stronicowana na ekranie zgłoszeń. */
-export async function getMyApplications(locale: string = routing.defaultLocale, throwOnError = false): Promise<MyApplication[]> {
+/**
+ * Krótki podgląd na pulpicie; pełna historia jest stronicowana na ekranie zgłoszeń.
+ * Awaria odczytu to jawny stan `error` — nie pusta lista udająca brak zgłoszeń (#244).
+ */
+export async function getMyApplicationsPreview(
+  locale: string = routing.defaultLocale,
+): Promise<CandidateSectionLoad<MyApplication>> {
   try {
-    return (await getMyApplicationsPage(locale)).items;
-  } catch (error) {
-    if (throwOnError) throw error;
-    return [];
+    return { status: 'ok', items: (await getMyApplicationsPage(locale)).items };
+  } catch {
+    // getMyApplicationsPage zgłosił już błąd do Sentry.
+    return { status: 'error' };
   }
 }
 
@@ -818,38 +871,63 @@ export async function getSavedJobs(locale: string = routing.defaultLocale): Prom
 }
 
 /**
- * Propozycje pracy wysłane do kandydata (`offers`) + dane oferty.
+ * Propozycje pracy wysłane do kandydata (`offers`) + dane oferty, stronicowane stabilnym kursorem
+ * (`created_at` + UUID), aby cała historia była osiągalna bez sztucznego limitu (#245).
  * Odczyt pod sesją (RLS `offers_select`: kandydat widzi wyłącznie własne propozycje). Tytuł/firmę
  * rozwiązujemy z RPC `get_applied_jobs_display` (własne aplikacje, niezależnie od statusu oferty),
  * a jako uzupełnienie z `get_public_jobs` (propozycja może dotyczyć oferty, do której kandydat nie
- * aplikował) — kandydat nie czyta tabel bazowych wprost (P1-01).
+ * aplikował) — kandydat nie czyta tabel bazowych wprost (P1-01). Błąd odczytu jest rzucany dalej,
+ * nigdy nie udaje pustej strony.
  */
-export async function getMyOffers(locale: string = routing.defaultLocale, throwOnError = false): Promise<MyOffer[]> {
+export async function getMyOffersPage(
+  locale: string = routing.defaultLocale,
+  cursor: OfferCursor | null = null,
+): Promise<MyOffersPage> {
   const resolvedLocale = toLocale(locale);
-  if (!isSupabaseConfigured()) return demoOffers(resolvedLocale);
+  if (!isSupabaseConfigured()) {
+    // Test przeglądarkowy uruchamia osobny serwer Next dev. Ta gałąź nie działa w buildzie produkcyjnym.
+    if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full') {
+      return developmentOfferFixture(resolvedLocale, cursor);
+    }
+    return { items: cursor ? [] : demoOffers(resolvedLocale), nextCursor: null };
+  }
 
   try {
     const { supabase, userId } = await getServerContext();
-    if (!userId) return [];
+    if (!userId) return { items: [], nextCursor: null };
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('offers')
       .select('id, job_id, status, message, sent_at, created_at, expires_at')
       .eq('candidate_id', userId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .order('id', { ascending: false });
+    if (cursor) {
+      // PostgREST wymaga cudzysłowu dla wartości z dwukropkiem i kropką (ISO 8601).
+      // Kursor z Server Action jest sprawdzany przez Zod przed trafieniem tutaj.
+      const timestamp = `"${cursor.createdAt}"`;
+      query = query.or(
+        `created_at.lt.${timestamp},and(created_at.eq.${timestamp},id.lt.${cursor.id})`,
+      );
+    }
+    const { data, error } = await query.limit(OFFER_PAGE_SIZE + 1);
     if (error) throw error;
 
     const rows = asArr(data);
-    if (rows.length === 0) return [];
+    if (rows.length === 0) return { items: [], nextCursor: null };
+    const visibleRows = rows.slice(0, OFFER_PAGE_SIZE);
+    const last = asRecord(visibleRows[visibleRows.length - 1]);
+    const nextCursor = rows.length > OFFER_PAGE_SIZE
+      ? { createdAt: asStr(last['created_at']), id: asStr(last['id']) }
+      : null;
 
     const [appliedMap, publicMap] = await Promise.all([
       fetchAppliedJobsMap(supabase, resolvedLocale),
       fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT),
     ]);
 
-    return rows.map((row) => {
+    const items = visibleRows.map((row): MyOffer => {
       const r = asRecord(row);
       const jobId = asStr(r['job_id']);
       const job = appliedMap.get(jobId) ?? publicMap.get(jobId);
@@ -859,17 +937,43 @@ export async function getMyOffers(locale: string = routing.defaultLocale, throwO
         jobTitle: job?.title ?? '',
         companyName: job?.companyName ?? '',
         slug: job?.slug ?? null,
-        message: asStr(r['message']),
+        // Szablon zapisany w języku nadawcy → '' (UI pokaże zaproszenie w języku kandydata, #289).
+        message: customOfferMessage(asStr(r['message'])) ?? '',
         date: sentAt || asStr(r['created_at']),
         status: asStr(r['status'], 'sent'),
         expiresAt: asStr(r['expires_at']) || null,
       };
     });
+    return { items, nextCursor };
   } catch (error) {
-    captureError(error, { area: 'candidate.getMyOffers' });
-    if (throwOnError) throw error;
-    return [];
+    captureError(error, { area: 'candidate.getMyOffersPage' });
+    throw error;
   }
+}
+
+/** Dane wyłącznie dla izolowanego testu Next dev (21 propozycji o równym czasie); produkcja tego nie wykonuje. */
+function developmentOfferFixture(locale: Locale, cursor: OfferCursor | null): MyOffersPage {
+  const jobs = resolveDemoJobs(locale);
+  const createdAt = '2026-09-20T09:00:00+00:00';
+  const all = Array.from({ length: 21 }, (_, index) => {
+    const job = jobs[index % Math.max(jobs.length, 1)];
+    return {
+      id: `bbbbbbbb-bbbb-4bbb-8bbb-${String(21 - index).padStart(12, '0')}`,
+      jobTitle: `${job?.title ?? ''} #${21 - index}`,
+      companyName: job?.companyName ?? '',
+      slug: job?.slug ?? null,
+      message: '',
+      date: createdAt,
+      status: index === 20 ? 'accepted' : 'declined',
+      expiresAt: null,
+    };
+  });
+  const remaining = cursor
+    ? all.filter((item) => item.date < cursor.createdAt || (item.date === cursor.createdAt && item.id < cursor.id))
+    : all;
+  const items = remaining.slice(0, OFFER_PAGE_SIZE);
+  const last = items[items.length - 1];
+  return { items, nextCursor: remaining.length > OFFER_PAGE_SIZE && last ? { createdAt: last.date, id: last.id } : null };
 }
 
 /**
@@ -915,7 +1019,7 @@ export async function getLatestActiveOffer(
       jobTitle: job?.title ?? '',
       companyName: job?.companyName ?? '',
       slug: job?.slug ?? null,
-      message: asStr(row['message']),
+      message: customOfferMessage(asStr(row['message'])) ?? '',
       date: asStr(row['sent_at']),
       status: asStr(row['status']),
       expiresAt: asStr(row['expires_at']) || null,
@@ -926,13 +1030,16 @@ export async function getLatestActiveOffer(
   }
 }
 
-/** Ostatnie wiadomości/konwersacje kandydata (puste, gdy brak). */
-export async function getLatestMessages(): Promise<LatestMessage[]> {
-  if (!isSupabaseConfigured()) return demoMessages(routing.defaultLocale);
+/** Ostatnie wiadomości/konwersacje kandydata. Pusta lista tylko po udanym odczycie (#244). */
+export async function getLatestMessages(): Promise<CandidateSectionLoad<LatestMessage>> {
+  if (!isSupabaseConfigured()) {
+    if (isDashboardErrorFixture()) return { status: 'error' };
+    return { status: 'ok', items: demoMessages(routing.defaultLocale) };
+  }
 
   try {
     const { supabase, userId } = await getServerContext();
-    if (!userId) return [];
+    if (!userId) return { status: 'ok', items: [] };
 
     const { data: memberData, error: memberError } = await supabase
       .from('conversation_members')
@@ -946,7 +1053,7 @@ export async function getLatestMessages(): Promise<LatestMessage[]> {
       const cid = asStr(r['conversation_id']);
       if (cid) lastReadByConv.set(cid, typeof r['last_read_at'] === 'string' ? (r['last_read_at'] as string) : null);
     }
-    if (lastReadByConv.size === 0) return [];
+    if (lastReadByConv.size === 0) return { status: 'ok', items: [] };
 
     const { data: convData, error: convError } = await supabase
       .from('conversations')
@@ -958,7 +1065,7 @@ export async function getLatestMessages(): Promise<LatestMessage[]> {
     if (convError) throw convError;
 
     const convs = asArr(convData);
-    if (convs.length === 0) return [];
+    if (convs.length === 0) return { status: 'ok', items: [] };
     const topIds = convs.map((c) => asStr(asRecord(c)['id'])).filter(Boolean);
 
     const { data: msgData, error: msgError } = await supabase
@@ -981,7 +1088,7 @@ export async function getLatestMessages(): Promise<LatestMessage[]> {
       });
     }
 
-    return convs.map((c) => {
+    const items = convs.map((c): LatestMessage => {
       const r = asRecord(c);
       const cid = asStr(r['id']);
       const last = latestByConv.get(cid);
@@ -997,9 +1104,10 @@ export async function getLatestMessages(): Promise<LatestMessage[]> {
         unread,
       };
     });
+    return { status: 'ok', items };
   } catch (error) {
     captureError(error, { area: 'candidate.getLatestMessages' });
-    return [];
+    return { status: 'error' };
   }
 }
 

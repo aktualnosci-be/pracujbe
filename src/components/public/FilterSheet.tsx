@@ -2,13 +2,19 @@
 
 import * as React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { SlidersHorizontal, X } from 'lucide-react';
+import { Loader2, SlidersHorizontal, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { useRouter, usePathname } from '@/i18n/navigation';
+import { usePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { FilterFields, useLiveFacets } from '@/components/public/FilterSidebar';
+import {
+  FilterFields,
+  requestResultsFocus,
+  useFilterNavigation,
+  useFocusResultsAfterNavigation,
+  useLiveFacets,
+} from '@/components/public/FilterSidebar';
 import {
   CATEGORY_KEYS,
   CONTRACT_TYPES,
@@ -292,14 +298,16 @@ export function FilterSheet({
 }: FilterSheetProps): React.JSX.Element {
   const t = useTranslations('filters');
   const tJobs = useTranslations('jobs');
-  const router = useRouter();
   const pathname = usePathname();
+  const { isNavigating, navigate } = useFilterNavigation();
 
   const [open, setOpen] = React.useState(false);
   const [pending, setPending] = React.useState<SidebarFilters>(initial);
 
   // Reset stanu do bieżących filtrów przy każdym otwarciu arkusza.
+  // W trakcie ładowania wyników arkusz się nie otwiera — brak podwójnego zatwierdzenia (#222).
   const handleOpenChange = (next: boolean) => {
+    if (next && isNavigating) return;
     if (next) setPending(initial);
     setOpen(next);
   };
@@ -310,9 +318,21 @@ export function FilterSheet({
     city,
   });
 
+  useFocusResultsAfterNavigation(JSON.stringify(initial));
+
   const apply = () => {
-    router.push(buildHref(pathname, pending, { keyword, city, sort }));
+    if (!navigate(buildHref(pathname, pending, { keyword, city, sort }))) return;
+    requestResultsFocus();
     setOpen(false);
+  };
+  // Fokus początkowy na pierwszym polu, a nie na „Wyczyść wszystko” (#224).
+  const focusFirstField = (event: Event) => {
+    const first = document.querySelector<HTMLElement>(
+      '[data-filter-passport="mobile-sheet"] [role="checkbox"]',
+    );
+    if (!first) return;
+    event.preventDefault();
+    first.focus();
   };
   const clearAll = () => setPending(emptySidebarFilters());
 
@@ -332,15 +352,22 @@ export function FilterSheet({
         />
       </noscript>
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
+        {/* Po zamknięciu arkusza fokus wraca tu, więc stan ładowania wyników niesie wyzwalacz. */}
         <Dialog.Trigger
           data-filter-passport="mobile-trigger"
+          aria-busy={isNavigating}
+          aria-disabled={isNavigating}
           className={cn(
             buttonVariants({ variant: 'outline' }),
-            'min-h-12 gap-2 rounded-xl border-border bg-background',
+            'min-h-12 gap-2 rounded-xl border-border bg-background aria-disabled:cursor-not-allowed aria-disabled:opacity-70',
             className,
           )}
         >
-          <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+          {isNavigating ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+          )}
           <span>{t('title')}</span>
           {activeCount > 0 ? (
             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
@@ -353,6 +380,7 @@ export function FilterSheet({
           <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
           <Dialog.Content
             aria-describedby={undefined}
+            onOpenAutoFocus={focusFirstField}
             data-filter-passport="mobile-sheet"
             className="fixed inset-x-0 bottom-0 z-50 flex max-h-[90vh] min-w-0 flex-col overflow-hidden rounded-t-2xl border-t border-border bg-background shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
           >
@@ -422,6 +450,9 @@ export function FilterSheet({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+      <p role="status" data-filter-status="mobile" className="sr-only">
+        {isNavigating ? t('resultsLoading') : null}
+      </p>
     </>
   );
 }

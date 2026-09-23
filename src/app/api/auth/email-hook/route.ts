@@ -3,7 +3,8 @@ import { Resend } from 'resend';
 import type { createAdminClient } from '@/lib/supabase/admin';
 import { renderEmail } from '@/emails/templates';
 import type { EmailType } from '@/emails/copy';
-import { routing, type Locale } from '@/i18n/routing';
+import type { Locale } from '@/i18n/routing';
+import { authEmailLocale, buildAuthEmail, type AuthRecipientProfile } from '@/lib/email/auth-email';
 import { env } from '@/lib/env';
 import { readTextWithLimit } from '@/lib/http/read-limited';
 import { captureError } from '@/lib/sentry';
@@ -44,12 +45,6 @@ interface HookPayload {
   };
 }
 
-/** Zawęża dowolny string do obsługiwanego Locale (fallback: język domyślny). */
-function toLocale(value: unknown): Locale {
-  const v = typeof value === 'string' ? value : '';
-  return (routing.locales as readonly string[]).includes(v) ? (v as Locale) : routing.defaultLocale;
-}
-
 /** Weryfikacja podpisu Standard Webhooks (jak Supabase Send Email Hook). */
 function verifySignature(secret: string, headers: Headers, rawBody: string): boolean {
   return verifyStandardWebhook(
@@ -64,17 +59,31 @@ function verifySignature(secret: string, headers: Headers, rawBody: string): boo
   );
 }
 
-/** Mapuje typ akcji GoTrue na nasz typ e-maila + dane szablonu (link w locale odbiorcy). */
-function buildEmail(
-  actionType: string,
-  url: string,
-  firstName: string | undefined,
-): { type: EmailType; data: Record<string, unknown> } {
-  if (actionType === 'recovery') {
-    return { type: 'passwordReset', data: { firstName, resetUrl: url } };
+/**
+ * #291: kolumny języka z profilu odbiorcy (service role, po `user.id`). Best-effort — brak
+ * profilu / błąd odczytu → `null` (język z metadanych rejestracji, końcowo 'en').
+ */
+async function readRecipientProfile(
+  admin: ReturnType<typeof createAdminClient> | null,
+  userId: string | undefined,
+): Promise<AuthRecipientProfile | null> {
+  if (!userId) return null;
+  try {
+    const client = admin ?? (await import('@/lib/supabase/admin')).createAdminClient();
+    const { data, error } = await client
+      .from('profiles')
+      .select('preferred_locale, account_locale, signup_locale')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      captureError(error, { area: 'auth.email-hook.profile' });
+      return null;
+    }
+    return (data as AuthRecipientProfile | null) ?? null;
+  } catch (err) {
+    captureError(err, { area: 'auth.email-hook.profile' });
+    return null;
   }
-  // signup / email / email_change / magiclink → potwierdzenie/akcja konta.
-  return { type: 'accountConfirmation', data: { firstName, confirmationUrl: url } };
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -141,7 +150,9 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'missing fields' }, { status: 400 });
   }
 
-  const locale = toLocale(meta['locale']);
+  // INVARIANT #1: preferred_locale → account_locale → signup_locale → 'en' (#291).
+  const profile = await readRecipientProfile(admin, payload.user?.id);
+  const locale: Locale = authEmailLocale(profile, meta);
   const firstName = typeof meta['first_name'] === 'string' ? (meta['first_name'] as string) : undefined;
 
   // Link weryfikacyjny GoTrue (potwierdzenie konta / reset hasła / magic link).
@@ -149,7 +160,7 @@ export async function POST(request: Request): Promise<Response> {
     `${supabaseUrl}/auth/v1/verify?token=${encodeURIComponent(tokenHash)}` +
     `&type=${encodeURIComponent(actionType)}&redirect_to=${encodeURIComponent(redirectTo)}`;
 
-  const { type, data } = buildEmail(actionType, verifyUrl, firstName);
+  const { type, data } = buildAuthEmail(actionType, verifyUrl, firstName);
 
   try {
     const render = renderEmail as (

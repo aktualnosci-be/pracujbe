@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import type { Locale } from '@/i18n/routing';
 import type { ErrorCode } from '@/lib/errors';
@@ -324,7 +325,18 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
               )}
             />
             <Label htmlFor="agreeTerms" className="text-sm font-normal leading-snug text-muted-foreground">
-              {t('agreeTerms')}
+              {t.rich('agreeTermsLinks', {
+                terms: (chunks) => (
+                  <TermsLink href="/regulamin" newTabHint={t('opensInNewTab')}>
+                    {chunks}
+                  </TermsLink>
+                ),
+                privacy: (chunks) => (
+                  <TermsLink href="/polityka-prywatnosci" newTabHint={t('opensInNewTab')}>
+                    {chunks}
+                  </TermsLink>
+                ),
+              })}
             </Label>
           </div>
           {errors.agreeTerms?.message ? (
@@ -346,5 +358,33 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
         )}
       </Button>
     </form>
+  );
+}
+
+/**
+ * Link do dokumentu prawnego w etykiecie zgody (#229). Otwiera się w nowej karcie, żeby nie
+ * gubić wpisanych danych. Link jest treścią interaktywną etykiety, więc klik w niego nie aktywuje
+ * `<label>` i nie przełącza checkboxa; `stopPropagation` odcina też reactowe handlery przodków.
+ */
+function TermsLink({
+  href,
+  newTabHint,
+  children,
+}: {
+  href: '/regulamin' | '/polityka-prywatnosci';
+  newTabHint: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <Link
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(event) => event.stopPropagation()}
+      className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+    >
+      {children}
+      <span className="sr-only"> {newTabHint}</span>
+    </Link>
   );
 }
