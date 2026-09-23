@@ -1,18 +1,19 @@
 import type { Metadata } from 'next';
-import { MapPin } from 'lucide-react';
+import { ArrowUpRight, BriefcaseBusiness } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
 import { MatchBar } from '@/components/ui/match-bar';
 import { SaveJobButton } from '@/components/candidate/SaveJobButton';
+import { Button } from '@/components/ui/button';
 import { getRecommendedJobs } from '@/lib/data/candidate';
 
 /**
- * Panel kandydata — Polecane oferty (pełna lista; makieta 04, sekcja „Polecane oferty pracy").
+ * Panel kandydata — polecane oferty i najnowsze oferty zastępcze.
  *
  * Dane realne pod sesją (RLS) z `getRecommendedJobs` (matching + dane publiczne); bez env dane DEMO.
- * NOINDEX + guard dziedziczone z `candidate/layout.tsx`. Kompaktowy wiersz z paskiem dopasowania
- * i zapisem oferty (spójny z podsumowaniem panelu); teksty z i18n (`dashboard`).
+ * NOINDEX + guard dziedziczone z `candidate/layout.tsx`. Akcja zapisu pozostaje podłączona;
+ * błąd odczytu nie jest prezentowany jako prawdziwie pusta lista.
  */
 
 export const dynamic = 'force-dynamic';
@@ -30,12 +31,6 @@ export async function generateMetadata({
   };
 }
 
-/** Inicjały firmy (placeholder logo). */
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '•';
-}
-
 export default async function CandidateRecommendedPage({
   params,
 }: {
@@ -45,57 +40,71 @@ export default async function CandidateRecommendedPage({
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'dashboard' });
-  const recommended = await getRecommendedJobs(locale);
+  let recommended: Awaited<ReturnType<typeof getRecommendedJobs>> = [];
+  let readFailed = false;
+  try {
+    recommended = await getRecommendedJobs(locale, true);
+  } catch {
+    readFailed = true;
+  }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('navRecommended')}</h1>
+    <div className="min-w-0 space-y-6">
+      <header className="max-w-3xl space-y-2">
+        <h1 className="break-words text-3xl font-bold tracking-tight text-foreground">{t('navRecommended')}</h1>
+        <p className="text-base text-muted-foreground">{t('recommendedIntro')}</p>
+      </header>
 
-      <section className="rounded-lg border border-border bg-card">
-        {recommended.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground sm:px-5">{t('emptyState')}</p>
+      <section aria-label={t('navRecommended')}>
+        {readFailed ? (
+          <div role="alert" className="rounded-3xl border border-border bg-card p-6 sm:p-8">
+            <h2 className="text-xl font-semibold text-foreground">{t('recommendedReadErrorTitle')}</h2>
+            <p className="mt-2 text-base text-muted-foreground">{t('recommendedReadErrorBody')}</p>
+            <Button asChild variant="outline" className="mt-5 min-h-12 rounded-xl">
+              <Link href="/candidate/oferty-polecane">{t('recommendedRetry')}</Link>
+            </Button>
+          </div>
+        ) : recommended.length === 0 ? (
+          <div className="rounded-3xl border border-border bg-card p-6 sm:p-8">
+            <BriefcaseBusiness className="h-8 w-8 text-accent" aria-hidden="true" />
+            <h2 className="mt-4 text-xl font-semibold text-foreground">{t('recommendedEmptyTitle')}</h2>
+            <p className="mt-2 text-base text-muted-foreground">{t('recommendedEmptyBody')}</p>
+            <Button asChild className="mt-5 min-h-12 rounded-xl">
+              <Link href="/oferty-pracy">{t('recommendedBrowse')}</Link>
+            </Button>
+          </div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul aria-label={t('navRecommended')} className="grid gap-4 xl:grid-cols-2">
             {recommended.map((job) => (
-              <li key={job.id} className="flex items-start gap-3 p-4 sm:px-5">
-                <span
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-                  aria-hidden="true"
-                >
-                  {initials(job.companyName)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
+              <li key={job.id} className="min-w-0 rounded-3xl border border-border bg-card p-5 sm:p-6">
+                <article className="flex h-full min-w-0 flex-col">
+                  <header className="flex min-w-0 items-start justify-between gap-3">
+                    <p className="flex min-w-0 items-center gap-2 break-words text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                      {job.companyName}
+                    </p>
+                    <SaveJobButton jobId={job.id} initialSaved={job.saved} className="-mt-2 h-12 w-12 rounded-xl" />
+                  </header>
+                  <h2 className="mt-3 min-w-0 break-words text-xl font-bold leading-tight tracking-tight text-foreground sm:text-2xl">{job.title}</h2>
+                  <dl className="mt-6 grid grid-cols-2 gap-4 border-y border-border py-5">
                     <div className="min-w-0">
-                      {job.slug ? (
-                        <Link
-                          href={`/oferty-pracy/${job.slug}`}
-                          className="truncate text-sm font-semibold text-foreground hover:text-accent hover:underline"
-                        >
-                          {job.title}
-                        </Link>
-                      ) : (
-                        <p className="truncate text-sm font-semibold text-foreground">{job.title}</p>
-                      )}
-                      <p className="truncate text-sm text-muted-foreground">{job.companyName}</p>
+                      <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('colLocation')}</dt>
+                      <dd className="mt-2 break-words text-base font-semibold text-foreground">{job.city}</dd>
                     </div>
-                    <SaveJobButton jobId={job.id} initialSaved={job.saved} className="-mt-1" />
-                  </div>
-                  <div className="mt-2 flex items-center gap-3">
-                    <span className="inline-flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
-                      <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-                      {job.city}
-                    </span>
-                    {job.match !== null ? (
-                      <span className="ml-auto flex min-w-0 max-w-[11rem] flex-1 items-center gap-2">
-                        <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-success-text">
-                          {job.match}%
-                        </span>
-                        <MatchBar value={job.match} className="flex-1" />
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
+                    <div className="min-w-0 border-l border-border pl-4">
+                      <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('colMatch')}</dt>
+                      <dd className="mt-2 break-words text-base font-semibold text-foreground">
+                        {job.match !== null ? `${job.match}%` : t('recommendedLatest')}
+                      </dd>
+                    </div>
+                  </dl>
+                  {job.match !== null ? <MatchBar value={job.match} className="mt-4" /> : null}
+                  {job.slug ? (
+                    <Link href={`/oferty-pracy/${job.slug}`} className="mt-auto inline-flex min-h-12 items-center justify-between gap-3 pt-5 font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                      {t('actionView')}<ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    </Link>
+                  ) : null}
+                </article>
               </li>
             ))}
           </ul>

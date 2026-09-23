@@ -611,7 +611,7 @@ export async function getCandidatePassport(): Promise<CandidatePassport> {
 }
 
 /** Polecane oferty: z `matches` kandydata (score desc), wzbogacone o dane publiczne; fallback = najnowsze oferty. */
-export async function getRecommendedJobs(locale: string): Promise<RecommendedJob[]> {
+export async function getRecommendedJobs(locale: string, throwOnError = false): Promise<RecommendedJob[]> {
   const resolvedLocale = toLocale(locale);
   if (!isSupabaseConfigured()) return demoRecommended(resolvedLocale);
 
@@ -652,6 +652,7 @@ export async function getRecommendedJobs(locale: string): Promise<RecommendedJob
     return latest;
   } catch (error) {
     captureError(error, { area: 'candidate.getRecommendedJobs' });
+    if (throwOnError) throw error;
     return [];
   }
 }
