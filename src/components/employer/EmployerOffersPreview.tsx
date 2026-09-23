@@ -1,0 +1,98 @@
+import { ArrowRight, MapPin } from 'lucide-react';
+
+import { Link } from '@/i18n/navigation';
+import { StatusPill } from '@/components/ui/status-pill';
+import type { CompanyJobsLoad } from '@/lib/data/employer';
+
+interface Labels {
+  title: string;
+  seeAll: string;
+  empty: string;
+  loadError: string;
+  loadErrorHint: string;
+  retry: string;
+  newApplications: string;
+  matched: string;
+}
+
+/** Podgląd read-only: awaria odczytu nigdy nie udaje pustego konta firmy. */
+export function EmployerOffersPreview({
+  result,
+  locale,
+  labels,
+}: {
+  result: CompanyJobsLoad;
+  locale: string;
+  labels: Labels;
+}) {
+  return (
+    <section className="min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+        <h2 className="text-base font-semibold text-foreground">{labels.title}</h2>
+        <Link
+          href="/employer/oferty"
+          className="inline-flex min-h-12 shrink-0 items-center gap-1 text-sm font-medium text-accent hover:underline"
+        >
+          {labels.seeAll}
+          <ArrowRight className="size-3.5" aria-hidden="true" />
+        </Link>
+      </div>
+
+      {result.status === 'error' ? (
+        <div role="alert" className="rounded-3xl border border-error/30 bg-card p-6 sm:p-8">
+          <h3 className="text-xl font-semibold text-foreground">{labels.loadError}</h3>
+          <p className="mt-2 text-base leading-relaxed text-muted-foreground">{labels.loadErrorHint}</p>
+          <a
+            href={`/${locale}/employer`}
+            className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-border px-5 text-base font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            {labels.retry}
+          </a>
+        </div>
+      ) : result.jobs.length === 0 ? (
+        <p className="rounded-3xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+          {labels.empty}
+        </p>
+      ) : (
+        <ul className="grid min-w-0 gap-4 xl:grid-cols-2" aria-label={labels.title}>
+          {result.jobs.map((offer) => (
+            <li key={offer.id} className="min-w-0">
+              <article className="flex h-full min-w-0 flex-col rounded-3xl border border-border bg-card p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="min-w-0 break-words text-lg font-bold leading-tight text-foreground">
+                    {offer.title}
+                  </h3>
+                  <StatusPill status={offer.status} />
+                </div>
+                {offer.city ? (
+                  <p className="mt-3 flex min-w-0 items-center gap-2 break-words text-sm text-muted-foreground">
+                    <MapPin className="size-4 shrink-0" aria-hidden="true" />
+                    {offer.city}
+                  </p>
+                ) : null}
+                <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-border pt-4">
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {labels.newApplications}
+                    </dt>
+                    <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+                      {offer.newApplications}
+                    </dd>
+                  </div>
+                  <div className="min-w-0 border-l border-border pl-4">
+                    <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {labels.matched}
+                    </dt>
+                    <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+                      {offer.matched}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}

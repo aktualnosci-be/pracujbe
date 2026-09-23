@@ -5,6 +5,8 @@ Decyzja właściciela z rozmowy projektowej 21 września 2026: biel, czerwień #
 ## Paczka
 `prototype/index.html` — komplet interaktywnej makiety i historycznych kierunków porównawczych. Zatwierdzony kierunek: `#people/home`. `prototype/materials/` — newsletter HTML, banery i social media SVG, instrukcja przygotowania do emisji. `prototype/assets/` — fotografie; autorzy i licencje w `prototype/photo-sources.html`.
 
+Lokalny eksport konkretnego baneru 1200 × 300 z jawnych danych kampanii opisuje [BANNER-EXPORT.md](BANNER-EXPORT.md). Pozostałe pliki w `prototype/materials/` są nadal demonstracyjne.
+
 Uruchom dowolny serwer statyczny w katalogu prototype. Dane w prototypie są demonstracyjne. Nie przenosić skryptów mockujących procesy do aplikacji produkcyjnej.
 
 ## Etapy
@@ -44,6 +46,8 @@ Etap #5: wspólny wskaźnik kroków kreatora profilu kandydata i oferty pokazuje
 
 Widok profilu kandydata ma teraz sekcję „Paszport pracy”: zawody, lokalizację i zasięg dojazdu, doświadczenie, dostępność, umiejętności, języki i certyfikaty. Dane są odczytywane pod sesją właściciela; brak wartości ma jawny pusty stan, a błąd odczytu osobny komunikat. Tryb demonstracyjny pokazuje pusty paszport i 0% kompletności, bez fikcyjnej osoby. Edycja nadal prowadzi do kreatora, a załączniki zachowują istniejące akcje. Weryfikacja obejmuje PL/NL/FR/EN i szerokości 320 oraz 640 px. Pozostałe widoki panelu nadal należą do #5.
 
+Nad siatką pól profilu znajduje się karta tożsamości kandydata. Pokazuje wyłącznie zapisane imię, pierwszy zawód, miasto i znaną dostępność; przy pustym profilu używa neutralnej etykiety, a po błędzie któregokolwiek odczytu ukrywa dane i pokazuje komunikat. Nie zastępuje szczegółowego paszportu ani akcji edycji. Testy obejmują cztery języki oraz stany pełny, pusty i błędny.
+
 Historia aplikacji kandydata pobiera po dziesięć własnych zgłoszeń pod sesją i RLS. Przycisk „Pokaż więcej” używa stabilnego kursora z daty zgłoszenia i identyfikatora, więc nie ukrywa starszych zgłoszeń przy równej dacie. Błąd kolejnej strony nie usuwa wcześniej wczytanych kart; można ponowić. Komunikaty i koniec listy mają teksty w PL/NL/FR/EN. Pełna historia propozycji pozostaje osobnym zadaniem.
 
 Odbiór #180: test przeglądarkowy z izolowaną instancją Next dev przechodzi przez serwerową akcję na 15 danych testowych; test jednostkowy sprawdza filtr daty i identyfikatora oraz ograniczenie do identyfikatora zalogowanego. Wartość czasu ISO jest ujęta w cudzysłów wymagany przez składnię filtrów logicznych PostgREST, a kursor z żądania przechodzi walidację formatu daty i UUID. Test nie uruchamia PostgREST ani prawdziwego RLS — rzeczywiste zapytanie i uprawnienia trzeba jeszcze sprawdzić na izolowanej bazie przy integracji warstwy danych. RPC wzbogacający nazwy ofert nadal pobiera całą historię przy każdej stronie; optymalizacja należy do #184.
@@ -52,7 +56,9 @@ Lista aplikacji pracodawcy korzysta z kart paszportowych i stronicowania po 12 z
 
 Lista ofert pracodawcy otrzymała karty paszportowe z rzeczywistymi danymi aktywnej firmy (tytuł, miasto, status, liczba nowych aplikacji i dopasowań). Akcje szkicu i cyklu życia oferty pozostały aktywne. Błąd odczytu jest osobnym stanem z ponowieniem, nie pustą listą. Limit 12 rekordów w źródle danych pozostaje do osobnego zadania z paginacją; obecny ekran nie powinien być opisywany jako pełne archiwum ofert firmy.
 
-Podgląd ofert na pulpicie pracodawcy używa teraz jednego responsywnego układu kart paszportowych zamiast dwóch osobnych widoków tabeli i wierszy mobilnych. Pokazuje pola dostępne z `getCompanyJobs()`; pełne zarządzanie nadal jest na liście ofert. Karty sprawdzono w PL/NL/FR/EN przy 320 px i rzeczywistym zoomie 200%. Podgląd ma ten sam zakres odczytu co wcześniej i nie jest pełnym archiwum ofert.
+Podgląd ofert na pulpicie pracodawcy używa teraz jednego responsywnego układu kart paszportowych zamiast dwóch osobnych widoków tabeli i wierszy mobilnych. Pokazuje pola dostępne z `getCompanyJobsLoad()`; pełne zarządzanie nadal jest na liście ofert. Karty sprawdzono w PL/NL/FR/EN przy 320 px i rzeczywistym zoomie 200%. Podgląd ma ten sam zakres odczytu co wcześniej i nie jest pełnym archiwum ofert.
+
+Odczyt ofert na pulpicie używa jawnego wyniku `getCompanyJobsLoad()`: awaria pokazuje lokalizowany komunikat z ponowieniem, a pusty stan pojawia się wyłącznie po udanym odczycie bez ofert. Karty i odnośnik do pełnej listy pozostają dostępne po udanym odczycie. Test regresyjny obejmuje oba stany w PL/NL/FR/EN.
 
 Ekran firmy pracodawcy zachowuje formularz tworzenia i edycji oraz baner statusu nadawanego wyłącznie przez administratora. Odczyt aktywnej firmy odbywa się pod sesją i RLS; awaria odczytu pokazuje osobny komunikat z ponowieniem, a formularz tworzenia pojawia się tylko przy potwierdzonym braku aktywnego członkostwa. Edycja nazwy i VAT jest dostępna tylko właścicielowi lub administratorowi firmy, zgodnie z polityką RLS; samo zgłoszenie zmiany nie jest sukcesem, dopóki baza nie zwróci zaktualizowanego wiersza. Układ i akcje sprawdzono w PL/NL/FR/EN przy 320 i 640 px; testy jednostkowe sprawdzają również stan błędu.
 

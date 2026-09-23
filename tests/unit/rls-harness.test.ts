@@ -38,6 +38,14 @@ describe('Harness testów RLS', () => {
     }
   });
 
+  it('wymaga pg_temp na końcu search_path definerów i braku TEMP dla ról runtime (0067)', async () => {
+    const guard = await read('supabase/tests/role-guard.sql');
+    expect(guard).toContain('SECURITY DEFINER bez search_path zakończonego pg_temp');
+    expect(guard).toContain('role runtime mogą tworzyć tabele tymczasowe');
+    const migration = await read('supabase/migrations/0067_definer_search_path_pg_temp.sql');
+    expect(migration).toMatch(/revoke temporary on database %I from public/);
+  });
+
   it('CI kopiuje katalog database do kontenera testów RLS', async () => {
     const ci = await read('.github/workflows/ci.yml');
     expect(ci).toContain('docker cp database "$POSTGRES_CONTAINER:/tmp/pracujbe-tests/database"');

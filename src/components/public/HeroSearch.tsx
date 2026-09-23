@@ -21,7 +21,7 @@ import { Link, useRouter } from '@/i18n/navigation';
 
 const JOBS_PATH = '/oferty-pracy';
 const CREATE_PROFILE_PATH = '/rejestracja';
-const POST_JOB_PATH = '/dla-pracodawcow';
+const POST_JOB_PATH = '/rejestracja-pracodawca';
 
 const CTA_LINKS = [
   { href: CREATE_PROFILE_PATH, Icon: UserRound, title: 'ctaCreateProfile', sub: 'ctaCreateProfileSub' },

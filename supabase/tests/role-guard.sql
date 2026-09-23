@@ -61,6 +61,43 @@ begin
   end if;
 end $$;
 
+-- 2b. Funkcje SECURITY DEFINER: search_path ustawiony i kończy się pg_temp (0067),
+--     a role klienta nie mogą tworzyć tabel tymczasowych przesłaniających public.*.
+do $$
+declare
+  v_bad text;
+begin
+  select string_agg(p.oid::regprocedure::text, ', ') into v_bad
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where p.prosecdef and n.nspname in ('public', 'auth')
+    and not exists (
+      select 1 from unnest(coalesce(p.proconfig, '{}'::text[])) cfg
+      where cfg like 'search_path=%' and cfg ~ ',\s*pg_temp\s*$'
+    );
+  if v_bad is not null then
+    raise exception 'ROLE GUARD: SECURITY DEFINER bez search_path zakończonego pg_temp: %', v_bad;
+  end if;
+
+  if has_database_privilege('authenticated', current_database(), 'TEMPORARY')
+     or has_database_privilege('anon', current_database(), 'TEMPORARY')
+     or has_database_privilege('pracujbe_app', current_database(), 'TEMPORARY') then
+    raise exception 'ROLE GUARD: role runtime mogą tworzyć tabele tymczasowe';
+  end if;
+end $$;
+
+set role authenticated;
+select pg_temp.assert_client_role();
+do $$
+begin
+  begin
+    create temporary table profiles(id uuid, role text);
+  exception when insufficient_privilege then
+    return;
+  end;
+  raise exception 'ROLE GUARD: klient utworzył tabelę tymczasową przesłaniającą public.profiles';
+end $$;
+reset role;
+
 -- 3. Kontrola dodatnia: rola klienta przechodzi strażnika.
 set role authenticated;
 select pg_temp.assert_client_role();

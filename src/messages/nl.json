@@ -744,6 +744,9 @@
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
+    "identityEyebrow": "JE WERKPASPOORT",
+    "identityEmptyName": "Geen voornaam opgegeven",
+    "identityEmpty": "Vul je gegevens in om je werkpaspoort te tonen.",
     "title": "Je werkprofiel",
     "intro": "Hier zie je de gegevens waarmee we vacatures afstemmen op je vaardigheden.",
     "edit": "Profiel bewerken",
