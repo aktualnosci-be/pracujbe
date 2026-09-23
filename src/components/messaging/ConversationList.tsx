@@ -46,15 +46,15 @@ export async function ConversationList({
 
   if (items.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-1 p-8 text-center">
-        <p className="text-sm font-medium text-foreground">{t('empty')}</p>
-        <p className="text-sm text-muted-foreground">{t('emptyHint')}</p>
+      <div className="flex min-h-72 flex-col items-center justify-center gap-2 p-8 text-center">
+        <p className="text-base font-semibold text-foreground">{t('empty')}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">{t('emptyHint')}</p>
       </div>
     );
   }
 
   return (
-    <ul className="divide-y divide-border">
+    <ul className="divide-y divide-border" aria-label={t('title')}>
       {items.map((item) => {
         const active = item.id === activeId;
         return (
@@ -63,12 +63,12 @@ export async function ConversationList({
               href={`${basePath}?c=${item.id}`}
               aria-current={active ? 'true' : undefined}
               className={cn(
-                'flex gap-3 px-4 py-3 transition-colors hover:bg-soft',
-                active ? 'bg-soft' : 'bg-transparent',
+                'flex min-h-20 gap-3 border-l-4 px-4 py-4 transition-colors hover:bg-soft',
+                active ? 'border-primary bg-soft' : 'border-transparent bg-transparent',
               )}
             >
               <span
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-soft text-sm font-semibold text-foreground ring-1 ring-inset ring-border"
                 aria-hidden="true"
               >
                 {initials(item.counterpartyName)}
@@ -77,7 +77,7 @@ export async function ConversationList({
                 <div className="flex items-center justify-between gap-2">
                   <p
                     className={cn(
-                      'truncate text-sm',
+                      'truncate text-base',
                       item.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground',
                     )}
                   >

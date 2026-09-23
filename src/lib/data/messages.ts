@@ -73,11 +73,13 @@ function asArr(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-/** Zwraca zalogowanego użytkownika (albo null). */
+/** Zwraca zalogowanego użytkownika (albo null), a awarii Auth nie maskuje jako braku sesji. */
 async function getAuthUserId(supabase: SupabaseClient): Promise<string | null> {
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser();
+  if (error) throw error;
   return user?.id ?? null;
 }
 
@@ -244,14 +246,19 @@ function buildDemo(locale: Locale): {
  * ------------------------------------------------------------------------- */
 
 /** Lista konwersacji bieżącego użytkownika (najświeższe pierwsze). */
-export async function getConversations(): Promise<ConversationListItem[]> {
-  if (!isSupabaseConfigured()) return buildDemo(routing.defaultLocale).list;
+export type ConversationsResult =
+  | { status: 'ready'; items: ConversationListItem[] }
+  | { status: 'error'; items: [] };
+
+/** Zachowuje różnicę między brakiem rozmów a awarią odczytu. */
+export async function getConversationsResult(): Promise<ConversationsResult> {
+  if (!isSupabaseConfigured()) return { status: 'ready', items: buildDemo(routing.defaultLocale).list };
 
   try {
     const { createServerClient } = await import('@/lib/supabase/server');
     const supabase = await createServerClient();
     const uid = await getAuthUserId(supabase);
-    if (!uid) return [];
+    if (!uid) return { status: 'ready', items: [] };
 
     // 1) Moje członkostwa → conversation_id + last_read_at.
     const { data: memberData, error: memberError } = await supabase
@@ -268,7 +275,7 @@ export async function getConversations(): Promise<ConversationListItem[]> {
         lastReadByConv.set(cid, typeof r['last_read_at'] === 'string' ? (r['last_read_at'] as string) : null);
       }
     }
-    if (lastReadByConv.size === 0) return [];
+    if (lastReadByConv.size === 0) return { status: 'ready', items: [] };
     const convIds = [...lastReadByConv.keys()];
 
     // 2) Konwersacje (najświeższe pierwsze).
@@ -281,7 +288,7 @@ export async function getConversations(): Promise<ConversationListItem[]> {
     if (convError) throw convError;
 
     const convs = asArr(convData);
-    if (convs.length === 0) return [];
+    if (convs.length === 0) return { status: 'ready', items: [] };
     const orderedIds = convs.map((c) => asStr(asRecord(c)['id'])).filter(Boolean);
 
     // 3) Pozostali uczestnicy (kandydaci na „drugą stronę").
@@ -333,7 +340,7 @@ export async function getConversations(): Promise<ConversationListItem[]> {
       unreadByConv.set(cid, typeof n === 'number' ? n : Number(n ?? 0) || 0);
     }
 
-    return convs.map((c) => {
+    const items = convs.map((c) => {
       const r = asRecord(c);
       const cid = asStr(r['id']);
       const last = lastMsgByConv.get(cid);
@@ -353,10 +360,16 @@ export async function getConversations(): Promise<ConversationListItem[]> {
         unreadCount,
       };
     });
+    return { status: 'ready', items };
   } catch (error) {
     captureError(error, { area: 'messages.getConversations' });
-    return [];
+    return { status: 'error', items: [] };
   }
+}
+
+/** Kompatybilność z istniejącymi licznikami wiadomości. */
+export async function getConversations(): Promise<ConversationListItem[]> {
+  return (await getConversationsResult()).items;
 }
 
 /** Pełny wątek jednej konwersacji (wiadomości rosnąco). `null` = brak dostępu / nie istnieje. */
