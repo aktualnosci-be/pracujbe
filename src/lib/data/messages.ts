@@ -73,11 +73,13 @@ function asArr(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-/** Zwraca zalogowanego użytkownika (albo null). */
+/** Zwraca zalogowanego użytkownika (albo null), a awarii Auth nie maskuje jako braku sesji. */
 async function getAuthUserId(supabase: SupabaseClient): Promise<string | null> {
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser();
+  if (error) throw error;
   return user?.id ?? null;
 }
 

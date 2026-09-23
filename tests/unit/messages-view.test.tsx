@@ -51,6 +51,14 @@ import { MessagesView } from '@/components/messaging/MessagesView';
 
 describe('mobilny powrót z wątku wiadomości', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('zachowuje polskie i francuskie znaki w nowych komunikatach', () => {
+    expect(pl.messages.loadError).toBe('Nie udało się wczytać rozmów.');
+    expect(pl.messages.loadErrorHint).toBe('Sprawdź połączenie i spróbuj ponownie.');
+    expect(pl.messages.retry).toBe('Spróbuj ponownie');
+    expect(fr.messages.loadErrorHint).toBe('Vérifiez votre connexion et réessayez.');
+    expect(fr.messages.retry).toBe('Réessayer');
+  });
   it.each(['pl', 'nl', 'fr', 'en'] as const)(
     'jest linkiem do listy z dostępną nazwą dla locale %s',
     async (locale) => {
