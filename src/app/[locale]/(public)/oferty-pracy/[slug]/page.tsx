@@ -551,7 +551,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               <div className="flex items-center gap-3">
                 <Building2 className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-foreground">{job.companyName}</p>
+                  <p className="break-words font-medium text-foreground">{job.companyName}</p>
                   <p className="text-sm text-muted-foreground">{t('contactViaPlatform')}</p>
                 </div>
               </div>
@@ -562,7 +562,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               ) : null}
               <Link
                 href={LOGIN_HREF}
-                className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 w-full')}
+                className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 h-auto min-h-12 w-full whitespace-normal text-center')}
               >
                 <MessageSquare className="h-4 w-4" aria-hidden="true" />
                 {t('sendMessage')}
@@ -590,7 +590,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                             {initials(item.companyName)}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-foreground group-hover:text-accent">
+                            <p className="break-words text-sm font-medium text-foreground group-hover:text-accent">
                               {item.title}
                             </p>
                             <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
