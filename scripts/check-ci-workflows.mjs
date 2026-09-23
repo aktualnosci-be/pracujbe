@@ -71,6 +71,24 @@ for (const name of ['unit', 'e2e']) {
   assert.match(jobs.get(name), /npx playwright install --with-deps chromium/, `${name}: hostowany runner potrzebuje Chromium i bibliotek systemowych`);
 }
 
+// e2e używa builda z jobu build (#127): ten sam klucz cache, weryfikacja kompletności,
+// fallback na własny build. Oba buildy z testowymi ID trackerów (#234).
+const buildKey = 'key: next-build-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}';
+const build = jobs.get('build');
+const e2e = jobs.get('e2e');
+for (const [name, body] of [['build', build], ['e2e', e2e]]) {
+  assert.ok(body.includes(buildKey), `${name}: klucz cache builda musi zawierać SHA, run_id i run_attempt`);
+  assert.match(body, /^            !\.next\/cache\s*$/m, `${name}: nie zapisuj .next/cache`);
+  assert.match(body, /NEXT_PUBLIC_GA_MEASUREMENT_ID: G-TEST000000/, `${name}: build z testowym ID GA`);
+  assert.match(body, /NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'/, `${name}: build z testowym ID Meta Pixel`);
+  assert.match(body, /node scripts\/check-next-build\.mjs/, `${name}: zweryfikuj kompletność .next`);
+}
+assert.match(build, /uses: actions\/cache\/save@v4/, 'build: zapisz .next w cache Actions');
+assert.doesNotMatch(build, /upload-artifact/, 'build: .next przez cache, nie artefakt (limit storage)');
+assert.match(e2e, /uses: actions\/cache\/restore@v4[\s\S]*restore-keys: next-build-/, 'e2e: odtwórz .next z jobu build');
+assert.match(e2e, /^        id: next-build\s*$/m, 'e2e: krok weryfikacji builda');
+assert.match(e2e, /if: steps\.next-build\.outcome != 'success'/, 'e2e: fallback build przy braku/niekompletności');
+
 const cleanup = sources.get('delete-old-runs.yml');
 assert.match(cleanup, /^    runs-on: ubuntu-latest\s*$/m);
 assert.match(cleanup, /^    timeout-minutes: \d+\s*$/m);

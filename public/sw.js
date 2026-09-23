@@ -9,7 +9,7 @@
  * NIE cache'ujemy dynamicznego/uwierzytelnionego HTML (ryzyko podania nieaktualnej,
  * cudzej treści panelu) ani żądań POST/API. Bez trackingu.
  */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const PRECACHE = `precache-${VERSION}`;
 const RUNTIME = `runtime-${VERSION}`;
 const PRECACHE_URLS = ['/offline.html', '/icon-192.png', '/icon-512.png'];

@@ -40,7 +40,7 @@ export default async function RegisterCandidatePage({ params, searchParams }: Pa
       <div className="w-full max-w-md">
         <Card>
           <CardHeader className="space-y-2 text-center">
-            <CardTitle className="text-2xl">{t('registerCandidateTitle')}</CardTitle>
+            <CardTitle as="h1" className="text-2xl">{t('registerCandidateTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <AuthForm variant="registerCandidate" next={next} />

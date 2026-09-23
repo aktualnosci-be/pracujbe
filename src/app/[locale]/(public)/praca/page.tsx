@@ -17,6 +17,7 @@ import {
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
+import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import {
@@ -104,7 +105,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   languages['x-default'] = `${base}/${routing.defaultLocale}${HUB_PATH}`;
 
   return {
-    title: t('hubMetaTitle'),
+    title: { absolute: t('hubMetaTitle') },
     description: t('hubMetaDescription'),
     alternates: { canonical: url, languages },
     openGraph: {
@@ -199,17 +200,10 @@ export default async function JobsHubPage({ params }: PageProps) {
       />
 
       {/* Breadcrumb */}
-      <nav aria-label={tCommon('breadcrumb')} className="mb-4 text-sm text-muted-foreground">
-        <ol className="flex items-center gap-1.5">
-          <li>
-            <Link href="/" className="transition-colors hover:text-foreground">
-              {tCommon('home')}
-            </Link>
-          </li>
-          <li aria-hidden="true">/</li>
-          <li className="text-foreground">{t('breadcrumbHub')}</li>
-        </ol>
-      </nav>
+      <Breadcrumbs
+        ariaLabel={tCommon('breadcrumb')}
+        items={[{ label: tCommon('home'), href: '/' }, { label: t('breadcrumbHub') }]}
+      />
 
       {/* Nagłówek */}
       <header className="max-w-2xl">
@@ -253,7 +247,7 @@ export default async function JobsHubPage({ params }: PageProps) {
       <div className="mt-12">
         <Link
           href={JOBS_PATH}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-accent underline-offset-4 hover:underline"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-accent underline-offset-4 hover:underline"
         >
           {t('viewAllJobs')}
           <ArrowRight className="h-4 w-4" aria-hidden="true" />

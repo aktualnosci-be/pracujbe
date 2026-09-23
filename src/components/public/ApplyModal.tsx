@@ -10,6 +10,7 @@ import { Link } from '@/i18n/navigation';
 import { applyToJob } from '@/lib/actions/applications';
 import { cn } from '@/lib/utils';
 import { loginHref } from '@/lib/validation/auth';
+import type { PhoneCountry } from '@/lib/validation/phone';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -41,15 +42,18 @@ import { Toast } from '@/components/ui/toast';
 const MESSAGE_MAX = 500;
 const TOAST_MS = 5000;
 
-/** Kody kierunkowe (dane, nie tekst UI). */
-const DIAL_CODES = [
+/**
+ * Kody kierunkowe (dane, nie tekst UI). Do serwera trafia numer i kod kraju osobno —
+ * normalizacja do E.164 odbywa się w `applyToJob` (#145), bez doklejania prefiksu w kliencie.
+ */
+const DIAL_CODES: ReadonlyArray<{ code: PhoneCountry; dial: string }> = [
   { code: 'PL', dial: '+48' },
   { code: 'BE', dial: '+32' },
   { code: 'NL', dial: '+31' },
   { code: 'FR', dial: '+33' },
   { code: 'DE', dial: '+49' },
   { code: 'LU', dial: '+352' },
-] as const;
+];
 
 const AVAILABILITY = ['immediate', 'twoWeeks', 'oneMonth', 'flexible'] as const;
 type Availability = (typeof AVAILABILITY)[number];
@@ -66,7 +70,8 @@ const AVAILABILITY_TO_DB: Record<
 };
 
 /** Rodzaj błędu formularza (mapowany na komunikat i18n, bez technikaliów). */
-type FormError = 'generic' | 'already' | 'login';
+type FormError = 'generic' | 'already' | 'login' | 'demo';
+type PhoneError = 'required' | 'invalid';
 
 export interface ApplyModalProps {
   jobId: string;
@@ -92,13 +97,13 @@ export function ApplyModal({
   const pathname = usePathname();
 
   const [open, setOpen] = React.useState(false);
-  const [dial, setDial] = React.useState<string>('PL');
+  const [dial, setDial] = React.useState<PhoneCountry>('PL');
   const [phone, setPhone] = React.useState('');
   const [availability, setAvailability] = React.useState<Availability>('immediate');
   const [message, setMessage] = React.useState('');
   const [consent, setConsent] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
-  const [errors, setErrors] = React.useState<{ phone?: boolean; consent?: boolean }>({});
+  const [errors, setErrors] = React.useState<{ phone?: PhoneError; consent?: boolean }>({});
   const [formError, setFormError] = React.useState<FormError | null>(null);
   const [sent, setSent] = React.useState(false);
   const phoneRef = React.useRef<HTMLInputElement>(null);
@@ -142,7 +147,10 @@ export function ApplyModal({
     event.preventDefault();
     if (submitting) return;
 
-    const nextErrors = { phone: phone.trim().length === 0, consent: !consent };
+    const nextErrors = {
+      phone: phone.trim().length === 0 ? ('required' as const) : undefined,
+      consent: !consent,
+    };
     setErrors(nextErrors);
     if (nextErrors.phone || nextErrors.consent) {
       // Fokus + przewinięcie do pierwszego błędnego pola (Invariant #11).
@@ -155,13 +163,12 @@ export function ApplyModal({
     setFormError(null);
     setSubmitting(true);
 
-    const dialEntry = DIAL_CODES.find((entry) => entry.code === dial);
-    const fullPhone = `${dialEntry?.dial ?? ''} ${phone.trim()}`.trim();
     const trimmedMessage = message.trim();
 
     const res = await applyToJob({
       jobId,
-      phone: fullPhone,
+      phone: phone.trim(),
+      phoneCountry: dial,
       availability: AVAILABILITY_TO_DB[availability],
       message: trimmedMessage.length > 0 ? trimmedMessage : undefined,
       agreeTerms: true,
@@ -176,7 +183,14 @@ export function ApplyModal({
     }
 
     setSubmitting(false);
-    if (res.error === 'PERMISSION_DENIED') {
+    if (res.field === 'phone') {
+      // Błąd numeru przy polu + fokus (Invariant #11), zamiast ogólnego alertu.
+      setErrors({ phone: 'invalid' });
+      phoneRef.current?.focus();
+      phoneRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else if (res.error === 'DEMO_UNAVAILABLE') {
+      setFormError('demo');
+    } else if (res.error === 'PERMISSION_DENIED') {
       setFormError('login');
     } else if (res.error === 'APPLICATION_ALREADY_EXISTS') {
       setFormError('already');
@@ -242,7 +256,7 @@ export function ApplyModal({
                   {t('phone')} <span className="text-error">*</span>
                 </Label>
                 <div className="flex gap-2">
-                  <Select value={dial} onValueChange={setDial}>
+                  <Select value={dial} onValueChange={(value) => setDial(value as PhoneCountry)}>
                     <SelectTrigger aria-label={t('phone')} className="w-28 shrink-0">
                       <SelectValue />
                     </SelectTrigger>
@@ -269,7 +283,7 @@ export function ApplyModal({
                 </div>
                 {errors.phone ? (
                   <p id="apply-phone-error" className="text-sm text-error">
-                    {t('phoneRequired')}
+                    {errors.phone === 'invalid' ? t('phoneInvalid') : t('phoneRequired')}
                   </p>
                 ) : null}
               </div>
@@ -344,6 +358,8 @@ export function ApplyModal({
                     </Link>
                   ) : formError === 'already' ? (
                     t('alreadyApplied')
+                  ) : formError === 'demo' ? (
+                    t('demoUnavailable')
                   ) : (
                     t('errorGeneric')
                   )}

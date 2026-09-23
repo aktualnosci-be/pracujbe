@@ -534,7 +534,8 @@
     "entitlementLimit": "Osiągnięto limit aktywnych ofert w Twoim planie. Zmień plan, aby opublikować więcej.",
     "notFound": "Nie znaleziono tego, czego szukasz.",
     "internal": "Wystąpił błąd po naszej stronie. Pracujemy nad tym.",
-    "generic": "Coś poszło nie tak. Spróbuj ponownie."
+    "generic": "Coś poszło nie tak. Spróbuj ponownie.",
+    "demoUnavailable": "Ta funkcja nie działa w wersji demonstracyjnej serwisu."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -873,7 +874,7 @@
     "available": "Dostępny",
     "datePosted": "Data dodania oferty",
     "any": "Dowolna",
-    "showResults": "Pokaż {count} ofert",
+    "showResults": "{count, plural, one {Pokaż # ofertę} few {Pokaż # oferty} many {Pokaż # ofert} other {Pokaż # oferty}}",
     "countLoading": "Liczymy oferty…",
     "countUnavailable": "Liczba ofert niedostępna",
     "countError": "Nie udało się policzyć ofert. Spróbuj ponownie.",
@@ -951,7 +952,9 @@
     "errorGeneric": "Nie udało się wysłać aplikacji. Spróbuj ponownie.",
     "alreadyApplied": "Już aplikowałeś na tę ofertę.",
     "submitting": "Wysyłanie...",
-    "close": "Zamknij"
+    "close": "Zamknij",
+    "phoneInvalid": "Podaj poprawny numer telefonu: numer krajowy dla wybranego kraju albo pełny numer z kodem kraju, np. +32 470 12 34 56.",
+    "demoUnavailable": "To jest wersja demonstracyjna — aplikowanie na oferty jest wyłączone."
   },
   "legal": {
     "termsTitle": "Regulamin",

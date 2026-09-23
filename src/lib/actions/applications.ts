@@ -2,10 +2,15 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { isSupabaseConfigured } from '@/lib/env';
 import { createServerClient } from '@/lib/supabase/server';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { applicationSchema, type ApplicationInput } from '@/lib/validation/application';
+import {
+  applicationPhoneSchema,
+  applicationSchema,
+  type ApplicationInput,
+} from '@/lib/validation/application';
 
 /**
  * Server Actions procesu aplikowania — cienka warstwa nad bezpiecznymi RPC (0012).
@@ -13,7 +18,10 @@ import { applicationSchema, type ApplicationInput } from '@/lib/validation/appli
  * tu: walidacja Zod + wywołanie RPC + mapowanie błędu na kod użytkowy (bez technikaliów).
  */
 
-export type ApplyResult = { ok: true; id: string } | { ok: false; error: ErrorCode };
+/** `field` wskazuje pole formularza, którego dotyczy błąd walidacji (komunikat przy polu). */
+export type ApplyResult =
+  | { ok: true; id: string }
+  | { ok: false; error: ErrorCode; field?: 'phone' };
 export type TransitionResult = { ok: true } | { ok: false; error: ErrorCode };
 
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
@@ -39,6 +47,16 @@ export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> 
   if (!(await checkRateLimit('apply', { max: 20, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
+
+  // Telefon najpierw: błędny numer (#145) wraca jako błąd pola, a nie ogólny komunikat.
+  const phone = applicationPhoneSchema.safeParse({
+    phone: input.phone,
+    phoneCountry: input.phoneCountry,
+  });
+  if (!phone.success) return { ok: false, error: 'VALIDATION_FAILED', field: 'phone' };
+
+  // Tryb demo (bez bazy): oferty mają syntetyczne identyfikatory i nic nie zapisujemy.
+  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
   const parsed = applicationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };

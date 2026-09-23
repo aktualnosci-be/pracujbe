@@ -8,7 +8,12 @@ import { useTranslations } from 'next-intl';
 import { useRouter, usePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { FilterFields, useLiveFacets } from '@/components/public/FilterSidebar';
+import {
+  FilterFields,
+  requestResultsFocus,
+  useFocusResultsAfterNavigation,
+  useLiveFacets,
+} from '@/components/public/FilterSidebar';
 import {
   CATEGORY_KEYS,
   CONTRACT_TYPES,
@@ -310,9 +315,21 @@ export function FilterSheet({
     city,
   });
 
+  useFocusResultsAfterNavigation(JSON.stringify(initial));
+
   const apply = () => {
+    requestResultsFocus();
     router.push(buildHref(pathname, pending, { keyword, city, sort }));
     setOpen(false);
+  };
+  // Fokus początkowy na pierwszym polu, a nie na „Wyczyść wszystko” (#224).
+  const focusFirstField = (event: Event) => {
+    const first = document.querySelector<HTMLElement>(
+      '[data-filter-passport="mobile-sheet"] [role="checkbox"]',
+    );
+    if (!first) return;
+    event.preventDefault();
+    first.focus();
   };
   const clearAll = () => setPending(emptySidebarFilters());
 
@@ -353,6 +370,7 @@ export function FilterSheet({
           <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
           <Dialog.Content
             aria-describedby={undefined}
+            onOpenAutoFocus={focusFirstField}
             data-filter-passport="mobile-sheet"
             className="fixed inset-x-0 bottom-0 z-50 flex max-h-[90vh] min-w-0 flex-col overflow-hidden rounded-t-2xl border-t border-border bg-background shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
           >

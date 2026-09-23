@@ -36,7 +36,7 @@ export default async function ResetPasswordPage({ params }: PageProps) {
       <div className="w-full max-w-md">
         <Card>
           <CardHeader className="space-y-2 text-center">
-            <CardTitle className="text-2xl">{t('resetTitle')}</CardTitle>
+            <CardTitle as="h1" className="text-2xl">{t('resetTitle')}</CardTitle>
             <CardDescription>{t('resetSubtitle')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">

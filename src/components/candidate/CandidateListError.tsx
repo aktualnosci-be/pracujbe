@@ -2,6 +2,8 @@
 
 import { useTranslations } from "next-intl";
 
+import { useErrorRetry } from "@/components/errors/use-error-retry";
+
 export function CandidateListError({
   reset,
 }: {
@@ -9,6 +11,7 @@ export function CandidateListError({
   reset: () => void;
 }) {
   const t = useTranslations("dashboard");
+  const { retry } = useErrorRetry(reset);
   return (
     <section
       role="alert"
@@ -22,7 +25,7 @@ export function CandidateListError({
       </p>
       <button
         type="button"
-        onClick={reset}
+        onClick={retry}
         className="mt-5 min-h-12 rounded-xl bg-primary px-5 font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         {t("candidateListRetry")}
