@@ -17,6 +17,14 @@ export const routing = defineRouting({
 
 export type Locale = (typeof routing.locales)[number];
 
+/**
+ * Jedyne źródło listy języków w kodzie aplikacji (#29): walidacja, fallbacki i schematy
+ * korzystają z `routing.locales`/`isLocale`, a nie z własnych kopii listy.
+ */
+export function isLocale(value: unknown): value is Locale {
+  return typeof value === 'string' && (routing.locales as readonly string[]).includes(value);
+}
+
 export const localeNames: Record<Locale, string> = {
   pl: 'Polski',
   nl: 'Nederlands',

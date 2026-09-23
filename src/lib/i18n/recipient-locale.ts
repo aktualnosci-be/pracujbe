@@ -5,7 +5,7 @@ import { routing } from '@/i18n/routing';
  * Wybór języka odbiorcy powiadomień / e-maili.
  *
  * Kolejność fallbacku: preferred_locale -> account_locale -> signup_locale -> 'en'.
- * Akceptowane są wyłącznie wartości obsługiwanych języków (['pl','nl','fr','en']);
+ * Akceptowane są wyłącznie wartości z `routing.locales` (obsługiwane języki);
  * nieznane / puste wartości są pomijane.
  */
 export function resolveRecipientLocale(r: {

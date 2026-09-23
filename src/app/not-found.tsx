@@ -1,21 +1,26 @@
 import type { Metadata } from 'next';
 
+import { routing, type Locale } from '@/i18n/routing';
+
 /**
  * Główna strona 404 — tylko dla adresów poza obsługiwanymi językami (root layout nie renderuje
  * <html>, więc ta strona robi to sama). Brak kontekstu i18n, stąd neutralny, wielojęzyczny
- * komunikat (jak w `global-error.tsx`) i linki do czterech wersji językowych.
+ * komunikat (jak w `global-error.tsx`) i linki do wszystkich wersji językowych.
  */
 export const metadata: Metadata = {
   title: 'Pracuj.be — 404',
   robots: { index: false, follow: false },
 };
 
-const LOCALES = [
-  { code: 'pl', message: 'Nie znaleziono tej strony.', home: 'Strona główna' },
-  { code: 'nl', message: 'Deze pagina bestaat niet.', home: 'Startpagina' },
-  { code: 'fr', message: 'Cette page est introuvable.', home: 'Accueil' },
-  { code: 'en', message: 'This page could not be found.', home: 'Home' },
-] as const;
+// Record<Locale, …>: nowy język w `routing.locales` bez tekstu tutaj = błąd typecheck.
+const TEXTS: Record<Locale, { message: string; home: string }> = {
+  pl: { message: 'Nie znaleziono tej strony.', home: 'Strona główna' },
+  nl: { message: 'Deze pagina bestaat niet.', home: 'Startpagina' },
+  fr: { message: 'Cette page est introuvable.', home: 'Accueil' },
+  en: { message: 'This page could not be found.', home: 'Home' },
+};
+
+const LOCALES = routing.locales.map((code) => ({ code, ...TEXTS[code] }));
 
 export default function RootNotFound(): React.JSX.Element {
   return (
