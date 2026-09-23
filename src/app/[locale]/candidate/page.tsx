@@ -10,6 +10,7 @@ import { MatchBar } from '@/components/ui/match-bar';
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
+import { ProfileSummaryError } from '@/components/candidate/ProfileSummaryError';
 import { CvUpload } from '@/components/candidate/CvUpload';
 import { SaveJobButton } from '@/components/candidate/SaveJobButton';
 import { ApplicationActions } from '@/components/candidate/ApplicationActions';
@@ -78,6 +79,8 @@ export default async function CandidateDashboardPage({
 
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tj = await getTranslations({ locale, namespace: 'jobs' });
+  const tp = await getTranslations({ locale, namespace: 'candidatePassport' });
+  const tc = await getTranslations({ locale, namespace: 'common' });
 
   const [overview, profile, recommended, applications, messages, files, newProposal] = await Promise.all([
     getCandidateOverview(),
@@ -133,12 +136,11 @@ export default async function CandidateDashboardPage({
           sub={td('unreadMessagesSub')}
           tone="error"
         />
-        <StatCard
-          label={td('profileCompleteness')}
-          value={`${overview.profileCompletionPct}%`}
-          tone="accent"
-          progress={overview.profileCompletionPct}
-        />
+        {profile.loadFailed ? (
+          <StatCard label={td('profileCompleteness')} value="—" sub={tp('loadError')} />
+        ) : (
+          <StatCard label={td('profileCompleteness')} value={`${profile.completionPct}%`} tone="accent" progress={profile.completionPct} />
+        )}
       </div>
 
       {/* Główna siatka: lewa (2/3) + prawa (1/3) */}
@@ -264,7 +266,7 @@ export default async function CandidateDashboardPage({
         {/* Kolumna boczna */}
         <div className="min-w-0 space-y-6">
           {/* Kompletność profilu */}
-          <section className="min-w-0 rounded-[1.75rem] border border-border bg-card p-5 sm:p-6">
+          {profile.loadFailed ? <ProfileSummaryError message={tp('loadError')} retry={tc('retry')} /> : <section className="min-w-0 rounded-[1.75rem] border border-border bg-card p-5 sm:p-6">
             <h2 className="text-xl font-bold text-foreground">{td('profileCompleteness')}</h2>
             <ProfileCompleteness
               className="mt-4"
@@ -276,7 +278,7 @@ export default async function CandidateDashboardPage({
             <Button asChild className="mt-5 min-h-12 w-full whitespace-normal rounded-xl text-center">
               <Link href="/candidate/profil">{td('completeProfile')}</Link>
             </Button>
-          </section>
+          </section>}
 
           {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
           <CvUpload items={files} />

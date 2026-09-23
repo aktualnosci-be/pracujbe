@@ -6,6 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
+import { ProfileSummaryError } from '@/components/candidate/ProfileSummaryError';
 import { CvUpload } from '@/components/candidate/CvUpload';
 import { getCandidateProfileSummary, getCandidatePassport, getCandidateFiles } from '@/lib/data/candidate';
 
@@ -47,10 +48,11 @@ export default async function CandidateProfilePage({
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const [t, tp, to] = await Promise.all([
+  const [t, tp, to, tc] = await Promise.all([
     getTranslations({ locale, namespace: 'dashboard' }),
     getTranslations({ locale, namespace: 'candidatePassport' }),
     getTranslations({ locale, namespace: 'onboarding' }),
+    getTranslations({ locale, namespace: 'common' }),
   ]);
   const [profile, passport, files] = await Promise.all([
     getCandidateProfileSummary(),
@@ -120,7 +122,7 @@ export default async function CandidateProfilePage({
         </section>
 
         <div className="min-w-0 space-y-6">
-        {!passport.loadFailed ? <section className="rounded-[1.75rem] border border-border bg-card p-5 sm:p-6">
+        {profile.loadFailed ? <ProfileSummaryError message={tp('loadError')} retry={tc('retry')} /> : <section className="rounded-[1.75rem] border border-border bg-card p-5 sm:p-6">
           <h2 className="text-base font-semibold text-foreground">{t('profileCompleteness')}</h2>
           <ProfileCompleteness
             className="mt-4"
@@ -130,7 +132,7 @@ export default async function CandidateProfilePage({
           />
           <ProfileChecklist className="mt-5" items={checklist} />
           <Link href="/candidate/onboarding" className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground hover:bg-soft">{t('completeProfile')}</Link>
-        </section> : null}
+        </section>}
 
         {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
         <CvUpload items={files} />
