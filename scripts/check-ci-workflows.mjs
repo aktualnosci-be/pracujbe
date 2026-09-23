@@ -67,7 +67,9 @@ assert.match(unit, /^        run: npm ci --prefer-offline --no-audit --fund=fals
 assert.doesNotMatch(unit, /actions\/cache\/restore@v4/, 'unit: nie odtwarzaj node_modules');
 assert.match(unit, /require\.resolve\('ms'\)/, 'unit: sprawdź zależność przed Vitest');
 
-assert.match(jobs.get('e2e'), /npx playwright install --with-deps chromium/, 'e2e: hostowany runner potrzebuje przeglądarki i bibliotek systemowych');
+for (const name of ['unit', 'e2e']) {
+  assert.match(jobs.get(name), /npx playwright install --with-deps chromium/, `${name}: hostowany runner potrzebuje Chromium i bibliotek systemowych`);
+}
 
 const cleanup = sources.get('delete-old-runs.yml');
 assert.match(cleanup, /^    runs-on: ubuntu-latest\s*$/m);

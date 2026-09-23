@@ -118,6 +118,14 @@ jobs:
       # odtwarza drzewo z lockfile; cache npm przyspiesza pobranie paczek.
       - name: Install dependencies from lockfile
         run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # Testy eksportu grafik (baner, Story) renderują przez Chromium Playwrighta.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
       - name: Verify ms dependency before tests
         run: node -e "console.log('ms resolved at:', require.resolve('ms'))"
       - name: Run unit tests
@@ -311,6 +319,11 @@ jobs:
       - name: Install dependencies (cache miss)
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       # Hostowany runner nie ma przeglądarki Playwrighta ani jej bibliotek systemowych.
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
