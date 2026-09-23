@@ -98,6 +98,18 @@ export interface MyOffer {
   expiresAt: string | null;
 }
 
+export interface OfferCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface MyOffersPage {
+  items: MyOffer[];
+  nextCursor: OfferCursor | null;
+}
+
+const OFFER_PAGE_SIZE = 10;
+
 export interface CandidateProfileSummary {
   loadFailed: boolean;
   firstName: string | null;
@@ -858,38 +870,63 @@ export async function getSavedJobs(locale: string = routing.defaultLocale): Prom
 }
 
 /**
- * Propozycje pracy wysłane do kandydata (`offers`) + dane oferty.
+ * Propozycje pracy wysłane do kandydata (`offers`) + dane oferty, stronicowane stabilnym kursorem
+ * (`created_at` + UUID), aby cała historia była osiągalna bez sztucznego limitu (#245).
  * Odczyt pod sesją (RLS `offers_select`: kandydat widzi wyłącznie własne propozycje). Tytuł/firmę
  * rozwiązujemy z RPC `get_applied_jobs_display` (własne aplikacje, niezależnie od statusu oferty),
  * a jako uzupełnienie z `get_public_jobs` (propozycja może dotyczyć oferty, do której kandydat nie
- * aplikował) — kandydat nie czyta tabel bazowych wprost (P1-01).
+ * aplikował) — kandydat nie czyta tabel bazowych wprost (P1-01). Błąd odczytu jest rzucany dalej,
+ * nigdy nie udaje pustej strony.
  */
-export async function getMyOffers(locale: string = routing.defaultLocale, throwOnError = false): Promise<MyOffer[]> {
+export async function getMyOffersPage(
+  locale: string = routing.defaultLocale,
+  cursor: OfferCursor | null = null,
+): Promise<MyOffersPage> {
   const resolvedLocale = toLocale(locale);
-  if (!isSupabaseConfigured()) return demoOffers(resolvedLocale);
+  if (!isSupabaseConfigured()) {
+    // Test przeglądarkowy uruchamia osobny serwer Next dev. Ta gałąź nie działa w buildzie produkcyjnym.
+    if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full') {
+      return developmentOfferFixture(resolvedLocale, cursor);
+    }
+    return { items: cursor ? [] : demoOffers(resolvedLocale), nextCursor: null };
+  }
 
   try {
     const { supabase, userId } = await getServerContext();
-    if (!userId) return [];
+    if (!userId) return { items: [], nextCursor: null };
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('offers')
       .select('id, job_id, status, message, sent_at, created_at, expires_at')
       .eq('candidate_id', userId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .order('id', { ascending: false });
+    if (cursor) {
+      // PostgREST wymaga cudzysłowu dla wartości z dwukropkiem i kropką (ISO 8601).
+      // Kursor z Server Action jest sprawdzany przez Zod przed trafieniem tutaj.
+      const timestamp = `"${cursor.createdAt}"`;
+      query = query.or(
+        `created_at.lt.${timestamp},and(created_at.eq.${timestamp},id.lt.${cursor.id})`,
+      );
+    }
+    const { data, error } = await query.limit(OFFER_PAGE_SIZE + 1);
     if (error) throw error;
 
     const rows = asArr(data);
-    if (rows.length === 0) return [];
+    if (rows.length === 0) return { items: [], nextCursor: null };
+    const visibleRows = rows.slice(0, OFFER_PAGE_SIZE);
+    const last = asRecord(visibleRows[visibleRows.length - 1]);
+    const nextCursor = rows.length > OFFER_PAGE_SIZE
+      ? { createdAt: asStr(last['created_at']), id: asStr(last['id']) }
+      : null;
 
     const [appliedMap, publicMap] = await Promise.all([
       fetchAppliedJobsMap(supabase, resolvedLocale),
       fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT),
     ]);
 
-    return rows.map((row) => {
+    const items = visibleRows.map((row): MyOffer => {
       const r = asRecord(row);
       const jobId = asStr(r['job_id']);
       const job = appliedMap.get(jobId) ?? publicMap.get(jobId);
@@ -905,11 +942,36 @@ export async function getMyOffers(locale: string = routing.defaultLocale, throwO
         expiresAt: asStr(r['expires_at']) || null,
       };
     });
+    return { items, nextCursor };
   } catch (error) {
-    captureError(error, { area: 'candidate.getMyOffers' });
-    if (throwOnError) throw error;
-    return [];
+    captureError(error, { area: 'candidate.getMyOffersPage' });
+    throw error;
   }
+}
+
+/** Dane wyłącznie dla izolowanego testu Next dev (21 propozycji o równym czasie); produkcja tego nie wykonuje. */
+function developmentOfferFixture(locale: Locale, cursor: OfferCursor | null): MyOffersPage {
+  const jobs = resolveDemoJobs(locale);
+  const createdAt = '2026-09-20T09:00:00+00:00';
+  const all = Array.from({ length: 21 }, (_, index) => {
+    const job = jobs[index % Math.max(jobs.length, 1)];
+    return {
+      id: `bbbbbbbb-bbbb-4bbb-8bbb-${String(21 - index).padStart(12, '0')}`,
+      jobTitle: `${job?.title ?? ''} #${21 - index}`,
+      companyName: job?.companyName ?? '',
+      slug: job?.slug ?? null,
+      message: '',
+      date: createdAt,
+      status: index === 20 ? 'accepted' : 'declined',
+      expiresAt: null,
+    };
+  });
+  const remaining = cursor
+    ? all.filter((item) => item.date < cursor.createdAt || (item.date === cursor.createdAt && item.id < cursor.id))
+    : all;
+  const items = remaining.slice(0, OFFER_PAGE_SIZE);
+  const last = items[items.length - 1];
+  return { items, nextCursor: remaining.length > OFFER_PAGE_SIZE && last ? { createdAt: last.date, id: last.id } : null };
 }
 
 /**

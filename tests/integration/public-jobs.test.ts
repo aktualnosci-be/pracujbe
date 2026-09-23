@@ -7,6 +7,7 @@ import { applyMigrations } from '../../scripts/db/migrate.mjs';
 import {
   getPublicJob,
   getPublicJobFilterFacets,
+  getPublicJobTranslations,
   getPublicJobs,
   getPublicJobsCount,
 } from '../../src/lib/db/public-jobs';
@@ -330,6 +331,32 @@ describe('Publiczne oferty — pełne migracje i rzeczywisty PostgreSQL 16', () 
       (await getPublicJob(app!, 'warehouse-rich', 'fr'))
         ?.requirements_mandatory,
     ).toEqual(['Wymaganie NL']);
+  });
+
+  it('udostępnia gościowi języki tłumaczeń tylko ofert publicznych (#301)', async () => {
+    const ids = (
+      await admin!.query<{ id: string; slug: string }>(
+        `SELECT id::text, slug FROM public.jobs WHERE slug = ANY($1::text[])`,
+        [['warehouse-rich', 'fallback-default', 'canonical', 'draft']],
+      )
+    ).rows;
+    const idOf = (slug: string) => ids.find((row) => row.slug === slug)!.id;
+    await admin!.query(
+      `INSERT INTO public.job_translations(job_id,locale,title) VALUES ($1,'pl','Szkic ukryty')`,
+      [idOf('draft')],
+    );
+
+    const rows = await getPublicJobTranslations(app!, ids.map((row) => row.id));
+    const localesOf = (slug: string) =>
+      rows.filter((row) => row.job_id === idOf(slug)).map((row) => row.locale).sort();
+
+    expect(localesOf('warehouse-rich')).toEqual(['en', 'fr', 'nl', 'pl']);
+    expect(localesOf('fallback-default')).toEqual(['en', 'nl']);
+    expect(localesOf('canonical')).toEqual([]);
+    expect(localesOf('draft')).toEqual([]);
+    expect(rows.find((row) => row.job_id === idOf('fallback-default') && row.locale === 'nl')?.title).toBe(
+      'Domyślny NL',
+    );
   });
 
   const filters: [string, Partial<GetJobsParams>, string[]][] = [

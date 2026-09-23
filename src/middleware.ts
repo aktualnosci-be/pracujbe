@@ -4,6 +4,15 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { routing } from './i18n/routing';
 import { env, isAppReady, isSupabaseConfigured } from '@/lib/env';
+import {
+  SITE_ACCESS_COOKIE,
+  SITE_ACCESS_DENIED_PARAM,
+  getSiteAccessPassword,
+  hasSiteAccess,
+  pickGateLocale,
+  renderSiteAccessPage,
+  siteAccessReturnPath,
+} from '@/lib/site-access';
 
 /**
  * Fail-closed (SEC-19): w trybie produkcyjnym bez konfiguracji NIE pokazujemy fikcyjnych
@@ -35,7 +44,38 @@ const MAINTENANCE_HTML =
  */
 const handleIntl = createIntlMiddleware(routing);
 
+/**
+ * Bramka „w przygotowaniu” (`SITE_ACCESS_PASSWORD`): bez ważnego cookie każda strona zwraca
+ * formularz hasła (503 + noindex). Sprawdzana przed wszystkim innym — także przed SEC-19.
+ */
+async function siteAccessGate(request: NextRequest): Promise<NextResponse | null> {
+  const password = getSiteAccessPassword();
+  if (!password) return null;
+  if (await hasSiteAccess(request.cookies.get(SITE_ACCESS_COOKIE)?.value, password)) return null;
+
+  const { pathname, searchParams } = request.nextUrl;
+  const locale = pickGateLocale(pathname, request.headers.get('accept-language'));
+  const error = searchParams.get(SITE_ACCESS_DENIED_PARAM) === 'denied';
+  const cleanSearch = new URLSearchParams(searchParams);
+  cleanSearch.delete(SITE_ACCESS_DENIED_PARAM);
+  const query = cleanSearch.toString();
+  const next = siteAccessReturnPath(`${pathname}${query ? `?${query}` : ''}`, locale);
+
+  return new NextResponse(renderSiteAccessPage({ locale, next, error }), {
+    status: 503,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'retry-after': '3600',
+      'x-robots-tag': 'noindex, nofollow',
+    },
+  });
+}
+
 export default async function middleware(request: NextRequest) {
+  const gated = await siteAccessGate(request);
+  if (gated) return gated;
+
   // 0) Fail-closed (SEC-19): produkcja bez konfiguracji → 503 maintenance, nie tryb demo.
   if (!isAppReady()) {
     return new NextResponse(MAINTENANCE_HTML, {
