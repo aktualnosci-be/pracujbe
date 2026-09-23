@@ -498,19 +498,26 @@ export default async function JobsListPage({
 
           {/* Nagłówek wyników (desktop) */}
           <div className="mb-4 hidden items-center justify-between gap-3 lg:flex">
-            <p className="text-sm text-muted-foreground" aria-live="polite">
+            <h2
+              data-results-heading
+              tabIndex={-1}
+              className="rounded-sm text-sm font-normal text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-live="polite"
+            >
               {t('resultsCount', { count: total })}
-            </p>
+            </h2>
             {sortMenu()}
           </div>
 
           {/* Liczba wyników (mobile) */}
-            <p
-              className="mb-3 text-sm text-muted-foreground lg:hidden"
-              aria-live="polite"
-            >
+          <h2
+            data-results-heading
+            tabIndex={-1}
+            className="mb-3 rounded-sm text-sm font-normal text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:hidden"
+            aria-live="polite"
+          >
             {t('resultsCount', { count: total })}
-          </p>
+          </h2>
 
           {/* Chipy aktywnych filtrów */}
           {chips.length > 0 ? (
