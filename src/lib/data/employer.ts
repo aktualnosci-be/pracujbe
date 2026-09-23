@@ -71,7 +71,12 @@ export interface EmployerMatchedCandidate {
 }
 
 export interface FunnelStats {
-  views: number;
+  /**
+   * Wyświetlenia ofert w okresie lejka. `null` = brak danych: `jobs.views_count` nie ma
+   * mechanizmu zliczania (#302, powiązane z #99), więc zamiast fałszywego 0 UI pokazuje
+   * „brak danych" i pomija konwersję wyświetlenia → aplikacje.
+   */
+  views: number | null;
   applications: number;
   interviews: number;
   hired: number;
@@ -126,7 +131,10 @@ const EMPTY_OVERVIEW: EmployerOverview = {
   messagesToAnswerCount: 0,
 };
 
-const EMPTY_FUNNEL: FunnelStats = { views: 0, applications: 0, interviews: 0, hired: 0 };
+const EMPTY_FUNNEL: FunnelStats = { views: null, applications: 0, interviews: 0, hired: 0 };
+
+/** Okno czasowe lejka — musi odpowiadać etykiecie `dashboard.funnelPeriod` („ostatnie 30 dni"). */
+export const FUNNEL_PERIOD_DAYS = 30;
 
 /** Jawny stan odczytu kafelków — błąd bazy nie może udawać zer (#304). */
 export type EmployerOverviewLoad =
@@ -832,54 +840,61 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
   }
 }
 
-/** Lejek rekrutacyjny (30 dni): wyświetlenia, aplikacje, rozmowy, zatrudnieni. */
-export async function getFunnelStats(): Promise<FunnelStatsLoad> {
+/**
+ * Lejek rekrutacyjny z ostatnich {@link FUNNEL_PERIOD_DAYS} dni (#302): kohorta aplikacji
+ * złożonych w oknie (`submitted_at`), a w niej te, które KIEDYKOLWIEK osiągnęły etap rozmowy
+ * / zatrudnienia (historia statusów — lejek monotoniczny, bez inwersji).
+ *
+ * Wszystkie trzy liczby to zapytania `count` (head) liczone w bazie pod RLS: brak limitu
+ * 1000 wierszy PostgREST i brak listy tysięcy UUID w URL. Etapy liczone jako aplikacje
+ * z `!inner` na historii → każda aplikacja liczona raz (odpowiednik `count(distinct)`).
+ * Wyświetlenia = `null` (brak mechanizmu zliczania — nie udajemy zera).
+ */
+export async function getFunnelStats(now: Date = new Date()): Promise<FunnelStatsLoad> {
   if (!isSupabaseConfigured()) return { status: 'ok', funnel: DEMO_FUNNEL };
 
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'ok', funnel: EMPTY_FUNNEL };
     const { supabase, companyId } = ctx;
+    const since = new Date(now.getTime() - FUNNEL_PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-    // Wyświetlenia = suma views_count ofert firmy; aplikacje = wszystkie aplikacje firmy.
-    const [{ data: viewsData, error: viewsError }, { data: appData, error: appError }] =
-      await Promise.all([
-        supabase.from('jobs').select('views_count').eq('company_id', companyId).is('deleted_at', null),
-        supabase.from('applications').select('id').eq('company_id', companyId).is('deleted_at', null),
-      ]);
-    if (viewsError) throw viewsError;
+    const cohort = (select: string) =>
+      supabase
+        .from('applications')
+        .select(select, { count: 'exact', head: true })
+        .eq('company_id', companyId)
+        .is('deleted_at', null)
+        .gte('submitted_at', since);
+
+    const [
+      { count: appCount, error: appError },
+      { count: interviewCount, error: interviewError },
+      { count: hiredCount, error: hiredError },
+    ] = await Promise.all([
+      cohort('id'),
+      cohort('id, application_status_history!inner(to_status)').in(
+        'application_status_history.to_status',
+        [...FUNNEL_INTERVIEW_STAGES],
+      ),
+      cohort('id, application_status_history!inner(to_status)').eq(
+        'application_status_history.to_status',
+        'hired',
+      ),
+    ]);
     if (appError) throw appError;
+    if (interviewError) throw interviewError;
+    if (hiredError) throw hiredError;
 
-    const views = asRows(viewsData).reduce((sum, r) => sum + asNumber(r['views_count']), 0);
-    const appIds = asRows(appData)
-      .map((r) => asString(r['id']))
-      .filter((id) => id.length > 0);
-
-    // Rozmowy i zatrudnieni liczone KUMULATYWNIE z historii statusów (kandydat, który
-    // KIEDYKOLWIEK osiągnął etap) — nie po bieżącym statusie — co eliminuje inwersję lejka.
-    let interviews = 0;
-    let hired = 0;
-    if (appIds.length > 0) {
-      const { data: historyData, error: historyError } = await supabase
-        .from('application_status_history')
-        .select('application_id, to_status')
-        .in('application_id', appIds)
-        .in('to_status', [...FUNNEL_INTERVIEW_STAGES]);
-      if (historyError) throw historyError;
-
-      const interviewSet = new Set<string>();
-      const hiredSet = new Set<string>();
-      for (const r of asRows(historyData)) {
-        const appId = asString(r['application_id']);
-        if (!appId) continue;
-        interviewSet.add(appId);
-        if (asString(r['to_status']) === 'hired') hiredSet.add(appId);
-      }
-      interviews = interviewSet.size;
-      hired = hiredSet.size;
-    }
-
-    return { status: 'ok', funnel: { views, applications: appIds.length, interviews, hired } };
+    return {
+      status: 'ok',
+      funnel: {
+        views: null,
+        applications: appCount ?? 0,
+        interviews: interviewCount ?? 0,
+        hired: hiredCount ?? 0,
+      },
+    };
   } catch (error) {
     captureError(error, { area: 'employer.getFunnelStats' });
     return { status: 'error' };

@@ -1,11 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CompanySwitcher } from '@/components/employer/CompanySwitcher';
 
 const { refresh, setActiveCompany } = vi.hoisted(() => ({
   refresh: vi.fn(),
-  setActiveCompany: vi.fn().mockResolvedValue(undefined),
+  setActiveCompany: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
@@ -15,6 +15,10 @@ vi.mock('@/lib/actions/company', () => ({ setActiveCompany }));
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+beforeEach(() => {
+  setActiveCompany.mockResolvedValue({ ok: true });
 });
 
 const companies = [
@@ -51,5 +55,43 @@ describe('CompanySwitcher na jasnym sidebarze', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
     expect(setActiveCompany).toHaveBeenCalledExactlyOnceWith('second');
     expect(details.open).toBe(false);
+  });
+
+  it('nazwa dostępna zawiera widoczną nazwę aktywnej firmy, a aktywna pozycja ma aria-current (#322)', () => {
+    const { container } = render(
+      <CompanySwitcher companies={companies} activeId="first" activeName="Firma Pierwsza" />,
+    );
+    const summary = container.querySelector('summary')!;
+    expect(summary).not.toHaveAttribute('aria-label');
+    expect(summary).toHaveTextContent('switchCompany');
+    expect(summary).toHaveTextContent('Firma Pierwsza');
+    expect(screen.getByRole('button', { name: 'Firma Pierwsza' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: 'Firma Druga' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('odrzucona zmiana pokazuje komunikat, nie odświeża panelu i oddaje fokus przełącznikowi (#322)', async () => {
+    setActiveCompany.mockResolvedValue({ ok: false });
+    const { container } = render(
+      <CompanySwitcher companies={companies} activeId="first" activeName="Firma Pierwsza" />,
+    );
+    const details = container.querySelector('details')!;
+    details.open = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Firma Druga' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('switchCompanyError');
+    expect(refresh).not.toHaveBeenCalled();
+    expect(details.open).toBe(false);
+    expect(container.querySelector('summary')).toHaveFocus();
+  });
+
+  it('wyjątek akcji traktuje jak nieudaną zmianę', async () => {
+    setActiveCompany.mockRejectedValue(new Error('network'));
+    const { container } = render(
+      <CompanySwitcher companies={companies} activeId="first" activeName="Firma Pierwsza" />,
+    );
+    container.querySelector('details')!.open = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Firma Druga' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('switchCompanyError');
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

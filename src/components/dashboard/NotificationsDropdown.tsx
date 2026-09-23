@@ -16,9 +16,18 @@ import { cn } from '@/lib/utils';
  *
  * Teksty chrome (tytuł / „oznacz jako przeczytane" / „zobacz wszystkie") z i18n
  * (namespace `notifications`). Treść pozycji (`items`) to dane wejściowe.
+ *
+ * #148: pozycja z `href` (cel wyznaczony serwerowo, bez prefiksu locale) jest lokalizowanym
+ * linkiem — klik/Enter prowadzi do obiektu, a nieprzeczytana pozycja zgłasza `onItemOpen`
+ * (rodzic oznacza JEDNO powiadomienie, bez blokowania nawigacji). „Zobacz wszystkie" pojawia
+ * się tylko z dedykowaną listą (`seeAllHref`) — nie kierujemy wszystkiego do wiadomości.
  */
 
 export interface NotificationItem {
+  /** Identyfikator powiadomienia (do oznaczenia jako przeczytane); brak w danych DEMO. */
+  id?: string;
+  /** Cel powiadomienia BEZ prefiksu locale; bez niego pozycja nie jest linkiem. */
+  href?: string;
   /** Treść powiadomienia (już zlokalizowana przez wywołującego). */
   title: string;
   /** Meta, np. względny czas („10 min", „1 h"). Dane, nie chrome UI. */
@@ -36,7 +45,9 @@ export interface NotificationsDropdownProps {
   onRetry?: () => void;
   /** Wywoływane przez „oznacz wszystkie jako przeczytane" (rodzic robi zapis + refresh). */
   onMarkAllRead?: () => void;
-  /** Docelowa trasa „zobacz wszystkie" (bez prefiksu locale). Bez niej — zwykły przycisk. */
+  /** Otwarcie pozycji (klik/Enter na linku) — rodzic oznacza ją jako przeczytaną. */
+  onItemOpen?: (item: NotificationItem) => void;
+  /** Dedykowana lista powiadomień (bez prefiksu locale). Bez niej akcja jest ukryta. */
   seeAllHref?: string;
 }
 
@@ -46,6 +57,7 @@ export function NotificationsDropdown({
   error = false,
   onRetry,
   onMarkAllRead,
+  onItemOpen,
   seeAllHref,
 }: NotificationsDropdownProps): React.JSX.Element {
   const t = useTranslations('notifications');
@@ -92,9 +104,9 @@ export function NotificationsDropdown({
         </div>
       ) : items.length > 0 ? (
         <ul className="max-h-80 divide-y divide-border overflow-y-auto">
-          {items.map((item, index) => (
-            <li key={`${item.title}-${index}`}>
-              <div className="flex gap-3 px-4 py-3 transition-colors hover:bg-soft">
+          {items.map((item, index) => {
+            const content = (
+              <>
                 <span
                   aria-hidden="true"
                   className={cn(
@@ -115,31 +127,37 @@ export function NotificationsDropdown({
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{item.meta}</p>
                 </div>
-              </div>
-            </li>
-          ))}
+              </>
+            );
+            return (
+              <li key={item.id ?? `${item.title}-${index}`}>
+                {item.href ? (
+                  <Link
+                    href={item.href}
+                    onClick={() => onItemOpen?.(item)}
+                    className="flex gap-3 px-4 py-3 transition-colors hover:bg-soft focus-visible:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <div className="flex gap-3 px-4 py-3">{content}</div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t('empty')}</p>
       )}
 
-      {!error ? (
+      {!error && seeAllHref ? (
         <div className="border-t border-border px-4 py-2.5 text-center">
-          {seeAllHref ? (
-            <Link
-              href={seeAllHref}
-              className="rounded text-sm font-medium text-accent hover:underline"
-            >
-              {t('seeAll')}
-            </Link>
-          ) : (
-            <button
-              type="button"
-              className="rounded text-sm font-medium text-accent hover:underline"
-            >
-              {t('seeAll')}
-            </button>
-          )}
+          <Link
+            href={seeAllHref}
+            className="rounded text-sm font-medium text-accent hover:underline"
+          >
+            {t('seeAll')}
+          </Link>
         </div>
       ) : null}
     </div>

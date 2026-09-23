@@ -72,7 +72,7 @@ export function EmployerOffersPreview({
                 ) : null}
                 <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-border pt-4">
                   <div className="min-w-0">
-                    <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <dt className="break-words hyphens-auto text-xs font-medium uppercase tracking-wider text-muted-foreground">
                       {labels.newApplications}
                     </dt>
                     <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
@@ -80,7 +80,7 @@ export function EmployerOffersPreview({
                     </dd>
                   </div>
                   <div className="min-w-0 border-l border-border pl-4">
-                    <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <dt className="break-words hyphens-auto text-xs font-medium uppercase tracking-wider text-muted-foreground">
                       {labels.matched}
                     </dt>
                     <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">

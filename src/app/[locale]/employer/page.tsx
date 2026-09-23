@@ -59,12 +59,6 @@ function initials(name: string): string {
   return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '•';
 }
 
-/** Konwersja między etapami lejka (%), zaokrąglona do 1 miejsca. */
-function conversionPct(numerator: number, denominator: number): number {
-  if (denominator <= 0) return 0;
-  return Math.round((numerator / denominator) * 1000) / 10;
-}
-
 export default async function EmployerDashboardPage({
   params,
 }: {
@@ -87,20 +81,12 @@ export default async function EmployerDashboardPage({
   ]);
   // P1-09: realne imię pracodawcy w powitaniu (bez zmyślonego „Jan"). Brak → wariant bez imienia.
   const firstName = shell?.userName?.trim().split(/\s+/)[0] ?? '';
-  const conversions: [number, number, number] =
-    funnel.status === 'ok'
-      ? [
-          conversionPct(funnel.funnel.applications, funnel.funnel.views),
-          conversionPct(funnel.funnel.interviews, funnel.funnel.applications),
-          conversionPct(funnel.funnel.hired, funnel.funnel.interviews),
-        ]
-      : [0, 0, 0];
 
   return (
     <div className="space-y-6">
       {/* Nagłówek + CTA */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0 break-words">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             {td('greetingEmployer')}
           </h1>
@@ -111,7 +97,7 @@ export default async function EmployerDashboardPage({
           </p>
         </div>
         {/* Kreator oferty (Etap 5) — 9 kroków z autozapisem szkicu. */}
-        <Button asChild className="shrink-0 gap-2 self-start sm:self-auto">
+        <Button asChild className="max-w-full gap-2 whitespace-normal text-center">
           <Link href="/employer/oferty/nowa">
             <Plus className="size-4" aria-hidden="true" />
             {td('addJob')}
@@ -123,7 +109,7 @@ export default async function EmployerDashboardPage({
       {overview.status === 'error' ? (
         <EmployerStatsError message={td('employerOverviewLoadError')} retryLabel={tc('retry')} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
           <StatCard
             label={td('activeOffers')}
             value={overview.overview.activeOffersCount}
@@ -157,9 +143,10 @@ export default async function EmployerDashboardPage({
         </div>
       )}
 
-      {/* Główna siatka: lewa (2/3) + prawa (1/3) */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="min-w-0 space-y-6 lg:col-span-2">
+      {/* Główna siatka: lewa (~2/3) + prawa (~1/3). Bazy w rem zamiast `lg:grid-cols-3`: przy
+          200% tekstu (#318) kolumna boczna przechodzi pod główną zamiast wystawać poza ekran. */}
+      <div className="flex flex-wrap gap-6">
+        <div className="min-w-0 flex-[2_1_36rem] space-y-6">
           {/* Twoje aktywne oferty */}
           <EmployerOffersPreview
             result={jobsLoad}
@@ -178,7 +165,7 @@ export default async function EmployerDashboardPage({
 
           {/* Najnowsze aplikacje — zmiana statusu (transitionApplication) */}
           <section className="rounded-lg border border-border bg-card">
-            <div className="flex items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
               <h2 className="text-base font-semibold text-foreground">{td('recentApplications')}</h2>
               <Link
                 href="/employer/aplikacje"
@@ -237,16 +224,15 @@ export default async function EmployerDashboardPage({
               applications={funnel.funnel.applications}
               interviews={funnel.funnel.interviews}
               hired={funnel.funnel.hired}
-              conversions={conversions}
             />
           )}
         </div>
 
         {/* Kolumna boczna */}
-        <div className="space-y-6">
+        <div className="min-w-0 flex-[1_1_18rem] space-y-6">
           {/* Top dopasowani kandydaci — wysyłka propozycji (sendOffer) */}
           <section className="rounded-lg border border-border bg-card">
-            <div className="flex items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
               <h2 className="text-base font-semibold text-foreground">{td('topMatched')}</h2>
               <Link
                 href="/employer/kandydaci"
@@ -294,7 +280,7 @@ export default async function EmployerDashboardPage({
                       jobTitle={candidate.jobTitle}
                       jobSlug={candidate.jobSlug}
                       offerSentAt={candidate.offerSentAt}
-                      className="w-full sm:w-auto"
+                      className="w-full whitespace-normal text-center sm:w-auto"
                     />
                   </li>
                 ))}
