@@ -8,8 +8,8 @@ import { expect, test } from '@playwright/test';
  * Zakres (uzupełnia smoke.spec.ts / seo.spec.ts):
  *  1. Wielojęzyczność: /pl /nl /fr /en renderują H1 hero w danym języku.
  *  2. Szczegóły oferty: z listy -> detal (H1) + widoczne CTA aplikowania.
- *  3. Panele = noindex (Invariant #9): candidate/employer mają meta robots noindex,
- *     i renderują się w trybie demo (bez sesji przepuszczane).
+ *  3. Panele = noindex (Invariant #9): candidate/employer/admin w 4 językach renderują się
+ *     w trybie demo (bez sesji przepuszczane) i mają meta robots noindex.
  *  4. Strony prawne dostępne (regulamin), ale noindex — treść placeholder (FUN-09).
  */
 
@@ -55,15 +55,31 @@ test('szczegóły oferty otwierają się z listy i mają CTA aplikowania', async
   expect(await applyCta.count()).toBeGreaterThan(0);
 });
 
-for (const panel of ['candidate', 'employer']) {
-  test(`panel /${panel} jest noindex i renderuje się (demo)`, async ({ page }) => {
-    await page.goto(`/pl/${panel}`);
-    // Invariant #9: panele wyłączone z indeksowania.
-    const robots = page.locator('meta[name="robots"]');
-    await expect(robots).toHaveAttribute('content', /noindex/);
-    // Treść panelu się renderuje (jakikolwiek nagłówek).
-    await expect(page.getByRole('heading').first()).toBeVisible();
-  });
+type PanelMessages = { dashboard: { greeting: string; greetingEmployer: string }; admin: { title: string } };
+
+/** Nagłówek H1 panelu w danym języku (kandydat w demo nie ma imienia → sam prefiks powitania). */
+function panelHeading(locale: string, panel: 'candidate' | 'employer' | 'admin'): string {
+  const file = resolve(process.cwd(), 'src', 'messages', `${locale}.json`);
+  const messages = JSON.parse(readFileSync(file, 'utf-8')) as PanelMessages;
+  if (panel === 'candidate') return messages.dashboard.greeting.replace('{name}', '').trim();
+  if (panel === 'employer') return messages.dashboard.greetingEmployer;
+  return messages.admin.title;
+}
+
+for (const locale of ['pl', 'nl', 'fr', 'en']) {
+  for (const panel of ['candidate', 'employer', 'admin'] as const) {
+    test(`panel /${locale}/${panel} renderuje się (demo) i ma meta robots noindex`, async ({ page }) => {
+      const response = await page.goto(`/${locale}/${panel}`);
+      // Brak panelu (404/5xx) albo przekierowanie gdzie indziej = porażka, nie pominięcie.
+      expect(response?.status(), `status /${locale}/${panel}`).toBe(200);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/${panel}$`));
+      await expect(page.locator('html')).toHaveAttribute('lang', locale);
+      await expect(page.getByRole('heading', { level: 1 })).toContainText(panelHeading(locale, panel));
+      // Invariant #9. Sprawdzamy meta robots z layoutu panelu, nie X-Robots-Tag —
+      // ten nagłówek poza produkcją jest ustawiany globalnie dla całej witryny.
+      await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+    });
+  }
 }
 
 test('strona regulaminu jest dostępna, ale noindex (placeholder, FUN-09)', async ({ page }) => {
