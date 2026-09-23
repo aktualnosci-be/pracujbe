@@ -11,13 +11,13 @@ do `main` Railway czeka na zakończenie GitHub Actions dla tego commita i wdraż
 go wyłącznie po zielonym wyniku. Czerwone, anulowane albo niedokończone CI nie
 może uruchomić produkcyjnego wdrożenia.
 
-CI działa w `.github/workflows/ci.yml` na self-hosted runnerach i obejmuje
-lint, typecheck, testy jednostkowe, testy PostgreSQL/RLS, E2E oraz build.
-Do czasu izolacji runnerów (#50) joby są ułożone liniowo, a CI i workflow
-sprzątania korzystają z jednej kolejki GitHub Actions (`queue: max`). Aktywny
-przebieg nie jest anulowany przez następny push; oczekujące przebiegi także
-pozostają w kolejce (do limitu 100). Railway wdraża po zielonym CI dla SHA
-na `main` przez natywne `Wait for CI`; nie uruchamiamy deployu jako joba Actions.
+CI działa w `.github/workflows/ci.yml` na GitHub-hosted runnerach
+(`ubuntu-latest`) i obejmuje lint, typecheck, testy jednostkowe, testy
+PostgreSQL/RLS, E2E oraz build. Joby niezależne biegną równolegle; build i E2E
+startują po zielonym lint/typecheck/unit. Nowy push do PR anuluje nieaktualny
+przebieg tego PR, ale przebiegi `main` nigdy nie są anulowane — Railway wdraża
+po zielonym CI dla SHA na `main` przez natywne `Wait for CI`; nie uruchamiamy
+deployu jako joba Actions.
 
 ## Konfiguracja usługi
 
