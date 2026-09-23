@@ -158,7 +158,7 @@
     "ctaCreateProfile": "Maak een kandidatenprofiel",
     "ctaCreateProfileSub": "Bewaar vacatures en solliciteer sneller",
     "ctaPostJob": "Vacature plaatsen",
-    "ctaPostJobSub": "Bereik duizenden kandidaten",
+    "ctaPostJobSub": "Bereik kandidaten die werk zoeken in België",
     "trustFastTitle": "Snel solliciteren zonder cv",
     "trustFastSub": "Een paar klikken volstaan",
     "trustVerifiedTitle": "Gecontroleerde vacatures",
@@ -172,7 +172,7 @@
     "locationsTitle": "Populaire locaties",
     "howTitle": "Hoe het werkt",
     "step1Title": "Vind een vacature",
-    "step1Desc": "Blader door duizenden vacatures die bij je passen.",
+    "step1Desc": "Blader door vacatures die bij je passen.",
     "step2Title": "Solliciteer snel",
     "step2Desc": "Solliciteer zonder cv in een paar klikken.",
     "step3Title": "Praat",
@@ -199,7 +199,7 @@
     "faqQ2": "Is Pracuj.be gratis voor werkzoekenden?",
     "faqA2": "Ja. Een profiel aanmaken, jobs zoeken en solliciteren zijn voor kandidaten volledig gratis.",
     "faqQ3": "In welke talen werkt het platform?",
-    "faqA3": "Je gebruikt Pracuj.be in het Pools, Nederlands, Frans en Engels. Vacatures tonen we in jouw taal.",
+    "faqA3": "Je gebruikt Pracuj.be in het Pools, Nederlands, Frans en Engels. De tekst van een vacature staat in de taal waarin de werkgever ze heeft opgesteld.",
     "faqQ4": "Moet ik Nederlands of Frans spreken?",
     "faqA4": "Niet altijd. Veel werkgevers aanvaarden kandidaten zonder kennis van de lokale taal. Gebruik de filter om jobs zonder taalvereiste te zien.",
     "faqQ5": "Hoe nemen werkgevers contact met me op?",
@@ -279,7 +279,7 @@
     "paginationLabel": "Paginering",
     "paginationPrevious": "Vorige",
     "paginationNext": "Volgende",
-    "subtitle": "Vind werk dat bij je past. Blader door duizenden actuele vacatures.",
+    "subtitle": "Vind werk dat bij je past. Blader door actuele vacatures in België.",
     "searchJobs": "Werk zoeken",
     "keywordPlaceholder": "bijv. monteur, magazijnier, verzorgende",
     "locationPlaceholder": "bijv. Antwerpen, Brussel, Gent",
@@ -1008,7 +1008,11 @@
     "submitting": "Bezig met verzenden...",
     "close": "Sluiten",
     "phoneInvalid": "Vul een geldig telefoonnummer in: een nationaal nummer voor het gekozen land of het volledige nummer met landcode, bijv. +32 470 12 34 56.",
-    "demoUnavailable": "Dit is een demoversie — solliciteren op vacatures is uitgeschakeld."
+    "demoUnavailable": "Dit is een demoversie — solliciteren op vacatures is uitgeschakeld.",
+    "guestSubtitle": "Om te solliciteren heb je een gratis kandidaatprofiel nodig. Een cv is niet nodig.",
+    "guestRegister": "Maak een gratis profiel en solliciteer",
+    "guestLogin": "Ik heb een account — inloggen",
+    "guestReturn": "Na het inloggen of het bevestigen van je e-mail kom je terug bij deze vacature."
   },
   "legal": {
     "termsTitle": "Algemene voorwaarden",
@@ -1388,5 +1392,11 @@
     "passwordLabel": "Toegangswachtwoord",
     "submit": "Doorgaan",
     "error": "Onjuist wachtwoord. Probeer het opnieuw."
+  },
+  "offline": {
+    "title": "Geen verbinding",
+    "heading": "Geen internetverbinding",
+    "body": "Controleer je verbinding. Als die terug is, ga je naar de startpagina of open je de gezochte pagina opnieuw.",
+    "goHome": "Naar de startpagina"
   }
 }

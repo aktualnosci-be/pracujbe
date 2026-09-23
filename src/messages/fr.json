@@ -158,7 +158,7 @@
     "ctaCreateProfile": "Créer un profil de candidat",
     "ctaCreateProfileSub": "Enregistrez des offres et postulez plus vite",
     "ctaPostJob": "Publier une offre",
-    "ctaPostJobSub": "Touchez des milliers de candidats",
+    "ctaPostJobSub": "Touchez des candidats qui cherchent un emploi en Belgique",
     "trustFastTitle": "Candidature rapide sans CV",
     "trustFastSub": "Quelques clics suffisent",
     "trustVerifiedTitle": "Offres vérifiées",
@@ -172,7 +172,7 @@
     "locationsTitle": "Localisations populaires",
     "howTitle": "Comment ça marche ?",
     "step1Title": "Trouvez une offre",
-    "step1Desc": "Parcourez des milliers d'offres adaptées à vous.",
+    "step1Desc": "Parcourez des offres adaptées à vous.",
     "step2Title": "Postulez vite",
     "step2Desc": "Postulez sans CV en quelques clics.",
     "step3Title": "Échangez",
@@ -199,7 +199,7 @@
     "faqQ2": "Pracuj.be est-il gratuit pour les chercheurs d'emploi ?",
     "faqA2": "Oui. Créer un profil, chercher des offres et postuler sont entièrement gratuits pour les candidats.",
     "faqQ3": "Dans quelles langues le site fonctionne-t-il ?",
-    "faqA3": "Vous utilisez Pracuj.be en polonais, néerlandais, français et anglais. Les offres sont affichées dans votre langue.",
+    "faqA3": "Vous utilisez Pracuj.be en polonais, néerlandais, français et anglais. Le texte d’une offre est dans la langue choisie par l’employeur.",
     "faqQ4": "Dois-je parler néerlandais ou français ?",
     "faqA4": "Pas toujours. De nombreux employeurs acceptent des candidats sans connaissance de la langue locale. Utilisez le filtre pour voir les offres sans exigence de langue.",
     "faqQ5": "Comment les employeurs me contactent-ils ?",
@@ -279,7 +279,7 @@
     "paginationLabel": "Pagination",
     "paginationPrevious": "Précédent",
     "paginationNext": "Suivant",
-    "subtitle": "Trouvez un emploi qui vous correspond. Parcourez des milliers d’offres actuelles.",
+    "subtitle": "Trouvez un emploi qui vous correspond. Parcourez les offres actuelles en Belgique.",
     "searchJobs": "Rechercher un emploi",
     "keywordPlaceholder": "p. ex. mécanicien, magasinier, aide-soignante",
     "locationPlaceholder": "p. ex. Anvers, Bruxelles, Gand",
@@ -1008,7 +1008,11 @@
     "submitting": "Envoi en cours...",
     "close": "Fermer",
     "phoneInvalid": "Saisissez un numéro de téléphone valide : un numéro national pour le pays choisi ou le numéro complet avec l’indicatif, par ex. +32 470 12 34 56.",
-    "demoUnavailable": "Ceci est une version de démonstration — la candidature aux offres est désactivée."
+    "demoUnavailable": "Ceci est une version de démonstration — la candidature aux offres est désactivée.",
+    "guestSubtitle": "Pour postuler, vous avez besoin d’un profil candidat gratuit. Aucun CV n’est nécessaire.",
+    "guestRegister": "Créer un profil gratuit et postuler",
+    "guestLogin": "J’ai un compte — me connecter",
+    "guestReturn": "Après la connexion ou la confirmation de votre e-mail, vous reviendrez à cette offre."
   },
   "legal": {
     "termsTitle": "Conditions générales",
@@ -1388,5 +1392,11 @@
     "passwordLabel": "Mot de passe d’accès",
     "submit": "Entrer",
     "error": "Mot de passe incorrect. Veuillez réessayer."
+  },
+  "offline": {
+    "title": "Pas de connexion",
+    "heading": "Pas de connexion internet",
+    "body": "Vérifiez votre connexion. Une fois rétablie, allez à la page d’accueil ou rouvrez la page recherchée.",
+    "goHome": "Aller à la page d’accueil"
   }
 }

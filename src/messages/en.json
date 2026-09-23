@@ -158,7 +158,7 @@
     "ctaCreateProfile": "Create a candidate profile",
     "ctaCreateProfileSub": "Save jobs and apply faster",
     "ctaPostJob": "Post a job",
-    "ctaPostJobSub": "Reach thousands of candidates",
+    "ctaPostJobSub": "Reach candidates looking for work in Belgium",
     "trustFastTitle": "Fast application without a CV",
     "trustFastSub": "Just a few clicks",
     "trustVerifiedTitle": "Verified jobs",
@@ -172,7 +172,7 @@
     "locationsTitle": "Popular locations",
     "howTitle": "How it works",
     "step1Title": "Find a job",
-    "step1Desc": "Browse thousands of jobs matched to you.",
+    "step1Desc": "Browse jobs matched to you.",
     "step2Title": "Apply fast",
     "step2Desc": "Apply without a CV in a few clicks.",
     "step3Title": "Talk",
@@ -199,7 +199,7 @@
     "faqQ2": "Is Pracuj.be free for job seekers?",
     "faqA2": "Yes. Creating a profile, searching for jobs and applying are completely free for candidates.",
     "faqQ3": "What languages does the platform support?",
-    "faqA3": "You can use Pracuj.be in Polish, Dutch, French and English. Job offers are shown in your language.",
+    "faqA3": "You can use Pracuj.be in Polish, Dutch, French and English. The text of a job offer is in the language the employer wrote it in.",
     "faqQ4": "Do I have to speak Dutch or French?",
     "faqA4": "Not always. Many employers accept candidates without local language skills. Use the filter to see jobs with no language requirement.",
     "faqQ5": "How do employers get in touch with me?",
@@ -279,7 +279,7 @@
     "paginationLabel": "Pagination",
     "paginationPrevious": "Previous",
     "paginationNext": "Next",
-    "subtitle": "Find a job that fits you. Browse thousands of current offers.",
+    "subtitle": "Find a job that fits you. Browse current job offers in Belgium.",
     "searchJobs": "Search jobs",
     "keywordPlaceholder": "e.g. mechanic, warehouse worker, carer",
     "locationPlaceholder": "e.g. Antwerp, Brussels, Ghent",
@@ -1008,7 +1008,11 @@
     "submitting": "Sending...",
     "close": "Close",
     "phoneInvalid": "Enter a valid phone number: a national number for the selected country or the full number with the country code, e.g. +32 470 12 34 56.",
-    "demoUnavailable": "This is a demo version — applying for jobs is turned off."
+    "demoUnavailable": "This is a demo version — applying for jobs is turned off.",
+    "guestSubtitle": "To apply, you need a free candidate profile. You don't need a CV.",
+    "guestRegister": "Create a free profile and apply",
+    "guestLogin": "I have an account — log in",
+    "guestReturn": "After you log in or confirm your email, you will come back to this job."
   },
   "legal": {
     "termsTitle": "Terms of Service",
@@ -1388,5 +1392,11 @@
     "passwordLabel": "Access password",
     "submit": "Enter",
     "error": "Incorrect password. Please try again."
+  },
+  "offline": {
+    "title": "No connection",
+    "heading": "No internet connection",
+    "body": "Check your connection. Once it is back, go to the home page or open the page you were looking for again.",
+    "goHome": "Go to the home page"
   }
 }

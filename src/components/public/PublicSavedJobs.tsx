@@ -101,6 +101,14 @@ export function PublicSavedJobsProvider({
   );
 }
 
+/**
+ * Stan sesji odwiedzającego z odczytu zapisanych ofert (jeden odczyt na stronę).
+ * `null` poza providerem — wtedy komponent nie zna sesji i zachowuje się jak dotąd.
+ */
+export function usePublicViewerStatus(): State['status'] | null {
+  return React.useContext(SavedContext)?.state.status ?? null;
+}
+
 export function PublicSaveJobButton({
   jobId,
   className,
