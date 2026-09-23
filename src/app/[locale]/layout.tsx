@@ -55,12 +55,12 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
     },
     appleWebApp: { capable: true, statusBarStyle: 'default', title: tCommon('appName') },
-    alternates: { canonical: `/${locale}` },
+    // Bez domyślnego canonical/og:url (#308): dziedziczyłyby je strony noindex (auth, 404, offline)
+    // jako „duplikat” strony głównej. Każda indeksowalna strona deklaruje własny adres.
     openGraph: {
       type: 'website',
       siteName: tCommon('appName'),
       locale,
-      url: `/${locale}`,
       title: tMeta('homeTitle'),
       description: tMeta('homeDescription'),
       images: [{ url: '/og.png', width: 1200, height: 630, alt: tCommon('appName') }],

@@ -250,3 +250,33 @@ export async function getPublicJob(
     return result.rows[0]?.job ?? null;
   });
 }
+
+export interface PublicJobTranslationRow {
+  job_id: string;
+  locale: string;
+  title: string;
+  description: string | null;
+}
+
+/**
+ * Języki, w których publiczne oferty mają tłumaczenie treści (#301). Odczyt pod rolą anon;
+ * RLS `job_translations_select` przepuszcza tylko oferty publiczne (`job_is_public`).
+ * Tytuł i opis pozwalają ustalić, które tłumaczenie zwróciło `get_public_job`, bo RPC nie
+ * zwraca jego języka.
+ */
+export async function getPublicJobTranslations(
+  pool: TransactionPool,
+  jobIds: readonly string[],
+): Promise<PublicJobTranslationRow[]> {
+  if (jobIds.length === 0) return [];
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT job_id::text AS job_id, locale, title, description
+       FROM public.job_translations
+       WHERE job_id = ANY($1::uuid[])
+       ORDER BY job_id, locale`,
+      [jobIds],
+    )) as { rows: PublicJobTranslationRow[] };
+    return result.rows.filter((row) => isLocale(row.locale));
+  });
+}

@@ -6,6 +6,7 @@ const adapters = vi.hoisted(() => ({
   detail: vi.fn(),
   categoryCounts: vi.fn(),
   cityCounts: vi.fn(),
+  translations: vi.fn(),
   pool: {},
 }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
@@ -14,6 +15,7 @@ vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJob: adapters.detail,
   getPublicJobCategoryCounts: adapters.categoryCounts,
   getPublicJobCityCounts: adapters.cityCounts,
+  getPublicJobTranslations: adapters.translations,
 }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
@@ -52,6 +54,26 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
     adapters.list.mockRejectedValue(new Error('database unavailable'));
     await expect(getJobs({ locale: 'pl' })).rejects.toMatchObject({ code: 'INTERNAL' });
+  });
+  it('detal zna język użytego tłumaczenia i listę dostępnych (#301)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'magazynier', title: 'Magazynier', description: 'Opis PL', published_at: '2026-01-01T00:00:00Z' });
+    adapters.translations.mockResolvedValue([{ job_id: 'job-1', locale: 'pl', title: 'Magazynier', description: 'Opis PL' }]);
+
+    const job = await getJobBySlug('magazynier', 'nl');
+
+    expect(adapters.translations).toHaveBeenCalledWith(adapters.pool, ['job-1']);
+    expect(job).toMatchObject({ contentLocale: 'pl', availableLocales: ['pl'] });
+  });
+  it('awaria odczytu tłumaczeń nie blokuje oferty (język nieznany)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'magazynier', title: 'Magazynier', published_at: '2026-01-01T00:00:00Z' });
+    adapters.translations.mockRejectedValue(new Error('permission denied'));
+
+    const job = await getJobBySlug('magazynier', 'nl');
+
+    expect(job).toMatchObject({ title: 'Magazynier' });
+    expect(job).not.toHaveProperty('availableLocales');
   });
   it('brak oferty w bazie pozostaje brakiem oferty', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
