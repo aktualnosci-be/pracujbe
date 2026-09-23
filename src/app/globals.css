@@ -41,6 +41,7 @@
        Używaj do tekstu/linków na jasnym tle; --success/--warning zostają na tła i kropki. */
     --success-text: 142 72% 29%;
     --warning-text: 26 90% 37%;
+    --error-text: 0 72% 42%;
 
     /* Obrysy / kontrolki / focus */
     --border: 0 0% 87%;
