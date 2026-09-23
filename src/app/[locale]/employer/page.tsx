@@ -34,7 +34,7 @@ import { RecentApplicationsError } from '@/components/employer/RecentApplication
  *
  * Dane ładowane przez `@/lib/data/employer` pod sesją użytkownika (RLS); bez env — te same
  * struktury z danymi DEMO (build/preview bez konfiguracji). Układ zgodny z makietą: rząd
- * kafelków statystyk (StatCard), tabela ofert firmy, sekcja najnowszych aplikacji (menu zmiany
+ * kafelków statystyk (StatCard), karty ofert firmy, sekcja najnowszych aplikacji (menu zmiany
  * statusu → `transitionApplication`), lejek rekrutacyjny, top dopasowani kandydaci (wysyłka
  * propozycji → `sendOffer`). NOINDEX (panel, dziedziczone z layoutu).
  */
@@ -153,8 +153,8 @@ export default async function EmployerDashboardPage({
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="min-w-0 space-y-6 lg:col-span-2">
           {/* Twoje aktywne oferty */}
-          <section className="rounded-lg border border-border bg-card">
-            <div className="flex items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
+          <section className="min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
               <h2 className="text-base font-semibold text-foreground">{td('yourActiveOffers')}</h2>
               <Link
                 href="/employer/oferty"
@@ -166,80 +166,47 @@ export default async function EmployerDashboardPage({
             </div>
 
             {jobs.length === 0 ? (
-              <p className="p-6 text-center text-sm text-muted-foreground">{td('emptyState')}</p>
+              <p className="rounded-3xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">{td('emptyState')}</p>
             ) : (
-              <>
-                {/* P1-14: podgląd READ-ONLY (bez nieaktywnych checkboxów/menu/działań zbiorczych,
-                    które „udawały" funkcje). Pełne zarządzanie na /employer/oferty (link wyżej). */}
-                <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left">
-                        <th scope="col" className="px-3 py-3 pl-4 font-medium text-muted-foreground">
-                          {td('colOffer')}
-                        </th>
-                        <th scope="col" className="px-3 py-3 font-medium text-muted-foreground">
-                          {td('colLocation')}
-                        </th>
-                        <th scope="col" className="px-3 py-3 text-center font-medium text-muted-foreground">
-                          {td('colNew')}
-                        </th>
-                        <th scope="col" className="px-3 py-3 text-center font-medium text-muted-foreground">
-                          {td('colMatched')}
-                        </th>
-                        <th scope="col" className="px-3 py-3 pr-4 font-medium text-muted-foreground">
-                          {td('colStatusEmp')}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {jobs.map((offer) => (
-                        <tr key={offer.id}>
-                          <td className="px-3 py-3 pl-4 align-middle">
-                            <p className="font-medium text-foreground">{offer.title}</p>
-                          </td>
-                          <td className="px-3 py-3 align-middle">
-                            <span className="inline-flex items-center gap-1 text-muted-foreground">
-                              <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-                              {offer.city}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 text-center align-middle tabular-nums text-foreground">
-                            {offer.newApplications}
-                          </td>
-                          <td className="px-3 py-3 text-center align-middle tabular-nums text-foreground">
-                            {offer.matched}
-                          </td>
-                          <td className="px-3 py-3 pr-4 align-middle">
-                            <StatusPill status={offer.status} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile: karty */}
-                <ul className="divide-y divide-border md:hidden">
+              /* P1-14: podgląd READ-ONLY. Pełne zarządzanie na /employer/oferty. */
+              <ul className="grid min-w-0 gap-4 xl:grid-cols-2" aria-label={td('yourActiveOffers')}>
                   {jobs.map((offer) => (
-                    <li key={offer.id} className="p-4">
-                      <p className="truncate font-medium text-foreground">{offer.title}</p>
-                      <p className="mt-0.5 inline-flex items-center gap-1 text-sm text-muted-foreground">
-                        <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-                        {offer.city}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {td('offersApplications', { count: offer.newApplications })}{' '}
-                        <span className="text-border">·</span>{' '}
-                        {td('offersMatched', { count: offer.matched })}
-                      </p>
-                      <div className="mt-2">
-                        <StatusPill status={offer.status} />
-                      </div>
+                    <li key={offer.id} className="min-w-0">
+                      <article className="flex h-full min-w-0 flex-col rounded-3xl border border-border bg-card p-5 sm:p-6">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="min-w-0 break-words text-lg font-bold leading-tight text-foreground">
+                            {offer.title}
+                          </h3>
+                          <StatusPill status={offer.status} />
+                        </div>
+                        {offer.city ? (
+                          <p className="mt-3 flex min-w-0 items-center gap-2 break-words text-sm text-muted-foreground">
+                            <MapPin className="size-4 shrink-0" aria-hidden="true" />
+                            {offer.city}
+                          </p>
+                        ) : null}
+                        <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-border pt-4">
+                          <div className="min-w-0">
+                            <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                              {td('employerOffersApplicationsLabel')}
+                            </dt>
+                            <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+                              {offer.newApplications}
+                            </dd>
+                          </div>
+                          <div className="min-w-0 border-l border-border pl-4">
+                            <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                              {td('colMatched')}
+                            </dt>
+                            <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+                              {offer.matched}
+                            </dd>
+                          </div>
+                        </dl>
+                      </article>
                     </li>
                   ))}
-                </ul>
-              </>
+              </ul>
             )}
           </section>
 
