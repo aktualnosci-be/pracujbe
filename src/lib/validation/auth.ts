@@ -1,5 +1,5 @@
 import { z } from 'zod/v3';
-import type { Locale } from '@/i18n/routing';
+import { isLocale, routing } from '@/i18n/routing';
 
 /**
  * Schematy walidacji autoryzacji (logowanie, rejestracja kandydata/pracodawcy, reset hasła).
@@ -8,9 +8,7 @@ import type { Locale } from '@/i18n/routing';
  * warstwa formularza mapuje je na tłumaczenia.
  */
 
-const LOCALE_VALUES = ['pl', 'nl', 'fr', 'en'] as const satisfies readonly Locale[];
-
-export const localeSchema = z.enum(LOCALE_VALUES);
+export const localeSchema = z.enum(routing.locales);
 
 export const emailSchema = z
   .string({ required_error: 'auth.error.emailRequired' })
@@ -118,7 +116,7 @@ export function safeNextPath(value: unknown): string | null {
     return null;
   }
   const firstSegment = url.pathname.split('/')[1] ?? '';
-  if (!(LOCALE_VALUES as readonly string[]).includes(firstSegment)) {
+  if (!isLocale(firstSegment)) {
     return null;
   }
   const normalized = `${url.pathname}${url.search}${url.hash}`;
