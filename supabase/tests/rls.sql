@@ -1534,63 +1534,63 @@ select pg_temp.assert(
   'LL5 helper odbiorców nie jest wywoływalny przez role klienta');
 
 -- ============================================================================
--- MM. Dopasowanie 0074 — dostępność „w ciągu 2 tygodni" (#190), poziomy języków
+-- OO. Dopasowanie 0074 — dostępność „w ciągu 2 tygodni" (#190), poziomy języków
 --     w get_job_match_profile (#195), publiczne oferty po ID dla polecanych (#196)
 -- ============================================================================
-\set JOBM   'd1000000-0000-0000-0000-0000000000b3'
-\set JOBMX  'd1000000-0000-0000-0000-0000000000b4'
-\set JOBMD  'd1000000-0000-0000-0000-0000000000b5'
+\set JOBO   'e7400000-0000-0000-0000-0000000000b3'
+\set JOBOX  'e7400000-0000-0000-0000-0000000000b4'
+\set JOBOD  'e7400000-0000-0000-0000-0000000000b5'
 reset role; reset app.current_uid;
 insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,expires_at,deleted_at) values
-  (:'JOBM', :'COMPL','job-m','Operator M','warehouse','permanent','Mechelen','Flandria','active','pl',null,null),
-  (:'JOBMX',:'COMPL','job-mx','Operator MX','warehouse','permanent','Mechelen','Flandria','active','pl',now() - interval '1 day',null),
-  (:'JOBMD',:'COMPL','job-md','Operator MD','warehouse','permanent','Mechelen','Flandria','active','pl',null,now());
-insert into public.job_translations(job_id, locale, title) values (:'JOBM','fr','Opérateur M');
+  (:'JOBO', :'COMPL','job-o','Operator M','warehouse','permanent','Mechelen','Flandria','active','pl',null,null),
+  (:'JOBOX',:'COMPL','job-ox','Operator MX','warehouse','permanent','Mechelen','Flandria','active','pl',now() - interval '1 day',null),
+  (:'JOBOD',:'COMPL','job-od','Operator MD','warehouse','permanent','Mechelen','Flandria','active','pl',null,now());
+insert into public.job_translations(job_id, locale, title) values (:'JOBO','fr','Opérateur M');
 insert into public.job_languages(job_id, language_label, level) values
-  (:'JOBM','Niderlandzki','fluent'), (:'JOBM','Angielski',null);
+  (:'JOBO','Niderlandzki','fluent'), (:'JOBO','Angielski',null);
 
--- MM1: aplikacja zapisuje within_two_weeks; firma (recruiter+) odczytuje tę wartość pod RLS.
+-- OO1: aplikacja zapisuje within_two_weeks; firma (recruiter+) odczytuje tę wartość pod RLS.
 select set_config('app.current_uid', :'CANDL', false);
 set role authenticated; select pg_temp.assert_client_role();
-select public.apply_to_job(:'JOBM'::uuid, 'mm-app-1', null, 'within_two_weeks', null) as appm \gset
+select public.apply_to_job(:'JOBO'::uuid, 'oo-app-1', null, 'within_two_weeks', null) as appo \gset
 reset role;
 select set_config('app.current_uid', :'OWNL', false);
 set role authenticated; select pg_temp.assert_client_role();
 select pg_temp.assert(
-  (select availability::text from public.applications where id = :'appm') = 'within_two_weeks',
-  'MM1 aplikacja zachowuje within_two_weeks; firma odczytuje ją pod RLS');
+  (select availability::text from public.applications where id = :'appo') = 'within_two_weeks',
+  'OO1 aplikacja zachowuje within_two_weeks; firma odczytuje ją pod RLS');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   'within_month' = any(enum_range(null::public.availability_status)::text[]),
-  'MM1b dotychczasowa wartość within_month pozostaje w enumie');
+  'OO1b dotychczasowa wartość within_month pozostaje w enumie');
 
--- MM2: poziom wymagany (także brak poziomu) przechodzi z oferty do dopasowania bez utraty.
+-- OO2: poziom wymagany (także brak poziomu) przechodzi z oferty do dopasowania bez utraty.
 select set_config('app.current_uid', :'CANDL', false);
 set role authenticated; select pg_temp.assert_client_role();
 select pg_temp.assert(
-  (select language_requirements from public.get_job_match_profile(:'JOBM'::uuid))
+  (select language_requirements from public.get_job_match_profile(:'JOBO'::uuid))
     = '[{"label":"Angielski","level":null},{"label":"Niderlandzki","level":"fluent"}]'::jsonb,
-  'MM2 get_job_match_profile zwraca poziomy języków (null = poziom dowolny)');
+  'OO2 get_job_match_profile zwraca poziomy języków (null = poziom dowolny)');
 select pg_temp.assert(
-  (select count(*) from public.get_job_match_profile(:'JOBMX'::uuid)) = 0,
-  'MM2b wygasła oferta nie ma profilu dopasowania');
+  (select count(*) from public.get_job_match_profile(:'JOBOX'::uuid)) = 0,
+  'OO2b wygasła oferta nie ma profilu dopasowania');
 reset role; reset app.current_uid;
 
--- MM3: get_public_jobs_by_ids zwraca dokładnie publiczne oferty z listy (tłumaczenie w locale),
+-- OO3: get_public_jobs_by_ids zwraca dokładnie publiczne oferty z listy (tłumaczenie w locale),
 -- pomija wygasłe, usunięte i firmy unverified (kontrola ujemna).
 set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select array_agg(id order by id) from public.get_public_jobs_by_ids(
-     array[:'JOBM', :'JOBMX', :'JOBMD', 'd1111111-1111-1111-1111-111111111111']::uuid[], 'fr'))
-    = array[:'JOBM']::uuid[],
-  'MM3 po ID tylko oferty publiczne (bez wygasłej, usuniętej, unverified)');
+     array[:'JOBO', :'JOBOX', :'JOBOD', 'd1111111-1111-1111-1111-111111111111']::uuid[], 'fr'))
+    = array[:'JOBO']::uuid[],
+  'OO3 po ID tylko oferty publiczne (bez wygasłej, usuniętej, unverified)');
 select pg_temp.assert(
-  (select title from public.get_public_jobs_by_ids(array[:'JOBM']::uuid[], 'fr')) = 'Opérateur M',
-  'MM3b tytuł w locale odbiorcy');
+  (select title from public.get_public_jobs_by_ids(array[:'JOBO']::uuid[], 'fr')) = 'Opérateur M',
+  'OO3b tytuł w locale odbiorcy');
 select pg_temp.assert(
   (select count(*) from public.get_public_jobs_by_ids(
-     array(select gen_random_uuid() from generate_series(1, 150)) || array[:'JOBM']::uuid[], 'pl')) = 0,
-  'MM3c twardy sufit 100 ID na wywołanie');
+     array(select gen_random_uuid() from generate_series(1, 150)) || array[:'JOBO']::uuid[], 'pl')) = 0,
+  'OO3c twardy sufit 100 ID na wywołanie');
 reset role;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
