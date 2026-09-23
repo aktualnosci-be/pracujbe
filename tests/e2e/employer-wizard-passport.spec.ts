@@ -20,7 +20,7 @@ test('klawiatura kieruje fokus na pierwszy błąd i odczytuje go przy polu', asy
   await expect(title).toBeFocused();
   await expect(title).toHaveAttribute('aria-invalid', 'true');
   await expect(title).toHaveAttribute('aria-describedby', 'job-title-error');
-  await expect(page.locator('#job-title-error')).toHaveText(pl.job.error.titleTooShort);
+  await expect(page.locator('#job-title-error')).toHaveText(pl.job.error.titleRequired);
 
   await title.fill('Operator magazynu');
   await page.getByLabel(pl.jobWizard.occupationLabel).fill('Magazynier');

@@ -367,7 +367,8 @@
       "companyDescriptionTooLong": "The company description is too long.",
       "contactEmailInvalid": "Invalid email address.",
       "publishAgreementRequired": "Confirm to publish the job.",
-      "invalid": "Invalid value."
+      "invalid": "Invalid value.",
+      "itemTooLong": "One of the list items is too long. Please shorten it."
     },
     "contentLanguageNotice": "This job’s content is only available in {language}.",
     "contentLanguageNames": {
@@ -1127,7 +1128,8 @@
     "previewNote": "Check the details before publishing.",
     "previewNothing": "—",
     "previewSalaryNotProvided": "Not provided",
-    "notVerifiedNote": "The draft has been saved. Publishing will be available once the company is verified."
+    "notVerifiedNote": "The draft has been saved. Publishing will be available once the company is verified.",
+    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list."
   },
   "messages": {
     "title": "Messages",
