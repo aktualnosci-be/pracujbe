@@ -782,6 +782,7 @@
   },
   "onboarding": {
     "stepProgress": "Étape {current} sur {total}",
+    "stepAnnounce": "Étape {current} sur {total} : {title}",
     "title": "Votre profil de candidat",
     "subtitle": "Créez votre profil et nous vous proposerons les meilleures offres en Belgique.",
     "loadError": "Impossible de charger votre profil",
@@ -872,7 +873,9 @@
     "contractTypesLabel": "Types de contrat souhaités",
     "bioLabel": "À propos de moi (facultatif)",
     "bioPlaceholder": "Écrivez quelques phrases sur vous, votre expérience et vos attentes.",
-    "agreeTerms": "J'accepte les conditions d'utilisation et la politique de confidentialité."
+    "agreeTerms": "J'accepte les conditions d'utilisation et la politique de confidentialité.",
+    "agreeTermsLinks": "J'accepte les <terms>conditions d'utilisation</terms> et la <privacy>politique de confidentialité</privacy>.",
+    "opensInNewTab": "(s’ouvre dans un nouvel onglet)"
   },
   "filters": {
     "title": "Filtres",
