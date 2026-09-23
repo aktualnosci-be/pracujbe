@@ -1336,7 +1336,7 @@
       "remoteJob": "Télétravail — le lieu importe peu",
       "withinCommuteRadius": "Lieu de travail dans votre rayon de déplacement"
     },
-    "loadError": "Impossible de calculer la correspondance pour le moment. Ce n’est pas une évaluation de votre profil — réessayez."
+    "loadError": "Impossible de calculer la compatibilité pour le moment. Ce n’est pas une évaluation de votre profil — réessayez."
   },
   "application": {
     "error": {
