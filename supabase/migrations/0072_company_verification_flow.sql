@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0071 — przepływ weryfikacji firmy po stronie pracodawcy (#365, #368, #400).
+-- 0072 — przepływ weryfikacji firmy po stronie pracodawcy (#365, #368, #400).
 --
 -- 1. `create_first_company(p_name, p_slug, p_vat_number)` — zakładanie PIERWSZEJ firmy
 --    z panelu (pracodawca, któremu nie udał się bootstrap po rejestracji — #365).

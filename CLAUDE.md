@@ -546,7 +546,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   limity `JOB_ITEM_LIMITS` równe obcięciom w RPC relacji (test porównuje z migracjami) — za długa
   pozycja nie trafia na listę (#364, część kreatora). Błędy pól: `aria-invalid` + `aria-describedby`
   + fokus na pierwszym błędzie; puste pole → komunikat „wymagane” (#160, #367 część kreatora).
-- [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0071`): baner statusu
+- [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
   weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”
   (`request_company_reverification`, rejected→pending, owner/admin, audyt). Zmiana nazwy/VAT

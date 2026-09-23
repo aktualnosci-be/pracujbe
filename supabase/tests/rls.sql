@@ -888,11 +888,11 @@ reset role; reset app.current_uid;
 select pg_temp.assert(
   (select name from public.companies where id = :'COMPA') = 'Firma A (edit)',
   'W2 owner/admin edytuje dane firmy (P1-03)');
--- 0071: zmiana nazwy zweryfikowanej firmy cofa ją do kolejki weryfikacji (sekcja MM);
+-- 0072: zmiana nazwy zweryfikowanej firmy cofa ją do kolejki weryfikacji (sekcja MM);
 -- tu przywracamy weryfikację, bo kolejne sekcje zakładają zweryfikowaną Firmę A.
 select pg_temp.assert(
   (select status::text from public.companies where id = :'COMPA') = 'pending',
-  'W2b zmiana nazwy zweryfikowanej firmy → pending (0071)');
+  'W2b zmiana nazwy zweryfikowanej firmy → pending (0072)');
 update public.companies set status = 'verified', verified_at = now() where id = :'COMPA';
 
 -- P1-04: konto pracodawcy nie aplikuje ani nie zakłada profilu kandydata (EMPB role=employer).
@@ -1517,7 +1517,7 @@ select pg_temp.assert(
   'LL5 helper odbiorców nie jest wywoływalny przez role klienta');
 
 -- ============================================================================
--- MM. Weryfikacja firmy po stronie pracodawcy (0071): ponowne zgłoszenie odrzuconej
+-- MM. Weryfikacja firmy po stronie pracodawcy (0072): ponowne zgłoszenie odrzuconej
 --     firmy, zmiana nazwy/VAT zweryfikowanej firmy → kolejka admina, pierwsza firma
 --     z panelu atomowo z VAT i idempotentnie
 -- ============================================================================

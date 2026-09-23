@@ -25,12 +25,12 @@ import {
  *
  *   - `createCompany` — zakłada PIERWSZĄ firmę pracodawcy (status wymuszony `unverified`) razem
  *                        z VAT/KBO i właścicielem w jednej transakcji — RPC `create_first_company`
- *                        (0071; idempotentne: ponowne kliknięcie zwraca tę samą firmę).
+ *                        (0072; idempotentne: ponowne kliknięcie zwraca tę samą firmę).
  *   - `updateCompany` — aktualizuje dane firmy aktywnego członkostwa (RLS `companies_update_member`).
  *                        Statusu nie ustawia; zmiana nazwy/VAT zweryfikowanej firmy przywraca
- *                        w bazie status `pending` (trigger `protect_company_verification`, 0071).
+ *                        w bazie status `pending` (trigger `protect_company_verification`, 0072).
  *   - `requestCompanyReverification` — odrzucona firma wraca do kolejki weryfikacji admina
- *                        (RPC `request_company_reverification`, 0071).
+ *                        (RPC `request_company_reverification`, 0072).
  *
  * Zapis idzie pod SESJĄ użytkownika (RLS, NIGDY service-role). Walidacja Zod (te same schematy
  * co formularz). Błędy mapowane na stabilny `ErrorCode` — bez technikaliów (Invariant #8).
@@ -211,7 +211,7 @@ export async function createCompany(
 /**
  * Aktualizuje dane aktywnej firmy zalogowanego (nazwa i/lub VAT). Nie ustawia statusu ani
  * sluga (stabilny w publicznych URL). Puste pola pomija; pusty VAT czyści wartość.
- * Zmiana nazwy/VAT zweryfikowanej firmy wraca do weryfikacji (baza, 0071) — wynik niesie
+ * Zmiana nazwy/VAT zweryfikowanej firmy wraca do weryfikacji (baza, 0072) — wynik niesie
  * wtedy `reverificationRequired`, by formularz powiedział o tym wprost.
  */
 export async function updateCompany(
