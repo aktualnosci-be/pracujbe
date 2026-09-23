@@ -38,7 +38,7 @@ export default function LocaleError({
           {tc('retry')}
         </button>
         <Link href="/" className={buttonVariants({ size: 'lg', variant: 'outline' })}>
-          {tc('back')}
+          {tc('home')}
         </Link>
       </div>
     </main>
