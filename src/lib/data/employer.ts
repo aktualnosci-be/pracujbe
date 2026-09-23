@@ -570,7 +570,13 @@ export type CompanyJobsLoad =
 export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
   const safePage = Number.isSafeInteger(page) && page > 0 && page <= Math.floor(Number.MAX_SAFE_INTEGER / 12) ? page : 1;
   const start = (safePage - 1) * 12;
-  if (!isSupabaseConfigured()) return { status: 'ok', jobs: DEMO_JOBS.slice(start, start + 12), hasNext: DEMO_JOBS.length > start + 12 };
+  if (!isSupabaseConfigured()) {
+    // Izolowany serwer dev testów E2E (błąd odczytu, #185). Ta gałąź nie działa w buildzie produkcyjnym.
+    if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error') {
+      return { status: 'error' };
+    }
+    return { status: 'ok', jobs: DEMO_JOBS.slice(start, start + 12), hasNext: DEMO_JOBS.length > start + 12 };
+  }
 
   try {
     const ctx = await loadContext();
@@ -622,12 +628,6 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
     captureError(error, { area: 'employer.getCompanyJobs' });
     return { status: 'error' };
   }
-}
-
-/** Starszy kontrakt dashboardu; ekran listy korzysta z jawnego stanu powyżej. */
-export async function getCompanyJobs(): Promise<EmployerJob[]> {
-  const result = await getCompanyJobsLoad();
-  return result.status === 'ok' ? result.jobs : [];
 }
 
 /** Najnowsze aplikacje na oferty firmy (do wiersza akcji zmiany statusu). */

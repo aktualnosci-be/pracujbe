@@ -376,7 +376,8 @@
       "nl": "niderlandzki",
       "fr": "francuski",
       "en": "angielski"
-    }
+    },
+    "similarJobsLoadError": "Nie udało się wczytać podobnych ofert. Ta oferta i aplikowanie działają normalnie."
   },
   "landing": {
     "hubMetaTitle": "Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be",
@@ -1334,7 +1335,8 @@
       "contractType": "Typ umowy",
       "remoteJob": "Praca zdalna — lokalizacja bez znaczenia",
       "withinCommuteRadius": "Miejsce pracy w Twoim promieniu dojazdu"
-    }
+    },
+    "loadError": "Nie udało się teraz policzyć dopasowania. To nie jest ocena Twojego profilu — spróbuj ponownie."
   },
   "application": {
     "error": {

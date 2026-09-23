@@ -21,8 +21,13 @@ export const dynamic = 'force-dynamic';
 
 const FAILURE_DELAY_MS = 750;
 
-function redirectTo(request: Request, path: string): NextResponse {
-  return NextResponse.redirect(new URL(path, request.url), 303);
+/**
+ * Przekierowanie względne (`Location: /pl/...`). Za proxy Railway `request.url` wskazuje
+ * wewnętrzny adres (np. https://localhost:8080), więc absolutny URL z niego wysłałby
+ * przeglądarkę donikąd; ścieżka względna zawsze zostaje na domenie, z której przyszło żądanie.
+ */
+function redirectTo(path: string): NextResponse {
+  return new NextResponse(null, { status: 303, headers: { location: path } });
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -41,7 +46,7 @@ export async function POST(request: Request): Promise<Response> {
   );
 
   // Bramka wyłączona — nic do sprawdzania.
-  if (!expected) return redirectTo(request, target);
+  if (!expected) return redirectTo(target);
 
   const password = form.get('password');
   const given = typeof password === 'string' ? password.trim() : '';
@@ -52,22 +57,24 @@ export async function POST(request: Request): Promise<Response> {
 
   if (!given || !constantTimeEqual(givenToken, expectedToken)) {
     await new Promise((resolve) => setTimeout(resolve, FAILURE_DELAY_MS));
-    const url = new URL(target, request.url);
+    const url = new URL(target, 'https://pracuj.invalid');
     url.searchParams.set(SITE_ACCESS_DENIED_PARAM, 'denied');
-    return NextResponse.redirect(url, 303);
+    return redirectTo(`${url.pathname}${url.search}`);
   }
 
-  const response = redirectTo(request, target);
+  const response = redirectTo(target);
   response.cookies.set(SITE_ACCESS_COOKIE, expectedToken, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: new URL(request.url).protocol === 'https:',
+    secure:
+      request.headers.get('x-forwarded-proto') === 'https' ||
+      new URL(request.url).protocol === 'https:',
     path: '/',
     maxAge: SITE_ACCESS_MAX_AGE,
   });
   return response;
 }
 
-export function GET(request: Request): Response {
-  return redirectTo(request, `/${routing.defaultLocale}`);
+export function GET(): Response {
+  return redirectTo(`/${routing.defaultLocale}`);
 }

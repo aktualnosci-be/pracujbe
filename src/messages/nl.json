@@ -376,7 +376,8 @@
       "nl": "Nederlands",
       "fr": "Frans",
       "en": "Engels"
-    }
+    },
+    "similarJobsLoadError": "Vergelijkbare vacatures konden niet worden geladen. Deze vacature en solliciteren werken gewoon."
   },
   "landing": {
     "hubMetaTitle": "Ontdek werk in België — sectoren en steden | Pracuj.be",
@@ -1334,7 +1335,8 @@
       "contractType": "Contracttype",
       "remoteJob": "Thuiswerk — locatie speelt geen rol",
       "withinCommuteRadius": "Werkplek binnen jouw reisafstand"
-    }
+    },
+    "loadError": "De match kon nu niet worden berekend. Dit is geen beoordeling van je profiel — probeer het opnieuw."
   },
   "application": {
     "error": {
