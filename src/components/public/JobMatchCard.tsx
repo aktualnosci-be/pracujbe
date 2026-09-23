@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Check, Sparkles } from 'lucide-react';
 
 import { MatchBar } from '@/components/ui/match-bar';
 import { getMyJobMatchAction } from '@/lib/actions/matching';
-import type { MatchResult } from '@/lib/matching/score';
+import type { JobMatchLoad } from '@/lib/data/matching';
 
 /**
  * JobMatchCard — wyspa kliencka pokazująca dopasowanie ZALOGOWANEGO kandydata do oferty.
@@ -14,7 +14,8 @@ import type { MatchResult } from '@/lib/matching/score';
  * Match liczony jest po stronie serwera (`getMyJobMatchAction` → deterministyczny `scoreMatch`)
  * i dohydrowany PO montażu — dzięki temu SSR/HTML detalu oferty jest identyczny dla anonimów
  * i robotów (SEO/cache), a kandydat dostaje spersonalizowany wynik. Dla anonimów/pracodawców/
- * osób bez profilu kandydata action zwraca `null` → komponent nie renderuje nic.
+ * osób bez profilu kandydata action zwraca `none` → komponent nie renderuje nic. Błąd odczytu
+ * (`error` lub nieudane wywołanie) → komunikat z ponowieniem, NIGDY procent (#197).
  *
  * Etykiety kryteriów: `strengths`/część `missing` to znane klucze (tłumaczone), a pozostałe
  * pozycje `missing`/`matched` to surowe etykiety danych (np. nazwa umiejętności) — pokazywane
@@ -39,29 +40,51 @@ const KNOWN_CRITERIA = new Set([
 
 export function JobMatchCard({ jobId }: { jobId: string }): React.JSX.Element | null {
   const t = useTranslations('match');
-  const [result, setResult] = useState<MatchResult | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const tCommon = useTranslations('common');
+  const [load, setLoad] = useState<JobMatchLoad | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => {
+    setLoad(null);
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     let active = true;
     getMyJobMatchAction(jobId)
       .then((r) => {
-        if (active) {
-          setResult(r);
-          setLoaded(true);
-        }
+        if (active) setLoad(r);
       })
       .catch(() => {
-        if (active) setLoaded(true);
+        if (active) setLoad({ status: 'error' });
       });
     return () => {
       active = false;
     };
-  }, [jobId]);
+  }, [jobId, attempt]);
 
   // Do czasu odpowiedzi oraz dla anonimów/pracodawców/braku profilu — nic nie renderujemy.
-  if (!loaded || !result) return null;
+  if (!load || load.status === 'none') return null;
 
+  if (load.status === 'error') {
+    return (
+      <div role="alert" data-testid="job-match-error" className="rounded-lg border border-border bg-card p-5 shadow-sm">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+          <Sparkles className="h-4 w-4 text-accent" aria-hidden="true" />
+          {t('title')}
+        </h2>
+        <p className="mt-2 break-words text-sm text-foreground">{t('loadError')}</p>
+        <button
+          type="button"
+          onClick={retry}
+          className="mt-3 inline-flex min-h-12 items-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          {tCommon('retry')}
+        </button>
+      </div>
+    );
+  }
+
+  const result = load.result;
   const label = (key: string): string => (KNOWN_CRITERIA.has(key) ? t(`criteria.${key}`) : key);
 
   return (

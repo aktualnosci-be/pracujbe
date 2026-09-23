@@ -375,7 +375,8 @@
       "nl": "Dutch",
       "fr": "French",
       "en": "English"
-    }
+    },
+    "similarJobsLoadError": "Similar jobs could not be loaded. This job and applying work as usual."
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
@@ -1305,7 +1306,8 @@
       "contractType": "Contract type",
       "remoteJob": "Remote work — location does not matter",
       "withinCommuteRadius": "Workplace within your commute radius"
-    }
+    },
+    "loadError": "Your match could not be calculated right now. This is not an assessment of your profile — please try again."
   },
   "application": {
     "error": {
