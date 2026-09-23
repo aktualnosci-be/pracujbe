@@ -46,6 +46,14 @@ describe('Harness testów RLS', () => {
     expect(migration).toMatch(/revoke temporary on database %I from public/);
   });
 
+  it('odrzuca grant zapisu klienta bez polityki RLS (0068)', async () => {
+    const guard = await read('supabase/tests/role-guard.sql');
+    expect(guard).toContain('grant zapisu bez polityki RLS');
+    expect(guard).toContain('domyślne uprawnienia dają klientowi zapis nowych tabel');
+    const migration = await read('supabase/migrations/0068_revoke_client_dml_without_policy.sql');
+    expect(migration).toContain('alter default privileges in schema public revoke insert, update, delete on tables from authenticated');
+  });
+
   it('CI kopiuje katalog database do kontenera testów RLS', async () => {
     const ci = await read('.github/workflows/ci.yml');
     expect(ci).toContain('docker cp database "$POSTGRES_CONTAINER:/tmp/pracujbe-tests/database"');

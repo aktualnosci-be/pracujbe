@@ -75,3 +75,16 @@ dodać kolejną migrację przywracającą funkcje z kontrolą
 `company_max_active_jobs`, razem z testem limitu i sprawdzeniem istniejących
 aktywnych ofert. Tabele billingowe pozostają na miejscu, więc rollback nie
 wymaga odtwarzania danych finansowych.
+
+## Uprawnienia klienta i definerów — 0067/0068 (#25)
+
+- `0067`: każda funkcja `SECURITY DEFINER` w `public`/`auth` ma `search_path`
+  zakończony `pg_temp`; rolom runtime odebrano `TEMPORARY` na bazie. Nowy definer
+  ustawia `set search_path = public, pg_temp` (lub węższy, zawsze z `pg_temp` na końcu).
+- `0068`: `authenticated` nie ma `INSERT/UPDATE/DELETE` na tabeli, jeśli żadna polityka
+  RLS nie dopuszcza tego polecenia. Nowe tabele nie dostają domyślnie zapisu klienta —
+  migracja, która go potrzebuje, dodaje jawny `GRANT` razem z polityką.
+- Oba niezmienniki sprawdza `supabase/tests/role-guard.sql` w jobie `rls`
+  (produkcyjny bootstrap, kontrole ujemne, strażnik roli po każdym `set role`).
+- Rollback nie wymaga zmian danych: przywrócenie poprzedniego `search_path`,
+  `GRANT TEMPORARY ON DATABASE … TO PUBLIC` i ponowne granty wypisane przez `NOTICE` 0068.
