@@ -9,6 +9,7 @@ import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
 import { ProfileSummaryError } from '@/components/candidate/ProfileSummaryError';
 import { CvUpload } from '@/components/candidate/CvUpload';
 import { getCandidateProfileSummary, getCandidatePassport, getCandidateFiles } from '@/lib/data/candidate';
+import { getProfileLevelTitle } from '@/lib/profile-completeness';
 
 /**
  * Panel kandydata — Profil (podgląd; makieta 04, kolumna „Kompletność profilu").
@@ -127,7 +128,7 @@ export default async function CandidateProfilePage({
           <ProfileCompleteness
             className="mt-4"
             value={profile.completionPct}
-            title={profile.completionPct >= 60 ? t('goodLevel') : undefined}
+            title={getProfileLevelTitle(profile.completionPct, t('goodLevel'))}
             hint={t('completenessHint')}
           />
           <ProfileChecklist className="mt-5" items={checklist} />
