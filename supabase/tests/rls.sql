@@ -1533,4 +1533,67 @@ select pg_temp.assert(
   and not has_function_privilege('anon', 'public.company_recipient_ok(uuid, uuid)', 'execute'),
   'LL5 helper odbiorców nie jest wywoływalny przez role klienta');
 
+-- ============================================================================
+-- MM. Kolejka e-mail (0074): klucz per przejście statusu (#292), applicationViewed
+--     i jobPublished (#295); język = język ODBIORCY (Invariant #1)
+-- ============================================================================
+-- Fixture z LL: appl2 (CANDL, locale fr) w stanie submitted; OWNL = aktywny owner COMPL.
+select set_config('app.current_uid', :'OWNL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'appl2'::uuid, 'viewed');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = :'appl2' and profile_id = :'CANDL' and template = 'applicationViewed' and locale = 'fr') = 1
+  and (select count(*) from public.email_deliveries
+     where entity_id = :'appl2' and template = 'statusChanged') = 0,
+  'MM1 viewed → dedykowany applicationViewed w języku kandydata (fr), bez statusChanged');
+
+-- Cykl interview → shortlisted → interview: każde przejście = jeden e-mail.
+select set_config('app.current_uid', :'OWNL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'appl2'::uuid, 'interview');
+select public.transition_application(:'appl2'::uuid, 'shortlisted');
+select public.transition_application(:'appl2'::uuid, 'interview');
+-- Ponowienie tego samego żądania (status bez zmian) nie tworzy przejścia ani e-maila.
+select public.transition_application(:'appl2'::uuid, 'interview');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = :'appl2' and template = 'statusChanged' and payload->>'status' = 'interview') = 2,
+  'MM2 powrót do interview wysyła drugi e-mail (#292)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where entity_id = :'appl2' and template = 'statusChanged') = 3
+  and (select count(*) from public.application_status_history where application_id = :'appl2') = 4,
+  'MM2b retry bez zmiany statusu nie dodaje e-maila ani historii (idempotencja)');
+select pg_temp.assert(
+  (select count(distinct idempotency_key) from public.email_deliveries where entity_id = :'appl2')
+    = (select count(*) from public.email_deliveries where entity_id = :'appl2'),
+  'MM2c klucze idempotencji unikalne per przejście');
+
+-- Kontrola ujemna: opt-out email_applications wyłącza oba szablony statusu; in-app zostaje.
+insert into public.notification_preferences (profile_id, email_applications) values (:'CANDL', false)
+  on conflict (profile_id) do update set email_applications = false;
+select set_config('app.current_uid', :'OWNL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'appl2'::uuid, 'shortlisted');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where entity_id = :'appl2' and profile_id = :'CANDL') = 4
+  and (select count(*) from public.notifications
+         where entity_id = :'appl2' and profile_id = :'CANDL' and type = 'application_status_changed') = 5,
+  'MM3 opt-out: brak e-maila, powiadomienie in-app powstaje');
+
+-- jobPublished: GG3 opublikował szkic (EMPA, locale nl); GG4 (odrzucona ponowna publikacja) bez maila.
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = 'a2222222-2222-2222-2222-222222222222' and template = 'jobPublished') = 1
+  and (select profile_id::text || '/' || locale from public.email_deliveries
+     where entity_id = 'a2222222-2222-2222-2222-222222222222' and template = 'jobPublished') = :'EMPA' || '/nl',
+  'MM4 publikacja → jeden jobPublished do publikującego w jego języku');
+select pg_temp.assert(
+  (select payload->>'jobTitle' from public.email_deliveries
+     where entity_id = 'a2222222-2222-2222-2222-222222222222' and template = 'jobPublished') = 'Nowa oferta',
+  'MM4b payload jobPublished zawiera tytuł oferty');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

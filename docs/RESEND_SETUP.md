@@ -47,7 +47,7 @@ Kroki:
 
 ## 3. Zmienne środowiskowe
 
-W `.env.local` / Vercel (patrz [`.env.example`](../.env.example)):
+W `.env.local` / zmiennych usługi Railway (patrz [`.env.example`](../.env.example)):
 
 ```bash
 RESEND_API_KEY="re_…"                          # SEKRET, tylko serwer
@@ -57,7 +57,7 @@ EMAIL_QUEUE_SECRET="…"                          # chroni endpoint przetwarzaj�
 ```
 
 - `EMAIL_FROM` musi być na **zweryfikowanej** domenie z §2.
-- `EMAIL_QUEUE_SECRET` — silny losowy sekret; chroni `/api/email/dispatch` przed
+- `EMAIL_QUEUE_SECRET` — silny losowy sekret; chroni `/api/email/process` przed
   wywołaniem z zewnątrz (patrz §6).
 
 ---
@@ -65,12 +65,27 @@ EMAIL_QUEUE_SECRET="…"                          # chroni endpoint przetwarzaj�
 ## 4. Szablony (React Email)
 
 Szablony w `src/emails/` (React Email), w czterech wariantach językowych renderowanych
-wg `email_deliveries.locale`. Typy e-maili odpowiadają `notification_type` / procesom:
+wg `email_deliveries.locale` (język ODBIORCY, Invariant #1). Który szablon wysyła które
+zdarzenie, opisuje rejestr [`src/emails/wiring.ts`](../src/emails/wiring.ts), pilnowany
+testem `tests/unit/email-wiring.test.ts`:
 
-- `application_received` (→ pracodawca), `application_status_changed` (→ kandydat),
-- `offer_received` (→ kandydat), `offer_status_changed` (→ pracodawca),
-- `message_received`, `job_match`, `company_verified`, oraz Auth (confirm/reset —
-  obsługiwane przez Supabase Auth, patrz [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) §6).
+| szablon | zdarzenie (RPC) | odbiorca |
+|---|---|---|
+| `newApplication` | `apply_to_job` | aktywni recruiter+ firmy |
+| `applicationViewed` | `transition_application` → `viewed` | kandydat |
+| `statusChanged` | `transition_application` → pozostałe statusy | kandydat |
+| `jobOffer` | `send_offer` | kandydat |
+| `offerAccepted` / `offerDeclined` | `respond_to_offer` | nadawca propozycji lub recruiter+ |
+| `newMessage` | `send_message` | druga strona rozmowy |
+| `jobPublished` | `publish_job` | osoba publikująca |
+
+E-maile konta (`accountConfirmation`, `passwordReset`, `magicLink`, `emailChange`, `invite`)
+wysyła warstwa Auth (`src/lib/email/auth-email.ts`), poza tą kolejką.
+
+**Świadomie nieużywane** (szablon i tłumaczenia są, zdarzenia w produkcie brak — nic ich
+nie wysyła): `welcome`, `contactInvitation`, `jobExpiring`, `payment`, `invoice`,
+`supportContact`. Powody są w `UNWIRED_EMAIL_TYPES`. Podpięcie typu wymaga przeniesienia
+go do właściwej grupy w rejestrze — inaczej test nie przejdzie.
 
 Każdy tekst pochodzi z tłumaczeń — żadnych literałów UI (Invariant #2).
 
@@ -96,7 +111,7 @@ Sukces → JSON z `id`. Sprawdź w Resend → **Logs** status dostarczenia. Jeś
 odrzucony — domena nie jest zweryfikowana (§2).
 
 W aplikacji: wykonaj przepływ tworzący e-mail (np. aplikacja na ofertę na staging),
-potem uruchom dispatcher (§6) i sprawdź `email_deliveries.status`.
+potem uruchom worker (§6) i sprawdź `email_deliveries.status`.
 
 ---
 
@@ -111,39 +126,51 @@ nie cofa operacji (aplikacja/propozycja pozostaje zapisana) — wysyłka jest po
 Server Action → enqueueEmail() → INSERT email_deliveries(status='queued', locale, …)
                                    ON CONFLICT (idempotency_key) DO NOTHING
         ▼
-cron/worker → POST /api/email/dispatch   (nagłówek/param z EMAIL_QUEUE_SECRET)
+cron Railway → POST /api/email/process   (Authorization: Bearer EMAIL_QUEUE_SECRET)
         ├─ SELECT queued/failed (attempts < MAX) FOR UPDATE SKIP LOCKED LIMIT N
         ├─ render React Email w locale odbiorcy → Resend.emails.send
         │     sukces → status='sent',  provider_message_id, sent_at
         │     błąd   → status='failed', error_message, attempts++ (backoff)
         ▼
-Webhook Resend → POST /api/webhooks/resend
-        └─ delivered / opened / clicked / bounced / complained
+(planowane, P1-19) Webhook Resend → bounced / complained
            (match po provider_message_id — kolumna UNIQUE)
 ```
 
-### Uruchamianie dispatchera (cron)
+### Uruchamianie workera (cron Railway)
 
-Opcje:
-- **Vercel Cron** (`vercel.json` → `crons`) — wywołuje `/api/email/dispatch` co np. 1–5 min.
-- Zewnętrzny cron / scheduler wołający ten sam endpoint.
+Handler: `src/app/api/email/process/route.ts` (`GET` i `POST /api/email/process`).
+Harmonogram prowadzi osobna usługa cron w Railway, uruchamiająca
+`node scripts/railway-cron-call.mjs` co 5 minut (UTC, restart NEVER):
 
-Endpoint MUSI weryfikować `EMAIL_QUEUE_SECRET` (np. nagłówek `Authorization`), inaczej
-zwraca 401. Używa **service role** (`@/lib/supabase/admin`) — `email_deliveries` nie ma
-polityk RLS.
+- `CRON_TARGET_URL` — prywatny adres usługi web w tym samym środowisku + `/api/email/process`,
+- `CRON_AUTH_SECRET` — ta sama wartość co `EMAIL_QUEUE_SECRET` w usłudze web.
+
+Szczegóły konfiguracji: [`docs/railway/README.md`](./railway/README.md) (sekcja „Cron”).
+Najpierw uruchom zadanie ręcznie i sprawdź `email_deliveries.status`.
+
+Endpoint weryfikuje `Authorization: Bearer <EMAIL_QUEUE_SECRET>` (lub `CRON_SECRET`),
+inaczej zwraca 401. Gdy worker nie może wysyłać (brak konfiguracji w produkcji, błąd
+pobrania kolejki), zwraca 503, więc cron nie raportuje fałszywego sukcesu. Używa
+**service role** — `email_deliveries` nie ma polityk RLS.
+
+`vercel.json` jest długiem migracyjnym i nie jest docelowym harmonogramem; nie uruchamiaj
+jednocześnie harmonogramów Vercel i Railway.
 
 ### Ponawianie i idempotencja
 
 - **Retry:** rekordy `failed` z `attempts < MAX` (np. 5) wybierane w kolejnym przebiegu;
   backoff rosnący. Po wyczerpaniu prób zostają `failed` (do diagnostyki, nie znikają).
-- **Idempotencja wysyłki:** `email_deliveries.idempotency_key` (partial UNIQUE) — np.
-  `offer:<offer_id>` — gwarantuje, że retry operacji biznesowej nie zakolejkuje drugiego
-  e-maila.
+- **Idempotencja wysyłki:** `email_deliveries.idempotency_key` (partial UNIQUE) gwarantuje,
+  że retry operacji biznesowej nie zakolejkuje drugiego e-maila. Klucz identyfikuje
+  zdarzenie, nie jego rodzaj: zmiana statusu aplikacji używa
+  `appstatus-<application_id>-<id wiersza application_status_history>` (0074), więc
+  powrót do wcześniejszego statusu (np. interview → shortlisted → interview) wysyła
+  kolejny e-mail, a ponowienie tego samego żądania — nie. Publikacja: `jobpub-<job_id>`.
 - **Deduplikacja webhooków:** `provider_message_id` UNIQUE.
 
-### Webhook Resend
+### Webhook Resend (planowany, P1-19 — endpoint jeszcze nie istnieje)
 
-Resend → **Webhooks → Add Endpoint** → `https://pracuj.be/api/webhooks/resend`.
+Docelowo: Resend → **Webhooks → Add Endpoint** → `https://pracuj.be/api/webhooks/resend`.
 Zdarzenia: `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`,
 `email.complained`. Zweryfikuj podpis (signing secret z panelu). Bounce/complaint →
 oznacz odbiorcę (rozważ wstrzymanie dalszych wysyłek marketingowych; transakcyjne
@@ -157,7 +184,7 @@ zgodnie z zasadami).
 |---|---|
 | `from` odrzucony | domena niezweryfikowana → §2, sprawdź status w Resend → Domains |
 | e-maile w spamie | brak/niepoprawny DKIM lub DMARC → zweryfikuj rekordy, zaostrz DMARC stopniowo |
-| `email_deliveries` rośnie w `queued` | dispatcher nie działa → sprawdź cron i `EMAIL_QUEUE_SECRET` |
+| `email_deliveries` rośnie w `queued` | worker nie działa → sprawdź cron Railway (`CRON_TARGET_URL` = `…/api/email/process`) i `EMAIL_QUEUE_SECRET` |
 | dużo `failed` | sprawdź `error_message`; limit API? błędny `RESEND_API_KEY`? |
 | błędny język e-maila | sprawdź `email_deliveries.locale` i `preferred/account/signup_locale` odbiorcy |
 
