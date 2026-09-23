@@ -24,7 +24,8 @@ async function analyze(page: import('@playwright/test').Page) {
     .analyze();
   const blocking = results.violations.filter((v) => BLOCKING.has(v.impact ?? ''));
   const advisory = results.violations.filter((v) => !BLOCKING.has(v.impact ?? ''));
-  return { blocking, advisory };
+  const targetSize = results.violations.filter((v) => v.id === 'target-size');
+  return { blocking, advisory, targetSize };
 }
 
 /** Czytelny opis naruszeń do komunikatu asercji (bez zrzutów technicznych do UI). */
@@ -56,7 +57,7 @@ for (const p of PAGES) {
     await page.getByRole('main').first().waitFor();
     await page.waitForTimeout(1000);
 
-    const { blocking, advisory } = await analyze(page);
+    const { blocking, advisory, targetSize } = await analyze(page);
     if (advisory.length > 0) {
       // Raport pomocniczy — nie blokuje bramki.
       console.log(`[a11y advisory] ${p.path}:\n${describe(advisory)}`);
@@ -64,11 +65,14 @@ for (const p of PAGES) {
     expect(blocking, `Naruszenia a11y (critical/serious) na ${p.path}:\n${describe(blocking)}`).toEqual(
       [],
     );
+    if (p.path === '/pl/oferty-pracy') {
+      expect(targetSize, `Cele dotykowe WCAG 2.2 AA na ${p.path}:\n${describe(targetSize)}`).toEqual([]);
+    }
   });
 }
 
 for (const locale of ['pl', 'nl', 'fr', 'en']) {
-  test(`a11y: lista ofert, ekran 320 px (${locale}) — brak naruszeń critical/serious`, async ({
+  test(`a11y: lista ofert, ekran 320 px (${locale}) — brak naruszeń critical/serious i target-size`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 320, height: 800 });
@@ -76,13 +80,17 @@ for (const locale of ['pl', 'nl', 'fr', 'en']) {
     await page.getByRole('main').first().waitFor();
     await page.waitForTimeout(1000);
 
-    const { blocking, advisory } = await analyze(page);
+    const { blocking, advisory, targetSize } = await analyze(page);
     if (advisory.length > 0) {
       console.log(`[a11y advisory] /${locale}/oferty-pracy (320 px):\n${describe(advisory)}`);
     }
     expect(
       blocking,
       `Naruszenia a11y (critical/serious) na /${locale}/oferty-pracy przy 320 px:\n${describe(blocking)}`,
+    ).toEqual([]);
+    expect(
+      targetSize,
+      `Cele dotykowe WCAG 2.2 AA na /${locale}/oferty-pracy przy 320 px:\n${describe(targetSize)}`,
     ).toEqual([]);
   });
 }
