@@ -17,6 +17,7 @@ type Messages = {
     pageTitle: string;
     empty: string;
   };
+  locations: Record<string, string>;
 };
 
 function messages(locale: Locale): Messages {
@@ -236,7 +237,13 @@ for (const locale of locales) {
     await noJs.waitForLoadState('domcontentloaded');
     await expect(noJs.locator('html')).toBeAttached();
     const submittedParams = new URL(noJs.url()).searchParams;
-    for (const [key, value] of expectedNoJsParams) {
+    // #189: formularz pokazuje i odsyła miasta pod nazwą w języku strony (to samo miasto).
+    const expectedSubmitted = new URLSearchParams(expectedNoJsParams);
+    expectedSubmitted.set(
+      'location',
+      `${t.locations['brussels']},${t.locations['antwerp']}`,
+    );
+    for (const [key, value] of expectedSubmitted) {
       expect(submittedParams.get(key), key).toBe(value);
     }
     expect(submittedParams.get('noLang')).toBe('1');

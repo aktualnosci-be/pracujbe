@@ -6,6 +6,7 @@ const adapters = vi.hoisted(() => ({
   detail: vi.fn(),
   categoryCounts: vi.fn(),
   cityCounts: vi.fn(),
+  filterFacets: vi.fn(),
   pool: {},
 }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
@@ -14,6 +15,7 @@ vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJob: adapters.detail,
   getPublicJobCategoryCounts: adapters.categoryCounts,
   getPublicJobCityCounts: adapters.cityCounts,
+  getPublicJobFilterFacets: adapters.filterFacets,
 }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
@@ -61,22 +63,31 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
   it('liczniki używają tych samych filtrów bazy co lista', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
     adapters.categoryCounts.mockResolvedValue({ construction: 204, transport: 7 });
-    adapters.cityCounts.mockResolvedValue({ Brussels: 122, Antwerp: 31 });
+    adapters.filterFacets.mockResolvedValue({
+      locations: [
+        { city: 'Brussels', count: 100 },
+        { city: 'Bruxelles', count: 22 },
+        { city: 'Antwerpen', count: 31 },
+        { city: 'Brussels-Capital', count: 5 },
+      ],
+    });
 
     expect(await getCategoryCounts('pl', ['construction', 'transport'])).toEqual({
       construction: 204,
       transport: 7,
     });
-    expect(await getCityCounts('pl', ['Brussels', 'Antwerp'])).toEqual({
-      Brussels: 122,
-      Antwerp: 31,
+    // #189: licznik per klucz miasta sumuje dokładne aliasy; nierozpoznana nazwa nie jest doliczana.
+    expect(await getCityCounts('pl', ['brussels', 'antwerp', 'liege'])).toEqual({
+      brussels: 122,
+      antwerp: 31,
+      liege: 0,
     });
     expect(adapters.categoryCounts).toHaveBeenCalledTimes(1);
     expect(adapters.categoryCounts).toHaveBeenCalledWith(adapters.pool, [
       'construction',
       'transport',
     ]);
-    expect(adapters.cityCounts).toHaveBeenCalledTimes(1);
-    expect(adapters.cityCounts).toHaveBeenCalledWith(adapters.pool, ['Brussels', 'Antwerp']);
+    expect(adapters.filterFacets).toHaveBeenCalledTimes(1);
+    expect(adapters.filterFacets).toHaveBeenCalledWith(adapters.pool, { locale: 'pl' });
   });
 });

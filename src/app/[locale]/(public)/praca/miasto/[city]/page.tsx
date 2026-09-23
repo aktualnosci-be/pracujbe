@@ -9,6 +9,7 @@ import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getJobs, type LocationKey } from '@/lib/jobs';
+import { cityAliases } from '@/lib/locations/city-aliases';
 import { JobCard } from '@/components/public/JobCard';
 import { resolveCityAlias } from './city-alias';
 
@@ -121,7 +122,13 @@ export default async function CityLandingPage({ params }: PageProps) {
   ]);
 
   const name = tLoc(city);
-  const result = await getJobs({ locale, city: name, page: 1, pageSize: LIST_LIMIT });
+  // #189: oferty miasta po wszystkich jego nazwach (PL/NL/FR/EN), nie po nazwie w języku strony.
+  const result = await getJobs({
+    locale,
+    locations: cityAliases(city),
+    page: 1,
+    pageSize: LIST_LIMIT,
+  });
 
   const otherCities = LOCATION_KEYS.filter((key) => key !== city);
 

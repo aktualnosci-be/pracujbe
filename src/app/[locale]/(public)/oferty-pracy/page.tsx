@@ -7,6 +7,11 @@ import { Link, redirect } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getJobFilterFacets, getJobs } from '@/lib/jobs';
+import {
+  localizedLocationLabel,
+  localizeLocationFacets,
+  resolveCityFilters,
+} from '@/lib/locations/city-aliases';
 import { FilterSidebar, SortMenu } from '@/components/public/FilterSidebar';
 import { FilterSheet } from '@/components/public/FilterSheet';
 import { JobCard } from '@/components/public/JobCard';
@@ -131,6 +136,11 @@ export default async function JobsListPage({
   const city = flat['city']?.trim() || undefined;
   const sort: SortValue = parseSort(flat['sort']);
   const sf = parseSidebarFilters(flat);
+  // #189: miasto z adresu może pochodzić z innej wersji językowej (przełącznik języka kopiuje
+  // query 1:1). Adres i linki zostają bez zmian; zapytanie obejmuje wszystkie nazwy miasta,
+  // a sidebar i chipy pokazują nazwę w języku strony — zbiór ofert nie zależy od języka.
+  const cityFilters = resolveCityFilters({ city, locations: sf.locations }, locale);
+  const sidebarInitial = { ...sf, locations: cityFilters.displayLocations };
 
   const pageRaw = Number(flat['page']);
   const page =
@@ -165,9 +175,9 @@ export default async function JobsListPage({
   const filterParams = {
     locale,
     keyword,
-    city,
+    city: cityFilters.city,
     categories: sf.categories,
-    locations: sf.locations,
+    locations: cityFilters.queryLocations,
     contractTypes: sf.contractTypes,
     ...(narrowed ? { salaryMin: sf.salaryMin } : {}),
     ...(narrowed && sf.salaryMax < SALARY_MAX_BOUND
@@ -184,14 +194,27 @@ export default async function JobsListPage({
     getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }),
     getJobFilterFacets(filterParams),
   ]);
-  const facets =
-    databaseFacets ??
-    buildDemoFacets(
-      (
-        await getJobs({ locale, keyword, city, page: 1, pageSize: 100 })
-      ).jobs.map(toFacetItem),
-      sf,
-    );
+  const facets = databaseFacets
+    ? {
+        ...databaseFacets,
+        locations: localizeLocationFacets(
+          databaseFacets.locations,
+          cityFilters.cityKey,
+          locale,
+        ),
+      }
+    : buildDemoFacets(
+        (
+          await getJobs({
+            locale,
+            keyword,
+            ...cityFilters.cityQuery,
+            page: 1,
+            pageSize: 100,
+          })
+        ).jobs.map(toFacetItem),
+        sidebarInitial,
+      );
   const pageItems = results.jobs;
   const total = results.total;
 
@@ -274,7 +297,12 @@ export default async function JobsListPage({
   const chips: Array<{ id: string; label: string; href: string }> = [];
   if (keyword)
     chips.push({ id: 'kw', label: keyword, href: withoutKey('keyword') });
-  if (city) chips.push({ id: 'city', label: city, href: withoutKey('city') });
+  if (city)
+    chips.push({
+      id: 'city',
+      label: cityFilters.cityLabel ?? city,
+      href: withoutKey('city'),
+    });
   for (const cat of sf.categories) {
     chips.push({
       id: `cat-${cat}`,
@@ -285,7 +313,7 @@ export default async function JobsListPage({
   for (const loc of sf.locations) {
     chips.push({
       id: `loc-${loc}`,
-      label: loc,
+      label: localizedLocationLabel(loc, locale),
       href: withoutValue('location', loc),
     });
   }
@@ -461,7 +489,7 @@ export default async function JobsListPage({
           <div className="sticky top-24">
             <FilterSidebar
                 facets={facets}
-              initial={sf}
+              initial={sidebarInitial}
               keyword={keyword}
               city={city}
               sort={sort}
@@ -476,7 +504,7 @@ export default async function JobsListPage({
           <div className="mb-4 flex flex-col items-stretch gap-3 lg:hidden [&>details]:w-full [&>details>summary]:justify-between">
             <FilterSheet
                 facets={facets}
-              initial={sf}
+              initial={sidebarInitial}
               keyword={keyword}
               city={city}
               sort={sort}
