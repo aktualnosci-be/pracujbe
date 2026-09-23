@@ -14,16 +14,20 @@ vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 type Result = { data?: unknown; count?: number | null; error: unknown };
 
 /** Łańcuchowy builder PostgREST: każda metoda zwraca builder, `await` daje wynik z kolejki tabeli. */
+const builders: { table: string; builder: Record<string, ReturnType<typeof vi.fn> | unknown> }[] = [];
+
 function client(results: Record<string, Result[]>) {
+  builders.length = 0;
   const queues = Object.fromEntries(Object.entries(results).map(([table, list]) => [table, [...list]]));
   const supabase = {
     auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null }) },
     from: vi.fn((table: string) => {
       const result = queues[table]?.shift() ?? { data: [], count: 0, error: null };
       const builder: Record<string, unknown> = {};
-      for (const method of ['select', 'eq', 'is', 'in', 'order', 'limit']) {
+      for (const method of ['select', 'eq', 'is', 'in', 'order', 'limit', 'gte']) {
         builder[method] = vi.fn(() => builder);
       }
+      builders.push({ table, builder });
       builder.then = (resolve: (value: Result) => unknown) => resolve(result);
       return builder;
     }),
@@ -85,50 +89,62 @@ describe('employer overview tiles', () => {
 });
 
 describe('employer recruitment funnel', () => {
-  it('reports a failed applications read as an error, never as an empty funnel', async () => {
+  const NOW = new Date('2026-09-23T12:00:00.000Z');
+  const SINCE = '2026-08-24T12:00:00.000Z';
+
+  it('reports a failed applications count as an error, never as an empty funnel', async () => {
     const error = { code: 'DATABASE_UNAVAILABLE' };
-    client({
-      jobs: [{ data: [{ views_count: 40 }], error: null }],
-      applications: [{ data: null, error }],
-    });
-    expect(await getFunnelStats()).toEqual({ status: 'error' });
+    client({ applications: [{ count: null, error }] });
+    expect(await getFunnelStats(NOW)).toEqual({ status: 'error' });
     expect(captureError).toHaveBeenCalledWith(error, { area: 'employer.getFunnelStats' });
   });
 
-  it('reports a failed status history read as an error', async () => {
+  it('reports a failed stage count as an error', async () => {
     client({
-      jobs: [{ data: [{ views_count: 40 }], error: null }],
-      applications: [{ data: [{ id: 'app-1' }], error: null }],
-      application_status_history: [{ data: null, error: { code: 'URI_TOO_LONG' } }],
+      applications: [
+        { count: 2, error: null },
+        { count: null, error: { code: 'TIMEOUT' } },
+        { count: 0, error: null },
+      ],
     });
-    expect(await getFunnelStats()).toEqual({ status: 'error' });
+    expect(await getFunnelStats(NOW)).toEqual({ status: 'error' });
   });
 
-  it('returns an empty funnel only after a successful read', async () => {
-    client({ jobs: [{ data: [], error: null }], applications: [{ data: [], error: null }] });
-    expect(await getFunnelStats()).toEqual({
+  it('returns an empty funnel only after a successful read, with views as “no data”', async () => {
+    client({ applications: [{ count: 0, error: null }, { count: 0, error: null }, { count: 0, error: null }] });
+    expect(await getFunnelStats(NOW)).toEqual({
       status: 'ok',
-      funnel: { views: 0, applications: 0, interviews: 0, hired: 0 },
+      funnel: { views: null, applications: 0, interviews: 0, hired: 0 },
     });
     expect(captureError).not.toHaveBeenCalled();
   });
 
-  it('counts funnel stages from a successful read', async () => {
-    client({
-      jobs: [{ data: [{ views_count: 30 }, { views_count: '10' }], error: null }],
-      applications: [{ data: [{ id: 'app-1' }, { id: 'app-2' }], error: null }],
-      application_status_history: [{
-        data: [
-          { application_id: 'app-1', to_status: 'interview' },
-          { application_id: 'app-1', to_status: 'hired' },
-          { application_id: 'app-2', to_status: 'interview' },
-        ],
-        error: null,
-      }],
+  it('counts funnel stages in the database for the last 30 days only (#302)', async () => {
+    const supabase = client({
+      applications: [{ count: 12, error: null }, { count: 5, error: null }, { count: 2, error: null }],
     });
-    expect(await getFunnelStats()).toEqual({
+    expect(await getFunnelStats(NOW)).toEqual({
       status: 'ok',
-      funnel: { views: 40, applications: 2, interviews: 2, hired: 1 },
+      funnel: { views: null, applications: 12, interviews: 5, hired: 2 },
     });
+
+    // Bez sumy views_count (brak mechanizmu zliczania) i bez pobierania wierszy/listy UUID.
+    expect(supabase.from).not.toHaveBeenCalledWith('jobs');
+    expect(supabase.from).not.toHaveBeenCalledWith('application_status_history');
+    expect(builders).toHaveLength(3);
+    for (const { builder } of builders) {
+      const b = builder as Record<string, ReturnType<typeof vi.fn>>;
+      expect(b.select!.mock.calls[0]![1]).toEqual({ count: 'exact', head: true });
+      expect(b.eq).toHaveBeenCalledWith('company_id', 'company-1');
+      expect(b.is).toHaveBeenCalledWith('deleted_at', null);
+      expect(b.gte).toHaveBeenCalledWith('submitted_at', SINCE);
+    }
+    const [, interviews, hired] = builders.map(({ builder }) => builder as Record<string, ReturnType<typeof vi.fn>>);
+    expect(interviews!.select!.mock.calls[0]![0]).toContain('application_status_history!inner');
+    expect(interviews!.in).toHaveBeenCalledWith(
+      'application_status_history.to_status',
+      ['interview', 'offer_sent', 'offer_accepted', 'offer_declined', 'hired'],
+    );
+    expect(hired!.eq).toHaveBeenCalledWith('application_status_history.to_status', 'hired');
   });
 });
