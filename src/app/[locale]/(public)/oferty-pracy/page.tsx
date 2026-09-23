@@ -477,6 +477,7 @@ export default async function JobsListPage({
               keyword={keyword}
               city={city}
               sort={sort}
+              className="max-h-[calc(100dvh-7rem-var(--cookie-banner-h,0px))]"
             />
           </div>
         </aside>

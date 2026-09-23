@@ -75,6 +75,13 @@
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
+  /* WCAG 2.4.11: przyklejony nagłówek (h-16 w Header i DashboardShell) nie może zakryć
+     elementu, do którego przeglądarka przewija fokus (Shift+Tab, kotwice #main-content).
+     4rem wysokości nagłówka + 1rem zapasu na pierścień fokusu. */
+  html {
+    scroll-padding-top: 5rem;
+  }
+
   ::selection {
     @apply bg-primary/20;
   }
