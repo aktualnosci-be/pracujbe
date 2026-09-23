@@ -142,6 +142,19 @@ export function safeNextPath(value: unknown): string | null {
   return normalized.length > NEXT_PATH_MAX_LENGTH ? null : normalized;
 }
 
+/**
+ * Query string po zmianie języka strony: bezpieczny `next` dostaje prefiks nowego języka,
+ * żeby po zalogowaniu użytkownik wrócił do tej samej strony w wybranym języku. Brak lub
+ * niebezpieczny `next` → query bez zmian (logowanie i tak go zignoruje).
+ */
+export function relocalizeNextParam(search: string, locale: Locale): string {
+  const params = new URLSearchParams(search);
+  const next = safeNextPath(params.get('next'));
+  if (!next) return search;
+  params.set('next', next.replace(/^\/[^/?#]+/, `/${locale}`));
+  return `?${params.toString()}`;
+}
+
 /** Ścieżka logowania (bez prefiksu języka — dokłada go `Link` z `@/i18n/navigation`). */
 const LOGIN_PATH = '/logowanie';
 

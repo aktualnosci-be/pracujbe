@@ -5,6 +5,7 @@ import { Languages } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/navigation';
 import { routing, localeNames } from '@/i18n/routing';
+import { relocalizeNextParam } from '@/lib/validation/auth';
 import {
   Select,
   SelectContent,
@@ -17,6 +18,7 @@ import {
  * Przełącznik języka (client component).
  * Zmienia locale, zachowując bieżącą ścieżkę (usePathname/useRouter z @/i18n/navigation).
  * Bez pełnego przeładowania — nawigacja w tranzycji. Etykieta z i18n (footer.langLabel).
+ * Parametr powrotu `?next=` (logowanie) przechodzi na nowy język razem ze stroną.
  *
  * `side="top"` otwiera listę nad przyciskiem — dla miejsc przy dolnej krawędzi ekranu
  * (panel menu mobilnego), gdzie lista otwierana w dół wychodziłaby poza viewport i nie
@@ -33,7 +35,8 @@ export function LocaleSwitcher({ side = 'bottom' }: { side?: 'top' | 'bottom' } 
     const target = routing.locales.find((loc) => loc === next);
     if (!target || target === locale) return;
     startTransition(() => {
-      router.replace(`${pathname}${window.location.search}${window.location.hash}`, {
+      const search = relocalizeNextParam(window.location.search, target);
+      router.replace(`${pathname}${search}${window.location.hash}`, {
         locale: target,
       });
     });
