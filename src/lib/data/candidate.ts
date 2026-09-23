@@ -24,6 +24,7 @@ import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 import { findLatestActiveProposal } from '@/lib/candidate-offers';
+import { customOfferMessage } from '@/lib/offers/default-message';
 
 /* ---------------------------------------------------------------------------
  * Kontrakt danych panelu kandydata
@@ -936,7 +937,8 @@ export async function getMyOffersPage(
         jobTitle: job?.title ?? '',
         companyName: job?.companyName ?? '',
         slug: job?.slug ?? null,
-        message: asStr(r['message']),
+        // Szablon zapisany w języku nadawcy → '' (UI pokaże zaproszenie w języku kandydata, #289).
+        message: customOfferMessage(asStr(r['message'])) ?? '',
         date: sentAt || asStr(r['created_at']),
         status: asStr(r['status'], 'sent'),
         expiresAt: asStr(r['expires_at']) || null,
@@ -1017,7 +1019,7 @@ export async function getLatestActiveOffer(
       jobTitle: job?.title ?? '',
       companyName: job?.companyName ?? '',
       slug: job?.slug ?? null,
-      message: asStr(row['message']),
+      message: customOfferMessage(asStr(row['message'])) ?? '',
       date: asStr(row['sent_at']),
       status: asStr(row['status']),
       expiresAt: asStr(row['expires_at']) || null,

@@ -542,7 +542,8 @@
     "notFound": "Nous n'avons pas trouvé ce que vous cherchez.",
     "internal": "Une erreur est survenue de notre côté. Nous y travaillons.",
     "generic": "Une erreur est survenue. Réessayez.",
-    "demoUnavailable": "Cette fonction n'est pas disponible dans la version de démonstration du site."
+    "demoUnavailable": "Cette fonction n'est pas disponible dans la version de démonstration du site.",
+    "invalidTransition": "Ce changement de statut n’est pas possible à cette étape. Actualisez la page et choisissez une autre option."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -774,7 +775,24 @@
     "declineConfirmDescriptionNamed": "La proposition « {title} » sera refusée. Cette réponse ne pourra pas être modifiée.",
     "declineConfirm": "Refuser",
     "acceptProposalSuccess": "La proposition a été acceptée.",
-    "declineProposalSuccess": "La proposition a été refusée."
+    "declineProposalSuccess": "La proposition a été refusée.",
+    "sendOfferTo": "Envoyer une proposition : {name} — {job}",
+    "offerMatchedJob": "Correspondance avec l’offre",
+    "offerSentOn": "Proposition envoyée le {date}",
+    "offerDialogTitle": "Envoyer la proposition ?",
+    "offerDialogDescription": "Vérifiez le candidat et l’offre avant d’envoyer l’invitation.",
+    "offerDialogCandidate": "Candidat",
+    "offerDialogJob": "Offre d’emploi",
+    "offerDialogDefaultInfo": "Sans message personnel, le candidat verra cette invitation dans sa propre langue :",
+    "offerDialogMessageLabel": "Message personnel (facultatif)",
+    "offerDialogMessageHint": "Le candidat verra votre message personnel exactement tel que vous l’écrivez.",
+    "statusMenuTrigger": "Modifier le statut : {name} — {job} ({status})",
+    "statusMenuOptions": "Statuts : {name} — {job}",
+    "statusFinal": "Statut final",
+    "statusFinalLabel": "Statut final : {name} — {job} ({status})",
+    "statusConfirmQuestion": "Passer le statut à « {status} » ? Ce changement est définitif.",
+    "statusConfirmAction": "Confirmer",
+    "offerForJob": "Offre : {job}"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1276,7 +1294,9 @@
     "saving": "Enregistrement...",
     "savedSuccess": "Vos préférences de notification ont été enregistrées.",
     "loadError": "Impossible de charger vos préférences de notification.",
-    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant."
+    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant.",
+    "pushEnabledLabel": "Notifications push",
+    "pushEnabledDescription": "Notifications sur votre appareil en cas d'événement important."
   },
   "guides": {
     "pageTitle": "Guides",

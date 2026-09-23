@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
+import { Link } from "@/i18n/navigation";
 import { getTopMatchedCandidates } from "@/lib/data/employer";
 import { MatchBar } from "@/components/ui/match-bar";
 import { SendOfferButton } from "@/components/employer/SendOfferButton";
@@ -131,10 +132,31 @@ export default async function EmployerCandidatesPage({
                       <MatchBar value={candidate.match} showLabel />
                     </dd>
                   </div>
+                  <div className="min-w-0 sm:col-span-2">
+                    <dt className="text-sm text-muted-foreground">
+                      {td("offerMatchedJob")}
+                    </dt>
+                    <dd className="mt-1 break-words text-base font-medium text-foreground">
+                      {candidate.jobSlug ? (
+                        <Link
+                          href={`/oferty-pracy/${candidate.jobSlug}`}
+                          className="text-primary hover:underline"
+                        >
+                          {candidate.jobTitle || td("applicationUnknownJob")}
+                        </Link>
+                      ) : (
+                        candidate.jobTitle || td("applicationUnknownJob")
+                      )}
+                    </dd>
+                  </div>
                 </dl>
                 <SendOfferButton
                   jobId={candidate.jobId}
                   candidateId={candidate.candidateId}
+                  candidateName={candidate.name || td("candidateFallback")}
+                  jobTitle={candidate.jobTitle}
+                  jobSlug={candidate.jobSlug}
+                  offerSentAt={candidate.offerSentAt}
                   className="mt-5 min-h-11 w-full sm:w-auto"
                 />
               </li>

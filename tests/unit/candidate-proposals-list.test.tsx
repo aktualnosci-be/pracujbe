@@ -70,4 +70,19 @@ describe('lista propozycji kandydata (#245)', () => {
     expect(screen.getByText('proposalsEmptyTitle')).toBeVisible();
     expect(screen.queryByText('proposalsEnd')).not.toBeInTheDocument();
   });
+
+  it('pusta treść → standardowe zaproszenie w języku kandydata; własna treść bez zmian (#289)', () => {
+    render(
+      <CandidateProposalsList
+        locale="nl"
+        now={now}
+        initialPage={{
+          items: [items[20]!, { ...items[19]!, message: 'Tot maandag!' }],
+          nextCursor: null,
+        }}
+      />,
+    );
+    expect(screen.getByText('offerDefaultMessage')).toBeVisible();
+    expect(screen.getByText('Tot maandag!')).toBeVisible();
+  });
 });

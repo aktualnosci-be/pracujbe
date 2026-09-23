@@ -542,7 +542,8 @@
     "notFound": "We couldn't find what you're looking for.",
     "internal": "Something went wrong on our end. We're working on it.",
     "generic": "Something went wrong. Please try again.",
-    "demoUnavailable": "This feature is not available in the demo version of the site."
+    "demoUnavailable": "This feature is not available in the demo version of the site.",
+    "invalidTransition": "This status change is not possible at the current stage. Refresh the page and choose another option."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -774,7 +775,24 @@
     "declineConfirmDescriptionNamed": "The proposal “{title}” will be declined. You can’t change this answer later.",
     "declineConfirm": "Decline",
     "acceptProposalSuccess": "The proposal has been accepted.",
-    "declineProposalSuccess": "The proposal has been declined."
+    "declineProposalSuccess": "The proposal has been declined.",
+    "sendOfferTo": "Send offer: {name} — {job}",
+    "offerMatchedJob": "Matched to job",
+    "offerSentOn": "Offer sent on {date}",
+    "offerDialogTitle": "Send this offer?",
+    "offerDialogDescription": "Check the candidate and the job before you send the invitation.",
+    "offerDialogCandidate": "Candidate",
+    "offerDialogJob": "Job",
+    "offerDialogDefaultInfo": "Without a personal message, the candidate will see this invitation in their own language:",
+    "offerDialogMessageLabel": "Personal message (optional)",
+    "offerDialogMessageHint": "The candidate will see your personal message exactly as you write it.",
+    "statusMenuTrigger": "Change status: {name} — {job} ({status})",
+    "statusMenuOptions": "Statuses: {name} — {job}",
+    "statusFinal": "Final status",
+    "statusFinalLabel": "Final status: {name} — {job} ({status})",
+    "statusConfirmQuestion": "Change the status to “{status}”? This cannot be undone.",
+    "statusConfirmAction": "Confirm",
+    "offerForJob": "Job: {job}"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -1276,7 +1294,9 @@
     "saving": "Saving...",
     "savedSuccess": "Your notification preferences have been saved.",
     "loadError": "We couldn’t load your notification preferences.",
-    "loadErrorHint": "We are not showing the form so that saving cannot overwrite your earlier choices. Please try again in a moment."
+    "loadErrorHint": "We are not showing the form so that saving cannot overwrite your earlier choices. Please try again in a moment.",
+    "pushEnabledLabel": "Push notifications",
+    "pushEnabledDescription": "Notifications on your device when something important happens."
   },
   "guides": {
     "pageTitle": "Guides",

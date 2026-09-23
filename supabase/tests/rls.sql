@@ -1353,4 +1353,44 @@ select pg_temp.expect_error('select count(*) from public.jobs', 'permission deni
 reset role; reset app.current_uid;
 delete from public.jobs where slug like 'facet-rls-%';
 
+-- ============================================================================
+-- KK. Języki serwisu jako dane (0069) — FK zamiast CHECK, jedna funkcja
+-- ============================================================================
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select array_agg(code order by code) from public.supported_locales) = array['en','fr','nl','pl'],
+  'KK1 anon czyta słownik języków: dokładnie pl/nl/fr/en');
+select pg_temp.expect_error($$insert into public.supported_locales(code) values ('de')$$,
+  'permission denied', 'KK2 anon nie dopisze języka');
+reset role;
+select set_config('app.current_uid', :'CANDA', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$delete from public.supported_locales where code = 'pl'$$,
+  'permission denied', 'KK3 zalogowany nie usunie języka');
+reset role; reset app.current_uid;
+
+select pg_temp.assert(public.is_supported_locale('pl') and not public.is_supported_locale('de')
+  and not public.is_supported_locale('PL') and public.is_supported_locale(null) is null,
+  'KK4 is_supported_locale: pl=true, de/PL=false, NULL=NULL (jak `x in (...)`)');
+select pg_temp.expect_error(
+  format($$update public.profiles set preferred_locale = 'de' where id = %L$$, :'CANDA'),
+  'foreign key', 'KK5 nieznany język w profilu odrzucony przez FK');
+select pg_temp.expect_error(
+  format($$update public.jobs set default_locale = 'de' where id = %L$$, :'JOBA'),
+  'foreign key', 'KK6 nieznany język oferty odrzucony przez FK');
+
+-- Nowy język = jeden wiersz: kolumny i funkcje przyjmują go bez zmian w kodzie SQL.
+insert into public.supported_locales(code) values ('ro');
+update public.profiles set preferred_locale = 'ro' where id = :'CANDA';
+select pg_temp.assert(public.resolve_recipient_locale(:'CANDA') = 'ro',
+  'KK7 po dodaniu ro: profil i resolve_recipient_locale przyjmują ro');
+update public.profiles set preferred_locale = null where id = :'CANDA';
+delete from public.supported_locales where code = 'ro';
+select pg_temp.assert(
+  not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname in ('public','auth') and p.prosrc ~ '''pl''\s*,\s*''nl''\s*,\s*''fr''\s*,\s*''en''')
+  and not exists (select 1 from pg_constraint where contype = 'c'
+    and pg_get_constraintdef(oid) ~ '''nl''::text'),
+  'KK8 żadna funkcja ani CHECK nie powiela listy języków');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

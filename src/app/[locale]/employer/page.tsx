@@ -215,6 +215,8 @@ export default async function EmployerDashboardPage({
                     <ApplicationStatusMenu
                       applicationId={application.id}
                       status={application.status}
+                      candidateName={application.candidateName || td('candidateFallback')}
+                      jobTitle={application.jobTitle}
                     />
                   </li>
                 ))}
@@ -276,6 +278,11 @@ export default async function EmployerDashboardPage({
                       {candidate.city ? (
                         <p className="truncate text-xs text-muted-foreground">{candidate.city}</p>
                       ) : null}
+                      {candidate.jobTitle ? (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {td('offerForJob', { job: candidate.jobTitle })}
+                        </p>
+                      ) : null}
                     </div>
                     <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-success-text">
                       {candidate.match}%
@@ -283,6 +290,10 @@ export default async function EmployerDashboardPage({
                     <SendOfferButton
                       jobId={candidate.jobId}
                       candidateId={candidate.candidateId}
+                      candidateName={candidate.name || td('candidateFallback')}
+                      jobTitle={candidate.jobTitle}
+                      jobSlug={candidate.jobSlug}
+                      offerSentAt={candidate.offerSentAt}
                       className="w-full sm:w-auto"
                     />
                   </li>

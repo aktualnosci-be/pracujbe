@@ -542,7 +542,8 @@
     "notFound": "Nie znaleziono tego, czego szukasz.",
     "internal": "Wystąpił błąd po naszej stronie. Pracujemy nad tym.",
     "generic": "Coś poszło nie tak. Spróbuj ponownie.",
-    "demoUnavailable": "Ta funkcja nie działa w wersji demonstracyjnej serwisu."
+    "demoUnavailable": "Ta funkcja nie działa w wersji demonstracyjnej serwisu.",
+    "invalidTransition": "Tej zmiany statusu nie można wykonać na obecnym etapie. Odśwież stronę i wybierz inną opcję."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -774,7 +775,24 @@
     "declineConfirmDescriptionNamed": "Propozycja „{title}” zostanie odrzucona. Tej odpowiedzi nie można później zmienić.",
     "declineConfirm": "Odrzuć",
     "acceptProposalSuccess": "Propozycja została przyjęta.",
-    "declineProposalSuccess": "Propozycja została odrzucona."
+    "declineProposalSuccess": "Propozycja została odrzucona.",
+    "sendOfferTo": "Wyślij propozycję: {name} — {job}",
+    "offerMatchedJob": "Dopasowanie do oferty",
+    "offerSentOn": "Propozycja wysłana {date}",
+    "offerDialogTitle": "Wysłać propozycję?",
+    "offerDialogDescription": "Sprawdź kandydata i ofertę, zanim wyślesz zaproszenie.",
+    "offerDialogCandidate": "Kandydat",
+    "offerDialogJob": "Oferta pracy",
+    "offerDialogDefaultInfo": "Jeśli nie dodasz własnej wiadomości, kandydat zobaczy to zaproszenie w swoim języku:",
+    "offerDialogMessageLabel": "Własna wiadomość (opcjonalnie)",
+    "offerDialogMessageHint": "Własną wiadomość kandydat zobaczy dokładnie tak, jak ją napiszesz.",
+    "statusMenuTrigger": "Zmień status: {name} — {job} ({status})",
+    "statusMenuOptions": "Statusy: {name} — {job}",
+    "statusFinal": "Status końcowy",
+    "statusFinalLabel": "Status końcowy: {name} — {job} ({status})",
+    "statusConfirmQuestion": "Zmienić status na „{status}”? Tej zmiany nie można cofnąć.",
+    "statusConfirmAction": "Potwierdź",
+    "offerForJob": "Oferta: {job}"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1276,7 +1294,9 @@
     "saving": "Zapisywanie...",
     "savedSuccess": "Preferencje powiadomień zostały zapisane.",
     "loadError": "Nie udało się wczytać Twoich preferencji powiadomień.",
-    "loadErrorHint": "Nie pokazujemy formularza, żeby zapis nie nadpisał Twoich wcześniejszych wyborów. Spróbuj ponownie za chwilę."
+    "loadErrorHint": "Nie pokazujemy formularza, żeby zapis nie nadpisał Twoich wcześniejszych wyborów. Spróbuj ponownie za chwilę.",
+    "pushEnabledLabel": "Powiadomienia push",
+    "pushEnabledDescription": "Powiadomienia na urządzeniu, gdy dzieje się coś ważnego."
   },
   "guides": {
     "pageTitle": "Poradniki",

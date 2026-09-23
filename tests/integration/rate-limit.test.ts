@@ -50,17 +50,23 @@ beforeAll(async () => {
   }
   if (!ready) throw new Error('Izolowany PostgreSQL nie uruchomił się.');
   await admin.query(readFileSync(new URL('../../database/bootstrap/0001_roles_and_identity.sql', import.meta.url), 'utf8'));
-  const migrations = new URL('../../supabase/migrations/', import.meta.url);
+  // Kolejność jak w produkcji (scripts/db/production-migrations.mjs, test-rls.sh): pliki
+  // domenowe i auth razem, po nazwie. Migracja późniejsza niż auth (np. 0069) widzi wtedy
+  // obiekty auth tak samo jak na Railway.
+  const migrationFiles = ['../../supabase/migrations/', '../../database/auth/']
+    .flatMap((dir) => {
+      const base = new URL(dir, import.meta.url);
+      return readdirSync(base).filter((name) => /^\d{4}_.+\.sql$/.test(name))
+        .map((name) => ({ name, url: new URL(name, base) }));
+    })
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   await admin.query('BEGIN');
-  for (const filename of readdirSync(migrations).filter((name) => name.endsWith('.sql')).sort()) {
-    await admin.query(readFileSync(new URL(filename, migrations), 'utf8'));
-  }
-  for (const filename of ['0057_better_auth_core.sql', '0058_rate_limit_role.sql', '0059_signup_receipts.sql']) {
-    if (filename === '0058_rate_limit_role.sql') {
+  for (const { name, url } of migrationFiles) {
+    if (name === '0058_rate_limit_role.sql') {
       domainFunctionPrivileges = (await admin.query(domainFunctionPrivilegesSql)).rows;
     }
-    await admin.query(readFileSync(new URL(`../../database/auth/${filename}`, import.meta.url), 'utf8'));
-    if (filename === '0058_rate_limit_role.sql') {
+    await admin.query(readFileSync(url, 'utf8'));
+    if (name === '0058_rate_limit_role.sql') {
       expect((await admin.query(domainFunctionPrivilegesSql)).rows).toEqual(domainFunctionPrivileges);
     }
   }

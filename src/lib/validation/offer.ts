@@ -18,7 +18,9 @@ export const offerSchema = z.object({
     .string({ required_error: 'offer.error.messageRequired' })
     .trim()
     .min(10, 'offer.error.messageTooShort')
-    .max(4000, 'offer.error.messageTooLong'),
+    .max(4000, 'offer.error.messageTooLong')
+    // Opcjonalna: bez własnej treści kandydat widzi standardowe zaproszenie w swoim języku (#289).
+    .optional(),
   locale: localeSchema.optional(),
   idempotencyKey: z
     .string({ required_error: 'offer.error.idempotencyKeyRequired' })

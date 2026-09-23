@@ -124,11 +124,11 @@ export function CandidateProposalsList({
                   />
                 </div>
 
-                {offer.message ? (
-                  <p className="whitespace-pre-line break-words border-l-4 border-primary bg-soft px-4 py-3 text-base leading-relaxed text-foreground">
-                    {offer.message}
-                  </p>
-                ) : null}
+                {/* Pusta treść = standardowe zaproszenie w języku KANDYDATA (Invariant #1, #289);
+                    loader zamienia zapisany wcześniej szablon na ''. Własna treść bez zmian. */}
+                <p className="whitespace-pre-line break-words border-l-4 border-primary bg-soft px-4 py-3 text-base leading-relaxed text-foreground">
+                  {offer.message || t('offerDefaultMessage')}
+                </p>
 
                 <div className="flex flex-wrap items-center gap-4 border-t border-border pt-4">
                   <ProposalActions
