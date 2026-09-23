@@ -140,8 +140,16 @@
     "close": "Sluiten"
   },
   "home": {
-    "heroTitle": "Vind werk in België",
-    "heroSubtitle": "Bekijk gecontroleerde vacatures en solliciteer zonder ingewikkeld cv.",
+    "heroTitle": "Jouw vaardigheden. Jouw plek. Jouw nieuwe start.",
+    "heroTitleLine1": "Jouw vaardigheden.",
+    "heroTitleLine2": "Jouw plek.",
+    "heroTitleLine3": "Jouw nieuwe start.",
+    "heroEyebrow": "Werken in België",
+    "heroSubtitle": "Vind werk waarin je kunt doen waar je goed in bent. Vergelijk de voorwaarden en solliciteer met je profiel — zonder cv te schrijven.",
+    "heroBrowseJobs": "Bekijk vacatures",
+    "heroCreateProfile": "Maak een kandidatenprofiel",
+    "heroPhotoCaption": "Werk draait om mensen.",
+    "heroPhotoDisclaimer": "Illustratieve foto — niet gekoppeld aan een specifieke vacature.",
     "heroSearchJobLabel": "Functie, trefwoord",
     "heroSearchLocationLabel": "Locatie",
     "searchJobPlaceholder": "bv. monteur, magazijnier, verzorgende",

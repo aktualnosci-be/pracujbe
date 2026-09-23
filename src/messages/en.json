@@ -140,8 +140,16 @@
     "close": "Close"
   },
   "home": {
-    "heroTitle": "Find work in Belgium",
-    "heroSubtitle": "Browse verified jobs and apply without a complicated CV.",
+    "heroTitle": "Your skills. Your place. Your new start.",
+    "heroTitleLine1": "Your skills.",
+    "heroTitleLine2": "Your place.",
+    "heroTitleLine3": "Your new start.",
+    "heroEyebrow": "Work in Belgium",
+    "heroSubtitle": "Find work that makes use of what you do well. Compare conditions and apply with your profile — no CV to write.",
+    "heroBrowseJobs": "Browse jobs",
+    "heroCreateProfile": "Create a candidate profile",
+    "heroPhotoCaption": "Work is about people.",
+    "heroPhotoDisclaimer": "Illustrative photo — not connected to a specific job.",
     "heroSearchJobLabel": "Job title, keyword",
     "heroSearchLocationLabel": "Location",
     "searchJobPlaceholder": "e.g. mechanic, warehouse worker, carer",

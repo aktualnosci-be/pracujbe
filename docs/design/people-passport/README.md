@@ -34,6 +34,8 @@ Zapis publiczny: wspólny odczyt pod sesją/RLS dla kolekcji, przyciski detalu s
 
 Kontynuacja: fotograficzny nagłówek strony głównej używa lokalnego WebP (90 KB) z zatwierdzonego projektu. Sprawdzono w przeglądarce układ desktop i ładowanie zdjęcia oraz brak overflow na 320 px w czterech językach. Publiczny home, lista ofert i filtry mają także zweryfikowany reflow przy 200% (efektywne 640 px) w PL/NL/FR/EN. Szczegóły oraz podobne oferty korzystają z tego samego formattera stawek co paszport: bez zaokrąglania groszy, z od/do i bez deklarowania negocjacji przy braku kwoty (#22).
 
+Doprecyzowanie hero (#166): trzyczęściowy nagłówek i krótki opis z prototypu są dostępne w PL/NL/FR/EN. Przyciski prowadzą do publicznej listy ofert oraz rejestracji kandydata; fotografia ma podpis i jawne oznaczenie jako ilustracyjna. Wyszukiwarka pozostaje bez zmian. Przeglądarkowe testy sprawdzają układ przy 320 i 1440 px, nawigację klawiaturą i reflow przy rzeczywistym powiększeniu 200%.
+
 Etap #4, wraz z dokładnymi licznikami filtrów, jest scalony w `main` w commicie `440409e`: jeden agregat bazy liczy pełny zbiór ofert, a interfejs obsługuje ładowanie, błąd, ponowienie i wyścigi żądań bez pokazywania starej liczby jako aktualnej. Wdrożenie produkcyjne przechodzi przez zielone CI i Railway, a jego poprawność jest weryfikowana osobno.
 
 Etap #5: wspólny wskaźnik kroków kreatora profilu kandydata i oferty pokazuje wyraźnie bieżący etap oraz postęp, zachowując pełną kolejność kroków dla czytników ekranu. Formularze zachowują dotychczasowe pola, walidację i zapis. Układ pasków akcji i treści kreatorów sprawdzono przy 320 px oraz efektywnej szerokości 640 px (powiększenie 200%) w PL/NL/FR/EN. Pozostałe ekrany paneli nadal wymagają przeglądu w ramach #5.
