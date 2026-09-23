@@ -5,7 +5,7 @@ import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import type { Locale } from '@/i18n/routing';
 import {
-  getConversations,
+  getConversationsResult,
   getConversationThread,
   type ConversationThread,
 } from '@/lib/data/messages';
@@ -41,7 +41,8 @@ export async function MessagesView({
 }: MessagesViewProps) {
   const t = await getTranslations({ locale, namespace: 'messages' });
 
-  const conversations = await getConversations();
+  const result = await getConversationsResult();
+  const conversations = result.items;
 
   // Aktywna konwersacja tylko wtedy, gdy należy do użytkownika (jest na jego liście).
   const activeId =
@@ -64,13 +65,13 @@ export async function MessagesView({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+        <p className="mt-1 text-base text-muted-foreground">{t('subtitle')}</p>
       </div>
 
-      <div className="grid h-[calc(100vh-14rem)] min-h-[28rem] grid-cols-1 overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-[20rem_1fr]">
+      <div className="grid min-h-[28rem] grid-cols-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm lg:h-[calc(100vh-14rem)] lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
         {/* Lista konwersacji — na mobile ukryta, gdy otwarty wątek */}
         <aside
           className={cn(
@@ -78,12 +79,20 @@ export async function MessagesView({
             activeId ? 'hidden' : 'block',
           )}
         >
-          <ConversationList
+          {result.status === 'error' ? (
+            <div role="alert" className="p-6 text-center">
+              <p className="text-base font-semibold text-foreground">{t('loadError')}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{t('loadErrorHint')}</p>
+              <Link href={basePath} className="mt-4 inline-flex min-h-12 items-center rounded-xl border border-border px-4 font-semibold text-foreground hover:bg-soft">
+                {t('retry')}
+              </Link>
+            </div>
+          ) : <ConversationList
             items={listItems}
             activeId={activeId}
             basePath={basePath}
             locale={locale}
-          />
+          />}
         </aside>
 
         {/* Wątek — na mobile ukryty, gdy nic nie wybrano */}
@@ -107,7 +116,7 @@ export async function MessagesView({
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center p-8 text-center">
-              <p className="text-sm text-muted-foreground">{t('selectConversation')}</p>
+              <p className="text-base text-muted-foreground">{t('selectConversation')}</p>
             </div>
           )}
         </section>
