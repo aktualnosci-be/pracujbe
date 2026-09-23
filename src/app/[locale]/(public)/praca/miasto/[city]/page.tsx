@@ -1,6 +1,6 @@
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { ArrowRight, SearchX } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
@@ -9,6 +9,7 @@ import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getJobs, type LocationKey } from '@/lib/jobs';
 import { JobCard } from '@/components/public/JobCard';
+import { resolveCityAlias } from './city-alias';
 
 /**
  * Landing-page miasta `/praca/miasto/<klucz>` (SSR/SSG, INDEKSOWALNY).
@@ -105,6 +106,9 @@ export default async function CityLandingPage({ params }: PageProps) {
   setRequestLocale(locale);
 
   if (!isLocationKey(city)) {
+    // Nazwa miasta w dowolnym języku / inna wielkość liter → kanoniczny adres z kluczem.
+    const alias = await resolveCityAlias(city, LOCATION_KEYS);
+    if (alias) permanentRedirect(`/${locale}${CITY_BASE}/${alias}`);
     notFound();
   }
 
