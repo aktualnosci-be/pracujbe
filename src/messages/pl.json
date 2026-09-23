@@ -936,7 +936,8 @@
     "agreeTerms": "Akceptuję regulamin i politykę prywatności.",
     "stepAnnounce": "Krok {current} z {total}: {title}",
     "agreeTermsLinks": "Akceptuję <terms>regulamin</terms> i <privacy>politykę prywatności</privacy>.",
-    "opensInNewTab": "(otwiera się w nowej karcie)"
+    "opensInNewTab": "(otwiera się w nowej karcie)",
+    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy."
   },
   "filters": {
     "title": "Filtry",
@@ -1090,7 +1091,8 @@
       "bioTooLong": "Opis jest za długi.",
       "termsRequired": "Musisz zaakceptować regulamin i politykę prywatności.",
       "availabilityRequired": "Wybierz swoją dostępność.",
-      "invalid": "Nieprawidłowa wartość."
+      "invalid": "Nieprawidłowa wartość.",
+      "itemTooLong": "Jedna z pozycji listy jest za długa. Skróć ją."
     }
   },
   "jobWizard": {
@@ -1199,7 +1201,9 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Nie podano",
     "notVerifiedNote": "Wersja robocza została zapisana. Publikacja będzie możliwa po weryfikacji firmy.",
-    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy."
+    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy.",
+    "stepAnnounce": "Krok {current} z {total}: {title}",
+    "goToOffers": "Przejdź do listy ofert"
   },
   "messages": {
     "title": "Wiadomości",

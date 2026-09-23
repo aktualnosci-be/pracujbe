@@ -58,16 +58,34 @@ export const candidateLanguageSchema = z.object({
   level: z.enum(LANGUAGE_LEVELS),
 });
 
+/**
+ * Limity długości pojedynczej pozycji list onboardingu (#364). Umiejętności i certyfikaty
+ * odpowiadają `left(btrim(...), N)` w `set_candidate_skills`/`set_candidate_certificates` (0028) —
+ * walidacja odrzuca za długą pozycję, zanim baza by ją po cichu obcięła. Zawód ma limit zgodny
+ * z polem zawodu w kreatorze oferty (80).
+ */
+export const CANDIDATE_ITEM_LIMITS = {
+  occupation: 80,
+  skill: 120,
+  certificate: 160,
+} as const;
+
+const itemLine = (max: number) =>
+  z.string().trim().min(1).max(max, 'candidate.error.itemTooLong');
+
 /** Krok 1 — kim jesteś: dane podstawowe. */
 export const step1Schema = z.object({
   firstName: z
     .string({ required_error: 'candidate.error.firstNameRequired' })
     .trim()
+    // Pusty string (formularz wysyła '') → „wymagane", „za krótkie" dopiero dla 1 znaku (#367).
+    .min(1, 'candidate.error.firstNameRequired')
     .min(2, 'candidate.error.firstNameTooShort')
     .max(80, 'candidate.error.firstNameTooLong'),
   lastName: z
     .string({ required_error: 'candidate.error.lastNameRequired' })
     .trim()
+    .min(1, 'candidate.error.lastNameRequired')
     .min(2, 'candidate.error.lastNameTooShort')
     .max(80, 'candidate.error.lastNameTooLong'),
   phone: z
@@ -81,7 +99,7 @@ export const step1Schema = z.object({
 /** Krok 2 — czego szukasz: zawody i kategorie. */
 export const step2Schema = z.object({
   occupations: z
-    .array(z.string().trim().min(1))
+    .array(itemLine(CANDIDATE_ITEM_LIMITS.occupation))
     .min(1, 'candidate.error.occupationsRequired')
     .max(10, 'candidate.error.occupationsTooMany'),
   categories: z
@@ -93,7 +111,7 @@ export const step2Schema = z.object({
 /** Krok 3 — umiejętności i doświadczenie. */
 export const step3Schema = z.object({
   skills: z
-    .array(z.string().trim().min(1))
+    .array(itemLine(CANDIDATE_ITEM_LIMITS.skill))
     .max(50, 'candidate.error.skillsTooMany')
     .default([]),
   experienceYears: z
@@ -128,7 +146,7 @@ export const step5Schema = z.object({
     .max(15, 'candidate.error.languagesTooMany')
     .default([]),
   certificates: z
-    .array(z.string().trim().min(1))
+    .array(itemLine(CANDIDATE_ITEM_LIMITS.certificate))
     .max(30, 'candidate.error.certificatesTooMany')
     .default([]),
 });

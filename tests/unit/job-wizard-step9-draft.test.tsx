@@ -137,7 +137,7 @@ describe("JobWizard krok 9: szkic bez zgody na publikację (#193)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "saveExit" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("saveError");
+    expect(await screen.findByRole("alert")).toHaveTextContent("errors.internal");
     expect(push).not.toHaveBeenCalled();
   });
 });

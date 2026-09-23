@@ -936,7 +936,8 @@
     "agreeTerms": "I accept the terms of use and the privacy policy.",
     "stepAnnounce": "Step {current} of {total}: {title}",
     "agreeTermsLinks": "I accept the <terms>terms of use</terms> and the <privacy>privacy policy</privacy>.",
-    "opensInNewTab": "(opens in a new tab)"
+    "opensInNewTab": "(opens in a new tab)",
+    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list."
   },
   "filters": {
     "title": "Filters",
@@ -1090,7 +1091,8 @@
       "bioTooLong": "The description is too long.",
       "termsRequired": "You must accept the terms and privacy policy.",
       "availabilityRequired": "Choose your availability.",
-      "invalid": "Invalid value."
+      "invalid": "Invalid value.",
+      "itemTooLong": "One of the list items is too long. Please shorten it."
     }
   },
   "jobWizard": {
@@ -1199,7 +1201,9 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Not provided",
     "notVerifiedNote": "The draft has been saved. Publishing will be available once the company is verified.",
-    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list."
+    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list.",
+    "stepAnnounce": "Step {current} of {total}: {title}",
+    "goToOffers": "Go to your job list"
   },
   "messages": {
     "title": "Messages",
