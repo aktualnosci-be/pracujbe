@@ -885,3 +885,189 @@ export async function getFunnelStats(): Promise<FunnelStatsLoad> {
     return { status: 'error' };
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Szczegół zgłoszenia (#300)
+ * ------------------------------------------------------------------------- */
+
+export interface EmployerApplicationDetail {
+  id: string;
+  status: string;
+  candidateId: string;
+  candidateName: string;
+  jobId: string;
+  jobTitle: string;
+  /** Treść wpisana przez kandydata w formularzu aplikowania (pusta = brak). */
+  message: string;
+  phone: string;
+  /** Surowy `availability_status` (immediate/within_month/…); pusty = brak. */
+  availability: string;
+  submittedAt: string | null;
+  /** Wynik dopasowania 0–100 (applications.match_score, inaczej matches.score); null = brak. */
+  matchScore: number | null;
+  /** Profil zawodowy — null, gdy kandydat nie ma profilu lub RLS go nie udostępnia. */
+  profile: {
+    headline: string;
+    city: string;
+    experienceYears: number | null;
+    hasDrivingLicense: boolean;
+    skills: string[];
+    languages: { label: string; level: string }[];
+    certificates: string[];
+  } | null;
+  history: { toStatus: string; at: string }[];
+}
+
+/**
+ * Jawny stan odczytu szczegółu: `not_found` obejmuje zarówno brak rekordu, jak i brak dostępu
+ * (RLS `applications_select` = recruiter+ firmy — 0039 — ukrywa cudze zgłoszenia jako brak
+ * wiersza, więc nie rozróżniamy, by nie ujawniać istnienia cudzych danych).
+ */
+export type EmployerApplicationDetailLoad =
+  | { status: 'ok'; application: EmployerApplicationDetail; isDemo: boolean }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const DEMO_APPLICATION_DETAILS: Record<string, Omit<EmployerApplicationDetail, 'id' | 'candidateName' | 'jobTitle' | 'status'>> = {
+  'demo-app-1': {
+    candidateId: 'demo-c-1', jobId: '12343', message: 'Mam 6 lat doświadczenia w utrzymaniu ruchu i uprawnienia SEP. Mogę zacząć od zaraz.',
+    phone: '+32 470 12 34 56', availability: 'immediate', submittedAt: '2026-09-20T08:30:00Z', matchScore: 92,
+    profile: { headline: 'Elektryk przemysłowy', city: 'Charleroi', experienceYears: 6, hasDrivingLicense: true, skills: ['Instalacje przemysłowe', 'Automatyka PLC'], languages: [{ label: 'Polski', level: 'native' }, { label: 'Francuski', level: 'intermediate' }], certificates: ['VCA Basis'] },
+    history: [{ toStatus: 'submitted', at: '2026-09-20T08:30:00Z' }],
+  },
+  'demo-app-2': {
+    candidateId: 'demo-c-2', jobId: '12345', message: '',
+    phone: '+32 471 98 76 54', availability: 'within_month', submittedAt: '2026-09-19T10:00:00Z', matchScore: 88,
+    profile: { headline: 'Operator wózka widłowego', city: 'Liège', experienceYears: 4, hasDrivingLicense: true, skills: ['Wózek widłowy'], languages: [{ label: 'Polski', level: 'native' }], certificates: [] },
+    history: [{ toStatus: 'submitted', at: '2026-09-19T10:00:00Z' }, { toStatus: 'viewed', at: '2026-09-19T14:00:00Z' }],
+  },
+  'demo-app-3': {
+    candidateId: 'demo-c-3', jobId: '12344', message: 'Pracowałem 3 lata w magazynie w Antwerpii.',
+    phone: '+32 472 11 22 33', availability: 'flexible', submittedAt: '2026-09-17T09:00:00Z', matchScore: 85,
+    profile: null,
+    history: [{ toStatus: 'submitted', at: '2026-09-17T09:00:00Z' }, { toStatus: 'viewed', at: '2026-09-17T12:00:00Z' }, { toStatus: 'shortlisted', at: '2026-09-18T09:00:00Z' }],
+  },
+  'demo-app-4': {
+    candidateId: 'demo-c-4', jobId: '12341', message: '',
+    phone: '', availability: '', submittedAt: '2026-09-15T09:00:00Z', matchScore: null,
+    profile: null,
+    history: [{ toStatus: 'submitted', at: '2026-09-15T09:00:00Z' }, { toStatus: 'interview', at: '2026-09-16T09:00:00Z' }],
+  },
+};
+
+export async function getEmployerApplicationDetail(id: string): Promise<EmployerApplicationDetailLoad> {
+  if (!isSupabaseConfigured()) {
+    const base = DEMO_APPLICATIONS.find((application) => application.id === id);
+    const extra = DEMO_APPLICATION_DETAILS[id];
+    if (!base || !extra) return { status: 'not_found' };
+    return { status: 'ok', isDemo: true, application: { ...base, ...extra } };
+  }
+
+  if (!UUID_RE.test(id)) return { status: 'not_found' };
+
+  try {
+    const ctx = await loadContext();
+    if (!ctx) return { status: 'not_found' };
+    const { supabase, companyId } = ctx;
+
+    // RLS (0039): tylko kandydat lub recruiter+ oferty; dodatkowo zawężamy do AKTYWNEJ firmy.
+    const { data, error } = await supabase
+      .from('applications')
+      .select('id, status, candidate_id, job_id, message, phone, availability, submitted_at, match_score, profiles(first_name, last_name), jobs(title)')
+      .eq('id', id)
+      .eq('company_id', companyId)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { status: 'not_found' };
+
+    const row = asRecord(data);
+    const candidateId = asString(row['candidate_id']);
+    const jobId = asString(row['job_id']);
+    const person = asEmbeddedRecord(row['profiles']);
+    const job = asEmbeddedRecord(row['jobs']);
+
+    const [
+      { data: historyData, error: historyError },
+      { data: cpData, error: cpError },
+      { data: matchData, error: matchError },
+    ] = await Promise.all([
+      supabase
+        .from('application_status_history')
+        .select('to_status, created_at')
+        .eq('application_id', id)
+        .order('created_at', { ascending: true })
+        .limit(50),
+      // candidate_profiles_select_company (0009 + company_can_view_candidate recruiter+, 0033).
+      supabase
+        .from('candidate_profiles')
+        .select('id, headline, city, experience_years, has_driving_license')
+        .eq('profile_id', candidateId)
+        .is('deleted_at', null)
+        .maybeSingle(),
+      supabase.from('matches').select('score').eq('candidate_id', candidateId).eq('job_id', jobId).maybeSingle(),
+    ]);
+    if (historyError) throw historyError;
+    if (cpError) throw cpError;
+    if (matchError) throw matchError;
+
+    let profile: EmployerApplicationDetail['profile'] = null;
+    if (cpData) {
+      const cp = asRecord(cpData);
+      const cpId = asString(cp['id']);
+      const [
+        { data: skillData, error: skillError },
+        { data: langData, error: langError },
+        { data: certData, error: certError },
+      ] = await Promise.all([
+        supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', cpId).order('skill_label'),
+        supabase.from('candidate_languages').select('language_label, level').eq('candidate_profile_id', cpId).order('language_label'),
+        supabase.from('candidate_certificates').select('certificate_label').eq('candidate_profile_id', cpId).order('certificate_label'),
+      ]);
+      if (skillError) throw skillError;
+      if (langError) throw langError;
+      if (certError) throw certError;
+      const years = cp['experience_years'];
+      profile = {
+        headline: asString(cp['headline']),
+        city: asString(cp['city']),
+        experienceYears: typeof years === 'number' ? years : null,
+        hasDrivingLicense: cp['has_driving_license'] === true,
+        skills: asRows(skillData).map((r) => asString(r['skill_label'])).filter(Boolean),
+        languages: asRows(langData)
+          .map((r) => ({ label: asString(r['language_label']), level: asString(r['level']) }))
+          .filter((l) => l.label),
+        certificates: asRows(certData).map((r) => asString(r['certificate_label'])).filter(Boolean),
+      };
+    }
+
+    const appScore = row['match_score'];
+    const matchScore =
+      typeof appScore === 'number' ? appScore : matchData ? asNumber(asRecord(matchData)['score']) : null;
+
+    return {
+      status: 'ok',
+      isDemo: false,
+      application: {
+        id: asString(row['id']),
+        status: asString(row['status'], 'submitted'),
+        candidateId,
+        candidateName: fullName(person['first_name'], person['last_name']),
+        jobId,
+        jobTitle: asString(job['title']),
+        message: asString(row['message']).trim(),
+        phone: asString(row['phone']).trim(),
+        availability: asString(row['availability']),
+        submittedAt: asString(row['submitted_at']) || null,
+        matchScore,
+        profile,
+        history: asRows(historyData).map((r) => ({ toStatus: asString(r['to_status']), at: asString(r['created_at']) })),
+      },
+    };
+  } catch (error) {
+    captureError(error, { area: 'employer.getEmployerApplicationDetail' });
+    return { status: 'error' };
+  }
+}
