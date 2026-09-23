@@ -690,6 +690,7 @@
     "offersApplications": "{count, plural, one {# sollicitatie} other {# sollicitaties}}",
     "offersMatched": "{count} matches",
     "recentApplications": "Recente sollicitaties",
+    "recentApplicationsError": "De recente sollicitaties konden niet worden geladen. Probeer het opnieuw.",
     "sendOffer": "Voorstel versturen",
     "offerSentSuccess": "Voorstel is verzonden.",
     "statusChanged": "Status is gewijzigd.",
