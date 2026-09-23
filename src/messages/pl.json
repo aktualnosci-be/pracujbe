@@ -514,6 +514,7 @@
   },
   "errors": {
     "authInvalidCredentials": "Nieprawidłowy e-mail lub hasło.",
+    "authEmailNotConfirmed": "Najpierw potwierdź adres e-mail — kliknij link, który wysłaliśmy na Twoją skrzynkę.",
     "permissionDenied": "Nie masz uprawnień do tej operacji.",
     "validationFailed": "Sprawdź wprowadzone dane i spróbuj ponownie.",
     "jobNotActive": "Ta oferta nie jest już aktywna.",
