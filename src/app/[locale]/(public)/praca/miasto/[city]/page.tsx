@@ -73,6 +73,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const base = env.siteUrl;
   const path = `${CITY_BASE}/${city}`;
   const url = `${base}/${locale}${path}`;
+  const shareImage = new URL('/og.png', base).href;
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
     languages[supported] = `${base}/${supported}${path}`;
@@ -93,7 +94,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       siteName: 'Pracuj.be',
       type: 'website',
       locale,
+      images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
+    twitter: { card: 'summary_large_image', title, description, images: [shareImage] },
   };
 }
 

@@ -32,5 +32,5 @@ Pliki można odtworzyć poleceniem `node scripts/generate-icons.mjs` (zależnoś
 - Kolory zgodne z design tokens: primary `#D92932`, tło `#FFFFFF` (patrz `tailwind.config.ts`).
 - Eksportuj z jednego źródła wektorowego, żeby wszystkie rozmiary były ostre.
 - Weryfikacja maskable: https://maskable.app/ (podgląd przycięć).
-- Po dodaniu plików sprawdź `/manifest.webmanifest` (generowany przez `src/app/manifest.ts`) —
+- Po dodaniu plików sprawdź manifesty `/{locale}/manifest.webmanifest` (generator `src/lib/pwa/manifest.ts`; stary `/manifest.webmanifest` pozostaje dla PL) —
   wszystkie `src` muszą wskazywać istniejące pliki, inaczej instalacja PWA zgłosi błąd ikon.

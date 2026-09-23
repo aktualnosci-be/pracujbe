@@ -43,7 +43,7 @@ const TONE_CLASS: Record<Tone, string> = {
   blue: 'bg-accent/10 text-accent-dark',
   amber: 'bg-warning/10 text-warning-text',
   green: 'bg-success/10 text-success-text',
-  red: 'bg-error/10 text-error',
+  red: 'bg-error/10 text-error-text',
   neutral: 'bg-muted text-muted-foreground',
   activeDot: 'bg-success/10 text-success-text',
   pausedDot: 'bg-warning/10 text-warning-text',

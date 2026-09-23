@@ -45,6 +45,7 @@ const config: Config = {
         warning: 'hsl(var(--warning))',
         'warning-text': 'hsl(var(--warning-text))',
         error: 'hsl(var(--error))',
+        'error-text': 'hsl(var(--error-text))',
         card: 'hsl(var(--card))',
       },
       borderRadius: {

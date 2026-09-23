@@ -609,12 +609,16 @@ export async function getCompanyJobs(): Promise<EmployerJob[]> {
 }
 
 /** Najnowsze aplikacje na oferty firmy (do wiersza akcji zmiany statusu). */
-export async function getRecentApplications(): Promise<EmployerApplication[]> {
-  if (!isSupabaseConfigured()) return DEMO_APPLICATIONS;
+export type RecentApplicationsLoad =
+  | { status: 'ok'; applications: EmployerApplication[] }
+  | { status: 'error' };
+
+export async function getRecentApplications(): Promise<RecentApplicationsLoad> {
+  if (!isSupabaseConfigured()) return { status: 'ok', applications: DEMO_APPLICATIONS };
 
   try {
     const ctx = await loadContext();
-    if (!ctx) return [];
+    if (!ctx) return { status: 'ok', applications: [] };
     const { supabase, companyId } = ctx;
 
     // Kandydat, który aplikował, jest widoczny dla firmy (company_can_view_candidate) — RLS
@@ -628,7 +632,7 @@ export async function getRecentApplications(): Promise<EmployerApplication[]> {
       .limit(6);
     if (error) throw error;
 
-    return asRows(data).map((r) => {
+    const applications = asRows(data).map((r) => {
       const profile = asEmbeddedRecord(r['profiles']);
       const job = asEmbeddedRecord(r['jobs']);
       return {
@@ -638,9 +642,10 @@ export async function getRecentApplications(): Promise<EmployerApplication[]> {
         status: asString(r['status'], 'submitted'),
       };
     });
+    return { status: 'ok', applications };
   } catch (error) {
     captureError(error, { area: 'employer.getRecentApplications' });
-    return [];
+    return { status: 'error' };
   }
 }
 
