@@ -41,7 +41,7 @@ export default async function OfflinePage({ params }: OfflinePageProps) {
       </div>
       <Link
         href="/"
-        className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-dark"
+        className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-dark"
       >
         {t('retry')}
       </Link>
