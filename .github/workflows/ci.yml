@@ -110,16 +110,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - name: Restore node_modules
-        id: node-modules
-        uses: actions/cache/restore@v4
-        with:
-          path: node_modules
-          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
-      - name: Install dependencies (cache miss)
-        if: steps.node-modules.outputs.cache-hit != 'true'
+          cache: npm
+      # Nie ufamy kompletności odtworzonego node_modules w tym jobie. npm ci
+      # odtwarza drzewo z lockfile; cache npm przyspiesza pobranie paczek.
+      - name: Install dependencies from lockfile
         run: npm ci --prefer-offline --no-audit --fund=false
-      - run: npm run test
+      - name: Verify ms dependency before tests
+        run: node -e "console.log('ms resolved at:', require.resolve('ms'))"
+      - name: Run unit tests
+        id: vitest
+        run: npm run test
+      - name: Diagnose dependency state after failure
+        if: failure()
+        run: |
+          pwd
+          if test -f node_modules/ms/index.js; then
+            echo 'node_modules/ms/index.js exists after failure'
+          else
+            echo 'node_modules/ms/index.js is missing after failure'
+          fi
+          npm ls ms --depth=0 || true
 
   sca:
     name: SCA (npm audit)
