@@ -45,7 +45,9 @@ const DEMO_COMPANY: MyCompany = {
  * ------------------------------------------------------------------------- */
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function asString(value: unknown, fallback = ''): string {
@@ -77,8 +79,11 @@ function asEmbeddedRecord(value: unknown): Record<string, unknown> {
  * Dane aktywnej firmy zalogowanego użytkownika albo `null`, gdy nie należy do żadnej firmy
  * (ekran pokaże wtedy formularz zakładania). Bez env → firma DEMO (`verified`).
  */
-export async function getMyCompany(): Promise<MyCompany | null> {
-  if (!isSupabaseConfigured()) return DEMO_COMPANY;
+export type MyCompanyLoad =
+  { status: 'ok'; company: MyCompany | null } | { status: 'error' };
+
+export async function getMyCompany(): Promise<MyCompanyLoad> {
+  if (!isSupabaseConfigured()) return { status: 'ok', company: DEMO_COMPANY };
 
   try {
     const { createServerClient } = await import('@/lib/supabase/server');
@@ -87,16 +92,18 @@ export async function getMyCompany(): Promise<MyCompany | null> {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return null;
+    if (!user) return { status: 'ok', company: null };
 
     // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
     const { getActiveCompanyId } = await import('@/lib/company-context');
     const activeId = await getActiveCompanyId(supabase, user.id);
-    if (!activeId) return null;
+    if (!activeId) return { status: 'ok', company: null };
 
     const { data, error } = await supabase
       .from('company_members')
-      .select('company_id, companies(id, name, slug, status, vat_number, verified_at)')
+      .select(
+        'company_id, companies(id, name, slug, status, vat_number, verified_at)',
+      )
       .eq('profile_id', user.id)
       .eq('company_id', activeId)
       .eq('is_active', true)
@@ -104,22 +111,25 @@ export async function getMyCompany(): Promise<MyCompany | null> {
     if (error) throw error;
 
     const row = asRows(data)[0];
-    if (!row) return null;
+    if (!row) return { status: 'error' };
 
     const company = asEmbeddedRecord(row['companies']);
     const id = asString(company['id']);
-    if (!id) return null;
+    if (!id) return { status: 'error' };
 
     return {
-      id,
-      name: asString(company['name']),
-      slug: asString(company['slug']),
-      status: asString(company['status'], 'unverified'),
-      vatNumber: asNullableString(company['vat_number']),
-      verifiedAt: asNullableString(company['verified_at']),
+      status: 'ok',
+      company: {
+        id,
+        name: asString(company['name']),
+        slug: asString(company['slug']),
+        status: asString(company['status'], 'unverified'),
+        vatNumber: asNullableString(company['vat_number']),
+        verifiedAt: asNullableString(company['verified_at']),
+      },
     };
   } catch (error) {
     captureError(error, { area: 'company.getMyCompany' });
-    return null;
+    return { status: 'error' };
   }
 }

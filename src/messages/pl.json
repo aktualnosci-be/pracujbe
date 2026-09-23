@@ -62,6 +62,8 @@
     "discountInvalid": "Kod jest nieprawidłowy lub wygasł."
   },
   "company": {
+    "loadError": "Nie udało się wczytać danych firmy",
+    "loadErrorHint": "Aby nie zmienić danych przez pomyłkę, nie otwieramy pustego formularza. Spróbuj ponownie.",
     "title": "Firma",
     "createTitle": "Załóż profil firmy",
     "createSubtitle": "Podaj podstawowe dane, aby zacząć publikować oferty.",

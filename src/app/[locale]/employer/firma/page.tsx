@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { getMyCompany } from '@/lib/data/company';
 import { CompanyForm } from '@/components/employer/CompanyForm';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
+import { CompanyLoadError } from '@/components/employer/CompanyLoadError';
 
 /**
  * Panel pracodawcy — Firma (Etap 4).
@@ -50,13 +51,18 @@ export default async function EmployerCompanyPage({
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'company' });
-  const company = await getMyCompany();
+  const companyLoad = await getMyCompany();
+  const company = companyLoad.status === 'ok' ? companyLoad.company : null;
 
   const statusLabel =
-    company && STATUS_KEY[company.status] ? t(STATUS_KEY[company.status]!) : company?.status ?? '';
+    company && STATUS_KEY[company.status]
+      ? t(STATUS_KEY[company.status]!)
+      : (company?.status ?? '');
   const verifiedLabel =
     company?.verifiedAt != null
-      ? new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(new Date(company.verifiedAt))
+      ? new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(
+          new Date(company.verifiedAt),
+        )
       : null;
 
   return (
@@ -79,38 +85,52 @@ export default async function EmployerCompanyPage({
               {company?.name || t('title')}
             </h1>
             <p className="mt-1 text-sm text-background/80">
-              {company ? t('detailsSubtitle') : t('createSubtitle')}
+              {companyLoad.status === 'error'
+                ? t('loadErrorHint')
+                : company
+                  ? t('detailsSubtitle')
+                  : t('createSubtitle')}
             </p>
           </div>
         </div>
       </header>
 
-      {company ? (
+      {companyLoad.status === 'error' ? (
+        <CompanyLoadError />
+      ) : company ? (
         <>
           <CompanyStatusBanner status={company.status} />
 
           {/* Dane read-only (nieedytowalne przez pracodawcę: identyfikator, status, weryfikacja). */}
           <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
-            <h2 className="text-base font-semibold text-foreground">{t('detailsTitle')}</h2>
+            <h2 className="text-base font-semibold text-foreground">
+              {t('detailsTitle')}
+            </h2>
             <dl className="mt-5 grid grid-cols-1 gap-px overflow-hidden rounded-2xl bg-border sm:grid-cols-2">
               <div className="min-w-0 bg-card p-4 sm:p-5">
                 <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {t('slug')}
                 </dt>
-                <dd className="mt-2 break-all text-base font-medium text-foreground">{company.slug || '—'}</dd>
+                <dd className="mt-2 break-all text-base font-medium text-foreground">
+                  {company.slug || '—'}
+                </dd>
               </div>
               <div className="min-w-0 bg-card p-4 sm:p-5">
                 <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {t('statusLabel')}
                 </dt>
-                <dd className="mt-2 break-words text-base font-medium text-foreground">{statusLabel}</dd>
+                <dd className="mt-2 break-words text-base font-medium text-foreground">
+                  {statusLabel}
+                </dd>
               </div>
               {verifiedLabel ? (
                 <div className="min-w-0 bg-card p-4 sm:p-5">
                   <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {t('verifiedAt')}
                   </dt>
-                  <dd className="mt-2 break-words text-base font-medium text-foreground">{verifiedLabel}</dd>
+                  <dd className="mt-2 break-words text-base font-medium text-foreground">
+                    {verifiedLabel}
+                  </dd>
                 </div>
               ) : null}
             </dl>
@@ -118,21 +138,32 @@ export default async function EmployerCompanyPage({
 
           {/* Edycja danych podstawowych (nazwa, VAT) — status pozostaje po stronie admina. */}
           <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
-            <h2 className="text-base font-semibold text-foreground">{t('editTitle')}</h2>
+            <h2 className="text-base font-semibold text-foreground">
+              {t('editTitle')}
+            </h2>
             <div className="mt-4">
               <CompanyForm
                 mode="edit"
-                defaultValues={{ name: company.name, vatNumber: company.vatNumber ?? '' }}
+                defaultValues={{
+                  name: company.name,
+                  vatNumber: company.vatNumber ?? '',
+                }}
               />
             </div>
           </section>
 
-          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{t('verificationNote')}</p>
+          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            {t('verificationNote')}
+          </p>
         </>
       ) : (
         <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
-          <h2 className="text-base font-semibold text-foreground">{t('createTitle')}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t('verificationNote')}</p>
+          <h2 className="text-base font-semibold text-foreground">
+            {t('createTitle')}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t('verificationNote')}
+          </p>
           <div className="mt-4">
             <CompanyForm mode="create" />
           </div>

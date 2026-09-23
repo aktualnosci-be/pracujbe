@@ -62,6 +62,8 @@
     "discountInvalid": "Le code est invalide ou expiré."
   },
   "company": {
+    "loadError": "Impossible de charger les données de l’entreprise",
+    "loadErrorHint": "Pour éviter toute modification involontaire, nous n’affichons pas de formulaire vide. Réessayez.",
     "title": "Entreprise",
     "createTitle": "Créer un profil d'entreprise",
     "createSubtitle": "Renseignez les informations de base pour commencer à publier des offres.",

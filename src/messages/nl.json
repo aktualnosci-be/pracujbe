@@ -62,6 +62,8 @@
     "discountInvalid": "De code is ongeldig of verlopen."
   },
   "company": {
+    "loadError": "Bedrijfsgegevens konden niet worden geladen",
+    "loadErrorHint": "Om onbedoelde wijzigingen te voorkomen, tonen we geen leeg formulier. Probeer het opnieuw.",
     "title": "Bedrijf",
     "createTitle": "Maak een bedrijfsprofiel aan",
     "createSubtitle": "Vul de basisgegevens in om vacatures te kunnen plaatsen.",
