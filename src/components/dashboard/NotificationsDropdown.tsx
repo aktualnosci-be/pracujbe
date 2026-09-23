@@ -31,6 +31,9 @@ export interface NotificationsDropdownProps {
   items: NotificationItem[];
   /** Licznik nieprzeczytanych; gdy pominięty — liczony z `items`. */
   count?: number;
+  /** Odczyt nie powiódł się; nie pokazujemy wtedy pustej skrzynki ani licznika. */
+  error?: boolean;
+  onRetry?: () => void;
   /** Wywoływane przez „oznacz wszystkie jako przeczytane" (rodzic robi zapis + refresh). */
   onMarkAllRead?: () => void;
   /** Docelowa trasa „zobacz wszystkie" (bez prefiksu locale). Bez niej — zwykły przycisk. */
@@ -40,6 +43,8 @@ export interface NotificationsDropdownProps {
 export function NotificationsDropdown({
   items,
   count,
+  error = false,
+  onRetry,
   onMarkAllRead,
   seeAllHref,
 }: NotificationsDropdownProps): React.JSX.Element {
@@ -54,23 +59,38 @@ export function NotificationsDropdown({
       <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-foreground">{t('title')}</span>
-          {unread > 0 ? (
+          {!error && unread > 0 ? (
             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-medium text-accent-foreground">
               {unread}
             </span>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={onMarkAllRead}
-          disabled={unread === 0}
-          className="rounded text-xs font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
-        >
-          {t('markAllRead')}
-        </button>
+        {!error ? (
+          <button
+            type="button"
+            onClick={onMarkAllRead}
+            disabled={unread === 0}
+            className="rounded text-xs font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+          >
+            {t('markAllRead')}
+          </button>
+        ) : null}
       </div>
 
-      {items.length > 0 ? (
+      {error ? (
+        <div role="alert" className="px-4 py-6 text-sm text-foreground">
+          <p>{t('loadError')}</p>
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-3 min-h-12 rounded-md border border-border px-4 py-2 font-medium text-accent hover:bg-soft"
+            >
+              {t('retry')}
+            </button>
+          ) : null}
+        </div>
+      ) : items.length > 0 ? (
         <ul className="max-h-80 divide-y divide-border overflow-y-auto">
           {items.map((item, index) => (
             <li key={`${item.title}-${index}`}>
@@ -103,23 +123,25 @@ export function NotificationsDropdown({
         <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t('empty')}</p>
       )}
 
-      <div className="border-t border-border px-4 py-2.5 text-center">
-        {seeAllHref ? (
-          <Link
-            href={seeAllHref}
-            className="rounded text-sm font-medium text-accent hover:underline"
-          >
-            {t('seeAll')}
-          </Link>
-        ) : (
-          <button
-            type="button"
-            className="rounded text-sm font-medium text-accent hover:underline"
-          >
-            {t('seeAll')}
-          </button>
-        )}
-      </div>
+      {!error ? (
+        <div className="border-t border-border px-4 py-2.5 text-center">
+          {seeAllHref ? (
+            <Link
+              href={seeAllHref}
+              className="rounded text-sm font-medium text-accent hover:underline"
+            >
+              {t('seeAll')}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="rounded text-sm font-medium text-accent hover:underline"
+            >
+              {t('seeAll')}
+            </button>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

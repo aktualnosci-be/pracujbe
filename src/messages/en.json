@@ -897,7 +897,9 @@
     "itemJobMatch": "New job matched to your profile",
     "itemCompanyVerified": "Your company has been verified",
     "itemSystem": "System notification",
-    "empty": "No notifications"
+    "empty": "No notifications",
+    "loadError": "We couldn't load your notifications. Please try again.",
+    "retry": "Try again"
   },
   "pricing": {
     "standard": "Standard",

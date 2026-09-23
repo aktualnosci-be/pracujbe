@@ -48,6 +48,7 @@ export interface CandidateShellProps {
   notifItems?: NotificationItem[];
   /** Liczba nieprzeczytanych powiadomień (badge na dzwonku). */
   notifUnread?: number;
+  notificationError?: boolean;
   /** Liczba konwersacji z nieprzeczytanymi (badge pozycji „Wiadomości"). */
   unreadMessages?: number;
   /** Nazwa zalogowanego kandydata (topbar). Puste → neutralna etykieta „Twoje konto". */
@@ -70,6 +71,7 @@ export function CandidateShell({
   children,
   notifItems,
   notifUnread,
+  notificationError,
   unreadMessages,
   userName,
 }: CandidateShellProps): React.JSX.Element {
@@ -108,6 +110,7 @@ export function CandidateShell({
       active={active}
       user={{ name: displayName, subtitle: td('viewProfile'), initials: initialsOf(displayName) }}
       notifications={notifUnread}
+      notificationError={notificationError}
       notifItems={notifItems}
       unreadMessages={unreadMessages}
     >

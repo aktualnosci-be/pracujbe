@@ -42,6 +42,7 @@ export interface DashboardShellProps {
   user: { name: string; subtitle?: string; initials: string };
   /** Licznik nieprzeczytanych powiadomień (badge na dzwonku). */
   notifications?: number;
+  notificationError?: boolean;
   /** Pozycje powiadomień do dropdownu. Gdy pominięte — fallback DEMO. */
   notifItems?: NotificationItem[];
   /** Liczba konwersacji z nieprzeczytanymi — badge pozycji „Wiadomości" w nawigacji. */
@@ -57,6 +58,7 @@ export function DashboardShell({
   brand,
   user,
   notifications,
+  notificationError = false,
   notifItems,
   unreadMessages,
   children,
@@ -104,6 +106,7 @@ export function DashboardShell({
 
   function handleMarkAllRead(): void {
     startMarkTransition(async () => {
+      if (notificationError) return;
       await markNotificationsRead();
       router.refresh();
     });
@@ -232,13 +235,20 @@ export function DashboardShell({
             <button
               type="button"
               onClick={() => setNotifOpen((open) => !open)}
-              aria-label={tn('title')}
+              aria-label={notificationError ? tn('loadError') : tn('title')}
               aria-haspopup="true"
               aria-expanded={notifOpen}
               className="relative inline-flex size-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-soft"
             >
               <Bell className="size-5" aria-hidden="true" />
-              {notifications && notifications > 0 ? (
+              {notificationError ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute right-1 top-1 inline-flex size-4 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground"
+                >
+                  !
+                </span>
+              ) : notifications && notifications > 0 ? (
                 <span className="absolute right-1.5 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-foreground">
                   {notifications}
                 </span>
@@ -249,6 +259,8 @@ export function DashboardShell({
                 <NotificationsDropdown
                   items={items}
                   count={notifications}
+                  error={notificationError}
+                  onRetry={() => router.refresh()}
                   onMarkAllRead={handleMarkAllRead}
                   seeAllHref={messagesHref}
                 />

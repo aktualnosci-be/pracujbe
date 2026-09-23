@@ -12,7 +12,7 @@
  * locale — prefiks dołoży `Link`/nawigacja z `@/i18n/navigation`.
  *
  * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do Sentry
- * i degradujemy do bezpiecznej pustej struktury (`{ items: [], unread: 0 }`).
+ * i zwracamy osobny stan błędu, bez niepewnego licznika i linków.
  */
 
 import { getTranslations } from 'next-intl/server';
@@ -141,10 +141,14 @@ const DEMO_SEEDS: readonly DemoNotificationSeed[] = [
   { id: 'demo-notif-2', type: 'message_received', entityType: 'conversation', minutesAgo: 1440, unread: false },
 ];
 
+export type NotificationsResult =
+  | { status: 'ready'; items: NotificationView[]; unread: number }
+  | { status: 'error' };
+
 function demoNotifications(
   t: NotificationsTranslator,
   locale: Locale,
-): { items: NotificationView[]; unread: number } {
+): NotificationsResult {
   const now = Date.now();
   const items: NotificationView[] = DEMO_SEEDS.map((seed) => ({
     id: seed.id,
@@ -154,7 +158,7 @@ function demoNotifications(
     // Panel kandydata jako domyślny kontekst demo (brak sesji/roli).
     href: resolveHref(seed.entityType, 'candidate'),
   }));
-  return { items, unread: items.filter((item) => item.unread).length };
+  return { status: 'ready', items, unread: items.filter((item) => item.unread).length };
 }
 
 /* ---------------------------------------------------------------------------
@@ -163,11 +167,11 @@ function demoNotifications(
 
 /**
  * Ostatnie powiadomienia bieżącego użytkownika (created_at desc, limit 20) + licznik
- * nieprzeczytanych. Bez env → 3 pozycje DEMO. Błąd → Sentry + pusta struktura.
+ * nieprzeczytanych. Bez env → 3 pozycje DEMO. Błąd → Sentry + stan błędu.
  */
 export async function getNotifications(
   locale: string,
-): Promise<{ items: NotificationView[]; unread: number }> {
+): Promise<NotificationsResult> {
   const resolvedLocale = toLocale(locale);
   const t = await getTranslations({ locale: resolvedLocale, namespace: 'notifications' });
 
@@ -178,11 +182,10 @@ export async function getNotifications(
   try {
     const { createServerClient } = await import('@/lib/supabase/server');
     const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
     const userId = user?.id ?? null;
-    if (!userId) return { items: [], unread: 0 };
+    if (!userId) return { status: 'ready', items: [], unread: 0 };
 
     const [profileRes, notifRes, unreadRes] = await Promise.all([
       supabase.from('profiles').select('role').eq('id', userId).maybeSingle(),
@@ -200,10 +203,17 @@ export async function getNotifications(
         .eq('profile_id', userId)
         .is('read_at', null),
     ]);
+    if (profileRes.error) throw profileRes.error;
     if (notifRes.error) throw notifRes.error;
     if (unreadRes.error) throw unreadRes.error;
 
-    const role = asStr(asRecord(profileRes.data)['role'], 'candidate');
+    const role = asStr(asRecord(profileRes.data)['role']);
+    if (role !== 'candidate' && role !== 'employer') {
+      throw new Error('Notification profile role unavailable');
+    }
+    if (!Array.isArray(notifRes.data) || unreadRes.count === null || unreadRes.count === undefined) {
+      throw new Error('Notification read incomplete');
+    }
 
     const items: NotificationView[] = asArr(notifRes.data).map((row) => {
       const r = asRecord(row);
@@ -217,9 +227,9 @@ export async function getNotifications(
       };
     });
 
-    return { items, unread: unreadRes.count ?? 0 };
+    return { status: 'ready', items, unread: unreadRes.count };
   } catch (error) {
     captureError(error, { area: 'notifications.getNotifications' });
-    return { items: [], unread: 0 };
+    return { status: 'error' };
   }
 }

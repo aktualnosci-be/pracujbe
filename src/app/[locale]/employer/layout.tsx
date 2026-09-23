@@ -43,6 +43,7 @@ export default async function EmployerLayout({
 
   let notifItems: NotificationItem[] | undefined;
   let notifUnread: number | undefined;
+  let notificationError = false;
   let unreadMessages: number | undefined;
   let companies: CompanySwitcherCompany[] | undefined;
   let activeCompanyId: string | null | undefined;
@@ -78,12 +79,13 @@ export default async function EmployerLayout({
       getUnreadConversationsCount(),
       getEmployerShellData(),
     ]);
-    notifItems = notif.items.map((item) => ({
+    notificationError = notif.status === 'error';
+    notifItems = (notif.status === 'ready' ? notif.items : []).map((item) => ({
       title: item.title,
       meta: item.meta,
       unread: item.unread,
     }));
-    notifUnread = notif.unread;
+    notifUnread = notif.status === 'ready' ? notif.unread : undefined;
     unreadMessages = unread;
     if (shell) {
       companies = shell.companies;
@@ -97,6 +99,7 @@ export default async function EmployerLayout({
     <EmployerShell
       notifItems={notifItems}
       notifUnread={notifUnread}
+      notificationError={notificationError}
       unreadMessages={unreadMessages}
       companies={companies}
       activeCompanyId={activeCompanyId}

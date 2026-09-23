@@ -43,6 +43,7 @@ export interface EmployerShellProps {
   notifItems?: NotificationItem[];
   /** Liczba nieprzeczytanych powiadomień (badge na dzwonku). */
   notifUnread?: number;
+  notificationError?: boolean;
   /** Liczba konwersacji z nieprzeczytanymi (badge pozycji „Wiadomości"). */
   unreadMessages?: number;
   /** Firmy użytkownika (przełącznik). Puste/undefined → fallback demo. */
@@ -70,6 +71,7 @@ export function EmployerShell({
   children,
   notifItems,
   notifUnread,
+  notificationError,
   unreadMessages,
   companies,
   activeCompanyId,
@@ -117,6 +119,7 @@ export function EmployerShell({
       brand={brand}
       user={{ name: displayUser, subtitle: activeName, initials: initialsOf(displayUser) }}
       notifications={notifUnread}
+      notificationError={notificationError}
       notifItems={notifItems}
       unreadMessages={unreadMessages}
     >
