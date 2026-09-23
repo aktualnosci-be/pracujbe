@@ -220,6 +220,12 @@ jobs:
         run: >-
           docker exec -e PGHOST=127.0.0.1 -e PGPORT=5432 -e PGUSER=postgres -e PGPASSWORD=postgres
           "$POSTGRES_CONTAINER" bash /tmp/pracujbe-tests/scripts/test-rls.sh
+      - name: Backup restore verification (pg_dump -> izolowana baza)
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: >-
+          docker exec -e PGHOST=127.0.0.1 -e PGPORT=5432 -e PGUSER=postgres -e PGPASSWORD=postgres
+          "$POSTGRES_CONTAINER" bash /tmp/pracujbe-tests/scripts/db/test-restore.sh
       - name: Seed data load test (10 firm / 50 ofert / 40 kandydatów)
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}

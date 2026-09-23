@@ -58,4 +58,16 @@ describe('Harness testów RLS', () => {
     const ci = await read('.github/workflows/ci.yml');
     expect(ci).toContain('docker cp database "$POSTGRES_CONTAINER:/tmp/pracujbe-tests/database"');
   });
+
+  it('CI weryfikuje odtworzenie kopii do izolowanej bazy z kontrolami ujemnymi (#47)', async () => {
+    const ci = await read('.github/workflows/ci.yml');
+    expect(ci).toContain('bash /tmp/pracujbe-tests/scripts/db/test-restore.sh');
+    const test = await read('scripts/db/test-restore.sh');
+    for (const label of ['cel niepusty', 'cel = źródło', 'niedozwolona nazwa celu', 'brak konfiguracji']) {
+      expect(test).toContain(`'${label}'`);
+    }
+    const script = await read('scripts/db/verify-restore.sh');
+    expect(script).toContain('pg_export_snapshot()');
+    expect(script).toMatch(/\^pracujbe_restore_/);
+  });
 });
