@@ -462,35 +462,45 @@ export default async function JobDetailPage({ params }: PageProps) {
           ) : null}
 
           <Section title={t('accommodationCommute')}>
+            {/*
+              Każda para dt/dd jest bezpośrednio w `div` będącym dzieckiem `dl` (HTML/axe
+              `definition-list`); ikona jest dekoracją wewnątrz `dt`, pozycjonowaną w lewym odstępie.
+            */}
             <dl className="grid gap-4 sm:grid-cols-2">
-              <div className="flex items-start gap-2.5">
-                <Home className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <div>
-                  <dt className="text-sm text-muted-foreground">{t('accommodation')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {job.accommodation ? tCommon('yes') : tCommon('no')}
-                  </dd>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <Truck className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <div>
-                  <dt className="text-sm text-muted-foreground">{t('transport')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {job.transport ? tCommon('yes') : tCommon('no')}
-                  </dd>
-                </div>
-              </div>
-              {job.languages.length > 0 ? (
-                <div className="flex items-start gap-2.5">
-                  <LanguagesIcon
-                    className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"
+              <div className="relative pl-[1.875rem]">
+                <dt className="text-sm text-muted-foreground">
+                  <Home
+                    className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
                     aria-hidden="true"
                   />
-                  <div>
-                    <dt className="text-sm text-muted-foreground">{t('languages')}</dt>
-                    <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
-                  </div>
+                  {t('accommodation')}
+                </dt>
+                <dd className="font-medium text-foreground">
+                  {job.accommodation ? tCommon('yes') : tCommon('no')}
+                </dd>
+              </div>
+              <div className="relative pl-[1.875rem]">
+                <dt className="text-sm text-muted-foreground">
+                  <Truck
+                    className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  {t('transport')}
+                </dt>
+                <dd className="font-medium text-foreground">
+                  {job.transport ? tCommon('yes') : tCommon('no')}
+                </dd>
+              </div>
+              {job.languages.length > 0 ? (
+                <div className="relative pl-[1.875rem]">
+                  <dt className="text-sm text-muted-foreground">
+                    <LanguagesIcon
+                      className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    {t('languages')}
+                  </dt>
+                  <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
                 </div>
               ) : null}
             </dl>
