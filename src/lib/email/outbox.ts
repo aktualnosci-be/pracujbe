@@ -4,6 +4,7 @@ import { Resend } from 'resend';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { renderEmail } from '@/emails/templates';
+import { buildDeliveryData } from '@/lib/email/delivery-data';
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
 import { captureError } from '@/lib/sentry';
@@ -37,6 +38,7 @@ const renderAny = renderEmail as (
 
 interface DeliveryRow {
   id: string;
+  profile_id: string | null;
   to_email: string;
   template: string;
   locale: string;
@@ -90,24 +92,34 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   let sent = 0;
   let failed = 0;
 
+  // #294: imię ODBIORCY do powitania — jeden odczyt na paczkę. Best-effort: błąd odczytu nie
+  // blokuje wysyłki (mail wychodzi z neutralnym powitaniem).
+  const firstNames = new Map<string, string>();
+  const profileIds = [...new Set(queue.map((r) => r.profile_id).filter((v): v is string => !!v))];
+  if (profileIds.length > 0) {
+    const { data: profiles, error: profilesErr } = await admin
+      .from('profiles')
+      .select('id, first_name')
+      .in('id', profileIds);
+    if (profilesErr) {
+      captureError(profilesErr, { area: 'email.outbox.recipientNames' });
+    } else {
+      for (const p of (profiles ?? []) as Array<{ id: string; first_name: string | null }>) {
+        if (p.first_name) firstNames.set(p.id, p.first_name);
+      }
+    }
+  }
+
   for (const row of queue) {
-    const base = `${site}/${row.locale}`;
-    // Panel odbiorcy wiadomości ('employer'|'candidate') przenoszony w payloadzie z RPC send_message.
-    const panel = (row.payload?.['panel'] === 'employer' ? 'employer' : 'candidate');
-    const data: Record<string, unknown> = {
-      ...(row.payload ?? {}),
-      applicationUrl: row.template === 'newApplication' ? `${base}/employer` : `${base}/candidate`,
-      offerUrl: `${base}/candidate`,
-      actionUrl: `${base}/employer`,
-      messageUrl: `${base}/${panel}/wiadomosci`,
-    };
+    // #290: CTA do właściwej sekcji panelu, w locale odbiorcy (kolumna `locale`).
+    const { locale, data } = buildDeliveryData(
+      row,
+      site,
+      row.profile_id ? firstNames.get(row.profile_id) : undefined,
+    );
 
     try {
-      const { subject, html } = await renderAny(
-        row.template as EmailType,
-        row.locale as Locale,
-        data,
-      );
+      const { subject, html } = await renderAny(row.template as EmailType, locale, data);
       // P1-17: idempotency key = delivery.id — jeśli po wysyłce zapis 'sent' zawiedzie i
       // wiersz wróci do puli, ponowna wysyłka jest deduplikowana po stronie Resend (bez dubletu).
       const result = await resend.emails.send(
