@@ -1098,6 +1098,8 @@
   "messages": {
     "title": "Messages",
     "subtitle": "Toutes vos conversations au même endroit",
+    "loading": "Chargement des conversations…",
+    "opening": "Ouverture de la conversation…",
     "empty": "Aucun message",
     "emptyHint": "Vos conversations apparaîtront ici dès que vous prendrez contact.",
     "loadError": "Impossible de charger les conversations.",
