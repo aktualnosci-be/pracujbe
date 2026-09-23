@@ -25,6 +25,9 @@ const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH;
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // Te scenariusze wymagają serwera z danymi fikcyjnymi (playwright.applications-fixture.config.ts);
+  // na danych demo zawsze by padły.
+  testIgnore: ['**/candidate-applications-pagination.spec.ts', '**/candidate-applications-error.spec.ts'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

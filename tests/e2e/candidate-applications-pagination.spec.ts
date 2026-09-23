@@ -32,6 +32,8 @@ for (const [locale, heading] of Object.entries(headings)) {
     await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
     const cards = page.getByRole('main').getByRole('listitem');
     await expect(cards).toHaveCount(10);
+    // Serwer dev kompiluje wyspy przy pierwszym wejściu; klik przed hydratacją ginie.
+    await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: more[locale as keyof typeof more] }).click();
     await expect(cards).toHaveCount(15);
     await expect(page.getByText(end[locale as keyof typeof end])).toBeVisible();
@@ -68,6 +70,8 @@ for (const [locale, heading] of Object.entries(headings)) {
       await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
       const cards = page.getByRole('main').getByRole('listitem');
       await expect(cards).toHaveCount(10);
+      // Serwer dev kompiluje wyspy przy pierwszym wejściu; klik przed hydratacją ginie.
+      await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: more[locale as keyof typeof more] }).click();
       await expect(cards).toHaveCount(15);
       await expect(page.getByText(end[locale as keyof typeof end])).toBeVisible();

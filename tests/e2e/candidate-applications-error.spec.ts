@@ -13,6 +13,7 @@ for (const [locale, text] of Object.entries(copy)) {
     await expect(page.getByRole('alert').getByRole('heading', { name: text.title })).toBeVisible();
     const retry = page.getByRole('alert').getByRole('button', { name: text.retry });
     await expect(retry).toBeVisible();
+    await page.waitForLoadState('networkidle');
     await retry.click();
     await expect(page.getByRole('alert').getByRole('heading', { name: text.title })).toBeVisible();
   });

@@ -316,6 +316,11 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'
         run: npm run test:e2e
+      # Historia aplikacji kandydata: osobny serwer z danymi fikcyjnymi (15 zgłoszeń / wymuszony błąd).
+      - name: Run E2E on application fixtures
+        run: |
+          TEST_APPLICATIONS_FIXTURE=full npx playwright test --config playwright.applications-fixture.config.ts
+          TEST_APPLICATIONS_FIXTURE=error npx playwright test --config playwright.applications-fixture.config.ts
       # Raport tylko przy porażce i z krótką retencją — oszczędza płatny storage.
       - uses: actions/upload-artifact@v4
         if: failure()

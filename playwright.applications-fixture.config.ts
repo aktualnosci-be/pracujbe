@@ -12,6 +12,8 @@ export default defineConfig({
     ? '**/candidate-applications-error.spec.ts'
     : '**/candidate-applications-pagination.spec.ts',
   workers: 1,
+  // next dev kompiluje trasę przy pierwszym żądaniu; na zimnym starcie trwa to ponad 30 s.
+  timeout: 120_000,
   retries: 0,
   reporter: 'list',
   expect: { timeout: 15_000 },
