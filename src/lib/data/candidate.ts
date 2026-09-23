@@ -11,8 +11,8 @@
  * wzbogacamy je przez RPC `get_public_jobs` (bezpieczne kolumny) i łączymy po `job_id`.
  *
  * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do Sentry
- * i degradujemy do bezpiecznej pustej struktury (0 / []), a nie do danych DEMO — panel jest
- * noindex i per-użytkownik, więc pusty realny wynik jest prawdziwy (nie „udaje" ofert).
+ * i degradujemy do bezpiecznej struktury, a nie do danych DEMO. Odczyty profilu
+ * oznaczają awarię osobnym `loadFailed`, aby nie udawać 0% kompletności.
  */
 
 import { cache } from 'react';
@@ -80,6 +80,7 @@ export interface MyOffer {
 }
 
 export interface CandidateProfileSummary {
+  loadFailed: boolean;
   firstName: string | null;
   completionPct: number;
   checklist: {
@@ -323,7 +324,7 @@ const computeProfileSummary = cache(async (
   supabase: SupabaseClient,
   userId: string,
 ): Promise<CandidateProfileSummary> => {
-  const [{ data: profileRow }, { data: cpRow }] = await Promise.all([
+  const [profileResult, candidateResult] = await Promise.all([
     supabase.from('profiles').select('first_name, last_name, avatar_url').eq('id', userId).maybeSingle(),
     supabase
       .from('candidate_profiles')
@@ -331,15 +332,17 @@ const computeProfileSummary = cache(async (
       .eq('profile_id', userId)
       .maybeSingle(),
   ]);
+  if (profileResult.error) throw profileResult.error;
+  if (candidateResult.error) throw candidateResult.error;
 
-  const profile = asRecord(profileRow);
-  const cp = asRecord(cpRow);
+  const profile = asRecord(profileResult.data);
+  const cp = asRecord(candidateResult.data);
   const candidateProfileId = asStr(cp['id']);
 
   let skillsCount = 0;
   let languagesCount = 0;
   if (candidateProfileId) {
-    const [{ count: sc }, { count: lc }] = await Promise.all([
+    const [skillsResult, languagesResult] = await Promise.all([
       supabase
         .from('candidate_skills')
         .select('id', { count: 'exact', head: true })
@@ -349,8 +352,10 @@ const computeProfileSummary = cache(async (
         .select('id', { count: 'exact', head: true })
         .eq('candidate_profile_id', candidateProfileId),
     ]);
-    skillsCount = sc ?? 0;
-    languagesCount = lc ?? 0;
+    if (skillsResult.error) throw skillsResult.error;
+    if (languagesResult.error) throw languagesResult.error;
+    skillsCount = skillsResult.count ?? 0;
+    languagesCount = languagesResult.count ?? 0;
   }
 
   const checklist = {
@@ -367,7 +372,7 @@ const computeProfileSummary = cache(async (
   const completionPct = Math.round((doneCount / 6) * 100);
   const firstName = asStr(profile['first_name']) || null;
 
-  return { firstName, completionPct, checklist };
+  return { loadFailed: false, firstName, completionPct, checklist };
 });
 
 /* ---------------------------------------------------------------------------
@@ -482,6 +487,7 @@ const DEMO_OVERVIEW: CandidateOverview = {
 };
 
 const DEMO_PROFILE_SUMMARY: CandidateProfileSummary = {
+  loadFailed: false,
   firstName: null,
   completionPct: 0,
   checklist: {
@@ -492,6 +498,11 @@ const DEMO_PROFILE_SUMMARY: CandidateProfileSummary = {
     languages: false,
     photo: false,
   },
+};
+
+const FAILED_PROFILE_SUMMARY: CandidateProfileSummary = {
+  ...DEMO_PROFILE_SUMMARY,
+  loadFailed: true,
 };
 
 /* ---------------------------------------------------------------------------
@@ -520,7 +531,10 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
         .is('deleted_at', null)
         .in('status', [...ACTIVE_APPLICATION_STATUSES]),
       countUnreadConversations(supabase, userId),
-      computeProfileSummary(supabase, userId),
+      computeProfileSummary(supabase, userId).catch((error: unknown) => {
+        captureError(error, { area: 'candidate.getCandidateOverview.profileSummary' });
+        return FAILED_PROFILE_SUMMARY;
+      }),
     ]);
 
     if (newJobs.error) throw newJobs.error;
@@ -545,20 +559,12 @@ export async function getCandidateProfileSummary(): Promise<CandidateProfileSumm
   try {
     const { supabase, userId } = await getServerContext();
     if (!userId) {
-      return {
-        firstName: null,
-        completionPct: 0,
-        checklist: { basicInfo: false, experience: false, education: false, skills: false, languages: false, photo: false },
-      };
+      return DEMO_PROFILE_SUMMARY;
     }
     return await computeProfileSummary(supabase, userId);
   } catch (error) {
     captureError(error, { area: 'candidate.getCandidateProfileSummary' });
-    return {
-      firstName: null,
-      completionPct: 0,
-      checklist: { basicInfo: false, experience: false, education: false, skills: false, languages: false, photo: false },
-    };
+    return FAILED_PROFILE_SUMMARY;
   }
 }
 
