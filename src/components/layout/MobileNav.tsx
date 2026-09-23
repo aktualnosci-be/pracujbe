@@ -10,6 +10,7 @@ import { Logo } from '@/components/brand/Logo';
 import { buttonVariants } from '@/components/ui/button';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 import { cn } from '@/lib/utils';
+import { HEADER_ICON_BUTTON_FIXED } from './header-sizing';
 import { LocaleSwitcher } from './LocaleSwitcher';
 
 /** Linki głównej nawigacji gościa — wspólne dla paska desktop (Header) i panelu mobilnego. */
@@ -70,7 +71,7 @@ export function MobileNav() {
     <LightDialogRoot open={open} onOpenChange={setOpen}>
       <Dialog.Trigger
         aria-label={t('menu')}
-        className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), '-ml-2 md:hidden')}
+        className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), HEADER_ICON_BUTTON_FIXED, '-ml-[8px] md:hidden')}
       >
         <Menu className="h-5 w-5" aria-hidden="true" />
       </Dialog.Trigger>

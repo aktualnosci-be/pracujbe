@@ -68,6 +68,7 @@ export default defineConfig({
     '**/candidate-applications-error.spec.ts',
     '**/candidate-proposals-pagination.spec.ts',
     '**/candidate-dashboard-read-errors.spec.ts',
+    '**/public-read-failures.spec.ts',
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

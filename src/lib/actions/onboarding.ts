@@ -1,14 +1,20 @@
 'use server';
 
+import { getLocale } from 'next-intl/server';
+import { headers } from 'next/headers';
+
 import { createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
+import { captureError } from '@/lib/sentry';
 import {
   step1Schema,
   step2Schema,
   step3Schema,
   step4Schema,
   step5Schema,
+  step6DraftSchema,
   step6Schema,
 } from '@/lib/validation/candidate';
 
@@ -21,7 +27,9 @@ import {
  *   - krok 3 → `candidate_profiles` (doświadczenie) + `candidate_skills` przez RPC (0028),
  *   - krok 5 → `candidate_languages` (z poziomem) + `candidate_certificates` przez RPC (0028),
  *   - kroki 2, 4, 6 → `candidate_profiles` (UPSERT po unikalnym `profile_id`),
- *   - krok 6 dodatkowo ustawia `profile_completed = true`.
+ *   - krok 6 z `finish: true` („Zakończ”) wymaga zgody, woła `finish_onboarding` i zapisuje
+ *     receipt akceptacji regulaminu/polityki (`record_document_acceptance`, 0054); bez `finish`
+ *     („Zapisz i wyjdź”, #337) zapisuje dane kroku bez zgody i bez kończenia onboardingu.
  *
  * Relacje (skills/languages/certificates) zapisujemy transakcyjnie przez SECURITY DEFINER RPC
  * `set_candidate_*` (replace-all) — koniec cichej utraty danych z FUN-04. Bezpośredni DML na
@@ -65,13 +73,16 @@ function nullIfEmpty(value: string | undefined): string | null {
  *
  * @param step numer kroku (1..6)
  * @param data surowe dane kroku (walidowane `stepNSchema`)
+ * @param options.finish tylko krok 6: zakończenie onboardingu (wymaga zgody)
  */
 export async function saveOnboardingStep(
   step: OnboardingStep,
   data: unknown,
+  options: { finish?: boolean } = {},
 ): Promise<SaveOnboardingResult> {
+  const finish = step === 6 && options.finish === true;
   // 1) Walidacja odpowiednim schematem kroku (identyczna jak na kliencie).
-  const parsed = validateStep(step, data);
+  const parsed = validateStep(step, data, finish);
   if (!parsed.ok) return { ok: false, error: 'VALIDATION_FAILED' };
 
   // 2) Tryb demo (brak env) — nie zapisujemy, ale przepływ działa.
@@ -135,7 +146,7 @@ export async function saveOnboardingStep(
       .upsert({ profile_id: user.id, ...row }, { onConflict: 'profile_id' });
     if (error) return { ok: false, error: mapPgError(error.message) };
 
-    if (step === 6) {
+    if (finish) {
       // Kompletność liczy DB z obecności wymaganych danych (FUN-05) — klient nie może już
       // sam ustawić profile_completed (kolumna odebrana; RPC definer waliduje i ustawia).
       const { data: complete, error: fe } = await supabase.rpc('finish_onboarding');
@@ -143,6 +154,7 @@ export async function saveOnboardingStep(
       // P1-07: NIE zgłaszaj sukcesu, gdy baza uznała profil za niekompletny — inaczej kreator
       // przekierowuje, a profil pozostaje niewyszukiwalny bez żadnego komunikatu (pozorna awaria).
       if (complete !== true) return { ok: false, error: 'ONBOARDING_INCOMPLETE' };
+      await recordTermsAcceptance(user.id);
     }
     return { ok: true };
   } catch {
@@ -155,6 +167,7 @@ export async function saveOnboardingStep(
 function validateStep(
   step: OnboardingStep,
   data: unknown,
+  finish: boolean,
 ): { ok: true; value: unknown } | { ok: false } {
   const schema = {
     1: step1Schema,
@@ -162,10 +175,36 @@ function validateStep(
     3: step3Schema,
     4: step4Schema,
     5: step5Schema,
-    6: step6Schema,
+    6: finish ? step6Schema : step6DraftSchema,
   }[step];
   const result = schema.safeParse(data);
   return result.success ? { ok: true, value: result.data } : { ok: false };
+}
+
+/**
+ * Niezmienny receipt akceptacji regulaminu i polityki prywatności z kroku 6 (#337) — to samo
+ * gotowe RPC co przy rejestracji (0054, tylko service_role), kluczowane po zweryfikowanym
+ * `user.id` z sesji. Best-effort jak w rejestracji: awaria receiptu nie cofa zapisanego profilu,
+ * ale trafia do Sentry (rozliczalność).
+ */
+async function recordTermsAcceptance(profileId: string): Promise<void> {
+  try {
+    const store = await headers();
+    const ip =
+      store.get('x-real-ip')?.trim() ||
+      store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
+      null;
+    const { error } = await createAdminClient().rpc('record_document_acceptance', {
+      p_profile_id: profileId,
+      p_documents: ['terms', 'privacy'],
+      p_locale: await getLocale(),
+      p_ip: ip,
+      p_user_agent: store.get('user-agent'),
+    });
+    if (error) captureError(error, { area: 'onboarding.recordDocumentAcceptance' });
+  } catch (e) {
+    captureError(e, { area: 'onboarding.recordDocumentAcceptance' });
+  }
 }
 
 /** Buduje wiersz `candidate_profiles` dla kroków 2/3/4/6 (tylko kolumny danego kroku). */
@@ -176,7 +215,7 @@ function buildCandidateProfileRow(
 ): Record<string, unknown> {
   type S2 = import('@/lib/validation/candidate').CandidateStep2;
   type S4 = import('@/lib/validation/candidate').CandidateStep4;
-  type S6 = import('@/lib/validation/candidate').CandidateStep6;
+  type S6 = Omit<import('@/lib/validation/candidate').CandidateStep6, 'agreeTerms'>;
 
   if (step === 2) {
     const v = value as S2;

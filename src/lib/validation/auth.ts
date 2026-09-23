@@ -155,6 +155,8 @@ export function relocalizeNextParam(search: string, locale: Locale): string {
 
 /** Ścieżka logowania (bez prefiksu języka — dokłada go `Link` z `@/i18n/navigation`). */
 const LOGIN_PATH = '/logowanie';
+/** Ścieżka rejestracji kandydata (bez prefiksu języka). */
+const REGISTER_PATH = '/rejestracja';
 
 /**
  * Link do logowania, po którym użytkownik wraca na `returnTo` (np. bieżącą ofertę).
@@ -165,4 +167,15 @@ export function loginHref(
 ): string | { pathname: string; query: { next: string } } {
   const next = safeNextPath(returnTo);
   return next ? { pathname: LOGIN_PATH, query: { next } } : LOGIN_PATH;
+}
+
+/**
+ * Link do rejestracji kandydata z tym samym bezpiecznym powrotem co `loginHref` — po
+ * potwierdzeniu e-maila kandydat wraca na `returnTo` (np. ofertę, na którą chciał aplikować).
+ */
+export function registerHref(
+  returnTo: string | null | undefined,
+): string | { pathname: string; query: { next: string } } {
+  const next = safeNextPath(returnTo);
+  return next ? { pathname: REGISTER_PATH, query: { next } } : REGISTER_PATH;
 }

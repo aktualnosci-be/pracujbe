@@ -158,7 +158,7 @@
     "ctaCreateProfile": "Create a candidate profile",
     "ctaCreateProfileSub": "Save jobs and apply faster",
     "ctaPostJob": "Post a job",
-    "ctaPostJobSub": "Reach thousands of candidates",
+    "ctaPostJobSub": "Reach candidates looking for work in Belgium",
     "trustFastTitle": "Fast application without a CV",
     "trustFastSub": "Just a few clicks",
     "trustVerifiedTitle": "Verified jobs",
@@ -172,10 +172,10 @@
     "locationsTitle": "Popular locations",
     "howTitle": "How it works",
     "step1Title": "Find a job",
-    "step1Desc": "Browse thousands of jobs matched to you.",
+    "step1Desc": "Browse jobs matched to you.",
     "step2Title": "Apply fast",
     "step2Desc": "Apply without a CV in a few clicks.",
-    "step3Title": "Talk",
+    "step3Title": "Get in touch",
     "step3Desc": "The employer contacts you directly.",
     "step4Title": "Start working",
     "step4Desc": "Join a team in Belgium.",
@@ -187,7 +187,7 @@
     "benefitNoCvDesc": "You don't need a ready-made CV. A simple profile is enough.",
     "benefitMultilangTitle": "In your language",
     "benefitMultilangDesc": "The platform works in Polish, Dutch, French and English.",
-    "benefitEasyApplyTitle": "Easy applying",
+    "benefitEasyApplyTitle": "Easy application",
     "benefitEasyApplyDesc": "You apply with one click, without unnecessary paperwork.",
     "benefitMatchingTitle": "Smart matching",
     "benefitMatchingDesc": "We show jobs that truly fit you.",
@@ -199,7 +199,7 @@
     "faqQ2": "Is Pracuj.be free for job seekers?",
     "faqA2": "Yes. Creating a profile, searching for jobs and applying are completely free for candidates.",
     "faqQ3": "What languages does the platform support?",
-    "faqA3": "You can use Pracuj.be in Polish, Dutch, French and English. Job offers are shown in your language.",
+    "faqA3": "You can use Pracuj.be in Polish, Dutch, French and English. The text of a job offer is in the language the employer wrote it in.",
     "faqQ4": "Do I have to speak Dutch or French?",
     "faqA4": "Not always. Many employers accept candidates without local language skills. Use the filter to see jobs with no language requirement.",
     "faqQ5": "How do employers get in touch with me?",
@@ -279,11 +279,11 @@
     "paginationLabel": "Pagination",
     "paginationPrevious": "Previous",
     "paginationNext": "Next",
-    "subtitle": "Find a job that fits you. Browse thousands of current offers.",
+    "subtitle": "Find a job that fits you. Browse current job offers in Belgium.",
     "searchJobs": "Search jobs",
     "keywordPlaceholder": "e.g. mechanic, warehouse worker, carer",
     "locationPlaceholder": "e.g. Antwerp, Brussels, Ghent",
-    "saveLogin": "Sign in to save this job",
+    "saveLogin": "Log in to save this job",
     "saveUnavailable": "Saving is available for candidate accounts with a connected service",
     "saveLoading": "Loading saved jobs",
     "saveRetry": "Could not load saved jobs. Retry",
@@ -376,7 +376,8 @@
       "nl": "Dutch",
       "fr": "French",
       "en": "English"
-    }
+    },
+    "similarJobsLoadError": "Similar jobs could not be loaded. This job and applying work as usual."
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
@@ -685,6 +686,7 @@
     "funnelApplications": "Applications",
     "funnelInterviews": "Interviews",
     "funnelHired": "Hired",
+    "funnelNoData": "no data",
     "conversion": "{value}% conversion",
     "topMatched": "Top matched candidates",
     "goToCandidates": "Go to candidates",
@@ -714,6 +716,8 @@
     "checkPhoto": "Photo",
     "employerRole": "Employer",
     "switchCompany": "Switch company",
+    "switchCompanyPending": "Switching company…",
+    "switchCompanyError": "Could not switch company. Refresh the page and try again.",
     "seeAllOffers": "See all offers",
     "seeAllCandidates": "See all",
     "funnelDetails": "View details",
@@ -782,7 +786,45 @@
     "statusFinalLabel": "Final status: {name} — {job} ({status})",
     "statusConfirmQuestion": "Change the status to “{status}”? This cannot be undone.",
     "statusConfirmAction": "Confirm",
-    "offerForJob": "Job: {job}"
+    "offerForJob": "Job: {job}",
+    "withdrawConfirmTitle": "Withdraw this application?",
+    "withdrawConfirmDescription": "The employer will no longer consider this application. You won’t be able to apply to this job again.",
+    "withdrawConfirmDescriptionNamed": "Your application for “{title}” will be withdrawn. You won’t be able to apply to this job again.",
+    "withdrawConfirm": "Withdraw",
+    "withdrawSuccess": "Your application has been withdrawn.",
+    "declineConfirmTitle": "Decline this proposal?",
+    "declineConfirmDescription": "The employer will receive your refusal. You can’t change this answer later.",
+    "declineConfirmDescriptionNamed": "The proposal “{title}” will be declined. You can’t change this answer later.",
+    "declineConfirm": "Decline",
+    "acceptProposalSuccess": "The proposal has been accepted.",
+    "declineProposalSuccess": "The proposal has been declined.",
+    "employerApplicationDetailTitle": "Application details",
+    "employerApplicationBack": "Back to applications",
+    "employerApplicationLoadError": "We couldn’t load this application.",
+    "employerApplicationNotProvided": "Not provided",
+    "employerApplicationSubmission": "Application",
+    "employerApplicationSubmittedAt": "Submitted on",
+    "employerApplicationPhone": "Phone",
+    "employerApplicationAvailability": "Availability",
+    "employerApplicationMatch": "Match",
+    "employerApplicationMatchValue": "{score}%",
+    "employerApplicationMessageHeading": "Message from the candidate",
+    "employerApplicationNoMessage": "The candidate didn’t add a message.",
+    "employerApplicationProfile": "Professional profile",
+    "employerApplicationHeadline": "Occupation",
+    "employerApplicationCity": "City",
+    "employerApplicationExperience": "Experience",
+    "employerApplicationExperienceYears": "{years, plural, one {# year} other {# years}}",
+    "employerApplicationDrivingLicense": "Driving licence",
+    "employerApplicationYes": "Yes",
+    "employerApplicationNo": "No",
+    "employerApplicationNoProfile": "The candidate’s professional profile is not available.",
+    "employerApplicationHistory": "Status history",
+    "employerApplicationNoHistory": "No status changes recorded.",
+    "employerApplicationMessage": "Write a message",
+    "employerApplicationMessageLabel": "Write a message to: {name}",
+    "employerApplicationView": "View application",
+    "employerApplicationViewLabel": "View application: {name}, {job}"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -891,7 +933,10 @@
     "contractTypesLabel": "Preferred contract types",
     "bioLabel": "About me (optional)",
     "bioPlaceholder": "Write a few sentences about yourself, your experience and expectations.",
-    "agreeTerms": "I accept the terms of use and the privacy policy."
+    "agreeTerms": "I accept the terms of use and the privacy policy.",
+    "stepAnnounce": "Step {current} of {total}: {title}",
+    "agreeTermsLinks": "I accept the <terms>terms of use</terms> and the <privacy>privacy policy</privacy>.",
+    "opensInNewTab": "(opens in a new tab)"
   },
   "filters": {
     "title": "Filters",
@@ -993,7 +1038,14 @@
     "submitting": "Sending...",
     "close": "Close",
     "phoneInvalid": "Enter a valid phone number: a national number for the selected country or the full number with the country code, e.g. +32 470 12 34 56.",
-    "demoUnavailable": "This is a demo version — applying for jobs is turned off."
+    "demoUnavailable": "This is a demo version — applying for jobs is turned off.",
+    "guestSubtitle": "To apply, you need a free candidate profile. You don't need a CV.",
+    "guestRegister": "Create a free profile and apply",
+    "guestLogin": "I have an account — log in",
+    "guestReturn": "After you log in or confirm your email, you will come back to this job.",
+    "errorNetwork": "We couldn't reach the server. Check your connection and try again — what you entered has been kept.",
+    "viewApplications": "View your applications",
+    "candidateOnly": "Only a candidate account can apply."
   },
   "legal": {
     "termsTitle": "Terms of Service",
@@ -1190,7 +1242,14 @@
     "empty": "No documents uploaded yet.",
     "delete": "Delete",
     "uploadError": "Upload failed. Check the format and size.",
-    "deleteError": "Delete failed."
+    "deleteError": "Delete failed.",
+    "loadError": "We couldn’t load your documents. Your files have not been deleted.",
+    "deleteConfirmTitle": "Delete this document?",
+    "deleteConfirmDescription": "The file “{name}” will be permanently deleted. This cannot be undone.",
+    "deleteSuccess": "The document has been deleted.",
+    "errorTooLarge": "The file is too large (max 5 MB).",
+    "errorType": "Allowed formats: PDF, DOC, DOCX.",
+    "errorEmpty": "The selected file is empty."
   },
   "admin": {
     "adminName": "Administrator",
@@ -1290,7 +1349,9 @@
     "inAppEnabledDescription": "Notifications you see while signed in.",
     "save": "Save preferences",
     "saving": "Saving...",
-    "savedSuccess": "Your notification preferences have been saved."
+    "savedSuccess": "Your notification preferences have been saved.",
+    "loadError": "We couldn’t load your notification preferences.",
+    "loadErrorHint": "We are not showing the form so that saving cannot overwrite your earlier choices. Please try again in a moment."
   },
   "guides": {
     "pageTitle": "Guides",
@@ -1334,7 +1395,8 @@
       "contractType": "Contract type",
       "remoteJob": "Remote work — location does not matter",
       "withinCommuteRadius": "Workplace within your commute radius"
-    }
+    },
+    "loadError": "Your match could not be calculated right now. This is not an assessment of your profile — please try again."
   },
   "application": {
     "error": {
@@ -1366,5 +1428,11 @@
     "passwordLabel": "Access password",
     "submit": "Enter",
     "error": "Incorrect password. Please try again."
+  },
+  "offline": {
+    "title": "No connection",
+    "heading": "No internet connection",
+    "body": "Check your connection. Once it is back, go to the home page or open the page you were looking for again.",
+    "goHome": "Go to the home page"
   }
 }

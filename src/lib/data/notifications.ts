@@ -104,22 +104,33 @@ function formatRelativeTime(iso: string, locale: Locale): string {
   return rtf.format(Math.round(diffMs / YEAR), 'year');
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * Docelowa ścieżka powiadomienia wg `entity_type` i roli bieżącego użytkownika.
- * Ścieżki BEZ prefiksu locale (dołoży go nawigacja).
+ * Docelowa ścieżka powiadomienia wg `entity_type` i roli bieżącego użytkownika (#148).
+ * Ścieżki BEZ prefiksu locale (dołoży go nawigacja). Cel wyznacza serwer z danych pod RLS —
+ * strona docelowa i tak ponownie sprawdza dostęp, więc obcy/usunięty obiekt kończy się
+ * bezpiecznym stanem tej strony (lista roli), nigdy cudzymi danymi. `entity_id` trafia do
+ * URL tylko jako zweryfikowany UUID (rozmowa → `?c=`); nieznany typ → pulpit roli.
  */
-function resolveHref(entityType: string, role: string): string {
-  const panelRoot = role === 'employer' ? '/employer' : '/candidate';
-  const messagesPath = role === 'employer' ? '/employer/wiadomosci' : '/candidate/wiadomosci';
+export function resolveHref(entityType: string, role: string, entityId = ''): string {
+  const employer = role === 'employer';
   switch (entityType) {
-    case 'conversation':
-      return messagesPath;
+    case 'conversation': {
+      const path = employer ? '/employer/wiadomosci' : '/candidate/wiadomosci';
+      return UUID_RE.test(entityId) ? `${path}?c=${entityId.toLowerCase()}` : path;
+    }
     case 'application':
-      return panelRoot;
+      return employer ? '/employer/aplikacje' : '/candidate/aplikacje';
     case 'offer':
-      return '/candidate';
+      // Kandydat: lista propozycji; pracodawca: odpowiedź na propozycję dotyczy zgłoszenia.
+      return employer ? '/employer/aplikacje' : '/candidate/propozycje';
+    case 'job':
+      return employer ? '/employer/oferty' : '/candidate/oferty-polecane';
+    case 'company':
+      return employer ? '/employer/firma' : '/candidate';
     default:
-      return panelRoot;
+      return employer ? '/employer' : '/candidate';
   }
 }
 
@@ -223,7 +234,7 @@ export async function getNotifications(
         title: t(titleKeyForType(type)),
         meta: formatRelativeTime(asStr(r['created_at']), resolvedLocale),
         unread: r['read_at'] == null,
-        href: resolveHref(asStr(r['entity_type']), role),
+        href: resolveHref(asStr(r['entity_type']), role, asStr(r['entity_id'])),
       };
     });
 

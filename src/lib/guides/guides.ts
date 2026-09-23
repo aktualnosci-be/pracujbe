@@ -129,7 +129,7 @@ const GUIDES: readonly Guide[] = [
           'Spreek je geen Nederlands of Frans? In veel sectoren in België kun je toch snel aan de slag. Ontdek waar taal geen drempel is.',
         body: [
           p(
-            'Geen Nederlands of Frans spreken is een veelvoorkomende zorg, maar in veel sectoren nemen werkgevers kandidaten aan zonder lokale taal.',
+            'Geen Nederlands of Frans spreken is een veelvoorkomende zorg, maar in veel sectoren nemen werkgevers kandidaten aan die de lokale taal niet spreken.',
           ),
           h('Sectoren zonder taaldrempel'),
           ul([
@@ -142,6 +142,9 @@ const GUIDES: readonly Guide[] = [
           p(
             'Concrete vaardigheden zoals een rijbewijs, een VCA-attest of ervaring met een heftruck vergroten je kansen. Begin vanaf dag één met de basis van de taal.',
           ),
+          p(
+            'Dit artikel bevat algemene informatie. Controleer details over taalcursussen en inburgeringsprogramma’s op de officiële websites van de gewesten (Vlaanderen, Wallonië, Brussel).',
+          ),
         ],
       },
       fr: {
@@ -150,7 +153,7 @@ const GUIDES: readonly Guide[] = [
           'Vous ne parlez ni néerlandais ni français ? Dans de nombreux secteurs en Belgique, vous pouvez tout de même travailler rapidement.',
         body: [
           p(
-            "Ne pas parler le néerlandais ou le français est une crainte fréquente, mais de nombreux employeurs recrutent des candidats sans langue locale.",
+            "Ne pas parler le néerlandais ou le français est une crainte fréquente, mais de nombreux employeurs recrutent des candidats qui ne parlent pas la langue locale.",
           ),
           h('Secteurs sans barrière linguistique'),
           ul([
@@ -163,6 +166,9 @@ const GUIDES: readonly Guide[] = [
           p(
             "Des compétences concrètes comme un permis de conduire, une attestation VCA ou de l'expérience avec un chariot élévateur augmentent vos chances. Apprenez les bases de la langue dès le premier jour.",
           ),
+          p(
+            'Cet article contient des informations générales. Vérifiez les détails sur les cours de langue et les parcours d’intégration sur les sites officiels des Régions (Flandre, Wallonie, Bruxelles).',
+          ),
         ],
       },
       en: {
@@ -171,7 +177,7 @@ const GUIDES: readonly Guide[] = [
           "Don't speak Dutch or French? In many sectors in Belgium you can still start working quickly. Here is where language is not a barrier.",
         body: [
           p(
-            'Not speaking Dutch or French is a common worry, but in many sectors employers hire candidates without the local language.',
+            "Not speaking Dutch or French is a common worry, but in many sectors employers hire candidates who don't speak the local language.",
           ),
           h('Sectors without a language barrier'),
           ul([
@@ -183,6 +189,9 @@ const GUIDES: readonly Guide[] = [
           ]),
           p(
             'Concrete skills such as a driving licence, a VCA certificate or forklift experience boost your chances. Start learning the basics of the language from day one.',
+          ),
+          p(
+            'This article contains general information. Check the details of language courses and integration programmes on the official websites of the regions (Flanders, Wallonia, Brussels).',
           ),
         ],
       },
@@ -236,11 +245,14 @@ const GUIDES: readonly Guide[] = [
           ul([
             'Hetzelfde loon als een vaste werknemer in dezelfde functie',
             'Ploegen-, overuren- en nachttoeslagen indien van toepassing',
-            'Recht op vakantiegeld en eindejaarspremie',
+            'Recht op vakantiegeld en een eindejaarspremie (bij voldoende anciënniteit)',
             'Aangifte via Dimona door het bureau',
           ]),
           p(
             'Vraag altijd een schriftelijk contract en bewaar je loonbrieven. Pas op voor werk zonder aangifte.',
+          ),
+          p(
+            'Bewaar kopieën van al je documenten. Heb je twijfels over je loon, dan kun je terecht bij een vakbond of de arbeidsinspectie. Dit artikel bevat algemene informatie — controleer de details bij officiële bronnen.',
           ),
         ],
       },
@@ -254,13 +266,16 @@ const GUIDES: readonly Guide[] = [
           ),
           h('Vos droits'),
           ul([
-            'Le même salaire qu’un employé fixe au même poste',
+            'Le même salaire qu’un travailleur permanent au même poste',
             'Primes d’équipe, heures supplémentaires et travail de nuit le cas échéant',
-            'Droit au pécule de vacances et à la prime de fin d’année',
+            'Droit au pécule de vacances et à la prime de fin d’année (selon l’ancienneté requise)',
             'Déclaration Dimona par l’agence',
           ]),
           p(
             'Demandez toujours un contrat écrit et conservez vos fiches de paie. Méfiez-vous du travail non déclaré.',
+          ),
+          p(
+            'Conservez une copie de tous vos documents. En cas de doute sur votre salaire, vous pouvez vous adresser à un syndicat ou à l’inspection du travail. Cet article contient des informations générales — vérifiez les détails auprès des sources officielles.',
           ),
         ],
       },
@@ -276,11 +291,14 @@ const GUIDES: readonly Guide[] = [
           ul([
             'The same pay as a permanent worker in the same role',
             'Shift, overtime and night allowances where applicable',
-            'Right to holiday pay and an end-of-year bonus',
+            'Right to holiday pay and an end-of-year bonus (once you have worked long enough)',
             'Dimona registration handled by the agency',
           ]),
           p(
             'Always ask for a written contract and keep your payslips. Beware of undeclared work.',
+          ),
+          p(
+            'Keep copies of all your documents. If you have doubts about your pay, you can contact a trade union or the labour inspectorate. This article contains general information — check the details with official sources.',
           ),
         ],
       },
@@ -336,6 +354,9 @@ const GUIDES: readonly Guide[] = [
             'Afstand tot het werk en vervoer',
           ]),
           p('Inhoudingen voor logies zijn wettelijk geregeld en moeten op je loonbrief staan.'),
+          p(
+            'Dit artikel bevat algemene informatie. Controleer de precieze grenzen voor inhoudingen en de normen voor huisvesting bij een vakbond, het uitzendbureau of officiële bronnen.',
+          ),
         ],
       },
       fr: {
@@ -354,6 +375,9 @@ const GUIDES: readonly Guide[] = [
             'La distance jusqu’au travail et le transport',
           ]),
           p('Les retenues pour logement sont encadrées par la loi et doivent figurer sur la fiche de paie.'),
+          p(
+            'Cet article contient des informations générales. Vérifiez les limites exactes des retenues et les normes de logement auprès d’un syndicat, de l’agence ou des sources officielles.',
+          ),
         ],
       },
       en: {
@@ -372,6 +396,9 @@ const GUIDES: readonly Guide[] = [
             'Distance to work and transport',
           ]),
           p('Deductions for housing are regulated by law and must appear on your payslip.'),
+          p(
+            'This article contains general information. Check the exact limits on deductions and the housing standards with a trade union, the agency or official sources.',
+          ),
         ],
       },
     },
@@ -384,7 +411,7 @@ const GUIDES: readonly Guide[] = [
       pl: {
         title: 'Numer rejestrowy (NISS) i podatki w Belgii',
         excerpt:
-          'NISS to Twój belgijski numer identyfikacyjny — bez niego nie zaczniesz legalnie pracować. Wyjaśniamy, czym jest, jak go uzyskać i jak działa opodatkowanie.',
+          'NISS to Twój belgijski numer identyfikacyjny, potrzebny przy zatrudnieniu. Wyjaśniamy, czym jest, jak go uzyskać (także gdy nie masz go jeszcze) i jak działa opodatkowanie.',
         body: [
           p(
             'Numer rejestru krajowego (NISS / rijksregisternummer / numéro de registre national) to podstawowy numer identyfikacyjny w Belgii. Działa podobnie do numeru identyfikacyjnego w innych krajach i jest potrzebny przy zatrudnieniu, ubezpieczeniu, kontaktach z administracją i bankiem.',
@@ -399,6 +426,9 @@ const GUIDES: readonly Guide[] = [
             'umowy o pracę lub dokumentu potwierdzającego zatrudnienie,',
             'w niektórych przypadkach zaświadczenia o zameldowaniu.',
           ]),
+          p(
+            'Jeśli nie jesteś wpisany do rejestru krajowego, zamiast NISS otrzymujesz numer BIS. O jego nadanie zwykle występuje pracodawca lub jego biuro kadrowe, więc brak NISS nie oznacza, że nie możesz przyjąć oferty.',
+          ),
           h('Podatki od wynagrodzenia'),
           p(
             'W Belgii pracodawca co miesiąc pobiera z wynagrodzenia zaliczkę na podatek dochodowy (précompte professionnel / bedrijfsvoorheffing) oraz składki na ubezpieczenia społeczne. Na pasku wypłaty zobaczysz różnicę między kwotą brutto a netto.',
@@ -418,12 +448,12 @@ const GUIDES: readonly Guide[] = [
         ],
       },
       nl: {
-        title: 'Rijksregisternummer (NISS) en belastingen in België',
+        title: 'Rijksregisternummer (INSZ) en belastingen in België',
         excerpt:
-          'Het NISS is je Belgische identificatienummer — zonder dit nummer kun je niet legaal werken. Wat het is en hoe je het krijgt.',
+          'Het INSZ-nummer is je Belgische identificatienummer, nodig om te werken. Wat het is en hoe je het krijgt, ook als je het nog niet hebt.',
         body: [
           p(
-            'Het rijksregisternummer (NISS) is het basisidentificatienummer in België, nodig voor werk, verzekering en administratie.',
+            'Het rijksregisternummer (INSZ-nummer) is het basisidentificatienummer in België, nodig voor werk, verzekering en administratie.',
           ),
           h('Hoe krijg je het'),
           ul([
@@ -432,14 +462,20 @@ const GUIDES: readonly Guide[] = [
             'Een arbeidsovereenkomst of bewijs van tewerkstelling',
           ]),
           p(
+            'Sta je niet in het rijksregister, dan krijg je in plaats daarvan een BIS-nummer. Dat vraagt meestal je werkgever of zijn sociaal secretariaat aan, dus zonder INSZ-nummer kun je een vacature toch aanvaarden.',
+          ),
+          p(
             'Je werkgever houdt maandelijks bedrijfsvoorheffing en sociale bijdragen in. Eén keer per jaar dien je een belastingaangifte in. Bewaar al je loonbrieven.',
+          ),
+          p(
+            'Dit artikel bevat algemene informatie. Controleer je persoonlijke belastingsituatie bij de FOD Financiën of een adviseur — regels en tarieven kunnen veranderen.',
           ),
         ],
       },
       fr: {
         title: 'Le numéro de registre national (NISS) et les impôts en Belgique',
         excerpt:
-          "Le NISS est votre numéro d'identification belge — sans lui, impossible de travailler légalement. Ce qu'il est et comment l'obtenir.",
+          "Le NISS est votre numéro d'identification belge, nécessaire pour travailler. Ce qu'il est et comment l'obtenir, même si vous ne l'avez pas encore.",
         body: [
           p(
             "Le numéro de registre national (NISS) est le numéro d'identification de base en Belgique, nécessaire pour le travail, l'assurance et l'administration.",
@@ -451,14 +487,20 @@ const GUIDES: readonly Guide[] = [
             'Un contrat de travail ou une preuve d’emploi',
           ]),
           p(
+            'Si vous n’êtes pas inscrit au registre national, vous recevez à la place un numéro BIS. Il est généralement demandé par l’employeur ou son secrétariat social : l’absence de NISS ne vous empêche donc pas d’accepter une offre.',
+          ),
+          p(
             "Votre employeur retient chaque mois le précompte professionnel et les cotisations sociales. Une fois par an, vous introduisez une déclaration d'impôts. Conservez toutes vos fiches de paie.",
+          ),
+          p(
+            'Cet article contient des informations générales. Vérifiez votre situation fiscale personnelle auprès du SPF Finances ou d’un conseiller — les règles et les taux peuvent changer.',
           ),
         ],
       },
       en: {
         title: 'The national number (NISS) and taxes in Belgium',
         excerpt:
-          'The NISS is your Belgian identification number — without it you cannot work legally. What it is and how to get it.',
+          "The NISS is your Belgian identification number, needed for work. What it is and how to get it, even if you don't have one yet.",
         body: [
           p(
             'The national register number (NISS) is the basic identification number in Belgium, needed for work, insurance and administration.',
@@ -470,7 +512,13 @@ const GUIDES: readonly Guide[] = [
             'An employment contract or proof of employment',
           ]),
           p(
-            'Your employer withholds professional tax and social contributions each month. Once a year you file a tax return. Keep all your payslips.',
+            'If you are not in the national register, you receive a BIS number instead. It is usually requested by your employer or its payroll office, so not having a NISS does not stop you from accepting a job offer.',
+          ),
+          p(
+            'Your employer deducts withholding tax on wages and social contributions each month. Once a year you file a tax return. Keep all your payslips.',
+          ),
+          p(
+            'This article contains general information. Check your personal tax situation with the FPS Finance (SPF Finances / FOD Financiën) or an adviser — rules and rates may change.',
           ),
         ],
       },
@@ -528,6 +576,9 @@ const GUIDES: readonly Guide[] = [
           p(
             'Voor beroepsvervoer heb je code 95 (vakbekwaamheid) en een bestuurderskaart voor de tachograaf nodig.',
           ),
+          p(
+            'De erkenning van rijbewijzen en de vereisten voor code 95 kunnen per situatie verschillen. Controleer de details bij de FOD Mobiliteit of je werkgever. Dit artikel bevat algemene informatie.',
+          ),
         ],
       },
       fr: {
@@ -547,6 +598,9 @@ const GUIDES: readonly Guide[] = [
           p(
             'Pour le transport professionnel, il faut le code 95 (aptitude professionnelle) et une carte de conducteur pour le tachygraphe.',
           ),
+          p(
+            'La reconnaissance des permis et les exigences du code 95 peuvent varier selon la situation. Vérifiez les détails auprès du SPF Mobilité ou de votre employeur. Cet article contient des informations générales.',
+          ),
         ],
       },
       en: {
@@ -565,6 +619,9 @@ const GUIDES: readonly Guide[] = [
           ]),
           p(
             'For professional transport you need code 95 (professional competence) and a driver card for the tachograph.',
+          ),
+          p(
+            'Recognition of licences and the code 95 requirements can differ depending on your situation. Check the details with the FPS Mobility (SPF Mobilité / FOD Mobiliteit) or your employer. This article contains general information.',
           ),
         ],
       },
@@ -623,6 +680,9 @@ const GUIDES: readonly Guide[] = [
             'Bedien geen machines zonder bevoegdheid',
             'Meld ongevallen en gevaarlijke situaties',
           ]),
+          p(
+            'De vereisten kunnen per bedrijf en per bouwplaats verschillen. Controleer de details over VCA-opleidingen bij je werkgever of een erkend opleidingscentrum. Dit artikel bevat algemene informatie.',
+          ),
         ],
       },
       fr: {
@@ -644,6 +704,9 @@ const GUIDES: readonly Guide[] = [
             'N’utilisez pas de machines sans habilitation',
             'Signalez les accidents et situations dangereuses',
           ]),
+          p(
+            'Les exigences peuvent varier selon l’entreprise et le chantier. Vérifiez les détails des formations VCA auprès de votre employeur ou d’un centre agréé. Cet article contient des informations générales.',
+          ),
         ],
       },
       en: {
@@ -665,6 +728,9 @@ const GUIDES: readonly Guide[] = [
             'Do not operate machines without authorisation',
             'Report accidents and dangerous situations',
           ]),
+          p(
+            'Requirements can differ between companies and sites. Check the details of VCA training with your employer or an accredited training centre. This article contains general information.',
+          ),
         ],
       },
     },

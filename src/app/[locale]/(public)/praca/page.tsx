@@ -138,10 +138,9 @@ export default async function JobsHubPage({ params }: PageProps) {
     getTranslations('home'),
   ]);
 
-  const cityNames = LOCATION_KEYS.map((key) => tLoc(key));
   const [categoryCounts, cityCounts] = await Promise.all([
     getCategoryCounts(locale, CATEGORY_KEYS),
-    getCityCounts(locale, cityNames),
+    getCityCounts(locale, LOCATION_KEYS),
   ]);
 
   const countLabel = (n: number): string | undefined =>
@@ -162,7 +161,7 @@ export default async function JobsHubPage({ params }: PageProps) {
 
   const cityItems: LandingHubItem[] = LOCATION_KEYS.map((key) => {
     const name = tLoc(key);
-    const facet = buildHubFacet(CITY_BASE, key, name, cityCounts);
+    const facet = buildHubFacet(CITY_BASE, key, key, cityCounts);
     return {
       key,
       href: facet.href,

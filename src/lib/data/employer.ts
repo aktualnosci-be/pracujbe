@@ -71,7 +71,12 @@ export interface EmployerMatchedCandidate {
 }
 
 export interface FunnelStats {
-  views: number;
+  /**
+   * Wyświetlenia ofert w okresie lejka. `null` = brak danych: `jobs.views_count` nie ma
+   * mechanizmu zliczania (#302, powiązane z #99), więc zamiast fałszywego 0 UI pokazuje
+   * „brak danych" i pomija konwersję wyświetlenia → aplikacje.
+   */
+  views: number | null;
   applications: number;
   interviews: number;
   hired: number;
@@ -126,7 +131,10 @@ const EMPTY_OVERVIEW: EmployerOverview = {
   messagesToAnswerCount: 0,
 };
 
-const EMPTY_FUNNEL: FunnelStats = { views: 0, applications: 0, interviews: 0, hired: 0 };
+const EMPTY_FUNNEL: FunnelStats = { views: null, applications: 0, interviews: 0, hired: 0 };
+
+/** Okno czasowe lejka — musi odpowiadać etykiecie `dashboard.funnelPeriod` („ostatnie 30 dni"). */
+export const FUNNEL_PERIOD_DAYS = 30;
 
 /** Jawny stan odczytu kafelków — błąd bazy nie może udawać zer (#304). */
 export type EmployerOverviewLoad =
@@ -570,7 +578,13 @@ export type CompanyJobsLoad =
 export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
   const safePage = Number.isSafeInteger(page) && page > 0 && page <= Math.floor(Number.MAX_SAFE_INTEGER / 12) ? page : 1;
   const start = (safePage - 1) * 12;
-  if (!isSupabaseConfigured()) return { status: 'ok', jobs: DEMO_JOBS.slice(start, start + 12), hasNext: DEMO_JOBS.length > start + 12 };
+  if (!isSupabaseConfigured()) {
+    // Izolowany serwer dev testów E2E (błąd odczytu, #185). Ta gałąź nie działa w buildzie produkcyjnym.
+    if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error') {
+      return { status: 'error' };
+    }
+    return { status: 'ok', jobs: DEMO_JOBS.slice(start, start + 12), hasNext: DEMO_JOBS.length > start + 12 };
+  }
 
   try {
     const ctx = await loadContext();
@@ -622,12 +636,6 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
     captureError(error, { area: 'employer.getCompanyJobs' });
     return { status: 'error' };
   }
-}
-
-/** Starszy kontrakt dashboardu; ekran listy korzysta z jawnego stanu powyżej. */
-export async function getCompanyJobs(): Promise<EmployerJob[]> {
-  const result = await getCompanyJobsLoad();
-  return result.status === 'ok' ? result.jobs : [];
 }
 
 /** Najnowsze aplikacje na oferty firmy (do wiersza akcji zmiany statusu). */
@@ -832,56 +840,249 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
   }
 }
 
-/** Lejek rekrutacyjny (30 dni): wyświetlenia, aplikacje, rozmowy, zatrudnieni. */
-export async function getFunnelStats(): Promise<FunnelStatsLoad> {
+/**
+ * Lejek rekrutacyjny z ostatnich {@link FUNNEL_PERIOD_DAYS} dni (#302): kohorta aplikacji
+ * złożonych w oknie (`submitted_at`), a w niej te, które KIEDYKOLWIEK osiągnęły etap rozmowy
+ * / zatrudnienia (historia statusów — lejek monotoniczny, bez inwersji).
+ *
+ * Wszystkie trzy liczby to zapytania `count` (head) liczone w bazie pod RLS: brak limitu
+ * 1000 wierszy PostgREST i brak listy tysięcy UUID w URL. Etapy liczone jako aplikacje
+ * z `!inner` na historii → każda aplikacja liczona raz (odpowiednik `count(distinct)`).
+ * Wyświetlenia = `null` (brak mechanizmu zliczania — nie udajemy zera).
+ */
+export async function getFunnelStats(now: Date = new Date()): Promise<FunnelStatsLoad> {
   if (!isSupabaseConfigured()) return { status: 'ok', funnel: DEMO_FUNNEL };
 
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'ok', funnel: EMPTY_FUNNEL };
     const { supabase, companyId } = ctx;
+    const since = new Date(now.getTime() - FUNNEL_PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-    // Wyświetlenia = suma views_count ofert firmy; aplikacje = wszystkie aplikacje firmy.
-    const [{ data: viewsData, error: viewsError }, { data: appData, error: appError }] =
-      await Promise.all([
-        supabase.from('jobs').select('views_count').eq('company_id', companyId).is('deleted_at', null),
-        supabase.from('applications').select('id').eq('company_id', companyId).is('deleted_at', null),
-      ]);
-    if (viewsError) throw viewsError;
+    const cohort = (select: string) =>
+      supabase
+        .from('applications')
+        .select(select, { count: 'exact', head: true })
+        .eq('company_id', companyId)
+        .is('deleted_at', null)
+        .gte('submitted_at', since);
+
+    const [
+      { count: appCount, error: appError },
+      { count: interviewCount, error: interviewError },
+      { count: hiredCount, error: hiredError },
+    ] = await Promise.all([
+      cohort('id'),
+      cohort('id, application_status_history!inner(to_status)').in(
+        'application_status_history.to_status',
+        [...FUNNEL_INTERVIEW_STAGES],
+      ),
+      cohort('id, application_status_history!inner(to_status)').eq(
+        'application_status_history.to_status',
+        'hired',
+      ),
+    ]);
     if (appError) throw appError;
+    if (interviewError) throw interviewError;
+    if (hiredError) throw hiredError;
 
-    const views = asRows(viewsData).reduce((sum, r) => sum + asNumber(r['views_count']), 0);
-    const appIds = asRows(appData)
-      .map((r) => asString(r['id']))
-      .filter((id) => id.length > 0);
-
-    // Rozmowy i zatrudnieni liczone KUMULATYWNIE z historii statusów (kandydat, który
-    // KIEDYKOLWIEK osiągnął etap) — nie po bieżącym statusie — co eliminuje inwersję lejka.
-    let interviews = 0;
-    let hired = 0;
-    if (appIds.length > 0) {
-      const { data: historyData, error: historyError } = await supabase
-        .from('application_status_history')
-        .select('application_id, to_status')
-        .in('application_id', appIds)
-        .in('to_status', [...FUNNEL_INTERVIEW_STAGES]);
-      if (historyError) throw historyError;
-
-      const interviewSet = new Set<string>();
-      const hiredSet = new Set<string>();
-      for (const r of asRows(historyData)) {
-        const appId = asString(r['application_id']);
-        if (!appId) continue;
-        interviewSet.add(appId);
-        if (asString(r['to_status']) === 'hired') hiredSet.add(appId);
-      }
-      interviews = interviewSet.size;
-      hired = hiredSet.size;
-    }
-
-    return { status: 'ok', funnel: { views, applications: appIds.length, interviews, hired } };
+    return {
+      status: 'ok',
+      funnel: {
+        views: null,
+        applications: appCount ?? 0,
+        interviews: interviewCount ?? 0,
+        hired: hiredCount ?? 0,
+      },
+    };
   } catch (error) {
     captureError(error, { area: 'employer.getFunnelStats' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Szczegół zgłoszenia (#300)
+ * ------------------------------------------------------------------------- */
+
+export interface EmployerApplicationDetail {
+  id: string;
+  status: string;
+  candidateId: string;
+  candidateName: string;
+  jobId: string;
+  jobTitle: string;
+  /** Treść wpisana przez kandydata w formularzu aplikowania (pusta = brak). */
+  message: string;
+  phone: string;
+  /** Surowy `availability_status` (immediate/within_month/…); pusty = brak. */
+  availability: string;
+  submittedAt: string | null;
+  /** Wynik dopasowania 0–100 (applications.match_score, inaczej matches.score); null = brak. */
+  matchScore: number | null;
+  /** Profil zawodowy — null, gdy kandydat nie ma profilu lub RLS go nie udostępnia. */
+  profile: {
+    headline: string;
+    city: string;
+    experienceYears: number | null;
+    hasDrivingLicense: boolean;
+    skills: string[];
+    languages: { label: string; level: string }[];
+    certificates: string[];
+  } | null;
+  history: { toStatus: string; at: string }[];
+}
+
+/**
+ * Jawny stan odczytu szczegółu: `not_found` obejmuje zarówno brak rekordu, jak i brak dostępu
+ * (RLS `applications_select` = recruiter+ firmy — 0039 — ukrywa cudze zgłoszenia jako brak
+ * wiersza, więc nie rozróżniamy, by nie ujawniać istnienia cudzych danych).
+ */
+export type EmployerApplicationDetailLoad =
+  | { status: 'ok'; application: EmployerApplicationDetail; isDemo: boolean }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const DEMO_APPLICATION_DETAILS: Record<string, Omit<EmployerApplicationDetail, 'id' | 'candidateName' | 'jobTitle' | 'status'>> = {
+  'demo-app-1': {
+    candidateId: 'demo-c-1', jobId: '12343', message: 'Mam 6 lat doświadczenia w utrzymaniu ruchu i uprawnienia SEP. Mogę zacząć od zaraz.',
+    phone: '+32 470 12 34 56', availability: 'immediate', submittedAt: '2026-09-20T08:30:00Z', matchScore: 92,
+    profile: { headline: 'Elektryk przemysłowy', city: 'Charleroi', experienceYears: 6, hasDrivingLicense: true, skills: ['Instalacje przemysłowe', 'Automatyka PLC'], languages: [{ label: 'Polski', level: 'native' }, { label: 'Francuski', level: 'intermediate' }], certificates: ['VCA Basis'] },
+    history: [{ toStatus: 'submitted', at: '2026-09-20T08:30:00Z' }],
+  },
+  'demo-app-2': {
+    candidateId: 'demo-c-2', jobId: '12345', message: '',
+    phone: '+32 471 98 76 54', availability: 'within_month', submittedAt: '2026-09-19T10:00:00Z', matchScore: 88,
+    profile: { headline: 'Operator wózka widłowego', city: 'Liège', experienceYears: 4, hasDrivingLicense: true, skills: ['Wózek widłowy'], languages: [{ label: 'Polski', level: 'native' }], certificates: [] },
+    history: [{ toStatus: 'submitted', at: '2026-09-19T10:00:00Z' }, { toStatus: 'viewed', at: '2026-09-19T14:00:00Z' }],
+  },
+  'demo-app-3': {
+    candidateId: 'demo-c-3', jobId: '12344', message: 'Pracowałem 3 lata w magazynie w Antwerpii.',
+    phone: '+32 472 11 22 33', availability: 'flexible', submittedAt: '2026-09-17T09:00:00Z', matchScore: 85,
+    profile: null,
+    history: [{ toStatus: 'submitted', at: '2026-09-17T09:00:00Z' }, { toStatus: 'viewed', at: '2026-09-17T12:00:00Z' }, { toStatus: 'shortlisted', at: '2026-09-18T09:00:00Z' }],
+  },
+  'demo-app-4': {
+    candidateId: 'demo-c-4', jobId: '12341', message: '',
+    phone: '', availability: '', submittedAt: '2026-09-15T09:00:00Z', matchScore: null,
+    profile: null,
+    history: [{ toStatus: 'submitted', at: '2026-09-15T09:00:00Z' }, { toStatus: 'interview', at: '2026-09-16T09:00:00Z' }],
+  },
+};
+
+export async function getEmployerApplicationDetail(id: string): Promise<EmployerApplicationDetailLoad> {
+  if (!isSupabaseConfigured()) {
+    const base = DEMO_APPLICATIONS.find((application) => application.id === id);
+    const extra = DEMO_APPLICATION_DETAILS[id];
+    if (!base || !extra) return { status: 'not_found' };
+    return { status: 'ok', isDemo: true, application: { ...base, ...extra } };
+  }
+
+  if (!UUID_RE.test(id)) return { status: 'not_found' };
+
+  try {
+    const ctx = await loadContext();
+    if (!ctx) return { status: 'not_found' };
+    const { supabase, companyId } = ctx;
+
+    // RLS (0039): tylko kandydat lub recruiter+ oferty; dodatkowo zawężamy do AKTYWNEJ firmy.
+    const { data, error } = await supabase
+      .from('applications')
+      .select('id, status, candidate_id, job_id, message, phone, availability, submitted_at, match_score, profiles(first_name, last_name), jobs(title)')
+      .eq('id', id)
+      .eq('company_id', companyId)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { status: 'not_found' };
+
+    const row = asRecord(data);
+    const candidateId = asString(row['candidate_id']);
+    const jobId = asString(row['job_id']);
+    const person = asEmbeddedRecord(row['profiles']);
+    const job = asEmbeddedRecord(row['jobs']);
+
+    const [
+      { data: historyData, error: historyError },
+      { data: cpData, error: cpError },
+      { data: matchData, error: matchError },
+    ] = await Promise.all([
+      supabase
+        .from('application_status_history')
+        .select('to_status, created_at')
+        .eq('application_id', id)
+        .order('created_at', { ascending: true })
+        .limit(50),
+      // candidate_profiles_select_company (0009 + company_can_view_candidate recruiter+, 0033).
+      supabase
+        .from('candidate_profiles')
+        .select('id, headline, city, experience_years, has_driving_license')
+        .eq('profile_id', candidateId)
+        .is('deleted_at', null)
+        .maybeSingle(),
+      supabase.from('matches').select('score').eq('candidate_id', candidateId).eq('job_id', jobId).maybeSingle(),
+    ]);
+    if (historyError) throw historyError;
+    if (cpError) throw cpError;
+    if (matchError) throw matchError;
+
+    let profile: EmployerApplicationDetail['profile'] = null;
+    if (cpData) {
+      const cp = asRecord(cpData);
+      const cpId = asString(cp['id']);
+      const [
+        { data: skillData, error: skillError },
+        { data: langData, error: langError },
+        { data: certData, error: certError },
+      ] = await Promise.all([
+        supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', cpId).order('skill_label'),
+        supabase.from('candidate_languages').select('language_label, level').eq('candidate_profile_id', cpId).order('language_label'),
+        supabase.from('candidate_certificates').select('certificate_label').eq('candidate_profile_id', cpId).order('certificate_label'),
+      ]);
+      if (skillError) throw skillError;
+      if (langError) throw langError;
+      if (certError) throw certError;
+      const years = cp['experience_years'];
+      profile = {
+        headline: asString(cp['headline']),
+        city: asString(cp['city']),
+        experienceYears: typeof years === 'number' ? years : null,
+        hasDrivingLicense: cp['has_driving_license'] === true,
+        skills: asRows(skillData).map((r) => asString(r['skill_label'])).filter(Boolean),
+        languages: asRows(langData)
+          .map((r) => ({ label: asString(r['language_label']), level: asString(r['level']) }))
+          .filter((l) => l.label),
+        certificates: asRows(certData).map((r) => asString(r['certificate_label'])).filter(Boolean),
+      };
+    }
+
+    const appScore = row['match_score'];
+    const matchScore =
+      typeof appScore === 'number' ? appScore : matchData ? asNumber(asRecord(matchData)['score']) : null;
+
+    return {
+      status: 'ok',
+      isDemo: false,
+      application: {
+        id: asString(row['id']),
+        status: asString(row['status'], 'submitted'),
+        candidateId,
+        candidateName: fullName(person['first_name'], person['last_name']),
+        jobId,
+        jobTitle: asString(job['title']),
+        message: asString(row['message']).trim(),
+        phone: asString(row['phone']).trim(),
+        availability: asString(row['availability']),
+        submittedAt: asString(row['submitted_at']) || null,
+        matchScore,
+        profile,
+        history: asRows(historyData).map((r) => ({ toStatus: asString(r['to_status']), at: asString(r['created_at']) })),
+      },
+    };
+  } catch (error) {
+    captureError(error, { area: 'employer.getEmployerApplicationDetail' });
     return { status: 'error' };
   }
 }
