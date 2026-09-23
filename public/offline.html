@@ -4,39 +4,56 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Offline — Pracuj.be</title>
+    <meta name="theme-color" content="#FFFFFF" />
+    <title>Brak połączenia · Pracuj.be</title>
     <style>
       :root { color-scheme: light; }
       * { box-sizing: border-box; }
       body {
         margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        background: #F8FAFC; color: #172033; padding: 24px;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: #FFFFFF; color: #151515; padding: 24px 16px;
       }
-      .card { max-width: 28rem; text-align: center; }
+      main { max-width: 28rem; text-align: center; }
       .logo {
-        width: 64px; height: 64px; border-radius: 16px; background: #0F2A47; color: #fff;
-        display: inline-flex; align-items: center; justify-content: center;
-        font-size: 32px; font-weight: 800; margin-bottom: 16px;
+        display: inline-flex; align-items: center; font-size: 28px; font-weight: 800;
+        white-space: nowrap; margin-bottom: 24px; color: #151515;
       }
-      h1 { font-size: 1.25rem; margin: 0 0 8px; }
-      p { color: #64748B; margin: 0 0 20px; line-height: 1.5; }
+      .logo-be {
+        margin-left: 2px; padding: 4px 6px; border-radius: 8px; background: #D92932; color: #FFFFFF;
+      }
+      h1 { font-size: 1.25rem; line-height: 1.4; margin: 0 0 12px; }
+      h1 span, p span { display: block; }
+      p { color: #5C5C5C; margin: 0 0 24px; line-height: 1.5; }
       button {
-        border: 0; background: #0F2A47; color: #fff; padding: 10px 20px; border-radius: 8px;
-        font-size: 0.95rem; font-weight: 600; cursor: pointer;
+        display: inline-flex; align-items: center; justify-content: center; min-height: 48px;
+        border: 0; border-radius: 8px; background: #D92932; color: #FFFFFF; padding: 12px 24px;
+        font: inherit; font-size: 0.95rem; font-weight: 600; line-height: 1.4; flex-wrap: wrap; cursor: pointer;
       }
-      button:hover { background: #0b2038; }
+      button:hover { background: #B01E27; }
+      button:focus-visible { outline: 3px solid #151515; outline-offset: 3px; }
     </style>
   </head>
   <body>
-    <div class="card">
-      <div class="logo">P</div>
-      <h1>Brak połączenia z internetem</h1>
+    <main>
+      <span class="logo" role="img" aria-label="Pracuj.be">
+        <span aria-hidden="true">pracuj</span><span class="logo-be" aria-hidden="true">.be</span>
+      </span>
+      <h1>
+        <span lang="pl">Brak połączenia z internetem</span>
+        <span lang="nl">Geen internetverbinding</span>
+        <span lang="fr">Pas de connexion internet</span>
+        <span lang="en">No internet connection</span>
+      </h1>
       <p>
-        Nie udało się załadować strony. Sprawdź połączenie i spróbuj ponownie.<br />
-        Geen internetverbinding · Pas de connexion · No internet connection.
+        <span lang="pl">Sprawdź połączenie i spróbuj ponownie.</span>
+        <span lang="nl">Controleer je verbinding en probeer het opnieuw.</span>
+        <span lang="fr">Vérifiez votre connexion et réessayez.</span>
+        <span lang="en">Check your connection and try again.</span>
       </p>
-      <button onclick="location.reload()">Spróbuj ponownie</button>
-    </div>
+      <button type="button" onclick="location.reload()">
+        <span lang="pl">Spróbuj ponownie</span><span aria-hidden="true">&nbsp;·&nbsp;</span><span lang="nl">Opnieuw proberen</span><span aria-hidden="true">&nbsp;·&nbsp;</span><span lang="fr">Réessayer</span><span aria-hidden="true">&nbsp;·&nbsp;</span><span lang="en">Try again</span>
+      </button>
+    </main>
   </body>
 </html>
