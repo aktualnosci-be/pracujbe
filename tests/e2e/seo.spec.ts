@@ -17,6 +17,37 @@ for (const locale of ['pl', 'nl', 'fr', 'en']) {
   }
 }
 
+const seoTitles = {
+  pl: { praca: 'Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be', poradniki: 'Poradniki — praca w Belgii | Pracuj.be' },
+  nl: { praca: 'Ontdek werk in België — sectoren en steden | Pracuj.be', poradniki: 'Gidsen — werken in België | Pracuj.be' },
+  fr: { praca: 'Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be', poradniki: 'Guides — travailler en Belgique | Pracuj.be' },
+  en: { praca: 'Browse jobs in Belgium — industries and cities | Pracuj.be', poradniki: 'Guides — working in Belgium | Pracuj.be' },
+} as const;
+
+for (const [locale, titles] of Object.entries(seoTitles)) {
+  for (const route of ['praca', 'poradniki'] as const) {
+    test(`${locale}/${route} ma jedną nazwę marki w tytule oraz pełny canonical i hreflang`, async ({ page }) => {
+      await page.goto(`/${locale}/${route}`);
+      await expect(page).toHaveTitle(titles[route]);
+      const origin = new URL(page.url()).origin;
+
+      const canonical = page.locator('link[rel="canonical"]');
+      await expect(canonical).toHaveAttribute('href', `${origin}/${locale}/${route}`);
+
+      for (const language of ['pl', 'nl', 'fr', 'en']) {
+        await expect(page.locator(`link[rel="alternate"][hreflang="${language}"]`)).toHaveAttribute(
+          'href',
+          `${origin}/${language}/${route}`,
+        );
+      }
+      await expect(page.locator('link[rel="alternate"][hreflang="x-default"]')).toHaveAttribute(
+        'href',
+        `${origin}/pl/${route}`,
+      );
+    });
+  }
+}
+
 /**
  * Testy SEO — działają na danych demonstracyjnych (bez Supabase).
  *
@@ -62,3 +93,19 @@ test('szczegóły oferty zawierają JSON-LD JobPosting oraz <html lang="pl">', a
   }
   expect(foundJobPosting, 'Brak danych strukturalnych JobPosting (JSON-LD)').toBe(true);
 });
+
+// #118: tytuł z nazwą marki nie może dodatkowo przejść przez szablon layoutu
+// („… | Pracuj.be · Pracuj.be”). Sprawdzamy każdą trasę, której tytuł z
+// komunikatów już zawiera markę.
+const brandTitleRoutes = ['', '/praca', '/poradniki', '/praca/kategoria/construction', '/praca/miasto/brussels'];
+
+for (const locale of ['pl', 'nl', 'fr', 'en']) {
+  for (const route of brandTitleRoutes) {
+    test(`${locale}${route || '/'} ma dokładnie jedną nazwę marki w <title>`, async ({ page }) => {
+      await page.goto(`/${locale}${route}`);
+      const title = await page.title();
+      expect(title.match(/Pracuj\.be/g) ?? [], title).toHaveLength(1);
+      expect(title).not.toMatch(/·\s*Pracuj\.be$/);
+    });
+  }
+}
