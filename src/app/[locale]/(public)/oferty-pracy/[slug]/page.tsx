@@ -619,19 +619,25 @@ export default async function JobDetailPage({ params }: PageProps) {
         </aside>
       </div>
 
-      {/* Dolny pasek (mobile) */}
-      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background/95 p-3 shadow-[0_-4px_12px_rgba(15,42,71,0.08)] backdrop-blur lg:hidden">
-        <PublicSaveJobButton jobId={job.id} className="flex-1" />
+      {/*
+        Dolny pasek (mobile): jeden wiersz — zapis jako ikona 48×48 (opis stanu w nazwie
+        dostępnej), CTA zajmuje resztę szerokości. Pasek sam rezerwuje miejsce pod całą
+        stroną (padding body, także pod stopką) i margines przewijania, aby element z fokusem
+        nie chował się pod nim (WCAG 2.4.11). Jednostki rem skalują się z powiększeniem tekstu.
+      */}
+      <div
+        data-testid="job-mobile-cta-bar"
+        className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background/95 p-3 shadow-[0_-4px_12px_rgba(15,42,71,0.08)] backdrop-blur lg:hidden max-lg:[body:has(&)]:pb-24 max-lg:[html:has(&)]:scroll-pb-28"
+      >
+        <PublicSaveJobButton jobId={job.id} iconOnly />
         <ApplyModal
           jobId={job.id}
           companyName={job.companyName}
           triggerLabel={applyLabel}
           triggerSize="default"
-          triggerClassName="flex-1"
+          triggerClassName="min-w-0 flex-1"
         />
       </div>
-      {/* Odstęp, aby dolny pasek nie zasłaniał treści na mobile. */}
-      <div className="h-20 lg:hidden" aria-hidden="true" />
     </div>
     </PublicSavedJobsProvider>
   );
