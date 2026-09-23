@@ -3,11 +3,11 @@ import { expect, test } from '@playwright/test';
 
 const locales = ['pl', 'nl', 'fr', 'en'] as const;
 const panels = [
-  { name: 'pulpit kandydata', path: 'candidate', fullAudit: false },
-  { name: 'profil kandydata', path: 'candidate/profil', fullAudit: true },
-  { name: 'pulpit pracodawcy', path: 'employer', fullAudit: false },
-  { name: 'firma pracodawcy', path: 'employer/firma', fullAudit: true },
-  { name: 'kreator oferty', path: 'employer/oferty/nowa', fullAudit: true },
+  { name: 'pulpit kandydata', path: 'candidate' },
+  { name: 'profil kandydata', path: 'candidate/profil' },
+  { name: 'pulpit pracodawcy', path: 'employer' },
+  { name: 'firma pracodawcy', path: 'employer/firma' },
+  { name: 'kreator oferty', path: 'employer/oferty/nowa' },
 ] as const;
 
 const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -35,9 +35,13 @@ for (const locale of locales) {
         ? main.getByRole('link').first()
         : main.getByRole('textbox').first();
       await expect(focusTarget).toBeVisible();
-      await page.keyboard.press('Tab');
-      await focusTarget.focus();
-      await expect(focusTarget).toBeFocused();
+      // #376: fokus ma dotrzeć do elementu KLAWISZEM Tab (nie programowym `focus()`).
+      let reached = false;
+      for (let i = 0; i < 60 && !reached; i += 1) {
+        await page.keyboard.press('Tab');
+        reached = await focusTarget.evaluate((element) => element === document.activeElement);
+      }
+      expect(reached, `${locale}/${panel.path}: Tab nie dociera do pierwszej kontrolki treści`).toBe(true);
       const focusStyle = await focusTarget.evaluate((element) => ({
         outlineStyle: getComputedStyle(element).outlineStyle,
         boxShadow: getComputedStyle(element).boxShadow,
@@ -57,19 +61,15 @@ for (const locale of locales) {
       const blocking = result.violations.filter((violation) =>
         violation.impact === 'critical' || violation.impact === 'serious',
       );
-      // Zachowaj wcześniejszą bramkę axe dla trzech istniejących tras.
-      // Dashboardy dodajemy tu wyłącznie do bramki target-size; ich pełny
-      // audyt kontrastu wymaga osobnej poprawki produktu.
-      if (panel.fullAudit) {
-        expect(
-          blocking.map((violation) => ({
-            id: violation.id,
-            impact: violation.impact,
-            targets: violation.nodes.slice(0, 3).map((node) => node.target),
-          })),
-          `${locale}/${panel.path}: naruszenia axe critical/serious`,
-        ).toEqual([]);
-      }
+      // #373: pulpity również pod pełną bramką critical/serious (dawne wyłączenie było nieaktualne).
+      expect(
+        blocking.map((violation) => ({
+          id: violation.id,
+          impact: violation.impact,
+          targets: violation.nodes.slice(0, 3).map((node) => node.target),
+        })),
+        `${locale}/${panel.path}: naruszenia axe critical/serious`,
+      ).toEqual([]);
       const targetSize = result.violations.filter((violation) => violation.id === 'target-size');
       expect(
         targetSize.map((violation) => violation.nodes.slice(0, 5).map((node) => node.target)),

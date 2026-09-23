@@ -85,13 +85,21 @@ describe("organiczne Story PL", () => {
     const generated = join(directory, PNG_NAME);
 
     try {
-      await execFileAsync(process.execPath, [
+      const { stdout } = await execFileAsync(process.execPath, [
         join(process.cwd(), "scripts/generate-organic-story.mjs"),
         generated,
       ]);
-      expect(await readFile(generated)).toEqual(
+      // Porównanie bajt w bajt bez diffu bufora (ten trwał minuty); przy różnicy komunikat
+      // podaje rewizję Chromium — inna rewizja (np. PLAYWRIGHT_CHROMIUM_PATH) renderuje inaczej (#378).
+      const same = (await readFile(generated)).equals(
         await readFile(join(STORY_DIR, PNG_NAME)),
       );
+      expect(
+        same,
+        `PNG różni się od pliku w repozytorium (${stdout.trim()}, PLAYWRIGHT_CHROMIUM_PATH=${
+          process.env.PLAYWRIGHT_CHROMIUM_PATH ?? "brak"
+        }). Plik w repo powstaje w Chromium instalowanym przez \`npx playwright install\`.`,
+      ).toBe(true);
     } finally {
       await rm(directory, { force: true, recursive: true });
     }

@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { messages, rejectOptionalCookies } from './fixtures/messages';
+
 const localizedWizard = [
   { locale: 'pl', title: 'Twój profil kandydata', firstName: 'Imię', lastName: 'Nazwisko', error: 'Nazwisko jest za krótkie.', next: 'Dalej: Preferencje pracy' },
   { locale: 'nl', title: 'Je kandidaatprofiel', firstName: 'Voornaam', lastName: 'Achternaam', error: 'Achternaam is te kort.', next: 'Volgende: Werkvoorkeuren' },
@@ -12,7 +14,7 @@ for (const { locale, title, firstName, lastName, error, next } of localizedWizar
     test(`kreator ${locale} przy ${width} px: błąd i fokus`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/${locale}/candidate/onboarding`);
-      await page.locator('[aria-labelledby="cookie-banner-title"] button').first().click();
+      await rejectOptionalCookies(page, locale);
 
       await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
       await expect(page.locator('main').locator('..')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
@@ -116,5 +118,8 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
 
   await page.getByRole('button', { name: 'Zakończ i opublikuj' }).click();
   await expect(page).toHaveURL(/\/pl\/candidate$/);
-  await expect(page.getByRole('heading').first()).toBeVisible();
+  // #376: H1 pulpitu (powitanie z `dashboard.greeting`), a nie dowolny nagłówek — także strony błędu.
+  const greeting = messages('pl').dashboard.greeting.split('{name}')[0]!.trim();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(new RegExp(`^${greeting}`));
+  await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 });
