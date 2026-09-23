@@ -13,15 +13,19 @@ import { expect, test } from '@playwright/test';
  * ten test jest regresyjną strażą, a nie jednorazowym audytem.
  */
 
-const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const BLOCKING = new Set(['critical', 'serious']);
 
 /** Uruchamia axe na aktualnej stronie i zwraca naruszenia pogrupowane wg wagi. */
 async function analyze(page: import('@playwright/test').Page) {
-  const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+  const results = await new AxeBuilder({ page })
+    .options({ rules: { 'target-size': { enabled: true } } })
+    .withTags(WCAG_TAGS)
+    .analyze();
   const blocking = results.violations.filter((v) => BLOCKING.has(v.impact ?? ''));
   const advisory = results.violations.filter((v) => !BLOCKING.has(v.impact ?? ''));
-  return { blocking, advisory };
+  const targetSize = results.violations.filter((v) => v.id === 'target-size');
+  return { blocking, advisory, targetSize };
 }
 
 /** Czytelny opis naruszeń do komunikatu asercji (bez zrzutów technicznych do UI). */
@@ -53,7 +57,7 @@ for (const p of PAGES) {
     await page.getByRole('main').first().waitFor();
     await page.waitForTimeout(1000);
 
-    const { blocking, advisory } = await analyze(page);
+    const { blocking, advisory, targetSize } = await analyze(page);
     if (advisory.length > 0) {
       // Raport pomocniczy — nie blokuje bramki.
       console.log(`[a11y advisory] ${p.path}:\n${describe(advisory)}`);
@@ -61,5 +65,73 @@ for (const p of PAGES) {
     expect(blocking, `Naruszenia a11y (critical/serious) na ${p.path}:\n${describe(blocking)}`).toEqual(
       [],
     );
+    if (p.path === '/pl/oferty-pracy') {
+      expect(targetSize, `Cele dotykowe WCAG 2.2 AA na ${p.path}:\n${describe(targetSize)}`).toEqual([]);
+    }
+  });
+}
+
+for (const locale of ['pl', 'nl', 'fr', 'en']) {
+  test(`a11y: lista ofert, ekran 320 px (${locale}) — brak naruszeń critical/serious i target-size`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(`/${locale}/oferty-pracy`);
+    await page.getByRole('main').first().waitFor();
+    await page.waitForTimeout(1000);
+
+    const { blocking, advisory, targetSize } = await analyze(page);
+    if (advisory.length > 0) {
+      console.log(`[a11y advisory] /${locale}/oferty-pracy (320 px):\n${describe(advisory)}`);
+    }
+    expect(
+      blocking,
+      `Naruszenia a11y (critical/serious) na /${locale}/oferty-pracy przy 320 px:\n${describe(blocking)}`,
+    ).toEqual([]);
+    expect(
+      targetSize,
+      `Cele dotykowe WCAG 2.2 AA na /${locale}/oferty-pracy przy 320 px:\n${describe(targetSize)}`,
+    ).toEqual([]);
+  });
+}
+
+/**
+ * WCAG 2.4.11 (#208): przy cofaniu fokusu (Shift+Tab) przeglądarka przewija element do górnej
+ * krawędzi okna — nie może on wtedy zniknąć w całości pod przyklejonym nagłówkiem.
+ */
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 320, height: 640 },
+]) {
+  test(`a11y: Shift+Tab nie chowa fokusu pod nagłówkiem (${viewport.width} px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/pl/oferty-pracy?category=construction,transport,warehouse,production');
+    const banner = page.locator('[aria-labelledby="cookie-banner-title"]');
+    await banner.getByRole('button').first().click();
+    await expect(banner).toHaveCount(0);
+
+    await page.locator('footer a').last().focus();
+    const hidden: string[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      await page.keyboard.press('Shift+Tab');
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        const header = document.querySelector('header');
+        if (!el || el === document.body || !header || header.contains(el)) return null;
+        // Elementy `position: fixed` (np. odnośnik „Przejdź do treści”) leżą nad nagłówkiem.
+        if (getComputedStyle(el).position === 'fixed') return null;
+        const rect = el.getBoundingClientRect();
+        return {
+          label: (el.textContent || el.getAttribute('aria-label') || el.tagName)
+            .trim()
+            .slice(0, 40),
+          fullyHidden: rect.bottom <= header.getBoundingClientRect().bottom,
+        };
+      });
+      if (stop?.fullyHidden) hidden.push(stop.label);
+    }
+    expect(hidden, 'elementy z fokusem w całości pod nagłówkiem').toEqual([]);
   });
 }

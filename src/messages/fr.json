@@ -140,8 +140,16 @@
     "close": "Fermer"
   },
   "home": {
-    "heroTitle": "Trouvez un emploi en Belgique",
-    "heroSubtitle": "Parcourez des offres vérifiées et postulez sans CV compliqué.",
+    "heroTitle": "Vos compétences. Votre place. Un nouveau départ.",
+    "heroTitleLine1": "Vos compétences.",
+    "heroTitleLine2": "Votre place.",
+    "heroTitleLine3": "Un nouveau départ.",
+    "heroEyebrow": "Travailler en Belgique",
+    "heroSubtitle": "Trouvez un emploi qui valorise votre savoir-faire. Comparez les conditions et postulez avec votre profil — sans rédiger de CV.",
+    "heroBrowseJobs": "Voir les offres",
+    "heroCreateProfile": "Créer un profil de candidat",
+    "heroPhotoCaption": "Le travail, c'est avant tout des personnes.",
+    "heroPhotoDisclaimer": "Photo d’illustration — ne représente aucune offre précise.",
     "heroSearchJobLabel": "Poste, mot-clé",
     "heroSearchLocationLabel": "Localisation",
     "searchJobPlaceholder": "ex. mécanicien, magasinier, aide-soignant",
@@ -311,6 +319,7 @@
     "tabDescription": "Description de l’offre",
     "tabCompany": "À propos de l’entreprise",
     "tabSimilar": "Offres similaires",
+    "sectionsNav": "Sections de l’offre",
     "saveJob": "Enregistrer l’offre",
     "contactTitle": "Contact employeur",
     "contactViaPlatform": "Contact via la plateforme",
@@ -506,6 +515,7 @@
   },
   "errors": {
     "authInvalidCredentials": "Adresse e-mail ou mot de passe incorrect.",
+    "authEmailNotConfirmed": "Confirmez d’abord votre adresse e-mail en cliquant sur le lien que nous vous avons envoyé.",
     "permissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action.",
     "validationFailed": "Vérifiez vos informations et réessayez.",
     "jobNotActive": "Cette offre n'est plus active.",
@@ -594,6 +604,10 @@
     "applicationsEmptyTitle": "Aucune candidature pour le moment",
     "applicationsEmptyBody": "Trouvez une offre et envoyez votre première candidature.",
     "applicationsFindJobs": "Voir les offres",
+    "applicationsMore": "Afficher plus de candidatures",
+    "applicationsLoading": "Chargement des candidatures…",
+    "applicationsMoreError": "Impossible de charger d’autres candidatures. Réessayez.",
+    "applicationsEnd": "Vous avez vu toutes vos candidatures.",
     "applicationUnknownJob": "Offre d’emploi",
     "applicationCurrentStatus": "Statut actuel",
     "applicationSentOn": "Envoyée le {date}",
@@ -690,6 +704,7 @@
     "offersApplications": "{count, plural, one {# candidature} other {# candidatures}}",
     "offersMatched": "{count} corresp.",
     "recentApplications": "Candidatures récentes",
+    "recentApplicationsError": "Impossible de charger les candidatures récentes. Réessayez.",
     "sendOffer": "Envoyer une proposition",
     "offerSentSuccess": "La proposition a été envoyée.",
     "statusChanged": "Le statut a été mis à jour.",
@@ -731,6 +746,9 @@
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
+    "identityEyebrow": "VOTRE PASSEPORT EMPLOI",
+    "identityEmptyName": "Prénom non indiqué",
+    "identityEmpty": "Ajoutez vos informations pour afficher votre passeport emploi.",
     "title": "Votre profil professionnel",
     "intro": "Retrouvez les informations utilisées pour vous proposer des emplois adaptés à vos compétences.",
     "edit": "Modifier le profil",
@@ -1089,12 +1107,17 @@
   "messages": {
     "title": "Messages",
     "subtitle": "Toutes vos conversations au même endroit",
+    "loading": "Chargement des conversations…",
+    "opening": "Ouverture de la conversation…",
     "empty": "Aucun message",
     "emptyHint": "Vos conversations apparaîtront ici dès que vous prendrez contact.",
     "loadError": "Impossible de charger les conversations.",
     "loadErrorHint": "Vérifiez votre connexion et réessayez.",
     "retry": "Réessayer",
     "selectConversation": "Sélectionnez une conversation pour voir les messages.",
+    "threadUnavailable": "Cette conversation n'est pas disponible.",
+    "threadLoadError": "Impossible de charger la conversation.",
+    "threadLoadErrorHint": "Réessayez. Vos messages restent enregistrés.",
     "threadEmpty": "Aucun message dans cette conversation.",
     "composerPlaceholder": "Écrivez un message…",
     "send": "Envoyer",
@@ -1244,6 +1267,29 @@
       "contractType": "Type de contrat",
       "remoteJob": "Télétravail — la localisation importe peu",
       "withinCommuteRadius": "Lieu de travail dans votre rayon de déplacement"
+    }
+  },
+  "application": {
+    "error": {
+      "jobRequired": "Choisissez l'offre à laquelle vous souhaitez postuler.",
+      "jobInvalid": "Cette offre est introuvable. Actualisez la page et réessayez.",
+      "messageTooLong": "Le message est trop long.",
+      "phoneInvalid": "Indiquez un numéro de téléphone valide.",
+      "termsRequired": "Vous devez accepter le consentement pour envoyer votre candidature.",
+      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez."
+    }
+  },
+  "offer": {
+    "error": {
+      "jobRequired": "Choisissez une offre d'emploi.",
+      "jobInvalid": "Cette offre d'emploi est introuvable. Actualisez la page et réessayez.",
+      "candidateRequired": "Choisissez un candidat.",
+      "candidateInvalid": "Ce candidat est introuvable. Actualisez la page et réessayez.",
+      "messageRequired": "Écrivez un message au candidat.",
+      "messageTooShort": "Le message est trop court (au moins 10 caractères).",
+      "messageTooLong": "Le message est trop long.",
+      "idempotencyKeyRequired": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez.",
+      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez."
     }
   }
 }

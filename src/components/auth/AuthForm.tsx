@@ -137,9 +137,14 @@ export interface AuthFormProps {
   variant: AuthFormVariant;
   /** Kod błędu do pokazania od razu (np. nieudany callback e-maila). */
   initialError?: ErrorCode | null;
+  /**
+   * Zwalidowany cel po zalogowaniu / potwierdzeniu e-maila (`?next=`, np. oferta pracy).
+   * Serwer waliduje go ponownie (`safeNextPath`). Używany przy logowaniu i rejestracji kandydata.
+   */
+  next?: string | null;
 }
 
-export function AuthForm({ variant, initialError = null }: AuthFormProps): React.JSX.Element {
+export function AuthForm({ variant, initialError = null, next = null }: AuthFormProps): React.JSX.Element {
   const t = useTranslations('auth');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -148,6 +153,9 @@ export function AuthForm({ variant, initialError = null }: AuthFormProps): React
   const [serverError, setServerError] = React.useState<ErrorCode | null>(initialError);
   const [success, setSuccess] = React.useState(false);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
+  // Fokus na komunikat tylko po wysyłce (nie przy wejściu z `?error=`): przycisk jest `disabled`
+  // w trakcie zapisu, więc przeglądarka zdejmuje z niego fokus — bez tego ląduje on na <body>.
+  const focusAlertRef = React.useRef(false);
 
   const resolver = React.useMemo(
     () => zodResolver(SCHEMAS[variant]) as Resolver<AuthFormValues>,
@@ -168,18 +176,27 @@ export function AuthForm({ variant, initialError = null }: AuthFormProps): React
   // Przewiń do komunikatu błędu/sukcesu, gdy się pojawi (błędy pól obsługuje focus RHF).
   React.useEffect(() => {
     if (serverError || success) {
-      alertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const alert = alertRef.current;
+      if (focusAlertRef.current && alert) {
+        focusAlertRef.current = false;
+        alert.focus({ preventScroll: true });
+      }
+      alert?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [serverError, success]);
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
+    focusAlertRef.current = true;
 
     let result: AuthActionResult | undefined;
     try {
       switch (variant) {
         case 'login':
-          result = await signIn({ email: values.email ?? '', password: values.password ?? '' });
+          result = await signIn(
+            { email: values.email ?? '', password: values.password ?? '' },
+            next,
+          );
           break;
         case 'registerCandidate':
           result = await registerCandidate({
@@ -190,7 +207,7 @@ export function AuthForm({ variant, initialError = null }: AuthFormProps): React
             lastName: values.lastName ?? '',
             agreeTerms: true,
             locale: locale as Locale,
-          });
+          }, next);
           break;
         case 'registerEmployer':
           result = await registerEmployer({
@@ -230,8 +247,9 @@ export function AuthForm({ variant, initialError = null }: AuthFormProps): React
     return (
       <div
         ref={alertRef}
+        tabIndex={-1}
         role="status"
-        className="flex items-start gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-foreground"
+        className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex items-start gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-foreground"
       >
         <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
         <p>{t('resetSuccess')}</p>
@@ -244,8 +262,9 @@ export function AuthForm({ variant, initialError = null }: AuthFormProps): React
       {serverError ? (
         <div
           ref={alertRef}
+          tabIndex={-1}
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
+          className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{tRoot(errorMessageKey(serverError))}</p>

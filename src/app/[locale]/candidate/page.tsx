@@ -14,6 +14,7 @@ import { ProfileSummaryError } from '@/components/candidate/ProfileSummaryError'
 import { CvUpload } from '@/components/candidate/CvUpload';
 import { SaveJobButton } from '@/components/candidate/SaveJobButton';
 import { ApplicationActions } from '@/components/candidate/ApplicationActions';
+import { getProfileLevelTitle } from '@/lib/profile-completeness';
 import {
   getCandidateOverview,
   getCandidateProfileSummary,
@@ -271,7 +272,7 @@ export default async function CandidateDashboardPage({
             <ProfileCompleteness
               className="mt-4"
               value={profile.completionPct}
-              title={td('goodLevel')}
+              title={getProfileLevelTitle(profile.completionPct, td('goodLevel'))}
               hint={td('completenessHint')}
             />
             <ProfileChecklist className="mt-5" items={checklist} />

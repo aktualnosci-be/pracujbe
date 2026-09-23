@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       template: `%s · ${tCommon('appName')}`,
     },
     description: tMeta('homeDescription'),
-    manifest: '/manifest.webmanifest',
+    manifest: `/${locale}/manifest.webmanifest`,
     icons: {
       icon: [
         { url: '/icon.svg', type: 'image/svg+xml' },

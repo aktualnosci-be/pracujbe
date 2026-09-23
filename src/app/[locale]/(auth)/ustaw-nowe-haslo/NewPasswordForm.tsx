@@ -53,6 +53,9 @@ export function NewPasswordForm(): React.JSX.Element {
   const [serverError, setServerError] = React.useState<ErrorCode | null>(null);
   const [success, setSuccess] = React.useState(false);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
+  // Fokus na komunikat tylko po wysyłce (nie przy wejściu z `?error=`): przycisk jest `disabled`
+  // w trakcie zapisu, więc przeglądarka zdejmuje z niego fokus — bez tego ląduje on na <body>.
+  const focusAlertRef = React.useRef(false);
 
   const resolver = React.useMemo(() => zodResolver(schema) as Resolver<FormValues>, []);
 
@@ -68,12 +71,18 @@ export function NewPasswordForm(): React.JSX.Element {
 
   React.useEffect(() => {
     if (serverError || success) {
-      alertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const alert = alertRef.current;
+      if (focusAlertRef.current && alert) {
+        focusAlertRef.current = false;
+        alert.focus({ preventScroll: true });
+      }
+      alert?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [serverError, success]);
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
+    focusAlertRef.current = true;
 
     let result: Awaited<ReturnType<typeof updatePassword>> | undefined;
     try {
@@ -99,8 +108,9 @@ export function NewPasswordForm(): React.JSX.Element {
       <div className="space-y-6">
         <div
           ref={alertRef}
+          tabIndex={-1}
           role="status"
-          className="flex items-start gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-foreground"
+          className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex items-start gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-foreground"
         >
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
           <p>{t('passwordUpdated')}</p>
@@ -122,8 +132,9 @@ export function NewPasswordForm(): React.JSX.Element {
       {serverError ? (
         <div
           ref={alertRef}
+          tabIndex={-1}
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
+          className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{tRoot(errorMessageKey(serverError))}</p>

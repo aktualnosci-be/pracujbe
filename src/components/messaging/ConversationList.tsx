@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import type { Locale } from '@/i18n/routing';
 import type { ConversationListItem } from '@/lib/data/messages';
 
+import { ConversationOpenPending } from './ConversationOpenPending';
+
 /**
  * ConversationList — prezentacyjna lista konwersacji panelu (makieta „Wiadomości").
  *
@@ -61,6 +63,7 @@ export async function ConversationList({
           <li key={item.id}>
             <Link
               href={`${basePath}?c=${item.id}`}
+              prefetch={false}
               aria-current={active ? 'true' : undefined}
               className={cn(
                 'flex min-h-20 gap-3 border-l-4 px-4 py-4 transition-colors hover:bg-soft',
@@ -108,6 +111,7 @@ export async function ConversationList({
                     </span>
                   ) : null}
                 </div>
+                <ConversationOpenPending />
               </div>
             </Link>
           </li>

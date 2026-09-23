@@ -36,7 +36,7 @@ async function expectNoHorizontalOverflow(
 }
 
 for (const locale of locales) {
-  test(`ekran offline pokazuje dostępne logo i akcję przy 320 px: ${locale}`, async ({
+  test(`ekran offline pokazuje dostępne logo i akcję ≥ 48 px przy 320 px: ${locale}`, async ({
     page,
   }) => {
     const t = messages(locale);
@@ -53,9 +53,12 @@ for (const locale of locales) {
         exact: true,
       }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: t.common.retry, exact: true }),
-    ).toBeVisible();
+    const retry = page.getByRole("link", { name: t.common.retry, exact: true });
+    await expect(retry).toBeVisible();
+    const box = await retry.boundingBox();
+    expect(box?.height ?? 0, `${locale}: wysokość CTA`).toBeGreaterThanOrEqual(48);
+    await retry.focus();
+    await expect(retry).toBeFocused();
     await expectNoHorizontalOverflow(page, locale);
   });
 }

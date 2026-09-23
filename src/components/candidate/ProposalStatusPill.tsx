@@ -7,7 +7,7 @@ const STATUS_TONE = {
   sent: "bg-primary/10 text-primary-dark",
   viewed: "bg-warning/10 text-warning-text",
   accepted: "bg-success/10 text-success-text",
-  declined: "bg-error/10 text-error",
+  declined: "bg-error/10 text-error-text",
   expired: "bg-muted text-muted-foreground",
   cancelled: "bg-muted text-muted-foreground",
 } as const;

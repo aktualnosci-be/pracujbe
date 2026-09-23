@@ -21,8 +21,12 @@ import { getLocale } from 'next-intl/server';
 import { headers } from 'next/headers';
 import { z } from 'zod/v3';
 
+import { redirect as redirectPath } from 'next/navigation';
+
 import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
+import { mapAuthError } from '@/lib/auth/map-auth-error';
+import { roleFromProfileRead } from '@/lib/auth/profile-role';
 import { env } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -35,6 +39,7 @@ import {
   registerCandidateSchema,
   registerEmployerSchema,
   resetSchema,
+  safeNextPath,
   type LoginInput,
   type RegisterCandidateInput,
   type RegisterEmployerInput,
@@ -66,9 +71,6 @@ export type AuthActionResult = { ok: true } | { ok: false; error: ErrorCode };
 type SignupRole = 'candidate' | 'employer';
 type Role = SignupRole | 'admin';
 
-/** Minimalny, strukturalny kształt błędu Supabase Auth (bez zależności od eksportu typu). */
-type SupabaseAuthErrorShape = { code?: string | null; status?: number; message?: string };
-
 /** Ścieżka panelu wg roli (bez prefiksu locale — dokłada go `redirect`/callback). */
 function panelPath(role: Role): string {
   switch (role) {
@@ -88,36 +90,16 @@ async function currentLocale(): Promise<Locale> {
   return supported.includes(value) ? (value as Locale) : routing.defaultLocale;
 }
 
-/** Mapuje błąd Supabase Auth na `AppError` ze stabilnym kodem (bez wycieku technikaliów). */
-function mapAuthError(error: SupabaseAuthErrorShape): AppError {
-  const code = error.code ?? '';
-  const status = error.status ?? 0;
-
-  if (status === 429 || code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit') {
-    return new AppError('RATE_LIMITED', { cause: error, context: { authCode: code, status } });
-  }
-  if (
-    code === 'invalid_credentials' ||
-    code === 'invalid_grant' ||
-    code === 'email_not_confirmed' ||
-    status === 400
-  ) {
-    return new AppError('AUTH_INVALID_CREDENTIALS', { cause: error, context: { authCode: code, status } });
-  }
-  return new AppError('INTERNAL', { cause: error, context: { authCode: code, status } });
-}
-
-/** Odczytuje rolę zalogowanego użytkownika z profiles (RLS: właściciel czyta swój wiersz). */
+/**
+ * Odczytuje rolę zalogowanego użytkownika z profiles (RLS: właściciel czyta swój wiersz).
+ * Błąd, brak profilu lub nieznana rola → AppError('INTERNAL'), nigdy domyślny kandydat.
+ */
 async function resolveRole(
   supabase: Awaited<ReturnType<typeof createServerClient>>,
   userId: string,
 ): Promise<Role> {
-  const { data } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
-  const role = (data as { role?: string } | null)?.role;
-  if (role === 'employer' || role === 'admin') {
-    return role;
-  }
-  return 'candidate';
+  const result = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+  return roleFromProfileRead(result);
 }
 
 interface SignUpArgs {
@@ -128,6 +110,8 @@ interface SignUpArgs {
   lastName: string;
   companyName?: string;
   locale: Locale;
+  /** Zwalidowany cel po potwierdzeniu e-maila (np. oferta); brak → panel wg roli. */
+  next?: string | null;
 }
 
 /**
@@ -137,7 +121,7 @@ interface SignUpArgs {
 async function signUpUser(args: SignUpArgs): Promise<void> {
   const supabase = await createServerClient();
 
-  const next = `/${args.locale}${panelPath(args.role)}`;
+  const next = args.next ?? `/${args.locale}${panelPath(args.role)}`;
   const emailRedirectTo =
     `${env.siteUrl}/auth/callback` +
     `?next=${encodeURIComponent(next)}&locale=${encodeURIComponent(args.locale)}`;
@@ -195,8 +179,12 @@ async function signUpUser(args: SignUpArgs): Promise<void> {
   }
 }
 
-/** Logowanie e-mail + hasło. Sukces → panel wg roli. */
-export async function signIn(input: LoginInput): Promise<AuthActionResult> {
+/**
+ * Logowanie e-mail + hasło. Sukces → bezpieczny `next` (np. oferta, z której kandydat przyszedł)
+ * albo panel wg roli. `next` jest walidowany ponownie po stronie serwera (`safeNextPath`) —
+ * wartość spoza serwisu jest ignorowana (brak open redirect).
+ */
+export async function signIn(input: LoginInput, next?: string | null): Promise<AuthActionResult> {
   // Rate limit per IP (10 prób / 5 min) — ochrona przed brute-force. Bez ujawniania detali.
   if (!(await checkRateLimit('signin', { max: 10, windowSeconds: 300 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
@@ -223,17 +211,36 @@ export async function signIn(input: LoginInput): Promise<AuthActionResult> {
     if (!userId) {
       throw new AppError('INTERNAL', { context: { reason: 'no_user_after_signin' } });
     }
-    role = await resolveRole(supabase, userId);
+    try {
+      role = await resolveRole(supabase, userId);
+    } catch (e) {
+      // Bez znanej roli nie zostawiamy półotwartej sesji: wylogowanie (best-effort)
+      // i kontrolowany błąd zamiast przekierowania do panelu innej roli.
+      captureError(e, { area: 'auth.signIn.resolveRole' });
+      await supabase.auth.signOut().catch(() => undefined);
+      throw e;
+    }
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
   }
 
   // `redirect` rzuca NEXT_REDIRECT (typ zwrotny `never`); `return` spełnia sygnaturę.
+  const target = safeNextPath(next);
+  if (target) {
+    // Ścieżka ma już prefiks języka (`/{locale}/...`) — bez ponownego dokładania locale.
+    return redirectPath(target);
+  }
   return redirect({ href: panelPath(role), locale });
 }
 
-/** Rejestracja kandydata. Sukces → strona potwierdzenia e-maila. */
-export async function registerCandidate(input: RegisterCandidateInput): Promise<AuthActionResult> {
+/**
+ * Rejestracja kandydata. Sukces → strona potwierdzenia e-maila. Bezpieczny `next` trafia do
+ * linku potwierdzającego (`/auth/callback?next=`), więc po potwierdzeniu kandydat wraca np. do oferty.
+ */
+export async function registerCandidate(
+  input: RegisterCandidateInput,
+  next?: string | null,
+): Promise<AuthActionResult> {
   // Rate limit per IP (5 rejestracji / godz) — ochrona przed masowym zakładaniem kont.
   if (!(await checkRateLimit('register', { max: 5, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
@@ -254,6 +261,7 @@ export async function registerCandidate(input: RegisterCandidateInput): Promise<
       firstName: parsed.data.firstName,
       lastName: parsed.data.lastName,
       locale,
+      next: safeNextPath(next),
     });
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };

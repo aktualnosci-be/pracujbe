@@ -13,7 +13,12 @@ for (const locale of locales) {
       readFileSync(resolve("src/messages", `${locale}.json`), "utf8"),
     ) as {
       cookies: { rejectOptional: string };
-      home: { heroTitle: string; searchButton: string };
+      home: {
+        heroTitle: string;
+        heroBrowseJobs: string;
+        heroCreateProfile: string;
+        searchButton: string;
+      };
       jobs: {
         pageTitle: string;
         keyword: string;
@@ -65,6 +70,20 @@ for (const locale of locales) {
       await expect(
         page.getByRole("heading", { level: 1, name: t.home.heroTitle }),
       ).toBeVisible();
+      const heroJobs = page.getByRole("link", {
+        name: t.home.heroBrowseJobs,
+        exact: true,
+      });
+      const heroProfile = page.getByRole("link", {
+        name: t.home.heroCreateProfile,
+        exact: true,
+      });
+      await expect(heroJobs).toBeVisible();
+      await expect(heroProfile).toBeVisible();
+      await heroJobs.focus();
+      await expect(heroJobs).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(heroProfile).toBeFocused();
       await expectNoHorizontalOverflow(page);
 
       await page

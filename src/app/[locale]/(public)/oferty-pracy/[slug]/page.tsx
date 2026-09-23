@@ -27,6 +27,7 @@ import { getJobBySlug, getJobs, type ContractType, type JobDetail, type JobListI
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
+import { loginHref } from '@/lib/validation/auth';
 import { JobMatchCard } from '@/components/public/JobMatchCard';
 
 /**
@@ -48,7 +49,6 @@ import { JobMatchCard } from '@/components/public/JobMatchCard';
  */
 
 const BASE_PATH = '/oferty-pracy';
-const LOGIN_HREF = '/logowanie';
 
 /** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). Spójne z layoutem/stroną główną. */
 const OG_LOCALE: Record<string, string> = {
@@ -103,6 +103,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const path = `${BASE_PATH}/${slug}`;
   const url = `${base}/${locale}${path}`;
   const description = truncate(job.description, 160);
+  const shareImage = new URL('/og.png', base).href;
 
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
@@ -122,6 +123,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       type: 'article',
       locale: OG_LOCALE[locale] ?? locale,
       publishedTime: job.publishedAt,
+      images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: job.title,
+      description,
+      images: [shareImage],
     },
   };
 }
@@ -242,7 +250,8 @@ export default async function JobDetailPage({ params }: PageProps) {
   const tabs = [
     { href: '#opis', label: t('tabDescription') },
     { href: '#firma', label: t('tabCompany') },
-    { href: '#podobne', label: t('tabSimilar') },
+    // Kotwica „Podobne” tylko, gdy sekcja istnieje (inaczej martwy link).
+    ...(similarJobs.length > 0 ? [{ href: '#podobne', label: t('tabSimilar') }] : []),
   ];
 
   const Section = ({
@@ -259,13 +268,20 @@ export default async function JobDetailPage({ params }: PageProps) {
       open
       className="group border-b border-border py-4 first:pt-0 lg:border-0 lg:py-0"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 lg:pointer-events-none lg:cursor-default [&::-webkit-details-marker]:hidden">
+      {/*
+        Akordeon tylko na mobile: na `lg` summary znika (display:none), więc nie jest
+        przystankiem Tab i Enter/Spacja nie zwinie sekcji, której nie da się rozwinąć myszą.
+        Na desktopie nagłówek sekcji to osobny `h2` za summary (w drzewie a11y zawsze tylko
+        jeden z nich).
+      */}
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 lg:hidden [&::-webkit-details-marker]:hidden">
         <h2 className="text-xl font-semibold text-foreground">{title}</h2>
         <ChevronDown
           className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 lg:hidden"
           aria-hidden="true"
         />
       </summary>
+      <h2 className="hidden text-xl font-semibold text-foreground lg:block">{title}</h2>
       <div className="mt-3 lg:mt-4">{children}</div>
     </details>
   );
@@ -367,20 +383,17 @@ export default async function JobDetailPage({ params }: PageProps) {
         </p>
       </header>
 
-      {/* Zakładki (kotwice do sekcji) */}
-      <nav aria-label={t('tabDescription')} className="mb-6 border-b border-border">
+      {/*
+        Kotwice do sekcji (nawigacja w obrębie strony, nie zakładki ARIA). Bez stałego
+        `aria-current`/wyróżnienia pierwszej pozycji — strona nie śledzi bieżącej sekcji.
+      */}
+      <nav aria-label={t('sectionsNav')} className="mb-6 border-b border-border">
         <ul className="-mb-px flex flex-wrap gap-6">
-          {tabs.map((tab, index) => (
+          {tabs.map((tab) => (
             <li key={tab.href}>
               <a
                 href={tab.href}
-                aria-current={index === 0 ? 'true' : undefined}
-                className={cn(
-                  'inline-block border-b-2 pb-3 text-sm font-medium transition-colors',
-                  index === 0
-                    ? 'border-accent text-accent'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                )}
+                className="inline-block border-b-2 border-transparent pb-3 text-sm font-medium text-muted-foreground transition-colors hover:border-accent hover:text-foreground"
               >
                 {tab.label}
               </a>
@@ -454,35 +467,45 @@ export default async function JobDetailPage({ params }: PageProps) {
           ) : null}
 
           <Section title={t('accommodationCommute')}>
+            {/*
+              Każda para dt/dd jest bezpośrednio w `div` będącym dzieckiem `dl` (HTML/axe
+              `definition-list`); ikona jest dekoracją wewnątrz `dt`, pozycjonowaną w lewym odstępie.
+            */}
             <dl className="grid gap-4 sm:grid-cols-2">
-              <div className="flex items-start gap-2.5">
-                <Home className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <div>
-                  <dt className="text-sm text-muted-foreground">{t('accommodation')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {job.accommodation ? tCommon('yes') : tCommon('no')}
-                  </dd>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <Truck className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <div>
-                  <dt className="text-sm text-muted-foreground">{t('transport')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {job.transport ? tCommon('yes') : tCommon('no')}
-                  </dd>
-                </div>
-              </div>
-              {job.languages.length > 0 ? (
-                <div className="flex items-start gap-2.5">
-                  <LanguagesIcon
-                    className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"
+              <div className="relative pl-[1.875rem]">
+                <dt className="text-sm text-muted-foreground">
+                  <Home
+                    className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
                     aria-hidden="true"
                   />
-                  <div>
-                    <dt className="text-sm text-muted-foreground">{t('languages')}</dt>
-                    <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
-                  </div>
+                  {t('accommodation')}
+                </dt>
+                <dd className="font-medium text-foreground">
+                  {job.accommodation ? tCommon('yes') : tCommon('no')}
+                </dd>
+              </div>
+              <div className="relative pl-[1.875rem]">
+                <dt className="text-sm text-muted-foreground">
+                  <Truck
+                    className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  {t('transport')}
+                </dt>
+                <dd className="font-medium text-foreground">
+                  {job.transport ? tCommon('yes') : tCommon('no')}
+                </dd>
+              </div>
+              {job.languages.length > 0 ? (
+                <div className="relative pl-[1.875rem]">
+                  <dt className="text-sm text-muted-foreground">
+                    <LanguagesIcon
+                      className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    {t('languages')}
+                  </dt>
+                  <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
                 </div>
               ) : null}
             </dl>
@@ -543,7 +566,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               <div className="flex items-center gap-3">
                 <Building2 className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-foreground">{job.companyName}</p>
+                  <p className="break-words font-medium text-foreground">{job.companyName}</p>
                   <p className="text-sm text-muted-foreground">{t('contactViaPlatform')}</p>
                 </div>
               </div>
@@ -553,8 +576,8 @@ export default async function JobDetailPage({ params }: PageProps) {
                 </p>
               ) : null}
               <Link
-                href={LOGIN_HREF}
-                className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 w-full')}
+                href={loginHref(`/${locale}${BASE_PATH}/${slug}`)}
+                className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 h-auto min-h-12 w-full whitespace-normal text-center')}
               >
                 <MessageSquare className="h-4 w-4" aria-hidden="true" />
                 {t('sendMessage')}
@@ -582,7 +605,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                             {initials(item.companyName)}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-foreground group-hover:text-accent">
+                            <p className="break-words text-sm font-medium text-foreground group-hover:text-accent">
                               {item.title}
                             </p>
                             <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -611,19 +634,25 @@ export default async function JobDetailPage({ params }: PageProps) {
         </aside>
       </div>
 
-      {/* Dolny pasek (mobile) */}
-      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background/95 p-3 shadow-[0_-4px_12px_rgba(15,42,71,0.08)] backdrop-blur lg:hidden">
-        <PublicSaveJobButton jobId={job.id} className="flex-1" />
+      {/*
+        Dolny pasek (mobile): jeden wiersz — zapis jako ikona 48×48 (opis stanu w nazwie
+        dostępnej), CTA zajmuje resztę szerokości. Pasek sam rezerwuje miejsce pod całą
+        stroną (padding body, także pod stopką) i margines przewijania, aby element z fokusem
+        nie chował się pod nim (WCAG 2.4.11). Jednostki rem skalują się z powiększeniem tekstu.
+      */}
+      <div
+        data-testid="job-mobile-cta-bar"
+        className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background/95 p-3 shadow-[0_-4px_12px_rgba(15,42,71,0.08)] backdrop-blur lg:hidden max-lg:[body:has(&)]:pb-24 max-lg:[html:has(&)]:scroll-pb-28"
+      >
+        <PublicSaveJobButton jobId={job.id} iconOnly />
         <ApplyModal
           jobId={job.id}
           companyName={job.companyName}
           triggerLabel={applyLabel}
           triggerSize="default"
-          triggerClassName="flex-1"
+          triggerClassName="min-w-0 flex-1"
         />
       </div>
-      {/* Odstęp, aby dolny pasek nie zasłaniał treści na mobile. */}
-      <div className="h-20 lg:hidden" aria-hidden="true" />
     </div>
     </PublicSavedJobsProvider>
   );

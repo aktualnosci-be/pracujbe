@@ -5,12 +5,14 @@ import { Link } from '@/i18n/navigation';
 import { Logo } from '@/components/brand/Logo';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { MobileNav } from './MobileNav';
+import { MobileNav, PrimaryNav } from './MobileNav';
 
 /**
  * Górny pasek nawigacji (server component) — wg makiety 01-home.
  *
  * Desktop: [logo + nawigacja gościa] ............ [Zaloguj się (ghost) · Dodaj ofertę (granat)].
+ * Strefy mogą się zawijać: przy powiększonym tekście (WCAG 1.4.4) na szerokościach md–lg
+ * pasek przechodzi do dwóch wierszy zamiast wypychać akcje poza ekran.
  * Mobile: [hamburger] [logo wyśrodkowane] [ikona konta]. Struktura oparta na
  * `justify-between` z trzema bezpośrednimi dziećmi — środkowe (logo mobilne) trafia na
  * środek, gdy skrajne są wąskie. Selektor języka celowo NIE jest w headerze (jest w stopce
@@ -19,33 +21,19 @@ import { MobileNav } from './MobileNav';
 export async function Header() {
   const t = await getTranslations('nav');
 
-  // Tylko trasy z realnymi stronami (uniknięcie 404 na pozycjach nawigacji). Strony
-  // treściowe (jak-to-działa/poradniki) dojdą wraz z ich implementacją — patrz roadmapa.
-  const navLinks = [
-    { href: '/oferty-pracy', label: t('jobs') },
-    { href: '/rejestracja-pracodawca', label: t('forEmployers') },
-  ] as const;
-
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="container flex h-16 items-center justify-between gap-3">
+      <div className="container flex min-h-16 items-center md:flex-wrap justify-between gap-x-3 gap-y-2 py-2">
         {/* Lewa strefa: hamburger (mobile) + logo (desktop) + nawigacja (desktop). */}
-        <div className="flex items-center gap-6 lg:gap-8">
+        <div className="flex min-w-0 items-center gap-x-6 md:flex-wrap gap-y-2 lg:gap-x-8">
           <MobileNav />
           <Link href="/" className="hidden rounded-sm md:block">
             <Logo />
           </Link>
-          <nav className="hidden items-center gap-6 md:flex">
-            {navLinks.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <PrimaryNav
+            className="hidden items-center gap-6 md:flex"
+            linkClassName="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:text-foreground"
+          />
         </div>
 
         {/* Logo wyśrodkowane — tylko mobile. */}
@@ -54,7 +42,7 @@ export async function Header() {
         </Link>
 
         {/* Prawa strefa: akcje (desktop) + ikona konta (mobile). */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 md:flex-wrap">
           <Link
             href="/logowanie"
             className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'hidden md:inline-flex')}

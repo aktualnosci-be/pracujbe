@@ -140,8 +140,16 @@
     "close": "Close"
   },
   "home": {
-    "heroTitle": "Find work in Belgium",
-    "heroSubtitle": "Browse verified jobs and apply without a complicated CV.",
+    "heroTitle": "Your skills. Your place. Your new start.",
+    "heroTitleLine1": "Your skills.",
+    "heroTitleLine2": "Your place.",
+    "heroTitleLine3": "Your new start.",
+    "heroEyebrow": "Work in Belgium",
+    "heroSubtitle": "Find work that makes use of what you do well. Compare conditions and apply with your profile — no CV to write.",
+    "heroBrowseJobs": "Browse jobs",
+    "heroCreateProfile": "Create a candidate profile",
+    "heroPhotoCaption": "Work is about people.",
+    "heroPhotoDisclaimer": "Illustrative photo — not connected to a specific job.",
     "heroSearchJobLabel": "Job title, keyword",
     "heroSearchLocationLabel": "Location",
     "searchJobPlaceholder": "e.g. mechanic, warehouse worker, carer",
@@ -311,6 +319,7 @@
     "tabDescription": "Job description",
     "tabCompany": "About the company",
     "tabSimilar": "Similar jobs",
+    "sectionsNav": "Job sections",
     "saveJob": "Save job",
     "contactTitle": "Employer contact",
     "contactViaPlatform": "Contact via the platform",
@@ -506,6 +515,7 @@
   },
   "errors": {
     "authInvalidCredentials": "Incorrect email or password.",
+    "authEmailNotConfirmed": "Please confirm your email address first — click the link we sent to your inbox.",
     "permissionDenied": "You don't have permission for this action.",
     "validationFailed": "Please check your details and try again.",
     "jobNotActive": "This job is no longer active.",
@@ -594,6 +604,10 @@
     "applicationsEmptyTitle": "No applications yet",
     "applicationsEmptyBody": "Find a job and send your first application.",
     "applicationsFindJobs": "Find jobs",
+    "applicationsMore": "Show more applications",
+    "applicationsLoading": "Loading applications…",
+    "applicationsMoreError": "Could not load more applications. Try again.",
+    "applicationsEnd": "These are all your applications.",
     "applicationUnknownJob": "Job listing",
     "applicationCurrentStatus": "Current status",
     "applicationSentOn": "Sent on {date}",
@@ -690,6 +704,7 @@
     "offersApplications": "{count, plural, one {# application} other {# applications}}",
     "offersMatched": "{count} matches",
     "recentApplications": "Recent applications",
+    "recentApplicationsError": "Could not load recent applications. Please try again.",
     "sendOffer": "Send offer",
     "offerSentSuccess": "Offer has been sent.",
     "statusChanged": "Status has been updated.",
@@ -731,6 +746,9 @@
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
+    "identityEyebrow": "YOUR WORK PASSPORT",
+    "identityEmptyName": "First name not added",
+    "identityEmpty": "Add your details to show your work passport.",
     "title": "Your work profile",
     "intro": "See the information used to match jobs with your skills.",
     "edit": "Edit profile",
@@ -1089,12 +1107,17 @@
   "messages": {
     "title": "Messages",
     "subtitle": "All your conversations in one place",
+    "loading": "Loading conversations…",
+    "opening": "Opening conversation…",
     "empty": "No messages",
     "emptyHint": "Your conversations will appear here once you start talking.",
     "loadError": "Could not load conversations.",
     "loadErrorHint": "Check your connection and try again.",
     "retry": "Try again",
     "selectConversation": "Select a conversation to view messages.",
+    "threadUnavailable": "This conversation is unavailable.",
+    "threadLoadError": "We could not load the conversation.",
+    "threadLoadErrorHint": "Try again. Your messages are still saved.",
     "threadEmpty": "No messages in this conversation yet.",
     "composerPlaceholder": "Write a message…",
     "send": "Send",
@@ -1244,6 +1267,29 @@
       "contractType": "Contract type",
       "remoteJob": "Remote work — location does not matter",
       "withinCommuteRadius": "Workplace within your commute radius"
+    }
+  },
+  "application": {
+    "error": {
+      "jobRequired": "Choose the job you want to apply for.",
+      "jobInvalid": "We couldn't find this job. Refresh the page and try again.",
+      "messageTooLong": "Your message is too long.",
+      "phoneInvalid": "Enter a valid phone number.",
+      "termsRequired": "You need to accept the consent to send your application.",
+      "idempotencyKeyInvalid": "The form couldn't be sent. Refresh the page and try again."
+    }
+  },
+  "offer": {
+    "error": {
+      "jobRequired": "Choose a job.",
+      "jobInvalid": "We couldn't find this job. Refresh the page and try again.",
+      "candidateRequired": "Choose a candidate.",
+      "candidateInvalid": "We couldn't find this candidate. Refresh the page and try again.",
+      "messageRequired": "Write a message to the candidate.",
+      "messageTooShort": "Your message is too short (at least 10 characters).",
+      "messageTooLong": "Your message is too long.",
+      "idempotencyKeyRequired": "The form couldn't be sent. Refresh the page and try again.",
+      "idempotencyKeyInvalid": "The form couldn't be sent. Refresh the page and try again."
     }
   }
 }

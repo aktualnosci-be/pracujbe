@@ -112,7 +112,7 @@ export function ApplicationActions({
               role="menuitem"
               onClick={handleWithdraw}
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-error transition-colors hover:bg-error/10',
+                'flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-error-text transition-colors hover:bg-error/10',
               )}
             >
               <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />

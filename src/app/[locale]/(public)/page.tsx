@@ -93,23 +93,50 @@ export default async function HomePage({ params }: HomePageProps) {
         <div className="container py-8 md:py-12">
           <div className="grid items-center gap-8 md:grid-cols-[1.16fr_1fr] lg:gap-12">
             <div className="min-w-0">
-              <h1 className="text-4xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-                {t('heroTitle')}
+              <p className="mb-5 text-xs font-bold uppercase tracking-[0.18em] text-accent-dark">
+                {t('heroEyebrow')}
+              </p>
+              <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
+                <span className="block">{t('heroTitleLine1')}</span>{' '}
+                <span className="block">{t('heroTitleLine2')}</span>{' '}
+                <span className="block text-accent-dark">{t('heroTitleLine3')}</span>
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
                 {t('heroSubtitle')}
               </p>
+              <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-4">
+                <Link
+                  href={JOBS_PATH}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-foreground px-6 py-3 text-sm font-semibold text-background transition-colors hover:bg-foreground/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {t('heroBrowseJobs')}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+                <Link
+                  href="/rejestracja"
+                  className="inline-flex min-h-12 items-center gap-1 font-semibold text-foreground underline decoration-accent underline-offset-4 hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {t('heroCreateProfile')}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </div>
             </div>
-            <div className="relative aspect-[3/2] overflow-hidden rounded-3xl rounded-tl-[5rem] bg-soft md:aspect-[4/3] lg:rounded-tl-[6rem]">
-              <Image
-                src="/images/people/team.webp"
-                alt=""
-                fill
-                priority
-                sizes="(min-width: 1280px) 520px, (min-width: 768px) 45vw, 100vw"
-                className="object-cover"
-              />
-            </div>
+            <figure className="min-w-0 overflow-hidden rounded-3xl rounded-tl-[5rem] bg-soft lg:rounded-tl-[6rem]">
+              <div className="relative aspect-[3/2] md:aspect-[4/3]">
+                <Image
+                  src="/images/people/team.webp"
+                  alt=""
+                  fill
+                  priority
+                  sizes="(min-width: 1280px) 520px, (min-width: 768px) 45vw, 100vw"
+                  className="object-cover"
+                />
+              </div>
+              <figcaption className="flex items-center gap-3 px-5 py-4 text-sm leading-snug text-foreground">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent font-bold text-white" aria-hidden="true">.be</span>
+                <span><strong className="block">{t('heroPhotoCaption')}</strong><span className="text-muted-foreground">{t('heroPhotoDisclaimer')}</span></span>
+              </figcaption>
+            </figure>
           </div>
           <div className="mt-8">
             <HeroSearch />

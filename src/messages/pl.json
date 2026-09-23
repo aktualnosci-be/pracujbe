@@ -140,8 +140,16 @@
     "close": "Zamknij"
   },
   "home": {
-    "heroTitle": "Znajdź pracę w Belgii",
-    "heroSubtitle": "Przeglądaj sprawdzone oferty i aplikuj bez skomplikowanego CV.",
+    "heroTitle": "Twoje umiejętności. Twoje miejsce. Twój nowy start.",
+    "heroTitleLine1": "Twoje umiejętności.",
+    "heroTitleLine2": "Twoje miejsce.",
+    "heroTitleLine3": "Twój nowy start.",
+    "heroEyebrow": "Praca w Belgii",
+    "heroSubtitle": "Znajdź pracę, w której wykorzystasz to, co potrafisz. Porównaj warunki i aplikuj swoim profilem — bez pisania CV.",
+    "heroBrowseJobs": "Przeglądaj oferty",
+    "heroCreateProfile": "Załóż profil kandydata",
+    "heroPhotoCaption": "Praca to przede wszystkim ludzie.",
+    "heroPhotoDisclaimer": "Zdjęcie ilustracyjne — nie przedstawia konkretnej oferty.",
     "heroSearchJobLabel": "Stanowisko, słowo kluczowe",
     "heroSearchLocationLabel": "Lokalizacja",
     "searchJobPlaceholder": "np. mechanik, magazynier, opiekunka",
@@ -311,6 +319,7 @@
     "tabDescription": "Opis oferty",
     "tabCompany": "Informacje o firmie",
     "tabSimilar": "Podobne oferty",
+    "sectionsNav": "Sekcje oferty",
     "saveJob": "Zapisz ofertę",
     "contactTitle": "Kontakt do pracodawcy",
     "contactViaPlatform": "Kontakt przez platformę",
@@ -506,6 +515,7 @@
   },
   "errors": {
     "authInvalidCredentials": "Nieprawidłowy e-mail lub hasło.",
+    "authEmailNotConfirmed": "Najpierw potwierdź adres e-mail — kliknij link, który wysłaliśmy na Twoją skrzynkę.",
     "permissionDenied": "Nie masz uprawnień do tej operacji.",
     "validationFailed": "Sprawdź wprowadzone dane i spróbuj ponownie.",
     "jobNotActive": "Ta oferta nie jest już aktywna.",
@@ -594,6 +604,10 @@
     "applicationsEmptyTitle": "Nie masz jeszcze zgłoszeń",
     "applicationsEmptyBody": "Znajdź ofertę i wyślij pierwsze zgłoszenie.",
     "applicationsFindJobs": "Znajdź oferty",
+    "applicationsMore": "Pokaż więcej zgłoszeń",
+    "applicationsLoading": "Wczytywanie zgłoszeń…",
+    "applicationsMoreError": "Nie udało się wczytać kolejnych zgłoszeń. Spróbuj ponownie.",
+    "applicationsEnd": "To wszystkie Twoje zgłoszenia.",
     "applicationUnknownJob": "Oferta pracy",
     "applicationCurrentStatus": "Aktualny status",
     "applicationSentOn": "Wysłano {date}",
@@ -690,6 +704,7 @@
     "offersApplications": "{count, plural, one {# aplikacja} few {# aplikacje} many {# aplikacji} other {# aplikacji}}",
     "offersMatched": "{count} dopas.",
     "recentApplications": "Najnowsze aplikacje",
+    "recentApplicationsError": "Nie udało się wczytać najnowszych aplikacji. Spróbuj ponownie.",
     "sendOffer": "Wyślij propozycję",
     "offerSentSuccess": "Propozycja została wysłana.",
     "statusChanged": "Status został zmieniony.",
@@ -731,6 +746,9 @@
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
+    "identityEyebrow": "TWÓJ PASZPORT",
+    "identityEmptyName": "Imię niepodane",
+    "identityEmpty": "Dodaj informacje o sobie, aby pokazać swój paszport.",
     "title": "Twój profil zawodowy",
     "intro": "Tutaj widzisz informacje, które pomagają dopasować oferty do Twoich umiejętności.",
     "edit": "Edytuj profil",
@@ -1089,12 +1107,17 @@
   "messages": {
     "title": "Wiadomości",
     "subtitle": "Twoje rozmowy w jednym miejscu",
+    "loading": "Wczytuję rozmowy…",
+    "opening": "Otwieram rozmowę…",
     "empty": "Brak wiadomości",
     "emptyHint": "Twoje rozmowy pojawią się tutaj, gdy zaczniesz kontakt.",
     "loadError": "Nie udało się wczytać rozmów.",
     "loadErrorHint": "Sprawdź połączenie i spróbuj ponownie.",
     "retry": "Spróbuj ponownie",
     "selectConversation": "Wybierz konwersację, aby zobaczyć wiadomości.",
+    "threadUnavailable": "Ta rozmowa nie jest dostępna.",
+    "threadLoadError": "Nie udało się wczytać rozmowy.",
+    "threadLoadErrorHint": "Spróbuj ponownie. Twoje wiadomości pozostają zapisane.",
     "threadEmpty": "Brak wiadomości w tej rozmowie.",
     "composerPlaceholder": "Napisz wiadomość…",
     "send": "Wyślij",
@@ -1244,6 +1267,29 @@
       "contractType": "Typ umowy",
       "remoteJob": "Praca zdalna — lokalizacja bez znaczenia",
       "withinCommuteRadius": "Miejsce pracy w Twoim promieniu dojazdu"
+    }
+  },
+  "application": {
+    "error": {
+      "jobRequired": "Wybierz ofertę, na którą chcesz aplikować.",
+      "jobInvalid": "Nie znaleziono tej oferty. Odśwież stronę i spróbuj ponownie.",
+      "messageTooLong": "Wiadomość jest za długa.",
+      "phoneInvalid": "Podaj poprawny numer telefonu.",
+      "termsRequired": "Musisz zaakceptować zgodę, aby wysłać aplikację.",
+      "idempotencyKeyInvalid": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie."
+    }
+  },
+  "offer": {
+    "error": {
+      "jobRequired": "Wybierz ofertę pracy.",
+      "jobInvalid": "Nie znaleziono tej oferty pracy. Odśwież stronę i spróbuj ponownie.",
+      "candidateRequired": "Wybierz kandydata.",
+      "candidateInvalid": "Nie znaleziono tego kandydata. Odśwież stronę i spróbuj ponownie.",
+      "messageRequired": "Napisz wiadomość do kandydata.",
+      "messageTooShort": "Wiadomość jest za krótka (co najmniej 10 znaków).",
+      "messageTooLong": "Wiadomość jest za długa.",
+      "idempotencyKeyRequired": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie.",
+      "idempotencyKeyInvalid": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie."
     }
   }
 }

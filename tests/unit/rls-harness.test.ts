@@ -1,0 +1,78 @@
+// @vitest-environment node
+import { readFile } from 'node:fs/promises';
+import { describe, expect, it } from 'vitest';
+
+const read = (path: string) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+
+// Statyczna ochrona harnessu RLS (#23/#25). Dynamiczne kontrole ujemne są w
+// supabase/tests/role-guard.sql; tu pilnujemy, by nikt ich po cichu nie odpiął.
+describe('Harness testów RLS', () => {
+  it('po każdym przełączeniu na rolę klienta wywołuje strażnika roli', async () => {
+    const lines = (await read('supabase/tests/rls.sql')).split('\n');
+    const switches = lines.filter(line => /^\s*set\s+(local\s+)?role\s+(authenticated|anon)\b/i.test(line));
+    expect(switches.length).toBeGreaterThan(50);
+    for (const line of switches) {
+      expect(line).toMatch(/select pg_temp\.assert_client_role\(\);\s*$/);
+    }
+    expect(lines).toContain('\\ir role-assert.sql');
+  });
+
+  it('działa na produkcyjnym bootstrapie i migracjach auth, bez shimu Supabase', async () => {
+    const script = await read('scripts/test-rls.sh');
+    expect(script).toContain('database/bootstrap/0001_roles_and_identity.sql');
+    expect(script).toContain('database/auth/0*.sql');
+    expect(script).toContain('supabase/tests/role-guard.sql');
+    expect(script).not.toContain('shim.sql');
+  });
+
+  it('kontrole ujemne obejmują superusera, BYPASSRLS, własność tabeli, członkostwo i row_security', async () => {
+    const guard = await read('supabase/tests/role-guard.sql');
+    for (const name of [
+      'superuser bez SET ROLE',
+      'rola BYPASSRLS',
+      'klient jako właściciel tabeli',
+      'klient może przejąć superusera',
+      'row_security wyłączone',
+    ]) {
+      expect(guard).toContain(`'${name}'`);
+    }
+  });
+
+  it('wymaga pg_temp na końcu search_path definerów i braku TEMP dla ról runtime (0067)', async () => {
+    const guard = await read('supabase/tests/role-guard.sql');
+    expect(guard).toContain('SECURITY DEFINER bez search_path zakończonego pg_temp');
+    expect(guard).toContain('role runtime mogą tworzyć tabele tymczasowe');
+    const migration = await read('supabase/migrations/0067_definer_search_path_pg_temp.sql');
+    expect(migration).toMatch(/revoke temporary on database %I from public/);
+  });
+
+  it('odrzuca grant zapisu klienta bez polityki RLS (0068)', async () => {
+    const guard = await read('supabase/tests/role-guard.sql');
+    expect(guard).toContain('grant zapisu bez polityki RLS');
+    expect(guard).toContain('domyślne uprawnienia dają klientowi zapis nowych tabel');
+    const migration = await read('supabase/migrations/0068_revoke_client_dml_without_policy.sql');
+    expect(migration).toContain('alter default privileges in schema public revoke insert, update, delete on tables from authenticated');
+  });
+
+  it('CI kopiuje katalog database do kontenera testów RLS', async () => {
+    const ci = await read('.github/workflows/ci.yml');
+    expect(ci).toContain('docker cp database "$POSTGRES_CONTAINER:/tmp/pracujbe-tests/database"');
+  });
+
+  it('CI weryfikuje odtworzenie kopii do izolowanej bazy z kontrolami ujemnymi (#47)', async () => {
+    const ci = await read('.github/workflows/ci.yml');
+    expect(ci).toContain('bash /tmp/pracujbe-tests/scripts/db/test-restore.sh');
+    const test = await read('scripts/db/test-restore.sh');
+    for (const label of ['cel niepusty', 'cel = źródło', 'niedozwolona nazwa celu', 'brak konfiguracji']) {
+      expect(test).toContain(`'${label}'`);
+    }
+    const script = await read('scripts/db/verify-restore.sh');
+    expect(script).toContain('pg_export_snapshot()');
+    expect(script).toMatch(/\^pracujbe_restore_/);
+    // W CI skrypt działa jako root w kontenerze serwera — sygnał z nieaktualnym PID-em
+    // zabił proces PostgreSQL (restart w trakcie testu). Sesję kończymy przez EOF.
+    const code = script.split('\n').filter(line => !line.trimStart().startsWith('#')).join('\n');
+    expect(code).not.toMatch(/\bkill\b/);
+    expect(code).toContain('close_src');
+  });
+});

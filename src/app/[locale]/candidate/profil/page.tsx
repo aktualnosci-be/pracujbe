@@ -8,7 +8,9 @@ import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness'
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
 import { ProfileSummaryError } from '@/components/candidate/ProfileSummaryError';
 import { CvUpload } from '@/components/candidate/CvUpload';
+import { CandidateIdentity } from '@/components/candidate/CandidateIdentity';
 import { getCandidateProfileSummary, getCandidatePassport, getCandidateFiles } from '@/lib/data/candidate';
+import { getProfileLevelTitle } from '@/lib/profile-completeness';
 
 /**
  * Panel kandydata — Profil (podgląd; makieta 04, kolumna „Kompletność profilu").
@@ -87,6 +89,18 @@ export default async function CandidateProfilePage({
         </div>
       </header>
 
+      <CandidateIdentity
+        profile={profile}
+        passport={passport}
+        labels={{
+          eyebrow: tp('identityEyebrow'),
+          emptyName: tp('identityEmptyName'),
+          emptyIdentity: tp('identityEmpty'),
+          loadError: tp('loadError'),
+          availability: !profile.loadFailed && !passport.loadFailed && availabilityKey ? to(availabilityKey) : null,
+        }}
+      />
+
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
         <section aria-labelledby="passport-heading" className="min-w-0 overflow-hidden rounded-[1.75rem] border border-border bg-card">
           <div className="border-b border-border bg-soft p-5 sm:p-7">
@@ -127,7 +141,7 @@ export default async function CandidateProfilePage({
           <ProfileCompleteness
             className="mt-4"
             value={profile.completionPct}
-            title={profile.completionPct >= 60 ? t('goodLevel') : undefined}
+            title={getProfileLevelTitle(profile.completionPct, t('goodLevel'))}
             hint={t('completenessHint')}
           />
           <ProfileChecklist className="mt-5" items={checklist} />
