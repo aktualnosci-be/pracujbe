@@ -17,7 +17,7 @@ ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · Supabase (przejściowo) · PostgreSQL Railway · Zod · React Hook Form · Resend + React Email · Sentry · Vitest + Playwright · Railway.
-2. **CI działa na self-hosted runnerach; wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Nie zmieniaj `runs-on` z powrotem na `ubuntu-latest` bez wyraźnej prośby.
+2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, pula minut Actions — decyzja właściciela 2026-09-23); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Oszczędzaj minuty: nie wypychaj pustych commitów ani zbędnych przebiegów.
 3. **Niezmienne reguły (NIGDY nie łam):** patrz sekcja „Invariants". Najważniejsze: język e-maili = język odbiorcy; wysyłka propozycji idempotentna; brak service-role key w przeglądarce; brak trackingu przed zgodą; RLS na wszystkim; żadnych tekstów UI na sztywno.
 4. **Gdzie co jest:** patrz „Struktura katalogów".
 5. **Co dalej:** patrz „Roadmapa / status" — sekcja z checkboxami. Wybierz kolejny niezaznaczony punkt.
@@ -88,7 +88,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 pracujbe/
 ├─ CLAUDE.md                      # ten plik — mapa/kontrakt projektu
 ├─ README.md                      # szybki start + skrypty
-├─ .github/workflows/             # CI na self-hosted runnerach
+├─ .github/workflows/             # CI na ubuntu-latest (GitHub-hosted)
 │  └─ ci.yml                      # lint · typecheck · unit · e2e · build
 ├─ docs/                          # dokumentacja rozszerzona
 │  ├─ ARCHITECTURE.md
@@ -256,19 +256,23 @@ historia → notyfikacja → enqueue e-mail.
 
 ---
 
-## 10. CI/CD — self-hosted (WAŻNE)
+## 10. CI/CD — GitHub-hosted (WAŻNE)
 
-CI chodzi na **self-hosted runnerach** (wymóg projektu), a wdrożenie obsługuje
-natywna integracja Railway. Zobacz:
-- `.github/workflows/ci.yml` — `runs-on: [self-hosted, linux, x64]`, joby: install → lint → typecheck → unit → e2e → build.
+CI chodzi na **GitHub-hosted runnerach `ubuntu-latest`** (decyzja właściciela z 2026-09-23;
+wcześniej jeden współdzielony self-hosted runner serializował wszystkie przebiegi — #50).
+Minuty Actions są płatne z ograniczonej puli, więc workflow jest zbudowany oszczędnie.
+Wdrożenie obsługuje natywna integracja Railway. Zobacz:
+- `.github/workflows/ci.yml` — `runs-on: ubuntu-latest`; `install` → `lint`/`typecheck`/`unit`/`migrations`,
+  równolegle `sca` i `rls`; `build` po zielonym lint+typecheck+unit; `e2e` po `build`.
 - `docs/DEPLOYMENT.md` — jedna produkcja Railway z `main`, z włączonym `Wait for CI`.
-- `docs/SELF_HOSTED_RUNNERS.md` — jak zarejestrować runner (repo/org), wymagane labele, narzędzia (Node 22, przeglądarki Playwright), sekrety.
+- `scripts/check-ci-workflows.mjs` — strażnik uruchamiany w jobie `lint`.
 
 **Reguły CI:**
-- `runs-on` używa labeli `self-hosted` + `linux` + `x64` (dostosuj etykiety do swoich maszyn).
-- Nie przełączaj na `ubuntu-latest` bez wyraźnej prośby użytkownika.
-- Runner musi mieć: Node 22 (`.nvmrc`), zależności systemowe Playwrighta i dostęp do sekretów wymaganych przez testy. Nie potrzebuje tokenu wdrożeniowego Railway.
-- Cache zależności (`~/.npm`) — na self-hosted zwykle przez `actions/cache` lub trwały wolumen.
+- Nazwy jobów (checków) są stałe — wymagają ich scalanie i Railway `Wait for CI`.
+- Każdy job ma `timeout-minutes`. Nowy push do PR anuluje trwający przebieg tego PR;
+  przebiegi `main` nigdy nie są anulowane (Railway potrzebuje wyniku każdego SHA).
+- Nie wypychaj pustych commitów ani push-ów „na odświeżenie”; ponawiaj tylko uzasadnione joby.
+- Powrót na self-hosted tylko na wyraźną prośbę właściciela (`docs/SELF_HOSTED_RUNNERS.md` — archiwalnie).
 
 ---
 
@@ -498,7 +502,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Model danych: migracje SQL (schemat + enumy + indeksy)
 - [x] RLS: polityki bazowe
 - [x] Role i routing paneli (candidate/employer/admin, noindex)
-- [x] CI na self-hosted (`ci.yml`) + natywne wdrożenie Railway z `main`
+- [x] CI (`ci.yml`, od 2026-09-23 na `ubuntu-latest`) + natywne wdrożenie Railway z `main`
 - [x] Centralny system błędów + kody + Sentry (config)
 - [ ] shadcn/ui — pełny zestaw komponentów (na razie podstawowe)
 
