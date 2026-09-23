@@ -533,7 +533,8 @@
     "notFound": "We konden dit niet vinden.",
     "internal": "Er is een fout aan onze kant opgetreden. We werken eraan.",
     "generic": "Er ging iets mis. Probeer opnieuw.",
-    "demoUnavailable": "Deze functie werkt niet in de demoversie van de website."
+    "demoUnavailable": "Deze functie werkt niet in de demoversie van de website.",
+    "invalidTransition": "Deze statuswijziging is in de huidige fase niet mogelijk. Vernieuw de pagina en kies een andere optie."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -743,7 +744,24 @@
     "employerOffersPage": "Pagina {page}",
     "employerOffersNext": "Volgende pagina",
     "employerOffersPageEmpty": "Op deze pagina staan geen vacatures meer.",
-    "employerOffersRetry": "Opnieuw proberen"
+    "employerOffersRetry": "Opnieuw proberen",
+    "sendOfferTo": "Voorstel sturen: {name} — {job}",
+    "offerMatchedJob": "Match met vacature",
+    "offerSentOn": "Voorstel verstuurd op {date}",
+    "offerDialogTitle": "Voorstel versturen?",
+    "offerDialogDescription": "Controleer de kandidaat en de vacature voordat u de uitnodiging verstuurt.",
+    "offerDialogCandidate": "Kandidaat",
+    "offerDialogJob": "Vacature",
+    "offerDialogDefaultInfo": "Zonder eigen bericht ziet de kandidaat deze uitnodiging in zijn of haar eigen taal:",
+    "offerDialogMessageLabel": "Eigen bericht (optioneel)",
+    "offerDialogMessageHint": "De kandidaat ziet uw eigen bericht precies zoals u het schrijft.",
+    "statusMenuTrigger": "Status wijzigen: {name} — {job} ({status})",
+    "statusMenuOptions": "Statussen: {name} — {job}",
+    "statusFinal": "Eindstatus",
+    "statusFinalLabel": "Eindstatus: {name} — {job} ({status})",
+    "statusConfirmQuestion": "Status wijzigen naar „{status}”? Deze wijziging kan niet ongedaan worden gemaakt.",
+    "statusConfirmAction": "Bevestigen",
+    "offerForJob": "Vacature: {job}"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",

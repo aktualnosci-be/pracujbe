@@ -6,6 +6,7 @@ import { ProposalStatusPill } from "@/components/candidate/ProposalStatusPill";
 import { ProposalActions } from "@/components/candidate/ProposalActions";
 import { canRespondToProposal, proposalDisplayStatus } from "@/lib/candidate-offers";
 import { getMyOffers } from "@/lib/data/candidate";
+import { customOfferMessage } from "@/lib/offers/default-message";
 
 /**
  * Panel kandydata — Propozycje pracy (makieta 04, nawigacja „Propozycje").
@@ -119,11 +120,11 @@ export default async function CandidateProposalsPage({
                     />
                   </div>
 
-                  {offer.message ? (
-                    <p className="whitespace-pre-line break-words border-l-4 border-primary bg-soft px-4 py-3 text-base leading-relaxed text-foreground">
-                      {offer.message}
-                    </p>
-                  ) : null}
+                  {/* Pusta treść = standardowe zaproszenie, renderowane w języku KANDYDATA
+                      (Invariant #1, #289). Własna treść rekrutera pokazywana bez zmian. */}
+                  <p className="whitespace-pre-line break-words border-l-4 border-primary bg-soft px-4 py-3 text-base leading-relaxed text-foreground">
+                    {customOfferMessage(offer.message) ?? t("offerDefaultMessage")}
+                  </p>
 
                   <div className="flex flex-wrap items-center gap-4 border-t border-border pt-4">
                     <ProposalActions

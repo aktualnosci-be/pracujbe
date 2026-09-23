@@ -88,7 +88,7 @@ export default async function EmployerApplicationsPage({
                     </dl>
                     <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
                       <StatusPill status={application.status} />
-                      <ApplicationStatusMenu applicationId={application.id} status={application.status} />
+                      <ApplicationStatusMenu applicationId={application.id} status={application.status} candidateName={name} jobTitle={application.jobTitle} />
                     </div>
                   </article>
                 </li>

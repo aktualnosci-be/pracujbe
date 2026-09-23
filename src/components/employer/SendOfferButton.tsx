@@ -1,23 +1,32 @@
 'use client';
 
 import * as React from 'react';
-import { Check, Send } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import * as Dialog from '@radix-ui/react-dialog';
+import { Check, Send, X } from 'lucide-react';
+import { useFormatter, useTranslations } from 'next-intl';
 
-import { useRouter } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import { sendOffer } from '@/lib/actions/offers';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
-import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { offerSchema } from '@/lib/validation/offer';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Toast } from '@/components/ui/toast';
 
 /**
  * SendOfferButton — wysłanie propozycji do dopasowanego kandydata (panel pracodawcy).
  *
- * Woła idempotentną Server Action `sendOffer` (RPC `send_offer`: walidacja verified/active/
- * członkostwa + niezależny outbox e-mail w języku ODBIORCY — Invarianty #1/#3). `idempotencyKey`
- * generowany JEDNORAZOWO na instancję (useRef) — powtórne kliknięcia trafiają w ten sam klucz,
- * więc DB zwraca istniejącą propozycję (brak duplikatu). Przycisk zablokowany w trakcie wysyłki
- * (useTransition), po sukcesie oznaczony jako wysłany; błędy → toast z komunikatem i18n.
+ * Przycisk otwiera dialog potwierdzenia (#327): kandydat, oferta, której dotyczy propozycja,
+ * podgląd standardowego zaproszenia i opcjonalna własna wiadomość. Bez własnej treści akcja
+ * wysyła `message` = brak → w DB pusta treść, a zaproszenie renderuje się po stronie odbiorcy
+ * w JEGO języku (Invariant #1, #289). Własna treść rekrutera trafia do kandydata bez zmian.
+ *
+ * Woła idempotentną Server Action `sendOffer` (RPC `send_offer`, Invariant #3). `idempotencyKey`
+ * generowany JEDNORAZOWO na instancję — ponowne kliknięcia / retry trafiają w ten sam klucz.
+ * Stan „wysłano" pochodzi z DB (`offerSentAt` z loadera), więc przetrwa odświeżenie strony.
+ * Przycisk wysyłki zablokowany w trakcie zapisu (Invariant #11); błędy → komunikat i18n.
  */
 
 const TOAST_MS = 4000;
@@ -25,26 +34,44 @@ const TOAST_MS = 4000;
 export interface SendOfferButtonProps {
   jobId: string;
   candidateId: string;
+  /** Imię i nazwisko (lub etykieta zastępcza) — w dialogu i dostępnej nazwie przycisku. */
+  candidateName: string;
+  /** Oferta, której dotyczy propozycja. */
+  jobTitle: string;
+  /** Slug oferty (link w dialogu); pusty = bez linku. */
+  jobSlug?: string;
+  /** Data wysłania aktywnej propozycji z DB; `null` = jeszcze nie wysłano. */
+  offerSentAt?: string | null;
   className?: string;
 }
 
 export function SendOfferButton({
   jobId,
   candidateId,
+  candidateName,
+  jobTitle,
+  jobSlug = '',
+  offerSentAt = null,
   className,
 }: SendOfferButtonProps): React.JSX.Element {
   const td = useTranslations('dashboard');
   const ts = useTranslations('status');
+  const tc = useTranslations('common');
   const tRoot = useTranslations();
+  const format = useFormatter();
 
+  const [open, setOpen] = React.useState(false);
+  const [message, setMessage] = React.useState('');
+  const [fieldError, setFieldError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
-  const [sent, setSent] = React.useState(false);
+  const [sentAt, setSentAt] = React.useState<string | null>(offerSentAt);
   const [toast, setToast] = React.useState<{ tone: 'success' | 'error'; message: string } | null>(
     null,
   );
+  const messageRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const fieldId = React.useId();
 
   // Stały klucz idempotencyjny na instancję przycisku (ochrona przed duplikatem propozycji).
-  // Leniwa inicjalizacja — crypto.randomUUID() woływane raz, nie przy każdym renderze.
   const idempotencyKeyRef = React.useRef<string>('');
   if (idempotencyKeyRef.current === '') {
     idempotencyKeyRef.current = crypto.randomUUID();
@@ -52,28 +79,61 @@ export function SendOfferButton({
   const router = useRouter();
 
   React.useEffect(() => {
+    setSentAt(offerSentAt);
+  }, [offerSentAt]);
+
+  React.useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), TOAST_MS);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const handleClick = () => {
-    if (pending || sent) return;
+  const job = jobTitle || td('applicationUnknownJob');
+
+  if (sentAt !== null) {
+    const date = sentAt ? new Date(sentAt) : null;
+    return (
+      <p
+        className={cn(
+          'inline-flex min-h-11 items-center gap-2 text-sm font-medium text-success-text',
+          className,
+        )}
+      >
+        <Check className="size-4 shrink-0" aria-hidden="true" />
+        {date && !Number.isNaN(date.getTime())
+          ? td('offerSentOn', { date: format.dateTime(date, { dateStyle: 'medium' }) })
+          : ts('offerSent')}
+      </p>
+    );
+  }
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (pending) return;
     // Brak identyfikatorów (np. tryb DEMO) — nie wołamy akcji, pokazujemy błąd zamiast wyjątku.
     if (!jobId || !candidateId) {
       setToast({ tone: 'error', message: tRoot(toUserMessageKey('INTERNAL')) });
       return;
     }
+    const trimmed = message.trim();
+    const parsed = offerSchema.shape.message.safeParse(trimmed.length > 0 ? trimmed : undefined);
+    if (!parsed.success) {
+      setFieldError(parsed.error.issues[0]?.message ?? 'offer.error.messageTooShort');
+      messageRef.current?.focus();
+      return;
+    }
+    setFieldError(null);
     startTransition(async () => {
       try {
         const res = await sendOffer({
           jobId,
           candidateId,
-          message: td('offerDefaultMessage'),
+          message: parsed.data,
           idempotencyKey: idempotencyKeyRef.current,
         });
         if (res.ok) {
-          setSent(true);
+          setOpen(false);
+          setSentAt(new Date().toISOString());
           setToast({ tone: 'success', message: td('offerSentSuccess') });
           router.refresh();
         } else {
@@ -87,21 +147,108 @@ export function SendOfferButton({
 
   return (
     <>
-      <Button
-        type="button"
-        size="sm"
-        variant={sent ? 'outline' : 'default'}
-        disabled={pending || sent}
-        onClick={handleClick}
-        className={className}
-      >
-        {sent ? (
-          <Check className="size-4" aria-hidden="true" />
-        ) : (
+      <Dialog.Root open={open} onOpenChange={(next) => (pending ? undefined : setOpen(next))}>
+        <Dialog.Trigger
+          aria-label={td('sendOfferTo', { name: candidateName, job })}
+          className={cn(buttonVariants({ size: 'sm' }), className)}
+        >
           <Send className="size-4" aria-hidden="true" />
-        )}
-        {sent ? ts('offerSent') : td('sendOffer')}
-      </Button>
+          {td('sendOffer')}
+        </Dialog.Trigger>
+
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-lg">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <Dialog.Title className="text-lg font-semibold text-foreground">
+                  {td('offerDialogTitle')}
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm text-muted-foreground">
+                  {td('offerDialogDescription')}
+                </Dialog.Description>
+              </div>
+              <Dialog.Close
+                aria-label={tc('cancel')}
+                disabled={pending}
+                className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-9 w-9 shrink-0')}
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </Dialog.Close>
+            </div>
+
+            <dl className="mb-4 grid gap-3 rounded-lg border border-border p-4">
+              <div className="min-w-0">
+                <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {td('offerDialogCandidate')}
+                </dt>
+                <dd className="mt-1 break-words text-base font-semibold text-foreground">
+                  {candidateName}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {td('offerDialogJob')}
+                </dt>
+                <dd className="mt-1 break-words text-base font-semibold text-foreground">
+                  {jobSlug ? (
+                    <Link href={`/oferty-pracy/${jobSlug}`} className="text-primary hover:underline">
+                      {job}
+                    </Link>
+                  ) : (
+                    job
+                  )}
+                </dd>
+              </div>
+            </dl>
+
+            <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">{td('offerDialogDefaultInfo')}</p>
+                <p className="whitespace-pre-line break-words border-l-4 border-primary bg-soft px-4 py-3 text-sm leading-relaxed text-foreground">
+                  {td('offerDefaultMessage')}
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor={fieldId}>{td('offerDialogMessageLabel')}</Label>
+                <Textarea
+                  id={fieldId}
+                  ref={messageRef}
+                  value={message}
+                  maxLength={4000}
+                  onChange={(event) => {
+                    setMessage(event.target.value);
+                    if (fieldError) setFieldError(null);
+                  }}
+                  aria-invalid={fieldError ? true : undefined}
+                  aria-describedby={`${fieldId}-hint${fieldError ? ` ${fieldId}-error` : ''}`}
+                />
+                <p id={`${fieldId}-hint`} className="text-xs text-muted-foreground">
+                  {td('offerDialogMessageHint')}
+                </p>
+                {fieldError ? (
+                  <p id={`${fieldId}-error`} className="text-sm text-error-text" role="alert">
+                    {tRoot(fieldError)}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2">
+                <Dialog.Close asChild>
+                  <Button type="button" variant="outline" disabled={pending}>
+                    {tc('cancel')}
+                  </Button>
+                </Dialog.Close>
+                <Button type="submit" disabled={pending} aria-busy={pending || undefined}>
+                  <Send className="size-4" aria-hidden="true" />
+                  {td('sendOffer')}
+                </Button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {toast ? (
         <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">

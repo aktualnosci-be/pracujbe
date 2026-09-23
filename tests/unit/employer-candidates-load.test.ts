@@ -138,4 +138,53 @@ describe("employer candidates read", () => {
     expect(await getTopMatchedCandidates({ throwOnError: true })).toEqual([]);
     expect(supabase.from).not.toHaveBeenCalled();
   });
+
+  it("returns the target job title and the active offer state from the database (#327)", async () => {
+    const { supabase } = client();
+    const offerFilters: unknown[][] = [];
+    supabase.from.mockImplementation((table: string) => {
+      let columns = "";
+      const data = () => {
+        if (table === "jobs") {
+          return columns.includes("title")
+            ? [{ id: "job-1", title: "Operator wózka", slug: "operator-wozka" }]
+            : [{ id: "job-1" }];
+        }
+        if (table === "matches") {
+          return [
+            { candidate_id: "candidate-1", job_id: "job-1", score: 92 },
+            { candidate_id: "candidate-2", job_id: "job-1", score: 80 },
+          ];
+        }
+        if (table === "offers") {
+          return [{ candidate_id: "candidate-1", job_id: "job-1", sent_at: "2026-09-20T10:00:00Z" }];
+        }
+        return [];
+      };
+      const query = {
+        select: vi.fn((cols: string) => {
+          columns = cols;
+          return query;
+        }),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn(() => query),
+        in: vi.fn((...args: unknown[]) => {
+          if (table === "offers") offerFilters.push(args);
+          return query;
+        }),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn(() => query),
+        then: (resolve: (value: { data: unknown[]; error: null }) => void) =>
+          Promise.resolve({ data: data(), error: null }).then(resolve),
+      };
+      return query;
+    });
+
+    const result = await getTopMatchedCandidates({ throwOnError: true });
+    expect(result.map((c) => [c.candidateId, c.jobTitle, c.jobSlug, c.offerSentAt])).toEqual([
+      ["candidate-1", "Operator wózka", "operator-wozka", "2026-09-20T10:00:00Z"],
+      ["candidate-2", "Operator wózka", "operator-wozka", null],
+    ]);
+    expect(offerFilters).toContainEqual(["status", ["sent", "viewed"]]);
+  });
 });
