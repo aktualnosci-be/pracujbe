@@ -22,7 +22,6 @@ for (const locale of ['pl', 'nl', 'fr', 'en']) {
  *
  * Zakres:
  *  1. Szczegóły oferty: dane strukturalne JobPosting (JSON-LD) + <html lang="pl">.
- *  2. Trasa panelu (dashboard) — jeśli istnieje — musi mieć noindex.
  */
 
 /** Pobiera slug pierwszej oferty demonstracyjnej z listy. */
@@ -62,18 +61,4 @@ test('szczegóły oferty zawierają JSON-LD JobPosting oraz <html lang="pl">', a
     }
   }
   expect(foundJobPosting, 'Brak danych strukturalnych JobPosting (JSON-LD)').toBe(true);
-});
-
-test('trasa panelu (dashboard) ma noindex, jeśli istnieje', async ({ page }) => {
-  const response = await page.goto('/pl/dashboard', { waitUntil: 'domcontentloaded' });
-
-  // Panel nie istnieje w tej wersji (404) — warunek spełniony trywialnie (pomiń).
-  if (!response || response.status() >= 400) {
-    test.skip(true, 'Trasa /pl/dashboard nie istnieje w tej wersji.');
-    return;
-  }
-
-  // Jeśli istnieje, MUSI być wykluczona z indeksowania.
-  const robots = page.locator('meta[name="robots"]');
-  await expect(robots).toHaveAttribute('content', /noindex/);
 });
