@@ -44,7 +44,11 @@ export function LandingHubGrid({
   return (
     <ul
       aria-label={ariaLabel}
-      className={cn("grid gap-3 sm:grid-cols-2 lg:grid-cols-3", className)}
+      className={cn(
+        // Kolumny liczone w rem: przy powiększonym tekście siatka sama redukuje liczbę kolumn.
+        "grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-3",
+        className,
+      )}
     >
       {items.map((item) => (
         <li key={item.key} className="min-w-0">
@@ -58,7 +62,7 @@ export function LandingHubGrid({
                   {item.icon}
                 </span>
               ) : null}
-              <h3 className="min-w-0 flex-1 text-lg font-bold leading-snug">
+              <h3 className="min-w-0 flex-1 hyphens-auto break-words text-lg font-bold leading-snug">
                 {item.title}
               </h3>
               <ArrowRight
@@ -66,7 +70,7 @@ export function LandingHubGrid({
                 aria-hidden="true"
               />
             </div>
-            <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+            <p className="mt-3 hyphens-auto break-words text-base leading-relaxed text-muted-foreground">
               {item.description}
             </p>
             {item.meta ? (
