@@ -3,8 +3,10 @@
 import * as React from 'react';
 import { Bookmark, BookmarkCheck } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { usePathname } from 'next/navigation';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
+import { loginHref } from '@/lib/validation/auth';
 import {
   getPublicSavedJobs,
   type PublicSavedState,
@@ -110,6 +112,8 @@ export function PublicSaveJobButton({
 }) {
   const context = React.useContext(SavedContext);
   const t = useTranslations('jobs');
+  // Anonim wraca po zalogowaniu na bieżącą stronę (oferta lub lista).
+  const pathname = usePathname();
   const status = context?.state.status ?? 'unavailable';
   const saved =
     context?.state.status === 'candidate' &&
@@ -140,7 +144,7 @@ export function PublicSaveJobButton({
   if (status === 'anonymous')
     return (
       <Link
-        href="/logowanie"
+        href={loginHref(pathname)}
         className={cn(style, className)}
         aria-label={label}
         title={label}
