@@ -69,5 +69,10 @@ describe('Harness testów RLS', () => {
     const script = await read('scripts/db/verify-restore.sh');
     expect(script).toContain('pg_export_snapshot()');
     expect(script).toMatch(/\^pracujbe_restore_/);
+    // W CI skrypt działa jako root w kontenerze serwera — sygnał z nieaktualnym PID-em
+    // zabił proces PostgreSQL (restart w trakcie testu). Sesję kończymy przez EOF.
+    const code = script.split('\n').filter(line => !line.trimStart().startsWith('#')).join('\n');
+    expect(code).not.toMatch(/\bkill\b/);
+    expect(code).toContain('close_src');
   });
 });

@@ -6,10 +6,13 @@ import { loadMigrations } from './migration-files.mjs';
 /**
  * Cały przebieg jest jedną transakcją na jednym połączeniu.
  * Błąd SQL lub zmiana historii cofa także wcześniej wykonane pliki tego przebiegu.
+ * Z `{ dryRun: true }` nakłada oczekujące pliki w tej samej transakcji, a na końcu
+ * zawsze robi ROLLBACK — dowód, że migracje przejdą na danej bazie, bez zapisu.
  * @param {{query: Function}} client Połączony klient, nigdy pula z query().
  * @param {Array<{name:string,sql:string,checksum:string}>} migrations
+ * @param {{dryRun?: boolean}} [options]
  */
-export async function applyMigrations(client, migrations) {
+export async function applyMigrations(client, migrations, { dryRun = false } = {}) {
   if (migrations.length === 0) throw new Error('Brak migracji.');
   await client.query('BEGIN');
   try {
@@ -26,22 +29,48 @@ export async function applyMigrations(client, migrations) {
     )`);
     await client.query('REVOKE ALL ON app_migrations.history FROM PUBLIC');
     const { rows } = await client.query('SELECT name, checksum FROM app_migrations.history ORDER BY name');
-    // Historia musi być dokładnym prefiksem: zakaz usunięcia, edycji lub wstawienia wstecz.
-    for (let index = 0; index < rows.length; index++) {
-      if (rows[index].name !== migrations[index]?.name || rows[index].checksum !== migrations[index]?.checksum) {
-        throw new Error('Historia migracji różni się od plików. Przywróć zastosowane pliki.');
-      }
-    }
+    assertHistoryPrefix(rows, migrations);
     const pending = migrations.slice(rows.length);
     for (const migration of pending) {
       await client.query(migration.sql);
       await client.query('INSERT INTO app_migrations.history (name, checksum) VALUES ($1, $2)', [migration.name, migration.checksum]);
     }
-    await client.query('COMMIT');
-    return { applied: pending.length, total: migrations.length };
+    await client.query(dryRun ? 'ROLLBACK' : 'COMMIT');
+    return { applied: dryRun ? 0 : pending.length, total: migrations.length, pending: pending.map(file => file.name) };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
+  }
+}
+
+/** Historia musi być dokładnym prefiksem: zakaz usunięcia, edycji lub wstawienia wstecz. */
+function assertHistoryPrefix(rows, migrations) {
+  for (let index = 0; index < rows.length; index++) {
+    if (rows[index].name !== migrations[index]?.name || rows[index].checksum !== migrations[index]?.checksum) {
+      throw new Error('Historia migracji różni się od plików. Przywróć zastosowane pliki.');
+    }
+  }
+}
+
+/**
+ * Tylko odczyt: stan historii względem plików, bez tworzenia schematu, blokad i zapisu.
+ * Sesja jest `READ ONLY`, więc nawet błąd w tej funkcji nie zmieni bazy.
+ * @param {{query: Function}} client
+ * @param {Array<{name:string,sql:string,checksum:string}>} migrations
+ * @returns {Promise<{applied: number, total: number, pending: string[]}>}
+ */
+export async function planMigrations(client, migrations) {
+  if (migrations.length === 0) throw new Error('Brak migracji.');
+  await client.query('BEGIN TRANSACTION READ ONLY');
+  try {
+    const { rows: [probe] } = await client.query("SELECT to_regclass('app_migrations.history') AS history");
+    const rows = probe.history
+      ? (await client.query('SELECT name, checksum FROM app_migrations.history ORDER BY name')).rows
+      : [];
+    assertHistoryPrefix(rows, migrations);
+    return { applied: rows.length, total: migrations.length, pending: migrations.slice(rows.length).map(file => file.name) };
+  } finally {
+    await client.query('ROLLBACK');
   }
 }
 

@@ -60,7 +60,15 @@ dump="$workdir/pracujbe.dump"
 # a liczności i zapytania kontrolne czytamy z TEGO SAMEGO snapshotu — wynik jest
 # porównywalny także na żywej produkcji, bez blokowania zapisów.
 coproc SRC { psql -X -q -At -v ON_ERROR_STOP=1 --dbname="$RESTORE_SOURCE_URL" 2>/dev/null; }
-trap 'rm -rf "$workdir"; [ -n "${SRC_PID:-}" ] && kill "$SRC_PID" 2>/dev/null || true' EXIT
+# Sesję źródła kończymy zamknięciem jej wejścia (psql kończy się sam po EOF), nigdy
+# sygnałem: w CI skrypt działa jako root w kontenerze serwera, więc `kill` z PID-em
+# pomocniczego procesu mógł trafić w proces serwera PostgreSQL i wywołać jego restart.
+close_src() {
+  if [ -n "${SRC[1]:-}" ]; then
+    eval "exec ${SRC[1]}>&-" 2>/dev/null || true
+  fi
+}
+trap 'close_src; rm -rf "$workdir"' EXIT
 
 src_tx() {
   # Wysyła SQL do sesji źródła i czyta wynik do znacznika końca.
