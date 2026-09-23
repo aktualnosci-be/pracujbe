@@ -1,0 +1,8 @@
+const { chromium } = require('/workspace/pracujbe/node_modules/playwright');
+(async()=>{const br=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+for(const u of ['/pl/praca','/nl/praca','/nl/poradniki','/fr/praca','/en/praca']){const p=await br.newPage({viewport:{width:640,height:800}});await p.goto('http://localhost:3100'+u);await p.waitForTimeout(700);
+ const b=p.locator('[aria-labelledby="cookie-banner-title"] button').first();if(await b.count()){await b.click();await p.waitForTimeout(300)}
+ await p.evaluate(()=>document.documentElement.style.fontSize='200%');await p.waitForTimeout(300);
+ const r=await p.evaluate(()=>{const W=document.documentElement.clientWidth;const out=[];const tw=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=tw.nextNode()){const rg=document.createRange();rg.selectNodeContents(n);const rr=rg.getBoundingClientRect();if(rr.right>W+1&&rr.width>0)out.push({text:n.textContent.slice(0,60),right:Math.round(rr.right),anc:(()=>{let a=n.parentElement,s=[];for(let i=0;i<5&&a;i++){s.push(a.tagName+"."+String(a.className).slice(0,60));a=a.parentElement}return s.join(" < ")})()})}document.querySelectorAll('body *').forEach(e=>{const r=e.getBoundingClientRect();if(r.right>W+1&&r.width>0&&![...e.children].some(c=>c.getBoundingClientRect().right>W+1)){out.push({html:e.outerHTML.slice(0,140),txt:e.textContent.slice(0,60),right:Math.round(r.right),anc:(()=>{let a=e,s=[];for(let i=0;i<5&&a;i++){s.push(a.tagName+'.'+String(a.className).slice(0,50));a=a.parentElement}return s.join(' < ')})()})}});return {sw:document.documentElement.scrollWidth-W,out:out.slice(0,4)}});
+ console.log(u,JSON.stringify(r,null,1));await p.close()}
+await br.close()})();
