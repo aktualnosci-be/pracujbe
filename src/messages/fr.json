@@ -532,7 +532,8 @@
     "entitlementLimit": "Vous avez atteint la limite d'offres actives de votre formule. Changez de formule pour en publier davantage.",
     "notFound": "Nous n'avons pas trouvé ce que vous cherchez.",
     "internal": "Une erreur est survenue de notre côté. Nous y travaillons.",
-    "generic": "Une erreur est survenue. Réessayez."
+    "generic": "Une erreur est survenue. Réessayez.",
+    "demoUnavailable": "Cette fonction n'est pas disponible dans la version de démonstration du site."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -949,7 +950,9 @@
     "errorGeneric": "L'envoi de la candidature a échoué. Réessayez.",
     "alreadyApplied": "Vous avez déjà postulé à cette offre.",
     "submitting": "Envoi en cours...",
-    "close": "Fermer"
+    "close": "Fermer",
+    "phoneInvalid": "Saisissez un numéro de téléphone valide : un numéro national pour le pays choisi ou le numéro complet avec l’indicatif, par ex. +32 470 12 34 56.",
+    "demoUnavailable": "Ceci est une version de démonstration — la candidature aux offres est désactivée."
   },
   "legal": {
     "termsTitle": "Conditions générales",

@@ -532,7 +532,8 @@
     "entitlementLimit": "Je hebt de limiet van actieve vacatures in je plan bereikt. Upgrade om er meer te plaatsen.",
     "notFound": "We konden dit niet vinden.",
     "internal": "Er is een fout aan onze kant opgetreden. We werken eraan.",
-    "generic": "Er ging iets mis. Probeer opnieuw."
+    "generic": "Er ging iets mis. Probeer opnieuw.",
+    "demoUnavailable": "Deze functie werkt niet in de demoversie van de website."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -949,7 +950,9 @@
     "errorGeneric": "De sollicitatie kon niet worden verzonden. Probeer opnieuw.",
     "alreadyApplied": "Je hebt al op deze vacature gesolliciteerd.",
     "submitting": "Bezig met verzenden...",
-    "close": "Sluiten"
+    "close": "Sluiten",
+    "phoneInvalid": "Vul een geldig telefoonnummer in: een nationaal nummer voor het gekozen land of het volledige nummer met landcode, bijv. +32 470 12 34 56.",
+    "demoUnavailable": "Dit is een demoversie — solliciteren op vacatures is uitgeschakeld."
   },
   "legal": {
     "termsTitle": "Algemene voorwaarden",
