@@ -1298,5 +1298,13 @@
       "idempotencyKeyRequired": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez.",
       "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez."
     }
+  },
+  "siteAccess": {
+    "pageTitle": "Pracuj.be — accès protégé par mot de passe",
+    "title": "Pracuj.be est en préparation",
+    "lead": "Le site n’est pas encore ouvert au public. Si vous avez un mot de passe d’accès, saisissez-le ci-dessous.",
+    "passwordLabel": "Mot de passe d’accès",
+    "submit": "Entrer",
+    "error": "Mot de passe incorrect. Veuillez réessayer."
   }
 }

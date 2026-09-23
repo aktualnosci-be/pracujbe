@@ -1298,5 +1298,13 @@
       "idempotencyKeyRequired": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie.",
       "idempotencyKeyInvalid": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie."
     }
+  },
+  "siteAccess": {
+    "pageTitle": "Pracuj.be — dostęp chroniony hasłem",
+    "title": "Pracuj.be jest w przygotowaniu",
+    "lead": "Serwis nie jest jeszcze publicznie dostępny. Jeśli masz hasło dostępu, wpisz je poniżej.",
+    "passwordLabel": "Hasło dostępu",
+    "submit": "Wejdź",
+    "error": "Nieprawidłowe hasło. Spróbuj ponownie."
   }
 }

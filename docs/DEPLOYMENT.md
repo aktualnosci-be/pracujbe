@@ -29,7 +29,11 @@ deployu jako joba Actions.
 - healthcheck: `/api/health`;
 - wymagane wartości: `APP_MODE=production` i
   `NEXT_PUBLIC_SITE_URL=https://pracuj.be`;
-- `PORT` dostarcza Railway.
+- `PORT` dostarcza Railway;
+- do czasu publicznego startu: `SITE_ACCESS_PASSWORD` — każda strona pokazuje
+  formularz hasła (503, noindex); po podaniu hasła cookie ważne 30 dni. Zmiana
+  hasła unieważnia wydane cookies, usunięcie zmiennej otwiera serwis. `/api/*`
+  (health, webhooki) działa bez hasła.
 
 Zmienne i sekrety aplikacji przechowuj w Railway, nigdy w repozytorium.
 Konfiguracja PostgreSQL, auth, prywatnego bucketu i cronów jest opisana w

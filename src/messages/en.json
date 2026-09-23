@@ -1298,5 +1298,13 @@
       "idempotencyKeyRequired": "The form couldn't be sent. Refresh the page and try again.",
       "idempotencyKeyInvalid": "The form couldn't be sent. Refresh the page and try again."
     }
+  },
+  "siteAccess": {
+    "pageTitle": "Pracuj.be — password-protected access",
+    "title": "Pracuj.be is being prepared",
+    "lead": "The website is not open to the public yet. If you have an access password, enter it below.",
+    "passwordLabel": "Access password",
+    "submit": "Enter",
+    "error": "Incorrect password. Please try again."
   }
 }
