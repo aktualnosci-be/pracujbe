@@ -66,6 +66,7 @@ export default defineConfig({
   testIgnore: [
     '**/candidate-applications-pagination.spec.ts',
     '**/candidate-applications-error.spec.ts',
+    '**/candidate-proposals-pagination.spec.ts',
     '**/candidate-dashboard-read-errors.spec.ts',
   ],
   fullyParallel: true,

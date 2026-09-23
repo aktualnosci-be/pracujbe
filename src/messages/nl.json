@@ -368,6 +368,13 @@
       "contactEmailInvalid": "Ongeldig e-mailadres.",
       "publishAgreementRequired": "Bevestig om de vacature te publiceren.",
       "invalid": "Ongeldige waarde."
+    },
+    "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
+    "contentLanguageNames": {
+      "pl": "Pools",
+      "nl": "Nederlands",
+      "fr": "Frans",
+      "en": "Engels"
     }
   },
   "landing": {
@@ -477,6 +484,8 @@
     "verifySubtitle": "We hebben een link naar je e-mailadres gestuurd. Klik erop om je registratie af te ronden.",
     "orContinue": "of ga verder met",
     "agreeTerms": "Door een account aan te maken ga je akkoord met de algemene voorwaarden en het privacybeleid.",
+    "agreeTermsLinks": "Ik aanvaard de <terms>algemene voorwaarden</terms> en het <privacy>privacybeleid</privacy>.",
+    "opensInNewTab": "(opent in een nieuw tabblad)",
     "passwordHint": "Minimaal 8 tekens, met een letter en een cijfer.",
     "registerAsEmployer": "Werkgever? Maak een werkgeversaccount aan",
     "registerAsCandidate": "Op zoek naar werk? Maak een kandidatenaccount aan",
@@ -615,6 +624,10 @@
     "proposalsIntro": "Werkgevers kunnen je een baanvoorstel sturen.",
     "proposalsEmptyTitle": "Nog geen voorstellen",
     "proposalsEmptyBody": "Vul je profiel aan zodat werkgevers je ervaring kunnen zien.",
+    "proposalsMore": "Meer voorstellen tonen",
+    "proposalsLoading": "Voorstellen laden…",
+    "proposalsMoreError": "Meer voorstellen konden niet worden geladen. Probeer het opnieuw.",
+    "proposalsEnd": "Dit zijn al je voorstellen.",
     "proposalSentOn": "Ontvangen op {date}",
     "candidateListErrorTitle": "Gegevens konden niet worden geladen",
     "candidateListErrorBody": "Vernieuw de pagina en probeer het opnieuw.",
@@ -702,7 +715,6 @@
     "seeAllOffers": "Bekijk alle vacatures",
     "seeAllCandidates": "Bekijk allemaal",
     "funnelDetails": "Details bekijken",
-    "offerId": "ID",
     "selectOffer": "Vacature selecteren",
     "selectAll": "Alles selecteren",
     "saveCandidate": "Kandidaat opslaan",
@@ -710,6 +722,10 @@
     "offersMatched": "{count} matches",
     "recentApplications": "Recente sollicitaties",
     "recentApplicationsError": "De recente sollicitaties konden niet worden geladen. Probeer het opnieuw.",
+    "navEmployerApplications": "Ontvangen sollicitaties",
+    "employerOverviewLoadError": "De statistieken konden niet worden geladen. Probeer het opnieuw.",
+    "employerFunnelLoadError": "De recruteringstrechter kon niet worden geladen. Probeer het opnieuw.",
+    "employerOffersCreatedLabel": "Aangemaakt op {date}",
     "sendOffer": "Voorstel versturen",
     "offerSentSuccess": "Voorstel is verzonden.",
     "statusChanged": "Status is gewijzigd.",

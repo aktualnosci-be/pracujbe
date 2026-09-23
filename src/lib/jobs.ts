@@ -10,7 +10,9 @@ import { isDatabaseConfigured, isProductionMode } from '@/lib/env';
 import { AppError } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
-import { resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
+import { demoJobContentLocales, resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
+import { resolveJobContentLocales } from '@/lib/job-content-locale';
+import type { TransactionPool } from '@/lib/db/transaction';
 
 export type ContractType =
   | 'permanent'
@@ -82,6 +84,10 @@ export interface JobDetail extends JobListItem {
   companyDescription: string;
   /** Data wygaśnięcia oferty (ISO) — do JSON-LD validThrough (P1-12). */
   expiresAt?: string;
+  /** Język treści (tytuł, opis, listy) — może różnić się od języka strony; brak = nieznany (#301). */
+  contentLocale?: Locale;
+  /** Języki z własnym tłumaczeniem treści; brak = nieznane, traktowane jak wszystkie (#301). */
+  availableLocales?: Locale[];
 }
 
 export interface GetJobsParams {
@@ -386,8 +392,35 @@ async function getJobBySlugFromDb(
     import('@/lib/db/runtime'),
     import('@/lib/db/public-jobs'),
   ]);
-  const first = await getPublicJob(await getDomainPool(), slug, locale);
-  return first ? rowToJobDetail(first) : null;
+  const pool = await getDomainPool();
+  const first = await getPublicJob(pool, slug, locale);
+  if (!first) return null;
+  const job = rowToJobDetail(first);
+  return { ...job, ...(await readContentLocales(pool, job, toLocale(locale))) };
+}
+
+/**
+ * Języki treści oferty (#301). Odczyt pomocniczy: jego awaria nie może zablokować strony oferty,
+ * więc błąd jest logowany, a oferta zachowuje się jak dotąd (język nieznany).
+ */
+async function readContentLocales(
+  pool: TransactionPool,
+  job: JobDetail,
+  locale: Locale,
+): Promise<Pick<JobDetail, 'contentLocale' | 'availableLocales'>> {
+  try {
+    const { getPublicJobTranslations } = await import('@/lib/db/public-jobs');
+    const rows = await getPublicJobTranslations(pool, [job.id]);
+    const resolved = resolveJobContentLocales(locale, job, rows);
+    if (resolved.availableLocales.length === 0) return {};
+    return {
+      availableLocales: resolved.availableLocales,
+      ...(resolved.contentLocale ? { contentLocale: resolved.contentLocale } : {}),
+    };
+  } catch (error) {
+    captureError(error, { area: 'jobs.readContentLocales', jobId: job.id });
+    return {};
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -455,6 +488,35 @@ export async function getJobFilterFacets(params: GetJobsParams) {
   } catch (error) {
     captureError(error, { area: 'jobs.getJobFilterFacets' });
     throw new AppError('INTERNAL');
+  }
+}
+
+/**
+ * Języki z własnym tłumaczeniem dla listy ofert (sitemap, #301). `null` = nieznane (błąd odczytu);
+ * oferta bez wpisu w wyniku nie ma żadnego tłumaczenia.
+ */
+export async function getJobsAvailableLocales(
+  jobIds: readonly string[],
+): Promise<Record<string, Locale[]> | null> {
+  if (!isDatabaseConfigured()) {
+    return Object.fromEntries(jobIds.map((id) => [id, demoJobContentLocales(id)]));
+  }
+  try {
+    const [{ getDomainPool }, { getPublicJobTranslations }] = await Promise.all([
+      import('@/lib/db/runtime'),
+      import('@/lib/db/public-jobs'),
+    ]);
+    const rows = await getPublicJobTranslations(await getDomainPool(), jobIds);
+    const result: Record<string, Locale[]> = {};
+    for (const row of rows) {
+      const locale = toLocale(row.locale);
+      const list = (result[row.job_id] ??= []);
+      if (!list.includes(locale)) list.push(locale);
+    }
+    return result;
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobsAvailableLocales' });
+    return null;
   }
 }
 

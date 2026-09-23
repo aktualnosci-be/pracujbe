@@ -79,12 +79,32 @@ function flatten(sp: SearchParams): Record<string, string | undefined> {
   return flat;
 }
 
+/** Numer strony z URL (jak w widoku: nieprawidłowy lub < 1 → 1). */
+function parsePage(value: string | undefined): number {
+  const raw = Number(value);
+  return Number.isFinite(raw) && raw >= 1 ? Math.trunc(raw) : 1;
+}
+
+/**
+ * Sufiks adresu kanonicznego (#314). Sama paginacja (`?page=N`, N > 1) jest kanoniczna sama
+ * dla siebie — kolejne strony prowadzą do ofert spoza strony 1. Filtry i sortowanie
+ * kanonizujemy do listy bazowej (bez eksplozji kombinacji); `page=1` = lista bazowa.
+ */
+function canonicalQuery(sp: SearchParams): string {
+  const flat = flatten(sp);
+  const hasFilters = Object.entries(flat).some(
+    ([key, value]) => key !== 'page' && value !== undefined && value.trim() !== '',
+  );
+  const page = parsePage(flat['page']);
+  return !hasFilters && page > 1 ? `?page=${page}` : '';
+}
+
 export async function generateMetadata({
   params,
-}: {
-  params: Promise<{ locale: string }>;
-}): Promise<Metadata> {
+  searchParams,
+}: PageProps): Promise<Metadata> {
   const { locale } = await params;
+  const query = canonicalQuery(await searchParams);
   const [t, tMeta] = await Promise.all([
     getTranslations({ locale, namespace: 'jobs' }),
     getTranslations({ locale, namespace: 'metadata' }),
@@ -94,11 +114,11 @@ export async function generateMetadata({
   const shareImage = new URL('/og.png', base).href;
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
-    languages[supported] = `${base}/${supported}${BASE_PATH}`;
+    languages[supported] = `${base}/${supported}${BASE_PATH}${query}`;
   }
-  languages['x-default'] = `${base}/${routing.defaultLocale}${BASE_PATH}`;
+  languages['x-default'] = `${base}/${routing.defaultLocale}${BASE_PATH}${query}`;
 
-  const url = `${base}/${locale}${BASE_PATH}`;
+  const url = `${base}/${locale}${BASE_PATH}${query}`;
 
   return {
     title: t('pageTitle'),
@@ -142,9 +162,7 @@ export default async function JobsListPage({
   const cityFilters = resolveCityFilters({ city, locations: sf.locations }, locale);
   const sidebarInitial = { ...sf, locations: cityFilters.displayLocations };
 
-  const pageRaw = Number(flat['page']);
-  const page =
-    Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.trunc(pageRaw) : 1;
+  const page = parsePage(flat['page']);
 
   const [t, tFilters, tCat, tContract, tCommon, tNav] = await Promise.all([
     getTranslations('jobs'),

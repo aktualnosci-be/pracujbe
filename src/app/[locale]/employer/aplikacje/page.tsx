@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'dashboard' });
-  return { title: t('navApplications'), robots: { index: false, follow: false } };
+  return { title: t('navEmployerApplications'), robots: { index: false, follow: false } };
 }
 
 function pageNumber(value: string | undefined): number {
@@ -44,7 +44,7 @@ export default async function EmployerApplicationsPage({
     <div className="space-y-7">
       <header>
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t('employerRole')}</p>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('navApplications')}</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('navEmployerApplications')}</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('employerApplicationsIntro')}</p>
         {result.status === 'ok' && result.isDemo ? (
           <p className="mt-3 inline-flex rounded-full bg-soft px-3 py-1 text-xs font-semibold text-muted-foreground">{t('employerApplicationsDemo')}</p>
@@ -67,7 +67,7 @@ export default async function EmployerApplicationsPage({
         </section>
       ) : (
         <>
-          <ul className="grid min-w-0 gap-4 xl:grid-cols-2" aria-label={t('navApplications')}>
+          <ul className="grid min-w-0 gap-4 xl:grid-cols-2" aria-label={t('navEmployerApplications')}>
             {result.applications.map((application) => {
               const name = application.candidateName || t('candidateFallback');
               return (

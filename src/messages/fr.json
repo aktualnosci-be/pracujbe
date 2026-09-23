@@ -368,6 +368,13 @@
       "contactEmailInvalid": "Adresse e-mail invalide.",
       "publishAgreementRequired": "Confirmez pour publier l'offre.",
       "invalid": "Valeur invalide."
+    },
+    "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
+    "contentLanguageNames": {
+      "pl": "polonais",
+      "nl": "néerlandais",
+      "fr": "français",
+      "en": "anglais"
     }
   },
   "landing": {
@@ -477,6 +484,8 @@
     "verifySubtitle": "Nous avons envoyé un lien à votre adresse e-mail. Cliquez dessus pour terminer votre inscription.",
     "orContinue": "ou continuez avec",
     "agreeTerms": "En créant un compte, vous acceptez les conditions générales et la politique de confidentialité.",
+    "agreeTermsLinks": "J’accepte les <terms>conditions générales</terms> et la <privacy>politique de confidentialité</privacy>.",
+    "opensInNewTab": "(s’ouvre dans un nouvel onglet)",
     "passwordHint": "Au moins 8 caractères, dont une lettre et un chiffre.",
     "registerAsEmployer": "Vous recrutez ? Créez un compte employeur",
     "registerAsCandidate": "Vous cherchez un emploi ? Créez un compte candidat",
@@ -615,6 +624,10 @@
     "proposalsIntro": "Les employeurs peuvent vous envoyer des propositions d’emploi.",
     "proposalsEmptyTitle": "Aucune proposition pour le moment",
     "proposalsEmptyBody": "Complétez votre profil pour présenter votre expérience aux employeurs.",
+    "proposalsMore": "Afficher plus de propositions",
+    "proposalsLoading": "Chargement des propositions…",
+    "proposalsMoreError": "Impossible de charger d’autres propositions. Réessayez.",
+    "proposalsEnd": "Vous avez vu toutes vos propositions.",
     "proposalSentOn": "Reçue le {date}",
     "candidateListErrorTitle": "Impossible de charger les données",
     "candidateListErrorBody": "Actualisez la page et réessayez.",
@@ -702,7 +715,6 @@
     "seeAllOffers": "Voir toutes les offres",
     "seeAllCandidates": "Voir tous",
     "funnelDetails": "Voir les détails",
-    "offerId": "ID",
     "selectOffer": "Sélectionner l'offre",
     "selectAll": "Tout sélectionner",
     "saveCandidate": "Enregistrer le candidat",
@@ -710,6 +722,10 @@
     "offersMatched": "{count} corresp.",
     "recentApplications": "Candidatures récentes",
     "recentApplicationsError": "Impossible de charger les candidatures récentes. Réessayez.",
+    "navEmployerApplications": "Candidatures reçues",
+    "employerOverviewLoadError": "Impossible de charger les statistiques. Réessayez.",
+    "employerFunnelLoadError": "Impossible de charger l’entonnoir de recrutement. Réessayez.",
+    "employerOffersCreatedLabel": "Créée le {date}",
     "sendOffer": "Envoyer une proposition",
     "offerSentSuccess": "La proposition a été envoyée.",
     "statusChanged": "Le statut a été mis à jour.",
