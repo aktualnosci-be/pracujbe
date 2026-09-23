@@ -26,6 +26,7 @@ import { redirect as redirectPath } from 'next/navigation';
 import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
 import { mapAuthError } from '@/lib/auth/map-auth-error';
+import { roleFromProfileRead } from '@/lib/auth/profile-role';
 import { env } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -89,17 +90,16 @@ async function currentLocale(): Promise<Locale> {
   return supported.includes(value) ? (value as Locale) : routing.defaultLocale;
 }
 
-/** Odczytuje rolę zalogowanego użytkownika z profiles (RLS: właściciel czyta swój wiersz). */
+/**
+ * Odczytuje rolę zalogowanego użytkownika z profiles (RLS: właściciel czyta swój wiersz).
+ * Błąd, brak profilu lub nieznana rola → AppError('INTERNAL'), nigdy domyślny kandydat.
+ */
 async function resolveRole(
   supabase: Awaited<ReturnType<typeof createServerClient>>,
   userId: string,
 ): Promise<Role> {
-  const { data } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
-  const role = (data as { role?: string } | null)?.role;
-  if (role === 'employer' || role === 'admin') {
-    return role;
-  }
-  return 'candidate';
+  const result = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+  return roleFromProfileRead(result);
 }
 
 interface SignUpArgs {
@@ -211,7 +211,15 @@ export async function signIn(input: LoginInput, next?: string | null): Promise<A
     if (!userId) {
       throw new AppError('INTERNAL', { context: { reason: 'no_user_after_signin' } });
     }
-    role = await resolveRole(supabase, userId);
+    try {
+      role = await resolveRole(supabase, userId);
+    } catch (e) {
+      // Bez znanej roli nie zostawiamy półotwartej sesji: wylogowanie (best-effort)
+      // i kontrolowany błąd zamiast przekierowania do panelu innej roli.
+      captureError(e, { area: 'auth.signIn.resolveRole' });
+      await supabase.auth.signOut().catch(() => undefined);
+      throw e;
+    }
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
   }

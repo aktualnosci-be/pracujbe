@@ -17,7 +17,9 @@ const mocks = vi.hoisted(() => {
     RedirectSignal,
     signInWithPassword: vi.fn(),
     signUp: vi.fn(),
+    signOut: vi.fn(),
     role: 'candidate' as string,
+    profileRead: null as { data: unknown; error: unknown } | null,
   };
 });
 
@@ -42,10 +44,12 @@ vi.mock('@/lib/supabase/admin', () => ({
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createServerClient: async () => ({
-    auth: { signInWithPassword: mocks.signInWithPassword, signUp: mocks.signUp },
+    auth: { signInWithPassword: mocks.signInWithPassword, signUp: mocks.signUp, signOut: mocks.signOut },
     from: () => ({
       select: () => ({
-        eq: () => ({ maybeSingle: async () => ({ data: { role: mocks.role } }) }),
+        eq: () => ({
+          maybeSingle: async () => mocks.profileRead ?? { data: { role: mocks.role }, error: null },
+        }),
       }),
     }),
   }),
@@ -65,6 +69,8 @@ const credentials = { email: 'jan@example.com', password: 'Haslo1234' };
 
 beforeEach(() => {
   mocks.role = 'candidate';
+  mocks.profileRead = null;
+  mocks.signOut.mockReset().mockResolvedValue({ error: null });
   mocks.signInWithPassword.mockReset().mockResolvedValue({
     data: { user: { id: '00000000-0000-4000-8000-000000000001' } },
     error: null,
@@ -105,6 +111,32 @@ describe('signIn — cel po zalogowaniu', () => {
       ok: false,
       error: 'AUTH_INVALID_CREDENTIALS',
     });
+  });
+});
+
+describe('signIn — rola z profilu (#24)', () => {
+  it.each(['candidate', 'employer', 'admin'])('rola %s prowadzi do własnego panelu', async (role) => {
+    mocks.role = role;
+    const { signIn } = await import('@/lib/actions/auth');
+    expect(await redirectTarget(() => signIn(credentials))).toBe(`/pl/${role}`);
+    expect(mocks.signOut).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['błąd odczytu', { data: null, error: { message: 'relation "profiles" does not exist', code: '42P01' } }],
+    ['brak profilu', { data: null, error: null }],
+    ['nieznana rola', { data: { role: 'moderator' }, error: null }],
+    ['rola pusta', { data: { role: null }, error: null }],
+  ])('%s → kontrolowany błąd, wylogowanie, brak przekierowania (także z next)', async (_label, read) => {
+    mocks.profileRead = read;
+    const { signIn } = await import('@/lib/actions/auth');
+    for (const next of [undefined, '/pl/oferty-pracy/x']) {
+      mocks.signOut.mockClear();
+      const result = await signIn(credentials, next);
+      expect(result).toEqual({ ok: false, error: 'INTERNAL' });
+      expect(JSON.stringify(result)).not.toMatch(/profiles|42P01|relation/);
+      expect(mocks.signOut).toHaveBeenCalledTimes(1);
+    }
   });
 });
 
