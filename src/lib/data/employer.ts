@@ -191,7 +191,9 @@ const loadContext = cache(async (): Promise<EmployerContext | null> => {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
+  if (authError) throw authError;
   if (!user) return null;
 
   // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
@@ -700,7 +702,7 @@ export async function getEmployerApplicationsPage(page: number): Promise<Employe
 }
 
 /** Top dopasowani kandydaci (matches × candidate_profiles). Tylko dla firmy zweryfikowanej. */
-export async function getTopMatchedCandidates(): Promise<EmployerMatchedCandidate[]> {
+export async function getTopMatchedCandidates(options?: { throwOnError?: boolean }): Promise<EmployerMatchedCandidate[]> {
   if (!isSupabaseConfigured()) return DEMO_CANDIDATES;
 
   try {
@@ -768,6 +770,7 @@ export async function getTopMatchedCandidates(): Promise<EmployerMatchedCandidat
     });
   } catch (error) {
     captureError(error, { area: 'employer.getTopMatchedCandidates' });
+    if (options?.throwOnError) throw error;
     return [];
   }
 }
