@@ -3,9 +3,11 @@ import { expect, test } from '@playwright/test';
 
 const locales = ['pl', 'nl', 'fr', 'en'] as const;
 const panels = [
-  { name: 'profil kandydata', path: 'candidate/profil' },
-  { name: 'firma pracodawcy', path: 'employer/firma' },
-  { name: 'kreator oferty', path: 'employer/oferty/nowa' },
+  { name: 'pulpit kandydata', path: 'candidate', fullAudit: false },
+  { name: 'profil kandydata', path: 'candidate/profil', fullAudit: true },
+  { name: 'pulpit pracodawcy', path: 'employer', fullAudit: false },
+  { name: 'firma pracodawcy', path: 'employer/firma', fullAudit: true },
+  { name: 'kreator oferty', path: 'employer/oferty/nowa', fullAudit: true },
 ] as const;
 
 const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -29,7 +31,7 @@ for (const locale of locales) {
 
       const main = page.getByRole('main');
       await expect(main.getByRole('heading', { level: 1 })).toBeVisible();
-      const focusTarget = panel.path === 'candidate/profil'
+      const focusTarget = panel.path === 'candidate/profil' || panel.path === 'candidate' || panel.path === 'employer'
         ? main.getByRole('link').first()
         : main.getByRole('textbox').first();
       await expect(focusTarget).toBeVisible();
@@ -45,17 +47,33 @@ for (const locale of locales) {
         `${locale}/${panel.path}: fokus elementu sterującego musi być widoczny`,
       ).toBe(true);
 
-      const result = await new AxeBuilder({ page }).withTags(tags).analyze();
+      // target-size (WCAG 2.2 SC 2.5.8) jest w axe domyślnie wyłączone.
+      // Sprawdzamy je osobno, bo jego wpływ bywa moderate i wtedy zwykły
+      // filtr critical/serious ukryłby rzeczywiste naruszenie.
+      const result = await new AxeBuilder({ page })
+        .options({ rules: { 'target-size': { enabled: true } } })
+        .withTags(tags)
+        .analyze();
       const blocking = result.violations.filter((violation) =>
         violation.impact === 'critical' || violation.impact === 'serious',
       );
+      // Zachowaj wcześniejszą bramkę axe dla trzech istniejących tras.
+      // Dashboardy dodajemy tu wyłącznie do bramki target-size; ich pełny
+      // audyt kontrastu wymaga osobnej poprawki produktu.
+      if (panel.fullAudit) {
+        expect(
+          blocking.map((violation) => ({
+            id: violation.id,
+            impact: violation.impact,
+            targets: violation.nodes.slice(0, 3).map((node) => node.target),
+          })),
+          `${locale}/${panel.path}: naruszenia axe critical/serious`,
+        ).toEqual([]);
+      }
+      const targetSize = result.violations.filter((violation) => violation.id === 'target-size');
       expect(
-        blocking.map((violation) => ({
-          id: violation.id,
-          impact: violation.impact,
-          targets: violation.nodes.slice(0, 3).map((node) => node.target),
-        })),
-        `${locale}/${panel.path}: naruszenia axe critical/serious`,
+        targetSize.map((violation) => violation.nodes.slice(0, 5).map((node) => node.target)),
+        `${locale}/${panel.path}: cele dotykowe WCAG 2.2 AA muszą mieć wymagany rozmiar lub odstęp`,
       ).toEqual([]);
     });
   }
