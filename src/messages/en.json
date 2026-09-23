@@ -1042,7 +1042,10 @@
     "guestSubtitle": "To apply, you need a free candidate profile. You don't need a CV.",
     "guestRegister": "Create a free profile and apply",
     "guestLogin": "I have an account — log in",
-    "guestReturn": "After you log in or confirm your email, you will come back to this job."
+    "guestReturn": "After you log in or confirm your email, you will come back to this job.",
+    "errorNetwork": "We couldn't reach the server. Check your connection and try again — what you entered has been kept.",
+    "viewApplications": "View your applications",
+    "candidateOnly": "Only a candidate account can apply."
   },
   "legal": {
     "termsTitle": "Terms of Service",
@@ -1243,7 +1246,10 @@
     "loadError": "We couldn’t load your documents. Your files have not been deleted.",
     "deleteConfirmTitle": "Delete this document?",
     "deleteConfirmDescription": "The file “{name}” will be permanently deleted. This cannot be undone.",
-    "deleteSuccess": "The document has been deleted."
+    "deleteSuccess": "The document has been deleted.",
+    "errorTooLarge": "The file is too large (max 5 MB).",
+    "errorType": "Allowed formats: PDF, DOC, DOCX.",
+    "errorEmpty": "The selected file is empty."
   },
   "admin": {
     "adminName": "Administrator",
