@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test';
 
 type Messages = {
   filters: { clearAll: string; clear: string };
-  jobs: { empty: string };
+  jobs: { empty: string; paginationLabel: string };
 };
 
 function messages(locale: string): Messages {
@@ -60,7 +60,7 @@ test('numer strony spoza zakresu prowadzi do ostatniej strony z tymi samymi filt
   expect(landed).toBeLessThan(999);
   await expect(page.getByText(t.jobs.empty)).toHaveCount(0);
   expect(await page.locator(cards).count()).toBeGreaterThan(0);
-  await expect(page.locator('nav [aria-current="page"]')).toHaveText(
+  await expect(page.getByRole('navigation', { name: t.jobs.paginationLabel }).locator('[aria-current="page"]')).toHaveText(
     String(landed),
   );
 });
@@ -71,7 +71,7 @@ test('numer strony przy pustym wyniku pokazuje spójny stan pusty z resetem', as
   const t = messages('pl');
   await page.goto('/pl/oferty-pracy?keyword=zzzzqqq&page=5');
   await expect(page.getByText(t.jobs.empty)).toBeVisible();
-  await expect(page.locator('nav [aria-current="page"]')).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: t.jobs.paginationLabel }).locator('[aria-current="page"]')).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: t.filters.clearAll, exact: true }),
   ).toBeVisible();
