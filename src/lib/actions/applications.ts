@@ -18,16 +18,22 @@ import {
  * tu: walidacja Zod + wywołanie RPC + mapowanie błędu na kod użytkowy (bez technikaliów).
  */
 
-/** `field` wskazuje pole formularza, którego dotyczy błąd walidacji (komunikat przy polu). */
+/**
+ * `field` wskazuje pole formularza, którego dotyczy błąd walidacji (komunikat przy polu).
+ * `UNAUTHENTICATED` (brak sesji) jest odróżniony od `PERMISSION_DENIED` (zalogowany, ale nie
+ * kandydat), aby link „Zaloguj się” widział tylko ktoś bez sesji (#361).
+ */
 export type ApplyResult =
   | { ok: true; id: string }
-  | { ok: false; error: ErrorCode; field?: 'phone' };
+  | { ok: false; error: ErrorCode | 'UNAUTHENTICATED'; field?: 'phone' };
 export type TransitionResult = { ok: true } | { ok: false; error: ErrorCode };
 
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
+  // apply_to_job (0071): nowa próba na ofertę, na którą kandydat już aplikował (inny klucz).
+  if (m.includes('APPLICATION_ALREADY_EXISTS')) return 'APPLICATION_ALREADY_EXISTS';
   if (m.includes('JOB_NOT_ACTIVE')) return 'JOB_NOT_ACTIVE';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
   // transition_application (0040): przejście spoza macierzy albo wyścig (CAS). Użytkownik niczego
@@ -76,7 +82,13 @@ export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> 
     p_message: v.message ?? null,
   });
 
-  if (error) return { ok: false, error: mapPgError(error.message) };
+  if (error) {
+    // RPC rzuca 'UNAUTHENTICATED' tylko przy braku sesji; konto innej roli dostaje PERMISSION_DENIED.
+    if ((error.message ?? '').startsWith('UNAUTHENTICATED')) {
+      return { ok: false, error: 'UNAUTHENTICATED' };
+    }
+    return { ok: false, error: mapPgError(error.message) };
+  }
   return { ok: true, id: String(data) };
 }
 

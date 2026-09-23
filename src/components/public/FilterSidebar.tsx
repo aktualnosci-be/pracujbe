@@ -714,6 +714,9 @@ export interface SortMenuProps {
 /**
  * Menu sortowania listy ofert. `<details>` działa bez JS; po hydratacji Escape i kliknięcie poza
  * menu je zamykają (Escape zwraca fokus na przycisk), a bieżąca opcja ma `aria-current` (#233).
+ * Escape działa w całym dokumencie, gdy menu jest otwarte (np. po otwarciu dotykiem na Safari
+ * fokus nie trafia do `summary`), a wybór opcji zamyka menu — nawigacja kliencka nie odmontowuje
+ * `<details>`, więc bez tego lista zostawała rozwinięta nad nowymi wynikami.
  */
 export function SortMenu({
   sortByLabel,
@@ -733,16 +736,21 @@ export function SortMenu({
       details.open = false;
       details.querySelector('summary')?.focus();
     };
+    const onClick = (event: MouseEvent) => {
+      if ((event.target as Element | null)?.closest('a')) details.open = false;
+    };
     const onPointerDown = (event: PointerEvent) => {
       if (details.open && !details.contains(event.target as Node)) {
         details.open = false;
       }
     };
-    details.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown);
     document.addEventListener('pointerdown', onPointerDown);
+    details.addEventListener('click', onClick);
     return () => {
-      details.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('pointerdown', onPointerDown);
+      details.removeEventListener('click', onClick);
     };
   }, []);
 

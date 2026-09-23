@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CvUpload } from '@/components/candidate/CvUpload';
-import { deleteCandidateFile } from '@/lib/actions/files';
+import { deleteCandidateFile, uploadCandidateCv } from '@/lib/actions/files';
 import pl from '@/messages/pl.json';
 import nl from '@/messages/nl.json';
 import fr from '@/messages/fr.json';
@@ -107,5 +107,60 @@ describe('Lista CV', () => {
     renderCv('pl', []);
     expect(screen.getByText(messages.pl.files.empty)).toBeVisible();
     expect(screen.queryByRole('button', { name: /^Usuń:/ })).not.toBeInTheDocument();
+  });
+});
+
+/** Plik o zadanym rozmiarze bez alokowania bufora (jsdom). */
+function fakeFile(name: string, type: string, size: number): File {
+  const file = new File(['%PDF-'], name, { type });
+  Object.defineProperty(file, 'size', { value: size });
+  return file;
+}
+
+function pick(container: HTMLElement, file: File): void {
+  const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [file] } });
+}
+
+describe('Wgrywanie CV — rozmiar i format (#362)', () => {
+  it.each([
+    ['7 MB', 7 * 1024 * 1024],
+    ['5,5 MB', 5.5 * 1024 * 1024],
+  ])('plik %s odrzucony w przeglądarce, bez żądania do serwera', async (_label, size) => {
+    const { container } = renderCv('pl', []);
+    pick(container, fakeFile('big.pdf', 'application/pdf', size));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(pl.files.errorTooLarge);
+    expect(uploadCandidateCv).not.toHaveBeenCalled();
+  });
+
+  it.each(['pl', 'nl', 'fr', 'en'] as const)('zły format → komunikat o formacie: %s', async (locale) => {
+    const { container } = renderCv(locale, []);
+    pick(container, fakeFile('photo.png', 'image/png', 1024));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(messages[locale].files.errorType);
+    expect(uploadCandidateCv).not.toHaveBeenCalled();
+  });
+
+  it('poprawny plik trafia do akcji; powód z serwera daje konkretny komunikat', async () => {
+    vi.mocked(uploadCandidateCv).mockResolvedValue({
+      ok: false,
+      error: 'VALIDATION_FAILED',
+      reason: 'type',
+    });
+    const { container } = renderCv('en', []);
+    pick(container, fakeFile('cv.pdf', 'application/pdf', 1024));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(en.files.errorType);
+    expect(uploadCandidateCv).toHaveBeenCalledTimes(1);
+  });
+
+  it('odrzucone żądanie (sieć/413) daje komunikat zamiast wywrócenia strony', async () => {
+    vi.mocked(uploadCandidateCv).mockRejectedValue(new Error('Body exceeded 6mb limit'));
+    const { container } = renderCv('pl', []);
+    pick(container, fakeFile('cv.pdf', 'application/pdf', 1024));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(pl.files.uploadError);
+    expect(screen.getByRole('button', { name: pl.files.upload })).toBeEnabled();
   });
 });

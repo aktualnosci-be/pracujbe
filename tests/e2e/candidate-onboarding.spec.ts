@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const localizedWizard = [
   { locale: 'pl', title: 'Twój profil kandydata', firstName: 'Imię', lastName: 'Nazwisko', error: 'Podaj nazwisko.', next: 'Dalej: Preferencje pracy' },
-  { locale: 'nl', title: 'Je kandidatenprofiel', firstName: 'Voornaam', lastName: 'Achternaam', error: 'Vul je achternaam in.', next: 'Volgende: Werkvoorkeuren' },
+  { locale: 'nl', title: 'Je kandidaatprofiel', firstName: 'Voornaam', lastName: 'Achternaam', error: 'Vul je achternaam in.', next: 'Volgende: Werkvoorkeuren' },
   { locale: 'fr', title: 'Votre profil de candidat', firstName: 'Prénom', lastName: 'Nom', error: 'Indiquez votre nom.', next: "Suivant: Préférences d'emploi" },
   { locale: 'en', title: 'Your candidate profile', firstName: 'First name', lastName: 'Last name', error: 'Enter your last name.', next: 'Next: Job preferences' },
 ] as const;

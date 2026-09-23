@@ -65,6 +65,12 @@ test('Escape i kliknięcie poza menu zamykają sortowanie, fokus wraca na przyci
   await expect(menu).toHaveAttribute('open', '');
   await page.mouse.click(5, 700);
   await expect(menu).not.toHaveAttribute('open', '');
+
+  // Wybór opcji (nawigacja kliencka) zamyka menu nad nowymi wynikami.
+  await summary.click();
+  await menu.getByRole('link', { name: 'Newest' }).click();
+  await expect(page).not.toHaveURL(/sort=salary/);
+  await expect(visibleSortMenu(page)).not.toHaveAttribute('open', '');
   await context.close();
 });
 

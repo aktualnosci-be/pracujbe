@@ -8,6 +8,7 @@ import { Link } from '@/i18n/navigation';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { brandShareImageUrl } from '@/lib/seo/structured-data';
 import { getJobs, type CategoryKey } from '@/lib/jobs';
 import { JobCard } from '@/components/public/JobCard';
 
@@ -73,7 +74,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const base = env.siteUrl;
   const path = `${CATEGORY_BASE}/${category}`;
   const url = `${base}/${locale}${path}`;
-  const shareImage = new URL('/og.png', base).href;
+  const shareImage = brandShareImageUrl(base);
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
     languages[supported] = `${base}/${supported}${path}`;

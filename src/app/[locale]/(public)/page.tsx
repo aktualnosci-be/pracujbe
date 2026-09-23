@@ -7,6 +7,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { brandShareImageUrl } from '@/lib/seo/structured-data';
 import { getLatestJobs } from '@/lib/jobs';
 import { Benefits } from '@/components/public/Benefits';
 import { CategoryGrid } from '@/components/public/CategoryGrid';
@@ -51,7 +52,7 @@ export async function generateMetadata({ params }: HomePageProps): Promise<Metad
   const description = t('homeDescription');
   const baseUrl = env.siteUrl;
   const canonical = `${baseUrl}/${locale}`;
-  const shareImage = new URL('/og.png', baseUrl).href;
+  const shareImage = brandShareImageUrl(baseUrl);
 
   const languages: Record<string, string> = {};
   for (const loc of routing.locales) {
