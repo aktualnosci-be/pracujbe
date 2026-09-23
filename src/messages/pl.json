@@ -732,6 +732,9 @@
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
+    "identityEyebrow": "TWÓJ PASZPORT",
+    "identityEmptyName": "Imię niepodane",
+    "identityEmpty": "Dodaj informacje o sobie, aby pokazać swój paszport.",
     "title": "Twój profil zawodowy",
     "intro": "Tutaj widzisz informacje, które pomagają dopasować oferty do Twoich umiejętności.",
     "edit": "Edytuj profil",

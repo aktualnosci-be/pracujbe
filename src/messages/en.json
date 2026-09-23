@@ -732,6 +732,9 @@
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
+    "identityEyebrow": "YOUR WORK PASSPORT",
+    "identityEmptyName": "First name not added",
+    "identityEmpty": "Add your details to show your work passport.",
     "title": "Your work profile",
     "intro": "See the information used to match jobs with your skills.",
     "edit": "Edit profile",
