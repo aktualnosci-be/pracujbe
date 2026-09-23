@@ -7,6 +7,7 @@ import { isSupabaseConfigured } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { removeFile, CANDIDATE_BUCKET } from '@/lib/storage';
 import type { ErrorCode } from '@/lib/errors';
+import { CV_ALLOWED_TYPES, checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
 
 /**
  * Upload/usuwanie plików kandydata (CV) — Invariant #10 (prywatny bucket + signed URLs).
@@ -14,17 +15,12 @@ import type { ErrorCode } from '@/lib/errors';
  * Bez env: tryb demo (no-op sukces), żeby UI działało bez konfiguracji.
  */
 
+/** `reason` rozróżnia błędy walidacji pliku (rozmiar / format), by UI podało konkretny komunikat. */
 export type UploadResult =
   | { ok: true; id: string; path: string }
-  | { ok: false; error: ErrorCode };
+  | { ok: false; error: ErrorCode; reason?: CvFileProblem };
 export type SimpleResult = { ok: true } | { ok: false; error: ErrorCode };
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
-const ALLOWED = new Map<string, string>([
-  ['application/pdf', 'pdf'],
-  ['application/msword', 'doc'],
-  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx'],
-]);
 
 /**
  * Sygnatury (magic bytes) na typ. Weryfikujemy zawartość, bo MIME z klienta jest
@@ -65,15 +61,19 @@ export async function uploadCandidateCv(formData: FormData): Promise<UploadResul
   }
 
   const file = formData.get('file');
-  if (!(file instanceof File) || file.size === 0) return { ok: false, error: 'VALIDATION_FAILED' };
-  if (file.size > MAX_BYTES) return { ok: false, error: 'VALIDATION_FAILED' };
-  const ext = ALLOWED.get(file.type);
-  if (!ext) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!(file instanceof File)) return { ok: false, error: 'VALIDATION_FAILED', reason: 'empty' };
+  const problem = checkCvFile(file);
+  if (problem) return { ok: false, error: 'VALIDATION_FAILED', reason: problem };
+  const ext = CV_ALLOWED_TYPES.get(file.type)!;
 
   // Weryfikacja sygnatury zawartości (magic bytes) — MIME z klienta jest niezaufany.
-  if (!(await hasValidSignature(file, ext))) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!(await hasValidSignature(file, ext))) {
+    return { ok: false, error: 'VALIDATION_FAILED', reason: 'type' };
+  }
   // P1-22: DOCX musi być realnym kontenerem OOXML (nie dowolnym ZIP-em).
-  if (ext === 'docx' && !(await isOoxmlDocx(file))) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (ext === 'docx' && !(await isOoxmlDocx(file))) {
+    return { ok: false, error: 'VALIDATION_FAILED', reason: 'type' };
+  }
 
   if (!isSupabaseConfigured()) return { ok: true, id: 'demo', path: 'demo/cv.pdf' };
 

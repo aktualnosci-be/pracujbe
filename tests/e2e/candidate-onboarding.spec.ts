@@ -4,7 +4,7 @@ import { messages, rejectOptionalCookies } from './fixtures/messages';
 
 const localizedWizard = [
   { locale: 'pl', title: 'Twój profil kandydata', firstName: 'Imię', lastName: 'Nazwisko', error: 'Nazwisko jest za krótkie.', next: 'Dalej: Preferencje pracy' },
-  { locale: 'nl', title: 'Je kandidatenprofiel', firstName: 'Voornaam', lastName: 'Achternaam', error: 'Achternaam is te kort.', next: 'Volgende: Werkvoorkeuren' },
+  { locale: 'nl', title: 'Je kandidaatprofiel', firstName: 'Voornaam', lastName: 'Achternaam', error: 'Achternaam is te kort.', next: 'Volgende: Werkvoorkeuren' },
   { locale: 'fr', title: 'Votre profil de candidat', firstName: 'Prénom', lastName: 'Nom', error: 'Le nom est trop court.', next: "Suivant: Préférences d'emploi" },
   { locale: 'en', title: 'Your candidate profile', firstName: 'First name', lastName: 'Last name', error: 'Last name is too short.', next: 'Next: Job preferences' },
 ] as const;

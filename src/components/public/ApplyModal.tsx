@@ -43,6 +43,12 @@ import { Toast } from '@/components/ui/toast';
  * pokazuje formularza, tylko od razu wybór „załóż profil / zaloguj się” z bezpiecznym powrotem
  * na tę ofertę (`?next=`). Nic nie jest wpisywane, więc nic nie przepada przy przejściu.
  * Poza providerem albo gdy sesja wygaśnie w trakcie, zostaje dotychczasowy link po wysłaniu.
+ *
+ * Błąd sieci (#360): wyjątek z wywołania akcji (utrata połączenia, 413/5xx przed akcją) nie
+ * zostawia przycisku w stanie „Wysyłanie…” — dane zostają, pojawia się komunikat, a ponowienie
+ * wysyła TEN SAM klucz idempotencji (trzymany w `useRef` na czas otwartego modalu), więc
+ * żądanie, które mimo błędu doszło do serwera, nie tworzy drugiej aplikacji (Invariant #4).
+ * Ponowna aplikacja na tę samą ofertę (#361) daje „Już aplikowałeś…” z linkiem do historii.
  */
 
 const MESSAGE_MAX = 500;
@@ -76,7 +82,15 @@ const AVAILABILITY_TO_DB: Record<
 };
 
 /** Rodzaj błędu formularza (mapowany na komunikat i18n, bez technikaliów). */
-type FormError = 'generic' | 'already' | 'login' | 'demo';
+type FormError =
+  | 'generic'
+  | 'network'
+  | 'already'
+  | 'login'
+  | 'candidateOnly'
+  | 'rateLimited'
+  | 'jobNotActive'
+  | 'demo';
 type PhoneError = 'required' | 'invalid';
 
 export interface ApplyModalProps {
@@ -100,6 +114,7 @@ export function ApplyModal({
 }: ApplyModalProps): React.JSX.Element {
   const t = useTranslations('apply');
   const tCommon = useTranslations('common');
+  const tErrors = useTranslations('errors');
   const viewer = usePublicViewerStatus();
   const isGuest = viewer === 'anonymous';
   // Pełna ścieżka z prefiksem języka — po zalogowaniu wracamy na tę ofertę.
@@ -118,6 +133,8 @@ export function ApplyModal({
   const phoneRef = React.useRef<HTMLInputElement>(null);
   const consentRef = React.useRef<HTMLButtonElement>(null);
   const formErrorRef = React.useRef<HTMLDivElement>(null);
+  // Jeden klucz na otwarcie modalu: ponowienie po błędzie = ta sama próba (Invariant #4).
+  const idempotencyKeyRef = React.useRef<string | null>(null);
 
   const availabilityLabel = (value: Availability): string => {
     switch (value) {
@@ -140,6 +157,7 @@ export function ApplyModal({
     setErrors({});
     setFormError(null);
     setSubmitting(false);
+    idempotencyKeyRef.current = null;
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -180,16 +198,25 @@ export function ApplyModal({
     setSubmitting(true);
 
     const trimmedMessage = message.trim();
+    idempotencyKeyRef.current ??= crypto.randomUUID();
 
-    const res = await applyToJob({
-      jobId,
-      phone: phone.trim(),
-      phoneCountry: dial,
-      availability: AVAILABILITY_TO_DB[availability],
-      message: trimmedMessage.length > 0 ? trimmedMessage : undefined,
-      agreeTerms: true,
-      idempotencyKey: crypto.randomUUID(),
-    });
+    let res: Awaited<ReturnType<typeof applyToJob>>;
+    try {
+      res = await applyToJob({
+        jobId,
+        phone: phone.trim(),
+        phoneCountry: dial,
+        availability: AVAILABILITY_TO_DB[availability],
+        message: trimmedMessage.length > 0 ? trimmedMessage : undefined,
+        agreeTerms: true,
+        idempotencyKey: idempotencyKeyRef.current,
+      });
+    } catch {
+      // Żądanie nie wróciło (sieć/timeout/5xx przed akcją). Dane formularza zostają.
+      setSubmitting(false);
+      setFormError('network');
+      return;
+    }
 
     // Sukces DOPIERO po realnym zapisie (Invariant #11).
     if (res.ok) {
@@ -206,10 +233,17 @@ export function ApplyModal({
       phoneRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     } else if (res.error === 'DEMO_UNAVAILABLE') {
       setFormError('demo');
-    } else if (res.error === 'PERMISSION_DENIED') {
+    } else if (res.error === 'UNAUTHENTICATED') {
       setFormError('login');
+    } else if (res.error === 'PERMISSION_DENIED') {
+      // Zalogowany pracodawca/admin — link logowania nie ma sensu (#361).
+      setFormError('candidateOnly');
     } else if (res.error === 'APPLICATION_ALREADY_EXISTS') {
       setFormError('already');
+    } else if (res.error === 'RATE_LIMITED') {
+      setFormError('rateLimited');
+    } else if (res.error === 'JOB_NOT_ACTIVE') {
+      setFormError('jobNotActive');
     } else {
       setFormError('generic');
     }
@@ -401,7 +435,20 @@ export function ApplyModal({
                         {t('loginRequired')}
                       </Link>
                     ) : formError === 'already' ? (
-                      t('alreadyApplied')
+                      <>
+                        {t('alreadyApplied')}{' '}
+                        <Link href="/candidate/aplikacje" className="font-medium underline">
+                          {t('viewApplications')}
+                        </Link>
+                      </>
+                    ) : formError === 'candidateOnly' ? (
+                      t('candidateOnly')
+                    ) : formError === 'rateLimited' ? (
+                      tErrors('rateLimited')
+                    ) : formError === 'jobNotActive' ? (
+                      tErrors('jobNotActive')
+                    ) : formError === 'network' ? (
+                      t('errorNetwork')
                     ) : formError === 'demo' ? (
                       t('demoUnavailable')
                     ) : (
