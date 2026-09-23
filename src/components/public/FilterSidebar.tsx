@@ -560,9 +560,12 @@ export function FilterSidebar({
   return (
     <div
       data-filter-passport="desktop"
-      className={cn('min-w-0 border-r border-border pr-5', className)}
+      className={cn(
+        'flex min-h-0 min-w-0 flex-col border-r border-border pr-5',
+        className,
+      )}
     >
-      <div className="mb-5 flex items-center justify-between gap-3 border-b border-border pb-4">
+      <div className="mb-5 flex shrink-0 items-center justify-between gap-3 border-b border-border pb-4">
         <h2 className="flex items-center gap-2.5 text-base font-semibold text-foreground before:h-2 before:w-2 before:shrink-0 before:rounded-full before:bg-primary">
           {t('title')}
         </h2>
@@ -576,12 +579,18 @@ export function FilterSidebar({
         </button>
       </div>
 
-      <FilterFields
-        facets={liveFacets.facets}
-        value={pending}
-        onChange={setPending}
-        idPrefix="d"
-      />
+      {/* Pola przewijają się wewnątrz panelu; zatwierdzenie zostaje widoczne pod nimi (#216). */}
+      <div
+        data-filter-scroll="desktop"
+        className="-mx-1 min-h-0 flex-1 overflow-y-auto border-b border-border px-1 pb-5 pt-1"
+      >
+        <FilterFields
+          facets={liveFacets.facets}
+          value={pending}
+          onChange={setPending}
+          idPrefix="d"
+        />
+      </div>
 
       {liveFacets.status === 'error' ? (
         <div className="mt-6 space-y-2" role="alert">
