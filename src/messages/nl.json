@@ -1171,7 +1171,16 @@
     "you": "Jij",
     "systemLabel": "Systeem",
     "back": "Terug naar lijst",
-    "unreadBadge": "Ongelezen"
+    "unreadBadge": "Ongelezen",
+    "conversationsHeading": "Gesprekken",
+    "threadListLabel": "Berichten met {name}",
+    "composerLabel": "Bericht aan {name}",
+    "composerCounter": "{count} / {max} tekens",
+    "composerTooLong": "Een bericht mag maximaal {max} tekens bevatten. Maak het korter en verstuur het opnieuw.",
+    "loadOlder": "Oudere berichten laden",
+    "loadingOlder": "Oudere berichten worden geladen…",
+    "loadOlderError": "Oudere berichten konden niet worden geladen. Probeer het opnieuw.",
+    "threadStart": "Dit is het begin van het gesprek."
   },
   "files": {
     "cvTitle": "Je cv / documenten",

@@ -1171,7 +1171,16 @@
     "you": "Vous",
     "systemLabel": "Système",
     "back": "Retour à la liste",
-    "unreadBadge": "Non lu"
+    "unreadBadge": "Non lu",
+    "conversationsHeading": "Conversations",
+    "threadListLabel": "Messages avec {name}",
+    "composerLabel": "Message à {name}",
+    "composerCounter": "{count} / {max} caractères",
+    "composerTooLong": "Un message peut contenir au maximum {max} caractères. Raccourcissez-le et renvoyez-le.",
+    "loadOlder": "Charger les messages plus anciens",
+    "loadingOlder": "Chargement des messages plus anciens…",
+    "loadOlderError": "Impossible de charger les messages plus anciens. Réessayez.",
+    "threadStart": "C'est le début de la conversation."
   },
   "files": {
     "cvTitle": "Votre CV / documents",

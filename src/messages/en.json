@@ -1171,7 +1171,16 @@
     "you": "You",
     "systemLabel": "System",
     "back": "Back to list",
-    "unreadBadge": "Unread"
+    "unreadBadge": "Unread",
+    "conversationsHeading": "Conversations",
+    "threadListLabel": "Messages with {name}",
+    "composerLabel": "Message to {name}",
+    "composerCounter": "{count} / {max} characters",
+    "composerTooLong": "A message can be at most {max} characters long. Shorten it and send it again.",
+    "loadOlder": "Load older messages",
+    "loadingOlder": "Loading older messages…",
+    "loadOlderError": "Could not load older messages. Please try again.",
+    "threadStart": "This is the start of the conversation."
   },
   "files": {
     "cvTitle": "Your CV / documents",

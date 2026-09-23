@@ -1,5 +1,10 @@
 'use server';
 
+import { z } from 'zod/v3';
+
+import { isLocale } from '@/i18n/routing';
+import { getOlderThreadMessages, type ThreadCursor } from '@/lib/data/messages';
+import { toMessageViews, type ThreadMessageView } from '@/lib/messaging/thread-view';
 import { createServerClient } from '@/lib/supabase/server';
 import type { ErrorCode } from '@/lib/errors';
 import { isSupabaseConfigured } from '@/lib/env';
@@ -95,4 +100,39 @@ export async function markConversationRead(conversationId: string): Promise<OkRe
 
   if (error) return { ok: false, error: mapPgError(error.message) };
   return { ok: true };
+}
+
+const olderMessagesInput = z.object({
+  locale: z.string().refine(isLocale),
+  conversationId: z.string().uuid(),
+  cursor: z.object({
+    createdAt: z.string().datetime({ offset: true }),
+    id: z.string().uuid(),
+  }),
+});
+
+export type OlderMessagesActionResult =
+  | { status: 'ready'; messages: ThreadMessageView[]; olderCursor: ThreadCursor | null }
+  | { status: 'not-found' }
+  | { status: 'error' };
+
+/**
+ * „Wczytaj starsze" w wątku (#146): kolejna strona czytana PONOWNIE pod bieżącą sesją/RLS.
+ * Niepoprawne wejście → `error` (UI pokazuje ponowienie, nie „koniec historii").
+ */
+export async function loadOlderMessages(
+  locale: string,
+  conversationId: string,
+  cursor: unknown,
+): Promise<OlderMessagesActionResult> {
+  const parsed = olderMessagesInput.safeParse({ locale, conversationId, cursor });
+  if (!parsed.success) return { status: 'error' };
+
+  const result = await getOlderThreadMessages(parsed.data.conversationId, parsed.data.cursor);
+  if (result.status !== 'ready') return result;
+  return {
+    status: 'ready',
+    messages: toMessageViews(result.messages, parsed.data.locale),
+    olderCursor: result.olderCursor,
+  };
 }
