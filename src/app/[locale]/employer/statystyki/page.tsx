@@ -35,12 +35,6 @@ export async function generateMetadata({
 
 export const dynamic = 'force-dynamic';
 
-/** Konwersja między etapami lejka (%), zaokrąglona do 1 miejsca. */
-function conversionPct(numerator: number, denominator: number): number {
-  if (denominator <= 0) return 0;
-  return Math.round((numerator / denominator) * 1000) / 10;
-}
-
 export default async function EmployerStatsPage({
   params,
 }: {
@@ -55,15 +49,6 @@ export default async function EmployerStatsPage({
   const configured = isSupabaseConfigured();
   const [overview, funnel] = await Promise.all([getEmployerOverview(), getFunnelStats()]);
 
-  const conversions: [number, number, number] =
-    funnel.status === 'ok'
-      ? [
-          conversionPct(funnel.funnel.applications, funnel.funnel.views),
-          conversionPct(funnel.funnel.interviews, funnel.funnel.applications),
-          conversionPct(funnel.funnel.hired, funnel.funnel.interviews),
-        ]
-      : [0, 0, 0];
-
   return (
     <div className="space-y-6">
       <div>
@@ -74,7 +59,7 @@ export default async function EmployerStatsPage({
       {overview.status === 'error' ? (
         <EmployerStatsError message={td('employerOverviewLoadError')} retryLabel={tc('retry')} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
           <StatCard
             label={td('activeOffers')}
             value={overview.overview.activeOffersCount}
@@ -121,7 +106,6 @@ export default async function EmployerStatsPage({
           applications={funnel.funnel.applications}
           interviews={funnel.funnel.interviews}
           hired={funnel.funnel.hired}
-          conversions={conversions}
         />
       )}
     </div>

@@ -14,6 +14,9 @@ import { MatchBar } from '@/components/ui/match-bar';
  *  - gdy BEZ ikony → koloruje samą wartość (jak w panelu kandydata: „2" czerwone, „78%" akcent).
  * Wszystkie teksty (label/value/sub) są przekazywane już przetłumaczone przez ekran (i18n),
  * dlatego komponent jest czysto prezentacyjny (serwerowy).
+ *
+ * Przy 200% tekstu (#318) etykieta i wartość zawijają się w kafelku (`min-w-0` +
+ * `break-words`), a ikona nie wypycha treści poza kartę.
  */
 
 type Tone = 'primary' | 'success' | 'warning' | 'error' | 'accent';
@@ -70,7 +73,9 @@ export function StatCard({
         ) : null}
       </div>
 
-      <p className={cn('mt-2 break-words text-3xl font-bold leading-tight tabular-nums', valueClass)}>
+      <p
+        className={cn('mt-2 break-words text-3xl font-bold leading-tight tabular-nums', valueClass)}
+      >
         {value}
       </p>
 

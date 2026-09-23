@@ -81,9 +81,11 @@ export default async function EmployerLayout({
     ]);
     notificationError = notif.status === 'error';
     notifItems = (notif.status === 'ready' ? notif.items : []).map((item) => ({
+      id: item.id,
       title: item.title,
       meta: item.meta,
       unread: item.unread,
+      href: item.href,
     }));
     notifUnread = notif.status === 'ready' ? notif.unread : undefined;
     unreadMessages = unread;

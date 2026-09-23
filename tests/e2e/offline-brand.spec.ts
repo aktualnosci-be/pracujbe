@@ -13,6 +13,12 @@ type Messages = {
     error: string;
     retry: string;
   };
+  offline: {
+    title: string;
+    heading: string;
+    body: string;
+    goHome: string;
+  };
 };
 
 function messages(locale: Locale): Messages {
@@ -46,15 +52,24 @@ for (const locale of locales) {
     await expect(
       page.getByRole("img", { name: t.common.appName, exact: true }),
     ).toBeVisible();
+    // #248: tytuł karty i nagłówek mówią o braku połączenia, nie o ogólnym błędzie.
+    await expect(page).toHaveTitle(`${t.offline.title} · ${t.common.appName}`);
     await expect(
       page.getByRole("heading", {
         level: 1,
-        name: t.common.error,
+        name: t.offline.heading,
         exact: true,
       }),
     ).toBeVisible();
-    const retry = page.getByRole("link", { name: t.common.retry, exact: true });
+    await expect(page.getByText(t.offline.body, { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: t.common.error, exact: true }),
+    ).toHaveCount(0);
+    // Nazwa akcji odpowiada temu, co robi: przejście na stronę główną w tym języku.
+    const retry = page.getByRole("link", { name: t.offline.goHome, exact: true });
     await expect(retry).toBeVisible();
+    await expect(retry).toHaveAttribute("href", `/${locale}`);
+    await expect(page.getByRole("link", { name: t.common.retry, exact: true })).toHaveCount(0);
     const box = await retry.boundingBox();
     expect(box?.height ?? 0, `${locale}: wysokość CTA`).toBeGreaterThanOrEqual(48);
     await retry.focus();
