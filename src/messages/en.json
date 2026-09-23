@@ -1266,5 +1266,28 @@
       "remoteJob": "Remote work — location does not matter",
       "withinCommuteRadius": "Workplace within your commute radius"
     }
+  },
+  "application": {
+    "error": {
+      "jobRequired": "Choose the job you want to apply for.",
+      "jobInvalid": "We couldn't find this job. Refresh the page and try again.",
+      "messageTooLong": "Your message is too long.",
+      "phoneInvalid": "Enter a valid phone number.",
+      "termsRequired": "You need to accept the consent to send your application.",
+      "idempotencyKeyInvalid": "The form couldn't be sent. Refresh the page and try again."
+    }
+  },
+  "offer": {
+    "error": {
+      "jobRequired": "Choose a job.",
+      "jobInvalid": "We couldn't find this job. Refresh the page and try again.",
+      "candidateRequired": "Choose a candidate.",
+      "candidateInvalid": "We couldn't find this candidate. Refresh the page and try again.",
+      "messageRequired": "Write a message to the candidate.",
+      "messageTooShort": "Your message is too short (at least 10 characters).",
+      "messageTooLong": "Your message is too long.",
+      "idempotencyKeyRequired": "The form couldn't be sent. Refresh the page and try again.",
+      "idempotencyKeyInvalid": "The form couldn't be sent. Refresh the page and try again."
+    }
   }
 }
