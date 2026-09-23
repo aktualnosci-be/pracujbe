@@ -15,6 +15,11 @@ afterEach(() => {
 });
 
 describe('recent applications read error', () => {
+  it('keeps Polish and French diacritics in the user-facing message', () => {
+    expect(pl.dashboard.recentApplicationsError).toBe('Nie udało się wczytać najnowszych aplikacji. Spróbuj ponownie.');
+    expect(fr.dashboard.recentApplicationsError).toBe('Impossible de charger les candidatures récentes. Réessayez.');
+  });
+
   for (const [locale, messages] of [
     ['pl', pl], ['nl', nl], ['fr', fr], ['en', en],
   ] as const) {
