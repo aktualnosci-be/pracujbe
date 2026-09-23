@@ -4,7 +4,7 @@ Stan: 21.09.2026. Decyzja właściciela: pl, ro, uk, fr, nl, en; automatyczne t�
 
 ## Co istnieje
 
-Routing src/i18n/routing.ts obsługuje pl/nl/fr/en. Ograniczenia czterech języków są również w SQL (0002–0007,0054), walidacji auth, kolejce maili0061, helperach odbiorcy i publicznych RPC. Dopisanie dwóch plików JSON nie wystarczy. job_translations (0003_jobs.sql) przechowuje tytuł, opis, obowiązki, warunki, benefity, highlights, godziny, zmiany, opis firmy i meta. Nie ma rewizji źródła, stanu tłumaczenia ani wykonawcy AI. job_requirements ma własne locale i również wymaga synchronizacji. candidate_profiles ma headline, bio i occupations; umiejętności, certyfikaty i języki są osobnymi relacjami. Brak lokalizowanych wersji profilu. Istniejący matching jest deterministyczny; nie zastępujemy go niezweryfikowanym rankingiem AI.
+Routing src/i18n/routing.ts obsługuje pl/nl/fr/en i jest jedynym źródłem listy w aplikacji (PR #280, test `locale-single-source`). W bazie listę trzyma `public.supported_locales` z FK kolumn locale i funkcją `is_supported_locale()` (migracja 0069). Nowy język to wiersz w słowniku, wpis w routingu i przejrzane tłumaczenia — samo dopisanie plików JSON nadal nie wystarczy. job_translations (0003_jobs.sql) przechowuje tytuł, opis, obowiązki, warunki, benefity, highlights, godziny, zmiany, opis firmy i meta. Nie ma rewizji źródła, stanu tłumaczenia ani wykonawcy AI. job_requirements ma własne locale i również wymaga synchronizacji. candidate_profiles ma headline, bio i occupations; umiejętności, certyfikaty i języki są osobnymi relacjami. Brak lokalizowanych wersji profilu. Istniejący matching jest deterministyczny; nie zastępujemy go niezweryfikowanym rankingiem AI.
 
 ## Research dostawców
 
