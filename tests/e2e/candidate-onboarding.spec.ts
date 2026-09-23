@@ -1,27 +1,33 @@
 import { expect, test } from '@playwright/test';
 
 const localizedWizard = [
-  { locale: 'pl', title: 'Twój profil kandydata', firstName: 'Imię', next: 'Dalej: Preferencje pracy' },
-  { locale: 'nl', title: 'Je kandidatenprofiel', firstName: 'Voornaam', next: 'Volgende: Werkvoorkeuren' },
-  { locale: 'fr', title: 'Votre profil de candidat', firstName: 'Prénom', next: "Suivant: Préférences d'emploi" },
-  { locale: 'en', title: 'Your candidate profile', firstName: 'First name', next: 'Next: Job preferences' },
+  { locale: 'pl', title: 'Twój profil kandydata', firstName: 'Imię', lastName: 'Nazwisko', error: 'Nazwisko jest za krótkie.', next: 'Dalej: Preferencje pracy' },
+  { locale: 'nl', title: 'Je kandidatenprofiel', firstName: 'Voornaam', lastName: 'Achternaam', error: 'Achternaam is te kort.', next: 'Volgende: Werkvoorkeuren' },
+  { locale: 'fr', title: 'Votre profil de candidat', firstName: 'Prénom', lastName: 'Nom', error: 'Le nom est trop court.', next: "Suivant: Préférences d'emploi" },
+  { locale: 'en', title: 'Your candidate profile', firstName: 'First name', lastName: 'Last name', error: 'Last name is too short.', next: 'Next: Job preferences' },
 ] as const;
 
-for (const { locale, title, firstName, next } of localizedWizard) {
-  test(`kreator ${locale}: czytelny układ i zachowanie danych przy błędzie`, async ({ page }) => {
-    await page.setViewportSize({ width: 320, height: 800 });
-    await page.goto(`/${locale}/candidate/onboarding`);
-    await page.locator('[aria-labelledby="cookie-banner-title"] button').first().click();
+for (const { locale, title, firstName, lastName, error, next } of localizedWizard) {
+  for (const width of [320, 640]) {
+    test(`kreator ${locale} przy ${width} px: błąd i fokus`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/${locale}/candidate/onboarding`);
+      await page.locator('[aria-labelledby="cookie-banner-title"] button').first().click();
 
-    await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
-    await expect(page.locator('main').locator('..')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-    const name = page.getByLabel(firstName, { exact: true });
-    await name.fill('Anna');
-    await page.getByRole('button', { name: next }).click();
-    await expect(name).toHaveValue('Anna');
-    await expect(page.getByRole('navigation', { name: /1.*6/ })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-  });
+      await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+      await expect(page.locator('main').locator('..')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      const name = page.getByLabel(firstName, { exact: true });
+      await name.fill('Anna');
+      await page.getByRole('button', { name: next }).click();
+      const invalidField = page.getByLabel(lastName, { exact: true });
+      await expect(page.getByText(error)).toBeVisible();
+      await expect(invalidField).toHaveAttribute('aria-invalid', 'true');
+      await expect(invalidField).toBeFocused();
+      await expect(name).toHaveValue('Anna');
+      await expect(page.getByRole('navigation', { name: /1.*6/ })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    });
+  }
 }
 
 async function expectMinimumTarget(
