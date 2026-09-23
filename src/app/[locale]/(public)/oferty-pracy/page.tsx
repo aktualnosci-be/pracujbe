@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { ChevronDown, MapPin, Search, SearchX, X } from 'lucide-react';
 
-import { Link } from '@/i18n/navigation';
+import { Link, redirect } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getJobFilterFacets, getJobs } from '@/lib/jobs';
@@ -214,6 +214,20 @@ export default async function JobsListPage({
     const qs = new URLSearchParams(paramsObj).toString();
     return qs ? `${BASE_PATH}?${qs}` : BASE_PATH;
   };
+  // Strona spoza zakresu (np. ?page=999) przy niepustym wyniku → ostatnia istniejąca strona
+  // z tymi samymi filtrami (#228). Pusty wynik zostaje pod adresem (stan pusty jest spójny).
+  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (total > 0 && page > lastPage) {
+    redirect({
+      href: hrefFrom(
+        lastPage > 1
+          ? { ...activeParams, page: String(lastPage) }
+          : activeParams,
+      ),
+      locale,
+    });
+  }
+
   const withoutKey = (key: string): string => {
     const next = { ...activeParams };
     delete next[key];
@@ -318,11 +332,9 @@ export default async function JobsListPage({
     });
   }
 
-  const clearFiltersHref = hrefFrom({
-    ...(keyword ? { keyword } : {}),
-    ...(city ? { city } : {}),
-    ...(sort !== 'newest' ? { sort } : {}),
-  });
+  // „Wyczyść filtry” usuwa wszystkie chipy — także słowo kluczowe i miasto; inaczej przy samym
+  // wyszukiwaniu tekstowym link prowadził na ten sam adres (#228). Sortowanie zostaje.
+  const clearFiltersHref = hrefFrom(sort !== 'newest' ? { sort } : {});
 
   // Parametry ukryte w formularzu wyszukiwarki (zachowanie filtrów przy wyszukiwaniu tekstem).
   const hiddenSearchParams = { ...activeParams };
@@ -553,6 +565,15 @@ export default async function JobsListPage({
                   aria-hidden="true"
                 />
               <p className="max-w-md text-muted-foreground">{t('empty')}</p>
+              {chips.length > 0 ? (
+                <Link
+                  href={clearFiltersHref}
+                  data-empty-reset
+                  className="mt-2 inline-flex min-h-12 items-center justify-center rounded-xl border border-border bg-background px-5 text-sm font-semibold text-foreground transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {tFilters('clearAll')}
+                </Link>
+              ) : null}
             </div>
           ) : (
             <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
