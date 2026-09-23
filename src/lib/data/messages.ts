@@ -52,15 +52,33 @@ export interface ThreadMessage {
   isSystem: boolean;
 }
 
+/** Stabilny kursor stronicowania wątku: najstarsza widoczna wiadomość (`created_at`, `id`). */
+export interface ThreadCursor {
+  createdAt: string;
+  id: string;
+}
+
+/** Liczba wiadomości na stronę wątku (pierwsza strona = najnowsze, kolejne = starsze). */
+export const THREAD_PAGE_SIZE = 50;
+
 export interface ConversationThread {
   id: string;
   subject: string;
   counterpartyName: string;
+  /** NAJNOWSZE `THREAD_PAGE_SIZE` wiadomości w kolejności chronologicznej (najstarsza pierwsza). */
   messages: ThreadMessage[];
+  /** Kursor do doładowania starszych; `null` = to już początek rozmowy. */
+  olderCursor: ThreadCursor | null;
 }
 
 export type ConversationThreadResult =
   | { status: 'ready'; thread: ConversationThread }
+  | { status: 'not-found' }
+  | { status: 'error' };
+
+/** Starsza strona wątku (chronologicznie) albo jawny brak dostępu / awaria — nigdy „koniec historii". */
+export type OlderMessagesResult =
+  | { status: 'ready'; messages: ThreadMessage[]; olderCursor: ThreadCursor | null }
   | { status: 'not-found' }
   | { status: 'error' };
 
@@ -153,6 +171,77 @@ function resolveCounterparty(
   return companyId ? (companyNameById.get(companyId) ?? '') : '';
 }
 
+/**
+ * Jedna strona wiadomości wątku OD NAJNOWSZYCH (#146). Sortowanie `(created_at, id)` malejąco
+ * jest stabilne także dla wiadomości o identycznym `created_at`; kursor wskazuje najstarszy
+ * zwrócony wiersz, więc kolejna strona nie ma luk ani duplikatów, a wiadomość dopisana między
+ * pobraniami (nowsza od kursora) nie przesuwa starszych stron. Pobieramy `limit + 1`, aby bez
+ * osobnego `count` wiedzieć, czy istnieją starsze. Zwraca wiersze CHRONOLOGICZNIE.
+ * Odczyt pod sesją — RLS `messages` ogranicza wynik do uczestnika rozmowy.
+ */
+async function fetchMessagePage(
+  supabase: SupabaseClient,
+  conversationId: string,
+  cursor: ThreadCursor | null,
+): Promise<{ rows: unknown[]; olderCursor: ThreadCursor | null }> {
+  let query = supabase
+    .from('messages')
+    .select('id, body, sender_id, is_system, created_at')
+    .eq('conversation_id', conversationId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false });
+  if (cursor) {
+    // PostgREST wymaga cudzysłowu dla wartości ISO 8601 (dwukropki, kropka). Kursor z Server
+    // Action jest sprawdzany przez Zod (ISO datetime + UUID) przed trafieniem tutaj.
+    const timestamp = `"${cursor.createdAt}"`;
+    query = query.or(
+      `created_at.lt.${timestamp},and(created_at.eq.${timestamp},id.lt.${cursor.id})`,
+    );
+  }
+  const { data, error } = await query.limit(THREAD_PAGE_SIZE + 1);
+  if (error) throw error;
+
+  const rows = asArr(data);
+  const visible = rows.slice(0, THREAD_PAGE_SIZE);
+  const oldest = asRecord(visible[visible.length - 1]);
+  const olderCursor =
+    rows.length > THREAD_PAGE_SIZE
+      ? { createdAt: asStr(oldest['created_at']), id: asStr(oldest['id']) }
+      : null;
+  return { rows: visible.reverse(), olderCursor };
+}
+
+/** Mapuje wiersze `messages` na kontrakt UI (nazwa nadawcy tylko z profili widocznych pod RLS). */
+function toThreadMessages(
+  rows: unknown[],
+  uid: string,
+  nameByProfile: Map<string, string>,
+): ThreadMessage[] {
+  return rows.map((row) => {
+    const r = asRecord(row);
+    const senderId = asStr(r['sender_id']);
+    return {
+      id: asStr(r['id']),
+      body: asStr(r['body']),
+      createdAt: asStr(r['created_at']),
+      mine: senderId === uid,
+      senderName: nameByProfile.get(senderId) ?? '',
+      isSystem: Boolean(r['is_system']),
+    };
+  });
+}
+
+/** Zbiór nadawców z wierszy wiadomości. */
+function senderIdsOf(rows: unknown[]): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    const sid = asStr(asRecord(row)['sender_id']);
+    if (sid) ids.add(sid);
+  }
+  return ids;
+}
+
 /* ---------------------------------------------------------------------------
  * Dane DEMO (fallback bez bazy) — spójne z demo ofert/firm (lokalizowane treści)
  * ------------------------------------------------------------------------- */
@@ -240,7 +329,13 @@ function buildDemo(locale: Locale): {
       unread: seed.unread,
       unreadCount: seed.unread ? 1 : 0,
     });
-    threads.set(seed.id, { id: seed.id, subject, counterpartyName: companyName, messages });
+    threads.set(seed.id, {
+      id: seed.id,
+      subject,
+      counterpartyName: companyName,
+      messages,
+      olderCursor: null,
+    });
   }
 
   return { list, threads };
@@ -377,7 +472,10 @@ export async function getConversations(): Promise<ConversationListItem[]> {
   return (await getConversationsResult()).items;
 }
 
-/** Pełny wątek; brak dostępu i nieistnienie dają ten sam wynik, awaria osobny. */
+/**
+ * Wątek z NAJNOWSZĄ stroną wiadomości (starsze: `getOlderThreadMessages`); brak dostępu
+ * i nieistnienie dają ten sam wynik, awaria osobny.
+ */
 export async function getConversationThread(
   conversationId: string,
 ): Promise<ConversationThreadResult> {
@@ -404,22 +502,14 @@ export async function getConversationThread(
     const cid = asStr(conv['id']);
     if (!cid) return { status: 'not-found' }; // brak dostępu (RLS) lub nie istnieje
 
-    const { data: msgData, error: msgError } = await supabase
-      .from('messages')
-      .select('id, body, sender_id, is_system, created_at')
-      .eq('conversation_id', conversationId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: true });
-    if (msgError) throw msgError;
-
-    const messageRows = asArr(msgData);
+    const { rows: messageRows, olderCursor } = await fetchMessagePage(
+      supabase,
+      conversationId,
+      null,
+    );
 
     // Nazwy nadawców (profile widoczne pod RLS) + pozostali uczestnicy (druga strona).
-    const senderIds = new Set<string>();
-    for (const row of messageRows) {
-      const sid = asStr(asRecord(row)['sender_id']);
-      if (sid) senderIds.add(sid);
-    }
+    const senderIds = senderIdsOf(messageRows);
 
     const { data: otherMembers, error: otherError } = await supabase
       .from('conversation_members')
@@ -443,18 +533,7 @@ export async function getConversationThread(
       fetchCompanyNames(supabase, companyId ? [companyId] : []),
     ]);
 
-    const messages: ThreadMessage[] = messageRows.map((row) => {
-      const r = asRecord(row);
-      const senderId = asStr(r['sender_id']);
-      return {
-        id: asStr(r['id']),
-        body: asStr(r['body']),
-        createdAt: asStr(r['created_at']),
-        mine: senderId === uid,
-        senderName: nameByProfile.get(senderId) ?? '',
-        isSystem: Boolean(r['is_system']),
-      };
-    });
+    const messages = toThreadMessages(messageRows, uid, nameByProfile);
 
     return {
       status: 'ready',
@@ -463,10 +542,50 @@ export async function getConversationThread(
         subject: asStr(conv['subject']),
         counterpartyName: resolveCounterparty(otherIds, companyId, nameByProfile, companyNameById),
         messages,
+        olderCursor,
       },
     };
   } catch (error) {
     captureError(error, { area: 'messages.getConversationThread' });
+    return { status: 'error' };
+  }
+}
+
+/**
+ * Starsza strona wątku (przed `cursor`) — „Wczytaj starsze" (#146). Dostęp sprawdzany jak przy
+ * otwarciu wątku (konwersacja widoczna pod RLS); awaria to osobny stan, nie pusta strona.
+ */
+export async function getOlderThreadMessages(
+  conversationId: string,
+  cursor: ThreadCursor,
+): Promise<OlderMessagesResult> {
+  if (!isSupabaseConfigured()) {
+    // Demo ma krótkie wątki (bez kursora), więc starsza strona zawsze jest pusta.
+    return buildDemo(routing.defaultLocale).threads.has(conversationId)
+      ? { status: 'ready', messages: [], olderCursor: null }
+      : { status: 'not-found' };
+  }
+
+  try {
+    const { createServerClient } = await import('@/lib/supabase/server');
+    const supabase = await createServerClient();
+    const uid = await getAuthUserId(supabase);
+    if (!uid) return { status: 'not-found' };
+
+    const { data: convRow, error: convError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (convError) throw convError;
+    if (!asStr(asRecord(convRow)['id'])) return { status: 'not-found' };
+
+    const { rows, olderCursor } = await fetchMessagePage(supabase, conversationId, cursor);
+    const nameByProfile = await fetchProfileNames(supabase, [...senderIdsOf(rows)]);
+    return { status: 'ready', messages: toThreadMessages(rows, uid, nameByProfile), olderCursor };
+  } catch (error) {
+    captureError(error, { area: 'messages.getOlderThreadMessages' });
     return { status: 'error' };
   }
 }

@@ -8,6 +8,7 @@ import { useRouter } from '@/i18n/navigation';
 import { respondToOffer } from '@/lib/actions/offers';
 import { Button } from '@/components/ui/button';
 import { Toast } from '@/components/ui/toast';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
@@ -21,27 +22,44 @@ const MAX_TIMEOUT_MS = 2_147_483_647;
  *
  * Reużywalny w sekcji/route propozycji kandydata; renderuje przyciski tylko dla statusów,
  * na które można jeszcze odpowiedzieć (sent/viewed).
+ *
+ * Odrzucenie jest stanem końcowym, więc wymaga potwierdzenia w `ConfirmDialog` (#328);
+ * anulowanie nie woła akcji i oddaje fokus przyciskowi „Odrzuć". Po udanej odpowiedzi zostaje
+ * komunikat `role="status"`, który dostaje fokus (przyciski znikają po odświeżeniu trasy).
  */
 
 export function ProposalActions({
   offerId,
   expiresAt,
   initialCanRespond,
+  jobTitle,
   className,
 }: {
   offerId: string;
+  /** Tytuł oferty do treści potwierdzenia (opcjonalny — bez niego tekst ogólny). */
+  jobTitle?: string;
   expiresAt: string | null;
   initialCanRespond: boolean;
   className?: string;
 }): React.JSX.Element | null {
   const td = useTranslations('dashboard');
   const te = useTranslations('errors');
+  const tc = useTranslations('common');
   const router = useRouter();
 
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState(false);
   const [canRespond, setCanRespond] = React.useState(initialCanRespond);
   const requestPendingRef = React.useRef(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [responded, setResponded] = React.useState<'accepted' | 'declined' | null>(null);
+  const declineRef = React.useRef<HTMLButtonElement>(null);
+  const statusRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    // Dialog oddaje fokus sam (getReturnFocus); przy przyjęciu bez dialogu robimy to tutaj.
+    if (responded === 'accepted') statusRef.current?.focus();
+  }, [responded]);
 
   React.useEffect(() => {
     if (!initialCanRespond) {
@@ -72,7 +90,27 @@ export function ProposalActions({
     };
   }, [expiresAt, initialCanRespond]);
 
-  if (!initialCanRespond || !canRespond) return null;
+  const successMessage =
+    responded === 'accepted'
+      ? td('acceptProposalSuccess')
+      : responded === 'declined'
+        ? td('declineProposalSuccess')
+        : null;
+  const successNode = successMessage ? (
+    <div
+      ref={statusRef}
+      role="status"
+      tabIndex={-1}
+      className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    >
+      {successMessage}
+    </div>
+  ) : null;
+
+  const showActions = initialCanRespond && canRespond;
+  // Po odpowiedzi odświeżona trasa odbiera akcje; komunikat zostaje w tym samym miejscu drzewa,
+  // więc nie jest montowany od nowa i nie gubi fokusu.
+  if (!showActions && !successNode) return null;
 
   const respond = (accept: boolean) => {
     if (pending || requestPendingRef.current) return;
@@ -81,12 +119,15 @@ export function ProposalActions({
     startTransition(async () => {
       try {
         const res = await respondToOffer(offerId, accept);
+        setConfirmOpen(false);
         if (res.ok) {
+          setResponded(accept ? 'accepted' : 'declined');
           router.refresh();
           return;
         }
         setError(true);
       } catch {
+        setConfirmOpen(false);
         setError(true);
       } finally {
         requestPendingRef.current = false;
@@ -96,7 +137,7 @@ export function ProposalActions({
 
   return (
     <div className={className}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      {showActions ? <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Button
           type="button"
           className="w-full sm:w-auto"
@@ -107,16 +148,35 @@ export function ProposalActions({
           {td('acceptProposal')}
         </Button>
         <Button
+          ref={declineRef}
           type="button"
           variant="outline"
           className="w-full sm:w-auto"
-          onClick={() => respond(false)}
+          onClick={() => setConfirmOpen(true)}
           disabled={pending}
         >
           <X className="h-4 w-4" aria-hidden="true" />
           {td('declineProposal')}
         </Button>
-      </div>
+      </div> : null}
+
+      {successNode ? <div className={showActions ? 'mt-3' : undefined}>{successNode}</div> : null}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={td('declineConfirmTitle')}
+        description={
+          jobTitle
+            ? td('declineConfirmDescriptionNamed', { title: jobTitle })
+            : td('declineConfirmDescription')
+        }
+        confirmLabel={td('declineConfirm')}
+        cancelLabel={tc('cancel')}
+        onConfirm={() => respond(false)}
+        pending={pending}
+        getReturnFocus={() => statusRef.current ?? declineRef.current}
+      />
 
       {error ? (
         <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">

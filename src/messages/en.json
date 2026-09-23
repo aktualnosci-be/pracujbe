@@ -367,7 +367,8 @@
       "companyDescriptionTooLong": "The company description is too long.",
       "contactEmailInvalid": "Invalid email address.",
       "publishAgreementRequired": "Confirm to publish the job.",
-      "invalid": "Invalid value."
+      "invalid": "Invalid value.",
+      "itemTooLong": "One of the list items is too long. Please shorten it."
     },
     "contentLanguageNotice": "This job’s content is only available in {language}.",
     "contentLanguageNames": {
@@ -375,7 +376,8 @@
       "nl": "Dutch",
       "fr": "French",
       "en": "English"
-    }
+    },
+    "similarJobsLoadError": "Similar jobs could not be loaded. This job and applying work as usual."
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
@@ -765,6 +767,17 @@
     "employerOffersNext": "Next page",
     "employerOffersPageEmpty": "There are no more jobs on this page.",
     "employerOffersRetry": "Try again",
+    "withdrawConfirmTitle": "Withdraw this application?",
+    "withdrawConfirmDescription": "The employer will no longer consider this application. You won’t be able to apply to this job again.",
+    "withdrawConfirmDescriptionNamed": "Your application for “{title}” will be withdrawn. You won’t be able to apply to this job again.",
+    "withdrawConfirm": "Withdraw",
+    "withdrawSuccess": "Your application has been withdrawn.",
+    "declineConfirmTitle": "Decline this proposal?",
+    "declineConfirmDescription": "The employer will receive your refusal. You can’t change this answer later.",
+    "declineConfirmDescriptionNamed": "The proposal “{title}” will be declined. You can’t change this answer later.",
+    "declineConfirm": "Decline",
+    "acceptProposalSuccess": "The proposal has been accepted.",
+    "declineProposalSuccess": "The proposal has been declined.",
     "sendOfferTo": "Send offer: {name} — {job}",
     "offerMatchedJob": "Matched to job",
     "offerSentOn": "Offer sent on {date}",
@@ -827,6 +840,7 @@
   },
   "onboarding": {
     "stepProgress": "Step {current} of {total}",
+    "stepAnnounce": "Step {current} of {total}: {title}",
     "title": "Your candidate profile",
     "subtitle": "Create your profile and we will match the best jobs in Belgium to you.",
     "loadError": "We couldn't load your profile",
@@ -917,7 +931,9 @@
     "contractTypesLabel": "Preferred contract types",
     "bioLabel": "About me (optional)",
     "bioPlaceholder": "Write a few sentences about yourself, your experience and expectations.",
-    "agreeTerms": "I accept the terms of use and the privacy policy."
+    "agreeTerms": "I accept the terms of use and the privacy policy.",
+    "agreeTermsLinks": "I accept the <terms>terms of use</terms> and the <privacy>privacy policy</privacy>.",
+    "opensInNewTab": "(opens in a new tab)"
   },
   "filters": {
     "title": "Filters",
@@ -1172,7 +1188,8 @@
     "previewNote": "Check the details before publishing.",
     "previewNothing": "—",
     "previewSalaryNotProvided": "Not provided",
-    "notVerifiedNote": "The draft has been saved. Publishing will be available once the company is verified."
+    "notVerifiedNote": "The draft has been saved. Publishing will be available once the company is verified.",
+    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list."
   },
   "messages": {
     "title": "Messages",
@@ -1196,7 +1213,16 @@
     "you": "You",
     "systemLabel": "System",
     "back": "Back to list",
-    "unreadBadge": "Unread"
+    "unreadBadge": "Unread",
+    "conversationsHeading": "Conversations",
+    "threadListLabel": "Messages with {name}",
+    "composerLabel": "Message to {name}",
+    "composerCounter": "{count} / {max} characters",
+    "composerTooLong": "A message can be at most {max} characters long. Shorten it and send it again.",
+    "loadOlder": "Load older messages",
+    "loadingOlder": "Loading older messages…",
+    "loadOlderError": "Could not load older messages. Please try again.",
+    "threadStart": "This is the start of the conversation."
   },
   "files": {
     "cvTitle": "Your CV / documents",
@@ -1206,7 +1232,11 @@
     "empty": "No documents uploaded yet.",
     "delete": "Delete",
     "uploadError": "Upload failed. Check the format and size.",
-    "deleteError": "Delete failed."
+    "deleteError": "Delete failed.",
+    "loadError": "We couldn’t load your documents. Your files have not been deleted.",
+    "deleteConfirmTitle": "Delete this document?",
+    "deleteConfirmDescription": "The file “{name}” will be permanently deleted. This cannot be undone.",
+    "deleteSuccess": "The document has been deleted."
   },
   "admin": {
     "adminName": "Administrator",
@@ -1300,13 +1330,15 @@
     "emailMarketingDescription": "Updates, tips and information about Pracuj.be.",
     "channelsSectionTitle": "Other channels",
     "channelsSectionDescription": "Notifications outside of email.",
-    "pushEnabledLabel": "Push notifications",
-    "pushEnabledDescription": "Notifications on your device when something important happens.",
     "inAppEnabledLabel": "In-app notifications",
     "inAppEnabledDescription": "Notifications you see while signed in.",
     "save": "Save preferences",
     "saving": "Saving...",
-    "savedSuccess": "Your notification preferences have been saved."
+    "savedSuccess": "Your notification preferences have been saved.",
+    "loadError": "We couldn’t load your notification preferences.",
+    "loadErrorHint": "We are not showing the form so that saving cannot overwrite your earlier choices. Please try again in a moment.",
+    "pushEnabledLabel": "Push notifications",
+    "pushEnabledDescription": "Notifications on your device when something important happens."
   },
   "guides": {
     "pageTitle": "Guides",
@@ -1350,7 +1382,8 @@
       "contractType": "Contract type",
       "remoteJob": "Remote work — location does not matter",
       "withinCommuteRadius": "Workplace within your commute radius"
-    }
+    },
+    "loadError": "Your match could not be calculated right now. This is not an assessment of your profile — please try again."
   },
   "application": {
     "error": {

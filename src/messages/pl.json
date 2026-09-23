@@ -367,7 +367,8 @@
       "companyDescriptionTooLong": "Opis firmy jest za długi.",
       "contactEmailInvalid": "Nieprawidłowy adres e-mail.",
       "publishAgreementRequired": "Potwierdź, aby opublikować ofertę.",
-      "invalid": "Nieprawidłowa wartość."
+      "invalid": "Nieprawidłowa wartość.",
+      "itemTooLong": "Jedna z pozycji listy jest za długa. Skróć ją."
     },
     "contentLanguageNotice": "Treść tej oferty jest dostępna tylko w języku: {language}.",
     "contentLanguageNames": {
@@ -375,7 +376,8 @@
       "nl": "niderlandzki",
       "fr": "francuski",
       "en": "angielski"
-    }
+    },
+    "similarJobsLoadError": "Nie udało się wczytać podobnych ofert. Ta oferta i aplikowanie działają normalnie."
   },
   "landing": {
     "hubMetaTitle": "Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be",
@@ -765,6 +767,17 @@
     "employerOffersNext": "Następna strona",
     "employerOffersPageEmpty": "Na tej stronie nie ma już ofert.",
     "employerOffersRetry": "Spróbuj ponownie",
+    "withdrawConfirmTitle": "Wycofać aplikację?",
+    "withdrawConfirmDescription": "Pracodawca nie będzie już rozpatrywać tego zgłoszenia. Nie będzie można ponownie aplikować na tę ofertę.",
+    "withdrawConfirmDescriptionNamed": "Zgłoszenie na ofertę „{title}” zostanie wycofane. Nie będzie można ponownie aplikować na tę ofertę.",
+    "withdrawConfirm": "Wycofaj",
+    "withdrawSuccess": "Aplikacja została wycofana.",
+    "declineConfirmTitle": "Odrzucić propozycję?",
+    "declineConfirmDescription": "Pracodawca otrzyma odmowę. Tej odpowiedzi nie można później zmienić.",
+    "declineConfirmDescriptionNamed": "Propozycja „{title}” zostanie odrzucona. Tej odpowiedzi nie można później zmienić.",
+    "declineConfirm": "Odrzuć",
+    "acceptProposalSuccess": "Propozycja została przyjęta.",
+    "declineProposalSuccess": "Propozycja została odrzucona.",
     "sendOfferTo": "Wyślij propozycję: {name} — {job}",
     "offerMatchedJob": "Dopasowanie do oferty",
     "offerSentOn": "Propozycja wysłana {date}",
@@ -827,6 +840,7 @@
   },
   "onboarding": {
     "stepProgress": "Krok {current} z {total}",
+    "stepAnnounce": "Krok {current} z {total}: {title}",
     "title": "Twój profil kandydata",
     "subtitle": "Utwórz swój profil, a my dopasujemy do Ciebie najlepsze oferty pracy w Belgii.",
     "loadError": "Nie udało się wczytać Twojego profilu",
@@ -917,7 +931,9 @@
     "contractTypesLabel": "Preferowane rodzaje umów",
     "bioLabel": "O mnie (opcjonalnie)",
     "bioPlaceholder": "Napisz kilka zdań o sobie, doświadczeniu i oczekiwaniach.",
-    "agreeTerms": "Akceptuję regulamin i politykę prywatności."
+    "agreeTerms": "Akceptuję regulamin i politykę prywatności.",
+    "agreeTermsLinks": "Akceptuję <terms>regulamin</terms> i <privacy>politykę prywatności</privacy>.",
+    "opensInNewTab": "(otwiera się w nowej karcie)"
   },
   "filters": {
     "title": "Filtry",
@@ -1172,7 +1188,8 @@
     "previewNote": "Sprawdź dane przed publikacją.",
     "previewNothing": "—",
     "previewSalaryNotProvided": "Nie podano",
-    "notVerifiedNote": "Wersja robocza została zapisana. Publikacja będzie możliwa po weryfikacji firmy."
+    "notVerifiedNote": "Wersja robocza została zapisana. Publikacja będzie możliwa po weryfikacji firmy.",
+    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy."
   },
   "messages": {
     "title": "Wiadomości",
@@ -1196,7 +1213,16 @@
     "you": "Ty",
     "systemLabel": "System",
     "back": "Wróć do listy",
-    "unreadBadge": "Nieprzeczytane"
+    "unreadBadge": "Nieprzeczytane",
+    "conversationsHeading": "Rozmowy",
+    "threadListLabel": "Wiadomości z: {name}",
+    "composerLabel": "Wiadomość do: {name}",
+    "composerCounter": "{count} / {max} znaków",
+    "composerTooLong": "Wiadomość może mieć najwyżej {max} znaków. Skróć ją i wyślij ponownie.",
+    "loadOlder": "Wczytaj starsze wiadomości",
+    "loadingOlder": "Wczytuję starsze wiadomości…",
+    "loadOlderError": "Nie udało się wczytać starszych wiadomości. Spróbuj ponownie.",
+    "threadStart": "To początek rozmowy."
   },
   "files": {
     "cvTitle": "Twoje CV / dokumenty",
@@ -1206,7 +1232,11 @@
     "empty": "Brak wgranych dokumentów.",
     "delete": "Usuń",
     "uploadError": "Nie udało się wgrać pliku. Sprawdź format i rozmiar.",
-    "deleteError": "Nie udało się usunąć pliku."
+    "deleteError": "Nie udało się usunąć pliku.",
+    "loadError": "Nie udało się wczytać dokumentów. Twoje pliki nie zostały usunięte.",
+    "deleteConfirmTitle": "Usunąć dokument?",
+    "deleteConfirmDescription": "Plik „{name}” zostanie trwale usunięty. Tej operacji nie można cofnąć.",
+    "deleteSuccess": "Dokument został usunięty."
   },
   "admin": {
     "adminName": "Administrator",
@@ -1300,13 +1330,15 @@
     "emailMarketingDescription": "Nowości, porady i informacje o Pracuj.be.",
     "channelsSectionTitle": "Pozostałe kanały",
     "channelsSectionDescription": "Powiadomienia poza pocztą e-mail.",
-    "pushEnabledLabel": "Powiadomienia push",
-    "pushEnabledDescription": "Powiadomienia na urządzeniu, gdy dzieje się coś ważnego.",
     "inAppEnabledLabel": "Powiadomienia w aplikacji",
     "inAppEnabledDescription": "Powiadomienia widoczne po zalogowaniu w panelu.",
     "save": "Zapisz preferencje",
     "saving": "Zapisywanie...",
-    "savedSuccess": "Preferencje powiadomień zostały zapisane."
+    "savedSuccess": "Preferencje powiadomień zostały zapisane.",
+    "loadError": "Nie udało się wczytać Twoich preferencji powiadomień.",
+    "loadErrorHint": "Nie pokazujemy formularza, żeby zapis nie nadpisał Twoich wcześniejszych wyborów. Spróbuj ponownie za chwilę.",
+    "pushEnabledLabel": "Powiadomienia push",
+    "pushEnabledDescription": "Powiadomienia na urządzeniu, gdy dzieje się coś ważnego."
   },
   "guides": {
     "pageTitle": "Poradniki",
@@ -1350,7 +1382,8 @@
       "contractType": "Typ umowy",
       "remoteJob": "Praca zdalna — lokalizacja bez znaczenia",
       "withinCommuteRadius": "Miejsce pracy w Twoim promieniu dojazdu"
-    }
+    },
+    "loadError": "Nie udało się teraz policzyć dopasowania. To nie jest ocena Twojego profilu — spróbuj ponownie."
   },
   "application": {
     "error": {

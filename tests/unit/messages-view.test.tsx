@@ -154,6 +154,18 @@ describe('mobilny powrót z wątku wiadomości', () => {
     },
   );
 
+  it.each(['pl', 'nl', 'fr', 'en'] as const)(
+    'lista rozmów jest nazwanym regionem, nie nienazwanym complementary (#358): %s',
+    async (locale) => {
+      getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1' }] });
+      getConversationThread.mockResolvedValue({ status: 'ready', thread: { id: 'conversation-1', counterpartyName: 'Anna', subject: '', messages: [] } });
+      markConversationRead.mockResolvedValue({ ok: true });
+      render(await MessagesView({ locale, basePath: '/candidate/wiadomosci', activeParam: 'conversation-1' }));
+      expect(screen.getByRole('region', { name: translations[locale].messages.conversationsHeading })).toBeInTheDocument();
+      expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    },
+  );
+
   it('nie odczytuje wątku spoza listy użytkownika', async () => {
     getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1' }] });
     render(await MessagesView({ locale: 'pl', basePath: '/candidate/wiadomosci', activeParam: 'other-id' }));

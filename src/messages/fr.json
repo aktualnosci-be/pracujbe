@@ -367,7 +367,8 @@
       "companyDescriptionTooLong": "La description de l'entreprise est trop longue.",
       "contactEmailInvalid": "Adresse e-mail invalide.",
       "publishAgreementRequired": "Confirmez pour publier l'offre.",
-      "invalid": "Valeur invalide."
+      "invalid": "Valeur invalide.",
+      "itemTooLong": "Un des éléments de la liste est trop long. Raccourcissez-le."
     },
     "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
     "contentLanguageNames": {
@@ -375,7 +376,8 @@
       "nl": "néerlandais",
       "fr": "français",
       "en": "anglais"
-    }
+    },
+    "similarJobsLoadError": "Impossible de charger les offres similaires. Cette offre et la candidature fonctionnent normalement."
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -765,6 +767,17 @@
     "employerOffersNext": "Page suivante",
     "employerOffersPageEmpty": "Il n’y a plus d’offres sur cette page.",
     "employerOffersRetry": "Réessayer",
+    "withdrawConfirmTitle": "Retirer la candidature ?",
+    "withdrawConfirmDescription": "L’employeur ne traitera plus cette candidature. Vous ne pourrez plus postuler à cette offre.",
+    "withdrawConfirmDescriptionNamed": "Votre candidature pour « {title} » sera retirée. Vous ne pourrez plus postuler à cette offre.",
+    "withdrawConfirm": "Retirer",
+    "withdrawSuccess": "La candidature a été retirée.",
+    "declineConfirmTitle": "Refuser la proposition ?",
+    "declineConfirmDescription": "L’employeur recevra un refus. Cette réponse ne pourra pas être modifiée.",
+    "declineConfirmDescriptionNamed": "La proposition « {title} » sera refusée. Cette réponse ne pourra pas être modifiée.",
+    "declineConfirm": "Refuser",
+    "acceptProposalSuccess": "La proposition a été acceptée.",
+    "declineProposalSuccess": "La proposition a été refusée.",
     "sendOfferTo": "Envoyer une proposition : {name} — {job}",
     "offerMatchedJob": "Correspondance avec l’offre",
     "offerSentOn": "Proposition envoyée le {date}",
@@ -827,6 +840,7 @@
   },
   "onboarding": {
     "stepProgress": "Étape {current} sur {total}",
+    "stepAnnounce": "Étape {current} sur {total} : {title}",
     "title": "Votre profil de candidat",
     "subtitle": "Créez votre profil et nous vous proposerons les meilleures offres en Belgique.",
     "loadError": "Impossible de charger votre profil",
@@ -917,7 +931,9 @@
     "contractTypesLabel": "Types de contrat souhaités",
     "bioLabel": "À propos de moi (facultatif)",
     "bioPlaceholder": "Écrivez quelques phrases sur vous, votre expérience et vos attentes.",
-    "agreeTerms": "J'accepte les conditions d'utilisation et la politique de confidentialité."
+    "agreeTerms": "J'accepte les conditions d'utilisation et la politique de confidentialité.",
+    "agreeTermsLinks": "J'accepte les <terms>conditions d'utilisation</terms> et la <privacy>politique de confidentialité</privacy>.",
+    "opensInNewTab": "(s’ouvre dans un nouvel onglet)"
   },
   "filters": {
     "title": "Filtres",
@@ -1172,7 +1188,8 @@
     "previewNote": "Vérifiez les informations avant publication.",
     "previewNothing": "—",
     "previewSalaryNotProvided": "Non précisé",
-    "notVerifiedNote": "Le brouillon est enregistré. La publication sera possible une fois l'entreprise vérifiée."
+    "notVerifiedNote": "Le brouillon est enregistré. La publication sera possible une fois l'entreprise vérifiée.",
+    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste."
   },
   "messages": {
     "title": "Messages",
@@ -1196,7 +1213,16 @@
     "you": "Vous",
     "systemLabel": "Système",
     "back": "Retour à la liste",
-    "unreadBadge": "Non lu"
+    "unreadBadge": "Non lu",
+    "conversationsHeading": "Conversations",
+    "threadListLabel": "Messages avec {name}",
+    "composerLabel": "Message à {name}",
+    "composerCounter": "{count} / {max} caractères",
+    "composerTooLong": "Un message peut contenir au maximum {max} caractères. Raccourcissez-le et renvoyez-le.",
+    "loadOlder": "Charger les messages plus anciens",
+    "loadingOlder": "Chargement des messages plus anciens…",
+    "loadOlderError": "Impossible de charger les messages plus anciens. Réessayez.",
+    "threadStart": "C'est le début de la conversation."
   },
   "files": {
     "cvTitle": "Votre CV / documents",
@@ -1206,7 +1232,11 @@
     "empty": "Aucun document téléversé.",
     "delete": "Supprimer",
     "uploadError": "Échec du téléversement. Vérifiez le format et la taille.",
-    "deleteError": "Échec de la suppression."
+    "deleteError": "Échec de la suppression.",
+    "loadError": "Impossible de charger les documents. Vos fichiers n’ont pas été supprimés.",
+    "deleteConfirmTitle": "Supprimer le document ?",
+    "deleteConfirmDescription": "Le fichier « {name} » sera définitivement supprimé. Cette action est irréversible.",
+    "deleteSuccess": "Le document a été supprimé."
   },
   "admin": {
     "adminName": "Administrateur",
@@ -1300,13 +1330,15 @@
     "emailMarketingDescription": "Nouveautés, conseils et informations sur Pracuj.be.",
     "channelsSectionTitle": "Autres canaux",
     "channelsSectionDescription": "Notifications en dehors de l'e-mail.",
-    "pushEnabledLabel": "Notifications push",
-    "pushEnabledDescription": "Notifications sur votre appareil en cas d'événement important.",
     "inAppEnabledLabel": "Notifications dans l'application",
     "inAppEnabledDescription": "Notifications visibles lorsque vous êtes connecté.",
     "save": "Enregistrer les préférences",
     "saving": "Enregistrement...",
-    "savedSuccess": "Vos préférences de notification ont été enregistrées."
+    "savedSuccess": "Vos préférences de notification ont été enregistrées.",
+    "loadError": "Impossible de charger vos préférences de notification.",
+    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant.",
+    "pushEnabledLabel": "Notifications push",
+    "pushEnabledDescription": "Notifications sur votre appareil en cas d'événement important."
   },
   "guides": {
     "pageTitle": "Guides",
@@ -1350,7 +1382,8 @@
       "contractType": "Type de contrat",
       "remoteJob": "Télétravail — la localisation importe peu",
       "withinCommuteRadius": "Lieu de travail dans votre rayon de déplacement"
-    }
+    },
+    "loadError": "Impossible de calculer la correspondance pour le moment. Ce n’est pas une évaluation de votre profil — réessayez."
   },
   "application": {
     "error": {

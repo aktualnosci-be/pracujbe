@@ -13,9 +13,10 @@ import { getCityCounts, type LocationKey } from '@/lib/jobs';
  * ofert filtrowanej po mieście (wartość = nazwa miasta w bieżącym języku, zgodna z danymi
  * ofert). Komponent serwerowy; renderowany w kolumnie przez `page.tsx`.
  *
- * P1-09: liczniki są REALNE (get_public_jobs_count z tym samym filtrem miasta, którym link
- * kieruje na listę) — spójne z widokiem docelowym. W trybie demo (bez env) `getCityCounts`
- * zwraca null → pomijamy badge zamiast zmyślonej liczby.
+ * P1-09 / #189: liczniki są REALNE i liczone per klucz miasta po wszystkich jego nazwach —
+ * lista rozpoznaje `city=<nazwa>` jako to samo miasto, więc licznik zgadza się z widokiem
+ * docelowym w każdym języku. W trybie demo (bez env) `getCityCounts` zwraca null → pomijamy
+ * badge zamiast zmyślonej liczby.
  */
 
 const JOBS_PATH = '/oferty-pracy';
@@ -27,8 +28,7 @@ export async function LocationGrid(): Promise<React.JSX.Element> {
   const tHome = await getTranslations('home');
   const tCommon = await getTranslations('common');
   const locale = await getLocale();
-  const cityNames = LOCATIONS.map((key) => t(key));
-  const counts = await getCityCounts(locale, cityNames);
+  const counts = await getCityCounts(locale, LOCATIONS);
 
   return (
     <div>
@@ -62,7 +62,7 @@ export async function LocationGrid(): Promise<React.JSX.Element> {
                 </span>
                 {counts ? (
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {tHome('offersCount', { count: counts[name] ?? 0 })}
+                    {tHome('offersCount', { count: counts[key] ?? 0 })}
                   </span>
                 ) : null}
               </Link>

@@ -105,14 +105,14 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   // Krok 6: wymagane są dostępność i zgoda.
   await page.getByLabel('Dostępność').click();
   await page.getByRole('option', { name: 'Od zaraz' }).click();
-  await page.getByLabel('Akceptuję regulamin i politykę prywatności.').click();
+  await page.getByRole('checkbox', { name: /^Akceptuję regulamin/ }).click();
 
   // Powrót sprawdza wyłącznie stan zamontowanego komponentu (bez reloadu i bez dowodu DB).
   await page.getByRole('button', { name: 'Wstecz' }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'Języki i certyfikaty' })).toBeVisible();
   await page.getByRole('button', { name: /Dalej: Preferencje i podsumowanie/ }).click();
   await expect(page.getByLabel('Dostępność')).toHaveText('Od zaraz');
-  await expect(page.getByLabel('Akceptuję regulamin i politykę prywatności.')).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: /^Akceptuję regulamin/ })).toBeChecked();
 
   await page.getByRole('button', { name: 'Zakończ i opublikuj' }).click();
   await expect(page).toHaveURL(/\/pl\/candidate$/);

@@ -57,7 +57,7 @@ describe("JobWizard: komunikaty błędów i fokus", () => {
     expect(title).toHaveAttribute("aria-invalid", "true");
     expect(title).toHaveAttribute("aria-describedby", "job-title-error");
     expect(document.getElementById("job-title-error")).toHaveTextContent(
-      "titleTooShort",
+      "titleRequired",
     );
     expect(category).toHaveAttribute("aria-describedby", "job-category-error");
     expect(document.getElementById("job-category-error")).toHaveTextContent(

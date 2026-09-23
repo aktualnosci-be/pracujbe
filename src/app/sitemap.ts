@@ -1,5 +1,4 @@
 import type { MetadataRoute } from 'next';
-import { getTranslations } from 'next-intl/server';
 
 import { routing } from '@/i18n/routing';
 import { env, isProductionDeployment } from '@/lib/env';
@@ -85,7 +84,7 @@ function buildLanguages(
 
 /**
  * Języki, w których landing ma ≥1 ofertę (#299). Liczniki używają tego samego filtra co strona
- * (kategoria; miasto po nazwie w danym języku), więc sitemap nie zgłasza pustych landingów,
+ * (kategoria; miasto po kluczu i wszystkich jego nazwach — #189), więc sitemap nie zgłasza pustych landingów,
  * które same mają `noindex`. `null` z licznika = błąd odczytu: sitemap nie może zgadywać.
  */
 async function nonEmptyLandingLocales(
@@ -98,15 +97,13 @@ async function nonEmptyLandingLocales(
     categories.set(key, (categoryCounts[key] ?? 0) > 0 ? [...locales] : []);
   }
 
-  const cities = new Map<string, string[]>(LOCATION_KEYS.map((key) => [key, []]));
-  for (const locale of locales) {
-    const tLoc = await getTranslations({ locale, namespace: 'locations' });
-    const names = LOCATION_KEYS.map((key) => tLoc(key));
-    const counts = await getCityCounts(locale, names);
-    if (!counts) throw new Error('sitemap: brak liczników miast');
-    LOCATION_KEYS.forEach((key, index) => {
-      if ((counts[names[index]!] ?? 0) > 0) cities.get(key)!.push(locale);
-    });
+  // #189: licznik per klucz miasta (wszystkie nazwy PL/NL/FR/EN) — landing ma te same oferty
+  // w każdym języku, więc jest pusty albo niepusty jednocześnie we wszystkich wersjach.
+  const cityCounts = await getCityCounts(routing.defaultLocale, LOCATION_KEYS);
+  if (!cityCounts) throw new Error('sitemap: brak liczników miast');
+  const cities = new Map<string, string[]>();
+  for (const key of LOCATION_KEYS) {
+    cities.set(key, (cityCounts[key] ?? 0) > 0 ? [...locales] : []);
   }
   return { categories, cities };
 }

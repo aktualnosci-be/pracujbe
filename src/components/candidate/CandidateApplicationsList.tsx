@@ -114,7 +114,7 @@ export function CandidateApplicationsList({
                       {t('actionView')}
                     </Link>
                   ) : <span />}
-                  <ApplicationActions applicationId={app.id} status={app.status} slug={app.slug} />
+                  <ApplicationActions applicationId={app.id} status={app.status} slug={app.slug} jobTitle={app.jobTitle || undefined} />
                 </div>
               </article>
             </li>

@@ -469,6 +469,43 @@ export async function getJobBySlug(
   return resolveDemoJobBySlug(slug, resolvedLocale);
 }
 
+/**
+ * Jawny wynik odczytu podobnych ofert (#191). Sekcja pomocnicza: jej awaria nie może
+ * przerwać renderowania szczegółu oferty ani aplikowania, a „brak podobnych” wolno pokazać
+ * tylko po udanym odczycie.
+ */
+export type SimilarJobsLoad =
+  | { status: 'ok'; jobs: JobListItem[] }
+  | { status: 'error' };
+
+/**
+ * Wymusza błąd odczytu podobnych ofert na izolowanym serwerze dev testów E2E
+ * (`playwright.applications-fixture.config.ts`). Nie działa w buildzie produkcyjnym.
+ */
+function isSimilarJobsErrorFixture(): boolean {
+  return process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error';
+}
+
+/** Do `limit` aktywnych ofert z tej samej kategorii, bez oferty bieżącej. */
+export async function getSimilarJobs(
+  job: Pick<JobListItem, 'slug' | 'category'>,
+  locale: string,
+  limit: number,
+): Promise<SimilarJobsLoad> {
+  const safeLimit = Math.max(1, Math.trunc(limit));
+  try {
+    if (isSimilarJobsErrorFixture()) throw new Error('Isolated similar jobs fixture failure');
+    const result = await getJobs({ locale, category: job.category, page: 1, pageSize: safeLimit + 1 });
+    return {
+      status: 'ok',
+      jobs: result.jobs.filter((item) => item.slug !== job.slug).slice(0, safeLimit),
+    };
+  } catch (error) {
+    captureError(error, { area: 'jobs.getSimilarJobs' });
+    return { status: 'error' };
+  }
+}
+
 export async function getLatestJobs(
   locale: string,
   limit: number = DEFAULT_LATEST_LIMIT,
@@ -550,22 +587,25 @@ export async function getCategoryCounts(
 }
 
 /**
- * P1-09: REALNE liczniki ofert per miasto. Liczy filtrem `p_city` (ilike) — dokładnie tak, jak
- * link kieruje na listę (`city=<nazwa>`), więc licznik jest spójny z widokiem docelowym niezależnie
- * od znanego niedopasowania nazw miast (P1-10 — odrębne ustalenie). `null` w trybie demo.
+ * P1-09 / #189: REALNE liczniki ofert per KLUCZ miasta (nie per przetłumaczona nazwa). Liczy z
+ * facetu lokalizacji i sumuje dokładne aliasy klucza (Bruksela/Brussel/Bruxelles/Brussels) —
+ * tą samą regułą, którą landing i lista filtrują oferty, więc licznik nie zależy od języka
+ * strony ani języka, w którym wpisano miasto oferty. `null` w trybie demo.
  */
 export async function getCityCounts(
-  _locale: string,
-  cities: readonly string[],
-): Promise<Record<string, number> | null> {
+  locale: string,
+  keys: readonly LocationKey[],
+): Promise<Record<LocationKey, number> | null> {
   if (!isDatabaseConfigured()) return null;
   try {
-    const [{ getDomainPool }, { getPublicJobCityCounts }] = await Promise.all([
-      import('@/lib/db/runtime'),
-      import('@/lib/db/public-jobs'),
-    ]);
-    const pool = await getDomainPool();
-    return getPublicJobCityCounts(pool, cities);
+    const [{ getDomainPool }, { getPublicJobFilterFacets }, { countByLocationKey }] =
+      await Promise.all([
+        import('@/lib/db/runtime'),
+        import('@/lib/db/public-jobs'),
+        import('@/lib/locations/city-aliases'),
+      ]);
+    const facets = await getPublicJobFilterFacets(await getDomainPool(), { locale });
+    return countByLocationKey(facets.locations, keys);
   } catch (error) {
     captureError(error, { area: 'jobs.getCityCounts' });
     return null;
