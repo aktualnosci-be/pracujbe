@@ -1,5 +1,26 @@
 # Kontrakty bazy danych
 
+## Zapisane oferty kandydata
+
+`public.get_saved_jobs_display(text)` zwraca własne zapisy zalogowanego kandydata w kolejności
+zapisu. Funkcja łączy `saved_jobs` z ofertami przed sortowaniem, więc aktywna oferta nie znika
+tylko dlatego, że jest starsza od 100 najnowszych ofert publicznych. Zwracane są wyłącznie
+publiczne pola aktywnej, niewygasłej oferty zweryfikowanej firmy. Warunek
+`saved_jobs.candidate_id = auth.uid()` ogranicza odczyt do właściciela; `EXECUTE` ma tylko
+rola `authenticated`. Bezpośrednie uprawnienia do tabel `jobs` i `companies` nie zmieniają się.
+
+Migracja: `supabase/migrations/0066_saved_jobs_display.sql`.
+
+### Rollback
+
+Najpierw wycofaj kod aplikacji używający RPC, następnie wykonaj:
+
+```sql
+drop function if exists public.get_saved_jobs_display(text);
+```
+
+Rollback usuwa tylko nową funkcję; nie zmienia zapisanych ofert ani innych danych.
+
 ## Publiczne liczniki ofert
 
 Kafle `/praca` odczytują liczniki przez dwa RPC `SECURITY DEFINER`:

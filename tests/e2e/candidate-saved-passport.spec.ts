@@ -13,7 +13,11 @@ for (const [locale, heading] of Object.entries(headings)) {
     await page.goto(`/${locale}/candidate/zapisane`);
 
     await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
-    await expect(page.locator('li').filter({ has: page.locator('button[aria-pressed="true"]') }).first()).toBeVisible();
+    const saveButton = page.locator('li').filter({ has: page.locator('button[aria-pressed="true"]') }).first().locator('button[aria-pressed="true"]');
+    await expect(saveButton).toBeVisible();
+    const target = await saveButton.boundingBox();
+    expect(target?.width).toBeGreaterThanOrEqual(48);
+    expect(target?.height).toBeGreaterThanOrEqual(48);
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );

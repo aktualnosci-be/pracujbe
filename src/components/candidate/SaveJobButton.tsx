@@ -65,7 +65,7 @@ export function SaveJobButton({
         aria-pressed={saved}
         title={label}
         className={cn(
-          'shrink-0 rounded-md p-1.5 transition-colors hover:bg-soft disabled:opacity-50',
+          'inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-soft disabled:opacity-50',
           saved ? 'text-accent' : 'text-muted-foreground hover:text-accent',
           className,
         )}

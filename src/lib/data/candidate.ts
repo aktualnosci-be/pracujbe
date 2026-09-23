@@ -702,10 +702,9 @@ export async function getMyApplications(locale: string = routing.defaultLocale, 
 }
 
 /**
- * Zapisane oferty kandydata (`saved_jobs`) wzbogacone o dane publiczne oferty.
- * Odczyt pod sesją (RLS: kandydat widzi wyłącznie własne `saved_jobs`); tytuł/firmę/miasto
- * bierzemy z RPC `get_public_jobs` (kandydat nie czyta tabel bazowych — P1-01), więc pokazujemy
- * te zapisy, które są wciąż aktywne/publiczne. Kolejność: najnowiej zapisane pierwsze.
+ * Zapisane oferty kandydata przez RPC, które łączy własne `saved_jobs` z aktywnymi,
+ * publicznymi ofertami przed sortowaniem. Nie ograniczamy się do najnowszych 100 ofert,
+ * bo stara, nadal aktywna oferta również może być zapisana.
  */
 export type SavedJobsResult =
   | { status: 'ready'; jobs: RecommendedJob[] }
@@ -719,24 +718,21 @@ export async function getSavedJobs(locale: string = routing.defaultLocale): Prom
     const { supabase, userId } = await getServerContext();
     if (!userId) return { status: 'error' };
 
-    const savedRes = await supabase
-      .from('saved_jobs')
-      .select('job_id, created_at')
-      .eq('candidate_id', userId)
-      .order('created_at', { ascending: false });
-    if (savedRes.error) throw savedRes.error;
-    const rows = asArr(savedRes.data);
-    if (rows.length === 0) return { status: 'ready', jobs: [] };
-    const jobsMap = await fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT);
-
-    const result: RecommendedJob[] = [];
-    for (const row of rows) {
-      const jobId = asStr(asRecord(row)['job_id']);
-      const job = jobId ? jobsMap.get(jobId) : undefined;
-      if (!job) continue;
-      result.push({ ...job, match: null, saved: true });
-    }
-    return { status: 'ready', jobs: result };
+    const { data, error } = await supabase.rpc('get_saved_jobs_display', { p_locale: resolvedLocale });
+    if (error) throw error;
+    const jobs = asArr(data).map((row): RecommendedJob => {
+      const item = asRecord(row);
+      return {
+        id: asStr(item['id']),
+        slug: asStr(item['slug']),
+        title: asStr(item['title']),
+        companyName: asStr(item['company_name']),
+        city: asStr(item['city']),
+        match: null,
+        saved: true,
+      };
+    });
+    return { status: 'ready', jobs };
   } catch (error) {
     captureError(error, { area: 'candidate.getSavedJobs' });
     return { status: 'error' };
