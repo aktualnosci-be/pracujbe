@@ -99,6 +99,48 @@ Po zmianie hooka zrestartuj wszystkie usługi runnerów i uruchom pełny CI. Wer
 jest zakończona dopiero wtedy, gdy równoległe joby przechodzą, a ich katalogi istnieją
 do końca każdego joba. Pojedynczy zielony job nie potwierdza izolacji dwóch runnerów.
 
+### Wspólny namespace portów na jednym hoście
+
+Oddzielne katalogi instalacji i `_work` nie izolują portów TCP. Wszystkie usługi
+runnera działające na jednym hoście współdzielą ten sam `localhost`, więc dwa joby
+Playwrighta nie mogą równocześnie uruchomić `next start` na porcie 3000.
+
+Krok E2E w `ci.yml` obejmuje wyłącznie `npm run test:e2e` hostową blokadą
+`flock --exclusive /run/lock/pracujbe/playwright-3000.lock`. Build pozostaje równoległy;
+oczekuje tylko drugi proces, który rzeczywiście chce użyć portu 3000. Stała ścieżka
+w `/run/lock` jest wspólna dla usług na hoście także wtedy, gdy jednostki systemd mają
+`PrivateTmp=true`; prywatne `/tmp` i `/var/tmp` nie nadają się do tej blokady.
+
+Plik przygotowuje administrator hosta, nie workflow. Dzięki temu różne konta usług
+mogą otworzyć istniejący plik do odczytu i założyć na jego deskryptorze blokadę wyłączną,
+ale nie mogą podmienić pliku ani zmienić jego uprawnień. `flock` z util-linux nie wymaga
+prawa zapisu do istniejącego pliku blokady. Skonfiguruj odtworzenie pliku po każdym
+restarcie hosta przez `systemd-tmpfiles`:
+
+```bash
+sudo tee /etc/tmpfiles.d/pracujbe-e2e.conf >/dev/null <<'EOF'
+d /run/lock/pracujbe 0755 root root -
+f /run/lock/pracujbe/playwright-3000.lock 0444 root root -
+EOF
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/pracujbe-e2e.conf
+stat -Lc 'path=%n owner_uid=%u group_gid=%g mode=%a device=%d inode=%i' \
+  /run/lock/pracujbe /run/lock/pracujbe/playwright-3000.lock
+```
+
+Job kończy się przed uruchomieniem Playwrighta, jeśli katalog nie ma właściciela
+`root` i trybu `0755` albo plik nie ma właściciela `root`, trybu `0444` i nie jest
+czytelny. Loguje też urządzenie i inode pliku. W dwóch równoległych jobach na tym samym
+hoście wartości muszą być identyczne; różne wartości oznaczają osobne przestrzenie
+montowań i konfigurację niespełniającą kontraktu. Nie naprawiaj tego przez `chmod`
+lub tworzenie pliku w workflow, bo dwa konta usług mogłyby ścigać się przy podmianie.
+
+Nie ustawiaj `reuseExistingServer: true` w CI: job mógłby wtedy testować serwer
+uruchomiony z innego commita. Nie zabijaj też procesu zajmującego port bez potwierdzenia
+jego właściciela.
+
+Po dodaniu kolejnej usługi runnera na tym samym hoście uruchom dwa workflow równolegle.
+Oba joby E2E muszą się wykonać i przejść, a ich sesje `next start` nie mogą się nakładać.
+
 ---
 
 ## 3. Wymagane oprogramowanie na runnerze
@@ -111,6 +153,7 @@ do końca każdego joba. Pojedynczy zielony job nie potwierdza izolacji dwóch r
 | biblioteki systemowe | zależności Chromium | na Ubuntu: `npx playwright install-deps` (wymaga sudo) |
 | Docker | dowolna aktualna | wymagane przez job `rls` (usługa kontenerowa `postgres:16`) |
 | Klient `psql` | dostarczany przez `postgres:16` | job `rls` wykonuje testy wewnątrz kontenera; instalacja na hoście nie jest potrzebna |
+| `flock` (`util-linux`) | wersja systemowa | hostowa serializacja serwera E2E na porcie 3000; plik w `/run/lock` przygotowany przez `systemd-tmpfiles` |
 
 > **Playwright:** job `e2e` wykonuje `npx playwright install chromium` (bez `--with-deps`,
 > bo tamto wymaga sudo w trakcie CI). Zależności systemowe zainstaluj **raz** przy provisioningu runnera.

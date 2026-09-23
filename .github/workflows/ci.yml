@@ -300,10 +300,27 @@ jobs:
       - name: Build application for E2E
         timeout-minutes: 15
         run: npm run build
+      - name: Verify host-wide E2E lock
+        shell: bash
+        run: |
+          lock_dir=/run/lock/pracujbe
+          lock_file="$lock_dir/playwright-3000.lock"
+          if [[ ! -d "$lock_dir" || ! -f "$lock_file" || ! -r "$lock_file" ]]; then
+            echo "::error::Brak czytelnej hostowej blokady $lock_file. Przygotuj ją zgodnie z docs/SELF_HOSTED_RUNNERS.md."
+            exit 1
+          fi
+          if [[ $(stat -Lc '%u:%a' "$lock_dir") != '0:755' || $(stat -Lc '%u:%a' "$lock_file") != '0:444' ]]; then
+            echo "::error::Blokada E2E musi mieć katalog root:755 i plik root:444; nie naprawiaj uprawnień w jobie CI."
+            stat -Lc 'path=%n owner_uid=%u group_gid=%g mode=%a device=%d inode=%i' "$lock_dir" "$lock_file"
+            exit 1
+          fi
+          stat -Lc 'E2E lock: path=%n owner_uid=%u group_gid=%g mode=%a device=%d inode=%i' "$lock_file"
       - name: Run E2E
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'
-        run: npm run test:e2e
+        # Dwie usługi runnera na jednym hoście współdzielą porty TCP. Blokada obejmuje tylko
+        # Playwrighta wraz z `next start`; build pozostaje równoległy z innymi workflow.
+        run: flock --exclusive --verbose /run/lock/pracujbe/playwright-3000.lock npm run test:e2e
       # Raport tylko przy porażce i z krótką retencją — oszczędza płatny storage.
       - uses: actions/upload-artifact@v4
         if: failure()
