@@ -140,8 +140,16 @@
     "close": "Zamknij"
   },
   "home": {
-    "heroTitle": "Znajdź pracę w Belgii",
-    "heroSubtitle": "Przeglądaj sprawdzone oferty i aplikuj bez skomplikowanego CV.",
+    "heroTitle": "Twoje umiejętności. Twoje miejsce. Twój nowy start.",
+    "heroTitleLine1": "Twoje umiejętności.",
+    "heroTitleLine2": "Twoje miejsce.",
+    "heroTitleLine3": "Twój nowy start.",
+    "heroEyebrow": "Praca w Belgii",
+    "heroSubtitle": "Znajdź pracę, w której wykorzystasz to, co potrafisz. Porównaj warunki i aplikuj swoim profilem — bez pisania CV.",
+    "heroBrowseJobs": "Przeglądaj oferty",
+    "heroCreateProfile": "Załóż profil kandydata",
+    "heroPhotoCaption": "Praca to przede wszystkim ludzie.",
+    "heroPhotoDisclaimer": "Zdjęcie ilustracyjne — nie przedstawia konkretnej oferty.",
     "heroSearchJobLabel": "Stanowisko, słowo kluczowe",
     "heroSearchLocationLabel": "Lokalizacja",
     "searchJobPlaceholder": "np. mechanik, magazynier, opiekunka",
