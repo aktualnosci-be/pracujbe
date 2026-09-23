@@ -865,7 +865,7 @@
     "available": "Beschikbaar",
     "datePosted": "Datum plaatsing",
     "any": "Alle",
-    "showResults": "Toon {count} vacatures",
+    "showResults": "{count, plural, one {Toon # vacature} other {Toon # vacatures}}",
     "countLoading": "Vacatures tellen…",
     "countUnavailable": "Aantal vacatures niet beschikbaar",
     "countError": "De vacatures konden niet worden geteld. Probeer het opnieuw.",
