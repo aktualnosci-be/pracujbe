@@ -897,7 +897,9 @@
     "itemJobMatch": "Nieuwe vacature afgestemd op je profiel",
     "itemCompanyVerified": "Je bedrijf is geverifieerd",
     "itemSystem": "Systeemmelding",
-    "empty": "Geen meldingen"
+    "empty": "Geen meldingen",
+    "loadError": "Meldingen konden niet worden geladen. Probeer het opnieuw.",
+    "retry": "Opnieuw proberen"
   },
   "pricing": {
     "standard": "Standaard",

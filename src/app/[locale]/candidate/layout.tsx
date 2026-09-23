@@ -44,6 +44,7 @@ export default async function CandidateLayout({
 
   let notifItems: NotificationItem[] | undefined;
   let notifUnread: number | undefined;
+  let notificationError = false;
   let unreadMessages: number | undefined;
   let userName: string | undefined;
 
@@ -87,12 +88,13 @@ export default async function CandidateLayout({
       getNotifications(locale),
       getUnreadConversationsCount(),
     ]);
-    notifItems = notif.items.map((item) => ({
+    notificationError = notif.status === 'error';
+    notifItems = (notif.status === 'ready' ? notif.items : []).map((item) => ({
       title: item.title,
       meta: item.meta,
       unread: item.unread,
     }));
-    notifUnread = notif.unread;
+    notifUnread = notif.status === 'ready' ? notif.unread : undefined;
     unreadMessages = unread;
   }
 
@@ -100,6 +102,7 @@ export default async function CandidateLayout({
     <CandidateShell
       notifItems={notifItems}
       notifUnread={notifUnread}
+      notificationError={notificationError}
       unreadMessages={unreadMessages}
       userName={userName}
     >

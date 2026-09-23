@@ -897,7 +897,9 @@
     "itemJobMatch": "Nowa oferta dopasowana do Twojego profilu",
     "itemCompanyVerified": "Twoja firma została zweryfikowana",
     "itemSystem": "Powiadomienie systemowe",
-    "empty": "Brak powiadomień"
+    "empty": "Brak powiadomień",
+    "loadError": "Nie udało się wczytać powiadomień. Spróbuj ponownie.",
+    "retry": "Spróbuj ponownie"
   },
   "pricing": {
     "standard": "Standard",
