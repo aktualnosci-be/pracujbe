@@ -47,30 +47,38 @@ for (const locale of locales) {
     await page.setViewportSize({ width: 320, height: 800 });
     await page.goto(`/${locale}/oferty-pracy`);
 
-    const boxes = await page.evaluate(() => {
+    const logo = await page.evaluate(() => {
       const header = document.querySelector("body header");
       const box = (el: Element | null | undefined) => {
         const r = el?.getBoundingClientRect();
         return r ? { width: r.width, height: r.height } : null;
       };
-      const visible = (sel: string) =>
-        Array.from(header?.querySelectorAll(sel) ?? []).find((el) => el.getClientRects().length > 0);
-      const logo = visible("[role=img]");
+      const mark = Array.from(header?.querySelectorAll("[role=img]") ?? []).find(
+        (el) => el.getClientRects().length > 0,
+      );
+      const tile = mark?.querySelector(":scope > span > span");
+      const tileStyle = tile ? getComputedStyle(tile) : null;
       return {
-        logo: box(logo),
-        tile: box(logo?.querySelector(":scope > span > span")),
+        fontSize: mark ? getComputedStyle(mark).fontSize : null,
+        logo: box(mark),
+        tile: box(tile),
+        tilePadding: tileStyle?.padding,
+        tileRadius: tileStyle?.borderRadius,
         iconButtons: Array.from(header?.querySelectorAll("a[aria-label], button[aria-label]") ?? [])
           .filter((el) => el.getClientRects().length > 0)
           .map(box),
       };
     });
 
-    // Wymiary sprzed poprawki (text-2xl, kafelek 4/6 px, przyciski 44 px).
-    expect(boxes.logo?.width).toBeCloseTo(110.2, 0);
-    expect(boxes.logo?.height).toBeCloseTo(32, 0);
-    expect(boxes.tile?.width).toBeCloseTo(43.8, 0);
-    expect(boxes.tile?.height).toBeCloseTo(32, 0);
-    expect(boxes.iconButtons).toEqual([
+    // Parametry sprzed poprawki, niezależne od renderowania fontu na danej maszynie:
+    // text-2xl (24 px), kafelek 4/6 px z promieniem 14 px (--radius), leading-none, więc
+    // wysokość = 24 + 2 × 4 = 32 px; przyciski-ikony 44 × 44 px.
+    expect(logo.fontSize).toBe("24px");
+    expect(logo.tilePadding).toBe("4px 6px");
+    expect(logo.tileRadius).toBe("14px");
+    expect(logo.logo?.height).toBeCloseTo(32, 0);
+    expect(logo.tile?.height).toBeCloseTo(32, 0);
+    expect(logo.iconButtons).toEqual([
       { width: 44, height: 44 },
       { width: 44, height: 44 },
     ]);
