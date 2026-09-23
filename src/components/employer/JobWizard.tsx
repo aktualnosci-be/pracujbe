@@ -391,10 +391,15 @@ export function JobWizard({
   function scrollToFirstError(current: WizardStep, erroredFields: Set<string>): void {
     const first = STEP_FIELDS[current].find((f) => erroredFields.has(f));
     if (!first) return;
-    const el = document.getElementById(domId(first));
+    const container = document.getElementById(domId(first));
+    const el = container?.matches('input, textarea, button, [role="combobox"], [role="checkbox"]')
+      ? container
+      : container?.querySelector<HTMLElement>(
+          'input, textarea, [role="combobox"], [role="checkbox"]',
+        );
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) el.focus();
+      (el as HTMLElement).focus();
     }
   }
 
@@ -505,6 +510,10 @@ export function JobWizard({
     );
   }
 
+  function errorDescription(name: keyof FormValues): string | undefined {
+    return errors[name] ? `${domId(name)}-error` : undefined;
+  }
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-8 sm:space-y-6">
       {/* Nagłówek + znacznik zapisu */}
@@ -563,6 +572,7 @@ export function JobWizard({
                   id={domId('title')}
                   placeholder={t('titlePlaceholder')}
                   aria-invalid={errors.title ? true : undefined}
+                  aria-describedby={errorDescription('title')}
                   {...register('title')}
                 />
                 <FieldError name="title" />
@@ -577,6 +587,7 @@ export function JobWizard({
                     <SelectTrigger
                       id="job-category-trigger"
                       aria-invalid={errors.category ? true : undefined}
+                      aria-describedby={errorDescription('category')}
                     >
                       <SelectValue placeholder={t('categoryPlaceholder')} />
                     </SelectTrigger>
@@ -596,6 +607,7 @@ export function JobWizard({
                     id={domId('occupation')}
                     placeholder={t('occupationPlaceholder')}
                     aria-invalid={errors.occupation ? true : undefined}
+                    aria-describedby={errorDescription('occupation')}
                     {...register('occupation')}
                   />
                   <FieldError name="occupation" />
@@ -618,6 +630,7 @@ export function JobWizard({
                     <SelectTrigger
                       id="job-contract-trigger"
                       aria-invalid={errors.contractType ? true : undefined}
+                      aria-describedby={errorDescription('contractType')}
                     >
                       <SelectValue placeholder={t('contractTypePlaceholder')} />
                     </SelectTrigger>
@@ -637,6 +650,7 @@ export function JobWizard({
                     id={domId('workingHours')}
                     placeholder={t('workingHoursPlaceholder')}
                     aria-invalid={errors.workingHours ? true : undefined}
+                    aria-describedby={errorDescription('workingHours')}
                     {...register('workingHours')}
                   />
                   <FieldError name="workingHours" />
@@ -647,6 +661,7 @@ export function JobWizard({
                     id={domId('shifts')}
                     placeholder={t('shiftsPlaceholder')}
                     aria-invalid={errors.shifts ? true : undefined}
+                    aria-describedby={errorDescription('shifts')}
                     {...register('shifts')}
                   />
                   <FieldError name="shifts" />
@@ -657,6 +672,7 @@ export function JobWizard({
                     id={domId('startDate')}
                     type="date"
                     aria-invalid={errors.startDate ? true : undefined}
+                    aria-describedby={errorDescription('startDate')}
                     {...register('startDate')}
                   />
                   <FieldError name="startDate" />
@@ -681,6 +697,7 @@ export function JobWizard({
                     placeholder={t('cityPlaceholder')}
                     autoComplete="address-level2"
                     aria-invalid={errors.city ? true : undefined}
+                    aria-describedby={errorDescription('city')}
                     {...register('city')}
                   />
                   <FieldError name="city" />
@@ -691,6 +708,7 @@ export function JobWizard({
                     id={domId('region')}
                     placeholder={t('regionPlaceholder')}
                     aria-invalid={errors.region ? true : undefined}
+                    aria-describedby={errorDescription('region')}
                     {...register('region')}
                   />
                   <FieldError name="region" />
@@ -701,6 +719,7 @@ export function JobWizard({
                     id={domId('address')}
                     placeholder={t('addressPlaceholder')}
                     aria-invalid={errors.address ? true : undefined}
+                    aria-describedby={errorDescription('address')}
                     {...register('address')}
                   />
                   <FieldError name="address" />
@@ -726,6 +745,7 @@ export function JobWizard({
                     inputMode="numeric"
                     min={0}
                     aria-invalid={errors.salaryMin ? true : undefined}
+                    aria-describedby={errorDescription('salaryMin')}
                     {...register('salaryMin')}
                   />
                   <FieldError name="salaryMin" />
@@ -738,6 +758,7 @@ export function JobWizard({
                     inputMode="numeric"
                     min={0}
                     aria-invalid={errors.salaryMax ? true : undefined}
+                    aria-describedby={errorDescription('salaryMax')}
                     {...register('salaryMax')}
                   />
                   <FieldError name="salaryMax" />
@@ -794,6 +815,7 @@ export function JobWizard({
                   rows={6}
                   placeholder={t('descriptionPlaceholder')}
                   aria-invalid={errors.description ? true : undefined}
+                  aria-describedby={errorDescription('description')}
                   {...register('description')}
                 />
                 <FieldError name="description" />
@@ -808,6 +830,7 @@ export function JobWizard({
                   addLabel={t('add')}
                   removeLabel={t('remove')}
                   invalid={Boolean(errors.responsibilities)}
+                  errorDescription={errorDescription('responsibilities')}
                 />
                 <p className="text-xs text-muted-foreground">{t('responsibilitiesHint')}</p>
                 <FieldError name="responsibilities" />
@@ -829,6 +852,7 @@ export function JobWizard({
                   addLabel={t('add')}
                   removeLabel={t('remove')}
                   invalid={Boolean(errors.requirementsMandatory)}
+                  errorDescription={errorDescription('requirementsMandatory')}
                 />
                 <FieldError name="requirementsMandatory" />
               </div>
@@ -842,6 +866,7 @@ export function JobWizard({
                   addLabel={t('add')}
                   removeLabel={t('remove')}
                   invalid={Boolean(errors.mandatorySkills)}
+                  errorDescription={errorDescription('mandatorySkills')}
                 />
                 <FieldError name="mandatorySkills" />
               </div>
@@ -854,6 +879,7 @@ export function JobWizard({
                   min={0}
                   max={60}
                   aria-invalid={errors.minExperienceYears ? true : undefined}
+                  aria-describedby={errorDescription('minExperienceYears')}
                   {...register('minExperienceYears')}
                 />
                 <p className="text-xs text-muted-foreground">{t('minExperienceHint')}</p>
@@ -876,6 +902,7 @@ export function JobWizard({
                   addLabel={t('add')}
                   removeLabel={t('remove')}
                   invalid={Boolean(errors.requirementsOptional)}
+                  errorDescription={errorDescription('requirementsOptional')}
                 />
                 <FieldError name="requirementsOptional" />
               </div>
@@ -889,6 +916,7 @@ export function JobWizard({
                   addLabel={t('add')}
                   removeLabel={t('remove')}
                   invalid={Boolean(errors.skills)}
+                  errorDescription={errorDescription('skills')}
                 />
                 <FieldError name="skills" />
               </div>
@@ -901,7 +929,10 @@ export function JobWizard({
                     className="flex-1"
                     value={langDraft}
                     placeholder={t('languageNamePlaceholder')}
-                    aria-invalid={langError ? true : undefined}
+                    aria-invalid={langError || errors.languages ? true : undefined}
+                    aria-describedby={
+                      langError ? 'job-language-draft-error' : errorDescription('languages')
+                    }
                     onChange={(e) => {
                       setLangDraft(e.target.value);
                       if (langError) setLangError(false);
@@ -932,7 +963,9 @@ export function JobWizard({
                   </Button>
                 </div>
                 {langError ? (
-                  <p className="text-sm text-error">{tRoot('candidate.error.languageInvalid')}</p>
+                  <p id="job-language-draft-error" className="text-sm text-error">
+                    {tRoot('candidate.error.languageInvalid')}
+                  </p>
                 ) : null}
                 {values.languages.length > 0 ? (
                   <ul className="mt-1 flex flex-wrap gap-2">
@@ -973,6 +1006,7 @@ export function JobWizard({
                   addLabel={t('add')}
                   removeLabel={t('remove')}
                   invalid={Boolean(errors.requiredCertificates)}
+                  errorDescription={errorDescription('requiredCertificates')}
                 />
                 <FieldError name="requiredCertificates" />
               </div>
@@ -1006,6 +1040,7 @@ export function JobWizard({
                   addLabel={t('add')}
                   removeLabel={t('remove')}
                   invalid={Boolean(errors.conditions)}
+                  errorDescription={errorDescription('conditions')}
                 />
                 <FieldError name="conditions" />
               </div>
@@ -1019,6 +1054,7 @@ export function JobWizard({
                   addLabel={t('add')}
                   removeLabel={t('remove')}
                   invalid={Boolean(errors.benefits)}
+                  errorDescription={errorDescription('benefits')}
                 />
                 <FieldError name="benefits" />
               </div>
@@ -1048,6 +1084,7 @@ export function JobWizard({
                   rows={5}
                   placeholder={t('companyDescriptionPlaceholder')}
                   aria-invalid={errors.companyDescription ? true : undefined}
+                  aria-describedby={errorDescription('companyDescription')}
                   {...register('companyDescription')}
                 />
                 <FieldError name="companyDescription" />
@@ -1059,6 +1096,7 @@ export function JobWizard({
                   type="email"
                   placeholder={t('contactEmailPlaceholder')}
                   aria-invalid={errors.contactEmail ? true : undefined}
+                  aria-describedby={errorDescription('contactEmail')}
                   {...register('contactEmail')}
                 />
                 <FieldError name="contactEmail" />
@@ -1123,6 +1161,7 @@ export function JobWizard({
                       setValue('agreePublish', checked === true, { shouldDirty: true })
                     }
                     aria-invalid={errors.agreePublish ? true : undefined}
+                    aria-describedby={errorDescription('agreePublish')}
                     className="mt-0.5"
                   />
                   <Label
@@ -1323,6 +1362,7 @@ function ChipInput({
   addLabel,
   removeLabel,
   invalid,
+  errorDescription,
 }: {
   id: string;
   values: string[];
@@ -1331,6 +1371,7 @@ function ChipInput({
   addLabel: string;
   removeLabel: string;
   invalid?: boolean;
+  errorDescription?: string;
 }): React.JSX.Element {
   const [draft, setDraft] = React.useState('');
 
@@ -1349,6 +1390,7 @@ function ChipInput({
           value={draft}
           placeholder={placeholder}
           aria-invalid={invalid ? true : undefined}
+          aria-describedby={errorDescription}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
