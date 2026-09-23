@@ -894,6 +894,7 @@
     "any": "Alle",
     "showResults": "{count, plural, one {Toon # vacature} other {Toon # vacatures}}",
     "countLoading": "Vacatures tellen…",
+    "resultsLoading": "Vacatures laden…",
     "countUnavailable": "Aantal vacatures niet beschikbaar",
     "countError": "De vacatures konden niet worden geteld. Probeer het opnieuw.",
     "retryCount": "Opnieuw tellen",
