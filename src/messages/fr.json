@@ -62,6 +62,7 @@
     "discountInvalid": "Le code est invalide ou expiré."
   },
   "company": {
+    "editOwnerOnly": "Seuls le propriétaire ou un administrateur de l’entreprise peuvent modifier ces données.",
     "loadError": "Impossible de charger les données de l’entreprise",
     "loadErrorHint": "Pour éviter toute modification involontaire, nous n’affichons pas de formulaire vide. Réessayez.",
     "title": "Entreprise",

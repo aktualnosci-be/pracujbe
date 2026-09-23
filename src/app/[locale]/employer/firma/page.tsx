@@ -137,20 +137,26 @@ export default async function EmployerCompanyPage({
           </section>
 
           {/* Edycja danych podstawowych (nazwa, VAT) — status pozostaje po stronie admina. */}
-          <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
-            <h2 className="text-base font-semibold text-foreground">
-              {t('editTitle')}
-            </h2>
-            <div className="mt-4">
-              <CompanyForm
-                mode="edit"
-                defaultValues={{
-                  name: company.name,
-                  vatNumber: company.vatNumber ?? '',
-                }}
-              />
-            </div>
-          </section>
+          {company.canEdit ? (
+            <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
+              <h2 className="text-base font-semibold text-foreground">
+                {t('editTitle')}
+              </h2>
+              <div className="mt-4">
+                <CompanyForm
+                  mode="edit"
+                  defaultValues={{
+                    name: company.name,
+                    vatNumber: company.vatNumber ?? '',
+                  }}
+                />
+              </div>
+            </section>
+          ) : (
+            <p className="rounded-3xl border border-border bg-card p-5 text-base text-muted-foreground sm:p-7">
+              {t('editOwnerOnly')}
+            </p>
+          )}
 
           <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
             {t('verificationNote')}

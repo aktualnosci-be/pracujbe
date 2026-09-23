@@ -2,17 +2,17 @@
 
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
-import { ACTIVE_COMPANY_COOKIE, getActiveCompanyId } from '@/lib/company-context';
+import { ACTIVE_COMPANY_COOKIE, getActiveCompany } from '@/lib/company-context';
 
 /** UUID v4 (walidacja identyfikatorów przekazywanych z klienta). */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import {
   companyFormSchema,
   companyUpdateSchema,
@@ -35,9 +35,9 @@ import {
  */
 
 export type CreateCompanyResult =
-  | { ok: true; id: string; demo?: boolean }
-  | { ok: false; error: ErrorCode };
-export type UpdateCompanyResult = { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
+  { ok: true; id: string; demo?: boolean } | { ok: false; error: ErrorCode };
+export type UpdateCompanyResult =
+  { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
 
 /** Syntetyczny identyfikator firmy w trybie DEMO (brak env). */
 const DEMO_COMPANY_ID = 'demo-company';
@@ -52,7 +52,9 @@ const RATE_WINDOW_SECONDS = 3600;
  * ------------------------------------------------------------------------- */
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function asString(value: unknown, fallback = ''): string {
@@ -95,17 +97,15 @@ function nullIfEmpty(value: string | undefined | null): string | null {
   return v ? v : null;
 }
 
-/** Id aktywnej firmy zalogowanego (cookie-aware, zwalidowane — FUN-07) albo null. */
-async function activeCompanyId(supabase: SupabaseClient, userId: string): Promise<string | null> {
-  return getActiveCompanyId(supabase, userId);
-}
-
 /**
  * Ustawia aktywną firmę użytkownika (FUN-07). Waliduje AKTYWNE członkostwo w danej firmie
  * (nie ufamy wartości od klienta), zapisuje cookie i odświeża panel. Zwraca `{ ok }`.
  */
-export async function setActiveCompany(companyId: string): Promise<{ ok: boolean }> {
-  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) return { ok: false };
+export async function setActiveCompany(
+  companyId: string,
+): Promise<{ ok: boolean }> {
+  if (typeof companyId !== 'string' || !UUID_RE.test(companyId))
+    return { ok: false };
   if (!isSupabaseConfigured()) return { ok: true }; // demo: bez sesji nie utrwalamy
 
   try {
@@ -148,7 +148,9 @@ export async function setActiveCompany(companyId: string): Promise<{ ok: boolean
  * Tworzy firmę zalogowanego użytkownika (status `unverified`) i zwraca jej `id`.
  * Opcjonalny numer VAT/KBO dopisywany jest po utworzeniu (RLS: członek firmy).
  */
-export async function createCompany(input: CompanyFormInput): Promise<CreateCompanyResult> {
+export async function createCompany(
+  input: CompanyFormInput,
+): Promise<CreateCompanyResult> {
   const parsed = companyFormSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
@@ -158,7 +160,12 @@ export async function createCompany(input: CompanyFormInput): Promise<CreateComp
   }
 
   // Rate limit per IP — ochrona przed masowym zakładaniem firm.
-  if (!(await checkRateLimit('company-create', { max: CREATE_RATE_MAX, windowSeconds: RATE_WINDOW_SECONDS }))) {
+  if (
+    !(await checkRateLimit('company-create', {
+      max: CREATE_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    }))
+  ) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
 
@@ -185,7 +192,8 @@ export async function createCompany(input: CompanyFormInput): Promise<CreateComp
         .from('companies')
         .update({ vat_number: vat })
         .eq('id', id);
-      if (vatErr) captureError(vatErr, { area: 'company.createCompany.vat', id });
+      if (vatErr)
+        captureError(vatErr, { area: 'company.createCompany.vat', id });
     }
 
     return { ok: true, id };
@@ -203,7 +211,9 @@ export async function createCompany(input: CompanyFormInput): Promise<CreateComp
  * Aktualizuje dane aktywnej firmy zalogowanego (nazwa i/lub VAT). NIE zmienia statusu ani
  * sluga (stabilny w publicznych URL). Puste pola pomija; pusty VAT czyści wartość.
  */
-export async function updateCompany(input: CompanyUpdateInput): Promise<UpdateCompanyResult> {
+export async function updateCompany(
+  input: CompanyUpdateInput,
+): Promise<UpdateCompanyResult> {
   const parsed = companyUpdateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
@@ -217,7 +227,12 @@ export async function updateCompany(input: CompanyUpdateInput): Promise<UpdateCo
   if (!isSupabaseConfigured()) return { ok: true, demo: true };
 
   // Rate limit per IP — łagodny (edycja to częsta akcja).
-  if (!(await checkRateLimit('company-update', { max: UPDATE_RATE_MAX, windowSeconds: RATE_WINDOW_SECONDS }))) {
+  if (
+    !(await checkRateLimit('company-update', {
+      max: UPDATE_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    }))
+  ) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
 
@@ -228,12 +243,27 @@ export async function updateCompany(input: CompanyUpdateInput): Promise<UpdateCo
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const companyId = await activeCompanyId(supabase, user.id);
+    const active = await getActiveCompany(supabase, user.id);
+    const companyId = active.activeId;
     if (!companyId) return { ok: false, error: 'NOT_FOUND' };
+    if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
+      return { ok: false, error: 'PERMISSION_DENIED' };
+    }
 
     // RLS `companies_update_member` + trigger `protect_company_verification` (status nietykalny).
-    const { error } = await supabase.from('companies').update(patch).eq('id', companyId);
+    const { data, error } = await supabase
+      .from('companies')
+      .update(patch)
+      .eq('id', companyId)
+      .select('id');
     if (error) return { ok: false, error: mapPgError(error.message) };
+    if (
+      !Array.isArray(data) ||
+      data.length !== 1 ||
+      asString(asRecord(data[0])['id']) !== companyId
+    ) {
+      return { ok: false, error: 'PERMISSION_DENIED' };
+    }
 
     return { ok: true };
   } catch (e) {

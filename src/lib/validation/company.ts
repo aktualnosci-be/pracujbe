@@ -3,7 +3,7 @@ import { z } from 'zod/v3';
 /**
  * Walidacja danych firmy pracodawcy (Etap 4).
  *
- * Dwa pola edytowalne przez członka firmy: nazwa (wymagana) oraz numer VAT/KBO
+ * Dwa pola edytowalne przez właściciela lub administratora firmy: nazwa (wymagana) oraz numer VAT/KBO
  * (opcjonalny; belgijski numer przedsiębiorstwa KBO/BCE albo pusty). Status weryfikacji
  * NIE jest częścią tego schematu — nadaje go wyłącznie administrator (RPC + trigger DB).
  *

@@ -25,6 +25,7 @@ export interface MyCompany {
   vatNumber: string | null;
   /** ISO timestamp weryfikacji albo null. */
   verifiedAt: string | null;
+  canEdit: boolean;
 }
 
 /* ---------------------------------------------------------------------------
@@ -38,6 +39,7 @@ const DEMO_COMPANY: MyCompany = {
   status: 'verified',
   vatNumber: 'BE0123456789',
   verifiedAt: '2025-01-15T09:00:00.000Z',
+  canEdit: true,
 };
 
 /* ---------------------------------------------------------------------------
@@ -76,8 +78,8 @@ function asEmbeddedRecord(value: unknown): Record<string, unknown> {
  * ------------------------------------------------------------------------- */
 
 /**
- * Dane aktywnej firmy zalogowanego użytkownika albo `null`, gdy nie należy do żadnej firmy
- * (ekran pokaże wtedy formularz zakładania). Bez env → firma DEMO (`verified`).
+ * Potwierdzony brak członkostwa zwraca `ok` z `company: null`; błędy i niepełne
+ * odpowiedzi są osobnym stanem. Bez env → firma DEMO (`verified`).
  */
 export type MyCompanyLoad =
   { status: 'ok'; company: MyCompany | null } | { status: 'error' };
@@ -89,14 +91,14 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
     const { createServerClient } = await import('@/lib/supabase/server');
     const supabase = await createServerClient();
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { status: 'ok', company: null };
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user) return { status: 'error' };
+    const user = authData.user;
 
     // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
-    const { getActiveCompanyId } = await import('@/lib/company-context');
-    const activeId = await getActiveCompanyId(supabase, user.id);
+    const { getActiveCompany } = await import('@/lib/company-context');
+    const active = await getActiveCompany(supabase, user.id);
+    const activeId = active.activeId;
     if (!activeId) return { status: 'ok', company: null };
 
     const { data, error } = await supabase
@@ -126,6 +128,7 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
         status: asString(company['status'], 'unverified'),
         vatNumber: asNullableString(company['vat_number']),
         verifiedAt: asNullableString(company['verified_at']),
+        canEdit: active.activeRole === 'owner' || active.activeRole === 'admin',
       },
     };
   } catch (error) {

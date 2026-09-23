@@ -62,6 +62,7 @@
     "discountInvalid": "Kod jest nieprawidłowy lub wygasł."
   },
   "company": {
+    "editOwnerOnly": "Dane firmy może edytować tylko właściciel lub administrator firmy.",
     "loadError": "Nie udało się wczytać danych firmy",
     "loadErrorHint": "Aby nie zmienić danych przez pomyłkę, nie otwieramy pustego formularza. Spróbuj ponownie.",
     "title": "Firma",

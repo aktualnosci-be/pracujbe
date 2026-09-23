@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getMyCompany } from '@/lib/data/company';
 import { isSupabaseConfigured } from '@/lib/env';
 import { createServerClient } from '@/lib/supabase/server';
-import { getActiveCompanyId } from '@/lib/company-context';
+import { getActiveCompany } from '@/lib/company-context';
 import { captureError } from '@/lib/sentry';
 
 vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
-vi.mock('@/lib/company-context', () => ({ getActiveCompanyId: vi.fn() }));
+vi.mock('@/lib/company-context', () => ({ getActiveCompany: vi.fn() }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 function client(data: unknown, error: unknown = null) {
@@ -29,7 +29,10 @@ function client(data: unknown, error: unknown = null) {
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(isSupabaseConfigured).mockReturnValue(true);
-  vi.mocked(getActiveCompanyId).mockResolvedValue('company-1');
+  vi.mocked(getActiveCompany).mockResolvedValue({
+    activeId: 'company-1',
+    activeRole: 'owner',
+  } as never);
 });
 
 describe('company read state', () => {
@@ -45,7 +48,10 @@ describe('company read state', () => {
 
   it('allows creation only when active membership is absent', async () => {
     const { supabase } = client([]);
-    vi.mocked(getActiveCompanyId).mockResolvedValue(null);
+    vi.mocked(getActiveCompany).mockResolvedValue({
+      activeId: null,
+      activeRole: 'member',
+    } as never);
     expect(await getMyCompany()).toEqual({ status: 'ok', company: null });
     expect(supabase.from).not.toHaveBeenCalled();
   });
@@ -72,7 +78,39 @@ describe('company read state', () => {
         status: 'pending',
         vatNumber: null,
         verifiedAt: null,
+        canEdit: true,
       },
+    });
+  });
+
+  it('does not treat missing auth data as a company-free account', async () => {
+    const { supabase } = client([]);
+    supabase.auth.getUser.mockResolvedValue({
+      data: { user: null },
+      error: null,
+    } as never);
+    expect(await getMyCompany()).toEqual({ status: 'error' });
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a failed membership lookup as no company', async () => {
+    const { supabase } = client([]);
+    vi.mocked(getActiveCompany).mockRejectedValue(
+      new Error('membership read failed'),
+    );
+    expect(await getMyCompany()).toEqual({ status: 'error' });
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it('does not allow a regular member to edit company data', async () => {
+    client([{ companies: { id: 'company-1', name: 'Acme' } }]);
+    vi.mocked(getActiveCompany).mockResolvedValue({
+      activeId: 'company-1',
+      activeRole: 'member',
+    } as never);
+    expect(await getMyCompany()).toMatchObject({
+      status: 'ok',
+      company: { canEdit: false },
     });
   });
 });
