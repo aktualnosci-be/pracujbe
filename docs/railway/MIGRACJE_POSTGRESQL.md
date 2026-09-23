@@ -98,3 +98,19 @@ wymaga odtwarzania danych finansowych.
   (produkcyjny bootstrap, kontrole ujemne, strażnik roli po każdym `set role`).
 - Rollback nie wymaga zmian danych: przywrócenie poprzedniego `search_path`,
   `GRANT TEMPORARY ON DATABASE … TO PUBLIC` i ponowne granty wypisane przez `NOTICE` 0068.
+
+## Języki serwisu jako dane — 0069 (#29)
+
+- `public.supported_locales` to jedyna lista języków w bazie (pl/nl/fr/en). Odczyt ma
+  każdy (`anon`/`authenticated`), zapis tylko migracja.
+- Kolumny locale (`profiles.*_locale`, `jobs.default_locale`, `job_translations`,
+  `job_requirements`, `applications`, `offers`, `email_deliveries`, `consent_versions`,
+  `document_acceptances`, `auth.email_outbox`) mają klucz obcy do
+  `supported_locales(code)` zamiast CHECK z listą. Nazwa: `<dawny_check>_fk`.
+- Funkcje używają `public.is_supported_locale(text)` (STRICT: NULL → NULL, jak `in (...)`).
+  Migracja kończy się asercją, że żadna funkcja ani CHECK nie powiela listy; sekcja
+  KK w `supabase/tests/rls.sql` sprawdza to samo oraz dodanie języka jednym wierszem.
+- Nowy język (np. ro/uk): osobna migracja `insert into public.supported_locales` —
+  dopiero razem z tłumaczeniami UI i `routing.locales` (lista w aplikacji, PR #280).
+- Rollback: nowa migracja odtwarzająca CHECK-i z listą w miejsce FK (lista kolumn
+  w `NOTICE` 0069) i poprzednie definicje funkcji; bez zmian danych.

@@ -69,11 +69,15 @@ describe('Atomowe receipty rejestracji', () => {
     expect(receipts.rows.every(row => row.accepted_at instanceof Date)).toBe(true);
   });
 
-  it.each([{ agree_terms: false }, { agree_terms: 'true' }, { role: 'admin' }, { locale: 'de' }, { signup_receipt_version: 2 }])
-    ('odrzuca błędny marker bez częściowego konta: %j', async invalid => {
+  // Nieznany język odrzuca klucz obcy profiles → supported_locales (0069, 23503) zanim
+  // walidacja receiptów zdąży rzucić 23514; w obu przypadkach bez częściowego konta.
+  it.each([
+    [{ agree_terms: false }, '23514'], [{ agree_terms: 'true' }, '23514'], [{ role: 'admin' }, '23514'],
+    [{ locale: 'de' }, '23503'], [{ signup_receipt_version: 2 }, '23514'],
+  ] as const)('odrzuca błędny marker bez częściowego konta: %j', async (invalid, code) => {
       const id = randomUUID();
       await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1, ...invalid }, id))
-        .rejects.toMatchObject({ code: '23514' });
+        .rejects.toMatchObject({ code });
       for (const table of ['auth.users', 'public.profiles']) {
         expect((await admin!.query(`SELECT id FROM ${table} WHERE id=$1`, [id])).rows).toHaveLength(0);
       }

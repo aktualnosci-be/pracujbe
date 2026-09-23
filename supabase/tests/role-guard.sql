@@ -78,6 +78,17 @@ begin
     raise exception 'ROLE GUARD: SECURITY DEFINER bez search_path zakończonego pg_temp: %', v_bad;
   end if;
 
+  -- Definer bez jawnego ACL ma PUBLIC EXECUTE — każda rola (także pracujbe_rate_limit,
+  -- pracujbe_auth_mail) mogłaby go wywołać z prawami migratora. Granty muszą być jawne (0058).
+  select string_agg(p.oid::regprocedure::text, ', ') into v_bad
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where p.prosecdef and n.nspname in ('public', 'auth')
+    and (p.proacl is null or exists (
+      select 1 from aclexplode(p.proacl) a where a.grantee = 0 and a.privilege_type = 'EXECUTE'));
+  if v_bad is not null then
+    raise exception 'ROLE GUARD: SECURITY DEFINER z PUBLIC EXECUTE: %', v_bad;
+  end if;
+
   if has_database_privilege('authenticated', current_database(), 'TEMPORARY')
      or has_database_privilege('anon', current_database(), 'TEMPORARY')
      or has_database_privilege('pracujbe_app', current_database(), 'TEMPORARY') then
