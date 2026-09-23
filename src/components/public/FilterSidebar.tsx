@@ -148,6 +148,31 @@ export function useLiveFacets(
   };
 }
 
+/* ------------------------------------------------ fokus po zatwierdzeniu (#224) */
+
+/**
+ * Po zatwierdzeniu filtrów lista wyników renderuje się od nowa (panel filtrów jest montowany
+ * ponownie), więc fokus klawiatury trafiał na `<body>`. Flaga modułu przetrwa ponowny montaż
+ * i przenosi fokus na widoczny nagłówek wyników (`[data-results-heading]`).
+ */
+let focusResultsAfterNavigation = false;
+
+export function requestResultsFocus(): void {
+  focusResultsAfterNavigation = true;
+}
+
+export function useFocusResultsAfterNavigation(filtersKey: string): void {
+  React.useEffect(() => {
+    if (!focusResultsAfterNavigation) return;
+    const heading = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-results-heading]'),
+    ).find((element) => element.offsetParent !== null);
+    if (!heading) return;
+    focusResultsAfterNavigation = false;
+    heading.focus();
+  }, [filtersKey]);
+}
+
 /* --------------------------------------------------------------- wiersz check */
 
 function CheckRow({
@@ -548,11 +573,16 @@ export function FilterSidebar({
     city,
   });
 
-  const apply = () =>
+  useFocusResultsAfterNavigation(initialKey);
+
+  const apply = () => {
+    requestResultsFocus();
     router.push(buildHref(pathname, pending, { keyword, city, sort }));
+  };
   const clearAll = () => {
     const cleared = emptySidebarFilters();
     setPending(cleared);
+    requestResultsFocus();
     router.push(buildHref(pathname, cleared, { keyword, city, sort }));
   };
 
