@@ -521,6 +521,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Onboarding kandydata (6 kroków) — UI + realny zapis per krok do DB (`saveOnboardingStep`, RHF + stan zapisu)
 - [x] Panel kandydata — realne dane pod sesją (RLS) + akcje (zapis oferty, wycofanie aplikacji, odpowiedź na propozycję), noindex; fallback demo bez env
 
+Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilnym kursorem
+`submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
+Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
+już wczytanych kart. Jest to część etapu wyglądu #5, nie dowód ukończenia całego etapu.
+
 ### Etap 4 — pracodawca
 - [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
 - [x] Panel pracodawcy — realne dane pod sesją (RLS) + akcje (zmiana statusu aplikacji, wysyłka propozycji), noindex; fallback demo bez env
