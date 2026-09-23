@@ -118,9 +118,12 @@ do końca każdego joba. Pojedynczy zielony job nie potwierdza izolacji dwóch r
 > (błąd „Executable doesn't exist"), ustaw `PLAYWRIGHT_CHROMIUM_PATH` na ścieżkę binarki
 > (np. `/opt/pw-browsers/chromium`) — `playwright.config.ts` użyje jej przez `executablePath`.
 >
-> **RLS (`rls`):** job uruchamia `scripts/test-rls.sh` — nakłada `supabase/tests/shim.sql`
-> + wszystkie migracje na kontener `postgres:16` (usługa GH Actions) i wykonuje adwersaryjne
-> asercje `supabase/tests/rls.sql`. Runner musi mieć **Docker**. Skrypty i migracje są
+> **RLS (`rls`):** job uruchamia `scripts/test-rls.sh` — nakłada produkcyjny bootstrap ról
+> (`database/bootstrap`) + wszystkie migracje domeny i auth na kontener `postgres:16` (usługa
+> GH Actions), sprawdza model ról z kontrolami ujemnymi (`supabase/tests/role-guard.sql`)
+> i wykonuje adwersaryjne asercje `supabase/tests/rls.sql`; po każdym przełączeniu na rolę
+> klienta strażnik (`role-assert.sql`) potwierdza `current_user`, brak ścieżki do
+> właściciela tabel/SUPERUSER/BYPASSRLS i `row_security=on`. Runner musi mieć **Docker**. Skrypty i migracje są
 > kopiowane do kontenera usługi, gdzie działają Bash i `psql`. Nie publikujemy portu bazy
 > na hoście; każdy job ma własną bazę. Job nie wymaga `node_modules`. Lokalnie: `npm run test:rls`
 > (peer auth: `sudo -u postgres bash scripts/test-rls.sh`).

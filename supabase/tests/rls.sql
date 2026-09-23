@@ -1,6 +1,6 @@
 -- =============================================================================
 -- supabase/tests/rls.sql — adwersaryjne asercje RLS/triggerów (uruchamiane przez
--- scripts/test-rls.sh na świeżej bazie z nałożonym shimem + wszystkimi migracjami).
+-- scripts/test-rls.sh na świeżej bazie z produkcyjnym bootstrapem ról + wszystkimi migracjami).
 --
 -- Konwencja: KAŻDA nieudana asercja RAISE'uje wyjątek. Skrypt uruchamiany jest z
 -- psql -v ON_ERROR_STOP=1, więc pierwszy błąd kończy proces kodem != 0 (fail CI).
@@ -36,6 +36,11 @@ begin
   raise exception '% : operacja powinna była zawieść (%), a się powiodła', p_name, p_pattern;
 end $$;
 
+-- Strażnik roli: po KAŻDYM przełączeniu na rolę klienta potwierdzamy current_user,
+-- brak ścieżki do właściciela tabel/SUPERUSER/BYPASSRLS i row_security=on
+-- (supabase/tests/role-assert.sql; kontrole ujemne w role-guard.sql).
+\ir role-assert.sql
+
 \set CANDA '11111111-1111-1111-1111-111111111111'
 \set CANDB '22222222-2222-2222-2222-222222222222'
 \set EMPA  '33333333-3333-3333-3333-333333333333'
@@ -50,13 +55,13 @@ end $$;
 \set JOBC  'c1111111-1111-1111-1111-111111111111'
 
 -- ---------------- SEED (jako superuser; profiles z triggera handle_new_user) ----------------
-insert into auth.users(id,email,raw_user_meta_data) values
-  (:'CANDA','canda@test.be','{"role":"candidate","first_name":"Anna","last_name":"K","locale":"pl"}'),
-  (:'CANDB','candb@test.be','{"role":"candidate","first_name":"Bea","last_name":"L","locale":"nl"}'),
-  (:'EMPA','empa@test.be','{"role":"employer","first_name":"Emp","last_name":"A","locale":"nl"}'),
-  (:'EMPB','empb@test.be','{"role":"employer","first_name":"Emp","last_name":"B","locale":"fr"}'),
-  (:'EMPC','empc@test.be','{"role":"employer","first_name":"Emp","last_name":"C","locale":"en"}'),
-  (:'ADMIN','admin@test.be','{"role":"employer","first_name":"Ad","last_name":"Min","locale":"en"}');
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDA','canda@test.be','Anna K','{"role":"candidate","first_name":"Anna","last_name":"K","locale":"pl"}'),
+  (:'CANDB','candb@test.be','Bea L','{"role":"candidate","first_name":"Bea","last_name":"L","locale":"nl"}'),
+  (:'EMPA','empa@test.be','Emp A','{"role":"employer","first_name":"Emp","last_name":"A","locale":"nl"}'),
+  (:'EMPB','empb@test.be','Emp B','{"role":"employer","first_name":"Emp","last_name":"B","locale":"fr"}'),
+  (:'EMPC','empc@test.be','Emp C','{"role":"employer","first_name":"Emp","last_name":"C","locale":"en"}'),
+  (:'ADMIN','admin@test.be','Ad Min','{"role":"employer","first_name":"Ad","last_name":"Min","locale":"en"}');
 -- Nadaj rolę admina (self-signup ogranicza do candidate/employer; admin tylko ręcznie).
 update public.profiles set role = 'admin' where id = :'ADMIN';
 
@@ -88,7 +93,7 @@ insert into public.applications(id, job_id, candidate_id, company_id, status)
 -- ============================================================================
 -- A. Blokada anonimowego dostępu do tabel bazowych (0014) + dostęp przez RPC
 -- ============================================================================
-set role anon; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select count(*) from public.companies', 'permission denied', 'A1 anon->companies');
 select pg_temp.expect_error('select count(*) from public.jobs',      'permission denied', 'A2 anon->jobs');
 select pg_temp.assert(
@@ -99,7 +104,7 @@ reset role;
 -- ============================================================================
 -- B. Aplikowanie: idempotencja + izolacja między kandydatami
 -- ============================================================================
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select public.apply_to_job(:'JOBA','idem-a-1',null,null,'Chetnie') as appa \gset
 select public.apply_to_job(:'JOBA','idem-a-1',null,null,'Chetnie') as appa2 \gset
 reset role; reset app.current_uid;
@@ -112,13 +117,13 @@ select pg_temp.assert(
   'B3 dokladnie jedna aplikacja CANDA->JOBA');
 
 -- B4: CANDB nie widzi aplikacji do JOBA (RLS wiersza).
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.assert((select count(*) from public.applications where job_id = :'JOBA') = 0,
   'B4 CANDB nie widzi cudzej aplikacji');
 reset role; reset app.current_uid;
 
 -- B5: EMPA (członek firmy oferty) widzi aplikację do swojej oferty.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.assert((select count(*) from public.applications where job_id = :'JOBA') = 1,
   'B5 EMPA widzi aplikacje do JOBA');
 reset role; reset app.current_uid;
@@ -126,13 +131,13 @@ reset role; reset app.current_uid;
 -- ============================================================================
 -- C. Zmiana statusu aplikacji: tylko firma oferty (izolacja między firmami)
 -- ============================================================================
-set role authenticated; set app.current_uid = :'EMPB';
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.transition_application(current_setting(''my.appa'')::uuid, ''viewed'')',
   'PERMISSION_DENIED', 'C1 EMPB nie zmienia cudzej aplikacji');
 reset role; reset app.current_uid;
 
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.transition_application(:'appa'::uuid, 'viewed');
 reset role; reset app.current_uid;
 select pg_temp.assert(
@@ -145,13 +150,13 @@ select pg_temp.assert(
 -- ============================================================================
 -- D. Propozycje: wymóg firmy zweryfikowanej + idempotencja
 -- ============================================================================
-set role authenticated; set app.current_uid = :'EMPC';
+set role authenticated; set app.current_uid = :'EMPC'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.send_offer(''c1111111-1111-1111-1111-111111111111''::uuid, ''22222222-2222-2222-2222-222222222222''::uuid, ''offc-1'', ''x'', null)',
   'COMPANY_NOT_VERIFIED', 'D1 firma unverified nie wysyla propozycji');
 reset role; reset app.current_uid;
 
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.send_offer(:'JOBA'::uuid, :'CANDA'::uuid, 'offa-1', 'Zapraszamy', null) as offa \gset
 select public.send_offer(:'JOBA'::uuid, :'CANDA'::uuid, 'offa-1', 'Zapraszamy', null) as offa2 \gset
 reset role; reset app.current_uid;
@@ -165,13 +170,13 @@ select pg_temp.assert((select expires_at is not null from public.offers where id
   'D4b propozycja ma domyślny termin ważności (P2-03)');
 
 -- D5: obcy kandydat nie odpowiada; właściwy kandydat akceptuje.
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.respond_to_offer(current_setting(''my.offa'')::uuid, true)',
   'PERMISSION_DENIED', 'D5 obcy kandydat nie odpowiada na propozycje');
 reset role; reset app.current_uid;
 
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select public.respond_to_offer(:'offa'::uuid, true);
 reset role; reset app.current_uid;
 select pg_temp.assert((select status::text from public.offers where id = :'offa') = 'accepted',
@@ -180,7 +185,7 @@ select pg_temp.assert((select status::text from public.offers where id = :'offa'
 -- ============================================================================
 -- E. Wiadomości (0016): tylko strony relacji; obcy zablokowany
 -- ============================================================================
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select public.get_or_create_conversation(:'appa'::uuid, null) as conv \gset
 reset role; reset app.current_uid;
 select set_config('my.conv', :'conv', false);
@@ -189,7 +194,7 @@ select pg_temp.assert((select count(*) from public.conversation_members where co
   'E1b konwersacja ma 2 uczestnikow');
 
 -- E2/E3: EMPB (obca firma) nie utworzy konwersacji dla cudzej aplikacji ani nie napisze.
-set role authenticated; set app.current_uid = :'EMPB';
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.get_or_create_conversation(current_setting(''my.appa'')::uuid, null)',
   'PERMISSION_DENIED', 'E2 obca firma nie tworzy cudzej konwersacji');
@@ -199,7 +204,7 @@ select pg_temp.expect_error(
 reset role; reset app.current_uid;
 
 -- E4: CANDA wysyła wiadomość; EMPA dostaje powiadomienie in-app.
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select public.send_message(:'conv'::uuid, 'Dzien dobry') as msg \gset
 reset role; reset app.current_uid;
 select pg_temp.assert(:'msg' is not null, 'E4 wiadomosc wyslana');
@@ -210,11 +215,11 @@ select pg_temp.assert(
 -- ============================================================================
 -- F. Powiadomienia: użytkownik widzi tylko własne (RLS) + oznaczanie przeczytania
 -- ============================================================================
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.assert((select count(*) from public.notifications) = 0, 'F1 CANDB widzi 0 powiadomien');
 reset role; reset app.current_uid;
 
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.mark_notifications_read(null) as marked \gset
 reset role; reset app.current_uid;
 select pg_temp.assert(:marked >= 1, 'F2 EMPA oznaczyl >=1 powiadomienie');
@@ -243,7 +248,7 @@ select pg_temp.assert(
   (select count(*) from public.audit_logs where action='company.created') = 3,
   'G3 audit company.created x3');
 -- G4: authenticated NIE czyta audit_logs (RLS deny + revoke).
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select count(*) from public.audit_logs', 'permission denied', 'G4 klient nie czyta audit_logs');
 reset role; reset app.current_uid;
 
@@ -251,15 +256,15 @@ reset role; reset app.current_uid;
 -- H. Admin (0019): is_admin, weryfikacja firm tylko admin, ochrona przed self-verify
 -- ============================================================================
 -- H1: is_admin() -> true dla admina, false dla kandydata.
-set role authenticated; set app.current_uid = :'ADMIN';
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select pg_temp.assert((select public.is_admin()) = true, 'H1 is_admin(admin)=true');
 reset role; reset app.current_uid;
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.assert((select public.is_admin()) = false, 'H1b is_admin(candidate)=false');
 reset role; reset app.current_uid;
 
 -- H2: admin weryfikuje COMPC (unverified -> verified).
-set role authenticated; set app.current_uid = :'ADMIN';
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select public.admin_set_company_status(:'COMPC'::uuid, 'verified');
 reset role; reset app.current_uid;
 select pg_temp.assert((select status::text from public.companies where id = :'COMPC') = 'verified',
@@ -270,14 +275,14 @@ select pg_temp.assert(
   'H2b audit company.status_changed (actor=ADMIN)');
 
 -- H3: nie-admin (EMPB) NIE może użyć admin_set_company_status.
-set role authenticated; set app.current_uid = :'EMPB';
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.admin_set_company_status(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa''::uuid, ''suspended'')',
   'PERMISSION_DENIED', 'H3 nie-admin nie zmienia statusu firmy');
 reset role; reset app.current_uid;
 
 -- H4: właściciel firmy NIE może samodzielnie zweryfikować firmy (bezpośredni UPDATE).
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'update public.companies set status=''suspended'' where id=''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa''',
   'PERMISSION_DENIED', 'H4 zmiana statusu firmy przez właściciela zablokowana');
@@ -291,21 +296,21 @@ reset role; reset app.current_uid;
 -- I1: FIRMA nie sfałszuje odpowiedzi na propozycję bezpośrednim UPDATE. Po 0025 (granica
 -- zaufania) bezpośredni DML jest odebrany `authenticated` na poziomie grantu — błąd pada
 -- ZANIM zadziała trigger (mocniejsza gwarancja). Zostaje jako defense-in-depth.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'update public.offers set status=''declined'' where id=current_setting(''my.offa'')::uuid',
   'permission denied', 'I1 firma nie ustawia accepted/declined oferty (PATCH → grant deny)');
 reset role; reset app.current_uid;
 
 -- I2: FIRMA nie przeskoczy aplikacji bezpośrednim UPDATE (po 0025 grant deny, wcześniej trigger).
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'update public.applications set status=''offer_accepted'' where id=current_setting(''my.appa'')::uuid',
   'permission denied', 'I2 firma nie robi bezpośredniego PATCH aplikacji (grant deny)');
 reset role; reset app.current_uid;
 
 -- I2b: kontrola — RPC transition_application do allow-listy nadal działa.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.transition_application(:'appa'::uuid, 'shortlisted');
 reset role; reset app.current_uid;
 select pg_temp.assert((select status::text from public.applications where id = :'appa') = 'shortlisted',
@@ -313,14 +318,14 @@ select pg_temp.assert((select status::text from public.applications where id = :
 
 -- I3: send_offer do NIEpowiązanego kandydata blokowany (P2#2). CANDB: bez aplikacji do COMPA,
 -- profil is_searchable=true ale profile_completed=false -> brak relacji.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.send_offer(''a1111111-1111-1111-1111-111111111111''::uuid, ''22222222-2222-2222-2222-222222222222''::uuid, ''offb-x'', ''hej'', null)',
   'PERMISSION_DENIED', 'I3 send_offer bez relacji firma–kandydat blokowany');
 reset role; reset app.current_uid;
 
 -- I4: respond_to_offer na już rozstrzygniętej propozycji blokowany (P3#1). offa='accepted'.
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.respond_to_offer(current_setting(''my.offa'')::uuid, false)',
   'VALIDATION_FAILED', 'I4 respond_to_offer na nieaktywnej propozycji blokowany');
@@ -328,7 +333,7 @@ reset role; reset app.current_uid;
 
 -- I5: opt-out e-mail honorowany (P1#2). Wyłącz CANDA email_applications, zmień status -> brak maila.
 update public.notification_preferences set email_applications = false where profile_id = :'CANDA';
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.transition_application(:'appa'::uuid, 'interview');
 reset role; reset app.current_uid;
 select pg_temp.assert(
@@ -343,14 +348,14 @@ select pg_temp.assert(
   'I5b powiadomienie in-app nadal tworzone');
 
 -- I6: profiles_insert_own nie pozwala nadać sobie roli admin (P3#2).
-set role authenticated; set app.current_uid = '88888888-8888-8888-8888-888888888888';
+set role authenticated; set app.current_uid = '88888888-8888-8888-8888-888888888888'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'insert into public.profiles (id, role) values (''88888888-8888-8888-8888-888888888888'', ''admin'')',
   'new row violates', 'I6 self-insert roli admin blokowany przez RLS');
 reset role; reset app.current_uid;
 
 -- I7: get_conversation_summaries (0021) zwraca konwersację uczestnika z ostatnią wiadomością.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.get_conversation_summaries()) >= 1,
   'I7 get_conversation_summaries zwraca konwersacje uczestnika');
@@ -368,7 +373,7 @@ select pg_temp.assert((select count(*) from public.claim_email_batch(100)) = 0,
 -- stare wzbogacanie mapą publiczną dawało tu pusty tytuł). Stan `closed` gwarantuje, że test
 -- realnie sprawdza obejście filtra publicznego (H2 wcześniej zweryfikował COMPC).
 update public.jobs set status = 'closed' where id = :'JOBC';
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.get_applied_jobs_display('pl')) = 1,
   'I9 get_applied_jobs_display zwraca tylko własne aplikacje (CANDB=1)');
@@ -380,7 +385,7 @@ select pg_temp.assert(
   'I9c nazwa firmy widoczna dla oferty własnej aplikacji');
 reset role; reset app.current_uid;
 -- kontrola: kandydat bez aplikacji (CANDA) nie widzi cudzych ofert przez to RPC.
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.get_applied_jobs_display('pl') where job_id = :'JOBC') = 0,
   'I9d RPC ograniczone do WŁASNYCH aplikacji (CANDA nie widzi JOBC)');
@@ -394,7 +399,7 @@ insert into public.companies(id,name,status)
 insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale)
   values ('d1111111-1111-1111-1111-111111111111','dddddddd-dddd-dddd-dddd-dddddddddddd',
           'job-d','Pakowacz D','warehouse','permanent','Brugia','Flandria','active','pl');
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.get_job_match_profile(:'JOBA')) = 1,
   'I10 get_job_match_profile zwraca profil dla oferty active+verified (JOBA)');
@@ -403,7 +408,7 @@ select pg_temp.assert(
   'I10b get_job_match_profile NIE zwraca oferty firmy unverified (JOBD)');
 reset role; reset app.current_uid;
 -- anon nie ma grantu do RPC — wywołanie kończy się błędem uprawnień.
-set role anon; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select count(*) from public.get_job_match_profile(''a1111111-1111-1111-1111-111111111111'')',
   'permission denied', 'I10c anon nie może wołać get_job_match_profile');
@@ -414,7 +419,7 @@ reset role;
 -- ============================================================================
 -- `authenticated` może TYLKO czytać (RLS) i mutować przez SECURITY DEFINER RPC.
 -- Bezpośredni INSERT/UPDATE/DELETE musi być odrzucony na poziomie grantu.
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'insert into public.applications(job_id, candidate_id, company_id, status) values ('''
   || :'JOBB' || ''','''|| :'CANDA' ||''','''|| :'COMPB' ||''',''submitted'')',
@@ -443,7 +448,7 @@ select pg_temp.expect_error(
 reset role; reset app.current_uid;
 
 -- J7: withdraw_application (0025) — kandydat wycofuje WŁASNĄ aplikację przez RPC (bez DML).
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   public.withdraw_application(:'appa'::uuid) = 'withdrawn',
   'J7 withdraw_application wycofuje własną aplikację');
@@ -452,19 +457,19 @@ select pg_temp.assert(
   'J7b withdraw_application idempotentne (drugie wywołanie bez błędu)');
 reset role; reset app.current_uid;
 -- Cudza aplikacja: CANDB nie może wycofać aplikacji CANDA (NOT_FOUND, brak dostępu).
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.withdraw_application(current_setting(''my.appa'')::uuid)',
   'NOT_FOUND', 'J7c withdraw_application nie wycofa cudzej aplikacji');
 reset role; reset app.current_uid;
 
 -- J8: rate_limit_hit (SEC-01) odebrany anon/authenticated; działa dla service_role.
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.rate_limit_hit(''k'', 5, 60)',
   'permission denied', 'J8 authenticated nie woła rate_limit_hit');
 reset role; reset app.current_uid;
-set role anon; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.rate_limit_hit(''k'', 5, 60)',
   'permission denied', 'J8b anon nie woła rate_limit_hit');
@@ -478,7 +483,7 @@ reset role;
 -- K. Hardening publicznych/procesowych RPC 0026 (SEC-03 limity, SEC-04 długości)
 -- ============================================================================
 -- SEC-03: ogromny p_limit i długie wejścia nie wywracają zapytania (clamp/left).
-set role anon; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.get_public_jobs('pl', p_limit => 999999, p_offset => 0)) >= 2,
   'K1 get_public_jobs z ogromnym limitem działa (clamp do 100)');
@@ -503,7 +508,7 @@ select pg_temp.expect_error(
 -- ============================================================================
 -- conv (get_or_create_conversation(appa)) należy do COMPA; uczestnicy: CANDA (kandydat)
 -- + EMPA (aktywny owner COMPA). Dowód, że dostęp firmowy wygasa wraz z dezaktywacją.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.is_conversation_member(:'conv'::uuid) is true,
   'L0 aktywny członek firmy ma dostęp do rozmowy firmowej');
 reset role; reset app.current_uid;
@@ -511,13 +516,13 @@ reset role; reset app.current_uid;
 -- Dezaktywacja członkostwa EMPA (symulacja: admin firmy wyłącza pracownika).
 update public.company_members set is_active = false where company_id = :'COMPA' and profile_id = :'EMPA';
 
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.is_conversation_member(:'conv'::uuid) is false,
   'L1 były członek (is_active=false) traci dostęp do rozmowy firmowej (SEC-08)');
 reset role; reset app.current_uid;
 
 -- Kandydat (strona nie-firmowa) zachowuje dostęp mimo zmian po stronie firmy.
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.is_conversation_member(:'conv'::uuid) is true,
   'L2 kandydat zachowuje dostęp do własnej rozmowy');
 reset role; reset app.current_uid;
@@ -528,7 +533,7 @@ update public.company_members set is_active = true where company_id = :'COMPA' a
 -- ============================================================================
 -- M. Persystencja relacji onboardingu 0028 (FUN-04) + RPC-only DML
 -- ============================================================================
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 -- Umiejętności: dedup (duplikat pomijany) + replace-all przy kolejnym zapisie.
 select public.set_candidate_skills(array['Spawanie','Wózek widłowy','Spawanie']);
 select pg_temp.assert(
@@ -566,7 +571,7 @@ reset role; reset app.current_uid;
 -- ============================================================================
 -- N. Kompletność onboardingu 0029 (FUN-05) — liczona w DB, klient nie ustawia flag
 -- ============================================================================
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 -- CANDA nie ma jeszcze occupations/categories/city/availability → profil niekompletny.
 select pg_temp.assert(public.finish_onboarding() is false,
   'N1 finish_onboarding=false dla niekompletnego profilu');
@@ -592,7 +597,7 @@ update public.candidate_profiles
       city = 'Antwerpia', availability = 'immediate'
   where profile_id = :'CANDA';
 
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.finish_onboarding() is true,
   'N4 finish_onboarding=true po uzupełnieniu wymaganych danych');
 select pg_temp.assert(
@@ -609,7 +614,7 @@ reset role; reset app.current_uid;
 -- O. Języki/certyfikaty oferty 0030 (FUN-03) — persystencja + detal + matching
 -- ============================================================================
 -- EMPA (członek COMPA, właściciel JOBA) dodaje wymagania językowe/certyfikatowe (jak kreator).
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 insert into public.job_languages(job_id, language_label, level) values (:'JOBA', 'Niderlandzki', 'intermediate');
 insert into public.job_certificates(job_id, certificate_label) values (:'JOBA', 'VCA');
 select pg_temp.assert(
@@ -621,7 +626,7 @@ select pg_temp.assert(
   'O2 get_job_match_profile zwraca języki i certyfikaty oferty (matching)');
 reset role; reset app.current_uid;
 -- O3: nie-członek firmy nie doda wymagania do cudzej oferty (RLS insert member).
-set role authenticated; set app.current_uid = :'EMPB';
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'insert into public.job_languages(job_id, language_label) values ('''|| :'JOBA' ||''',''hak'')',
   'row-level security', 'O3 nie-członek nie dodaje języka do cudzej oferty (RLS)');
@@ -636,7 +641,7 @@ insert into public.jobs(id, company_id, slug, title, category, contract_type, ci
           'warehouse', 'permanent', '', '', 'draft', 'pl');
 
 -- P1: niekompletny szkic (placeholder title, puste miasto/region) nie przechodzi publikacji.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.publish_job(''e1111111-1111-1111-1111-111111111111''::uuid, ''op-x'')',
   'VALIDATION_FAILED', 'P1 publish_job odrzuca niekompletny szkic');
@@ -654,7 +659,7 @@ insert into public.job_requirements(job_id, locale, kind, position, content)
   values ('e1111111-1111-1111-1111-111111111111', 'pl', 'mandatory', 0, 'Dyspozycyjność');
 
 -- P2: kompletny drugi szkic publikuje się bez subskrypcji (status → active).
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   public.publish_job('e1111111-1111-1111-1111-111111111111'::uuid, 'operator-produkcji-abc') is not null,
   'P2 publish_job publikuje drugi kompletny szkic bez subskrypcji');
@@ -668,7 +673,7 @@ reset role;
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
   values ('e2222222-2222-2222-2222-222222222222', :'COMPA', 'draft-e2', 'Szkic 2',
           'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'update public.jobs set status=''active'' where id=''e2222222-2222-2222-2222-222222222222''',
   'PERMISSION_DENIED', 'P3 klient nie aktywuje oferty bezpośrednim UPDATE (guard)');
@@ -676,7 +681,7 @@ reset role; reset app.current_uid;
 
 -- P4: bezpłatność nie omija wymagania zweryfikowanej firmy.
 update public.companies set status = 'unverified' where id = :'COMPA';
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.publish_job(''e2222222-2222-2222-2222-222222222222''::uuid, ''x'')',
   'COMPANY_NOT_VERIFIED', 'P4 niezweryfikowana firma nie publikuje bezpłatnej oferty');
@@ -684,7 +689,7 @@ reset role; reset app.current_uid;
 update public.companies set status = 'verified' where id = :'COMPA';
 
 -- P5: nie-członek nie opublikuje cudzego szkicu.
-set role authenticated; set app.current_uid = :'EMPB';
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.publish_job(''e2222222-2222-2222-2222-222222222222''::uuid, ''x'')',
   'PERMISSION_DENIED', 'P5 nie-członek nie publikuje cudzej oferty');
@@ -699,14 +704,14 @@ insert into public.company_members(company_id, profile_id, role, is_active)
   values (:'COMPA', :'EMPC', 'admin', true);
 
 -- Q1: admin (nie-owner) nie awansuje siebie na ownera (przejęcie firmy).
-set role authenticated; set app.current_uid = :'EMPC';
+set role authenticated; set app.current_uid = :'EMPC'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'update public.company_members set role=''owner'' where company_id='''|| :'COMPA' ||''' and profile_id='''|| :'EMPC' ||'''',
   'PERMISSION_DENIED', 'Q1 admin nie awansuje siebie na ownera');
 reset role; reset app.current_uid;
 
 -- Q2: nie można zdemotować OSTATNIEGO aktywnego ownera (EMPA demote self).
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'update public.company_members set role=''admin'' where company_id='''|| :'COMPA' ||''' and profile_id='''|| :'EMPA' ||'''',
   'VALIDATION_FAILED', 'Q2 nie można zdemotować ostatniego ownera');
@@ -724,7 +729,7 @@ select pg_temp.assert(
 reset role; reset app.current_uid;
 
 -- Q5: gdy jest już drugi aktywny owner (EMPC), pierwszy (EMPA) MOŻE zejść z roli.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 update public.company_members set role='admin' where company_id=:'COMPA' and profile_id=:'EMPA';
 select pg_temp.assert(
   (select role::text from public.company_members where company_id=:'COMPA' and profile_id=:'EMPA') = 'admin',
@@ -740,7 +745,7 @@ insert into public.company_members(company_id, profile_id, role, is_active)
   values (:'COMPA', :'CANDB', 'member', true);
 
 -- R1: plain member nie utworzy oferty firmy (can_manage_jobs=false → RLS with-check).
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'insert into public.jobs(company_id, slug, title, category, contract_type, city, region, status, default_locale) '
   || 'values ('''|| :'COMPA' ||''',''rbac-1'',''X'',''warehouse'',''permanent'',''Gent'',''Flandria'',''draft'',''pl'')',
@@ -753,7 +758,7 @@ select pg_temp.assert(public.can_manage_jobs(:'COMPA'::uuid) is false,
 reset role; reset app.current_uid;
 
 -- R3: recruiter+ (EMPC owner COMPA) zarządza ofertami i widzi kandydatów z relacją.
-set role authenticated; set app.current_uid = :'EMPC';
+set role authenticated; set app.current_uid = :'EMPC'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.can_manage_jobs(:'COMPA'::uuid) is true,
   'R3 owner/recruiter zarządza ofertami');
 select pg_temp.assert(public.company_can_view_candidate(:'CANDA'::uuid) is true,
@@ -779,7 +784,7 @@ select pg_temp.assert(
 -- ============================================================================
 -- T. Dedup webhooków 0036 (SEC-14) — brak dostępu klienta + unikat id
 -- ============================================================================
-set role authenticated; reset app.current_uid;
+set role authenticated; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select count(*) from public.processed_webhooks',
   'permission denied', 'T1 authenticated nie ma dostępu do processed_webhooks');
 reset role;
@@ -792,7 +797,7 @@ select pg_temp.expect_error(
 -- ============================================================================
 -- U. C3 0037: propozycje/statusy wymagają recruiter+ (CANDB = member COMPA)
 -- ============================================================================
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.transition_application(current_setting(''my.appa'')::uuid, ''viewed'')',
   'PERMISSION_DENIED', 'U1 zwykły member nie zmienia statusu aplikacji (recruiter+)');
@@ -802,10 +807,10 @@ select pg_temp.expect_error(
 reset role; reset app.current_uid;
 -- Kontrola pozytywna: recruiter+ (EMPC owner COMPA) MOŻE zmienić status ŚWIEŻEJ aplikacji.
 -- (appa jest już 'withdrawn' po J7 — stan końcowy; tworzymy nową aplikację CANDB->JOBA.)
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select public.apply_to_job(:'JOBA'::uuid, 'candb-joba-1', null, null, 'chętnie') as appcb \gset
 reset role; reset app.current_uid;
-set role authenticated; set app.current_uid = :'EMPC';
+set role authenticated; set app.current_uid = :'EMPC'; select pg_temp.assert_client_role();
 select public.transition_application(:'appcb'::uuid, 'viewed');  -- submitted->viewed OK
 reset role; reset app.current_uid;
 select pg_temp.assert(
@@ -819,7 +824,7 @@ select pg_temp.assert(
 -- COMPA i uczestnik rozmowy :conv (utworzonej w sekcji I dla aplikacji appa); CANDA = kandydat.
 
 -- V1: plain member NIE widzi aplikacji firmowej (P1-01; wcześniej: widział pełny rekord).
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.assert((select count(*) from public.applications where id = :'appa') = 0,
   'V1 plain member nie widzi aplikacji firmowej (recruiter+ only)');
 select pg_temp.assert(public.can_access_application(:'appa'::uuid) is false,
@@ -827,7 +832,7 @@ select pg_temp.assert(public.can_access_application(:'appa'::uuid) is false,
 reset role; reset app.current_uid;
 
 -- V2: recruiter+ (EMPC owner) widzi aplikację (P1-01 kontrola pozytywna).
-set role authenticated; set app.current_uid = :'EMPC';
+set role authenticated; set app.current_uid = :'EMPC'; select pg_temp.assert_client_role();
 select pg_temp.assert((select count(*) from public.applications where id = :'appa') = 1,
   'V2 recruiter+ widzi aplikację firmową');
 select pg_temp.assert(public.can_access_application(:'appa'::uuid) is true,
@@ -835,7 +840,7 @@ select pg_temp.assert(public.can_access_application(:'appa'::uuid) is true,
 reset role; reset app.current_uid;
 
 -- V3: recruiter+ uczestnik (EMPA admin, aktywny) widzi podsumowanie rozmowy :conv.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.get_conversation_summaries() where conversation_id = :'conv') = 1,
   'V3 recruiter+ uczestnik widzi podsumowanie rozmowy');
@@ -846,7 +851,7 @@ reset role;
 update public.company_members set is_active = false where company_id = :'COMPA' and profile_id = :'EMPA';
 
 -- V4a: były członek (EMPA) NIE widzi podsumowań mimo historycznego wiersza uczestnika (P1-02).
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.get_conversation_summaries() where conversation_id = :'conv') = 0,
   'V4a były członek nie widzi podsumowań rozmowy (P1-02)');
@@ -856,7 +861,7 @@ select pg_temp.expect_error(
 reset role; reset app.current_uid;
 
 -- V4c: kandydat (strona kandydata) NADAL widzi swoją rozmowę.
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.get_conversation_summaries() where conversation_id = :'conv') = 1,
   'V4c kandydat nadal widzi podsumowanie swojej rozmowy');
@@ -871,13 +876,13 @@ update public.company_members set is_active = true where company_id = :'COMPA' a
 -- ============================================================================
 -- P1-03: edycja danych firmy tylko owner/admin (CANDB=member, EMPC=owner COMPA).
 -- Uwaga: RLS UPDATE z fałszywym USING trafia 0 wierszy (bez błędu) — sprawdzamy brak zmiany.
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 update public.companies set name = 'Hack' where id = :'COMPA';
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select name from public.companies where id = :'COMPA') <> 'Hack',
   'W1 plain member nie zmienia danych firmy (P1-03; UPDATE trafia 0 wierszy)');
-set role authenticated; set app.current_uid = :'EMPC';
+set role authenticated; set app.current_uid = :'EMPC'; select pg_temp.assert_client_role();
 update public.companies set name = 'Firma A (edit)' where id = :'COMPA';
 reset role; reset app.current_uid;
 select pg_temp.assert(
@@ -885,7 +890,7 @@ select pg_temp.assert(
   'W2 owner/admin edytuje dane firmy (P1-03)');
 
 -- P1-04: konto pracodawcy nie aplikuje ani nie zakłada profilu kandydata (EMPB role=employer).
-set role authenticated; set app.current_uid = :'EMPB';
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.apply_to_job('''|| :'JOBB' ||'''::uuid, ''emp-apply'', null, null, ''x'')',
   'PERMISSION_DENIED', 'W3 pracodawca nie aplikuje (rola candidate wymagana, P1-04)');
@@ -895,7 +900,7 @@ select pg_temp.expect_error(
 reset role; reset app.current_uid;
 
 -- P1-05: maszyna stanów aplikacji (appcb='viewed' po sekcji U3; EMPC=recruiter+ COMPA).
-set role authenticated; set app.current_uid = :'EMPC';
+set role authenticated; set app.current_uid = :'EMPC'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.transition_application('''|| :'appcb' ||'''::uuid, ''withdrawn'')',
   'VALIDATION_FAILED', 'W4 status docelowy poza allow-listą odrzucony (P1-05)');
@@ -906,12 +911,12 @@ select pg_temp.expect_error(
 reset role; reset app.current_uid;
 
 -- P1-06: wycofanie tylko ze stanów aktywnych.
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(  -- appcb='rejected' (końcowy) → kandydat nie wycofa
   'select public.withdraw_application('''|| :'appcb' ||'''::uuid)',
   'VALIDATION_FAILED', 'W6 nie można wycofać aplikacji w stanie końcowym (P1-06)');
 reset role; reset app.current_uid;
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select public.apply_to_job(:'JOBB'::uuid, 'cand-jobb-1', null, null, 'chętnie') as appjb \gset
 select public.withdraw_application(:'appjb'::uuid) as wres \gset
 select pg_temp.assert(:'wres' = 'withdrawn', 'W7 wycofanie aplikacji aktywnej OK (P1-06)');
@@ -921,7 +926,7 @@ reset role; reset app.current_uid;
 -- X. Audyt produkcyjny 0041 (P1-23) — idempotencja aktywnej pary + wygaśnięcie propozycji
 -- ============================================================================
 -- EMPC = recruiter+ COMPA; CANDA związany z COMPA (aplikacja appa). Brak aktywnej propozycji.
-set role authenticated; set app.current_uid = :'EMPC';
+set role authenticated; set app.current_uid = :'EMPC'; select pg_temp.assert_client_role();
 select public.send_offer(:'JOBA'::uuid, :'CANDA'::uuid, 'x-off-key-1', 'Zapraszamy', null) as xoff1 \gset
 -- Inny klucz idempotencji, TA SAMA aktywna para → zwraca ISTNIEJĄCĄ propozycję (bez dubletu).
 select public.send_offer(:'JOBA'::uuid, :'CANDA'::uuid, 'x-off-key-2', 'Ponownie', null) as xoff2 \gset
@@ -936,7 +941,7 @@ select pg_temp.assert(
 -- Wygaśnięcie: ustaw expires_at w przeszłości i spróbuj zaakceptować (kandydat).
 reset role;
 update public.offers set expires_at = now() - interval '1 day' where id = :'xoff1';
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.respond_to_offer('''|| :'xoff1' ||'''::uuid, true)',
   'VALIDATION_FAILED', 'X2 wygasłej propozycji nie można zaakceptować (P1-23)');
@@ -946,13 +951,13 @@ reset role; reset app.current_uid;
 -- Y. Audyt produkcyjny 0043 (P1-24) — receipt zgód RPC-only (koniec floodowania)
 -- ============================================================================
 -- Y1: klient nie zapisuje wprost do consents (bezpośredni INSERT odebrany).
-set role authenticated; reset app.current_uid;
+set role authenticated; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'insert into public.consents(category, granted) values (''analytics'', true)',
   'permission denied', 'Y1 authenticated nie robi bezpośredniego INSERT do consents');
 reset role;
 -- Y2: record_consent (anon) zapisuje 4 kategorie z metadanymi receiptu.
-set role anon; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select public.record_consent('{"analytics":true,"marketing":false,"preferences":true}'::jsonb,
   'cookie_banner', 'vis-123', '203.0.113.7', 'UA/1.0');
 reset role;
@@ -977,7 +982,7 @@ insert into public.discount_codes(id, code, percent_off, max_redemptions, is_act
   values ('dc000000-0000-0000-0000-0000000000dc', 'ZTEST10', 10, 1, true);
 
 -- Z1: klient nie ma dostępu do tabeli realizacji (RPC-only).
-set role authenticated; reset app.current_uid;
+set role authenticated; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select count(*) from public.discount_redemptions',
   'permission denied', 'Z1 authenticated nie widzi discount_redemptions');
 reset role;
@@ -1014,7 +1019,7 @@ select pg_temp.assert(
 -- ============================================================================
 -- AA. Audyt produkcyjny 0046 (P1-12) — filtry/sort/paginacja get_public_jobs w SQL
 -- ============================================================================
-set role anon; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 -- AA1: filtr kategorii zwraca wyłącznie oferty tej kategorii (JOBA = warehouse, publiczna).
 select pg_temp.assert(
   (select bool_and(category = 'warehouse')
@@ -1039,7 +1044,7 @@ reset role;
 -- BB. Audyt produkcyjny 0047 (P1-09) — atomowe RPC replace relacji oferty (recruiter+)
 -- ============================================================================
 -- EMPA (recruiter+ COMPA, właściciel JOBA) zastępuje języki atomowo (JOBA miało 'Niderlandzki').
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_languages(:'JOBA'::uuid, '[{"language":"Francuski","level":"basic"}]'::jsonb);
 reset role; reset app.current_uid;
 select pg_temp.assert(
@@ -1048,7 +1053,7 @@ select pg_temp.assert(
   'BB1 set_job_languages zastępuje atomowo (replace-all)');
 
 -- BB2: zwykły member (CANDB w COMPA) nie zapisze relacji oferty (recruiter+ only).
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.set_job_skills('''|| :'JOBA' ||'''::uuid, true, array[''x''])',
   'PERMISSION_DENIED', 'BB2 zwykły member nie zapisuje relacji oferty (recruiter+)');
@@ -1060,7 +1065,7 @@ reset role; reset app.current_uid;
 reset role;
 update public.jobs set expires_at = now() - interval '1 day' where id = :'JOBA';
 
-set role anon; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.get_public_job('job-a', 'pl')) = 0,
   'CC1 wygasła oferta nie ma detalu publicznego (get_public_job)');
@@ -1075,7 +1080,7 @@ select pg_temp.assert(public.job_is_public(:'JOBA'::uuid) is false,
 -- DD. AUDIT_REPORT 0050 (P0-02) — serwerowa idempotencja checkoutu (checkout_intents)
 -- ============================================================================
 -- DD1: DML na checkout_intents odebrany anon/authenticated (RPC-only).
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'insert into public.checkout_intents (company_id, plan) values ('''|| :'COMPA' ||''', ''standard'')',
   'permission denied', 'DD1 authenticated nie pisze checkout_intents (RPC-only)');
@@ -1125,7 +1130,7 @@ reset role;
 -- EE. AUDIT_REPORT 0051 (P1-08) — umiejętność realnie przechodzi mandatory↔optional
 -- ============================================================================
 -- Punkt wyjścia: EMPA (recruiter+ w COMPA, właściciel JOBA) ustawia zakresy jak kreator.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_skills(:'JOBA'::uuid, false, array['Java', 'Python']); -- optional
 select public.set_job_skills(:'JOBA'::uuid, true,  array['SQL']);            -- mandatory
 reset role; reset app.current_uid;
@@ -1134,7 +1139,7 @@ select pg_temp.assert(
   'EE1 Java startuje jako optional');
 
 -- Przeniesienie Java optional → mandatory: musi zniknąć z optional i pojawić się w mandatory (1 wiersz).
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_skills(:'JOBA'::uuid, true, array['SQL', 'Java']); -- Java dołącza do mandatory
 reset role; reset app.current_uid;
 select pg_temp.assert(
@@ -1151,7 +1156,7 @@ select pg_temp.assert(
 -- FF. AUDIT_REPORT 0054 (P1-16) — niezmienny receipt akceptacji regulaminu/polityki
 -- ============================================================================
 -- FF1: bezpośredni DML odebrany authenticated (RPC-only).
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'insert into public.document_acceptances (profile_id, document) values ('''|| :'CANDA' ||''', ''terms'')',
   'permission denied', 'FF1 authenticated nie pisze document_acceptances (RPC-only)');
@@ -1166,11 +1171,11 @@ select pg_temp.assert(
   'FF2 receipt dla terms+privacy utworzony');
 
 -- FF3: kandydat widzi WŁASNE akceptacje; obcy nie.
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.document_acceptances) = 2, 'FF3 CANDA widzi swoje akceptacje');
 reset role; reset app.current_uid;
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select count(*) from public.document_acceptances where profile_id = :'CANDA') = 0,
   'FF4 obcy nie widzi cudzych akceptacji (RLS)');
@@ -1180,14 +1185,14 @@ reset role; reset app.current_uid;
 -- GG. Część #51 — billing pozostaje kompatybilny, publikacja jest bezpłatna
 -- ============================================================================
 -- GG1: członek widzi uprawnienia — bez subskrypcji plan 'free', limit 1.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select max_active_jobs as gg_max, plan as gg_plan
   from public.get_company_entitlements(:'COMPA'::uuid) \gset
 reset role; reset app.current_uid;
 select pg_temp.assert(:'gg_plan' = 'free' and :'gg_max' = '1', 'GG1 plan free → limit 1');
 
 -- GG2: nie-członek nie widzi uprawnień firmy.
-set role authenticated; set app.current_uid = :'CANDA';
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select * from public.get_company_entitlements('''|| :'COMPA' ||'''::uuid)',
   'PERMISSION_DENIED', 'GG2 nie-członek nie widzi entitlements');
@@ -1203,7 +1208,7 @@ insert into public.job_requirements (job_id, kind, locale, content, position)
   values ('a2222222-2222-2222-2222-222222222222', 'mandatory', 'pl', 'Doświadczenie', 1);
 
 -- GG3: brak subskrypcji nie blokuje publikacji kolejnej kompletnej oferty.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.publish_job('a2222222-2222-2222-2222-222222222222'::uuid, 'nowa-oferta');
 reset role; reset app.current_uid;
 select pg_temp.assert(
@@ -1211,7 +1216,7 @@ select pg_temp.assert(
   'GG3 bez subskrypcji: druga kompletna oferta jest aktywna');
 
 -- GG4: ponowne żądanie publikacji nie może udawać drugiego sukcesu.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.publish_job(''a2222222-2222-2222-2222-222222222222''::uuid, ''inna-nazwa'')',
   'VALIDATION_FAILED', 'GG4 ponowna publikacja aktywnej oferty jest odrzucona');
@@ -1223,7 +1228,7 @@ reset role; reset app.current_uid;
 -- Punkt wyjścia: 'a2222222…' jest AKTYWNA (opublikowana w GG4).
 -- HH1: klient nie zmienia statusu bezpośrednim UPDATE (guard_job_status — dotąd chroniona
 -- była tylko zmiana na 'active'; teraz KAŻDA zmiana idzie przez RPC).
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'update public.jobs set status = ''paused'' where id = ''a2222222-2222-2222-2222-222222222222''',
   'PERMISSION_DENIED', 'HH1 klient nie zmienia statusu oferty bezpośrednio');
@@ -1245,7 +1250,7 @@ select pg_temp.assert(public.job_is_public('a2222222-2222-2222-2222-222222222222
 -- HH4: bezpłatność nie omija wymagania zweryfikowanej firmy przy aktywacji.
 reset role;
 update public.companies set status = 'unverified' where id = :'COMPA';
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.set_job_status(''a2222222-2222-2222-2222-222222222222''::uuid, ''resume'')',
   'COMPANY_NOT_VERIFIED', 'HH4 niezweryfikowana firma nie wznawia bezpłatnej oferty');
@@ -1253,7 +1258,7 @@ reset role; reset app.current_uid;
 update public.companies set status = 'verified' where id = :'COMPA';
 
 -- HH5: wznowienie bez subskrypcji przechodzi (paused → active).
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_status('a2222222-2222-2222-2222-222222222222'::uuid, 'resume');
 reset role; reset app.current_uid;
 select pg_temp.assert(
@@ -1261,13 +1266,13 @@ select pg_temp.assert(
   'HH5 resume: paused → active bez subskrypcji');
 
 -- HH6: zamknięcie (active → closed) i ponowne otwarcie (closed → active) z kompletnością.
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_status('a2222222-2222-2222-2222-222222222222'::uuid, 'close');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text from public.jobs where id = 'a2222222-2222-2222-2222-222222222222') = 'closed',
   'HH6 close: active → closed');
-set role authenticated; set app.current_uid = :'EMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_status('a2222222-2222-2222-2222-222222222222'::uuid, 'reopen');
 reset role; reset app.current_uid;
 select pg_temp.assert(
@@ -1279,7 +1284,7 @@ reset role;
 insert into public.company_members(company_id, profile_id, role, is_active)
   values (:'COMPA', :'CANDB', 'member', true)
   on conflict do nothing;
-set role authenticated; set app.current_uid = :'CANDB';
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.set_job_status(''a2222222-2222-2222-2222-222222222222''::uuid, ''pause'')',
   'PERMISSION_DENIED', 'HH8 zwykły member nie zmienia statusu oferty (recruiter+)');
@@ -1296,7 +1301,7 @@ reset role;
 -- RPC musi zachować requested row i zwrócić 0, zamiast usunąć grupę przez WHERE po LEFT JOIN.
 update public.companies set status = 'unverified' where id = :'COMPC';
 update public.jobs set status = 'active', expires_at = null where id = :'JOBC';
-set role anon; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select total from public.get_public_job_category_counts(array['warehouse']) where key = 'warehouse') = 2,
   'II1 anon widzi pełny grupowany licznik kategorii przez SECURITY DEFINER');
@@ -1330,7 +1335,7 @@ insert into public.jobs(company_id,slug,title,category,contract_type,city,region
   published_at,expires_at,accommodation,immediate,no_language_required)
 select :'COMPA','facet-rls-'||n,'Facet '||n,'warehouse','permanent','Antwerpia','Flandria','active','pl',
   now(),now()+interval '30 days',n%2=0,n%3=0,n%5=0 from generate_series(1,205) n;
-set role anon; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select total from public.get_public_job_filter_facets('pl',p_locations=>array['Antwerpia'],
     p_contract_types=>array['permanent']) where dimension='total' and key='all') > 200,
