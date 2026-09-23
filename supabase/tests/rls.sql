@@ -888,6 +888,12 @@ reset role; reset app.current_uid;
 select pg_temp.assert(
   (select name from public.companies where id = :'COMPA') = 'Firma A (edit)',
   'W2 owner/admin edytuje dane firmy (P1-03)');
+-- 0071: zmiana nazwy zweryfikowanej firmy cofa ją do kolejki weryfikacji (sekcja MM);
+-- tu przywracamy weryfikację, bo kolejne sekcje zakładają zweryfikowaną Firmę A.
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPA') = 'pending',
+  'W2b zmiana nazwy zweryfikowanej firmy → pending (0071)');
+update public.companies set status = 'verified', verified_at = now() where id = :'COMPA';
 
 -- P1-04: konto pracodawcy nie aplikuje ani nie zakłada profilu kandydata (EMPB role=employer).
 set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
@@ -1509,5 +1515,160 @@ select pg_temp.assert(
   not has_function_privilege('authenticated', 'public.company_recipient_ok(uuid, uuid)', 'execute')
   and not has_function_privilege('anon', 'public.company_recipient_ok(uuid, uuid)', 'execute'),
   'LL5 helper odbiorców nie jest wywoływalny przez role klienta');
+
+-- ============================================================================
+-- MM. Weryfikacja firmy po stronie pracodawcy (0071): ponowne zgłoszenie odrzuconej
+--     firmy, zmiana nazwy/VAT zweryfikowanej firmy → kolejka admina, pierwsza firma
+--     z panelu atomowo z VAT i idempotentnie
+-- ============================================================================
+\set OWNM  'e1000000-0000-0000-0000-0000000000a1'
+\set MEMM  'e1000000-0000-0000-0000-0000000000a2'
+\set OWNN  'e1000000-0000-0000-0000-0000000000a3'
+\set NOCO  'e1000000-0000-0000-0000-0000000000a4'
+\set EXM   'e1000000-0000-0000-0000-0000000000a5'
+\set NOCO2 'e1000000-0000-0000-0000-0000000000a6'
+\set CANDM 'e1000000-0000-0000-0000-00000000000c'
+\set COMPM 'e1000000-0000-0000-0000-0000000000f1'
+\set COMPN 'e1000000-0000-0000-0000-0000000000f2'
+\set COMPS 'e1000000-0000-0000-0000-0000000000f3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'OWNM','ownm@test.be','Otto M','{"role":"employer","first_name":"Otto","last_name":"M","locale":"nl"}'),
+  (:'MEMM','memm@test.be','Mila M','{"role":"employer","first_name":"Mila","last_name":"M","locale":"pl"}'),
+  (:'OWNN','ownn@test.be','Nora N','{"role":"employer","first_name":"Nora","last_name":"N","locale":"fr"}'),
+  (:'NOCO','noco@test.be','Nico C','{"role":"employer","first_name":"Nico","last_name":"C","locale":"en"}'),
+  (:'EXM','exm@test.be','Ex M','{"role":"employer","first_name":"Ex","last_name":"M","locale":"pl"}'),
+  (:'NOCO2','noco2@test.be','Nina C','{"role":"employer","first_name":"Nina","last_name":"C","locale":"pl"}'),
+  (:'CANDM','candm@test.be','Cleo M','{"role":"candidate","first_name":"Cleo","last_name":"M","locale":"pl"}');
+insert into public.companies(id,name,status,vat_number,verified_at) values
+  (:'COMPM','Firma M','rejected',null,null),
+  (:'COMPN','Firma N','verified','BE0111111111',now()),
+  (:'COMPS','Firma S','suspended',null,null);
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPM',:'OWNM','owner',true),
+  (:'COMPM',:'MEMM','member',true),
+  (:'COMPM',:'EXM','recruiter',false),
+  (:'COMPN',:'OWNN','owner',true),
+  (:'COMPS',:'OWNN','owner',true);
+
+-- MM1: ponowne zgłoszenie — kontrola ujemna (member, obca firma, stany inne niż rejected).
+set role authenticated; set app.current_uid = :'MEMM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.request_company_reverification(''e1000000-0000-0000-0000-0000000000f1''::uuid)',
+  'PERMISSION_DENIED', 'MM1 zwykły member nie zgłasza firmy ponownie');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'OWNN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.request_company_reverification(''e1000000-0000-0000-0000-0000000000f1''::uuid)',
+  'PERMISSION_DENIED', 'MM1b owner innej firmy nie zgłasza obcej firmy');
+select pg_temp.expect_error(
+  'select public.request_company_reverification(''e1000000-0000-0000-0000-0000000000f2''::uuid)',
+  'COMPANY_STATUS_INVALID', 'MM1c firma verified nie wraca do kolejki przez RPC');
+select pg_temp.expect_error(
+  'select public.request_company_reverification(''e1000000-0000-0000-0000-0000000000f3''::uuid)',
+  'COMPANY_STATUS_INVALID', 'MM1d zawieszenie zdejmuje tylko admin');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPM') = 'rejected'
+  and (select status::text from public.companies where id = :'COMPS') = 'suspended',
+  'MM1e nieudane zgłoszenia nie zmieniają statusu');
+
+-- MM2: owner nie ustawi statusu bezpośrednio — także ze znacznikiem transakcji ustawionym ręcznie.
+set role authenticated; set app.current_uid = :'OWNM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'update public.companies set status=''pending'' where id=''e1000000-0000-0000-0000-0000000000f1''',
+  'PERMISSION_DENIED', 'MM2 bezpośredni UPDATE rejected→pending zablokowany');
+select pg_temp.expect_error(
+  'select set_config(''pracujbe.company_reverify'', ''e1000000-0000-0000-0000-0000000000f1'', false); '
+  || 'update public.companies set status=''verified'' where id=''e1000000-0000-0000-0000-0000000000f1''',
+  'PERMISSION_DENIED', 'MM2b znacznik nie pozwala na samodzielną weryfikację');
+select set_config('pracujbe.company_reverify', '', false);
+
+-- MM3: owner odrzuconej firmy zgłasza ją ponownie → pending (kolejka awaiting), audyt.
+select public.request_company_reverification(:'COMPM'::uuid);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPM') = 'pending',
+  'MM3 rejected → pending po ponownym zgłoszeniu');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs where entity_id = :'COMPM'
+            and action = 'company.reverification_requested' and actor_id = :'OWNM')
+  and exists (select 1 from public.audit_logs where entity_id = :'COMPM'
+            and action = 'company.status_changed' and after_data->>'status' = 'pending'),
+  'MM3b audyt ponownego zgłoszenia i zmiany statusu');
+select pg_temp.assert(
+  coalesce(current_setting('pracujbe.company_reverify', true), '') = '',
+  'MM3c znacznik RPC nie zostaje w sesji');
+set role authenticated; set app.current_uid = :'OWNM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.request_company_reverification(''e1000000-0000-0000-0000-0000000000f1''::uuid)',
+  'COMPANY_STATUS_INVALID', 'MM3d drugie zgłoszenie bez ponownego odrzucenia odrzucone');
+reset role; reset app.current_uid;
+
+-- MM4: zmiana nazwy/VAT zweryfikowanej firmy przez ownera → pending, bez daty weryfikacji.
+set role authenticated; set app.current_uid = :'OWNN'; select pg_temp.assert_client_role();
+update public.companies set name = 'Firma N' where id = :'COMPN';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPN') = 'verified',
+  'MM4 zapis bez zmiany nazwy/VAT nie cofa weryfikacji');
+set role authenticated; set app.current_uid = :'OWNN'; select pg_temp.assert_client_role();
+update public.companies set name = 'Firma N Nowa' where id = :'COMPN';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'pending' and verified_at is null and verified_by is null
+     from public.companies where id = :'COMPN'),
+  'MM4b zmiana nazwy zweryfikowanej firmy → pending');
+update public.companies set status = 'verified', verified_at = now() where id = :'COMPN';
+set role authenticated; set app.current_uid = :'OWNN'; select pg_temp.assert_client_role();
+update public.companies set vat_number = 'BE0222222222' where id = :'COMPN';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPN') = 'pending',
+  'MM4c zmiana VAT zweryfikowanej firmy → pending');
+-- Admin ponownie weryfikuje firmę z kolejki.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_company_status(:'COMPN'::uuid, 'verified');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPN') = 'verified',
+  'MM4d admin ponownie weryfikuje firmę z kolejki');
+
+-- MM5: pierwsza firma z panelu — atomowo z VAT, idempotentnie, tylko pracodawca.
+set role authenticated; set app.current_uid = :'NOCO'; select pg_temp.assert_client_role();
+select company_id as nocomp, created as nocreated
+  from public.create_first_company('Firma Nowa', 'firma-nowa-mm5', ' BE0333333333 ') \gset
+select company_id as nocomp2, created as nocreated2
+  from public.create_first_company('Firma Nowa', 'firma-nowa-mm5-b', 'BE0333333333') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'nocreated'::boolean and not :'nocreated2'::boolean and :'nocomp' = :'nocomp2',
+  'MM5 ponowne wywołanie zwraca tę samą firmę (bez duplikatu)');
+select pg_temp.assert(
+  (select status::text = 'unverified' and vat_number = 'BE0333333333' and name = 'Firma Nowa'
+     from public.companies where id = :'nocomp'),
+  'MM5b firma unverified z zapisanym VAT w jednej transakcji');
+select pg_temp.assert(
+  (select count(*) from public.company_members where profile_id = :'NOCO') = 1
+  and (select role::text from public.company_members where profile_id = :'NOCO') = 'owner',
+  'MM5c jedno członkowstwo ownera');
+set role authenticated; set app.current_uid = :'CANDM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma K'', ''firma-k-mm5'', null)',
+  'PERMISSION_DENIED', 'MM5d kandydat nie zakłada firmy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EXM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma X'', ''firma-x-mm5'', null)',
+  'PERMISSION_DENIED', 'MM5e odebrany dostęp nie tworzy firmy zastępczej');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'NOCO2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma Y'', ''firma-y-mm5'', repeat(''9'', 65))',
+  'companies_vat_len', 'MM5f za długi VAT odrzuca całą operację');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.company_members where profile_id = :'NOCO2') = 0
+  and not exists (select 1 from public.companies where slug = 'firma-y-mm5'),
+  'MM5g błąd VAT nie zostawia firmy bez numeru');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

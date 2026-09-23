@@ -5,7 +5,8 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { JobWizard } from '@/components/employer/JobWizard';
-import { getJobDraft } from '@/lib/data/employer';
+import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
+import { getEmployerShellData, getJobDraft } from '@/lib/data/employer';
 
 /**
  * Wznowienie / edycja SZKICU oferty (P1-04) — `/employer/oferty/[id]/edycja`.
@@ -73,5 +74,18 @@ export default async function EditJobDraftPage({
     );
   }
 
-  return <JobWizard initialJobId={draft.jobId} initialValues={draft.values} />;
+  // #399: przy niezweryfikowanej firmie — szkic tak, publikacja po weryfikacji.
+  const shell = await getEmployerShellData();
+  return (
+    <>
+      {shell.status === 'ok' ? (
+        <CompanyStatusBanner
+          status={shell.activeStatus}
+          variant="wizard"
+          className="mx-auto mb-5 max-w-5xl"
+        />
+      ) : null}
+      <JobWizard initialJobId={draft.jobId} initialValues={draft.values} />
+    </>
+  );
 }
