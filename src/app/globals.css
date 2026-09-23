@@ -57,8 +57,16 @@
     @apply border-border;
   }
 
+  /* WCAG 2.4.11: gdy baner cookies jest widoczny, CookieConsent wystawia jego wysokość jako
+     --cookie-banner-h. Przewijany element z fokusem zatrzymuje się nad banerem, a dolny
+     odstęp pozwala przewinąć koniec strony (stopka, przycisk formularza) ponad baner. */
+  html {
+    scroll-padding-bottom: var(--cookie-banner-h, 0px);
+  }
+
   body {
     @apply bg-background font-sans text-foreground antialiased;
+    padding-bottom: var(--cookie-banner-h, 0px);
   }
 
   /* WCAG 2.1 (2.4.7): wyraźny, widoczny wskaźnik fokusu klawiatury.
