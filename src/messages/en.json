@@ -514,6 +514,7 @@
   },
   "errors": {
     "authInvalidCredentials": "Incorrect email or password.",
+    "authEmailNotConfirmed": "Please confirm your email address first — click the link we sent to your inbox.",
     "permissionDenied": "You don't have permission for this action.",
     "validationFailed": "Please check your details and try again.",
     "jobNotActive": "This job is no longer active.",

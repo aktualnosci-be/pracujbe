@@ -23,6 +23,7 @@ import { z } from 'zod/v3';
 
 import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
+import { mapAuthError } from '@/lib/auth/map-auth-error';
 import { env } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -66,9 +67,6 @@ export type AuthActionResult = { ok: true } | { ok: false; error: ErrorCode };
 type SignupRole = 'candidate' | 'employer';
 type Role = SignupRole | 'admin';
 
-/** Minimalny, strukturalny kształt błędu Supabase Auth (bez zależności od eksportu typu). */
-type SupabaseAuthErrorShape = { code?: string | null; status?: number; message?: string };
-
 /** Ścieżka panelu wg roli (bez prefiksu locale — dokłada go `redirect`/callback). */
 function panelPath(role: Role): string {
   switch (role) {
@@ -86,25 +84,6 @@ async function currentLocale(): Promise<Locale> {
   const value = await getLocale();
   const supported: readonly string[] = routing.locales;
   return supported.includes(value) ? (value as Locale) : routing.defaultLocale;
-}
-
-/** Mapuje błąd Supabase Auth na `AppError` ze stabilnym kodem (bez wycieku technikaliów). */
-function mapAuthError(error: SupabaseAuthErrorShape): AppError {
-  const code = error.code ?? '';
-  const status = error.status ?? 0;
-
-  if (status === 429 || code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit') {
-    return new AppError('RATE_LIMITED', { cause: error, context: { authCode: code, status } });
-  }
-  if (
-    code === 'invalid_credentials' ||
-    code === 'invalid_grant' ||
-    code === 'email_not_confirmed' ||
-    status === 400
-  ) {
-    return new AppError('AUTH_INVALID_CREDENTIALS', { cause: error, context: { authCode: code, status } });
-  }
-  return new AppError('INTERNAL', { cause: error, context: { authCode: code, status } });
 }
 
 /** Odczytuje rolę zalogowanego użytkownika z profiles (RLS: właściciel czyta swój wiersz). */

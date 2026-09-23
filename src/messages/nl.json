@@ -514,6 +514,7 @@
   },
   "errors": {
     "authInvalidCredentials": "Onjuist e-mailadres of wachtwoord.",
+    "authEmailNotConfirmed": "Bevestig eerst je e-mailadres — klik op de link die we je hebben gestuurd.",
     "permissionDenied": "Je hebt geen toestemming voor deze actie.",
     "validationFailed": "Controleer je gegevens en probeer opnieuw.",
     "jobNotActive": "Deze vacature is niet meer actief.",
