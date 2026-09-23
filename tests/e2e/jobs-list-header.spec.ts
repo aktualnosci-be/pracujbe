@@ -96,8 +96,16 @@ for (const locale of locales) {
 
     await keyword.fill("magazyn");
     await location.fill("Bruksela");
+    // Adres początkowy też ma query string, więc sam wzorzec ścieżki spełnia się od
+    // razu i test czytałby DOM w trakcie podmiany dokumentu (documentElement === null).
+    // Czekamy na adres z wysłanymi wartościami i pełne załadowanie nowej strony.
     await Promise.all([
-      page.waitForURL(new RegExp(`/${locale}/oferty-pracy\\?`)),
+      page.waitForURL(
+        (target) =>
+          target.pathname === `/${locale}/oferty-pracy` &&
+          target.searchParams.get("keyword") === "magazyn",
+        { waitUntil: "load" },
+      ),
       submit.click(),
     ]);
 
