@@ -1222,7 +1222,20 @@
     "actionReview": "Prendre en charge",
     "actionResolve": "Résoudre",
     "actionDismiss": "Rejeter",
-    "actionReopen": "Rouvrir"
+    "actionReopen": "Rouvrir",
+    "filterAwaiting": "À vérifier",
+    "loadErrorTitle": "Impossible de charger les données",
+    "loadErrorHint": "Cela ne signifie pas que la liste est vide. Réessayez dans un instant.",
+    "loadErrorRetry": "Réessayer",
+    "listTruncated": "Les {count} éléments les plus récents sont affichés.",
+    "detailVat": "Numéro de TVA",
+    "detailRegistration": "Numéro BCE",
+    "detailEmail": "E-mail de l’entreprise",
+    "detailCity": "Ville",
+    "confirmTitle": "{action} : confirmer le changement de statut",
+    "confirmDescription": "Entreprise « {name} » : {from} → {to}. Vérifiez les données avant de confirmer.",
+    "confirmCancel": "Annuler",
+    "confirmSaving": "Enregistrement…"
   },
   "settings": {
     "title": "Préférences de notification",

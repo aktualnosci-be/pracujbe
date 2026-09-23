@@ -1222,7 +1222,20 @@
     "actionReview": "Start review",
     "actionResolve": "Resolve",
     "actionDismiss": "Dismiss",
-    "actionReopen": "Reopen"
+    "actionReopen": "Reopen",
+    "filterAwaiting": "To verify",
+    "loadErrorTitle": "We couldn't load the data",
+    "loadErrorHint": "This doesn't mean the list is empty. Please try again in a moment.",
+    "loadErrorRetry": "Try again",
+    "listTruncated": "Showing the {count} most recent items.",
+    "detailVat": "VAT number",
+    "detailRegistration": "Company number (KBO/BCE)",
+    "detailEmail": "Company email",
+    "detailCity": "City",
+    "confirmTitle": "{action}: confirm status change",
+    "confirmDescription": "Company “{name}”: {from} → {to}. Check the details before confirming.",
+    "confirmCancel": "Cancel",
+    "confirmSaving": "Saving…"
   },
   "settings": {
     "title": "Notification preferences",

@@ -17,7 +17,7 @@ const TONE_CLASS: Record<Tone, string> = {
   blue: 'bg-accent/10 text-accent-dark',
   amber: 'bg-warning/10 text-warning-text',
   green: 'bg-success/10 text-success-text',
-  red: 'bg-error/10 text-error',
+  red: 'bg-error/10 text-error-text',
   neutral: 'bg-muted text-muted-foreground',
 };
 
@@ -29,7 +29,7 @@ const COMPANY_TONE: Record<string, Tone> = {
   suspended: 'red',
 };
 
-const COMPANY_KEY: Record<string, string> = {
+export const COMPANY_STATUS_KEY: Record<string, string> = {
   unverified: 'statusUnverified',
   pending: 'statusPending',
   verified: 'statusVerified',
@@ -66,7 +66,7 @@ export function AdminStatusBadge({
 }: AdminStatusBadgeProps): React.JSX.Element {
   const t = useTranslations('admin');
   const toneMap = kind === 'company' ? COMPANY_TONE : REPORT_TONE;
-  const keyMap = kind === 'company' ? COMPANY_KEY : REPORT_KEY;
+  const keyMap = kind === 'company' ? COMPANY_STATUS_KEY : REPORT_KEY;
 
   const tone: Tone = toneMap[status] ?? 'neutral';
   const messageKey = keyMap[status];

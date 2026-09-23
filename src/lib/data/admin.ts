@@ -20,7 +20,10 @@ import { captureError } from '@/lib/sentry';
 export interface AdminStats {
   /** Liczba firm (bez usuniętych). */
   companies: number;
-  /** Firmy oczekujące na weryfikację (status `pending`). */
+  /**
+   * Firmy czekające na decyzję admina: `unverified` + `pending` (#307). Nowa firma dostaje
+   * `unverified` i nic w aplikacji nie przestawia jej na `pending`, więc liczymy oba statusy.
+   */
   pendingCompanies: number;
   /** Liczba kont użytkowników (bez usuniętych). */
   users: number;
@@ -35,7 +38,30 @@ export interface AdminCompanyRow {
   status: string;
   /** ISO timestamp utworzenia albo null. */
   createdAt: string | null;
+  /** Dane weryfikacyjne (#310) — null, gdy nieuzupełnione. */
+  vatNumber: string | null;
+  registrationNumber: string | null;
+  email: string | null;
+  city: string | null;
 }
+
+/** Wynik odczytu listy: błąd jest jawny, nie udaje pustej listy (#311). */
+export type AdminListResult<T> =
+  | {
+      status: 'ok';
+      rows: T[];
+      /** true, gdy lista obcięta do `ADMIN_MAX_ROWS`. */ truncated: boolean;
+    }
+  | { status: 'error' };
+
+/** Wynik odczytu statystyk: błąd jest jawny, nie udaje zer (#311). */
+export type AdminStatsResult = { status: 'ok'; stats: AdminStats } | { status: 'error' };
+
+/** Statusy firm czekających na decyzję admina (kolejka weryfikacji, #307). */
+export const AWAITING_COMPANY_STATUSES = ['unverified', 'pending'] as const;
+
+/** Wartość filtra listy firm dla kolejki weryfikacji (`?status=awaiting`). */
+export const AWAITING_FILTER = 'awaiting';
 
 export interface AdminReportRow {
   id: string;
@@ -67,19 +93,19 @@ export interface AdminUserRow {
 
 const DEMO_STATS: AdminStats = {
   companies: 12,
-  pendingCompanies: 3,
+  pendingCompanies: 4,
   users: 148,
   openReports: 2,
 };
 
 const DEMO_COMPANIES: AdminCompanyRow[] = [
-  { id: 'demo-c1', name: 'AGO Jobs & HR', status: 'verified', createdAt: '2025-01-15T09:00:00.000Z' },
-  { id: 'demo-c2', name: 'Bouwbedrijf De Vos', status: 'pending', createdAt: '2025-02-03T11:30:00.000Z' },
-  { id: 'demo-c3', name: 'Logistiek Antwerpen NV', status: 'pending', createdAt: '2025-02-10T08:15:00.000Z' },
-  { id: 'demo-c4', name: 'Horeca Brussel Group', status: 'unverified', createdAt: '2025-02-18T14:45:00.000Z' },
-  { id: 'demo-c5', name: 'CleanPro Services', status: 'rejected', createdAt: '2025-01-28T10:00:00.000Z' },
-  { id: 'demo-c6', name: 'TransEuro Trucking', status: 'suspended', createdAt: '2024-12-11T16:20:00.000Z' },
-  { id: 'demo-c7', name: 'Flanders Food Factory', status: 'pending', createdAt: '2025-02-20T09:05:00.000Z' },
+  { id: 'demo-c1', name: 'AGO Jobs & HR', status: 'verified', createdAt: '2025-01-15T09:00:00.000Z', vatNumber: 'BE0123456789', registrationNumber: '0123.456.789', email: 'jobs@example.com', city: 'Antwerpen' },
+  { id: 'demo-c2', name: 'Bouwbedrijf De Vos', status: 'pending', createdAt: '2025-02-03T11:30:00.000Z', vatNumber: 'BE0987654321', registrationNumber: null, email: 'info@example.com', city: 'Gent' },
+  { id: 'demo-c3', name: 'Logistiek Antwerpen NV', status: 'pending', createdAt: '2025-02-10T08:15:00.000Z', vatNumber: null, registrationNumber: null, email: null, city: null },
+  { id: 'demo-c4', name: 'Horeca Brussel Group', status: 'unverified', createdAt: '2025-02-18T14:45:00.000Z', vatNumber: null, registrationNumber: null, email: null, city: null },
+  { id: 'demo-c5', name: 'CleanPro Services', status: 'rejected', createdAt: '2025-01-28T10:00:00.000Z', vatNumber: null, registrationNumber: null, email: null, city: null },
+  { id: 'demo-c6', name: 'TransEuro Trucking', status: 'suspended', createdAt: '2024-12-11T16:20:00.000Z', vatNumber: null, registrationNumber: null, email: null, city: null },
+  { id: 'demo-c7', name: 'Flanders Food Factory', status: 'pending', createdAt: '2025-02-20T09:05:00.000Z', vatNumber: null, registrationNumber: null, email: null, city: null },
 ];
 
 const DEMO_REPORTS: AdminReportRow[] = [
@@ -156,49 +182,80 @@ function fullName(row: Record<string, unknown>): string {
 /** Filtr statusu dla listy DEMO (`all`/undefined → wszystko). */
 function filterDemoCompanies(filter?: string): AdminCompanyRow[] {
   if (!filter || filter === 'all') return DEMO_COMPANIES;
+  if (filter === AWAITING_FILTER) {
+    return DEMO_COMPANIES.filter((c) =>
+      (AWAITING_COMPANY_STATUSES as readonly string[]).includes(c.status),
+    );
+  }
   return DEMO_COMPANIES.filter((c) => c.status === filter);
 }
 
-const MAX_ROWS = 200;
+/** Limit wierszy list admina (brak paginacji — P2-04); UI informuje o obcięciu. */
+export const ADMIN_MAX_ROWS = 200;
+
+/** Odczyt listy z limitem: pobieramy o 1 więcej, żeby wiedzieć, czy lista jest obcięta. */
+function toList<T>(rows: T[]): AdminListResult<T> {
+  return {
+    status: 'ok',
+    rows: rows.slice(0, ADMIN_MAX_ROWS),
+    truncated: rows.length > ADMIN_MAX_ROWS,
+  };
+}
+
+function demoList<T>(rows: T[]): AdminListResult<T> {
+  return { status: 'ok', rows, truncated: false };
+}
 
 /* ---------------------------------------------------------------------------
  * Publiczne API
  * ------------------------------------------------------------------------- */
 
-/** Kafelki statystyk dashboardu admina. Bez env → dane DEMO. */
-export async function getAdminStats(): Promise<AdminStats> {
-  if (!isSupabaseConfigured()) return DEMO_STATS;
+/** Kafelki statystyk dashboardu admina. Bez env → dane DEMO. Błąd dowolnego licznika → `error`. */
+export async function getAdminStats(): Promise<AdminStatsResult> {
+  if (!isSupabaseConfigured()) return { status: 'ok', stats: DEMO_STATS };
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
     const supabase = createAdminClient();
 
-    const [companies, pending, users, reports] = await Promise.all([
-      supabase.from('companies').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+    const results = await Promise.all([
       supabase
         .from('companies')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending')
+        .is('deleted_at', null),
+      supabase
+        .from('companies')
+        .select('id', { count: 'exact', head: true })
+        .in('status', [...AWAITING_COMPANY_STATUSES])
         .is('deleted_at', null),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null),
       supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     ]);
 
+    const failed = results.find((r) => r.error || typeof r.count !== 'number');
+    if (failed) throw failed.error ?? new Error('ADMIN_STATS_COUNT_MISSING');
+
+    const [companies, pending, users, reports] = results;
     return {
-      companies: companies.count ?? 0,
-      pendingCompanies: pending.count ?? 0,
-      users: users.count ?? 0,
-      openReports: reports.count ?? 0,
+      status: 'ok',
+      stats: {
+        companies: companies.count as number,
+        pendingCompanies: pending.count as number,
+        users: users.count as number,
+        openReports: reports.count as number,
+      },
     };
   } catch (error) {
     captureError(error, { area: 'admin.getAdminStats' });
-    return { companies: 0, pendingCompanies: 0, users: 0, openReports: 0 };
+    return { status: 'error' };
   }
 }
 
-/** Lista firm (opcjonalnie filtr statusu). Bez env → DEMO. */
-export async function listCompanies(filter?: string): Promise<AdminCompanyRow[]> {
-  if (!isSupabaseConfigured()) return filterDemoCompanies(filter);
+/**
+ * Lista firm (opcjonalnie filtr statusu; `awaiting` = kolejka weryfikacji). Bez env → DEMO.
+ */
+export async function listCompanies(filter?: string): Promise<AdminListResult<AdminCompanyRow>> {
+  if (!isSupabaseConfigured()) return demoList(filterDemoCompanies(filter));
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
@@ -206,30 +263,37 @@ export async function listCompanies(filter?: string): Promise<AdminCompanyRow[]>
 
     let query = supabase
       .from('companies')
-      .select('id, name, status, created_at')
+      .select('id, name, status, created_at, vat_number, registration_number, email, city')
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
-      .limit(MAX_ROWS);
-    if (filter && filter !== 'all') query = query.eq('status', filter);
+      .limit(ADMIN_MAX_ROWS + 1);
+    if (filter === AWAITING_FILTER) query = query.in('status', [...AWAITING_COMPANY_STATUSES]);
+    else if (filter && filter !== 'all') query = query.eq('status', filter);
 
     const { data, error } = await query;
     if (error) throw error;
 
-    return asRows(data).map((row) => ({
-      id: asString(row['id']),
-      name: asString(row['name']),
-      status: asString(row['status'], 'unverified'),
-      createdAt: asNullableString(row['created_at']),
-    }));
+    return toList(
+      asRows(data).map((row) => ({
+        id: asString(row['id']),
+        name: asString(row['name']),
+        status: asString(row['status'], 'unverified'),
+        createdAt: asNullableString(row['created_at']),
+        vatNumber: asNullableString(row['vat_number']),
+        registrationNumber: asNullableString(row['registration_number']),
+        email: asNullableString(row['email']),
+        city: asNullableString(row['city']),
+      })),
+    );
   } catch (error) {
     captureError(error, { area: 'admin.listCompanies' });
-    return [];
+    return { status: 'error' };
   }
 }
 
 /** Lista zgłoszeń (najnowsze pierwsze) z nazwą zgłaszającego. Bez env → DEMO. */
-export async function listReports(): Promise<AdminReportRow[]> {
-  if (!isSupabaseConfigured()) return DEMO_REPORTS;
+export async function listReports(): Promise<AdminListResult<AdminReportRow>> {
+  if (!isSupabaseConfigured()) return demoList(DEMO_REPORTS);
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
@@ -239,7 +303,7 @@ export async function listReports(): Promise<AdminReportRow[]> {
       .from('reports')
       .select('id, reporter_id, target_type, target_id, reason, details, status, created_at')
       .order('created_at', { ascending: false })
-      .limit(MAX_ROWS);
+      .limit(ADMIN_MAX_ROWS + 1);
     if (error) throw error;
 
     const rows = asRows(data);
@@ -250,38 +314,41 @@ export async function listReports(): Promise<AdminReportRow[]> {
     ];
     const nameById = new Map<string, string>();
     if (reporterIds.length > 0) {
-      const { data: profiles } = await supabase
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, first_name, last_name')
         .in('id', reporterIds);
+      if (profilesError) throw profilesError;
       for (const profile of asRows(profiles)) {
         nameById.set(asString(profile['id']), fullName(profile));
       }
     }
 
-    return rows.map((row) => {
-      const reporterId = asString(row['reporter_id']);
-      const name = reporterId ? nameById.get(reporterId) ?? '' : '';
-      return {
-        id: asString(row['id']),
-        targetType: asString(row['target_type']),
-        targetId: asString(row['target_id']),
-        reason: asString(row['reason']),
-        details: asNullableString(row['details']),
-        status: asString(row['status'], 'open'),
-        reporterName: name.length > 0 ? name : null,
-        createdAt: asNullableString(row['created_at']),
-      };
-    });
+    return toList(
+      rows.map((row) => {
+        const reporterId = asString(row['reporter_id']);
+        const name = reporterId ? (nameById.get(reporterId) ?? '') : '';
+        return {
+          id: asString(row['id']),
+          targetType: asString(row['target_type']),
+          targetId: asString(row['target_id']),
+          reason: asString(row['reason']),
+          details: asNullableString(row['details']),
+          status: asString(row['status'], 'open'),
+          reporterName: name.length > 0 ? name : null,
+          createdAt: asNullableString(row['created_at']),
+        };
+      }),
+    );
   } catch (error) {
     captureError(error, { area: 'admin.listReports' });
-    return [];
+    return { status: 'error' };
   }
 }
 
 /** Lista kont użytkowników (tylko odczyt). Bez env → DEMO. */
-export async function listUsers(): Promise<AdminUserRow[]> {
-  if (!isSupabaseConfigured()) return DEMO_USERS;
+export async function listUsers(): Promise<AdminListResult<AdminUserRow>> {
+  if (!isSupabaseConfigured()) return demoList(DEMO_USERS);
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
@@ -292,18 +359,20 @@ export async function listUsers(): Promise<AdminUserRow[]> {
       .select('id, first_name, last_name, email, role, created_at')
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
-      .limit(MAX_ROWS);
+      .limit(ADMIN_MAX_ROWS + 1);
     if (error) throw error;
 
-    return asRows(data).map((row) => ({
-      id: asString(row['id']),
-      name: fullName(row),
-      email: asNullableString(row['email']),
-      role: asString(row['role'], 'candidate'),
-      createdAt: asNullableString(row['created_at']),
-    }));
+    return toList(
+      asRows(data).map((row) => ({
+        id: asString(row['id']),
+        name: fullName(row),
+        email: asNullableString(row['email']),
+        role: asString(row['role'], 'candidate'),
+        createdAt: asNullableString(row['created_at']),
+      })),
+    );
   } catch (error) {
     captureError(error, { area: 'admin.listUsers' });
-    return [];
+    return { status: 'error' };
   }
 }
