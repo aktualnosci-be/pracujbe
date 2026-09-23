@@ -78,6 +78,14 @@ export default async function LoginPage({ params, searchParams }: PageProps) {
                   {t('submitRegister')}
                 </Link>
               </p>
+              <p>
+                <Link
+                  href="/rejestracja-pracodawca"
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {t('registerAsEmployer')}
+                </Link>
+              </p>
             </div>
           </CardContent>
         </Card>
