@@ -1042,7 +1042,10 @@
     "guestSubtitle": "Aby aplikować, potrzebujesz darmowego profilu kandydata. CV nie jest potrzebne.",
     "guestRegister": "Załóż darmowy profil i aplikuj",
     "guestLogin": "Mam konto — zaloguj się",
-    "guestReturn": "Po zalogowaniu lub potwierdzeniu e-maila wrócisz do tej oferty."
+    "guestReturn": "Po zalogowaniu lub potwierdzeniu e-maila wrócisz do tej oferty.",
+    "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź internet i spróbuj ponownie — wpisane dane zostały zachowane.",
+    "viewApplications": "Zobacz swoje aplikacje",
+    "candidateOnly": "Aplikować można tylko z konta kandydata."
   },
   "legal": {
     "termsTitle": "Regulamin",
@@ -1243,7 +1246,10 @@
     "loadError": "Nie udało się wczytać dokumentów. Twoje pliki nie zostały usunięte.",
     "deleteConfirmTitle": "Usunąć dokument?",
     "deleteConfirmDescription": "Plik „{name}” zostanie trwale usunięty. Tej operacji nie można cofnąć.",
-    "deleteSuccess": "Dokument został usunięty."
+    "deleteSuccess": "Dokument został usunięty.",
+    "errorTooLarge": "Plik jest za duży (maks. 5 MB).",
+    "errorType": "Dozwolone formaty: PDF, DOC, DOCX.",
+    "errorEmpty": "Wybrany plik jest pusty."
   },
   "admin": {
     "adminName": "Administrator",

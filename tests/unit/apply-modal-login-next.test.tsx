@@ -48,7 +48,7 @@ afterEach(cleanup);
 
 describe('ApplyModal — wymagane logowanie', () => {
   it('link logowania wraca na bieżącą ofertę', async () => {
-    vi.mocked(applyToJob).mockResolvedValue({ ok: false, error: 'PERMISSION_DENIED' } as Awaited<
+    vi.mocked(applyToJob).mockResolvedValue({ ok: false, error: 'UNAUTHENTICATED' } as Awaited<
       ReturnType<typeof applyToJob>
     >);
     render(

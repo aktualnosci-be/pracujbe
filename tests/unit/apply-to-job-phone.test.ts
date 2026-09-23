@@ -69,3 +69,26 @@ describe('applyToJob — phone', () => {
     });
   });
 });
+
+describe('applyToJob — błędy RPC (#361)', () => {
+  const valid = { ...input, phone: '470 12 34 56', phoneCountry: 'BE' as const };
+
+  it.each([
+    ['APPLICATION_ALREADY_EXISTS', 'APPLICATION_ALREADY_EXISTS'],
+    ['UNAUTHENTICATED', 'UNAUTHENTICATED'],
+    ['PERMISSION_DENIED: aplikować może tylko konto kandydata', 'PERMISSION_DENIED'],
+    ['JOB_NOT_ACTIVE', 'JOB_NOT_ACTIVE'],
+    ['duplicate key value violates unique constraint', 'INTERNAL'],
+  ])('%s → %s', async (message, code) => {
+    rpc.mockResolvedValue({ data: null, error: { message } });
+    expect(await applyToJob(valid)).toEqual({ ok: false, error: code });
+  });
+
+  it('przekazuje klucz idempotencji klienta do RPC (retry = ta sama próba)', async () => {
+    await applyToJob(valid);
+    expect(rpc).toHaveBeenCalledWith(
+      'apply_to_job',
+      expect.objectContaining({ p_idempotency_key: input.idempotencyKey }),
+    );
+  });
+});

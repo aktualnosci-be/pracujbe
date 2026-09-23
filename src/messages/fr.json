@@ -1042,7 +1042,10 @@
     "guestSubtitle": "Pour postuler, vous avez besoin d’un profil candidat gratuit. Aucun CV n’est nécessaire.",
     "guestRegister": "Créer un profil gratuit et postuler",
     "guestLogin": "J’ai un compte — me connecter",
-    "guestReturn": "Après la connexion ou la confirmation de votre e-mail, vous reviendrez à cette offre."
+    "guestReturn": "Après la connexion ou la confirmation de votre e-mail, vous reviendrez à cette offre.",
+    "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez — vos données saisies ont été conservées.",
+    "viewApplications": "Voir vos candidatures",
+    "candidateOnly": "Seul un compte candidat peut postuler."
   },
   "legal": {
     "termsTitle": "Conditions générales",
@@ -1243,7 +1246,10 @@
     "loadError": "Impossible de charger les documents. Vos fichiers n’ont pas été supprimés.",
     "deleteConfirmTitle": "Supprimer le document ?",
     "deleteConfirmDescription": "Le fichier « {name} » sera définitivement supprimé. Cette action est irréversible.",
-    "deleteSuccess": "Le document a été supprimé."
+    "deleteSuccess": "Le document a été supprimé.",
+    "errorTooLarge": "Le fichier est trop volumineux (max. 5 Mo).",
+    "errorType": "Formats acceptés : PDF, DOC, DOCX.",
+    "errorEmpty": "Le fichier choisi est vide."
   },
   "admin": {
     "adminName": "Administrateur",

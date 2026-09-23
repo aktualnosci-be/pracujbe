@@ -1042,7 +1042,10 @@
     "guestSubtitle": "Om te solliciteren heb je een gratis kandidaatprofiel nodig. Een cv is niet nodig.",
     "guestRegister": "Maak een gratis profiel en solliciteer",
     "guestLogin": "Ik heb een account — inloggen",
-    "guestReturn": "Na het inloggen of het bevestigen van je e-mail kom je terug bij deze vacature."
+    "guestReturn": "Na het inloggen of het bevestigen van je e-mail kom je terug bij deze vacature.",
+    "errorNetwork": "Er kon geen verbinding worden gemaakt met de server. Controleer je internet en probeer opnieuw — je ingevulde gegevens zijn bewaard.",
+    "viewApplications": "Bekijk je sollicitaties",
+    "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount."
   },
   "legal": {
     "termsTitle": "Algemene voorwaarden",
@@ -1243,7 +1246,10 @@
     "loadError": "De documenten konden niet worden geladen. Je bestanden zijn niet verwijderd.",
     "deleteConfirmTitle": "Document verwijderen?",
     "deleteConfirmDescription": "Het bestand „{name}” wordt definitief verwijderd. Dit kan niet ongedaan worden gemaakt.",
-    "deleteSuccess": "Het document is verwijderd."
+    "deleteSuccess": "Het document is verwijderd.",
+    "errorTooLarge": "Het bestand is te groot (max. 5 MB).",
+    "errorType": "Toegestane formaten: PDF, DOC, DOCX.",
+    "errorEmpty": "Het gekozen bestand is leeg."
   },
   "admin": {
     "adminName": "Beheerder",
