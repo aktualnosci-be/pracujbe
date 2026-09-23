@@ -530,6 +530,36 @@ export function FilterFields({
 
 /* -------------------------------------------------------------- FilterSidebar */
 
+/**
+ * Nawigacja do wyników filtrów jako przejście Reacta (#222): `isNavigating` trwa, dopóki
+ * nowe wyniki (RSC) nie zostaną wyrenderowane. W tym czasie kolejne zatwierdzenia są
+ * ignorowane — ref blokuje też dwa kliknięcia w tej samej klatce, zanim stan się odświeży.
+ */
+export function useFilterNavigation(): {
+  isNavigating: boolean;
+  navigate: (href: string) => boolean;
+} {
+  const router = useRouter();
+  const [isNavigating, startTransition] = React.useTransition();
+  const inFlight = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!isNavigating) inFlight.current = false;
+  }, [isNavigating]);
+
+  const navigate = React.useCallback(
+    (href: string) => {
+      if (inFlight.current) return false;
+      inFlight.current = true;
+      startTransition(() => router.push(href));
+      return true;
+    },
+    [router],
+  );
+
+  return { isNavigating, navigate };
+}
+
 export interface FilterSidebarProps {
   facets: JobFilterFacets;
   initial: SidebarFilters;
@@ -563,8 +593,8 @@ export function FilterSidebar({
 }: FilterSidebarProps): React.JSX.Element {
   const t = useTranslations('filters');
   const tJobs = useTranslations('jobs');
-  const router = useRouter();
   const pathname = usePathname();
+  const { isNavigating, navigate } = useFilterNavigation();
 
   const initialKey = JSON.stringify(initial);
   const [pending, setPending] = React.useState<SidebarFilters>(initial);
@@ -578,14 +608,17 @@ export function FilterSidebar({
   useFocusResultsAfterNavigation(initialKey);
 
   const apply = () => {
-    requestResultsFocus();
-    router.push(buildHref(pathname, pending, { keyword, city, sort }));
+    if (navigate(buildHref(pathname, pending, { keyword, city, sort }))) {
+      requestResultsFocus();
+    }
   };
   const clearAll = () => {
+    if (isNavigating) return;
     const cleared = emptySidebarFilters();
     setPending(cleared);
-    requestResultsFocus();
-    router.push(buildHref(pathname, cleared, { keyword, city, sort }));
+    if (navigate(buildHref(pathname, cleared, { keyword, city, sort }))) {
+      requestResultsFocus();
+    }
   };
 
   return (
@@ -603,8 +636,9 @@ export function FilterSidebar({
         <button
           type="button"
           onClick={clearAll}
+          aria-disabled={isNavigating}
           data-filter-target="clear"
-          className="min-h-12 rounded-sm px-1 text-right text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="min-h-12 rounded-sm aria-disabled:cursor-not-allowed aria-disabled:opacity-60 px-1 text-right text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           {t('clearAll')}
         </button>
@@ -631,25 +665,34 @@ export function FilterSidebar({
           </Button>
         </div>
       ) : null}
+      {/* `aria-disabled` zamiast `disabled`: fokus zostaje na przycisku w trakcie nawigacji (#222). */}
       <Button
         type="button"
         onClick={apply}
-        aria-busy={liveFacets.status === 'loading'}
-        className="mt-6 w-full rounded-xl"
+        aria-busy={isNavigating || liveFacets.status === 'loading'}
+        aria-disabled={isNavigating}
+        data-filter-apply="desktop"
+        className="mt-6 w-full rounded-xl aria-disabled:cursor-not-allowed aria-disabled:opacity-70"
       >
         {/* Licznik to tylko podpowiedź: bez aktualnej liczby zatwierdzenie nadal działa (#220). */}
-        {liveFacets.status === 'idle'
-          ? t('showResults', { count: liveFacets.facets.total })
-          : tJobs('filterButton')}
+        {isNavigating
+          ? t('resultsLoading')
+          : liveFacets.status === 'idle'
+            ? t('showResults', { count: liveFacets.facets.total })
+            : tJobs('filterButton')}
       </Button>
-      {liveFacets.status === 'loading' ? (
-        <p
-          role="status"
-          className="mt-2 text-center text-xs text-muted-foreground"
-        >
-          {t('countLoading')}
-        </p>
-      ) : null}
+      {/* Region stale w DOM, żeby czytnik ekranu ogłosił ładowanie wyników. */}
+      <p
+        role="status"
+        data-filter-status="desktop"
+        className="mt-2 min-h-4 text-center text-xs text-muted-foreground"
+      >
+        {isNavigating
+          ? t('resultsLoading')
+          : liveFacets.status === 'loading'
+            ? t('countLoading')
+            : null}
+      </p>
     </div>
   );
 }

@@ -874,6 +874,7 @@
     "any": "Dowolna",
     "showResults": "{count, plural, one {Pokaż # ofertę} few {Pokaż # oferty} many {Pokaż # ofert} other {Pokaż # oferty}}",
     "countLoading": "Liczymy oferty…",
+    "resultsLoading": "Wczytujemy oferty…",
     "countUnavailable": "Liczba ofert niedostępna",
     "countError": "Nie udało się policzyć ofert. Spróbuj ponownie.",
     "retryCount": "Policz ponownie",

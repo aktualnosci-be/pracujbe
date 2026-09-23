@@ -874,6 +874,7 @@
     "any": "Toutes",
     "showResults": "{count, plural, one {Afficher # offre} other {Afficher # offres}}",
     "countLoading": "Comptage des offres…",
+    "resultsLoading": "Chargement des offres…",
     "countUnavailable": "Nombre d’offres indisponible",
     "countError": "Impossible de compter les offres. Réessayez.",
     "retryCount": "Recompter",

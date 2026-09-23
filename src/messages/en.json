@@ -874,6 +874,7 @@
     "any": "Any",
     "showResults": "{count, plural, one {Show # job} other {Show # jobs}}",
     "countLoading": "Counting jobs…",
+    "resultsLoading": "Loading jobs…",
     "countUnavailable": "Job count unavailable",
     "countError": "We could not count the jobs. Try again.",
     "retryCount": "Count again",
