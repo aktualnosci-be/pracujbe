@@ -1198,7 +1198,20 @@
     "actionReview": "In behandeling nemen",
     "actionResolve": "Oplossen",
     "actionDismiss": "Verwerpen",
-    "actionReopen": "Heropenen"
+    "actionReopen": "Heropenen",
+    "filterAwaiting": "Te verifiëren",
+    "loadErrorTitle": "De gegevens konden niet worden geladen",
+    "loadErrorHint": "Dit betekent niet dat de lijst leeg is. Probeer het zo meteen opnieuw.",
+    "loadErrorRetry": "Opnieuw proberen",
+    "listTruncated": "De {count} nieuwste items worden getoond.",
+    "detailVat": "Btw-nummer",
+    "detailRegistration": "KBO-nummer",
+    "detailEmail": "E-mail bedrijf",
+    "detailCity": "Stad",
+    "confirmTitle": "{action}: statuswijziging bevestigen",
+    "confirmDescription": "Bedrijf „{name}”: {from} → {to}. Controleer de gegevens voordat je bevestigt.",
+    "confirmCancel": "Annuleren",
+    "confirmSaving": "Opslaan…"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",

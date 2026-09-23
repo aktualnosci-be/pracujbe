@@ -1198,7 +1198,20 @@
     "actionReview": "Weź do analizy",
     "actionResolve": "Rozwiąż",
     "actionDismiss": "Odrzuć",
-    "actionReopen": "Otwórz ponownie"
+    "actionReopen": "Otwórz ponownie",
+    "filterAwaiting": "Do weryfikacji",
+    "loadErrorTitle": "Nie udało się wczytać danych",
+    "loadErrorHint": "To nie oznacza, że lista jest pusta. Spróbuj ponownie za chwilę.",
+    "loadErrorRetry": "Spróbuj ponownie",
+    "listTruncated": "Pokazano {count} najnowszych pozycji.",
+    "detailVat": "Numer VAT",
+    "detailRegistration": "Numer KBO",
+    "detailEmail": "E-mail firmy",
+    "detailCity": "Miasto",
+    "confirmTitle": "{action}: potwierdź zmianę statusu",
+    "confirmDescription": "Firma „{name}”: {from} → {to}. Sprawdź dane przed zatwierdzeniem.",
+    "confirmCancel": "Anuluj",
+    "confirmSaving": "Zapisywanie…"
   },
   "settings": {
     "title": "Preferencje powiadomień",
