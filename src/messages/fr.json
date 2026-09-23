@@ -927,6 +927,7 @@
     "certificatesPlaceholder": "ex. VCA, certificat de qualification",
     "availabilityLabel": "Disponibilité",
     "availImmediate": "Immédiatement",
+    "availWithinTwoWeeks": "Dans les 2 semaines",
     "availWithinMonth": "Dans un mois",
     "availWithinThreeMonths": "Dans 3 mois",
     "availFlexible": "Flexible",
@@ -1396,7 +1397,15 @@
       "remoteJob": "Télétravail — le lieu importe peu",
       "withinCommuteRadius": "Lieu de travail dans votre rayon de déplacement"
     },
-    "loadError": "Impossible de calculer la compatibilité pour le moment. Ce n’est pas une évaluation de votre profil — réessayez."
+    "loadError": "Impossible de calculer la compatibilité pour le moment. Ce n’est pas une évaluation de votre profil — réessayez.",
+    "languageLevelBelow": "{language} : niveau requis {required}, votre niveau {actual}",
+    "languageLevelUnknown": "{language} : niveau requis {required} — indiquez votre niveau dans votre profil",
+    "levels": {
+      "basic": "débutant",
+      "intermediate": "intermédiaire",
+      "fluent": "courant",
+      "native": "langue maternelle"
+    }
   },
   "application": {
     "error": {

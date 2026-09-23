@@ -11,6 +11,11 @@ import { applyToJob } from '@/lib/actions/applications';
 import { cn } from '@/lib/utils';
 import { loginHref, registerHref } from '@/lib/validation/auth';
 import { usePublicViewerStatus } from '@/components/public/PublicSavedJobs';
+import {
+  APPLY_AVAILABILITY_OPTIONS,
+  APPLY_AVAILABILITY_TO_DB,
+  type ApplyAvailabilityOption,
+} from '@/lib/validation/application';
 import type { PhoneCountry } from '@/lib/validation/phone';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -67,19 +72,9 @@ const DIAL_CODES: ReadonlyArray<{ code: PhoneCountry; dial: string }> = [
   { code: 'LU', dial: '+352' },
 ];
 
-const AVAILABILITY = ['immediate', 'twoWeeks', 'oneMonth', 'flexible'] as const;
-type Availability = (typeof AVAILABILITY)[number];
-
-/** Mapowanie opcji UI na wartości enuma `availability_status` w bazie (0001). */
-const AVAILABILITY_TO_DB: Record<
-  Availability,
-  'immediate' | 'within_month' | 'within_three_months' | 'flexible'
-> = {
-  immediate: 'immediate',
-  twoWeeks: 'within_month',
-  oneMonth: 'within_month',
-  flexible: 'flexible',
-};
+const AVAILABILITY = APPLY_AVAILABILITY_OPTIONS;
+type Availability = ApplyAvailabilityOption;
+const AVAILABILITY_TO_DB = APPLY_AVAILABILITY_TO_DB;
 
 /** Rodzaj błędu formularza (mapowany na komunikat i18n, bez technikaliów). */
 type FormError =

@@ -927,6 +927,7 @@
     "certificatesPlaceholder": "np. VCA, świadectwo kwalifikacji",
     "availabilityLabel": "Dostępność",
     "availImmediate": "Od zaraz",
+    "availWithinTwoWeeks": "W ciągu 2 tygodni",
     "availWithinMonth": "W ciągu miesiąca",
     "availWithinThreeMonths": "W ciągu 3 miesięcy",
     "availFlexible": "Elastycznie",
@@ -1396,7 +1397,15 @@
       "remoteJob": "Praca zdalna — lokalizacja bez znaczenia",
       "withinCommuteRadius": "Miejsce pracy w Twoim promieniu dojazdu"
     },
-    "loadError": "Nie udało się teraz policzyć dopasowania. To nie jest ocena Twojego profilu — spróbuj ponownie."
+    "loadError": "Nie udało się teraz policzyć dopasowania. To nie jest ocena Twojego profilu — spróbuj ponownie.",
+    "languageLevelBelow": "{language}: wymagany poziom {required}, Twój poziom {actual}",
+    "languageLevelUnknown": "{language}: wymagany poziom {required} — podaj swój poziom w profilu",
+    "levels": {
+      "basic": "podstawowy",
+      "intermediate": "średni",
+      "fluent": "biegły",
+      "native": "ojczysty"
+    }
   },
   "application": {
     "error": {

@@ -668,7 +668,43 @@ export async function getCandidatePassport(): Promise<CandidatePassport> {
   }
 }
 
-/** Polecane oferty: z `matches` kandydata (score desc), wzbogacone o dane publiczne; fallback = najnowsze oferty. */
+/** Ile najlepszych dopasowań bierzemy pod uwagę przy polecanych (część może być już niepubliczna). */
+const RECOMMENDED_MATCHES_LIMIT = 50;
+const RECOMMENDED_LIMIT = 5;
+
+/**
+ * Publiczne dane DOKŁADNIE dla podanych ofert (RPC `get_public_jobs_by_ids`, 0074) — te same
+ * filtry widoczności co lista publiczna (active, niewygasła, firma verified), tłumaczenie w locale.
+ */
+async function fetchPublicJobsByIds(
+  supabase: SupabaseClient,
+  locale: Locale,
+  ids: string[],
+): Promise<Map<string, PublicJobLite>> {
+  const map = new Map<string, PublicJobLite>();
+  if (ids.length === 0) return map;
+  const { data, error } = await supabase.rpc('get_public_jobs_by_ids', { p_ids: ids, p_locale: locale });
+  if (error) throw error;
+  for (const row of asArr(data)) {
+    const r = asRecord(row);
+    const id = asStr(r['id']);
+    if (!id) continue;
+    map.set(id, {
+      id,
+      slug: asStr(r['slug']),
+      title: asStr(r['title']),
+      companyName: asStr(r['company_name']),
+      city: asStr(r['city']),
+    });
+  }
+  return map;
+}
+
+/**
+ * Polecane oferty: najlepsze `matches` kandydata (score desc, job_id jako rozstrzygnięcie),
+ * wzbogacone o dane publiczne dokładnie tych ofert — niezależnie od ich wieku (#196).
+ * Fallback = najnowsze oferty, tylko gdy żadne dopasowanie nie jest już publiczne.
+ */
 export async function getRecommendedJobs(locale: string, throwOnError = false): Promise<RecommendedJob[]> {
   const resolvedLocale = toLocale(locale);
   if (!isSupabaseConfigured()) return demoRecommended(resolvedLocale);
@@ -677,35 +713,46 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
     const { supabase, userId } = await getServerContext();
     if (!userId) return [];
 
-    const [matchRes, jobsMap, savedIds] = await Promise.all([
+    const [matchRes, savedIds] = await Promise.all([
       supabase
         .from('matches')
         .select('job_id, score')
         .eq('candidate_id', userId)
         .order('score', { ascending: false })
-        .limit(20),
-      fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT),
+        .order('job_id', { ascending: true })
+        .limit(RECOMMENDED_MATCHES_LIMIT),
       fetchSavedJobIds(supabase, userId),
     ]);
     if (matchRes.error) throw matchRes.error;
 
-    // 1) Realne dopasowania (tylko te wciąż aktywne/publiczne, więc obecne w mapie).
-    const matched: RecommendedJob[] = [];
-    for (const row of asArr(matchRes.data)) {
+    const matchRows = asArr(matchRes.data).map((row) => {
       const r = asRecord(row);
-      const jobId = asStr(r['job_id']);
-      const job = jobId ? jobsMap.get(jobId) : undefined;
-      if (!job) continue;
-      matched.push({ ...job, match: asNum(r['score']), saved: savedIds.has(job.id) });
-      if (matched.length >= 5) break;
+      return { jobId: asStr(r['job_id']), score: asNum(r['score']) };
+    }).filter((row) => row.jobId.length > 0);
+    const jobsById = await fetchPublicJobsByIds(
+      supabase,
+      resolvedLocale,
+      [...new Set(matchRows.map((row) => row.jobId))],
+    );
+
+    // 1) Realne dopasowania w kolejności wyniku (tylko wciąż aktywne/publiczne).
+    const matched: RecommendedJob[] = [];
+    const seen = new Set<string>();
+    for (const row of matchRows) {
+      const job = jobsById.get(row.jobId);
+      if (!job || seen.has(job.id)) continue;
+      seen.add(job.id);
+      matched.push({ ...job, match: row.score, saved: savedIds.has(job.id) });
+      if (matched.length >= RECOMMENDED_LIMIT) break;
     }
     if (matched.length > 0) return matched;
 
+    const jobsMap = await fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT);
     // 2) Fallback: najnowsze oferty publiczne (bez policzonego matchu).
     const latest: RecommendedJob[] = [];
     for (const job of jobsMap.values()) {
       latest.push({ ...job, match: null, saved: savedIds.has(job.id) });
-      if (latest.length >= 5) break;
+      if (latest.length >= RECOMMENDED_LIMIT) break;
     }
     return latest;
   } catch (error) {

@@ -19,7 +19,8 @@ import type { JobMatchLoad } from '@/lib/data/matching';
  *
  * Etykiety kryteriów: `strengths`/część `missing` to znane klucze (tłumaczone), a pozostałe
  * pozycje `missing`/`matched` to surowe etykiety danych (np. nazwa umiejętności) — pokazywane
- * bez tłumaczenia. `summaryKey` zawsze jest jednym z good/partial/low.
+ * bez tłumaczenia. `summaryKey` zawsze jest jednym z good/partial/low. `languageGaps` (#195)
+ * to języki znane poniżej wymaganego poziomu — opisane z poziomem wymaganym i deklarowanym.
  */
 
 const KNOWN_CRITERIA = new Set([
@@ -86,6 +87,20 @@ export function JobMatchCard({ jobId }: { jobId: string }): React.JSX.Element | 
 
   const result = load.result;
   const label = (key: string): string => (KNOWN_CRITERIA.has(key) ? t(`criteria.${key}`) : key);
+  const gaps = [
+    ...result.missing.map((m) => ({ key: m, text: label(m) })),
+    // Starsza odpowiedź serwera może nie mieć pola — traktujemy jak brak luk.
+    ...(result.languageGaps ?? []).map((g) => ({
+      key: `language:${g.language}`,
+      text: g.actual
+        ? t('languageLevelBelow', {
+            language: g.language,
+            required: t(`levels.${g.required}`),
+            actual: t(`levels.${g.actual}`),
+          })
+        : t('languageLevelUnknown', { language: g.language, required: t(`levels.${g.required}`) }),
+    })),
+  ];
 
   return (
     <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
@@ -119,17 +134,17 @@ export function JobMatchCard({ jobId }: { jobId: string }): React.JSX.Element | 
         </div>
       ) : null}
 
-      {result.missing.length > 0 ? (
+      {gaps.length > 0 ? (
         <div className="mt-4">
           <h3 className="mb-2 text-sm font-semibold text-muted-foreground">{t('gapsTitle')}</h3>
           <ul className="space-y-1.5">
-            {result.missing.map((m) => (
-              <li key={m} className="flex items-start gap-2 text-sm text-muted-foreground">
+            {gaps.map((gap) => (
+              <li key={gap.key} className="flex items-start gap-2 text-sm text-muted-foreground">
                 <span
                   className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground"
                   aria-hidden="true"
                 />
-                <span>{label(m)}</span>
+                <span>{gap.text}</span>
               </li>
             ))}
           </ul>
