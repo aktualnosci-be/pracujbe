@@ -250,7 +250,8 @@ export default async function JobDetailPage({ params }: PageProps) {
   const tabs = [
     { href: '#opis', label: t('tabDescription') },
     { href: '#firma', label: t('tabCompany') },
-    { href: '#podobne', label: t('tabSimilar') },
+    // Kotwica „Podobne” tylko, gdy sekcja istnieje (inaczej martwy link).
+    ...(similarJobs.length > 0 ? [{ href: '#podobne', label: t('tabSimilar') }] : []),
   ];
 
   const Section = ({
@@ -375,20 +376,17 @@ export default async function JobDetailPage({ params }: PageProps) {
         </p>
       </header>
 
-      {/* Zakładki (kotwice do sekcji) */}
-      <nav aria-label={t('tabDescription')} className="mb-6 border-b border-border">
+      {/*
+        Kotwice do sekcji (nawigacja w obrębie strony, nie zakładki ARIA). Bez stałego
+        `aria-current`/wyróżnienia pierwszej pozycji — strona nie śledzi bieżącej sekcji.
+      */}
+      <nav aria-label={t('sectionsNav')} className="mb-6 border-b border-border">
         <ul className="-mb-px flex flex-wrap gap-6">
-          {tabs.map((tab, index) => (
+          {tabs.map((tab) => (
             <li key={tab.href}>
               <a
                 href={tab.href}
-                aria-current={index === 0 ? 'true' : undefined}
-                className={cn(
-                  'inline-block border-b-2 pb-3 text-sm font-medium transition-colors',
-                  index === 0
-                    ? 'border-accent text-accent'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                )}
+                className="inline-block border-b-2 border-transparent pb-3 text-sm font-medium text-muted-foreground transition-colors hover:border-accent hover:text-foreground"
               >
                 {tab.label}
               </a>
