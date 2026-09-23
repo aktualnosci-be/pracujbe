@@ -743,7 +743,18 @@
     "employerOffersPage": "Page {page}",
     "employerOffersNext": "Page suivante",
     "employerOffersPageEmpty": "Il n’y a plus d’offres sur cette page.",
-    "employerOffersRetry": "Réessayer"
+    "employerOffersRetry": "Réessayer",
+    "withdrawConfirmTitle": "Retirer la candidature ?",
+    "withdrawConfirmDescription": "L’employeur ne traitera plus cette candidature. Vous ne pourrez plus postuler à cette offre.",
+    "withdrawConfirmDescriptionNamed": "Votre candidature pour « {title} » sera retirée. Vous ne pourrez plus postuler à cette offre.",
+    "withdrawConfirm": "Retirer",
+    "withdrawSuccess": "La candidature a été retirée.",
+    "declineConfirmTitle": "Refuser la proposition ?",
+    "declineConfirmDescription": "L’employeur recevra un refus. Cette réponse ne pourra pas être modifiée.",
+    "declineConfirmDescriptionNamed": "La proposition « {title} » sera refusée. Cette réponse ne pourra pas être modifiée.",
+    "declineConfirm": "Refuser",
+    "acceptProposalSuccess": "La proposition a été acceptée.",
+    "declineProposalSuccess": "La proposition a été refusée."
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1139,7 +1150,11 @@
     "empty": "Aucun document téléversé.",
     "delete": "Supprimer",
     "uploadError": "Échec du téléversement. Vérifiez le format et la taille.",
-    "deleteError": "Échec de la suppression."
+    "deleteError": "Échec de la suppression.",
+    "loadError": "Impossible de charger les documents. Vos fichiers n’ont pas été supprimés.",
+    "deleteConfirmTitle": "Supprimer le document ?",
+    "deleteConfirmDescription": "Le fichier « {name} » sera définitivement supprimé. Cette action est irréversible.",
+    "deleteSuccess": "Le document a été supprimé."
   },
   "admin": {
     "adminName": "Administrateur",
@@ -1220,13 +1235,13 @@
     "emailMarketingDescription": "Nouveautés, conseils et informations sur Pracuj.be.",
     "channelsSectionTitle": "Autres canaux",
     "channelsSectionDescription": "Notifications en dehors de l'e-mail.",
-    "pushEnabledLabel": "Notifications push",
-    "pushEnabledDescription": "Notifications sur votre appareil en cas d'événement important.",
     "inAppEnabledLabel": "Notifications dans l'application",
     "inAppEnabledDescription": "Notifications visibles lorsque vous êtes connecté.",
     "save": "Enregistrer les préférences",
     "saving": "Enregistrement...",
-    "savedSuccess": "Vos préférences de notification ont été enregistrées."
+    "savedSuccess": "Vos préférences de notification ont été enregistrées.",
+    "loadError": "Impossible de charger vos préférences de notification.",
+    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant."
   },
   "guides": {
     "pageTitle": "Guides",

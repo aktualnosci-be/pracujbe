@@ -743,7 +743,18 @@
     "employerOffersPage": "Pagina {page}",
     "employerOffersNext": "Volgende pagina",
     "employerOffersPageEmpty": "Op deze pagina staan geen vacatures meer.",
-    "employerOffersRetry": "Opnieuw proberen"
+    "employerOffersRetry": "Opnieuw proberen",
+    "withdrawConfirmTitle": "Sollicitatie intrekken?",
+    "withdrawConfirmDescription": "De werkgever behandelt deze sollicitatie niet meer. Je kunt daarna niet opnieuw op deze vacature solliciteren.",
+    "withdrawConfirmDescriptionNamed": "Je sollicitatie voor „{title}” wordt ingetrokken. Je kunt daarna niet opnieuw op deze vacature solliciteren.",
+    "withdrawConfirm": "Intrekken",
+    "withdrawSuccess": "Je sollicitatie is ingetrokken.",
+    "declineConfirmTitle": "Voorstel afwijzen?",
+    "declineConfirmDescription": "De werkgever krijgt een weigering. Dit antwoord kun je later niet meer wijzigen.",
+    "declineConfirmDescriptionNamed": "Het voorstel „{title}” wordt afgewezen. Dit antwoord kun je later niet meer wijzigen.",
+    "declineConfirm": "Afwijzen",
+    "acceptProposalSuccess": "Het voorstel is aanvaard.",
+    "declineProposalSuccess": "Het voorstel is afgewezen."
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -1139,7 +1150,11 @@
     "empty": "Nog geen documenten geüpload.",
     "delete": "Verwijderen",
     "uploadError": "Uploaden mislukt. Controleer formaat en grootte.",
-    "deleteError": "Verwijderen mislukt."
+    "deleteError": "Verwijderen mislukt.",
+    "loadError": "De documenten konden niet worden geladen. Je bestanden zijn niet verwijderd.",
+    "deleteConfirmTitle": "Document verwijderen?",
+    "deleteConfirmDescription": "Het bestand „{name}” wordt definitief verwijderd. Dit kan niet ongedaan worden gemaakt.",
+    "deleteSuccess": "Het document is verwijderd."
   },
   "admin": {
     "adminName": "Beheerder",
@@ -1220,13 +1235,13 @@
     "emailMarketingDescription": "Nieuws, tips en informatie over Pracuj.be.",
     "channelsSectionTitle": "Andere kanalen",
     "channelsSectionDescription": "Meldingen buiten e-mail om.",
-    "pushEnabledLabel": "Pushmeldingen",
-    "pushEnabledDescription": "Meldingen op je apparaat wanneer er iets belangrijks gebeurt.",
     "inAppEnabledLabel": "Meldingen in de app",
     "inAppEnabledDescription": "Meldingen die je ziet wanneer je bent ingelogd.",
     "save": "Voorkeuren opslaan",
     "saving": "Opslaan...",
-    "savedSuccess": "Je meldingsvoorkeuren zijn opgeslagen."
+    "savedSuccess": "Je meldingsvoorkeuren zijn opgeslagen.",
+    "loadError": "Je meldingsvoorkeuren konden niet worden geladen.",
+    "loadErrorHint": "We tonen het formulier niet, zodat opslaan je eerdere keuzes niet overschrijft. Probeer het zo meteen opnieuw."
   },
   "guides": {
     "pageTitle": "Gidsen",

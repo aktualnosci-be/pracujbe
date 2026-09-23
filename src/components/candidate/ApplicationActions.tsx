@@ -8,6 +8,7 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { withdrawApplication } from '@/lib/actions/candidate';
 import { cn } from '@/lib/utils';
 import { Toast } from '@/components/ui/toast';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 /**
  * ApplicationActions — menu wiersza aplikacji w panelu kandydata (makieta 04, przycisk „…").
@@ -17,7 +18,9 @@ import { Toast } from '@/components/ui/toast';
  *   - „Zobacz ofertę" (gdy znany slug) → publiczna strona oferty (Link z prefiksem locale),
  *   - „Wycofaj aplikację" (dla statusów w toku) → Server Action `withdrawApplication`.
  * Zapis realny pod sesją (RLS + trigger dopuszczają dla właściciela tylko przejście do 'withdrawn').
- * Po sukcesie odświeżamy dane trasy (StatusPill zmieni się na „Wycofana"); błąd → Toast z i18n.
+ * Wycofanie jest nieodwracalne, więc najpierw pyta w `ConfirmDialog` (#328); anulowanie nie woła
+ * akcji, fokus wraca do przycisku „…". Po sukcesie komunikat `role="status"` i odświeżenie trasy
+ * (StatusPill zmieni się na „Wycofana"); błąd → Toast z i18n.
  */
 
 /** Statusy, z których kandydat może jeszcze wycofać aplikację. */
@@ -27,21 +30,33 @@ export function ApplicationActions({
   applicationId,
   status,
   slug,
+  jobTitle,
 }: {
   applicationId: string;
   status: string;
   slug: string | null;
+  /** Tytuł oferty do treści potwierdzenia (opcjonalny — bez niego tekst ogólny). */
+  jobTitle?: string;
 }): React.JSX.Element {
   const td = useTranslations('dashboard');
   const te = useTranslations('errors');
+  const tc = useTranslations('common');
 
   const [open, setOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [withdrawn, setWithdrawn] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
   const router = useRouter();
 
   const canWithdraw = WITHDRAWABLE.has(status);
+
+  // „…" jest zablokowany w trakcie zapisu, więc fokus wraca do niego po zakończeniu.
+  React.useEffect(() => {
+    if (withdrawn && !pending) triggerRef.current?.focus();
+  }, [withdrawn, pending]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -61,23 +76,36 @@ export function ApplicationActions({
     };
   }, [open]);
 
+  const askWithdraw = () => {
+    setOpen(false);
+    setConfirmOpen(true);
+  };
+
   const handleWithdraw = () => {
     if (pending) return;
     setError(false);
-    setOpen(false);
+    setWithdrawn(false);
     startTransition(async () => {
-      const res = await withdrawApplication(applicationId);
-      if (res.ok) {
-        router.refresh();
-        return;
+      try {
+        const res = await withdrawApplication(applicationId);
+        setConfirmOpen(false);
+        if (res.ok) {
+          setWithdrawn(true);
+          router.refresh();
+          return;
+        }
+        setError(true);
+      } catch {
+        setConfirmOpen(false);
+        setError(true);
       }
-      setError(true);
     });
   };
 
   return (
     <div ref={containerRef} className="relative shrink-0">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
         disabled={pending}
@@ -110,7 +138,7 @@ export function ApplicationActions({
             <button
               type="button"
               role="menuitem"
-              onClick={handleWithdraw}
+              onClick={askWithdraw}
               className={cn(
                 'flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-error-text transition-colors hover:bg-error/10',
               )}
@@ -122,9 +150,31 @@ export function ApplicationActions({
         </div>
       ) : null}
 
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={td('withdrawConfirmTitle')}
+        description={
+          jobTitle
+            ? td('withdrawConfirmDescriptionNamed', { title: jobTitle })
+            : td('withdrawConfirmDescription')
+        }
+        confirmLabel={td('withdrawConfirm')}
+        cancelLabel={tc('cancel')}
+        onConfirm={handleWithdraw}
+        pending={pending}
+        getReturnFocus={() => triggerRef.current}
+      />
+
       {error ? (
         <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">
           <Toast message={te('generic')} tone="error" onClose={() => setError(false)} />
+        </div>
+      ) : null}
+
+      {withdrawn ? (
+        <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">
+          <Toast message={td('withdrawSuccess')} onClose={() => setWithdrawn(false)} />
         </div>
       ) : null}
     </div>

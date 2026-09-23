@@ -129,6 +129,7 @@ export default async function CandidateProposalsPage({
                     <ProposalActions
                       offerId={offer.id}
                       expiresAt={offer.expiresAt}
+                      jobTitle={offer.jobTitle || undefined}
                       initialCanRespond={canRespondToProposal(
                         offer.status,
                         offer.expiresAt,

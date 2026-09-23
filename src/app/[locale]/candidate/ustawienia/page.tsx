@@ -1,14 +1,16 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { getNotificationPreferences } from '@/lib/data/notification-preferences';
+import { loadNotificationPreferences } from '@/lib/data/notification-preferences';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
+import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
 
 /**
  * Panel kandydata — Ustawienia (preferencje powiadomień, Etap 6).
  *
  * Formularz przełączników preferencji (`notification_preferences`), dane pod sesją/RLS z
- * `@/lib/data/notification-preferences`; bez env — wartości domyślne. NOINDEX (panel) +
+ * `@/lib/data/notification-preferences`; bez env — wartości domyślne. Błąd odczytu → stan
+ * błędu z ponowieniem zamiast formularza (#309 — zapis nie może nadpisać opt-outów). NOINDEX (panel) +
  * `force-dynamic` (dane zależne od sesji). Guard zalogowania dziedziczony z `candidate/layout.tsx`.
  */
 
@@ -36,7 +38,7 @@ export default async function CandidateSettingsPage({
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'settings' });
-  const preferences = await getNotificationPreferences();
+  const load = await loadNotificationPreferences();
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -46,7 +48,11 @@ export default async function CandidateSettingsPage({
       </header>
 
       <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
-        <NotificationPreferencesForm defaultValues={preferences} />
+        {load.status === 'ready' ? (
+          <NotificationPreferencesForm defaultValues={load.preferences} />
+        ) : (
+          <NotificationPreferencesLoadError />
+        )}
       </section>
     </div>
   );

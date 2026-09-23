@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import {
   OnboardingWizard,
   type OnboardingInitialValues,
+  type OnboardingStepNumber,
 } from '@/components/candidate/OnboardingWizard';
 import { OnboardingLoadError } from '@/components/candidate/OnboardingLoadError';
 import { isSupabaseConfigured } from '@/lib/env';
@@ -154,18 +155,31 @@ async function loadInitialValues(): Promise<LoadResult> {
   }
 }
 
+/** `?step=N` (1–6) otwiera wskazany krok (linki „Dodaj" z checklisty profilu, #317). */
+function parseStep(value: string | string[] | undefined): OnboardingStepNumber {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 6 ? (n as OnboardingStepNumber) : 1;
+}
+
 export default async function CandidateOnboardingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  const initialStep = parseStep((await searchParams)['step']);
 
   const result = await loadInitialValues();
   if (result.status === 'error') return <OnboardingLoadError />;
 
   return (
-    <OnboardingWizard initialValues={result.status === 'ok' ? result.values : undefined} />
+    <OnboardingWizard
+      initialValues={result.status === 'ok' ? result.values : undefined}
+      initialStep={initialStep}
+    />
   );
 }

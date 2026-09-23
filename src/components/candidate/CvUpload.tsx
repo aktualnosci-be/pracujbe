@@ -6,11 +6,17 @@ import { FileText, Trash2, UploadCloud } from 'lucide-react';
 
 import { useRouter } from '@/i18n/navigation';
 import { uploadCandidateCv, deleteCandidateFile } from '@/lib/actions/files';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 /**
  * Upload CV kandydata (PDF/DOC/DOCX, <=5 MB) — prywatny bucket + signed URLs (Invariant #10).
  * Kliencki fragment: FormData -> server action `uploadCandidateCv`; blokada w trakcie
  * (useTransition), komunikaty z i18n. Po sukcesie odświeża panel (router.refresh).
+ *
+ * `loadFailed` (#331): odczyt listy się nie udał — pokazujemy błąd z ponowieniem zamiast
+ * „Brak wgranych dokumentów" i ukrywamy wgrywanie, żeby nie powstawały duplikaty CV.
+ * Usunięcie pliku wymaga potwierdzenia (#328); po nim fokus wraca do „Wgraj", a wynik
+ * ogłasza komunikat `role="status"`.
  */
 export interface CvItem {
   id: string;
@@ -19,12 +25,29 @@ export interface CvItem {
   url: string | null;
 }
 
-export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
+export function CvUpload({
+  items,
+  loadFailed = false,
+}: {
+  items: CvItem[];
+  loadFailed?: boolean;
+}): React.JSX.Element {
   const t = useTranslations('files');
+  const tc = useTranslations('common');
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const uploadRef = React.useRef<HTMLButtonElement>(null);
+  const deleteTriggerRef = React.useRef<HTMLButtonElement | null>(null);
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
+  const [confirmItem, setConfirmItem] = React.useState<CvItem | null>(null);
+  const [deleted, setDeleted] = React.useState(false);
+  const deletedRef = React.useRef(false);
+
+  // Po usunięciu kosz znika; fokus idzie do „Wgraj", gdy przestanie być zablokowany zapisem.
+  React.useEffect(() => {
+    if (deleted && !pending) uploadRef.current?.focus();
+  }, [deleted, pending]);
 
   function onPick(): void {
     inputRef.current?.click();
@@ -34,6 +57,7 @@ export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setDeleted(false);
     const fd = new FormData();
     fd.append('file', file);
     startTransition(async () => {
@@ -44,13 +68,49 @@ export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
     });
   }
 
+  function askDelete(item: CvItem, trigger: HTMLButtonElement): void {
+    deleteTriggerRef.current = trigger;
+    deletedRef.current = false;
+    setConfirmItem(item);
+  }
+
   function onDelete(id: string): void {
     setError(null);
+    setDeleted(false);
     startTransition(async () => {
-      const res = await deleteCandidateFile(id);
-      if (!res.ok) setError(t('deleteError'));
-      else router.refresh();
+      let ok = false;
+      try {
+        ok = (await deleteCandidateFile(id)).ok;
+      } catch {
+        ok = false;
+      }
+      deletedRef.current = ok;
+      setConfirmItem(null);
+      if (!ok) {
+        setError(t('deleteError'));
+        return;
+      }
+      setDeleted(true);
+      router.refresh();
     });
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="min-w-0 rounded-lg border border-border bg-background p-4">
+        <h3 className="mb-3 text-sm font-semibold text-foreground">{t('cvTitle')}</h3>
+        <div role="alert">
+          <p className="text-sm text-error-text">{t('loadError')}</p>
+          <button
+            type="button"
+            onClick={() => router.refresh()}
+            className="mt-3 inline-flex min-h-12 items-center rounded-md border border-border px-4 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            {tc('retry')}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -58,6 +118,7 @@ export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">{t('cvTitle')}</h3>
         <button
+          ref={uploadRef}
           type="button"
           onClick={onPick}
           disabled={pending}
@@ -96,7 +157,7 @@ export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
               </span>
               <button
                 type="button"
-                onClick={() => onDelete(item.id)}
+                onClick={(event) => askDelete(item, event.currentTarget)}
                 disabled={pending}
                 aria-label={`${t('delete')}: ${item.fileName}`}
                 className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-error disabled:opacity-60"
@@ -115,6 +176,28 @@ export function CvUpload({ items }: { items: CvItem[] }): React.JSX.Element {
           {error}
         </p>
       ) : null}
+
+      {deleted ? (
+        <p role="status" className="mt-2 text-xs text-success-text">
+          {t('deleteSuccess')}
+        </p>
+      ) : null}
+
+      <ConfirmDialog
+        open={confirmItem !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmItem(null);
+        }}
+        title={t('deleteConfirmTitle')}
+        description={t('deleteConfirmDescription', { name: confirmItem?.fileName ?? '' })}
+        confirmLabel={t('delete')}
+        cancelLabel={tc('cancel')}
+        onConfirm={() => {
+          if (confirmItem) onDelete(confirmItem.id);
+        }}
+        pending={pending}
+        getReturnFocus={() => (deletedRef.current ? uploadRef.current : deleteTriggerRef.current)}
+      />
     </div>
   );
 }
