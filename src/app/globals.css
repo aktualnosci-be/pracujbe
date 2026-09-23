@@ -45,7 +45,11 @@
 
     /* Obrysy / kontrolki / focus */
     --border: 0 0% 87%;
-    --input: 0 0% 87%;
+    /* Obramowanie kontrolek formularzy (input, select, textarea, checkbox,
+       przyciski outline, chipy wyboru). WCAG 1.4.11: ≥ 3:1 z tłem —
+       #757575 daje ≈ 4,6:1 na bieli i ≈ 4,3:1 na --soft/--muted (#218).
+       --border zostaje jasny: to obrys dekoracyjny kart i separatorów. */
+    --input: 0 0% 46%;
     --ring: 357 68% 51%;
 
     /* Promień zaokrągleń */
