@@ -212,6 +212,16 @@ export default async function EmployerDashboardPage({
                       <p className="truncate text-sm text-muted-foreground">{application.jobTitle}</p>
                     </div>
                     <StatusPill status={application.status} />
+                    <Link
+                      href={`/employer/aplikacje/${encodeURIComponent(application.id)}`}
+                      aria-label={td('employerApplicationViewLabel', {
+                        name: application.candidateName || td('candidateFallback'),
+                        job: application.jobTitle || td('applicationUnknownJob'),
+                      })}
+                      className="inline-flex min-h-11 items-center rounded-lg border border-border px-3 text-sm font-medium text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      {td('employerApplicationView')}
+                    </Link>
                     <ApplicationStatusMenu
                       applicationId={application.id}
                       status={application.status}

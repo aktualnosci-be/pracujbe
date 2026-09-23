@@ -88,6 +88,13 @@ export default async function EmployerApplicationsPage({
                     </dl>
                     <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
                       <StatusPill status={application.status} />
+                      <Link
+                        href={`/employer/aplikacje/${encodeURIComponent(application.id)}`}
+                        aria-label={t('employerApplicationViewLabel', { name, job: application.jobTitle || t('applicationUnknownJob') })}
+                        className="inline-flex min-h-12 items-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        {t('employerApplicationView')}
+                      </Link>
                       <ApplicationStatusMenu applicationId={application.id} status={application.status} candidateName={name} jobTitle={application.jobTitle} />
                     </div>
                   </article>
