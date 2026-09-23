@@ -137,10 +137,10 @@ export function ProposalActions({
 
   return (
     <div className={className}>
-      {showActions ? <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      {showActions ? <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Button
           type="button"
-          className="w-full sm:w-auto"
+          className="h-auto min-h-12 w-full min-w-0 whitespace-normal text-center sm:w-auto"
           onClick={() => respond(true)}
           disabled={pending}
         >
@@ -151,7 +151,7 @@ export function ProposalActions({
           ref={declineRef}
           type="button"
           variant="outline"
-          className="w-full sm:w-auto"
+          className="h-auto min-h-12 w-full min-w-0 whitespace-normal text-center sm:w-auto"
           onClick={() => setConfirmOpen(true)}
           disabled={pending}
         >

@@ -794,7 +794,10 @@
     "statusFinalLabel": "Eindstatus: {name} — {job} ({status})",
     "statusConfirmQuestion": "Status wijzigen naar „{status}”? Deze wijziging kan niet ongedaan worden gemaakt.",
     "statusConfirmAction": "Bevestigen",
-    "offerForJob": "Vacature: {job}"
+    "offerForJob": "Vacature: {job}",
+    "greetingNoName": "Welkom!",
+    "viewProposal": "Bekijk het voorstel",
+    "rowActionsFor": "Acties: {title}"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",

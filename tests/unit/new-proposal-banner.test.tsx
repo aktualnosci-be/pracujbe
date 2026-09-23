@@ -77,7 +77,7 @@ describe('NewProposalBanner', () => {
       show(status);
 
       expect(
-        screen.getByRole('link', { name: en.dashboard.viewOffer }),
+        screen.getByRole('link', { name: en.dashboard.viewProposal }),
       ).toHaveAttribute('href', '/jobs/real-offer');
 
       fireEvent.click(screen.getByRole('button', { name: en.nav.close }));

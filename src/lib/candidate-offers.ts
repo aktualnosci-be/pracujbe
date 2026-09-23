@@ -64,3 +64,12 @@ export function findLatestActiveProposal<
       })[0] ?? null
   );
 }
+
+/** Kotwica karty propozycji na `/candidate/propozycje` — baner prowadzi tam, gdzie można odpowiedzieć (#324). */
+export function proposalAnchorId(offerId: string): string {
+  return `offer-${offerId}`;
+}
+
+export function proposalAnchorHref(offerId: string): string {
+  return `/candidate/propozycje#${proposalAnchorId(offerId)}`;
+}

@@ -54,9 +54,9 @@ export function StatCard({
   const valueClass = !icon && tone ? VALUE_TONE[tone] : 'text-foreground';
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+    <div className="min-w-0 rounded-lg border border-border bg-card p-4 sm:p-5">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <p className="min-w-0 break-words text-sm font-medium text-muted-foreground [overflow-wrap:anywhere]">{label}</p>
         {icon ? (
           <span
             className={cn(
@@ -70,11 +70,11 @@ export function StatCard({
         ) : null}
       </div>
 
-      <p className={cn('mt-2 text-3xl font-bold leading-tight tabular-nums', valueClass)}>
+      <p className={cn('mt-2 break-words text-3xl font-bold leading-tight tabular-nums', valueClass)}>
         {value}
       </p>
 
-      {sub ? <p className="mt-1 text-sm text-muted-foreground">{sub}</p> : null}
+      {sub ? <p className="mt-1 break-words text-sm text-muted-foreground">{sub}</p> : null}
 
       {typeof progress === 'number' ? <MatchBar value={progress} className="mt-3" /> : null}
     </div>

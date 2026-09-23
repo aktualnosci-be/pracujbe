@@ -19,11 +19,11 @@ const profile: CandidateProfileSummary = {
   completionPct: 50,
   checklist: {
     basicInfo: true,
-    experience: false,
-    education: true,
-    skills: true,
+    preferences: true,
+    experience: true,
+    location: false,
     languages: false,
-    photo: false,
+    availability: false,
   },
 };
 const passport: CandidatePassport = {

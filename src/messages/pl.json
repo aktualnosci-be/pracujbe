@@ -794,7 +794,10 @@
     "statusFinalLabel": "Status końcowy: {name} — {job} ({status})",
     "statusConfirmQuestion": "Zmienić status na „{status}”? Tej zmiany nie można cofnąć.",
     "statusConfirmAction": "Potwierdź",
-    "offerForJob": "Oferta: {job}"
+    "offerForJob": "Oferta: {job}",
+    "greetingNoName": "Witaj!",
+    "viewProposal": "Zobacz propozycję",
+    "rowActionsFor": "Działania: {title}"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",

@@ -794,7 +794,10 @@
     "statusFinalLabel": "Statut final : {name} — {job} ({status})",
     "statusConfirmQuestion": "Passer le statut à « {status} » ? Ce changement est définitif.",
     "statusConfirmAction": "Confirmer",
-    "offerForJob": "Offre : {job}"
+    "offerForJob": "Offre : {job}",
+    "greetingNoName": "Bonjour !",
+    "viewProposal": "Voir la proposition",
+    "rowActionsFor": "Actions : {title}"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",

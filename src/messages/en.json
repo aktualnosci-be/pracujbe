@@ -794,7 +794,10 @@
     "statusFinalLabel": "Final status: {name} — {job} ({status})",
     "statusConfirmQuestion": "Change the status to “{status}”? This cannot be undone.",
     "statusConfirmAction": "Confirm",
-    "offerForJob": "Job: {job}"
+    "offerForJob": "Job: {job}",
+    "greetingNoName": "Welcome!",
+    "viewProposal": "View proposal",
+    "rowActionsFor": "Actions: {title}"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
