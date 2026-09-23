@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server';
+import { pickClientMessages } from '@/i18n/client-messages';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { CookieConsent } from '@/components/cookies/CookieConsent';
@@ -11,7 +12,8 @@ import { inter } from '../fonts';
 
 /**
  * Layout dla segmentu językowego. To TUTAJ renderowane są <html>/<body> — z lang={locale}
- * ustawianym dynamicznie. Dostarcza wiadomości i18n do klienta (NextIntlClientProvider)
+ * ustawianym dynamicznie. Dostarcza wiadomości i18n do klienta (NextIntlClientProvider —
+ * tylko przestrzenie nazw używane przez komponenty klienckie, patrz client-messages.ts)
  * oraz baner zgód cookie. setRequestLocale włącza statyczne renderowanie stron pod danym językiem.
  *
  * UWAGA (struktura layoutów): globalny chrome (Header/Footer) NIE jest tutaj. Trafił do
@@ -82,7 +84,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   }
 
   setRequestLocale(locale);
-  const messages = await getMessages();
+  const messages = pickClientMessages(await getMessages());
 
   return (
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
