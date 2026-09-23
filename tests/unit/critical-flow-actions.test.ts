@@ -106,7 +106,12 @@ describe('applyToJob', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it.each(PG_ERRORS)('błąd RPC „%s” → %s bez technikaliów', async (message, code) => {
+  // applyToJob odróżnia brak sesji (UNAUTHENTICATED → link logowania w modalu) od PERMISSION_DENIED.
+  const APPLY_ERRORS = PG_ERRORS.map(([message, code]): [string, string] =>
+    message === 'UNAUTHENTICATED' ? [message, 'UNAUTHENTICATED'] : [message, code],
+  );
+
+  it.each(APPLY_ERRORS)('błąd RPC „%s” → %s bez technikaliów', async (message, code) => {
     rpc.mockResolvedValue({ data: null, error: { message } });
     const result = await applyToJob(application);
     expect(result).toEqual({ ok: false, error: code });
