@@ -1,14 +1,16 @@
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { ArrowRight, SearchX } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
+import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getJobs, type LocationKey } from '@/lib/jobs';
 import { JobCard } from '@/components/public/JobCard';
+import { resolveCityAlias } from './city-alias';
 
 /**
  * Landing-page miasta `/praca/miasto/<klucz>` (SSR/SSG, INDEKSOWALNY).
@@ -105,6 +107,9 @@ export default async function CityLandingPage({ params }: PageProps) {
   setRequestLocale(locale);
 
   if (!isLocationKey(city)) {
+    // Nazwa miasta w dowolnym języku / inna wielkość liter → kanoniczny adres z kluczem.
+    const alias = await resolveCityAlias(city, LOCATION_KEYS);
+    if (alias) permanentRedirect(`/${locale}${CITY_BASE}/${alias}`);
     notFound();
   }
 
@@ -154,23 +159,14 @@ export default async function CityLandingPage({ params }: PageProps) {
       />
 
       {/* Breadcrumb */}
-      <nav aria-label={tCommon('breadcrumb')} className="mb-4 text-sm text-muted-foreground">
-        <ol className="flex flex-wrap items-center gap-1.5">
-          <li>
-            <Link href="/" className="transition-colors hover:text-foreground">
-              {tCommon('home')}
-            </Link>
-          </li>
-          <li aria-hidden="true">/</li>
-          <li>
-            <Link href={HUB_PATH} className="transition-colors hover:text-foreground">
-              {t('breadcrumbHub')}
-            </Link>
-          </li>
-          <li aria-hidden="true">/</li>
-          <li className="text-foreground">{name}</li>
-        </ol>
-      </nav>
+      <Breadcrumbs
+        ariaLabel={tCommon('breadcrumb')}
+        items={[
+          { label: tCommon('home'), href: '/' },
+          { label: t('breadcrumbHub'), href: HUB_PATH },
+          { label: name },
+        ]}
+      />
 
       {/* Nagłówek */}
       <header className="max-w-2xl">
@@ -194,7 +190,7 @@ export default async function CityLandingPage({ params }: PageProps) {
             <p className="max-w-md text-muted-foreground">{t('empty')}</p>
             <Link
               href={JOBS_PATH}
-              className="text-sm font-medium text-accent underline-offset-4 hover:underline"
+              className="inline-flex min-h-11 items-center text-sm font-medium text-accent underline-offset-4 hover:underline"
             >
               {t('viewAllJobs')}
             </Link>
@@ -211,7 +207,7 @@ export default async function CityLandingPage({ params }: PageProps) {
             <div className="mt-4">
               <Link
                 href={{ pathname: JOBS_PATH, query: { city: name } }}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-accent underline-offset-4 hover:underline"
+                className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-accent underline-offset-4 hover:underline"
               >
                 {t('seeAllCity', { name })}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -229,7 +225,7 @@ export default async function CityLandingPage({ params }: PageProps) {
             <li key={key}>
               <Link
                 href={`${CITY_BASE}/${key}`}
-                className="inline-flex items-center rounded-full border border-border bg-soft px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="inline-flex min-h-11 items-center rounded-full border border-border bg-soft px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 {tLoc(key)}
               </Link>
