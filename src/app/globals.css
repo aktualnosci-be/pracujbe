@@ -57,14 +57,29 @@
     @apply border-border;
   }
 
+  /* WCAG 2.4.11: gdy baner cookies jest widoczny, CookieConsent wystawia jego wysokość jako
+     --cookie-banner-h. Przewijany element z fokusem zatrzymuje się nad banerem, a dolny
+     odstęp pozwala przewinąć koniec strony (stopka, przycisk formularza) ponad baner. */
+  html {
+    scroll-padding-bottom: var(--cookie-banner-h, 0px);
+  }
+
   body {
     @apply bg-background font-sans text-foreground antialiased;
+    padding-bottom: var(--cookie-banner-h, 0px);
   }
 
   /* WCAG 2.1 (2.4.7): wyraźny, widoczny wskaźnik fokusu klawiatury.
      Reguła bazowa — komponenty mogą ją nadpisać własnymi utilitami focus-visible. */
   :focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* WCAG 2.4.11: przyklejony nagłówek (h-16 w Header i DashboardShell) nie może zakryć
+     elementu, do którego przeglądarka przewija fokus (Shift+Tab, kotwice #main-content).
+     4rem wysokości nagłówka + 1rem zapasu na pierścień fokusu. */
+  html {
+    scroll-padding-top: 5rem;
   }
 
   ::selection {

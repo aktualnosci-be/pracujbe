@@ -11,6 +11,10 @@ export default defineConfig({
     fileParallelism: false,
   },
   resolve: {
-    alias: { 'server-only': resolve(__dirname, 'tests/stubs/server-only.ts') },
+    // `@` jak w tsconfig i vitest.config.ts — moduły aplikacji importują `@/…` także w integracji.
+    alias: {
+      '@': resolve(__dirname, 'src'),
+      'server-only': resolve(__dirname, 'tests/stubs/server-only.ts'),
+    },
   },
 });

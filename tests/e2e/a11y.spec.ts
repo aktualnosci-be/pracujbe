@@ -94,3 +94,44 @@ for (const locale of ['pl', 'nl', 'fr', 'en']) {
     ).toEqual([]);
   });
 }
+
+/**
+ * WCAG 2.4.11 (#208): przy cofaniu fokusu (Shift+Tab) przeglądarka przewija element do górnej
+ * krawędzi okna — nie może on wtedy zniknąć w całości pod przyklejonym nagłówkiem.
+ */
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 320, height: 640 },
+]) {
+  test(`a11y: Shift+Tab nie chowa fokusu pod nagłówkiem (${viewport.width} px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/pl/oferty-pracy?category=construction,transport,warehouse,production');
+    const banner = page.locator('[aria-labelledby="cookie-banner-title"]');
+    await banner.getByRole('button').first().click();
+    await expect(banner).toHaveCount(0);
+
+    await page.locator('footer a').last().focus();
+    const hidden: string[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      await page.keyboard.press('Shift+Tab');
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        const header = document.querySelector('header');
+        if (!el || el === document.body || !header || header.contains(el)) return null;
+        // Elementy `position: fixed` (np. odnośnik „Przejdź do treści”) leżą nad nagłówkiem.
+        if (getComputedStyle(el).position === 'fixed') return null;
+        const rect = el.getBoundingClientRect();
+        return {
+          label: (el.textContent || el.getAttribute('aria-label') || el.tagName)
+            .trim()
+            .slice(0, 40),
+          fullyHidden: rect.bottom <= header.getBoundingClientRect().bottom,
+        };
+      });
+      if (stop?.fullyHidden) hidden.push(stop.label);
+    }
+    expect(hidden, 'elementy z fokusem w całości pod nagłówkiem').toEqual([]);
+  });
+}

@@ -21,12 +21,32 @@ vi.mock('@/lib/actions/public-saved-jobs', () => ({
 }));
 vi.mock('@/lib/actions/candidate', () => ({ toggleSavedJob: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
-  Link: ({ children, ...props }: React.ComponentProps<'a'>) => (
-    <a {...props}>{children}</a>
+  Link: ({
+    children,
+    href,
+    ...props
+  }: Omit<React.ComponentProps<'a'>, 'href'> & {
+    href: string | { pathname: string; query: Record<string, string> };
+  }) => (
+    <a
+      {...props}
+      href={
+        typeof href === 'string'
+          ? href
+          : `${href.pathname}?${new URLSearchParams(href.query).toString()}`
+      }
+    >
+      {children}
+    </a>
   ),
 }));
+const pathname = vi.hoisted(() => ({ current: null as string | null }));
+vi.mock('next/navigation', () => ({ usePathname: () => pathname.current }));
 afterEach(cleanup);
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  pathname.current = null;
+});
 const id = '11111111-1111-4111-8111-111111111111';
 function show() {
   return render(
@@ -102,13 +122,26 @@ describe('Public saved jobs controls', () => {
     ).toHaveLength(2);
     expect(toggleSavedJob).not.toHaveBeenCalled();
   });
-  it('anonymous users receive a login link without unsupported return parameters', async () => {
+  it('anonymous users receive a login link returning to the current offer', async () => {
+    pathname.current = '/pl/oferty-pracy/murarz-bruksela-1002';
+    vi.mocked(getPublicSavedJobs).mockResolvedValue({ status: 'anonymous' });
+    show();
+    (await screen.findAllByRole('link', { name: en.jobs.saveLogin })).forEach(
+      (link) =>
+        expect(link).toHaveAttribute(
+          'href',
+          '/logowanie?next=%2Fpl%2Foferty-pracy%2Fmurarz-bruksela-1002',
+        ),
+    );
+    expect(toggleSavedJob).not.toHaveBeenCalled();
+  });
+  it('anonymous login link drops an unsafe or missing return path', async () => {
+    pathname.current = '//evil.example/pl';
     vi.mocked(getPublicSavedJobs).mockResolvedValue({ status: 'anonymous' });
     show();
     (await screen.findAllByRole('link', { name: en.jobs.saveLogin })).forEach(
       (link) => expect(link).toHaveAttribute('href', '/logowanie'),
     );
-    expect(toggleSavedJob).not.toHaveBeenCalled();
   });
   it('unavailable mode cannot claim a saved result', async () => {
     vi.mocked(getPublicSavedJobs).mockResolvedValue({ status: 'unavailable' });

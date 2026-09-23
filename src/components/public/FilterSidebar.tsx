@@ -562,6 +562,7 @@ export function FilterSidebar({
   className,
 }: FilterSidebarProps): React.JSX.Element {
   const t = useTranslations('filters');
+  const tJobs = useTranslations('jobs');
   const router = useRouter();
   const pathname = usePathname();
 
@@ -590,9 +591,12 @@ export function FilterSidebar({
   return (
     <div
       data-filter-passport="desktop"
-      className={cn('min-w-0 border-r border-border pr-5', className)}
+      className={cn(
+        'flex min-h-0 min-w-0 flex-col border-r border-border pr-5',
+        className,
+      )}
     >
-      <div className="mb-5 flex items-center justify-between gap-3 border-b border-border pb-4">
+      <div className="mb-5 flex shrink-0 items-center justify-between gap-3 border-b border-border pb-4">
         <h2 className="flex items-center gap-2.5 text-base font-semibold text-foreground before:h-2 before:w-2 before:shrink-0 before:rounded-full before:bg-primary">
           {t('title')}
         </h2>
@@ -606,12 +610,18 @@ export function FilterSidebar({
         </button>
       </div>
 
-      <FilterFields
-        facets={liveFacets.facets}
-        value={pending}
-        onChange={setPending}
-        idPrefix="d"
-      />
+      {/* Pola przewijają się wewnątrz panelu; zatwierdzenie zostaje widoczne pod nimi (#216). */}
+      <div
+        data-filter-scroll="desktop"
+        className="-mx-1 min-h-0 flex-1 overflow-y-auto border-b border-border px-1 pb-5 pt-1"
+      >
+        <FilterFields
+          facets={liveFacets.facets}
+          value={pending}
+          onChange={setPending}
+          idPrefix="d"
+        />
+      </div>
 
       {liveFacets.status === 'error' ? (
         <div className="mt-6 space-y-2" role="alert">
@@ -624,16 +634,22 @@ export function FilterSidebar({
       <Button
         type="button"
         onClick={apply}
-        disabled={liveFacets.status !== 'idle'}
         aria-busy={liveFacets.status === 'loading'}
         className="mt-6 w-full rounded-xl"
       >
+        {/* Licznik to tylko podpowiedź: bez aktualnej liczby zatwierdzenie nadal działa (#220). */}
         {liveFacets.status === 'idle'
           ? t('showResults', { count: liveFacets.facets.total })
-          : liveFacets.status === 'loading'
-            ? t('countLoading')
-            : t('countUnavailable')}
+          : tJobs('filterButton')}
       </Button>
+      {liveFacets.status === 'loading' ? (
+        <p
+          role="status"
+          className="mt-2 text-center text-xs text-muted-foreground"
+        >
+          {t('countLoading')}
+        </p>
+      ) : null}
     </div>
   );
 }

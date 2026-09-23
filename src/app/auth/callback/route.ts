@@ -4,6 +4,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { env } from '@/lib/env';
 import { routing, type Locale } from '@/i18n/routing';
 import { bootstrapCompany } from '@/lib/actions/auth';
+import { safeNextPath } from '@/lib/validation/auth';
 
 /**
  * Route handler callbacku Auth: wymienia kod (PKCE) na sesję (`exchangeCodeForSession`)
@@ -27,24 +28,6 @@ function isLocale(value: string | null): value is Locale {
   return value !== null && supported.includes(value);
 }
 
-/**
- * Zezwól tylko na bezpieczne, wewnętrzne ścieżki z prefiksem języka (`/{locale}/...`).
- * Chroni przed open redirect oraz wyjściem poza routing i18n (allowlist na pierwszy segment).
- */
-function sanitizeNext(value: string | null): string | null {
-  if (!value || !value.startsWith('/')) {
-    return null;
-  }
-  if (value.startsWith('//') || value.startsWith('/\\')) {
-    return null;
-  }
-  const firstSegment = value.split('/')[1];
-  if (firstSegment === undefined || !isLocale(firstSegment)) {
-    return null;
-  }
-  return value;
-}
-
 function panelPathForRole(role: string | undefined): string {
   if (role === 'employer') {
     return '/employer';
@@ -58,7 +41,8 @@ function panelPathForRole(role: string | undefined): string {
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = sanitizeNext(searchParams.get('next'));
+  // Ta sama walidacja co przy logowaniu/rejestracji (brak open redirect, wymagany prefiks języka).
+  const next = safeNextPath(searchParams.get('next'));
   const localeParam = searchParams.get('locale');
   const locale: Locale = isLocale(localeParam) ? localeParam : routing.defaultLocale;
 

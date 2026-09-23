@@ -109,7 +109,7 @@ describe("odmiana liczby w przycisku zatwierdzenia (#226)", () => {
 });
 
 describe("dokładny licznik oczekujących filtrów", () => {
-  it("natychmiast usuwa starą liczbę, blokuje CTA i pokazuje dokładny wynik przed apply", async () => {
+  it("natychmiast usuwa starą liczbę, pozostawia CTA aktywne bez liczby i pokazuje dokładny wynik przed apply", async () => {
     const request = deferred<Response>();
     vi.mocked(fetch).mockReturnValueOnce(request.promise);
     show();
@@ -117,9 +117,12 @@ describe("dokładny licznik oczekujących filtrów", () => {
     expect(screen.getByRole("button", { name: "Show 12 jobs" })).toBeEnabled();
     fireEvent.click(screen.getByLabelText("Immediate start"));
 
-    const pendingCta = screen.getByRole("button", { name: "Counting jobs…" });
-    expect(pendingCta).toBeDisabled();
+    // #220: licznik to podpowiedź — w trakcie liczenia CTA nie pokazuje starej liczby,
+    // ale nadal zatwierdza filtry (wolne API nie może blokować filtrowania).
+    const pendingCta = screen.getByRole("button", { name: "Filter" });
+    expect(pendingCta).toBeEnabled();
     expect(pendingCta).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status")).toHaveTextContent("Counting jobs…");
     expect(
       screen.queryByRole("button", { name: "Show 12 jobs" }),
     ).not.toBeInTheDocument();
@@ -179,9 +182,9 @@ describe("dokładny licznik oczekujących filtrów", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "We could not count the jobs. Try again.",
     );
-    expect(
-      screen.getByRole("button", { name: "Job count unavailable" }),
-    ).toBeDisabled();
+    // #220: awaria licznika nie blokuje zatwierdzenia; CTA bez fałszywej liczby.
+    const unavailableCta = screen.getByRole("button", { name: "Filter" });
+    expect(unavailableCta).toBeEnabled();
     expect(screen.queryByText("Show 12 jobs")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Count again" }));
@@ -191,5 +194,18 @@ describe("dokładny licznik oczekujących filtrów", () => {
 
     expect(screen.getByRole("button", { name: "Show 0 jobs" })).toBeEnabled();
     expect(screen.getByLabelText("Liège")).toBeChecked();
+  });
+
+  it("zatwierdza filtry mimo trwałej awarii licznika", async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error("transport"));
+    show();
+
+    fireEvent.click(screen.getByLabelText("Immediate start"));
+    await startRequest();
+    await act(async () => {});
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+    expect(push).toHaveBeenCalledWith("/jobs?immediate=1");
   });
 });

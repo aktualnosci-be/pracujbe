@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Link } from '@/i18n/navigation';
+import { Link, usePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import {
   acceptAllCategories,
@@ -30,7 +31,31 @@ import { Analytics } from './Analytics';
  *
  * Do momentu zamontowania po stronie klienta komponent nie renderuje banera (uniknięcie
  * niezgodności hydratacji — zgoda żyje w cookie dostępnym dopiero w przeglądarce).
+ *
+ * Dostępność banera (WCAG 2.4.3 / 2.4.11 / 1.4.4 / 1.4.10):
+ * - baner trafia do kontenera wstawianego tuż za odnośnikiem „Przejdź do treści" (albo na
+ *   początek <body>, gdy strona go nie ma), więc jest na początku kolejności Tab, a nie za stopką;
+ * - jego wysokość jest wystawiana jako `--cookie-banner-h` na <html>; globals.css zamienia ją
+ *   na `scroll-padding-bottom` i `padding-bottom`, dzięki czemu element z fokusem i koniec strony
+ *   dają się przewinąć ponad baner;
+ * - baner ma ograniczoną wysokość i przewija się wewnątrz, a przyciski zawijają tekst — przy
+ *   powiększonym tekście żadna z trzech opcji nie wychodzi poza ekran.
  */
+
+/** Zmienna CSS z wysokością banera (odczytywana w globals.css). */
+const BANNER_HEIGHT_VAR = '--cookie-banner-h';
+/** Zapas nad banerem dla przewijanego elementu z fokusem (px). */
+const BANNER_SCROLL_GAP = 8;
+
+/** Wstawia kontener banera za odnośnikiem do treści (lub na początek body). */
+function placeBannerHost(host: HTMLElement) {
+  const skipLink = document.querySelector('a[href="#main-content"]');
+  if (skipLink?.parentNode) {
+    if (skipLink.nextSibling !== host) skipLink.after(host);
+  } else if (document.body.firstChild !== host) {
+    document.body.prepend(host);
+  }
+}
 
 type CategoryMeta = {
   key: ConsentCategory;
@@ -86,6 +111,9 @@ function ConsentSwitch({
   );
 }
 
+/** Przyciski banera zawijają tekst (bez `whitespace-nowrap`), zachowując min. 48 px wysokości. */
+const BANNER_BUTTON = 'h-auto min-h-12 w-full whitespace-normal text-center sm:w-auto';
+
 export function CookieConsent() {
   const t = useTranslations('cookies');
   const tNav = useTranslations('nav');
@@ -95,6 +123,10 @@ export function CookieConsent() {
   const [bannerVisible, setBannerVisible] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draft, setDraft] = useState<ConsentCategories>(necessaryOnly());
+  const [bannerHost, setBannerHost] = useState<HTMLElement | null>(null);
+  const hostRef = useRef<HTMLElement | null>(null);
+  const bannerRef = useRef<HTMLDivElement | null>(null);
+  const pathname = usePathname();
 
   // Odczyt istniejącej zgody po stronie klienta.
   useEffect(() => {
@@ -114,6 +146,51 @@ export function CookieConsent() {
     window.addEventListener(OPEN_SETTINGS_EVENT, onOpenSettings);
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpenSettings);
   }, []);
+
+  // Kontener banera na początku kolejności Tab. Po zmianie trasy layout mógł się wymienić
+  // (np. publiczny → auth), więc kontener jest ponownie umieszczany we właściwym miejscu.
+  useEffect(() => {
+    if (!bannerVisible) return;
+    const host = hostRef.current ?? document.createElement('div');
+    hostRef.current = host;
+    placeBannerHost(host);
+    setBannerHost(host);
+  }, [bannerVisible, pathname]);
+
+  useEffect(() => {
+    return () => {
+      hostRef.current?.remove();
+      document.documentElement.style.removeProperty(BANNER_HEIGHT_VAR);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (bannerVisible) return;
+    hostRef.current?.remove();
+    hostRef.current = null;
+    setBannerHost(null);
+  }, [bannerVisible]);
+
+  // Wysokość banera → zmienna CSS (scroll-padding/padding strony w globals.css).
+  useEffect(() => {
+    const root = document.documentElement;
+    const banner = bannerRef.current;
+    if (!bannerVisible || !bannerHost || !banner) {
+      root.style.removeProperty(BANNER_HEIGHT_VAR);
+      return;
+    }
+    const update = () => {
+      const height = Math.ceil(banner.getBoundingClientRect().height);
+      root.style.setProperty(BANNER_HEIGHT_VAR, `${height + BANNER_SCROLL_GAP}px`);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(banner);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty(BANNER_HEIGHT_VAR);
+    };
+  }, [bannerVisible, bannerHost]);
 
   const persist = useCallback((categories: ConsentCategories) => {
     updateConsent(categories);
@@ -139,47 +216,51 @@ export function CookieConsent() {
     <>
       {mounted ? <Analytics /> : null}
 
-      {mounted && bannerVisible ? (
-        <div
-          role="region"
-          aria-labelledby="cookie-banner-title"
-          aria-describedby="cookie-banner-desc"
-          className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background shadow-[0_-4px_24px_rgba(15,42,71,0.08)]"
-        >
-          <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-1 lg:max-w-2xl">
-              <p id="cookie-banner-title" className="text-base font-semibold text-foreground">
-                {t('bannerTitle')}
-              </p>
-              <p id="cookie-banner-desc" className="text-sm text-muted-foreground">
-                {t('bannerDesc')}{' '}
-                <Link
-                  href="/polityka-cookies"
-                  className="font-medium text-accent underline-offset-4 hover:underline"
-                >
-                  {t('moreInfo')}
-                </Link>
-              </p>
-            </div>
-            {/* Invariant #7: trzy równorzędne opcje — odrzucenie tak samo łatwe jak akceptacja. */}
-            <div className="flex flex-col gap-2 sm:flex-row lg:shrink-0">
-              <Button
-                variant="outline"
-                onClick={handleRejectOptional}
-                className="w-full sm:w-auto"
-              >
-                {t('rejectOptional')}
-              </Button>
-              <Button variant="outline" onClick={openCustomize} className="w-full sm:w-auto">
-                {t('customize')}
-              </Button>
-              <Button variant="outline" onClick={handleAcceptAll} className="w-full sm:w-auto">
-                {t('acceptAll')}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {mounted && bannerVisible && bannerHost
+        ? createPortal(
+            <div
+              ref={bannerRef}
+              role="region"
+              aria-labelledby="cookie-banner-title"
+              aria-describedby="cookie-banner-desc"
+              className="fixed inset-x-0 bottom-0 z-50 max-h-[60dvh] overflow-y-auto overscroll-contain border-t border-border bg-background shadow-[0_-4px_24px_rgba(15,42,71,0.08)]"
+            >
+              <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+                <div className="space-y-1 lg:max-w-2xl">
+                  <p id="cookie-banner-title" className="text-base font-semibold text-foreground">
+                    {t('bannerTitle')}
+                  </p>
+                  <p id="cookie-banner-desc" className="text-sm text-muted-foreground">
+                    {t('bannerDesc')}{' '}
+                    <Link
+                      href="/polityka-cookies"
+                      className="font-medium text-accent underline-offset-4 hover:underline"
+                    >
+                      {t('moreInfo')}
+                    </Link>
+                  </p>
+                </div>
+                {/* Invariant #7: trzy równorzędne opcje — odrzucenie tak samo łatwe jak akceptacja. */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:max-w-[60%] lg:shrink-0">
+                  <Button
+                    variant="outline"
+                    onClick={handleRejectOptional}
+                    className={BANNER_BUTTON}
+                  >
+                    {t('rejectOptional')}
+                  </Button>
+                  <Button variant="outline" onClick={openCustomize} className={BANNER_BUTTON}>
+                    {t('customize')}
+                  </Button>
+                  <Button variant="outline" onClick={handleAcceptAll} className={BANNER_BUTTON}>
+                    {t('acceptAll')}
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            bannerHost,
+          )
+        : null}
 
       <Dialog.Root open={settingsOpen} onOpenChange={setSettingsOpen}>
         <Dialog.Portal>

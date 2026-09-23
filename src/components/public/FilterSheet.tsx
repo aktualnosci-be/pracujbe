@@ -296,6 +296,7 @@ export function FilterSheet({
   className,
 }: FilterSheetProps): React.JSX.Element {
   const t = useTranslations('filters');
+  const tJobs = useTranslations('jobs');
   const router = useRouter();
   const pathname = usePathname();
 
@@ -419,16 +420,22 @@ export function FilterSheet({
               <Button
                 type="button"
                 onClick={apply}
-                disabled={liveFacets.status !== 'idle'}
                 aria-busy={liveFacets.status === 'loading'}
                 className="min-h-12 w-full rounded-xl"
               >
+                {/* Licznik to tylko podpowiedź: bez aktualnej liczby zatwierdzenie nadal działa (#220). */}
                 {liveFacets.status === 'idle'
                   ? t('showResults', { count: liveFacets.facets.total })
-                  : liveFacets.status === 'loading'
-                    ? t('countLoading')
-                    : t('countUnavailable')}
+                  : tJobs('filterButton')}
               </Button>
+              {liveFacets.status === 'loading' ? (
+                <p
+                  role="status"
+                  className="mt-2 text-center text-xs text-muted-foreground"
+                >
+                  {t('countLoading')}
+                </p>
+              ) : null}
             </div>
           </Dialog.Content>
         </Dialog.Portal>
