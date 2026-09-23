@@ -267,13 +267,20 @@ export default async function JobDetailPage({ params }: PageProps) {
       open
       className="group border-b border-border py-4 first:pt-0 lg:border-0 lg:py-0"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 lg:pointer-events-none lg:cursor-default [&::-webkit-details-marker]:hidden">
+      {/*
+        Akordeon tylko na mobile: na `lg` summary znika (display:none), więc nie jest
+        przystankiem Tab i Enter/Spacja nie zwinie sekcji, której nie da się rozwinąć myszą.
+        Na desktopie nagłówek sekcji to osobny `h2` za summary (w drzewie a11y zawsze tylko
+        jeden z nich).
+      */}
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 lg:hidden [&::-webkit-details-marker]:hidden">
         <h2 className="text-xl font-semibold text-foreground">{title}</h2>
         <ChevronDown
           className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 lg:hidden"
           aria-hidden="true"
         />
       </summary>
+      <h2 className="hidden text-xl font-semibold text-foreground lg:block">{title}</h2>
       <div className="mt-3 lg:mt-4">{children}</div>
     </details>
   );
