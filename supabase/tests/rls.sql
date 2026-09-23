@@ -1534,7 +1534,7 @@ select pg_temp.assert(
   'LL5 helper odbiorców nie jest wywoływalny przez role klienta');
 
 -- ============================================================================
--- MM. Kolejka e-mail (0074): klucz per przejście statusu (#292), applicationViewed
+-- MM. Kolejka e-mail (0073): klucz per przejście statusu (#292), applicationViewed
 --     i jobPublished (#295); język = język ODBIORCY (Invariant #1)
 -- ============================================================================
 -- Fixture z LL: appl2 (CANDL, locale fr) w stanie submitted; OWNL = aktywny owner COMPL.

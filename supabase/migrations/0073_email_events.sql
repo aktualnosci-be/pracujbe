@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0074 — kolejka e-mail: klucz idempotencji per przejście statusu (#292)
+-- 0073 — kolejka e-mail: klucz idempotencji per przejście statusu (#292)
 --        oraz podpięcie szablonów z realnym zdarzeniem (#295).
 --
 -- 1. transition_application — klucz e-maila zawiera id wiersza

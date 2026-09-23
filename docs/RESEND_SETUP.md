@@ -163,7 +163,7 @@ jednocześnie harmonogramów Vercel i Railway.
 - **Idempotencja wysyłki:** `email_deliveries.idempotency_key` (partial UNIQUE) gwarantuje,
   że retry operacji biznesowej nie zakolejkuje drugiego e-maila. Klucz identyfikuje
   zdarzenie, nie jego rodzaj: zmiana statusu aplikacji używa
-  `appstatus-<application_id>-<id wiersza application_status_history>` (0074), więc
+  `appstatus-<application_id>-<id wiersza application_status_history>` (0073), więc
   powrót do wcześniejszego statusu (np. interview → shortlisted → interview) wysyła
   kolejny e-mail, a ponowienie tego samego żądania — nie. Publikacja: `jobpub-<job_id>`.
 - **Deduplikacja webhooków:** `provider_message_id` UNIQUE.

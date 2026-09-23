@@ -574,9 +574,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
-  0074); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
+  0073); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
   zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
-  (#51), supportContact. Klucz e-maila zmiany statusu = id wiersza historii (0074, #292) — powrót do
+  (#51), supportContact. Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
   statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja MM.
   Status aplikacji w mailu = etykieta `status.*` z `src/messages` (nie enum); neutralne warianty
   treści przy braku nazwy nadawcy (`EmailCopy.anonymous`); CTA do sekcji panelu w locale odbiorcy
