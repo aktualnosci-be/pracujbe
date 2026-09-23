@@ -49,4 +49,13 @@ describe('status propozycji', () => {
     );
     expect(screen.getByText(pl.offerStatus[status as keyof typeof pl.offerStatus])).toHaveClass(tone);
   });
+
+  it('uses readable error text for a declined proposal', () => {
+    render(
+      <NextIntlClientProvider locale="pl" messages={pl}>
+        <ProposalStatusPill status="declined" />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText(pl.offerStatus.declined)).toHaveClass('text-error-text');
+  });
 });
