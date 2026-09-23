@@ -1089,6 +1089,8 @@
   "messages": {
     "title": "Messages",
     "subtitle": "All your conversations in one place",
+    "loading": "Loading conversations…",
+    "opening": "Opening conversation…",
     "empty": "No messages",
     "emptyHint": "Your conversations will appear here once you start talking.",
     "loadError": "Could not load conversations.",
