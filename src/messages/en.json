@@ -872,7 +872,7 @@
     "available": "Available",
     "datePosted": "Date posted",
     "any": "Any",
-    "showResults": "Show {count} jobs",
+    "showResults": "{count, plural, one {Show # job} other {Show # jobs}}",
     "countLoading": "Counting jobs…",
     "countUnavailable": "Job count unavailable",
     "countError": "We could not count the jobs. Try again.",
