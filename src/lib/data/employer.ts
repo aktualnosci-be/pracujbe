@@ -40,6 +40,8 @@ export interface EmployerJob {
   status: string;
   newApplications: number;
   matched: number;
+  /** Data utworzenia (ISO) — pokazywana zamiast technicznego identyfikatora (Invariant #8). */
+  createdAt: string | null;
 }
 
 export interface EmployerApplication {
@@ -89,11 +91,11 @@ export const DEMO_OVERVIEW_DELTAS = {
 } as const;
 
 const DEMO_JOBS: EmployerJob[] = [
-  { id: '12345', title: 'Operator wózka widłowego', city: 'Liège', status: 'active', newApplications: 12, matched: 6 },
-  { id: '12344', title: 'Pracownik magazynu', city: 'Antwerpia', status: 'active', newApplications: 8, matched: 4 },
-  { id: '12343', title: 'Elektryk przemysłowy', city: 'Charleroi', status: 'active', newApplications: 5, matched: 3 },
-  { id: '12342', title: 'Produkcja – operator maszyn', city: 'Genk', status: 'active', newApplications: 7, matched: 4 },
-  { id: '12341', title: 'Specjalista ds. logistyki', city: 'Bruksela', status: 'active', newApplications: 3, matched: 2 },
+  { id: '12345', title: 'Operator wózka widłowego', city: 'Liège', status: 'active', newApplications: 12, matched: 6, createdAt: '2026-09-18T09:00:00Z' },
+  { id: '12344', title: 'Pracownik magazynu', city: 'Antwerpia', status: 'active', newApplications: 8, matched: 4, createdAt: '2026-09-15T09:00:00Z' },
+  { id: '12343', title: 'Elektryk przemysłowy', city: 'Charleroi', status: 'active', newApplications: 5, matched: 3, createdAt: '2026-09-11T09:00:00Z' },
+  { id: '12342', title: 'Produkcja – operator maszyn', city: 'Genk', status: 'active', newApplications: 7, matched: 4, createdAt: '2026-09-08T09:00:00Z' },
+  { id: '12341', title: 'Specjalista ds. logistyki', city: 'Bruksela', status: 'active', newApplications: 3, matched: 2, createdAt: '2026-09-02T09:00:00Z' },
 ];
 
 const DEMO_APPLICATIONS: EmployerApplication[] = [
@@ -119,6 +121,16 @@ const EMPTY_OVERVIEW: EmployerOverview = {
 };
 
 const EMPTY_FUNNEL: FunnelStats = { views: 0, applications: 0, interviews: 0, hired: 0 };
+
+/** Jawny stan odczytu kafelków — błąd bazy nie może udawać zer (#304). */
+export type EmployerOverviewLoad =
+  | { status: 'ok'; overview: EmployerOverview }
+  | { status: 'error' };
+
+/** Jawny stan odczytu lejka — błąd bazy nie może udawać pustego lejka (#304). */
+export type FunnelStatsLoad =
+  | { status: 'ok'; funnel: FunnelStats }
+  | { status: 'error' };
 
 /**
  * Statusy z `application_status_history` traktowane jako „osiągnięto etap rozmowy".
@@ -275,12 +287,12 @@ function pickCount(res: { count: number | null; error: unknown }): number {
  * ------------------------------------------------------------------------- */
 
 /** Kafelki statystyk (aktywne oferty, nowe aplikacje, dopasowani, wiadomości do odpowiedzi). */
-export async function getEmployerOverview(): Promise<EmployerOverview> {
-  if (!isSupabaseConfigured()) return DEMO_OVERVIEW;
+export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
+  if (!isSupabaseConfigured()) return { status: 'ok', overview: DEMO_OVERVIEW };
 
   try {
     const ctx = await loadContext();
-    if (!ctx) return EMPTY_OVERVIEW;
+    if (!ctx) return { status: 'ok', overview: EMPTY_OVERVIEW };
     const { supabase, companyId, userId } = ctx;
 
     const jobIds = await companyJobIds(supabase, companyId);
@@ -310,14 +322,17 @@ export async function getEmployerOverview(): Promise<EmployerOverview> {
     ]);
 
     return {
-      activeOffersCount: pickCount(activeOffers),
-      newApplicationsCount: pickCount(newApps),
-      matchedCandidatesCount: pickCount(matched),
-      messagesToAnswerCount: pickCount(messages),
+      status: 'ok',
+      overview: {
+        activeOffersCount: pickCount(activeOffers),
+        newApplicationsCount: pickCount(newApps),
+        matchedCandidatesCount: pickCount(matched),
+        messagesToAnswerCount: pickCount(messages),
+      },
     };
   } catch (error) {
     captureError(error, { area: 'employer.getEmployerOverview' });
-    return EMPTY_OVERVIEW;
+    return { status: 'error' };
   }
 }
 
@@ -558,7 +573,7 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
 
     const { data: jobsData, error: jobsError } = await supabase
       .from('jobs')
-      .select('id, title, city, status')
+      .select('id, title, city, status, created_at')
       .eq('company_id', companyId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
@@ -594,6 +609,7 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
         status: asString(r['status'], 'draft'),
         newApplications: countsByJob.get(id)?.newApplications ?? 0,
         matched: countsByJob.get(id)?.matched ?? 0,
+        createdAt: asString(r['created_at']) || null,
       };
     }) };
   } catch (error) {
@@ -775,12 +791,12 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
 }
 
 /** Lejek rekrutacyjny (30 dni): wyświetlenia, aplikacje, rozmowy, zatrudnieni. */
-export async function getFunnelStats(): Promise<FunnelStats> {
-  if (!isSupabaseConfigured()) return DEMO_FUNNEL;
+export async function getFunnelStats(): Promise<FunnelStatsLoad> {
+  if (!isSupabaseConfigured()) return { status: 'ok', funnel: DEMO_FUNNEL };
 
   try {
     const ctx = await loadContext();
-    if (!ctx) return EMPTY_FUNNEL;
+    if (!ctx) return { status: 'ok', funnel: EMPTY_FUNNEL };
     const { supabase, companyId } = ctx;
 
     // Wyświetlenia = suma views_count ofert firmy; aplikacje = wszystkie aplikacje firmy.
@@ -821,9 +837,9 @@ export async function getFunnelStats(): Promise<FunnelStats> {
       hired = hiredSet.size;
     }
 
-    return { views, applications: appIds.length, interviews, hired };
+    return { status: 'ok', funnel: { views, applications: appIds.length, interviews, hired } };
   } catch (error) {
     captureError(error, { area: 'employer.getFunnelStats' });
-    return EMPTY_FUNNEL;
+    return { status: 'error' };
   }
 }

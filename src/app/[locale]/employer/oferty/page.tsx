@@ -31,6 +31,16 @@ export async function generateMetadata({
   return { title: t("navOffers"), robots: { index: false, follow: false } };
 }
 
+/** Data utworzenia oferty w języku interfejsu — zamiast surowego UUID (Invariant #8, #330). */
+function formatCreatedAt(iso: string, locale: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeZone: "Europe/Brussels",
+  }).format(date);
+}
+
 export default async function EmployerOffersPage({
   params,
   searchParams,
@@ -132,11 +142,18 @@ export default async function EmployerOffersPage({
             {result.jobs.map((offer) => (
               <li key={offer.id} className="min-w-0">
                 <article className="flex h-full min-w-0 flex-col rounded-3xl border border-border bg-card p-5 sm:p-6">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <span className="max-w-full break-all rounded-full bg-soft px-3 py-1 text-xs font-medium text-muted-foreground">
-                      {td("offerId")}: {offer.id}
-                    </span>
-                    <StatusPill status={offer.status} />
+                  <div
+                    className="flex flex-wrap items-start justify-between gap-3"
+                    data-job-id={offer.id}
+                  >
+                    {offer.createdAt && formatCreatedAt(offer.createdAt, locale) ? (
+                      <span className="max-w-full rounded-full bg-soft px-3 py-1 text-xs font-medium text-muted-foreground">
+                        {td("employerOffersCreatedLabel", {
+                          date: formatCreatedAt(offer.createdAt, locale),
+                        })}
+                      </span>
+                    ) : null}
+                    <StatusPill status={offer.status} className="ml-auto" />
                   </div>
                   <h2 className="mt-5 min-w-0 break-words text-xl font-bold leading-tight tracking-tight text-foreground sm:text-2xl">
                     {offer.title}

@@ -101,6 +101,19 @@ describe("employer offers read state", () => {
     expect(captureError).not.toHaveBeenCalled();
   });
 
+  it("maps the creation date instead of exposing only the technical id", async () => {
+    const { query } = client([
+      { id: "job-1", title: "Offer", city: "Brussels", status: "active", created_at: "2026-09-18T09:00:00Z" },
+      { id: "job-2", title: "Offer 2", city: "Gent", status: "draft" },
+    ]);
+    const result = await getCompanyJobsLoad();
+    expect(query.select).toHaveBeenCalledWith("id, title, city, status, created_at");
+    expect(result.status === "ok" && result.jobs.map((job) => job.createdAt)).toEqual([
+      "2026-09-18T09:00:00Z",
+      null,
+    ]);
+  });
+
   it("does not show zero counts when a count request fails", async () => {
     const error = { code: "COUNT_UNAVAILABLE" };
     client([{ id: "job-1", title: "Offer", city: "Brussels", status: "active" }], null, [], [], error);

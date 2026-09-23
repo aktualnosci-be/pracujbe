@@ -1,5 +1,5 @@
 import { z } from 'zod/v3';
-import { isLocale, routing } from '@/i18n/routing';
+import { isLocale, routing, type Locale } from '@/i18n/routing';
 
 /**
  * Schematy walidacji autoryzacji (logowanie, rejestracja kandydata/pracodawcy, reset hasła).
