@@ -63,6 +63,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const base = env.siteUrl;
   const path = `${GUIDES_PATH}/${slug}`;
   const url = `${base}/${locale}${path}`;
+  const shareImage = new URL('/og.png', base).href;
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
     languages[supported] = `${base}/${supported}${path}`;
@@ -81,6 +82,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       type: 'article',
       locale,
       publishedTime: guide.publishedAt,
+      images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: guide.title,
+      description: guide.excerpt,
+      images: [shareImage],
     },
   };
 }
