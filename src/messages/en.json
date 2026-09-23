@@ -62,6 +62,9 @@
     "discountInvalid": "The code is invalid or expired."
   },
   "company": {
+    "editOwnerOnly": "Only the company owner or an administrator can edit these details.",
+    "loadError": "Could not load company details",
+    "loadErrorHint": "To prevent accidental changes, we are not showing an empty form. Please try again.",
     "title": "Company",
     "createTitle": "Create a company profile",
     "createSubtitle": "Enter the basic details to start posting jobs.",

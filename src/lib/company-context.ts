@@ -37,7 +37,9 @@ function asArr(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 function asRec(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : {};
 }
 /** Embed PostgREST bywa obiektem (to-one) lub tablicą — normalizujemy do pierwszego rekordu. */
 function embed(value: unknown): Record<string, unknown> {
@@ -59,13 +61,15 @@ export async function getActiveCompany(
     .eq('is_active', true)
     .order('created_at', { ascending: true });
   if (error) throw error;
+  if (!Array.isArray(data))
+    throw new Error('Company membership read returned no rows');
 
   const companies: CompanyOption[] = [];
   for (const row of asArr(data)) {
     const r = asRec(row);
     const c = embed(r['companies']);
     const id = asStr(r['company_id']) || asStr(c['id']);
-    if (!id) continue;
+    if (!id) throw new Error('Company membership row is missing company id');
     companies.push({
       id,
       name: asStr(c['name']),
@@ -76,7 +80,13 @@ export async function getActiveCompany(
 
   const first = companies[0];
   if (!first) {
-    return { activeId: null, activeStatus: 'unverified', activeName: '', activeRole: 'member', companies: [] };
+    return {
+      activeId: null,
+      activeStatus: 'unverified',
+      activeName: '',
+      activeRole: 'member',
+      companies: [],
+    };
   }
 
   const cookieVal = (await cookies()).get(ACTIVE_COMPANY_COOKIE)?.value ?? '';
