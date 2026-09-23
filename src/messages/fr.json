@@ -234,7 +234,11 @@
       "viewOffer": "Voir l’offre",
       "salaryFrom": "à partir de {value}",
       "salaryTo": "jusqu’à {value}",
-      "salaryPeriods": { "hour": "brut / heure", "month": "brut / mois", "year": "brut / an" }
+      "salaryPeriods": {
+        "hour": "brut / heure",
+        "month": "brut / mois",
+        "year": "brut / an"
+      }
     },
     "pageTitle": "Offres d'emploi en Belgique",
     "search": "Rechercher",
@@ -531,7 +535,8 @@
     "hired": "Embauché",
     "active": "Active",
     "paused": "En pause",
-    "closed": "Fermée"
+    "closed": "Fermée",
+    "expired": "Expirée"
   },
   "dashboard": {
     "greeting": "Bonjour, {name}",
@@ -663,7 +668,14 @@
     "employerApplicationsPage": "Page {page}",
     "employerApplicationsNewer": "Candidatures récentes",
     "employerApplicationsOlder": "Candidatures précédentes",
-    "emptyState": "Aucune donnée à afficher."
+    "emptyState": "Aucune donnée à afficher.",
+    "employerOffersIntro": "Gérez vos offres et consultez les réponses des candidats.",
+    "employerOffersApplicationsLabel": "Nouvelles candidatures",
+    "employerOffersEmptyTitle": "Vous n'avez pas encore d'offres",
+    "employerOffersEmptyHint": "Publiez votre première offre pour commencer à recruter.",
+    "employerOffersLoadError": "Impossible de charger vos offres",
+    "employerOffersLoadErrorHint": "Actualisez la page et réessayez. Vos offres sont toujours enregistrées.",
+    "employerOffersRetry": "Réessayer"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",

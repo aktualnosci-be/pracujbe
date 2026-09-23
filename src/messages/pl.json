@@ -234,7 +234,11 @@
       "viewOffer": "Poznaj ofertę",
       "salaryFrom": "od {value}",
       "salaryTo": "do {value}",
-      "salaryPeriods": { "hour": "brutto / godz.", "month": "brutto / mies.", "year": "brutto / rok" }
+      "salaryPeriods": {
+        "hour": "brutto / godz.",
+        "month": "brutto / mies.",
+        "year": "brutto / rok"
+      }
     },
     "pageTitle": "Oferty pracy w Belgii",
     "search": "Szukaj",
@@ -531,7 +535,8 @@
     "hired": "Zatrudniony",
     "active": "Aktywna",
     "paused": "Wstrzymana",
-    "closed": "Zamknięta"
+    "closed": "Zamknięta",
+    "expired": "Wygasła"
   },
   "dashboard": {
     "greeting": "Witaj, {name}",
@@ -663,7 +668,14 @@
     "employerApplicationsPage": "Strona {page}",
     "employerApplicationsNewer": "Nowsze aplikacje",
     "employerApplicationsOlder": "Starsze aplikacje",
-    "emptyState": "Brak danych do wyświetlenia."
+    "emptyState": "Brak danych do wyświetlenia.",
+    "employerOffersIntro": "Zarządzaj ofertami i sprawdzaj zainteresowanie kandydatów.",
+    "employerOffersApplicationsLabel": "Nowe aplikacje",
+    "employerOffersEmptyTitle": "Nie masz jeszcze ofert",
+    "employerOffersEmptyHint": "Dodaj pierwszą ofertę, aby rozpocząć rekrutację.",
+    "employerOffersLoadError": "Nie udało się wczytać ofert",
+    "employerOffersLoadErrorHint": "Odśwież stronę i spróbuj ponownie. Twoje oferty pozostały zapisane.",
+    "employerOffersRetry": "Spróbuj ponownie"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",

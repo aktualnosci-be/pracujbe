@@ -36,6 +36,7 @@ const STATUS_TONE: Record<string, Tone> = {
   active: 'activeDot',
   paused: 'pausedDot',
   closed: 'neutral',
+  expired: 'neutral',
 };
 
 const TONE_CLASS: Record<Tone, string> = {

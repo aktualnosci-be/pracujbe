@@ -538,13 +538,18 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
   }
 }
 
+/** Jawny stan odczytu dla ekranu ofert — błąd bazy nie może udawać pustej listy. */
+export type CompanyJobsLoad =
+  | { status: 'ok'; jobs: EmployerJob[] }
+  | { status: 'error' };
+
 /** Lista ofert firmy z liczbą nowych aplikacji i dopasowań na ofertę. */
-export async function getCompanyJobs(): Promise<EmployerJob[]> {
-  if (!isSupabaseConfigured()) return DEMO_JOBS;
+export async function getCompanyJobsLoad(): Promise<CompanyJobsLoad> {
+  if (!isSupabaseConfigured()) return { status: 'ok', jobs: DEMO_JOBS };
 
   try {
     const ctx = await loadContext();
-    if (!ctx) return [];
+    if (!ctx) return { status: 'ok', jobs: [] };
     const { supabase, companyId } = ctx;
 
     const { data: jobsData, error: jobsError } = await supabase
@@ -558,7 +563,7 @@ export async function getCompanyJobs(): Promise<EmployerJob[]> {
 
     const jobs = asRows(jobsData);
     const jobIds = jobs.map((r) => asString(r['id'])).filter((id) => id.length > 0);
-    if (jobIds.length === 0) return [];
+    if (jobIds.length === 0) return { status: 'ok', jobs: [] };
 
     const [{ data: appRows, error: appError }, { data: matchRows, error: matchError }] =
       await Promise.all([
@@ -584,7 +589,7 @@ export async function getCompanyJobs(): Promise<EmployerJob[]> {
       matched.set(id, (matched.get(id) ?? 0) + 1);
     }
 
-    return jobs.map((r) => {
+    return { status: 'ok', jobs: jobs.map((r) => {
       const id = asString(r['id']);
       return {
         id,
@@ -594,11 +599,17 @@ export async function getCompanyJobs(): Promise<EmployerJob[]> {
         newApplications: newApps.get(id) ?? 0,
         matched: matched.get(id) ?? 0,
       };
-    });
+    }) };
   } catch (error) {
     captureError(error, { area: 'employer.getCompanyJobs' });
-    return [];
+    return { status: 'error' };
   }
+}
+
+/** Starszy kontrakt dashboardu; ekran listy korzysta z jawnego stanu powyżej. */
+export async function getCompanyJobs(): Promise<EmployerJob[]> {
+  const result = await getCompanyJobsLoad();
+  return result.status === 'ok' ? result.jobs : [];
 }
 
 /** Najnowsze aplikacje na oferty firmy (do wiersza akcji zmiany statusu). */

@@ -234,7 +234,11 @@
       "viewOffer": "Bekijk vacature",
       "salaryFrom": "vanaf {value}",
       "salaryTo": "tot {value}",
-      "salaryPeriods": { "hour": "bruto / uur", "month": "bruto / maand", "year": "bruto / jaar" }
+      "salaryPeriods": {
+        "hour": "bruto / uur",
+        "month": "bruto / maand",
+        "year": "bruto / jaar"
+      }
     },
     "pageTitle": "Vacatures in België",
     "search": "Zoeken",
@@ -531,7 +535,8 @@
     "hired": "Aangenomen",
     "active": "Actief",
     "paused": "Gepauzeerd",
-    "closed": "Gesloten"
+    "closed": "Gesloten",
+    "expired": "Verlopen"
   },
   "dashboard": {
     "greeting": "Welkom, {name}",
@@ -663,7 +668,14 @@
     "employerApplicationsPage": "Pagina {page}",
     "employerApplicationsNewer": "Nieuwere sollicitaties",
     "employerApplicationsOlder": "Oudere sollicitaties",
-    "emptyState": "Geen gegevens om weer te geven."
+    "emptyState": "Geen gegevens om weer te geven.",
+    "employerOffersIntro": "Beheer uw vacatures en bekijk de reacties van kandidaten.",
+    "employerOffersApplicationsLabel": "Nieuwe sollicitaties",
+    "employerOffersEmptyTitle": "U hebt nog geen vacatures",
+    "employerOffersEmptyHint": "Plaats uw eerste vacature om kandidaten te vinden.",
+    "employerOffersLoadError": "Uw vacatures konden niet worden geladen",
+    "employerOffersLoadErrorHint": "Vernieuw de pagina en probeer het opnieuw. Uw vacatures zijn nog opgeslagen.",
+    "employerOffersRetry": "Opnieuw proberen"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",

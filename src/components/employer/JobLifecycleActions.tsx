@@ -97,13 +97,14 @@ export function JobLifecycleActions({
 
   return (
     <>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         {actions.map((action) => (
           <Button
             key={action}
             type="button"
             size="sm"
             variant="outline"
+            className="min-h-12 whitespace-normal rounded-xl text-center"
             disabled={pending}
             onClick={() => run(action)}
           >
