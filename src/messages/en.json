@@ -532,7 +532,8 @@
     "entitlementLimit": "You've reached your plan's active job limit. Upgrade your plan to publish more.",
     "notFound": "We couldn't find what you're looking for.",
     "internal": "Something went wrong on our end. We're working on it.",
-    "generic": "Something went wrong. Please try again."
+    "generic": "Something went wrong. Please try again.",
+    "demoUnavailable": "This feature is not available in the demo version of the site."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -949,7 +950,9 @@
     "errorGeneric": "The application could not be sent. Please try again.",
     "alreadyApplied": "You've already applied for this job.",
     "submitting": "Sending...",
-    "close": "Close"
+    "close": "Close",
+    "phoneInvalid": "Enter a valid phone number: a national number for the selected country or the full number with the country code, e.g. +32 470 12 34 56.",
+    "demoUnavailable": "This is a demo version — applying for jobs is turned off."
   },
   "legal": {
     "termsTitle": "Terms of Service",

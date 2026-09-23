@@ -27,6 +27,7 @@ export const ErrorCodes = {
   BILLING_UNAVAILABLE: 'BILLING_UNAVAILABLE',
   CHECKOUT_IN_PROGRESS: 'CHECKOUT_IN_PROGRESS',
   ENTITLEMENT_LIMIT: 'ENTITLEMENT_LIMIT',
+  DEMO_UNAVAILABLE: 'DEMO_UNAVAILABLE',
   NOT_FOUND: 'NOT_FOUND',
   INTERNAL: 'INTERNAL',
 } as const;
@@ -58,6 +59,7 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   BILLING_UNAVAILABLE: 'billingUnavailable',
   CHECKOUT_IN_PROGRESS: 'checkoutInProgress',
   ENTITLEMENT_LIMIT: 'entitlementLimit',
+  DEMO_UNAVAILABLE: 'demoUnavailable',
   NOT_FOUND: 'notFound',
   INTERNAL: 'internal',
 };
