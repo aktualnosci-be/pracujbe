@@ -588,6 +588,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 ### Etap 8 — jakość
 - [x] Testy: Vitest (matching, recipient-locale, i18n keys, error-keys), integracyjne RLS+seed w CI (`postgres:16`), Playwright (smoke/seo/flows)
 - [~] Testy Playwright: języki/detal oferty/CTA/noindex paneli/cookies/SEO gotowe (`flows.spec`+smoke+seo, 12 pass); do rozbudowy: aplikowanie/propozycje pod realną sesją
+  Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
+  worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
+  (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
+  E2E noindex każdej strony paneli i auth z systemu plików (`panel-noindex`) i axe na wszystkich
+  trasach publicznych, 4 języki, 320/1280 px, z banerem i po jego zamknięciu (`a11y-public-routes`).
+  Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),
+  bez `.first()`/`.nth()` na przyciskach o znaczeniu. **Do zrobienia:** asercje
+  `email_deliveries.locale` w `rls.sql` (#348, SQL), E2E kategorii zgód (#349), raport flaków (#375).
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
