@@ -376,7 +376,8 @@
       "nl": "néerlandais",
       "fr": "français",
       "en": "anglais"
-    }
+    },
+    "similarJobsLoadError": "Impossible de charger les offres similaires. Cette offre et la candidature fonctionnent normalement."
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -1334,7 +1335,8 @@
       "contractType": "Type de contrat",
       "remoteJob": "Télétravail — la localisation importe peu",
       "withinCommuteRadius": "Lieu de travail dans votre rayon de déplacement"
-    }
+    },
+    "loadError": "Impossible de calculer la correspondance pour le moment. Ce n’est pas une évaluation de votre profil — réessayez."
   },
   "application": {
     "error": {

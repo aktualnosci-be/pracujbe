@@ -24,12 +24,13 @@ import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
 import { defaultAlternateLocale } from '@/lib/job-content-locale';
-import { getJobBySlug, getJobs, type ContractType, type JobDetail, type JobListItem } from '@/lib/jobs';
+import { getJobBySlug, getSimilarJobs, type ContractType, type JobDetail } from '@/lib/jobs';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
 import { loginHref } from '@/lib/validation/auth';
 import { JobMatchCard } from '@/components/public/JobMatchCard';
+import { SimilarJobsError } from '@/components/public/SimilarJobsError';
 
 /**
  * Szczegóły oferty pracy (SSR) wg makiety 03-job-detail.
@@ -269,16 +270,11 @@ export default async function JobDetailPage({ params }: PageProps) {
   // Treść w innym języku niż strona → `lang` na fragmentach treści (WCAG 3.1.2).
   const contentLang = version.fallback ? version.contentLocale : undefined;
 
-  // Podobne oferty (ta sama kategoria, bez bieżącej).
-  const similarResult = await getJobs({
-    locale,
-    category: job.category,
-    page: 1,
-    pageSize: SIMILAR_LIMIT + 1,
-  });
-  const similarJobs: JobListItem[] = similarResult.jobs
-    .filter((item) => item.slug !== job.slug)
-    .slice(0, SIMILAR_LIMIT);
+  // Podobne oferty (ta sama kategoria, bez bieżącej). Sekcja pomocnicza: jej błąd odczytu
+  // nie przerywa strony — opis, firma i aplikowanie zostają dostępne (#191).
+  const similar = await getSimilarJobs(job, locale, SIMILAR_LIMIT);
+  const similarJobs = similar.status === 'ok' ? similar.jobs : [];
+  const showSimilar = similar.status === 'error' || similarJobs.length > 0;
 
   const applyLabel = tJobs('applyNow');
   const applyHint = tApply('hint');
@@ -287,7 +283,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     { href: '#opis', label: t('tabDescription') },
     { href: '#firma', label: t('tabCompany') },
     // Kotwica „Podobne” tylko, gdy sekcja istnieje (inaczej martwy link).
-    ...(similarJobs.length > 0 ? [{ href: '#podobne', label: t('tabSimilar') }] : []),
+    ...(showSimilar ? [{ href: '#podobne', label: t('tabSimilar') }] : []),
   ];
 
   const Section = ({
@@ -635,7 +631,12 @@ export default async function JobDetailPage({ params }: PageProps) {
             </div>
 
             {/* Podobne oferty */}
-            {similarJobs.length > 0 ? (
+            {similar.status === 'error' ? (
+              <div id="podobne" className="rounded-lg border border-border bg-card p-5 shadow-sm">
+                <h2 className="mb-3 text-base font-semibold text-foreground">{t('similarJobs')}</h2>
+                <SimilarJobsError message={t('similarJobsLoadError')} retry={tCommon('retry')} />
+              </div>
+            ) : similarJobs.length > 0 ? (
               <div id="podobne" className="rounded-lg border border-border bg-card p-5 shadow-sm">
                 <h2 className="mb-3 text-base font-semibold text-foreground">{t('similarJobs')}</h2>
                 <ul className="divide-y divide-border">

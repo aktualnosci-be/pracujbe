@@ -469,6 +469,43 @@ export async function getJobBySlug(
   return resolveDemoJobBySlug(slug, resolvedLocale);
 }
 
+/**
+ * Jawny wynik odczytu podobnych ofert (#191). Sekcja pomocnicza: jej awaria nie może
+ * przerwać renderowania szczegółu oferty ani aplikowania, a „brak podobnych” wolno pokazać
+ * tylko po udanym odczycie.
+ */
+export type SimilarJobsLoad =
+  | { status: 'ok'; jobs: JobListItem[] }
+  | { status: 'error' };
+
+/**
+ * Wymusza błąd odczytu podobnych ofert na izolowanym serwerze dev testów E2E
+ * (`playwright.applications-fixture.config.ts`). Nie działa w buildzie produkcyjnym.
+ */
+function isSimilarJobsErrorFixture(): boolean {
+  return process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error';
+}
+
+/** Do `limit` aktywnych ofert z tej samej kategorii, bez oferty bieżącej. */
+export async function getSimilarJobs(
+  job: Pick<JobListItem, 'slug' | 'category'>,
+  locale: string,
+  limit: number,
+): Promise<SimilarJobsLoad> {
+  const safeLimit = Math.max(1, Math.trunc(limit));
+  try {
+    if (isSimilarJobsErrorFixture()) throw new Error('Isolated similar jobs fixture failure');
+    const result = await getJobs({ locale, category: job.category, page: 1, pageSize: safeLimit + 1 });
+    return {
+      status: 'ok',
+      jobs: result.jobs.filter((item) => item.slug !== job.slug).slice(0, safeLimit),
+    };
+  } catch (error) {
+    captureError(error, { area: 'jobs.getSimilarJobs' });
+    return { status: 'error' };
+  }
+}
+
 export async function getLatestJobs(
   locale: string,
   limit: number = DEFAULT_LATEST_LIMIT,

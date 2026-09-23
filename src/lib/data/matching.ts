@@ -11,8 +11,10 @@ import { scoreMatch, type MatchCandidate, type MatchJob, type MatchResult } from
  *
  * Liczy dopasowanie NA ŻYWO z realnego profilu zalogowanego kandydata i znormalizowanych
  * wymagań oferty (RPC `get_job_match_profile`, 0024) — deterministycznym silnikiem
- * `scoreMatch` (bez AI, te same wejścia → ten sam wynik). Zwraca `null`, gdy: brak env
- * (demo), brak sesji, brak profilu kandydata lub oferta niedostępna publicznie.
+ * `scoreMatch` (bez AI, te same wejścia → ten sam wynik). Zwraca jawny wynik (#197):
+ * `none`, gdy brak env (demo), brak sesji, brak profilu kandydata lub oferta niedostępna
+ * publicznie; `error`, gdy którykolwiek odczyt (profil, umiejętności, języki, certyfikaty,
+ * RPC oferty) się nie udał — wtedy NIE liczymy procentu z niepełnych danych.
  *
  * Prywatność: profil kandydata czytany pod RLS (własny wiersz); oferta przez SECURITY
  * DEFINER RPC ograniczone do ofert active+verified i bezpiecznych kolumn.
@@ -48,33 +50,61 @@ async function getAuthUserId(supabase: SupabaseClient): Promise<string | null> {
   return user?.id ?? null;
 }
 
+/** Jawny wynik dopasowania — błąd odczytu nigdy nie udaje wyniku ani braku profilu/oferty. */
+export type JobMatchLoad =
+  | { status: 'ok'; result: MatchResult }
+  | { status: 'none' }
+  | { status: 'error' };
+
+/** Błąd odczytu wejścia dopasowania; rejestrowany bez treści zapytania (Invariant #8). */
+class MatchReadError extends Error {
+  constructor(readonly source: string, readonly readError: unknown) {
+    super(`Match input read failed: ${source}`);
+    this.name = 'MatchReadError';
+  }
+}
+
+function check<T extends { error: unknown }>(result: T, source: string): T {
+  if (result.error) throw new MatchReadError(source, result.error);
+  return result;
+}
+
 /**
- * Dopasowanie zalogowanego kandydata do konkretnej oferty (lub `null`).
- * Bezpieczne do wołania także dla anonimów/pracodawców — wtedy zwraca `null`.
+ * Dopasowanie zalogowanego kandydata do konkretnej oferty.
+ * Bezpieczne do wołania także dla anonimów/pracodawców — wtedy zwraca `none`.
  */
-export async function getMyJobMatch(jobId: string): Promise<MatchResult | null> {
-  if (!isSupabaseConfigured()) return null;
-  if (!jobId) return null;
+export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
+  if (!isSupabaseConfigured()) {
+    // Izolowany serwer dev testów E2E (błąd odczytu). Ta gałąź nie działa w buildzie produkcyjnym.
+    if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error') {
+      return { status: 'error' };
+    }
+    return { status: 'none' };
+  }
+  if (!jobId) return { status: 'none' };
 
   try {
     const { createServerClient } = await import('@/lib/supabase/server');
     const supabase = await createServerClient();
     const userId = await getAuthUserId(supabase);
-    if (!userId) return null;
+    if (!userId) return { status: 'none' };
 
-    // Profil kandydata (własny wiersz pod RLS). Brak → użytkownik nie jest kandydatem.
-    const { data: cpData } = await supabase
-      .from('candidate_profiles')
-      .select(
-        'id, occupations, categories, preferred_contract_types, city, region, radius_km, ' +
-          'has_driving_license, has_car, experience_years, availability',
-      )
-      .eq('profile_id', userId)
-      .maybeSingle();
-    if (!cpData) return null;
+    // Profil kandydata (własny wiersz pod RLS). Brak (po udanym odczycie) → nie kandydat.
+    const { data: cpData } = check(
+      await supabase
+        .from('candidate_profiles')
+        .select(
+          'id, occupations, categories, preferred_contract_types, city, region, radius_km, ' +
+            'has_driving_license, has_car, experience_years, availability',
+        )
+        .eq('profile_id', userId)
+        .maybeSingle(),
+      'candidate_profiles',
+    );
+    if (!cpData) return { status: 'none' };
     const cp = asRecord(cpData);
     const profileId = asStr(cp['id']);
-    if (!profileId) return null;
+    if (!profileId) return { status: 'none' };
 
     const [skillsRes, langsRes, certsRes, jobRes] = await Promise.all([
       supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', profileId),
@@ -82,11 +112,16 @@ export async function getMyJobMatch(jobId: string): Promise<MatchResult | null> 
       supabase.from('candidate_certificates').select('certificate_label').eq('candidate_profile_id', profileId),
       supabase.rpc('get_job_match_profile', { p_job_id: jobId }),
     ]);
+    // Każdy odczyt osobno: pusta relacja po sukcesie ≠ relacja nieodczytana (błąd).
+    check(skillsRes, 'candidate_skills');
+    check(langsRes, 'candidate_languages');
+    check(certsRes, 'candidate_certificates');
+    check(jobRes, 'get_job_match_profile');
 
     const jobRow = asArr(jobRes.data)[0];
-    if (!jobRow) return null; // oferta niedostępna publicznie (nie active/verified) lub nie istnieje
+    // Udany odczyt bez wiersza: oferta niedostępna publicznie (nie active/verified) lub nie istnieje.
+    if (!jobRow) return { status: 'none' };
     const jr = asRecord(jobRow);
-
     const candidate: MatchCandidate = {
       occupations: asStrArr(cp['occupations']),
       categories: asStrArr(cp['categories']),
@@ -120,9 +155,12 @@ export async function getMyJobMatch(jobId: string): Promise<MatchResult | null> 
       remote: jr['remote'] === true,
     };
 
-    return scoreMatch(candidate, job);
+    return { status: 'ok', result: scoreMatch(candidate, job) };
   } catch (error) {
-    captureError(error, { area: 'matching.getMyJobMatch' });
-    return null;
+    captureError(error instanceof MatchReadError ? error.readError : error, {
+      area: 'matching.getMyJobMatch',
+      ...(error instanceof MatchReadError ? { source: error.source } : {}),
+    });
+    return { status: 'error' };
   }
 }
