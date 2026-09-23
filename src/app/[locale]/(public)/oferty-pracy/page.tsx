@@ -520,11 +520,14 @@ export default async function JobsListPage({
                   key={chip.id}
                   href={chip.href}
                   aria-label={`${tFilters('removeFilter')}: ${chip.label}`}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-soft py-1 pl-3 pr-2 text-sm text-foreground transition-colors hover:bg-muted"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-soft py-1 pl-3 pr-2 text-sm text-foreground transition-colors hover:bg-muted"
                 >
-                  <span>{chip.label}</span>
+                  {/* Długie słowo (złożenie, adres) łamie się zamiast rozpychać stronę (#230). */}
+                  <span className="min-w-0 [overflow-wrap:anywhere]">
+                    {chip.label}
+                  </span>
                     <X
-                      className="h-3.5 w-3.5 text-muted-foreground"
+                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
                 </Link>
