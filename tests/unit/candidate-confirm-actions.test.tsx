@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApplicationActions } from '@/components/candidate/ApplicationActions';
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
+import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 import { withdrawApplication } from '@/lib/actions/candidate';
 import pl from '@/messages/pl.json';
 import nl from '@/messages/nl.json';
@@ -117,5 +118,28 @@ describe('checklista kompletności (#317)', () => {
     render(<ProfileChecklist items={[{ label: 'Języki', done: true, action: 'Dodaj', href: '/x' }]} />);
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.queryByText('Dodaj')).not.toBeInTheDocument();
+  });
+});
+
+describe('pozycje checklisty pulpitu i profilu (#317)', () => {
+  it('nieuzupełnione sekcje prowadzą do właściwych kroków, zdjęcie nie udaje linku', () => {
+    const t = (key: string) => (pl.dashboard as Record<string, string>)[key]!;
+    const items = profileChecklistItems(
+      { basicInfo: false, experience: false, education: false, skills: true, languages: false, photo: false },
+      t,
+      pl.onboarding.none,
+    );
+    expect(items.map((i) => i.href)).toEqual([
+      '/candidate/onboarding?step=1',
+      '/candidate/onboarding?step=3',
+      '/candidate/onboarding?step=2',
+      '/candidate/onboarding?step=3',
+      '/candidate/onboarding?step=5',
+      undefined,
+    ]);
+    render(<ProfileChecklist items={items} />);
+    expect(screen.getAllByRole('link')).toHaveLength(4);
+    expect(screen.queryByRole('link', { name: new RegExp(pl.dashboard.checkPhoto) })).not.toBeInTheDocument();
+    expect(screen.getByText(pl.onboarding.none)).toBeVisible();
   });
 });

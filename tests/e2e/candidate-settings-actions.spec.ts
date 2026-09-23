@@ -30,18 +30,20 @@ async function dismissCookies(page: Page) {
 }
 
 for (const locale of LOCALES) {
-  test(`checklista profilu prowadzi do kroku kreatora (#317): ${locale}`, async ({ page }) => {
-    const m = messages(locale);
-    await page.setViewportSize({ width: 320, height: 800 });
-    await page.goto(`/${locale}/candidate/profil`);
-    await dismissCookies(page);
+  for (const path of ['profil', ''] as const) {
+    test(`checklista ${path || 'pulpitu'} prowadzi do kroku kreatora (#317): ${locale}`, async ({ page }) => {
+      const m = messages(locale);
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.goto(`/${locale}/candidate${path ? `/${path}` : ''}`);
+      await dismissCookies(page);
 
-    const add = page.getByRole('link', { name: `${m.dashboard.add}: ${m.dashboard.checkSkills}` });
-    await add.focus();
-    await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(new RegExp(`/${locale}/candidate/onboarding\\?step=3$`));
-    await expect(page.getByRole('heading', { level: 2, name: m.onboarding.step3Title })).toBeVisible();
-  });
+      const add = page.getByRole('link', { name: `${m.dashboard.add}: ${m.dashboard.checkSkills}` });
+      await add.focus();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(new RegExp(`/${locale}/candidate/onboarding\\?step=3$`));
+      await expect(page.getByRole('heading', { level: 2, name: m.onboarding.step3Title })).toBeVisible();
+    });
+  }
 
   test(`ustawienia nie pokazują nieczynnego push (#312): ${locale}`, async ({ page }) => {
     const m = messages(locale);

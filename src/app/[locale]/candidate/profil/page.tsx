@@ -11,6 +11,7 @@ import { CvUpload } from '@/components/candidate/CvUpload';
 import { CandidateIdentity } from '@/components/candidate/CandidateIdentity';
 import { getCandidateProfileSummary, getCandidatePassport } from '@/lib/data/candidate';
 import { loadCandidateFiles } from '@/lib/data/candidate-files';
+import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 import { getProfileLevelTitle } from '@/lib/profile-completeness';
 
 /**
@@ -63,16 +64,7 @@ export default async function CandidateProfilePage({
     loadCandidateFiles(),
   ]);
 
-  // „Dodaj" prowadzi do kroku kreatora, który uzupełnia sekcję (#317). Zdjęcia kreator nie
-  // obsługuje, więc ta pozycja ma neutralny opis zamiast imitacji linku.
-  const checklist = [
-    { label: t('checkBasicInfo'), done: profile.checklist.basicInfo, action: t('add'), href: '/candidate/onboarding?step=1' },
-    { label: t('checkExperience'), done: profile.checklist.experience, action: t('add'), href: '/candidate/onboarding?step=3' },
-    { label: t('checkEducation'), done: profile.checklist.education, action: t('add'), href: '/candidate/onboarding?step=2' },
-    { label: t('checkSkills'), done: profile.checklist.skills, action: t('add'), href: '/candidate/onboarding?step=3' },
-    { label: t('checkLanguages'), done: profile.checklist.languages, action: t('add'), href: '/candidate/onboarding?step=5' },
-    { label: t('checkPhoto'), done: profile.checklist.photo, hint: to('none') },
-  ];
+  const checklist = profileChecklistItems(profile.checklist, t, to('none'));
   const availabilityKey = passport.availability && passport.availability in availabilityLabels
     ? availabilityLabels[passport.availability as keyof typeof availabilityLabels]
     : null;
