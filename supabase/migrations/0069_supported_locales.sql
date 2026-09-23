@@ -43,14 +43,19 @@ create policy supported_locales_select_all on public.supported_locales
 revoke all on public.supported_locales from anon, authenticated;
 grant select on public.supported_locales to anon, authenticated;
 
+-- SECURITY INVOKER: słownik jest publiczny do odczytu, a funkcje, które ją wołają,
+-- są definerami migratora. Bez PUBLIC EXECUTE (jak pozostałe funkcje domeny, 0058).
 create function public.is_supported_locale(p_code text) returns boolean
-language sql stable strict security definer
+language sql stable strict security invoker
 set search_path = public, pg_temp
 as $$
   select exists (select 1 from public.supported_locales where code = p_code);
 $$;
 comment on function public.is_supported_locale(text) is
   'Czy kod jest językiem serwisu (#29). STRICT: NULL → NULL, jak `x in (...)`.';
+revoke execute on function public.is_supported_locale(text) from public;
+grant execute on function public.is_supported_locale(text) to anon, authenticated, service_role;
+grant select on public.supported_locales to service_role;
 
 -- 3. CHECK-i kolumn → klucze obce.
 do $$
