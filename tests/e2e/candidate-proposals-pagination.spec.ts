@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { rejectOptionalCookies } from './fixtures/messages';
+
 import en from '../../src/messages/en.json';
 import fr from '../../src/messages/fr.json';
 import nl from '../../src/messages/nl.json';
@@ -15,7 +17,7 @@ for (const [locale, messages] of Object.entries({ pl, nl, fr, en })) {
   test(`candidate proposal history reaches the oldest proposal at 320px (${locale})`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await page.goto(`/${locale}/candidate/propozycje`);
-    await page.locator('[aria-labelledby="cookie-banner-title"] button').first().click();
+    await rejectOptionalCookies(page, locale);
     await expect(page.getByRole('heading', { level: 1, name: t.navProposals })).toBeVisible();
 
     const cards = page.getByRole('main').getByRole('article');

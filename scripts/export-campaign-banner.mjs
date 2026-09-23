@@ -2,7 +2,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { chromium } from "@playwright/test";
+import { launchChromium } from "./lib/launch-chromium.mjs";
 
 const WIDTH = 1200;
 const HEIGHT = 300;
@@ -140,7 +140,7 @@ async function main() {
   const campaign = validateCampaign(
     JSON.parse((await readFile(inputPath, "utf8")).replace(/^\uFEFF/, "")),
   );
-  const browser = await chromium.launch();
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage({
       viewport: { width: WIDTH, height: HEIGHT },
