@@ -3,7 +3,6 @@ import {
   ArrowRight,
   Briefcase,
   ClipboardList,
-  MapPin,
   MessageSquare,
   Plus,
   Star,
@@ -13,7 +12,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { isSupabaseConfigured } from '@/lib/env';
 import {
-  getCompanyJobs,
+  getCompanyJobsLoad,
   getEmployerOverview,
   getEmployerShellData,
   getFunnelStats,
@@ -28,6 +27,7 @@ import { RecruitmentFunnel } from '@/components/employer/RecruitmentFunnel';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import { SendOfferButton } from '@/components/employer/SendOfferButton';
 import { RecentApplicationsError } from '@/components/employer/RecentApplicationsError';
+import { EmployerOffersPreview } from '@/components/employer/EmployerOffersPreview';
 
 /**
  * Panel pracodawcy — Podsumowanie (makieta 05), na REALNYCH danych.
@@ -76,9 +76,9 @@ export default async function EmployerDashboardPage({
   const tc = await getTranslations({ locale, namespace: 'common' });
 
   const configured = isSupabaseConfigured();
-  const [overview, jobs, recentApplications, candidates, funnel, shell] = await Promise.all([
+  const [overview, jobsLoad, recentApplications, candidates, funnel, shell] = await Promise.all([
     getEmployerOverview(),
-    getCompanyJobs(),
+    getCompanyJobsLoad(),
     getRecentApplications(),
     getTopMatchedCandidates(),
     getFunnelStats(),
@@ -153,62 +153,20 @@ export default async function EmployerDashboardPage({
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="min-w-0 space-y-6 lg:col-span-2">
           {/* Twoje aktywne oferty */}
-          <section className="min-w-0">
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
-              <h2 className="text-base font-semibold text-foreground">{td('yourActiveOffers')}</h2>
-              <Link
-                href="/employer/oferty"
-                className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-accent hover:underline"
-              >
-                {td('seeAllOffers')}
-                <ArrowRight className="size-3.5" aria-hidden="true" />
-              </Link>
-            </div>
-
-            {jobs.length === 0 ? (
-              <p className="rounded-3xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">{td('emptyState')}</p>
-            ) : (
-              /* P1-14: podgląd READ-ONLY. Pełne zarządzanie na /employer/oferty. */
-              <ul className="grid min-w-0 gap-4 xl:grid-cols-2" aria-label={td('yourActiveOffers')}>
-                  {jobs.map((offer) => (
-                    <li key={offer.id} className="min-w-0">
-                      <article className="flex h-full min-w-0 flex-col rounded-3xl border border-border bg-card p-5 sm:p-6">
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="min-w-0 break-words text-lg font-bold leading-tight text-foreground">
-                            {offer.title}
-                          </h3>
-                          <StatusPill status={offer.status} />
-                        </div>
-                        {offer.city ? (
-                          <p className="mt-3 flex min-w-0 items-center gap-2 break-words text-sm text-muted-foreground">
-                            <MapPin className="size-4 shrink-0" aria-hidden="true" />
-                            {offer.city}
-                          </p>
-                        ) : null}
-                        <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-border pt-4">
-                          <div className="min-w-0">
-                            <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                              {td('employerOffersApplicationsLabel')}
-                            </dt>
-                            <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
-                              {offer.newApplications}
-                            </dd>
-                          </div>
-                          <div className="min-w-0 border-l border-border pl-4">
-                            <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                              {td('colMatched')}
-                            </dt>
-                            <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
-                              {offer.matched}
-                            </dd>
-                          </div>
-                        </dl>
-                      </article>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </section>
+          <EmployerOffersPreview
+            result={jobsLoad}
+            locale={locale}
+            labels={{
+              title: td('yourActiveOffers'),
+              seeAll: td('seeAllOffers'),
+              empty: td('emptyState'),
+              loadError: td('employerOffersLoadError'),
+              loadErrorHint: td('employerOffersLoadErrorHint'),
+              retry: td('employerOffersRetry'),
+              newApplications: td('employerOffersApplicationsLabel'),
+              matched: td('colMatched'),
+            }}
+          />
 
           {/* Najnowsze aplikacje — zmiana statusu (transitionApplication) */}
           <section className="rounded-lg border border-border bg-card">
