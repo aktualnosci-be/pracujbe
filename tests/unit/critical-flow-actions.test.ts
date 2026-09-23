@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { applyToJob, transitionApplication } from '@/lib/actions/applications';
-import { markConversationRead, openConversation, sendMessage } from '@/lib/actions/messages';
+import { loadOlderMessages, markConversationRead, openConversation, sendMessage } from '@/lib/actions/messages';
+import { getOlderThreadMessages } from '@/lib/data/messages';
 import { respondToOffer, sendOffer } from '@/lib/actions/offers';
 import { saveOnboardingStep } from '@/lib/actions/onboarding';
 import { isSupabaseConfigured } from '@/lib/env';
@@ -233,6 +234,37 @@ describe('wiadomości', () => {
       expect(result).toEqual({ ok: false, error: code });
       expectNoTechnicalText(result, message);
     }
+  });
+});
+
+describe('loadOlderMessages', () => {
+  const CURSOR = { createdAt: '2026-09-20T10:00:00.000Z', id: OFFER };
+
+  it.each([
+    ['nieobsługiwany język', 'de', CONVERSATION, CURSOR],
+    ['konwersacja nie-UUID', 'pl', 'c-1', CURSOR],
+    ['kursor bez daty', 'pl', CONVERSATION, { id: OFFER }],
+  ])('%s → error bez odczytu', async (_label, locale, conversation, cursor) => {
+    expect(await loadOlderMessages(locale, conversation, cursor)).toEqual({ status: 'error' });
+    expect(getOlderThreadMessages).not.toHaveBeenCalled();
+  });
+
+  it('strona starszych wiadomości: odczyt pod sesją i etykieta czasu w języku strony', async () => {
+    const message = { id: JOB, body: 'Dzień dobry', createdAt: '2026-09-19T08:30:00.000Z', mine: false };
+    vi.mocked(getOlderThreadMessages).mockResolvedValue({
+      status: 'ready',
+      messages: [message],
+      olderCursor: null,
+    } as never);
+    const result = await loadOlderMessages('nl', CONVERSATION, CURSOR);
+    expect(getOlderThreadMessages).toHaveBeenCalledWith(CONVERSATION, CURSOR);
+    expect(result).toMatchObject({ status: 'ready', olderCursor: null, messages: [{ id: JOB, body: 'Dzień dobry' }] });
+    expect(result.status === 'ready' && typeof result.messages[0]!.timeLabel).toBe('string');
+  });
+
+  it.each(['not-found', 'error'] as const)('wynik odczytu %s przekazany bez zmian', async (status) => {
+    vi.mocked(getOlderThreadMessages).mockResolvedValue({ status } as never);
+    expect(await loadOlderMessages('pl', CONVERSATION, CURSOR)).toEqual({ status });
   });
 });
 
