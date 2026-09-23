@@ -34,6 +34,10 @@ const nextConfig = {
   images: {
     // WebP/AVIF automatycznie; ogranicz rozmiary do sensownych breakpointów (wydajność).
     formats: ['image/avif', 'image/webp'],
+    // #394: wynik optymalizacji trzymany 31 dni (domyślnie 60 s → MISS/STALE i ponowna praca
+    // `sharp` przy obrazie LCP). Pliki z public/ zmieniają się tylko z deployem — przy zmianie
+    // obrazu zmień nazwę pliku (np. team-v2.webp); zasoby Storage mają własne URL-e.
+    minimumCacheTTL: 2678400,
     remotePatterns: [
       // Supabase Storage (publiczne assety firm/ofert): dokładny host projektu, gdy znany.
       { protocol: 'https', hostname: SUPABASE_HOST ?? '*.supabase.co' },
@@ -105,7 +109,21 @@ const nextConfig = {
       // Staging/preview: twardy noindex na poziomie nagłówka (obok robots.ts i pustego sitemap).
       security.push({ key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' });
     }
-    return [{ source: '/:path*', headers: security }];
+    // #394: pliki z public/ nie mają hasha w nazwie, więc bez `immutable` — dzień świeżości
+    // i tydzień serwowania z cache podczas rewalidacji. Service worker zawsze świeży, żeby
+    // aktualizacja nie utknęła w cache przeglądarki.
+    const publicAssetCache = [
+      { key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' },
+    ];
+    return [
+      { source: '/:path*', headers: security },
+      { source: '/images/:path*', headers: publicAssetCache },
+      {
+        source: '/:file(icon-[a-z0-9-]+\\.png|icon\\.svg|apple-touch-icon\\.png|og\\.png)',
+        headers: publicAssetCache,
+      },
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }] },
+    ];
   },
 };
 
