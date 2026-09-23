@@ -1220,6 +1220,7 @@
     "send": "Wyślij",
     "sending": "Wysyłanie…",
     "sendError": "Nie udało się wysłać wiadomości. Spróbuj ponownie.",
+    "sendErrorUncertain": "Nie wiemy, czy wiadomość dotarła. Wyślij ją ponownie — nie powstanie duplikat.",
     "you": "Ty",
     "systemLabel": "System",
     "back": "Wróć do listy",

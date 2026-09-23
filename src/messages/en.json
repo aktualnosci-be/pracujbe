@@ -1220,6 +1220,7 @@
     "send": "Send",
     "sending": "Sending…",
     "sendError": "Could not send the message. Please try again.",
+    "sendErrorUncertain": "We couldn't confirm the message was sent. Send it again — it won't be duplicated.",
     "you": "You",
     "systemLabel": "System",
     "back": "Back to list",

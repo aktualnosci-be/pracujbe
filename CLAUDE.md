@@ -568,7 +568,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `PERMISSION_DENIED` (konto nie-kandydata), własne komunikaty `RATE_LIMITED`/`JOB_NOT_ACTIVE`.
   Dowód: `rls.sql` B3b/B3c, J7d–J7f.
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
+  Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
+  i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
+  i alerty pojedyncze (`rls.sql` MM7–MM8).
 - [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** załączniki, zgłoszenia
+  Wysyłka idempotentna (0075, #147): `send_message(conversation, body, client_message_id)` —
+  `MessageComposer` trzyma jeden UUID na operację danej treści (`useRef`), ponowienie po
+  zerwanym połączeniu = ta sama wiadomość bez drugiego powiadomienia/e-maila. Dowód: `rls.sql`
+  sekcja MM (retry, dwie równoległe sesje przez dblink, rollback pierwszej próby).
   Odbiorcy powiadomień/e-maili firmowych (aplikacja, wiadomość, odpowiedź na propozycję) = aktywni
   recruiter+ z aktywnym profilem (`company_recipient_ok`, 0070); e-mail o wiadomości od firmy do
   kandydata podpisany nazwą firmy. Dowód: `rls.sql` sekcja LL.
