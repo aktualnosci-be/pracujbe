@@ -5,10 +5,11 @@ import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { ErrorCodes, type ErrorCode } from '@/lib/errors';
+import { safeNextPath } from '@/lib/validation/auth';
 
 /**
  * Logowanie (email + hasło). Formularz kliencki (AuthForm) wywołuje server action `signIn`,
- * które po sukcesie przekierowuje do panelu wg roli. Parametr `?error=<CODE>` (np. z callbacku
+ * które po sukcesie przekierowuje do bezpiecznego `?next=` (np. oferty) albo do panelu wg roli. Parametr `?error=<CODE>` (np. z callbacku
  * e-maila) jest pokazywany jako komunikat nad formularzem.
  */
 
@@ -45,6 +46,8 @@ export default async function LoginPage({ params, searchParams }: PageProps) {
 
   const sp = await searchParams;
   const initialError = parseErrorCode(sp['error']);
+  // Bezpieczny cel powrotu (np. oferta, z której kandydat przyszedł); przenosimy go też do rejestracji.
+  const next = safeNextPath(sp['next']);
 
   const t = await getTranslations('auth');
 
@@ -57,7 +60,7 @@ export default async function LoginPage({ params, searchParams }: PageProps) {
             <CardDescription>{t('loginSubtitle')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <AuthForm variant="login" initialError={initialError} />
+            <AuthForm variant="login" initialError={initialError} next={next} />
 
             <div className="space-y-3 text-center text-sm">
               <Link
@@ -69,7 +72,7 @@ export default async function LoginPage({ params, searchParams }: PageProps) {
               <p className="text-muted-foreground">
                 {t('noAccount')}{' '}
                 <Link
-                  href="/rejestracja"
+                  href={next ? { pathname: '/rejestracja', query: { next } } : '/rejestracja'}
                   className="font-medium text-primary underline-offset-4 hover:underline"
                 >
                   {t('submitRegister')}

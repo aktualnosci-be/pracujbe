@@ -27,6 +27,7 @@ import { getJobBySlug, getJobs, type ContractType, type JobDetail, type JobListI
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
+import { loginHref } from '@/lib/validation/auth';
 import { JobMatchCard } from '@/components/public/JobMatchCard';
 
 /**
@@ -48,7 +49,6 @@ import { JobMatchCard } from '@/components/public/JobMatchCard';
  */
 
 const BASE_PATH = '/oferty-pracy';
-const LOGIN_HREF = '/logowanie';
 
 /** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). Spójne z layoutem/stroną główną. */
 const OG_LOCALE: Record<string, string> = {
@@ -576,7 +576,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 </p>
               ) : null}
               <Link
-                href={LOGIN_HREF}
+                href={loginHref(`/${locale}${BASE_PATH}/${slug}`)}
                 className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 h-auto min-h-12 w-full whitespace-normal text-center')}
               >
                 <MessageSquare className="h-4 w-4" aria-hidden="true" />

@@ -4,10 +4,12 @@ import * as React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { CheckCircle2, Lock, X, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { usePathname } from 'next/navigation';
 
 import { Link } from '@/i18n/navigation';
 import { applyToJob } from '@/lib/actions/applications';
 import { cn } from '@/lib/utils';
+import { loginHref } from '@/lib/validation/auth';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -38,7 +40,6 @@ import { Toast } from '@/components/ui/toast';
 
 const MESSAGE_MAX = 500;
 const TOAST_MS = 5000;
-const LOGIN_HREF = '/logowanie';
 
 /** Kody kierunkowe (dane, nie tekst UI). */
 const DIAL_CODES = [
@@ -87,6 +88,8 @@ export function ApplyModal({
   triggerSize = 'lg',
 }: ApplyModalProps): React.JSX.Element {
   const t = useTranslations('apply');
+  // Pełna ścieżka z prefiksem języka — po zalogowaniu wracamy na tę ofertę.
+  const pathname = usePathname();
 
   const [open, setOpen] = React.useState(false);
   const [dial, setDial] = React.useState<string>('PL');
@@ -336,7 +339,7 @@ export function ApplyModal({
                   className="rounded-lg bg-error/10 p-3 text-sm text-error"
                 >
                   {formError === 'login' ? (
-                    <Link href={LOGIN_HREF} className="font-medium underline">
+                    <Link href={loginHref(pathname)} className="font-medium underline">
                       {t('loginRequired')}
                     </Link>
                   ) : formError === 'already' ? (
