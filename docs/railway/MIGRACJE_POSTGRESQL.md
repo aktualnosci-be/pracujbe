@@ -40,6 +40,16 @@ odczytuje URL aplikacji ani nie tworzy loginów z hasłami. Bootstrap, dotychcza
 migracje domeny i nowe migracje auth są stosowane razem, na jednym połączeniu,
 w jednej transakcji z blokadą i kontrolą sum.
 
+Tryb wybiera `MIGRATION_MODE` (domyślnie bezpieczny odczyt):
+
+| tryb | działanie |
+| --- | --- |
+| `status` (domyślny) | sesja `READ ONLY`: liczba zastosowanych i lista oczekujących migracji; odmowa przy niezgodnej historii; nie tworzy schematu `app_migrations` |
+| `dry-run` | nakłada oczekujące migracje w jednej transakcji i **zawsze** robi `ROLLBACK` — dowód, że przejdą na tej bazie |
+| `apply` | nakłada i zatwierdza; wymaga jawnego wyboru |
+
+Procedura na produkcji Railway: `docs/railway/WDROZENIE_MIGRACJI.md`.
+
 W historii bootstrap otrzymuje nazwę `0000_bootstrap_roles_and_identity.sql`.
 Plik źródłowy pozostaje w `database/bootstrap`. Pozostałe numery są unikalne
 między katalogami `supabase/migrations` i `database/auth`; kolejną zmianę zawsze
