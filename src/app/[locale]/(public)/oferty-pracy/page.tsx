@@ -1,14 +1,13 @@
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { ChevronDown, MapPin, Search, SearchX, X } from 'lucide-react';
+import { MapPin, Search, SearchX, X } from 'lucide-react';
 
-import { Link } from '@/i18n/navigation';
+import { Link, redirect } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { getJobFilterFacets, getJobs } from '@/lib/jobs';
-import { cn } from '@/lib/utils';
-import { FilterSidebar } from '@/components/public/FilterSidebar';
+import { FilterSidebar, SortMenu } from '@/components/public/FilterSidebar';
 import { FilterSheet } from '@/components/public/FilterSheet';
 import { JobCard } from '@/components/public/JobCard';
 import { Pagination } from '@/components/public/Pagination';
@@ -214,6 +213,20 @@ export default async function JobsListPage({
     const qs = new URLSearchParams(paramsObj).toString();
     return qs ? `${BASE_PATH}?${qs}` : BASE_PATH;
   };
+  // Strona spoza zakresu (np. ?page=999) przy niepustym wyniku → ostatnia istniejąca strona
+  // z tymi samymi filtrami (#228). Pusty wynik zostaje pod adresem (stan pusty jest spójny).
+  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (total > 0 && page > lastPage) {
+    redirect({
+      href: hrefFrom(
+        lastPage > 1
+          ? { ...activeParams, page: String(lastPage) }
+          : activeParams,
+      ),
+      locale,
+    });
+  }
+
   const withoutKey = (key: string): string => {
     const next = { ...activeParams };
     delete next[key];
@@ -318,51 +331,26 @@ export default async function JobsListPage({
     });
   }
 
-  const clearFiltersHref = hrefFrom({
-    ...(keyword ? { keyword } : {}),
-    ...(city ? { city } : {}),
-    ...(sort !== 'newest' ? { sort } : {}),
-  });
+  // „Wyczyść filtry” usuwa wszystkie chipy — także słowo kluczowe i miasto; inaczej przy samym
+  // wyszukiwaniu tekstowym link prowadził na ten sam adres (#228). Sortowanie zostaje.
+  const clearFiltersHref = hrefFrom(sort !== 'newest' ? { sort } : {});
 
   // Parametry ukryte w formularzu wyszukiwarki (zachowanie filtrów przy wyszukiwaniu tekstem).
   const hiddenSearchParams = { ...activeParams };
   delete hiddenSearchParams['keyword'];
   delete hiddenSearchParams['city'];
 
-  const currentSortLabel =
-    sort === 'salary' ? tFilters('sortSalary') : tFilters('sortNewest');
-  const sortOptions: Array<{ value: SortValue; label: string }> = [
-    { value: 'newest', label: tFilters('sortNewest') },
-    { value: 'salary', label: tFilters('sortSalary') },
-  ];
+  const sortOptions = [
+    { value: 'newest', label: tFilters('sortNewest'), href: sortHref('newest') },
+    { value: 'salary', label: tFilters('sortSalary'), href: sortHref('salary') },
+  ] as const;
 
   const sortMenu = () => (
-    <details className="group relative">
-      <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-soft [&::-webkit-details-marker]:hidden">
-        <span className="text-muted-foreground">{tFilters('sortBy')}:</span>
-        <span className="font-medium">{currentSortLabel}</span>
-        <ChevronDown
-          className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
-          aria-hidden="true"
-        />
-      </summary>
-      <div className="absolute right-0 z-20 mt-1 w-60 rounded-md border border-border bg-background p-1 shadow-md">
-        {sortOptions.map((option) => (
-          <Link
-            key={option.value}
-            href={sortHref(option.value)}
-            className={cn(
-              'block rounded-sm px-3 py-2 text-sm transition-colors hover:bg-soft',
-              option.value === sort
-                ? 'font-medium text-accent'
-                : 'text-foreground',
-            )}
-          >
-            {option.label}
-          </Link>
-        ))}
-      </div>
-    </details>
+    <SortMenu
+      sortByLabel={tFilters('sortBy')}
+      current={sort}
+      options={sortOptions}
+    />
   );
 
   return (
@@ -499,19 +487,26 @@ export default async function JobsListPage({
 
           {/* Nagłówek wyników (desktop) */}
           <div className="mb-4 hidden items-center justify-between gap-3 lg:flex">
-            <p className="text-sm text-muted-foreground" aria-live="polite">
+            <h2
+              data-results-heading
+              tabIndex={-1}
+              className="rounded-sm text-sm font-normal text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-live="polite"
+            >
               {t('resultsCount', { count: total })}
-            </p>
+            </h2>
             {sortMenu()}
           </div>
 
           {/* Liczba wyników (mobile) */}
-            <p
-              className="mb-3 text-sm text-muted-foreground lg:hidden"
-              aria-live="polite"
-            >
+          <h2
+            data-results-heading
+            tabIndex={-1}
+            className="mb-3 rounded-sm text-sm font-normal text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:hidden"
+            aria-live="polite"
+          >
             {t('resultsCount', { count: total })}
-          </p>
+          </h2>
 
           {/* Chipy aktywnych filtrów */}
           {chips.length > 0 ? (
@@ -521,18 +516,21 @@ export default async function JobsListPage({
                   key={chip.id}
                   href={chip.href}
                   aria-label={`${tFilters('removeFilter')}: ${chip.label}`}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-soft py-1 pl-3 pr-2 text-sm text-foreground transition-colors hover:bg-muted"
+                  className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-full border border-border bg-soft py-1 pl-3 pr-2 text-sm text-foreground transition-colors hover:bg-muted"
                 >
-                  <span>{chip.label}</span>
+                  {/* Długie słowo (złożenie, adres) łamie się zamiast rozpychać stronę (#230). */}
+                  <span className="min-w-0 [overflow-wrap:anywhere]">
+                    {chip.label}
+                  </span>
                     <X
-                      className="h-3.5 w-3.5 text-muted-foreground"
+                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
                 </Link>
               ))}
               <Link
                 href={clearFiltersHref}
-                className="ml-1 text-sm font-medium text-accent hover:text-accent-dark"
+                className="ml-1 inline-flex min-h-11 items-center rounded-sm text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 {tFilters('clear')}
               </Link>
@@ -547,6 +545,15 @@ export default async function JobsListPage({
                   aria-hidden="true"
                 />
               <p className="max-w-md text-muted-foreground">{t('empty')}</p>
+              {chips.length > 0 ? (
+                <Link
+                  href={clearFiltersHref}
+                  data-empty-reset
+                  className="mt-2 inline-flex min-h-12 items-center justify-center rounded-xl border border-border bg-background px-5 text-sm font-semibold text-foreground transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {tFilters('clearAll')}
+                </Link>
+              ) : null}
             </div>
           ) : (
             <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">

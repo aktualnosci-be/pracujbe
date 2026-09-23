@@ -86,7 +86,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = t(`city_${city}`);
 
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: { canonical: url, languages },
     openGraph: {

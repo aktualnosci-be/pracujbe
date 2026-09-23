@@ -532,7 +532,8 @@
     "entitlementLimit": "Vous avez atteint la limite d'offres actives de votre formule. Changez de formule pour en publier davantage.",
     "notFound": "Nous n'avons pas trouvé ce que vous cherchez.",
     "internal": "Une erreur est survenue de notre côté. Nous y travaillons.",
-    "generic": "Une erreur est survenue. Réessayez."
+    "generic": "Une erreur est survenue. Réessayez.",
+    "demoUnavailable": "Cette fonction n'est pas disponible dans la version de démonstration du site."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -622,6 +623,10 @@
     "candidateListErrorTitle": "Impossible de charger les données",
     "candidateListErrorBody": "Actualisez la page et réessayez.",
     "candidateListRetry": "Réessayer",
+    "candidateOverviewLoadError": "Certains compteurs n’ont pas pu être chargés. Actualisez la page et réessayez.",
+    "candidateStatLoadError": "Chargement impossible",
+    "candidateApplicationsLoadError": "Impossible de charger vos candidatures. Actualisez la page et réessayez.",
+    "candidateMessagesLoadError": "Impossible de charger vos messages. Actualisez la page et réessayez.",
     "savedIntro": "Retrouvez les offres que vous avez gardées pour plus tard.",
     "savedEmpty": "Vous n'avez pas encore enregistré d'offres. Trouvez une offre intéressante et enregistrez-la ici.",
     "savedBrowse": "Voir les offres",
@@ -875,7 +880,7 @@
     "available": "Disponible",
     "datePosted": "Date de publication",
     "any": "Toutes",
-    "showResults": "Afficher {count} offres",
+    "showResults": "{count, plural, one {Afficher # offre} other {Afficher # offres}}",
     "countLoading": "Comptage des offres…",
     "countUnavailable": "Nombre d’offres indisponible",
     "countError": "Impossible de compter les offres. Réessayez.",
@@ -953,7 +958,9 @@
     "errorGeneric": "L'envoi de la candidature a échoué. Réessayez.",
     "alreadyApplied": "Vous avez déjà postulé à cette offre.",
     "submitting": "Envoi en cours...",
-    "close": "Fermer"
+    "close": "Fermer",
+    "phoneInvalid": "Saisissez un numéro de téléphone valide : un numéro national pour le pays choisi ou le numéro complet avec l’indicatif, par ex. +32 470 12 34 56.",
+    "demoUnavailable": "Ceci est une version de démonstration — la candidature aux offres est désactivée."
   },
   "legal": {
     "termsTitle": "Conditions générales",
