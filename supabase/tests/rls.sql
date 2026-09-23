@@ -1393,4 +1393,121 @@ select pg_temp.assert(
     and pg_get_constraintdef(oid) ~ '''nl''::text'),
   'KK8 żadna funkcja ani CHECK nie powiela listy języków');
 
+-- ============================================================================
+-- LL. Odbiorcy powiadomień firmowych = aktywni recruiter+ (0070); e-mail o wiadomości
+--     do kandydata bez danych osobowych członka firmy
+-- ============================================================================
+\set CANDL 'd1000000-0000-0000-0000-00000000000c'
+\set OWNL  'd1000000-0000-0000-0000-0000000000a1'
+\set EXL   'd1000000-0000-0000-0000-0000000000a2'
+\set MEML  'd1000000-0000-0000-0000-0000000000a3'
+\set DELL  'd1000000-0000-0000-0000-0000000000a4'
+\set COMPL 'd1000000-0000-0000-0000-0000000000f1'
+\set JOBL  'd1000000-0000-0000-0000-0000000000b1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDL','candl@test.be','Cara L','{"role":"candidate","first_name":"Cara","last_name":"Lambrecht","locale":"fr"}'),
+  (:'OWNL','ownl@test.be','Olaf O','{"role":"employer","first_name":"Olaf","last_name":"Oosterlinck","locale":"nl"}'),
+  (:'EXL','exl@test.be','Ewa X','{"role":"employer","first_name":"Ewa","last_name":"Exowska","locale":"pl"}'),
+  (:'MEML','meml@test.be','Mia M','{"role":"employer","first_name":"Mia","last_name":"Memberska","locale":"en"}'),
+  (:'DELL','dell@test.be','Dirk D','{"role":"employer","first_name":"Dirk","last_name":"Deleted","locale":"nl"}');
+insert into public.companies(id,name,status) values (:'COMPL','Firma L','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPL',:'OWNL','owner',true),
+  (:'COMPL',:'EXL','recruiter',true),
+  (:'COMPL',:'MEML','member',true),
+  (:'COMPL',:'DELL','recruiter',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JOBL',:'COMPL','job-l','Operator L','warehouse','permanent','Brugge','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDL', false);
+
+-- Stan wyjściowy (wszyscy aktywni): aplikacja, propozycja od EXL, rozmowa z udziałem firmy.
+select set_config('app.current_uid', :'CANDL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JOBL'::uuid, 'll-app-1', null, null, 'chętnie') as appl \gset
+reset role;
+select set_config('app.current_uid', :'EXL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'JOBL'::uuid, :'CANDL'::uuid, 'll-off-1', 'Zapraszamy', null) as offl \gset
+select public.get_or_create_conversation(:'appl'::uuid, null) as convl \gset
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.conversation_members where conversation_id = :'convl') = 5,
+  'LL0 rozmowa objęła kandydata i wszystkich aktywnych członków firmy');
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_id = :'appl' and profile_id = :'MEML') = 0
+  and (select count(*) from public.email_deliveries where entity_id = :'appl' and profile_id = :'MEML') = 0,
+  'LL0b zwykły member nie dostaje powiadomienia o aplikacji');
+
+-- EXL odchodzi z firmy; profil DELL zostaje usunięty (soft delete).
+update public.company_members set is_active = false where company_id = :'COMPL' and profile_id = :'EXL';
+update public.profiles set deleted_at = now() where id = :'DELL';
+
+-- LL1: nowa aplikacja — tylko aktywny recruiter+ z aktywnym profilem (OWNL).
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('d1000000-0000-0000-0000-0000000000b2',:'COMPL','job-l2','Operator L2','warehouse','permanent','Brugge','Flandria','active','pl');
+select set_config('app.current_uid', :'CANDL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job('d1000000-0000-0000-0000-0000000000b2'::uuid, 'll-app-2', null, null, null) as appl2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select array_agg(profile_id::text order by profile_id) from public.notifications where entity_id = :'appl2')
+    = array[:'OWNL'::text],
+  'LL1 powiadomienie o aplikacji tylko dla aktywnego recruiter+ (nie b. członek, nie usunięty profil)');
+select pg_temp.assert(
+  (select array_agg(profile_id::text order by profile_id) from public.email_deliveries where entity_id = :'appl2')
+    = array[:'OWNL'::text],
+  'LL1b e-mail o aplikacji tylko dla aktywnego recruiter+');
+
+-- LL2: wiadomość kandydata — b. członek, usunięty profil i zwykły member bez wpisów.
+select set_config('app.current_uid', :'CANDL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'convl'::uuid, 'Dzień dobry, pytanie o zmianę') as msgl \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications
+     where entity_id = :'convl' and type = 'message_received' and profile_id in (:'EXL', :'DELL', :'MEML')) = 0,
+  'LL2 b. członek / usunięty profil / member nie dostają powiadomienia o wiadomości');
+select pg_temp.assert(
+  (select array_agg(profile_id::text order by profile_id) from public.email_deliveries where entity_id = :'msgl')
+    = array[:'OWNL'::text],
+  'LL2b e-mail o wiadomości tylko dla aktywnego recruiter+ firmy');
+
+-- LL3: odpowiedź na propozycję b. członka — trafia do aktywnych recruiter+, nie do nadawcy.
+select set_config('app.current_uid', :'CANDL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.respond_to_offer(:'offl'::uuid, true);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_id = :'offl' and type = 'offer_status_changed'
+     and profile_id = :'EXL') = 0
+  and (select count(*) from public.email_deliveries where entity_id = :'offl' and profile_id = :'EXL') = 0,
+  'LL3 b. członek (nadawca propozycji) nie dostaje odpowiedzi kandydata');
+select pg_temp.assert(
+  (select array_agg(profile_id::text order by profile_id) from public.email_deliveries
+     where entity_id = :'offl' and template = 'offerAccepted') = array[:'OWNL'::text],
+  'LL3b odpowiedź trafia do aktywnego recruiter+ firmy');
+
+-- LL4: wiadomość członka firmy do kandydata — e-mail podpisany nazwą firmy, bez nazwiska.
+select set_config('app.current_uid', :'OWNL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'convl'::uuid, 'Zapraszamy na rozmowę') as msgl2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select payload->>'senderName' from public.email_deliveries
+     where entity_id = :'msgl2' and profile_id = :'CANDL') = 'Firma L',
+  'LL4 kandydat widzi w e-mailu nazwę firmy jako nadawcę');
+select pg_temp.assert(
+  not exists (select 1 from public.email_deliveries
+    where entity_id = :'msgl2' and payload::text ~ '(Olaf|Oosterlinck)'),
+  'LL4b payload e-maila do kandydata nie zawiera imienia/nazwiska rekrutera');
+-- Kierunek kandydat → firma bez zmian: firma widzi imię i nazwisko kandydata.
+select pg_temp.assert(
+  (select payload->>'senderName' from public.email_deliveries
+     where entity_id = :'msgl' and profile_id = :'OWNL') = 'Cara Lambrecht',
+  'LL4c firma nadal dostaje imię i nazwisko kandydata');
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.company_recipient_ok(uuid, uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.company_recipient_ok(uuid, uuid)', 'execute'),
+  'LL5 helper odbiorców nie jest wywoływalny przez role klienta');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

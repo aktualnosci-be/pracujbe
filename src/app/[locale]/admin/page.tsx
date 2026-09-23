@@ -82,7 +82,7 @@ export default async function AdminDashboardPage({
       {statsResult.status === 'error' ? (
         <AdminLoadError retryHref={`/${locale}/admin`} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
           <StatCard
             label={t('statCompanies')}
             value={statsResult.stats.companies}
@@ -119,7 +119,7 @@ export default async function AdminDashboardPage({
       )}
 
       {/* Szybkie przejścia */}
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <section className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-4">
         {QUICK_LINKS.map((link) => (
           <Link
             key={link.href}
@@ -133,7 +133,7 @@ export default async function AdminDashboardPage({
               {link.icon}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-1 text-sm font-semibold text-foreground">
+              <span className="flex flex-wrap items-center gap-1 break-words text-sm font-semibold text-foreground">
                 {t(link.labelKey)}
                 <ArrowRight
                   className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5"

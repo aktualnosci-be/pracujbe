@@ -91,7 +91,7 @@ export function DashboardShell({
   ];
   const items = notifItems ?? demoNotifItems;
 
-  // Trasa „Wiadomości" (jeśli w nawigacji) — cel „zobacz wszystkie" oraz nośnik badge.
+  // Trasa „Wiadomości" (jeśli w nawigacji) — nośnik badge nieprzeczytanych rozmów.
   const messagesHref = nav.find((item) => item.href.endsWith('/wiadomosci'))?.href;
 
   // Badge pozycji „Wiadomości" bierze się z realnej liczby nieprzeczytanych konwersacji.
@@ -109,6 +109,19 @@ export function DashboardShell({
       if (notificationError) return;
       await markNotificationsRead();
       router.refresh();
+    });
+  }
+
+  // #148: otwarcie pozycji oznacza JEDNO powiadomienie (RPC idempotentne: ponowne oznaczenie
+  // już przeczytanego to no-op) i odświeża licznik; nawigacja Linkiem nie czeka na zapis,
+  // a błąd zapisu nie zmienia celu (ten wyznaczył serwer).
+  function handleItemOpen(item: NotificationItem): void {
+    setNotifOpen(false);
+    const id = item.id;
+    if (notificationError || !item.unread || !id) return;
+    startMarkTransition(async () => {
+      const res = await markNotificationsRead([id]);
+      if (res.ok) router.refresh();
     });
   }
 
@@ -262,7 +275,7 @@ export function DashboardShell({
                   error={notificationError}
                   onRetry={() => router.refresh()}
                   onMarkAllRead={handleMarkAllRead}
-                  seeAllHref={messagesHref}
+                  onItemOpen={handleItemOpen}
                 />
               </div>
             ) : null}
