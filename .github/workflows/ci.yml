@@ -167,6 +167,15 @@ jobs:
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
       - run: npm run build
+      # E2E używa dokładnie tego buildu (#127). Cache Actions, nie artefakt: nie liczy się do
+      # płatnego storage. Klucz wiąże build z SHA, przebiegiem i próbą; .next/cache pomijamy.
+      - name: Save build for E2E
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .next
+            !.next/cache
+          key: next-build-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   rls:
     name: RLS integration (PostgreSQL 16)
@@ -309,9 +318,24 @@ jobs:
       # Poniższe jest bezpiecznym no-op, jeśli już są; --with-deps pomijamy, bo wymaga sudo.
       - name: Ensure Playwright browsers
         run: npx playwright install chromium
+      - name: Restore build from Build job
+        id: next-build
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .next
+            !.next/cache
+          key: next-build-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Verify restored build
+        id: next-build-check
+        if: steps.next-build.outputs.cache-hit == 'true'
+        run: node scripts/check-next-build.mjs
+        continue-on-error: true
+      # Powrót do osobnego buildu, gdy cache nie trafił albo build jest niekompletny.
       - name: Build application for E2E
+        if: steps.next-build.outputs.cache-hit != 'true' || steps.next-build-check.outcome != 'success'
         timeout-minutes: 15
-        run: npm run build
+        run: rm -rf .next && npm run build
       - name: Run E2E
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'
