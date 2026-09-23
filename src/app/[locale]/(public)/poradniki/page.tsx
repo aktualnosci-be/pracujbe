@@ -106,7 +106,7 @@ export default async function GuidesListPage({ params }: PageProps) {
             </Link>
           </li>
           <li aria-hidden="true">/</li>
-          <li className="text-foreground">{t('pageTitle')}</li>
+          <li aria-current="page" className="text-foreground">{t('pageTitle')}</li>
         </ol>
       </nav>
 

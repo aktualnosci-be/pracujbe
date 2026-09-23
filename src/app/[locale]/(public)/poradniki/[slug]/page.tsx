@@ -182,7 +182,7 @@ export default async function GuideArticlePage({ params }: PageProps) {
             </Link>
           </li>
           <li aria-hidden="true">/</li>
-          <li className="min-w-0 truncate text-foreground">{guide.title}</li>
+          <li aria-current="page" className="min-w-0 truncate text-foreground">{guide.title}</li>
         </ol>
       </nav>
 
