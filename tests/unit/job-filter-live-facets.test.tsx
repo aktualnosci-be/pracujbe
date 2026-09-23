@@ -15,6 +15,7 @@ import {
   type SidebarFilters,
 } from "@/components/public/job-filters";
 import en from "@/messages/en.json";
+import pl from "@/messages/pl.json";
 import type { JobFilterFacets } from "@/types/job-filter-facets";
 
 const push = vi.fn();
@@ -83,6 +84,28 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+describe("odmiana liczby w przycisku zatwierdzenia (#226)", () => {
+  it.each([
+    ["pl", 1, "Pokaż 1 ofertę", pl],
+    ["pl", 2, "Pokaż 2 oferty", pl],
+    ["pl", 5, "Pokaż 5 ofert", pl],
+    ["pl", 22, "Pokaż 22 oferty", pl],
+    ["en", 1, "Show 1 job", en],
+    ["en", 2, "Show 2 jobs", en],
+  ] as const)("%s: %i → %s", (locale, total, label, messages) => {
+    render(
+      <NextIntlClientProvider locale={locale} messages={messages}>
+        <FilterSidebar
+          facets={facets(total)}
+          initial={emptySidebarFilters()}
+          sort="newest"
+        />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByRole("button", { name: label })).toBeEnabled();
+  });
 });
 
 describe("dokładny licznik oczekujących filtrów", () => {

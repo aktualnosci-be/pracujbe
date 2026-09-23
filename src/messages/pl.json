@@ -870,7 +870,7 @@
     "available": "Dostępny",
     "datePosted": "Data dodania oferty",
     "any": "Dowolna",
-    "showResults": "Pokaż {count} ofert",
+    "showResults": "{count, plural, one {Pokaż # ofertę} few {Pokaż # oferty} many {Pokaż # ofert} other {Pokaż # oferty}}",
     "countLoading": "Liczymy oferty…",
     "countUnavailable": "Liczba ofert niedostępna",
     "countError": "Nie udało się policzyć ofert. Spróbuj ponownie.",
