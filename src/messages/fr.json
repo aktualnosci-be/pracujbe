@@ -690,6 +690,7 @@
     "offersApplications": "{count, plural, one {# candidature} other {# candidatures}}",
     "offersMatched": "{count} corresp.",
     "recentApplications": "Candidatures récentes",
+    "recentApplicationsError": "Impossible de charger les candidatures r?centes. R?essayez.",
     "sendOffer": "Envoyer une proposition",
     "offerSentSuccess": "La proposition a été envoyée.",
     "statusChanged": "Le statut a été mis à jour.",

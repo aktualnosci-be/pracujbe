@@ -27,6 +27,7 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { RecruitmentFunnel } from '@/components/employer/RecruitmentFunnel';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import { SendOfferButton } from '@/components/employer/SendOfferButton';
+import { RecentApplicationsError } from '@/components/employer/RecentApplicationsError';
 
 /**
  * Panel pracodawcy — Podsumowanie (makieta 05), na REALNYCH danych.
@@ -72,9 +73,10 @@ export default async function EmployerDashboardPage({
   setRequestLocale(locale);
 
   const td = await getTranslations({ locale, namespace: 'dashboard' });
+  const tc = await getTranslations({ locale, namespace: 'common' });
 
   const configured = isSupabaseConfigured();
-  const [overview, jobs, applications, candidates, funnel, shell] = await Promise.all([
+  const [overview, jobs, recentApplications, candidates, funnel, shell] = await Promise.all([
     getEmployerOverview(),
     getCompanyJobs(),
     getRecentApplications(),
@@ -253,11 +255,13 @@ export default async function EmployerDashboardPage({
                 <ArrowRight className="size-3.5" aria-hidden="true" />
               </Link>
             </div>
-            {applications.length === 0 ? (
+            {recentApplications.status === 'error' ? (
+              <RecentApplicationsError message={td('recentApplicationsError')} retryLabel={tc('retry')} />
+            ) : recentApplications.applications.length === 0 ? (
               <p className="p-6 text-center text-sm text-muted-foreground">{td('emptyState')}</p>
             ) : (
               <ul className="divide-y divide-border">
-                {applications.map((application) => (
+                {recentApplications.applications.map((application) => (
                   <li
                     key={application.id}
                     className="flex flex-wrap items-center gap-3 p-4 sm:px-5"

@@ -690,6 +690,7 @@
     "offersApplications": "{count, plural, one {# application} other {# applications}}",
     "offersMatched": "{count} matches",
     "recentApplications": "Recent applications",
+    "recentApplicationsError": "Could not load recent applications. Please try again.",
     "sendOffer": "Send offer",
     "offerSentSuccess": "Offer has been sent.",
     "statusChanged": "Status has been updated.",

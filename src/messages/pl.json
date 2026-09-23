@@ -690,6 +690,7 @@
     "offersApplications": "{count, plural, one {# aplikacja} few {# aplikacje} many {# aplikacji} other {# aplikacji}}",
     "offersMatched": "{count} dopas.",
     "recentApplications": "Najnowsze aplikacje",
+    "recentApplicationsError": "Nie uda?o si? wczyta? najnowszych aplikacji. Spr?buj ponownie.",
     "sendOffer": "Wyślij propozycję",
     "offerSentSuccess": "Propozycja została wysłana.",
     "statusChanged": "Status został zmieniony.",
