@@ -12,8 +12,8 @@
  *   tylko dla zweryfikowanych).
  * - `conversations`/`conversation_members`/`messages`: wyłącznie uczestnik konwersacji.
  *
- * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do Sentry i degradujemy
- * do bezpiecznej pustej struktury (`[]` / `0` / `null`), NIE crashując panelu.
+ * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do Sentry,
+ * a wyniki listy i wątku odróżniają awarię od prawdziwego braku danych.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -58,6 +58,11 @@ export interface ConversationThread {
   counterpartyName: string;
   messages: ThreadMessage[];
 }
+
+export type ConversationThreadResult =
+  | { status: 'ready'; thread: ConversationThread }
+  | { status: 'not-found' }
+  | { status: 'error' };
 
 /* ---------------------------------------------------------------------------
  * Pomocnicze konwersje (bez `any`, wzorzec z @/lib/data/candidate)
@@ -372,19 +377,20 @@ export async function getConversations(): Promise<ConversationListItem[]> {
   return (await getConversationsResult()).items;
 }
 
-/** Pełny wątek jednej konwersacji (wiadomości rosnąco). `null` = brak dostępu / nie istnieje. */
+/** Pełny wątek; brak dostępu i nieistnienie dają ten sam wynik, awaria osobny. */
 export async function getConversationThread(
   conversationId: string,
-): Promise<ConversationThread | null> {
+): Promise<ConversationThreadResult> {
   if (!isSupabaseConfigured()) {
-    return buildDemo(routing.defaultLocale).threads.get(conversationId) ?? null;
+    const thread = buildDemo(routing.defaultLocale).threads.get(conversationId);
+    return thread ? { status: 'ready', thread } : { status: 'not-found' };
   }
 
   try {
     const { createServerClient } = await import('@/lib/supabase/server');
     const supabase = await createServerClient();
     const uid = await getAuthUserId(supabase);
-    if (!uid) return null;
+    if (!uid) return { status: 'not-found' };
 
     const { data: convRow, error: convError } = await supabase
       .from('conversations')
@@ -396,7 +402,7 @@ export async function getConversationThread(
 
     const conv = asRecord(convRow);
     const cid = asStr(conv['id']);
-    if (!cid) return null; // brak dostępu (RLS) lub nie istnieje
+    if (!cid) return { status: 'not-found' }; // brak dostępu (RLS) lub nie istnieje
 
     const { data: msgData, error: msgError } = await supabase
       .from('messages')
@@ -451,14 +457,17 @@ export async function getConversationThread(
     });
 
     return {
-      id: cid,
-      subject: asStr(conv['subject']),
-      counterpartyName: resolveCounterparty(otherIds, companyId, nameByProfile, companyNameById),
-      messages,
+      status: 'ready',
+      thread: {
+        id: cid,
+        subject: asStr(conv['subject']),
+        counterpartyName: resolveCounterparty(otherIds, companyId, nameByProfile, companyNameById),
+        messages,
+      },
     };
   } catch (error) {
     captureError(error, { area: 'messages.getConversationThread' });
-    return null;
+    return { status: 'error' };
   }
 }
 

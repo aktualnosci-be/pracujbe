@@ -7,20 +7,22 @@ import type { Locale } from '@/i18n/routing';
 import {
   getConversationsResult,
   getConversationThread,
-  type ConversationThread,
+  type ConversationThreadResult,
 } from '@/lib/data/messages';
 import { markConversationRead } from '@/lib/actions/messages';
+import { captureError } from '@/lib/sentry';
 
 import { ConversationList } from './ConversationList';
 import { MessageThread } from './MessageThread';
 import { MessageComposer } from './MessageComposer';
+import { ThreadRetryButton } from './ThreadRetryButton';
 
 /**
  * MessagesView — współdzielony widok wątku wiadomości panelu (kandydat/pracodawca).
  *
  * Ładuje listę konwersacji (pod sesją/RLS lub DEMO bez env). Gdy `?c=<id>` wskazuje
  * konwersację użytkownika: oznacza ją jako przeczytaną, pobiera wątek i renderuje
- * MessageThread + MessageComposer; inaczej pokazuje stan „wybierz konwersację".
+ * MessageThread + MessageComposer; brak dostępu i awaria mają osobne stany.
  * Układ 2-kolumnowy na desktopie (lista | wątek), na mobile widoczna lista ALBO wątek.
  *
  * `basePath` to trasa panelu bez prefiksu locale (`/candidate/wiadomosci` lub
@@ -50,16 +52,25 @@ export async function MessagesView({
       ? activeParam
       : null;
 
-  let thread: ConversationThread | null = null;
+  let threadResult: ConversationThreadResult = { status: 'not-found' };
+  let markedRead = false;
   if (activeId) {
-    // Otwarcie = oznaczenie przeczytane (idempotentne; RLS w RPC). Potem pobranie wątku.
-    await markConversationRead(activeId);
-    thread = await getConversationThread(activeId);
+    threadResult = await getConversationThread(activeId);
+    if (threadResult.status === 'ready') {
+      // Oznaczamy tylko wątek, który udało się odczytać; licznik zmieniamy po sukcesie RPC.
+      try {
+        markedRead = (await markConversationRead(activeId)).ok;
+      } catch (error) {
+        captureError(error, { area: 'messages.markConversationRead' });
+      }
+    }
   }
 
-  // Po oznaczeniu przeczytania odbij to w liście natychmiast (bez czekania na kolejny render).
+  const showThreadPanel = result.status === 'ready' && Boolean(activeParam);
+
+  // Po udanym oznaczeniu przeczytania odbij to w liście natychmiast.
   const listItems = conversations.map((conversation) =>
-    conversation.id === activeId
+    markedRead && conversation.id === activeId
       ? { ...conversation, unread: false, unreadCount: 0 }
       : conversation,
   );
@@ -76,7 +87,7 @@ export async function MessagesView({
         <aside
           className={cn(
             'min-h-0 overflow-y-auto border-border lg:block lg:border-r',
-            activeId ? 'hidden' : 'block',
+            showThreadPanel ? 'hidden' : 'block',
           )}
         >
           {result.status === 'error' ? (
@@ -97,9 +108,9 @@ export async function MessagesView({
 
         {/* Wątek — na mobile ukryty, gdy nic nie wybrano */}
         <section
-          className={cn('min-h-0 flex-col', activeId ? 'flex' : 'hidden lg:flex')}
+          className={cn('min-h-0 flex-col', showThreadPanel ? 'flex' : 'hidden lg:flex')}
         >
-          {activeId && thread ? (
+          {showThreadPanel ? (
             <>
               {/* Powrót do listy — tylko mobile */}
               <div className="shrink-0 border-b border-border p-2 lg:hidden">
@@ -111,8 +122,24 @@ export async function MessagesView({
                   <span className="min-w-0 break-words">{t('back')}</span>
                 </Link>
               </div>
-              <MessageThread thread={thread} locale={locale} />
-              <MessageComposer conversationId={activeId} />
+              {threadResult.status === 'ready' && activeId ? (
+                <>
+                  <MessageThread thread={threadResult.thread} locale={locale} />
+                  <MessageComposer conversationId={activeId} />
+                </>
+              ) : (
+                <div role={threadResult.status === 'error' ? 'alert' : undefined} className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+                  <p className="text-base font-semibold text-foreground">
+                    {threadResult.status === 'error' ? t('threadLoadError') : t('threadUnavailable')}
+                  </p>
+                  {threadResult.status === 'error' && activeId ? (
+                    <>
+                      <p className="text-sm text-muted-foreground">{t('threadLoadErrorHint')}</p>
+                      <ThreadRetryButton label={t('retry')} />
+                    </>
+                  ) : null}
+                </div>
+              )}
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center p-8 text-center">

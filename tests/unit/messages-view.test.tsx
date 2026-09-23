@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import en from '@/messages/en.json';
@@ -6,11 +6,13 @@ import fr from '@/messages/fr.json';
 import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
 
-const { getConversationsResult, getConversationThread, markConversationRead } =
+const { getConversationsResult, getConversationThread, markConversationRead, refresh, captureError } =
   vi.hoisted(() => ({
     getConversationsResult: vi.fn(),
     getConversationThread: vi.fn(),
     markConversationRead: vi.fn(),
+    refresh: vi.fn(),
+    captureError: vi.fn(),
   }));
 
 const translations = { pl, nl, fr, en } as const;
@@ -23,6 +25,7 @@ vi.mock('next-intl/server', () => ({
 }));
 
 vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ refresh }),
   Link: ({
     children,
     ...props
@@ -37,8 +40,10 @@ vi.mock('@/lib/data/messages', () => ({
 }));
 
 vi.mock('@/lib/actions/messages', () => ({ markConversationRead }));
+vi.mock('@/lib/sentry', () => ({ captureError }));
 vi.mock('@/components/messaging/ConversationList', () => ({
-  ConversationList: () => <div>conversation-list</div>,
+  ConversationList: ({ items }: { items: Array<{ unreadCount: number }> }) =>
+    <div data-testid="conversation-list" data-unread={items[0]?.unreadCount}>conversation-list</div>,
 }));
 vi.mock('@/components/messaging/MessageThread', () => ({
   MessageThread: () => <div>message-thread</div>,
@@ -63,11 +68,10 @@ describe('mobilny powrót z wątku wiadomości', () => {
     'jest linkiem do listy z dostępną nazwą dla locale %s',
     async (locale) => {
       getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1' }] });
-      getConversationThread.mockResolvedValue({
-        id: 'conversation-1',
-        messages: [],
-      });
-      markConversationRead.mockResolvedValue(undefined);
+      getConversationThread.mockResolvedValue({ status: 'ready', thread: {
+        id: 'conversation-1', messages: [],
+      } });
+      markConversationRead.mockResolvedValue({ ok: true });
 
       render(
         await MessagesView({
@@ -99,4 +103,89 @@ describe('mobilny powrót z wątku wiadomości', () => {
       expect(markConversationRead).not.toHaveBeenCalled();
     },
   );
+
+  it.each(['candidate', 'employer'] as const)(
+    'pokazuje błąd wątku z ponowieniem w panelu %s, bez kompozytora i szczegółów bazy',
+    async (role) => {
+      getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1' }] });
+      getConversationThread.mockResolvedValue({ status: 'error' });
+      markConversationRead.mockResolvedValue({ ok: true });
+      const basePath = `/${role}/wiadomosci`;
+
+      render(await MessagesView({ locale: 'pl', basePath, activeParam: 'conversation-1' }));
+
+      expect(screen.getByRole('alert')).toHaveTextContent(pl.messages.threadLoadError);
+      expect(screen.getByRole('alert')).toHaveTextContent(pl.messages.threadLoadErrorHint);
+      fireEvent.click(screen.getByRole('button', { name: pl.messages.retry }));
+      expect(refresh).toHaveBeenCalledOnce();
+      expect(markConversationRead).not.toHaveBeenCalled();
+      expect(screen.queryByText('message-thread')).not.toBeInTheDocument();
+      expect(screen.queryByText('message-composer')).not.toBeInTheDocument();
+      expect(screen.queryByText('private database detail')).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(['pl', 'nl', 'fr', 'en'] as const)(
+    'lokalizuje błąd wątku i ponowienie: %s',
+    async (locale) => {
+      getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1' }] });
+      getConversationThread.mockResolvedValue({ status: 'error' });
+      render(await MessagesView({ locale, basePath: '/employer/wiadomosci', activeParam: 'conversation-1' }));
+      expect(screen.getByRole('alert')).toHaveTextContent(translations[locale].messages.threadLoadError);
+      expect(screen.getByRole('alert')).toHaveTextContent(translations[locale].messages.threadLoadErrorHint);
+      expect(screen.getByRole('button', { name: translations[locale].messages.retry })).toBeVisible();
+      expect(markConversationRead).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['pl', 'nl', 'fr', 'en'] as const)(
+    'pokazuje bezpieczny brak wątku, gdy jego odczyt nie zwraca danych: %s',
+    async (locale) => {
+      getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1' }] });
+      getConversationThread.mockResolvedValue({ status: 'not-found' });
+
+      const basePath = '/candidate/wiadomosci';
+      const inaccessible = await MessagesView({ locale, basePath, activeParam: 'conversation-1' });
+      render(inaccessible);
+      expect(screen.getByText(translations[locale].messages.threadUnavailable)).toBeVisible();
+      expect(getConversationThread).toHaveBeenCalledWith('conversation-1');
+      expect(screen.queryByText('message-composer')).not.toBeInTheDocument();
+      expect(markConversationRead).not.toHaveBeenCalled();
+    },
+  );
+
+  it('nie odczytuje wątku spoza listy użytkownika', async () => {
+    getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1' }] });
+    render(await MessagesView({ locale: 'pl', basePath: '/candidate/wiadomosci', activeParam: 'other-id' }));
+    expect(screen.getByText(pl.messages.threadUnavailable)).toBeVisible();
+    expect(getConversationThread).not.toHaveBeenCalled();
+    expect(markConversationRead).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('zmienia licznik nieprzeczytanych tylko po wyniku oznaczenia ok=%s', async (ok) => {
+    getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1', unread: true, unreadCount: 2 }] });
+    getConversationThread.mockResolvedValue({ status: 'ready', thread: { id: 'conversation-1', messages: [] } });
+    markConversationRead.mockImplementation(async () => {
+      expect(getConversationThread).toHaveBeenCalledWith('conversation-1');
+      return ok ? { ok: true } : { ok: false, error: 'INTERNAL' };
+    });
+
+    render(await MessagesView({ locale: 'pl', basePath: '/candidate/wiadomosci', activeParam: 'conversation-1' }));
+
+    expect(screen.getByTestId('conversation-list')).toHaveAttribute('data-unread', ok ? '0' : '2');
+    expect(screen.getByText('message-thread')).toBeVisible();
+  });
+
+  it('nie usuwa licznika, gdy oznaczenie przeczytania rzuci wyjątek', async () => {
+    const failure = new Error('private database detail');
+    getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1', unread: true, unreadCount: 2 }] });
+    getConversationThread.mockResolvedValue({ status: 'ready', thread: { id: 'conversation-1', messages: [] } });
+    markConversationRead.mockRejectedValue(failure);
+
+    render(await MessagesView({ locale: 'pl', basePath: '/candidate/wiadomosci', activeParam: 'conversation-1' }));
+
+    expect(screen.getByTestId('conversation-list')).toHaveAttribute('data-unread', '2');
+    expect(screen.getByText('message-thread')).toBeVisible();
+    expect(captureError).toHaveBeenCalledWith(failure, { area: 'messages.markConversationRead' });
+  });
 });
