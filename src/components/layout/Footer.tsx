@@ -7,15 +7,19 @@ import { CookieSettingsButton } from './CookieSettingsButton';
 
 /** Jasna stopka nowej identyfikacji. Linki i zgody zachowują dotychczasowe działanie. */
 export async function Footer() {
-  const [t, tCommon] = await Promise.all([
+  const [t, tCommon, tNav] = await Promise.all([
     getTranslations('footer'),
     getTranslations('common'),
+    getTranslations('nav'),
   ]);
 
   const columns = [
     {
       title: t('forCandidates'),
-      links: [{ href: '/oferty-pracy', label: t('jobs') }],
+      links: [
+        { href: '/oferty-pracy', label: t('jobs') },
+        { href: '/poradniki', label: tNav('guides') },
+      ],
     },
     {
       title: t('forEmployers'),
