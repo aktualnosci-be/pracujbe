@@ -130,11 +130,13 @@ describe('ProposalActions', () => {
 
     const decline = screen.getByRole('button', { name: en.dashboard.declineProposal });
     fireEvent.click(decline);
+    fireEvent.click(screen.getByRole('button', { name: en.dashboard.declineConfirm }));
     expect(await screen.findByText(en.errors.generic)).toBeVisible();
     expect(router.refresh).not.toHaveBeenCalled();
     await waitFor(() => expect(decline).toBeEnabled());
 
     fireEvent.click(decline);
+    fireEvent.click(screen.getByRole('button', { name: en.dashboard.declineConfirm }));
     await waitFor(() => expect(router.refresh).toHaveBeenCalledTimes(1));
     expect(respondToOffer).toHaveBeenCalledTimes(2);
   });
@@ -154,5 +156,48 @@ describe('ProposalActions', () => {
     fireEvent.click(accept);
     await waitFor(() => expect(router.refresh).toHaveBeenCalledTimes(1));
     expect(respondToOffer).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks before declining: cancel sends nothing and returns focus to the trigger', async () => {
+    show('sent');
+    const decline = screen.getByRole('button', { name: en.dashboard.declineProposal });
+    fireEvent.click(decline);
+
+    const dialog = screen.getByRole('alertdialog', { name: en.dashboard.declineConfirmTitle });
+    expect(dialog).toHaveTextContent(en.dashboard.declineConfirmDescription);
+    expect(screen.getByRole('button', { name: en.common.cancel })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: en.common.cancel }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(respondToOffer).not.toHaveBeenCalled();
+    await waitFor(() => expect(decline).toHaveFocus());
+  });
+
+  it('confirmed decline calls the action once and announces the result', async () => {
+    vi.mocked(respondToOffer).mockResolvedValue({ ok: true });
+    render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <ProposalActions
+          offerId="11111111-1111-4111-8111-111111111111"
+          expiresAt={null}
+          initialCanRespond
+          jobTitle="Forklift driver"
+        />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: en.dashboard.declineProposal }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Forklift driver');
+    const confirm = screen.getByRole('button', { name: en.dashboard.declineConfirm });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(router.refresh).toHaveBeenCalledTimes(1));
+    expect(respondToOffer).toHaveBeenCalledExactlyOnceWith(
+      '11111111-1111-4111-8111-111111111111',
+      false,
+    );
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent(en.dashboard.declineProposalSuccess);
+    await waitFor(() => expect(status).toHaveFocus());
   });
 });

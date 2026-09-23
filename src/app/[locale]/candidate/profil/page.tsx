@@ -9,7 +9,9 @@ import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
 import { ProfileSummaryError } from '@/components/candidate/ProfileSummaryError';
 import { CvUpload } from '@/components/candidate/CvUpload';
 import { CandidateIdentity } from '@/components/candidate/CandidateIdentity';
-import { getCandidateProfileSummary, getCandidatePassport, getCandidateFiles } from '@/lib/data/candidate';
+import { getCandidateProfileSummary, getCandidatePassport } from '@/lib/data/candidate';
+import { loadCandidateFiles } from '@/lib/data/candidate-files';
+import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 import { getProfileLevelTitle } from '@/lib/profile-completeness';
 
 /**
@@ -59,17 +61,10 @@ export default async function CandidateProfilePage({
   const [profile, passport, files] = await Promise.all([
     getCandidateProfileSummary(),
     getCandidatePassport(),
-    getCandidateFiles(),
+    loadCandidateFiles(),
   ]);
 
-  const checklist = [
-    { label: t('checkBasicInfo'), done: profile.checklist.basicInfo, action: t('add') },
-    { label: t('checkExperience'), done: profile.checklist.experience, action: t('add') },
-    { label: t('checkEducation'), done: profile.checklist.education, action: t('add') },
-    { label: t('checkSkills'), done: profile.checklist.skills, action: t('add') },
-    { label: t('checkLanguages'), done: profile.checklist.languages, action: t('add') },
-    { label: t('checkPhoto'), done: profile.checklist.photo, action: t('add') },
-  ];
+  const checklist = profileChecklistItems(profile.checklist, t, to('none'));
   const availabilityKey = passport.availability && passport.availability in availabilityLabels
     ? availabilityLabels[passport.availability as keyof typeof availabilityLabels]
     : null;
@@ -149,7 +144,10 @@ export default async function CandidateProfilePage({
         </section>}
 
         {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
-        <CvUpload items={files} />
+        <CvUpload
+          items={files.status === 'ready' ? files.items : []}
+          loadFailed={files.status === 'error'}
+        />
         </div>
       </div>
     </div>

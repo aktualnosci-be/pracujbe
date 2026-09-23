@@ -219,11 +219,18 @@ function toErrorKey(field: string, message: string): string {
   return 'candidate.error.invalid';
 }
 
+export type OnboardingStepNumber = OnboardingStep;
+
 export interface OnboardingWizardProps {
   initialValues?: OnboardingInitialValues;
+  /** Krok startowy (np. z `?step=3` — link „Dodaj" z checklisty profilu). Domyślnie 1. */
+  initialStep?: OnboardingStep;
 }
 
-export function OnboardingWizard({ initialValues }: OnboardingWizardProps): React.JSX.Element {
+export function OnboardingWizard({
+  initialValues,
+  initialStep = 1,
+}: OnboardingWizardProps): React.JSX.Element {
   const t = useTranslations('onboarding');
   const tRoot = useTranslations();
   const tn = useTranslations('nav');
@@ -246,7 +253,7 @@ export function OnboardingWizard({ initialValues }: OnboardingWizardProps): Reac
 
   const values = watch();
 
-  const [step, setStep] = React.useState<OnboardingStep>(1);
+  const [step, setStep] = React.useState<OnboardingStep>(initialStep);
   const [saveState, setSaveState] = React.useState<SaveState>('idle');
   const [demoSaved, setDemoSaved] = React.useState(false);
   const [badgeVisible, setBadgeVisible] = React.useState(false);
