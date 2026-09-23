@@ -10,15 +10,19 @@ for (const locale of locales) {
   for (const viewport of viewports) {
     test(`aplikacje pracodawcy: ${locale}, ${viewport.width} px`, async ({ page }) => {
       const messages = JSON.parse(readFileSync(resolve(process.cwd(), 'src', 'messages', `${locale}.json`), 'utf8')) as {
-        dashboard: { navApplications: string; employerApplicationsCandidateLabel: string; employerApplicationsJobLabel: string; employerApplicationsDemo: string; colStatusEmp: string };
+        dashboard: { navApplications: string; navEmployerApplications: string; employerApplicationsCandidateLabel: string; employerApplicationsJobLabel: string; employerApplicationsDemo: string; colStatusEmp: string };
       };
       await page.setViewportSize(viewport);
       await page.goto(`/${locale}/employer/aplikacje`);
 
       const main = page.getByRole('main');
-      await expect(main.getByRole('heading', { level: 1, name: messages.dashboard.navApplications })).toBeVisible();
+      await expect(main.getByRole('heading', { level: 1, name: messages.dashboard.navEmployerApplications })).toBeVisible();
       await expect(main.getByText(messages.dashboard.employerApplicationsDemo)).toBeVisible();
-      await expect(main.getByRole('list', { name: messages.dashboard.navApplications }).locator('li')).toHaveCount(4);
+      // #319: pracodawca widzi zgłoszenia do swoich ofert, nie etykietę kandydata „Moje aplikacje”.
+      await expect(page).toHaveTitle(new RegExp(messages.dashboard.navEmployerApplications));
+      await expect(page.getByText(messages.dashboard.navApplications, { exact: true })).toHaveCount(0);
+      await expect(page.locator(`a[href="/${locale}/employer/aplikacje"]`).filter({ hasText: messages.dashboard.navEmployerApplications }).first()).toBeAttached();
+      await expect(main.getByRole('list', { name: messages.dashboard.navEmployerApplications }).locator('li')).toHaveCount(4);
       await expect(main.getByText(messages.dashboard.employerApplicationsCandidateLabel, { exact: true }).first()).toBeVisible();
       await expect(main.getByText(messages.dashboard.employerApplicationsJobLabel, { exact: true }).first()).toBeVisible();
       await expect(main.getByRole('button', { name: messages.dashboard.colStatusEmp }).first()).toBeVisible();

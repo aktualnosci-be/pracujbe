@@ -4,6 +4,7 @@ import * as React from 'react';
 import {
   Building2,
   ClipboardList,
+  Inbox,
   LayoutDashboard,
   MessageSquare,
   Settings,
@@ -85,7 +86,7 @@ export function EmployerShell({
     { href: HREF.summary, label: td('navSummary'), icon: <LayoutDashboard /> },
     { href: HREF.offers, label: td('navOffers'), icon: <ClipboardList /> },
     { href: HREF.candidates, label: td('navCandidates'), icon: <Users /> },
-    { href: HREF.applications, label: td('navApplications'), icon: <ClipboardList /> },
+    { href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> },
     { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
     { href: HREF.company, label: td('navCompany'), icon: <Building2 /> },
     { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },
