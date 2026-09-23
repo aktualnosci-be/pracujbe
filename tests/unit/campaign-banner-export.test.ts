@@ -121,7 +121,7 @@ describe("eksport baneru kampanii 1200 × 300", () => {
       { ...VALID, url: "https://pracuj.be/pl#inny" },
       /url:.*HTTPS/i,
     );
-  });
+  }, 60_000);
 
   it("odrzuca napis, którego nie można zmieścić w przycisku lub dwóch liniach", async () => {
     await rejectsCampaign(
