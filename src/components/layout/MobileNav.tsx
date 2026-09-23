@@ -44,7 +44,7 @@ export function MobileNav() {
         <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xs flex-col gap-6 bg-background p-6 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
+          className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xs flex-col gap-6 overflow-y-auto bg-background p-6 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
         >
           <div className="flex items-center justify-between">
             <Dialog.Title asChild>
@@ -92,7 +92,7 @@ export function MobileNav() {
           </div>
 
           <div className="mt-auto">
-            <LocaleSwitcher />
+            <LocaleSwitcher side="top" />
           </div>
         </Dialog.Content>
       </Dialog.Portal>
