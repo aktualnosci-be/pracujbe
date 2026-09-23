@@ -477,6 +477,8 @@
     "verifySubtitle": "Wysłaliśmy link na Twój adres e-mail. Kliknij go, aby dokończyć rejestrację.",
     "orContinue": "lub kontynuuj przez",
     "agreeTerms": "Zakładając konto, akceptujesz regulamin i politykę prywatności.",
+    "agreeTermsLinks": "Akceptuję <terms>regulamin</terms> i <privacy>politykę prywatności</privacy>.",
+    "opensInNewTab": "(otwiera się w nowej karcie)",
     "passwordHint": "Minimum 8 znaków, w tym litera i cyfra.",
     "registerAsEmployer": "Rekrutujesz? Załóż konto pracodawcy",
     "registerAsCandidate": "Szukasz pracy? Załóż konto kandydata",
