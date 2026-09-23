@@ -14,6 +14,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Toast } from '@/components/ui/toast';
+import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 
 /**
  * SendOfferButton — wysłanie propozycji do dopasowanego kandydata (panel pracodawcy).
@@ -147,7 +148,7 @@ export function SendOfferButton({
 
   return (
     <>
-      <Dialog.Root open={open} onOpenChange={(next) => (pending ? undefined : setOpen(next))}>
+      <LightDialogRoot open={open} onOpenChange={(next) => (pending ? undefined : setOpen(next))}>
         <Dialog.Trigger
           aria-label={td('sendOfferTo', { name: candidateName, job })}
           className={cn(buttonVariants({ size: 'sm' }), className)}
@@ -156,99 +157,100 @@ export function SendOfferButton({
           {td('sendOffer')}
         </Dialog.Trigger>
 
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-lg">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <Dialog.Title className="text-lg font-semibold text-foreground">
-                  {td('offerDialogTitle')}
-                </Dialog.Title>
-                <Dialog.Description className="mt-1 text-sm text-muted-foreground">
-                  {td('offerDialogDescription')}
-                </Dialog.Description>
-              </div>
-              <Dialog.Close
-                aria-label={tc('cancel')}
-                disabled={pending}
-                className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-9 w-9 shrink-0')}
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </Dialog.Close>
+        <LightDialogContent
+          open={open}
+          overlayClassName="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm"
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-lg"
+        >
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Dialog.Title className="text-lg font-semibold text-foreground">
+                {td('offerDialogTitle')}
+              </Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-muted-foreground">
+                {td('offerDialogDescription')}
+              </Dialog.Description>
+            </div>
+            <Dialog.Close
+              aria-label={tc('cancel')}
+              disabled={pending}
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-9 w-9 shrink-0')}
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </Dialog.Close>
+          </div>
+
+          <dl className="mb-4 grid gap-3 rounded-lg border border-border p-4">
+            <div className="min-w-0">
+              <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {td('offerDialogCandidate')}
+              </dt>
+              <dd className="mt-1 break-words text-base font-semibold text-foreground">
+                {candidateName}
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {td('offerDialogJob')}
+              </dt>
+              <dd className="mt-1 break-words text-base font-semibold text-foreground">
+                {jobSlug ? (
+                  <Link href={`/oferty-pracy/${jobSlug}`} className="text-primary hover:underline">
+                    {job}
+                  </Link>
+                ) : (
+                  job
+                )}
+              </dd>
+            </div>
+          </dl>
+
+          <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">{td('offerDialogDefaultInfo')}</p>
+              <p className="whitespace-pre-line break-words border-l-4 border-primary bg-soft px-4 py-3 text-sm leading-relaxed text-foreground">
+                {td('offerDefaultMessage')}
+              </p>
             </div>
 
-            <dl className="mb-4 grid gap-3 rounded-lg border border-border p-4">
-              <div className="min-w-0">
-                <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {td('offerDialogCandidate')}
-                </dt>
-                <dd className="mt-1 break-words text-base font-semibold text-foreground">
-                  {candidateName}
-                </dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {td('offerDialogJob')}
-                </dt>
-                <dd className="mt-1 break-words text-base font-semibold text-foreground">
-                  {jobSlug ? (
-                    <Link href={`/oferty-pracy/${jobSlug}`} className="text-primary hover:underline">
-                      {job}
-                    </Link>
-                  ) : (
-                    job
-                  )}
-                </dd>
-              </div>
-            </dl>
-
-            <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">{td('offerDialogDefaultInfo')}</p>
-                <p className="whitespace-pre-line break-words border-l-4 border-primary bg-soft px-4 py-3 text-sm leading-relaxed text-foreground">
-                  {td('offerDefaultMessage')}
+            <div className="space-y-1.5">
+              <Label htmlFor={fieldId}>{td('offerDialogMessageLabel')}</Label>
+              <Textarea
+                id={fieldId}
+                ref={messageRef}
+                value={message}
+                maxLength={4000}
+                onChange={(event) => {
+                  setMessage(event.target.value);
+                  if (fieldError) setFieldError(null);
+                }}
+                aria-invalid={fieldError ? true : undefined}
+                aria-describedby={`${fieldId}-hint${fieldError ? ` ${fieldId}-error` : ''}`}
+              />
+              <p id={`${fieldId}-hint`} className="text-xs text-muted-foreground">
+                {td('offerDialogMessageHint')}
+              </p>
+              {fieldError ? (
+                <p id={`${fieldId}-error`} className="text-sm text-error-text" role="alert">
+                  {tRoot(fieldError)}
                 </p>
-              </div>
+              ) : null}
+            </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor={fieldId}>{td('offerDialogMessageLabel')}</Label>
-                <Textarea
-                  id={fieldId}
-                  ref={messageRef}
-                  value={message}
-                  maxLength={4000}
-                  onChange={(event) => {
-                    setMessage(event.target.value);
-                    if (fieldError) setFieldError(null);
-                  }}
-                  aria-invalid={fieldError ? true : undefined}
-                  aria-describedby={`${fieldId}-hint${fieldError ? ` ${fieldId}-error` : ''}`}
-                />
-                <p id={`${fieldId}-hint`} className="text-xs text-muted-foreground">
-                  {td('offerDialogMessageHint')}
-                </p>
-                {fieldError ? (
-                  <p id={`${fieldId}-error`} className="text-sm text-error-text" role="alert">
-                    {tRoot(fieldError)}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="flex flex-wrap justify-end gap-2">
-                <Dialog.Close asChild>
-                  <Button type="button" variant="outline" disabled={pending}>
-                    {tc('cancel')}
-                  </Button>
-                </Dialog.Close>
-                <Button type="submit" disabled={pending} aria-busy={pending || undefined}>
-                  <Send className="size-4" aria-hidden="true" />
-                  {td('sendOffer')}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline" disabled={pending}>
+                  {tc('cancel')}
                 </Button>
-              </div>
-            </form>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+              </Dialog.Close>
+              <Button type="submit" disabled={pending} aria-busy={pending || undefined}>
+                <Send className="size-4" aria-hidden="true" />
+                {td('sendOffer')}
+              </Button>
+            </div>
+          </form>
+        </LightDialogContent>
+      </LightDialogRoot>
 
       {toast ? (
         <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">

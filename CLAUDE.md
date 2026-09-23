@@ -627,6 +627,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
   logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny). **Do zrobienia:**
   Core Web Vitals / audyt wydajności (Lighthouse w CI).
+  Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391), dialogi
+  na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
+  obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
+  na decyzję o workflow.
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 

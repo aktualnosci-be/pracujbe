@@ -29,6 +29,7 @@ import {
   type SortValue,
 } from '@/components/public/job-filters';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
+import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 
 /**
  * Mobilny panel filtrów (bottom-sheet na Radix Dialog) wg makiety 02-jobs-list.
@@ -351,7 +352,7 @@ export function FilterSheet({
           pathname={pathname}
         />
       </noscript>
-      <Dialog.Root open={open} onOpenChange={handleOpenChange}>
+      <LightDialogRoot open={open} onOpenChange={handleOpenChange}>
         {/* Po zamknięciu arkusza fokus wraca tu, więc stan ładowania wyników niesie wyzwalacz. */}
         <Dialog.Trigger
           data-filter-passport="mobile-trigger"
@@ -376,80 +377,79 @@ export function FilterSheet({
           ) : null}
         </Dialog.Trigger>
 
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-          <Dialog.Content
-            aria-describedby={undefined}
-            onOpenAutoFocus={focusFirstField}
-            data-filter-passport="mobile-sheet"
-            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[90vh] min-w-0 flex-col overflow-hidden rounded-t-2xl border-t border-border bg-background shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
-          >
-            <div className="sticky top-0 z-10 flex min-h-16 items-center justify-between gap-2 border-b border-border bg-background px-4 py-2">
-              <Dialog.Title className="flex items-center gap-2.5 text-base font-semibold text-foreground before:h-2 before:w-2 before:shrink-0 before:rounded-full before:bg-primary">
-                {t('title')}
-              </Dialog.Title>
-              <div className="flex min-w-0 items-center gap-1">
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  data-filter-target="clear"
-                  className="min-h-12 rounded-md px-2 text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  {t('clearAll')}
-                </button>
-                <Dialog.Close
-                  aria-label={t('close')}
-                  className={cn(
-                    buttonVariants({ variant: 'ghost', size: 'icon' }),
-                    'h-12 w-12 shrink-0 rounded-xl',
-                  )}
-                >
-                  <X className="h-5 w-5" aria-hidden="true" />
-                </Dialog.Close>
-              </div>
-            </div>
-
-            <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5">
-              <FilterFields
-                facets={liveFacets.facets}
-                value={pending}
-                onChange={setPending}
-                idPrefix="m"
-              />
-            </div>
-
-            <div className="sticky bottom-0 z-10 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-              {liveFacets.status === 'error' ? (
-                <div className="mb-3 space-y-2" role="alert">
-                  <p className="text-sm text-destructive">{t('countError')}</p>
-                  <Button type="button" variant="outline" onClick={liveFacets.retry} className="w-full">
-                    {t('retryCount')}
-                  </Button>
-                </div>
-              ) : null}
-              <Button
+        <LightDialogContent
+          open={open}
+          overlayClassName="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+          aria-describedby={undefined}
+          onOpenAutoFocus={focusFirstField}
+          data-filter-passport="mobile-sheet"
+          className="fixed inset-x-0 bottom-0 z-50 flex max-h-[90vh] min-w-0 flex-col overflow-hidden rounded-t-2xl border-t border-border bg-background shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
+        >
+          <div className="sticky top-0 z-10 flex min-h-16 items-center justify-between gap-2 border-b border-border bg-background px-4 py-2">
+            <Dialog.Title className="flex items-center gap-2.5 text-base font-semibold text-foreground before:h-2 before:w-2 before:shrink-0 before:rounded-full before:bg-primary">
+              {t('title')}
+            </Dialog.Title>
+            <div className="flex min-w-0 items-center gap-1">
+              <button
                 type="button"
-                onClick={apply}
-                aria-busy={liveFacets.status === 'loading'}
-                className="min-h-12 w-full rounded-xl"
+                onClick={clearAll}
+                data-filter-target="clear"
+                className="min-h-12 rounded-md px-2 text-sm font-medium text-accent hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                {/* Licznik to tylko podpowiedź: bez aktualnej liczby zatwierdzenie nadal działa (#220). */}
-                {liveFacets.status === 'idle'
-                  ? t('showResults', { count: liveFacets.facets.total })
-                  : tJobs('filterButton')}
-              </Button>
-              {liveFacets.status === 'loading' ? (
-                <p
-                  role="status"
-                  className="mt-2 text-center text-xs text-muted-foreground"
-                >
-                  {t('countLoading')}
-                </p>
-              ) : null}
+                {t('clearAll')}
+              </button>
+              <Dialog.Close
+                aria-label={t('close')}
+                className={cn(
+                  buttonVariants({ variant: 'ghost', size: 'icon' }),
+                  'h-12 w-12 shrink-0 rounded-xl',
+                )}
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </Dialog.Close>
             </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+          </div>
+
+          <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5">
+            <FilterFields
+              facets={liveFacets.facets}
+              value={pending}
+              onChange={setPending}
+              idPrefix="m"
+            />
+          </div>
+
+          <div className="sticky bottom-0 z-10 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {liveFacets.status === 'error' ? (
+              <div className="mb-3 space-y-2" role="alert">
+                <p className="text-sm text-destructive">{t('countError')}</p>
+                <Button type="button" variant="outline" onClick={liveFacets.retry} className="w-full">
+                  {t('retryCount')}
+                </Button>
+              </div>
+            ) : null}
+            <Button
+              type="button"
+              onClick={apply}
+              aria-busy={liveFacets.status === 'loading'}
+              className="min-h-12 w-full rounded-xl"
+            >
+              {/* Licznik to tylko podpowiedź: bez aktualnej liczby zatwierdzenie nadal działa (#220). */}
+              {liveFacets.status === 'idle'
+                ? t('showResults', { count: liveFacets.facets.total })
+                : tJobs('filterButton')}
+            </Button>
+            {liveFacets.status === 'loading' ? (
+              <p
+                role="status"
+                className="mt-2 text-center text-xs text-muted-foreground"
+              >
+                {t('countLoading')}
+              </p>
+            ) : null}
+          </div>
+        </LightDialogContent>
+      </LightDialogRoot>
       <p role="status" data-filter-status="mobile" className="sr-only">
         {isNavigating ? t('resultsLoading') : null}
       </p>
