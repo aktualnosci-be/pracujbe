@@ -21,6 +21,8 @@ export const emailSchema = z
 
 export const passwordSchema = z
   .string({ required_error: 'auth.error.passwordRequired' })
+  // Formularz wysyła '' (nie undefined), więc „wymagane” musi być osobnym, pierwszym sprawdzeniem.
+  .min(1, 'auth.error.passwordRequired')
   .min(8, 'auth.error.passwordTooShort')
   .max(72, 'auth.error.passwordTooLong')
   .regex(/[A-Za-z]/, 'auth.error.passwordNeedsLetter')
@@ -29,8 +31,25 @@ export const passwordSchema = z
 const nameSchema = z
   .string({ required_error: 'auth.error.nameRequired' })
   .trim()
+  .min(1, 'auth.error.nameRequired')
   .min(2, 'auth.error.nameTooShort')
   .max(80, 'auth.error.nameTooLong');
+
+/**
+ * Zgoda na regulamin: wymagane `true`. Celowo NIE `z.literal(true)` — niepoprawny literal jest
+ * błędem krytycznym Zod, który wstrzymuje `.refine` całego obiektu, przez co niezgodność haseł
+ * wychodziła dopiero po poprawieniu reszty formularza. Błąd niekrytyczny (`fatal: false`)
+ * pozwala zgłosić wszystkie problemy w jednej rundzie.
+ */
+const agreeTermsSchema = z.custom<true>((value) => value === true, {
+  message: 'auth.error.termsRequired',
+  fatal: false,
+});
+
+/** Zgodność haseł; puste powtórzenie ma własny komunikat („Powtórz hasło”). */
+function passwordsMatch(data: { password: string; passwordConfirm: string }): boolean {
+  return data.passwordConfirm.length === 0 || data.password === data.passwordConfirm;
+}
 
 export const loginSchema = z.object({
   email: emailSchema,
@@ -45,11 +64,9 @@ export const registerCandidateSchema = z
     firstName: nameSchema,
     lastName: nameSchema,
     locale: localeSchema.optional(),
-    agreeTerms: z.literal(true, {
-      errorMap: () => ({ message: 'auth.error.termsRequired' }),
-    }),
+    agreeTerms: agreeTermsSchema,
   })
-  .refine((data) => data.password === data.passwordConfirm, {
+  .refine(passwordsMatch, {
     path: ['passwordConfirm'],
     message: 'auth.error.passwordMismatch',
   });
@@ -62,16 +79,15 @@ export const registerEmployerSchema = z
     companyName: z
       .string({ required_error: 'auth.error.companyNameRequired' })
       .trim()
+      .min(1, 'auth.error.companyNameRequired')
       .min(2, 'auth.error.companyNameTooShort')
       .max(120, 'auth.error.companyNameTooLong'),
     firstName: nameSchema,
     lastName: nameSchema,
     locale: localeSchema.optional(),
-    agreeTerms: z.literal(true, {
-      errorMap: () => ({ message: 'auth.error.termsRequired' }),
-    }),
+    agreeTerms: agreeTermsSchema,
   })
-  .refine((data) => data.password === data.passwordConfirm, {
+  .refine(passwordsMatch, {
     path: ['passwordConfirm'],
     message: 'auth.error.passwordMismatch',
   });
