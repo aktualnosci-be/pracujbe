@@ -85,6 +85,41 @@ begin
   end if;
 end $$;
 
+-- 2c. Zapis klienta tylko tam, gdzie polityka go dopuszcza (0068): żaden grant
+--     INSERT/UPDATE/DELETE dla authenticated/anon bez polityki na to polecenie,
+--     a nowe tabele nie dostają domyślnie zapisu klienta.
+do $$
+declare
+  v_bad text;
+begin
+  select string_agg(format('%s %I.%I', r.rolname, n.nspname, c.relname) || ' ' || cmd, ', ') into v_bad
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+  cross join unnest(array['INSERT', 'UPDATE', 'DELETE']) cmd
+  cross join pg_roles r
+  where n.nspname in ('public', 'auth') and c.relkind in ('r', 'p')
+    and r.rolname in ('authenticated', 'anon')
+    and has_table_privilege(r.oid, c.oid, cmd)
+    and not exists (
+      select 1 from pg_policy p
+      where p.polrelid = c.oid
+        and p.polcmd in ('*', case cmd when 'INSERT' then 'a' when 'UPDATE' then 'w' else 'd' end)
+        and (0::oid = any(p.polroles) or r.oid = any(p.polroles))
+    );
+  if v_bad is not null then
+    raise exception 'ROLE GUARD: grant zapisu bez polityki RLS: %', v_bad;
+  end if;
+
+  if exists (
+    select 1 from pg_default_acl d, aclexplode(d.defaclacl) a
+    join pg_roles r on r.oid = a.grantee
+    where d.defaclobjtype = 'r' and r.rolname in ('authenticated', 'anon')
+      and a.privilege_type in ('INSERT', 'UPDATE', 'DELETE')
+  ) then
+    raise exception 'ROLE GUARD: domyślne uprawnienia dają klientowi zapis nowych tabel';
+  end if;
+end $$;
+
 set role authenticated;
 select pg_temp.assert_client_role();
 do $$
