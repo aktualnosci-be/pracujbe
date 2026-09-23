@@ -952,6 +952,7 @@
     "subtitle": "Use your profile to apply quickly.",
     "profileNote": "Your profile details will be attached to the application.",
     "phone": "Phone",
+    "dialCode": "Country calling code",
     "phonePlaceholder": "512 345 678",
     "availability": "Availability",
     "availImmediate": "Immediately",
