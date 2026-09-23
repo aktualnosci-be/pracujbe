@@ -112,10 +112,10 @@ export default async function GuidesListPage({ params }: PageProps) {
 
       {/* Nagłówek */}
       <header className="max-w-2xl">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+        <h1 className="break-words text-3xl font-bold tracking-tight text-foreground hyphens-auto md:text-4xl">
           {t('pageTitle')}
         </h1>
-        <p className="mt-2 text-muted-foreground">{t('pageSubtitle')}</p>
+        <p className="mt-2 break-words text-muted-foreground hyphens-auto">{t('pageSubtitle')}</p>
       </header>
 
       {/* Lista poradników */}

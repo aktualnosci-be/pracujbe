@@ -24,7 +24,7 @@ export function GuideContent({ body }: GuideContentProps): React.JSX.Element {
           return (
             <h2
               key={key}
-              className="mt-10 text-xl font-bold tracking-tight text-foreground first:mt-0 md:text-2xl"
+              className="mt-10 break-words text-xl font-bold tracking-tight text-foreground first:mt-0 md:text-2xl hyphens-auto"
             >
               {block.text}
             </h2>
@@ -35,7 +35,7 @@ export function GuideContent({ body }: GuideContentProps): React.JSX.Element {
           return (
             <ul
               key={key}
-              className="mt-4 list-disc space-y-2 pl-5 text-base leading-relaxed text-muted-foreground marker:text-accent"
+              className="mt-4 list-disc space-y-2 break-words pl-5 text-base leading-relaxed text-muted-foreground marker:text-accent hyphens-auto"
             >
               {block.items.map((item, itemIndex) => (
                 <li key={`${key}-${itemIndex}`}>{item}</li>
@@ -45,7 +45,10 @@ export function GuideContent({ body }: GuideContentProps): React.JSX.Element {
         }
 
         return (
-          <p key={key} className="mt-4 text-base leading-relaxed text-muted-foreground">
+          <p
+            key={key}
+            className="mt-4 break-words text-base leading-relaxed text-muted-foreground hyphens-auto"
+          >
             {block.text}
           </p>
         );
