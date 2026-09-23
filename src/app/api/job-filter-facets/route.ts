@@ -9,6 +9,7 @@ import {
 } from '@/components/public/job-filters';
 import { routing, type Locale } from '@/i18n/routing';
 import { getJobFilterFacets, getJobs } from '@/lib/jobs';
+import { localizeLocationFacets, resolveCityFilters } from '@/lib/locations/city-aliases';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,11 @@ export async function GET(request: Request): Promise<NextResponse> {
     ? (requestedLocale as Locale)
     : routing.defaultLocale;
   const filters = parseSidebarFilters(raw);
+  // #189: ta sama reguła miast co lista ofert (zapytanie po aliasach, nazwy w języku strony).
+  const cityFilters = resolveCityFilters(
+    { city: raw['city']?.slice(0, 100) || undefined, locations: filters.locations },
+    locale,
+  );
   const narrowed = isSalaryNarrowed(filters);
   const days =
     filters.date === '24h'
@@ -32,9 +38,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   const params = {
     locale,
     keyword: raw['keyword']?.slice(0, 100) || undefined,
-    city: raw['city']?.slice(0, 100) || undefined,
+    city: cityFilters.city,
     categories: filters.categories,
-    locations: filters.locations,
+    locations: cityFilters.queryLocations,
     contractTypes: filters.contractTypes,
     ...(narrowed ? { salaryMin: filters.salaryMin } : {}),
     ...(narrowed && filters.salaryMax < SALARY_MAX_BOUND
@@ -50,20 +56,27 @@ export async function GET(request: Request): Promise<NextResponse> {
       : {}),
   };
   const databaseFacets = await getJobFilterFacets(params);
-  const facets =
-    databaseFacets ??
-    buildDemoFacets(
-      (
-        await getJobs({
+  const facets = databaseFacets
+    ? {
+        ...databaseFacets,
+        locations: localizeLocationFacets(
+          databaseFacets.locations,
+          cityFilters.cityKey,
           locale,
-          keyword: params.keyword,
-          city: params.city,
-          page: 1,
-          pageSize: 100,
-        })
-      ).jobs.map(toFacetItem),
-      filters,
-    );
+        ),
+      }
+    : buildDemoFacets(
+        (
+          await getJobs({
+            locale,
+            keyword: params.keyword,
+            ...cityFilters.cityQuery,
+            page: 1,
+            pageSize: 100,
+          })
+        ).jobs.map(toFacetItem),
+        { ...filters, locations: cityFilters.displayLocations },
+      );
   return NextResponse.json(facets, {
     headers: { 'Cache-Control': 'private, no-store' },
   });
