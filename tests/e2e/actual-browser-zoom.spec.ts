@@ -14,7 +14,13 @@ for (const locale of locales) {
     ) as {
       cookies: { rejectOptional: string };
       home: { heroTitle: string; searchButton: string };
-      jobs: { pageTitle: string };
+      jobs: {
+        pageTitle: string;
+        keyword: string;
+        location: string;
+        searchJobs: string;
+      };
+      filters: { title: string; immediate: string };
     };
     const profile = await mkdtemp(join(tmpdir(), "pracujbe-zoom-"));
     const context = await chromium.launchPersistentContext(profile, {
@@ -69,6 +75,37 @@ for (const locale of locales) {
       await expect(
         page.getByRole("heading", { level: 1, name: t.jobs.pageTitle }),
       ).toBeVisible();
+      // Browser zoom belongs to the tab. Confirm it survived client navigation.
+      const zoomAfterNavigation = await worker.evaluate(async (url) => {
+        const tab = (await chrome.tabs.query({})).find((item) =>
+          item.url?.startsWith(url),
+        );
+        if (!tab?.id) throw new Error("Nie znaleziono karty ofert");
+        return chrome.tabs.getZoom(tab.id);
+      }, baseURL!);
+      expect(zoomAfterNavigation).toBe(2);
+      expect(await page.evaluate(() => window.innerWidth)).toBe(640);
+      expect(await page.evaluate(() => window.devicePixelRatio)).toBe(2);
+      await expect(page.locator('a[href*="/oferty-pracy/"]').first()).toBeVisible();
+      const search = page.getByRole("search");
+      await expect(search.getByLabel(t.jobs.keyword, { exact: true })).toBeVisible();
+      await expect(search.getByLabel(t.jobs.location, { exact: true })).toBeVisible();
+      await expect(
+        search.getByRole("button", { name: t.jobs.searchJobs, exact: true }),
+      ).toBeVisible();
+      const filterTrigger = page.getByRole("button", {
+        name: t.filters.title,
+        exact: true,
+      });
+      await expect(filterTrigger).toBeVisible();
+      await filterTrigger.click();
+      const dialog = page.getByRole("dialog", { name: t.filters.title });
+      await expect(dialog).toBeVisible();
+      const immediate = dialog.getByRole("checkbox", {
+        name: t.filters.immediate,
+      });
+      await immediate.click();
+      await expect(immediate).toBeChecked();
       await expectNoHorizontalOverflow(page);
     } finally {
       await context.close();
