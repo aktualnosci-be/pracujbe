@@ -7,6 +7,7 @@ import { FileText, Trash2, UploadCloud } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
 import { uploadCandidateCv, deleteCandidateFile } from '@/lib/actions/files';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
 
 /**
  * Upload CV kandydata (PDF/DOC/DOCX, <=5 MB) — prywatny bucket + signed URLs (Invariant #10).
@@ -17,6 +18,10 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
  * „Brak wgranych dokumentów" i ukrywamy wgrywanie, żeby nie powstawały duplikaty CV.
  * Usunięcie pliku wymaga potwierdzenia (#328); po nim fokus wraca do „Wgraj", a wynik
  * ogłasza komunikat `role="status"`.
+ *
+ * #362: rozmiar i format sprawdzamy w przeglądarce PRZED wysyłką (wspólne reguły z serwerem,
+ * `checkCvFile`) — plik > 5 MB nie trafia na limit ciała Server Actions (413 → granica błędu).
+ * Wywołanie akcji jest w `try/catch`, więc błąd sieci daje komunikat, a nie wywrócenie strony.
  */
 export interface CvItem {
   id: string;
@@ -33,6 +38,7 @@ export function CvUpload({
   loadFailed?: boolean;
 }): React.JSX.Element {
   const t = useTranslations('files');
+  const tErrors = useTranslations('errors');
   const tc = useTranslations('common');
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -58,14 +64,34 @@ export function CvUpload({
     if (!file) return;
     setError(null);
     setDeleted(false);
+    const problem = checkCvFile(file);
+    if (problem) {
+      setError(problemMessage(problem));
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
     const fd = new FormData();
     fd.append('file', file);
     startTransition(async () => {
-      const res = await uploadCandidateCv(fd);
-      if (!res.ok) setError(t('uploadError'));
-      else router.refresh();
-      if (inputRef.current) inputRef.current.value = '';
+      try {
+        const res = await uploadCandidateCv(fd);
+        if (res.ok) router.refresh();
+        else if (res.reason) setError(problemMessage(res.reason));
+        else if (res.error === 'RATE_LIMITED') setError(tErrors('rateLimited'));
+        else setError(t('uploadError'));
+      } catch {
+        // Żądanie nie wróciło (sieć, limit ciała, 5xx) — komunikat zamiast granicy błędu.
+        setError(t('uploadError'));
+      } finally {
+        if (inputRef.current) inputRef.current.value = '';
+      }
     });
+  }
+
+  function problemMessage(problem: CvFileProblem): string {
+    if (problem === 'tooLarge') return t('errorTooLarge');
+    if (problem === 'type') return t('errorType');
+    return t('errorEmpty');
   }
 
   function askDelete(item: CvItem, trigger: HTMLButtonElement): void {

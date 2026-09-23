@@ -115,6 +115,16 @@ select pg_temp.assert(:'appa' = :'appa2', 'B2 aplikowanie idempotentne');
 select pg_temp.assert(
   (select count(*) from public.applications where job_id = :'JOBA' and candidate_id = :'CANDA') = 1,
   'B3 dokladnie jedna aplikacja CANDA->JOBA');
+-- B3b/B3c (0071, #361): nowa próba z INNYM kluczem na tę samą ofertę → APPLICATION_ALREADY_EXISTS
+-- (nie fałszywy sukces), bez drugiego wiersza. Kontrola ujemna do B2 (ten sam klucz = sukces).
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.apply_to_job('''|| :'JOBA' ||'''::uuid, ''idem-a-2'', null, null, null)',
+  'APPLICATION_ALREADY_EXISTS', 'B3b ponowna aplikacja innym kluczem odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.applications where job_id = :'JOBA' and candidate_id = :'CANDA') = 1,
+  'B3c po odrzuconej ponownej aplikacji nadal jedna aplikacja');
 
 -- B4: CANDB nie widzi aplikacji do JOBA (RLS wiersza).
 set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
@@ -462,6 +472,19 @@ select pg_temp.expect_error(
   'select public.withdraw_application(current_setting(''my.appa'')::uuid)',
   'NOT_FOUND', 'J7c withdraw_application nie wycofa cudzej aplikacji');
 reset role; reset app.current_uid;
+-- J7d/J7e (0071, #361): po wycofaniu nowa próba (inny klucz) → APPLICATION_ALREADY_EXISTS
+-- i status zostaje 'withdrawn'; retry pierwotnym kluczem nadal zwraca tę samą aplikację.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.apply_to_job('''|| :'JOBA' ||'''::uuid, ''idem-a-after-withdraw'', null, null, null)',
+  'APPLICATION_ALREADY_EXISTS', 'J7d ponowna aplikacja po wycofaniu odrzucona jawnie');
+select pg_temp.assert(
+  public.apply_to_job(:'JOBA'::uuid, 'idem-a-1', null, null, null) = :'appa'::uuid,
+  'J7e retry pierwotnym kluczem zwraca tę samą aplikację');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.applications where id = :'appa'::uuid) = 'withdrawn',
+  'J7f status aplikacji bez zmian po odrzuconej ponownej aplikacji');
 
 -- J8: rate_limit_hit (SEC-01) odebrany anon/authenticated; działa dla service_role.
 set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
