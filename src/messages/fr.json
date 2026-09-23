@@ -803,7 +803,7 @@
     "employerApplicationSubmittedAt": "Date de candidature",
     "employerApplicationPhone": "Téléphone",
     "employerApplicationAvailability": "Disponibilité",
-    "employerApplicationMatch": "Correspondance",
+    "employerApplicationMatch": "Compatibilité",
     "employerApplicationMatchValue": "{score} %",
     "employerApplicationMessageHeading": "Message du candidat",
     "employerApplicationNoMessage": "Le candidat n’a pas ajouté de message.",
