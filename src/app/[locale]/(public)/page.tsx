@@ -60,7 +60,7 @@ export async function generateMetadata({ params }: HomePageProps): Promise<Metad
   languages['x-default'] = `${baseUrl}/${routing.defaultLocale}`;
 
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: { canonical, languages },
     openGraph: {

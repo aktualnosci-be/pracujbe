@@ -29,6 +29,24 @@ function messages(locale: Locale): Messages {
   return JSON.parse(readFileSync(file, "utf-8")) as Messages;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Wzorzec etykiety „Pokaż N ofert” — obsługuje odmianę ICU (`{count, plural, …}`, #226). */
+function resultsPattern(template: string): RegExp {
+  const branches = [...template.matchAll(/\{([^{}]*#[^{}]*)\}/g)].map(
+    (match) => match[1],
+  );
+  const variants = branches.length > 0 ? branches : [template];
+  const alternatives = variants.map((variant) =>
+    escapeRegExp(variant)
+      .replace("\\{count\\}", "\\d+")
+      .replace("#", "\\d+"),
+  );
+  return new RegExp(`^(?:${alternatives.join("|")})$`);
+}
+
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   const overflow = await page.evaluate(() => {
     const viewportWidth = document.documentElement.clientWidth;
@@ -111,7 +129,7 @@ for (const locale of locales) {
     await expect(immediate).toBeChecked();
 
     const showResults = dialog.getByRole("button", {
-      name: new RegExp(`^${t.filters.showResults.replace("{count}", "\\d+")}$`),
+      name: resultsPattern(t.filters.showResults),
     });
     await expect(showResults).toBeVisible();
     await showResults.click();

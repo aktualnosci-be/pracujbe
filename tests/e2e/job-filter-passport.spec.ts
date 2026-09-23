@@ -60,8 +60,22 @@ async function expectTargetsAtLeast48(root: Locator): Promise<void> {
   expect(await undersizedTargets(root)).toEqual([]);
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Wzorzec etykiety „Pokaż N ofert” — obsługuje odmianę ICU (`{count, plural, …}`, #226). */
 function resultsPattern(template: string): RegExp {
-  return new RegExp(`^${template.replace('{count}', '\\d+')}$`);
+  const branches = [...template.matchAll(/\{([^{}]*#[^{}]*)\}/g)].map(
+    (match) => match[1],
+  );
+  const variants = branches.length > 0 ? branches : [template];
+  const alternatives = variants.map((variant) =>
+    escapeRegExp(variant)
+      .replace('\\{count\\}', '\\d+')
+      .replace('#', '\\d+'),
+  );
+  return new RegExp(`^(?:${alternatives.join('|')})$`);
 }
 
 test('formularz no-JS zachowuje pojedynczą lokalizację spoza facetów przy zerowym wyniku', async ({
