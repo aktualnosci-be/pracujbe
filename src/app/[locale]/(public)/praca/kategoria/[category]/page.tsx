@@ -72,6 +72,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const base = env.siteUrl;
   const path = `${CATEGORY_BASE}/${category}`;
   const url = `${base}/${locale}${path}`;
+  const shareImage = new URL('/og.png', base).href;
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
     languages[supported] = `${base}/${supported}${path}`;
@@ -92,7 +93,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       siteName: 'Pracuj.be',
       type: 'website',
       locale,
+      images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
+    twitter: { card: 'summary_large_image', title, description, images: [shareImage] },
   };
 }
 
@@ -180,7 +183,10 @@ export default async function CategoryLandingPage({ params }: PageProps) {
       </header>
 
       {/* Lista ofert */}
-      <section className="mt-6" aria-label={t('availableJobs')}>
+      <section className="mt-6" aria-labelledby="landing-jobs-heading">
+        <h2 id="landing-jobs-heading" className="sr-only">
+          {t('availableJobs')}
+        </h2>
         {result.jobs.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-soft px-6 py-16 text-center">
             <SearchX className="h-10 w-10 text-muted-foreground" aria-hidden="true" />

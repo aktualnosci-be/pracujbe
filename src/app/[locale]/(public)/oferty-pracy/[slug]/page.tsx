@@ -103,6 +103,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const path = `${BASE_PATH}/${slug}`;
   const url = `${base}/${locale}${path}`;
   const description = truncate(job.description, 160);
+  const shareImage = new URL('/og.png', base).href;
 
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
@@ -122,6 +123,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       type: 'article',
       locale: OG_LOCALE[locale] ?? locale,
       publishedTime: job.publishedAt,
+      images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: job.title,
+      description,
+      images: [shareImage],
     },
   };
 }

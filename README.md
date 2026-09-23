@@ -17,7 +17,7 @@ Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailw
 Supabase (przejściowo) · PostgreSQL Railway · Zod · React Hook Form · Resend + React Email ·
 Sentry · Vitest + Playwright · Railway.
 
-**CI działa na self-hosted runnerach, a produkcję z `main` wdraża Railway po zielonym CI** —
+**CI działa na GitHub-hosted runnerach (`ubuntu-latest`), a produkcję z `main` wdraża Railway po zielonym CI** —
 patrz [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
 
 Migracja backendu, bazy, logowania i prywatnych plików do Railway nadal trwa.

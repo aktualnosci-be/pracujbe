@@ -164,10 +164,12 @@ describe('Limiter PostgreSQL — atomowość i wąska rola', () => {
   });
 
   it('przechodzi cały istniejący zestaw RLS po migracjach domenowych i auth', () => {
+    // psql czyta zestaw ze stdin, więc \ir nie ma katalogu bazowego — strażnik roli
+    // (role-assert.sql) wstawiamy w miejsce dyrektywy, bez zmiany samych asercji.
+    const guard = readFileSync(new URL('../../supabase/tests/role-assert.sql', import.meta.url), 'utf8');
     const suite = readFileSync(new URL('../../supabase/tests/rls.sql', import.meta.url), 'utf8');
-    // Stary seed RLS nie podaje name, wymaganego od 0057. Domyślna nazwa tylko
-    // dla fixture w tej transakcji; oryginalne asercje i role pozostają bez zmian.
-    const input = `BEGIN;\nALTER TABLE auth.users ALTER COLUMN name SET DEFAULT 'Fixture RLS';\n${suite}\nROLLBACK;`;
+    expect(suite).toContain('\\ir role-assert.sql');
+    const input = `BEGIN;\n${suite.replace('\\ir role-assert.sql', () => guard)}\nROLLBACK;`;
     const args = ['exec', '-i', container, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'limiter_test'];
     const windows = process.platform === 'win32';
     const output = execFileSync(windows ? 'wsl.exe' : 'docker',

@@ -13,7 +13,7 @@ import { Link } from '@/i18n/navigation';
  * `page.tsx`. Komponent serwerowy; CTA jako Button asChild + Link (zachowuje prefiks języka).
  */
 
-const POST_JOB_PATH = '/dla-pracodawcow';
+const POST_JOB_PATH = '/rejestracja-pracodawca';
 
 export async function ForCompanies(): Promise<React.JSX.Element> {
   const t = await getTranslations('home');
