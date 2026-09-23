@@ -16,7 +16,7 @@ for (const locale of ["pl", "nl", "fr", "en"] as const) {
             loading: string;
             opening: string;
             title: string;
-            composerPlaceholder: string;
+            composerLabel: string;
           };
           nav: { menu: string };
         };
@@ -72,7 +72,8 @@ for (const locale of ["pl", "nl", "fr", "en"] as const) {
           .toBe(true);
         await expect(
           page.getByRole("textbox", {
-            name: messages.messages.composerPlaceholder,
+            // Etykieta „Wiadomość do {rozmówca}” (#358) — dopasowanie po stałym prefiksie.
+            name: messages.messages.composerLabel.split("{name}")[0],
           }),
         ).toBeVisible();
         await expect(page.getByRole("status")).toHaveCount(0);
