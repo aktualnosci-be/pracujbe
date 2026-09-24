@@ -75,16 +75,19 @@ describe('Atomowe receipty rejestracji', () => {
     const id = await insert({
       role: 'candidate', locale, agree_terms: true, privacy_notice_ack: true, signup_receipt_version: 2,
       optional_consents: { email_marketing: locale === 'fr' },
-      consent_wording: { terms: 'sha256:aa', privacy: 'sha256:bb', email_marketing: 'sha256:cc' },
+      consent_wording: { terms: `sha256:${'a'.repeat(64)}`, privacy: `sha256:${'b'.repeat(64)}`, email_marketing: `sha256:${'c'.repeat(64)}` },
     });
     const receipts = await admin!.query(
       'SELECT document, kind, source, locale, document_version FROM public.document_acceptances WHERE profile_id=$1 ORDER BY document', [id]);
     expect(receipts.rows).toEqual([
-      { document: 'privacy', kind: 'privacy_notice_ack', source: 'signup', locale, document_version: 'sha256:bb' },
-      { document: 'terms', kind: 'terms_acceptance', source: 'signup', locale, document_version: 'sha256:aa' },
+      { document: 'privacy', kind: 'privacy_notice_ack', source: 'signup', locale, document_version: `sha256:${'b'.repeat(64)}` },
+      { document: 'terms', kind: 'terms_acceptance', source: 'signup', locale, document_version: `sha256:${'a'.repeat(64)}` },
     ]);
-    const optional = await admin!.query('SELECT purpose, granted, wording_version FROM public.optional_consents WHERE profile_id=$1', [id]);
-    expect(optional.rows).toEqual([{ purpose: 'email_marketing', granted: locale === 'fr', wording_version: 'sha256:cc' }]);
+    // Zgoda opcjonalna = zdarzenie dziennika #513; odmowa nie tworzy zdarzenia.
+    const events = await admin!.query('SELECT category, granted, source, locale, wording_version FROM public.email_consent_events WHERE profile_id=$1', [id]);
+    expect(events.rows).toEqual(locale === 'fr'
+      ? [{ category: 'marketing', granted: true, source: 'signup', locale, wording_version: `sha256:${'c'.repeat(64)}` }]
+      : []);
   });
 
   // Nieznany język odrzuca klucz obcy profiles → supported_locales (0069, 23503) zanim

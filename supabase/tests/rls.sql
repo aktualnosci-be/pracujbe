@@ -7294,9 +7294,9 @@ select pg_temp.assert(
 -- CS493-1: klient nie pisze receiptów ani nie woła RPC zapisu.
 set role authenticated; set app.current_uid = :'CS1'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
-  'insert into public.optional_consents (profile_id, purpose, granted, source) values ('''
-    || :'CS1' || ''', ''email_marketing'', true, ''signup'')',
-  'permission denied', 'CS493-1 authenticated nie pisze optional_consents');
+  'insert into public.document_acceptances (profile_id, document, kind) values ('''
+    || :'CS1' || ''', ''terms'', ''terms_acceptance'')',
+  'permission denied', 'CS493-1 authenticated nie pisze document_acceptances');
 select pg_temp.expect_error(
   'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{}'', ''signup'')',
   'permission denied', 'CS493-1b authenticated nie woła record_signup_consents');
@@ -7327,29 +7327,26 @@ select pg_temp.expect_error(
 reset role;
 select pg_temp.assert(
   (select count(*) from public.document_acceptances where profile_id = :'CS1') = 0
-  and (select count(*) from public.optional_consents where profile_id = :'CS1') = 0,
+  and (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0,
   'CS493-2f odrzucone wywołania nie zostawiają receiptu');
 
 -- CS493-3: odmowa zgody opcjonalnej nie blokuje; każdy element osobno; zgoda nie jest włączana.
 set role service_role;
 select public.record_signup_consents(:'CS1', true, true, '{"email_marketing": false}', 'signup', 'nl',
-  '{"terms": "sha256:abc123", "privacy": "sha256:def456", "email_marketing": "sha256:0f0f"}',
+  '{"terms": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "privacy": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "email_marketing": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}',
   '203.0.113.9', 'UA/2.0');
 reset role;
 select pg_temp.assert(
   (select count(*) from public.document_acceptances where profile_id = :'CS1') = 2
   and exists (select 1 from public.document_acceptances where profile_id = :'CS1'
                and document = 'terms' and kind = 'terms_acceptance' and source = 'signup'
-               and locale = 'nl' and document_version = 'sha256:abc123' and ip_address = '203.0.113.9')
+               and locale = 'nl' and document_version = 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' and ip_address = '203.0.113.9')
   and exists (select 1 from public.document_acceptances where profile_id = :'CS1'
                and document = 'privacy' and kind = 'privacy_notice_ack' and source = 'signup'),
   'CS493-3 regulamin i informacja o prywatności jako osobne receipty z wersją i kanałem');
 select pg_temp.assert(
-  (select count(*) from public.optional_consents where profile_id = :'CS1') = 1
-  and exists (select 1 from public.optional_consents where profile_id = :'CS1'
-               and purpose = 'email_marketing' and granted = false and wording_version = 'sha256:0f0f'
-               and source = 'signup' and locale = 'nl'),
-  'CS493-3b odmowa zapisana jako osobny dowód');
+  (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0,
+  'CS493-3b odmowa nie tworzy zdarzenia zgody (#513: dziennik zapisuje tylko zmiany)');
 select pg_temp.assert(
   coalesce((select email_marketing from public.notification_preferences where profile_id = :'CS1'), false) = false,
   'CS493-3c odmowa nie włącza marketingu');
@@ -7357,18 +7354,29 @@ select pg_temp.assert(
 -- CS493-4: zgoda włącza kategorię (wycofanie = ustawienia powiadomień).
 set role service_role;
 select public.record_signup_consents(:'CS2', true, true, '{"email_marketing": true}', 'signup', 'fr',
-  '{"email_marketing": "bad value with spaces"}', null, null);
+  '{"email_marketing": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}', null, null);
 reset role;
 select pg_temp.assert(
   (select email_marketing from public.notification_preferences where profile_id = :'CS2') = true
-  and (select granted and wording_version is null from public.optional_consents where profile_id = :'CS2'),
-  'CS493-4 zgoda na marketing włącza kategorię; niepoprawna wersja treści nie trafia do dowodu');
+  and (select count(*) from public.email_consent_events where profile_id = :'CS2') = 1
+  and (select granted and category = 'marketing' and source = 'signup' and locale = 'fr'
+              and wording_version = 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+         from public.email_consent_events where profile_id = :'CS2'),
+  'CS493-4 zgoda na marketing: kategoria włączona, zdarzenie #513 ze źródłem signup i wersją treści');
+-- Kontekst źródła nie przecieka na kolejne zapisy w tej samej transakcji.
+select pg_temp.assert(
+  public.email_consent_context('source') is null and public.email_consent_context('wording') is null,
+  'CS493-4a kontekst signup wyczyszczony po zapisie');
 set role authenticated; set app.current_uid = :'CS2'; select pg_temp.assert_client_role();
-update public.notification_preferences set email_marketing = false where profile_id = :'CS2';
+select public.set_notification_preferences(
+  '{"email_applications": true, "email_offers": true, "email_messages": true, "email_job_matches": true,
+    "email_marketing": false, "push_enabled": true, "in_app_enabled": true}', 'fr', null);
 select pg_temp.assert(
   (select email_marketing from public.notification_preferences where profile_id = :'CS2') = false
-  and (select count(*) from public.optional_consents) = 1,
-  'CS493-4b wycofanie w ustawieniach działa; użytkownik widzi tylko własny dowód');
+  and (select count(*) from public.email_consent_events) = 2
+  and exists (select 1 from public.email_consent_events where category = 'marketing'
+               and not granted and source = 'settings'),
+  'CS493-4b wycofanie w ustawieniach (RPC #513); użytkownik widzi tylko własny dowód');
 reset role; reset app.current_uid;
 
 -- CS493-5: onboarding bez pokazanych zgód opcjonalnych nie tworzy fałszywego dowodu.
@@ -7376,7 +7384,7 @@ set role service_role;
 select public.record_signup_consents(:'CS1', true, true, '{}', 'onboarding', 'nl', '{}', null, null);
 reset role;
 select pg_temp.assert(
-  (select count(*) from public.optional_consents where profile_id = :'CS1') = 1
+  (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0
   and (select count(*) from public.document_acceptances where profile_id = :'CS1' and source = 'onboarding') = 2,
   'CS493-5 onboarding: tylko regulamin + informacja, bez zgody na inne cele');
 
@@ -7387,16 +7395,29 @@ select pg_temp.expect_error(
 select pg_temp.expect_error(
   'delete from public.document_acceptances where profile_id = ''' || :'CS1' || '''',
   'CONSENT_RECEIPT_IMMUTABLE', 'CS493-6b document_acceptances bez DELETE');
-select pg_temp.expect_error(
-  'update public.optional_consents set granted = true where profile_id = ''' || :'CS1' || '''',
-  'CONSENT_RECEIPT_IMMUTABLE', 'CS493-6c optional_consents bez UPDATE');
--- Kontrola ujemna: bez triggera przepisanie odmowy na zgodę przechodzi (test ma sens).
+-- Kontrola ujemna: bez triggera przepisanie akceptacji regulaminu na dawny wpis przechodzi.
 begin;
-drop trigger optional_consents_immutable on public.optional_consents;
-update public.optional_consents set granted = true where profile_id = :'CS1';
+drop trigger document_acceptances_immutable on public.document_acceptances;
+update public.document_acceptances set kind = 'legacy_combined', source = null where profile_id = :'CS1';
 select pg_temp.assert(
-  (select granted from public.optional_consents where profile_id = :'CS1'),
-  'CS493-6d kontrola ujemna: bez triggera odmowę dałoby się przepisać');
+  not exists (select 1 from public.document_acceptances where profile_id = :'CS1' and kind <> 'legacy_combined'),
+  'CS493-6d kontrola ujemna: bez triggera znaczenie receiptu dałoby się przepisać');
+rollback;
+-- Kontrola ujemna: bez źródła 'signup' w triggerze 0101 zgoda z rejestracji byłaby 'direct'.
+begin;
+create or replace function public.record_email_consent_change()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $f$
+begin
+  insert into public.email_consent_events (profile_id, category, granted, source, locale)
+  values (new.profile_id, 'marketing', new.email_marketing, 'direct', 'pl');
+  return null;
+end $f$;
+set role service_role;
+select public.record_signup_consents(:'CS1', true, true, '{"email_marketing": true}', 'signup', 'nl', '{}', null, null);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.email_consent_events where profile_id = :'CS1' and source = 'signup'),
+  'CS493-6e kontrola ujemna: trigger bez źródła signup nie daje dowodu z rejestracji');
 rollback;
 
 -- CS493-7: Better Auth, marker v2 — osobne receipty, zgoda opcjonalna z formularza.
@@ -7404,11 +7425,12 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CS3','cs3@test.be','Cs Three', jsonb_build_object('role','candidate','first_name','Cs','last_name','Three',
     'locale','en','signup_receipt_version',2,'agree_terms',true,'privacy_notice_ack',true,
     'optional_consents', jsonb_build_object('email_marketing', true),
-    'consent_wording', jsonb_build_object('terms','sha256:t1','privacy','sha256:p1','email_marketing','sha256:m1')));
+    'consent_wording', jsonb_build_object('terms','sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','privacy','sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','email_marketing','sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc')));
 select pg_temp.assert(
   (select array_agg(kind order by kind) from public.document_acceptances where profile_id = :'CS3')
     = array['privacy_notice_ack','terms_acceptance']
-  and (select granted and wording_version = 'sha256:m1' from public.optional_consents where profile_id = :'CS3')
+  and (select granted and source = 'signup' and locale = 'en' and wording_version = 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+         from public.email_consent_events where profile_id = :'CS3' and category = 'marketing')
   and (select email_marketing from public.notification_preferences where profile_id = :'CS3'),
   'CS493-7 rejestracja v2: dwa osobne receipty + zgoda opcjonalna');
 -- v2 bez potwierdzenia informacji o prywatności albo z celem spoza listy = brak konta.
@@ -7436,7 +7458,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CS5','cs5@test.be','Cs Five','{"role":"employer","first_name":"Cs","last_name":"Five","locale":"pl","signup_receipt_version":2,"agree_terms":true,"privacy_notice_ack":true}');
 select pg_temp.assert(
   (select count(*) from public.document_acceptances where profile_id = :'CS5') = 2
-  and (select count(*) from public.optional_consents where profile_id = :'CS5') = 0
+  and (select count(*) from public.email_consent_events where profile_id = :'CS5') = 0
   and coalesce((select email_marketing from public.notification_preferences where profile_id = :'CS5'), false) = false,
   'CS493-7f brak zgody opcjonalnej nie blokuje konta');
 
@@ -7448,7 +7470,7 @@ select pg_temp.assert(
   'CS493-8 kaskada usunięcia konta usuwa receipty');
 delete from auth.users where id = :'CS3';
 select pg_temp.assert(
-  not exists (select 1 from public.optional_consents where profile_id = :'CS3'),
-  'CS493-8b kaskada usuwa dowód zgód opcjonalnych');
+  not exists (select 1 from public.email_consent_events where profile_id = :'CS3'),
+  'CS493-8b kaskada usuwa dowód zgód opcjonalnych (#513)');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

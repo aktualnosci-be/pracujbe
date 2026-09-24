@@ -18,24 +18,22 @@
 --    document_acceptances.source — kanał (signup / onboarding); historyczne = null.
 --    Wiersze są niezmienne (trigger dla każdej roli); usunąć je może tylko kaskada
 --    usunięcia profilu (prawo do usunięcia danych).
--- 2. optional_consents — niezmienny dowód KAŻDEJ zgody opcjonalnej osobno (cel, wybór,
---    wersja pokazanej treści, kanał, język, czas). Zapisujemy tylko cele, które były
---    pokazane w formularzu (także odmowę) — brak klucza = brak wiersza.
+-- 2. Zgody opcjonalne = model #513 (0101): email_consent_events. Nie tworzymy własnej
+--    tabeli — dopuszczamy tylko nowe źródło 'signup' w tym dzienniku. Zgoda na marketing
+--    z formularza ustawia notification_preferences.email_marketing = true w kontekście
+--    source='signup' + język + wersja treści, a trigger 0101 zapisuje niezmienne zdarzenie.
+--    Odmowa niczego nie zmienia (marketing domyślnie wyłączony) i nie tworzy zdarzenia.
 -- 3. record_signup_consents (service_role) — jedna transakcja: regulamin + informacja
---    o prywatności są wymagane, zgody opcjonalne nie. Zgoda na marketing ustawia
---    notification_preferences.email_marketing = true (wycofanie: ustawienia powiadomień).
+--    o prywatności są wymagane, zgody opcjonalne nie (wycofanie: ustawienia powiadomień).
 -- 4. record_document_acceptance (dawne API wspólnego checkboxa) zapisuje legacy_combined.
 -- 5. auth.record_signup_receipts (Better Auth, 0059): marker v2 → record_signup_consents;
 --    v1 (formularz sprzed zmiany, w trakcie wdrożenia) → dawna ścieżka legacy_combined.
 -- 6. guest_applications.consent_* — opis znaczenia (potwierdzenie informacji o prywatności).
 --
--- Zależność: #513 (0101, email_consent_events) nie jest w main. Po jego scaleniu zmiana
--- email_marketing z tej funkcji zostawi też wpis w email_consent_events (trigger na
--- notification_preferences) — ten dowód jest uzupełnieniem, nie duplikatem: tutaj zapisujemy
--- wybór z formularza rejestracji, tam każdą późniejszą zmianę ustawień.
---
--- Rollback: przywrócić record_document_acceptance z 0054 i auth.record_signup_receipts z 0059;
--- drop record_signup_consents, optional_consents, triggerów niezmienności i kolumn kind/source.
+-- Rollback: przywrócić record_document_acceptance z 0054, auth.record_signup_receipts z 0059
+-- i record_email_consent_change z 0101; drop record_signup_consents, triggera niezmienności
+-- i kolumn kind/source; constraint źródła email_consent_events bez 'signup' (po usunięciu
+-- takich wierszy nie wolno — dowód zostaje, więc constraint zostawić).
 -- Historii akceptacji nie usuwać.
 -- =============================================================================
 
@@ -79,34 +77,59 @@ create trigger document_acceptances_immutable
   before update or delete on public.document_acceptances
   for each row execute function public.forbid_consent_receipt_change();
 
--- --- 2. optional_consents ----------------------------------------------------------------
-create table if not exists public.optional_consents (
-  id               uuid primary key default gen_random_uuid(),
-  profile_id       uuid not null references public.profiles(id) on delete cascade,
-  purpose          text not null check (purpose in ('email_marketing')),
-  granted          boolean not null,
-  wording_version  text check (wording_version is null or char_length(wording_version) <= 80),
-  source           text not null check (source in ('signup', 'onboarding')),
-  locale           text references public.supported_locales(code),
-  ip_address       inet,
-  user_agent       text check (user_agent is null or char_length(user_agent) <= 512),
-  created_at       timestamptz not null default now()
-);
+-- --- 2. Zgody opcjonalne w dzienniku #513 (email_consent_events) -------------------------
+alter table public.email_consent_events drop constraint email_consent_events_source;
+alter table public.email_consent_events add constraint email_consent_events_source check (
+  source in ('settings', 'unsubscribe_page', 'one_click', 'direct', 'signup'));
 
-create index if not exists optional_consents_profile_idx
-  on public.optional_consents (profile_id, purpose, created_at desc);
+-- 0101 z jedną zmianą: 'signup' jest znanym źródłem (reszta bez zmian).
+create or replace function public.record_email_consent_change()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_source text := public.email_consent_context('source');
+  v_locale text := public.email_consent_context('locale');
+  v_wording text := public.email_consent_context('wording');
+  v_cat text;
+  v_old boolean;
+  v_new boolean;
+begin
+  if v_source is null or v_source not in ('settings', 'unsubscribe_page', 'one_click', 'signup') then
+    v_source := 'direct';
+  end if;
+  if v_locale is null or not public.is_supported_locale(v_locale) then
+    v_locale := public.resolve_recipient_locale(new.profile_id);
+  end if;
+  if v_wording is not null and v_wording !~ '^sha256:[0-9a-f]{64}$' then
+    v_wording := null;
+  end if;
 
-alter table public.optional_consents enable row level security;
-revoke all on public.optional_consents from anon, authenticated;
-grant select on public.optional_consents to authenticated;
-drop policy if exists optional_consents_select_own on public.optional_consents;
-create policy optional_consents_select_own on public.optional_consents
-  for select to authenticated using (profile_id = auth.uid());
-
-drop trigger if exists optional_consents_immutable on public.optional_consents;
-create trigger optional_consents_immutable
-  before update or delete on public.optional_consents
-  for each row execute function public.forbid_consent_receipt_change();
+  foreach v_cat in array array['applications', 'offers', 'messages', 'job_matches', 'marketing'] loop
+    v_new := case v_cat
+      when 'applications' then new.email_applications
+      when 'offers'       then new.email_offers
+      when 'messages'     then new.email_messages
+      when 'job_matches'  then new.email_job_matches
+      else new.email_marketing end;
+    if tg_op = 'INSERT' then
+      -- Wiersz startowy (handle_new_user) ma wartości domyślne kolumn — to nie jest zgoda.
+      v_old := v_cat <> 'marketing';
+    else
+      v_old := case v_cat
+        when 'applications' then old.email_applications
+        when 'offers'       then old.email_offers
+        when 'messages'     then old.email_messages
+        when 'job_matches'  then old.email_job_matches
+        else old.email_marketing end;
+    end if;
+    if v_new is distinct from v_old then
+      insert into public.email_consent_events (profile_id, category, granted, source, locale, wording_version)
+      values (new.profile_id, v_cat, v_new, v_source, v_locale,
+              case when v_new then v_wording end);
+    end if;
+  end loop;
+  return null;
+end $$;
+revoke all on function public.record_email_consent_change() from public;
 
 -- Wersja pokazanej treści (np. 'sha256:…') — tylko krótki, drukowalny identyfikator.
 create or replace function public.consent_wording_version(p_versions jsonb, p_key text)
@@ -142,8 +165,6 @@ declare
   v_kind text;
   v_version_id uuid;
   v_version text;
-  v_purpose text;
-  v_granted boolean;
 begin
   if p_profile_id is null
      or p_terms_accepted is distinct from true
@@ -181,23 +202,20 @@ begin
     v_version_id := null; v_version := null;
   end loop;
 
-  for v_purpose, v_granted in
-    select e.key, (e.value)::text::boolean from jsonb_each(v_opt) e order by e.key
-  loop
-    insert into public.optional_consents
-      (profile_id, purpose, granted, wording_version, source, locale, ip_address, user_agent)
-    values
-      (p_profile_id, v_purpose, v_granted,
-       public.consent_wording_version(p_wording_versions, v_purpose),
-       v_src, v_loc, v_ip, v_ua);
-
-    -- Zgoda włącza kategorię; odmowa niczego nie zmienia (domyślnie wyłączone, 0006/0087).
-    if v_purpose = 'email_marketing' and v_granted then
-      insert into public.notification_preferences (profile_id, email_marketing)
-      values (p_profile_id, true)
-      on conflict (profile_id) do update set email_marketing = true;
-    end if;
-  end loop;
+  -- Zgoda opcjonalna (#513): zdarzenie w email_consent_events zapisuje trigger 0101 w kontekście
+  -- source='signup'. Odmowa = brak zmiany = brak zdarzenia (marketing domyślnie wyłączony).
+  if (v_opt ->> 'email_marketing')::boolean is true then
+    perform set_config('pracujbe.email_consent_source', 'signup', true);
+    perform set_config('pracujbe.email_consent_locale', coalesce(v_loc, ''), true);
+    perform set_config('pracujbe.email_consent_wording',
+      coalesce(public.consent_wording_version(p_wording_versions, 'email_marketing'), ''), true);
+    insert into public.notification_preferences as np (profile_id, email_marketing)
+    values (p_profile_id, true)
+    on conflict (profile_id) do update set email_marketing = true, updated_at = now();
+    perform set_config('pracujbe.email_consent_source', '', true);
+    perform set_config('pracujbe.email_consent_locale', '', true);
+    perform set_config('pracujbe.email_consent_wording', '', true);
+  end if;
 end $$;
 revoke all on function public.record_signup_consents(uuid, boolean, boolean, jsonb, text, text, jsonb, text, text)
   from public, anon, authenticated;

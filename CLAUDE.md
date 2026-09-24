@@ -571,12 +571,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   w ustawieniach powiadomień). `record_signup_consents` (service_role; Better Auth: marker v2
   w `auth.record_signup_receipts`) zapisuje każdy element osobno: `document_acceptances.kind`
   (`terms_acceptance`/`privacy_notice_ack`, dawne wiersze = `legacy_combined`, nie zgoda),
-  `optional_consents` (cel, wybór, wersja treści `sha256:` z `src/lib/signup-consents.ts`,
-  kanał, język). Receipty niezmienne (trigger; usuwa je tylko kaskada usunięcia konta).
+  zgoda na marketing jako zdarzenie dziennika #513 `email_consent_events` (źródło `signup`,
+  język, wersja treści `sha256:` z `src/lib/signup-consents.ts`; odmowa = brak zdarzenia). Receipty niezmienne (trigger; usuwa je tylko kaskada usunięcia konta).
   Aplikowanie: pole „zapoznałem się z informacją o prywatności” zamiast „zgody”. Dowód:
   `rls.sql` sekcja CS493 (z kontrolą ujemną), `signup-consents.test`, E2E `consent-separation`.
   Szkic brzmień: `docs/legal-drafts/zgody-i-akceptacje.md` (PROJEKT, nieopublikowany).
-  **Otwarte:** treść prawna (#61), podstawy (#485/#487), dziennik zmian zgód e-mail (#513). Guardy tras paneli komplet: `/candidate` (auth + rola≠employer→/employer), `/employer` (auth + aktywne `company_members`→/rejestracja-pracodawca), `/admin` (auth + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex.
+  **Otwarte:** treść prawna (#61), podstawy (#485/#487). Guardy tras paneli komplet: `/candidate` (auth + rola≠employer→/employer), `/employer` (auth + aktywne `company_members`→/rejestracja-pracodawca), `/admin` (auth + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex.
 - [x] Onboarding kandydata (6 kroków) — UI + realny zapis per krok do DB (`saveOnboardingStep`, RHF + stan zapisu)
   Pusta nazwa/imię/nazwisko → „wymagane” (także formularz firmy, #367); pozycje list (zawody 80,
   umiejętności 120, certyfikaty 160 = `CANDIDATE_ITEM_LIMITS`, zgodne z `left()` w 0028) —

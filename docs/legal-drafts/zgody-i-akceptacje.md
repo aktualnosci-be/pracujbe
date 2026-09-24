@@ -14,14 +14,16 @@ Formularze mają osobne, **domyślnie niezaznaczone** pola. Każde ma własny, n
 |---|---|---|---|
 | Akceptacja regulaminu | warunek umowy o świadczenie usługi | tak (konto) | `document_acceptances.kind = terms_acceptance` |
 | Zapoznanie się z informacją o prywatności | obowiązek informacyjny (art. 13 RODO), **nie zgoda** | tak (potwierdzenie) | `document_acceptances.kind = privacy_notice_ack` |
-| E-maile z nowościami (marketing) | zgoda opcjonalna (art. 6 ust. 1 lit. a) | nie | `optional_consents.purpose = email_marketing` (także odmowa) |
+| E-maile z nowościami (marketing) | zgoda opcjonalna (art. 6 ust. 1 lit. a) | nie | `email_consent_events` (#513): `category = marketing`, `source = signup` |
 
 - Wersja treści: identyfikator `consent_versions`, gdy dokument zostanie opublikowany; do tego
   czasu `sha256:` etykiety w języku formularza.
 - Kanał: `signup` (rejestracja) albo `onboarding` (krok 6 profilu kandydata).
 - Zapisy sprzed zmiany mają `kind = legacy_combined` — to ślad dawnego wspólnego checkboxa
   „Akceptuję regulamin i politykę prywatności”. **Nie są** zgodą na żaden cel opcjonalny.
-- Zgodę na marketing można wycofać w ustawieniach powiadomień i linkiem wypisania w e-mailu.
+- Zgodę na marketing można wycofać w ustawieniach powiadomień i linkiem wypisania w e-mailu;
+  każda zmiana trafia do tego samego dziennika `email_consent_events` (#513). Odmowa przy
+  rejestracji nie tworzy wpisu (marketing jest domyślnie wyłączony).
 - Aplikacja bez konta: jedno pole — potwierdzenie zapoznania się z informacją o prywatności
   (dotychczasowy snapshot wersji polityki w `guest_application_requests.consent_*`).
 
@@ -69,5 +71,5 @@ Tłumaczenia NL/FR/EN mają ten sam sens i są w `src/messages/{nl,fr,en}.json` 
 
 - #61 — zatwierdzona treść regulaminu i polityki prywatności (wpisy w `consent_versions`).
 - #485/#487 — macierz podstaw prawnych (AI, publikacja profilu).
-- #513 (#45, etap 2) — dowód zmian zgód e-mailowych w ustawieniach (`email_consent_events`);
-  po scaleniu zmiana `email_marketing` z rejestracji zostawi też wpis w tamtym dzienniku.
+- #513 (#45, etap 2, w `main`) — dziennik zgód e-mail `email_consent_events`; rejestracja
+  dopisuje do niego zdarzenia ze źródłem `signup`.

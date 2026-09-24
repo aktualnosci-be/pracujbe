@@ -14,7 +14,7 @@ import {
 
 /**
  * #493: każdy element formularza ma własną etykietę (i własną wersję treści w dowodzie),
- * a lista celów opcjonalnych jest lustrem CHECK-a `optional_consents.purpose` z migracji.
+ * a lista celów opcjonalnych jest lustrem allow-listy `record_signup_consents` z migracji.
  */
 
 const LOCALES = ['pl', 'nl', 'fr', 'en'] as const;
@@ -59,10 +59,17 @@ describe('zgody opcjonalne', () => {
     expect(signupOptionalConsents({ marketingOptIn: true })).toEqual({ email_marketing: true });
   });
 
-  it('lista celów = CHECK optional_consents.purpose i allow-lista RPC (0107)', () => {
-    const check = /purpose\s+text not null check \(purpose in \(([^)]*)\)\)/.exec(MIGRATION)?.[1] ?? '';
-    const sqlPurposes = [...check.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
-    expect(sqlPurposes).toEqual([...OPTIONAL_CONSENT_PURPOSES]);
+  it('lista celów = allow-lista RPC (0107); źródło signup w dzienniku #513', () => {
+    expect(OPTIONAL_CONSENT_PURPOSES).toEqual(['email_marketing']);
     expect(MIGRATION).toContain(`where e.key <> '${OPTIONAL_CONSENT_PURPOSES[0]}'`);
+    expect(MIGRATION).toContain("source in ('settings', 'unsubscribe_page', 'one_click', 'direct', 'signup')");
+    // Bez własnej tabeli zgód opcjonalnych (#513 jest jedynym dziennikiem zgód e-mail).
+    expect(MIGRATION).not.toMatch(/create table[^;]*optional_consents/i);
+  });
+
+  it('wersja treści ma dokładny format dziennika #513 (sha256 + 64 hex)', () => {
+    for (const locale of LOCALES) {
+      expect(consentWordingVersion(locale, 'auth.marketingOptIn')).toMatch(/^sha256:[0-9a-f]{64}$/);
+    }
   });
 });
