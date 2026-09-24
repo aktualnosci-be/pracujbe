@@ -533,7 +533,13 @@
       "companyNameRequired": "Vul de bedrijfsnaam in.",
       "companyNameTooShort": "De bedrijfsnaam is te kort.",
       "companyNameTooLong": "De bedrijfsnaam is te lang."
-    }
+    },
+    "botCheckLabel": "Beveiligingscontrole",
+    "botCheckLoading": "Beveiligingscontrole wordt geladen…",
+    "botCheckRequired": "Voltooi de beveiligingscontrole boven de knop en verstuur daarna het formulier.",
+    "botCheckExpired": "De controle is verlopen. Bevestig ze opnieuw.",
+    "botCheckLoadFailed": "De beveiligingscontrole kon niet worden geladen. Controleer je verbinding of schakel inhoudsblokkering voor deze site uit en probeer het opnieuw.",
+    "botCheckRetry": "Controle opnieuw laden"
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Werken in België zonder cv",
@@ -565,7 +571,9 @@
     "invalidTransition": "Deze statuswijziging is in de huidige fase niet mogelijk. Vernieuw de pagina en kies een andere optie.",
     "staleState": "De status is intussen gewijzigd (bijvoorbeeld door een andere beheerder). De lijst is vernieuwd — controleer de huidige status.",
     "jobNotEditable": "Deze vacature kan nu niet worden bewerkt. Alleen een actieve of gepauzeerde vacature kan worden aangepast.",
-    "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien."
+    "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien.",
+    "botCheckFailed": "We konden niet bevestigen dat een mens dit formulier verstuurt. Voltooi de verificatie opnieuw en verstuur het nog eens.",
+    "botCheckUnavailable": "De beveiligingscontrole is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw."
   },
   "offerStatus": {
     "draft": "Concept",

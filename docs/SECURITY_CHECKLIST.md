@@ -57,6 +57,8 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 
 - [ ] Formularze publiczne (rejestracja, kontakt, aplikacja) chronione (honeypot i/lub
       CAPTCHA — Supabase Auth wspiera hCaptcha/Turnstile; włącz na produkcji).
+      Logowanie, rejestracja i reset hasła: Cloudflare Turnstile z weryfikacją serwerową
+      (#46, [`TURNSTILE.md`](./TURNSTILE.md)) — ustaw klucze w produkcji.
 - [ ] Rate limiting jako druga warstwa anty-bot.
 
 ## 7. Nieujawnianie istnienia e-maila

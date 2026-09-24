@@ -29,6 +29,9 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 - [ ] `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `EMAIL_QUEUE_SECRET`,
       `SENTRY_AUTH_TOKEN` jako **sekrety** (nie `NEXT_PUBLIC_*`).
 - [ ] Użyte są wyłącznie produkcyjne klucze i sekrety.
+- [ ] Turnstile (#46): `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (dostępny przy buildzie) i sekret
+      `TURNSTILE_SECRET_KEY`. Bez nich w produkcji rejestracja i reset hasła są odrzucane —
+      patrz [`TURNSTILE.md`](./TURNSTILE.md).
 - [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` zgodny z aktualną polityką.
 
 ## 3. Baza danych (Supabase produkcja)

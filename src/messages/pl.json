@@ -533,7 +533,13 @@
       "companyNameRequired": "Podaj nazwę firmy.",
       "companyNameTooShort": "Nazwa firmy jest za krótka.",
       "companyNameTooLong": "Nazwa firmy jest za długa."
-    }
+    },
+    "botCheckLabel": "Weryfikacja bezpieczeństwa",
+    "botCheckLoading": "Ładowanie weryfikacji bezpieczeństwa…",
+    "botCheckRequired": "Dokończ weryfikację bezpieczeństwa nad przyciskiem, a potem wyślij formularz.",
+    "botCheckExpired": "Weryfikacja wygasła. Potwierdź ją ponownie.",
+    "botCheckLoadFailed": "Nie udało się załadować weryfikacji bezpieczeństwa. Sprawdź połączenie lub wyłącz blokowanie treści dla tej strony i spróbuj ponownie.",
+    "botCheckRetry": "Załaduj weryfikację ponownie"
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Praca w Belgii bez CV",
@@ -565,7 +571,9 @@
     "invalidTransition": "Tej zmiany statusu nie można wykonać na obecnym etapie. Odśwież stronę i wybierz inną opcję.",
     "staleState": "Status zmienił się w międzyczasie (np. zmienił go inny administrator). Lista została odświeżona — sprawdź aktualny stan.",
     "jobNotEditable": "Tej oferty nie można teraz edytować. Poprawić można ofertę aktywną lub wstrzymaną.",
-    "jobEditConflict": "Ktoś zmienił tę ofertę w międzyczasie. Otwórz ją ponownie z listy ofert, aby zobaczyć aktualną wersję."
+    "jobEditConflict": "Ktoś zmienił tę ofertę w międzyczasie. Otwórz ją ponownie z listy ofert, aby zobaczyć aktualną wersję.",
+    "botCheckFailed": "Nie udało się potwierdzić, że formularz wysyła człowiek. Zaznacz weryfikację jeszcze raz i wyślij ponownie.",
+    "botCheckUnavailable": "Weryfikacja bezpieczeństwa jest chwilowo niedostępna. Spróbuj ponownie za kilka minut."
   },
   "offerStatus": {
     "draft": "Szkic",
