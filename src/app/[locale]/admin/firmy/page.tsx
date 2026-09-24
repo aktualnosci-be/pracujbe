@@ -8,13 +8,27 @@ import { AWAITING_FILTER, listCompanies } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import {
+  AdminEmptyState,
   AdminPageHeader,
   AdminPager,
   AdminSearchForm,
 } from '@/components/admin/AdminListControls';
+import {
+  chipClass,
+  INLINE_LINK,
+  PANEL,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  TABLE_WRAP,
+  TD,
+  TD_WRAP,
+  TEXT_LINK,
+  TH,
+} from '@/components/admin/admin-styles';
+import { cn } from '@/lib/utils';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
-import { cn } from '@/lib/utils';
 
 /**
  * Panel administratora — Firmy (Etap 7g).
@@ -71,7 +85,7 @@ function CompanyDetailLink({ id, name }: { id: string; name: string }) {
   return (
     <Link
       href={`/admin/firmy/${encodeURIComponent(id)}`}
-      className="underline underline-offset-2 hover:no-underline"
+      className={cn(INLINE_LINK, 'break-words')}
     >
       {name}
     </Link>
@@ -85,7 +99,7 @@ function CompanyHistoryLink({ id, label }: { id: string; label: string }) {
   return (
     <Link
       href={{ pathname: '/admin/dziennik', query: { entity: 'company', id: uuid } }}
-      className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-foreground underline underline-offset-2 hover:no-underline"
+      className={cn(TEXT_LINK, 'px-1 text-xs')}
     >
       {label}
     </Link>
@@ -128,8 +142,12 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
   ).toString();
 
   return (
-    <div className="space-y-6">
-      <AdminPageHeader title={t('companiesTitle')} subtitle={t('companiesSubtitle')} />
+    <div className="min-w-0 space-y-[22px]">
+      <AdminPageHeader
+        eyebrow={t('brandTag')}
+        title={t('companiesTitle')}
+        subtitle={t('companiesSubtitle')}
+      />
 
       <AdminSearchForm
         action={`/${locale}${BASE_PATH}`}
@@ -155,12 +173,7 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
                 },
               }}
               aria-current={isActive ? 'true' : undefined}
-              className={cn(
-                'inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium transition-colors',
-                isActive
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border text-muted-foreground hover:bg-soft hover:text-foreground',
-              )}
+              className={chipClass(isActive)}
             >
               {t(FILTER_LABEL[value] ?? 'filterAll')}
             </Link>
@@ -173,51 +186,49 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
           retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`}
         />
       ) : (
-        <section className="rounded-lg border border-border bg-card">
+        <section className={PANEL}>
           {companies.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">{t('companiesEmpty')}</p>
+            <AdminEmptyState message={t('companiesEmpty')} />
           ) : (
             <>
-              {/* Desktop: tabela */}
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full text-sm">
+              {/* Desktop: tabela (`.table-wrap table`) */}
+              <div className={cn(TABLE_WRAP, 'hidden md:block')}>
+                <table className="w-full border-collapse">
                   <thead>
-                    <tr className="border-b border-border text-left">
-                      <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                    <tr>
+                      <th scope="col" className={TH}>
                         {t('colName')}
                       </th>
-                      <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                      <th scope="col" className={TH}>
                         {t('colStatus')}
                       </th>
-                      <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                      <th scope="col" className={TH}>
                         {t('colCreated')}
                       </th>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-right font-medium text-muted-foreground"
-                      >
+                      <th scope="col" className={cn(TH, 'pr-0 text-right')}>
                         {t('colActions')}
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody>
                     {companies.map((company) => (
                       <tr key={company.id}>
                         <th
                           scope="row"
                           tabIndex={-1}
                           data-admin-focus={companyFocusKey(company.id)}
-                          className="px-4 py-3 text-left align-middle font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                          className={cn(
+                            TD_WRAP,
+                            'text-left font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                          )}
                         >
                           <CompanyDetailLink id={company.id} name={company.name} />
                         </th>
-                        <td className="px-4 py-3 align-middle">
+                        <td className={TD}>
                           <AdminStatusBadge kind="company" status={company.status} />
                         </td>
-                        <td className="px-4 py-3 align-middle text-muted-foreground">
-                          {formatDate(company.createdAt)}
-                        </td>
-                        <td className="px-4 py-3 text-right align-middle">
+                        <td className={TD}>{formatDate(company.createdAt)}</td>
+                        <td className={cn(TD, 'pr-0 text-right')}>
                           <div className="flex flex-wrap items-center justify-end gap-2">
                             <CompanyHistoryLink id={company.id} label={t('auditHistoryLink')} />
                             <CompanyStatusActions
@@ -233,24 +244,23 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
                 </table>
               </div>
 
-              {/* Mobile: karty */}
-              <ul className="divide-y divide-border md:hidden">
+              {/* Mobile: wiersze (`.panel .job`) */}
+              <ul className="md:hidden">
                 {companies.map((company) => (
-                  <li key={company.id} className="space-y-3 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h2
-                          tabIndex={-1}
-                          data-admin-focus={companyFocusKey(company.id)}
-                          className="break-words text-base font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <CompanyDetailLink id={company.id} name={company.name} />
-                        </h2>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {formatDate(company.createdAt)}
-                        </p>
-                      </div>
-                      <AdminStatusBadge kind="company" status={company.status} />
+                  <li key={company.id} className={cn(ROW, 'flex-col')}>
+                    <div className="min-w-0">
+                      <h2
+                        tabIndex={-1}
+                        data-admin-focus={companyFocusKey(company.id)}
+                        className={cn(
+                          ROW_TITLE,
+                          'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        )}
+                      >
+                        <CompanyDetailLink id={company.id} name={company.name} />
+                      </h2>
+                      <p className={ROW_META}>{formatDate(company.createdAt)}</p>
+                      <AdminStatusBadge kind="company" status={company.status} className="mt-1.5" />
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <CompanyStatusActions

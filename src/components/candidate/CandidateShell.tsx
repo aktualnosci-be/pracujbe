@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import {
+  BellRing,
   Bookmark,
   FileText,
   Heart,
@@ -35,6 +36,7 @@ const HREF = {
   summary: '/candidate',
   recommended: '/candidate/oferty-polecane',
   saved: '/candidate/zapisane',
+  searches: '/candidate/wyszukiwania',
   applications: '/candidate/aplikacje',
   proposals: '/candidate/propozycje',
   messages: '/candidate/wiadomosci',
@@ -87,6 +89,7 @@ export function CandidateShell({
     { href: HREF.summary, label: td('navSummary'), icon: <LayoutDashboard /> },
     { href: HREF.recommended, label: td('navRecommended'), icon: <FileText /> },
     { href: HREF.saved, label: td('navSaved'), icon: <Heart /> },
+    { href: HREF.searches, label: td('navSearches'), icon: <BellRing /> },
     { href: HREF.applications, label: td('navApplications'), icon: <Bookmark /> },
     { href: HREF.proposals, label: td('navProposals'), icon: <MailCheck /> },
     { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },

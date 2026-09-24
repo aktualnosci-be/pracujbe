@@ -18,9 +18,11 @@ import type {
   SalaryPeriod,
 } from '@/lib/jobs';
 import {
-  compareMonthlySalaryDesc,
-  salaryInMonthlyRange,
+  compareSalaryDesc,
+  isSalaryUnit,
+  salaryInRange,
   type SalaryFields,
+  type SalaryUnit,
 } from '@/lib/salary-compare';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 
@@ -33,6 +35,26 @@ export const SALARY_MIN_BOUND = 1500;
 export const SALARY_MAX_BOUND = 4500;
 export const SALARY_STEP = 100;
 
+export interface SalaryBounds {
+  min: number;
+  /** Górna granica = „i więcej”. */
+  max: number;
+  step: number;
+}
+
+/**
+ * Widełki suwaka w danej jednostce (#188, 0091): miesięczna jak wyżej, godzinowa
+ * 10–40 EUR brutto/godz. co 1 EUR. Jednostki nie są przeliczane na siebie.
+ */
+export const SALARY_BOUNDS: Record<SalaryUnit, SalaryBounds> = {
+  month: { min: SALARY_MIN_BOUND, max: SALARY_MAX_BOUND, step: SALARY_STEP },
+  hour: { min: 10, max: 40, step: 1 },
+};
+
+export function salaryBounds(unit: SalaryUnit): SalaryBounds {
+  return SALARY_BOUNDS[unit];
+}
+
 export type AccommodationValue = 'provided' | 'unavailable';
 export type DateValue = 'any' | '24h' | '7d' | '30d';
 export type SortValue = 'newest' | 'salary';
@@ -42,6 +64,8 @@ export interface SidebarFilters {
   categories: CategoryKey[];
   locations: string[];
   contractTypes: ContractType[];
+  /** Jednostka widełek i sortowania po wynagrodzeniu (URL `salaryUnit`, domyślnie month). */
+  salaryUnit: SalaryUnit;
   salaryMin: number;
   salaryMax: number;
   accommodation: AccommodationValue[];
@@ -105,6 +129,7 @@ export function emptySidebarFilters(): SidebarFilters {
     categories: [],
     locations: [],
     contractTypes: [],
+    salaryUnit: 'month',
     salaryMin: SALARY_MIN_BOUND,
     salaryMax: SALARY_MAX_BOUND,
     accommodation: [],
@@ -123,9 +148,16 @@ export function splitParam(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function clampSalary(value: number): number {
-  const stepped = Math.round(value / SALARY_STEP) * SALARY_STEP;
-  return Math.min(SALARY_MAX_BOUND, Math.max(SALARY_MIN_BOUND, stepped));
+export function clampSalary(value: number, unit: SalaryUnit = 'month'): number {
+  const { min, max, step } = salaryBounds(unit);
+  const stepped = Math.round(value / step) * step;
+  return Math.min(max, Math.max(min, stepped));
+}
+
+/** Zmiana jednostki zeruje widełki — kwot miesięcznych i godzinowych nie przeliczamy. */
+export function withSalaryUnit(f: SidebarFilters, unit: SalaryUnit): SidebarFilters {
+  const { min, max } = salaryBounds(unit);
+  return { ...f, salaryUnit: unit, salaryMin: min, salaryMax: max };
 }
 
 /** Odczyt filtrów sidebara z płaskiego zestawu parametrów zapytania. */
@@ -142,13 +174,17 @@ export function parseSidebarFilters(
     (v): v is ContractType => (CONTRACT_TYPES as readonly string[]).includes(v),
   );
 
-  const min = Number(sp['salaryMin']);
-  const max = Number(sp['salaryMax']);
-  f.salaryMin = Number.isFinite(min) ? clampSalary(min) : SALARY_MIN_BOUND;
-  f.salaryMax = Number.isFinite(max) ? clampSalary(max) : SALARY_MAX_BOUND;
+  const unit = sp['salaryUnit'];
+  f.salaryUnit = isSalaryUnit(unit) ? unit : 'month';
+  const bounds = salaryBounds(f.salaryUnit);
+  // Pusty parametr (np. puste pole formularza) = brak wartości, nie zero.
+  const min = sp['salaryMin'] ? Number(sp['salaryMin']) : Number.NaN;
+  const max = sp['salaryMax'] ? Number(sp['salaryMax']) : Number.NaN;
+  f.salaryMin = Number.isFinite(min) ? clampSalary(min, f.salaryUnit) : bounds.min;
+  f.salaryMax = Number.isFinite(max) ? clampSalary(max, f.salaryUnit) : bounds.max;
   if (f.salaryMin > f.salaryMax) {
-    f.salaryMin = SALARY_MIN_BOUND;
-    f.salaryMax = SALARY_MAX_BOUND;
+    f.salaryMin = bounds.min;
+    f.salaryMax = bounds.max;
   }
 
   f.accommodation = splitParam(sp['accommodation']).filter(
@@ -174,7 +210,26 @@ export function parseSort(value: string | undefined): SortValue {
 
 /** Czy zakres wynagrodzenia został zawężony względem pełnych widełek. */
 export function isSalaryNarrowed(f: SidebarFilters): boolean {
-  return f.salaryMin > SALARY_MIN_BOUND || f.salaryMax < SALARY_MAX_BOUND;
+  const { min, max } = salaryBounds(f.salaryUnit);
+  return f.salaryMin > min || f.salaryMax < max;
+}
+
+/**
+ * Widełki wynagrodzenia jako parametry `getJobs`/RPC: jednostka zawsze (steruje też
+ * sortowaniem), kwoty tylko przy zawężeniu, górna granica suwaka = „i więcej” (bez limitu).
+ */
+export function salaryQueryParams(f: SidebarFilters): {
+  salaryUnit: SalaryUnit;
+  salaryMin?: number;
+  salaryMax?: number;
+} {
+  if (!isSalaryNarrowed(f)) return { salaryUnit: f.salaryUnit };
+  const { max } = salaryBounds(f.salaryUnit);
+  return {
+    salaryUnit: f.salaryUnit,
+    salaryMin: f.salaryMin,
+    ...(f.salaryMax < max ? { salaryMax: f.salaryMax } : {}),
+  };
 }
 
 /** Predykat dopasowania oferty do filtrów sidebara (używany serwerowo i klienckim liczniku). */
@@ -190,9 +245,11 @@ export function matchesSidebar(item: FacetItem, f: SidebarFilters): boolean {
 
   if (isSalaryNarrowed(f)) {
     const maxEff =
-      f.salaryMax >= SALARY_MAX_BOUND ? Number.POSITIVE_INFINITY : f.salaryMax;
-    // Miesięczny ekwiwalent (#188); oferta bez porównywalnej kwoty nie jest wykluczana.
-    if (!salaryInMonthlyRange(item, f.salaryMin, maxEff)) return false;
+      f.salaryMax >= salaryBounds(f.salaryUnit).max
+        ? Number.POSITIVE_INFINITY
+        : f.salaryMax;
+    // Kwota w wybranej jednostce (#188); oferta bez porównywalnej kwoty nie jest wykluczana.
+    if (!salaryInRange(item, f.salaryMin, maxEff, f.salaryUnit)) return false;
   }
 
   if (f.accommodation.length === 1) {
@@ -301,6 +358,7 @@ export function sidebarFiltersToParams(
   if (f.locations.length) params['location'] = f.locations.join(',');
   if (f.contractTypes.length)
     params['contractType'] = f.contractTypes.join(',');
+  if (f.salaryUnit !== 'month') params['salaryUnit'] = f.salaryUnit;
   if (isSalaryNarrowed(f)) {
     params['salaryMin'] = String(f.salaryMin);
     params['salaryMax'] = String(f.salaryMax);
@@ -328,16 +386,20 @@ export function countActiveSidebar(f: SidebarFilters): number {
   );
 }
 
-/** Sortowanie ofert: najnowsze (domyślnie) lub najwyższe wynagrodzenie (ekwiwalent miesięczny). */
+/**
+ * Sortowanie ofert: najnowsze (domyślnie) lub najwyższe wynagrodzenie w wybranej
+ * jednostce (miesięcznie: ekwiwalent miesięczny; godzinowo: stawka godzinowa).
+ */
 export function sortJobs<T extends SalaryFields & { publishedAt: string }>(
   jobs: readonly T[],
   sort: SortValue,
+  unit: SalaryUnit = 'month',
 ): T[] {
   const copy = [...jobs];
   if (sort === 'salary') {
     copy.sort(
       (a, b) =>
-        compareMonthlySalaryDesc(a, b) ||
+        compareSalaryDesc(a, b, unit) ||
         b.publishedAt.localeCompare(a.publishedAt),
     );
   } else {

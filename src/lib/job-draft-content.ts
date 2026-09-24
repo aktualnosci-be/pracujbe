@@ -9,6 +9,7 @@ import type {
   JobStep8,
   JobStep9Draft,
 } from '@/lib/validation/job';
+import { cleanLocalizedText } from '@/lib/screening/questions';
 
 /** Puste/whitespace → null (kolumny nullable), w innym wypadku wartość surowa. */
 function nullIfEmpty(value: string | undefined | null): string | null {
@@ -83,6 +84,16 @@ export function buildDraftStepContent(step: number, parsed: unknown): Record<str
         skills_optional: v.skills,
         languages: v.languages.map((l) => ({ language: l.language, level: l.level })),
         certificates: v.requiredCertificates,
+        // #101: pytania replace-all w tej samej transakcji (tylko szkic; id opcji nadaje baza).
+        screening_questions: (v.screeningQuestions ?? []).map((q) => ({
+          type: q.type,
+          required: q.required,
+          prompt: cleanLocalizedText(q.prompt),
+          options:
+            q.type === 'single_choice'
+              ? q.options.map((o) => ({ label: cleanLocalizedText(o.label) }))
+              : [],
+        })),
       };
     }
     case 8: {

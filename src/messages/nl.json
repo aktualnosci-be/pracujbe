@@ -386,7 +386,14 @@
       "contactEmailInvalid": "Ongeldig e-mailadres.",
       "publishAgreementRequired": "Bevestig om de vacature te publiceren.",
       "invalid": "Ongeldige waarde.",
-      "itemTooLong": "Een van de items in de lijst is te lang. Maak het korter."
+      "itemTooLong": "Een van de items in de lijst is te lang. Maak het korter.",
+      "screeningTypeInvalid": "Kies een soort antwoord.",
+      "screeningPromptRequired": "Vul de vraag in de taal van de vacature in.",
+      "screeningPromptTooLong": "Een vraag mag maximaal 300 tekens hebben.",
+      "screeningOptionRequired": "Vul het antwoord in de taal van de vacature in.",
+      "screeningOptionTooLong": "Een antwoord mag maximaal 120 tekens hebben.",
+      "screeningOptionsCount": "Een lijstvraag heeft 2 tot 10 antwoorden nodig.",
+      "screeningTooMany": "Een vacature kan maximaal 10 vragen hebben."
     },
     "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
     "contentLanguageNames": {
@@ -578,11 +585,13 @@
     "jobExpired": "De vervaldatum van deze vacature is verstreken. Open ze opnieuw via de vacaturelijst — heropenen verwijdert de verstreken datum.",
     "botCheckFailed": "We konden niet bevestigen dat een mens dit formulier verstuurt. Voltooi de verificatie opnieuw en verstuur het nog eens.",
     "botCheckUnavailable": "De beveiligingscontrole is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw.",
+    "screeningAnswerRequired": "Beantwoord de verplichte vragen van de werkgever.",
     "jobImportInvalidFile": "Dit bestand kan niet worden geïmporteerd. Gebruik een PNG-, JPG- of WebP-screenshot tot 5 MB.",
     "jobImportInvalidUrl": "Dit adres kunnen we niet ophalen. Plak een openbare http(s)-link naar de vacature.",
     "jobImportFetchFailed": "We konden de pagina met de vacature niet ophalen. Probeer het later of upload een screenshot.",
     "jobImportNotAListing": "We vonden hier geen vacature. Controleer het bestand of de link.",
-    "jobImportFailed": "We konden de vacature niet lezen. Probeer het opnieuw of vul het formulier zelf in."
+    "jobImportFailed": "We konden de vacature niet lezen. Probeer het opnieuw of vul het formulier zelf in.",
+    "savedSearchLimitReached": "Je hebt al 20 opgeslagen zoekopdrachten. Verwijder er een om een nieuwe toe te voegen."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -871,7 +880,12 @@
     "editJobLabel": "Vacature bewerken: {title}",
     "viewJob": "Vacature bekijken",
     "viewJobLabel": "Vacature bekijken: {title}",
-    "navTeam": "Team"
+    "navTeam": "Team",
+    "employerApplicationScreening": "Antwoorden op vragen",
+    "employerApplicationScreeningHint": "Vragen zoals ze waren bij het indienen. De antwoorden veranderen de match en de status niet.",
+    "employerApplicationScreeningRequired": "verplicht",
+    "employerApplicationScreeningNoAnswer": "Geen antwoord",
+    "navSearches": "Opgeslagen zoekopdrachten"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -998,6 +1012,13 @@
     "chooseLocation": "Kies een locatie",
     "salary": "Loon (bruto/maand)",
     "salaryPeriodNote": "We vergelijken maandlonen; jaarlonen delen we door 12. Uurlonen rekenen we niet om — vacatures met een uurloon of zonder vermeld loon blijven zichtbaar bij deze filter en staan achteraan bij sorteren op loon.",
+    "salaryUnit": "Looneenheid",
+    "salaryUnitMonth": "Per maand",
+    "salaryUnitHour": "Per uur",
+    "salaryHourly": "Uurloon (bruto/uur)",
+    "salaryHourlyNote": "Bij uurloon vergelijken we alleen uurlonen. Maand- en jaarlonen rekenen we niet om naar uren, omdat het aantal werkuren niet bekend is — die vacatures en vacatures zonder vermeld loon blijven zichtbaar bij deze filter en staan achteraan bij sorteren op uurloon.",
+    "salaryChipHourly": "Uurloon: {min} – {max} /uur",
+    "sortSalaryHourly": "Hoogste uurloon",
     "contractType": "Contracttype",
     "requiredLanguage": "Vereiste taal",
     "chooseLanguage": "Kies een taal",
@@ -1060,7 +1081,8 @@
     "markedAllRead": "Alle meldingen zijn als gelezen gemarkeerd.",
     "itemCompanyRejected": "Je bedrijf is niet geverifieerd",
     "itemCompanySuspended": "Je bedrijf is opgeschort",
-    "itemTeamInvitation": "Uitnodiging voor een bedrijfsteam"
+    "itemTeamInvitation": "Uitnodiging voor een bedrijfsteam",
+    "itemSavedSearch": "Nieuwe vacatures voor een opgeslagen zoekopdracht"
   },
   "pricing": {
     "standard": "Standaard",
@@ -1104,7 +1126,13 @@
     "viewApplications": "Bekijk je sollicitaties",
     "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount.",
     "demoJobTitle": "Dit is een voorbeeldvacature",
-    "demoJobBody": "Deze vacature en dit bedrijf zijn fictief en laten alleen zien hoe de site werkt. Je kunt er niet op solliciteren."
+    "demoJobBody": "Deze vacature en dit bedrijf zijn fictief en laten alleen zien hoe de site werkt. Je kunt er niet op solliciteren.",
+    "screeningTitle": "Vragen van de werkgever",
+    "screeningNote": "{company} ziet je antwoorden samen met je sollicitatie. Ze veranderen je matchscore niet en wijzen je sollicitatie niet automatisch af.",
+    "screeningOptional": "(optioneel)",
+    "screeningRequired": "Beantwoord deze vraag.",
+    "screeningYes": "Ja",
+    "screeningNo": "Nee"
   },
   "legal": {
     "termsTitle": "Algemene voorwaarden",
@@ -1271,7 +1299,29 @@
     "editSaveHint": "De wijzigingen zijn nog niet opgeslagen. Sla ze op met „Wijzigingen opslaan”.",
     "editSaved": "Wijzigingen opgeslagen",
     "editSavedDemo": "Wijzigingen opgeslagen (demomodus)",
-    "editFixStep": "De wijzigingen zijn niet opgeslagen. Corrigeer de gemarkeerde velden in stap {step}: {title}."
+    "editFixStep": "De wijzigingen zijn niet opgeslagen. Corrigeer de gemarkeerde velden in stap {step}: {title}.",
+    "screeningTitle": "Vragen aan kandidaten",
+    "screeningHint": "Optioneel, maximaal {max} korte vragen, bijv. over rijbewijs, VCA of vervoer. Je ziet de antwoorden in de sollicitatie; ze veranderen de match niet en wijzen kandidaten niet automatisch af.",
+    "screeningReadOnly": "Vragen kun je alleen in een concept wijzigen — kandidaten hebben de huidige versie al beantwoord.",
+    "screeningEmpty": "Deze vacature heeft geen vragen aan kandidaten.",
+    "screeningAdd": "Vraag toevoegen",
+    "screeningQuestion": "Vraag {n}",
+    "screeningType": "Soort antwoord",
+    "screeningTypeYesNo": "Ja / nee",
+    "screeningTypeSingleChoice": "Eén uit een lijst",
+    "screeningTypeDate": "Datum",
+    "screeningTypeShortText": "Korte tekst",
+    "screeningRequired": "Antwoord verplicht",
+    "screeningRequiredBadge": "verplicht",
+    "screeningPrompt": "Vraag ({language})",
+    "screeningPromptPlaceholder": "bijv. Heb je een rijbewijs B?",
+    "screeningOption": "Antwoord {n} ({language})",
+    "screeningAddOption": "Antwoord toevoegen",
+    "screeningRemoveOption": "Antwoord {n} verwijderen",
+    "screeningRemove": "Vraag {n} verwijderen",
+    "screeningMoveUp": "Vraag {n} omhoog",
+    "screeningMoveDown": "Vraag {n} omlaag",
+    "screeningTranslations": "Vertalingen (optioneel)"
   },
   "jobImport": {
     "title": "Importeren uit een vacature",
@@ -1362,6 +1412,7 @@
     "navUsers": "Gebruikers",
     "title": "Beheerderspaneel",
     "subtitle": "Beheer bedrijven, meldingen en gebruikersaccounts.",
+    "quickLinksTitle": "Ga naar een onderdeel",
     "statCompanies": "Bedrijven",
     "statPending": "In afwachting van verificatie",
     "statUsers": "Gebruikers",
@@ -1864,5 +1915,35 @@
     "untitled": "Vacature zonder titel",
     "denied": "De vacaturetrechter is zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
     "loadError": "De vacaturetrechter kon niet worden geladen. Probeer het opnieuw."
+  },
+  "savedSearches": {
+    "hint": "Sla deze filters op en we laten je op de site en per e-mail weten wanneer er nieuwe vacatures zijn (hoogstens één keer per dag).",
+    "save": "Zoekopdracht opslaan",
+    "saving": "Opslaan…",
+    "saved": "We hebben de zoekopdracht opgeslagen. We laten je weten wanneer er nieuwe vacatures zijn.",
+    "alreadySaved": "Deze zoekopdracht is al opgeslagen.",
+    "manage": "Zoekopdrachten beheren",
+    "loginRequired": "Log in met je kandidatenaccount om de zoekopdracht op te slaan.",
+    "login": "Inloggen",
+    "errorNetwork": "Geen verbinding. Controleer je internet en probeer het opnieuw.",
+    "defaultName": "Mijn zoekopdracht",
+    "intro": "Zoekopdrachten die je vanuit de vacaturelijst hebt opgeslagen. Komen er nieuwe vacatures met deze filters bij, dan krijg je een melding en een e-mail.",
+    "loadError": "We konden je opgeslagen zoekopdrachten niet laden.",
+    "retry": "Opnieuw proberen",
+    "empty": "Je hebt nog geen opgeslagen zoekopdrachten. Stel filters in op de vacaturelijst en klik op ‘Zoekopdracht opslaan’.",
+    "demo": "In de demoversie slaan we geen zoekopdrachten op.",
+    "browse": "Vacatures bekijken",
+    "lastAlert": "Laatste melding: {date}",
+    "noAlertYet": "We hebben nog geen melding verstuurd.",
+    "open": "Vacatures tonen",
+    "alerts": "Meld nieuwe vacatures",
+    "frequency": "Hoe vaak",
+    "daily": "Eén keer per dag",
+    "weekly": "Eén keer per week",
+    "delete": "Verwijderen",
+    "deleteTitle": "Zoekopdracht ‘{name}’ verwijderen?",
+    "deleteDescription": "Je krijgt dan geen meldingen meer over nieuwe vacatures met deze filters.",
+    "deleted": "We hebben de zoekopdracht verwijderd.",
+    "updated": "We hebben de wijzigingen opgeslagen."
   }
 }

@@ -386,7 +386,14 @@
       "contactEmailInvalid": "Invalid email address.",
       "publishAgreementRequired": "Confirm to publish the job.",
       "invalid": "Invalid value.",
-      "itemTooLong": "One of the list items is too long. Please shorten it."
+      "itemTooLong": "One of the list items is too long. Please shorten it.",
+      "screeningTypeInvalid": "Choose an answer type.",
+      "screeningPromptRequired": "Enter the question in the language of the job.",
+      "screeningPromptTooLong": "A question can have up to 300 characters.",
+      "screeningOptionRequired": "Enter the answer in the language of the job.",
+      "screeningOptionTooLong": "An answer can have up to 120 characters.",
+      "screeningOptionsCount": "A list question needs 2 to 10 answers.",
+      "screeningTooMany": "A job can have up to 10 questions."
     },
     "contentLanguageNotice": "This job’s content is only available in {language}.",
     "contentLanguageNames": {
@@ -578,11 +585,13 @@
     "jobExpired": "This job's expiry date has passed. Reopen it from the jobs list — reopening removes the past date.",
     "botCheckFailed": "We couldn't confirm that a person is sending this form. Complete the check again and resubmit.",
     "botCheckUnavailable": "The security check is temporarily unavailable. Please try again in a few minutes.",
+    "screeningAnswerRequired": "Please answer the employer's required questions.",
     "jobImportInvalidFile": "This file cannot be imported. Use a PNG, JPG or WebP screenshot up to 5 MB.",
     "jobImportInvalidUrl": "We cannot fetch this address. Paste a public http(s) link to the ad.",
     "jobImportFetchFailed": "We could not download the page with the ad. Try later or upload a screenshot.",
     "jobImportNotAListing": "We did not find a job ad here. Check the file or link.",
-    "jobImportFailed": "We could not read the ad. Try again or fill in the form manually."
+    "jobImportFailed": "We could not read the ad. Try again or fill in the form manually.",
+    "savedSearchLimitReached": "You already have 20 saved searches. Delete one to add a new one."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -871,7 +880,12 @@
     "editJobLabel": "Edit job: {title}",
     "viewJob": "View job",
     "viewJobLabel": "View job: {title}",
-    "navTeam": "Team"
+    "navTeam": "Team",
+    "employerApplicationScreening": "Answers to questions",
+    "employerApplicationScreeningHint": "Questions as they were when the application was submitted. Answers do not change the match or status.",
+    "employerApplicationScreeningRequired": "required",
+    "employerApplicationScreeningNoAnswer": "No answer",
+    "navSearches": "Saved searches"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -998,6 +1012,13 @@
     "chooseLocation": "Choose a location",
     "salary": "Salary (gross/month)",
     "salaryPeriodNote": "We compare monthly pay; yearly salaries are divided by 12. Hourly rates are not converted — hourly jobs and jobs without a stated salary stay visible with this filter and appear last when sorting by salary.",
+    "salaryUnit": "Pay unit",
+    "salaryUnitMonth": "Per month",
+    "salaryUnitHour": "Per hour",
+    "salaryHourly": "Rate (gross/hour)",
+    "salaryHourlyNote": "With the hourly rate we compare hourly rates only. Monthly and yearly salaries are not converted to hours because the working hours are not known — those jobs and jobs without a stated salary stay visible with this filter and appear last when sorting by rate.",
+    "salaryChipHourly": "Rate: {min} – {max} /hour",
+    "sortSalaryHourly": "Highest hourly rate",
     "contractType": "Contract type",
     "requiredLanguage": "Required language",
     "chooseLanguage": "Choose a language",
@@ -1060,7 +1081,8 @@
     "markedAllRead": "All notifications marked as read.",
     "itemCompanyRejected": "Your company was not verified",
     "itemCompanySuspended": "Your company has been suspended",
-    "itemTeamInvitation": "Invitation to a company team"
+    "itemTeamInvitation": "Invitation to a company team",
+    "itemSavedSearch": "New jobs for a saved search"
   },
   "pricing": {
     "standard": "Standard",
@@ -1104,7 +1126,13 @@
     "viewApplications": "View your applications",
     "candidateOnly": "Only a candidate account can apply.",
     "demoJobTitle": "This is a sample job offer",
-    "demoJobBody": "This offer and company are fictional and only show how the site works. You cannot apply to it."
+    "demoJobBody": "This offer and company are fictional and only show how the site works. You cannot apply to it.",
+    "screeningTitle": "Questions from the employer",
+    "screeningNote": "{company} will see your answers with your application. They do not change your match score and do not reject your application automatically.",
+    "screeningOptional": "(optional)",
+    "screeningRequired": "Please answer this question.",
+    "screeningYes": "Yes",
+    "screeningNo": "No"
   },
   "legal": {
     "termsTitle": "Terms of Service",
@@ -1271,7 +1299,29 @@
     "editSaveHint": "Your changes are not saved yet. Save them with “Save changes”.",
     "editSaved": "Changes saved",
     "editSavedDemo": "Changes saved (demo mode)",
-    "editFixStep": "Your changes weren't saved. Fix the highlighted fields in step {step}: {title}."
+    "editFixStep": "Your changes weren't saved. Fix the highlighted fields in step {step}: {title}.",
+    "screeningTitle": "Questions for candidates",
+    "screeningHint": "Optional, up to {max} short questions, e.g. about a driving licence, VCA or commuting. You will see the answers in the application; they don't change the match and don't reject candidates automatically.",
+    "screeningReadOnly": "Questions can only be changed in a draft — candidates have already answered the current version.",
+    "screeningEmpty": "This job has no questions for candidates.",
+    "screeningAdd": "Add question",
+    "screeningQuestion": "Question {n}",
+    "screeningType": "Answer type",
+    "screeningTypeYesNo": "Yes / no",
+    "screeningTypeSingleChoice": "One from a list",
+    "screeningTypeDate": "Date",
+    "screeningTypeShortText": "Short text",
+    "screeningRequired": "Answer required",
+    "screeningRequiredBadge": "required",
+    "screeningPrompt": "Question ({language})",
+    "screeningPromptPlaceholder": "e.g. Do you have a category B driving licence?",
+    "screeningOption": "Answer {n} ({language})",
+    "screeningAddOption": "Add answer",
+    "screeningRemoveOption": "Remove answer {n}",
+    "screeningRemove": "Remove question {n}",
+    "screeningMoveUp": "Move question {n} up",
+    "screeningMoveDown": "Move question {n} down",
+    "screeningTranslations": "Translations (optional)"
   },
   "jobImport": {
     "title": "Import from a job ad",
@@ -1362,6 +1412,7 @@
     "navUsers": "Users",
     "title": "Admin panel",
     "subtitle": "Manage companies, reports and user accounts.",
+    "quickLinksTitle": "Go to a section",
     "statCompanies": "Companies",
     "statPending": "Awaiting verification",
     "statUsers": "Users",
@@ -1864,5 +1915,35 @@
     "untitled": "Untitled job",
     "denied": "The job funnel is visible to the company owner, administrators and recruiters.",
     "loadError": "The job funnel could not be loaded. Please try again."
+  },
+  "savedSearches": {
+    "hint": "Save these filters and we will let you know on the site and by email about new jobs (at most once a day).",
+    "save": "Save search",
+    "saving": "Saving…",
+    "saved": "We saved the search. We will let you know about new jobs.",
+    "alreadySaved": "This search is already saved.",
+    "manage": "Manage searches",
+    "loginRequired": "To save the search, log in to your candidate account.",
+    "login": "Log in",
+    "errorNetwork": "No connection. Check your internet and try again.",
+    "defaultName": "My search",
+    "intro": "Searches saved from the job list. When new jobs match these filters, you get a notification and an email.",
+    "loadError": "We could not load your saved searches.",
+    "retry": "Try again",
+    "empty": "You have no saved searches yet. Set filters on the job list and click “Save search”.",
+    "demo": "The demo version does not save searches.",
+    "browse": "Browse jobs",
+    "lastAlert": "Last alert: {date}",
+    "noAlertYet": "No alert sent yet.",
+    "open": "Show jobs",
+    "alerts": "Notify me about new jobs",
+    "frequency": "How often",
+    "daily": "Once a day",
+    "weekly": "Once a week",
+    "delete": "Delete",
+    "deleteTitle": "Delete the search “{name}”?",
+    "deleteDescription": "You will stop receiving alerts about new jobs matching these filters.",
+    "deleted": "We deleted the search.",
+    "updated": "We saved your changes."
   }
 }

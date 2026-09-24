@@ -2,6 +2,7 @@ import { z } from 'zod/v3';
 import { localeSchema } from '@/lib/validation/auth';
 import { AVAILABILITY_VALUES } from '@/lib/validation/candidate';
 import { normalizePhone, PHONE_COUNTRIES } from '@/lib/validation/phone';
+import { SCREENING_LIMITS } from '@/lib/screening/questions';
 
 /**
  * Walidacja aplikacji kandydata na ofertę.
@@ -82,6 +83,17 @@ export const applicationSchema = z
       errorMap: () => ({ message: 'application.error.termsRequired' }),
     }),
     idempotencyKey: z.string().uuid('application.error.idempotencyKeyInvalid').optional(),
+    /**
+     * #101: odpowiedzi na pytania oferty (id pytania → tak/nie albo tekst). Wymagalność, typ
+     * i opcje sprawdza `apply_to_job` w bazie — tu tylko kształt i sufity rozmiaru.
+     */
+    answers: z
+      .record(
+        z.string().uuid(),
+        z.union([z.boolean(), z.string().trim().max(SCREENING_LIMITS.answer)]),
+      )
+      .refine((value) => Object.keys(value).length <= SCREENING_LIMITS.questions)
+      .optional(),
   })
   .merge(phoneFields)
   .transform(withNormalizedPhone);

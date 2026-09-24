@@ -2792,6 +2792,96 @@ select pg_temp.assert(
 reset role;
 
 -- ============================================================================
+-- SP188. Jednostka filtra/sortu wynagrodzeń (0091, #188): p_salary_unit.
+--        'month' = reguła 0080 bez zmian; 'hour' = tylko stawki godzinowe, miesięczne
+--        i roczne NIE są przeliczane na godziny (nieporównywalne → nie odpadają, sort na
+--        końcu). Fixture'y SAL + dwie stawki godzinowe o różnym wymiarze czasu pracy.
+-- ============================================================================
+\set JOBSPH2 'e8000000-0000-0000-0000-0000000000b7'
+\set JOBSPH3 'e8000000-0000-0000-0000-0000000000b8'
+reset role; reset app.current_uid;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,salary_period,working_hours,published_at) values
+  (:'JOBSPH2',:'COMPL','sal-h2','Salp188 H2','warehouse','permanent','Mechelen','Flandria','active','pl', 14, null, 'hour', '20 h/tydz.', now() - interval '7 hours'),
+  (:'JOBSPH3',:'COMPL','sal-h3','Salp188 H3','warehouse','permanent','Mechelen','Flandria','active','pl', 14, 16,   'hour', '38 h/tydz.', now() - interval '8 hours');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- SP188-1: kwota porównywalna w jednostce.
+select pg_temp.assert(public.job_comparable_salary(20, 'hour', 'hour') = 20
+  and public.job_comparable_salary(3000, 'month', 'hour') is null
+  and public.job_comparable_salary(36000, 'year', 'hour') is null
+  and public.job_comparable_salary(36000, 'year', 'month') = 3000
+  and public.job_comparable_salary(20, 'hour', 'month') is null
+  and public.job_comparable_salary(36000, 'year', 'week') = 3000,
+  'SP188-1 hour = tylko stawka godzinowa; month = reguła 0080; nieznana jednostka = month');
+
+-- SP188-2: od 18 EUR/godz. — 20–22/h przechodzi, 14/h i 14–16/h odpadają niezależnie od
+-- wymiaru czasu pracy; miesięczne, roczne i bez kwoty zostają (nieporównywalne).
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,18,null,null,null,null,null,'newest',100,0,'hour'))
+    = array['sal-h','sal-m','sal-m2','sal-n','sal-y','sal-y2'],
+  'SP188-2 filtr od 18 EUR/godz. porównuje wyłącznie stawki godzinowe');
+
+-- SP188-3 (kontrola ujemna): ten sam próg w jednostce miesięcznej (domyślnej) nie wyklucza
+-- stawek godzinowych i przepuszcza wszystkie kwoty miesięczne/roczne ≥ 18.
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,18,null,null,null,null,null,'newest',100,0)) = 8
+  and (select count(*) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,18,null,null,null,null,null,'newest',100,0,'month')) = 8,
+  'SP188-3 bez jednostki = month (0080), stawki godzinowe nie są filtrowane');
+
+-- SP188-4: sort po stawce godzinowej — godzinowe malejąco (remis → nowsze), reszta na końcu
+-- wg daty publikacji; sort miesięczny bez zmian względem SAL4.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,null,null,null,null,null,'salary',100,0,'hour'))
+    = array['sal-h','sal-h3','sal-h2','sal-m','sal-y','sal-m2','sal-y2','sal-n']
+  and (select array_agg(slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,null,null,null,null,null,'salary',100,0))
+    = array['sal-m','sal-y','sal-m2','sal-y2','sal-h','sal-n','sal-h2','sal-h3'],
+  'SP188-4 sort po stawce godzinowej; sort miesięczny jak 0080');
+
+-- SP188-5: licznik i facety w jednostce godzinowej zgodne z listingiem; do 15 EUR/godz.
+-- odpada tylko 20–22/h (14–16 zachodzi na widełki).
+select pg_temp.assert(
+  public.get_public_jobs_count('pl','salp188',null,null,null,null,18,null,null,null,null,null,'hour') = 6
+  and (select total from public.get_public_job_filter_facets(
+         'pl','salp188',null,null,null,null,18,null,null,null,null,null,'hour')
+       where dimension = 'total') = 6
+  and public.get_public_jobs_count('pl','salp188',null,null,null,null,null,15,null,null,null,null,'hour') = 7
+  and (select total from public.get_public_job_filter_facets(
+         'pl','salp188',null,null,null,null,null,15,null,null,null,null,'hour')
+       where dimension = 'total') = 7
+  and (select array_agg(slug order by slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,15,null,null,null,null,'newest',100,0,'hour'))
+    = array['sal-h2','sal-h3','sal-m','sal-m2','sal-n','sal-y','sal-y2'],
+  'SP188-5 licznik, facety i listing — ta sama reguła jednostki godzinowej');
+
+-- SP188-6: wywołania nazwane bez p_salary_unit (PostgREST/supabase-js) nie są
+-- niejednoznaczne — stare sygnatury usunięte, została jedna funkcja każdego RPC.
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs(p_locale => 'pl', p_keyword => 'salp188')) = 8
+  and public.get_public_jobs_count(p_keyword => 'salp188', p_city => null) = 8
+  and (select count(*) from pg_proc where pronamespace = 'public'::regnamespace
+         and proname in ('get_public_jobs','get_public_jobs_count','get_public_job_filter_facets')) = 3,
+  'SP188-6 jedna sygnatura każdego RPC, wywołanie nazwane bez jednostki działa');
+reset role;
+
+-- SP188-7: granty jak dotąd — anon/authenticated tak, PUBLIC nie.
+select pg_temp.assert(
+  has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text)', 'execute')
+  and has_function_privilege('authenticated', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
+  and not exists (
+    select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+    where p.pronamespace = 'public'::regnamespace
+      and p.proname in ('get_public_jobs','get_public_jobs_count','get_public_job_filter_facets')
+      and a.grantee = 0),
+  'SP188-7 granty anon/authenticated odtworzone, bez PUBLIC');
+
+-- ============================================================================
 -- ADM. RPC admina (0081, #420): macierz przejść, STALE_STATE, deleted_at, reopen
 -- ============================================================================
 reset role; reset app.current_uid;
@@ -4517,6 +4607,563 @@ reset role;
 set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select * from public.get_offered_jobs_display(''pl'')',
   'permission denied', 'BL97-6d gość bez EXECUTE');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- SS100. Zapisane wyszukiwania i alerty o nowych ofertach (0092, #100): kanoniczne
+-- filtry bez duplikatów, izolacja właściciela, RPC-only DML, worker przez
+-- get_public_jobs, idempotencja per wyszukiwanie+oferta, opt-out, blokada firmy.
+-- ============================================================================
+\set SSA 'e9300000-0000-0000-0000-0000000000a1'
+\set SSB 'e9300000-0000-0000-0000-0000000000a2'
+\set SSE 'e9300000-0000-0000-0000-0000000000b1'
+\set SSC 'e9300000-0000-0000-0000-0000000000c1'
+\set SSC2 'e9300000-0000-0000-0000-0000000000c2'
+\set SSJ1 'e9300000-0000-0000-0000-0000000000d1'
+\set SSJ2 'e9300000-0000-0000-0000-0000000000d2'
+\set SSJ3 'e9300000-0000-0000-0000-0000000000d3'
+\set SSJ4 'e9300000-0000-0000-0000-0000000000d4'
+\set SSJ5 'e9300000-0000-0000-0000-0000000000d5'
+\set SSJ6 'e9300000-0000-0000-0000-0000000000d6'
+\set SSJ7 'e9300000-0000-0000-0000-0000000000d7'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SSA','ssa@test.be','Sara A','{"role":"candidate","first_name":"Sara","last_name":"A","locale":"fr"}'),
+  (:'SSB','ssb@test.be','Seb B','{"role":"candidate","first_name":"Seb","last_name":"B","locale":"nl"}'),
+  (:'SSE','sse@test.be','Emil E','{"role":"employer","first_name":"Emil","last_name":"E","locale":"pl"}');
+insert into public.companies(id,name,status) values
+  (:'SSC','Firma SS','verified'), (:'SSC2','Firma SS Blok','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'SSC',:'SSE','owner',true);
+
+-- SS100-1: zapis + kanonizacja (kolejność, wielkość liter, spacje) → brak duplikatu.
+set role authenticated; set app.current_uid = :'SSA'; select pg_temp.assert_client_role();
+select saved_search_id as ss1, created as ss1c from public.save_saved_search(
+  'Magazyn Liège', 'pl',
+  '{"keyword":" Magazynier SS ","categories":["warehouse","production","warehouse"],"immediate":false}',
+  '?keyword=Magazynier+SS&category=warehouse,production') \gset
+select pg_temp.assert(:'ss1c'::boolean, 'SS100-1 wyszukiwanie zapisane');
+select saved_search_id as ss1b, created as ss1bc from public.save_saved_search(
+  'Inna nazwa', 'pl', '{"categories":["production","warehouse"],"keyword":"magazynier ss"}') \gset
+select pg_temp.assert(:'ss1' = :'ss1b' and not :'ss1bc'::boolean,
+  'SS100-1b identyczne filtry → to samo wyszukiwanie, bez duplikatu');
+select pg_temp.assert(
+  (select filters from public.saved_searches where id = :'ss1')
+    = '{"keyword":"magazynier ss","categories":["production","warehouse"],"locale":"pl"}'::jsonb,
+  'SS100-1c filtry kanoniczne (posortowane, bez fałszywych flag, locale przy słowie kluczowym)');
+select pg_temp.assert((select filters_version from public.saved_searches where id = :'ss1') = 1,
+  'SS100-1d wersja filtrów = 1');
+select pg_temp.expect_error(
+  'select * from public.save_saved_search(''X'', ''pl'', ''{"since":"2020-01-01"}'')',
+  'VALIDATION_FAILED', 'SS100-1e nieznany klucz filtra odrzucony');
+select pg_temp.expect_error(
+  'select * from public.save_saved_search(''X'', ''pl'', ''{"categories":["nie-ma"]}'')',
+  'VALIDATION_FAILED', 'SS100-1f nieznana kategoria odrzucona');
+select pg_temp.expect_error(
+  'select * from public.save_saved_search(''X'', ''pl'', ''{"salaryMin":3000,"salaryMax":1000}'')',
+  'VALIDATION_FAILED', 'SS100-1g minimum powyżej maksimum odrzucone');
+select pg_temp.expect_error(
+  'select * from public.save_saved_search(''  '', ''pl'', ''{}'')',
+  'VALIDATION_FAILED', 'SS100-1h pusta nazwa odrzucona');
+select pg_temp.expect_error(
+  'select * from public.save_saved_search(''X'', ''de'', ''{}'')',
+  'VALIDATION_FAILED', 'SS100-1i nieobsługiwany język odrzucony');
+select pg_temp.expect_error(
+  'select * from public.save_saved_search(''X'', ''pl'', ''{"immediate":false,"keyword":"  "}'')',
+  'VALIDATION_FAILED', 'SS100-1j brak realnego filtra (same puste/fałszywe) odrzucony');
+-- Drugie wyszukiwanie SSA: kategoria transport (do kontroli, że worker nie myli filtrów).
+select saved_search_id as ss2 from public.save_saved_search('Kierowca', 'fr',
+  '{"categories":["transport"]}', '?category=transport', 'weekly') \gset
+reset role; reset app.current_uid;
+
+-- SS100-2 (KONTROLE UJEMNE): cudze wyszukiwania niewidoczne i nietykalne.
+set role authenticated; set app.current_uid = :'SSB'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.saved_searches) = 0,
+  'SS100-2 obcy kandydat nie widzi cudzych wyszukiwań (RLS)');
+select pg_temp.expect_error(
+  'select public.set_saved_search_alerts(''' || :'ss1' || ''', false)',
+  'NOT_FOUND', 'SS100-2b obcy nie wyłączy cudzego alertu');
+select pg_temp.expect_error(
+  'select public.delete_saved_search(''' || :'ss1' || ''')',
+  'NOT_FOUND', 'SS100-2c obcy nie usunie cudzego wyszukiwania');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select alerts_enabled from public.saved_searches where id = :'ss1'),
+  'SS100-2d cudzy alert nadal włączony');
+
+-- SS100-3 (KONTROLE UJEMNE): bezpośredni DML odebrany; tabela alertów bez ścieżki klienta.
+set role authenticated; set app.current_uid = :'SSA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.saved_searches) = 2,
+  'SS100-3 właściciel widzi swoje wyszukiwania');
+select pg_temp.expect_error(
+  'insert into public.saved_searches(profile_id,name,locale,filters,filters_hash) values ('''
+  || :'SSA' || ''', ''x'', ''pl'', ''{}'', md5(''x''))',
+  'permission denied', 'SS100-3b bezpośredni INSERT odrzucony');
+select pg_temp.expect_error(
+  'update public.saved_searches set next_run_at = now() where id = ''' || :'ss1' || '''',
+  'permission denied', 'SS100-3c bezpośredni UPDATE odrzucony');
+select pg_temp.expect_error(
+  'delete from public.saved_searches where id = ''' || :'ss1' || '''',
+  'permission denied', 'SS100-3d bezpośredni DELETE odrzucony');
+select pg_temp.expect_error('select count(*) from public.saved_search_alerts',
+  'permission denied', 'SS100-3e brak odczytu tabeli alertów');
+select pg_temp.expect_error('select public.process_saved_search_alerts(10)',
+  'permission denied', 'SS100-3f klient nie uruchomi workera');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SSE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.save_saved_search(''X'', ''pl'', ''{}'')',
+  'PERMISSION_DENIED', 'SS100-3g pracodawca nie zapisuje wyszukiwań');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.save_saved_search(''X'', ''pl'', ''{}'')',
+  'permission denied', 'SS100-3h anon bez EXECUTE');
+reset role;
+
+-- SS100-4: worker — nowa pasująca oferta → jeden alert, jedno in-app, jeden e-mail
+-- jobMatch w języku ODBIORCY (fr), z tytułem tłumaczenia fr.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SSJ1',:'SSC','ss-j1','Magazynier SS nocny','warehouse','permanent','Liège','Wallonie','active','pl', now()),
+  (:'SSJ2',:'SSC','ss-j2','Magazynier SS stary','warehouse','permanent','Liège','Wallonie','active','pl', now() - interval '3 days'),
+  (:'SSJ3',:'SSC','ss-j3','Kucharz SS','hospitality','permanent','Liège','Wallonie','active','pl', now());
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'SSJ1', 'pl', 'Magazynier SS nocny', 'Opis'),
+         (:'SSJ1', 'fr', 'Magasinier SS de nuit', 'Description');
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day', alerts_since = now() - interval '2 days' where id in (:'ss1', :'ss2');
+set role service_role;
+select pg_temp.assert(public.process_saved_search_alerts(100) = 1,
+  'SS100-4 jeden digest (drugie wyszukiwanie bez nowych ofert)');
+reset role;
+select pg_temp.assert(
+  (select array_agg(job_id) from public.saved_search_alerts where saved_search_id = :'ss1')
+    = array[:'SSJ1'::uuid],
+  'SS100-4b tylko nowa oferta pasująca do filtrów (stara i spoza kategorii pominięte)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id = :'SSA' and template = 'jobMatch') = 1
+  and (select locale from public.email_deliveries where profile_id = :'SSA' and template = 'jobMatch') = 'fr'
+  and (select payload -> 'jobs' -> 0 ->> 'title' from public.email_deliveries
+         where profile_id = :'SSA' and template = 'jobMatch') = 'Magasinier SS de nuit',
+  'SS100-4c jeden e-mail jobMatch w języku odbiorcy (fr) z tytułem fr');
+select pg_temp.assert(
+  (select count(*) from public.notifications
+     where profile_id = :'SSA' and type = 'job_match' and entity_type = 'saved_search'
+       and entity_id = :'ss1') = 1,
+  'SS100-4d jedno powiadomienie in-app');
+select pg_temp.assert(
+  (select next_run_at > now() + interval '23 hours' from public.saved_searches where id = :'ss1')
+  and (select next_run_at > now() + interval '6 days' from public.saved_searches where id = :'ss2'),
+  'SS100-4e limit częstotliwości: kolejny przebieg za dobę / tydzień');
+
+-- SS100-5: ponowny przebieg (wymuszony) nie wysyła tej samej oferty drugi raz.
+update public.saved_searches set next_run_at = now() - interval '1 minute' where id = :'ss1';
+set role service_role;
+select pg_temp.assert(public.process_saved_search_alerts(100) = 0, 'SS100-5 brak nowego digestu');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id = :'SSA' and template = 'jobMatch') = 1,
+  'SS100-5b ta sama oferta nie trafia drugi raz (idempotencja wyszukiwanie+oferta)');
+-- Kontrola ujemna: bez wpisu w saved_search_alerts ta sama oferta poszłaby ponownie —
+-- to PK (wyszukiwanie, oferta) odcina duplikat, nie przypadek.
+delete from public.saved_search_alerts where saved_search_id = :'ss1';
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day' where id = :'ss1';
+set role service_role;
+select pg_temp.assert(public.process_saved_search_alerts(100) = 1,
+  'SS100-5c kontrola ujemna: bez rejestru alertów oferta wraca');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id = :'SSA' and template = 'jobMatch') = 2,
+  'SS100-5d kontrola ujemna: drugi e-mail pojawia się tylko po usunięciu rejestru');
+
+-- SS100-6 (KONTROLE UJEMNE): opt-out e-mail / in-app → alert zarejestrowany, bez wysyłki.
+update public.notification_preferences
+  set email_job_matches = false, in_app_enabled = false where profile_id = :'SSA';
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SSJ4',:'SSC','ss-j4','Magazynier SS dzienny','warehouse','permanent','Liège','Wallonie','active','pl', now());
+update public.saved_searches set next_run_at = now() - interval '1 minute' where id = :'ss1';
+set role service_role;
+select public.process_saved_search_alerts(100);
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.saved_search_alerts where saved_search_id = :'ss1' and job_id = :'SSJ4'),
+  'SS100-6 oferta zarejestrowana (po ponownym włączeniu nie wróci)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id = :'SSA' and template = 'jobMatch') = 2,
+  'SS100-6b opt-out email_job_matches → brak e-maila');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'SSA' and type = 'job_match') = 2,
+  'SS100-6c opt-out in_app_enabled → brak powiadomienia');
+update public.notification_preferences
+  set email_job_matches = true, in_app_enabled = true where profile_id = :'SSA';
+
+-- SS100-7: wyłączony alert nie jest przetwarzany; ponowne włączenie przesuwa watermark.
+set role authenticated; set app.current_uid = :'SSA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_saved_search_alerts(:'ss1', false) = false, 'SS100-7 alert wyłączony');
+reset role; reset app.current_uid;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SSJ5',:'SSC','ss-j5','Magazynier SS weekend','warehouse','permanent','Liège','Wallonie','active','pl', now() - interval '1 minute');
+update public.saved_searches set next_run_at = now() - interval '1 minute' where id = :'ss1';
+set role service_role;
+select pg_temp.assert(public.process_saved_search_alerts(100) = 0, 'SS100-7b wyłączony alert pominięty');
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.saved_search_alerts where job_id = :'SSJ5'),
+  'SS100-7c brak alertu przy wyłączonym wyszukiwaniu');
+set role authenticated; set app.current_uid = :'SSA'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts(:'ss1', true, 'weekly');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select last_checked_at >= now() - interval '5 seconds' and frequency = 'weekly'
+     and next_run_at > now() + interval '6 days' from public.saved_searches where id = :'ss1'),
+  'SS100-7d ponowne włączenie: watermark = teraz, częstotliwość tygodniowa');
+
+-- SS100-8: oferta firmy zablokowanej przez kandydata nie trafia do alertu.
+insert into public.candidate_company_blocks(candidate_id, company_id) values (:'SSA', :'SSC2');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SSJ6',:'SSC2','ss-j6','Magazynier SS blok','warehouse','permanent','Liège','Wallonie','active','pl', now() + interval '1 second'),
+  (:'SSJ7',:'SSC','ss-j7','Magazynier SS rano','warehouse','permanent','Liège','Wallonie','active','pl', now() + interval '1 second');
+update public.saved_searches set next_run_at = now() - interval '1 minute' where id = :'ss1';
+set role service_role;
+select public.process_saved_search_alerts(100);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.saved_search_alerts where job_id = :'SSJ6'),
+  'SS100-8 oferta zablokowanej firmy pominięta');
+select pg_temp.assert(
+  exists (select 1 from public.saved_search_alerts where job_id = :'SSJ7'),
+  'SS100-8b kontrola: oferta niezablokowanej firmy w tym samym przebiegu trafia do alertu');
+select pg_temp.assert(
+  not exists (select 1 from public.saved_search_alerts where job_id = :'SSJ5'),
+  'SS100-8c oferta opublikowana przy wyłączonym alercie nie wraca po włączeniu');
+
+-- SS100-9: usunięcie własnego wyszukiwania kasuje rejestr alertów.
+set role authenticated; set app.current_uid = :'SSA'; select pg_temp.assert_client_role();
+select public.delete_saved_search(:'ss1');
+select pg_temp.assert((select count(*) from public.saved_searches) = 1, 'SS100-9 wyszukiwanie usunięte');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.saved_search_alerts where saved_search_id = :'ss1'),
+  'SS100-9b rejestr alertów usunięty kaskadowo');
+
+-- SS100-10: jednostka widełek (0091) — wyszukiwanie „do 30 EUR/godz.” przekazuje
+-- p_salary_unit='hour' do get_public_jobs: stawka 50/godz. odpada, 20/godz. zostaje.
+-- Kontrola ujemna: te same kwoty w domyślnej jednostce (month) nie porównują stawek
+-- godzinowych, więc 50/godz. by przeszła — różnica dowodzi, że jednostka dociera do SQL.
+set role authenticated; set app.current_uid = :'SSB'; select pg_temp.assert_client_role();
+select saved_search_id as ss10 from public.save_saved_search('Sprzątanie godzinowe', 'nl',
+  '{"categories":["cleaning"],"salaryMin":15,"salaryMax":30,"salaryUnit":"hour"}') \gset
+select saved_search_id as ss10m from public.save_saved_search('Sprzątanie miesięczne', 'nl',
+  '{"categories":["cleaning"],"salaryMin":15,"salaryMax":30}') \gset
+select pg_temp.expect_error(
+  'select * from public.save_saved_search(''X'', ''nl'', ''{"categories":["cleaning"],"salaryUnit":"day"}'')',
+  'VALIDATION_FAILED', 'SS100-10 nieznana jednostka odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select filters ->> 'salaryUnit' from public.saved_searches where id = :'ss10') = 'hour'
+  and not (select filters ? 'salaryUnit' from public.saved_searches where id = :'ss10m'),
+  'SS100-10b jednostka godzinowa w filtrach kanonicznych, domyślna pominięta');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        published_at,salary_min,salary_max,salary_period) values
+  ('e9300000-0000-0000-0000-0000000000e1',:'SSC','ss-h20','Sprzątanie SS 20','cleaning','permanent',
+   'Liège','Wallonie','active','pl', now(), 20, 20, 'hour'),
+  ('e9300000-0000-0000-0000-0000000000e2',:'SSC','ss-h50','Sprzątanie SS 50','cleaning','permanent',
+   'Liège','Wallonie','active','pl', now(), 50, 50, 'hour');
+update public.saved_searches set next_run_at = now() - interval '1 minute' where id in (:'ss10', :'ss10m');
+set role service_role;
+select public.process_saved_search_alerts(100);
+reset role;
+select pg_temp.assert(
+  (select array_agg(job_id order by job_id) from public.saved_search_alerts where saved_search_id = :'ss10')
+    = array['e9300000-0000-0000-0000-0000000000e1'::uuid],
+  'SS100-10c jednostka godzinowa: 20/godz. w alercie, 50/godz. odpada');
+select pg_temp.assert(
+  exists (select 1 from public.saved_search_alerts
+            where saved_search_id = :'ss10m' and job_id = 'e9300000-0000-0000-0000-0000000000e2'),
+  'SS100-10d kontrola ujemna: bez jednostki stawka godzinowa nie jest porównywana (50/godz. przechodzi)');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- SQ101. Pytania screeningowe (0093, #101): zapis w szkicu (recruiter+, atomowo z krokiem),
+--        odpowiedzi walidowane w bazie razem z aplikacją, niezmienny snapshot, RLS odczytu.
+-- ============================================================================
+\set SQJOB  'f1010000-0000-0000-0000-0000000000a1'
+\set SQJOB2 'f1010000-0000-0000-0000-0000000000a2'
+\set SQMEM  'f1010000-0000-0000-0000-0000000000c1'
+\set SQCAND 'f1010000-0000-0000-0000-0000000000c2'
+\set SQCAND2 'f1010000-0000-0000-0000-0000000000c3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SQMEM','sqmem@test.be','Sq Mem','{"role":"employer","first_name":"Sq","last_name":"Mem","locale":"pl"}'),
+  (:'SQCAND','sqcand@test.be','Sq Cand','{"role":"candidate","first_name":"Sq","last_name":"Cand","locale":"fr"}'),
+  (:'SQCAND2','sqcand2@test.be','Sq Cand2','{"role":"candidate","first_name":"Sq","last_name":"Cand2","locale":"nl"}');
+insert into public.company_members(company_id, profile_id, role, is_active) values (:'COMPA', :'SQMEM', 'member', true);
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'SQJOB', :'COMPA', :'EMPA', 'draft-sq101', 'Kierowca C+E', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
+  (:'SQJOB2', :'COMPA', :'EMPA', 'draft-sq101-2', 'Magazynier', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+
+-- SQ101-1: recruiter+ zapisuje pytania krokiem kreatora (razem z inną relacją kroku).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'SQJOB'::uuid, $j${
+  "certificates": ["VCA"],
+  "screening_questions": [
+    {"type": "yes_no", "required": true, "prompt": {"pl": "  Masz prawo jazdy C+E? ", "fr": "Permis C+E ?", "en": ""}},
+    {"type": "single_choice", "required": true, "prompt": {"pl": "Jak dojedziesz?"},
+     "options": [{"label": {"pl": "Własny samochód", "nl": "Eigen auto"}}, {"label": {"pl": "Komunikacja"}}]},
+    {"type": "date", "required": false, "prompt": {"pl": "Od kiedy możesz zacząć?"}},
+    {"type": "short_text", "prompt": {"pl": "Doświadczenie z tachografem?"}}
+  ]
+}$j$::jsonb);
+select count(*) = 4 as ok from public.job_screening_questions where job_id = :'SQJOB' \gset sq1_
+select pg_temp.assert(:'sq1_ok'::boolean, 'SQ101-1 członek recruiter+ czyta 4 zapisane pytania');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select prompt = '{"pl": "Masz prawo jazdy C+E?", "fr": "Permis C+E ?"}'::jsonb and required and type = 'yes_no'
+     from public.job_screening_questions where job_id = :'SQJOB' and position = 0)
+  and (select options = '[{"id": "o1", "label": {"pl": "Własny samochód", "nl": "Eigen auto"}},
+                          {"id": "o2", "label": {"pl": "Komunikacja"}}]'::jsonb
+         from public.job_screening_questions where job_id = :'SQJOB' and position = 1)
+  and (select not required from public.job_screening_questions where job_id = :'SQJOB' and position = 3)
+  and (select array_agg(certificate_label) from public.job_certificates where job_id = :'SQJOB') = array['VCA'],
+  'SQ101-1b treść przycięta, pusty język pominięty, id opcji nadane przez bazę, krok zapisany w całości');
+
+-- SQ101-2 (kontrola ujemna): member bez recruiter+ i inna firma nie zapisują pytań.
+set role authenticated; set app.current_uid = :'SQMEM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB', '[]'),
+  'PERMISSION_DENIED', 'SQ101-2 member nie ustala pytań');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'SQJOB', '{"screening_questions": []}'),
+  'PERMISSION_DENIED', 'SQ101-2b member nie zapisuje pytań krokiem kreatora');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB', '[]'),
+  'PERMISSION_DENIED', 'SQ101-2c inna firma nie ustala pytań');
+select count(*) = 0 as ok from public.job_screening_questions where job_id = :'SQJOB' \gset sq2_
+select pg_temp.assert(:'sq2_ok'::boolean, 'SQ101-2d inna firma nie czyta pytań szkicu');
+reset role; reset app.current_uid;
+
+-- SQ101-3 (kontrola ujemna): walidacja w bazie — limity, typy, język oferty; błąd cofa cały krok.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    (select jsonb_agg(jsonb_build_object('type', 'yes_no', 'prompt', jsonb_build_object('pl', 'P' || g)))
+       from generate_series(1, 11) g)),
+  'VALIDATION_FAILED', 'SQ101-3 więcej niż 10 pytań odrzucone');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    '[{"type": "single_choice", "prompt": {"pl": "X"}, "options": [{"label": {"pl": "Jedna"}}]}]'),
+  'VALIDATION_FAILED', 'SQ101-3b wybór z jedną opcją odrzucony');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    '[{"type": "yes_no", "prompt": {"fr": "Seulement FR"}}]'),
+  'VALIDATION_FAILED', 'SQ101-3c brak treści w języku oferty odrzucony');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    '[{"type": "yes_no", "prompt": {"pl": "X", "xx": "Y"}}]'),
+  'VALIDATION_FAILED', 'SQ101-3d nieobsługiwany język odrzucony');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    jsonb_build_array(jsonb_build_object('type', 'short_text', 'prompt', jsonb_build_object('pl', repeat('x', 301))))),
+  'VALIDATION_FAILED', 'SQ101-3e za długa treść odrzucona (bez cichego obcinania)');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    '[{"type": "yes_no", "prompt": {"pl": "X"}, "options": [{"label": {"pl": "A"}}]}]'),
+  'VALIDATION_FAILED', 'SQ101-3f opcje przy pytaniu tak/nie odrzucone');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    '[{"type": "number", "prompt": {"pl": "X"}}]'),
+  'VALIDATION_FAILED', 'SQ101-3g nieznany typ odrzucony');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'SQJOB',
+    '{"certificates": ["Inny"], "screening_questions": [{"type": "yes_no", "prompt": {}}]}'),
+  'VALIDATION_FAILED', 'SQ101-3h błędne pytanie odrzuca cały krok');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.job_screening_questions where job_id = :'SQJOB') = 4
+  and (select array_agg(certificate_label) from public.job_certificates where job_id = :'SQJOB') = array['VCA'],
+  'SQ101-3i odrzucone zapisy nie zmieniły pytań ani relacji kroku');
+
+-- SQ101-4 (kontrola ujemna): bezpośredni DML na pytaniach odebrany klientom.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('insert into public.job_screening_questions(job_id, position, type, prompt) values (%L, 5, %L, %L)',
+         :'SQJOB', 'yes_no', '{"pl": "Obejście"}'),
+  'permission denied', 'SQ101-4 bezpośredni INSERT pytań odrzucony');
+select pg_temp.expect_error(
+  format('update public.job_screening_questions set required = false where job_id = %L', :'SQJOB'),
+  'permission denied', 'SQ101-4b bezpośredni UPDATE pytań odrzucony');
+select pg_temp.expect_error(
+  format('delete from public.job_screening_questions where job_id = %L', :'SQJOB'),
+  'permission denied', 'SQ101-4c bezpośredni DELETE pytań odrzucony');
+reset role; reset app.current_uid;
+
+-- SQ101-5: szkic nie jest publiczny — anon nie widzi jego pytań; tabela bez dostępu dla anon.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select count(*) = 0 as ok from public.get_public_job_screening_questions(:'SQJOB') \gset sq5_
+select pg_temp.assert(:'sq5_ok'::boolean, 'SQ101-5 pytania szkicu niepubliczne');
+select pg_temp.expect_error('select count(*) from public.job_screening_questions',
+  'permission denied', 'SQ101-5b anon bez dostępu do tabeli pytań');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB', '[]'),
+  'permission denied', 'SQ101-5c anon nie woła set_job_screening_questions');
+reset role;
+
+-- Publikacja (superuser — kompletność publish_job testują sekcje P/Y).
+update public.jobs set status = 'active', published_at = now(), slug = 'sq101-kierowca' where id = :'SQJOB';
+select id as sq_yes from public.job_screening_questions where job_id = :'SQJOB' and position = 0 \gset
+select id as sq_choice from public.job_screening_questions where job_id = :'SQJOB' and position = 1 \gset
+select id as sq_date from public.job_screening_questions where job_id = :'SQJOB' and position = 2 \gset
+select id as sq_text from public.job_screening_questions where job_id = :'SQJOB' and position = 3 \gset
+
+-- SQ101-6 (kontrola ujemna): po publikacji pytań nie zmienia żadna ścieżka.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB', '[]'),
+  'JOB_NOT_DRAFT', 'SQ101-6 opublikowana oferta: pytań nie zmienia RPC');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'SQJOB', '{"screening_questions": []}'),
+  'JOB_NOT_DRAFT', 'SQ101-6b opublikowana oferta: pytań nie zmienia krok kreatora');
+reset role; reset app.current_uid;
+select pg_temp.expect_error(
+  format('update public.job_screening_questions set required = false where id = %L', :'sq_yes'),
+  'JOB_NOT_DRAFT', 'SQ101-6c strażnik blokuje zmianę pytań opublikowanej oferty także poza RPC');
+select pg_temp.expect_error(
+  format('insert into public.job_screening_questions(job_id, position, type, prompt) values (%L, 7, %L, %L)',
+         :'SQJOB', 'yes_no', '{"pl": "Nowe"}'),
+  'JOB_NOT_DRAFT', 'SQ101-6d strażnik blokuje dodanie pytania do opublikowanej oferty');
+
+-- SQ101-7: oferta publiczna — gość widzi pytania w kolejności.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select (array_agg(type order by position) = array['yes_no', 'single_choice', 'date', 'short_text']) as ok
+  from public.get_public_job_screening_questions(:'SQJOB') \gset sq7_
+select pg_temp.assert(:'sq7_ok'::boolean, 'SQ101-7 pytania publicznej oferty w kolejności');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L)', :'SQJOB', 'sq-anon'),
+  'permission denied', 'SQ101-7b anon nie aplikuje');
+reset role;
+
+-- SQ101-8 (kontrola ujemna): brak odpowiedzi na pytanie wymagane → błąd w bazie, brak aplikacji.
+set role authenticated; set app.current_uid = :'SQCAND'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, null)', :'SQJOB', 'sq-k0'),
+  'SCREENING_ANSWER_REQUIRED', 'SQ101-8 brak odpowiedzi na wymagane pytania');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', '  ')),
+  'SCREENING_ANSWER_REQUIRED: ' || :'sq_choice', 'SQ101-8b pusty tekst = brak odpowiedzi (id pytania w błędzie)');
+-- Złe typy/wartości → VALIDATION_FAILED.
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', 'tak', :'sq_choice', 'o1')),
+  'VALIDATION_FAILED', 'SQ101-8c tak/nie jako tekst odrzucone');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o9')),
+  'VALIDATION_FAILED', 'SQ101-8d nieznana opcja odrzucona');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o1', :'sq_date', '2026-02-30')),
+  'VALIDATION_FAILED', 'SQ101-8e nieistniejąca data odrzucona');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o1', :'sq_text', repeat('x', 501))),
+  'VALIDATION_FAILED', 'SQ101-8f za długa odpowiedź odrzucona');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o1', 'f1010000-0000-0000-0000-00000000dead', true)),
+  'VALIDATION_FAILED', 'SQ101-8g odpowiedź na pytanie spoza oferty odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.applications where job_id = :'SQJOB')
+  and not exists (select 1 from public.email_deliveries e join public.applications a on a.id = e.entity_id where a.job_id = :'SQJOB'),
+  'SQ101-8h odrzucone próby nie zostawiły aplikacji ani e-maili');
+
+-- SQ101-9: poprawna aplikacja zapisuje snapshot odpowiedzi; retry = ta sama aplikacja bez zmian.
+set role authenticated; set app.current_uid = :'SQCAND'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SQJOB'::uuid, 'sq-k1', null, 'immediate', null,
+  jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o2', :'sq_date', '2026-10-01')) as sqapp \gset
+select public.apply_to_job(:'SQJOB'::uuid, 'sq-k1', null, 'immediate', null,
+  jsonb_build_object(:'sq_yes', false, :'sq_choice', 'o1', :'sq_text', 'Inna odpowiedź')) = :'sqapp'::uuid as ok \gset sq9_
+select pg_temp.assert(:'sq9_ok'::boolean, 'SQ101-9 retry z tym samym kluczem = ta sama aplikacja');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k2',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o1')),
+  'APPLICATION_ALREADY_EXISTS', 'SQ101-9b inny klucz = istniejąca aplikacja');
+select (count(*) = 4
+        and bool_and(case position
+              when 0 then answer_boolean is true and prompt->>'pl' = 'Masz prawo jazdy C+E?'
+              when 1 then answer_text = 'o2' and options->1->'label'->>'pl' = 'Komunikacja'
+              when 2 then answer_date = date '2026-10-01'
+              else answer_text is null and answer_boolean is null and not required end)) as ok
+  from public.application_screening_answers where application_id = :'sqapp' \gset sq9c_
+select pg_temp.assert(:'sq9c_ok'::boolean,
+  'SQ101-9c kandydat widzi własne odpowiedzi; retry ich nie nadpisał; pytanie opcjonalne bez odpowiedzi zachowane');
+-- SQ101-10 (kontrola ujemna): odpowiedzi niezmienne i bez DML dla klienta.
+select pg_temp.expect_error(
+  format('update public.application_screening_answers set answer_boolean = false where application_id = %L', :'sqapp'),
+  'permission denied', 'SQ101-10 kandydat nie zmienia odpowiedzi');
+select pg_temp.expect_error(
+  format('insert into public.application_screening_answers(application_id, position, type, required, prompt) values (%L, 9, %L, false, %L)',
+         :'sqapp', 'short_text', '{"pl": "x"}'),
+  'permission denied', 'SQ101-10b kandydat nie dopisuje odpowiedzi');
+select pg_temp.expect_error(
+  format('delete from public.application_screening_answers where application_id = %L', :'sqapp'),
+  'permission denied', 'SQ101-10c kandydat nie usuwa odpowiedzi');
+reset role; reset app.current_uid;
+select pg_temp.expect_error(
+  format('update public.application_screening_answers set answer_boolean = false where application_id = %L', :'sqapp'),
+  'niezmienne', 'SQ101-10d odpowiedzi niezmienne także poza rolą klienta');
+select pg_temp.expect_error(
+  format('insert into public.application_screening_answers(application_id, position, type, required, prompt) values (%L, 9, %L, true, %L)',
+         :'sqapp', 'yes_no', '{"pl": "x"}'),
+  'application_screening_answers_required', 'SQ101-10e wymagane pytanie bez odpowiedzi odrzuca CHECK w bazie');
+
+-- SQ101-11: odczyt — recruiter+ firmy oferty tak; member, inna firma i inny kandydat nie.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) = 4 as ok from public.application_screening_answers where application_id = :'sqapp' \gset sq11_
+select pg_temp.assert(:'sq11_ok'::boolean, 'SQ101-11 recruiter+ firmy oferty czyta odpowiedzi');
+select pg_temp.expect_error(
+  format('update public.application_screening_answers set answer_text = %L where application_id = %L', 'x', :'sqapp'),
+  'permission denied', 'SQ101-11b pracodawca nie zmienia odpowiedzi');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SQMEM'; select pg_temp.assert_client_role();
+select count(*) = 0 as ok from public.application_screening_answers where application_id = :'sqapp' \gset sq11c_
+select pg_temp.assert(:'sq11c_ok'::boolean, 'SQ101-11c member bez recruiter+ nie czyta odpowiedzi');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select count(*) = 0 as ok from public.application_screening_answers \gset sq11d_
+select pg_temp.assert(:'sq11d_ok'::boolean, 'SQ101-11d inna firma nie czyta odpowiedzi');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SQCAND2'; select pg_temp.assert_client_role();
+select count(*) = 0 as ok from public.application_screening_answers \gset sq11e_
+select pg_temp.assert(:'sq11e_ok'::boolean, 'SQ101-11e inny kandydat nie czyta cudzych odpowiedzi');
+reset role; reset app.current_uid;
+
+-- SQ101-12: zmiana pytania po złożeniu aplikacji (ręczna, z pominięciem strażnika) nie zmienia
+-- historycznej treści w zgłoszeniu — snapshot jest niezależny od pytania.
+set session_replication_role = replica;
+update public.job_screening_questions set prompt = '{"pl": "Zmienione pytanie"}', required = false where id = :'sq_yes';
+delete from public.job_screening_questions where id = :'sq_choice';
+set session_replication_role = origin;
+select pg_temp.assert(
+  (select prompt->>'pl' = 'Masz prawo jazdy C+E?' and required and question_id = :'sq_yes'::uuid
+     from public.application_screening_answers where application_id = :'sqapp' and position = 0)
+  and (select answer_text = 'o2' and jsonb_array_length(options) = 2 and prompt->>'pl' = 'Jak dojedziesz?'
+         from public.application_screening_answers where application_id = :'sqapp' and position = 1),
+  'SQ101-12 snapshot zachowuje treść pytania i opcje po zmianie/usunięciu pytania');
+
+-- SQ101-13: oferta bez pytań — aplikacja bez odpowiedzi jak dotąd; odpowiedź do nieistniejącego pytania odrzucona.
+update public.jobs set status = 'active', published_at = now(), slug = 'sq101-magazynier' where id = :'SQJOB2';
+set role authenticated; set app.current_uid = :'SQCAND2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB2', 'sq2-k0',
+         jsonb_build_object(:'sq_date', '2026-10-01')),
+  'VALIDATION_FAILED', 'SQ101-13 odpowiedź na pytanie innej oferty odrzucona');
+select public.apply_to_job(:'SQJOB2'::uuid, 'sq2-k1', null, null, null) is not null as ok \gset sq13_
+select pg_temp.assert(:'sq13_ok'::boolean, 'SQ101-13b oferta bez pytań: aplikacja jak dotąd');
 reset role; reset app.current_uid;
 
 -- ============================================================================
