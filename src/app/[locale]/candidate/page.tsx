@@ -1,10 +1,26 @@
 import type { Metadata } from 'next';
-import { MapPin } from 'lucide-react';
+import { ArrowRight, MapPin } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
-import { Button } from '@/components/ui/button';
-import { StatCard } from '@/components/ui/stat-card';
+import { PanelStats } from '@/components/dashboard/PanelStats';
+import {
+  BTN_PRIMARY,
+  EMPTY,
+  EYEBROW,
+  H1,
+  ICON_BOX,
+  INTRO,
+  PANEL,
+  PANEL_H2,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  SECTION_HEAD,
+  TEXT_LINK,
+} from '@/components/dashboard/panel-styles';
+import { DASH_GRID, DASH_GRID_MAIN, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
+import { cn } from '@/lib/utils';
 import { MatchBar } from '@/components/ui/match-bar';
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
@@ -29,7 +45,8 @@ import { loadCandidateFiles } from '@/lib/data/candidate-files';
 import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 
 /**
- * Panel kandydata — Podsumowanie w stylu Paszportu pracy.
+ * Panel kandydata — Podsumowanie. Wygląd: kalka `#people/candidate` z prototypu „04 Ludzie
+ * i praca” (klasy z `panel-styles.ts` i `candidate-styles.ts`).
  *
  * Dane realne z bazy pod sesją użytkownika (RLS) przez `@/lib/data/candidate`; bez env te same
  * struktury z danymi DEMO. NOINDEX (dziedziczone z layoutu panelu). Akcje (zapis oferty, wycofanie
@@ -88,15 +105,17 @@ export default async function CandidateDashboardPage({
   const checklist = profileChecklistItems(profile.checklist, td('add'), to);
 
   return (
-    <div className="min-w-0 space-y-6">
-      {/* Powitanie */}
-      <header className="min-w-0 rounded-[1.75rem] border border-border bg-card p-5 sm:p-8">
-        <h1 className="break-words text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+    <div className="min-w-0">
+      {/* Powitanie — `candidate()` z prototypu: `.eyebrow`, `.dash-content h1`, `.dash-intro`. */}
+      <header className="min-w-0">
+        <p className={EYEBROW}>{td('candidateEyebrow')}</p>
+        <h1 className={H1}>
           {profile.firstName ? td('greeting', { name: profile.firstName }) : td('greetingNoName')}
         </h1>
+        <p className={cn(INTRO, 'mb-[25px] mt-2')}>{td('candidateIntro')}</p>
       </header>
 
-      {/* Baner wyłącznie dla rzeczywistej propozycji oczekującej na odpowiedź. */}
+      {/* Baner wyłącznie dla rzeczywistej propozycji oczekującej na odpowiedź (`.notice`). */}
       {newProposal ? (
         <NewProposalBanner
           status={newProposal.status}
@@ -104,93 +123,96 @@ export default async function CandidateDashboardPage({
         />
       ) : null}
 
-      {/* Statystyki — licznik bez udanego odczytu pokazuje „—", nigdy fałszywe zero (#244). */}
+      {/* Statystyki (`.stats`) — licznik bez udanego odczytu pokazuje „—", nigdy fałszywe zero (#244). */}
       {overviewFailed ? (
-        <div className="rounded-[1.75rem] border border-border bg-card">
+        <div className={cn(PANEL, 'mt-[22px]')}>
           <CandidateSectionError message={td('candidateOverviewLoadError')} retry={td('candidateListRetry')} />
         </div>
       ) : null}
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label={td('newJobs')}
-          value={overview.newJobsCount ?? '—'}
-          sub={overview.newJobsCount === null ? td('candidateStatLoadError') : td('newJobsSub')}
-        />
-        <StatCard
-          label={td('activeApplications')}
-          value={overview.activeApplicationsCount ?? '—'}
-          sub={overview.activeApplicationsCount === null ? td('candidateStatLoadError') : td('activeApplicationsSub')}
-        />
-        <StatCard
-          label={td('unreadMessages')}
-          value={overview.unreadMessagesCount ?? '—'}
-          sub={overview.unreadMessagesCount === null ? td('candidateStatLoadError') : td('unreadMessagesSub')}
-          tone={overview.unreadMessagesCount === null ? undefined : 'error'}
-        />
-        {profile.loadFailed ? (
-          <StatCard label={td('profileCompleteness')} value="—" sub={tp('loadError')} />
-        ) : (
-          <StatCard label={td('profileCompleteness')} value={`${profile.completionPct}%`} tone="accent" progress={profile.completionPct} />
-        )}
-      </div>
+      <PanelStats
+        items={[
+          {
+            label: td('newJobs'),
+            value: overview.newJobsCount ?? '—',
+            sub: overview.newJobsCount === null ? td('candidateStatLoadError') : td('newJobsSub'),
+          },
+          {
+            label: td('activeApplications'),
+            value: overview.activeApplicationsCount ?? '—',
+            sub:
+              overview.activeApplicationsCount === null
+                ? td('candidateStatLoadError')
+                : td('activeApplicationsSub'),
+          },
+          {
+            label: td('unreadMessages'),
+            value: overview.unreadMessagesCount ?? '—',
+            sub:
+              overview.unreadMessagesCount === null
+                ? td('candidateStatLoadError')
+                : td('unreadMessagesSub'),
+          },
+          profile.loadFailed
+            ? { label: td('profileCompleteness'), value: '—', sub: tp('loadError') }
+            : { label: td('profileCompleteness'), value: `${profile.completionPct}%` },
+        ]}
+      />
 
-      {/* Główna siatka: lewa (2/3) + prawa (1/3) */}
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-        <div className="min-w-0 space-y-6">
-          {/* Polecane oferty pracy */}
-          <section className="min-w-0 rounded-[1.75rem] border border-border bg-card">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-[1.75rem] border-b border-border bg-soft p-5 sm:px-7">
-              <h2 className="text-xl font-bold text-foreground">{td('recommendedJobs')}</h2>
-              <Link
-                href="/candidate/oferty-polecane"
-                className="inline-flex min-h-11 items-center break-words text-sm font-semibold text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
+      {/* `.people .dash-grid` — 1.4fr / 1fr, odstęp 19 px. */}
+      <div className={DASH_GRID}>
+        <div className={DASH_GRID_MAIN}>
+          {/* Polecane oferty pracy — `.panel` z wierszami `.job` */}
+          <section className={PANEL}>
+            <div className={SECTION_HEAD}>
+              <h2 className={PANEL_H2}>{td('recommendedJobs')}</h2>
+              <Link href="/candidate/oferty-polecane" className={TEXT_LINK}>
                 {td('seeAll')}
+                <ArrowRight className="size-3.5" aria-hidden="true" />
               </Link>
             </div>
             {recommended.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground sm:px-5">{tj('empty')}</p>
+              <p className={EMPTY}>{tj('empty')}</p>
             ) : (
-              <ul className="divide-y divide-border">
+              <ul className="min-w-0">
                 {recommended.map((job) => (
-                  <li key={job.id} className="flex min-w-0 items-start gap-3 p-5 sm:px-7">
-                    <span
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-                      aria-hidden="true"
-                    >
+                  <li key={job.id} className={ROW}>
+                    <span className={ICON_BOX} aria-hidden="true">
                       {initials(job.companyName)}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-start justify-between gap-2">
                         <div className="min-w-0">
                           {job.slug ? (
-                            <Link
-                              href={`/oferty-pracy/${job.slug}`}
-                              className="block max-w-full break-words text-base font-semibold text-foreground hover:text-accent hover:underline"
-                            >
-                              {job.title}
-                            </Link>
+                            <h3 className={ROW_TITLE}>
+                              <Link
+                                href={`/oferty-pracy/${job.slug}`}
+                                className="break-words hover:text-primary hover:underline"
+                              >
+                                {job.title}
+                              </Link>
+                            </h3>
                           ) : (
-                            <p className="break-words text-base font-semibold text-foreground">{job.title}</p>
+                            <h3 className={ROW_TITLE}>{job.title}</h3>
                           )}
-                          <p className="break-words text-sm text-muted-foreground">{job.companyName}</p>
+                          <p className={ROW_META}>
+                            {job.companyName}
+                            <span aria-hidden="true"> · </span>
+                            <span className="inline-flex items-center gap-1">
+                              <MapPin className="size-3 shrink-0" aria-hidden="true" />
+                              {job.city}
+                            </span>
+                          </p>
                         </div>
                         <SaveJobButton jobId={job.id} initialSaved={job.saved} className="-mt-1" />
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <span className="inline-flex min-w-0 items-center gap-1 break-words text-sm text-muted-foreground">
-                          <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                          {job.city}
-                        </span>
-                        {job.match !== null ? (
-                          <span className="flex min-w-[7rem] max-w-[11rem] flex-1 items-center gap-2">
-                            <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-success-text">
-                              {job.match}%
-                            </span>
-                            <MatchBar value={job.match} className="flex-1" />
+                      {job.match !== null ? (
+                        <span className="mt-2.5 flex min-w-[7rem] max-w-[14rem] items-center gap-2">
+                          <span className="w-9 shrink-0 text-right text-xs font-semibold tabular-nums text-success-text">
+                            {job.match}%
                           </span>
-                        ) : null}
-                      </div>
+                          <MatchBar value={job.match} className="flex-1" />
+                        </span>
+                      ) : null}
                     </div>
                   </li>
                 ))}
@@ -213,20 +235,20 @@ export default async function CandidateDashboardPage({
         </div>
 
         {/* Kolumna boczna */}
-        <div className="min-w-0 space-y-6">
-          {/* Kompletność profilu */}
-          {profile.loadFailed ? <ProfileSummaryError message={tp('loadError')} retry={tc('retry')} /> : <section className="min-w-0 rounded-[1.75rem] border border-border bg-card p-5 sm:p-6">
-            <h2 className="text-xl font-bold text-foreground">{td('profileCompleteness')}</h2>
+        <div className={DASH_GRID_SIDE}>
+          {/* Kompletność profilu — `.panel`: h2, opis, `.progress`, `.checklist`, `.btn`. */}
+          {profile.loadFailed ? <ProfileSummaryError message={tp('loadError')} retry={tc('retry')} /> : <section className={PANEL}>
+            <h2 className={PANEL_H2}>{td('profileCompleteness')}</h2>
             <ProfileCompleteness
-              className="mt-4"
+              className="mt-2"
               value={profile.completionPct}
               title={getProfileLevelTitle(profile.completionPct, td('goodLevel'))}
               hint={td('completenessHint')}
             />
-            <ProfileChecklist className="mt-5" items={checklist} />
-            <Button asChild className="mt-5 min-h-12 w-full whitespace-normal rounded-xl text-center">
-              <Link href="/candidate/profil">{td('completeProfile')}</Link>
-            </Button>
+            <ProfileChecklist items={checklist} />
+            <Link href="/candidate/profil" className={cn(BTN_PRIMARY, 'w-full')}>
+              {td('completeProfile')}
+            </Link>
           </section>}
 
           {/* Dokumenty / CV (prywatny bucket + signed URLs) */}

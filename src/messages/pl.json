@@ -118,7 +118,23 @@
     "editVerifiedHint": "Zmiana nazwy lub numeru VAT/KBO zweryfikowanej firmy wymaga ponownej weryfikacji. Do czasu zatwierdzenia oferty firmy nie będą widoczne publicznie, a publikacja i wysyłka propozycji zostaną wstrzymane.",
     "savedReverification": "Dane firmy zostały zapisane. Firma wróciła do weryfikacji — administrator sprawdzi nowe dane.",
     "onboardingEyebrow": "Konto pracodawcy",
-    "bannerReasonLabel": "Uzasadnienie administratora"
+    "bannerReasonLabel": "Uzasadnienie administratora",
+    "moderationTitle": "Decyzje moderacyjne",
+    "moderationLoadError": "Nie udało się wczytać decyzji moderacyjnych. Odśwież stronę.",
+    "moderationJobRemoved": "Oferta wycofana z serwisu",
+    "moderationCompanySuspended": "Firma i jej oferty zawieszone",
+    "moderationReference": "Numer decyzji",
+    "moderationDecidedAt": "Data decyzji",
+    "moderationFacts": "Ustalone fakty",
+    "moderationGround": "Podstawa",
+    "moderationGroundTerms": "Regulamin serwisu",
+    "moderationGroundLaw": "Przepis prawa",
+    "moderationAutomation": "Automatyzacja",
+    "moderationAutomatedYes": "Treść wykryto lub oznaczono automatycznie; decyzję podjął człowiek.",
+    "moderationAutomatedNo": "Bez wykrycia automatycznego; decyzję podjął człowiek.",
+    "moderationRestoredAt": "Ograniczenie cofnięte",
+    "moderationRedress": "Jeśli nie zgadzasz się z decyzją, napisz do nas przez stronę Pomoc i podaj numer decyzji {reference}.",
+    "moderationLegalPlaceholder": "Informacja prawna o środkach odwoławczych od decyzji moderacyjnych — do uzupełnienia przez właściciela serwisu."
   },
   "common": {
     "appName": "Pracuj.be",
@@ -606,6 +622,7 @@
     "jobImportNotAListing": "Nie znaleźliśmy tu ogłoszenia o pracę. Sprawdź plik lub link.",
     "jobImportFailed": "Nie udało się odczytać ogłoszenia. Spróbuj ponownie albo wypełnij formularz ręcznie.",
     "savedSearchLimitReached": "Masz już 20 zapisanych wyszukiwań. Usuń jedno z nich, aby dodać nowe.",
+    "moderationLocked": "Ta treść jest ograniczona decyzją moderacyjną, więc nie można zmienić jej statusu.",
     "guestApplyUnavailable": "Aplikacja bez konta jest chwilowo niedostępna. Spróbuj później albo zaloguj się.",
     "emailNotVerified": "Najpierw potwierdź adres e-mail swojego konta — kliknij link, który wysłaliśmy przy rejestracji.",
     "claimExpired": "Link do przypisania aplikacji wygasł (był ważny 30 dni)."
@@ -905,7 +922,15 @@
     "navSearches": "Zapisane wyszukiwania",
     "employerApplicationGuestBadge": "Bez konta",
     "employerApplicationGuestHint": "Kandydat aplikował bez konta Pracuj.be i potwierdził adres e-mail. Skontaktuj się e-mailem lub telefonem — wiadomości w serwisie będą dostępne, gdy przypisze aplikację do konta.",
-    "employerApplicationEmail": "E-mail"
+    "employerApplicationEmail": "E-mail",
+    "candidateEyebrow": "Twój następny krok",
+    "candidateIntro": "Twoje aplikacje, propozycje i możliwości — w jednym miejscu.",
+    "candidatePlaceEyebrow": "Twoje miejsce",
+    "applicationStepSent": "Zgłoszenie wysłane",
+    "applicationStepReview": "Pracodawca przegląda",
+    "applicationStepInterview": "Rozmowa",
+    "applicationStepDecision": "Decyzja",
+    "employerPlaceEyebrow": "Twoja rekrutacja"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1022,7 +1047,8 @@
     "stepAnnounce": "Krok {current} z {total}: {title}",
     "agreeTermsLinks": "Akceptuję <terms>regulamin</terms> i <privacy>politykę prywatności</privacy>.",
     "opensInNewTab": "(otwiera się w nowej karcie)",
-    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy."
+    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy.",
+    "eyebrow": "PASZPORT PRACY"
   },
   "filters": {
     "title": "Filtry",
@@ -1102,7 +1128,10 @@
     "itemCompanyRejected": "Twoja firma nie przeszła weryfikacji",
     "itemCompanySuspended": "Twoja firma została zawieszona",
     "itemTeamInvitation": "Zaproszenie do zespołu firmy",
-    "itemSavedSearch": "Nowe oferty dla zapisanego wyszukiwania"
+    "itemSavedSearch": "Nowe oferty dla zapisanego wyszukiwania",
+    "itemModerationJobRemoved": "Oferta wycofana decyzją moderacyjną",
+    "itemModerationCompanySuspended": "Firma zawieszona decyzją moderacyjną",
+    "itemModerationRestored": "Ograniczenie treści zostało cofnięte"
   },
   "pricing": {
     "standard": "Standard",
@@ -1725,7 +1754,49 @@
     "caseEventStatus": "status: {status}",
     "reasonImpersonation": "Podszywanie się",
     "reasonIllegalConditions": "Warunki pracy niezgodne z prawem",
-    "reasonDataMisuse": "Niewłaściwe wykorzystanie danych"
+    "reasonDataMisuse": "Niewłaściwe wykorzystanie danych",
+    "actionDecide": "Podejmij decyzję",
+    "actionRestore": "Cofnij ograniczenie",
+    "decisionDialogTitle": "Decyzja w sprawie {caseNumber}",
+    "decisionDialogHint": "Decyzja, jej skutek, stan sprawy i powiadomienia zapisują się razem. Jeśli którakolwiek część się nie powiedzie, nic się nie zmieni i sprawa pozostanie otwarta.",
+    "decisionLabel": "Rozstrzygnięcie",
+    "decisionNoAction": "Brak działań — treść nie narusza zasad",
+    "decisionJobRemoved": "Wycofanie oferty z serwisu",
+    "decisionCompanySuspended": "Zawieszenie firmy i wszystkich jej ofert",
+    "decisionFactsLabel": "Fakty i okoliczności",
+    "decisionFactsHint": "Co ustalono w sprawie (od {min} do {max} znaków). Przy ograniczeniu treści ten opis otrzyma jej autor.",
+    "decisionGroundLabel": "Podstawa ograniczenia",
+    "decisionGroundTerms": "Regulamin serwisu",
+    "decisionGroundLaw": "Przepis prawa",
+    "decisionGroundReferenceLabel": "Wskazanie postanowienia",
+    "decisionGroundReferenceHint": "Numer punktu regulaminu albo przepisu ({min}–{max} znaków).",
+    "decisionAutomatedLabel": "Treść wykryto lub oznaczono automatycznie",
+    "decisionAutomatedHint": "Informacja do uzasadnienia. Decyzję zawsze podejmuje człowiek.",
+    "decisionNotifyRestrict": "Autor treści otrzyma uzasadnienie w swoim języku, a zgłaszający — sam wynik sprawy.",
+    "decisionNotifyNoAction": "Treść pozostaje bez zmian. Zgłaszający otrzyma wynik sprawy w swoim języku.",
+    "decisionConfirm": "Zapisz decyzję",
+    "decisionSaved": "Decyzja zapisana, sprawa rozstrzygnięta.",
+    "decisionErrorRequired": "To pole jest wymagane.",
+    "decisionErrorTooShort": "Wpisz co najmniej {min} znaków.",
+    "decisionErrorTooLong": "Wpisz najwyżej {max} znaków.",
+    "decisionErrorScope": "To rozstrzygnięcie nie pasuje do celu zgłoszenia.",
+    "decisionSummaryTitle": "Decyzja {reference}",
+    "decisionSummaryGround": "Podstawa: {ground} — {reference}",
+    "decisionSummaryAutomated": "Wykrycie automatyczne: tak",
+    "decisionSummaryManual": "Wykrycie automatyczne: nie",
+    "decisionSummaryRestored": "Ograniczenie cofnięte {date}: {reason}",
+    "restoreDialogTitle": "Cofnięcie decyzji {reference}",
+    "restoreDialogHint": "Treść wróci do stanu sprzed decyzji, chyba że ogranicza ją inna decyzja. Autor otrzyma powód cofnięcia. Sprawa pozostaje rozstrzygnięta.",
+    "restoreReasonLabel": "Powód cofnięcia",
+    "restoreReasonHint": "Od {min} do {max} znaków. Trafi do autora treści i do dziennika zdarzeń.",
+    "restoreSaved": "Ograniczenie cofnięte.",
+    "caseEventDecision": "decyzja moderacyjna",
+    "caseEventRestored": "cofnięcie ograniczenia",
+    "caseEventFlagged": "oznaczono do przeglądu",
+    "casePriority": "Priorytet przeglądu: {priority}",
+    "caseFlag": "Sygnał automatu: {flag}",
+    "auditActionModerationDecided": "Decyzja moderacyjna",
+    "auditActionModerationRestored": "Cofnięcie ograniczenia"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -2139,7 +2210,10 @@
       "caseNumberInvalid": "Numer sprawy ma format DSA-XXXX-XXXX-XXXX-XXXX.",
       "accessCodeRequired": "Podaj kod dostępu.",
       "accessCodeInvalid": "Kod dostępu ma 24 znaki: litery A–Z i cyfry 2–7."
-    }
+    },
+    "outcomeLabel": "Wynik",
+    "outcomeActionTaken": "Podjęliśmy działania wobec zgłoszonej treści.",
+    "outcomeNoAction": "Po analizie nie podjęliśmy działań wobec zgłoszonej treści."
   },
   "campaignBanner": {
     "eyebrow": "Oferta pracy w Belgii",

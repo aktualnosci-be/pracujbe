@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0099_campaign_job_source.sql
+-- 0102_campaign_job_source.sql
 -- Zaufany odczyt oferty do materiałów kampanii (#186, #175).
 --
 -- Problem: eksport grafik (post 1080×1080 z #181, baner kampanii z #175) brał dane z
@@ -17,7 +17,7 @@
 --   Każdy brak (nie istnieje / demo / nieaktywna / wygasła / cudza / firma niezweryfikowana)
 --   daje ten sam pusty wynik. Bez PII: brak kontaktów, członków firmy, opisu i identyfikatorów.
 --
--- Rollback: supabase/rollback/0099_campaign_job_source.down.sql.
+-- Rollback: supabase/rollback/0102_campaign_job_source.down.sql.
 -- Dowód: supabase/tests/rls.sql sekcja CJ186.
 -- =============================================================================
 

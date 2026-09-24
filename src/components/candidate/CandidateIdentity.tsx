@@ -4,6 +4,9 @@ import type {
   CandidatePassport,
   CandidateProfileSummary,
 } from "@/lib/data/candidate";
+import { EYEBROW, PROFILE_AVATAR, STATUS_GOOD } from "@/components/dashboard/panel-styles";
+import { PROFILE_BANNER } from "@/components/candidate/candidate-styles";
+import { cn } from "@/lib/utils";
 
 interface CandidateIdentityProps {
   profile: CandidateProfileSummary;
@@ -42,37 +45,37 @@ export function CandidateIdentity({
       aria-labelledby={loadFailed ? undefined : "candidate-identity-heading"}
       aria-label={loadFailed ? labels.eyebrow : undefined}
       data-testid="candidate-identity"
-      className="min-w-0 overflow-hidden rounded-[1.75rem] bg-soft p-5 sm:p-7"
+      className={cn(PROFILE_BANNER, "block")}
     >
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-accent">
+      <p className={EYEBROW}>
         {labels.eyebrow}
       </p>
       {loadFailed ? (
-        <p role="alert" className="mt-4 text-sm text-error">
+        <p role="alert" className="mt-4 text-[15px] text-error">
           {labels.loadError}
         </p>
       ) : (
-        <div className="mt-4 flex min-w-0 flex-wrap items-center gap-4 sm:gap-6">
+        <div className="mt-4 flex min-w-0 flex-wrap items-center gap-5 max-[600px]:gap-3.5">
           <span
             aria-hidden="true"
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.25rem] bg-foreground text-background"
+            className={PROFILE_AVATAR}
           >
             <UserRound className="h-8 w-8" />
           </span>
           <div className="min-w-0 flex-1">
             <h2
               id="candidate-identity-heading"
-              className="[overflow-wrap:anywhere] text-2xl font-bold tracking-tight text-foreground sm:text-3xl"
+              className="m-0 text-[23px] font-bold leading-[1.3] tracking-[-0.025em] text-foreground [overflow-wrap:anywhere] max-[600px]:text-[21px]"
             >
               {firstName || labels.emptyName}
             </h2>
             {hasIdentity ? (
-              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground sm:text-base">
+              <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 text-[15px] leading-[1.7] text-muted-foreground">
                 {occupation ? (
                   <span className="inline-flex min-w-0 items-center gap-2 [overflow-wrap:anywhere]">
                     <BriefcaseBusiness
                       aria-hidden="true"
-                      className="h-4 w-4 shrink-0 text-accent"
+                      className="h-4 w-4 shrink-0 text-primary"
                     />
                     {occupation}
                   </span>
@@ -81,14 +84,14 @@ export function CandidateIdentity({
                   <span className="inline-flex min-w-0 items-center gap-2 [overflow-wrap:anywhere]">
                     <MapPin
                       aria-hidden="true"
-                      className="h-4 w-4 shrink-0 text-accent"
+                      className="h-4 w-4 shrink-0 text-primary"
                     />
                     {city}
                   </span>
                 ) : null}
               </div>
             ) : (
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="mt-1.5 text-[15px] leading-[1.7] text-muted-foreground">
                 {labels.emptyIdentity}
               </p>
             )}
@@ -96,7 +99,7 @@ export function CandidateIdentity({
           {labels.availability ? (
             <span
               data-testid="candidate-identity-availability"
-              className="max-w-full break-words rounded-lg bg-success/10 px-3 py-2 text-sm font-semibold text-success-text"
+              className={cn(STATUS_GOOD, "ml-auto max-[950px]:ml-0")}
             >
               <span className="sr-only">{labels.availabilityLabel} </span>
               {labels.availability}

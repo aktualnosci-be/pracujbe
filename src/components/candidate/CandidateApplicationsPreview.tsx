@@ -3,6 +3,9 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { ApplicationActions } from '@/components/candidate/ApplicationActions';
 import { CandidateSectionError } from '@/components/candidate/CandidateSectionError';
 import type { CandidateSectionLoad, MyApplication } from '@/lib/data/candidate';
+import { ArrowRight } from 'lucide-react';
+import { EMPTY, PANEL, PANEL_H2, ROW, ROW_META, ROW_TITLE, SECTION_HEAD, TEXT_LINK } from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 interface Labels {
   title: string;
@@ -34,50 +37,48 @@ export function CandidateApplicationsPreview({
   labels: Labels;
 }) {
   return (
-    <section className="min-w-0 rounded-[1.75rem] border border-border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-[1.75rem] border-b border-border bg-soft p-5 sm:px-7">
-        <h2 className="text-xl font-bold text-foreground">{labels.title}</h2>
-        <Link
-          href="/candidate/aplikacje"
-          className="inline-flex min-h-11 items-center break-words text-sm font-semibold text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
+    <section className={PANEL}>
+      <div className={SECTION_HEAD}>
+        <h2 className={PANEL_H2}>{labels.title}</h2>
+        <Link href="/candidate/aplikacje" className={TEXT_LINK}>
           {labels.seeAll}
+          <ArrowRight className="size-3.5" aria-hidden="true" />
         </Link>
       </div>
       {result.status === 'error' ? (
         <CandidateSectionError message={labels.loadError} retry={labels.retry} />
       ) : result.items.length === 0 ? (
-        <p className="p-4 text-sm text-muted-foreground sm:px-5">{labels.empty}</p>
+        <p className={EMPTY}>{labels.empty}</p>
       ) : (
-        <ul className="divide-y divide-border">
+        <ul className="min-w-0">
           {result.items.map((app) => {
             const date = formatDate(app.date, locale);
             return (
-              <li key={app.id} className="flex min-w-0 flex-wrap items-start gap-3 p-5 sm:px-7">
+              <li key={app.id} className={cn(ROW, 'flex-wrap items-start')}>
                 <div className="min-w-0 flex-1">
                   {app.slug ? (
-                    <Link
-                      href={`/oferty-pracy/${app.slug}`}
-                      className="block max-w-full break-words text-base font-semibold text-foreground hover:text-accent hover:underline"
-                    >
-                      {app.jobTitle || '—'}
-                    </Link>
+                    <h3 className={ROW_TITLE}>
+                      <Link
+                        href={`/oferty-pracy/${app.slug}`}
+                        className="break-words hover:text-primary hover:underline"
+                      >
+                        {app.jobTitle || '—'}
+                      </Link>
+                    </h3>
                   ) : (
-                    <p className="break-words text-base font-semibold text-foreground">
-                      {app.jobTitle || '—'}
-                    </p>
+                    <h3 className={ROW_TITLE}>{app.jobTitle || '—'}</h3>
                   )}
-                  <p className="mt-1 break-words text-sm text-muted-foreground">
+                  <p className={ROW_META}>
                     {app.companyName ? (
                       <>
-                        {app.companyName} <span className="text-border">·</span> {date}
+                        {app.companyName} <span aria-hidden="true">·</span> {date}
                       </>
                     ) : (
                       date
                     )}
                   </p>
                 </div>
-                <StatusPill status={app.status} className="shrink-0" />
+                <StatusPill status={app.status} className="shrink-0 rounded-[8px] px-3 py-2" />
                 <ApplicationActions
                   applicationId={app.id}
                   status={app.status}

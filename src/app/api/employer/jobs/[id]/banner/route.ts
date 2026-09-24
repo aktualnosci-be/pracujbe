@@ -12,7 +12,7 @@ import { createServerClient } from '@/lib/supabase/server';
 /**
  * Eksport baneru kampanii z oferty (#175, dane z #186): `GET ?format=1200x300&locale=pl`,
  * `&download=1` = załącznik. Dostęp: zalogowany recruiter+ firmy oferty albo administrator —
- * egzekwuje baza (`get_managed_campaign_job`, 0099). Oferta nieaktywna/wygasła/demo/cudza/
+ * egzekwuje baza (`get_managed_campaign_job`, 0102). Oferta nieaktywna/wygasła/demo/cudza/
  * nieistniejąca = ten sam 404. Tryb demo (bez bazy) = 404: danych demonstracyjnych nie eksportujemy.
  *
  * Odpowiedź nigdy nie jest cache'owana ani indeksowana (`private, no-store`, `X-Robots-Tag`),

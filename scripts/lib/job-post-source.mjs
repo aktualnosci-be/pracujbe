@@ -1,7 +1,7 @@
 /**
  * Źródło danych posta 1080 × 1080 (#181, #186). Eksporter nie przyjmuje danych oferty od
  * operatora (pliku JSON, flag CLI): jedynym źródłem jest wąski odczyt `get_campaign_job`
- * (migracja 0099) wykonany jak w portalu — ograniczony login aplikacji (`DATABASE_APP_URL`)
+ * (migracja 0102) wykonany jak w portalu — ograniczony login aplikacji (`DATABASE_APP_URL`)
  * i `SET LOCAL ROLE anon`. RPC zwraca wiersz tylko dla oferty `active`, nieusuniętej,
  * niewygasłej, niedemonstracyjnej (`is_demo = false` oferty i firmy) i firmy `verified`;
  * każdy inny przypadek daje ten sam błąd „oferta niedostępna”. Kolumny to wyłącznie pola

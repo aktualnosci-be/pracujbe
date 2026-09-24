@@ -82,7 +82,7 @@ describe('źródło oferty posta (#186): tylko get_campaign_job pod rolą anon',
   });
 
   it('dla braku wiersza (demo, nieaktywna, wygasła, niezweryfikowana, nieistniejąca) daje jednakowy błąd', async () => {
-    // Filtry egzekwuje baza (0099, dowód rls.sql CJ186); tu: brak wiersza i wiersz innej oferty.
+    // Filtry egzekwuje baza (0102, dowód rls.sql CJ186); tu: brak wiersza i wiersz innej oferty.
     const messages = new Set<string>();
     for (const row of [null, { ...ROW, slug: 'inna-oferta' }]) {
       const error = await load(row).job.catch((e: Error) => e);
@@ -100,8 +100,8 @@ describe('źródło oferty posta (#186): tylko get_campaign_job pod rolą anon',
     expect(serialized).not.toMatch(/hr@firma\.be|\+32|is_demo|isDemo|status/);
   });
 
-  it('zapytanie czyta dokładnie kolumny get_campaign_job z migracji 0099', () => {
-    const migration = readFileSync(resolve('supabase/migrations/0099_campaign_job_source.sql'), 'utf8');
+  it('zapytanie czyta dokładnie kolumny get_campaign_job z migracji 0102', () => {
+    const migration = readFileSync(resolve('supabase/migrations/0102_campaign_job_source.sql'), 'utf8');
     const header = /function public\.get_campaign_job\([^)]*\)\s*returns table \(([^)]*)\)/.exec(migration)?.[1] ?? '';
     const columns = header.split(',').map((part) => part.trim().split(/\s+/)[0]).filter(Boolean);
     expect(columns).toEqual([

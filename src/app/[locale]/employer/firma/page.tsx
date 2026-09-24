@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { getMyCompany } from '@/lib/data/company';
+import { getCompanyModerationDecisions, getMyCompany } from '@/lib/data/company';
+import { CompanyModerationDecisions } from '@/components/employer/CompanyModerationDecisions';
 import { CompanyForm } from '@/components/employer/CompanyForm';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { CompanyLoadError } from '@/components/employer/CompanyLoadError';
@@ -29,7 +30,8 @@ import { cn } from '@/lib/utils';
  * firma ma akcję ponownego zgłoszenia — #400) + dane read-only (identyfikator/status/data
  * weryfikacji) + edycja nazwy i VAT (CompanyForm mode="edit"; zmiana tych danych zweryfikowanej
  * firmy wraca do weryfikacji). Publikacja ofert i wysyłka propozycji wymaga statusu `verified`
- * (nadaje administrator) — objaśnione w nocie.
+ * (nadaje administrator) — objaśnione w nocie. Decyzje moderacyjne wobec firmy i jej ofert
+ * (#42) — uzasadnienie dla ownera/admina firmy (CompanyModerationDecisions).
  *
  * NOINDEX (panel) + `force-dynamic` (dane zależne od sesji/RLS). Guard członkostwa dziedziczony
  * z `employer/layout.tsx`; bez env → firma DEMO (widok danych).
@@ -71,6 +73,9 @@ export default async function EmployerCompanyPage({
   const companyLoad = await getMyCompany();
   const company = companyLoad.status === 'ok' ? companyLoad.company : null;
   if (companyLoad.status === 'ok' && !company) return <CompanyOnboarding />;
+  // Decyzje moderacyjne (#42) — uzasadnienie widzi owner/admin firmy (RPC zwraca pustą listę innym).
+  const moderation =
+    company && company.canEdit ? await getCompanyModerationDecisions(company.id) : null;
 
   const statusLabel =
     company && STATUS_KEY[company.status]
@@ -117,6 +122,14 @@ export default async function EmployerCompanyPage({
               company.status === 'rejected' && company.canEdit ? <CompanyReverifyButton /> : null
             }
           />
+
+          {moderation ? (
+            <CompanyModerationDecisions
+              locale={locale}
+              decisions={moderation.status === 'ok' ? moderation.decisions : []}
+              loadError={moderation.status === 'error'}
+            />
+          ) : null}
 
           {/* Dane read-only (nieedytowalne przez pracodawcę: identyfikator, status, weryfikacja). */}
           <section className={PAPER}>

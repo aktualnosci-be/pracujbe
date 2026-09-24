@@ -5,7 +5,7 @@ import nl from '@/messages/nl.json';
 
 /**
  * Endpoint baneru kampanii (#175): uwierzytelnienie, limit, jednakowy 404 dla każdej oferty,
- * której baza nie zwraca (nieaktywna/wygasła/demo/cudza — filtry w 0099, dowód rls.sql CJ186),
+ * której baza nie zwraca (nieaktywna/wygasła/demo/cudza — filtry w 0102, dowód rls.sql CJ186),
  * nagłówki noindex/no-store/CSP i brak PII w wyniku.
  */
 

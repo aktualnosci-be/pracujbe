@@ -5,7 +5,7 @@ import { cleanBannerText, fitText, measureText, truncateText, type FontWeight } 
  * `docs/design/people-passport/prototype/materials/banner-*.svg`, znak jak `Logo.tsx`, kolory =
  * tokeny `--pp-*` z `src/app/globals.css` (strażnik: tests/unit/campaign-banner.test.ts).
  *
- * Wejście to wyłącznie pola oferty z `get_managed_campaign_job` (0099) i etykiety z
+ * Wejście to wyłącznie pola oferty z `get_managed_campaign_job` (0102) i etykiety z
  * `src/messages` — bez danych osobowych. Każdy tekst przechodzi przez `cleanBannerText` i
  * `escapeXml`; SVG nie ma skryptów, obrazów ani odnośników poza adresem oferty w pracuj.be.
  */
@@ -45,7 +45,7 @@ export function bannerSize(format: BannerFormat): { width: number; height: numbe
   return { width, height };
 }
 
-/** Pola oferty potrzebne grafice (kontrakt kolumn 0099). */
+/** Pola oferty potrzebne grafice (kontrakt kolumn 0102). */
 export interface BannerJob {
   slug: string;
   title: string;

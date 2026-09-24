@@ -22,7 +22,7 @@ import { createServerClient } from '@/lib/supabase/server';
 /**
  * Baner kampanii z oferty (#175) — `/employer/oferty/[id]/baner?jezyk=pl|nl|fr|en`.
  *
- * Dane wyłącznie z `get_managed_campaign_job` (0099, #186) pod sesją: tylko aktywna, niewygasła,
+ * Dane wyłącznie z `get_managed_campaign_job` (0102, #186) pod sesją: tylko aktywna, niewygasła,
  * niedemonstracyjna oferta zweryfikowanej firmy, tylko dla recruiter+ tej firmy albo admina;
  * każdy inny przypadek = ten sam komunikat „baner niedostępny”. Tryb demo (bez bazy) nie
  * eksportuje danych demonstracyjnych. Podgląd i pobranie idą przez
