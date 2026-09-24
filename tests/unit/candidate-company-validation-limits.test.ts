@@ -85,5 +85,17 @@ describe("onboarding: limity pozycji list (#364)", () => {
 
     expect(cut(body("set_candidate_skills"))).toContain(CANDIDATE_ITEM_LIMITS.skill);
     expect(cut(body("set_candidate_certificates"))).toContain(CANDIDATE_ITEM_LIMITS.certificate);
+
+    // 0079 (#96) zastępuje set_candidate_certificates wersją jsonb z datą ważności — ten sam limit.
+    const certs = readFileSync(
+      join(process.cwd(), "supabase", "migrations", "0079_matching_certificates_distinct.sql"),
+      "utf8",
+    );
+    const start = certs.search(/function\s+public\.set_candidate_certificates\(p_certificates jsonb\)/i);
+    expect(start).toBeGreaterThan(-1);
+    const latest = certs.slice(start, certs.indexOf("$$;", start));
+    expect([...latest.matchAll(/left\(btrim\([\s\S]*?\),\s*(\d+)\)/g)].map((m) => Number(m[1]))).toContain(
+      CANDIDATE_ITEM_LIMITS.certificate,
+    );
   });
 });
