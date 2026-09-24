@@ -208,10 +208,10 @@ export default async function CategoryLandingPage({ params }: PageProps) {
           </div>
         ) : (
           <>
-            <ul className="grid gap-4 lg:grid-cols-2 lg:gap-5">
+            <ul className="pp-job-grid">
               {result.jobs.map((job) => (
-                <li key={job.id} className="flex min-w-0">
-                  <JobCard job={job} className="w-full" />
+                <li key={job.id}>
+                  <JobCard job={job} />
                 </li>
               ))}
             </ul>

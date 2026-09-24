@@ -6,7 +6,10 @@ import { LocaleSwitcher } from './LocaleSwitcher';
 import { CookieSettingsButton } from './CookieSettingsButton';
 
 /**
- * Jasna stopka nowej identyfikacji. Linki i zgody zachowują dotychczasowe działanie.
+ * Jasna stopka nowej identyfikacji. Linki, zgody i język zachowują dotychczasowe działanie.
+ * Dolny pasek to kalka `.site-footer` z prototypu „Ludzie i praca” (`.pp-footer-bar`: biel,
+ * linia #eee, 11 px, marka + hasło po lewej); kolumny linków stoją nad nim (prototyp ich nie
+ * ma, ale regulamin, polityki, ustawienia cookies i język muszą być dostępne).
  * `locale` jawnie z layoutu (#298) — odczyt locale z żądania wymusza renderowanie dynamiczne.
  */
 export async function Footer({ locale }: { locale: string }) {
@@ -49,7 +52,7 @@ export async function Footer({ locale }: { locale: string }) {
   const version = process.env.NEXT_PUBLIC_APP_VERSION;
 
   return (
-    <footer className="border-t border-border bg-soft text-foreground">
+    <footer className="border-t border-border bg-background text-foreground">
       <div className="container py-12">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-3 lg:col-span-2">
@@ -99,19 +102,22 @@ export async function Footer({ locale }: { locale: string }) {
           </nav>
         </div>
 
-        <div className="mt-10 flex flex-col gap-4 border-t border-border pt-6 md:flex-row md:items-center md:justify-between">
+        <div className="mt-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-muted-foreground">
             © {year} {tCommon('appName')}. {t('rights')}
           </p>
           <LocaleSwitcher />
         </div>
+      </div>
+      <div className="pp-footer-bar">
+        <span>{tCommon('appName')} · {t('tagline')}</span>
         {version && buildTime ? (
-          <p className="mt-4 text-xs text-muted-foreground">
+          <span>
             v{version} · <time dateTime={buildTime}>{new Intl.DateTimeFormat(locale, {
               timeZone: 'Europe/Warsaw', day: '2-digit', month: '2-digit', year: 'numeric',
               hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short',
             }).format(new Date(buildTime))}</time>
-          </p>
+          </span>
         ) : null}
       </div>
     </footer>

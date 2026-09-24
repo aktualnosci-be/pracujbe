@@ -10,7 +10,9 @@ Wyjście: src/app/fonts/DMSans-latin.woff2 — tylko to, czego potrzebują pl/nl
 Co zostaje:
 - oś `wght` zawężona do 400–800 (font-normal … font-bold oraz 750/800 nagłówków i logo
   z prototypu);
-- oś `opsz` 9–40 bez zmian (automatyczny krój optyczny dla nagłówków);
+- oś `opsz` 9–40 bez zmian (domyślnie 9). Strony publiczne w stylu prototypu (`.pp-*`) mają
+  `font-optical-sizing: none`, czyli opsz 9 — dokładnie plik „DM Sans 9pt”, który prototyp
+  dostaje z Google Fonts; panele zostają przy automatycznym kroju optycznym;
 - znaki: Basic Latin + Latin-1 + Latin Extended-A (ąćęłńóśźż, éèêëàâçîïôûùœ, ĳ),
   ș/ț, akcenty łączone, interpunkcja typograficzna („” ‘’ – — … • « »), €, ™, strzałki,
   znaki matematyczne używane w UI (− ≈ ≠ ≤ ≥), ✓;

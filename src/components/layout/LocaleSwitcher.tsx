@@ -59,8 +59,9 @@ function isVisible(element: HTMLElement | null): element is HTMLElement {
  * Bez pełnego przeładowania — nawigacja w tranzycji. Etykieta z i18n (footer.langLabel).
  * Parametr powrotu `?next=` (logowanie) przechodzi na nowy język razem ze stroną.
  *
- * `variant="compact"` (nagłówek stron publicznych, wg prototypu „Ludzie i praca”) pokazuje
- * sam kod języka („PL”) bez obramowania; nazwa dostępna = etykieta + kod (WCAG 2.5.3).
+ * `variant="compact"` (nagłówek stron publicznych, `.account > span` z prototypu „Ludzie i praca”)
+ * pokazuje sam kod języka („PL”, 12 px) bez obramowania i strzałki; nazwa dostępna = etykieta +
+ * kod (WCAG 2.5.3), cel ≥ 24 px (WCAG 2.5.8).
  *
  * `side="top"` otwiera listę nad przyciskiem — dla miejsc przy dolnej krawędzi ekranu
  * (panel menu mobilnego), gdzie lista otwierana w dół wychodziłaby poza viewport i nie
@@ -117,7 +118,7 @@ export function LocaleSwitcher({
       {variant === 'compact' ? (
         <SelectTrigger
           ref={triggerRef}
-          className="h-11 w-auto gap-1 border-transparent px-2 text-sm font-medium uppercase shadow-none hover:bg-soft"
+          className="h-11 w-auto min-w-6 justify-center gap-0 rounded-md border-transparent bg-transparent px-0 text-xs font-normal uppercase text-foreground shadow-none hover:underline [&>svg]:hidden"
           aria-label={`${t('langLabel')} ${locale.toUpperCase()}`}
           aria-busy={isPending || undefined}
         >

@@ -11,8 +11,8 @@ nie ma na Androidzie i Linuksie, dlatego mamy własne grupy: Arial/Helvetica/Lib
 (metrycznie zgodne), Roboto (Android) i DejaVu Sans (Linux bez Liberation).
 
 Szerokość = średnia szerokość znaku ważona częstością znaków w tekstach UI
-(src/messages/*.json, wszystkie języki), dla instancji DM Sans wght 400, opsz 14 (rozmiar
-tekstu UI; przeglądarka dobiera opsz do rozmiaru — `font-optical-sizing: auto`).
+(src/messages/*.json, wszystkie języki), dla instancji DM Sans wght 400, opsz 9 (krój stron
+publicznych — `.pp-*` z `font-optical-sizing: none` w globals.css).
 
 Użycie (pip install fonttools==4.66.0 brotli==1.2.0):
     python3 scripts/font-fallback-metrics.py NAZWA=plik[,plik2] ...
@@ -62,7 +62,7 @@ def advances(paths: list[str]) -> tuple[dict[int, float], TTFont]:
     for path in paths:
         font = TTFont(path)
         if "fvar" in font:
-            font = instantiateVariableFont(font, {"wght": 400, "opsz": 14})
+            font = instantiateVariableFont(font, {"wght": 400, "opsz": 9})
         first = first or font
         upm = font["head"].unitsPerEm
         hmtx = font["hmtx"]

@@ -141,7 +141,7 @@ describe('font DM Sans — podzbiór łaciński (#388)', () => {
     expect(codepoints.has(0x1ea0)).toBe(false); // Ạ
   });
 
-  it('ma oś wagi 400–800 (font-normal … 800 logo) i oś opsz', () => {
+  it('ma oś wagi 400–800 (font-normal … 800 logo) i oś opsz 9–40', () => {
     const axes = fvarAxes(tables.get('fvar')!);
     expect(axes.wght).toEqual({ min: 400, max: 800 });
     expect(axes.opsz).toEqual({ min: 9, max: 40 });

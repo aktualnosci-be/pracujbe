@@ -14,8 +14,9 @@ import localFont from 'next/font/local';
  * PODZBIÓR (#388): `DMSans-latin.woff2` (~42 KB zamiast 235 KB TTF) powstaje skryptem
  * `scripts/subset-font.py` z oryginału `assets/fonts/DMSans-4.004[opsz,wght].ttf`: tylko znaki
  * pl/nl/fr/en (Latin, Latin-1, Latin Extended-A, interpunkcja typograficzna, €, ™, strzałki),
- * oś wagi zawężona do 400–800 (font-normal … font-bold oraz 750/800 z prototypu), oś opsz
- * bez zmian. Nie podmieniaj pliku ręcznie — zmień skrypt i uruchom go ponownie.
+ * oś wagi zawężona do 400–800 (font-normal … font-bold oraz 650/750/800 z prototypu), oś opsz
+ * 9–40 bez zmian; sekcje w stylu prototypu (`.pp-*`) wyłączają krój optyczny (opsz 9 = plik
+ * „DM Sans 9pt”, który prototyp dostaje z Google Fonts). Nie podmieniaj pliku ręcznie — zmień skrypt i uruchom go ponownie.
  * Strażnik: tests/unit/font-subset.test.ts.
  *
  * FALLBACK (#388): zamiast domyślnego `local("Arial")` z next/font (Arial nie ma na Androidzie

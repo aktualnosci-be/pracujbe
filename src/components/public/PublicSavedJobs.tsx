@@ -141,21 +141,19 @@ export function PublicSaveJobButton({
             : saved
               ? t('saved')
               : t('save');
-  // Wariant `plain` (karta-paszport) jak `.p-save` z prototypu: sama zakładka bez obramowania,
-  // zapisana na jasnoczerwonym tle; cel dotykowy zostaje 44 px (WCAG 2.5.8).
+  // Wariant `plain` (karta-paszport) = `.p-save` z prototypu (klasa `.pp-save` w globals.css):
+  // sama zakładka 30 × 30 px bez obramowania, zapisana na jasnoczerwonym tle (aria-pressed).
   const flat = iconOnly && plain;
-  const style = cn(
-    'relative z-10 inline-flex shrink-0 items-center justify-center gap-2 rounded-xl text-sm transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
-    flat
-      ? 'min-h-11 min-w-11 bg-transparent'
-      : 'min-h-12 min-w-12 border border-border bg-background px-3',
-    saved ? 'text-accent' : 'text-muted-foreground',
-    saved && flat && 'bg-primary/10 hover:bg-primary/15',
-  );
+  const style = flat
+    ? 'pp-save focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60'
+    : cn(
+        'relative z-10 inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 text-sm transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
+        saved ? 'text-accent' : 'text-muted-foreground',
+      );
   const Icon = saved ? BookmarkCheck : Bookmark;
   const content = (
     <>
-      <Icon className="h-5 w-5" aria-hidden="true" />
+      <Icon className={flat ? undefined : 'h-5 w-5'} strokeWidth={flat ? 1.5 : undefined} aria-hidden="true" />
       {!iconOnly && label}
     </>
   );
@@ -174,7 +172,7 @@ export function PublicSaveJobButton({
     <span className={cn('relative z-10 inline-flex flex-col', className)}>
       <button
         type="button"
-        className={cn(style, 'w-full')}
+        className={flat ? style : cn(style, 'w-full')}
         aria-label={label}
         title={label}
         aria-pressed={status === 'candidate' ? saved : undefined}

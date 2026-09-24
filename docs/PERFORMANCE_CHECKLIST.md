@@ -89,11 +89,12 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
       tekst w `assets/fonts/DMSans-OFL.txt`.
 - [x] Podzbiór (#388): `src/app/fonts/DMSans-latin.woff2` (~42 KB; Inter miał ~73 KB) —
       Latin, Latin-1, Latin Extended-A, interpunkcja typograficzna, €, ™, strzałki; oś `wght`
-      400–800, oś `opsz` 9–40. Przepis: `python3 scripts/subset-font.py` (źródło `assets/fonts/`),
-      strażnik `tests/unit/font-subset.test.ts` (≤ 60 KB, każdy znak z `src/messages`).
+      400–800, oś opsz 9–40 (strony w stylu prototypu: opsz 9 przez `font-optical-sizing: none`). Przepis:
+      `python3 scripts/subset-font.py` (źródło `assets/fonts/`), strażnik
+      `tests/unit/font-subset.test.ts` (≤ 60 KB, każdy znak z `src/messages`).
 - [x] `font-display: swap` z fontami zastępczymi o dopasowanych metrykach (#388): grupy Arial/
       Liberation Sans, Roboto (Android), DejaVu Sans (Linux) w `globals.css`, wartości ze
-      `scripts/font-fallback-metrics.py` (przeliczone dla DM Sans, wght 400 / opsz 14). CLS od
+      `scripts/font-fallback-metrics.py` (przeliczone dla DM Sans, wght 400 / opsz 9). CLS od
       podmiany fontu (Inter): `/pl` 0,036 → 0, poradnik 0,069 → 0,016; po zmianie na DM Sans
       lab `perf-lab.mjs` — CLS 0,000 na wszystkich trasach (poradnik 0,030 → 0,000 na tej samej
       maszynie).
