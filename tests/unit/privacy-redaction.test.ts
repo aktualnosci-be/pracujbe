@@ -1,9 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { FILTERED, redactError, redactString, redactUrl, redactValue } from '@/lib/privacy/redact';
-import { scrubBreadcrumb, scrubEvent, scrubSpan } from '@/lib/privacy/sentry-scrub';
+import { redactSentryEvent } from '@/lib/sentry-egress';
 import { installConsoleRedaction } from '@/lib/privacy/console';
-import { safeContext } from '@/lib/sentry';
 import { PII, UUID, expectNoPii } from '../helpers/privacy-fixtures';
 
 /**
@@ -96,8 +95,8 @@ describe('redactError', () => {
   });
 });
 
-describe('scrubEvent / breadcrumbs / spans', () => {
-  it('usuwa PII z każdego pola zdarzenia, zostawia diagnostykę', () => {
+describe('filtr Sentry (#508) na pełnym zdarzeniu z danymi kandydata', () => {
+  it('usuwa PII z każdego pola zdarzenia, zostawia kod błędu', () => {
     const event = {
       event_id: 'abc',
       message: `failed for ${PII.email}`,
@@ -138,34 +137,14 @@ describe('scrubEvent / breadcrumbs / spans', () => {
       spans: [{ description: `GET https://x.be/api?email=${PII.email}`, data: { 'http.query': `q=${PII.lastName}`, 'db.system': 'postgresql' } }],
     };
     expect(JSON.stringify(event)).toContain(PII.bio);
-    const out = scrubEvent(structuredClone(event) as never) as unknown as typeof event;
+    const out = redactSentryEvent(structuredClone(event) as never);
     const json = JSON.stringify(out);
     expectNoPii(json);
     expect(json).not.toContain('203.0.113.9');
     expect(out.user).toBeUndefined();
-    expect(out.request).toEqual({ method: 'POST', url: 'https://pracuj.be/pl/candidate/profil?[Filtered]' });
-    expect(out.tags.errorCode).toBe('INTERNAL');
-    expect(out.extra.area).toBe('files.upload');
-    expect(out.contexts.os).toEqual({ name: 'Linux', version: '6.1' });
-    expect(out.contexts.trace.trace_id).toBe('a'.repeat(32));
-    expect(out.exception.values[0]?.type).toBe('Error');
-    expect(out.breadcrumbs[1]?.data).toMatchObject({ method: 'GET', status_code: 500 });
-    expect(out.spans[0]?.data['db.system']).toBe('postgresql');
-  });
-
-  it('beforeBreadcrumb i beforeSendSpan redagują tak samo', () => {
-    const b = scrubBreadcrumb({ category: 'xhr', message: PII.email, data: { url: `/api?x=${PII.token}` } });
-    expectNoPii(JSON.stringify(b));
-    const s = scrubSpan({ description: `POST /pl/x?token=${PII.token}`, data: { 'url.full': `https://x.be/?e=${PII.email}` } });
-    expectNoPii(JSON.stringify(s));
-  });
-});
-
-describe('captureError — allowlist kontekstu', () => {
-  it('klucz spoza allowlisty nie wychodzi; bezpieczne klucze zostają', () => {
-    const out = safeContext({ area: 'job-import', deliveryId: UUID, path: `u/${PII.cvFile}`, candidateNote: PII.bio, reason: `x ${PII.email}` });
-    expectNoPii(JSON.stringify(out));
-    expect(out).toEqual({ area: 'job-import', deliveryId: UUID, path: FILTERED, candidateNote: FILTERED, reason: `x ${FILTERED}` });
+    expect(out.request).toBeUndefined();
+    expect(out.breadcrumbs).toBeUndefined();
+    expect(out.tags).toEqual({ errorCode: 'INTERNAL' });
   });
 });
 
@@ -185,15 +164,15 @@ describe('logi serwera (console)', () => {
 });
 
 describe('strażnik konfiguracji telemetrii', () => {
-  it('każdy Sentry.init używa wspólnych opcji prywatności; onRequestError idzie przez redakcję', async () => {
+  it('każdy Sentry.init ma filtr #508 i wyłączony tracing; logi serwera idą przez redakcję', async () => {
     const { readFileSync } = await import('node:fs');
     for (const file of ['sentry.client.config.ts', 'sentry.server.config.ts', 'sentry.edge.config.ts']) {
       const src = readFileSync(file, 'utf8');
-      expect(src, file).toContain('...sentryPrivacyOptions');
-      expect(src, file).not.toMatch(/sendDefaultPii:\s*true|beforeSend\w*:/);
+      expect(src, file).toContain('beforeSend: redactSentryEvent');
+      expect(src, file).toMatch(/tracesSampleRate:\s*0,/);
+      expect(src, file).toMatch(/sendDefaultPii:\s*false/);
     }
     const instrumentation = readFileSync('src/instrumentation.ts', 'utf8');
-    expect(instrumentation).not.toMatch(/onRequestError\s*=\s*Sentry\.captureRequestError/);
     expect(instrumentation).toContain('installConsoleRedaction()');
   });
 });

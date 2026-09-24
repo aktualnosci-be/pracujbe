@@ -1,7 +1,7 @@
-// Wspólny zestaw zdarzeń dla testu SDK (#502) i jego kontroli ujemnej.
+// Wspólny zestaw zdarzeń dla testu SDK (#502, filtr z #508) i jego kontroli ujemnej.
 import * as Sentry from '@sentry/nextjs';
 import { AppError } from '@/lib/errors';
-import { sentryPrivacyOptions } from '@/lib/privacy/sentry-scrub';
+import { redactSentryEvent } from '@/lib/sentry-egress';
 import { PII } from './privacy-fixtures';
 
 export const sent: string[] = [];
@@ -9,18 +9,18 @@ export const sent: string[] = [];
 export function init(withPrivacy: boolean): void {
   Sentry.init({
     dsn: 'https://public@o0.ingest.sentry.io/0',
-    tracesSampleRate: 1,
     defaultIntegrations: false,
+    integrations: [Sentry.linkedErrorsIntegration()],
     transport: (options: Parameters<typeof Sentry.createTransport>[0]) =>
       Sentry.createTransport(options, async (request) => {
         sent.push(typeof request.body === 'string' ? request.body : new TextDecoder().decode(request.body));
         return { statusCode: 200 };
       }),
-    ...(withPrivacy ? sentryPrivacyOptions : { sendDefaultPii: true }),
-    integrations: (defaults) => {
-      const own = [Sentry.linkedErrorsIntegration(), ...defaults];
-      return withPrivacy ? sentryPrivacyOptions.integrations(own) : own;
-    },
+    // Z filtrem = te same opcje prywatności co sentry.*.config.ts (#508; pilnuje ich strażnik
+    // w privacy-redaction.test.ts). Bez filtra = kontrola ujemna z włączonym tracingiem.
+    ...(withPrivacy
+      ? { tracesSampleRate: 0, sendDefaultPii: false, beforeSend: redactSentryEvent }
+      : { tracesSampleRate: 1, sendDefaultPii: true }),
   });
 }
 

@@ -9,6 +9,8 @@ import { respondToOffer } from '@/lib/actions/offers';
 import { Button } from '@/components/ui/button';
 import { Toast } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { BTN_PRIMARY, BTN_RESET, BTN_SECONDARY } from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
@@ -101,7 +103,7 @@ export function ProposalActions({
       ref={statusRef}
       role="status"
       tabIndex={-1}
-      className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      className="rounded-[8px] bg-success/10 px-3 py-2 text-[13px] font-medium text-success-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
     >
       {successMessage}
     </div>
@@ -137,10 +139,10 @@ export function ProposalActions({
 
   return (
     <div className={className}>
-      {showActions ? <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+      {showActions ? <div className="flex min-w-0 flex-wrap items-center gap-[13px] max-[600px]:flex-col max-[600px]:items-stretch">
         <Button
           type="button"
-          className="h-auto min-h-12 w-full min-w-0 whitespace-normal text-center sm:w-auto"
+          className={cn(BTN_PRIMARY, BTN_RESET)}
           onClick={() => respond(true)}
           disabled={pending}
         >
@@ -151,7 +153,7 @@ export function ProposalActions({
           ref={declineRef}
           type="button"
           variant="outline"
-          className="h-auto min-h-12 w-full min-w-0 whitespace-normal text-center sm:w-auto"
+          className={cn(BTN_SECONDARY, BTN_RESET)}
           onClick={() => setConfirmOpen(true)}
           disabled={pending}
         >

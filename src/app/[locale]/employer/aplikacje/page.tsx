@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
@@ -5,6 +6,21 @@ import { Link } from '@/i18n/navigation';
 import { getEmployerApplicationsPage } from '@/lib/data/employer';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
+import {
+  BTN_SECONDARY,
+  EYEBROW,
+  H1,
+  ICON_BOX,
+  INFO_LABEL,
+  INFO_VALUE,
+  INTRO,
+  JOB_CARD,
+  JOB_CARD_TITLE,
+  PANEL,
+  PANEL_H2,
+  PANEL_P,
+  TAG,
+} from '@/components/dashboard/panel-styles';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,50 +59,50 @@ export default async function EmployerApplicationsPage({
   return (
     <div className="space-y-7">
       <header>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t('employerRole')}</p>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('navEmployerApplications')}</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('employerApplicationsIntro')}</p>
+        <p className={EYEBROW}>{t('employerRole')}</p>
+        <h1 className={H1}>{t('navEmployerApplications')}</h1>
+        <p className={INTRO}>{t('employerApplicationsIntro')}</p>
         {result.status === 'ok' && result.isDemo ? (
-          <p className="mt-3 inline-flex rounded-full bg-soft px-3 py-1 text-xs font-semibold text-muted-foreground">{t('employerApplicationsDemo')}</p>
+          <p className={`mt-3 ${TAG}`}>{t('employerApplicationsDemo')}</p>
         ) : null}
       </header>
 
       {result.status === 'error' ? (
-        <section role="alert" className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-          <h2 className="text-xl font-semibold text-foreground">{t('employerApplicationsLoadError')}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{t('employerApplicationsLoadErrorHint')}</p>
-          <a href={`/${locale}${pageHref(page)}`} className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-border px-5 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+        <section role="alert" className={PANEL}>
+          <h2 className={PANEL_H2}>{t('employerApplicationsLoadError')}</h2>
+          <p className={`mt-2 ${PANEL_P}`}>{t('employerApplicationsLoadErrorHint')}</p>
+          <a href={`/${locale}${pageHref(page)}`} className={`mt-5 ${BTN_SECONDARY}`}>
             {t('employerApplicationsRetry')}
           </a>
         </section>
       ) : result.applications.length === 0 ? (
-        <section className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-          <h2 className="text-xl font-semibold text-foreground">{t('employerApplicationsEmptyTitle')}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{t('employerApplicationsEmptyHint')}</p>
-          {page > 1 ? <Link href={pageHref(page - 1)} className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-border px-5 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{t('employerApplicationsNewer')}</Link> : null}
+        <section className={PANEL}>
+          <h2 className={PANEL_H2}>{t('employerApplicationsEmptyTitle')}</h2>
+          <p className={`mt-2 ${PANEL_P}`}>{t('employerApplicationsEmptyHint')}</p>
+          {page > 1 ? <Link href={pageHref(page - 1)} className={`mt-5 ${BTN_SECONDARY}`}>{t('employerApplicationsNewer')}</Link> : null}
         </section>
       ) : (
         <>
-          <ul className="grid min-w-0 gap-4 xl:grid-cols-2" aria-label={t('navEmployerApplications')}>
+          <ul className="grid min-w-0 gap-5 xl:grid-cols-2" aria-label={t('navEmployerApplications')}>
             {result.applications.map((application) => {
               const name = application.candidateName || t('candidateFallback');
               return (
                 <li key={application.id} className="min-w-0">
-                  <article className="flex h-full min-w-0 flex-col rounded-3xl border border-border bg-card p-5 sm:p-6">
+                  <article className={JOB_CARD}>
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-soft text-sm font-semibold text-foreground" aria-hidden="true">{initials(name)}</span>
+                      <span className={ICON_BOX} aria-hidden="true">{initials(name)}</span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('employerApplicationsCandidateLabel')}</p>
-                        <h2 className="mt-1 break-words text-xl font-bold leading-tight text-foreground">{name}</h2>
+                        <p className={INFO_LABEL}>{t('employerApplicationsCandidateLabel')}</p>
+                        <h2 className={`mt-1 ${JOB_CARD_TITLE}`}>{name}</h2>
                         {application.isGuest ? (
-                          <p className="mt-2 inline-flex rounded-full bg-soft px-3 py-1 text-xs font-semibold text-foreground">{t('employerApplicationGuestBadge')}</p>
+                          <p className={cn(TAG, "mt-2 font-semibold text-foreground")}>{t('employerApplicationGuestBadge')}</p>
                         ) : null}
                       </div>
                     </div>
                     <dl className="mt-6 border-y border-border py-5">
                       <div className="min-w-0">
-                        <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('employerApplicationsJobLabel')}</dt>
-                        <dd className="mt-1 break-words text-base font-semibold text-foreground">{application.jobTitle || '—'}</dd>
+                        <dt className={INFO_LABEL}>{t('employerApplicationsJobLabel')}</dt>
+                        <dd className={INFO_VALUE}>{application.jobTitle || '—'}</dd>
                       </div>
                     </dl>
                     <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
@@ -94,7 +110,7 @@ export default async function EmployerApplicationsPage({
                       <Link
                         href={`/employer/aplikacje/${encodeURIComponent(application.id)}`}
                         aria-label={t('employerApplicationViewLabel', { name, job: application.jobTitle || t('applicationUnknownJob') })}
-                        className="inline-flex min-h-12 items-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className={BTN_SECONDARY}
                       >
                         {t('employerApplicationView')}
                       </Link>
@@ -106,10 +122,10 @@ export default async function EmployerApplicationsPage({
             })}
           </ul>
           <nav className="flex flex-wrap items-center justify-between gap-3" aria-label={t('employerApplicationsPagination')}>
-            <span className="text-sm text-muted-foreground">{t('employerApplicationsPage', { page })}</span>
+            <span className={`text-xs text-muted-foreground`}>{t('employerApplicationsPage', { page })}</span>
             <div className="flex flex-wrap gap-2">
-              {page > 1 ? <Link href={pageHref(page - 1)} className="inline-flex min-h-12 items-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{t('employerApplicationsNewer')}</Link> : null}
-              {result.hasMore ? <Link href={pageHref(page + 1)} className="inline-flex min-h-12 items-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{t('employerApplicationsOlder')}</Link> : null}
+              {page > 1 ? <Link href={pageHref(page - 1)} className={BTN_SECONDARY}>{t('employerApplicationsNewer')}</Link> : null}
+              {result.hasMore ? <Link href={pageHref(page + 1)} className={BTN_SECONDARY}>{t('employerApplicationsOlder')}</Link> : null}
             </div>
           </nav>
         </>

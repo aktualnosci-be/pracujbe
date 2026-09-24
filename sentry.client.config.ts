@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/nextjs';
-import { sentryPrivacyOptions, sentryClientDenyUrls } from '@/lib/privacy/sentry-scrub';
+import { redactSentryEvent } from './src/lib/sentry-egress';
 
 /**
  * Inicjalizacja Sentry po stronie przeglądarki.
@@ -7,7 +7,7 @@ import { sentryPrivacyOptions, sentryClientDenyUrls } from '@/lib/privacy/sentry
  * Uruchamia się TYLKO gdy NEXT_PUBLIC_SENTRY_DSN jest ustawione. Bez DSN to no-op —
  * dzięki temu aplikacja buduje się i działa bez konfiguracji Sentry (tryb demo/dev).
  *
- * Prywatność: sendDefaultPii=false + filtr beforeSend/beforeBreadcrumb/beforeSendSpan (bez IP, cookies i nagłówków użytkownika),
+ * Prywatność: sendDefaultPii=false (bez IP, cookies i nagłówków użytkownika),
  * Session Replay wyłączony. Nie zbieramy danych osobowych.
  */
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
@@ -16,12 +16,11 @@ if (dsn) {
   Sentry.init({
     dsn,
     environment: process.env.NODE_ENV,
-    // Umiarkowane próbkowanie tras (10%) — kontrola kosztów i wpływu na wydajność.
-    tracesSampleRate: 0.1,
-    // Prywatność: bez danych osobowych; redakcja zdarzeń, spanów i breadcrumbów w SDK,
-    // PRZED wysłaniem (src/lib/privacy/sentry-scrub.ts). sendDefaultPii=false jest w opcjach.
-    ...sentryPrivacyOptions,
-    denyUrls: sentryClientDenyUrls,
+    // Tracing wyłączony, dopóki spany nie mają bramki prywatności przed wysyłką (#502).
+    tracesSampleRate: 0,
+    beforeSend: redactSentryEvent,
+    // Prywatność: nie dołączaj danych osobowych do zdarzeń.
+    sendDefaultPii: false,
     // Session Replay wyłączony (prywatność + rozmiar bundle'a klienta).
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,

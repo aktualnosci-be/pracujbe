@@ -21,7 +21,7 @@ describe('Sentry SDK — payload wychodzący', () => {
     init(false);
     await emitAll();
     const payload = sent.join('\n');
-    for (const value of [PII.email, PII.token, PII.lastName, PII.firstName, PII.nissPlain]) {
+    for (const value of [PII.email, PII.token, PII.messageBody, PII.nissPlain]) {
       expect(payload).toContain(value);
     }
   });

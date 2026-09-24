@@ -1,5 +1,6 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { AlertCircle, CheckCircle2, ChevronDown, Link2, Loader2, Upload } from 'lucide-react';
@@ -7,6 +8,18 @@ import { AlertCircle, CheckCircle2, ChevronDown, Link2, Loader2, Upload } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  BTN_PRIMARY,
+  BTN_RESET,
+  FORM_ERROR,
+  FORM_FIELD,
+  FORM_HINT,
+  FORM_INPUT,
+  FORM_LABEL_TEXT,
+  H2_EXTENDED,
+  P_EXTENDED,
+  PAPER,
+} from '@/components/dashboard/panel-styles';
 import { importJobListing, type JobImportResult } from '@/lib/actions/job-import';
 import { checkImportImageMeta, IMPORT_IMAGE_TYPES, type ImportImageProblem } from '@/lib/ai-import/image';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
@@ -111,17 +124,18 @@ export function JobImportPanel({
   const filledCount = result ? Object.keys(result.values).length : 0;
 
   return (
+    // Prototyp nie ma importu — karta `.paper` z nagłówkiem `.extended h2` i polami `.demo-form`.
     <section
       aria-labelledby={`${panelId}-title`}
-      className="rounded-[1.75rem] border border-border bg-card p-5 shadow-sm sm:p-7"
+      className={PAPER}
     >
-      <h2 id={`${panelId}-title`} className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+      <h2 id={`${panelId}-title`} className={H2_EXTENDED}>
         <button
           type="button"
           aria-expanded={open}
           aria-controls={`${panelId}-body`}
           onClick={() => setOpen((v) => !v)}
-          className="flex w-full min-h-11 items-center justify-between gap-3 rounded-lg text-left"
+          className="flex min-h-11 w-full items-center justify-between gap-3 rounded-[11px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <span>{t('title')}</span>
           <ChevronDown
@@ -130,16 +144,16 @@ export function JobImportPanel({
           />
         </button>
       </h2>
-      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{t('subtitle')}</p>
+      <p className={cn(P_EXTENDED, 'mt-1.5')}>{t('subtitle')}</p>
 
       {result ? (
         <div
           ref={resultRef}
           tabIndex={-1}
           role="status"
-          className="mt-4 space-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg border border-success/30 bg-success/5 p-3 text-sm text-foreground"
+          className="mt-5 space-y-1.5 rounded-[16px] border border-success/30 bg-success/5 px-[23px] py-5 text-[13px] text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[600px]:p-[18px]"
         >
-          <p className="flex items-start gap-2 font-medium">
+          <p className="flex items-start gap-2 text-[15px] font-[650]">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
             {t('successTitle', { count: filledCount })}
           </p>
@@ -154,17 +168,17 @@ export function JobImportPanel({
         </div>
       ) : null}
 
-      <div id={`${panelId}-body`} hidden={!open} className="mt-5 space-y-6" aria-busy={busy !== null}>
-        <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm leading-relaxed text-foreground">
+      <div id={`${panelId}-body`} hidden={!open} className="mt-[22px] space-y-7" aria-busy={busy !== null}>
+        <p className="border-b border-border pb-3 text-xs leading-[1.6] text-muted-foreground">
           {t('rightsNote')} {t('privacyNote')}
         </p>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${panelId}-file`}>{t('fileLabel')}</Label>
-          <p id={`${panelId}-file-hint`} className="text-sm text-muted-foreground">
+        <div className={FORM_FIELD}>
+          <Label htmlFor={`${panelId}-file`} className={FORM_LABEL_TEXT}>{t('fileLabel')}</Label>
+          <p id={`${panelId}-file-hint`} className={FORM_HINT}>
             {t('fileHint')}
           </p>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
             <Input
               ref={fileRef}
               id={`${panelId}-file`}
@@ -175,19 +189,19 @@ export function JobImportPanel({
               aria-describedby={[`${panelId}-file-hint`, error?.source === 'image' ? fileErrorId : '']
                 .filter(Boolean)
                 .join(' ')}
-              className="min-h-12 sm:flex-1"
+              className={cn(FORM_INPUT, 'sm:flex-1')}
             />
-            <Button type="button" onClick={() => void submit('image')} disabled={busy !== null} className="min-h-12">
+            <Button type="button" onClick={() => void submit('image')} disabled={busy !== null} className={`${BTN_PRIMARY} ${BTN_RESET} shrink-0`}>
               {busy === 'image' ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
-                <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
+                <Upload className="h-4 w-4" aria-hidden="true" />
               )}
               {busy === 'image' ? t('importing') : t('importImage')}
             </Button>
           </div>
           {error?.source === 'image' ? (
-            <p id={fileErrorId} role="alert" className="text-sm text-error">
+            <p id={fileErrorId} role="alert" className={FORM_ERROR}>
               {error.message}
             </p>
           ) : null}
@@ -195,17 +209,17 @@ export function JobImportPanel({
 
         <form
           noValidate
-          className="space-y-2"
+          className={FORM_FIELD}
           onSubmit={(e) => {
             e.preventDefault();
             void submit('url');
           }}
         >
-          <Label htmlFor={`${panelId}-url`}>{t('urlLabel')}</Label>
-          <p id={`${panelId}-url-hint`} className="text-sm text-muted-foreground">
+          <Label htmlFor={`${panelId}-url`} className={FORM_LABEL_TEXT}>{t('urlLabel')}</Label>
+          <p id={`${panelId}-url-hint`} className={FORM_HINT}>
             {t('urlHint')}
           </p>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
             <Input
               id={`${panelId}-url`}
               type="url"
@@ -219,26 +233,26 @@ export function JobImportPanel({
               aria-describedby={[`${panelId}-url-hint`, error?.source === 'url' ? urlErrorId : '']
                 .filter(Boolean)
                 .join(' ')}
-              className="min-h-12 sm:flex-1"
+              className={cn(FORM_INPUT, 'sm:flex-1')}
             />
-            <Button type="submit" disabled={busy !== null} className="min-h-12">
+            <Button type="submit" disabled={busy !== null} className={`${BTN_PRIMARY} ${BTN_RESET} shrink-0`}>
               {busy === 'url' ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
-                <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                <Link2 className="h-4 w-4" aria-hidden="true" />
               )}
               {busy === 'url' ? t('importing') : t('importUrl')}
             </Button>
           </div>
           {error?.source === 'url' ? (
-            <p id={urlErrorId} role="alert" className="text-sm text-error">
+            <p id={urlErrorId} role="alert" className={FORM_ERROR}>
               {error.message}
             </p>
           ) : null}
         </form>
 
         {busy ? (
-          <p role="status" className="text-sm text-muted-foreground">
+          <p role="status" className={P_EXTENDED}>
             {t('busyHint')}
           </p>
         ) : null}

@@ -588,6 +588,9 @@ zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie od
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
 już wczytanych kart. Jest to część etapu wyglądu #5, nie dowód ukończenia całego etapu.
 
+Wygląd panelu kandydata, onboardingu, wiadomości, powiadomień, toastu i aplikowania = kalka
+prototypu „04 Ludzie i praca” (#5/#6): klasy `panel-styles.ts` (wspólne z pracodawcą/adminem)
++ `src/components/candidate/candidate-styles.ts`; odstępstwa w `docs/design/people-passport/README.md`.
 Kompletność profilu (pulpit + profil) = 6 kroków kreatora onboardingu, jedno źródło
 `src/lib/profile-completeness.ts` (`PROFILE_SECTIONS`/`computeProfileChecklist`); kompletny
 kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma własne kryteria.
@@ -641,6 +644,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = suma `detail_views` z lejka ofert
   (#99), „brak danych” tylko bez uprawnień rekrutera — bez fałszywej konwersji 0%. Kafelki/lejek/kolumny zawijają się przy
   200% tekstu (#318). Przełącznik firmy: nazwa w etykiecie, `aria-current`, komunikat błędu (#322).
+  Wygląd panelu i kreatora oferty = kalka prototypu „04 Ludzie i praca” (#5/#6): klasy w
+  `src/components/dashboard/panel-styles.ts` (wspólne z adminem), sidebar `.side-item`, opis
+  odstępstw w `docs/design/people-passport/README.md`.
   Pulpit: karty ofert w stylu paszportu (#171), jawny błąd najnowszych zgłoszeń z ponowieniem
   (#157), „Zobacz wszystkie” → `/employer/aplikacje` (#164); bramka axe 320/1280 px i 200% tekstu
   w 4 językach — `tests/e2e/employer-dashboard-a11y.spec.ts`.
@@ -839,6 +845,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   centrum preferencji dla wszystkich kategorii, `text/plain`, tożsamość i adres pocztowy nadawcy
   w stopce marketingu, budżet w hooku e-maili Auth, rezerwacja kampania+odbiorca, decyzja o
   trackingu na odebranym `.eml`.
+  Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
+  (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
+  `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
+  niezależny od dostawcy: `src/lib/email/provider-events.ts`. RPC `record_email_event`
+  (service_role): status tylko „w górę”, czasy zdarzeń; trwałe odbicie i skarga → aktywna
+  blokada w `email_suppressions` (jedna na adres, historia zostaje). `enqueue_email` pomija
+  zablokowany adres, `claim_email_batch` wygasza wcześniejsze wiersze (`suppressed_address`).
+  E-maile Auth nie są blokowane (obowiązkowe). Panel `/admin/poczta`: lista, filtr, zdjęcie
+  blokady z uzasadnieniem (`admin_lift_email_suppression`, audyt). Dowód: `rls.sql` sekcja
+  ML44, `email-delivery-webhook.test.ts`, `admin-email-suppressions.test.ts`, E2E
+  `admin-email-suppressions.spec`. **Do zrobienia (#44):** alarmy (wiek kolejki, wzrost
+  bounce/complaint), stany w `/api/health`, adapter drugiego dostawcy.
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
@@ -964,19 +982,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
   cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
   `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
-- [x] Telemetria bez danych kandydata (#502, część kodowa): jedno źródło reguł redakcji
+- [x] Telemetria bez danych kandydata (#502, część kodowa): Sentry — #508
+  (`src/lib/sentry-egress.ts`: `beforeSend` buduje nowe zdarzenie z samym kodem błędu,
+  `captureError` wysyła tylko kod, tracing wyłączony). Logi serwera — wspólne reguły redakcji
   `src/lib/privacy/redact.ts` (e-mail, telefon, NISS/BIS, IBAN, tokeny/JWT, query i fragment URL,
-  nazwy plików dokumentów, wiersze błędów Postgresa; pola wrażliwe po nazwie) użyte w Sentry
-  (`sentryPrivacyOptions` w `src/lib/privacy/sentry-scrub.ts`: `beforeSend`/`beforeSendTransaction`/
-  `beforeSendSpan`/`beforeBreadcrumb`, nagłówek kopert, bez `user`/nagłówków/body, bez propagacji
-  trace do usług zewnętrznych) we wszystkich trzech configach, w `onRequestError` (ścieżka bez
-  query, bez nagłówków) i w `captureError` (allowlist `SAFE_CONTEXT_KEYS` — klucz spoza listy =
-  `[Filtered]`), oraz w logach serwera (`installConsoleRedaction()` w `register()`, poza `next dev`).
-  Dowód: `privacy-redaction`, `privacy-sentry-sdk` (payload z SDK) + kontrola ujemna
-  `privacy-sentry-sdk-control`. Opis kanałów: `docs/TELEMETRY_PRIVACY.md`. **Otwarte
-  (właściciel):** region/retencja/DPA/dostęp Sentry i logów Railway, rejestr (#485), usuwanie
-  danych już wysłanych (#486); do tego czasu Sentry bez DSN. Sentry w przeglądarce nie jest
-  wpięte (brak `instrumentation-client`) — wpinając, użyj `sentryPrivacyOptions`.
+  nazwy plików dokumentów, wiersze błędów Postgresa; pola wrażliwe po nazwie; `cause`)
+  w `installConsoleRedaction()` (`register()`, poza `next dev`). Dowód: `privacy-redaction`,
+  `privacy-sentry-sdk` (payload z SDK z opcjami jak w configach) + kontrola ujemna
+  `privacy-sentry-sdk-control`, `sentry-egress`, `sentry-capture`. Opis: `docs/TELEMETRY_PRIVACY.md`.
+  **Otwarte (właściciel):** region/retencja/DPA/dostęp Sentry i logów Railway, rejestr (#485),
+  usuwanie danych już wysłanych (#486); do tego czasu Sentry bez DSN. Sentry w przeglądarce nie
+  jest wpięte (brak `instrumentation-client`).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).

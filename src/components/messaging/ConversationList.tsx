@@ -6,6 +6,7 @@ import type { Locale } from '@/i18n/routing';
 import type { ConversationListItem } from '@/lib/data/messages';
 
 import { ConversationOpenPending } from './ConversationOpenPending';
+import { ICON_BOX } from '@/components/dashboard/panel-styles';
 
 /**
  * ConversationList — prezentacyjna lista konwersacji panelu (makieta „Wiadomości").
@@ -66,12 +67,12 @@ export async function ConversationList({
               prefetch={false}
               aria-current={active ? 'true' : undefined}
               className={cn(
-                'flex min-h-20 gap-3 border-l-4 px-4 py-4 transition-colors hover:bg-soft',
-                active ? 'border-primary bg-soft' : 'border-transparent bg-transparent',
+                'flex min-h-20 gap-3 border-l-4 px-5 py-[18px] transition-colors hover:bg-soft',
+                active ? 'border-primary bg-primary/5' : 'border-transparent bg-transparent',
               )}
             >
               <span
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-soft text-sm font-semibold text-foreground ring-1 ring-inset ring-border"
+                className={ICON_BOX}
                 aria-hidden="true"
               >
                 {initials(item.counterpartyName)}
@@ -80,7 +81,7 @@ export async function ConversationList({
                 <div className="flex items-center justify-between gap-2">
                   <p
                     className={cn(
-                      'truncate text-base',
+                      'truncate text-[15px] tracking-[-0.03em]',
                       item.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground',
                     )}
                   >
@@ -105,7 +106,7 @@ export async function ConversationList({
                   </p>
                   {item.unread ? (
                     <span
-                      className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-semibold text-accent-foreground"
+                      className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground"
                       aria-label={t('unreadBadge')}
                     >
                       {item.unreadCount > 0 ? item.unreadCount : ''}

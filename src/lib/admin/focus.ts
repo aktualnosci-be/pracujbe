@@ -14,3 +14,7 @@ export function companyFocusKey(id: string): string {
 export function reportFocusKey(id: string): string {
   return `report-${id}`;
 }
+
+export function emailSuppressionFocusKey(id: string): string {
+  return `email-suppression-${id}`;
+}

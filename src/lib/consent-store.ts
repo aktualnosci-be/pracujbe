@@ -19,6 +19,7 @@ import {
   type ConsentRecord,
   type ConsentSource,
 } from './consent';
+import { allowsTrackingOnPath } from './analytics/route-policy';
 
 /** Measurement ID GA (publiczny, wstrzykiwany do bundle klienta). */
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
@@ -101,6 +102,11 @@ export interface TrackerConsent {
  */
 export function syncTrackers({ analytics, marketing }: TrackerConsent): void {
   if (typeof window === 'undefined') return;
+
+  // Consent cannot enable tracking on routes carrying credentials or private data.
+  const routeAllowed = allowsTrackingOnPath(window.location.pathname);
+  analytics = analytics && routeAllowed;
+  marketing = marketing && routeAllowed;
 
   const w = window as unknown as Record<string, unknown> & {
     fbq?: (...args: unknown[]) => void;

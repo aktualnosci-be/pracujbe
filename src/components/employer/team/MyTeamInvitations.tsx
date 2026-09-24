@@ -10,6 +10,16 @@ import { toUserMessageKey } from '@/lib/errors';
 import { respondToTeamInvitation } from '@/lib/actions/team';
 import { teamErrorKey, type TeamError } from '@/lib/team/errors';
 import { roleLabelKey } from './role-keys';
+import {
+  BTN_PRIMARY,
+  BTN_SECONDARY,
+  NOTICE,
+  PANEL,
+  PANEL_H2,
+  ROW,
+  ROW_META,
+} from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * Zaproszenia do zespołów skierowane do zalogowanego (#403) — „Dołącz” / „Odrzuć”.
@@ -61,38 +71,41 @@ export function MyTeamInvitations({
   return (
     <section
       aria-labelledby="my-team-invitations-title"
-      className="space-y-3 rounded-3xl border border-primary/30 bg-card p-5 sm:p-7"
+      className={cn(PANEL, 'space-y-3 border-primary/30')}
     >
-      <h2 id="my-team-invitations-title" className="text-lg font-semibold text-foreground">
+      <h2 id="my-team-invitations-title" className={PANEL_H2}>
         {t('myInvitationsTitle')}
       </h2>
       <p role="status" aria-live="polite" className={notice ? 'text-sm text-foreground' : 'sr-only'}>
         {notice ?? ''}
       </p>
       {error ? (
-        <p role="alert" className="rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text">
+        <p role="alert" className={cn(NOTICE, 'my-0 border-error/30 bg-error/10 text-error-text')}>
           {tRoot(teamErrorKey(error, toUserMessageKey))}
         </p>
       ) : null}
-      <ul className="space-y-3">
+      <ul>
         {invitations.map((inv) => {
           const role = t(roleLabelKey(inv.role));
           return (
-            <li key={inv.id} className="flex flex-col gap-3 rounded-2xl border border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <li
+              key={inv.id}
+              className={cn(ROW, 'flex-col sm:flex-row sm:items-center sm:justify-between')}
+            >
               <div className="min-w-0">
-                <p className="break-words text-sm text-foreground">
+                <p className="break-words text-sm font-semibold text-foreground">
                   {inv.inviterName
                     ? t('myInvitationFrom', { inviter: inv.inviterName, company: inv.companyName, role })
                     : t('myInvitationNoInviter', { company: inv.companyName, role })}
                 </p>
                 {inv.expiresLabel ? (
-                  <p className="text-xs text-muted-foreground">{inv.expiresLabel}</p>
+                  <p className={cn(ROW_META, 'mt-1')}>{inv.expiresLabel}</p>
                 ) : null}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-[13px]">
                 <Button
                   type="button"
-                  className="min-h-12"
+                  className={cn(BTN_PRIMARY, 'h-auto whitespace-normal')}
                   disabled={pending !== null}
                   aria-label={t('acceptLabel', { company: inv.companyName })}
                   onClick={() => void respond(inv.id, true)}
@@ -103,7 +116,7 @@ export function MyTeamInvitations({
                 <Button
                   type="button"
                   variant="outline"
-                  className="min-h-12"
+                  className={cn(BTN_SECONDARY, 'h-auto whitespace-normal')}
                   disabled={pending !== null}
                   aria-label={t('declineLabel', { company: inv.companyName })}
                   onClick={() => void respond(inv.id, false)}
