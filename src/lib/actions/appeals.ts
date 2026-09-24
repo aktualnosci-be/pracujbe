@@ -18,7 +18,7 @@ import { captureError } from '@/lib/sentry';
 import { reportCaseLookupSchema } from '@/lib/validation/content-report';
 
 /**
- * Odwołania od decyzji moderacyjnych (DSA, #43) — cienka warstwa nad RPC z migracji 0103.
+ * Odwołania od decyzji moderacyjnych (DSA, #43) — cienka warstwa nad RPC z migracji 0104.
  *
  *   - `submitModerationAppeal` — autor treści (owner/admin firmy) pod SESJĄ: RPC sam sprawdza
  *     członkostwo, termin od poinformowania i to, że od decyzji przysługuje odwołanie.

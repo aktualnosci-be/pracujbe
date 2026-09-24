@@ -27,6 +27,7 @@ import {
   parseEmailSuppressionFilter,
   parseReportFilter,
   parseReportKindFilter,
+  parseScreeningReviewFilter,
   parseUserRoleFilter,
   parseUuid,
   parseYmd,
@@ -38,6 +39,13 @@ import { demoJobs } from '@/lib/data/demo';
 import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 import { createServerClient } from '@/lib/supabase/server';
+import {
+  isScreeningQuestionType,
+  toLocalizedText,
+  type LocalizedText,
+  type ScreeningQuestionType,
+} from '@/lib/screening/questions';
+import { isScreeningRiskCategory, type ScreeningRiskCategory } from '@/lib/screening/risk';
 import {
   buildViesState,
   companyVatSource,
@@ -1100,6 +1108,8 @@ export async function listAuditLogs(
           entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
         } else if (entityType === 'email_suppression') {
           entityHref = { pathname: '/admin/poczta', query: { status: 'all' } };
+        } else if (entityType === 'screening_question_review') {
+          entityHref = { pathname: '/admin/pytania', query: { status: 'all' } };
         }
         return {
           id: asString(row['id']),
@@ -1113,6 +1123,7 @@ export async function listAuditLogs(
           reason:
             entityType === 'company' ||
             entityType === 'email_suppression' ||
+            entityType === 'screening_question_review' ||
             asString(row['action']) === 'moderation.restored'
               ? asNullableString(asRecord(row['after_data'])['reason'])
               : null,
@@ -1506,6 +1517,213 @@ export async function listEmailSuppressions(
     );
   } catch (error) {
     captureError(error, { area: 'admin.listEmailSuppressions' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Przegląd pytań screeningowych (#497, 0103)
+ * ------------------------------------------------------------------------- */
+
+export interface AdminScreeningReviewRow {
+  id: string;
+  jobId: string;
+  jobTitle: string;
+  jobStatus: string;
+  companyId: string;
+  companyName: string;
+  questionType: ScreeningQuestionType;
+  prompt: LocalizedText;
+  options: { label: LocalizedText }[];
+  categories: ScreeningRiskCategory[];
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string | null;
+  requestedByName: string | null;
+  decidedAt: string | null;
+  decidedByName: string | null;
+  reason: string | null;
+  /** Treść nadal jest w ofercie (inaczej decyzja nieaktualna — RPC zwróci STALE_STATE). */
+  current: boolean;
+}
+
+export interface AdminScreeningReviewsQuery {
+  status?: string | null;
+  cursor?: string | null;
+}
+
+const DEMO_SCREENING_REVIEWS: AdminScreeningReviewRow[] = [
+  {
+    id: 'demo-sr1',
+    jobId: 'demo-job-1',
+    jobTitle: 'Magazynier / Magazynierka',
+    jobStatus: 'draft',
+    companyId: 'demo-c1',
+    companyName: 'Logistiek Gent BV',
+    questionType: 'date',
+    prompt: { pl: 'Podaj datę urodzenia', nl: 'Wat is je geboortedatum?' },
+    options: [],
+    categories: ['age'],
+    status: 'pending',
+    createdAt: '2025-01-21T08:15:00.000Z',
+    requestedByName: 'Anna Nowak',
+    decidedAt: null,
+    decidedByName: null,
+    reason: null,
+    current: true,
+  },
+  {
+    id: 'demo-sr2',
+    jobId: 'demo-job-2',
+    jobTitle: 'Kierowca C+E',
+    jobStatus: 'draft',
+    companyId: 'demo-c2',
+    companyName: 'Transport Liège SA',
+    questionType: 'yes_no',
+    prompt: { pl: 'Czy masz zaświadczenie o niekaralności?' },
+    options: [],
+    categories: ['criminal'],
+    status: 'rejected',
+    createdAt: '2025-01-19T10:40:00.000Z',
+    requestedByName: 'Marc Dubois',
+    decidedAt: '2025-01-20T09:00:00.000Z',
+    decidedByName: 'Zespół Pracuj.be',
+    reason: 'Brak wskazanej podstawy dla tego stanowiska.',
+    current: true,
+  },
+];
+
+function reviewStatusOf(value: unknown): AdminScreeningReviewRow['status'] {
+  return value === 'approved' || value === 'rejected' ? value : 'pending';
+}
+
+/**
+ * Kolejka przeglądu pytań (#497): filtr oczekujące (domyślnie) / rozstrzygnięte / wszystkie,
+ * stronicowanie kursorem (`created_at`, `id`). „Oczekujące” pokazuje tylko treść nadal obecną
+ * w ofercie — autozapis kroku z inną treścią zostawia stary wiersz jako historię. Bez env → DEMO.
+ */
+export async function listScreeningReviews(
+  query: AdminScreeningReviewsQuery = {},
+): Promise<AdminListResult<AdminScreeningReviewRow>> {
+  const filter = parseScreeningReviewFilter(query.status);
+  if (!isSupabaseConfigured()) {
+    return demoList(
+      DEMO_SCREENING_REVIEWS.filter(
+        (row) =>
+          filter === 'all' || (filter === 'pending') === (row.status === 'pending'),
+      ),
+    );
+  }
+  await requireAdmin();
+
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const supabase = createAdminClient();
+
+    let builder = supabase
+      .from('screening_question_reviews')
+      .select(
+        'id, job_id, content_fingerprint, risk_categories, question_type, prompt, options, status, created_at, requested_by, decided_by, decided_at, decision_reason',
+      );
+    if (filter === 'pending') builder = builder.eq('status', 'pending');
+    if (filter === 'decided') builder = builder.in('status', ['approved', 'rejected']);
+    const cursorFilter = cursorFilterOf(query.cursor);
+    if (cursorFilter) builder = builder.or(cursorFilter);
+
+    const { data, error } = await builder
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(ADMIN_PAGE_SIZE + 1);
+    if (error) throw error;
+    const raw = asRows(data);
+    const page = raw.slice(0, ADMIN_PAGE_SIZE);
+    const lastRaw = page[page.length - 1];
+    const lastCreatedAt = lastRaw ? asNullableString(lastRaw['created_at']) : null;
+    const nextCursor =
+      raw.length > ADMIN_PAGE_SIZE && lastRaw && lastCreatedAt
+        ? encodeAdminCursor({ createdAt: lastCreatedAt, id: asString(lastRaw['id']) })
+        : null;
+
+    const jobIds = [...new Set(page.map((r) => asString(r['job_id'])).filter(Boolean))];
+    const profileIds = [
+      ...new Set(
+        page
+          .flatMap((r) => [asString(r['requested_by']), asString(r['decided_by'])])
+          .filter((id) => id.length > 0),
+      ),
+    ];
+
+    const [jobs, questions, profiles] = await Promise.all([
+      jobIds.length > 0
+        ? supabase
+            .from('jobs')
+            .select('id, title, status, company_id, deleted_at, companies(name)')
+            .in('id', jobIds)
+        : Promise.resolve({ data: [], error: null }),
+      jobIds.length > 0
+        ? supabase
+            .from('job_screening_questions')
+            .select('job_id, content_fingerprint')
+            .in('job_id', jobIds)
+        : Promise.resolve({ data: [], error: null }),
+      profileIds.length > 0
+        ? supabase.from('profiles').select('id, first_name, last_name').in('id', profileIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (jobs.error) throw jobs.error;
+    if (questions.error) throw questions.error;
+    if (profiles.error) throw profiles.error;
+
+    const jobById = new Map(asRows(jobs.data).map((job) => [asString(job['id']), job]));
+    const present = new Set(
+      asRows(questions.data).map(
+        (q) => `${asString(q['job_id'])}:${asString(q['content_fingerprint'])}`,
+      ),
+    );
+    const nameById = new Map(
+      asRows(profiles.data).map((profile) => [asString(profile['id']), fullName(profile)]),
+    );
+    const nameOf = (id: string): string | null => {
+      const name = id ? nameById.get(id) : undefined;
+      return name && name.length > 0 ? name : null;
+    };
+
+    const rows = page
+      .map((row): AdminScreeningReviewRow => {
+        const jobId = asString(row['job_id']);
+        const job = jobById.get(jobId) ?? {};
+        const company = asRecord(job['companies']);
+        const type = row['question_type'];
+        return {
+          id: asString(row['id']),
+          jobId,
+          jobTitle: asString(job['title']),
+          jobStatus: asString(job['status']),
+          companyId: asString(job['company_id']),
+          companyName: asString(company['name']),
+          questionType: isScreeningQuestionType(type) ? type : 'short_text',
+          prompt: toLocalizedText(row['prompt']),
+          options: (Array.isArray(row['options']) ? row['options'] : []).map((option) => ({
+            label: toLocalizedText(asRecord(option)['label']),
+          })),
+          categories: (Array.isArray(row['risk_categories']) ? row['risk_categories'] : []).filter(
+            isScreeningRiskCategory,
+          ),
+          status: reviewStatusOf(row['status']),
+          createdAt: asNullableString(row['created_at']),
+          requestedByName: nameOf(asString(row['requested_by'])),
+          decidedAt: asNullableString(row['decided_at']),
+          decidedByName: nameOf(asString(row['decided_by'])),
+          reason: asNullableString(row['decision_reason']),
+          current:
+            job['deleted_at'] == null &&
+            present.has(`${jobId}:${asString(row['content_fingerprint'])}`),
+        };
+      })
+      .filter((row) => filter !== 'pending' || row.current);
+
+    return { status: 'ok', rows, nextCursor };
+  } catch (error) {
+    captureError(error, { area: 'admin.listScreeningReviews' });
     return { status: 'error' };
   }
 }

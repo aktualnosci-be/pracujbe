@@ -1,7 +1,7 @@
 /**
  * Reguły odwołań od decyzji moderacyjnych (DSA, #43) — wspólne dla formularzy (przeglądarka)
  * i Server Actions. Te same limity egzekwuje baza (RPC `submit_moderation_appeal`,
- * `submit_report_appeal`, `admin_decide_appeal`, CHECK-i `moderation_appeals`, migracja 0103).
+ * `submit_report_appeal`, `admin_decide_appeal`, CHECK-i `moderation_appeals`, migracja 0104).
  */
 
 import {
@@ -27,7 +27,7 @@ export const APPEAL_OUTCOMES = ['upheld', 'reversed'] as const;
 export type AppealOutcome = (typeof APPEAL_OUTCOMES)[number];
 
 /**
- * Stan drogi odwołania od decyzji (`moderation_appealable`, 0103): `OK` — można się odwołać;
+ * Stan drogi odwołania od decyzji (`moderation_appealable`, 0104): `OK` — można się odwołać;
  * pozostałe — nie (już złożone, termin upłynął, ograniczenie cofnięte / decyzja zmieniona).
  */
 export const APPEAL_STATES = ['OK', 'APPEAL_EXISTS', 'APPEAL_WINDOW_CLOSED', 'INVALID_TRANSITION', 'NOT_FOUND'] as const;
