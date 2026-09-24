@@ -22,6 +22,11 @@ Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
 4. **Gdzie co jest:** patrz „Struktura katalogów".
 5. **Co dalej:** patrz „Roadmapa / status" — sekcja z checkboxami. Wybierz kolejny niezaznaczony punkt.
 6. **Zawsze uruchom przed commitem:** `npm run verify` (lint + typecheck + unit). E2E gdy dotykasz przepływów.
+7. **Praca wieloma sesjami:** prace idą równolegle w wielu sesjach Claude Code, a jedna
+   sesja-integrator scala PR-y, prowadzi kolejkę migracji i rutyny. Podręcznik (role,
+   stałe decyzje właściciela, procedura scalania, kolejka migracji, szablon sesji,
+   Railway): `.claude/skills/integration-loop/SKILL.md`. Sesja potomna: nie scalaj,
+   migracja na numerze tymczasowym, ostateczny nada integrator.
 
 ---
 
