@@ -385,8 +385,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > bazie z realnymi (nie-demo) firmami/ofertami (ochrona przed przypadkowym seedem znanych kont
 > na staging/produkcji); czysta/lokalna/CI baza przechodzi. Test negatywny w `test-seed.sh`.
 > **P1 możliwe autonomicznie — ZAMKNIĘTE** (SEC-01/03/04/05/06/07/08/09/10/17/19, FUN-01/03/04/
-> 05/06(część)/07). **FUN-08 (billing) — ZROBIONE:** realny Stripe (checkout/webhook/cancel,
-> webhook = źródło prawdy, provider-gated). **P1 wymagające infra/treści (otwarte):** CI-01/02/07
+> 05/06(część)/07). **FUN-08 (billing) — HISTORYCZNE, WYŁĄCZONE (#51):** dawny Stripe
+> checkout/webhook nie działa w bezpłatnym MVP (patrz Etap 7, „Płatności”). **P1 wymagające infra/treści (otwarte):** CI-01/02/07
 > (separacja runnerów + twarda bramka RLS/Storage — infra), FUN-09 (realna treść prawna — noindex
 > safe default zrobiony). **P2/P3 — ZROBIONE:** SEC-16 (0035, in_app opt-out trigger),
 > SEC-15 (outbox: sprawdzanie błędów zapisu po wysyłce + log do reconciliacji), SEC-14 (0036,
@@ -786,11 +786,22 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
   obiekt z linkiem; filtry typu obiektu, akcji, aktora, zakresu dat i `id` (skrót „Historia
   statusów” w wierszu firmy), stronicowanie kursorem.
-- [x] Płatności / subskrypcje / faktury / kody rabatowe — REALNY Stripe (FUN-08), provider-gated:
-  `startCheckout` tworzy sesję Stripe Checkout (subskrypcja, inline `price_data` z `PLANS`, kupon z
-  kodu rabatowego), `cancelSubscription` = `cancel_at_period_end`, webhook `/api/stripe/webhook`
-  (weryfikacja podpisu) = ŹRÓDŁO PRAWDY: synchronizuje `subscriptions/invoices/payments` service-rolem
-  (klient nie pisze tych tabel). Billing = rola owner/admin. Bez `STRIPE_SECRET_KEY` = tryb demo.
+- [x] Płatności — **WYŁĄCZONE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Stan aktywny:
+  portal bez cennika, pakietów, CTA zakupu i limitów planu; billing niedostępny. Jedna jawna flaga
+  `BILLING_ENABLED` (`src/lib/billing/flag.ts`), domyślnie wyłączona — włącza ją tylko dokładne
+  `true`. Bez flagi: `getStripe()` = null, `isStripeConfigured`/`isBillingProviderReady`/
+  `isBillingProviderConfigured`/`readinessChecks().stripe` = false mimo sekretów, webhook
+  `/api/stripe/webhook` = 404 bez czytania treści. Niezależnie od flagi: akcje `startCheckout`/
+  `applyDiscount`/`cancelSubscription` zawsze zwracają `BILLING_UNAVAILABLE` (komunikat
+  `errors.billingDisabled` — portal jest bezpłatny), webhook z flagą = 410, `/employer/platnosci`
+  → przekierowanie na `/employer`, brak trasy cennika (404), brak linków w nawigacji/stopce/sitemap.
+  `ENTITLEMENT_LIMIT` → `errors.activeJobLimit` (bez wzmianki o planie). Dawne klucze sprzedaży
+  (`billing.*`, `pricing.*`, `dashboard.*Package`, `footer.pricing`) zostały w `src/messages` bez
+  użycia. Tabele finansowe (`subscriptions/payments/invoices/discount_codes/checkout_intents`) =
+  martwy schemat do cleanupu po migracji Railway, nie wdrożona funkcja. Powrót monetyzacji =
+  nowa decyzja właściciela + osobny projekt (sama flaga nie uruchamia sprzedaży). Dowód:
+  `billing-disabled.test` (z kontrolą ujemną: flaga + sekrety + bezpośrednie wywołanie checkoutu),
+  `free-mvp-ui.test`, `sitemap-robots.test`, E2E `free-mvp-no-sales.spec` (4 języki).
 
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
