@@ -11,9 +11,9 @@
  * `renderEmail(type, locale, data)` zwraca `{ subject, html }` (render przez @react-email/render).
  */
 
-import { createElement, type CSSProperties, type FunctionComponent, type ReactElement } from 'react';
+import { createElement, type FunctionComponent, type ReactElement } from 'react';
 import { render } from '@react-email/render';
-import { Link, Section, Text } from '@react-email/components';
+import { Section } from '@react-email/components';
 
 import type { Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
@@ -22,13 +22,17 @@ import {
   EmailHeading,
   EmailHighlight,
   EmailLayout,
+  EmailPassport,
+  type EmailPassportField,
   EmailQuote,
   EmailRawLink,
   EmailText,
+  EmailTextLink,
 } from '@/emails/_components';
 import type { EmailCopy, EmailType } from '@/emails/copy';
 import { emailCopy, greetings, interpolate, jobOfferPassportCopy, layoutCopy, moderationLabels } from '@/emails/copy';
 import { applicationStatusLabel } from '@/emails/status-labels';
+import type { EmailSenderIdentity } from '@/lib/email/sender';
 
 /**
  * Dane wejściowe każdego typu maila. Nazwy pól odpowiadają tokenom `{...}` w `copy.ts`.
@@ -249,6 +253,14 @@ function formatEmailDate(value: unknown, locale: Locale): string | undefined {
   }).format(ts);
 }
 
+function asEmailSender(value: unknown): EmailSenderIdentity | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { identity, postalAddress } = value as Record<string, unknown>;
+  return typeof identity === 'string' && typeof postalAddress === 'string'
+    ? { identity, postalAddress }
+    : undefined;
+}
+
 /**
  * Wspólny „szkielet” treści maila: nagłówek, powitanie, akapity, opcjonalne wyróżnienie
  * i cytat, przycisk CTA (z surowym linkiem fallback) oraz opcjonalny tekst końcowy.
@@ -290,9 +302,17 @@ function EmailShell(props: {
   // #45: adres wypisania przekazuje renderEmail (opcja workera), nie payload kolejki.
   const unsubscribeUrl =
     typeof props.vars.unsubscribeUrl === 'string' ? props.vars.unsubscribeUrl : undefined;
+  // #45: tożsamość nadawcy też z opcji workera (po danych), nigdy z payloadu kolejki.
+  const sender = asEmailSender(props.vars.emailSender);
 
   return (
-    <EmailLayout locale={locale} preview={preview} unsubscribeUrl={unsubscribeUrl} footerNote={copy.footerNote}>
+    <EmailLayout
+      locale={locale}
+      preview={preview}
+      unsubscribeUrl={unsubscribeUrl}
+      footerNote={copy.footerNote}
+      sender={sender}
+    >
       <EmailHeading>{heading}</EmailHeading>
       <EmailText>{greeting}</EmailText>
       {paragraphs.map((paragraph, index) => (
@@ -309,78 +329,26 @@ function EmailShell(props: {
   );
 }
 
-const passportStyles = {
-  card: {
-    backgroundColor: '#F7F7F7',
-    border: '1px solid #DEDEDE',
-    borderTop: '4px solid #D92932',
-    borderRadius: '10px',
-    margin: '4px 0 18px 0',
-    padding: '18px 18px 4px 18px',
-  } satisfies CSSProperties,
-  title: {
-    color: '#D92932',
-    fontSize: '12px',
-    fontWeight: 700,
-    letterSpacing: '1px',
-    lineHeight: '18px',
-    margin: '0 0 12px 0',
-    textTransform: 'uppercase',
-  } satisfies CSSProperties,
-  row: {
-    borderTop: '1px solid #DEDEDE',
-    padding: '12px 0',
-  } satisfies CSSProperties,
-  label: {
-    color: '#616161',
-    fontSize: '11px',
-    fontWeight: 600,
-    letterSpacing: '0.7px',
-    lineHeight: '16px',
-    margin: '0 0 2px 0',
-    textTransform: 'uppercase',
-  } satisfies CSSProperties,
-  value: {
-    color: '#151515',
-    fontSize: '16px',
-    fontWeight: 700,
-    lineHeight: '22px',
-    margin: 0,
-  } satisfies CSSProperties,
-} as const;
-
-function PassportRow({
-  label,
-  value,
-  field,
-}: {
-  label: string;
-  value: string;
-  field: 'job-title' | 'company-name' | 'salary' | 'expires-at';
-}): ReactElement {
-  return (
-    <Section style={passportStyles.row} data-passport-field={field}>
-      <Text style={passportStyles.label}>{label}</Text>
-      <Text style={passportStyles.value}>{value}</Text>
-    </Section>
-  );
-}
-
+/** Propozycja pracy jako „paszport” z newsletter.html: pola w dwóch kolumnach. */
 function JobOfferPassport(props: EmailProps<'jobOffer'>): ReactElement {
   const labels = jobOfferPassportCopy[props.locale];
   const salary = props.salary?.trim();
   const expiresAt = formatEmailDate(props.expiresAt, props.locale);
+  const fields: EmailPassportField[] = [
+    { label: labels.jobTitle, value: props.jobTitle, data: ['data-passport-field', 'job-title'] },
+    { label: labels.companyName, value: props.companyName, data: ['data-passport-field', 'company-name'] },
+  ];
+  if (salary) fields.push({ label: labels.salary, value: salary, data: ['data-passport-field', 'salary'] });
+  if (expiresAt) {
+    fields.push({ label: labels.expiresAt, value: expiresAt, data: ['data-passport-field', 'expires-at'] });
+  }
 
   return (
-    <Section style={passportStyles.card} data-email-component="job-offer-passport">
-      <Text style={passportStyles.title}>{labels.title}</Text>
-      <PassportRow label={labels.jobTitle} value={props.jobTitle} field="job-title" />
-      <PassportRow label={labels.companyName} value={props.companyName} field="company-name" />
-      {salary ? <PassportRow label={labels.salary} value={salary} field="salary" /> : null}
-      {expiresAt ? (
-        <PassportRow label={labels.expiresAt} value={expiresAt} field="expires-at" />
-      ) : null}
-    </Section>
+    <EmailPassport
+      eyebrow={labels.title}
+      fields={fields}
+      sectionData={{ 'data-email-component': 'job-offer-passport' }}
+    />
   );
 }
 
@@ -646,41 +614,21 @@ export function GuestApplicationSentEmail(props: EmailProps<'guestApplicationSen
   );
 }
 
-const jobListStyles = {
-  item: {
-    borderTop: '1px solid #DEDEDE',
-    padding: '12px 0',
-  } satisfies CSSProperties,
-  title: {
-    color: '#151515',
-    fontSize: '16px',
-    fontWeight: 700,
-    lineHeight: '22px',
-    textDecoration: 'underline',
-  } satisfies CSSProperties,
-  meta: {
-    color: '#616161',
-    fontSize: '14px',
-    lineHeight: '20px',
-    margin: '2px 0 0 0',
-  } satisfies CSSProperties,
-} as const;
-
-/** Lista nowych ofert w digeście — tytuł jako link do oferty, pod nim firma i miasto. */
+/** Lista nowych ofert w digeście — sekcje jak paszporty newslettera: tytuł-link, firma · miasto. */
 function JobMatchList({ jobs }: { jobs: EmailDataMap['jobMatch']['jobs'] }): ReactElement | null {
   const items = (jobs ?? []).filter((job) => job.title.trim().length > 0 && job.url.length > 0);
   if (items.length === 0) return null;
   return (
-    <Section style={{ margin: '4px 0 18px 0' }} data-email-component="job-match-list">
+    <Section style={{ margin: '4px 0 8px 0' }} data-email-component="job-match-list">
       {items.map((job, index) => {
         const meta = [job.companyName, job.city].filter((v) => v && v.trim().length > 0).join(' · ');
         return (
-          <Section key={index} style={jobListStyles.item}>
-            <Link href={job.url} style={jobListStyles.title}>
-              {job.title}
-            </Link>
-            {meta ? <Text style={jobListStyles.meta}>{meta}</Text> : null}
-          </Section>
+          <EmailPassport
+            key={index}
+            title={<EmailTextLink href={job.url} tone="title">{job.title}</EmailTextLink>}
+            fields={[]}
+            footer={meta ? <strong>{meta}</strong> : undefined}
+          />
         );
       })}
     </Section>
@@ -902,8 +850,8 @@ export async function renderEmail<T extends EmailType>(
   type: T,
   locale: Locale,
   data: EmailDataMap[T],
-  options: { unsubscribeUrl?: string } = {},
-): Promise<{ subject: string; html: string }> {
+  options: { unsubscribeUrl?: string; sender?: EmailSenderIdentity } = {},
+): Promise<{ subject: string; html: string; text: string }> {
   // Rejestr jest w pełni typowany; tu kasujemy generyk wyłącznie na potrzeby createElement
   // (TS nie potrafi skorelować EmailDataMap[T] z sygnaturą createElement).
   const Component = templates[type] as unknown as FunctionComponent<Record<string, unknown>>;
@@ -913,9 +861,12 @@ export async function renderEmail<T extends EmailType>(
     ...data,
     locale,
     unsubscribeUrl: options.unsubscribeUrl,
+    emailSender: options.sender,
   });
   const html = await render(element);
+  // #45: wersja text/plain z tego samego drzewa (multipart/alternative u dostawcy).
+  const text = await render(element, { plainText: true });
   const vars = prepareVars(type, locale, data as Record<string, unknown>);
   const subject = interpolate(resolveCopy(type, locale, vars).subject, vars);
-  return { subject, html };
+  return { subject, html, text };
 }
