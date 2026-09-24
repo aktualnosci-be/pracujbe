@@ -567,6 +567,7 @@
     "staleState": "De status is intussen gewijzigd (bijvoorbeeld door een andere beheerder). De lijst is vernieuwd — controleer de huidige status.",
     "jobNotEditable": "Deze vacature kan nu niet worden bewerkt. Alleen een actieve of gepauzeerde vacature kan worden aangepast.",
     "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien.",
+    "jobExpired": "De vervaldatum van deze vacature is verstreken. Open ze opnieuw via de vacaturelijst — heropenen verwijdert de verstreken datum.",
     "jobImportInvalidFile": "Dit bestand kan niet worden geïmporteerd. Gebruik een PNG-, JPG- of WebP-screenshot tot 5 MB.",
     "jobImportInvalidUrl": "Dit adres kunnen we niet ophalen. Plak een openbare http(s)-link naar de vacature.",
     "jobImportFetchFailed": "We konden de pagina met de vacature niet ophalen. Probeer het later of upload een screenshot.",

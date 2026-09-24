@@ -567,6 +567,7 @@
     "staleState": "Status zmienił się w międzyczasie (np. zmienił go inny administrator). Lista została odświeżona — sprawdź aktualny stan.",
     "jobNotEditable": "Tej oferty nie można teraz edytować. Poprawić można ofertę aktywną lub wstrzymaną.",
     "jobEditConflict": "Ktoś zmienił tę ofertę w międzyczasie. Otwórz ją ponownie z listy ofert, aby zobaczyć aktualną wersję.",
+    "jobExpired": "Termin ważności tej oferty minął. Otwórz ją ponownie z listy ofert — ponowne otwarcie usuwa minioną datę.",
     "jobImportInvalidFile": "Tego pliku nie można zaimportować. Użyj zrzutu ekranu PNG, JPG lub WebP do 5 MB.",
     "jobImportInvalidUrl": "Tego adresu nie możemy pobrać. Wklej publiczny link http(s) do ogłoszenia.",
     "jobImportFetchFailed": "Nie udało się pobrać strony z ogłoszeniem. Spróbuj później albo wgraj zrzut ekranu.",

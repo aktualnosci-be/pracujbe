@@ -657,6 +657,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   opcjonalnie `AI_JOB_IMPORT_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
   produkcją (E2E `job-import.spec`). Research, koszty, prywatność: `docs/AI_JOB_IMPORT.md`.
   **Otwarte:** globalny budżet i raport kosztów (#36), DPA/retencja dostawcy (decyzja właściciela).
+- [x] Wygaszanie ofert (#72, migracja `0085`): `expire_due_jobs()` (service_role, `SKIP LOCKED`,
+  zwraca liczbę) zmienia tylko `active` z `expires_at <= now()` na `expired`; woła je
+  `/api/maintenance` (cron Railway co godzinę, `docs/railway/README.md`). Panel nie czeka na cron:
+  licznik aktywnych filtruje datę, lista pokazuje aktywną po terminie jako `expired`
+  (`src/lib/job-expiry.ts`) z akcją „Otwórz ponownie”, kreator jej nie edytuje. `publish_job` z
+  minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
+  `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu
 
 ### Etap 5 — procesy
@@ -843,6 +850,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami
   (`tests/helpers/png-pixels.ts`), bo rewizje Chromium inaczej kodują IDAT.
+  Zrzut bez flaka (main 514e917, „Unable to capture screenshot”): skrypty robią zrzut przez
+  `scripts/lib/stable-screenshot.mjs` (fonty + dwie ramki ze stałym układem, najwyżej 3 próby
+  tylko tego błędu, wpis na stderr); testy z Chromium w projekcie Vitest `chromium`
+  (`CHROMIUM_TEST_FILES`, jeden plik naraz), strażnik `stable-screenshot.test.ts`.
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
