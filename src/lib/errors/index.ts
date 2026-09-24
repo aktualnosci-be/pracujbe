@@ -35,6 +35,7 @@ export const ErrorCodes = {
   CHECKOUT_IN_PROGRESS: 'CHECKOUT_IN_PROGRESS',
   ENTITLEMENT_LIMIT: 'ENTITLEMENT_LIMIT',
   DEMO_UNAVAILABLE: 'DEMO_UNAVAILABLE',
+  SAVED_SEARCH_LIMIT_REACHED: 'SAVED_SEARCH_LIMIT_REACHED',
   NOT_FOUND: 'NOT_FOUND',
   INTERNAL: 'INTERNAL',
 } as const;
@@ -74,6 +75,7 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   CHECKOUT_IN_PROGRESS: 'checkoutInProgress',
   ENTITLEMENT_LIMIT: 'entitlementLimit',
   DEMO_UNAVAILABLE: 'demoUnavailable',
+  SAVED_SEARCH_LIMIT_REACHED: 'savedSearchLimitReached',
   NOT_FOUND: 'notFound',
   INTERNAL: 'internal',
 };

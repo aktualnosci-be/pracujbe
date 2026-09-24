@@ -13,8 +13,14 @@ import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 import {
   localizedLocationLabel,
   localizeLocationFacets,
-  resolveCityFilters,
 } from '@/lib/locations/city-aliases';
+import {
+  hasSavedSearchFilters,
+  parseJobListQuery,
+  savedSearchFiltersFromQuery,
+  savedSearchQueryString,
+} from '@/lib/job-list-query';
+import { SaveSearchButton } from '@/components/public/SaveSearchButton';
 import { FilterSidebar, SortMenu } from '@/components/public/FilterSidebar';
 import { FilterSheet } from '@/components/public/FilterSheet';
 import { JobCard } from '@/components/public/JobCard';
@@ -23,8 +29,6 @@ import {
   SALARY_MAX_BOUND,
   buildDemoFacets,
   isSalaryNarrowed,
-  parseSidebarFilters,
-  parseSort,
   sidebarFiltersToParams,
   splitParam,
   toFacetItem,
@@ -155,14 +159,8 @@ export default async function JobsListPage({
   const sp = await searchParams;
   const flat = flatten(sp);
 
-  const keyword = flat['keyword']?.trim() || undefined;
-  const city = flat['city']?.trim() || undefined;
-  const sort: SortValue = parseSort(flat['sort']);
-  const sf = parseSidebarFilters(flat);
-  // #189: miasto z adresu może pochodzić z innej wersji językowej (przełącznik języka kopiuje
-  // query 1:1). Adres i linki zostają bez zmian; zapytanie obejmuje wszystkie nazwy miasta,
-  // a sidebar i chipy pokazują nazwę w języku strony — zbiór ofert nie zależy od języka.
-  const cityFilters = resolveCityFilters({ city, locations: sf.locations }, locale);
+  const listQuery = parseJobListQuery(flat, locale);
+  const { keyword, city, sort, sidebar: sf, cityFilters, filterParams } = listQuery;
   const sidebarInitial = { ...sf, locations: cityFilters.displayLocations };
 
   const page = parsePage(flat['page']);
@@ -176,41 +174,10 @@ export default async function JobsListPage({
     getTranslations('nav'),
   ]);
 
-  // Data „od" dla filtra świeżości (P1-12: liczone w SQL).
-  const DAY_MS = 86_400_000;
-  const sinceWindow =
-    sf.date === '24h'
-      ? DAY_MS
-      : sf.date === '7d'
-        ? 7 * DAY_MS
-        : sf.date === '30d'
-          ? 30 * DAY_MS
-          : 0;
-  const since = sinceWindow
-    ? new Date(Date.now() - sinceWindow).toISOString()
-    : undefined;
-
   // WYNIKI: komplet filtrów sidebara + sort + paginacja + licznik PO STRONIE SQL (P1-12) —
   // koniec liczenia w pamięci nad wycinkiem 200 (oferty nie znikają, liczba stron poprawna).
-  const narrowed = isSalaryNarrowed(sf);
-  const filterParams = {
-    locale,
-    keyword,
-    city: cityFilters.city,
-    categories: sf.categories,
-    locations: cityFilters.queryLocations,
-    contractTypes: sf.contractTypes,
-    ...(narrowed ? { salaryMin: sf.salaryMin } : {}),
-    ...(narrowed && sf.salaryMax < SALARY_MAX_BOUND
-      ? { salaryMax: sf.salaryMax }
-      : {}),
-    ...(sf.accommodation.length === 1
-      ? { accommodation: sf.accommodation.includes('provided') }
-      : {}),
-    ...(sf.immediate ? { immediate: true } : {}),
-    ...(sf.noLanguageRequired ? { noLanguageRequired: true } : {}),
-    ...(since ? { since } : {}),
-  };
+  // Filtry buduje `parseJobListQuery` — to samo źródło co zapis wyszukiwania (#100).
+  const savedSearchFilters = savedSearchFiltersFromQuery(listQuery);
   const [results, databaseFacets] = await Promise.all([
     getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }),
     getJobFilterFacets(filterParams),
@@ -586,6 +553,22 @@ export default async function JobsListPage({
                 {tFilters('clear')}
               </Link>
             </div>
+          ) : null}
+
+          {/* #100: zapis wyszukiwania + alert (akcja sprawdza sesję; strona zostaje publiczna). */}
+          {hasSavedSearchFilters(savedSearchFilters) ? (
+            <SaveSearchButton
+              className="mb-4"
+              locale={locale}
+              filters={savedSearchFilters}
+              query={savedSearchQueryString(listQuery)}
+              name={chips
+                .filter((chip) => chip.id !== 'date')
+                .map((chip) => chip.label)
+                .join(' · ')
+                .slice(0, 80)}
+              loginNext={`${BASE_PATH}${savedSearchQueryString(listQuery)}`}
+            />
           ) : null}
 
           {/* Wyniki */}

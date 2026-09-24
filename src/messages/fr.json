@@ -575,7 +575,8 @@
     "jobEditConflict": "Quelqu'un a modifié cette offre entre-temps. Rouvrez-la depuis la liste des offres pour voir la version actuelle.",
     "jobExpired": "La date d'expiration de cette offre est dépassée. Rouvrez-la depuis la liste des offres — la réouverture supprime la date passée.",
     "botCheckFailed": "Nous n'avons pas pu confirmer que ce formulaire est envoyé par une personne. Refaites la vérification et envoyez-le à nouveau.",
-    "botCheckUnavailable": "La vérification de sécurité est momentanément indisponible. Réessayez dans quelques minutes."
+    "botCheckUnavailable": "La vérification de sécurité est momentanément indisponible. Réessayez dans quelques minutes.",
+    "savedSearchLimitReached": "Vous avez déjà 20 recherches enregistrées. Supprimez-en une pour en ajouter une nouvelle."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -864,7 +865,8 @@
     "editJobLabel": "Modifier l'offre : {title}",
     "viewJob": "Voir l'offre",
     "viewJobLabel": "Voir l'offre : {title}",
-    "navTeam": "Équipe"
+    "navTeam": "Équipe",
+    "navSearches": "Recherches enregistrées"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1053,7 +1055,8 @@
     "markedAllRead": "Toutes les notifications ont été marquées comme lues.",
     "itemCompanyRejected": "Votre entreprise n’a pas été vérifiée",
     "itemCompanySuspended": "Votre entreprise a été suspendue",
-    "itemTeamInvitation": "Invitation à rejoindre une équipe"
+    "itemTeamInvitation": "Invitation à rejoindre une équipe",
+    "itemSavedSearch": "Nouvelles offres pour une recherche enregistrée"
   },
   "pricing": {
     "standard": "Standard",
@@ -1757,5 +1760,35 @@
       "companyLimit": "Vous pouvez gérer au maximum 5 entreprises.",
       "lastOwner": "L’entreprise doit avoir au moins un propriétaire actif."
     }
+  },
+  "savedSearches": {
+    "hint": "Enregistrez ces filtres et nous vous préviendrons sur le site et par e-mail des nouvelles offres (au maximum une fois par jour).",
+    "save": "Enregistrer la recherche",
+    "saving": "Enregistrement…",
+    "saved": "Nous avons enregistré la recherche. Nous vous préviendrons des nouvelles offres.",
+    "alreadySaved": "Cette recherche est déjà enregistrée.",
+    "manage": "Gérer les recherches",
+    "loginRequired": "Pour enregistrer la recherche, connectez-vous à votre compte candidat.",
+    "login": "Se connecter",
+    "errorNetwork": "Pas de connexion. Vérifiez votre accès à Internet et réessayez.",
+    "defaultName": "Ma recherche",
+    "intro": "Recherches enregistrées depuis la liste des offres. Quand de nouvelles offres correspondent à ces filtres, vous recevez une notification et un e-mail.",
+    "loadError": "Impossible de charger vos recherches enregistrées.",
+    "retry": "Réessayer",
+    "empty": "Vous n’avez pas encore de recherche enregistrée. Choisissez des filtres dans la liste des offres et cliquez sur « Enregistrer la recherche ».",
+    "demo": "La version de démonstration n’enregistre pas de recherches.",
+    "browse": "Voir les offres",
+    "lastAlert": "Dernière alerte : {date}",
+    "noAlertYet": "Aucune alerte envoyée pour l’instant.",
+    "open": "Voir les offres",
+    "alerts": "M’avertir des nouvelles offres",
+    "frequency": "Fréquence",
+    "daily": "Une fois par jour",
+    "weekly": "Une fois par semaine",
+    "delete": "Supprimer",
+    "deleteTitle": "Supprimer la recherche « {name} » ?",
+    "deleteDescription": "Vous ne recevrez plus d’alertes sur les nouvelles offres correspondant à ces filtres.",
+    "deleted": "Nous avons supprimé la recherche.",
+    "updated": "Nous avons enregistré les modifications."
   }
 }

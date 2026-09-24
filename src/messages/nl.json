@@ -575,7 +575,8 @@
     "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien.",
     "jobExpired": "De vervaldatum van deze vacature is verstreken. Open ze opnieuw via de vacaturelijst — heropenen verwijdert de verstreken datum.",
     "botCheckFailed": "We konden niet bevestigen dat een mens dit formulier verstuurt. Voltooi de verificatie opnieuw en verstuur het nog eens.",
-    "botCheckUnavailable": "De beveiligingscontrole is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw."
+    "botCheckUnavailable": "De beveiligingscontrole is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw.",
+    "savedSearchLimitReached": "Je hebt al 20 opgeslagen zoekopdrachten. Verwijder er een om een nieuwe toe te voegen."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -864,7 +865,8 @@
     "editJobLabel": "Vacature bewerken: {title}",
     "viewJob": "Vacature bekijken",
     "viewJobLabel": "Vacature bekijken: {title}",
-    "navTeam": "Team"
+    "navTeam": "Team",
+    "navSearches": "Opgeslagen zoekopdrachten"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -1053,7 +1055,8 @@
     "markedAllRead": "Alle meldingen zijn als gelezen gemarkeerd.",
     "itemCompanyRejected": "Je bedrijf is niet geverifieerd",
     "itemCompanySuspended": "Je bedrijf is opgeschort",
-    "itemTeamInvitation": "Uitnodiging voor een bedrijfsteam"
+    "itemTeamInvitation": "Uitnodiging voor een bedrijfsteam",
+    "itemSavedSearch": "Nieuwe vacatures voor een opgeslagen zoekopdracht"
   },
   "pricing": {
     "standard": "Standaard",
@@ -1757,5 +1760,35 @@
       "companyLimit": "Je kunt maximaal 5 bedrijven beheren.",
       "lastOwner": "Het bedrijf moet minstens één actieve eigenaar hebben."
     }
+  },
+  "savedSearches": {
+    "hint": "Sla deze filters op en we laten je op de site en per e-mail weten wanneer er nieuwe vacatures zijn (hoogstens één keer per dag).",
+    "save": "Zoekopdracht opslaan",
+    "saving": "Opslaan…",
+    "saved": "We hebben de zoekopdracht opgeslagen. We laten je weten wanneer er nieuwe vacatures zijn.",
+    "alreadySaved": "Deze zoekopdracht is al opgeslagen.",
+    "manage": "Zoekopdrachten beheren",
+    "loginRequired": "Log in met je kandidatenaccount om de zoekopdracht op te slaan.",
+    "login": "Inloggen",
+    "errorNetwork": "Geen verbinding. Controleer je internet en probeer het opnieuw.",
+    "defaultName": "Mijn zoekopdracht",
+    "intro": "Zoekopdrachten die je vanuit de vacaturelijst hebt opgeslagen. Komen er nieuwe vacatures met deze filters bij, dan krijg je een melding en een e-mail.",
+    "loadError": "We konden je opgeslagen zoekopdrachten niet laden.",
+    "retry": "Opnieuw proberen",
+    "empty": "Je hebt nog geen opgeslagen zoekopdrachten. Stel filters in op de vacaturelijst en klik op ‘Zoekopdracht opslaan’.",
+    "demo": "In de demoversie slaan we geen zoekopdrachten op.",
+    "browse": "Vacatures bekijken",
+    "lastAlert": "Laatste melding: {date}",
+    "noAlertYet": "We hebben nog geen melding verstuurd.",
+    "open": "Vacatures tonen",
+    "alerts": "Meld nieuwe vacatures",
+    "frequency": "Hoe vaak",
+    "daily": "Eén keer per dag",
+    "weekly": "Eén keer per week",
+    "delete": "Verwijderen",
+    "deleteTitle": "Zoekopdracht ‘{name}’ verwijderen?",
+    "deleteDescription": "Je krijgt dan geen meldingen meer over nieuwe vacatures met deze filters.",
+    "deleted": "We hebben de zoekopdracht verwijderd.",
+    "updated": "We hebben de wijzigingen opgeslagen."
   }
 }

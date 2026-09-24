@@ -575,7 +575,8 @@
     "jobEditConflict": "Ktoś zmienił tę ofertę w międzyczasie. Otwórz ją ponownie z listy ofert, aby zobaczyć aktualną wersję.",
     "jobExpired": "Termin ważności tej oferty minął. Otwórz ją ponownie z listy ofert — ponowne otwarcie usuwa minioną datę.",
     "botCheckFailed": "Nie udało się potwierdzić, że formularz wysyła człowiek. Zaznacz weryfikację jeszcze raz i wyślij ponownie.",
-    "botCheckUnavailable": "Weryfikacja bezpieczeństwa jest chwilowo niedostępna. Spróbuj ponownie za kilka minut."
+    "botCheckUnavailable": "Weryfikacja bezpieczeństwa jest chwilowo niedostępna. Spróbuj ponownie za kilka minut.",
+    "savedSearchLimitReached": "Masz już 20 zapisanych wyszukiwań. Usuń jedno z nich, aby dodać nowe."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -864,7 +865,8 @@
     "editJobLabel": "Edytuj ofertę: {title}",
     "viewJob": "Zobacz ofertę",
     "viewJobLabel": "Zobacz ofertę: {title}",
-    "navTeam": "Zespół"
+    "navTeam": "Zespół",
+    "navSearches": "Zapisane wyszukiwania"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1053,7 +1055,8 @@
     "markedAllRead": "Oznaczono wszystkie powiadomienia jako przeczytane.",
     "itemCompanyRejected": "Twoja firma nie przeszła weryfikacji",
     "itemCompanySuspended": "Twoja firma została zawieszona",
-    "itemTeamInvitation": "Zaproszenie do zespołu firmy"
+    "itemTeamInvitation": "Zaproszenie do zespołu firmy",
+    "itemSavedSearch": "Nowe oferty dla zapisanego wyszukiwania"
   },
   "pricing": {
     "standard": "Standard",
@@ -1757,5 +1760,35 @@
       "companyLimit": "Możesz prowadzić maksymalnie 5 firm.",
       "lastOwner": "Firma musi mieć co najmniej jednego aktywnego właściciela."
     }
+  },
+  "savedSearches": {
+    "hint": "Zapisz te filtry, a powiadomimy Cię w serwisie i e-mailem o nowych ofertach (najwyżej raz dziennie).",
+    "save": "Zapisz wyszukiwanie",
+    "saving": "Zapisywanie…",
+    "saved": "Zapisaliśmy wyszukiwanie. Powiadomimy Cię o nowych ofertach.",
+    "alreadySaved": "To wyszukiwanie jest już zapisane.",
+    "manage": "Zarządzaj wyszukiwaniami",
+    "loginRequired": "Aby zapisać wyszukiwanie, zaloguj się na konto kandydata.",
+    "login": "Zaloguj się",
+    "errorNetwork": "Brak połączenia. Sprawdź internet i spróbuj ponownie.",
+    "defaultName": "Moje wyszukiwanie",
+    "intro": "Wyszukiwania zapisane z listy ofert. Gdy pojawią się nowe oferty z tymi filtrami, dostaniesz powiadomienie i e-mail.",
+    "loadError": "Nie udało się wczytać zapisanych wyszukiwań.",
+    "retry": "Spróbuj ponownie",
+    "empty": "Nie masz jeszcze zapisanych wyszukiwań. Ustaw filtry na liście ofert i kliknij „Zapisz wyszukiwanie”.",
+    "demo": "W wersji demonstracyjnej nie zapisujemy wyszukiwań.",
+    "browse": "Przeglądaj oferty",
+    "lastAlert": "Ostatni alert: {date}",
+    "noAlertYet": "Jeszcze nie wysłaliśmy alertu.",
+    "open": "Pokaż oferty",
+    "alerts": "Powiadamiaj o nowych ofertach",
+    "frequency": "Jak często",
+    "daily": "Raz dziennie",
+    "weekly": "Raz w tygodniu",
+    "delete": "Usuń",
+    "deleteTitle": "Usunąć wyszukiwanie „{name}”?",
+    "deleteDescription": "Przestaniesz dostawać alerty o nowych ofertach z tymi filtrami.",
+    "deleted": "Usunęliśmy wyszukiwanie.",
+    "updated": "Zapisaliśmy zmiany."
   }
 }
