@@ -1171,7 +1171,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   jest wpięte (brak `instrumentation-client`).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
-  `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0106`
+  `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0107`
   (`claim_email_batch` dla `service_role`). Dowód: `tests/integration/portal-*.test.ts` (PG16). **Otwarte:** nazwa
   firmy z rejestracji w formularzu firmy (metadane konta), nazwa firmy w wiadomościach kandydata (od 0014);
   spięcie z trasami sesji (#24) i usunięcie SDK (#27).

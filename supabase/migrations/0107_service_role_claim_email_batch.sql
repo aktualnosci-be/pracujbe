@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0106_service_role_claim_email_batch.sql — #25: worker poczty na puli `service`.
+-- 0107_service_role_claim_email_batch.sql — #25: worker poczty na puli `service`.
 --
 -- 0021 odebrało EXECUTE na claim_email_batch roli PUBLIC. Na Supabase klucz service-role
 -- i tak mógł ją wołać (domyślne uprawnienia platformy); na PostgreSQL Railway rola
@@ -7,7 +7,7 @@
 -- więc worker `/api/email/process` nie odebrałby żadnego wiersza kolejki.
 -- Nadajemy EXECUTE WYŁĄCZNIE service_role; anon/authenticated nadal bez prawa.
 -- Pozostałe funkcje wołane przez pulę service mają już EXECUTE dla service_role
--- (sprawdzone na komplecie migracji 0000–0105).
+-- (sprawdzone na komplecie migracji 0000–0105; numer 0106 zarezerwowany dla #523).
 --
 -- Rollback: revoke execute on function public.claim_email_batch(integer, integer)
 --           from service_role;  (bez zmian danych)
