@@ -1027,6 +1027,16 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `/zglos-tresc/sprawa`. Dowód: `rls.sql` sekcja MOD42; unit `moderation-decision*`; E2E
   `admin-ux` (#42). **Otwarte:** procedura odwołań (#43); znacznik treści prawnej o środkach
   odwoławczych w panelu firmy; UI kolejki według priorytetu (lista nadal po dacie).
+- [~] Mapa danych osobowych (#485/#488/#503/#504, część techniczna): `node scripts/privacy/data-map.mjs`
+  generuje `docs/legal-drafts/data-map.generated.md` z migracji produkcyjnych (parser
+  `scripts/privacy/schema.mjs`), klasyfikacji `src/lib/privacy/data-map.ts` (każda tabela, kategorie,
+  czynności) i usług `src/lib/privacy/processors.ts` (rola/region/transfer/DPA = „DO UZUPEŁNIENIA”);
+  sekcja e-maili = klucze payloadu z aktualnych funkcji SQL (`email-payloads.mjs`). Test
+  `privacy-data-map.test.ts`: tabela bez wpisu albo kolumna wyglądająca na PII (np. `email`) bez
+  klasyfikacji = czerwony, plik nieaktualny = czerwony, payload z CV/odpowiedziami/treścią wiadomości
+  = czerwony (kontrole ujemne). Szkice `docs/legal-drafts/rejestr-czynnosci.md` i
+  `dostawcy-i-transfery.md` — PROJEKT, nieopublikowany, nic w UI. **Do ustalenia (właściciel +
+  prawnik):** administrator, role portal/pracodawca, podstawy, retencja, DPA i transfery.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
@@ -1053,6 +1063,16 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
   connect/img/font, GA/Meta/Supabase/Sentry). Wariant nonce/strict-dynamic = follow-up (E2E).
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
+- [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
+  funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
+  `src/`+`scripts/`, wywołanie modelu bez wpisu = czerwony test, kontrola ujemna; pliki
+  matchingu/statusu/screeningu nie mogą wołać modelu), log użycia AI bez treści/PII
+  (`src/lib/ai/usage-log.ts`, wpięty w import ogłoszeń), dokumentacja lejka `docs/JOB_FUNNEL.md`
+  i E2E `job-funnel-no-storage` (fixture: zero cookies/storage i żądanie bez `Cookie`).
+  Szkice NIEOPUBLIKOWANE: `docs/legal-drafts/ai-act-art22-dpia.md`, `eprivacy-lejek.md`.
+  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie, wariant zgody lejka
+  (dziś wysyłka niezależna od banera), twardy termin retencji `job_funnel_receipts`, wpis
+  tłumaczeń (#514) do logu użycia.
 - [x] Cloudflare Turnstile (#46) — logowanie/rejestracja/reset: siteverify w Server Actions
   (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.

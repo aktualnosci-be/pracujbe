@@ -26,6 +26,8 @@ export default defineConfig({
         '**/offer-message-login.spec.ts',
         // Formularz zgłoszenia treści (#41).
         '**/content-report-form.spec.ts',
+        // Lejek ofert bez cookies/storage przed zgodą (#499).
+        '**/job-funnel-no-storage.spec.ts',
       ],
   workers: 1,
   // next dev kompiluje trasę przy pierwszym żądaniu; na zimnym starcie trwa to ponad 30 s.
