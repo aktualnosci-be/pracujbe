@@ -1,5 +1,5 @@
 import { isLocale, routing, type Locale } from '@/i18n/routing';
-import { safeNextPath } from '@/lib/validation/auth';
+import { safeNextPath } from '@/lib/auth/next-path';
 
 import en from '@/messages/en.json';
 import fr from '@/messages/fr.json';

@@ -736,7 +736,11 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Core Web Vitals / audyt wydajności (Lighthouse w CI).
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391), dialogi
   na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
-  obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
+  obrazów z optymalizatora i plików `public/` (#394).
+  Zod poza JS stron publicznych (#390): helpery adresu `next` (`safeNextPath`, `loginHref`,
+  `registerHref`, `relocalizeNextParam`) w `src/lib/auth/next-path.ts` bez Zoda; schematy
+  zostają w `validation/auth`. Straże: graf importów `public-bundle-no-zod.test` i chunki
+  z `ZodError` w `check-next-build.mjs` (layout `(public)`, home, lista ofert, poradnik). Bramka wydajności w CI (#395) czeka
   na decyzję o workflow.
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
   `locale` jawnie do Header/Footer/SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).

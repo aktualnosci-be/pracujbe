@@ -4,7 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AuthForm } from '@/components/auth/AuthForm';
-import { safeNextPath } from '@/lib/validation/auth';
+import { safeNextPath } from '@/lib/auth/next-path';
 
 /**
  * Rejestracja kandydata (wybór roli). Formularz kliencki (AuthForm) wywołuje server action

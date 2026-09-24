@@ -29,7 +29,7 @@ import { brandShareImageUrl, buildJobPostingJsonLd, serializeJsonLd } from '@/li
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
-import { loginHref } from '@/lib/validation/auth';
+import { loginHref } from '@/lib/auth/next-path';
 import { JobMatchCard } from '@/components/public/JobMatchCard';
 import { JobCompanyBlockControl } from '@/components/public/JobCompanyBlockControl';
 import { SimilarJobsError } from '@/components/public/SimilarJobsError';

@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
-import { loginHref } from '@/lib/validation/auth';
+import { loginHref } from '@/lib/auth/next-path';
 import {
   getPublicSavedJobs,
   type PublicSavedState,

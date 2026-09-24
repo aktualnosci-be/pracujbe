@@ -5,7 +5,7 @@ import { Languages } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/navigation';
 import { routing, localeNames } from '@/i18n/routing';
-import { relocalizeNextParam } from '@/lib/validation/auth';
+import { relocalizeNextParam } from '@/lib/auth/next-path';
 import {
   Select,
   SelectContent,
