@@ -1536,6 +1536,12 @@ select pg_temp.assert(
 -- ============================================================================
 -- MM. Idempotentna wysyłka wiadomości (0075, #147) oraz wyścig i granica wygaśnięcia
 --     odpowiedzi na propozycję (0075, #88). Równoległość: dwie osobne sesje przez dblink.
+--
+-- Zestaw bywa uruchamiany w jednej zewnętrznej transakcji (tests/integration/rate-limit.test.ts:
+-- BEGIN … ROLLBACK), której niezatwierdzonych danych inne sesje nie widzą. Dlatego fixture'y
+-- tej sekcji zakłada i ZATWIERDZA osobna sesja (mm_setup), a testy wymagające własnej
+-- transakcji (granica expires_at = now()) też idą przez osobną sesję — bez BEGIN/ROLLBACK
+-- w tym skrypcie. Identyfikatory fixture'ów są stałe i unikalne dla sekcji MM.
 -- ============================================================================
 \set CANDM 'e1000000-0000-0000-0000-00000000000c'
 \set OWNM  'e1000000-0000-0000-0000-0000000000a1'
@@ -1547,43 +1553,23 @@ select pg_temp.assert(
 \set KEY1  'e1000000-0000-0000-0000-0000000000d1'
 \set KEY2  'e1000000-0000-0000-0000-0000000000d2'
 \set KEY3  'e1000000-0000-0000-0000-0000000000d3'
-\set KEY4  'e1000000-0000-0000-0000-0000000000d4'
 reset role; reset app.current_uid;
-insert into auth.users(id,email,name,raw_user_meta_data) values
-  (:'CANDM','candm@test.be','Maja M','{"role":"candidate","first_name":"Maja","last_name":"Mertens","locale":"pl"}'),
-  (:'OWNM','ownm@test.be','Otto M','{"role":"employer","first_name":"Otto","last_name":"Maes","locale":"nl"}');
-insert into public.companies(id,name,status) values (:'COMPM','Firma M','verified');
-insert into public.company_members(company_id,profile_id,role,is_active) values (:'COMPM',:'OWNM','owner',true);
-insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
-  (:'JOBM1',:'COMPM','job-m1','Operator M1','warehouse','permanent','Leuven','Flandria','active','pl'),
-  (:'JOBM2',:'COMPM','job-m2','Operator M2','warehouse','permanent','Leuven','Flandria','active','pl'),
-  (:'JOBM3',:'COMPM','job-m3','Operator M3','warehouse','permanent','Leuven','Flandria','active','pl'),
-  (:'JOBM4',:'COMPM','job-m4','Operator M4','warehouse','permanent','Leuven','Flandria','active','pl');
-insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDM', false);
-
-select set_config('app.current_uid', :'CANDM', false);
-set role authenticated; select pg_temp.assert_client_role();
-select public.apply_to_job(:'JOBM1'::uuid, 'mm-app-1', null, null, null) as appm \gset
-reset role;
-select set_config('app.current_uid', :'OWNM', false);
-set role authenticated; select pg_temp.assert_client_role();
-select public.get_or_create_conversation(:'appm'::uuid, null) as convm \gset
-select public.send_offer(:'JOBM1'::uuid, :'CANDM'::uuid, 'mm-off-1', 'Zapraszamy', null) as offm \gset
-reset role; reset app.current_uid;
-select count(*) as mm_notif0 from public.notifications
-  where entity_id = :'convm' and type = 'message_received' and profile_id = :'OWNM' \gset
 
 -- Sesje równoległe: dblink tylko w bazie testowej, poza schematem public.
 create schema if not exists dbl;
 create extension if not exists dblink schema dbl;
 
--- Otwiera osobne połączenie jako `authenticated` z danym uid w otwartej transakcji; zwraca pid.
-create function pg_temp.remote_begin(p_conn text, p_uid uuid) returns int
+create function pg_temp.remote_connect(p_conn text) returns void
+language plpgsql as $$
+begin
+  perform dbl.dblink_connect(p_conn, format('dbname=%s user=%s', current_database(), current_user));
+end $$;
+
+-- Ustawia w otwartej transakcji sesji rolę `authenticated` i uid; zwraca pid sesji.
+create function pg_temp.remote_as(p_conn text, p_uid uuid) returns int
 language plpgsql as $$
 declare v_pid int; v_role text; v_rls text;
 begin
-  perform dbl.dblink_connect(p_conn, format('dbname=%s user=%s', current_database(), current_user));
-  perform dbl.dblink_exec(p_conn, 'begin');
   perform dbl.dblink_exec(p_conn, 'set local role authenticated');
   perform dbl.dblink_exec(p_conn, format('set local app.current_uid = %L', p_uid));
   select t.pid, t.r, t.rls into v_pid, v_role, v_rls
@@ -1593,6 +1579,27 @@ begin
     raise exception 'ROLE GUARD: sesja % działa jako % (row_security=%)', p_conn, v_role, v_rls;
   end if;
   return v_pid;
+end $$;
+
+-- Otwiera osobne połączenie jako `authenticated` z danym uid w otwartej transakcji; zwraca pid.
+create function pg_temp.remote_begin(p_conn text, p_uid uuid) returns int
+language plpgsql as $$
+begin
+  perform pg_temp.remote_connect(p_conn);
+  perform dbl.dblink_exec(p_conn, 'begin');
+  return pg_temp.remote_as(p_conn, p_uid);
+end $$;
+
+-- Wywołuje RPC jako dany użytkownik w osobnej, ZATWIERDZANEJ transakcji; zwraca wynik jako tekst.
+create function pg_temp.remote_commit_call(p_uid uuid, p_sql text) returns text
+language plpgsql as $$
+declare v_val text;
+begin
+  perform pg_temp.remote_begin('mm_setup', p_uid);
+  select t.v into v_val from dbl.dblink('mm_setup', p_sql) as t(v text);
+  perform dbl.dblink_exec('mm_setup', 'commit');
+  perform dbl.dblink_disconnect('mm_setup');
+  return v_val;
 end $$;
 
 -- Czeka, aż sesja o danym pid zablokuje się na blokadzie trzymanej przez inną transakcję.
@@ -1620,12 +1627,42 @@ begin
   return v_val;
 end $$;
 
--- MM1: „commit wykonany, odpowiedź utracona" — ponowienie z tym samym kluczem = ta sama wiadomość.
-select set_config('app.current_uid', :'CANDM', false);
-set role authenticated; select pg_temp.assert_client_role();
-select public.send_message(:'convm'::uuid, 'Czy mogę zacząć w poniedziałek?', :'KEY1'::uuid) as mm1a \gset
-select public.send_message(:'convm'::uuid, 'Czy mogę zacząć w poniedziałek?', :'KEY1'::uuid) as mm1b \gset
-reset role; reset app.current_uid;
+-- Fixture'y (zatwierdzone w osobnej sesji jako superuser).
+select pg_temp.remote_connect('mm_setup');
+select dbl.dblink_exec('mm_setup', $fx$
+  insert into auth.users(id,email,name,raw_user_meta_data) values
+    ('e1000000-0000-0000-0000-00000000000c','candm@test.be','Maja M',
+     '{"role":"candidate","first_name":"Maja","last_name":"Mertens","locale":"pl"}'),
+    ('e1000000-0000-0000-0000-0000000000a1','ownm@test.be','Otto M',
+     '{"role":"employer","first_name":"Otto","last_name":"Maes","locale":"nl"}');
+  insert into public.companies(id,name,status) values ('e1000000-0000-0000-0000-0000000000f1','Firma M','verified');
+  insert into public.company_members(company_id,profile_id,role,is_active) values
+    ('e1000000-0000-0000-0000-0000000000f1','e1000000-0000-0000-0000-0000000000a1','owner',true);
+  insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+    ('e1000000-0000-0000-0000-0000000000b1','e1000000-0000-0000-0000-0000000000f1','job-m1','Operator M1','warehouse','permanent','Leuven','Flandria','active','pl'),
+    ('e1000000-0000-0000-0000-0000000000b2','e1000000-0000-0000-0000-0000000000f1','job-m2','Operator M2','warehouse','permanent','Leuven','Flandria','active','pl'),
+    ('e1000000-0000-0000-0000-0000000000b3','e1000000-0000-0000-0000-0000000000f1','job-m3','Operator M3','warehouse','permanent','Leuven','Flandria','active','pl'),
+    ('e1000000-0000-0000-0000-0000000000b4','e1000000-0000-0000-0000-0000000000f1','job-m4','Operator M4','warehouse','permanent','Leuven','Flandria','active','pl');
+  insert into public.candidate_profiles(profile_id, is_searchable) values ('e1000000-0000-0000-0000-00000000000c', false);
+$fx$);
+select dbl.dblink_disconnect('mm_setup');
+
+select pg_temp.remote_commit_call(:'CANDM',
+  'select public.apply_to_job(''' || :'JOBM1' || '''::uuid, ''mm-app-1'', null, null, null)::text') as appm \gset
+select pg_temp.remote_commit_call(:'OWNM',
+  'select public.get_or_create_conversation(''' || :'appm' || '''::uuid, null)::text') as convm \gset
+select pg_temp.remote_commit_call(:'OWNM',
+  'select public.send_offer(''' || :'JOBM1' || '''::uuid, ''' || :'CANDM' || '''::uuid, ''mm-off-1'', ''Zapraszamy'', null)::text')
+  as offm \gset
+select count(*) as mm_notif0 from public.notifications
+  where entity_id = :'convm' and type = 'message_received' and profile_id = :'OWNM' \gset
+-- MM1: „commit wykonany, odpowiedź utracona" — pierwsza transakcja zatwierdzona, ponowienie
+-- w nowej transakcji z tym samym kluczem = ta sama wiadomość. (Zapisy wiadomości idą przez
+-- osobne sesje: blokada wiersza rozmowy w zewnętrznej transakcji zakleszczyłaby MM5/MM6.)
+select pg_temp.remote_commit_call(:'CANDM',
+  'select public.send_message(''' || :'convm' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || :'KEY1' || '''::uuid)::text') as mm1a \gset
+select pg_temp.remote_commit_call(:'CANDM',
+  'select public.send_message(''' || :'convm' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || :'KEY1' || '''::uuid)::text') as mm1b \gset
 select pg_temp.assert(:'mm1a' = :'mm1b', 'MM1 ponowienie z tym samym kluczem zwraca to samo messages.id');
 select pg_temp.assert((select count(*) from public.messages where client_message_id = :'KEY1') = 1,
   'MM1b jedna wiadomość dla klucza');
@@ -1638,20 +1675,16 @@ select pg_temp.assert(
   'MM1d jeden wpis e-mail dla odbiorcy mimo ponowienia');
 
 -- MM2: kontrola ujemna — inny klucz z identyczną treścią to nowa, zasadna wiadomość.
-select set_config('app.current_uid', :'CANDM', false);
-set role authenticated; select pg_temp.assert_client_role();
-select public.send_message(:'convm'::uuid, 'Czy mogę zacząć w poniedziałek?', gen_random_uuid()) as mm2 \gset
-reset role; reset app.current_uid;
+select pg_temp.remote_commit_call(:'CANDM',
+  'select public.send_message(''' || :'convm' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || gen_random_uuid()::text || '''::uuid)::text') as mm2 \gset
 select pg_temp.assert(:'mm2' <> :'mm1a'
   and (select count(*) from public.messages
          where conversation_id = :'convm' and body = 'Czy mogę zacząć w poniedziałek?') = 2,
   'MM2 różne klucze z tą samą treścią tworzą dwie wiadomości (brak deduplikacji po treści)');
 
 -- MM3: klucz jest per nadawca — druga strona z tym samym UUID pisze własną wiadomość.
-select set_config('app.current_uid', :'OWNM', false);
-set role authenticated; select pg_temp.assert_client_role();
-select public.send_message(:'convm'::uuid, 'Tak, zapraszamy', :'KEY1'::uuid) as mm3 \gset
-reset role; reset app.current_uid;
+select pg_temp.remote_commit_call(:'OWNM',
+  'select public.send_message(''' || :'convm' || '''::uuid, ''Tak, zapraszamy'', ''' || :'KEY1' || '''::uuid)::text') as mm3 \gset
 select pg_temp.assert(:'mm3' <> :'mm1a'
   and (select sender_id::text from public.messages where id = :'mm3') = :'OWNM',
   'MM3 ten sam klucz innego nadawcy nie zwraca cudzej wiadomości');
@@ -1764,17 +1797,21 @@ select pg_temp.assert((select status::text from public.offers where id = :'offpa
   'MM8c odrzucona próba nie zmienia stanu wygasłej propozycji');
 
 -- Równość: now() jest stałe w transakcji, więc expires_at = now() to dokładnie granica.
-begin;
-insert into public.offers(job_id,candidate_id,company_id,sender_id,status,message,locale,idempotency_key,sent_at,expires_at)
-  values (:'JOBM3',:'CANDM',:'COMPM',:'OWNM','sent','Na granicy','pl','mm-exp-eq', now() - interval '1 day', now())
-  returning id as offeq \gset
-select set_config('app.current_uid', :'CANDM', true);
-set local role authenticated; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.respond_to_offer(''' || :'offeq' || '''::uuid, false)',
-  'propozycja wygasła', 'MM8d expires_at = now() to już po terminie (spójnie z expires_at > now())');
-reset role;
-select pg_temp.assert((select status::text from public.offers where id = :'offeq') = 'sent',
-  'MM8e propozycja na granicy pozostaje nierozstrzygnięta');
-rollback;
+-- Własna transakcja w osobnej sesji: wstawienie propozycji i odpowiedź w tej samej chwili now().
+select pg_temp.remote_connect('mm_eq');
+select dbl.dblink_exec('mm_eq', 'begin');
+select dbl.dblink_exec('mm_eq',
+  'insert into public.offers(job_id,candidate_id,company_id,sender_id,status,message,locale,idempotency_key,sent_at,expires_at)
+   values (''' || :'JOBM3' || ''',''' || :'CANDM' || ''',''' || :'COMPM' || ''',''' || :'OWNM' || ''',''sent'',''Na granicy'',''pl'',''mm-exp-eq'', now() - interval ''1 day'', now())');
+select pg_temp.remote_as('mm_eq', :'CANDM') as pid_eq \gset
+select dbl.dblink_send_query('mm_eq',
+  'select public.respond_to_offer(o.id, false)::text from public.offers o where o.idempotency_key = ''mm-exp-eq''');
+select pg_temp.remote_result('mm_eq') as mm8d \gset
+select dbl.dblink_exec('mm_eq', 'rollback');
+select dbl.dblink_disconnect('mm_eq');
+select pg_temp.assert(:'mm8d' like 'ERROR:%propozycja wygasła%',
+  'MM8d expires_at = now() to już po terminie (spójnie z expires_at > now())');
+select pg_temp.assert(not exists (select 1 from public.offers where idempotency_key = 'mm-exp-eq'),
+  'MM8e próba na granicy wycofana razem z transakcją sesji');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
