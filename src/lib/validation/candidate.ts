@@ -70,6 +70,15 @@ export const CANDIDATE_ITEM_LIMITS = {
   certificate: 160,
 } as const;
 
+/** Data kalendarzowa 'YYYY-MM-DD' (np. z `<input type="date">`), istniejąca w kalendarzu. */
+const isoDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'candidate.error.certificateExpiryInvalid')
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, 'candidate.error.certificateExpiryInvalid');
+
 const itemLine = (max: number) =>
   z.string().trim().min(1).max(max, 'candidate.error.itemTooLong');
 
@@ -149,6 +158,11 @@ export const step5Schema = z.object({
     .array(itemLine(CANDIDATE_ITEM_LIMITS.certificate))
     .max(30, 'candidate.error.certificatesTooMany')
     .default([]),
+  /**
+   * Data ważności certyfikatu ('YYYY-MM-DD') po etykiecie (#96). Brak wpisu = bezterminowy.
+   * Wpisy dla etykiet spoza `certificates` są pomijane przy zapisie.
+   */
+  certificateExpiry: z.record(z.string(), isoDateSchema).default({}),
 });
 
 /** Krok 6 — preferencje i zgody. */

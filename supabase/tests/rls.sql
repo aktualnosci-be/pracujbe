@@ -578,7 +578,7 @@ select pg_temp.assert(
     where cp.profile_id = :'CANDA' and cl.level = 'native') = 1,
   'M2 set_candidate_languages zapisuje języki z poziomem');
 -- Certyfikaty.
-select public.set_candidate_certificates(array['VCA','HACCP']);
+select public.set_candidate_certificates('["VCA","HACCP"]'::jsonb);  -- sygnatura jsonb od 0079
 select pg_temp.assert(
   (select count(*) from public.candidate_certificates cc
      join public.candidate_profiles cp on cp.id = cc.candidate_profile_id
@@ -2375,6 +2375,356 @@ select pg_temp.assert(
   exists (select 1 from public.job_certificates
             where job_id = 'e2222222-2222-2222-2222-222222222222' and certificate_label = 'BHP'),
   'RR9c szkic dalej zapisuje relacje przez set_job_*');
+
+-- ============================================================================
+-- BL. Kandydat blokuje firmę (0078, #97): dwie firmy × dwóch kandydatów.
+--     Firma zablokowana traci wgląd w profil/PII, wyszukiwanie, dopasowania, nie wyśle
+--     propozycji ani wiadomości; druga firma i drugi kandydat bez zmian (kontrole ujemne).
+-- ============================================================================
+\set BLC1 'e7800000-0000-0000-0000-0000000000c1'
+\set BLC2 'e7800000-0000-0000-0000-0000000000c2'
+\set BLE1 'e7800000-0000-0000-0000-0000000000e1'
+\set BLE2 'e7800000-0000-0000-0000-0000000000e2'
+\set BLF1 'e7800000-0000-0000-0000-0000000000f1'
+\set BLF2 'e7800000-0000-0000-0000-0000000000f2'
+\set BLJ1 'e7800000-0000-0000-0000-0000000000b1'
+\set BLJ2 'e7800000-0000-0000-0000-0000000000b2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'BLC1','blc1@test.be','Bl C1','{"role":"candidate","first_name":"Bloker","last_name":"Jeden","locale":"pl"}'),
+  (:'BLC2','blc2@test.be','Bl C2','{"role":"candidate","first_name":"Kontrola","last_name":"Dwa","locale":"nl"}'),
+  (:'BLE1','ble1@test.be','Bl E1','{"role":"employer","first_name":"Rek","last_name":"Jeden","locale":"pl"}'),
+  (:'BLE2','ble2@test.be','Bl E2','{"role":"employer","first_name":"Rek","last_name":"Dwa","locale":"pl"}');
+insert into public.companies(id,name,status) values
+  (:'BLF1','Firma Blok 1','verified'), (:'BLF2','Firma Blok 2','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'BLF1',:'BLE1','owner',true), (:'BLF2',:'BLE2','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'BLJ1',:'BLF1','job-bl-1','Magazynier BL1','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'BLJ2',:'BLF2','job-bl-2','Magazynier BL2','warehouse','permanent','Antwerpia','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values
+  (:'BLC1', true, true), (:'BLC2', true, true);
+insert into public.matches(candidate_id, job_id, score) values
+  (:'BLC1',:'BLJ1',80), (:'BLC2',:'BLJ1',70), (:'BLC1',:'BLJ2',60);
+
+-- Obaj kandydaci aplikują do BLJ1; BLC1 także do BLJ2.
+select set_config('app.current_uid', :'BLC1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'BLJ1'::uuid, 'bl-app-11', null, 'immediate', null) as blapp11 \gset
+select public.apply_to_job(:'BLJ2'::uuid, 'bl-app-12', null, 'immediate', null) as blapp12 \gset
+reset role;
+select set_config('app.current_uid', :'BLC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'BLJ1'::uuid, 'bl-app-21', null, 'immediate', null) as blapp21 \gset
+reset role;
+
+-- Przed blokadą BLE1 widzi PII BLC1 (punkt odniesienia).
+select set_config('app.current_uid', :'BLE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.profiles where id = :'BLC1') = 1,
+  'BL0 przed blokadą firma z relacją widzi profil kandydata');
+reset role;
+
+-- BL1: kandydat blokuje firmę BLF1 (idempotentnie), widzi blokadę na liście.
+select set_config('app.current_uid', :'BLC1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_company_block(:'BLF1'::uuid, true), 'BL1 blokada zwraca true');
+select public.set_company_block(:'BLF1'::uuid, true);
+select pg_temp.assert(
+  (select count(*) from public.candidate_company_blocks) = 1
+  and (select company_name from public.get_my_company_blocks()) = 'Firma Blok 1',
+  'BL1b jedna blokada (idempotencja), lista z nazwą firmy');
+select pg_temp.assert(
+  (select blocked from public.get_job_company_block(:'BLJ1'::uuid))
+  and not (select blocked from public.get_job_company_block(:'BLJ2'::uuid)),
+  'BL1c stan blokady na szczególe oferty');
+-- Polecane: oferty firmy zablokowanej znikają tylko dla blokującego.
+select pg_temp.assert(
+  (select array_agg(id) from public.get_public_jobs_by_ids(array[:'BLJ1', :'BLJ2']::uuid[], 'pl'))
+    = array[:'BLJ2']::uuid[],
+  'BL1d polecane pomijają ofertę firmy zablokowanej');
+-- Historia zostaje: własne aplikacje (także do firmy zablokowanej) nadal widoczne.
+select pg_temp.assert(
+  (select count(*) from public.applications where candidate_id = :'BLC1') = 2,
+  'BL1e historia aplikacji kandydata nietknięta');
+-- Bezpośredni zapis do tabeli blokad odrzucony (RPC-only).
+select pg_temp.expect_error(
+  format('insert into public.candidate_company_blocks(candidate_id, company_id) values (%L, %L)',
+         :'BLC1', :'BLF2'),
+  'permission denied', 'BL1f bezpośredni INSERT blokady odrzucony');
+reset role;
+select set_config('app.current_uid', :'BLC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs_by_ids(array[:'BLJ1', :'BLJ2']::uuid[], 'pl')) = 2
+  and (select count(*) from public.candidate_company_blocks) = 0,
+  'BL1g kontrola ujemna: drugi kandydat widzi obie oferty i nie widzi cudzych blokad');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs_by_ids(array[:'BLJ1', :'BLJ2']::uuid[], 'pl')) = 2,
+  'BL1h gość widzi obie oferty (publiczny URL/lista bez zmian)');
+reset role;
+
+-- BL2: firma zablokowana — brak PII, wyszukiwania, dopasowań; firma nie widzi blokad.
+select set_config('app.current_uid', :'BLE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.profiles where id = :'BLC1') = 0
+  and (select count(*) from public.candidate_profiles where profile_id = :'BLC1') = 0
+  and not public.company_can_view_candidate(:'BLC1'::uuid),
+  'BL2 firma zablokowana nie widzi profilu/PII kandydata (także po ID)');
+select pg_temp.assert(
+  (select count(*) from public.profiles where id = :'BLC2') = 1
+  and (select count(*) from public.candidate_profiles where profile_id = :'BLC2') = 1,
+  'BL2b kontrola ujemna: ta sama firma widzi drugiego kandydata');
+select pg_temp.assert(
+  (select array_agg(candidate_id) from public.matches where job_id = :'BLJ1') = array[:'BLC2']::uuid[],
+  'BL2c dopasowania firmy zablokowanej bez blokującego kandydata');
+select pg_temp.assert(
+  (select count(*) from public.applications where candidate_id = :'BLC1' and company_id = :'BLF1') = 1,
+  'BL2d historyczna aplikacja pozostaje w firmie');
+select pg_temp.assert(
+  (select count(*) from public.candidate_company_blocks) = 0
+  and (select count(*) from public.get_job_company_block(:'BLJ1'::uuid)) = 0
+  and (select count(*) from public.get_my_company_blocks()) = 0,
+  'BL2e firma nie odczyta blokad (brak informacji o blokadzie)');
+select pg_temp.expect_error(
+  format('select public.candidate_blocked_company(%L::uuid, %L::uuid)', :'BLC1', :'BLF1'),
+  'permission denied', 'BL2f helper blokad niedostępny dla klienta');
+select pg_temp.expect_error(
+  format('select public.set_company_block(%L::uuid, true)', :'BLF2'),
+  'PERMISSION_DENIED', 'BL2g pracodawca nie blokuje firm');
+
+-- BL3: propozycja do blokującego = ten sam neutralny błąd co brak relacji; do drugiego OK.
+select pg_temp.expect_error(
+  format('select public.send_offer(%L::uuid, %L::uuid, %L)', :'BLJ1', :'BLC1', 'bl-offer-11'),
+  'brak relacji firma–kandydat', 'BL3 propozycja do kandydata, który zablokował firmę, odrzucona');
+select public.send_offer(:'BLJ1'::uuid, :'BLC2'::uuid, 'bl-offer-21') as bloffer21 \gset
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.offers where candidate_id = :'BLC1' and company_id = :'BLF1') = 0
+  and (select count(*) from public.offers where id = :'bloffer21') = 1,
+  'BL3b brak propozycji dla blokującego; kontrola ujemna: drugi kandydat dostał propozycję');
+
+-- BL4: nowa rozmowa od strony firmy zablokowanej odrzucona; kandydat może ją założyć.
+select set_config('app.current_uid', :'BLE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.get_or_create_conversation(%L::uuid, null)', :'blapp11'),
+  'PERMISSION_DENIED', 'BL4 firma zablokowana nie otwiera nowej rozmowy');
+select public.get_or_create_conversation(:'blapp21'::uuid, null) as blconv21 \gset
+reset role;
+select set_config('app.current_uid', :'BLC1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'blapp11'::uuid, null) as blconv11 \gset
+reset role;
+
+-- BL5: wiadomość (trigger niezależny od sygnatury send_message): firma zablokowana → odmowa,
+-- kandydat pisze; firma pisze do drugiego kandydata (kontrola ujemna).
+reset app.current_uid;
+select pg_temp.expect_error(
+  format('insert into public.messages(conversation_id, sender_id, body) values (%L, %L, %L)',
+         :'blconv11', :'BLE1', 'Od firmy'),
+  'PERMISSION_DENIED', 'BL5 wiadomość firmy zablokowanej odrzucona');
+insert into public.messages(conversation_id, sender_id, body) values (:'blconv11', :'BLC1', 'Od kandydata');
+insert into public.messages(conversation_id, sender_id, body) values (:'blconv21', :'BLE1', 'Do kandydata 2');
+select pg_temp.assert(
+  (select count(*) from public.messages where conversation_id = :'blconv11') = 1
+  and (select count(*) from public.messages where conversation_id = :'blconv21') = 1,
+  'BL5b wiadomość kandydata i wiadomość do drugiego kandydata zapisane');
+
+-- BL6: druga firma bez zmian (izolacja firm): widzi PII, dopasowanie, wysyła propozycję.
+select set_config('app.current_uid', :'BLE2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.profiles where id = :'BLC1') = 1
+  and (select count(*) from public.candidate_profiles where profile_id = :'BLC1') = 1
+  and (select count(*) from public.matches where candidate_id = :'BLC1' and job_id = :'BLJ2') = 1,
+  'BL6 firma niezablokowana widzi profil i dopasowanie kandydata');
+select public.send_offer(:'BLJ2'::uuid, :'BLC1'::uuid, 'bl-offer-12') as bloffer12 \gset
+reset role;
+select pg_temp.assert((select count(*) from public.offers where id = :'bloffer12') = 1,
+  'BL6b propozycja firmy niezablokowanej zapisana');
+
+-- BL7: odblokowanie przywraca dostęp (profil, dopasowanie, propozycja).
+select set_config('app.current_uid', :'BLC1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.set_company_block(:'BLF1'::uuid, false), 'BL7 odblokowanie zwraca false');
+select public.set_company_block(:'BLF1'::uuid, false);
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs_by_ids(array[:'BLJ1']::uuid[], 'pl')) = 1,
+  'BL7b po odblokowaniu oferta wraca do polecanych');
+reset role;
+select set_config('app.current_uid', :'BLE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.profiles where id = :'BLC1') = 1
+  and (select count(*) from public.matches where candidate_id = :'BLC1' and job_id = :'BLJ1') = 1,
+  'BL7c po odblokowaniu firma znów widzi profil i dopasowanie');
+select public.send_offer(:'BLJ1'::uuid, :'BLC1'::uuid, 'bl-offer-11b') as bloffer11 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.offers where id = :'bloffer11') = 1,
+  'BL7d po odblokowaniu propozycja przechodzi');
+
+-- ============================================================================
+-- MC. Dopasowanie (0079): data ważności certyfikatów kandydata (#96) oraz pięciu RÓŻNYCH
+--     najlepiej dopasowanych kandydatów firmy przed limitem (#141). Identyfikatory e79….
+-- ============================================================================
+\set CANDMA 'e7900000-0000-0000-0000-0000000000ca'
+\set CANDMB 'e7900000-0000-0000-0000-0000000000cb'
+\set CANDMC 'e7900000-0000-0000-0000-0000000000cc'
+\set CANDMD 'e7900000-0000-0000-0000-0000000000cd'
+\set CANDME 'e7900000-0000-0000-0000-0000000000ce'
+\set CANDMF 'e7900000-0000-0000-0000-0000000000cf'
+\set CANDMH 'e7900000-0000-0000-0000-0000000000c8'
+\set CANDMG 'e7900000-0000-0000-0000-0000000000c9'
+\set OWNMC  'e7900000-0000-0000-0000-0000000000a1'
+\set MEMMC  'e7900000-0000-0000-0000-0000000000a2'
+\set OWNMY  'e7900000-0000-0000-0000-0000000000a3'
+\set COMPMC 'e7900000-0000-0000-0000-0000000000f1'
+\set COMPMY 'e7900000-0000-0000-0000-0000000000f2'
+\set JOBMY  'e7900000-0000-0000-0000-0000000999b1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data)
+  select c.id::uuid, 'mc-' || c.tag || '@test.be', 'MC ' || c.tag,
+         jsonb_build_object('role', c.role, 'first_name', 'MC', 'last_name', c.tag, 'locale', 'pl')
+  from (values (:'CANDMA','a','candidate'), (:'CANDMB','b','candidate'), (:'CANDMC','c','candidate'),
+               (:'CANDMD','d','candidate'), (:'CANDME','e','candidate'), (:'CANDMF','f','candidate'),
+               (:'CANDMH','h','candidate'), (:'CANDMG','g','candidate'),
+               (:'OWNMC','own','employer'), (:'MEMMC','mem','employer'), (:'OWNMY','owny','employer'))
+       as c(id, tag, role);
+insert into public.companies(id,name,status) values
+  (:'COMPMC','Firma MC','verified'), (:'COMPMY','Firma MY','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPMC',:'OWNMC','owner',true), (:'COMPMC',:'MEMMC','member',true), (:'COMPMY',:'OWNMY','owner',true);
+-- 24 oferty firmy MC (…01b1 … …24b1) i jedna oferta firmy MY.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale)
+  select format('e7900000-0000-0000-0000-000000%sb1', lpad(i::text, 4, '0'))::uuid, :'COMPMC',
+         'job-mc-' || i, 'Oferta MC ' || i, 'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl'
+  from generate_series(1, 24) i;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JOBMY',:'COMPMY','job-my','Oferta MY','warehouse','permanent','Gent','Flandria','active','pl');
+-- Wyszukiwalne kompletne profile (A–G); H niewyszukiwalny i bez relacji z firmą.
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed)
+  select id::uuid, true, true
+  from unnest(array[:'CANDMA',:'CANDMB',:'CANDMC',:'CANDMD',:'CANDME',:'CANDMF',:'CANDMG']) id;
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values (:'CANDMH', false, true);
+-- A: 100 do każdej z 24 ofert. B: 99 (oferta 2) i 50 (oferta 1). C: 98. D i E: remis 97. F: 90.
+-- H: 95 (niewidoczny). G: 100 tylko do oferty INNEJ firmy.
+insert into public.matches(candidate_id, job_id, score)
+  select :'CANDMA', j.id, 100 from public.jobs j where j.company_id = :'COMPMC';
+insert into public.matches(candidate_id, job_id, score) values
+  (:'CANDMB','e7900000-0000-0000-0000-0000000002b1'::uuid, 99),
+  (:'CANDMB','e7900000-0000-0000-0000-0000000001b1'::uuid, 50),
+  (:'CANDMC','e7900000-0000-0000-0000-0000000003b1'::uuid, 98),
+  (:'CANDMD','e7900000-0000-0000-0000-0000000004b1'::uuid, 97),
+  (:'CANDME','e7900000-0000-0000-0000-0000000005b1'::uuid, 97),
+  (:'CANDMF','e7900000-0000-0000-0000-0000000006b1'::uuid, 90),
+  (:'CANDMH','e7900000-0000-0000-0000-0000000007b1'::uuid, 95),
+  (:'CANDMG',:'JOBMY', 100);
+
+-- MC1 kontrola ujemna: dawny odczyt (24 najlepsze wiersze, dedup dopiero w aplikacji) = sam A.
+select pg_temp.assert(
+  (select count(distinct s.candidate_id) from (
+     select m.candidate_id from public.matches m join public.jobs j on j.id = m.job_id
+     where j.company_id = :'COMPMC' order by m.score desc limit 24) s) = 1,
+  'MC1 kontrola ujemna: limit 24 wierszy przed deduplikacją zostawiał jednego kandydata');
+
+select set_config('app.current_uid', :'OWNMC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select string_agg(candidate_id::text || '/' || job_id::text || '/' || score, ',' order by ord) as mc2
+  from public.get_company_top_matches(:'COMPMC'::uuid, 5) with ordinality as t(candidate_id, job_id, score, ord) \gset
+select count(*) as mc3 from public.get_company_top_matches(:'COMPMC'::uuid, 100) \gset
+select count(*) as mc3b from public.get_company_top_matches(:'COMPMC'::uuid, 2) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mc2' =
+  :'CANDMA' || '/e7900000-0000-0000-0000-0000000001b1/100,' ||
+  :'CANDMB' || '/e7900000-0000-0000-0000-0000000002b1/99,' ||
+  :'CANDMC' || '/e7900000-0000-0000-0000-0000000003b1/98,' ||
+  :'CANDMD' || '/e7900000-0000-0000-0000-0000000004b1/97,' ||
+  :'CANDME' || '/e7900000-0000-0000-0000-0000000005b1/97',
+  'MC2 pięciu różnych kandydatów, job_id = najwyższe dopasowanie (remis ofert → najmniejszy job_id, remis kandydatów → candidate_id)');
+select pg_temp.assert(:'mc3' = '6',
+  'MC3 bez limitu 5: A–F (bez H niewidocznego i G z innej firmy), każdy raz');
+select pg_temp.assert(:'mc3b' = '2', 'MC3b limit respektowany');
+
+-- MC4: izolacja — owner innej firmy i zwykły member nie dostają dopasowań firmy MC.
+select set_config('app.current_uid', :'OWNMY', false);
+set role authenticated; select pg_temp.assert_client_role();
+select count(*) as mc4 from public.get_company_top_matches(:'COMPMC'::uuid, 5) \gset
+select string_agg(candidate_id::text, ',') as mc4c from public.get_company_top_matches(:'COMPMY'::uuid, 5) \gset
+reset role;
+select set_config('app.current_uid', :'MEMMC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select count(*) as mc4b from public.get_company_top_matches(:'COMPMC'::uuid, 5) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mc4' = '0', 'MC4 firma B nie widzi dopasowań firmy A');
+select pg_temp.assert(:'mc4c' = :'CANDMG', 'MC4c firma B widzi tylko swoje dopasowania');
+select pg_temp.assert(:'mc4b' = '0', 'MC4b zwykły member bez dostępu do dopasowań (recruiter+)');
+
+-- MC5: bramka weryfikacji firmy — niezweryfikowana firma nie dostaje wyników.
+update public.companies set status = 'pending' where id = :'COMPMC';
+select set_config('app.current_uid', :'OWNMC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select count(*) as mc5 from public.get_company_top_matches(:'COMPMC'::uuid, 5) \gset
+reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'COMPMC';
+select pg_temp.assert(:'mc5' = '0', 'MC5 firma niezweryfikowana nie dostaje dopasowanych kandydatów');
+
+-- MC5b: blokada firmy przez kandydata (0078) obowiązuje też w RPC (SECURITY INVOKER + RLS
+-- matches/candidate_profiles): B blokuje firmę MC → znika z wyniku, F wchodzi na jego miejsce.
+select set_config('app.current_uid', :'CANDMB', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.set_company_block(:'COMPMC'::uuid, true);
+reset role;
+select set_config('app.current_uid', :'OWNMC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select string_agg(candidate_id::text, ',' order by ord) as mc5b
+  from public.get_company_top_matches(:'COMPMC'::uuid, 5) with ordinality as t(candidate_id, job_id, score, ord) \gset
+reset role;
+select set_config('app.current_uid', :'CANDMB', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.set_company_block(:'COMPMC'::uuid, false);
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mc5b' = :'CANDMA' || ',' || :'CANDMC' || ',' || :'CANDMD' || ',' || :'CANDME' || ',' || :'CANDMF',
+  'MC5b kandydat, który zablokował firmę, nie trafia do jej najlepiej dopasowanych');
+
+-- MC6: certyfikaty z datą ważności (#96) przez RPC; stara sygnatura text[] usunięta.
+select pg_temp.assert(to_regprocedure('public.set_candidate_certificates(text[])') is null,
+  'MC6 wersja text[] zastąpiona wersją jsonb');
+select set_config('app.current_uid', :'CANDMA', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.set_candidate_certificates(
+  '[{"label":" VCA ","expires_at":"2026-01-31"},"ADR",{"label":"VCA","expires_at":null},{"label":" "},{"label":"Heftruck","expires_at":""}]'::jsonb);
+select string_agg(certificate_label || '=' || coalesce(expires_at::text, '-'), ',' order by certificate_label) as mc6
+  from public.candidate_certificates cc
+  join public.candidate_profiles cp on cp.id = cc.candidate_profile_id
+  where cp.profile_id = :'CANDMA' \gset
+reset role;
+select pg_temp.assert(:'mc6' = 'ADR=-,Heftruck=-,VCA=2026-01-31',
+  'MC6b zapis dat ważności: pierwsze wystąpienie etykiety wygrywa, pusta data = bezterminowy');
+
+set role authenticated; select pg_temp.assert_client_role();
+-- Zgodność ze starszą aplikacją: tablica etykiet (replace-all).
+select public.set_candidate_certificates('["X","Y"]'::jsonb);
+select string_agg(certificate_label || '=' || coalesce(expires_at::text, '-'), ',' order by certificate_label) as mc7
+  from public.candidate_certificates cc
+  join public.candidate_profiles cp on cp.id = cc.candidate_profile_id
+  where cp.profile_id = :'CANDMA' \gset
+select pg_temp.expect_error($q$select public.set_candidate_certificates('[{"label":"VCA","expires_at":"jutro"}]'::jsonb)$q$,
+  'invalid input syntax for type date', 'MC7b niepoprawna data odrzucona');
+select pg_temp.expect_error($q$select public.set_candidate_certificates('{"label":"VCA"}'::jsonb)$q$,
+  'VALIDATION_FAILED', 'MC7c obiekt zamiast tablicy odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mc7' = 'X=-,Y=-', 'MC7 tablica etykiet (stary klient) zapisuje bezterminowe certyfikaty');
+-- Kontrola ujemna: pracodawca nie wywoła RPC kandydata (ensure_candidate_profile).
+select set_config('app.current_uid', :'OWNMC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$select public.set_candidate_certificates('["VCA"]'::jsonb)$q$,
+  '', 'MC7d pracodawca nie zapisze certyfikatów kandydata');
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- SAL. Okres stawki w filtrze, sortowaniu i facetach listy ofert (0080, #188).

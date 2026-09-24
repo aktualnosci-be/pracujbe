@@ -953,6 +953,9 @@
     "addLanguage": "Ajouter une langue",
     "certificatesLabel": "Certificats et attestations",
     "certificatesPlaceholder": "ex. VCA, certificat de qualification",
+    "certificateExpiryLabel": "Valable jusqu’au — {certificate}",
+    "certificateExpired": "Expiré — corrigez la date d’expiration",
+    "certificateExpiryHint": "Indiquez la date d’expiration si le certificat en a une. Un certificat expiré ne compte pas dans le calcul de compatibilité avec les offres.",
     "availabilityLabel": "Disponibilité",
     "availImmediate": "Immédiatement",
     "availWithinTwoWeeks": "Dans les 2 semaines",
@@ -1119,6 +1122,7 @@
       "languageInvalid": "Indiquez un nom de langue valide.",
       "languagesTooMany": "Trop de langues ajoutées.",
       "certificatesTooMany": "Trop de certificats ajoutés.",
+      "certificateExpiryInvalid": "Indiquez une date d’expiration valide pour le certificat.",
       "contractTypesTooMany": "Trop de types de contrat sélectionnés.",
       "salaryInvalid": "Indiquez un montant de salaire valide.",
       "bioTooLong": "La description est trop longue.",
@@ -1451,6 +1455,7 @@
     "loadError": "Impossible de calculer la compatibilité pour le moment. Ce n’est pas une évaluation de votre profil — réessayez.",
     "languageLevelBelow": "{language} : niveau requis {required}, votre niveau {actual}",
     "languageLevelUnknown": "{language} : niveau requis {required} — indiquez votre niveau dans votre profil",
+    "certificateExpired": "{certificate} : le certificat a expiré — mettez à jour la date d’expiration dans votre profil",
     "levels": {
       "basic": "débutant",
       "intermediate": "intermédiaire",
@@ -1532,5 +1537,24 @@
     "contactProposalsDesc": "Vous pouvez envoyer au candidat une proposition d'emploi qu'il accepte ou refuse.",
     "finalTitle": "Vous voulez publier votre première offre ?",
     "finalDesc": "Créez un compte employeur. Vous publierez l'offre après la vérification de l'entreprise."
+  },
+  "companyBlocks": {
+    "sectionTitle": "Entreprises bloquées",
+    "sectionDescription": "Une entreprise bloquée ne voit pas votre profil, ne vous trouve pas parmi les candidats, ne peut pas vous envoyer de proposition ni de nouveau message, et ses offres disparaissent de vos recommandations. L’entreprise n’est pas informée du blocage. Vos candidatures et conversations existantes sont conservées.",
+    "empty": "Vous n’avez bloqué aucune entreprise. Vous pouvez bloquer une entreprise depuis la page de son offre.",
+    "blockedAt": "Bloquée le {date}",
+    "unblock": "Débloquer",
+    "unblockNamed": "Débloquer l’entreprise {company}",
+    "unblocking": "Déblocage…",
+    "unblockedSuccess": "L’entreprise {company} a été débloquée.",
+    "loadError": "Impossible de charger la liste des entreprises bloquées. Actualisez la page dans un instant.",
+    "saveError": "Impossible d’enregistrer la modification. Réessayez.",
+    "jobTitle": "Contact avec cette entreprise",
+    "jobDescription": "Si vous ne souhaitez pas que {company} voie votre profil et vous contacte, vous pouvez la bloquer. L’entreprise n’en sera pas informée.",
+    "jobBlockedDescription": "{company} est bloquée : elle ne voit pas votre profil et ne peut pas vous envoyer de proposition ni de message. Ses offres n’apparaissent pas dans vos recommandations.",
+    "block": "Bloquer l’entreprise",
+    "blocking": "Blocage…",
+    "blockedSuccess": "L’entreprise {company} a été bloquée.",
+    "manage": "Gérer les entreprises bloquées"
   }
 }

@@ -5,8 +5,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 import { resolveCoordinates, type LocationRow } from '@/lib/matching/locations';
+import { referenceDate } from '@/lib/matching/reference-date';
 import {
   scoreMatch,
+  type CertificateEntry,
   type LanguageEntry,
   type MatchCandidate,
   type MatchJob,
@@ -78,6 +80,16 @@ function labelsFrom(rows: unknown, field: string): string[] {
     .filter((v) => v.length > 0);
 }
 
+/** Certyfikaty kandydata z datą ważności (#96) — `expires_at` null = bezterminowy. */
+function certificatesFrom(rows: unknown): CertificateEntry[] {
+  return asArr(rows)
+    .map((r) => {
+      const rec = asRecord(r);
+      return { label: asStr(rec['certificate_label']), expiresAt: asStr(rec['expires_at']) || null };
+    })
+    .filter((c) => c.label.length > 0);
+}
+
 async function getAuthUserId(supabase: SupabaseClient): Promise<string | null> {
   const {
     data: { user },
@@ -144,7 +156,7 @@ export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
     const [skillsRes, langsRes, certsRes, jobRes, locationsRes] = await Promise.all([
       supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', profileId),
       supabase.from('candidate_languages').select('language_label, level').eq('candidate_profile_id', profileId),
-      supabase.from('candidate_certificates').select('certificate_label').eq('candidate_profile_id', profileId),
+      supabase.from('candidate_certificates').select('certificate_label, expires_at').eq('candidate_profile_id', profileId),
       supabase.rpc('get_job_match_profile', { p_job_id: jobId }),
       supabase.from('locations').select('name, slug, latitude, longitude').eq('is_active', true),
     ]);
@@ -177,7 +189,7 @@ export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
       experienceYears: asNum(cp['experience_years']),
       availability: asStr(cp['availability']) || undefined,
       languages: languagesFrom(langsRes.data, 'language_label'),
-      certificates: labelsFrom(certsRes.data, 'certificate_label'),
+      certificates: certificatesFrom(certsRes.data),
       hasDrivingLicense: cp['has_driving_license'] === true,
       hasCar: cp['has_car'] === true,
       preferredContractTypes: asStrArr(cp['preferred_contract_types']),
@@ -201,7 +213,7 @@ export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
       remote: jr['remote'] === true,
     };
 
-    return { status: 'ok', result: scoreMatch(candidate, job) };
+    return { status: 'ok', result: scoreMatch(candidate, job, { today: referenceDate() }) };
   } catch (error) {
     captureError(error instanceof MatchReadError ? error.readError : error, {
       area: 'matching.getMyJobMatch',

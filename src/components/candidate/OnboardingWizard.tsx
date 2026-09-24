@@ -50,6 +50,7 @@ import {
 import type { CategoryKey, ContractType } from '@/lib/jobs';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { saveOnboardingStep, type OnboardingStep } from '@/lib/actions/onboarding';
+import { referenceDate } from '@/lib/matching/reference-date';
 
 /**
  * OnboardingWizard — kreator profilu kandydata (makieta 06), 6 kroków z REALNYM zapisem.
@@ -93,6 +94,8 @@ export interface OnboardingInitialValues {
   hasCar?: boolean;
   languages?: LanguageEntry[];
   certificates?: string[];
+  /** Data ważności certyfikatu po etykiecie ('YYYY-MM-DD', #96). */
+  certificateExpiry?: Record<string, string>;
   availability?: Availability | null;
   preferredContractTypes?: ContractType[];
   expectedSalaryMin?: number | null;
@@ -115,6 +118,7 @@ interface FormValues {
   hasCar: boolean;
   languages: LanguageEntry[];
   certificates: string[];
+  certificateExpiry: Record<string, string>;
   availability: '' | Availability;
   preferredContractTypes: ContractType[];
   expectedSalaryMin: string;
@@ -131,7 +135,7 @@ const STEP_FIELDS: Record<OnboardingStep, (keyof FormValues)[]> = {
   2: ['occupations', 'categories'],
   3: ['experienceYears', 'skills'],
   4: ['city', 'region', 'radiusKm', 'hasDrivingLicense', 'hasCar'],
-  5: ['languages', 'certificates'],
+  5: ['languages', 'certificates', 'certificateExpiry'],
   6: ['availability', 'preferredContractTypes', 'expectedSalaryMin', 'bio', 'agreeTerms'],
 };
 
@@ -192,7 +196,16 @@ function buildStepData(step: OnboardingStep, v: FormValues): unknown {
         hasCar: v.hasCar,
       };
     case 5:
-      return { languages: v.languages, certificates: v.certificates };
+      return {
+        languages: v.languages,
+        certificates: v.certificates,
+        // Tylko daty bieżących certyfikatów; puste pole = bezterminowy (#96).
+        certificateExpiry: Object.fromEntries(
+          v.certificates
+            .map((label) => [label, v.certificateExpiry[label] ?? ''] as const)
+            .filter(([, date]) => date !== ''),
+        ),
+      };
     case 6:
       return {
         availability: v.availability,
@@ -222,6 +235,7 @@ function toFormValues(init?: OnboardingInitialValues): FormValues {
     hasCar: init?.hasCar ?? false,
     languages: init?.languages ?? [],
     certificates: init?.certificates ?? [],
+    certificateExpiry: init?.certificateExpiry ?? {},
     availability: init?.availability ?? '',
     preferredContractTypes: init?.preferredContractTypes ?? [],
     expectedSalaryMin: init?.expectedSalaryMin != null ? String(init.expectedSalaryMin) : '',
@@ -251,6 +265,8 @@ export function OnboardingWizard({
   initialStep = 1,
 }: OnboardingWizardProps): React.JSX.Element {
   const t = useTranslations('onboarding');
+  // Ta sama granica dnia co w matchingu: certyfikat ważny jeszcze w dniu wygaśnięcia (#96).
+  const [today] = React.useState(() => referenceDate());
   const tRoot = useTranslations();
   const tn = useTranslations('nav');
   const tCat = useTranslations('categories');
@@ -940,6 +956,52 @@ export function OnboardingWizard({
                     describedBy={describedBy('certificates')}
                   />
                   <FieldError name="certificates" />
+                  {values.certificates.length > 0 ? (
+                    <ul id={domId('certificateExpiry')} className="mt-2 space-y-2">
+                      {values.certificates.map((label, index) => {
+                        const inputId = `onb-certificate-expiry-${index}`;
+                        const statusId = `${inputId}-status`;
+                        const date = values.certificateExpiry[label] ?? '';
+                        const expired = date !== '' && date < today;
+                        return (
+                          <li
+                            key={label}
+                            className="flex flex-col gap-1.5 rounded-md border border-input p-2.5 sm:flex-row sm:items-center sm:gap-3"
+                          >
+                            <Label htmlFor={inputId} className="min-w-0 flex-1 break-words">
+                              {t('certificateExpiryLabel', { certificate: label })}
+                            </Label>
+                            <Input
+                              id={inputId}
+                              type="date"
+                              className="sm:w-44"
+                              value={date}
+                              aria-invalid={expired || errors.certificateExpiry ? true : undefined}
+                              aria-describedby={
+                                [expired ? statusId : null, describedBy('certificateExpiry')]
+                                  .filter(Boolean)
+                                  .join(' ') || undefined
+                              }
+                              onChange={(e) =>
+                                setValue(
+                                  'certificateExpiry',
+                                  { ...values.certificateExpiry, [label]: e.target.value },
+                                  { shouldDirty: true },
+                                )
+                              }
+                            />
+                            {expired ? (
+                              <p id={statusId} className="text-sm font-medium text-error">
+                                {t('certificateExpired')}
+                              </p>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                  <p className="text-sm text-muted-foreground">{t('certificateExpiryHint')}</p>
+                  <FieldError name="certificateExpiry" />
                 </div>
               </div>
             ) : null}

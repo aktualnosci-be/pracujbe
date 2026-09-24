@@ -42,7 +42,7 @@ export function SaveJobButton({
 
     startTransition(async () => {
       try {
-        const res = await toggleSavedJob(jobId);
+        const res = await toggleSavedJob(jobId, next);
         if (res.ok) {
           if (typeof res.saved === 'boolean') setSaved(res.saved);
           return;

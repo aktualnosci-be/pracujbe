@@ -4,7 +4,6 @@ import { setRequestLocale } from 'next-intl/server';
 
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
-import { SkipLink } from '@/components/layout/SkipLink';
 import { routing } from '@/i18n/routing';
 
 /**
@@ -15,11 +14,13 @@ import { routing } from '@/i18n/routing';
  * się między nimi w `<main>`. Panele (candidate/employer), onboarding i strony auth mają
  * własne, odrębne layouty i NIE korzystają z tego chrome'u.
  *
+ * „Przejdź do treści" renderuje [locale]/layout (przed banerem zgód, #389).
+ *
  * Komponent serwerowy — bez interakcji na tym poziomie.
  *
  * Renderowanie statyczne (#298): layouty i strony renderują się w Next 15 równolegle, więc
  * `setRequestLocale` ze strony nie zdąży przed chrome'em. Layout sam ustawia locale i podaje
- * je jawnie do Header/Footer/SkipLink — bez tego next-intl czyta `headers()` i każda strona
+ * je jawnie do Header/Footer (SkipLink — [locale]/layout) — bez tego next-intl czyta `headers()` i każda strona
  * publiczna staje się SSR z `Cache-Control: no-store`. Chrome nie zależy od sesji ani cookies
  * (stan zgód i zapisanych ofert czytają wyspy klienckie), więc może trafić do cache.
  */
@@ -46,7 +47,6 @@ export default async function PublicLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <SkipLink locale={locale} />
       <Header locale={locale} />
       <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
         {children}

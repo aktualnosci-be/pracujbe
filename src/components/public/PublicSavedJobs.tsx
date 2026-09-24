@@ -74,7 +74,7 @@ export function PublicSavedJobsProvider({
       );
     update(!wasSaved);
     try {
-      const result = await toggleSavedJob(id);
+      const result = await toggleSavedJob(id, !wasSaved);
       if (!result.ok || typeof result.saved !== 'boolean')
         throw new Error('save');
       update(result.saved);

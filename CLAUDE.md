@@ -566,6 +566,16 @@ kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma w
 Baner nowej propozycji prowadzi do `/candidate/propozycje#offer-{id}` (#324); „Najnowsze
 wiadomości” linkują do `?c={id}` (#340); menu „…” aplikacji ma pełny wzorzec ARIA menu (#341).
 
+Blokada firmy przez kandydata (#97, migracja `0078`): tabela `candidate_company_blocks`
+(RPC-only `set_company_block`, odczyt `get_my_company_blocks`/`get_job_company_block`, firma nie
+ma ścieżki odczytu). Egzekwowanie w bazie: `company_can_view_candidate` (profil/PII),
+wyszukiwanie (`candidate_profiles_select_employer`, `candidate_profile_is_searchable`), `matches`,
+triggery BEFORE INSERT na `offers`/`conversations`/`messages` (neutralny błąd jak brak relacji),
+polecane (`get_public_jobs_by_ids` pod sesją). Historia aplikacji/rozmów zostaje. UI: sekcja
+„Zablokowane firmy” w `/candidate/ustawienia` + kontrolka na szczególe oferty. Dowód: `rls.sql`
+sekcja BL. **Do zrobienia:** publiczna lista `/oferty-pracy` celowo działa jako gość (anon),
+więc oferty zablokowanej firmy nadal są w wynikach listy — personalizacja wymaga osobnej decyzji.
+
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
 
@@ -619,6 +629,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   bez współrzędnych ten sam region = 10 bez etykiety „w promieniu”. **Do zrobienia (#194):**
   współrzędne dla miast spoza 10-elementowego słownika (kanoniczny model miast/geokodowanie).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
+  Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
+  `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
+  oznaczenie „Wygasł”); `scoreMatch(…, { today })` nie liczy certyfikatu z `expires_at` < dziś
+  (dzień w Europe/Brussels, `referenceDate`), wygasły wymagany → `expiredCertificates` z wyjaśnieniem.
+  Top dopasowani (#141, 0079): `get_company_top_matches` — najlepsze dopasowanie na kandydata
+  (DISTINCT ON) przed limitem 5, pod RLS (recruiter+, widoczność kandydata, firma verified).
+  Dowód: `rls.sql` sekcja MC.
   Odporność odczytu (#191/#197): `getSimilarJobs` i `getMyJobMatch` zwracają jawny wynik
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się
@@ -732,9 +749,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391), dialogi
   na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
   obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
-  na decyzję o workflow.
+  na decyzję o workflow. Font Inter jako podzbiór łaciński ~73 KB (#388, przepis
+  `scripts/subset-font.py`, fonty zastępcze z metrykami w `globals.css`) i baner zgód
+  w HTML z serwera, ukrywany przed malowaniem przy zapisanej zgodzie (`consent-boot.ts`, #389);
+  „Przejdź do treści” renderuje `[locale]/layout` przed banerem, każdy układ ma `#main-content`.
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
-  `locale` jawnie do Header/Footer/SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
+  `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
   `DATABASE_APP_URL` build nie czyta bazy (`prerenderParamsAtBuild` → strony na pierwsze żądanie);
   layout `(public)` odrzuca nieobsługiwany locale (`notFound`). Middleware: bramka hasła i

@@ -744,9 +744,12 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
     if (matched.length > 0) return matched;
 
     const jobsMap = await fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT);
-    // 2) Fallback: najnowsze oferty publiczne (bez policzonego matchu).
+    // 2) Fallback: najnowsze oferty publiczne (bez policzonego matchu). Przepuszczamy je przez
+    // RPC po ID, które pod sesją pomija oferty firm zablokowanych przez kandydata (#97).
+    const allowed = await fetchPublicJobsByIds(supabase, resolvedLocale, [...jobsMap.keys()].slice(0, 100));
     const latest: RecommendedJob[] = [];
     for (const job of jobsMap.values()) {
+      if (!allowed.has(job.id)) continue;
       latest.push({ ...job, match: null, saved: savedIds.has(job.id) });
       if (latest.length >= RECOMMENDED_LIMIT) break;
     }

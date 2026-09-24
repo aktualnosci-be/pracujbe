@@ -132,8 +132,12 @@ export async function saveOnboardingStep(
       const langs = v.languages.map((l) => ({ language: l.language, level: l.level }));
       const { error: le } = await supabase.rpc('set_candidate_languages', { p_languages: langs });
       if (le) return { ok: false, error: mapPgError(le.message) };
+      // Certyfikat z datą ważności (#96) — matching pomija wygasłe; brak daty = bezterminowy.
       const { error: ce } = await supabase.rpc('set_candidate_certificates', {
-        p_certificates: v.certificates,
+        p_certificates: v.certificates.map((label) => ({
+          label,
+          expires_at: v.certificateExpiry[label] ?? null,
+        })),
       });
       if (ce) return { ok: false, error: mapPgError(ce.message) };
       return { ok: true };
