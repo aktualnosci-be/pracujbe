@@ -297,8 +297,8 @@ describe('budżet e-maili Auth', () => {
   });
 });
 
-describe('lustro SQL ↔ TS (0102)', () => {
-  const sql = readFileSync(join(process.cwd(), 'supabase/migrations/0102_email_consent_campaigns.sql'), 'utf8');
+describe('lustro SQL ↔ TS (0101)', () => {
+  const sql = readFileSync(join(process.cwd(), 'supabase/migrations/0101_email_consent_campaigns.sql'), 'utf8');
 
   it('kategorie dowodu zgody = kategorie preferencji', () => {
     const body = /constraint email_consent_events_category check \(\s*category in \(([^)]*)\)/.exec(sql)![1]!;

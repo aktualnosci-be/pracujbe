@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0102_email_consent_campaigns.sql — #45, etap 2: dowód zgody, budżet na odbiorcę,
+-- 0101_email_consent_campaigns.sql — #45, etap 2: dowód zgody, budżet na odbiorcę,
 -- rezerwacja kampanii „rewizja + odbiorca”. Buduje na 0087 (wypisanie, budżet dostawcy)
 -- i 0098 (#44, blokady adresów) — numer tymczasowy, nada go koordynator.
 --

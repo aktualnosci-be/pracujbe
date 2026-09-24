@@ -12,7 +12,7 @@ import type { ErrorCode } from '@/lib/errors';
  * Server Action preferencji powiadomień — zapis POD SESJĄ użytkownika (nie service-role).
  *
  * `updateNotificationPreferences` waliduje wejście schematem Zod (bool per pole, język strony,
- * rola formularza) i woła RPC `set_notification_preferences` (0102), które zapisuje własny
+ * rola formularza) i woła RPC `set_notification_preferences` (0101), które zapisuje własny
  * wiersz (`auth.uid()`) i dowód każdej zmiany zgody e-mail: źródło `settings`, język strony
  * i wersję pokazanej treści (`emailConsentWordingVersion`, #45).
  *
@@ -75,7 +75,7 @@ export async function updateNotificationPreferences(
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    // 4) RPC: upsert własnego wiersza + dowód zmiany zgody (0102).
+    // 4) RPC: upsert własnego wiersza + dowód zmiany zgody (0101).
     const { error } = await supabase.rpc('set_notification_preferences', {
       p_prefs: {
         email_applications: prefs.emailApplications,

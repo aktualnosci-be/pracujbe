@@ -167,7 +167,7 @@ describe('POST/GET /api/email/unsubscribe', () => {
     expect(second.status).toBe(200);
     expect(await second.json()).toEqual({ status: 'done' });
     expect(adminRpc).toHaveBeenCalledTimes(2);
-    // #45 (0102): źródło one-click i język linku trafiają do dowodu wycofania zgody.
+    // #45 (0101): źródło one-click i język linku trafiają do dowodu wycofania zgody.
     const call = { p_profile_id: PROFILE, p_category: 'messages', p_source: 'one_click', p_locale: 'fr' };
     expect(adminRpc).toHaveBeenNthCalledWith(1, 'email_unsubscribe', call);
     expect(adminRpc).toHaveBeenNthCalledWith(2, 'email_unsubscribe', call);

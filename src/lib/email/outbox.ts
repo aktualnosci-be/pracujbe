@@ -48,7 +48,7 @@ import { isProductionMode } from '@/lib/env';
  * odmowa odkłada wiersz do następnego okna BEZ zwiększania `attempts` (to nie błąd dostawcy).
  *
  * #45, etap 2: każdy mail ma wersję `text/plain` (multipart/alternative). Mail kategorii
- * `marketing` (newsletter z rewizji kampanii, 0102) wychodzi tylko z jawnym `EMAIL_FROM`,
+ * `marketing` (newsletter z rewizji kampanii, 0101) wychodzi tylko z jawnym `EMAIL_FROM`,
  * tożsamością i adresem pocztowym nadawcy (`EMAIL_SENDER_*`) w stopce oraz działającym
  * wypisaniem — brak którejkolwiek części = błąd wiersza (ponowienie, alarm), nie wysyłka.
  * Tracking otwarć/kliknięć jest wyłączony: nie dodajemy pikseli ani przekierowań, a

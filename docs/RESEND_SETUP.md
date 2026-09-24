@@ -197,7 +197,7 @@ jednocześnie harmonogramów Vercel i Railway.
   `attempts`. Hook e-maili Auth pobiera budżet puli `auth` przed wysyłką: odmowa (okno
   dostawcy pełne) = 503 + `Retry-After`, GoTrue ponawia; błąd bazy nie blokuje e-maila Auth.
 
-### Dowód zgody, budżet odbiorcy i kampanie (#45, etap 2, migracja `0102`)
+### Dowód zgody, budżet odbiorcy i kampanie (#45, etap 2, migracja `0101`)
 
 - **Dowód zgody** — `email_consent_events` (niezmienna): każda zmiana `email_*` w
   `notification_preferences` zapisuje kategorię, zgodę/wycofanie, źródło (`settings`,

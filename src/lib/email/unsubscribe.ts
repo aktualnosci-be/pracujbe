@@ -14,7 +14,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * Zapis przez RPC `email_unsubscribe` (0087, tylko service_role) — idempotentny: ponowienie
  * tego samego tokenu kończy się tym samym stanem. Worker ponownie sprawdza zgodę przy
  * claimie, więc wiadomości już zakolejkowane w tej kategorii nie wyjdą.
- * #45, etap 2 (0102): RPC zapisuje dowód wycofania zgody (źródło, język); strona pozwala też
+ * #45, etap 2 (0101): RPC zapisuje dowód wycofania zgody (źródło, język); strona pozwala też
  * wypisać się ze wszystkich kategorii jednym zapisem (`email_unsubscribe_all`).
  */
 
@@ -36,7 +36,7 @@ export function inspectUnsubscribeToken(
 }
 
 export interface UnsubscribeOptions {
-  /** Skąd przyszło wypisanie — trafia do dowodu zgody (0102). */
+  /** Skąd przyszło wypisanie — trafia do dowodu zgody (0101). */
   source: 'unsubscribe_page' | 'one_click';
   /** Język strony/linku (dowód zgody); nieobsługiwany = język odbiorcy w bazie. */
   locale?: string | null;

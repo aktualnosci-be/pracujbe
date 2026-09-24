@@ -18,7 +18,7 @@ import { captureError } from '@/lib/sentry';
  * #98: retencja aplikacji bez konta (`purge_guest_application_requests`, 0095) — usuwa
  * niepotwierdzone zgłoszenia 7 dni po ostatnim linku i duplikaty 7 dni po potwierdzeniu (razem
  * z ich e-mailami) i zeruje tokeny przejęcia po wygaśnięciu 30-dniowego okna.
- * #45: kampanie e-mail (`process_email_campaigns`, 0102) — rezerwacja „rewizja + odbiorca”
+ * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
  *
  * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
@@ -69,7 +69,7 @@ async function run(request: Request): Promise<Response> {
     const searchAlerts = expiredJobs.error
       ? { data: null, error: null }
       : await admin.rpc('process_saved_search_alerts', { p_limit: 500 });
-    // #45: rezerwacja i kolejkowanie paczki odbiorców aktywnych rewizji kampanii (0102).
+    // #45: rezerwacja i kolejkowanie paczki odbiorców aktywnych rewizji kampanii (0101).
     const campaigns = await admin.rpc('process_email_campaigns', { p_limit: 500 });
     if (
       discounts.error ||

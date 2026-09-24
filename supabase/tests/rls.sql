@@ -6316,7 +6316,7 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
   'ESCO93-8b ręczne zawody z 0010 nietknięte');
 
 -- ============================================================================
--- CM45 (#45, etap 2, 0102): dowód zgody, budżet na odbiorcę przy kolejkowaniu,
+-- CM45 (#45, etap 2, 0101): dowód zgody, budżet na odbiorcę przy kolejkowaniu,
 -- rezerwacja kampanii „rewizja + odbiorca”. Tokeny wypisania (cudzy/wygasły/zmieniony)
 -- są podpisem HMAC w aplikacji — kontrole ujemne w tests/unit/email-unsubscribe.test.ts;
 -- tu: bez tokenu nikt poza service_role nie wypisze nikogo (CM45-1i).

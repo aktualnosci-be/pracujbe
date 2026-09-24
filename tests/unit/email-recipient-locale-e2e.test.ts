@@ -172,7 +172,7 @@ describe("resolve_recipient_locale (SQL) — kontrakt Invariantu #1", () => {
 });
 
 describe("enqueue_email (SQL) — locale z profilu odbiorcy", () => {
-  // #45 (0102): enqueue_email deleguje do enqueue_email_outcome z tym samym odbiorcą —
+  // #45 (0101): enqueue_email deleguje do enqueue_email_outcome z tym samym odbiorcą —
   // kontrakt locale sprawdzamy na ciele, które faktycznie wstawia wiersz.
   const wrapper = latestFunctionBody("enqueue_email").body;
   const delegates = /public\.enqueue_email_outcome\(\s*p_profile_id\b/i.test(wrapper);

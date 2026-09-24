@@ -842,7 +842,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`take_email_send_budget`, rezerwy auth/transakcyjna; odmowa = odłożenie bez `attempts`).
   Dowód: `rls.sql` sekcja UN45 (dblink, kontrole ujemne), `email-unsubscribe.test.ts`, E2E
   `email-unsubscribe.spec`.
-  Etap 2 (#45, migracja `0102` — numer tymczasowy, po `0098`): niezmienny dowód zgody
+  Etap 2 (#45, migracja `0101` — numer tymczasowy, po `0100` (#511)): niezmienny dowód zgody
   `email_consent_events` (trigger na `notification_preferences` — każda ścieżka zapisu; źródło
   `settings`/`unsubscribe_page`/`one_click`/`direct`, język, wersja treści `sha256:` z etykiet
   formularza — `src/lib/email/consent-wording.ts`); ustawienia przez RPC
