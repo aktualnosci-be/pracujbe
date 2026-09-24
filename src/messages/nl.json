@@ -905,7 +905,15 @@
     "navSearches": "Opgeslagen zoekopdrachten",
     "employerApplicationGuestBadge": "Zonder account",
     "employerApplicationGuestHint": "De kandidaat solliciteerde zonder account op Pracuj.be en bevestigde het e-mailadres. Neem contact op via e-mail of telefoon — berichten op het platform zijn beschikbaar zodra de sollicitatie aan een account is gekoppeld.",
-    "employerApplicationEmail": "E-mail"
+    "employerApplicationEmail": "E-mail",
+    "candidateEyebrow": "Je volgende stap",
+    "candidateIntro": "Je sollicitaties, voorstellen en kansen — op één plek.",
+    "candidatePlaceEyebrow": "Jouw plek",
+    "applicationStepSent": "Sollicitatie verstuurd",
+    "applicationStepReview": "Werkgever bekijkt",
+    "applicationStepInterview": "Gesprek",
+    "applicationStepDecision": "Beslissing",
+    "employerPlaceEyebrow": "Jouw werving"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -1022,7 +1030,8 @@
     "stepAnnounce": "Stap {current} van {total}: {title}",
     "agreeTermsLinks": "Ik aanvaard de <terms>gebruiksvoorwaarden</terms> en het <privacy>privacybeleid</privacy>.",
     "opensInNewTab": "(opent in een nieuw tabblad)",
-    "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen."
+    "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen.",
+    "eyebrow": "WERKPASPOORT"
   },
   "filters": {
     "title": "Filters",

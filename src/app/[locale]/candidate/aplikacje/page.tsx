@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { CandidateApplicationsList } from "@/components/candidate/CandidateApplicationsList";
 import { getMyApplicationsPage } from "@/lib/data/candidate";
+import { CandidatePageHeader } from "@/components/candidate/CandidatePageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -30,15 +31,12 @@ export default async function CandidateApplicationsPage({
   const initialPage = await getMyApplicationsPage(locale);
 
   return (
-    <div className="space-y-6">
-      <header className="max-w-2xl space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          {t("navApplications")}
-        </h1>
-        <p className="text-base text-muted-foreground">
-          {t("applicationsIntro")}
-        </p>
-      </header>
+    <div className="min-w-0">
+      <CandidatePageHeader
+        eyebrow={t("candidatePlaceEyebrow")}
+        title={t("navApplications")}
+        intro={t("applicationsIntro")}
+      />
 
       <CandidateApplicationsList locale={locale} initialPage={initialPage} />
     </div>

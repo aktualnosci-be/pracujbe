@@ -905,7 +905,15 @@
     "navSearches": "Recherches enregistrées",
     "employerApplicationGuestBadge": "Sans compte",
     "employerApplicationGuestHint": "Le candidat a postulé sans compte Pracuj.be et a confirmé son adresse e-mail. Contactez-le par e-mail ou par téléphone — la messagerie du site sera disponible lorsqu’il aura rattaché la candidature à un compte.",
-    "employerApplicationEmail": "E-mail"
+    "employerApplicationEmail": "E-mail",
+    "candidateEyebrow": "Votre prochaine étape",
+    "candidateIntro": "Vos candidatures, propositions et opportunités — au même endroit.",
+    "candidatePlaceEyebrow": "Votre espace",
+    "applicationStepSent": "Candidature envoyée",
+    "applicationStepReview": "L’employeur examine",
+    "applicationStepInterview": "Entretien",
+    "applicationStepDecision": "Décision",
+    "employerPlaceEyebrow": "Votre recrutement"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1022,7 +1030,8 @@
     "stepAnnounce": "Étape {current} sur {total} : {title}",
     "agreeTermsLinks": "J'accepte les <terms>conditions d'utilisation</terms> et la <privacy>politique de confidentialité</privacy>.",
     "opensInNewTab": "(s’ouvre dans un nouvel onglet)",
-    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste."
+    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste.",
+    "eyebrow": "PASSEPORT EMPLOI"
   },
   "filters": {
     "title": "Filtres",

@@ -905,7 +905,15 @@
     "navSearches": "Saved searches",
     "employerApplicationGuestBadge": "No account",
     "employerApplicationGuestHint": "The candidate applied without a Pracuj.be account and confirmed their email address. Contact them by email or phone — on-site messages become available once they link the application to an account.",
-    "employerApplicationEmail": "Email"
+    "employerApplicationEmail": "Email",
+    "candidateEyebrow": "Your next step",
+    "candidateIntro": "Your applications, proposals and opportunities — in one place.",
+    "candidatePlaceEyebrow": "Your space",
+    "applicationStepSent": "Application sent",
+    "applicationStepReview": "Employer reviewing",
+    "applicationStepInterview": "Interview",
+    "applicationStepDecision": "Decision",
+    "employerPlaceEyebrow": "Your recruitment"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -1022,7 +1030,8 @@
     "stepAnnounce": "Step {current} of {total}: {title}",
     "agreeTermsLinks": "I accept the <terms>terms of use</terms> and the <privacy>privacy policy</privacy>.",
     "opensInNewTab": "(opens in a new tab)",
-    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list."
+    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list.",
+    "eyebrow": "WORK PASSPORT"
   },
   "filters": {
     "title": "Filters",
