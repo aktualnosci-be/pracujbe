@@ -26,7 +26,7 @@ import { CV_MAX_BYTES } from '@/lib/validation/cv-file';
  *   2. `proposeFromCvAction` — po potwierdzeniu zakresu przez kandydata: ponowna redakcja na
  *      serwerze, wywołanie modelu, walidacja → PROPOZYCJE (nic nie jest zapisywane).
  *   3. `applyCvProposals` — wyłącznie pozycje zaznaczone przez kandydata → jedno RPC
- *      `apply_candidate_cv_proposals` (0102: dopisanie w jednej transakcji, limity).
+ *      `apply_candidate_cv_proposals` (0109: dopisanie w jednej transakcji, limity).
  *
  * Autoryzacja: zalogowane konto KANDYDATA (import dotyczy wyłącznie własnego profilu).
  * Limit wywołań modelu per konto (fail-closed, bo każde wywołanie kosztuje).
@@ -133,7 +133,7 @@ const itemLine = (max: number) =>
     .max(max)
     .refine((v) => !isDisallowedProposalText(v));
 
-/** Zatwierdzone pozycje — te same limity co kreator onboardingu i RPC 0102. */
+/** Zatwierdzone pozycje — te same limity co kreator onboardingu i RPC 0109. */
 const approvedSchema = z
   .object({
     occupations: z.array(itemLine(CANDIDATE_ITEM_LIMITS.occupation)).max(CV_PROPOSAL_LIMITS.occupations).default([]),

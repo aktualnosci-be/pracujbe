@@ -3,7 +3,7 @@ import type { LANGUAGE_LEVELS } from '@/lib/validation/candidate';
 /**
  * Typy propozycji importu CV (#487) — współdzielone przez serwer i UI (bez `server-only`).
  * Propozycja to NIE jest zapis: do profilu trafia wyłącznie to, co kandydat zatwierdzi
- * (`applyCvProposals` → RPC `apply_candidate_cv_proposals`, 0102).
+ * (`applyCvProposals` → RPC `apply_candidate_cv_proposals`, 0109).
  */
 
 export type CvProposalKind = 'occupation' | 'skill' | 'language' | 'certificate' | 'experienceYears';

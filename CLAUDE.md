@@ -647,7 +647,7 @@ unit `saved-search-alerts`; E2E `saved-search.spec`. **Otwarte:** zmiana nazwy w
 link wypisania i ponowna kontrola zgody tuż przed wysyłką przychodzą z #466 (tam `jobMatch` →
 kategoria `job_matches`); na przebieg najwyżej 100 najnowszych pasujących ofert.
 
-Import CV przez AI (#487, #498, migracja `0102`, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
+Import CV przez AI (#487, #498, migracja `0109` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
 profilu tylko z flagą). PDF/DOCX → tekst lokalnie (`src/lib/cv-import/text.ts`: pdf.js 5 bez
 `eval`, DOCX tylko `word/document.xml` z limitem dekompresji) → minimalizacja
@@ -1143,7 +1143,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   superusera; `scripts/lib/job-post-source.mjs`), bez JSON od operatora; renderer przyjmuje tylko
   obiekt ze źródła. Stawka tylko gdy podana, tytuł 2×77/3×60 px albo błąd przed zapisem.
   Instrukcja: `docs/design/people-passport/JOB-POST-EXPORT.md`, test `job-post-export`.
-  **Otwarte (#186):** zaufana kontrola `is_demo` wymaga wąskiego RPC z migracją.
+  Źródło danych (#186, migracja `0102`): `get_campaign_job` (anon) — tylko pola grafiki i tylko
+  oferta `active`, nieusunięta, niewygasła, `is_demo = false` (oferta i firma), firma `verified`;
+  inaczej jednakowy brak danych. Dowód: `rls.sql` sekcja CJ186 (każdy przypadek + kontrola ujemna
+  po zdjęciu każdego filtra), rollback `supabase/rollback/0102_…down.sql` (test w `test-rls.sh`).
+  Baner kampanii z oferty w panelu (#175): `/employer/oferty/[id]/baner` (noindex) + `GET
+  /api/employer/jobs/[id]/banner` — formaty 1200×300, 300×250, 300×600, język PL/NL/FR/EN, SVG
+  i PNG (kanwa w przeglądarce); dane z `get_managed_campaign_job` (recruiter+ firmy oferty albo
+  admin, te same filtry), limit 60/h na konto, `private, no-store`, CSP `sandbox`, demo = 404.
+  Znak jak `Logo.tsx`, tokeny `--pp-*`, osadzony DM Sans, pomiar tekstu tablicą szerokości
+  (`src/lib/campaign-banner/`). Opis: `docs/design/people-passport/BANNER-EXPORT.md`. Testy:
+  `campaign-banner*.test.ts` (Chromium: pomiar przeglądarki ≤ serwera), E2E `campaign-banner`.
+  **Otwarte:** link do baneru w panelu admina (admin ma dostęp tylko przez adres endpointu).
   Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami

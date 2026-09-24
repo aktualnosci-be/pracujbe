@@ -9,7 +9,7 @@ import { buildDocx, CV_WITH_REFEREES, DOCX_TYPE, REFEREES } from '../helpers/cv-
 
 /**
  * #487 — akcje importu CV: flaga (domyślnie wyłączona), konto kandydata, limit wywołań
- * modelu, a zapis WYŁĄCZNIE zatwierdzonych pozycji przez RPC 0102. Brak zatwierdzenia =
+ * modelu, a zapis WYŁĄCZNIE zatwierdzonych pozycji przez RPC 0109. Brak zatwierdzenia =
  * brak wywołania bazy. Klient AI i baza to atrapy — zero prawdziwych wywołań.
  */
 

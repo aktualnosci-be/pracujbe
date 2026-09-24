@@ -18,7 +18,7 @@ z flagą). Bez flagi strona zwraca 404, a profil wypełnia się ręcznie w kreat
 | 2. Podgląd | kandydat widzi dokładny tekst do wysłania i liczniki usuniętych fragmentów | nie | nie |
 | 3. „Wyślij do analizy” | serwer ponownie minimalizuje tekst, wysyła go do modelu, waliduje odpowiedź | tak | nie |
 | 4. Propozycje | każda pozycja osobno, domyślnie niezaznaczona, ze źródłem w CV i oznaczeniem niepewności | nie | nie |
-| 5. „Dodaj zaznaczone” | tylko zaznaczone pozycje → RPC `apply_candidate_cv_proposals` (0102) | nie | tak |
+| 5. „Dodaj zaznaczone” | tylko zaznaczone pozycje → RPC `apply_candidate_cv_proposals` (0109) | nie | tak |
 
 Pliku, tekstu CV ani propozycji nie zapisujemy. Przepływ nie tworzy rekordu `files`, nie
 udostępnia CV firmom i nie zmienia widoczności profilu. Wynik nie trafia do `scoreMatch`,
@@ -40,7 +40,7 @@ rankingu ani screeningu. Ewentualne użycie do oceny kandydatów wymaga osobnej 
 
 Reużyte: detektor `src/lib/privacy/sensitive-data.ts` (#495/#500 — NISS/BIS, PESEL, dokumenty,
 e-mail, telefon), `ExtractorError` i model domyślny z importu ogłoszeń, sygnatury plików
-z `src/lib/validation/cv-file.ts` (wspólne z uploadem CV), limiter `rate_limit_hit`.
+z `src/lib/validation/cv-file.ts` (upload CV w `files.ts` ma jeszcze własną kopię — ujednolicenie po przepięciu plików #26), limiter `rate_limit_hit`.
 
 ## Minimalizacja (deterministyczna, przed modelem)
 
@@ -80,7 +80,7 @@ wraca z przeglądarki. Redakcja jest idempotentna.
   oznaczenie „do sprawdzenia”. Język bez poziomu → „podstawowy” + „do sprawdzenia”.
 - Podejrzenie prompt injection → ostrzeżenie i wszystkie propozycje „do sprawdzenia”.
 
-## Zapis (migracja 0102)
+## Zapis (migracja 0109)
 
 `apply_candidate_cv_proposals(p_occupations, p_skills, p_languages, p_certificates,
 p_experience_years)` — SECURITY DEFINER, tylko `authenticated`, własny profil konta kandydata

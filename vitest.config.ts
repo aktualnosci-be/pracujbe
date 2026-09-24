@@ -20,6 +20,7 @@ import { defineConfig } from 'vitest/config';
  */
 export const CHROMIUM_TEST_FILES = [
   'tests/unit/campaign-banner-export.test.ts',
+  'tests/unit/campaign-banner-chromium.test.ts',
   'tests/unit/job-post-export.test.ts',
   'tests/unit/organic-story-assets.test.ts',
   'tests/unit/launch-chromium.test.ts',

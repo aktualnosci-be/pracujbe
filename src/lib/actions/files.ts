@@ -7,7 +7,7 @@ import { isSupabaseConfigured } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { removeFile, CANDIDATE_BUCKET } from '@/lib/storage';
 import type { ErrorCode } from '@/lib/errors';
-import { CV_ALLOWED_TYPES, checkCvFile, hasCvSignature, type CvFileProblem } from '@/lib/validation/cv-file';
+import { CV_ALLOWED_TYPES, checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
 
 /**
  * Upload/usuwanie plików kandydata (CV) — Invariant #10 (prywatny bucket + signed URLs).
@@ -22,9 +22,25 @@ export type UploadResult =
 export type SimpleResult = { ok: true } | { ok: false; error: ErrorCode };
 
 
-/** Sprawdza, czy początek pliku pasuje do sygnatury danego rozszerzenia (`cv-file.ts`). */
-async function hasValidSignature(file: File, ext: 'pdf' | 'doc' | 'docx'): Promise<boolean> {
-  return hasCvSignature(new Uint8Array(await file.slice(0, 8).arrayBuffer()), ext);
+/**
+ * Sygnatury (magic bytes) na typ. Weryfikujemy zawartość, bo MIME z klienta jest
+ * niezaufany. DOCX to kontener ZIP (`PK`), stary DOC to OLE (`D0 CF 11 E0`).
+ */
+const SIGNATURES: Record<string, readonly number[][]> = {
+  pdf: [[0x25, 0x50, 0x44, 0x46]], // %PDF
+  docx: [[0x50, 0x4b]], // PK (zip)
+  doc: [[0xd0, 0xcf, 0x11, 0xe0]], // OLE compound file
+};
+
+/** Sprawdza, czy początek pliku pasuje do którejkolwiek sygnatury danego rozszerzenia. */
+async function hasValidSignature(file: File, ext: string): Promise<boolean> {
+  const sigs = SIGNATURES[ext];
+  if (!sigs) return false;
+  const maxLen = Math.max(...sigs.map((s) => s.length));
+  const header = new Uint8Array(await file.slice(0, maxLen).arrayBuffer());
+  return sigs.some(
+    (sig) => sig.length <= header.length && sig.every((byte, i) => header[i] === byte),
+  );
 }
 
 /**
