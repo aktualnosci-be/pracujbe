@@ -554,7 +554,7 @@
     "rateLimited": "Trop de tentatives. Patientez un instant et réessayez.",
     "companyNotVerified": "Votre entreprise n'a pas encore été vérifiée.",
     "onboardingIncomplete": "Complétez tous les champs requis du profil pour terminer la configuration.",
-    "jobNotDraft": "Cette offre ne peut être modifiée qu'à l'état de brouillon.",
+    "jobNotDraft": "Cette offre est déjà publiée. Modifiez-la avec « Modifier » dans la liste des offres.",
     "billingUnavailable": "Les paiements sont momentanément indisponibles. Réessayez plus tard.",
     "checkoutInProgress": "Un paiement est déjà en cours. Terminez-le ou réessayez dans un instant.",
     "entitlementLimit": "Vous avez atteint la limite d'offres actives de votre formule. Changez de formule pour en publier davantage.",
@@ -562,7 +562,9 @@
     "internal": "Une erreur est survenue de notre côté. Nous y travaillons.",
     "generic": "Une erreur est survenue. Réessayez.",
     "demoUnavailable": "Cette fonction n'est pas disponible dans la version de démonstration du site.",
-    "invalidTransition": "Ce changement de statut n’est pas possible à cette étape. Actualisez la page et choisissez une autre option."
+    "invalidTransition": "Ce changement de statut n’est pas possible à cette étape. Actualisez la page et choisissez une autre option.",
+    "jobNotEditable": "Cette offre ne peut pas être modifiée pour le moment. Seule une offre active ou suspendue peut être corrigée.",
+    "jobEditConflict": "Quelqu'un a modifié cette offre entre-temps. Rouvrez-la depuis la liste des offres pour voir la version actuelle."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -678,8 +680,6 @@
     "jobReopen": "Réouvrir",
     "jobStatusUpdated": "Statut de l'offre mis à jour.",
     "resumeDraft": "Terminer le brouillon",
-    "jobNotDraftTitle": "Cette offre n'est plus un brouillon",
-    "jobNotDraftHint": "Une offre publiée se gère depuis la liste des offres : suspendre, clôturer ou réouvrir.",
     "activeOffers": "Offres actives",
     "newApplications": "Nouvelles candidatures",
     "matchedCandidates": "Candidats correspondants",
@@ -846,7 +846,13 @@
     "viewProposal": "Voir la proposition",
     "rowActionsFor": "Actions : {title}",
     "companyFallback": "Votre entreprise",
-    "employerShellLoadError": "Impossible de charger les données du compte de l’entreprise. Veuillez réessayer."
+    "employerShellLoadError": "Impossible de charger les données du compte de l’entreprise. Veuillez réessayer.",
+    "jobNotEditableTitle": "Cette offre ne peut pas être modifiée pour le moment",
+    "jobNotEditableHint": "Rouvrez d'abord une offre clôturée ou expirée depuis la liste des offres, puis corrigez-la.",
+    "editJob": "Modifier",
+    "editJobLabel": "Modifier l'offre : {title}",
+    "viewJob": "Voir l'offre",
+    "viewJobLabel": "Voir l'offre : {title}"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1229,7 +1235,16 @@
     "notVerifiedNote": "Le brouillon est enregistré. La publication sera possible une fois l'entreprise vérifiée.",
     "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste.",
     "stepAnnounce": "Étape {current} sur {total} : {title}",
-    "goToOffers": "Voir la liste des offres"
+    "goToOffers": "Voir la liste des offres",
+    "editTitle": "Modifier l'offre",
+    "editSubtitleActive": "L'offre est publiée. Enregistrez vos modifications avec « Enregistrer les modifications » : les candidats les verront aussitôt. Le statut et les candidatures ne changent pas.",
+    "editSubtitlePaused": "L'offre est suspendue. Enregistrez vos modifications avec « Enregistrer les modifications » : les candidats les verront à la reprise de l'offre. Les candidatures ne changent pas.",
+    "viewOffer": "Voir l'offre publiée",
+    "saveChanges": "Enregistrer les modifications",
+    "editSaveHint": "Les modifications ne sont pas encore enregistrées. Enregistrez-les avec « Enregistrer les modifications ».",
+    "editSaved": "Modifications enregistrées",
+    "editSavedDemo": "Modifications enregistrées (mode démo)",
+    "editFixStep": "Les modifications n'ont pas été enregistrées. Corrigez les champs signalés à l'étape {step} : {title}."
   },
   "messages": {
     "title": "Messages",

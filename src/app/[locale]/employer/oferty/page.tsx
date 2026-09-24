@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { MapPin, Plus } from "lucide-react";
+import { ExternalLink, MapPin, Pencil, Plus } from "lucide-react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
@@ -18,6 +18,9 @@ import { getCompanyJobsLoad } from "@/lib/data/employer";
  * P1-04 (cykl życia): szkic ma link „Dokończ szkic" (wznowienie kreatora — koniec osieroconych
  * draftów), a oferta opublikowana/wstrzymana/zamknięta realne akcje statusu (wstrzymaj/wznów/
  * zamknij/otwórz ponownie) egzekwowane w RPC `set_job_status`.
+ *
+ * #325: aktywną i wstrzymaną ofertę można poprawić („Edytuj" → kreator w trybie edycji,
+ * RPC `update_published_job`), a aktywną obejrzeć publicznie („Zobacz ofertę").
  */
 export const dynamic = "force-dynamic";
 
@@ -194,10 +197,40 @@ export default async function EmployerOffersPage({
                         </Link>
                       </Button>
                     ) : (
-                      <JobLifecycleActions
-                        jobId={offer.id}
-                        status={offer.status}
-                      />
+                      <>
+                        {/* #325: poprawka opublikowanej oferty bez zmiany statusu i zgłoszeń. */}
+                        {offer.status === "active" || offer.status === "paused" ? (
+                          <Button
+                            asChild
+                            variant="outline"
+                            className="min-h-12 rounded-xl"
+                          >
+                            <Link
+                              href={`/employer/oferty/${offer.id}/edycja`}
+                              aria-label={td("editJobLabel", { title: offer.title })}
+                            >
+                              <Pencil className="size-4" aria-hidden="true" />
+                              {td("editJob")}
+                            </Link>
+                          </Button>
+                        ) : null}
+                        {offer.status === "active" &&
+                        offer.slug &&
+                        !offer.slug.startsWith("draft-") ? (
+                          <Link
+                            href={`/oferty-pracy/${offer.slug}`}
+                            aria-label={td("viewJobLabel", { title: offer.title })}
+                            className="inline-flex min-h-12 items-center gap-2 rounded-xl px-3 text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <ExternalLink className="size-4" aria-hidden="true" />
+                            {td("viewJob")}
+                          </Link>
+                        ) : null}
+                        <JobLifecycleActions
+                          jobId={offer.id}
+                          status={offer.status}
+                        />
+                      </>
                     )}
                   </div>
                 </article>
