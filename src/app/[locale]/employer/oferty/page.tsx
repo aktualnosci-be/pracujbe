@@ -12,7 +12,7 @@ import {
   BTN_PRIMARY,
   BTN_SECONDARY,
   EYEBROW,
-  H1,
+  H1_EXTENDED,
   INFO_LABEL,
   INTRO,
   JOB_CARD,
@@ -97,7 +97,7 @@ export default async function EmployerOffersPage({
           <p className={EYEBROW}>
             {td("employerRole")}
           </p>
-          <h1 className={H1}>
+          <h1 className={H1_EXTENDED}>
             {td("navOffers")}
           </h1>
           <p className={INTRO}>

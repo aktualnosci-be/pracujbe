@@ -18,7 +18,7 @@ import type { CompanySwitcherCompany } from '@/components/employer/CompanySwitch
 /**
  * Layout panelu pracodawcy (grupa tras `/employer/*`).
  *
- * Owija strony w chrome panelu (DashboardShell: granatowy sidebar z przełącznikiem firmy
+ * Owija strony w chrome panelu (DashboardShell: jasny sidebar `.side-item` z przełącznikiem firmy
  * + topbar) poprzez kliencki `EmployerShell`.
  *
  * GUARD: przy skonfigurowanym Supabase wymaga (1) zalogowanego użytkownika oraz
