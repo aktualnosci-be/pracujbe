@@ -969,6 +969,7 @@
     "location": "Locatie",
     "chooseLocation": "Kies een locatie",
     "salary": "Loon (bruto/maand)",
+    "salaryPeriodNote": "We vergelijken maandlonen; jaarlonen delen we door 12. Uurlonen rekenen we niet om — vacatures met een uurloon of zonder vermeld loon blijven zichtbaar bij deze filter en staan achteraan bij sorteren op loon.",
     "contractType": "Contracttype",
     "requiredLanguage": "Vereiste taal",
     "chooseLanguage": "Kies een taal",

@@ -969,6 +969,7 @@
     "location": "Lieu",
     "chooseLocation": "Choisir un lieu",
     "salary": "Salaire (brut/mois)",
+    "salaryPeriodNote": "Nous comparons les salaires mensuels ; les salaires annuels sont divisés par 12. Les taux horaires ne sont pas convertis : les offres à l’heure ou sans salaire indiqué restent visibles avec ce filtre et apparaissent en dernier dans le tri par salaire.",
     "contractType": "Type de contrat",
     "requiredLanguage": "Langue requise",
     "chooseLanguage": "Choisir une langue",
