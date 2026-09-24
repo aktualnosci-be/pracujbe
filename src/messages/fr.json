@@ -1757,5 +1757,29 @@
       "companyLimit": "Vous pouvez gérer au maximum 5 entreprises.",
       "lastOwner": "L’entreprise doit avoir au moins un propriétaire actif."
     }
+  },
+  "emailUnsubscribe": {
+    "metaTitle": "Désinscription des e-mails",
+    "title": "Désinscription des e-mails",
+    "confirmText": "Confirmez que vous ne souhaitez plus recevoir ces e-mails : {category}.",
+    "confirmButton": "Me désinscrire",
+    "pending": "Enregistrement…",
+    "doneTitle": "Désinscription effectuée",
+    "doneText": "Nous ne vous enverrons plus ces e-mails : {category}. Les autres messages et notifications du site ne changent pas.",
+    "settingsHint": "Vous pouvez modifier tous vos paramètres de notification après connexion.",
+    "loginLink": "Se connecter",
+    "invalidTitle": "Le lien n’est pas valide",
+    "invalidText": "Ce lien de désinscription est incomplet ou a été modifié. Utilisez le lien du dernier e-mail ou modifiez vos paramètres après connexion.",
+    "expiredTitle": "Le lien a expiré",
+    "expiredText": "Ce lien de désinscription n’est plus valable. Utilisez le lien du dernier e-mail ou modifiez vos paramètres après connexion.",
+    "unavailableText": "La désinscription est momentanément indisponible. Réessayez plus tard ou modifiez vos paramètres après connexion.",
+    "errorText": "La modification n’a pas été enregistrée. Réessayez.",
+    "category": {
+      "applications": "sur les candidatures et leur statut",
+      "offers": "sur les propositions d’emploi",
+      "messages": "sur les nouveaux messages",
+      "job_matches": "avec des offres correspondantes",
+      "marketing": "avec la newsletter et les informations marketing"
+    }
   }
 }
