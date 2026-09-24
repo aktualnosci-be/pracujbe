@@ -799,7 +799,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391; jedyna
   wyspa = przycisk zapisu z `jobId`; względna data na serwerze po dniu kalendarzowym w
   Brukseli — `src/lib/relative-date.ts`, zmienia się tylko o północy, zgodna z ISR), dialogi
-  na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
+  na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu, z treścią montowaną
+  w osobnym zadaniu po ramce z nakładką (#393; INP otwarcia < 100 ms przy CPU 4×,
+  `dialog-open-inp.spec`), długi cache
   obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
   na decyzję o workflow. Font Inter jako podzbiór łaciński ~73 KB (#388, przepis
   `scripts/subset-font.py`, fonty zastępcze z metrykami w `globals.css`) i baner zgód
