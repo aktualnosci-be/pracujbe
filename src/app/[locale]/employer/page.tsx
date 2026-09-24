@@ -20,6 +20,8 @@ import {
   getTopMatchedCandidates,
   DEMO_OVERVIEW_DELTAS,
 } from '@/lib/data/employer';
+import { RecruiterOnlyNote } from '@/components/employer/RecruiterOnlyNote';
+import { canRecruit } from '@/lib/team/permissions';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatusPill } from '@/components/ui/status-pill';
@@ -82,6 +84,8 @@ export default async function EmployerDashboardPage({
   ]);
   // P1-09: realne imię pracodawcy w powitaniu (bez zmyślonego „Jan"). Brak → wariant bez imienia.
   const firstName = shell.status === 'ok' ? (shell.userName.trim().split(/\s+/)[0] ?? '') : '';
+  // #403: akcje rekrutacyjne tylko dla recruiter+ (demo/błąd chrome → jak dotąd, baza i tak odmówi).
+  const canAddJobs = shell.status !== 'ok' || canRecruit(shell.activeRole);
 
   return (
     <div className="space-y-6">
@@ -97,13 +101,17 @@ export default async function EmployerDashboardPage({
               : td('employerGreetingSubGeneric')}
           </p>
         </div>
-        {/* Kreator oferty (Etap 5) — 9 kroków z autozapisem szkicu. */}
-        <Button asChild className="max-w-full gap-2 whitespace-normal text-center">
-          <Link href="/employer/oferty/nowa">
-            <Plus className="size-4" aria-hidden="true" />
-            {td('addJob')}
-          </Link>
-        </Button>
+        {/* Kreator oferty (Etap 5) — 9 kroków z autozapisem szkicu. Rola member → wyjaśnienie (#403). */}
+        {canAddJobs ? (
+          <Button asChild className="max-w-full gap-2 whitespace-normal text-center">
+            <Link href="/employer/oferty/nowa">
+              <Plus className="size-4" aria-hidden="true" />
+              {td('addJob')}
+            </Link>
+          </Button>
+        ) : (
+          <RecruiterOnlyNote locale={locale} />
+        )}
       </div>
 
       {/* #399: status weryfikacji firmy od pierwszego wejścia (verified → brak baneru). */}

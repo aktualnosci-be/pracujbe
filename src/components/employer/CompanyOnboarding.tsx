@@ -2,6 +2,10 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
 import { CompanyForm } from '@/components/employer/CompanyForm';
+import {
+  MyTeamInvitations,
+  type MyTeamInvitationView,
+} from '@/components/employer/team/MyTeamInvitations';
 
 /**
  * Zakładanie firmy przez ZALOGOWANEGO pracodawcę bez członkostwa (#365) — np. gdy bootstrap
@@ -9,8 +13,16 @@ import { CompanyForm } from '@/components/employer/CompanyForm';
  * (każda podstrona `/employer/*`) oraz przez `/employer/firma`. Nazwa z rejestracji
  * (`user_metadata.company_name`) wypełnia formularz; zapis jest idempotentny
  * (`create_first_company`), więc ponowne kliknięcie nie tworzy drugiej firmy.
+ * #403: nad formularzem zaproszenia do istniejących zespołów — zamiast zakładać własną firmę
+ * można dołączyć do firmy, która zaprosiła ten adres.
  */
-export function CompanyOnboarding({ defaultName }: { defaultName?: string }): React.JSX.Element {
+export function CompanyOnboarding({
+  defaultName,
+  invitations = [],
+}: {
+  defaultName?: string;
+  invitations?: MyTeamInvitationView[];
+}): React.JSX.Element {
   const t = useTranslations('company');
 
   return (
@@ -24,6 +36,8 @@ export function CompanyOnboarding({ defaultName }: { defaultName?: string }): Re
         </h1>
         <p className="mt-1 text-sm text-background/80">{t('createSubtitle')}</p>
       </header>
+
+      <MyTeamInvitations invitations={invitations} />
 
       <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
         <p className="text-sm text-muted-foreground">{t('verificationNote')}</p>
