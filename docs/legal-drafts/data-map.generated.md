@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 81; z danymi osobowymi: 49; bez danych osobowych: 32.
+Tabele w migracjach: 83; z danymi osobowymi: 50; bez danych osobowych: 33.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -22,7 +22,7 @@ Tabele w migracjach: 81; z danymi osobowymi: 49; bez danych osobowych: 32.
 | Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs`, `public.screening_question_reviews` | Railway, Supabase, Resend, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
 | E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Supabase, Resend | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
-| Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Supabase, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
+| Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Supabase, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.rate_limits`, `public.system_events` | Railway, Supabase, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Supabase, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway, Supabase | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
@@ -681,6 +681,21 @@ Tabele w migracjach: 81; z danymi osobowymi: 49; bez danych osobowych: 32.
 | `body` | Korespondencja i treści swobodne | `supabase/migrations/0006_messaging.sql` |
 | `read_at` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0006_messaging.sql` |
 
+### `public.moderation_appeals`
+
+- **Migracja:** `supabase/migrations/0104_dsa_appeals.sql`
+- **Czynności:** Zgłoszenia treści (DSA) i moderacja
+- **Osoby:** Pracodawcy i członkowie firm, Zgłaszający treści (z kontem lub bez), Administratorzy portalu
+- **Uwaga:** Uzasadnienia odwołania i rozpatrzenia są anonimizowane przez dsa_retention_run po końcu drogi odwołania i okresie retencji (#43).
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `appellant_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0104_dsa_appeals.sql` |
+| `appellant_locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0104_dsa_appeals.sql` |
+| `grounds` | Korespondencja i treści swobodne | `supabase/migrations/0104_dsa_appeals.sql` |
+| `outcome_reasoning` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0104_dsa_appeals.sql` |
+| `decided_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0104_dsa_appeals.sql` |
+
 ### `public.moderation_decisions`
 
 - **Migracja:** `supabase/migrations/0099_dsa_moderation.sql`
@@ -893,6 +908,9 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 
 | Szablon | Pola payloadu | Funkcje SQL |
 |---|---|---|
+| `appealReceived` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `recipientName` | `submit_moderation_appeal`, `submit_report_appeal` |
+| `appealReversed` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
+| `appealUpheld` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
 | `applicationViewed` | `companyName`, `jobTitle` | `transition_application` |
 | `companyRejected` | `companyName`, `reason` | `admin_set_company_status` |
 | `companySuspended` | `companyName`, `reason` | `admin_set_company_status` |
@@ -902,9 +920,9 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `jobMatch` | `count`, `jobs`, `query`, `searchName` | `process_saved_search_alerts` |
 | `jobOffer` | `companyName`, `jobTitle` | `send_offer` |
 | `jobPublished` | `jobTitle` | `publish_job` |
-| `moderationCompanySuspended` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_report` |
-| `moderationJobRemoved` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_report` |
-| `moderationRestored` | `companyName`, `decisionReference`, `jobTitle`, `reason` | `admin_restore_moderation` |
+| `moderationCompanySuspended` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
+| `moderationJobRemoved` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
+| `moderationRestored` | `companyName`, `decisionReference`, `jobTitle`, `reason` | `moderation_restore_core` |
 | `newApplication` | `candidateName`, `jobTitle` | `apply_to_job`, `confirm_guest_application` |
 | `newMessage` | `panel`, `senderName` | `send_message` |
 | `offerAccepted` | `candidateName`, `jobTitle` | `respond_to_offer` |
@@ -925,6 +943,7 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `public.consent_versions` | Słownik/konfiguracja (wersje dokumentów zgód) — bez danych osobowych. |
 | `public.discount_codes` | Słownik/konfiguracja (kody rabatowe) — bez danych osobowych. |
 | `public.discount_redemptions` | Martwy schemat billingu. |
+| `public.dsa_retention_runs` | Wyłącznie liczniki przebiegów retencji (bez danych osobowych). |
 | `public.email_campaigns` | Treść i status kampanii (per język) — bez danych odbiorców. |
 | `public.email_recipient_budget_config` | Słownik/konfiguracja (limity wysyłki na odbiorcę) — bez danych osobowych. |
 | `public.email_send_budget_config` | Słownik/konfiguracja (budżet wysyłki e-mail) — bez danych osobowych. |
