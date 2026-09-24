@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -25,7 +26,6 @@ import { decodePng } from '../helpers/png-pixels';
 const execFileAsync = promisify(execFile);
 const SCRIPT = resolve('scripts/export-job-post.mjs');
 const LOCALES = ['pl', 'nl', 'fr', 'en'] as const;
-const NOW = new Date('2026-09-24T10:00:00Z');
 
 type Row = Record<string, unknown>;
 
@@ -33,7 +33,6 @@ const ROW: Row = {
   slug: 'operator-wozka-widlowego-antwerpia',
   title: 'Operator wózka widłowego',
   company_name: 'Logistyka Noord NV',
-  company_verified: true,
   city: 'Antwerpia',
   region: 'Flandria',
   contract_type: 'permanent',
@@ -42,12 +41,11 @@ const ROW: Row = {
   salary_max: 20,
   currency: 'EUR',
   salary_period: 'hour',
-  expires_at: '2026-10-24T00:00:00Z',
 };
 
 function load(row: Row | null, locale: string = 'pl', slug = ROW.slug as string) {
   const query = vi.fn(async () => (row ? [row] : []));
-  return { query, job: loadExportableJob({ slug, locale, query, now: NOW }) };
+  return { query, job: loadExportableJob({ slug, locale, query }) };
 }
 
 /** Pomiar deterministyczny do testów układu: 0,6 szerokości znaku na piksel rozmiaru. */
@@ -62,7 +60,7 @@ async function svgFor(row: Row, locale: string = 'pl') {
   return renderSvg(content, await layoutPost(content, fakeMeasure));
 }
 
-describe('źródło oferty posta (#186): tylko get_public_job pod rolą anon', () => {
+describe('źródło oferty posta (#186): tylko get_campaign_job pod rolą anon', () => {
   it('zwraca wąski zestaw pól i bezpieczny adres oferty', async () => {
     const job = await load(ROW, 'nl').job;
     expect(job).toEqual({
@@ -83,24 +81,36 @@ describe('źródło oferty posta (#186): tylko get_public_job pod rolą anon', (
     expect(Object.isFrozen(job)).toBe(true);
   });
 
-  it('dla braku wiersza (nieaktywna, wygasła, demo ukryta przez RPC, nieistniejąca) daje jednakowy błąd', async () => {
-    await expect(load(null).job).rejects.toBeInstanceOf(JobUnavailableError);
-    // Obrona w głąb: nawet gdyby RPC zwróciło wiersz, który nie spełnia warunków — ten sam błąd.
-    const cases: Row[] = [
-      { ...ROW, company_verified: false },
-      { ...ROW, expires_at: '2026-09-24T10:00:00Z' },
-      { ...ROW, slug: 'inna-oferta' },
-    ];
+  it('dla braku wiersza (demo, nieaktywna, wygasła, niezweryfikowana, nieistniejąca) daje jednakowy błąd', async () => {
+    // Filtry egzekwuje baza (0102, dowód rls.sql CJ186); tu: brak wiersza i wiersz innej oferty.
     const messages = new Set<string>();
-    for (const row of cases) {
+    for (const row of [null, { ...ROW, slug: 'inna-oferta' }]) {
       const error = await load(row).job.catch((e: Error) => e);
       expect(error).toBeInstanceOf(JobUnavailableError);
       messages.add((error as Error).message);
     }
-    messages.add(((await load(null).job.catch((e: Error) => e)) as Error).message);
     expect(messages.size).toBe(1);
-    // Kontrola ujemna: ten sam wiersz z ważną datą i zweryfikowaną firmą przechodzi.
-    await expect(load({ ...ROW, expires_at: null }).job).resolves.toMatchObject({ slug: ROW.slug });
+    // Kontrola ujemna: wiersz tej oferty przechodzi.
+    await expect(load(ROW).job).resolves.toMatchObject({ slug: ROW.slug });
+  });
+
+  it('pomija pola spoza grafiki, nawet gdy źródło by je zwróciło (bez PII)', async () => {
+    const job = await load({ ...ROW, email: 'hr@firma.be', phone: '+32 470 00 00 00', is_demo: false, status: 'active' }).job;
+    const serialized = JSON.stringify(job);
+    expect(serialized).not.toMatch(/hr@firma\.be|\+32|is_demo|isDemo|status/);
+  });
+
+  it('zapytanie czyta dokładnie kolumny get_campaign_job z migracji 0102', () => {
+    const migration = readFileSync(resolve('supabase/migrations/0102_campaign_job_source.sql'), 'utf8');
+    const header = /function public\.get_campaign_job\([^)]*\)\s*returns table \(([^)]*)\)/.exec(migration)?.[1] ?? '';
+    const columns = header.split(',').map((part) => part.trim().split(/\s+/)[0]).filter(Boolean);
+    expect(columns).toEqual([
+      'slug', 'title', 'company_name', 'city', 'region', 'contract_type', 'accommodation',
+      'salary_min', 'salary_max', 'currency', 'salary_period',
+    ]);
+    const source = readFileSync(resolve('scripts/lib/job-post-source.mjs'), 'utf8');
+    const select = /SELECT ([\s\S]*?)\s+FROM public\.get_campaign_job/.exec(source)?.[1] ?? '';
+    expect(select.split(',').map((c) => c.trim())).toEqual(columns);
   });
 
   it('odrzuca nieprawidłowy slug i język przed zapytaniem do bazy', async () => {
@@ -121,13 +131,13 @@ describe('źródło oferty posta (#186): tylko get_public_job pod rolą anon', (
     const client = {
       query: vi.fn(async (sql: string) => {
         statements.push(sql);
-        return { rows: sql.includes('get_public_job') ? [ROW] : [] };
+        return { rows: sql.includes('get_campaign_job') ? [ROW] : [] };
       }),
     };
     await expect(createAnonJobQuery(client)(ROW.slug, 'pl')).resolves.toEqual([ROW]);
     expect(statements[0]).toBe('BEGIN');
     expect(statements[1]).toBe('SET LOCAL ROLE anon');
-    expect(statements[3]).toMatch(/FROM public\.get_public_job\(/);
+    expect(statements[3]).toMatch(/FROM public\.get_campaign_job\(/);
     expect(statements.at(-1)).toBe('COMMIT');
     expect(statements.join('\n')).not.toMatch(/is_demo|from public\.jobs/i);
 
@@ -142,8 +152,8 @@ describe('źródło oferty posta (#186): tylko get_public_job pod rolą anon', (
   it('odrzuca podmieniony obiekt oferty (status/isDemo z lokalnego pliku)', async () => {
     const job = await load(ROW).job;
     const forged = { ...job, isDemo: false, status: 'active' };
-    expect(() => buildPostContent(forged)).toThrow(/get_public_job/);
-    expect(() => buildPostContent(JSON.parse(JSON.stringify(job)))).toThrow(/get_public_job/);
+    expect(() => buildPostContent(forged)).toThrow(/get_campaign_job/);
+    expect(() => buildPostContent(JSON.parse(JSON.stringify(job)))).toThrow(/get_campaign_job/);
     // Kontrola ujemna: oryginalny obiekt ze źródła przechodzi.
     expect(buildPostContent(job).title).toBe('Operator wózka widłowego');
   });
