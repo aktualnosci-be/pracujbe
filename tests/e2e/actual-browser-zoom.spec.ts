@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, expect, test } from "@playwright/test";
 
+import { openZoomController, ZOOM_EXTENSION_ARGS } from "./fixtures/zoom-controller";
+
 const locales = ["pl", "nl", "fr", "en"] as const;
-const extensionPath = resolve(__dirname, "fixtures/browser-zoom");
 
 for (const locale of locales) {
   test(`rzeczywisty zoom 200%: wyszukiwanie ofert działa bez poziomego przewijania (${locale})`, async () => {
@@ -32,25 +33,20 @@ for (const locale of locales) {
       channel: "chromium",
       headless: true,
       viewport: { width: 1280, height: 900 },
-      args: [
-        `--disable-extensions-except=${extensionPath}`,
-        `--load-extension=${extensionPath}`,
-      ],
+      args: ZOOM_EXTENSION_ARGS,
       ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
         ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
         : {}),
     });
 
     try {
-      const worker =
-        context.serviceWorkers()[0] ??
-        (await context.waitForEvent("serviceworker"));
       const page = context.pages()[0] ?? (await context.newPage());
+      const zoomController = await openZoomController(context, page);
       const baseURL = test.info().project.use.baseURL;
       expect(baseURL).toBeTruthy();
       await page.goto(new URL(`/${locale}`, baseURL).toString());
 
-      const zoom = await worker.evaluate(async (url) => {
+      const zoom = await zoomController.evaluate(async (url) => {
         const tab = (await chrome.tabs.query({})).find((item) =>
           item.url?.startsWith(url),
         );
@@ -95,7 +91,7 @@ for (const locale of locales) {
         page.getByRole("heading", { level: 1, name: t.jobs.pageTitle }),
       ).toBeVisible();
       // Browser zoom belongs to the tab. Confirm it survived client navigation.
-      const zoomAfterNavigation = await worker.evaluate(async (url) => {
+      const zoomAfterNavigation = await zoomController.evaluate(async (url) => {
         const tab = (await chrome.tabs.query({})).find((item) =>
           item.url?.startsWith(url),
         );

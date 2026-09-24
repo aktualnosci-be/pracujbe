@@ -5,8 +5,9 @@ import { join, resolve } from 'node:path';
 
 import { chromium, expect, test, type Page } from '@playwright/test';
 
+import { openZoomController, ZOOM_EXTENSION_ARGS } from './fixtures/zoom-controller';
+
 const locales = ['pl', 'nl', 'fr', 'en'] as const;
-const extensionPath = resolve(__dirname, 'fixtures/browser-zoom');
 
 function copy(locale: (typeof locales)[number]) {
   return JSON.parse(readFileSync(resolve('src/messages', `${locale}.json`), 'utf8')) as {
@@ -68,18 +69,18 @@ for (const locale of locales) {
       channel: 'chromium',
       headless: true,
       viewport: { width: 1280, height: 900 },
-      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
+      args: ZOOM_EXTENSION_ARGS,
       ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
         ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
         : {}),
     });
     try {
-      const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
       const page = context.pages()[0] ?? await context.newPage();
+      const zoomController = await openZoomController(context, page);
       const baseURL = test.info().project.use.baseURL;
       expect(baseURL).toBeTruthy();
       await page.goto(new URL(`/${locale}/employer`, baseURL).toString());
-      const zoom = await worker.evaluate(async (url) => {
+      const zoom = await zoomController.evaluate(async (url) => {
         const tab = (await chrome.tabs.query({})).find((item) => item.url?.startsWith(url));
         if (!tab?.id) throw new Error('Nie znaleziono karty panelu pracodawcy');
         await chrome.tabs.setZoom(tab.id, 2);

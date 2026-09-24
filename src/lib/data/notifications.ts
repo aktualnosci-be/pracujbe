@@ -76,7 +76,22 @@ const TITLE_KEY_BY_TYPE: Record<string, string> = {
   system: 'itemSystem',
 };
 
-function titleKeyForType(type: string): string {
+/**
+ * Decyzja admina o firmie (0084, #310): odrzucenie/zawieszenie przychodzi jako `system`
+ * z `data.kind = 'company_status'` (enum `notification_type` bez zmian) — tytuł wg `data.status`.
+ */
+const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {
+  verified: 'itemCompanyVerified',
+  rejected: 'itemCompanyRejected',
+  suspended: 'itemCompanySuspended',
+};
+
+export function titleKeyForType(type: string, data?: unknown): string {
+  const d = asRecord(data);
+  if (d['kind'] === 'company_status') {
+    const key = COMPANY_STATUS_TITLE_KEY[asStr(d['status'])];
+    if (key) return key;
+  }
   return TITLE_KEY_BY_TYPE[type] ?? TITLE_KEY_BY_TYPE['system']!;
 }
 
@@ -207,7 +222,7 @@ export async function getNotifications(
       supabase.from('profiles').select('role').eq('id', userId).maybeSingle(),
       supabase
         .from('notifications')
-        .select('id, type, entity_type, entity_id, read_at, created_at')
+        .select('id, type, data, entity_type, entity_id, read_at, created_at')
         .eq('profile_id', userId)
         .order('created_at', { ascending: false })
         .limit(20),
@@ -236,7 +251,7 @@ export async function getNotifications(
       const type = asStr(r['type'], 'system');
       return {
         id: asStr(r['id']),
-        title: t(titleKeyForType(type)),
+        title: t(titleKeyForType(type, r['data'])),
         meta: formatRelativeTime(asStr(r['created_at']), resolvedLocale),
         unread: r['read_at'] == null,
         href: resolveHref(asStr(r['entity_type']), role, asStr(r['entity_id'])),

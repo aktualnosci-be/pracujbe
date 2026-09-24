@@ -106,6 +106,7 @@ export default async function EmployerCompanyPage({
         <>
           <CompanyStatusBanner
             status={company.status}
+            reason={company.statusReason}
             action={
               company.status === 'rejected' && company.canEdit ? <CompanyReverifyButton /> : null
             }
