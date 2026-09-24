@@ -739,6 +739,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] Wybór języka odbiorcy (fallback) — util + test + `resolve_recipient_locale()` w DB (INVARIANT #1 egzekwowany przy kolejkowaniu)
 - [~] Kolejka e-mail + worker + ponawianie — outbox (`email_deliveries`: attempts/next_attempt_at/payload), worker `src/lib/email/outbox.ts` + route `/api/email/process` (sekret) gotowe; realna wysyłka wymaga `RESEND_API_KEY`
   Harmonogram: cron Railway (`scripts/railway-cron-call.mjs` → `/api/email/process`), opis w `docs/RESEND_SETUP.md` §6 (#296).
+  Wypisanie i budżety (#45, etap 1, migracja `0087`): token HMAC (`src/lib/email/unsubscribe-token.ts`,
+  `EMAIL_UNSUBSCRIBE_SECRET`; UUID konta + kategoria + 180 dni, bez e-maila w URL), link w stopce
+  → `/{locale}/wypisz` (noindex, zapis dopiero po kliknięciu), nagłówki `List-Unsubscribe` +
+  `List-Unsubscribe-Post` → `POST /api/email/unsubscribe` (RFC 8058, idempotentne RPC
+  `email_unsubscribe`, tylko service_role; GET = 303 bez zmian). Kategorie: `src/lib/email/categories.ts`
+  = `email_preference_category`; marketing domyślnie wyłączony (`email_allowed`). `claim_email_batch`
+  ponownie sprawdza zgodę i wygasza wiersz (`suppressed_at`). Atomowy budżet okna
+  (`take_email_send_budget`, rezerwy auth/transakcyjna; odmowa = odłożenie bez `attempts`).
+  Dowód: `rls.sql` sekcja UN45 (dblink, kontrole ujemne), `email-unsubscribe.test.ts`, E2E
+  `email-unsubscribe.spec`. **Do zrobienia (#45):** wersjonowany dowód zgody marketingowej,
+  centrum preferencji dla wszystkich kategorii, `text/plain`, tożsamość i adres pocztowy nadawcy
+  w stopce marketingu, budżet w hooku e-maili Auth, rezerwacja kampania+odbiorca, decyzja o
+  trackingu na odebranym `.eml`.
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
