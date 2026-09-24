@@ -1,8 +1,9 @@
 import 'server-only';
 import { Pool, type PoolConfig } from 'pg';
 
-export type DatabasePurpose = 'domain' | 'auth';
-const roles = { domain: 'pracujbe_app', auth: 'pracujbe_auth' } as const;
+export type DatabasePurpose = 'domain' | 'auth' | 'ops';
+/** 'ops' (#47, 0097): login monitoringu — wyłącznie EXECUTE na public.ops_metrics(). */
+const roles = { domain: 'pracujbe_app', auth: 'pracujbe_auth', ops: 'pracujbe_ops' } as const;
 
 /** Konfiguracja jawna; nie odczytuje DATABASE_URL migratora ani nie łączy przy imporcie. */
 export function runtimePoolConfig(connectionString: string, purpose: DatabasePurpose): PoolConfig {
@@ -24,7 +25,8 @@ export function runtimePoolConfig(connectionString: string, purpose: DatabasePur
   }
   return {
     connectionString,
-    max: 5,
+    // Monitoring nie może zająć połączeń aplikacji: jedna sesja na proces.
+    max: purpose === 'ops' ? 1 : 5,
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
     options: `-c role=${roles[purpose]} -c search_path=${purpose === 'auth' ? 'auth' : 'public'} -c statement_timeout=30000 -c idle_in_transaction_session_timeout=30000`,

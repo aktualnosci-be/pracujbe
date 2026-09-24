@@ -26,6 +26,10 @@ Skrypt kończy się kodem0 przy sukcesie,1 przy błędzie żądania/HTTP,2 przy 
 - **Cykl życia:** publikacja szkicu z minioną datą i wznowienie wstrzymanej oferty po terminie są odrzucane (`JOB_EXPIRED`); ponowne otwarcie (także aktywnej lub wstrzymanej po terminie) usuwa minioną datę.
 - **Rollback:** wyłącz harmonogram usługi cron (operacja nie ma efektów ubocznych poza zmianą statusu). Zmiany SQL cofa wyłącznie nowa migracja naprawcza (`drop function public.expire_due_jobs()`, `drop index public.idx_jobs_active_expires_at`, odtworzenie `publish_job` z `0073` i `set_job_status` z `0062`); zastosowanej migracji `0085` nie edytuj. Oferty już zmienione na `expired` pracodawca otwiera ponownie z listy ofert.
 
+## Operacje (#47)
+
+Czujki `/api/health/ops`, kopie zaszyfrowane z retencją, okresowe odtworzenie i pomiar wyszukiwania opisuje [OPERATIONS.md](OPERATIONS.md). Kroki infrastruktury (sekret, login monitoringu, uptime, cron kopii) są w sekcji 5 tego dokumentu i nie zostały wykonane.
+
 ## Stan przejściowy kodu
 
 Workflow Vercela został usunięty: repozytorium nie publikuje już zielonego

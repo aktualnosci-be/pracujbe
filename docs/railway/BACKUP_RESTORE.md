@@ -1,4 +1,6 @@
-# Kopia i odtworzenie PostgreSQL — dowód odtwarzalności (#47)
+# Kopia i odtworzenie PostgreSQL (#47)
+
+## Dowód odtwarzalności — `scripts/db/verify-restore.sh`
 
 `scripts/db/verify-restore.sh` wykonuje zrzut `pg_dump -Fc` bazy źródłowej,
 czyta całe archiwum (`pg_restore --list`), odtwarza je do **pustej, izolowanej**
@@ -13,7 +15,7 @@ powstał zrzut, więc kontrola jest poprawna również na działającej produkcj
 blokuje zapisów. Skrypt nigdy nie pisze do źródła i nie usuwa baz. Wejście wyłącznie
 ze zmiennych środowiskowych; URL-e i hasła nie są wypisywane.
 
-## Uruchomienie przez operatora
+### Uruchomienie przez operatora
 
 Wymagany klient PostgreSQL w wersji co najmniej równej serwerowi (Railway: 18).
 
@@ -34,21 +36,78 @@ Cel musi być osobną, nietrwałą bazą: lokalny kontener albo tymczasowa usłu
 nie wskazuj produkcyjnej bazy Railway jako celu. Polityki RLS odwołują się do ról
 globalnych — skrypt tworzy brakujące role na celu jako `NOLOGIN` bez atrybutów.
 
-## Co jest sprawdzane w CI
+### Co jest sprawdzane w CI
 
 Job `rls` uruchamia `scripts/db/test-restore.sh`: źródło z produkcyjnym bootstrapem,
 wszystkimi migracjami i danymi, odtworzenie oraz kontrole ujemne (cel niepusty,
 cel = źródło, niedozwolona nazwa, brak konfiguracji).
 
-## Poza skryptem — do decyzji/infrastruktury
+## Kopia zaszyfrowana z retencją — `scripts/db/backup.sh`
 
-- Harmonogram: okresowe uruchamianie wymaga zadania cron (usługa Railway z
-  klientem PG18 albo zewnętrzny runner) — koszt i miejsce do decyzji właściciela.
-- Szyfrowanie i retencja archiwum (`RESTORE_KEEP_DUMP`) oraz miejsce przechowywania
-  poza wolumenem bazy.
-- Alarm przy błędzie kopii lub odtworzenia (#47).
-- Wolumen Railway ma własne snapshoty; ten skrypt dowodzi odtwarzalności logicznej
-  kopii, nie zastępuje polityki kopii wolumenu.
+Kopia do przechowywania, nie tylko dowód odtwarzalności:
 
-Rollback: skrypt i test są niezależne od runtime; usunięcie kroku CI i plików
-nie zmienia bazy.
+1. `pg_dump -Fc` ze snapshotu transakcji REPEATABLE READ tylko do odczytu,
+2. **pełny odczyt** archiwum: `pg_restore --list` oraz odtworzenie do `/dev/null`,
+3. szyfrowanie `age` **kluczem publicznym**; zadanie kopii nie zna klucza prywatnego,
+   a skrypt odrzuca plik odbiorców zawierający `AGE-SECRET-KEY`,
+4. manifest `pracujbe-<UTC>.json` obok artefaktu `pracujbe-<UTC>.dump.age` zawiera
+   rozmiar zrzutu i artefaktu, SHA-256 artefaktu, SHA-256 zapytań kontrolnych
+   (historia migracji, tabele z RLS, liczba polityk, liczba wierszy każdej tabeli
+   z tego samego snapshotu), liczbę tabel i migracji, ostatnią migrację i wersję
+   serwera; manifest nie zawiera danych,
+5. retencja: zostaje `BACKUP_RETENTION` najnowszych kopii; usuwane są wyłącznie
+   pliki o dokładnym wzorcu nazwy. Artefakt i manifest mają prawa 0600, katalog 0700,
+6. opcjonalny `BACKUP_HEARTBEAT_URL`: po sukcesie `GET URL`, po błędzie `GET URL/fail`.
+   Brak pingu w oknie usługi (dead-man’s switch) = alarm. Kolejny udany ping to recovery.
+
+```text
+BACKUP_SOURCE_URL           # login tylko do odczytu albo migrator (nie login WWW)
+BACKUP_DIR                  # katalog artefaktów (wolumen/bucket POZA wolumenem bazy)
+BACKUP_AGE_RECIPIENTS_FILE  # klucz(e) publiczne age1…
+BACKUP_RETENTION            # domyślnie 14 (1–365)
+BACKUP_WORK_DIR             # opcjonalnie: dysk na chwilowy zrzut (usuwany zawsze)
+BACKUP_HEARTBEAT_URL        # opcjonalnie
+```
+
+Kod `0` = kopia zapisana i odczytana, `1` = błąd kopii, `2` = zła konfiguracja.
+Niezerowy kod to nieudane wykonanie crona Railway, czyli sygnał alarmu. Niezaszyfrowany zrzut
+istnieje tylko w katalogu roboczym 0700 do chwili zaszyfrowania i jest usuwany także po błędzie.
+
+Klucze: `age-keygen -o pracujbe-backup.key` (klucz prywatny przechowuj POZA Railway),
+`age-keygen -y pracujbe-backup.key > recipients.txt` (klucz publiczny dla zadania kopii).
+Rotacja: dopisz nowy klucz publiczny do `recipients.txt` (kopie da się otworzyć
+każdym z kluczy) i usuń stary po wygaśnięciu retencji.
+
+## Odtworzenie artefaktu — `scripts/db/restore-backup.sh`
+
+```text
+RESTORE_ARCHIVE             # ścieżka pracujbe-<UTC>.dump.age (manifest obok)
+RESTORE_AGE_IDENTITY_FILE   # klucz prywatny age
+RESTORE_TARGET_URL          # pusta baza pracujbe_restore_* na OSOBNYM klastrze
+```
+
+Kolejne kroki: zgodność SHA-256 artefaktu z manifestem, odszyfrowanie, pełny
+odczyt, utworzenie brakujących ról polityk jako `NOLOGIN`, `pg_restore
+--single-transaction --exit-on-error` i porównanie SHA-256 zapytań kontrolnych
+z manifestem. Kody wyjścia jak wyżej. Podmieniony artefakt, zły klucz, zmieniony
+manifest, niepusty cel i nazwa spoza `pracujbe_restore_*` kończą się błędem.
+
+Test obu skryptów: `sudo -u postgres npm run test:backup` (lokalny PG16) albo
+`PGHOST=… PGUSER=… PGPASSWORD=… npm run test:backup`. Test wykonuje trzy kopie
+przy retencji 2, sprawdza prawa plików, format `age` i brak plaintextu w
+artefakcie, odtwarza najnowszą kopię i wykonuje 8 kontroli ujemnych. Wymaga `age`
+i `age-keygen`, nie łączy się z internetem. Workflow CI nie uruchamia go
+automatycznie. Gotowy krok dla właściciela jest w [OPERATIONS.md](OPERATIONS.md) §5.
+
+## Poza skryptami — do decyzji/infrastruktury
+
+- Harmonogram kopii (raz na dobę) i okresowego odtworzenia (raz w tygodniu): usługi
+  cron Railway z klientem PG18 i `age` albo zewnętrzny runner. Koszt i miejsce
+  wybiera właściciel.
+- Miejsce przechowywania artefaktów poza wolumenem bazy (bucket, druga lokalizacja).
+- Usługa heartbeat dla `BACKUP_HEARTBEAT_URL` (alarm przy braku kopii).
+- Wolumen Railway ma własne snapshoty. Te skrypty dowodzą odtwarzalności logicznej
+  kopii i nie zastępują polityki kopii wolumenu.
+
+Rollback: skrypty i testy są niezależne od runtime. Usunięcie plików nie zmienia
+bazy. Rozróżnienie rollbacku kodu, schematu i danych: [OPERATIONS.md](OPERATIONS.md) §4.

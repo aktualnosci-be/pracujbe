@@ -3919,4 +3919,90 @@ select pg_temp.expect_error('select * from public.create_additional_company(''A'
   'permission denied', 'TM403-12b anon bez EXECUTE na kolejnej firmie');
 reset role;
 
+
+-- =============================================================================
+-- OPS47 — czujki operacyjne (0097): ops_metrics tylko dla pracujbe_ops/service_role,
+-- same liczby (bez PII), poprawne zaległości/dzierżawy/webhooki/maintenance,
+-- indeks trigramowy miasta używany przez filtr `city ilike`.
+-- =============================================================================
+\echo '--- OPS47 ops_metrics ---'
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_metrics()', 'permission denied', 'OPS47-1 anon bez EXECUTE');
+reset role;
+set role authenticated; set app.current_uid = :'TMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_metrics()', 'permission denied', 'OPS47-1b authenticated bez EXECUTE');
+reset role; reset app.current_uid;
+
+select pg_temp.assert(
+  (select not rolcanlogin and not rolinherit and not rolsuper and not rolbypassrls
+     from pg_roles where rolname = 'pracujbe_ops')
+  and not exists (select 1 from pg_auth_members where member = 'pracujbe_ops'::regrole),
+  'OPS47-2 rola pracujbe_ops bez atrybutów i członkostw');
+
+set role pracujbe_ops;
+select pg_temp.expect_error('select count(*) from public.email_deliveries', 'permission denied',
+  'OPS47-2b pracujbe_ops nie czyta tabel');
+select pg_temp.expect_error('select count(*) from public.jobs', 'permission denied',
+  'OPS47-2c pracujbe_ops nie czyta ofert');
+select pg_temp.expect_error('select public.expire_due_jobs()', 'permission denied',
+  'OPS47-2d pracujbe_ops nie wykonuje zadań maintenance');
+select pg_temp.assert(
+  (select public.ops_metrics() ?& array['email', 'authEmail', 'webhooks', 'maintenance', 'connections']),
+  'OPS47-2e pracujbe_ops czyta metryki');
+reset role;
+
+select public.ops_metrics() as ops_base \gset
+begin;
+insert into public.email_deliveries(to_email, template, status, next_attempt_at, locked_at, updated_at) values
+  ('ops47-ready@test.invalid', 'newMessage', 'queued', now() - interval '20 minutes', null, now()),
+  ('ops47-lease@test.invalid', 'newMessage', 'queued', now() - interval '1 minute', now() - interval '10 minutes', now()),
+  ('ops47-future@test.invalid', 'newMessage', 'queued', now() + interval '1 hour', null, now()),
+  ('ops47-failed@test.invalid', 'newMessage', 'failed', now(), null, now());
+insert into public.processed_webhooks(id, source, status, seen_at, updated_at) values
+  ('ops47-stuck', 'stripe', 'processing', now() - interval '1 hour', now() - interval '1 hour'),
+  ('ops47-fresh', 'stripe', 'processing', now(), now());
+set local session_replication_role = replica;
+update public.jobs set status = 'active', expires_at = now() - interval '3 hours'
+  where id = (select id from public.jobs where deleted_at is null order by id limit 1);
+set local session_replication_role = origin;
+set local role pracujbe_ops;
+select public.ops_metrics() as ops_now \gset
+reset role;
+select pg_temp.assert(
+  ((:'ops_now')::jsonb #>> '{email,ready}')::int = ((:'ops_base')::jsonb #>> '{email,ready}')::int + 2
+  and ((:'ops_now')::jsonb #>> '{email,oldestReadyAgeSeconds}')::int >= 1200
+  and ((:'ops_now')::jsonb #>> '{email,abandonedLeases}')::int = ((:'ops_base')::jsonb #>> '{email,abandonedLeases}')::int + 1
+  and ((:'ops_now')::jsonb #>> '{email,failedLast24h}')::int = ((:'ops_base')::jsonb #>> '{email,failedLast24h}')::int + 1,
+  'OPS47-3 kolejka e-mail: gotowe, wiek najstarszego, porzucona dzierżawa, nieudane (przyszłe pomijane)');
+select pg_temp.assert(
+  ((:'ops_now')::jsonb #>> '{webhooks,stuckProcessing}')::int = ((:'ops_base')::jsonb #>> '{webhooks,stuckProcessing}')::int + 1,
+  'OPS47-4 webhook zawieszony > 15 min liczony, świeży nie');
+select pg_temp.assert(
+  ((:'ops_now')::jsonb #>> '{maintenance,overdueActiveJobs}')::int >= 1,
+  'OPS47-5 aktywna oferta > 2 h po terminie = opóźnienie maintenance');
+select pg_temp.assert(
+  ((:'ops_now')::jsonb #>> '{connections,used}')::int >= 1
+  and ((:'ops_now')::jsonb #>> '{connections,max}')::int > 0
+  and ((:'ops_now')::jsonb ? 'authEmail') and jsonb_typeof((:'ops_now')::jsonb -> 'authEmail') = 'object',
+  'OPS47-6 połączenia i kolejka auth (0061) raportowane');
+select pg_temp.assert(
+  position('ops47' in (:'ops_now')) = 0 and position('@' in (:'ops_now')) = 0,
+  'OPS47-7 metryki bez adresów i identyfikatorów');
+rollback;
+
+-- Kontrola ujemna: bez GRANT dla pracujbe_ops wywołanie jest odrzucane (grant jest jedyną ścieżką).
+begin;
+revoke execute on function public.ops_metrics() from pracujbe_ops;
+set local role pracujbe_ops;
+select pg_temp.expect_error('select public.ops_metrics()', 'permission denied',
+  'OPS47-8 kontrola ujemna: bez GRANT odmowa');
+rollback;
+
+-- Użycie indeksu przy realnej liczbie ofert mierzy scripts/db/search-benchmark.sh (EXPLAIN
+-- przed/po); tu — definicja zgodna z predykatem get_public_jobs (status/deleted_at, trigram).
+select pg_temp.assert(
+  (select pg_get_indexdef('public.idx_jobs_city_trgm'::regclass))
+    like '%USING gin (city gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))%',
+  'OPS47-9 idx_jobs_city_trgm: GIN trigram na city, częściowy jak predykat listy ofert');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

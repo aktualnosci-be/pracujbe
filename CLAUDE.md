@@ -802,6 +802,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Bez kluczy poza produkcją = wyłączony; w produkcji brak kluczy = fail-closed rejestracji/resetu.
   CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. **Do zrobienia:**
   formularze kontaktu i zgłoszeń (polityki `contact`/`report` gotowe, formularzy brak).
+- [~] Operacje #47 (część kodowa, migracja `0097`): czujki `GET /api/health/ops` — tylko z
+  `HEALTH_CHECK_SECRET` (inaczej 404), same liczby z `ops_metrics()` (rola `pracujbe_ops` bez praw
+  do tabel; login `DATABASE_OPS_URL`, pula `ops` w `pool.ts`, fallback service-role), progi w
+  `src/lib/ops/sensors.ts` (wiek kolejek e-mail/auth, porzucone dzierżawy, zawieszone webhooki,
+  opóźnienie maintenance, 80% połączeń) → 503 `alert` / 200 = recovery. Kopia zaszyfrowana `age`
+  z manifestem i retencją (`scripts/db/backup.sh`) + odtworzenie z porównaniem sum
+  (`restore-backup.sh`), test `npm run test:backup` (PG16, 8 kontroli ujemnych; nie w CI).
+  `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
+  sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
+  `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
+  cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
+  `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
