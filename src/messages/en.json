@@ -534,7 +534,13 @@
       "companyNameRequired": "Enter the company name.",
       "companyNameTooShort": "The company name is too short.",
       "companyNameTooLong": "The company name is too long."
-    }
+    },
+    "botCheckLabel": "Security check",
+    "botCheckLoading": "Loading the security check…",
+    "botCheckRequired": "Complete the security check above the button, then submit the form.",
+    "botCheckExpired": "The check has expired. Please confirm it again.",
+    "botCheckLoadFailed": "The security check couldn't load. Check your connection or turn off content blocking for this site, then try again.",
+    "botCheckRetry": "Reload the security check"
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Work in Belgium without a CV",
@@ -567,7 +573,9 @@
     "staleState": "The status changed in the meantime (for example, another administrator changed it). The list has been refreshed — check the current state.",
     "jobNotEditable": "This job can't be edited right now. Only an active or paused job can be changed.",
     "jobEditConflict": "Someone changed this job in the meantime. Open it again from the jobs list to see the current version.",
-    "jobExpired": "This job's expiry date has passed. Reopen it from the jobs list — reopening removes the past date."
+    "jobExpired": "This job's expiry date has passed. Reopen it from the jobs list — reopening removes the past date.",
+    "botCheckFailed": "We couldn't confirm that a person is sending this form. Complete the check again and resubmit.",
+    "botCheckUnavailable": "The security check is temporarily unavailable. Please try again in a few minutes."
   },
   "offerStatus": {
     "draft": "Draft",
