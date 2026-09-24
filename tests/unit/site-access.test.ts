@@ -101,6 +101,7 @@ describe('bramka dostępu — middleware', () => {
       const res = await middleware(pageRequest(path));
       expect(res.status).toBe(503);
       expect(res.headers.get('x-robots-tag')).toContain('noindex');
+      expect(res.headers.get('cache-control')).toBe('no-store');
       const html = await res.text();
       expect(html).toContain('name="password"');
     }
@@ -119,6 +120,8 @@ describe('bramka dostępu — middleware', () => {
     const token = await siteAccessToken(PASSWORD);
     const ok = await middleware(pageRequest('/pl', { cookie: `${SITE_ACCESS_COOKIE}=${token}` }));
     expect(ok.status).not.toBe(503);
+    // #298: strona może pochodzić z cache ISR, ale przy bramce nie trafia do cache współdzielonego.
+    expect(ok.headers.get('cache-control')).toBe('private, no-store');
     const stale = await siteAccessToken('stare-haslo');
     const denied = await middleware(
       pageRequest('/pl', { cookie: `${SITE_ACCESS_COOKIE}=${stale}` }),
@@ -130,6 +133,8 @@ describe('bramka dostępu — middleware', () => {
     vi.stubEnv('SITE_ACCESS_PASSWORD', '');
     const res = await middleware(pageRequest('/pl'));
     expect(res.status).not.toBe(503);
+    // Kontrola ujemna (#298): bez bramki middleware nie nadpisuje nagłówka cache strony.
+    expect(res.headers.get('cache-control')).toBeNull();
   });
 });
 
