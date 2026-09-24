@@ -1533,4 +1533,94 @@ select pg_temp.assert(
   and not has_function_privilege('anon', 'public.company_recipient_ok(uuid, uuid)', 'execute'),
   'LL5 helper odbiorców nie jest wywoływalny przez role klienta');
 
+-- ============================================================================
+-- MM. Panel administratora (0076): funkcje admina, zgłoszenia, granty funkcji ról
+-- ============================================================================
+-- MM1: anon nie wywoła RPC admina (grant), a zalogowany nie-admin dostaje PERMISSION_DENIED
+--      także dla zgłoszeń (H3 pokrywa firmy).
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.admin_set_company_status(uuid, text)', 'execute')
+  and not has_function_privilege('anon', 'public.admin_resolve_report(uuid, text)', 'execute'),
+  'MM1 anon bez EXECUTE na RPC admina');
+reset role; reset app.current_uid;
+insert into public.reports(id, reporter_id, target_type, target_id, reason)
+  values ('e1000000-0000-0000-0000-0000000000a1', :'CANDB', 'job', :'JOBA', 'spam');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_resolve_report(''e1000000-0000-0000-0000-0000000000a1''::uuid, ''dismissed'')',
+  'PERMISSION_DENIED', 'MM1b nie-admin nie rozstrzyga zgłoszenia');
+reset role; reset app.current_uid;
+
+-- MM2: zgłoszenie — tożsamość i stan moderacji ustala baza, nie klient.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+insert into public.reports(id, reporter_id, target_type, target_id, reason, status, resolved_by, resolved_at, created_at)
+  values ('e1000000-0000-0000-0000-0000000000a2', :'CANDA', 'job', :'JOBB', 'spam',
+          'resolved', :'ADMIN', now(), now() - interval '400 days');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'open' and resolved_by is null and resolved_at is null
+          and created_at > now() - interval '1 minute'
+     from public.reports where id = 'e1000000-0000-0000-0000-0000000000a2'),
+  'MM2 klient nie ustawia statusu/rozstrzygnięcia/daty zgłoszenia');
+
+-- MM2b: zgłoszenie w cudzym imieniu — zapisuje się jako zgłoszenie zalogowanego (albo odrzucone).
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+do $$ begin
+  insert into public.reports(id, reporter_id, target_type, target_id, reason)
+    values ('e1000000-0000-0000-0000-0000000000a3', '22222222-2222-2222-2222-222222222222',
+            'job', 'b1111111-1111-1111-1111-111111111111', 'spam');
+exception when insufficient_privilege then null; end $$;
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.reports
+    where id = 'e1000000-0000-0000-0000-0000000000a3' and reporter_id is distinct from :'CANDA'),
+  'MM2b brak zgłoszenia przypisanego innemu użytkownikowi');
+
+-- MM2c: klient nie zmienia ani nie usuwa zgłoszenia (także własnego).
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'update public.reports set status = ''dismissed'' where id = ''e1000000-0000-0000-0000-0000000000a2''',
+  'permission denied', 'MM2c UPDATE zgłoszenia przez klienta odrzucony');
+select pg_temp.expect_error(
+  'delete from public.reports where id = ''e1000000-0000-0000-0000-0000000000a2''',
+  'permission denied', 'MM2d DELETE zgłoszenia przez klienta odrzucony');
+-- MM2e: twardy sufit długości treści zgłoszenia.
+select pg_temp.expect_error(
+  'insert into public.reports(reporter_id, target_type, target_id, reason, details) values (''11111111-1111-1111-1111-111111111111'', ''job'', ''b1111111-1111-1111-1111-111111111111'', ''spam'', repeat(''x'', 5001))',
+  'reports_details_length', 'MM2e zbyt długi opis zgłoszenia odrzucony');
+select pg_temp.expect_error(
+  'insert into public.reports(reporter_id, target_type, target_id, reason) values (''11111111-1111-1111-1111-111111111111'', ''job'', ''b1111111-1111-1111-1111-111111111111'', repeat(''x'', 201))',
+  'reports_reason_length', 'MM2f zbyt długi powód zgłoszenia odrzucony');
+reset role; reset app.current_uid;
+
+-- MM2g: admin nadal rozstrzyga zgłoszenie przez RPC (audyt z aktorem admina).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report('e1000000-0000-0000-0000-0000000000a2'::uuid, 'dismissed');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'dismissed' and resolved_by = :'ADMIN'
+     from public.reports where id = 'e1000000-0000-0000-0000-0000000000a2'),
+  'MM2g admin rozstrzyga zgłoszenie przez RPC');
+
+-- MM3: funkcje pomocnicze ról nie są wywoływalne przez anon (ani PUBLIC). Wyjątek:
+--      is_job_company_member — używana w politykach SELECT dla anon (job_* tłumaczenia/relacje).
+select pg_temp.assert(
+  (select count(*) from unnest(array[
+     'public.is_admin()', 'public.is_company_member(uuid)', 'public.is_company_admin(uuid)',
+     'public.is_company_owner(uuid)', 'public.can_manage_jobs(uuid)', 'public.is_job_manager(uuid)',
+     'public.is_conversation_member(uuid)', 'public.can_access_application(uuid)',
+     'public.can_access_offer(uuid)', 'public.company_can_view_candidate(uuid)']) as f(sig)
+   where has_function_privilege('anon', f.sig, 'execute')
+      or has_function_privilege('public', f.sig, 'execute')) = 0,
+  'MM3 anon/PUBLIC bez EXECUTE na funkcjach pomocniczych ról');
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.is_admin()', 'permission denied', 'MM3b anon nie woła is_admin()');
+-- Polityki dla anon nadal działają (publiczne relacje ofert).
+select pg_temp.assert((select count(*) from public.job_translations) >= 0, 'MM3c anon czyta job_translations');
+reset role;
+-- MM3d: zalogowany nadal korzysta z helperów (polityki/UI) — is_admin() zwraca własny stan.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.assert((select public.is_admin()) = true, 'MM3d authenticated: is_admin() działa');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
