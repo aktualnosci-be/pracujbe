@@ -48,7 +48,7 @@ describe('getSimilarJobs (#191)', () => {
 
     const result = await getSimilarJobs(current, 'nl', 3);
 
-    expect(adapters.list).toHaveBeenCalledWith(adapters.pool, expect.objectContaining({ locale: 'nl', category: 'warehouse', page: 1, pageSize: 4 }));
+    expect(adapters.list).toHaveBeenCalledWith(adapters.pool, expect.objectContaining({ locale: 'nl', category: 'warehouse', page: 1, pageSize: 4 }), null);
     expect(result.status).toBe('ok');
     expect(result.status === 'ok' && result.jobs.map((job) => job.slug)).toEqual(['a', 'b', 'c']);
   });

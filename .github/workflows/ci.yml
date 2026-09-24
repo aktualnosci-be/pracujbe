@@ -189,6 +189,10 @@ jobs:
         run: npm run build
       - name: Verify build output
         run: node scripts/check-next-build.mjs
+      # Bramka wydajności, część statyczna (#395, ~1 s): JS gzip tras i fonty z tego builda
+      # vs perf-budgets.json. Tabela w podsumowaniu przebiegu.
+      - name: Performance budget (static)
+        run: node scripts/perf-budget-static.mjs
       # Cache Actions, NIE artefakt: nie zjada płatnego storage organizacji.
       # Bez .next/cache (cache kompilatora nie jest potrzebny do `next start`).
       - name: Save build for E2E
@@ -379,6 +383,12 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'
         run: npm run test:e2e
+      # Bramka wydajności, lab CWV (#395, ~2 min): LCP/CLS/TBT (mediana prób) na tym samym
+      # buildzie i Chromium co E2E — bez drugiego builda i bez instalacji przeglądarki.
+      # Przed krokiem fixture: `next dev` nadpisuje produkcyjny `.next`.
+      # JSON wyników trafia do playwright-report/ (artefakt tylko przy porażce).
+      - name: Performance budget (lab CWV)
+        run: node scripts/perf-lab.mjs
       # Historia aplikacji kandydata: osobny serwer z danymi fikcyjnymi (15 zgłoszeń / wymuszony błąd).
       - name: Run E2E on application fixtures
         run: |
