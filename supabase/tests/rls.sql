@@ -4538,6 +4538,10 @@ insert into public.applications(job_id, candidate_id, company_id, status, submit
 insert into public.applications(job_id, candidate_id, company_id, status, submitted_at) values
   (:'FNJB', :'FNCAN', :'FNCB', 'submitted', now() - interval '40 days');
 
+-- Lejek liczy dni w Europe/Brussels (zapis i odczyt). `current_date` w asercjach musi być tym
+-- samym dniem — inaczej między 22:00 a 24:00 UTC (CEST) zakres kończy się „wczoraj” i FN99-8 pada.
+set timezone = 'Europe/Brussels';
+
 -- FN99-1: bez bramki serwera anon nie zapisze zdarzenia (np. wywołanie z pominięciem endpointu).
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
@@ -4656,6 +4660,7 @@ select count(*) >= 0 as fn12 from public.job_funnel_daily \gset
 reset role;
 revoke select on public.job_funnel_daily from anon;
 select pg_temp.assert(:'fn12'::boolean, 'FN99-12 kontrola ujemna: z grantem anon czyta agregat (test FN99-6 by to wykrył)');
+reset timezone;
 
 -- ============================================================================
 -- BL97. Blokada firmy w wynikach listy ofert (0090, #97): get_public_jobs / _count /
