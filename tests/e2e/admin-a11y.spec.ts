@@ -28,7 +28,7 @@ async function dismissCookies(page: Page) {
   }
 }
 
-const ROUTES = ['/admin', '/admin/firmy', '/admin/zgloszenia', '/admin/uzytkownicy'];
+const ROUTES = ['/admin', '/admin/firmy', '/admin/zgloszenia', '/admin/uzytkownicy', '/admin/dziennik'];
 
 for (const viewport of [
   { width: 1280, height: 900 },

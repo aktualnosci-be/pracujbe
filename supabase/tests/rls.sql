@@ -2107,8 +2107,8 @@ select pg_temp.assert(not exists (select 1 from public.offers where idempotency_
 -- QQ1: anon nie wywoła RPC admina (grant), a zalogowany nie-admin dostaje PERMISSION_DENIED
 --      także dla zgłoszeń (H3 pokrywa firmy).
 select pg_temp.assert(
-  not has_function_privilege('anon', 'public.admin_set_company_status(uuid, text)', 'execute')
-  and not has_function_privilege('anon', 'public.admin_resolve_report(uuid, text)', 'execute'),
+  not has_function_privilege('anon', 'public.admin_set_company_status(uuid, text, text)', 'execute')
+  and not has_function_privilege('anon', 'public.admin_resolve_report(uuid, text, text)', 'execute'),
   'QQ1 anon bez EXECUTE na RPC admina');
 reset role; reset app.current_uid;
 insert into public.reports(id, reporter_id, target_type, target_id, reason)
@@ -2190,5 +2190,115 @@ reset role;
 set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select pg_temp.assert((select public.is_admin()) = true, 'QQ3d authenticated: is_admin() działa');
 reset role; reset app.current_uid;
+
+-- ============================================================================
+-- ADM. RPC admina (0081, #420): macierz przejść, STALE_STATE, deleted_at, reopen
+-- ============================================================================
+reset role; reset app.current_uid;
+insert into public.companies(id, name, status) values
+  ('f8100000-0000-0000-0000-000000000001', 'Firma ADM pending', 'pending'),
+  ('f8100000-0000-0000-0000-000000000002', 'Firma ADM usunięta', 'pending');
+update public.companies set deleted_at = now() where id = 'f8100000-0000-0000-0000-000000000002';
+insert into public.reports(id, reporter_id, target_type, target_id, reason)
+  values ('f8100000-0000-0000-0000-0000000000a1', :'CANDB', 'job', :'JOBA', 'spam');
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+-- ADM1: nieaktualny widok (admin widział 'unverified', a firma jest 'pending') → STALE_STATE, bez zmian.
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8100000-0000-0000-0000-000000000001''::uuid, ''verified'', ''unverified'')',
+  'STALE_STATE', 'ADM1 nieaktualny widok firmy odrzucony');
+-- ADM2: poprawne przejście z oczekiwanym statusem.
+select public.admin_set_company_status('f8100000-0000-0000-0000-000000000001'::uuid, 'verified', 'pending');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'verified' and verified_at is not null and verified_by = :'ADMIN'
+     from public.companies where id = 'f8100000-0000-0000-0000-000000000001'),
+  'ADM2 pending → verified z kontrolą oczekiwanego stanu');
+update public.companies set verified_at = '2026-01-01T00:00:00Z'
+  where id = 'f8100000-0000-0000-0000-000000000001';
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+-- ADM3: verified → verified niedozwolone (nie nadpisuje daty weryfikacji).
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8100000-0000-0000-0000-000000000001''::uuid, ''verified'')',
+  'INVALID_TRANSITION', 'ADM3 ponowna weryfikacja zweryfikowanej firmy odrzucona');
+-- ADM3b: przejścia spoza macierzy (→ pending/unverified, verified → rejected) odrzucone.
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8100000-0000-0000-0000-000000000001''::uuid, ''pending'')',
+  'INVALID_TRANSITION', 'ADM3b verified → pending odrzucone');
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8100000-0000-0000-0000-000000000001''::uuid, ''rejected'')',
+  'INVALID_TRANSITION', 'ADM3c verified → rejected odrzucone');
+-- ADM4: firma usunięta miękko → NOT_FOUND.
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8100000-0000-0000-0000-000000000002''::uuid, ''verified'')',
+  'NOT_FOUND', 'ADM4 status usuniętej firmy nie zmienia się');
+-- ADM4b: nieznany status → VALIDATION_FAILED (nie surowy błąd enuma).
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8100000-0000-0000-0000-000000000001''::uuid, ''hacked'')',
+  'VALIDATION_FAILED', 'ADM4b nieznany status firmy');
+-- ADM5: verified → suspended → verified dozwolone (macierz), zawieszenie nie rusza verified_at.
+select public.admin_set_company_status('f8100000-0000-0000-0000-000000000001'::uuid, 'suspended', 'verified');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'suspended' and verified_at = '2026-01-01T00:00:00Z'
+     from public.companies where id = 'f8100000-0000-0000-0000-000000000001'),
+  'ADM5 zawieszenie nie nadpisuje daty weryfikacji');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = 'f8100000-0000-0000-0000-000000000002') = 'pending',
+  'ADM4c usunięta firma bez zmian');
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+-- ADM6: zgłoszenie — rozstrzygnięcie ustawia resolved_*, ponowne otwarcie je czyści.
+select public.admin_resolve_report('f8100000-0000-0000-0000-0000000000a1'::uuid, 'resolved', 'open');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'resolved' and resolved_by = :'ADMIN' and resolved_at is not null
+     from public.reports where id = 'f8100000-0000-0000-0000-0000000000a1'),
+  'ADM6 rozstrzygnięcie zapisuje resolved_by/resolved_at');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report('f8100000-0000-0000-0000-0000000000a1'::uuid, 'reviewing', 'resolved');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'reviewing' and resolved_by is null and resolved_at is null
+     from public.reports where id = 'f8100000-0000-0000-0000-0000000000a1'),
+  'ADM6b ponowne otwarcie czyści resolved_by/resolved_at');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs
+     where action = 'report.resolved' and entity_id = 'f8100000-0000-0000-0000-0000000000a1') = 2,
+  'ADM6c historia decyzji zostaje w audit_logs');
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+-- ADM7: kontrola ujemna — nieaktualny widok zgłoszenia, przejście spoza macierzy.
+select pg_temp.expect_error(
+  'select public.admin_resolve_report(''f8100000-0000-0000-0000-0000000000a1''::uuid, ''dismissed'', ''open'')',
+  'STALE_STATE', 'ADM7 nieaktualny widok zgłoszenia odrzucony');
+select pg_temp.expect_error(
+  'select public.admin_resolve_report(''f8100000-0000-0000-0000-0000000000a1''::uuid, ''open'')',
+  'INVALID_TRANSITION', 'ADM7b reviewing → open odrzucone');
+select pg_temp.expect_error(
+  'select public.admin_resolve_report(''f8100000-0000-0000-0000-0000000000a1''::uuid, ''reviewing'')',
+  'INVALID_TRANSITION', 'ADM7c reviewing → reviewing odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.reports where id = 'f8100000-0000-0000-0000-0000000000a1') = 'reviewing',
+  'ADM7d odrzucone próby nie zmieniły zgłoszenia');
+
+-- ADM8: uprawnienia bez zmian — nie-admin i anon nie wołają nowych sygnatur.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8100000-0000-0000-0000-000000000001''::uuid, ''verified'', ''suspended'')',
+  'PERMISSION_DENIED', 'ADM8 nie-admin nie zmienia statusu firmy (nowa sygnatura)');
+select pg_temp.expect_error(
+  'select public.admin_resolve_report(''f8100000-0000-0000-0000-0000000000a1''::uuid, ''resolved'', ''reviewing'')',
+  'PERMISSION_DENIED', 'ADM8b nie-admin nie rozstrzyga zgłoszenia (nowa sygnatura)');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public'
+                 and p.proname in ('admin_set_company_status', 'admin_resolve_report')
+                 and p.pronargs = 2),
+  'ADM8c stare dwuargumentowe sygnatury usunięte (brak obejścia macierzy)');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

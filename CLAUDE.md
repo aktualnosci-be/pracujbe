@@ -493,7 +493,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P1-18 (moderacja zgłoszeń end-to-end), P1-19 (webhook Resend bounce/complaint = zewn.),
 > P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
-> P2-04/06/13 i P4-* (paginacja admina, atomowy lease inboxa, zarządzanie zespołem, alerty/CWV).
+> P2-06/13 i P4-* (atomowy lease inboxa, zarządzanie zespołem, alerty/CWV); P2-04 (paginacja
+> admina) zamknięte w #418.
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
@@ -672,7 +673,22 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`requireAdmin` → `notFound()`), niezależnie od layoutu. `0076`: pola tożsamości i moderacji
   zgłoszeń ustala baza (trigger `reports_guard`, limity długości), helpery ról bez EXECUTE dla
   anon/PUBLIC (`is_job_company_member` zostaje — polityki anon). Dowód: `rls.sql` sekcja QQ.
+  UX panelu (#415–#418, #420–#423): listy firm/zgłoszeń/użytkowników stronicowane kursorem
+  (`created_at`+`id`, 50/stronę, `src/lib/admin/list-params.ts`) z wyszukiwaniem po stronie serwera
+  (firmy: nazwa/VAT/KBO/e-mail; użytkownicy: imię/nazwisko/e-mail + filtr roli), parametry w URL.
+  Zgłoszenia: filtr statusu (domyślnie otwarte + w analizie), cel z linkiem/podglądem wiadomości
+  albo „obiekt usunięty”, powód ze słownika i18n; „Rozwiąż”/„Oddal zgłoszenie” z dialogiem
+  potwierdzenia (`AdminConfirmDialog`). Fokus i toast po akcji w `AdminFeedbackProvider`
+  (nagłówek wiersza albo strony, nigdy `<body>`). Daty w Europe/Brussels (`src/lib/datetime.ts`).
+  Bez dzwonka powiadomień (`DashboardShell showNotifications={false}`). `0081`: macierz przejść
+  w `admin_set_company_status`/`admin_resolve_report` + `p_expected_status` (`FOR UPDATE`,
+  `STALE_STATE`), firma usunięta → `NOT_FOUND`, ponowne otwarcie zgłoszenia czyści
+  `resolved_*`. Dowód: `rls.sql` sekcja ADM; E2E `admin-ux.spec`.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
+  Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
+  data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
+  obiekt z linkiem; filtry typu obiektu, akcji, aktora, zakresu dat i `id` (skrót „Historia
+  statusów” w wierszu firmy), stronicowanie kursorem.
 - [x] Płatności / subskrypcje / faktury / kody rabatowe — REALNY Stripe (FUN-08), provider-gated:
   `startCheckout` tworzy sesję Stripe Checkout (subskrypcja, inline `price_data` z `PLANS`, kupon z
   kodu rabatowego), `cancelSubscription` = `cancel_at_period_end`, webhook `/api/stripe/webhook`

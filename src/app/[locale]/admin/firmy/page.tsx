@@ -2,8 +2,16 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
-import { ADMIN_MAX_ROWS, AWAITING_FILTER, listCompanies } from '@/lib/data/admin';
-import { AdminLoadError, AdminTruncatedNote } from '@/components/admin/AdminLoadError';
+import { companyFocusKey } from '@/lib/admin/focus';
+import { normalizeAdminSearch, parseUuid } from '@/lib/admin/list-params';
+import { AWAITING_FILTER, listCompanies } from '@/lib/data/admin';
+import { createAppDateFormatter } from '@/lib/datetime';
+import { AdminLoadError } from '@/components/admin/AdminLoadError';
+import {
+  AdminPageHeader,
+  AdminPager,
+  AdminSearchForm,
+} from '@/components/admin/AdminListControls';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
 import { cn } from '@/lib/utils';
@@ -14,7 +22,9 @@ import { cn } from '@/lib/utils';
  * Lista firm z filtrem statusu (chipy → query `?status=`) + akcje weryfikacji/odrzucenia/
  * zawieszenia (CompanyStatusActions → dialog potwierdzenia z danymi firmy → RPC
  * `admin_set_company_status`, #310). Filtr `awaiting` = kolejka weryfikacji (`unverified` +
- * `pending`, #307). Błąd odczytu → jawny stan błędu (#311). Odczyt service-rolem
+ * `pending`, #307). Wyszukiwanie po nazwie/VAT/KBO/e-mailu i stronicowanie kursorem (#418),
+ * parametry w URL (`?status=&q=&cursor=`). Daty w Europe/Brussels (#421). Po zmianie statusu
+ * fokus na nagłówku wiersza albo strony (#415). Błąd odczytu → jawny stan błędu (#311). Odczyt service-rolem
  * po potwierdzeniu roli admina w layoucie. NOINDEX + `force-dynamic` (dziedziczone z layoutu).
  */
 
@@ -55,6 +65,20 @@ function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** Skrót do historii statusów firmy w dzienniku zdarzeń (#417) — tylko dla realnych id. */
+function CompanyHistoryLink({ id, label }: { id: string; label: string }) {
+  const uuid = parseUuid(id);
+  if (!uuid) return null;
+  return (
+    <Link
+      href={{ pathname: '/admin/dziennik', query: { entity: 'company', id: uuid } }}
+      className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-foreground underline underline-offset-2 hover:no-underline"
+    >
+      {label}
+    </Link>
+  );
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -79,18 +103,29 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
   const filter =
     raw && (FILTERS as readonly string[]).includes(raw) && raw !== 'all' ? raw : undefined;
   const activeFilter = filter ?? 'all';
+  const q = normalizeAdminSearch(firstValue(sp['q']));
+  const cursor = firstValue(sp['cursor']) ?? null;
 
-  const result = await listCompanies(filter);
+  const result = await listCompanies({ status: filter, q, cursor });
   const companies = result.status === 'ok' ? result.rows : [];
-  const dateFmt = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
-  const formatDate = (iso: string | null): string => (iso ? dateFmt.format(new Date(iso)) : '—');
+  const formatDate = createAppDateFormatter(locale);
+  const listQuery = { status: filter, q };
+  const retryParams = new URLSearchParams(
+    Object.entries({ ...listQuery, cursor }).filter((e): e is [string, string] => Boolean(e[1])),
+  ).toString();
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('companiesTitle')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t('companiesSubtitle')}</p>
-      </header>
+      <AdminPageHeader title={t('companiesTitle')} subtitle={t('companiesSubtitle')} />
+
+      <AdminSearchForm
+        action={`/${locale}${BASE_PATH}`}
+        q={q}
+        label={t('searchCompaniesLabel')}
+        hint={t('searchCompaniesHint')}
+        keep={{ status: filter }}
+        clearHref={{ pathname: BASE_PATH, query: filter ? { status: filter } : {} }}
+      />
 
       {/* Filtry statusu */}
       <div className="flex flex-wrap gap-2">
@@ -99,11 +134,13 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
           return (
             <Link
               key={value}
-              href={
-                value === 'all'
-                  ? { pathname: BASE_PATH }
-                  : { pathname: BASE_PATH, query: { status: value } }
-              }
+              href={{
+                pathname: BASE_PATH,
+                query: {
+                  ...(value === 'all' ? {} : { status: value }),
+                  ...(q ? { q } : {}),
+                },
+              }}
               aria-current={isActive ? 'true' : undefined}
               className={cn(
                 'inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium transition-colors',
@@ -120,7 +157,7 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
 
       {result.status === 'error' ? (
         <AdminLoadError
-          retryHref={`/${locale}${BASE_PATH}${filter ? `?status=${encodeURIComponent(filter)}` : ''}`}
+          retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`}
         />
       ) : (
         <section className="rounded-lg border border-border bg-card">
@@ -153,9 +190,14 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
                   <tbody className="divide-y divide-border">
                     {companies.map((company) => (
                       <tr key={company.id}>
-                        <td className="px-4 py-3 align-middle font-medium text-foreground">
+                        <th
+                          scope="row"
+                          tabIndex={-1}
+                          data-admin-focus={companyFocusKey(company.id)}
+                          className="px-4 py-3 text-left align-middle font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        >
                           {company.name}
-                        </td>
+                        </th>
                         <td className="px-4 py-3 align-middle">
                           <AdminStatusBadge kind="company" status={company.status} />
                         </td>
@@ -163,11 +205,14 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
                           {formatDate(company.createdAt)}
                         </td>
                         <td className="px-4 py-3 text-right align-middle">
-                          <CompanyStatusActions
-                            company={company}
-                            createdLabel={formatDate(company.createdAt)}
-                            className="justify-end"
-                          />
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <CompanyHistoryLink id={company.id} label={t('auditHistoryLink')} />
+                            <CompanyStatusActions
+                              company={company}
+                              createdLabel={formatDate(company.createdAt)}
+                              className="justify-end"
+                            />
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -179,19 +224,28 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
               <ul className="divide-y divide-border md:hidden">
                 {companies.map((company) => (
                   <li key={company.id} className="space-y-3 p-4">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{company.name}</p>
+                        <h2
+                          tabIndex={-1}
+                          data-admin-focus={companyFocusKey(company.id)}
+                          className="break-words text-base font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {company.name}
+                        </h2>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {formatDate(company.createdAt)}
                         </p>
                       </div>
                       <AdminStatusBadge kind="company" status={company.status} />
                     </div>
-                    <CompanyStatusActions
-                      company={company}
-                      createdLabel={formatDate(company.createdAt)}
-                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CompanyStatusActions
+                        company={company}
+                        createdLabel={formatDate(company.createdAt)}
+                      />
+                      <CompanyHistoryLink id={company.id} label={t('auditHistoryLink')} />
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -199,8 +253,15 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
           )}
         </section>
       )}
-      {result.status === 'ok' && result.truncated ? (
-        <AdminTruncatedNote limit={ADMIN_MAX_ROWS} />
+      {result.status === 'ok' ? (
+        <AdminPager
+          pathname={BASE_PATH}
+          query={listQuery}
+          nextCursor={result.nextCursor}
+          hasCursor={Boolean(cursor)}
+          count={companies.length}
+          q={q}
+        />
       ) : null}
     </div>
   );

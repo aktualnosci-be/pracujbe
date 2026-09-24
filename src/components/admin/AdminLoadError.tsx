@@ -29,9 +29,3 @@ export function AdminLoadError({ retryHref }: AdminLoadErrorProps): React.JSX.El
     </section>
   );
 }
-
-/** Informacja, że lista pokazuje tylko najnowsze wiersze (brak paginacji — P2-04). */
-export function AdminTruncatedNote({ limit }: { limit: number }): React.JSX.Element {
-  const t = useTranslations('admin');
-  return <p className="text-sm text-muted-foreground">{t('listTruncated', { count: limit })}</p>;
-}

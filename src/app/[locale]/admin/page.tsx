@@ -13,7 +13,8 @@ import { StatCard } from '@/components/ui/stat-card';
  *
  * Kafelki statystyk (firmy / oczekujące na weryfikację / użytkownicy / otwarte zgłoszenia)
  * czytane service-rolem po potwierdzeniu roli admina w layoucie (guard). Błąd odczytu → jawny
- * stan błędu zamiast zer (#311). Kafelek kolejki weryfikacji prowadzi do listy (#307). Skróty do
+ * stan błędu zamiast zer (#311). Kafelek kolejki weryfikacji prowadzi do listy (#307), kafelek
+ * otwartych zgłoszeń — do listy z filtrem „Otwarte” (#416). Skróty do
  * poszczególnych sekcji. NOINDEX + `force-dynamic` (dziedziczone z layoutu).
  */
 
@@ -109,12 +110,18 @@ export default async function AdminDashboardPage({
             icon={<Users />}
             tone="accent"
           />
-          <StatCard
-            label={t('statOpenReports')}
-            value={statsResult.stats.openReports}
-            icon={<Flag />}
-            tone="error"
-          />
+          {/* #416: kafelek prowadzi do listy z filtrem „Otwarte” — ta sama liczba co na kafelku. */}
+          <Link
+            href={{ pathname: '/admin/zgloszenia', query: { status: 'open' } }}
+            className="block rounded-lg transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <StatCard
+              label={t('statOpenReports')}
+              value={statsResult.stats.openReports}
+              icon={<Flag />}
+              tone="warning"
+            />
+          </Link>
         </div>
       )}
 
