@@ -999,6 +999,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
   cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
   `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
+- [x] Telemetria bez danych kandydata (#502, część kodowa): Sentry — #508
+  (`src/lib/sentry-egress.ts`: `beforeSend` buduje nowe zdarzenie z samym kodem błędu,
+  `captureError` wysyła tylko kod, tracing wyłączony). Logi serwera — wspólne reguły redakcji
+  `src/lib/privacy/redact.ts` (e-mail, telefon, NISS/BIS, IBAN, tokeny/JWT, query i fragment URL,
+  nazwy plików dokumentów, wiersze błędów Postgresa; pola wrażliwe po nazwie; `cause`)
+  w `installConsoleRedaction()` (`register()`, poza `next dev`). Dowód: `privacy-redaction`,
+  `privacy-sentry-sdk` (payload z SDK z opcjami jak w configach) + kontrola ujemna
+  `privacy-sentry-sdk-control`, `sentry-egress`, `sentry-capture`. Opis: `docs/TELEMETRY_PRIVACY.md`.
+  **Otwarte (właściciel):** region/retencja/DPA/dostęp Sentry i logów Railway, rejestr (#485),
+  usuwanie danych już wysłanych (#486); do tego czasu Sentry bez DSN. Sentry w przeglądarce nie
+  jest wpięte (brak `instrumentation-client`).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
