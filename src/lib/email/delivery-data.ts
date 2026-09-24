@@ -37,6 +37,8 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
       return '/employer/aplikacje';
     case 'offerDeclined':
       return '/employer/kandydaci';
+    case 'jobPublished':
+      return '/employer/oferty';
     case 'newMessage': {
       const panel = payload?.['panel'] === 'employer' ? 'employer' : 'candidate';
       const conversationId = payload?.['conversationId'];
@@ -72,6 +74,7 @@ export function buildDeliveryData(
       offerUrl: url,
       actionUrl: url,
       messageUrl: url,
+      jobUrl: url,
     },
   };
 }
