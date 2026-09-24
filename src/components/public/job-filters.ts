@@ -43,7 +43,7 @@ export interface SalaryBounds {
 }
 
 /**
- * Widełki suwaka w danej jednostce (#188, 0092): miesięczna jak wyżej, godzinowa
+ * Widełki suwaka w danej jednostce (#188, 0091): miesięczna jak wyżej, godzinowa
  * 10–40 EUR brutto/godz. co 1 EUR. Jednostki nie są przeliczane na siebie.
  */
 export const SALARY_BOUNDS: Record<SalaryUnit, SalaryBounds> = {

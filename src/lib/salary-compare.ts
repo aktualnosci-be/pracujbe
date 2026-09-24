@@ -1,6 +1,6 @@
 /**
  * Porównywanie wynagrodzeń na liście ofert (#188) — lustro reguły SQL z migracji
- * `0080_salary_period_filter.sql` i `0092_salary_unit_filter.sql` (`job_comparable_salary`,
+ * `0080_salary_period_filter.sql` i `0091_salary_unit_filter.sql` (`job_comparable_salary`,
  * `job_salary_in_range`, `job_salary_sort_key`). Moduł czysty: używa go ścieżka demo
  * `getJobs` oraz klienckie liczniki filtrów, więc widok demonstracyjny i PostgreSQL liczą
  * tak samo.

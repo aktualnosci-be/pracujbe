@@ -394,7 +394,7 @@ describe('Publiczne oferty — pełne migracje i rzeczywisty PostgreSQL 16', () 
       ['warehouse-rich', 'without-salary'],
     ],
     ['pensja nie wyklucza niepodanej', { salaryMin: 5000 }, ['without-salary']],
-    // #188 (0092): w jednostce godzinowej kwoty miesięczne są nieporównywalne — nie odpadają.
+    // #188 (0091): w jednostce godzinowej kwoty miesięczne są nieporównywalne — nie odpadają.
     [
       'stawka godzinowa nie porównuje kwot miesięcznych',
       { salaryMin: 20, salaryUnit: 'hour' },

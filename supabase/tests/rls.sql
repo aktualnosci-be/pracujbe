@@ -2792,7 +2792,7 @@ select pg_temp.assert(
 reset role;
 
 -- ============================================================================
--- SP188. Jednostka filtra/sortu wynagrodzeń (0092, #188): p_salary_unit.
+-- SP188. Jednostka filtra/sortu wynagrodzeń (0091, #188): p_salary_unit.
 --        'month' = reguła 0080 bez zmian; 'hour' = tylko stawki godzinowe, miesięczne
 --        i roczne NIE są przeliczane na godziny (nieporównywalne → nie odpadają, sort na
 --        końcu). Fixture'y SAL + dwie stawki godzinowe o różnym wymiarze czasu pracy.

@@ -99,7 +99,7 @@ describe('matchesSidebar (liczniki demo) stosuje tę samą regułę', () => {
   });
 });
 
-// Jednostka godzinowa (0092, rls.sql sekcja SP188): stawki godzinowe porównywane wprost,
+// Jednostka godzinowa (0091, rls.sql sekcja SP188): stawki godzinowe porównywane wprost,
 // miesięczne/roczne nieprzeliczane na godziny (nieznana liczba godzin pracy).
 const hourlyJobs: Job[] = [
   ...jobs,

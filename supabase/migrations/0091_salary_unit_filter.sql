@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0092_salary_unit_filter.sql
+-- 0091_salary_unit_filter.sql
 -- #188 (dokończenie 0080): filtr i sortowanie wynagrodzeń w wybranej JEDNOSTCE.
 --
 -- 0080 porównuje kwoty w EUR brutto/miesiąc (month bez zmian, year / 12), a stawek
@@ -19,13 +19,16 @@
 -- funkcje z tym samym `p_salary_unit`, więc nie mogą się rozjechać. Lustro TS dla
 -- danych demonstracyjnych: `src/lib/salary-compare.ts`.
 --
+-- Definicje RPC = stan z 0090 (#97: pominięcie ofert firm zablokowanych przez
+-- wywołującego kandydata) + jednostka; filtr blokad bez zmian.
+--
 -- Nowy parametr jest OSTATNI i ma wartość domyślną, więc wywołania pozycyjne i nazwane
 -- bez jednostki działają jak po 0080. Stare sygnatury są usuwane (inaczej wywołanie
 -- nazwane bez `p_salary_unit` byłoby niejednoznaczne między dwiema przeciążonymi
 -- funkcjami). Granty odtworzone 1:1 (anon, authenticated).
 --
 -- Rollback: NOWA migracja naprawcza — drop funkcji z sygnaturą z `text` na końcu i
--- odtworzenie trzech RPC z 0080 (wraz z grantami); drop job_salary_in_range,
+-- odtworzenie trzech RPC z 0090 (wraz z grantami); drop job_salary_in_range,
 -- job_salary_sort_key, job_comparable_salary. Aplikacja wysyła `p_salary_unit` tylko
 -- przy jednostce godzinowej — przed rollbackiem wycofać wersję aplikacji. Migracja nie
 -- zmienia danych. Nie edytować tej migracji po zastosowaniu.
@@ -69,7 +72,7 @@ drop function if exists public.get_public_job_filter_facets(
   text, text, text, text[], text[], text[], integer, integer,
   boolean, boolean, boolean, timestamptz);
 
--- --- get_public_jobs (0080) + p_salary_unit -------------------------------------
+-- --- get_public_jobs (0090) + p_salary_unit -------------------------------------
 create or replace function public.get_public_jobs(
   p_locale         text        default 'pl',
   p_keyword        text        default null,
@@ -120,6 +123,11 @@ language sql stable security definer set search_path = public, pg_temp as $$
   where j.status = 'active' and j.deleted_at is null
     and (j.expires_at is null or j.expires_at > now())
     and c.status = 'verified' and c.deleted_at is null
+    -- #97: zalogowany kandydat nie dostaje ofert firm, które zablokował (gość: bez zmian).
+    and not exists (
+      select 1 from public.candidate_company_blocks b
+      where b.candidate_id = auth.uid() and b.company_id = j.company_id
+    )
     and (p_categories is null or array_length(p_categories, 1) is null or j.category::text = any(p_categories))
     and (p_locations is null or array_length(p_locations, 1) is null or j.city = any(p_locations))
     and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
@@ -148,7 +156,7 @@ grant execute on function public.get_public_jobs(
   boolean, boolean, boolean, timestamptz, text, integer, integer, text
 ) to anon, authenticated;
 
--- --- get_public_jobs_count (0080) + p_salary_unit -------------------------------
+-- --- get_public_jobs_count (0090) + p_salary_unit -------------------------------
 create or replace function public.get_public_jobs_count(
   p_locale         text      default 'pl',
   p_keyword        text      default null,
@@ -178,6 +186,11 @@ create or replace function public.get_public_jobs_count(
   where j.status = 'active' and j.deleted_at is null
     and (j.expires_at is null or j.expires_at > now())
     and c.status = 'verified' and c.deleted_at is null
+    -- #97: zalogowany kandydat nie dostaje ofert firm, które zablokował (gość: bez zmian).
+    and not exists (
+      select 1 from public.candidate_company_blocks b
+      where b.candidate_id = auth.uid() and b.company_id = j.company_id
+    )
     and (p_categories is null or array_length(p_categories, 1) is null or j.category::text = any(p_categories))
     and (p_locations is null or array_length(p_locations, 1) is null or j.city = any(p_locations))
     and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
@@ -200,7 +213,7 @@ grant execute on function public.get_public_jobs_count(
   boolean, boolean, boolean, timestamptz, text
 ) to anon, authenticated;
 
--- --- get_public_job_filter_facets (0080) + p_salary_unit -----------------------
+-- --- get_public_job_filter_facets (0090) + p_salary_unit -----------------------
 create or replace function public.get_public_job_filter_facets(
   p_locale text default 'pl', p_keyword text default null, p_city text default null,
   p_categories text[] default null, p_locations text[] default null,
@@ -231,6 +244,10 @@ language sql stable security definer set search_path = public, pg_temp as $$
     where j.status='active' and j.deleted_at is null
       and (j.expires_at is null or j.expires_at>now())
       and c.status='verified' and c.deleted_at is null
+      and not exists (
+      select 1 from public.candidate_company_blocks b
+      where b.candidate_id = auth.uid() and b.company_id = j.company_id
+    )
       and (i.keyword is null or coalesce(t.title,j.title) ilike '%'||i.keyword||'%')
       and (i.city is null or j.city ilike '%'||i.city||'%')
       and public.job_salary_in_range(

@@ -3,7 +3,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { messages } from './fixtures/messages';
 
 /**
- * #188 (0092) — jednostka filtra wynagrodzeń. Dane demonstracyjne mają jedną ofertę
+ * #188 (0091) — jednostka filtra wynagrodzeń. Dane demonstracyjne mają jedną ofertę
  * godzinową (id 1025, 14,50–16,75 EUR/godz.); pozostałe są miesięczne. Godzinowo
  * porównujemy tylko stawki godzinowe, kwoty miesięczne nie są przeliczane i nie odpadają.
  */

@@ -390,7 +390,7 @@ export function FilterFields({
       {/* Wynagrodzenie */}
       <section>
         <SectionTitle>{hourly ? t('salaryHourly') : t('salary')}</SectionTitle>
-        {/* Jednostka (#188, 0092): kwot miesięcznych i godzinowych nie przeliczamy. */}
+        {/* Jednostka (#188, 0091): kwot miesięcznych i godzinowych nie przeliczamy. */}
         <fieldset className="mb-2">
           <legend className="sr-only">{t('salaryUnit')}</legend>
           <div className="flex gap-2">

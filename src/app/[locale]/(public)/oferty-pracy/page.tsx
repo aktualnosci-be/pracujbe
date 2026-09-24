@@ -202,7 +202,7 @@ export default async function JobsListPage({
     categories: sf.categories,
     locations: cityFilters.queryLocations,
     contractTypes: sf.contractTypes,
-    // Jednostka widełek steruje też sortowaniem po wynagrodzeniu (#188, 0092).
+    // Jednostka widełek steruje też sortowaniem po wynagrodzeniu (#188, 0091).
     ...salaryQueryParams(sf),
     ...(sf.accommodation.length === 1
       ? { accommodation: sf.accommodation.includes('provided') }

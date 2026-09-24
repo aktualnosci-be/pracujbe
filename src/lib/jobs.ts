@@ -111,7 +111,7 @@ export interface GetJobsParams {
   contractTypes?: ContractType[];
   salaryMin?: number;
   salaryMax?: number;
-  /** Jednostka widełek i sortowania po wynagrodzeniu (#188, 0092); domyślnie 'month'. */
+  /** Jednostka widełek i sortowania po wynagrodzeniu (#188, 0091); domyślnie 'month'. */
   salaryUnit?: SalaryUnit;
   /** true=tylko z zakwaterowaniem, false=tylko bez, undefined=bez filtra. */
   accommodation?: boolean;
@@ -239,7 +239,7 @@ function getJobsFromDemo(
       );
     }
   }
-  // Widełki w wybranej jednostce (#188, reguła jak w SQL 0080/0092): oferta bez
+  // Widełki w wybranej jednostce (#188, reguła jak w SQL 0080/0091): oferta bez
   // porównywalnej kwoty (brak wynagrodzenia albo inny okres stawki) NIE jest wykluczana.
   const salaryUnit = params.salaryUnit ?? 'month';
   if (params.salaryMin !== undefined || params.salaryMax !== undefined) {

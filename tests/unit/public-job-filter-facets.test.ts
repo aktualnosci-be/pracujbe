@@ -50,7 +50,7 @@ describe('dokładne facety publicznych ofert', () => {
   });
 });
 
-describe('jednostka wynagrodzenia w publicznych RPC (#188, 0092)', () => {
+describe('jednostka wynagrodzenia w publicznych RPC (#188, 0091)', () => {
   const run = async (
     params: Parameters<typeof getPublicJobs>[1],
   ): Promise<Array<[string, unknown[]]>> => {
