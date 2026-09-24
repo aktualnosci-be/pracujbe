@@ -8,7 +8,8 @@ import { cn } from '@/lib/utils';
 /**
  * AdminConfirmDialog — dialog potwierdzenia decyzji admina (firmy #310, zgłoszenia #422).
  *
- * `role="alertdialog"` + `aria-modal`, fokus startuje na „Anuluj”, Tab zapętlony w dialogu,
+ * `role="alertdialog"` + `aria-modal`, fokus startuje na „Anuluj” (albo `initialFocusRef`,
+ * np. na polu uzasadnienia), Tab zapętlony w dialogu (przyciski i pola),
  * Escape/„Anuluj” zamyka (rodzic oddaje fokus przyciskowi otwierającemu). W trakcie zapisu
  * przyciski zablokowane (Invariant #11), a Escape nie zamyka. Teksty przekazuje rodzic (i18n).
  */
@@ -44,6 +45,10 @@ export interface AdminConfirmDialogProps {
   pending: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Dodatkowa treść pod danymi (np. pole uzasadnienia decyzji — #310). */
+  children?: React.ReactNode;
+  /** Element, który dostaje fokus po otwarciu (domyślnie „Anuluj”). */
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 export function AdminConfirmDialog({
@@ -55,6 +60,8 @@ export function AdminConfirmDialog({
   pending,
   onConfirm,
   onCancel,
+  children,
+  initialFocusRef,
 }: AdminConfirmDialogProps): React.JSX.Element {
   const t = useTranslations('admin');
   const dialogRef = React.useRef<HTMLDivElement>(null);
@@ -64,7 +71,9 @@ export function AdminConfirmDialog({
   const descId = `${idBase}-desc`;
 
   React.useEffect(() => {
-    cancelRef.current?.focus();
+    (initialFocusRef?.current ?? cancelRef.current)?.focus();
+    // Tylko przy otwarciu dialogu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Wyłączony przycisk traci fokus (przeglądarka przenosi go na <body>) — w trakcie zapisu
@@ -81,7 +90,9 @@ export function AdminConfirmDialog({
     }
     if (event.key !== 'Tab' || !dialogRef.current) return;
     const focusable = Array.from(
-      dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled])'),
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), textarea:not([disabled]), input:not([disabled])',
+      ),
     );
     if (focusable.length === 0) {
       // W trakcie zapisu wszystkie przyciski są wyłączone — fokus zostaje w dialogu.
@@ -129,6 +140,8 @@ export function AdminConfirmDialog({
             ))}
           </dl>
         ) : null}
+
+        {children}
 
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button

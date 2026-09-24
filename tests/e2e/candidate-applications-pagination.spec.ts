@@ -1,11 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { chromium, expect, test } from '@playwright/test';
+
+import { openZoomController, ZOOM_EXTENSION_ARGS } from './fixtures/zoom-controller';
 
 import { rejectOptionalCookies } from './fixtures/messages';
 
-const extensionPath = resolve(__dirname, 'fixtures/browser-zoom');
 
 const headings = {
   pl: 'Moje aplikacje',
@@ -49,25 +50,25 @@ for (const [locale, heading] of Object.entries(headings)) {
       channel: 'chromium',
       headless: true,
       viewport: { width: 1280, height: 800 },
-      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
+      args: ZOOM_EXTENSION_ARGS,
       ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
         ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
         : {}),
     });
     try {
-      const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
       const page = context.pages()[0] ?? await context.newPage();
+      const zoomController = await openZoomController(context, page);
       const baseURL = test.info().project.use.baseURL;
       expect(baseURL).toBeTruthy();
       await page.goto(new URL(`/${locale}/candidate/aplikacje`, baseURL).toString());
       await rejectOptionalCookies(page, locale);
-      const tabId = await worker.evaluate(async (url) => {
+      const tabId = await zoomController.evaluate(async (url) => {
         const tab = (await chrome.tabs.query({})).find((entry) => entry.url?.startsWith(url));
         if (!tab?.id) throw new Error('Application tab missing');
         await chrome.tabs.setZoom(tab.id, 2);
         return tab.id;
       }, baseURL!);
-      expect(await worker.evaluate((id) => chrome.tabs.getZoom(id), tabId)).toBe(2);
+      expect(await zoomController.evaluate((id) => chrome.tabs.getZoom(id), tabId)).toBe(2);
       await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(640);
       await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
       const cards = page.getByRole('main').getByRole('listitem');

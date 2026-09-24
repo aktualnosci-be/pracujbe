@@ -99,6 +99,11 @@ export interface EmailDataMap {
     applicationUrl: string;
   };
   jobPublished: { recipientName?: string; jobTitle: string; jobUrl: string };
+  /** Decyzja admina o firmie (#310) — do właściciela firmy, w jego języku. */
+  companyVerified: { recipientName?: string; companyName: string; actionUrl: string };
+  /** `reason` = uzasadnienie admina, renderowane jako cytat (tekst, bez HTML). */
+  companyRejected: { recipientName?: string; companyName: string; reason?: string | null; actionUrl: string };
+  companySuspended: { recipientName?: string; companyName: string; reason?: string | null; actionUrl: string };
   teamInvitation: {
     recipientName?: string;
     companyName: string;
@@ -124,6 +129,8 @@ const SUBJECT_FIELD: Partial<Record<EmailType, string>> = {
   offerDeclined: 'candidateName',
   newMessage: 'senderName',
   statusChanged: 'status',
+  companyRejected: 'reason',
+  companySuspended: 'reason',
   teamInvitation: 'inviterName',
 };
 
@@ -502,6 +509,44 @@ export function JobPublishedEmail(props: EmailProps<'jobPublished'>): ReactEleme
   );
 }
 
+export function CompanyVerifiedEmail(props: EmailProps<'companyVerified'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="companyVerified"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
+export function CompanyRejectedEmail(props: EmailProps<'companyRejected'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="companyRejected"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+      quote={props.reason ?? undefined}
+    />
+  );
+}
+
+export function CompanySuspendedEmail(props: EmailProps<'companySuspended'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="companySuspended"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+      quote={props.reason ?? undefined}
+    />
+  );
+}
+
 export function TeamInvitationEmail(props: EmailProps<'teamInvitation'>): ReactElement {
   return (
     <EmailShell
@@ -589,6 +634,9 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   offerDeclined: OfferDeclinedEmail,
   statusChanged: StatusChangedEmail,
   jobPublished: JobPublishedEmail,
+  companyVerified: CompanyVerifiedEmail,
+  companyRejected: CompanyRejectedEmail,
+  companySuspended: CompanySuspendedEmail,
   teamInvitation: TeamInvitationEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,

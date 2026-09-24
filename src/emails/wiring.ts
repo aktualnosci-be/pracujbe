@@ -18,6 +18,9 @@ export const QUEUED_EMAIL_TYPES = [
   'offerDeclined', // respond_to_offer
   'newMessage', // send_message
   'jobPublished', // publish_job
+  'companyVerified', // admin_set_company_status → verified (0084)
+  'companyRejected', // admin_set_company_status → rejected (0084)
+  'companySuspended', // admin_set_company_status → suspended (0084)
   'teamInvitation', // invite_company_member (0086)
 ] as const satisfies readonly EmailType[];
 

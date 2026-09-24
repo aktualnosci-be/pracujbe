@@ -28,7 +28,15 @@ async function dismissCookies(page: Page) {
   }
 }
 
-const ROUTES = ['/admin', '/admin/firmy', '/admin/zgloszenia', '/admin/uzytkownicy', '/admin/dziennik'];
+const ROUTES = [
+  '/admin',
+  '/admin/firmy',
+  // Szczegół firmy (#310) — firma demonstracyjna.
+  '/admin/firmy/demo-c2',
+  '/admin/zgloszenia',
+  '/admin/uzytkownicy',
+  '/admin/dziennik',
+];
 
 for (const viewport of [
   { width: 1280, height: 900 },
@@ -58,7 +66,8 @@ test('admin: zawieszenie firmy wymaga potwierdzenia w dialogu z danymi firmy', a
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('BE0123456789');
-  await expect(dialog.getByRole('button', { name: 'Anuluj' })).toBeFocused();
+  // Zawieszenie wymaga uzasadnienia (#310) — fokus startuje na polu.
+  await expect(dialog.getByRole('textbox', { name: 'Uzasadnienie (wymagane)' })).toBeFocused();
   expect(await blockingViolations(page)).toEqual([]);
 
   await page.keyboard.press('Escape');

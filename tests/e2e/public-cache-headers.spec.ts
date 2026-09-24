@@ -43,9 +43,30 @@ async function getTwice(request: import("@playwright/test").APIRequestContext, p
   return request.get(path, { maxRedirects: 0 });
 }
 
+/**
+ * Odpowiedź z cache ISR. Wpis mógł powstać wcześniej w tym przebiegu (inne testy odwiedzają
+ * te strony) i być starszy niż `revalidate` — wtedy Next odpowiada `STALE` i odświeża go
+ * w tle, a kolejne żądanie dostaje `HIT` (flaky przy `toBe("HIT")` po dwóch żądaniach, #375).
+ * Strona renderowana per żądanie nigdy nie ma nagłówka `x-nextjs-cache`, więc asercja
+ * nadal łapie regresję do SSR.
+ */
+async function getCached(request: import("@playwright/test").APIRequestContext, path: string) {
+  let response = await request.get(path, { maxRedirects: 0 });
+  await expect
+    .poll(
+      async () => {
+        response = await request.get(path, { maxRedirects: 0 });
+        return response.headers()["x-nextjs-cache"];
+      },
+      { message: `${path}: trafienie w cache ISR` },
+    )
+    .toBe("HIT");
+  return response;
+}
+
 for (const { path, maxAge } of STATIC_PAGES) {
   test(`${path}: statyczna/ISR, cache współdzielony ${maxAge} s, trafienie w cache`, async ({ request }) => {
-    const response = await getTwice(request, path);
+    const response = await getCached(request, path);
     expect(response.status()).toBe(200);
     const cacheControl = response.headers()["cache-control"] ?? "";
     expect(cacheControl).not.toContain("no-store");
@@ -60,7 +81,7 @@ test("szczegół oferty: ISR na żądanie (60 s), drugie żądanie z cache", asy
   const list = await request.get("/pl/oferty-pracy");
   const slug = /href="\/pl\/oferty-pracy\/([a-z0-9-]+)"/.exec(await list.text())?.[1];
   expect(slug, "lista ofert linkuje do szczegółu").toBeTruthy();
-  const response = await getTwice(request, `/pl/oferty-pracy/${slug}`);
+  const response = await getCached(request, `/pl/oferty-pracy/${slug}`);
   expect(response.status()).toBe(200);
   expect(sMaxAge(response)).toBe(60);
   expect(response.headers()["x-nextjs-cache"]).toBe("HIT");
@@ -68,7 +89,7 @@ test("szczegół oferty: ISR na żądanie (60 s), drugie żądanie z cache", asy
 
 test("HTML z cache nie zależy od cookies sesji ani zgód i nie zawiera trackerów", async ({ request }) => {
   for (const path of ["/pl", "/pl/regulamin"]) {
-    const anonymous = await getTwice(request, path);
+    const anonymous = await getCached(request, path);
     const withCookies = await request.get(path, { headers: { cookie: VISITOR_COOKIES } });
     expect(withCookies.headers()["x-nextjs-cache"]).toBe("HIT");
     const html = await withCookies.text();

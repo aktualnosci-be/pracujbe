@@ -237,6 +237,11 @@ export default async function AdminAuditPage({
                           </span>
                         )}
                       </p>
+                      {row.reason ? (
+                        <p className="break-words text-sm text-foreground">
+                          {t('auditReason', { reason: row.reason })}
+                        </p>
+                      ) : null}
                       <p className="text-xs text-muted-foreground">
                         {t('auditActor', { name: actorText(row) })}
                       </p>

@@ -19,7 +19,8 @@ import { cn } from '@/lib/utils';
 /**
  * Panel administratora — Firmy (Etap 7g).
  *
- * Lista firm z filtrem statusu (chipy → query `?status=`) + akcje weryfikacji/odrzucenia/
+ * Lista firm z filtrem statusu (chipy → query `?status=`); nazwa prowadzi do szczegółu firmy
+ * (`/admin/firmy/[id]` — dane, członkowie, oferty, #310) + akcje weryfikacji/odrzucenia/
  * zawieszenia (CompanyStatusActions → dialog potwierdzenia z danymi firmy → RPC
  * `admin_set_company_status`, #310). Filtr `awaiting` = kolejka weryfikacji (`unverified` +
  * `pending`, #307). Wyszukiwanie po nazwie/VAT/KBO/e-mailu i stronicowanie kursorem (#418),
@@ -63,6 +64,18 @@ type PageProps = {
 
 function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+/** Nazwa firmy jako link do szczegółu (#310) — dane, członkowie i oferty przed decyzją. */
+function CompanyDetailLink({ id, name }: { id: string; name: string }) {
+  return (
+    <Link
+      href={`/admin/firmy/${encodeURIComponent(id)}`}
+      className="underline underline-offset-2 hover:no-underline"
+    >
+      {name}
+    </Link>
+  );
 }
 
 /** Skrót do historii statusów firmy w dzienniku zdarzeń (#417) — tylko dla realnych id. */
@@ -196,7 +209,7 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
                           data-admin-focus={companyFocusKey(company.id)}
                           className="px-4 py-3 text-left align-middle font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                         >
-                          {company.name}
+                          <CompanyDetailLink id={company.id} name={company.name} />
                         </th>
                         <td className="px-4 py-3 align-middle">
                           <AdminStatusBadge kind="company" status={company.status} />
@@ -231,7 +244,7 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
                           data-admin-focus={companyFocusKey(company.id)}
                           className="break-words text-base font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          {company.name}
+                          <CompanyDetailLink id={company.id} name={company.name} />
                         </h2>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {formatDate(company.createdAt)}

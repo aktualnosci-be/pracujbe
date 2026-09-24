@@ -32,6 +32,9 @@ export const EMAIL_TYPES = [
   'offerDeclined',
   'statusChanged',
   'jobPublished',
+  'companyVerified',
+  'companyRejected',
+  'companySuspended',
   'teamInvitation',
   'jobExpiring',
   'payment',
@@ -791,6 +794,135 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       body: 'Your job “{jobTitle}” is now visible to candidates on Pracuj.be. We will let you know as soon as the first applications arrive.',
       cta: 'View job',
       highlight: '{jobTitle}',
+    },
+  },
+
+  companyVerified: {
+    pl: {
+      subject: 'Firma {companyName} jest zweryfikowana',
+      preview: 'Możesz publikować oferty pracy w Pracuj.be.',
+      heading: 'Firma zweryfikowana',
+      body: 'Sprawdziliśmy dane firmy {companyName}. Możesz teraz publikować oferty pracy i odpowiadać kandydatom.',
+      cta: 'Przejdź do danych firmy',
+      highlight: '{companyName}',
+    },
+    nl: {
+      subject: 'Bedrijf {companyName} is geverifieerd',
+      preview: 'Je kunt vacatures publiceren op Pracuj.be.',
+      heading: 'Bedrijf geverifieerd',
+      body: 'We hebben de gegevens van {companyName} gecontroleerd. Je kunt nu vacatures publiceren en kandidaten antwoorden.',
+      cta: 'Naar bedrijfsgegevens',
+      highlight: '{companyName}',
+    },
+    fr: {
+      subject: 'L’entreprise {companyName} est vérifiée',
+      preview: 'Vous pouvez publier des offres d’emploi sur Pracuj.be.',
+      heading: 'Entreprise vérifiée',
+      body: 'Nous avons vérifié les données de {companyName}. Vous pouvez maintenant publier des offres d’emploi et répondre aux candidats.',
+      cta: 'Voir les données de l’entreprise',
+      highlight: '{companyName}',
+    },
+    en: {
+      subject: '{companyName} is verified',
+      preview: 'You can now publish jobs on Pracuj.be.',
+      heading: 'Company verified',
+      body: 'We have checked the details of {companyName}. You can now publish jobs and reply to candidates.',
+      cta: 'Go to company details',
+      highlight: '{companyName}',
+    },
+  },
+
+  companyRejected: {
+    pl: {
+      subject: 'Weryfikacja firmy {companyName} nie powiodła się',
+      preview: 'Sprawdź powód i popraw dane firmy.',
+      heading: 'Firma niezweryfikowana',
+      body: 'Nie mogliśmy zweryfikować firmy {companyName}. Powód podajemy poniżej. Popraw dane firmy i wyślij ją ponownie do weryfikacji w panelu pracodawcy.',
+      cta: 'Popraw dane firmy',
+      highlight: '{companyName}',
+      anonymous: {
+        body: 'Nie mogliśmy zweryfikować firmy {companyName}. Popraw dane firmy i wyślij ją ponownie do weryfikacji w panelu pracodawcy.',
+      },
+    },
+    nl: {
+      subject: 'Verificatie van {companyName} is niet gelukt',
+      preview: 'Bekijk de reden en pas de bedrijfsgegevens aan.',
+      heading: 'Bedrijf niet geverifieerd',
+      body: 'We konden {companyName} niet verifiëren. De reden staat hieronder. Pas de bedrijfsgegevens aan en stuur het bedrijf opnieuw ter verificatie in via het werkgeverspaneel.',
+      cta: 'Bedrijfsgegevens aanpassen',
+      highlight: '{companyName}',
+      anonymous: {
+        body: 'We konden {companyName} niet verifiëren. Pas de bedrijfsgegevens aan en stuur het bedrijf opnieuw ter verificatie in via het werkgeverspaneel.',
+      },
+    },
+    fr: {
+      subject: 'La vérification de {companyName} n’a pas abouti',
+      preview: 'Consultez le motif et corrigez les données de l’entreprise.',
+      heading: 'Entreprise non vérifiée',
+      body: 'Nous n’avons pas pu vérifier {companyName}. Le motif figure ci-dessous. Corrigez les données de l’entreprise et renvoyez-la en vérification depuis l’espace employeur.',
+      cta: 'Corriger les données',
+      highlight: '{companyName}',
+      anonymous: {
+        body: 'Nous n’avons pas pu vérifier {companyName}. Corrigez les données de l’entreprise et renvoyez-la en vérification depuis l’espace employeur.',
+      },
+    },
+    en: {
+      subject: 'Verification of {companyName} was not successful',
+      preview: 'See the reason and update your company details.',
+      heading: 'Company not verified',
+      body: 'We could not verify {companyName}. The reason is shown below. Update your company details and send the company for verification again from the employer panel.',
+      cta: 'Update company details',
+      highlight: '{companyName}',
+      anonymous: {
+        body: 'We could not verify {companyName}. Update your company details and send the company for verification again from the employer panel.',
+      },
+    },
+  },
+
+  companySuspended: {
+    pl: {
+      subject: 'Firma {companyName} została zawieszona',
+      preview: 'Oferty firmy nie są teraz widoczne dla kandydatów.',
+      heading: 'Firma zawieszona',
+      body: 'Zawiesiliśmy firmę {companyName}. Do czasu wyjaśnienia sprawy nie możesz publikować nowych ofert. Powód podajemy poniżej.',
+      cta: 'Przejdź do danych firmy',
+      highlight: '{companyName}',
+      anonymous: {
+        body: 'Zawiesiliśmy firmę {companyName}. Do czasu wyjaśnienia sprawy nie możesz publikować nowych ofert.',
+      },
+    },
+    nl: {
+      subject: 'Bedrijf {companyName} is opgeschort',
+      preview: 'De vacatures van het bedrijf zijn nu niet zichtbaar voor kandidaten.',
+      heading: 'Bedrijf opgeschort',
+      body: 'We hebben {companyName} opgeschort. Tot de zaak is opgehelderd, kun je geen nieuwe vacatures publiceren. De reden staat hieronder.',
+      cta: 'Naar bedrijfsgegevens',
+      highlight: '{companyName}',
+      anonymous: {
+        body: 'We hebben {companyName} opgeschort. Tot de zaak is opgehelderd, kun je geen nieuwe vacatures publiceren.',
+      },
+    },
+    fr: {
+      subject: 'L’entreprise {companyName} a été suspendue',
+      preview: 'Les offres de l’entreprise ne sont plus visibles par les candidats.',
+      heading: 'Entreprise suspendue',
+      body: 'Nous avons suspendu {companyName}. Tant que la situation n’est pas clarifiée, vous ne pouvez pas publier de nouvelles offres. Le motif figure ci-dessous.',
+      cta: 'Voir les données de l’entreprise',
+      highlight: '{companyName}',
+      anonymous: {
+        body: 'Nous avons suspendu {companyName}. Tant que la situation n’est pas clarifiée, vous ne pouvez pas publier de nouvelles offres.',
+      },
+    },
+    en: {
+      subject: '{companyName} has been suspended',
+      preview: 'The company’s jobs are not visible to candidates for now.',
+      heading: 'Company suspended',
+      body: 'We have suspended {companyName}. Until the matter is resolved, you cannot publish new jobs. The reason is shown below.',
+      cta: 'Go to company details',
+      highlight: '{companyName}',
+      anonymous: {
+        body: 'We have suspended {companyName}. Until the matter is resolved, you cannot publish new jobs.',
+      },
     },
   },
 

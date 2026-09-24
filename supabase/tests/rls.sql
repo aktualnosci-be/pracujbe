@@ -2116,7 +2116,7 @@ select pg_temp.assert(not exists (select 1 from public.offers where idempotency_
 -- QQ1: anon nie wywoła RPC admina (grant), a zalogowany nie-admin dostaje PERMISSION_DENIED
 --      także dla zgłoszeń (H3 pokrywa firmy).
 select pg_temp.assert(
-  not has_function_privilege('anon', 'public.admin_set_company_status(uuid, text, text)', 'execute')
+  not has_function_privilege('anon', 'public.admin_set_company_status(uuid, text, text, text)', 'execute')
   and not has_function_privilege('anon', 'public.admin_resolve_report(uuid, text, text)', 'execute'),
   'QQ1 anon bez EXECUTE na RPC admina');
 reset role; reset app.current_uid;
@@ -2838,7 +2838,8 @@ select pg_temp.expect_error(
   'select public.admin_set_company_status(''f8100000-0000-0000-0000-000000000001''::uuid, ''hacked'')',
   'VALIDATION_FAILED', 'ADM4b nieznany status firmy');
 -- ADM5: verified → suspended → verified dozwolone (macierz), zawieszenie nie rusza verified_at.
-select public.admin_set_company_status('f8100000-0000-0000-0000-000000000001'::uuid, 'suspended', 'verified');
+select public.admin_set_company_status('f8100000-0000-0000-0000-000000000001'::uuid, 'suspended', 'verified',
+                                      'Test zawieszenia ADM5');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text = 'suspended' and verified_at = '2026-01-01T00:00:00Z'
@@ -2900,6 +2901,314 @@ select pg_temp.assert(
                  and p.proname in ('admin_set_company_status', 'admin_resolve_report')
                  and p.pronargs = 2),
   'ADM8c stare dwuargumentowe sygnatury usunięte (brak obejścia macierzy)');
+
+
+-- ============================================================================
+-- CO28. Bootstrap firmy po rejestracji bez duplikatów (#28). Callback rejestracji woła
+--       `create_first_company` (0072): blokada własnego profilu + ponowne sprawdzenie
+--       członkostwa w jednej transakcji. Równoległość: osobne sesje przez dblink (PP).
+-- ============================================================================
+\set CO28A  'e2800000-0000-0000-0000-0000000000a1'
+\set CO28B  'e2800000-0000-0000-0000-0000000000a2'
+\set CO28C  'e2800000-0000-0000-0000-0000000000a3'
+\set CO28I  'e2800000-0000-0000-0000-0000000000a4'
+\set CO28D  'e2800000-0000-0000-0000-0000000000a5'
+\set CO28K  'e2800000-0000-0000-0000-0000000000a6'
+\set CO28M  'e2800000-0000-0000-0000-0000000000a7'
+reset role; reset app.current_uid;
+
+select pg_temp.remote_connect('co_setup');
+select dbl.dblink_exec('co_setup', $fx$
+  insert into auth.users(id,email,name,raw_user_meta_data) values
+    ('e2800000-0000-0000-0000-0000000000a1','co28a@test.be','Ann A','{"role":"employer","locale":"pl"}'),
+    ('e2800000-0000-0000-0000-0000000000a2','co28b@test.be','Bram B','{"role":"employer","locale":"nl"}'),
+    ('e2800000-0000-0000-0000-0000000000a3','co28c@test.be','Cleo C','{"role":"employer","locale":"fr"}'),
+    ('e2800000-0000-0000-0000-0000000000a4','co28i@test.be','Ines I','{"role":"employer","locale":"en"}'),
+    ('e2800000-0000-0000-0000-0000000000a5','co28d@test.be','Dirk D','{"role":"employer","locale":"nl"}'),
+    ('e2800000-0000-0000-0000-0000000000a6','co28k@test.be','Kaja K','{"role":"candidate","locale":"pl"}'),
+    ('e2800000-0000-0000-0000-0000000000a7','co28m@test.be','Mila M','{"role":"employer","locale":"pl"}');
+  update public.profiles set is_active = false where id = 'e2800000-0000-0000-0000-0000000000a4';
+  update public.profiles set deleted_at = now() where id = 'e2800000-0000-0000-0000-0000000000a5';
+  insert into public.companies(id,name,status) values ('e2800000-0000-0000-0000-0000000000f1','Firma CO28','unverified');
+  insert into public.company_members(company_id,profile_id,role,is_active) values
+    ('e2800000-0000-0000-0000-0000000000f1','e2800000-0000-0000-0000-0000000000a7','recruiter',false);
+$fx$);
+select dbl.dblink_disconnect('co_setup');
+
+-- CO28-1: dwa RÓWNOCZESNE bootstrapy tego samego pracodawcy — druga transakcja czeka
+-- na blokadę profilu i po commicie pierwszej zwraca tę samą firmę (created = false).
+select pg_temp.remote_begin('co_a', :'CO28A') as pid_a \gset
+select pg_temp.remote_begin('co_b', :'CO28A') as pid_b \gset
+select t.v as co1a from dbl.dblink('co_a',
+  'select (company_id::text || '':'' || created::text) from public.create_first_company(''Firma A'', ''co28-a-1'', null)')
+  as t(v text) \gset
+select dbl.dblink_send_query('co_b',
+  'select (company_id::text || '':'' || created::text) from public.create_first_company(''Firma A'', ''co28-a-2'', null)');
+select pg_temp.wait_blocked(:pid_b, 'CO28-1');
+select dbl.dblink_exec('co_a', 'commit');
+select pg_temp.remote_result('co_b') as co1b \gset
+select dbl.dblink_exec('co_b', 'commit');
+select dbl.dblink_disconnect('co_a'); select dbl.dblink_disconnect('co_b');
+select pg_temp.assert(:'co1a' like '%:true' and :'co1b' = split_part(:'co1a', ':', 1) || ':false',
+  'CO28-1 równoczesny bootstrap zwraca tę samą firmę (druga próba created = false)');
+select pg_temp.assert(
+  (select count(*) from public.company_members where profile_id = :'CO28A') = 1
+  and (select count(*) from public.company_members cm
+         where cm.company_id = split_part(:'co1a', ':', 1)::uuid and cm.role = 'owner') = 1
+  and not exists (select 1 from public.companies where slug = 'co28-a-2'),
+  'CO28-1b jedna nowa firma i jeden owner po dwóch równoczesnych wywołaniach');
+
+-- CO28-2: kontrola ujemna — ta sama funkcja z usuniętą blokadą profilu (kopia ciała
+-- z katalogu, jedyna różnica to brak FOR UPDATE) tworzy duplikat w tym samym scenariuszu.
+-- Kopię zakłada i usuwa osobna, zatwierdzana sesja: zestaw bywa uruchamiany w BEGIN …
+-- ROLLBACK (tests/integration/rate-limit.test.ts), a sesje dblink widzą tylko commit.
+do $$
+declare v_def text; v_nolock text;
+begin
+  v_def := pg_get_functiondef('public.create_first_company(text,text,text)'::regprocedure);
+  v_nolock := replace(replace(v_def, 'public.create_first_company(', 'co28_neg.create_first_company_nolock('),
+                      'where p.id = v_uid for update;', 'where p.id = v_uid;');
+  if v_nolock = v_def or v_nolock like '%for update;%'
+     or v_nolock not like '%co28_neg.create_first_company_nolock(%' then
+    raise exception 'ASSERT FAILED: CO28-2 nie udało się usunąć blokady z kopii funkcji';
+  end if;
+  perform pg_temp.remote_connect('co_setup');
+  perform dbl.dblink_exec('co_setup', 'create schema co28_neg');
+  perform dbl.dblink_exec('co_setup', v_nolock);
+  perform dbl.dblink_exec('co_setup', 'grant usage on schema co28_neg to authenticated');
+  perform dbl.dblink_exec('co_setup',
+    'grant execute on function co28_neg.create_first_company_nolock(text, text, text) to authenticated');
+  perform dbl.dblink_disconnect('co_setup');
+end $$;
+select pg_temp.remote_begin('co_a', :'CO28B') as pid_a \gset
+select pg_temp.remote_begin('co_b', :'CO28B') as pid_b \gset
+select t.v as co2a from dbl.dblink('co_a',
+  'select company_id::text from co28_neg.create_first_company_nolock(''Firma B'', ''co28-b-1'', null)')
+  as t(v text) \gset
+select t.v as co2b from dbl.dblink('co_b',
+  'select company_id::text from co28_neg.create_first_company_nolock(''Firma B'', ''co28-b-2'', null)')
+  as t(v text) \gset
+select dbl.dblink_exec('co_a', 'commit'); select dbl.dblink_exec('co_b', 'commit');
+select dbl.dblink_disconnect('co_a'); select dbl.dblink_disconnect('co_b');
+select pg_temp.remote_connect('co_setup');
+select dbl.dblink_exec('co_setup', 'drop schema co28_neg cascade');
+select dbl.dblink_disconnect('co_setup');
+select pg_temp.assert(:'co2a' <> :'co2b'
+  and (select count(*) from public.company_members where profile_id = :'CO28B' and role = 'owner') = 2,
+  'CO28-2 bez blokady profilu równoczesny bootstrap tworzy DWIE firmy (test wykrywa wyścig)');
+
+-- CO28-3: pierwsza próba wycofana (awaria w trakcie) nie zostawia firmy ani członkostwa;
+-- czekające ponowienie tworzy dokładnie jedną firmę.
+select pg_temp.remote_begin('co_a', :'CO28C') as pid_a \gset
+select pg_temp.remote_begin('co_b', :'CO28C') as pid_b \gset
+select t.v as co3a from dbl.dblink('co_a',
+  'select company_id::text from public.create_first_company(''Firma C'', ''co28-c-1'', null)') as t(v text) \gset
+select dbl.dblink_send_query('co_b',
+  'select (company_id::text || '':'' || created::text) from public.create_first_company(''Firma C'', ''co28-c-2'', null)');
+select pg_temp.wait_blocked(:pid_b, 'CO28-3');
+select dbl.dblink_exec('co_a', 'rollback');
+select pg_temp.remote_result('co_b') as co3b \gset
+select dbl.dblink_exec('co_b', 'commit');
+select dbl.dblink_disconnect('co_a'); select dbl.dblink_disconnect('co_b');
+select pg_temp.assert(:'co3b' like '%:true' and split_part(:'co3b', ':', 1) <> :'co3a'
+  and not exists (select 1 from public.companies where id = :'co3a'::uuid),
+  'CO28-3 wycofana próba nie zostawia firmy; ponowienie ją tworzy');
+select pg_temp.assert(
+  (select count(*) from public.company_members where profile_id = :'CO28C') = 1,
+  'CO28-3b po awarii i ponowieniu jedno członkostwo ownera');
+
+-- CO28-4: kandydat, profil nieaktywny, profil usunięty i samo nieaktywne członkostwo
+-- nie tworzą firmy.
+set role authenticated; set app.current_uid = :'CO28K'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma K'', ''co28-k'', null)',
+  'PERMISSION_DENIED', 'CO28-4 kandydat nie tworzy firmy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CO28I'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma I'', ''co28-i'', null)',
+  'PERMISSION_DENIED', 'CO28-4b nieaktywny profil pracodawcy nie tworzy firmy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CO28D'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma D'', ''co28-d'', null)',
+  'PERMISSION_DENIED', 'CO28-4c usunięty profil pracodawcy nie tworzy firmy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CO28M'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma M'', ''co28-m'', null)',
+  'PERMISSION_DENIED', 'CO28-4d nieaktywne członkostwo nie tworzy firmy zastępczej');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.companies where slug in ('co28-k', 'co28-i', 'co28-d', 'co28-m'))
+  and (select count(*) from public.company_members
+         where profile_id in (:'CO28K', :'CO28I', :'CO28D')) = 0
+  and (select count(*) from public.company_members where profile_id = :'CO28M') = 1,
+  'CO28-4e odmowy nie zostawiły firm ani członkostw');
+
+-- CO28-5: świadome tworzenie kolejnej firmy poza automatycznym bootstrapem nadal możliwe,
+-- a późniejszy bootstrap nie dokłada firmy.
+set role authenticated; set app.current_uid = :'CO28A'; select pg_temp.assert_client_role();
+select public.create_company_with_owner('Firma A2', 'co28-a-second') is not null as co5 \gset
+select created::text as co5b from public.create_first_company('Firma A', 'co28-a-3', null) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'co5'::boolean and :'co5b' = 'false'
+  and (select count(*) from public.company_members where profile_id = :'CO28A') = 2,
+  'CO28-5 druga firma z osobnej akcji, bootstrap po niej nie tworzy trzeciej');
+
+-- ============================================================================
+-- AV310. Decyzja admina o firmie (0084, #310): wymagane uzasadnienie, powiadomienie
+--        i e-mail do właściciela w JEGO języku (Invariant #1), audyt z uzasadnieniem
+-- ============================================================================
+\set OWN310 'f8310000-0000-0000-0000-0000000000a1'
+\set OWN310B 'f8310000-0000-0000-0000-0000000000a2'
+\set REC310 'f8310000-0000-0000-0000-0000000000a3'
+\set COMP310 'f8310000-0000-0000-0000-000000000001'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'OWN310','own310@test.be','Own 310','{"role":"employer","first_name":"Own","last_name":"310","locale":"pl"}'),
+  (:'OWN310B','own310b@test.be','Own 310B','{"role":"employer","first_name":"Old","last_name":"Owner","locale":"pl"}'),
+  (:'REC310','rec310@test.be','Rec 310','{"role":"employer","first_name":"Rec","last_name":"310","locale":"pl"}');
+-- Właściciel wybrał francuski (preferred_locale), admin ma 'en' — e-mail musi być 'fr'.
+update public.profiles set preferred_locale = 'fr' where id = :'OWN310';
+insert into public.companies(id, name, status, vat_number) values
+  (:'COMP310', 'Firma AV310', 'pending', 'BE0310310310');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'COMP310', :'OWN310', 'owner', true),
+  (:'COMP310', :'OWN310B', 'owner', true),
+  (:'COMP310', :'REC310', 'recruiter', true);
+-- Drugi właściciel traci dostęp (nieaktywny) — nie może dostać powiadomienia.
+update public.company_members set is_active = false
+  where company_id = :'COMP310' and profile_id = :'OWN310B';
+
+-- AV310-1: odrzucenie bez uzasadnienia (brak / same spacje) → REASON_REQUIRED, bez zmian.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8310000-0000-0000-0000-000000000001''::uuid, ''rejected'', ''pending'')',
+  'REASON_REQUIRED', 'AV310-1 odrzucenie bez uzasadnienia odrzucone');
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8310000-0000-0000-0000-000000000001''::uuid, ''rejected'', ''pending'', ''   '')',
+  'REASON_REQUIRED', 'AV310-1b uzasadnienie z samych spacji odrzucone');
+-- AV310-2: uzasadnienie > 1000 znaków → REASON_TOO_LONG.
+select pg_temp.expect_error(
+  format('select public.admin_set_company_status(%L::uuid, ''rejected'', ''pending'', %L)',
+         'f8310000-0000-0000-0000-000000000001', repeat('x', 1001)),
+  'REASON_TOO_LONG', 'AV310-2 za długie uzasadnienie odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'pending' and status_reason is null from public.companies where id = :'COMP310')
+  and not exists (select 1 from public.notifications where entity_id = :'COMP310')
+  and not exists (select 1 from public.email_deliveries where entity_id = :'COMP310'),
+  'AV310-2b odrzucone próby bez zmian, powiadomień i e-maili');
+
+-- AV310-3: odrzucenie z uzasadnieniem.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_company_status(:'COMP310'::uuid, 'rejected', 'pending', '  Numer VAT nie zgadza się z KBO.  ');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'rejected' and status_reason = 'Numer VAT nie zgadza się z KBO.'
+     from public.companies where id = :'COMP310'),
+  'AV310-3 status rejected + uzasadnienie (przycięte) zapisane');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs
+     where action = 'company.status_changed' and entity_id = :'COMP310' and actor_id = :'ADMIN'
+       and before_data->>'status' = 'pending' and after_data->>'status' = 'rejected'
+       and after_data->>'reason' = 'Numer VAT nie zgadza się z KBO.') = 1,
+  'AV310-3b audyt: aktor admin, przejście i uzasadnienie');
+select pg_temp.assert(
+  (select count(*) from public.notifications
+     where profile_id = :'OWN310' and entity_type = 'company' and entity_id = :'COMP310'
+       and type = 'system' and data->>'kind' = 'company_status' and data->>'status' = 'rejected') = 1,
+  'AV310-3c powiadomienie in-app do aktywnego właściciela');
+select pg_temp.assert(
+  not exists (select 1 from public.notifications
+                where entity_id = :'COMP310' and profile_id in (:'OWN310B', :'REC310', :'ADMIN')),
+  'AV310-3d brak powiadomienia dla nieaktywnego właściciela, rekrutera i admina');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = :'COMP310' and template = 'companyRejected' and profile_id = :'OWN310'
+       and locale = 'fr' and payload->>'reason' = 'Numer VAT nie zgadza się z KBO.'
+       and payload->>'companyName' = 'Firma AV310') = 1,
+  'AV310-3e e-mail companyRejected w języku właściciela (fr), nie admina (en)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where entity_id = :'COMP310') = 1,
+  'AV310-3f jeden e-mail na decyzję (tylko aktywny właściciel)');
+
+-- AV310-4: właściciel widzi uzasadnienie pod RLS, ale nie może go zmienić; obca firma nie widzi.
+set role authenticated; set app.current_uid = :'OWN310'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select status_reason from public.companies where id = 'f8310000-0000-0000-0000-000000000001')
+    = 'Numer VAT nie zgadza się z KBO.',
+  'AV310-4 właściciel czyta uzasadnienie swojej firmy');
+select pg_temp.expect_error(
+  'update public.companies set status_reason = null where id = ''f8310000-0000-0000-0000-000000000001''',
+  'PERMISSION_DENIED', 'AV310-4b właściciel nie zmienia uzasadnienia');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.companies where id = 'f8310000-0000-0000-0000-000000000001') = 0,
+  'AV310-4c obca firma nie widzi firmy ani uzasadnienia');
+reset role; reset app.current_uid;
+
+-- AV310-5: ponowne zgłoszenie przez właściciela (0072) nadal działa.
+set role authenticated; set app.current_uid = :'OWN310'; select pg_temp.assert_client_role();
+select public.request_company_reverification(:'COMP310'::uuid);
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.companies where id = :'COMP310') = 'pending',
+  'AV310-5 ponowne zgłoszenie rejected → pending');
+
+-- AV310-6: weryfikacja czyści uzasadnienie, powiadomienie company_verified, e-mail bez powodu.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_company_status(:'COMP310'::uuid, 'verified', 'pending', 'ignorowane');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'verified' and status_reason is null from public.companies where id = :'COMP310'),
+  'AV310-6 weryfikacja czyści uzasadnienie');
+select pg_temp.assert(
+  (select count(*) from public.notifications
+     where profile_id = :'OWN310' and entity_id = :'COMP310' and type = 'company_verified') = 1,
+  'AV310-6b powiadomienie company_verified');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = :'COMP310' and template = 'companyVerified' and locale = 'fr'
+       and not (payload ? 'reason')) = 1,
+  'AV310-6c e-mail companyVerified (fr) bez uzasadnienia');
+select pg_temp.assert(
+  (select after_data from public.audit_logs
+     where action = 'company.status_changed' and entity_id = :'COMP310'
+       and after_data->>'status' = 'verified') = '{"status": "verified"}'::jsonb,
+  'AV310-6d audyt weryfikacji bez uzasadnienia');
+
+-- AV310-7: zawieszenie wymaga uzasadnienia; z uzasadnieniem → companySuspended.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8310000-0000-0000-0000-000000000001''::uuid, ''suspended'', ''verified'')',
+  'REASON_REQUIRED', 'AV310-7 zawieszenie bez uzasadnienia odrzucone');
+select public.admin_set_company_status(:'COMP310'::uuid, 'suspended', 'verified', 'Zgłoszenia oszustwa.');
+-- AV310-7b: ponowienie z nieaktualnym widokiem (podwójne kliknięcie) → STALE_STATE, bez duplikatu.
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8310000-0000-0000-0000-000000000001''::uuid, ''suspended'', ''verified'', ''Zgłoszenia oszustwa.'')',
+  'STALE_STATE', 'AV310-7b powtórzona decyzja odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = :'COMP310' and template = 'companySuspended' and locale = 'fr'
+       and payload->>'reason' = 'Zgłoszenia oszustwa.') = 1
+  and (select count(*) from public.email_deliveries where entity_id = :'COMP310') = 3
+  and (select count(*) from public.notifications where entity_id = :'COMP310') = 3,
+  'AV310-7c zawieszenie: jeden e-mail companySuspended, łącznie 3 decyzje = 3 e-maile i 3 powiadomienia');
+
+-- AV310-8: stara sygnatura bez uzasadnienia usunięta; nie-admin nie woła nowej.
+select pg_temp.assert(
+  not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'admin_set_company_status'
+                 and p.pronargs <> 4),
+  'AV310-8 tylko czteroargumentowa sygnatura admin_set_company_status');
+set role authenticated; set app.current_uid = :'OWN310'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8310000-0000-0000-0000-000000000001''::uuid, ''verified'', ''suspended'', null)',
+  'PERMISSION_DENIED', 'AV310-8b właściciel nie odwiesza własnej firmy');
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- WZ192. Zapis kroku kreatora w jednej transakcji (0083, #192): save_job_draft — kolumny,
