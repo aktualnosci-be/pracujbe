@@ -13,7 +13,7 @@ import { E2E_UNSUBSCRIBE_SECRET } from './tests/e2e/fixtures/unsubscribe';
  *   dzięki czemu przechodzą BEZ zmiennych środowiskowych.
  * - baseURL: http://localhost:3000
  * - projekt: chromium
- * - reporter: html
+ * - reporter: html (+ list/github w CI) i raport flaków (#375)
  *
  * W CI serwer jest budowany od zera; lokalnie można podmienić komendę na `npm run dev`.
  *
@@ -80,9 +80,23 @@ export default defineConfig({
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // Niestabilność ma być widoczna (#375). Jedno ponowienie odróżnia test niestabilny
+  // od stale czerwonego i zbiera trace ('on-first-retry'), ale test, który przeszedł
+  // dopiero przy ponowieniu, i tak czerwieni przebieg (`failOnFlakyTests`). Listę flaków
+  // z błędami nieudanych prób wypisuje tests/e2e/reporters/flaky-report.ts (stdout,
+  // podsumowanie joba, plik flaky-tests.json); reporter `github` dodaje adnotacje.
+  retries: process.env.CI ? 1 : 0,
+  failOnFlakyTests: !!process.env.CI,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  reporter: process.env.CI
+    ? [
+        ['line'],
+        ['github'],
+        ['html', { open: 'never' }],
+        // Po reporterze html: plik trafia do playwright-report/, wysyłanego jako artefakt.
+        ['./tests/e2e/reporters/flaky-report.ts', { outputFile: 'playwright-report/flaky-tests.json' }],
+      ]
+    : [['html'], ['./tests/e2e/reporters/flaky-report.ts']],
   // Świeżo zbudowany serwer (next start) hydratuje pierwsze żądania „na zimno" — elementy
   // montowane po stronie klienta (np. baner cookies) mogą pojawić się nieco później niż
   // domyślne 5 s. Dajemy asercjom 10 s, by uniknąć flaky na zimnym starcie/pod obciążeniem.

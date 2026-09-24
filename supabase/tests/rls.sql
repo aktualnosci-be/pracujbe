@@ -2116,7 +2116,7 @@ select pg_temp.assert(not exists (select 1 from public.offers where idempotency_
 -- QQ1: anon nie wywoła RPC admina (grant), a zalogowany nie-admin dostaje PERMISSION_DENIED
 --      także dla zgłoszeń (H3 pokrywa firmy).
 select pg_temp.assert(
-  not has_function_privilege('anon', 'public.admin_set_company_status(uuid, text, text)', 'execute')
+  not has_function_privilege('anon', 'public.admin_set_company_status(uuid, text, text, text)', 'execute')
   and not has_function_privilege('anon', 'public.admin_resolve_report(uuid, text, text)', 'execute'),
   'QQ1 anon bez EXECUTE na RPC admina');
 reset role; reset app.current_uid;
@@ -2838,7 +2838,8 @@ select pg_temp.expect_error(
   'select public.admin_set_company_status(''f8100000-0000-0000-0000-000000000001''::uuid, ''hacked'')',
   'VALIDATION_FAILED', 'ADM4b nieznany status firmy');
 -- ADM5: verified → suspended → verified dozwolone (macierz), zawieszenie nie rusza verified_at.
-select public.admin_set_company_status('f8100000-0000-0000-0000-000000000001'::uuid, 'suspended', 'verified');
+select public.admin_set_company_status('f8100000-0000-0000-0000-000000000001'::uuid, 'suspended', 'verified',
+                                      'Test zawieszenia ADM5');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text = 'suspended' and verified_at = '2026-01-01T00:00:00Z'
@@ -3054,6 +3055,160 @@ reset role; reset app.current_uid;
 select pg_temp.assert(:'co5'::boolean and :'co5b' = 'false'
   and (select count(*) from public.company_members where profile_id = :'CO28A') = 2,
   'CO28-5 druga firma z osobnej akcji, bootstrap po niej nie tworzy trzeciej');
+
+-- ============================================================================
+-- AV310. Decyzja admina o firmie (0084, #310): wymagane uzasadnienie, powiadomienie
+--        i e-mail do właściciela w JEGO języku (Invariant #1), audyt z uzasadnieniem
+-- ============================================================================
+\set OWN310 'f8310000-0000-0000-0000-0000000000a1'
+\set OWN310B 'f8310000-0000-0000-0000-0000000000a2'
+\set REC310 'f8310000-0000-0000-0000-0000000000a3'
+\set COMP310 'f8310000-0000-0000-0000-000000000001'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'OWN310','own310@test.be','Own 310','{"role":"employer","first_name":"Own","last_name":"310","locale":"pl"}'),
+  (:'OWN310B','own310b@test.be','Own 310B','{"role":"employer","first_name":"Old","last_name":"Owner","locale":"pl"}'),
+  (:'REC310','rec310@test.be','Rec 310','{"role":"employer","first_name":"Rec","last_name":"310","locale":"pl"}');
+-- Właściciel wybrał francuski (preferred_locale), admin ma 'en' — e-mail musi być 'fr'.
+update public.profiles set preferred_locale = 'fr' where id = :'OWN310';
+insert into public.companies(id, name, status, vat_number) values
+  (:'COMP310', 'Firma AV310', 'pending', 'BE0310310310');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'COMP310', :'OWN310', 'owner', true),
+  (:'COMP310', :'OWN310B', 'owner', true),
+  (:'COMP310', :'REC310', 'recruiter', true);
+-- Drugi właściciel traci dostęp (nieaktywny) — nie może dostać powiadomienia.
+update public.company_members set is_active = false
+  where company_id = :'COMP310' and profile_id = :'OWN310B';
+
+-- AV310-1: odrzucenie bez uzasadnienia (brak / same spacje) → REASON_REQUIRED, bez zmian.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8310000-0000-0000-0000-000000000001''::uuid, ''rejected'', ''pending'')',
+  'REASON_REQUIRED', 'AV310-1 odrzucenie bez uzasadnienia odrzucone');
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8310000-0000-0000-0000-000000000001''::uuid, ''rejected'', ''pending'', ''   '')',
+  'REASON_REQUIRED', 'AV310-1b uzasadnienie z samych spacji odrzucone');
+-- AV310-2: uzasadnienie > 1000 znaków → REASON_TOO_LONG.
+select pg_temp.expect_error(
+  format('select public.admin_set_company_status(%L::uuid, ''rejected'', ''pending'', %L)',
+         'f8310000-0000-0000-0000-000000000001', repeat('x', 1001)),
+  'REASON_TOO_LONG', 'AV310-2 za długie uzasadnienie odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'pending' and status_reason is null from public.companies where id = :'COMP310')
+  and not exists (select 1 from public.notifications where entity_id = :'COMP310')
+  and not exists (select 1 from public.email_deliveries where entity_id = :'COMP310'),
+  'AV310-2b odrzucone próby bez zmian, powiadomień i e-maili');
+
+-- AV310-3: odrzucenie z uzasadnieniem.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_company_status(:'COMP310'::uuid, 'rejected', 'pending', '  Numer VAT nie zgadza się z KBO.  ');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'rejected' and status_reason = 'Numer VAT nie zgadza się z KBO.'
+     from public.companies where id = :'COMP310'),
+  'AV310-3 status rejected + uzasadnienie (przycięte) zapisane');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs
+     where action = 'company.status_changed' and entity_id = :'COMP310' and actor_id = :'ADMIN'
+       and before_data->>'status' = 'pending' and after_data->>'status' = 'rejected'
+       and after_data->>'reason' = 'Numer VAT nie zgadza się z KBO.') = 1,
+  'AV310-3b audyt: aktor admin, przejście i uzasadnienie');
+select pg_temp.assert(
+  (select count(*) from public.notifications
+     where profile_id = :'OWN310' and entity_type = 'company' and entity_id = :'COMP310'
+       and type = 'system' and data->>'kind' = 'company_status' and data->>'status' = 'rejected') = 1,
+  'AV310-3c powiadomienie in-app do aktywnego właściciela');
+select pg_temp.assert(
+  not exists (select 1 from public.notifications
+                where entity_id = :'COMP310' and profile_id in (:'OWN310B', :'REC310', :'ADMIN')),
+  'AV310-3d brak powiadomienia dla nieaktywnego właściciela, rekrutera i admina');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = :'COMP310' and template = 'companyRejected' and profile_id = :'OWN310'
+       and locale = 'fr' and payload->>'reason' = 'Numer VAT nie zgadza się z KBO.'
+       and payload->>'companyName' = 'Firma AV310') = 1,
+  'AV310-3e e-mail companyRejected w języku właściciela (fr), nie admina (en)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where entity_id = :'COMP310') = 1,
+  'AV310-3f jeden e-mail na decyzję (tylko aktywny właściciel)');
+
+-- AV310-4: właściciel widzi uzasadnienie pod RLS, ale nie może go zmienić; obca firma nie widzi.
+set role authenticated; set app.current_uid = :'OWN310'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select status_reason from public.companies where id = 'f8310000-0000-0000-0000-000000000001')
+    = 'Numer VAT nie zgadza się z KBO.',
+  'AV310-4 właściciel czyta uzasadnienie swojej firmy');
+select pg_temp.expect_error(
+  'update public.companies set status_reason = null where id = ''f8310000-0000-0000-0000-000000000001''',
+  'PERMISSION_DENIED', 'AV310-4b właściciel nie zmienia uzasadnienia');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.companies where id = 'f8310000-0000-0000-0000-000000000001') = 0,
+  'AV310-4c obca firma nie widzi firmy ani uzasadnienia');
+reset role; reset app.current_uid;
+
+-- AV310-5: ponowne zgłoszenie przez właściciela (0072) nadal działa.
+set role authenticated; set app.current_uid = :'OWN310'; select pg_temp.assert_client_role();
+select public.request_company_reverification(:'COMP310'::uuid);
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.companies where id = :'COMP310') = 'pending',
+  'AV310-5 ponowne zgłoszenie rejected → pending');
+
+-- AV310-6: weryfikacja czyści uzasadnienie, powiadomienie company_verified, e-mail bez powodu.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_company_status(:'COMP310'::uuid, 'verified', 'pending', 'ignorowane');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'verified' and status_reason is null from public.companies where id = :'COMP310'),
+  'AV310-6 weryfikacja czyści uzasadnienie');
+select pg_temp.assert(
+  (select count(*) from public.notifications
+     where profile_id = :'OWN310' and entity_id = :'COMP310' and type = 'company_verified') = 1,
+  'AV310-6b powiadomienie company_verified');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = :'COMP310' and template = 'companyVerified' and locale = 'fr'
+       and not (payload ? 'reason')) = 1,
+  'AV310-6c e-mail companyVerified (fr) bez uzasadnienia');
+select pg_temp.assert(
+  (select after_data from public.audit_logs
+     where action = 'company.status_changed' and entity_id = :'COMP310'
+       and after_data->>'status' = 'verified') = '{"status": "verified"}'::jsonb,
+  'AV310-6d audyt weryfikacji bez uzasadnienia');
+
+-- AV310-7: zawieszenie wymaga uzasadnienia; z uzasadnieniem → companySuspended.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8310000-0000-0000-0000-000000000001''::uuid, ''suspended'', ''verified'')',
+  'REASON_REQUIRED', 'AV310-7 zawieszenie bez uzasadnienia odrzucone');
+select public.admin_set_company_status(:'COMP310'::uuid, 'suspended', 'verified', 'Zgłoszenia oszustwa.');
+-- AV310-7b: ponowienie z nieaktualnym widokiem (podwójne kliknięcie) → STALE_STATE, bez duplikatu.
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8310000-0000-0000-0000-000000000001''::uuid, ''suspended'', ''verified'', ''Zgłoszenia oszustwa.'')',
+  'STALE_STATE', 'AV310-7b powtórzona decyzja odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = :'COMP310' and template = 'companySuspended' and locale = 'fr'
+       and payload->>'reason' = 'Zgłoszenia oszustwa.') = 1
+  and (select count(*) from public.email_deliveries where entity_id = :'COMP310') = 3
+  and (select count(*) from public.notifications where entity_id = :'COMP310') = 3,
+  'AV310-7c zawieszenie: jeden e-mail companySuspended, łącznie 3 decyzje = 3 e-maile i 3 powiadomienia');
+
+-- AV310-8: stara sygnatura bez uzasadnienia usunięta; nie-admin nie woła nowej.
+select pg_temp.assert(
+  not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'admin_set_company_status'
+                 and p.pronargs <> 4),
+  'AV310-8 tylko czteroargumentowa sygnatura admin_set_company_status');
+set role authenticated; set app.current_uid = :'OWN310'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''f8310000-0000-0000-0000-000000000001''::uuid, ''verified'', ''suspended'', null)',
+  'PERMISSION_DENIED', 'AV310-8b właściciel nie odwiesza własnej firmy');
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- WZ192. Zapis kroku kreatora w jednej transakcji (0083, #192): save_job_draft — kolumny,

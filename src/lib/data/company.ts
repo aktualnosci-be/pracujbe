@@ -25,6 +25,8 @@ export interface MyCompany {
   vatNumber: string | null;
   /** ISO timestamp weryfikacji albo null. */
   verifiedAt: string | null;
+  /** Uzasadnienie admina dla odrzuconej/zawieszonej firmy (0084, #310) — inaczej null. */
+  statusReason: string | null;
   canEdit: boolean;
 }
 
@@ -39,6 +41,7 @@ const DEMO_COMPANY: MyCompany = {
   status: 'verified',
   vatNumber: 'BE0123456789',
   verifiedAt: '2025-01-15T09:00:00.000Z',
+  statusReason: null,
   canEdit: true,
 };
 
@@ -104,7 +107,7 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
     const { data, error } = await supabase
       .from('company_members')
       .select(
-        'company_id, companies(id, name, slug, status, vat_number, verified_at)',
+        'company_id, companies(id, name, slug, status, status_reason, vat_number, verified_at)',
       )
       .eq('profile_id', user.id)
       .eq('company_id', activeId)
@@ -119,15 +122,20 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
     const id = asString(company['id']);
     if (!id) return { status: 'error' };
 
+    const status = asString(company['status'], 'unverified');
     return {
       status: 'ok',
       company: {
         id,
         name: asString(company['name']),
         slug: asString(company['slug']),
-        status: asString(company['status'], 'unverified'),
+        status,
         vatNumber: asNullableString(company['vat_number']),
         verifiedAt: asNullableString(company['verified_at']),
+        statusReason:
+          status === 'rejected' || status === 'suspended'
+            ? asNullableString(company['status_reason'])
+            : null,
         canEdit: active.activeRole === 'owner' || active.activeRole === 'admin',
       },
     };

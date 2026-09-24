@@ -57,6 +57,8 @@ for (const locale of LOCALES) {
 
     const dialog = page.getByRole('alertdialog');
     await expect(dialog).toBeVisible();
+    // Odrzucenie wymaga uzasadnienia (#310).
+    await dialog.getByRole('textbox', { name: t.reasonLabel }).fill('VAT nie zgadza się z KBO');
     await dialog.getByRole('button', { name: t.actionRejectCompany, exact: true }).press('Enter');
     await expect(dialog).toHaveCount(0);
 
