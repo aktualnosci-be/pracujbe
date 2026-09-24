@@ -13,13 +13,16 @@ import { MESSAGE_BODY_MAX_LENGTH } from '@/lib/validation/message';
 /**
  * MessageComposer — pole tworzenia wiadomości (Etap 6).
  *
- * Komponent kliencki: wysyła przez server action `sendMessage(conversationId, body)`.
+ * Komponent kliencki: wysyła przez server action `sendMessage(conversationId, body, clientMessageId)`.
  * W trakcie zapisu pole jest `readOnly` + `aria-busy` (NIE `disabled` — to zdejmowało fokus,
  * #335), a przycisk zablokowany: bez podwójnego wysłania (Invariant #11). Po sukcesie:
  * czyszczenie pola, fokus zostaje w polu, `router.refresh()` (odświeża wątek RSC).
  * Limit długości = `MESSAGE_BODY_MAX_LENGTH` (CHECK w bazie), z licznikiem powiązanym przez
  * `aria-describedby`. Błąd przy polu z klucza i18n wg kodu (Invariant #8), treść zostaje.
  * Enter = wyślij, Shift+Enter = nowa linia. Etykieta: „Wiadomość do {rozmówca}" (#358).
+ * Klucz idempotencji (#147): jeden UUID na operację wysyłki danej treści; ponowienie tej
+ * samej treści po błędzie używa tego samego klucza (retry po utracie odpowiedzi nie dubluje
+ * wiadomości), sukces lub zmiana treści zaczyna nową operację.
  */
 
 export interface MessageComposerProps {
@@ -42,6 +45,7 @@ export function MessageComposer({
   const [value, setValue] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
+  const operationRef = React.useRef<{ body: string; key: string } | null>(null);
 
   const tooLongMessage = t('composerTooLong', { max: MESSAGE_BODY_MAX_LENGTH });
 
@@ -62,17 +66,23 @@ export function MessageComposer({
       return;
     }
     setError(null);
+    if (operationRef.current?.body !== body) {
+      operationRef.current = { body, key: crypto.randomUUID() };
+    }
+    const clientMessageId = operationRef.current.key;
     startTransition(async () => {
       try {
-        const result = await sendMessage(conversationId, body);
+        const result = await sendMessage(conversationId, body, clientMessageId);
         if (result.ok) {
+          operationRef.current = null;
           setValue('');
           router.refresh();
         } else {
           setError(errorMessage(result.error, body.length));
         }
       } catch {
-        setError(t('sendError'));
+        // Wynik niejednoznaczny (np. zerwane połączenie): ponowienie użyje tego samego klucza.
+        setError(t('sendErrorUncertain'));
       }
       textareaRef.current?.focus();
     });

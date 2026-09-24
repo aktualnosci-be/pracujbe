@@ -1250,6 +1250,7 @@
     "send": "Envoyer",
     "sending": "Envoi…",
     "sendError": "Échec de l'envoi du message. Réessayez.",
+    "sendErrorUncertain": "Nous ne savons pas si le message a été envoyé. Renvoyez-le : il ne sera pas dupliqué.",
     "you": "Vous",
     "systemLabel": "Système",
     "back": "Retour à la liste",
