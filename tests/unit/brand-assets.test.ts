@@ -42,10 +42,18 @@ describe("zasoby marki Pracuj.be", () => {
     }
   });
 
-  it("wektorowy favicon używa zatwierdzonego czerwonego kafelka i białego .be", () => {
+  it("wektorowy favicon = kafelek .be z prototypu: czerwień, biel i kontury DM Sans", () => {
     const svg = readFileSync(join(PUBLIC, "icon.svg"), "utf8");
-    expect(svg).toContain("#D92932");
-    expect(svg).toContain('fill="#fff"');
-    expect(svg).toContain(">.be</text>");
+    const glyphs = JSON.parse(
+      readFileSync(join(process.cwd(), "assets", "brand", "logo-glyphs.json"), "utf8"),
+    ) as { source: string; words: Record<string, { d: string }> };
+    expect(glyphs.source).toContain("DM Sans");
+    expect(svg).toContain('fill="#D92932"');
+    expect(svg).toContain('fill="#FFFFFF"');
+    // Kontur glifów z DM Sans 800 zamiast tekstu: favicon nie zależy od fontu systemowego
+    // (dawna wersja z <text> renderowała się Arialem).
+    expect(svg).toContain(`d="${glyphs.words[".be"]!.d}"`);
+    expect(svg).not.toMatch(/<text|font-family/);
+    expect(new Set(svg.match(/#[0-9A-Fa-f]{3,6}\b/g))).toEqual(new Set(["#D92932", "#FFFFFF"]));
   });
 });

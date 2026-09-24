@@ -17,7 +17,7 @@ import {
   issueGuestToken,
 } from '@/lib/guest-apply/token';
 import { clearGuestLinkToken, readGuestLinkToken } from '@/lib/guest-apply/link-cookie';
-import { applicationPhoneSchema } from '@/lib/validation/application';
+import { applicationPhoneSchema, findPersonalIdentifierField } from '@/lib/validation/application';
 import {
   guestApplicationSchema,
   type GuestApplicationInput,
@@ -38,7 +38,7 @@ import {
  * (gość nie ma sesji); 3 działa pod sesją kandydata (auth.uid() + zweryfikowany e-mail).
  */
 
-export type GuestApplyField = 'fullName' | 'email' | 'phone' | 'consent';
+export type GuestApplyField = 'fullName' | 'email' | 'phone' | 'message' | 'consent';
 export type GuestApplyResult =
   | { ok: true }
   | {
@@ -47,6 +47,8 @@ export type GuestApplyResult =
       field?: GuestApplyField;
       /** #101: pytanie wymagane bez odpowiedzi (walidacja w bazie) — komunikat przy pytaniu. */
       questionId?: string;
+      /** #495: pole/pytanie zawiera NISS/BIS albo numer dokumentu — komunikat przy polu. */
+      reason?: 'sensitiveId';
     };
 
 const SCREENING_REQUIRED_RE =
@@ -98,6 +100,8 @@ function fieldFromIssuePath(path: ReadonlyArray<string | number>): GuestApplyFie
       return 'fullName';
     case 'email':
       return 'email';
+    case 'message':
+      return 'message';
     case 'agreeTerms':
       return 'consent';
     default:
@@ -120,6 +124,10 @@ export async function submitGuestApplication(
 
   const phone = applicationPhoneSchema.safeParse({ phone: input.phone, phoneCountry: input.phoneCountry });
   if (!phone.success) return { ok: false, error: 'VALIDATION_FAILED', field: 'phone' };
+
+  // #495: numer identyfikacyjny w wiadomości/odpowiedzi → błąd przy polu, bez zapisu.
+  const sensitive = findPersonalIdentifierField(input);
+  if (sensitive) return { ok: false, error: 'VALIDATION_FAILED', reason: 'sensitiveId', ...sensitive };
 
   // Fixture E2E ma syntetyczne identyfikatory ofert (nie UUID) — tylko tam luzujemy `jobId`.
   const schema = isGuestApplyFixture()

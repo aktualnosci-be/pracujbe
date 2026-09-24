@@ -12,6 +12,7 @@ import {
 } from '@/lib/validation/job';
 import { LANGUAGE_LEVELS } from '@/lib/validation/candidate';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
+import { findSensitiveData, IDENTIFIER_KINDS } from '@/lib/privacy/sensitive-data';
 import {
   IMPORTABLE_FIELDS,
   rawExtractionSchema,
@@ -30,6 +31,12 @@ import {
  * Do sprawdzenia (`review`) trafiają pola: wskazane przez model jako niepewne, obcięte,
  * zaokrąglone, odrzucone przez walidację — a przy podejrzeniu prompt injection wszystkie
  * wypełnione pola.
+ *
+ * Walidacja wyjścia pod kątem danych osób (#500, #495) — niezależnie od instrukcji w prompcie:
+ *   - tekst z e-mailem lub telefonem nie trafia do formularza (pole tekstowe jest czyszczone,
+ *     pozycja listy pomijana; pole oznaczone do sprawdzenia);
+ *   - numer NISS/BIS, PESEL lub dokumentu w dowolnym polu → `sensitiveIdentifier`, a import
+ *     jest odrzucany w całości (`runJobImport`).
  */
 
 export interface ImportedWizardValues {
@@ -64,12 +71,13 @@ export interface ImportedWizardValues {
   accommodation?: boolean;
   transport?: boolean;
   companyDescription?: string;
-  contactEmail?: string;
 }
 
 export interface MappedImport {
   isJobListing: boolean;
   suspicious: boolean;
+  /** #495: odpowiedź zawiera numer identyfikacyjny osoby/dokumentu — import odrzucany. */
+  sensitiveIdentifier: boolean;
   sourceLanguage: string | null;
   values: ImportedWizardValues;
   review: ImportableField[];
@@ -126,14 +134,32 @@ export function mapExtraction(raw: unknown): MappedImport {
   const parsed = rawExtractionSchema.safeParse(raw);
   const r: RawExtraction | null = parsed.success ? parsed.data : null;
   if (!r) {
-    return { isJobListing: false, suspicious: false, sourceLanguage: null, values: {}, review: [], validSteps: [] };
+    return {
+      isJobListing: false,
+      suspicious: false,
+      sensitiveIdentifier: false,
+      sourceLanguage: null,
+      values: {},
+      review: [],
+      validSteps: [],
+    };
   }
 
   const review = new Set<ImportableField>();
   const values: ImportedWizardValues = {};
+  let sensitiveIdentifier = false;
+  /** `true` = wartość może trafić do formularza (bez danych kontaktowych i identyfikatorów). */
+  const isClean = (field: ImportableField, v: string): boolean => {
+    const found = findSensitiveData(v);
+    if (found.length === 0) return true;
+    if (found.some((m) => IDENTIFIER_KINDS.includes(m.kind))) sensitiveIdentifier = true;
+    review.add(field);
+    return false;
+  };
   const setText = (field: ImportableField & keyof ImportedWizardValues, rawValue: string | null): void => {
     const v = cleanText(rawValue);
     if (v === null) return;
+    if (!isClean(field, v)) return;
     const max = TEXT_MAX[field];
     const out = max ? truncate(v, max) : v;
     if (out !== v) review.add(field);
@@ -146,6 +172,7 @@ export function mapExtraction(raw: unknown): MappedImport {
     for (const item of items) {
       const v = cleanText(item);
       if (v === null) continue;
+      if (!isClean(field, v)) continue;
       if (v.length > rule.item) {
         review.add(field); // pozycja za długa — nie trafia na listę (#364)
         continue;
@@ -202,7 +229,7 @@ export function mapExtraction(raw: unknown): MappedImport {
   const languages: { language: string; level: string }[] = [];
   for (const l of r.languages) {
     const name = cleanText(l.language);
-    if (!name) continue;
+    if (!name || !isClean('languages', name)) continue;
     const level = l.level && (LANGUAGE_LEVELS as readonly string[]).includes(l.level) ? l.level : null;
     if (!level) review.add('languages');
     if (!languages.some((x) => x.language.toLowerCase() === name.toLowerCase())) {
@@ -217,7 +244,6 @@ export function mapExtraction(raw: unknown): MappedImport {
   setBool('accommodation', r.accommodation);
   setBool('transport', r.transport);
   setText('companyDescription', r.companyDescription);
-  setText('contactEmail', r.contactEmail);
 
   for (const f of r.uncertainFields) {
     if ((IMPORTABLE_FIELDS as readonly string[]).includes(f) && f in values) review.add(f as ImportableField);
@@ -255,12 +281,13 @@ export function mapExtraction(raw: unknown): MappedImport {
   return {
     isJobListing: r.isJobListing,
     suspicious: r.suspiciousInstructions,
+    sensitiveIdentifier,
     sourceLanguage: cleanText(r.sourceLanguage)?.slice(0, 8) ?? null,
     values,
     review: IMPORTABLE_FIELDS.filter((f) => review.has(f)),
     // Podejrzenie prompt injection: nic nie trafia do bazy bez przejrzenia przez człowieka —
     // formularz jest wypełniony, ale szkic zapisze dopiero „Dalej" po sprawdzeniu pól.
-    validSteps: r.suspiciousInstructions ? [] : validSteps,
+    validSteps: r.suspiciousInstructions || sensitiveIdentifier ? [] : validSteps,
   };
 }
 
@@ -343,7 +370,8 @@ const STEP_DEFS: {
   {
     step: 9,
     schema: step9DraftSchema,
-    build: (v) => ({ companyDescription: v.companyDescription, contactEmail: opt(v.contactEmail) }),
+    // E-mail kontaktowy nie jest importowany (#500) — pracodawca wpisuje go ręcznie.
+    build: (v) => ({ companyDescription: v.companyDescription }),
   },
 ];
 

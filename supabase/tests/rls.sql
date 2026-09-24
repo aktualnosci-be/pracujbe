@@ -6315,8 +6315,590 @@ select pg_temp.assert(pg_temp.e93_fingerprint() = :'e93fp', 'ESCO93-8 import nie
 select pg_temp.assert((select count(*) from public.occupations where source = 'manual') = :e93manual,
   'ESCO93-8b ręczne zawody z 0010 nietknięte');
 
+-- ============================================================================
+-- CM45 (#45, etap 2, 0101): dowód zgody, budżet na odbiorcę przy kolejkowaniu,
+-- rezerwacja kampanii „rewizja + odbiorca”. Tokeny wypisania (cudzy/wygasły/zmieniony)
+-- są podpisem HMAC w aplikacji — kontrole ujemne w tests/unit/email-unsubscribe.test.ts;
+-- tu: bez tokenu nikt poza service_role nie wypisze nikogo (CM45-1i).
+-- ============================================================================
+\set CMA 'e0450000-0000-0000-0000-0000000000c1'
+\set CMB 'e0450000-0000-0000-0000-0000000000c2'
+\set CMN1 'e0450000-0000-0000-0000-0000000000d1'
+\set CMN2 'e0450000-0000-0000-0000-0000000000d2'
+\set CMN3 'e0450000-0000-0000-0000-0000000000d3'
+\set CMN4 'e0450000-0000-0000-0000-0000000000d4'
+\set CMN5 'e0450000-0000-0000-0000-0000000000d5'
+\set CMW 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+\set CMJOBS '{"pl":{"jobs":[{"slug":"magazynier-gent","title":"Magazynier","city":"Gent","locale":"pl","isDemo":false}]},"nl":{"jobs":[{"slug":"magazijnier-gent","title":"Magazijnier","city":"Gent","locale":"nl","isDemo":false}]},"fr":{"jobs":[{"slug":"magasinier-gand","title":"Magasinier","city":"Gand","locale":"fr","isDemo":false}]},"en":{"jobs":[{"slug":"warehouse-gent","title":"Warehouse worker","city":"Ghent","locale":"en","isDemo":false}]}}'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CMA','cma@test.be','Cm A','{"role":"candidate","first_name":"Cm","last_name":"A","locale":"pl"}'),
+  (:'CMB','cmb@test.be','Cm B','{"role":"candidate","first_name":"Cm","last_name":"B","locale":"nl"}'),
+  (:'CMN1','cmn1@test.be','Cm N1','{"role":"candidate","first_name":"Cm","last_name":"N1","locale":"pl"}'),
+  (:'CMN2','cmn2@test.be','Cm N2','{"role":"candidate","first_name":"Cm","last_name":"N2","locale":"nl"}'),
+  (:'CMN3','cmn3@test.be','Cm N3','{"role":"candidate","first_name":"Cm","last_name":"N3","locale":"fr"}'),
+  (:'CMN4','cmn4@test.be','Cm N4','{"role":"candidate","first_name":"Cm","last_name":"N4","locale":"en"}'),
+  (:'CMN5','cmn5@test.be','Cm N5','{"role":"candidate","first_name":"Cm","last_name":"N5","locale":"pl"}');
+
+-- CM45-1: dowód zgody.
+select pg_temp.assert(not exists (select 1 from public.email_consent_events where profile_id = :'CMA'),
+  'CM45-1 wiersz startowy preferencji (wartości domyślne) nie jest zgodą');
+set role authenticated; set app.current_uid = :'CMA'; select pg_temp.assert_client_role();
+select public.set_notification_preferences(
+  '{"email_applications":true,"email_offers":true,"email_messages":true,"email_job_matches":true,"email_marketing":true,"push_enabled":false,"in_app_enabled":true}'::jsonb,
+  'nl', :'CMW');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(category = 'marketing' and granted and source = 'settings'
+                                    and locale = 'nl' and wording_version = :'CMW')
+     from public.email_consent_events where profile_id = :'CMA'),
+  'CM45-1b opt-in marketingu: kategoria, źródło, język strony, wersja treści');
+select public.set_notification_preferences(
+  '{"email_applications":true,"email_offers":true,"email_messages":true,"email_job_matches":true,"email_marketing":true,"push_enabled":true,"in_app_enabled":true}'::jsonb,
+  'nl', :'CMW');
+select pg_temp.assert((select count(*) from public.email_consent_events where profile_id = :'CMA') = 1,
+  'CM45-1c ponowny zapis bez zmiany zgody e-mail nie dopisuje dowodu');
+update public.notification_preferences set email_offers = false where profile_id = :'CMA';
+select pg_temp.assert(
+  (select source = 'direct' and locale = 'pl' and not granted and wording_version is null
+     from public.email_consent_events where profile_id = :'CMA' and category = 'offers'),
+  'CM45-1d bezpośredni UPDATE pod RLS też zostawia ślad (źródło direct, język odbiorcy)');
+select pg_temp.expect_error($$insert into public.email_consent_events (profile_id, category, granted, source, locale)
+    values ('e0450000-0000-0000-0000-0000000000c1', 'marketing', true, 'settings', 'pl')$$,
+  'permission denied', 'CM45-1e klient nie dopisze dowodu');
+select pg_temp.expect_error($$update public.email_consent_events set granted = false$$,
+  'permission denied', 'CM45-1f klient nie zmieni dowodu');
+select pg_temp.expect_error($$select public.set_notification_preferences('{"email_marketing":true}'::jsonb, 'pl', null)$$,
+  'VALIDATION_FAILED', 'CM45-1g niekompletne preferencje odrzucone');
+select pg_temp.expect_error(format($$select public.set_notification_preferences(%L::jsonb, 'pl', 'md5:abc')$$,
+  '{"email_applications":true,"email_offers":true,"email_messages":true,"email_job_matches":true,"email_marketing":true,"push_enabled":false,"in_app_enabled":true}'),
+  'VALIDATION_FAILED', 'CM45-1h zła wersja treści odrzucona');
+select pg_temp.expect_error($$select public.email_unsubscribe_all('e0450000-0000-0000-0000-0000000000c2')$$,
+  'permission denied', 'CM45-1i zalogowany nie wypisze innej osoby (bez tokenu, bez RPC)');
+reset role;
+set role authenticated; set app.current_uid = :'CMB'; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.email_consent_events where profile_id = :'CMA'),
+  'CM45-1j cudzy dowód zgody niewidoczny');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select count(*) from public.email_consent_events$$,
+  'permission denied', 'CM45-1k anon nie czyta dowodów');
+reset role;
+select pg_temp.expect_error($$update public.email_consent_events set granted = false$$,
+  'PERMISSION_DENIED', 'CM45-1l dowód niezmienny także dla właściciela tabel');
+
+set role service_role;
+select pg_temp.assert(public.email_unsubscribe(:'CMA', 'marketing', 'one_click', 'fr') is true,
+  'CM45-1m one-click wypisuje z marketingu');
+select pg_temp.assert(public.email_unsubscribe_all(:'CMA') is true
+    and public.email_unsubscribe_all(:'CMA') is false,
+  'CM45-1n wypisanie ze wszystkiego jest idempotentne');
+select pg_temp.expect_error($$select public.email_unsubscribe('e0450000-0000-0000-0000-0000000000c1', 'offers', 'settings')$$,
+  'VALIDATION_FAILED', 'CM45-1o wypisanie tylko ze źródłem strony/one-click');
+reset role;
+select pg_temp.assert(
+  (select source = 'one_click' and locale = 'fr' and not granted
+     from public.email_consent_events where profile_id = :'CMA' and category = 'marketing' and not granted)
+  and (select count(*) = 3 and bool_and(source = 'unsubscribe_page' and not granted)
+         from public.email_consent_events
+        where profile_id = :'CMA' and category in ('applications', 'messages', 'job_matches')),
+  'CM45-1p wypisanie zapisuje wycofanie zgody ze źródłem i językiem');
+select pg_temp.assert(
+  (select not (email_applications or email_offers or email_messages or email_job_matches or email_marketing)
+     from public.notification_preferences where profile_id = :'CMA'),
+  'CM45-1q po wypisaniu ze wszystkiego żadna kategoria nie jest włączona');
+
+-- CM45-1r: KONTROLA UJEMNA — bez triggera zmiana zgody nie zostawia dowodu.
+alter table public.notification_preferences disable trigger notification_preferences_consent_events;
+update public.notification_preferences set email_marketing = true where profile_id = :'CMB';
+select pg_temp.assert(not exists (select 1 from public.email_consent_events where profile_id = :'CMB'),
+  'CM45-1r bez triggera opt-in przechodzi bez śladu (test wykrywa brak dowodu)');
+update public.notification_preferences set email_marketing = false where profile_id = :'CMB';
+alter table public.notification_preferences enable trigger notification_preferences_consent_events;
+
+-- CM45-2: budżet na odbiorcę (domyślnie newsletter 1/dobę).
+update public.notification_preferences set email_marketing = true where profile_id = :'CMB';
+select pg_temp.assert(
+  (select outcome = 'queued' from public.enqueue_email_outcome(:'CMB', 'newsletter', null, null, 'cm45-news-1', '{}'::jsonb)),
+  'CM45-2 pierwszy newsletter w oknie zakolejkowany');
+select pg_temp.assert(
+  (select outcome = 'recipient_budget' from public.enqueue_email_outcome(:'CMB', 'newsletter', null, null, 'cm45-news-2', '{}'::jsonb)),
+  'CM45-2b drugi newsletter w tej samej dobie odrzucony budżetem odbiorcy');
+select pg_temp.assert(
+  (select status::text = 'failed' and suppressed_at is not null and error_message = 'suppressed_recipient_budget'
+     from public.email_deliveries where idempotency_key = 'cm45-news-2'),
+  'CM45-2c wiersz ponad limit zostaje jako ślad, nie trafi do workera');
+select pg_temp.assert(
+  (select outcome = 'duplicate' from public.enqueue_email_outcome(:'CMB', 'newsletter', null, null, 'cm45-news-2', '{}'::jsonb))
+  and (select count(*) from public.email_deliveries where idempotency_key = 'cm45-news-2') = 1
+  and (select used from public.email_recipient_windows where profile_id = :'CMB' and scope = 'template:newsletter') = 1,
+  'CM45-2d ponowienie z tym samym kluczem: bez drugiego listu i bez zużycia budżetu');
+select pg_temp.assert(
+  (select outcome = 'queued' from public.enqueue_email_outcome(:'CMB', 'statusChanged', 'application', null, 'cm45-status-1', '{}'::jsonb)),
+  'CM45-2e transakcyjne nie są ograniczone limitem newslettera');
+-- enqueue → wypisanie → worker nie wysyła, a miejsce wraca do odbiorcy.
+set role service_role; select public.email_unsubscribe(:'CMB', 'marketing', 'one_click', null); reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c where c.idempotency_key = 'cm45-news-1'),
+  'CM45-2f newsletter zakolejkowany przed wypisaniem nie wychodzi');
+select pg_temp.assert(
+  (select used from public.email_recipient_windows where profile_id = :'CMB' and scope = 'template:newsletter') = 0,
+  'CM45-2g wygaszony list oddaje miejsce w budżecie odbiorcy');
+
+-- CM45-3: kampanie — rezerwacja rewizja + odbiorca.
+update public.notification_preferences set email_marketing = true
+ where profile_id in (:'CMN1', :'CMN2', :'CMN3', :'CMN5');
+set role service_role;
+select pg_temp.expect_error($$select public.create_email_campaign_revision('cm45-news', '{"pl":{"jobs":[{"slug":"a"}]}}'::jsonb)$$,
+  'VALIDATION_FAILED', 'CM45-3 treść bez wszystkich języków odrzucona');
+select public.create_email_campaign_revision('cm45-news', :'CMJOBS'::jsonb) as cm_rev1 \gset
+select pg_temp.assert(
+  (select b.reserved = 0 from public.enqueue_campaign_batch(:'cm_rev1', 100) b),
+  'CM45-3b szkic nie kolejkuje niczego');
+select public.activate_email_campaign(:'cm_rev1');
+select public.enqueue_campaign_batch(:'cm_rev1', 5000);
+reset role;
+select pg_temp.assert(
+  (select count(*) = 4 and bool_and(r.status = 'queued' and r.delivery_id is not null)
+     from public.email_campaign_recipients r
+    where r.campaign_id = :'cm_rev1' and r.profile_id in (:'CMN1', :'CMN2', :'CMN3', :'CMN5'))
+  and not exists (select 1 from public.email_campaign_recipients r
+                   where r.campaign_id = :'cm_rev1' and r.profile_id in (:'CMN4', :'CMA')),
+  'CM45-3c zarezerwowani tylko odbiorcy z aktualną zgodą');
+select pg_temp.assert(
+  (select d.locale = 'nl' and d.payload -> 'jobs' -> 0 ->> 'slug' = 'magazijnier-gent'
+          and d.campaign_id = :'cm_rev1'::uuid
+     from public.email_deliveries d where d.idempotency_key = 'campaign:' || :'cm_rev1' || ':' || :'CMN2'),
+  'CM45-3d list w języku odbiorcy z treścią tego języka (Invariant #1)');
+set role service_role;
+select pg_temp.assert((select b.reserved = 0 from public.enqueue_campaign_batch(:'cm_rev1', 5000) b),
+  'CM45-3e restart harmonogramu nie rezerwuje nikogo drugi raz');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where campaign_id = :'cm_rev1'::uuid and profile_id = :'CMN1') = 1
+  and (select status from public.email_campaigns where id = :'cm_rev1') = 'completed',
+  'CM45-3f jeden list na odbiorcę; kampania zakończona po zarezerwowaniu wszystkich');
+
+-- Stan przed nową rewizją: N1 wysłany i doręczony, N2 czeka (backoff), N3 wypisany, N5 w drodze.
+update public.email_deliveries set next_attempt_at = now() + interval '1 hour'
+ where campaign_id = :'cm_rev1'::uuid and profile_id = :'CMN2';
+set role service_role; select public.email_unsubscribe(:'CMN3', 'marketing', 'one_click', null); reset role;
+select pg_temp.assert(
+  (select count(*) from public.claim_email_batch(100000) c
+    where c.campaign_id = :'cm_rev1'::uuid and c.profile_id in (:'CMN1', :'CMN5')) = 2,
+  'CM45-3g worker bierze listy N1 i N5');
+update public.email_deliveries set status = 'sent', locked_at = null
+ where campaign_id = :'cm_rev1'::uuid and profile_id = :'CMN1';
+update public.email_deliveries set status = 'delivered'
+ where campaign_id = :'cm_rev1'::uuid and profile_id = :'CMN1';
+select pg_temp.assert(
+  (select r.status from public.email_campaign_recipients r where r.campaign_id = :'cm_rev1' and r.profile_id = :'CMN1') = 'delivered'
+  and (select r.status || '/' || r.reason from public.email_campaign_recipients r
+        where r.campaign_id = :'cm_rev1' and r.profile_id = :'CMN3') = 'skipped_consent/opted_out',
+  'CM45-3h status odbiorcy idzie za wysyłką; wypisany po kolejkowaniu = skipped_consent');
+
+-- Nowa rewizja: stara wygaszona, nie wraca; zgoda sprawdzana od nowa.
+update public.notification_preferences set email_marketing = true where profile_id = :'CMN4';
+set role service_role;
+select public.create_email_campaign_revision('cm45-news', :'CMJOBS'::jsonb) as cm_rev2 \gset
+select public.activate_email_campaign(:'cm_rev2');
+reset role;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'cm_rev1') = 'superseded'
+  and (select d.status::text || '/' || d.error_message from public.email_deliveries d
+        where d.campaign_id = :'cm_rev1'::uuid and d.profile_id = :'CMN2') = 'failed/suppressed_campaign_inactive'
+  and (select r.status || '/' || r.reason from public.email_campaign_recipients r
+        where r.campaign_id = :'cm_rev1' and r.profile_id = :'CMN2') = 'cancelled/superseded',
+  'CM45-3i aktywacja nowej rewizji wygasza niewysłany list starej');
+set role service_role;
+select pg_temp.expect_error(format('select public.activate_email_campaign(%L)', :'cm_rev1'),
+  'STALE_STATE', 'CM45-3j stara rewizja nie wraca');
+select public.enqueue_campaign_batch(:'cm_rev2', 5000);
+reset role;
+select pg_temp.assert(
+  (select array_agg(r.profile_id order by r.profile_id) from public.email_campaign_recipients r
+    where r.campaign_id = :'cm_rev2' and r.profile_id in (:'CMN1', :'CMN2', :'CMN3', :'CMN4', :'CMN5'))
+    = array[:'CMN2', :'CMN4']::uuid[]
+  and (select bool_and(r.status = 'queued') from public.email_campaign_recipients r
+        where r.campaign_id = :'cm_rev2' and r.profile_id in (:'CMN2', :'CMN4')),
+  'CM45-3k nowa rewizja: bez doręczonych (N1) i w drodze (N5), bez wypisanych (N3); N2 z oddanym budżetem');
+-- Worker po wznowieniu: dzierżawa N5 wygasła, rewizja nieaktywna → list nie wychodzi.
+update public.email_deliveries set locked_at = now() - interval '1 hour'
+ where campaign_id = :'cm_rev1'::uuid and profile_id = :'CMN5';
+create function pg_temp.cm45_claim_0098(p_id uuid) returns setof public.email_deliveries
+language sql as $$
+  select e.* from public.email_deliveries e
+   where e.id = p_id and e.status = 'queued'
+     and public.email_allowed(e.profile_id, e.template)
+     and not public.email_address_suppressed(e.to_email::text);
+$$;
+select pg_temp.assert(
+  exists (select 1 from pg_temp.cm45_claim_0098(
+    (select id from public.email_deliveries where campaign_id = :'cm_rev1'::uuid and profile_id = :'CMN5'))),
+  'CM45-3l KONTROLA UJEMNA: warunki claimu z 0098 wydałyby list starej rewizji');
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c
+               where c.campaign_id = :'cm_rev1'::uuid),
+  'CM45-3m nowy claim nie wydaje listu nieaktywnej rewizji po wznowieniu workera');
+select pg_temp.assert(
+  (select d.error_message = 'suppressed_campaign_inactive' and r.status = 'cancelled'
+     from public.email_deliveries d join public.email_campaign_recipients r on r.delivery_id = d.id
+    where d.campaign_id = :'cm_rev1'::uuid and d.profile_id = :'CMN5'),
+  'CM45-3n list wygaszony (ślad zostaje), odbiorca starej rewizji = cancelled');
+
+-- CM45-4: uprawnienia.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.email_campaigns', 'permission denied',
+  'CM45-4 anon nie czyta kampanii');
+select pg_temp.expect_error(format('select * from public.enqueue_campaign_batch(%L)', :'cm_rev2'),
+  'permission denied', 'CM45-4b anon nie kolejkuje kampanii');
+reset role;
+set role authenticated; set app.current_uid = :'CMN1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.email_campaign_recipients', 'permission denied',
+  'CM45-4c zalogowany nie czyta listy odbiorców');
+select pg_temp.expect_error('select count(*) from public.email_recipient_windows', 'permission denied',
+  'CM45-4d zalogowany nie czyta liczników budżetu');
+select pg_temp.expect_error('update public.email_recipient_budget_config set max_per_recipient = 1000',
+  'permission denied', 'CM45-4e zalogowany nie zmieni limitów');
+select pg_temp.expect_error(format('select public.activate_email_campaign(%L)', :'cm_rev2'),
+  'permission denied', 'CM45-4f zalogowany nie aktywuje kampanii');
+select pg_temp.expect_error($$select * from public.enqueue_email_outcome('e0450000-0000-0000-0000-0000000000d1', 'newsletter', null, null, 'x', '{}'::jsonb)$$,
+  'permission denied', 'CM45-4g zalogowany nie kolejkuje e-maili');
+reset role; reset app.current_uid;
+
+-- CM45-5..6: równoległe sesje (dblink). Dane zatwierdzane przez osobne połączenie, bo
+-- niezatwierdzone wiersze skryptu byłyby niewidoczne dla sesji symulujących workery.
+select pg_temp.un45_sql($q$
+  insert into auth.users(id,email,name,raw_user_meta_data) values
+    ('e0450000-0000-0000-0000-0000000000f1','cmp1@test.be','Cm P1','{"role":"candidate","first_name":"Cm","last_name":"P1","locale":"pl"}'),
+    ('e0450000-0000-0000-0000-0000000000f2','cmp2@test.be','Cm P2','{"role":"candidate","first_name":"Cm","last_name":"P2","locale":"en"}');
+  update public.notification_preferences set email_marketing = true
+   where profile_id in ('e0450000-0000-0000-0000-0000000000f1','e0450000-0000-0000-0000-0000000000f2');
+  insert into public.email_recipient_budget_config (scope, window_seconds, max_per_recipient)
+    values ('template:jobMatch', 86400, 1) on conflict (scope) do update set max_per_recipient = 1;
+  select 'ok'$q$);
+select pg_temp.remote_connect('cm45_a');
+select pg_temp.remote_connect('cm45_b');
+
+-- CM45-5: dwa równoległe enqueue tego samego typu — limit 1 dostaje tylko jeden.
+select dbl.dblink_exec('cm45_a', 'begin');
+select pg_temp.assert(
+  (select t.o from dbl.dblink('cm45_a', $$select outcome from public.enqueue_email_outcome(
+     'e0450000-0000-0000-0000-0000000000f1', 'jobMatch', null, null, 'cm45-par-1', '{}'::jsonb)$$) as t(o text)) = 'queued',
+  'CM45-5 sesja A kolejkuje (transakcja otwarta)');
+select dbl.dblink_send_query('cm45_b', $$select outcome from public.enqueue_email_outcome(
+  'e0450000-0000-0000-0000-0000000000f1', 'jobMatch', null, null, 'cm45-par-2', '{}'::jsonb)$$);
+select pg_sleep(0.3);
+select pg_temp.assert(
+  exists (select 1 from pg_stat_activity where wait_event_type = 'Lock' and query like '%cm45-par-2%'),
+  'CM45-5a sesja B czeka na licznik odbiorcy');
+select dbl.dblink_exec('cm45_a', 'commit');
+select pg_temp.assert(
+  (select t.o from dbl.dblink_get_result('cm45_b') as t(o text)) = 'recipient_budget',
+  'CM45-5b sesja B dostaje odmowę budżetu');
+select * from dbl.dblink_get_result('cm45_b') as t(o text);
+select pg_temp.assert(
+  pg_temp.un45_sql($$select count(*)::text from public.email_deliveries
+    where profile_id = 'e0450000-0000-0000-0000-0000000000f1' and template = 'jobMatch' and status = 'queued'$$) = '1',
+  'CM45-5c równolegle: dokładnie jeden list w limicie');
+
+-- CM45-5d: KONTROLA UJEMNA — licznik bez blokady (odczyt → zapis) przepuszcza oba.
+select pg_temp.un45_sql($q$
+  create schema cm45test;
+  create table cm45test.win (used int not null);
+  insert into cm45test.win values (0);
+  create function cm45test.naive_take() returns boolean language plpgsql as $f$
+  declare v_used int;
+  begin
+    select used into v_used from cm45test.win;
+    perform pg_sleep(0.2);
+    if v_used >= 1 then return false; end if;
+    update cm45test.win set used = v_used + 1;
+    return true;
+  end $f$;
+  select 'ok'$q$);
+select dbl.dblink_send_query('cm45_a', 'select cm45test.naive_take()');
+select dbl.dblink_send_query('cm45_b', 'select cm45test.naive_take()');
+select pg_temp.assert(
+  (select t.g from dbl.dblink_get_result('cm45_a') as t(g boolean)) is true
+  and (select t.g from dbl.dblink_get_result('cm45_b') as t(g boolean)) is true,
+  'CM45-5d naiwny licznik przepuszcza dwa listy przy limicie 1 (test wykrywa błąd)');
+select * from dbl.dblink_get_result('cm45_a') as t(g boolean);
+select * from dbl.dblink_get_result('cm45_b') as t(g boolean);
+
+-- CM45-6: dwa harmonogramy kampanii naraz — jeden list na odbiorcę.
+select pg_temp.un45_sql($q$
+  with r as (select public.create_email_campaign_revision('cm45-par', $j${"pl":{"jobs":[{"slug":"magazynier-gent","title":"Magazynier","city":"Gent","locale":"pl","isDemo":false}]},"nl":{"jobs":[{"slug":"magazijnier-gent","title":"Magazijnier","city":"Gent","locale":"nl","isDemo":false}]},"fr":{"jobs":[{"slug":"magasinier-gand","title":"Magasinier","city":"Gand","locale":"fr","isDemo":false}]},"en":{"jobs":[{"slug":"warehouse-gent","title":"Warehouse worker","city":"Ghent","locale":"en","isDemo":false}]}}$j$::jsonb) as id)
+  select public.activate_email_campaign(id) from r;
+  select 'ok'$q$);
+select dbl.dblink_exec('cm45_a', 'begin');
+select * from dbl.dblink('cm45_a', $$select reserved::text from public.enqueue_campaign_batch(
+  (select id from public.email_campaigns where slug = 'cm45-par' and status = 'active'), 5000)$$) as t(v text);
+select dbl.dblink_send_query('cm45_b', $$select reserved::text from public.enqueue_campaign_batch(
+  (select id from public.email_campaigns where slug = 'cm45-par' and status = 'active'), 5000)$$);
+select pg_sleep(0.3);
+select dbl.dblink_exec('cm45_a', 'commit');
+select * from dbl.dblink_get_result('cm45_b') as t(v text);
+select * from dbl.dblink_get_result('cm45_b') as t(v text);
+select pg_temp.assert(
+  pg_temp.un45_sql($$select (count(*) = 2 and count(distinct d.profile_id) = 2)::text
+      from public.email_deliveries d join public.email_campaigns c on c.id = d.campaign_id
+     where c.slug = 'cm45-par'
+       and d.profile_id in ('e0450000-0000-0000-0000-0000000000f1','e0450000-0000-0000-0000-0000000000f2')$$)::boolean,
+  'CM45-6 równoległe harmonogramy: po jednym liście na odbiorcę');
+-- CM45-6b: KONTROLA UJEMNA — harmonogram bez rezerwacji (sprawdź „czy już ma list” → wstaw
+-- z nowym kluczem) wysyła dwa listy temu samemu odbiorcy.
+select pg_temp.un45_sql($q$
+  create table cm45test.naive_sent (profile_id uuid not null);
+  create function cm45test.naive_schedule() returns int language plpgsql as $f$
+  declare v_has boolean;
+  begin
+    select exists (select 1 from cm45test.naive_sent
+                    where profile_id = 'e0450000-0000-0000-0000-0000000000f1') into v_has;
+    perform pg_sleep(0.2);
+    if v_has then return 0; end if;
+    insert into cm45test.naive_sent values ('e0450000-0000-0000-0000-0000000000f1');
+    return 1;
+  end $f$;
+  select 'ok'$q$);
+select dbl.dblink_send_query('cm45_a', 'select cm45test.naive_schedule()');
+select dbl.dblink_send_query('cm45_b', 'select cm45test.naive_schedule()');
+select * from dbl.dblink_get_result('cm45_a') as t(n int);
+select * from dbl.dblink_get_result('cm45_a') as t(n int);
+select * from dbl.dblink_get_result('cm45_b') as t(n int);
+select * from dbl.dblink_get_result('cm45_b') as t(n int);
+select pg_temp.assert(
+  pg_temp.un45_sql('select count(*)::text from cm45test.naive_sent') = '2',
+  'CM45-6b bez rezerwacji dwa harmonogramy wysyłają dwa listy (test wykrywa błąd)');
+select dbl.dblink_disconnect('cm45_a');
+select dbl.dblink_disconnect('cm45_b');
+
 -- ESCO93-R (rollback 0097): supabase/tests/esco93-rollback.sql, uruchamiany przez test-rls.sh
 -- po tym pliku (psql -f, bo \ir ścieżki rollbacku nie działa przy wejściu ze stdin).
+
+-- ============================================================================
+-- VIS494. Widoczność profilu kandydata dla firm (#494, 0100): domyślnie wyłączona po
+-- ukończeniu onboardingu, świadome włączenie/wyłączenie przez set_candidate_searchable,
+-- znacznik czasu + historia tylko przy realnej zmianie, skutek natychmiastowy (także po
+-- znanym ID i dla dopasowań), relacja z aplikacji zostaje. Kontrole ujemne: stara
+-- polityka matches (0078) i stary guard (0029) dają czerwony wynik.
+-- ============================================================================
+\set VISC  'e4940000-0000-0000-0000-000000000001'
+\set VISO  'e4940000-0000-0000-0000-000000000002'
+\set VISE1 'e4940000-0000-0000-0000-000000000003'
+\set VISE2 'e4940000-0000-0000-0000-000000000004'
+\set VISEU 'e4940000-0000-0000-0000-000000000005'
+\set VISF1 'e4940000-0000-0000-0000-0000000000f1'
+\set VISF2 'e4940000-0000-0000-0000-0000000000f2'
+\set VISFU 'e4940000-0000-0000-0000-0000000000f3'
+\set VISJ1 'e4940000-0000-0000-0000-0000000000a1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'VISC','visc@test.be','Vis C','{"role":"candidate","first_name":"Vera","last_name":"Visible","locale":"pl"}'),
+  (:'VISO','viso@test.be','Vis O','{"role":"candidate","first_name":"Olaf","last_name":"Other","locale":"nl"}'),
+  (:'VISE1','vise1@test.be','Vis E1','{"role":"employer","first_name":"Rek","last_name":"V1","locale":"fr"}'),
+  (:'VISE2','vise2@test.be','Vis E2','{"role":"employer","first_name":"Rek","last_name":"V2","locale":"en"}'),
+  (:'VISEU','viseu@test.be','Vis EU','{"role":"employer","first_name":"Rek","last_name":"VU","locale":"nl"}');
+insert into public.companies(id,name,status) values
+  (:'VISF1','Firma Vis 1','verified'), (:'VISF2','Firma Vis 2','verified'), (:'VISFU','Firma Vis U','unverified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'VISF1',:'VISE1','owner',true), (:'VISF2',:'VISE2','owner',true), (:'VISFU',:'VISEU','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'VISJ1',:'VISF1','job-vis-1','Magazynier VIS','warehouse','permanent','Antwerpia','Flandria','active','pl');
+
+-- Kandydat bez profilu: pierwszy RPC tworzy profil (ensure_candidate_profile); dane jak po krokach 1–6.
+select set_config('app.current_uid', :'VISC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_candidate_searchable(false) is false, 'VIS1 wyłączenie działa zawsze (także przed ukończeniem)');
+select pg_temp.expect_error('select public.set_candidate_searchable(true)',
+  'VALIDATION_FAILED', 'VIS1b włączenie przed ukończeniem profilu odrzucone');
+reset role;
+update public.candidate_profiles
+  set occupations = array['magazynier'], categories = array['warehouse']::public.job_category[],
+      city = 'Antwerpia', availability = 'immediate', headline = 'Magazynier'
+  where profile_id = :'VISC';
+insert into public.candidate_skills(candidate_profile_id, skill_label)
+  select id, 'wózek widłowy' from public.candidate_profiles where profile_id = :'VISC';
+insert into public.matches(candidate_id, job_id, score) values (:'VISC', :'VISJ1', 90);
+
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(public.finish_onboarding() is true, 'VIS2 onboarding ukończony');
+select pg_temp.assert(
+  (select not is_searchable and profile_completed and searchable_changed_at is null
+   from public.candidate_profiles where profile_id = :'VISC'),
+  'VIS2b ukończony onboarding zostawia profil niewyszukiwalny, bez znacznika');
+select pg_temp.assert((select count(*) from public.candidate_visibility_events) = 0,
+  'VIS2c brak zdarzeń bez realnej zmiany (wyłączenie przy wyłączonym = no-op)');
+reset role;
+
+-- Przed opt-in: nikt poza właścicielem nie widzi profilu, relacji ani dopasowania.
+select set_config('app.current_uid', :'VISE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS3 zweryfikowana firma nie widzi profilu przed opt-in (znane ID)');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'VISC') = 0,
+  'VIS3b zweryfikowana firma nie widzi dopasowania przed opt-in');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS3c anon nie widzi profilu');
+reset role;
+
+-- Opt-in.
+select set_config('app.current_uid', :'VISC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_candidate_searchable(true) is true, 'VIS4 włączenie po ukończeniu');
+select pg_temp.assert(public.set_candidate_searchable(true) is true, 'VIS4b ponowienie włączenia');
+select pg_temp.assert(
+  (select is_searchable and searchable_changed_at is not null
+   from public.candidate_profiles where profile_id = :'VISC'),
+  'VIS4c flaga i znacznik czasu z bazy');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(searchable) from public.candidate_visibility_events where candidate_id = :'VISC'),
+  'VIS4d jedno zdarzenie historii (ponowienie bez duplikatu)');
+select pg_temp.expect_error(
+  format('update public.candidate_profiles set searchable_changed_at = now() - interval ''1 day'' where profile_id = %L::uuid', :'VISC'),
+  'PERMISSION_DENIED', 'VIS4e klient nie ustawia znacznika bezpośrednio');
+select pg_temp.expect_error(
+  format('insert into public.candidate_visibility_events(candidate_id, searchable) values (%L::uuid, false)', :'VISC'),
+  'permission denied', 'VIS4f klient nie dopisuje historii');
+select pg_temp.expect_error(
+  format('delete from public.candidate_visibility_events where candidate_id = %L::uuid', :'VISC'),
+  'permission denied', 'VIS4g klient nie kasuje historii');
+reset role;
+
+-- Po opt-in: zweryfikowana firma widzi minimalny zakres (profil zawodowy + relacje + dopasowanie),
+-- bez imienia/nazwiska/kontaktu.
+select set_config('app.current_uid', :'VISE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 1,
+  'VIS5 zweryfikowana firma widzi profil po opt-in');
+select pg_temp.assert((select count(*) from public.candidate_skills s join public.candidate_profiles cp
+    on cp.id = s.candidate_profile_id where cp.profile_id = :'VISC') = 1,
+  'VIS5b widzi umiejętności profilu');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'VISC') = 1,
+  'VIS5c widzi dopasowanie do własnej oferty');
+select pg_temp.assert((select count(*) from public.profiles where id = :'VISC') = 0,
+  'VIS5d nie widzi imienia/nazwiska/kontaktu bez relacji');
+select pg_temp.assert((select count(*) from public.candidate_visibility_events) = 0,
+  'VIS5e firma nie czyta historii widoczności');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS5j anon nie widzi profilu po opt-in');
+reset role;
+select set_config('app.current_uid', :'VISEU', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS5f niezweryfikowana firma nie widzi profilu po opt-in');
+reset role;
+select set_config('app.current_uid', :'VISO', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS5g inny kandydat nie widzi profilu');
+select pg_temp.assert((select count(*) from public.candidate_visibility_events) = 0,
+  'VIS5h inny kandydat nie widzi cudzej historii');
+reset role;
+select set_config('app.current_uid', :'VISE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.set_candidate_searchable(true)',
+  'PERMISSION_DENIED', 'VIS5i konto pracodawcy nie ustawia widoczności');
+reset role;
+
+-- Blokada firmy: VISF2 nie widzi mimo opt-in, VISF1 dalej widzi.
+select set_config('app.current_uid', :'VISC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.set_company_block(:'VISF2'::uuid, true);
+reset role;
+select set_config('app.current_uid', :'VISE2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS6 zablokowana firma nie widzi profilu mimo opt-in');
+reset role;
+
+-- Opt-out: skutek natychmiastowy, także po znanym ID i dla dopasowań.
+select set_config('app.current_uid', :'VISC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select searchable_changed_at as vis_on_at from public.candidate_profiles where profile_id = :'VISC' \gset
+select pg_temp.assert(public.set_candidate_searchable(false) is false, 'VIS7 wyłączenie');
+select pg_temp.assert(
+  (select not is_searchable and searchable_changed_at >= :'vis_on_at'::timestamptz
+   from public.candidate_profiles where profile_id = :'VISC'),
+  'VIS7b flaga wyłączona, znacznik zaktualizowany');
+select pg_temp.assert(
+  (select string_agg(searchable::text, ',' order by created_at, searchable desc)
+   from public.candidate_visibility_events where candidate_id = :'VISC') = 'true,false',
+  'VIS7c historia: włączenie, potem wyłączenie');
+reset role;
+select set_config('app.current_uid', :'VISE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS8 po wyłączeniu firma nie widzi profilu (znane ID)');
+select pg_temp.assert((select count(*) from public.candidate_skills s join public.candidate_profiles cp
+    on cp.id = s.candidate_profile_id where cp.profile_id = :'VISC') = 0,
+  'VIS8b po wyłączeniu nie widzi umiejętności');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'VISC') = 0,
+  'VIS8c po wyłączeniu nie widzi dopasowania (znane ID)');
+select pg_temp.assert((select count(*) from public.get_company_top_matches(:'VISF1'::uuid, 5)
+    where candidate_id = :'VISC') = 0,
+  'VIS8d po wyłączeniu kandydat znika z top dopasowań');
+reset role;
+
+-- Kontrola ujemna 1: polityka matches z 0078 (bez widoczności kandydata) przepuszcza wynik.
+begin;
+drop policy matches_select on public.matches;
+create policy matches_select on public.matches
+  for select to authenticated
+  using (
+    candidate_id = auth.uid()
+    or (public.is_job_manager(job_id)
+        and not public.candidate_blocked_job_company(candidate_id, job_id))
+  );
+set local role authenticated; set local app.current_uid = :'VISE1'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'VISC') = 1,
+  'VIS9 kontrola ujemna: bez 0100 firma czyta dopasowanie po wyłączeniu widoczności');
+rollback;
+
+-- Kontrola ujemna 2: guard z 0029 (bez znacznika) pozwala klientowi przestawić znacznik.
+begin;
+create or replace function public.guard_candidate_completeness()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if current_user in ('postgres', 'service_role', 'supabase_admin', 'supabase_auth_admin') then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    new.profile_completed := false; new.is_searchable := false; return new;
+  end if;
+  if new.profile_completed is distinct from old.profile_completed
+     or new.is_searchable is distinct from old.is_searchable then
+    raise exception 'PERMISSION_DENIED' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+set local role authenticated; set local app.current_uid = :'VISC'; select pg_temp.assert_client_role();
+update public.candidate_profiles set searchable_changed_at = now() - interval '1 day' where profile_id = :'VISC';
+select pg_temp.assert((select searchable_changed_at < now() - interval '1 hour'
+    from public.candidate_profiles where profile_id = :'VISC'),
+  'VIS9b kontrola ujemna: bez 0100 klient przestawia znacznik');
+rollback;
+
+-- Relacja z aplikacji zostaje: kandydat aplikuje do VISF1 — firma widzi profil i dopasowanie
+-- w tym procesie mimo wyłączonej widoczności (company_can_view_candidate, 0078).
+select set_config('app.current_uid', :'VISC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'VISJ1'::uuid, 'vis-app-1', null, 'immediate', null) as visapp \gset
+reset role;
+select set_config('app.current_uid', :'VISE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 1,
+  'VIS10 firma, do której kandydat aplikował, widzi profil mimo wyłączenia');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'VISC') = 1,
+  'VIS10b i dopasowanie do tej oferty');
+reset role;
+select set_config('app.current_uid', :'VISE2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS10c inna firma nadal nie widzi profilu');
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- MOD42. Decyzja moderacyjna z uzasadnieniem i atomową egzekucją (0099, #42):
