@@ -2246,5 +2246,27 @@
     "outcomeLabel": "Uitkomst",
     "outcomeActionTaken": "We hebben maatregelen genomen tegen de gemelde inhoud.",
     "outcomeNoAction": "Na onderzoek hebben we geen maatregelen genomen tegen de gemelde inhoud."
+  },
+  "campaignBanner": {
+    "eyebrow": "Vacature in België",
+    "cta": "Nu solliciteren",
+    "accessibleName": "Pracuj.be — vacature: {title}",
+    "pageTitle": "Campagnebanner",
+    "intro": "Kant-en-klare afbeeldingen van deze vacature voor campagnes en sociale media. Ze bevatten alleen gegevens die in de openbare vacature staan. Er wordt niets automatisch gepubliceerd — controleer de voorvertoning vóór gebruik.",
+    "languageLabel": "Taal van de banner",
+    "formatHeading": "{width} × {height} px",
+    "previewAlt": "Voorvertoning banner {width} × {height} px: {title}",
+    "downloadSvg": "SVG downloaden",
+    "downloadPng": "PNG downloaden",
+    "downloadPngPending": "PNG wordt voorbereid…",
+    "downloadPngError": "De PNG kon niet worden voorbereid. Probeer het opnieuw of download de SVG.",
+    "linkNote": "In het SVG-bestand leidt de knop naar de vacature. Stel bij een PNG dit adres in op de plaats van publicatie: {url}",
+    "unavailableTitle": "Banner niet beschikbaar",
+    "unavailableHint": "Een banner kan alleen worden gemaakt voor een actieve, niet-verlopen vacature van een geverifieerd bedrijf, met recruiterrechten voor dat bedrijf.",
+    "backToOffers": "Terug naar vacatures",
+    "openBanner": "Campagnebanner",
+    "openBannerLabel": "Campagnebanner: {title}",
+    "loadError": "De vacature kon niet worden geladen",
+    "loadErrorHint": "Probeer het zo meteen opnieuw. Blijft het probleem bestaan, ga dan terug naar de lijst met vacatures."
   }
 }
