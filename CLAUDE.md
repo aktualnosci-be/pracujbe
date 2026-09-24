@@ -582,6 +582,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 
 ### Etap 4 — pracodawca
 - [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
+  Bootstrap po rejestracji (#28): callback Auth (`bootstrapCompany` w `actions/auth.ts`) woła
+  wyłącznie `create_first_company` — blokada profilu i ponowne sprawdzenie członkostwa w jednej
+  transakcji; dwa równoczesne callbacki = jedna firma, jeden owner. Bez migracji. Dowód: `rls.sql`
+  sekcja CO28 (dblink, kontrola ujemna bez `FOR UPDATE` tworzy duplikat), `company-bootstrap-callback.test`.
 - [x] Panel pracodawcy — realne dane pod sesją (RLS) + akcje (zmiana statusu aplikacji, wysyłka propozycji), noindex; fallback demo bez env
   Lejek (#302): kohorta aplikacji z 30 dni (`submitted_at`) liczona zapytaniami `count` (head,
   `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = „brak danych” (brak mechanizmu
