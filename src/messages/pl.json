@@ -2375,5 +2375,27 @@
     "appealIntro": "Jeśli nie zgadzasz się z wynikiem, możesz się odwołać. Autor zgłoszonej treści nie pozna Twoich danych.",
     "appealStatusTitle": "Twoje odwołanie {reference}",
     "appealLegalPlaceholder": "Informacja prawna o procedurze odwoławczej i pozasądowym rozstrzyganiu sporów — do uzupełnienia przez właściciela serwisu."
+  },
+  "campaignBanner": {
+    "eyebrow": "Oferta pracy w Belgii",
+    "cta": "Aplikuj teraz",
+    "accessibleName": "Pracuj.be — oferta pracy: {title}",
+    "pageTitle": "Baner kampanii",
+    "intro": "Gotowe grafiki tej oferty do kampanii i mediów społecznościowych. Zawierają tylko dane widoczne w publicznej ofercie. Nic nie jest publikowane automatycznie — sprawdź podgląd przed użyciem.",
+    "languageLabel": "Język baneru",
+    "formatHeading": "{width} × {height} px",
+    "previewAlt": "Podgląd baneru {width} × {height} px: {title}",
+    "downloadSvg": "Pobierz SVG",
+    "downloadPng": "Pobierz PNG",
+    "downloadPngPending": "Przygotowywanie PNG…",
+    "downloadPngError": "Nie udało się przygotować PNG. Spróbuj ponownie albo pobierz SVG.",
+    "linkNote": "W pliku SVG przycisk prowadzi do oferty. Przy PNG ustaw ten adres w miejscu publikacji: {url}",
+    "unavailableTitle": "Baner niedostępny",
+    "unavailableHint": "Baner można przygotować tylko dla aktywnej, niewygasłej oferty zweryfikowanej firmy, z uprawnieniami rekrutera tej firmy.",
+    "backToOffers": "Wróć do ofert",
+    "openBanner": "Baner kampanii",
+    "openBannerLabel": "Baner kampanii: {title}",
+    "loadError": "Nie udało się wczytać oferty",
+    "loadErrorHint": "Spróbuj ponownie za chwilę. Jeśli problem się powtarza, wróć do listy ofert."
   }
 }

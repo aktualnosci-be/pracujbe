@@ -7274,10 +7274,10 @@ reset role;
 
 -- ============================================================================
 -- APL43. Odwołania od decyzji moderacyjnych, terminy, retencja i raport przejrzystości
--- (0102, #43): obie strony odwołują się bez dostępu do danych drugiej; termin od
+-- (0103, #43): obie strony odwołują się bez dostępu do danych drugiej; termin od
 -- POINFORMOWANIA; rozpatruje inny człowiek; skuteczne odwołanie atomowo zmienia decyzję,
 -- treść i audyt; czyszczenie nie rusza sprawy przed końcem drogi odwołania; agregaty.
--- ============================================================================
+-- =====================================================================
 \set ADMIN2 '78787878-7878-7878-7878-787878787878'
 \set APCO 'e9700000-0000-0000-0000-0000000000c1'
 \set APJ1 'e9700000-0000-0000-0000-0000000000b1'
@@ -7643,5 +7643,139 @@ select pg_temp.assert(
 select pg_temp.expect_error('select public.dsa_transparency_report(now(), now() - interval ''1 day'')',
   'VALIDATION_FAILED', 'APL43-11c zły okres raportu');
 reset role;
+-- ============================================================================
+-- CJ186. Zaufany odczyt oferty do materiałów kampanii (#186, #175, 0102): tylko aktywna,
+-- niedemonstracyjna, niewygasła oferta zweryfikowanej firmy; wąskie pola bez PII; wejście
+-- panelu tylko dla recruiter+ firmy oferty lub admina; kontrola ujemna po zdjęciu filtra.
+-- ============================================================================
+\set CJREC 'c1860000-0000-0000-0000-000000000001'
+\set CJMEM 'c1860000-0000-0000-0000-000000000002'
+\set CJOTH 'c1860000-0000-0000-0000-000000000003'
+\set CJV   'c1860000-0000-0000-0000-0000000000a1'
+\set CJD   'c1860000-0000-0000-0000-0000000000a2'
+\set CJU   'c1860000-0000-0000-0000-0000000000a3'
+\set CJO   'c1860000-0000-0000-0000-0000000000a4'
+\set CJ1   'c1860000-0000-0000-0000-0000000000b1'
+\set CJ2   'c1860000-0000-0000-0000-0000000000b2'
+\set CJ3   'c1860000-0000-0000-0000-0000000000b3'
+\set CJ4   'c1860000-0000-0000-0000-0000000000b4'
+\set CJ5   'c1860000-0000-0000-0000-0000000000b5'
+\set CJ6   'c1860000-0000-0000-0000-0000000000b6'
+\set CJ7   'c1860000-0000-0000-0000-0000000000b7'
+\set CJ8   'c1860000-0000-0000-0000-0000000000b8'
+\echo '--- CJ186 campaign job source ---'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CJREC','cjrec@test.be','Cj Rec','{"role":"employer","first_name":"Cj","last_name":"Rec","locale":"pl"}'),
+  (:'CJMEM','cjmem@test.be','Cj Mem','{"role":"employer","first_name":"Cj","last_name":"Mem","locale":"pl"}'),
+  (:'CJOTH','cjoth@test.be','Cj Oth','{"role":"employer","first_name":"Cj","last_name":"Oth","locale":"pl"}');
+insert into public.companies(id,name,status,is_demo,email) values
+  (:'CJV','Kampania Sp','verified',false,'kontakt-cj@test.be'),
+  (:'CJD','Demo Sp','verified',true,null),
+  (:'CJU','Niezweryfikowana Sp','unverified',false,null),
+  (:'CJO','Obca Sp','verified',false,null);
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'CJV',:'CJREC','owner',true),
+  (:'CJV',:'CJMEM','member',true),
+  (:'CJO',:'CJOTH','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,is_demo,expires_at,deleted_at) values
+  (:'CJ1',:'CJV','cj-ok','Magazynier kampanii','warehouse','permanent','Antwerpia','Flandria','active','pl',2400,2800,false,now() + interval '10 days',null),
+  (:'CJ2',:'CJV','cj-demo','Magazynier demo','warehouse','permanent','Antwerpia','Flandria','active','pl',null,null,true,null,null),
+  (:'CJ3',:'CJV','cj-paused','Magazynier wstrzymany','warehouse','permanent','Antwerpia','Flandria','paused','pl',null,null,false,null,null),
+  (:'CJ4',:'CJV','cj-expired','Magazynier wygasły','warehouse','permanent','Antwerpia','Flandria','active','pl',null,null,false,now() - interval '1 minute',null),
+  (:'CJ5',:'CJD','cj-demo-company','Magazynier firmy demo','warehouse','permanent','Gandawa','Flandria','active','pl',null,null,false,null,null),
+  (:'CJ6',:'CJU','cj-unverified','Magazynier bez weryfikacji','warehouse','permanent','Gandawa','Flandria','active','pl',null,null,false,null,null),
+  (:'CJ7',:'CJV','cj-deleted','Magazynier usunięty','warehouse','permanent','Gandawa','Flandria','active','pl',null,null,false,null,now()),
+  (:'CJ8',:'CJO','cj-other','Kierowca obcej firmy','transport','permanent','Liège','Walonia','active','pl',null,null,false,null,null);
+insert into public.job_translations(job_id, locale, title) values
+  (:'CJ1', 'nl', 'Magazijnmedewerker campagne'), (:'CJ1', 'pl', 'Magazynier kampanii PL');
+
+-- Liczba wierszy publicznego wejścia pod bieżącą rolą.
+create function pg_temp.cj_public(p_slug text, p_locale text default 'pl') returns int
+language sql as $$ select count(*)::int from public.get_campaign_job(p_slug, p_locale) $$;
+create function pg_temp.cj_managed(p_job uuid) returns int
+language sql as $$ select count(*)::int from public.get_managed_campaign_job(p_job, 'pl') $$;
+
+-- CJ186-1: kontrakt kolumn — tylko pola grafiki (bez id, kontaktu, opisu, członków firmy).
+select pg_temp.assert(
+  (select string_agg(parameter_name, ',' order by ordinal_position)
+   from information_schema.parameters p join information_schema.routines r using (specific_schema, specific_name)
+   where r.routine_schema = 'public' and r.routine_name = n and p.parameter_mode = 'OUT')
+  = 'slug,title,company_name,city,region,contract_type,accommodation,salary_min,salary_max,currency,salary_period',
+  'CJ186-1 ' || n || ': wąski zestaw kolumn')
+from unnest(array['get_campaign_job', 'get_managed_campaign_job', 'campaign_job_source']) n;
+
+-- CJ186-2: gość — aktywna oferta zwraca tłumaczenie tytułu, pozostałe przypadki jednakowo puste.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select title = 'Magazijnmedewerker campagne' and company_name = 'Kampania Sp' and city = 'Antwerpia'
+      and salary_min = 2400 and salary_max = 2800 and currency = 'EUR'
+   from public.get_campaign_job('cj-ok', 'nl')),
+  'CJ186-2 aktywna oferta: tytuł w żądanym języku, firma, miasto, stawka');
+select pg_temp.assert((select title from public.get_campaign_job('cj-ok', 'fr')) = 'Magazynier kampanii PL',
+  'CJ186-2b brak tłumaczenia → język domyślny oferty (jak get_public_job)');
+select pg_temp.assert(pg_temp.cj_public(s) = 0, 'CJ186-2c brak danych: ' || s)
+from unnest(array['cj-demo', 'cj-paused', 'cj-expired', 'cj-demo-company', 'cj-unverified',
+                  'cj-deleted', 'cj-nie-istnieje']) s;
+select pg_temp.assert(pg_temp.cj_public('cj-ok', 'xx') = 0, 'CJ186-2d język spoza listy → brak danych');
+select pg_temp.expect_error('select * from public.campaign_job_source(null, ''cj-ok'', ''pl'')',
+  'permission denied', 'CJ186-2e gość nie woła źródła bez filtrów uprawnień');
+select pg_temp.expect_error('select * from public.get_managed_campaign_job(''' || :'CJ1' || ''', ''pl'')',
+  'permission denied', 'CJ186-2f gość nie woła wejścia panelu');
+-- Dotychczasowe publiczne RPC pokazuje ofertę demo — to jest luka, którą zamyka 0102.
+select pg_temp.assert((select count(*) from public.get_public_job('cj-demo', 'pl')) = 1,
+  'CJ186-2g get_public_job nie filtruje is_demo (dlatego osobne źródło)');
+reset role;
+
+-- CJ186-3: panel — recruiter+ firmy oferty i admin; member, obca firma i przypadki brzegowe puste.
+set role authenticated; set app.current_uid = :'CJREC'; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.cj_managed(:'CJ1') = 1, 'CJ186-3 owner firmy dostaje aktywną ofertę');
+select pg_temp.assert(pg_temp.cj_managed(j) = 0, 'CJ186-3b owner: brak danych dla ' || j)
+from unnest(array[:'CJ2', :'CJ3', :'CJ4', :'CJ7', :'CJ8', :'CJ5', :'CJ6']::uuid[]) j;
+select pg_temp.expect_error('select * from public.campaign_job_source(''' || :'CJ1' || ''', null, ''pl'')',
+  'permission denied', 'CJ186-3c zalogowany nie woła źródła bez filtrów uprawnień');
+reset role;
+set role authenticated; set app.current_uid = :'CJMEM'; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.cj_managed(:'CJ1') = 0, 'CJ186-3d member (bez praw rekrutera) nie eksportuje');
+reset role;
+set role authenticated; set app.current_uid = :'CJOTH'; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.cj_managed(:'CJ1') = 0 and pg_temp.cj_managed(:'CJ8') = 1,
+  'CJ186-3e obca firma nie eksportuje cudzej oferty, własną tak');
+reset role;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.cj_managed(:'CJ1') = 1 and pg_temp.cj_managed(:'CJ2') = 0,
+  'CJ186-3f admin eksportuje aktywną ofertę, nie demo');
+reset role; reset app.current_uid;
+update public.company_members set is_active = false where company_id = :'CJV' and profile_id = :'CJMEM';
+update public.company_members set role = 'recruiter' where company_id = :'CJV' and profile_id = :'CJMEM';
+set role authenticated; set app.current_uid = :'CJMEM'; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.cj_managed(:'CJ1') = 0, 'CJ186-3g nieaktywny recruiter nie eksportuje');
+reset role; reset app.current_uid;
+
+-- CJ186-4: kontrola ujemna — zdjęcie KAŻDEGO filtra źródła ujawnia odpowiadający przypadek,
+-- więc asercje CJ186-2c wykrywają regresję (zmiana w transakcji cofanej).
+create function pg_temp.cj_drop_filter(p_filter text) returns void language plpgsql as $$
+declare
+  v_def text := pg_get_functiondef('public.campaign_job_source(uuid, text, text)'::regprocedure);
+begin
+  if position(p_filter in v_def) = 0 then
+    raise exception 'ASSERT FAILED: CJ186-4 filtr „%” nie występuje w źródle', p_filter;
+  end if;
+  execute replace(v_def, p_filter, 'true');
+end $$;
+begin; select pg_temp.cj_drop_filter('j.is_demo = false');
+select pg_temp.assert(pg_temp.cj_public('cj-demo') = 1, 'CJ186-4 bez filtra is_demo oferta demo wycieka'); rollback;
+begin; select pg_temp.cj_drop_filter('c.is_demo = false');
+select pg_temp.assert(pg_temp.cj_public('cj-demo-company') = 1, 'CJ186-4b bez filtra is_demo firmy wycieka'); rollback;
+begin; select pg_temp.cj_drop_filter('j.status = ''active''');
+select pg_temp.assert(pg_temp.cj_public('cj-paused') = 1, 'CJ186-4c bez filtra statusu wycieka wstrzymana'); rollback;
+begin; select pg_temp.cj_drop_filter('(j.expires_at is null or j.expires_at > now())');
+select pg_temp.assert(pg_temp.cj_public('cj-expired') = 1, 'CJ186-4d bez filtra wygaśnięcia wycieka wygasła'); rollback;
+begin; select pg_temp.cj_drop_filter('c.status = ''verified''');
+select pg_temp.assert(pg_temp.cj_public('cj-unverified') = 1, 'CJ186-4e bez filtra weryfikacji wycieka'); rollback;
+begin; select pg_temp.cj_drop_filter('j.deleted_at is null');
+select pg_temp.assert(pg_temp.cj_public('cj-deleted') = 1, 'CJ186-4f bez filtra usunięcia wycieka'); rollback;
+select pg_temp.assert(pg_temp.cj_public(s) = 0, 'CJ186-4g po cofnięciu filtry wróciły: ' || s)
+from unnest(array['cj-demo', 'cj-demo-company', 'cj-paused', 'cj-expired', 'cj-unverified', 'cj-deleted']) s;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

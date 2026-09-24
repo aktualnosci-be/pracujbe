@@ -267,7 +267,7 @@ firmy), następnie w nowej migracji zdejmij blokady (z wyłączonymi triggerami
 
 ## Odwołania, terminy, retencja i raport przejrzystości DSA
 
-Migracja `supabase/migrations/0102_dsa_appeals.sql` (#43; numer według kolejki
+Migracja `supabase/migrations/0103_dsa_appeals.sql` (#43; numer według kolejki
 koordynatora migracji). Buduje na sprawie z 0094 i decyzji z 0099.
 
 - **Odwołanie (`moderation_appeals`, niezmienne).** Jedno na decyzję, numer
@@ -326,7 +326,7 @@ retencji od zamknięcia sprawy, agregaty niezmienione po anonimizacji.
 
 Odwołania są dowodem — przed rollbackiem wyeksportuj `moderation_appeals` i
 `dsa_retention_runs`. Wycofaj kod (formularze odwołań, `/admin/odwolania`, `/admin/raport-dsa`,
-trasa eksportu), potem w nowej migracji: usuń funkcje z 0102, przywróć z 0099
+trasa eksportu), potem w nowej migracji: usuń funkcje z 0103, przywróć z 0099
 `admin_restore_moderation`, `reports_decision_guard`, `moderation_append_only`,
 `get_company_moderation_decisions`, `get_report_case`, check `report_events.event_type`
 i unikat `moderation_decisions(report_id)`; z 0094 `reports_notice_immutable`,

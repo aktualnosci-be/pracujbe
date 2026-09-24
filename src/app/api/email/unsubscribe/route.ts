@@ -17,7 +17,11 @@ import { env } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
 
-const NO_STORE = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' };
+const NO_STORE = {
+  'Cache-Control': 'no-store',
+  'Referrer-Policy': 'no-referrer',
+  'X-Robots-Tag': 'noindex, nofollow',
+};
 
 export async function POST(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -41,6 +45,6 @@ export async function GET(request: Request): Promise<Response> {
   const locale = requested && isLocale(requested) ? requested : routing.defaultLocale;
   const target = new URL(`/${locale}/wypisz`, env.siteUrl);
   const token = url.searchParams.get('t');
-  if (token) target.searchParams.set('t', token);
+  if (token) target.hash = `t=${encodeURIComponent(token)}`;
   return NextResponse.redirect(target, { status: 303, headers: NO_STORE });
 }
