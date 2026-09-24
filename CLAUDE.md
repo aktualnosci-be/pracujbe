@@ -673,6 +673,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)
 - [x] Panel administratora — `/admin/**` (guard role='admin'→notFound, noindex): dashboard, firmy
   (weryfikuj/odrzuć/zawieś), zgłoszenia (moderacja), użytkownicy; odczyt service-role, zapis przez RPC (0019)
+  Każdy odczyt service-role w `src/lib/data/admin.ts` sam potwierdza rolę admina sesji
+  (`requireAdmin` → `notFound()`), niezależnie od layoutu. `0076`: pola tożsamości i moderacji
+  zgłoszeń ustala baza (trigger `reports_guard`, limity długości), helpery ról bez EXECUTE dla
+  anon/PUBLIC (`is_job_company_member` zostaje — polityki anon). Dowód: `rls.sql` sekcja QQ.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
 - [x] Płatności / subskrypcje / faktury / kody rabatowe — REALNY Stripe (FUN-08), provider-gated:
   `startCheckout` tworzy sesję Stripe Checkout (subskrypcja, inline `price_data` z `PLANS`, kupon z
