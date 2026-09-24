@@ -38,6 +38,11 @@ vi.mock('@/lib/data/company-blocks', () => ({
   loadMyCompanyBlocks: async () => ({ status: 'ready', blocks: [], demo: false }),
 }));
 vi.mock('@/components/settings/CompanyBlocksSettings', () => ({ CompanyBlocksSettings: () => null }));
+// Widoczność profilu (#494) ma własne testy (profile-visibility, rls.sql VIS494).
+vi.mock('@/lib/data/profile-visibility', () => ({
+  loadProfileVisibility: async () => ({ status: 'ready', demo: false, searchable: false, completed: true, changedAt: null }),
+}));
+vi.mock('@/components/settings/ProfileVisibilitySettings', () => ({ ProfileVisibilitySettings: () => null }));
 vi.mock('@/lib/actions/notification-preferences', () => ({
   updateNotificationPreferences: vi.fn(),
 }));

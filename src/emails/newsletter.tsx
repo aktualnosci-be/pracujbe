@@ -1,14 +1,15 @@
-import type { CSSProperties, ReactElement } from "react";
+import type { ReactElement } from "react";
 import { render } from "@react-email/render";
-import { Link, Section, Text } from "@react-email/components";
 
 import {
   EmailButton,
   EmailHeading,
   EmailLayout,
+  EmailPassport,
+  type EmailPassportField,
   EmailRawLink,
   EmailText,
-  emailPalette,
+  EmailTextLink,
 } from "@/emails/_components";
 import { newsletterCopy } from "@/emails/newsletter-copy";
 import { interpolate, layoutCopy } from "@/emails/copy";
@@ -86,47 +87,7 @@ export function assertRenderableJobs(
   }
 }
 
-const styles = {
-  card: {
-    borderTop: `1px solid ${emailPalette.border}`,
-    padding: "20px 0 16px 0",
-  } satisfies CSSProperties,
-  eyebrow: {
-    color: emailPalette.primary,
-    fontSize: "11px",
-    fontWeight: 700,
-    letterSpacing: "1px",
-    lineHeight: "16px",
-    margin: "0 0 8px 0",
-    textTransform: "uppercase",
-  } satisfies CSSProperties,
-  title: {
-    color: emailPalette.foreground,
-    fontSize: "19px",
-    fontWeight: 700,
-    lineHeight: "26px",
-    margin: "0 0 12px 0",
-  } satisfies CSSProperties,
-  detail: {
-    color: emailPalette.muted,
-    fontSize: "13px",
-    lineHeight: "20px",
-    margin: "0 0 4px 0",
-  } satisfies CSSProperties,
-  value: {
-    color: emailPalette.foreground,
-    fontWeight: 600,
-  } satisfies CSSProperties,
-  link: {
-    color: emailPalette.primaryDark,
-    display: "inline-block",
-    fontSize: "14px",
-    fontWeight: 700,
-    lineHeight: "22px",
-    marginTop: "8px",
-  } satisfies CSSProperties,
-} as const;
-
+/** Karta oferty = `PASZPORT PRACY` z prototypowego newsletter.html (miejsce | stawka, link). */
 function NewsletterJobCard({
   locale,
   job,
@@ -137,23 +98,19 @@ function NewsletterJobCard({
   const copy = newsletterCopy[locale];
   const href = `${env.siteUrl}/${locale}/oferty-pracy/${job.slug}`;
   const salary = job.salary?.trim();
+  const fields: EmailPassportField[] = [{ label: copy.location, value: job.city }];
+  if (salary) {
+    fields.push({ label: copy.salary, value: salary, data: ["data-newsletter-field", "salary"] });
+  }
 
   return (
-    <Section style={styles.card} data-newsletter-job={job.slug}>
-      <Text style={styles.eyebrow}>{copy.passport}</Text>
-      <Text style={styles.title}>{job.title}</Text>
-      <Text style={styles.detail}>
-        {copy.location}: <span style={styles.value}>{job.city}</span>
-      </Text>
-      {salary ? (
-        <Text style={styles.detail} data-newsletter-field="salary">
-          {copy.salary}: <span style={styles.value}>{salary}</span>
-        </Text>
-      ) : null}
-      <Link href={href} style={styles.link}>
-        {copy.viewJob}
-      </Link>
-    </Section>
+    <EmailPassport
+      eyebrow={copy.passport}
+      title={job.title}
+      fields={fields}
+      link={{ href, label: copy.viewJob }}
+      sectionData={{ "data-newsletter-job": job.slug }}
+    />
   );
 }
 
@@ -181,9 +138,9 @@ export function NewsletterEmail({
       ))}
       <EmailButton href={jobsHref}>{copy.viewAll}</EmailButton>
       <EmailText muted>{copy.preferencesNote}</EmailText>
-      <Link href={preferencesHref} style={styles.link}>
-        {copy.preferences}
-      </Link>
+      <EmailText muted>
+        <EmailTextLink href={preferencesHref}>{copy.preferences}</EmailTextLink>
+      </EmailText>
       <EmailRawLink href={preferencesHref} />
     </EmailLayout>
   );
