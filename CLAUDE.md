@@ -845,6 +845,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami
   (`tests/helpers/png-pixels.ts`), bo rewizje Chromium inaczej kodują IDAT.
+  Zrzut bez flaka (main 514e917, „Unable to capture screenshot”): skrypty robią zrzut przez
+  `scripts/lib/stable-screenshot.mjs` (fonty + dwie ramki ze stałym układem, najwyżej 3 próby
+  tylko tego błędu, wpis na stderr); testy z Chromium w projekcie Vitest `chromium`
+  (`CHROMIUM_TEST_FILES`, jeden plik naraz), strażnik `stable-screenshot.test.ts`.
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
@@ -875,6 +879,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`isrFlushToDisk: false` odpada — wyłącza cache obrazów); limit = własny `cacheHandler`. Straże: `static-public-pages.test`, `check-next-build.mjs`
   (prerender), E2E `public-cache-headers.spec`. Lista `/oferty-pracy` (filtry), auth, panele — per żądanie.
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa
+  Wydanie 1.0.0 (#103): kryteria, blokery i procedura (decyzja właściciela, zielone CI, SHA
+  wdrożenia, tag `v1.0.0`, `CHANGELOG.md`) w `docs/RELEASE_1_0.md`. Build zostaje `0.YYYYMMDD.M+SHA`
+  do jawnego `PRACUJBE_RELEASE_VERSION=1.0.0` (→ `1.0.0+SHA`); inna wartość przerywa build
+  (`scripts/build-version.mjs`, `build-version.test.ts`).
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 
 ---

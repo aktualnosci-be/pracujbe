@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { launchChromium } from "./lib/launch-chromium.mjs";
+import { captureStableScreenshot } from "./lib/stable-screenshot.mjs";
 
 const WIDTH = 1200;
 const HEIGHT = 300;
@@ -151,7 +152,10 @@ async function main() {
     await page.setContent(
       `<style>html,body{margin:0;width:${WIDTH}px;height:${HEIGHT}px;overflow:hidden}svg{display:block}</style>${svg}`,
     );
-    const png = await page.screenshot({ animations: "disabled", type: "png" });
+    const png = await captureStableScreenshot(page, {
+      animations: "disabled",
+      type: "png",
+    });
     await mkdir(dirname(outputPrefix), { recursive: true });
     await writeFile(`${outputPrefix}.svg`, svg);
     await writeFile(`${outputPrefix}.png`, png);
