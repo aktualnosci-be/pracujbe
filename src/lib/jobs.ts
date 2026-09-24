@@ -12,7 +12,7 @@ import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoJobContentLocales, resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
 import { resolveJobContentLocales } from '@/lib/job-content-locale';
-import { compareMonthlySalaryDesc, salaryInMonthlyRange } from '@/lib/salary-compare';
+import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-compare';
 import type { TransactionPool } from '@/lib/db/transaction';
 
 export type ContractType =
@@ -111,6 +111,8 @@ export interface GetJobsParams {
   contractTypes?: ContractType[];
   salaryMin?: number;
   salaryMax?: number;
+  /** Jednostka widełek i sortowania po wynagrodzeniu (#188, 0091); domyślnie 'month'. */
+  salaryUnit?: SalaryUnit;
   /** true=tylko z zakwaterowaniem, false=tylko bez, undefined=bez filtra. */
   accommodation?: boolean;
   immediate?: boolean;
@@ -237,12 +239,13 @@ function getJobsFromDemo(
       );
     }
   }
-  // Widełki miesięczne (#188, reguła jak w SQL 0080): oferta bez porównywalnej kwoty
-  // (brak wynagrodzenia albo stawka godzinowa) NIE jest wykluczana.
+  // Widełki w wybranej jednostce (#188, reguła jak w SQL 0080/0091): oferta bez
+  // porównywalnej kwoty (brak wynagrodzenia albo inny okres stawki) NIE jest wykluczana.
+  const salaryUnit = params.salaryUnit ?? 'month';
   if (params.salaryMin !== undefined || params.salaryMax !== undefined) {
     const lo = params.salaryMin ?? 0;
     const hi = params.salaryMax ?? Number.POSITIVE_INFINITY;
-    jobs = jobs.filter((job) => salaryInMonthlyRange(job, lo, hi));
+    jobs = jobs.filter((job) => salaryInRange(job, lo, hi, salaryUnit));
   }
   if (params.accommodation !== undefined) {
     jobs = jobs.filter((job) => job.accommodation === params.accommodation);
@@ -262,7 +265,7 @@ function getJobsFromDemo(
 
   const sorted = [...jobs].sort(
     params.sort === 'salary'
-      ? (a, b) => compareMonthlySalaryDesc(a, b) || newestFirst(a, b)
+      ? (a, b) => compareSalaryDesc(a, b, salaryUnit) || newestFirst(a, b)
       : newestFirst,
   );
   const total = sorted.length;
@@ -387,6 +390,7 @@ async function getJobsFromDb(
   params: GetJobsParams,
   page: number,
   pageSize: number,
+  viewerId: string | null,
 ): Promise<GetJobsResult> {
   const [{ getDomainPool }, { getPublicJobs }] = await Promise.all([
     import('@/lib/db/runtime'),
@@ -396,7 +400,7 @@ async function getJobsFromDb(
     ...params,
     page,
     pageSize,
-  });
+  }, viewerId);
   return {
     jobs: result.rows.map(rowToJobListItem),
     total: result.total,
@@ -448,7 +452,18 @@ async function readContentLocales(
  * Publiczne API (kontrakt @/lib/jobs)
  * ------------------------------------------------------------------------- */
 
-export async function getJobs(params: GetJobsParams): Promise<GetJobsResult> {
+/**
+ * Kontekst osoby przeglądającej listę. `candidateId` wyłącznie ze zweryfikowanej sesji
+ * serwera (`readCandidateViewerId`); brak = gość, wynik wspólny (ISR/statyczne strony).
+ */
+export interface JobsViewer {
+  candidateId: string | null;
+}
+
+export async function getJobs(
+  params: GetJobsParams,
+  viewer?: JobsViewer,
+): Promise<GetJobsResult> {
   const locale = toLocale(params.locale);
   const page = Math.max(1, Math.trunc(params.page ?? 1));
   const pageSize = Math.max(
@@ -458,7 +473,7 @@ export async function getJobs(params: GetJobsParams): Promise<GetJobsResult> {
 
   if (isDatabaseConfigured()) {
     try {
-      return await getJobsFromDb(params, page, pageSize);
+      return await getJobsFromDb(params, page, pageSize, viewer?.candidateId ?? null);
     } catch (error) {
       // Skonfigurowana baza NIE może po cichu degradować do danych demonstracyjnych
       // (fikcyjne oferty indeksowane jako realne). Loguj i propaguj kontrolowany błąd.
@@ -537,13 +552,17 @@ export async function getLatestJobs(
   return result.jobs;
 }
 
-export async function getJobFilterFacets(params: GetJobsParams) {
+export async function getJobFilterFacets(params: GetJobsParams, viewer?: JobsViewer) {
   if (!isDatabaseConfigured()) return null;
   try {
     const [{ getDomainPool }, { getPublicJobFilterFacets }] = await Promise.all(
       [import('@/lib/db/runtime'), import('@/lib/db/public-jobs')],
     );
-    return await getPublicJobFilterFacets(await getDomainPool(), params);
+    return await getPublicJobFilterFacets(
+      await getDomainPool(),
+      params,
+      viewer?.candidateId ?? null,
+    );
   } catch (error) {
     captureError(error, { area: 'jobs.getJobFilterFacets' });
     throw new AppError('INTERNAL');

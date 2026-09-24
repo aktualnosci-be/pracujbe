@@ -8,6 +8,7 @@ import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { brandShareImageUrl } from '@/lib/seo/structured-data';
 import { getJobFilterFacets, getJobs, isShowingDemoJobs } from '@/lib/jobs';
+import { readCandidateViewerId } from '@/lib/auth/candidate-viewer';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
 import {
@@ -21,11 +22,12 @@ import { JobCard } from '@/components/public/JobCard';
 import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { Pagination } from '@/components/public/Pagination';
 import {
-  SALARY_MAX_BOUND,
   buildDemoFacets,
   isSalaryNarrowed,
   parseSidebarFilters,
   parseSort,
+  salaryBounds,
+  salaryQueryParams,
   sidebarFiltersToParams,
   splitParam,
   toFacetItem,
@@ -193,7 +195,6 @@ export default async function JobsListPage({
 
   // WYNIKI: komplet filtrów sidebara + sort + paginacja + licznik PO STRONIE SQL (P1-12) —
   // koniec liczenia w pamięci nad wycinkiem 200 (oferty nie znikają, liczba stron poprawna).
-  const narrowed = isSalaryNarrowed(sf);
   const filterParams = {
     locale,
     keyword,
@@ -201,10 +202,8 @@ export default async function JobsListPage({
     categories: sf.categories,
     locations: cityFilters.queryLocations,
     contractTypes: sf.contractTypes,
-    ...(narrowed ? { salaryMin: sf.salaryMin } : {}),
-    ...(narrowed && sf.salaryMax < SALARY_MAX_BOUND
-      ? { salaryMax: sf.salaryMax }
-      : {}),
+    // Jednostka widełek steruje też sortowaniem po wynagrodzeniu (#188, 0091).
+    ...salaryQueryParams(sf),
     ...(sf.accommodation.length === 1
       ? { accommodation: sf.accommodation.includes('provided') }
       : {}),
@@ -212,9 +211,12 @@ export default async function JobsListPage({
     ...(sf.noLanguageRequired ? { noLanguageRequired: true } : {}),
     ...(since ? { since } : {}),
   };
+  // #97: zalogowany kandydat nie widzi ofert firm, które zablokował (lista, licznik i facety
+  // filtruje baza — 0090). Gość i pracodawca dostają wspólny wynik publiczny.
+  const viewer = { candidateId: await readCandidateViewerId() };
   const [results, databaseFacets] = await Promise.all([
-    getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }),
-    getJobFilterFacets(filterParams),
+    getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }, viewer),
+    getJobFilterFacets(filterParams, viewer),
   ]);
   const facets = databaseFacets
     ? {
@@ -288,6 +290,7 @@ export default async function JobsListPage({
     const next = { ...activeParams };
     delete next['salaryMin'];
     delete next['salaryMax'];
+    delete next['salaryUnit'];
     return hrefFrom(next);
   };
   const sortHref = (value: SortValue): string => {
@@ -307,13 +310,13 @@ export default async function JobsListPage({
           : tFilters('any');
 
   const salaryMaxLabel =
-    sf.salaryMax >= SALARY_MAX_BOUND
+    sf.salaryMax >= salaryBounds(sf.salaryUnit).max
       ? tFilters('salaryMaxCap', { value: currency.format(sf.salaryMax) })
       : currency.format(sf.salaryMax);
-  const salaryChipLabel = tFilters('salaryChip', {
-    min: currency.format(sf.salaryMin),
-    max: salaryMaxLabel,
-  });
+  const salaryChipLabel = tFilters(
+    sf.salaryUnit === 'hour' ? 'salaryChipHourly' : 'salaryChip',
+    { min: currency.format(sf.salaryMin), max: salaryMaxLabel },
+  );
 
   // Chipy aktywnych filtrów (odzwierciedlają activeParams).
   const chips: Array<{ id: string; label: string; href: string }> = [];
@@ -392,7 +395,13 @@ export default async function JobsListPage({
 
   const sortOptions = [
     { value: 'newest', label: tFilters('sortNewest'), href: sortHref('newest') },
-    { value: 'salary', label: tFilters('sortSalary'), href: sortHref('salary') },
+    {
+      value: 'salary',
+      label: tFilters(
+        sf.salaryUnit === 'hour' ? 'sortSalaryHourly' : 'sortSalary',
+      ),
+      href: sortHref('salary'),
+    },
   ] as const;
 
   const sortMenu = () => (

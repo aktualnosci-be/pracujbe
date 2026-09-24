@@ -2791,6 +2791,96 @@ select pg_temp.assert(
 reset role;
 
 -- ============================================================================
+-- SP188. Jednostka filtra/sortu wynagrodzeń (0091, #188): p_salary_unit.
+--        'month' = reguła 0080 bez zmian; 'hour' = tylko stawki godzinowe, miesięczne
+--        i roczne NIE są przeliczane na godziny (nieporównywalne → nie odpadają, sort na
+--        końcu). Fixture'y SAL + dwie stawki godzinowe o różnym wymiarze czasu pracy.
+-- ============================================================================
+\set JOBSPH2 'e8000000-0000-0000-0000-0000000000b7'
+\set JOBSPH3 'e8000000-0000-0000-0000-0000000000b8'
+reset role; reset app.current_uid;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,salary_period,working_hours,published_at) values
+  (:'JOBSPH2',:'COMPL','sal-h2','Salp188 H2','warehouse','permanent','Mechelen','Flandria','active','pl', 14, null, 'hour', '20 h/tydz.', now() - interval '7 hours'),
+  (:'JOBSPH3',:'COMPL','sal-h3','Salp188 H3','warehouse','permanent','Mechelen','Flandria','active','pl', 14, 16,   'hour', '38 h/tydz.', now() - interval '8 hours');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- SP188-1: kwota porównywalna w jednostce.
+select pg_temp.assert(public.job_comparable_salary(20, 'hour', 'hour') = 20
+  and public.job_comparable_salary(3000, 'month', 'hour') is null
+  and public.job_comparable_salary(36000, 'year', 'hour') is null
+  and public.job_comparable_salary(36000, 'year', 'month') = 3000
+  and public.job_comparable_salary(20, 'hour', 'month') is null
+  and public.job_comparable_salary(36000, 'year', 'week') = 3000,
+  'SP188-1 hour = tylko stawka godzinowa; month = reguła 0080; nieznana jednostka = month');
+
+-- SP188-2: od 18 EUR/godz. — 20–22/h przechodzi, 14/h i 14–16/h odpadają niezależnie od
+-- wymiaru czasu pracy; miesięczne, roczne i bez kwoty zostają (nieporównywalne).
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,18,null,null,null,null,null,'newest',100,0,'hour'))
+    = array['sal-h','sal-m','sal-m2','sal-n','sal-y','sal-y2'],
+  'SP188-2 filtr od 18 EUR/godz. porównuje wyłącznie stawki godzinowe');
+
+-- SP188-3 (kontrola ujemna): ten sam próg w jednostce miesięcznej (domyślnej) nie wyklucza
+-- stawek godzinowych i przepuszcza wszystkie kwoty miesięczne/roczne ≥ 18.
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,18,null,null,null,null,null,'newest',100,0)) = 8
+  and (select count(*) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,18,null,null,null,null,null,'newest',100,0,'month')) = 8,
+  'SP188-3 bez jednostki = month (0080), stawki godzinowe nie są filtrowane');
+
+-- SP188-4: sort po stawce godzinowej — godzinowe malejąco (remis → nowsze), reszta na końcu
+-- wg daty publikacji; sort miesięczny bez zmian względem SAL4.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,null,null,null,null,null,'salary',100,0,'hour'))
+    = array['sal-h','sal-h3','sal-h2','sal-m','sal-y','sal-m2','sal-y2','sal-n']
+  and (select array_agg(slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,null,null,null,null,null,'salary',100,0))
+    = array['sal-m','sal-y','sal-m2','sal-y2','sal-h','sal-n','sal-h2','sal-h3'],
+  'SP188-4 sort po stawce godzinowej; sort miesięczny jak 0080');
+
+-- SP188-5: licznik i facety w jednostce godzinowej zgodne z listingiem; do 15 EUR/godz.
+-- odpada tylko 20–22/h (14–16 zachodzi na widełki).
+select pg_temp.assert(
+  public.get_public_jobs_count('pl','salp188',null,null,null,null,18,null,null,null,null,null,'hour') = 6
+  and (select total from public.get_public_job_filter_facets(
+         'pl','salp188',null,null,null,null,18,null,null,null,null,null,'hour')
+       where dimension = 'total') = 6
+  and public.get_public_jobs_count('pl','salp188',null,null,null,null,null,15,null,null,null,null,'hour') = 7
+  and (select total from public.get_public_job_filter_facets(
+         'pl','salp188',null,null,null,null,null,15,null,null,null,null,'hour')
+       where dimension = 'total') = 7
+  and (select array_agg(slug order by slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,15,null,null,null,null,'newest',100,0,'hour'))
+    = array['sal-h2','sal-h3','sal-m','sal-m2','sal-n','sal-y','sal-y2'],
+  'SP188-5 licznik, facety i listing — ta sama reguła jednostki godzinowej');
+
+-- SP188-6: wywołania nazwane bez p_salary_unit (PostgREST/supabase-js) nie są
+-- niejednoznaczne — stare sygnatury usunięte, została jedna funkcja każdego RPC.
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs(p_locale => 'pl', p_keyword => 'salp188')) = 8
+  and public.get_public_jobs_count(p_keyword => 'salp188', p_city => null) = 8
+  and (select count(*) from pg_proc where pronamespace = 'public'::regnamespace
+         and proname in ('get_public_jobs','get_public_jobs_count','get_public_job_filter_facets')) = 3,
+  'SP188-6 jedna sygnatura każdego RPC, wywołanie nazwane bez jednostki działa');
+reset role;
+
+-- SP188-7: granty jak dotąd — anon/authenticated tak, PUBLIC nie.
+select pg_temp.assert(
+  has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text)', 'execute')
+  and has_function_privilege('authenticated', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
+  and not exists (
+    select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+    where p.pronamespace = 'public'::regnamespace
+      and p.proname in ('get_public_jobs','get_public_jobs_count','get_public_job_filter_facets')
+      and a.grantee = 0),
+  'SP188-7 granty anon/authenticated odtworzone, bez PUBLIC');
+
+-- ============================================================================
 -- ADM. RPC admina (0081, #420): macierz przejść, STALE_STATE, deleted_at, reopen
 -- ============================================================================
 reset role; reset app.current_uid;
@@ -4363,6 +4453,160 @@ select count(*) >= 0 as fn12 from public.job_funnel_daily \gset
 reset role;
 revoke select on public.job_funnel_daily from anon;
 select pg_temp.assert(:'fn12'::boolean, 'FN99-12 kontrola ujemna: z grantem anon czyta agregat (test FN99-6 by to wykrył)');
+
+-- ============================================================================
+-- BL97. Blokada firmy w wynikach listy ofert (0090, #97): get_public_jobs / _count /
+--       get_public_job_filter_facets pomijają oferty firm zablokowanych przez wywołującego.
+--       Dwie firmy × dwóch kandydatów; kontrole ujemne: gość, pracodawca, cudzy kandydat,
+--       bezpośredni DML blokad. Identyfikatory e9100….
+-- ============================================================================
+reset role; reset app.current_uid;
+\set B97C1 'e9100000-0000-0000-0000-0000000000c1'
+\set B97C2 'e9100000-0000-0000-0000-0000000000c2'
+\set B97E1 'e9100000-0000-0000-0000-0000000000e1'
+\set B97E2 'e9100000-0000-0000-0000-0000000000e2'
+\set B97F1 'e9100000-0000-0000-0000-0000000000f1'
+\set B97F2 'e9100000-0000-0000-0000-0000000000f2'
+\set B97J1 'e9100000-0000-0000-0000-0000000000b1'
+\set B97J2 'e9100000-0000-0000-0000-0000000000b2'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'B97C1','b97c1@test.be','B97 C1','{"role":"candidate","first_name":"Lista","last_name":"Jeden","locale":"pl"}'),
+  (:'B97C2','b97c2@test.be','B97 C2','{"role":"candidate","first_name":"Lista","last_name":"Dwa","locale":"fr"}'),
+  (:'B97E1','b97e1@test.be','B97 E1','{"role":"employer","first_name":"Rek","last_name":"Jeden","locale":"pl"}'),
+  (:'B97E2','b97e2@test.be','B97 E2','{"role":"employer","first_name":"Rek","last_name":"Dwa","locale":"nl"}');
+insert into public.companies(id,name,status) values
+  (:'B97F1','Firma Lista 1','verified'), (:'B97F2','Firma Lista 2','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'B97F1',:'B97E1','owner',true), (:'B97F2',:'B97E2','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'B97J1',:'B97F1','job-bl97-1','Kierowca bl97lista','transport','permanent','Gent','Flandria','active','pl'),
+  (:'B97J2',:'B97F2','job-bl97-2','Kierowca bl97lista','transport','permanent','Gent','Flandria','active','pl');
+
+-- Liczba ofert z listy / licznika / facetów dla bieżącego wywołującego (unikalne słowo kluczowe).
+create or replace function pg_temp.bl97_list() returns uuid[] language sql as $$
+  select coalesce(array_agg(id order by id), '{}')
+  from public.get_public_jobs('pl', 'bl97lista', null, null, null, null, null, null,
+                              null, null, null, null, 'newest', 20, 0);
+$$;
+create or replace function pg_temp.bl97_count() returns bigint language sql as $$
+  select public.get_public_jobs_count('pl', 'bl97lista');
+$$;
+create or replace function pg_temp.bl97_facet() returns bigint language sql as $$
+  select total from public.get_public_job_filter_facets('pl', 'bl97lista')
+  where dimension = 'total' and key = 'all';
+$$;
+
+-- BL97-0: przed blokadą kandydat widzi obie oferty (punkt odniesienia).
+set role authenticated; set app.current_uid = :'B97C1'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  pg_temp.bl97_list() = array[:'B97J1', :'B97J2']::uuid[]
+  and pg_temp.bl97_count() = 2 and pg_temp.bl97_facet() = 2,
+  'BL97-0 przed blokadą lista/licznik/facety z obiema ofertami');
+
+-- BL97-1: C1 blokuje F1 → lista, licznik i facety bez oferty F1.
+select public.set_company_block(:'B97F1'::uuid, true);
+select pg_temp.assert(
+  pg_temp.bl97_list() = array[:'B97J2']::uuid[]
+  and pg_temp.bl97_count() = 1 and pg_temp.bl97_facet() = 1,
+  'BL97-1 lista/licznik/facety kandydata pomijają firmę zablokowaną');
+select pg_temp.assert(
+  (select count(*) from public.get_public_job('job-bl97-1', 'pl')) = 1
+  and (select blocked from public.get_job_company_block(:'B97J1'::uuid)),
+  'BL97-1b publiczny URL oferty zablokowanej firmy dostępny (z opcją odblokowania)');
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'bl97lista', null, array['transport'], array['Gent'],
+                               array['permanent']) = 1,
+  'BL97-1c ten sam filtr blokady przy pozostałych filtrach listy');
+
+-- BL97-2: bezpośredni DML blokad odrzucony (kandydat pisze tylko przez RPC).
+select pg_temp.expect_error(
+  format('insert into public.candidate_company_blocks(candidate_id, company_id) values (%L, %L)',
+         :'B97C1', :'B97F2'),
+  'permission denied', 'BL97-2 bezpośredni INSERT blokady odrzucony');
+select pg_temp.expect_error(
+  format('delete from public.candidate_company_blocks where candidate_id = %L', :'B97C1'),
+  'permission denied', 'BL97-2b bezpośredni DELETE blokady odrzucony');
+select pg_temp.expect_error(
+  format('update public.candidate_company_blocks set company_id = %L where candidate_id = %L',
+         :'B97F2', :'B97C1'),
+  'permission denied', 'BL97-2c bezpośredni UPDATE blokady odrzucony');
+reset role;
+
+-- BL97-3: cudzy kandydat — blokada C1 go nie dotyczy, a jego „odblokowanie” nie usuwa blokady C1.
+set role authenticated; set app.current_uid = :'B97C2'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  pg_temp.bl97_list() = array[:'B97J1', :'B97J2']::uuid[]
+  and pg_temp.bl97_count() = 2 and pg_temp.bl97_facet() = 2,
+  'BL97-3 kontrola ujemna: drugi kandydat widzi obie oferty');
+select public.set_company_block(:'B97F1'::uuid, false);
+select public.set_company_block(:'B97F2'::uuid, true);
+select pg_temp.assert(
+  pg_temp.bl97_list() = array[:'B97J1']::uuid[],
+  'BL97-3b blokada drugiego kandydata działa tylko dla niego');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.candidate_company_blocks
+   where candidate_id = :'B97C1' and company_id = :'B97F1') = 1,
+  'BL97-3c cudzy kandydat nie odblokuje cudzej blokady');
+
+-- BL97-4: gość i pracodawcy (także firmy zablokowanej) — wynik publiczny bez zmian,
+-- bez informacji o blokadzie.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  pg_temp.bl97_list() = array[:'B97J1', :'B97J2']::uuid[]
+  and pg_temp.bl97_count() = 2 and pg_temp.bl97_facet() = 2,
+  'BL97-4 gość widzi obie oferty');
+reset role;
+set role authenticated; set app.current_uid = :'B97E1'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  pg_temp.bl97_list() = array[:'B97J1', :'B97J2']::uuid[]
+  and pg_temp.bl97_count() = 2
+  and (select count(*) from public.candidate_company_blocks) = 0,
+  'BL97-4b firma zablokowana widzi pełną listę i nie odczyta blokad');
+reset role;
+set role authenticated; set app.current_uid = :'B97E2'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  pg_temp.bl97_list() = array[:'B97J1', :'B97J2']::uuid[] and pg_temp.bl97_count() = 2,
+  'BL97-4c inna firma bez zmian');
+reset role;
+
+-- BL97-5: odblokowanie przywraca ofertę na liście, w liczniku i facetach.
+set role authenticated; set app.current_uid = :'B97C1'; select pg_temp.assert_client_role();
+select public.set_company_block(:'B97F1'::uuid, false);
+select pg_temp.assert(
+  pg_temp.bl97_list() = array[:'B97J1', :'B97J2']::uuid[]
+  and pg_temp.bl97_count() = 2 and pg_temp.bl97_facet() = 2,
+  'BL97-5 po odblokowaniu oferta wraca na listę');
+reset role; reset app.current_uid;
+
+-- BL97-6: historia propozycji po blokadzie — get_offered_jobs_display zwraca ofertę własnej
+-- propozycji (bez aplikacji do tej oferty) mimo blokady; cudzy kandydat i firma nic nie dostają.
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values
+  (:'B97C1', true, true);
+set role authenticated; set app.current_uid = :'B97E1'; select pg_temp.assert_client_role();
+select public.send_offer(:'B97J1'::uuid, :'B97C1'::uuid, 'bl97-offer-1') as b97offer \gset
+reset role;
+set role authenticated; set app.current_uid = :'B97C1'; select pg_temp.assert_client_role();
+select public.set_company_block(:'B97F1'::uuid, true);
+select pg_temp.assert(
+  (select count(*) from public.applications where job_id = :'B97J1') = 0
+  and not (:'B97J1'::uuid = any(pg_temp.bl97_list()))
+  and (select array_agg(job_id) from public.get_offered_jobs_display('pl')) = array[:'B97J1']::uuid[]
+  and (select title from public.get_offered_jobs_display('pl')) = 'Kierowca bl97lista',
+  'BL97-6 propozycja firmy zablokowanej zachowuje dane oferty w historii');
+reset role;
+set role authenticated; set app.current_uid = :'B97C2'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_offered_jobs_display('pl')) = 0,
+  'BL97-6b cudzy kandydat nie widzi danych cudzych propozycji');
+reset role;
+set role authenticated; set app.current_uid = :'B97E1'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_offered_jobs_display('pl')) = 0,
+  'BL97-6c firma nie dostaje nic z RPC kandydata');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.get_offered_jobs_display(''pl'')',
+  'permission denied', 'BL97-6d gość bez EXECUTE');
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- DSA41. Publiczne zgłoszenia treści i trwały model sprawy (0095, #41):

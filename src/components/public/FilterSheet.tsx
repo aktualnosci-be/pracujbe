@@ -19,15 +19,15 @@ import {
   CATEGORY_KEYS,
   CONTRACT_TYPES,
   DATE_VALUES,
-  SALARY_MAX_BOUND,
-  SALARY_MIN_BOUND,
-  SALARY_STEP,
+  SALARY_BOUNDS,
   countActiveSidebar,
   emptySidebarFilters,
+  isSalaryNarrowed,
   sidebarFiltersToParams,
   type SidebarFilters,
   type SortValue,
 } from '@/components/public/job-filters';
+import { SALARY_UNITS } from '@/lib/salary-compare';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 
@@ -92,6 +92,11 @@ function NoScriptFilterForm({
   const selectedLocations = initial.locations.join(',');
   const selectedContracts = initial.contractTypes.join(',');
   const selectedAccommodation = initial.accommodation.join(',');
+  // Bez JS jednostkę można zmienić razem z kwotami, więc pola przyjmują zakres obu
+  // jednostek (serwer przycina do widełek wybranej), a puste pole = pełne widełki.
+  const salaryNarrowed = isSalaryNarrowed(initial);
+  const salaryInputMin = Math.min(SALARY_BOUNDS.month.min, SALARY_BOUNDS.hour.min);
+  const salaryInputMax = Math.max(SALARY_BOUNDS.month.max, SALARY_BOUNDS.hour.max);
 
   const dateLabel = (option: (typeof DATE_VALUES)[number]): string => {
     if (option === '24h') return t('date24h');
@@ -169,20 +174,34 @@ function NoScriptFilterForm({
 
       <fieldset className="space-y-3 border-t border-border pt-5">
         <legend className="text-sm font-semibold text-foreground">
-          {t('salary')}
+          {initial.salaryUnit === 'hour' ? t('salaryHourly') : t('salary')}
         </legend>
+        <label className="block space-y-2 text-sm text-foreground">
+          <span>{t('salaryUnit')}</span>
+          <select
+            name="salaryUnit"
+            defaultValue={initial.salaryUnit}
+            className={controlClass}
+          >
+            {SALARY_UNITS.map((unit) => (
+              <option key={unit} value={unit}>
+                {unit === 'hour' ? t('salaryUnitHour') : t('salaryUnitMonth')}
+              </option>
+            ))}
+          </select>
+        </label>
         <p className="text-xs text-muted-foreground">
-          {t('salaryPeriodNote')}
+          {t('salaryPeriodNote')} {t('salaryHourlyNote')}
         </p>
         <label className="block space-y-2 text-sm text-foreground">
           <span>{t('salaryMin')}</span>
           <input
             type="number"
             name="salaryMin"
-            min={SALARY_MIN_BOUND}
-            max={SALARY_MAX_BOUND}
-            step={SALARY_STEP}
-            defaultValue={initial.salaryMin}
+            min={salaryInputMin}
+            max={salaryInputMax}
+            step={1}
+            defaultValue={salaryNarrowed ? initial.salaryMin : undefined}
             className={controlClass}
           />
         </label>
@@ -191,10 +210,10 @@ function NoScriptFilterForm({
           <input
             type="number"
             name="salaryMax"
-            min={SALARY_MIN_BOUND}
-            max={SALARY_MAX_BOUND}
-            step={SALARY_STEP}
-            defaultValue={initial.salaryMax}
+            min={salaryInputMin}
+            max={salaryInputMax}
+            step={1}
+            defaultValue={salaryNarrowed ? initial.salaryMax : undefined}
             className={controlClass}
           />
         </label>
