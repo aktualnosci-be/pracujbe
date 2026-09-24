@@ -31,7 +31,11 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         </Link>
         <LocaleSwitcher />
       </header>
-      <main className="flex flex-1 items-start justify-center px-4 pb-16">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex flex-1 items-start justify-center px-4 pb-16 outline-none"
+      >
         <div className="w-full max-w-md">{children}</div>
       </main>
     </div>

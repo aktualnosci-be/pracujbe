@@ -737,9 +737,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391), dialogi
   na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
   obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
-  na decyzję o workflow.
+  na decyzję o workflow. Font Inter jako podzbiór łaciński ~73 KB (#388, przepis
+  `scripts/subset-font.py`, fonty zastępcze z metrykami w `globals.css`) i baner zgód
+  w HTML z serwera, ukrywany przed malowaniem przy zapisanej zgodzie (`consent-boot.ts`, #389);
+  „Przejdź do treści” renderuje `[locale]/layout` przed banerem, każdy układ ma `#main-content`.
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
-  `locale` jawnie do Header/Footer/SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
+  `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
   `DATABASE_APP_URL` build nie czyta bazy (`prerenderParamsAtBuild` → strony na pierwsze żądanie);
   layout `(public)` odrzuca nieobsługiwany locale (`notFound`). Middleware: bramka hasła i
