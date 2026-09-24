@@ -630,6 +630,25 @@ unit `profile-visibility`; E2E `candidate-profile-visibility.spec`. **Otwarte:**
 od firmy odsłania jej imię i kontakt z konta (`company_can_view_candidate` po `offers`) —
 decyzja produktowo-prawna (#485/#34).
 
+Polityka wieku kandydatów (#492, migracja `0110` — numer tymczasowy): próg jako dane
+(`age_policy`, zakres 13–18, domyślnie 18, `confirmed=false` = do zatwierdzenia przez
+właściciela po przeglądzie prawnym; zmiana tylko `admin_set_candidate_min_age` z uzasadnieniem
+i audytem `age_policy.updated`). Minimalizacja: oświadczenie „mam co najmniej N lat” bez daty
+urodzenia (`candidate_age_attestations`, niezmienne, RPC-only). Deklaracja: rejestracja
+kandydata (`AgeDeclarationField` — osobny komponent obok zgód #493; Better Auth przez trigger
+`auth.record_signup_receipts`, Supabase Auth przez `record_candidate_age_attestation`),
+formularz gościa (`p_age_attested_min` → wrapper `submit_guest_application`), sekcja „Wiek”
+w `/candidate/ustawienia` (`attest_candidate_age`). Egzekwowanie w bazie triggerami: aplikacja
+i przejęcie aplikacji gościa, propozycja (neutralny błąd), włączenie widoczności (#494),
+zgłoszenie gościa. Podniesienie progu od razu ukrywa profile z niższą deklaracją. Formularze
+pokazują próg z `candidate_min_age()` (błąd odczytu → 18). Dowód: `rls.sql` sekcja AGE492
+(kontrole ujemne: bez triggera aplikacja/gość bez deklaracji przechodzą); unit `age-policy`;
+E2E `auth-age-declaration`, `guest-apply`. Szkic pytań prawnych (nieopublikowany):
+`docs/legal-drafts/kandydaci-niepelnoletni.md`. **Otwarte (właściciel/prawnik):** wybór
+wariantu, treść regulaminu/polityki, wariant z niepełnoletnimi (zgoda opiekuna, oznaczenie
+ofert, ograniczenia kontaktu/CV/AI), procedura dla wykrytego konta osoby niepełnoletniej,
+UI zmiany progu w panelu admina.
+
 Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
 `/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja
 `saveSearchAction`) zapisuje KANONICZNE filtry v1 = dokładnie argumenty `get_public_jobs`

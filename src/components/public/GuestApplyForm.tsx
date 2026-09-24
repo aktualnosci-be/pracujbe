@@ -5,6 +5,8 @@ import { MailCheck, Send } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { isTurnstileWidgetEnabled, TurnstileWidget, type TurnstileHandle } from '@/components/auth/TurnstileWidget';
+import { AgeDeclarationField } from '@/components/auth/AgeDeclarationField';
+import { CANDIDATE_MIN_AGE_FALLBACK } from '@/lib/age-policy/constants';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -63,6 +65,9 @@ import {
  *
  * Pytania screeningowe (#101): te same pola co w zwykłej aplikacji; pytanie wymagane bez
  * odpowiedzi blokuje wysyłkę przy pytaniu, a ten sam błąd z bazy (`questionId`) też tam trafia.
+ *
+ * Polityka wieku (#492): deklaracja „mam co najmniej {minAge} lat” (bez daty urodzenia) —
+ * próg z bazy; bez deklaracji baza odrzuca zgłoszenie (0110).
  */
 
 const DIAL_CODES: ReadonlyArray<{ code: PhoneCountry; dial: string }> = [
@@ -84,6 +89,8 @@ export interface GuestApplyFormProps {
   screeningQuestions?: ScreeningQuestion[];
   /** Język treści oferty — tekst pytania, gdy brak tłumaczenia w języku strony. */
   contentLocale?: string;
+  /** #492: próg wieku z bazy; brak → 18 (górna granica, spełnia każdy próg). */
+  candidateMinAge?: number;
 }
 
 export function GuestApplyForm({
@@ -91,6 +98,7 @@ export function GuestApplyForm({
   companyName,
   screeningQuestions = [],
   contentLocale,
+  candidateMinAge = CANDIDATE_MIN_AGE_FALLBACK,
 }: GuestApplyFormProps): React.JSX.Element {
   const t = useTranslations('guestApply');
   const ta = useTranslations('apply');
@@ -104,6 +112,7 @@ export function GuestApplyForm({
   const [availability, setAvailability] = React.useState<ApplyAvailabilityOption>('immediate');
   const [message, setMessage] = React.useState('');
   const [consent, setConsent] = React.useState(false);
+  const [ageConfirmed, setAgeConfirmed] = React.useState(false);
   const [answers, setAnswers] = React.useState<Record<string, ScreeningAnswerValue>>({});
   const [answerErrors, setAnswerErrors] = React.useState<Record<string, ScreeningAnswerError>>({});
   const [errors, setErrors] = React.useState<FieldErrors>({});
@@ -123,6 +132,7 @@ export function GuestApplyForm({
     phone: React.useRef<HTMLInputElement>(null),
     message: React.useRef<HTMLTextAreaElement>(null),
     consent: React.useRef<HTMLButtonElement>(null),
+    age: React.useRef<HTMLButtonElement>(null),
   };
   const formErrorRef = React.useRef<HTMLDivElement>(null);
   const sentHeadingRef = React.useRef<HTMLHeadingElement>(null);
@@ -169,13 +179,14 @@ export function GuestApplyForm({
     if (!name) next.fullName = t('error.nameRequired');
     if (!address) next.email = t('error.emailRequired');
     else if (!looksLikeEmail(address)) next.email = t('error.emailInvalid');
+    if (!ageConfirmed) next.age = t('error.ageConfirmRequired');
     if (!consent) next.consent = t('error.consentRequired');
     const missing = screeningQuestions.filter(
       (question) => question.required && isScreeningAnswerMissing(answers[question.id]),
     );
     setErrors(next);
     setAnswerErrors(Object.fromEntries(missing.map((question) => [question.id, true as const])));
-    // Fokus na pierwszym błędzie w kolejności formularza (Invariant #11): dane, pytania, zgoda.
+    // Fokus na pierwszym błędzie w kolejności formularza (Invariant #11): dane, pytania, wiek, zgoda.
     const firstField = (['fullName', 'email'] as const).find((field) => next[field]);
     if (firstField) {
       focusField(firstField);
@@ -183,6 +194,10 @@ export function GuestApplyForm({
     }
     if (missing[0]) {
       focusQuestion(missing[0].id);
+      return;
+    }
+    if (next.age) {
+      focusField('age');
       return;
     }
     if (next.consent) {
@@ -219,6 +234,8 @@ export function GuestApplyForm({
           message: trimmedMessage.length > 0 ? trimmedMessage : undefined,
           locale,
           agreeTerms: true,
+          ageConfirmed: true,
+          minAge: candidateMinAge,
           idempotencyKey: idempotencyKeyRef.current,
           ...(Object.keys(answerPayload).length > 0 ? { answers: answerPayload } : {}),
         },
@@ -252,6 +269,10 @@ export function GuestApplyForm({
     } else if (res.error === 'SCREENING_ANSWER_REQUIRED' && res.questionId) {
       setAnswerErrors({ [res.questionId]: true });
       focusQuestion(res.questionId);
+    } else if (res.field === 'age') {
+      // #492: brak deklaracji albo próg zmienił się po otwarciu formularza — dane zostają.
+      setErrors({ age: tRoot('errors.ageAttestationRequired') });
+      focusField('age');
     } else if (res.field) {
       setErrors({ [res.field]: tRoot('errors.validationFailed') });
       focusField(res.field);
@@ -423,6 +444,21 @@ export function GuestApplyForm({
           }
         }}
       />
+
+      <div className={FORM_FIELD}>
+        <AgeDeclarationField
+          ref={refs.age}
+          id="guest-apply-age"
+          variant="compact"
+          minAge={candidateMinAge}
+          checked={ageConfirmed}
+          onCheckedChange={(value) => {
+            setAgeConfirmed(value);
+            if (value && errors.age) setErrors((current) => ({ ...current, age: undefined }));
+          }}
+          error={errors.age ?? null}
+        />
+      </div>
 
       <div className={FORM_FIELD}>
         <div className="flex items-start gap-[9px]">

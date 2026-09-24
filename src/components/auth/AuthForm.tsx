@@ -35,6 +35,8 @@ import {
   type AuthActionResult,
 } from '@/lib/actions/auth';
 import type { TurnstileFlow } from '@/lib/turnstile/policy';
+import { CANDIDATE_MIN_AGE_FALLBACK } from '@/lib/age-policy/constants';
+import { AgeDeclarationField } from './AgeDeclarationField';
 import {
   isTurnstileWidgetEnabled,
   TurnstileWidget,
@@ -77,6 +79,9 @@ interface AuthFormValues extends FieldValues {
   lastName?: string;
   companyName?: string;
   agreeTerms?: boolean;
+  /** #492: deklaracja progu wieku (tylko rejestracja kandydata). */
+  ageConfirmed?: boolean;
+  minAge?: number;
 }
 
 const FIELDS: Record<AuthFormVariant, readonly FieldConfig[]> = {
@@ -124,6 +129,14 @@ const BOT_CHECK_FLOW: Record<AuthFormVariant, TurnstileFlow> = {
   reset: 'passwordReset',
 };
 
+/** #492: deklaracja progu wieku — tylko konto kandydata. */
+const SHOW_AGE: Record<AuthFormVariant, boolean> = {
+  login: false,
+  registerCandidate: true,
+  registerEmployer: false,
+  reset: false,
+};
+
 const SHOW_TERMS: Record<AuthFormVariant, boolean> = {
   login: false,
   registerCandidate: true,
@@ -137,13 +150,17 @@ function errorMessageKey(code: ErrorCode): string {
   return `errors.${camel}`;
 }
 
-function buildDefaults(variant: AuthFormVariant): DefaultValues<AuthFormValues> {
+function buildDefaults(variant: AuthFormVariant, minAge: number): DefaultValues<AuthFormValues> {
   const values: AuthFormValues = {};
   for (const field of FIELDS[variant]) {
     values[field.name] = '';
   }
   if (SHOW_TERMS[variant]) {
     values.agreeTerms = false;
+  }
+  if (SHOW_AGE[variant]) {
+    values.ageConfirmed = false;
+    values.minAge = minAge;
   }
   return values as DefaultValues<AuthFormValues>;
 }
@@ -157,9 +174,19 @@ export interface AuthFormProps {
    * Serwer waliduje go ponownie (`safeNextPath`). Używany przy logowaniu i rejestracji kandydata.
    */
   next?: string | null;
+  /**
+   * #492: próg wieku z bazy (`candidate_min_age()`), pokazany w deklaracji rejestracji
+   * kandydata. Brak → wartość awaryjna 18 (górna granica, spełnia każdy próg).
+   */
+  candidateMinAge?: number;
 }
 
-export function AuthForm({ variant, initialError = null, next = null }: AuthFormProps): React.JSX.Element {
+export function AuthForm({
+  variant,
+  initialError = null,
+  next = null,
+  candidateMinAge = CANDIDATE_MIN_AGE_FALLBACK,
+}: AuthFormProps): React.JSX.Element {
   const t = useTranslations('auth');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -193,7 +220,7 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
     formState: { errors, isSubmitting },
   } = useForm<AuthFormValues>({
     resolver,
-    defaultValues: buildDefaults(variant),
+    defaultValues: buildDefaults(variant, candidateMinAge),
     mode: 'onSubmit',
   });
 
@@ -238,6 +265,8 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
             firstName: values.firstName ?? '',
             lastName: values.lastName ?? '',
             agreeTerms: true,
+            ageConfirmed: true,
+            minAge: candidateMinAge,
             locale: locale as Locale,
           }, next, token);
           break;
@@ -338,6 +367,24 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
           </div>
         );
       })}
+
+      {SHOW_AGE[variant] ? (
+        <Controller
+          name="ageConfirmed"
+          control={control}
+          render={({ field }) => (
+            <AgeDeclarationField
+              ref={field.ref}
+              id="ageConfirmed"
+              minAge={candidateMinAge}
+              checked={field.value === true}
+              onCheckedChange={field.onChange}
+              onBlur={field.onBlur}
+              error={errors.ageConfirmed?.message ? tRoot(String(errors.ageConfirmed.message)) : null}
+            />
+          )}
+        />
+      ) : null}
 
       {SHOW_TERMS[variant] ? (
         <div className="space-y-1.5">

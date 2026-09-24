@@ -24,6 +24,8 @@ interface SignupMetadata {
   readonly first_name: string;
   readonly last_name: string;
   readonly company_name?: string;
+  /** #492: zadeklarowany próg wieku kandydata (bez daty urodzenia); trigger zapisuje receipt. */
+  readonly age_min_attested?: number;
 }
 
 interface SignupContext {
@@ -61,6 +63,7 @@ async function runSignup<T>(
     first_name: input.firstName,
     last_name: input.lastName,
     ...('companyName' in input ? { company_name: input.companyName } : {}),
+    ...('minAge' in input ? { age_min_attested: input.minAge } : {}),
   });
   const context: SignupContext = { credentials, metadata, active: true, admitted: false };
   return signupContext.run(context, async () => {

@@ -570,14 +570,17 @@
       "termsRequired": "You must accept the terms and privacy policy.",
       "companyNameRequired": "Enter the company name.",
       "companyNameTooShort": "The company name is too short.",
-      "companyNameTooLong": "The company name is too long."
+      "companyNameTooLong": "The company name is too long.",
+      "ageConfirmRequired": "Confirm that you are at least the required age."
     },
     "botCheckLabel": "Security check",
     "botCheckLoading": "Loading the security check…",
     "botCheckRequired": "Complete the security check above the button, then submit the form.",
     "botCheckExpired": "The check has expired. Please confirm it again.",
     "botCheckLoadFailed": "The security check couldn't load. Check your connection or turn off content blocking for this site, then try again.",
-    "botCheckRetry": "Reload the security check"
+    "botCheckRetry": "Reload the security check",
+    "ageConfirm": "I confirm that I am at least {age} years old.",
+    "ageConfirmHint": "We do not ask for your date of birth or an identity document."
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Work in Belgium without a CV",
@@ -626,7 +629,8 @@
     "guestApplyUnavailable": "Applying without an account is temporarily unavailable. Try again later or log in.",
     "emailNotVerified": "First confirm your account’s email address — click the link we sent when you registered.",
     "claimExpired": "The link to link the application has expired (it was valid for 30 days).",
-    "jobImportSensitiveData": "The listing contains a personal or document identification number, so we did not import it. Please fill in the form manually."
+    "jobImportSensitiveData": "The listing contains a personal or document identification number, so we did not import it. Please fill in the form manually.",
+    "ageAttestationRequired": "To continue, confirm that you are at least the required age. If the form was open for a long time, refresh the page."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -1184,7 +1188,9 @@
     "screeningYes": "Yes",
     "screeningNo": "No",
     "sensitiveIdHint": "Your application does not need a NISS/BIS number or an identity document number — please leave them out.",
-    "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
+    "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply.",
+    "ageRequired": "Before applying, confirm your age in your account settings.",
+    "ageRequiredLink": "Go to settings"
   },
   "guestApply": {
     "subtitle": "Apply without creating an account, or log in to use your profile. No CV needed.",
@@ -1237,7 +1243,8 @@
       "messageTooLong": "The message can have at most 500 characters.",
       "consentRequired": "You must accept the consent to send the application.",
       "idempotencyKeyInvalid": "Refresh the page and send the form again.",
-      "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
+      "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply.",
+      "ageConfirmRequired": "Confirm that you are at least the required age."
     }
   },
   "legal": {
@@ -1801,7 +1808,8 @@
     "casePriority": "Review priority: {priority}",
     "caseFlag": "Automated signal: {flag}",
     "auditActionModerationDecided": "Moderation decision",
-    "auditActionModerationRestored": "Restriction lifted"
+    "auditActionModerationRestored": "Restriction lifted",
+    "auditActionAgePolicyUpdated": "Candidate age threshold changed"
   },
   "settings": {
     "title": "Notification preferences",
@@ -2004,7 +2012,8 @@
     "savedOn": "Your profile is now visible to verified companies.",
     "savedOff": "Your profile is now hidden from company searches.",
     "saveError": "We couldn’t save the change. The setting has not changed — please try again.",
-    "loadError": "We couldn’t load your profile visibility setting. Refresh the page in a moment."
+    "loadError": "We couldn’t load your profile visibility setting. Refresh the page in a moment.",
+    "requiresAge": "To share your profile with companies, first confirm your age in the “Age” section."
   },
   "team": {
     "title": "Team",
@@ -2244,5 +2253,16 @@
     "outcomeLabel": "Outcome",
     "outcomeActionTaken": "We have taken action on the reported content.",
     "outcomeNoAction": "After review, we took no action on the reported content."
+  },
+  "ageAttestation": {
+    "sectionTitle": "Age",
+    "sectionDescription": "You can apply and share your profile with companies from the age of {age}. We store only your statement and its date — no date of birth.",
+    "stateOk": "Confirmed: you are at least {age} years old.",
+    "stateMissing": "Not confirmed. Without it you cannot apply or share your profile with companies.",
+    "submit": "Confirm",
+    "saving": "Saving…",
+    "saved": "Age confirmation saved.",
+    "saveError": "The confirmation could not be saved. Please try again.",
+    "loadError": "Your age confirmation information could not be loaded."
   }
 }

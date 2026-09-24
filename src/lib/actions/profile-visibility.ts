@@ -23,6 +23,8 @@ export type SetProfileVisibilityResult =
 
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  // 0110 (#492): profil bez ważnej deklaracji progu wieku nie staje się widoczny dla firm.
+  if (m.includes('AGE_ATTESTATION_REQUIRED')) return 'AGE_ATTESTATION_REQUIRED';
   if (m.includes('VALIDATION_FAILED')) return 'ONBOARDING_INCOMPLETE';
   if (m.includes('PERMISSION_DENIED') || m.includes('UNAUTHENTICATED') || m.includes('JWT')) {
     return 'PERMISSION_DENIED';

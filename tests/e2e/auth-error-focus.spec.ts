@@ -32,6 +32,7 @@ const forms: ReadonlyArray<{ path: string; fill: (page: Page) => Promise<void> }
       await page.locator('#email').fill('jan@example.com');
       await page.locator('#password').fill('Haslo1234');
       await page.locator('#passwordConfirm').fill('Haslo1234');
+      await page.locator('#ageConfirmed').press('Space');
       await page.locator('#agreeTerms').press('Space');
     },
   },

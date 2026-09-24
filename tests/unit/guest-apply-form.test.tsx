@@ -41,7 +41,12 @@ const REQUIRED_QUESTION = {
   options: [],
 };
 
-function renderForm(locale = 'en', messages: Messages = en, questions: (typeof REQUIRED_QUESTION)[] = []) {
+function renderForm(
+  locale = 'en',
+  messages: Messages = en,
+  questions: (typeof REQUIRED_QUESTION)[] = [],
+  candidateMinAge?: number,
+) {
   render(
     <NextIntlClientProvider locale={locale} messages={messages}>
       <GuestApplyForm
@@ -49,6 +54,7 @@ function renderForm(locale = 'en', messages: Messages = en, questions: (typeof R
         companyName="ACME"
         screeningQuestions={questions}
         contentLocale="en"
+        candidateMinAge={candidateMinAge}
       />
     </NextIntlClientProvider>,
   );
@@ -56,9 +62,15 @@ function renderForm(locale = 'en', messages: Messages = en, questions: (typeof R
   return {
     name: screen.getByRole('textbox', { name: new RegExp(m.fullName) }),
     email: screen.getByRole('textbox', { name: new RegExp(m.email) }),
+    age: screen.getByRole('checkbox', { name: ageLabel(messages, candidateMinAge ?? 18) }),
     consent: screen.getByRole('checkbox', { name: messages.apply.consent }),
     submit: screen.getByRole('button', { name: messages.apply.submit }),
   };
+}
+
+/** #492: etykieta deklaracji progu wieku z komunikatów (próg z serwera). */
+function ageLabel(messages: Messages, age: number): string {
+  return messages.auth.ageConfirm.replace('{age}', String(age));
 }
 
 describe('GuestApplyForm', () => {
@@ -70,14 +82,43 @@ describe('GuestApplyForm', () => {
     expect(f.name).toHaveAccessibleDescription(en.guestApply.error.nameRequired);
     expect(f.email).toHaveAccessibleDescription(en.guestApply.error.emailRequired);
     expect(f.consent).toHaveAccessibleDescription(en.guestApply.error.consentRequired);
+    expect(f.age).toHaveAccessibleDescription(new RegExp(en.guestApply.error.ageConfirmRequired));
     expect(document.activeElement).toBe(f.name);
+  });
+
+  it('#492: bez deklaracji wieku nic nie wysyłamy, fokus na deklaracji', () => {
+    const f = renderForm();
+    fireEvent.change(f.name, { target: { value: 'Anna' } });
+    fireEvent.change(f.email, { target: { value: 'anna@example.com' } });
+    fireEvent.click(f.consent);
+    fireEvent.click(f.submit);
+    expect(submitGuestApplication).not.toHaveBeenCalled();
+    expect(f.age).toHaveAttribute('aria-invalid', 'true');
+    expect(document.activeElement).toBe(f.age);
+  });
+
+  it('#492: próg z serwera trafia do etykiety i do akcji; odmowa bazy ląduje przy deklaracji', async () => {
+    vi.mocked(submitGuestApplication).mockResolvedValueOnce({ ok: false, error: 'AGE_ATTESTATION_REQUIRED', field: 'age' });
+    const f = renderForm('en', en, [], 16);
+    fireEvent.change(f.name, { target: { value: 'Anna' } });
+    fireEvent.change(f.email, { target: { value: 'anna@example.com' } });
+    fireEvent.click(f.age);
+    fireEvent.click(f.consent);
+    fireEvent.click(f.submit);
+    await waitFor(() => expect(submitGuestApplication).toHaveBeenCalledTimes(1));
+    const sent = vi.mocked(submitGuestApplication).mock.calls[0]![0];
+    expect(sent).toMatchObject({ ageConfirmed: true, minAge: 16 });
+    expect(JSON.stringify(sent)).not.toMatch(/birth/i);
+    await waitFor(() => expect(f.age).toHaveAttribute('aria-invalid', 'true'));
+    expect(f.age).toHaveAccessibleDescription(new RegExp(en.errors.ageAttestationRequired.slice(0, 30)));
+    expect(f.name).toHaveValue('Anna');
   });
 
   it('invalid address is flagged at the field', () => {
     const f = renderForm();
     fireEvent.change(f.name, { target: { value: 'Anna' } });
     fireEvent.change(f.email, { target: { value: 'anna@' } });
-    fireEvent.click(f.consent);
+    fireEvent.click(f.age);    fireEvent.click(f.consent);
     fireEvent.click(f.submit);
     expect(submitGuestApplication).not.toHaveBeenCalled();
     expect(f.email).toHaveAccessibleDescription(en.guestApply.error.emailInvalid);
@@ -93,7 +134,7 @@ describe('GuestApplyForm', () => {
       const f = renderForm(locale, m);
       fireEvent.change(f.name, { target: { value: 'Anna Nowak' } });
       fireEvent.change(f.email, { target: { value: 'anna@example.com' } });
-      fireEvent.click(f.consent);
+      fireEvent.click(f.age);      fireEvent.click(f.consent);
       fireEvent.click(f.submit);
 
       expect(await screen.findByRole('alert')).toHaveTextContent(m.apply.errorNetwork);
@@ -118,7 +159,7 @@ describe('GuestApplyForm', () => {
     fireEvent.change(f.name, { target: { value: 'Anna' } });
     fireEvent.change(f.email, { target: { value: 'anna@example.com' } });
     fireEvent.change(screen.getByRole('textbox', { name: en.guestApply.phoneOptional }), { target: { value: 'abc' } });
-    fireEvent.click(f.consent);
+    fireEvent.click(f.age);    fireEvent.click(f.consent);
     fireEvent.click(f.submit);
     await waitFor(() => expect(screen.getByRole('button', { name: en.apply.submitting })).toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: en.apply.submitting }));
@@ -134,7 +175,7 @@ describe('GuestApplyForm', () => {
     const f = renderForm('en', en, [REQUIRED_QUESTION]);
     fireEvent.change(f.name, { target: { value: 'Anna' } });
     fireEvent.change(f.email, { target: { value: 'anna@example.com' } });
-    fireEvent.click(f.consent);
+    fireEvent.click(f.age);    fireEvent.click(f.consent);
     fireEvent.click(f.submit);
     expect(submitGuestApplication).not.toHaveBeenCalled();
     expect(document.activeElement?.id).toBe(screeningFieldId(REQUIRED_QUESTION.id));
@@ -159,7 +200,7 @@ describe('GuestApplyForm', () => {
     const f = renderForm();
     fireEvent.change(f.name, { target: { value: 'Anna' } });
     fireEvent.change(f.email, { target: { value: 'anna@example.com' } });
-    fireEvent.click(f.consent);
+    fireEvent.click(f.age);    fireEvent.click(f.consent);
     fireEvent.click(f.submit);
     expect(await screen.findByRole('alert')).toHaveTextContent(en.errors.rateLimited);
     fireEvent.click(f.submit);

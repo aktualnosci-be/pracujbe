@@ -54,6 +54,24 @@ end $$;
 \set JOBB  'b1111111-1111-1111-1111-111111111111'
 \set JOBC  'c1111111-1111-1111-1111-111111111111'
 
+-- ---------------- FIXTURE #492: deklaracja wieku kont testowych ----------------
+-- Od 0110 aplikacja/propozycja/widoczność wymagają deklaracji progu wieku. Konta testowe
+-- sekcji sprzed #492 deklarują próg przy utworzeniu (jak formularz rejestracji). Sekcja AGE492
+-- wyłącza ten trigger i sprawdza konta BEZ deklaracji (kontrole ujemne).
+create schema if not exists test_fixture;
+create function test_fixture.attest_candidate_age() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if new.role = 'candidate' then
+    insert into public.candidate_age_attestations (profile_id, min_age, source)
+    values (new.id, 18, 'signup');
+  end if;
+  return new;
+end $$;
+create trigger zz_test_fixture_attest_candidate_age
+  after insert on public.profiles
+  for each row execute function test_fixture.attest_candidate_age();
+
 -- ---------------- SEED (jako superuser; profiles z triggera handle_new_user) ----------------
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CANDA','canda@test.be','Anna K','{"role":"candidate","first_name":"Anna","last_name":"K","locale":"pl"}'),
@@ -5804,7 +5822,7 @@ insert into public.consent_versions(id, document, version, locale, is_current, p
 -- GA98-1: klient nie woła RPC gościa i nie czyta zgłoszeń.
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
-  'select public.submit_guest_application(''' || :'GAJ' || ''', ''a@b.be'', ''A'', null, null, null, ''pl'', ''idem-ga-anon'', repeat(''n'',32), repeat(''a'',64))',
+  'select public.submit_guest_application(''' || :'GAJ' || ''', ''a@b.be'', ''A'', null, null, null, ''pl'', ''idem-ga-anon'', repeat(''n'',32), repeat(''a'',64), p_age_attested_min => 18)',
   'permission denied', 'GA98-1 anon bez EXECUTE submit_guest_application');
 select pg_temp.expect_error('select public.confirm_guest_application(repeat(''a'',64), repeat(''n'',32), repeat(''b'',64))',
   'permission denied', 'GA98-1b anon bez EXECUTE confirm_guest_application');
@@ -5822,10 +5840,10 @@ reset role; reset app.current_uid;
 set role service_role;
 select public.submit_guest_application(:'GAJ', ' GA-Guest@test.be ', 'Gosia Gość', '+32470123456',
   'immediate', 'Mogę od zaraz', 'nl', 'idem-ga-0001', 'nonce-ga-0001-aaaaaaaa',
-  encode(sha256('tok-ga-1'::bytea), 'hex'), '203.0.113.7', 'UA test') as gareq \gset
+  encode(sha256('tok-ga-1'::bytea), 'hex'), '203.0.113.7', 'UA test', p_age_attested_min => 18) as gareq \gset
 select public.submit_guest_application(:'GAJ', 'ga-guest@test.be', 'Gosia Gość', '+32470123456',
   'immediate', 'Mogę od zaraz', 'nl', 'idem-ga-0001', 'nonce-ga-0001-aaaaaaaa',
-  encode(sha256('tok-ga-1'::bytea), 'hex')) as gareq2 \gset
+  encode(sha256('tok-ga-1'::bytea), 'hex'), p_age_attested_min => 18) as gareq2 \gset
 reset role;
 select pg_temp.assert(:'gareq' = :'gareq2', 'GA98-2 ponowienie tym samym kluczem → to samo zgłoszenie');
 select pg_temp.assert(
@@ -5845,12 +5863,12 @@ select pg_temp.assert(
 set role service_role;
 select public.submit_guest_application(:'GAJ', 'ga-guest@test.be', 'Gosia Gość', '+32470123456',
   'immediate', 'Mogę od zaraz', 'nl', 'idem-ga-0002', 'nonce-ga-0002-aaaaaaaa',
-  encode(sha256('tok-ga-2'::bytea), 'hex')) as gareq3 \gset
+  encode(sha256('tok-ga-2'::bytea), 'hex'), p_age_attested_min => 18) as gareq3 \gset
 select pg_temp.expect_error(
-  'select public.submit_guest_application(''' || :'GAJ2' || ''', ''ga-guest@test.be'', ''G'', null, null, null, ''nl'', ''idem-ga-0002'', repeat(''n'',32), repeat(''c'',64))',
+  'select public.submit_guest_application(''' || :'GAJ2' || ''', ''ga-guest@test.be'', ''G'', null, null, null, ''nl'', ''idem-ga-0002'', repeat(''n'',32), repeat(''c'',64), p_age_attested_min => 18)',
   'VALIDATION_FAILED', 'GA98-2d klucz idempotencji z innego zgłoszenia → odrzucony');
 select pg_temp.expect_error(
-  'select public.submit_guest_application(''' || :'GAJ' || ''', ''zly-adres'', ''G'', null, null, null, ''nl'', ''idem-ga-bad1'', repeat(''n'',32), repeat(''c'',64))',
+  'select public.submit_guest_application(''' || :'GAJ' || ''', ''zly-adres'', ''G'', null, null, null, ''nl'', ''idem-ga-bad1'', repeat(''n'',32), repeat(''c'',64), p_age_attested_min => 18)',
   'VALIDATION_FAILED', 'GA98-2e niepoprawny e-mail → VALIDATION_FAILED');
 reset role;
 select pg_temp.assert(:'gareq3' = :'gareq'
@@ -5959,13 +5977,13 @@ reset role; reset app.current_uid;
 -- GA98-6: duplikat (ten sam adres, ta sama oferta) i wygasły link.
 set role service_role;
 select public.submit_guest_application(:'GAJ', 'ga-guest@test.be', 'Gosia', null, null, null, 'pl',
-  'idem-ga-0003', 'nonce-ga-0003-aaaaaaaa', encode(sha256('tok-ga-3'::bytea), 'hex')) as gadup \gset
+  'idem-ga-0003', 'nonce-ga-0003-aaaaaaaa', encode(sha256('tok-ga-3'::bytea), 'hex'), p_age_attested_min => 18) as gadup \gset
 select pg_temp.assert(
   (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-3'::bytea), 'hex'),
      'nonce-claim-ga-00003', encode(sha256('claim-ga-3'::bytea), 'hex'))) = 'duplicate',
   'GA98-6 drugi raz na tę samą ofertę → duplicate');
 select public.submit_guest_application(:'GAJ2', 'late@test.be', 'Late L', null, null, null, 'fr',
-  'idem-ga-0004', 'nonce-ga-0004-aaaaaaaa', encode(sha256('tok-ga-4'::bytea), 'hex')) as galate \gset
+  'idem-ga-0004', 'nonce-ga-0004-aaaaaaaa', encode(sha256('tok-ga-4'::bytea), 'hex'), p_age_attested_min => 18) as galate \gset
 reset role;
 update public.guest_application_requests set confirm_expires_at = now() - interval '1 minute' where id = :'galate';
 set role service_role;
@@ -5984,7 +6002,7 @@ select public.apply_to_job(:'GAJ3', 'idem-ga-gax-3');
 reset role; reset app.current_uid;
 set role service_role;
 select public.submit_guest_application(:'GAJ3', 'gax@test.be', 'Xavier', null, null, null, 'en',
-  'idem-ga-0005', 'nonce-ga-0005-aaaaaaaa', encode(sha256('tok-ga-5'::bytea), 'hex')) as gaacct \gset
+  'idem-ga-0005', 'nonce-ga-0005-aaaaaaaa', encode(sha256('tok-ga-5'::bytea), 'hex'), p_age_attested_min => 18) as gaacct \gset
 select pg_temp.assert(
   (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-5'::bytea), 'hex'),
      'nonce-claim-ga-00005', encode(sha256('claim-ga-5'::bytea), 'hex'))) = 'duplicate',
@@ -6048,7 +6066,7 @@ reset role; reset app.current_uid;
 -- GA98-11: wygasły token przejęcia.
 set role service_role;
 select public.submit_guest_application(:'GAJ2', 'gax@test.be', 'Xavier', null, null, null, 'en',
-  'idem-ga-0006', 'nonce-ga-0006-aaaaaaaa', encode(sha256('tok-ga-6'::bytea), 'hex')) as gaexp \gset
+  'idem-ga-0006', 'nonce-ga-0006-aaaaaaaa', encode(sha256('tok-ga-6'::bytea), 'hex'), p_age_attested_min => 18) as gaexp \gset
 select pg_temp.assert(
   (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-6'::bytea), 'hex'),
      'nonce-claim-ga-00006', encode(sha256('claim-ga-6'::bytea), 'hex'))) = 'confirmed',
@@ -6067,7 +6085,7 @@ reset role; reset app.current_uid;
 -- nie jest usuwane.
 set role service_role;
 select public.submit_guest_application(:'GAJ3', 'fresh@test.be', 'Fresh F', null, null, null, 'pl',
-  'idem-ga-0007', 'nonce-ga-0007-aaaaaaaa', encode(sha256('tok-ga-7'::bytea), 'hex')) as gafresh \gset
+  'idem-ga-0007', 'nonce-ga-0007-aaaaaaaa', encode(sha256('tok-ga-7'::bytea), 'hex'), p_age_attested_min => 18) as gafresh \gset
 reset role;
 update public.guest_application_requests
    set confirm_expires_at = now() - interval '6 days', created_at = now() - interval '8 days'
@@ -6109,14 +6127,14 @@ select id as gaq1 from public.job_screening_questions where job_id = :'GAJ4' and
 select id as gaq2 from public.job_screening_questions where job_id = :'GAJ4' and position = 1 \gset
 set role service_role;
 select pg_temp.expect_error(
-  'select public.submit_guest_application(''' || :'GAJ4' || ''', ''sq@test.be'', ''Sq'', null, null, null, ''pl'', ''idem-ga-sq-1'', ''nonce-ga-sq-1-aaaaaaaa'', ''' || encode(sha256('tok-ga-sq-0'::bytea), 'hex') || ''')',
+  'select public.submit_guest_application(''' || :'GAJ4' || ''', ''sq@test.be'', ''Sq'', null, null, null, ''pl'', ''idem-ga-sq-1'', ''nonce-ga-sq-1-aaaaaaaa'', ''' || encode(sha256('tok-ga-sq-0'::bytea), 'hex') || ''', p_age_attested_min => 18)',
   'SCREENING_ANSWER_REQUIRED: ' || :'gaq1', 'GA98-13 gość bez odpowiedzi na pytanie wymagane → odrzucony');
 select pg_temp.expect_error(
-  'select public.submit_guest_application(''' || :'GAJ4' || ''', ''sq@test.be'', ''Sq'', null, null, null, ''pl'', ''idem-ga-sq-2'', ''nonce-ga-sq-2-aaaaaaaa'', ''' || encode(sha256('tok-ga-sq-00'::bytea), 'hex') || ''', null, null, ''{"' || :'gaq1' || '": "tak"}''::jsonb)',
+  'select public.submit_guest_application(''' || :'GAJ4' || ''', ''sq@test.be'', ''Sq'', null, null, null, ''pl'', ''idem-ga-sq-2'', ''nonce-ga-sq-2-aaaaaaaa'', ''' || encode(sha256('tok-ga-sq-00'::bytea), 'hex') || ''', null, null, ''{"' || :'gaq1' || '": "tak"}''::jsonb, p_age_attested_min => 18)',
   'VALIDATION_FAILED', 'GA98-13b zły typ odpowiedzi → VALIDATION_FAILED');
 select public.submit_guest_application(:'GAJ4', 'sq@test.be', 'Sq Gość', null, null, null, 'pl',
   'idem-ga-sq-3', 'nonce-ga-sq-3-aaaaaaaa', encode(sha256('tok-ga-sq-3'::bytea), 'hex'), null, null,
-  jsonb_build_object(:'gaq1', true, :'gaq2', '  3 lata  ')) as gasq \gset
+  jsonb_build_object(:'gaq1', true, :'gaq2', '  3 lata  '), p_age_attested_min => 18) as gasq \gset
 reset role;
 select pg_temp.assert(
   (select screening_answers ? :'gaq1' from public.guest_application_requests where id = :'gasq')
@@ -6914,5 +6932,239 @@ select pg_temp.assert((select count(*) from public.moderation_decisions) = 5
   and (select count(*) from public.moderation_restorations) = 3,
   'MOD42-14d service_role czyta decyzje i przywrócenia');
 reset role;
+
+-- ============================================================================
+-- AGE492. Polityka wieku kandydatów (#492, 0110): próg jako dane (domyślnie 18,
+-- niezatwierdzony), deklaracja „mam co najmniej N lat” bez daty urodzenia, egzekwowana
+-- w bazie dla aplikacji, propozycji, widoczności profilu, aplikacji gościa i rejestracji.
+-- Fixture deklaracji jest tu WYŁĄCZONY — konta poniżej nie mają deklaracji, dopóki jej
+-- nie złożą. Kontrole ujemne: bez triggera aplikacja przechodzi (AGE9n), bez wrappera
+-- gość bez deklaracji przechodzi (AGE14n).
+-- ============================================================================
+reset role; reset app.current_uid;
+alter table public.profiles disable trigger zz_test_fixture_attest_candidate_age;
+\set AGC  'e4920000-0000-0000-0000-000000000001'
+\set AGC2 'e4920000-0000-0000-0000-000000000002'
+\set AGE  'e4920000-0000-0000-0000-000000000003'
+\set AGA  'e4920000-0000-0000-0000-000000000004'
+\set AGS1 'e4920000-0000-0000-0000-000000000005'
+\set AGS2 'e4920000-0000-0000-0000-000000000006'
+\set AGS3 'e4920000-0000-0000-0000-000000000007'
+\set AGS4 'e4920000-0000-0000-0000-000000000008'
+\set AGF  'e4920000-0000-0000-0000-0000000000f1'
+\set AGJ  'e4920000-0000-0000-0000-0000000000a1'
+\set AGJ2 'e4920000-0000-0000-0000-0000000000a2'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'AGC','agc@test.be','Age C','{"role":"candidate","first_name":"Ada","last_name":"C","locale":"pl"}'),
+  (:'AGC2','agc2@test.be','Age C2','{"role":"candidate","first_name":"Bo","last_name":"C2","locale":"nl"}'),
+  (:'AGE','age@test.be','Age E','{"role":"employer","first_name":"Rek","last_name":"E","locale":"fr"}'),
+  (:'AGA','aga@test.be','Age A','{"role":"employer","first_name":"Ad","last_name":"A","locale":"en"}');
+update public.profiles set role = 'admin' where id = :'AGA';
+insert into public.companies(id,name,status) values (:'AGF','Firma Age','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'AGF',:'AGE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'AGJ',:'AGF','age-job','Magazynier AGE','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'AGJ2',:'AGF','age-job-2','Kierowca AGE','transport','permanent','Gent','Flandria','active','pl');
+
+-- AGE1: próg jako dane — domyślnie 18 i niezatwierdzony; odczyt progu publiczny, tabela nie.
+select pg_temp.assert(
+  (select candidate_min_age = 18 and not confirmed from public.age_policy)
+  and (select count(*) from public.candidate_age_attestations where profile_id in (:'AGC', :'AGC2')) = 0,
+  'AGE1 domyślny próg 18, confirmed=false; konta bez deklaracji');
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(public.candidate_min_age() = 18, 'AGE1b anon odczytuje próg');
+select pg_temp.expect_error('select * from public.age_policy', 'permission denied',
+  'AGE1c anon nie czyta tabeli polityki');
+select pg_temp.expect_error('select public.attest_candidate_age(18)', 'permission denied',
+  'AGE1d anon nie składa deklaracji');
+reset role;
+
+-- AGE2: kandydat bez deklaracji nie aplikuje (i nie powstaje wiersz).
+set role authenticated; set app.current_uid = :'AGC'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.apply_to_job(%L, ''idem-age-1'', null, null, ''x'')', :'AGJ'),
+  'AGE_ATTESTATION_REQUIRED', 'AGE2 aplikacja bez deklaracji odrzucona');
+select pg_temp.assert(
+  (select meets_policy is false and attested_min_age is null and required_min_age = 18
+   from public.get_my_age_attestation()),
+  'AGE2b stan deklaracji: brak, wymagane 18');
+-- AGE3: deklaracja poniżej progu, poza zakresem, pusta.
+select pg_temp.expect_error('select public.attest_candidate_age(17)', 'AGE_ATTESTATION_REQUIRED',
+  'AGE3 deklaracja poniżej progu odrzucona');
+select pg_temp.expect_error('select public.attest_candidate_age(null)', 'AGE_ATTESTATION_REQUIRED',
+  'AGE3b pusta deklaracja odrzucona');
+select pg_temp.expect_error('select public.attest_candidate_age(19)', 'VALIDATION_FAILED',
+  'AGE3c deklaracja powyżej 18 poza zakresem');
+-- AGE4: receipt tylko przez RPC.
+select pg_temp.expect_error(
+  format('insert into public.candidate_age_attestations(profile_id, min_age, source) values (%L, 18, ''self'')', :'AGC'),
+  'permission denied', 'AGE4 klient nie wstawia deklaracji bezpośrednio');
+select public.set_candidate_searchable(false);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.applications where candidate_id = :'AGC') = 0
+  and (select count(*) from public.candidate_age_attestations where profile_id = :'AGC') = 0,
+  'AGE4b odrzucone próby nie zostawiają wierszy');
+
+-- AGE5: pracodawca nie składa deklaracji kandydata.
+set role authenticated; set app.current_uid = :'AGE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.attest_candidate_age(18)', 'PERMISSION_DENIED',
+  'AGE5 deklaracja tylko dla kandydata');
+reset role; reset app.current_uid;
+
+-- AGE6: profil bez deklaracji nie staje się widoczny dla firm — także zapisem systemowym.
+select pg_temp.expect_error(
+  format('update public.candidate_profiles set is_searchable = true where profile_id = %L', :'AGC'),
+  'AGE_ATTESTATION_REQUIRED', 'AGE6 widoczność bez deklaracji odrzucona (chokepoint triggera)');
+
+-- AGE8: deklaracja 18 → aplikacja przechodzi; ponowienie bez duplikatu; receipt niezmienny.
+set role authenticated; set app.current_uid = :'AGC'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.attest_candidate_age(18) is true, 'AGE8 deklaracja 18 spełnia próg');
+select pg_temp.assert(public.attest_candidate_age(18) is true, 'AGE8b ponowienie deklaracji');
+select pg_temp.assert(
+  (select meets_policy and attested_min_age = 18 and attested_at is not null from public.get_my_age_attestation())
+  and (select count(*) from public.candidate_age_attestations) = 1,
+  'AGE8c jedna deklaracja (widzi tylko własną), stan spełniony');
+select public.apply_to_job(:'AGJ', 'idem-age-2', null, null, 'Chętnie') as agapp \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.candidate_age_attestations where profile_id = :'AGC' and source = 'self'
+     and locale = 'pl') = 1
+  and (select status = 'submitted' from public.applications where id = :'agapp'),
+  'AGE9 po deklaracji aplikacja zapisana; receipt: źródło self, język konta');
+select pg_temp.expect_error(
+  format('update public.candidate_age_attestations set min_age = 13 where profile_id = %L', :'AGC'),
+  'PERMISSION_DENIED', 'AGE9b receipt niezmienny także dla właściciela bazy');
+
+-- AGE9n: kontrola ujemna — bez triggera kandydat bez deklaracji aplikuje (test zależy od 0110).
+begin;
+drop trigger trg_applications_age_policy on public.applications;
+set local app.current_uid = :'AGC2'; set local role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(public.apply_to_job(:'AGJ', 'idem-age-neg', null, null, 'x') is not null,
+  'AGE9n kontrola ujemna: bez triggera aplikacja bez deklaracji przechodzi');
+rollback;
+
+-- AGE10: zmiana progu tylko przez admina, z audytem.
+set role authenticated; set app.current_uid = :'AGE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, false, ''test'')',
+  'PERMISSION_DENIED', 'AGE10 pracodawca nie zmienia progu');
+reset role;
+set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(12, false, ''test'')',
+  'VALIDATION_FAILED', 'AGE10b próg poniżej 13 odrzucony');
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, false, ''  '')',
+  'VALIDATION_FAILED', 'AGE10c zmiana bez uzasadnienia odrzucona');
+select pg_temp.assert(public.admin_set_candidate_min_age(16, false, 'Wariant roboczy do testu') = 0,
+  'AGE10d obniżenie progu nikogo nie ukrywa');
+reset role; reset app.current_uid;
+select pg_temp.assert(public.candidate_min_age() = 16
+  and exists (select 1 from public.audit_logs where action = 'age_policy.updated' and actor_id = :'AGA'
+                and (before_data->>'candidate_min_age')::int = 18 and (after_data->>'candidate_min_age')::int = 16),
+  'AGE10e próg 16 w bazie + audit_logs z wartością przed/po');
+
+-- AGE11: przy progu 16 deklaracja 16 wystarcza (aplikacja + widoczność).
+set role authenticated; set app.current_uid = :'AGC2'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.attest_candidate_age(16) is true, 'AGE11 deklaracja 16 przy progu 16');
+select public.set_candidate_searchable(false);
+select public.apply_to_job(:'AGJ', 'idem-age-3', null, null, 'x') as agapp2 \gset
+reset role; reset app.current_uid;
+update public.candidate_profiles set is_searchable = true, profile_completed = true where profile_id = :'AGC2';
+select pg_temp.assert((select is_searchable from public.candidate_profiles where profile_id = :'AGC2'),
+  'AGE11b profil z deklaracją 16 może być widoczny przy progu 16');
+
+-- AGE12: podniesienie progu ukrywa profile z niższą deklaracją (historia + audyt).
+set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.admin_set_candidate_min_age(18, false, 'Powrót do wariantu 18+') = 1,
+  'AGE12 podniesienie progu zwraca liczbę ukrytych profili');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select not is_searchable and searchable_changed_at is not null from public.candidate_profiles where profile_id = :'AGC2')
+  and (select count(*) from public.candidate_visibility_events where candidate_id = :'AGC2' and not searchable) = 1
+  and exists (select 1 from public.audit_logs where action = 'age_policy.updated'
+                and (after_data->>'hidden_profiles')::int = 1),
+  'AGE12b profil ukryty, zdarzenie widoczności, audyt z liczbą');
+
+-- AGE13: po podniesieniu progu — nowa aplikacja i propozycja od firmy zablokowane.
+set role authenticated; set app.current_uid = :'AGC2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.apply_to_job(%L, ''idem-age-4'', null, null, ''x'')', :'AGJ2'),
+  'AGE_ATTESTATION_REQUIRED', 'AGE13 deklaracja 16 nie wystarcza przy progu 18');
+select pg_temp.assert((select meets_policy is false and attested_min_age = 16 from public.get_my_age_attestation()),
+  'AGE13b stan: deklaracja 16, wymagana ponowna');
+reset role;
+set role authenticated; set app.current_uid = :'AGE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.send_offer(%L::uuid, %L::uuid, ''off-age-1'', ''x'', null)', :'AGJ', :'AGC2'),
+  'PERMISSION_DENIED: brak relacji', 'AGE13c propozycja dla osoby bez ważnej deklaracji — neutralny błąd');
+select pg_temp.assert(public.send_offer(:'AGJ'::uuid, :'AGC'::uuid, 'off-age-2', 'Zapraszamy', null) is not null,
+  'AGE13d kontrola dodatnia: propozycja dla osoby z deklaracją 18 przechodzi');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'AGC2'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.attest_candidate_age(18) is true, 'AGE13e ponowna deklaracja 18 przywraca aplikowanie');
+select pg_temp.assert(public.apply_to_job(:'AGJ2', 'idem-age-5', null, null, 'x') is not null,
+  'AGE13f aplikacja po ponownej deklaracji');
+reset role; reset app.current_uid;
+
+-- AGE14: aplikacja gościa wymaga deklaracji; funkcja core niedostępna i bez deklaracji odrzuca.
+set role service_role;
+select pg_temp.expect_error(
+  format('select public.submit_guest_application(%L, ''age-g@test.be'', ''G'', null, null, null, ''pl'', ''idem-age-g1'', repeat(''n'',32), repeat(''a'',64))', :'AGJ'),
+  'AGE_ATTESTATION_REQUIRED', 'AGE14 gość bez deklaracji odrzucony');
+select pg_temp.expect_error(
+  format('select public.submit_guest_application(%L, ''age-g@test.be'', ''G'', null, null, null, ''pl'', ''idem-age-g1'', repeat(''n'',32), repeat(''a'',64), p_age_attested_min => 17)', :'AGJ'),
+  'AGE_ATTESTATION_REQUIRED', 'AGE14b gość z deklaracją poniżej progu odrzucony');
+select pg_temp.expect_error(
+  format('select public.submit_guest_application_core(%L, ''age-g@test.be'', ''G'', null, null, null, ''pl'', ''idem-age-g1'', repeat(''n'',32), repeat(''a'',64))', :'AGJ'),
+  'permission denied', 'AGE14c service_role nie woła funkcji core');
+select public.submit_guest_application(:'AGJ', 'age-g@test.be', 'G', null, null, null, 'pl',
+  'idem-age-g2', repeat('n',32), repeat('b',64), p_age_attested_min => 18) as agguest \gset
+reset role;
+select pg_temp.assert(
+  (select age_attested_min = 18 and age_attested_at is not null from public.guest_application_requests where id = :'agguest')
+  and (select count(*) from public.guest_application_requests where job_id = :'AGJ') = 1,
+  'AGE14d zgłoszenie gościa z zapisanym progiem deklaracji (bez daty urodzenia)');
+select pg_temp.expect_error(
+  format('select public.submit_guest_application_core(%L, ''age-h@test.be'', ''H'', null, null, null, ''pl'', ''idem-age-g3'', repeat(''n'',32), repeat(''c'',64))', :'AGJ'),
+  'AGE_ATTESTATION_REQUIRED', 'AGE14e core bez deklaracji odrzucony także dla właściciela (trigger)');
+-- AGE14n: kontrola ujemna — bez triggera core zapisuje zgłoszenie bez deklaracji.
+begin;
+drop trigger trg_guest_application_requests_age_policy on public.guest_application_requests;
+select pg_temp.assert(public.submit_guest_application_core(:'AGJ', 'age-h@test.be', 'H', null, null, null, 'pl',
+  'idem-age-g4', repeat('n',32), repeat('d',64)) is not null,
+  'AGE14n kontrola ujemna: bez triggera zgłoszenie bez deklaracji przechodzi');
+rollback;
+
+-- AGE15: rejestracja (Better Auth, trigger auth.record_signup_receipts) — deklaracja w tej samej
+-- transakcji co konto; bez niej albo poniżej progu konto nie powstaje.
+select pg_temp.expect_error(
+  format($$insert into auth.users(id,email,name,raw_user_meta_data) values (%L, 'ags1@test.be', 'S1',
+    '{"signup_receipt_version":1,"agree_terms":true,"role":"candidate","locale":"pl","first_name":"S","last_name":"1"}')$$, :'AGS1'),
+  'AGE_ATTESTATION_REQUIRED', 'AGE15 rejestracja kandydata bez deklaracji odrzucona');
+select pg_temp.expect_error(
+  format($$insert into auth.users(id,email,name,raw_user_meta_data) values (%L, 'ags2@test.be', 'S2',
+    '{"signup_receipt_version":1,"agree_terms":true,"role":"candidate","locale":"pl","first_name":"S","last_name":"2","age_min_attested":16}')$$, :'AGS2'),
+  'AGE_ATTESTATION_REQUIRED', 'AGE15b rejestracja z deklaracją poniżej progu odrzucona');
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'AGS3', 'ags3@test.be', 'S3',
+   '{"signup_receipt_version":1,"agree_terms":true,"role":"candidate","locale":"fr","first_name":"S","last_name":"3","age_min_attested":18}'),
+  (:'AGS4', 'ags4@test.be', 'S4',
+   '{"signup_receipt_version":1,"agree_terms":true,"role":"employer","locale":"nl","first_name":"S","last_name":"4"}');
+select pg_temp.assert(
+  not exists (select 1 from auth.users where id in (:'AGS1', :'AGS2'))
+  and (select count(*) from public.candidate_age_attestations
+        where profile_id = :'AGS3' and min_age = 18 and source = 'signup' and locale = 'fr') = 1
+  and (select count(*) from public.candidate_age_attestations where profile_id = :'AGS4') = 0
+  and (select count(*) from public.document_acceptances where profile_id = :'AGS3') = 2,
+  'AGE15c rejestracja kandydata zapisuje deklarację i akceptacje; pracodawca bez deklaracji');
+
+-- AGE16: service_role (akcja rejestracji Supabase Auth) — ten sam kontrakt.
+set role service_role;
+select pg_temp.expect_error(format('select public.record_candidate_age_attestation(%L, 17, ''pl'')', :'AGC2'),
+  'AGE_ATTESTATION_REQUIRED', 'AGE16 receipt rejestracji poniżej progu odrzucony');
+select pg_temp.expect_error(format('select public.record_candidate_age_attestation(%L, 18, ''pl'')', :'AGE'),
+  'PERMISSION_DENIED', 'AGE16b receipt tylko dla konta kandydata');
+reset role;
+set role authenticated; set app.current_uid = :'AGC'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.record_candidate_age_attestation(%L, 18, ''pl'')', :'AGC2'),
+  'permission denied', 'AGE16c klient nie zapisuje receiptu rejestracji');
+reset role; reset app.current_uid;
+alter table public.profiles enable trigger zz_test_fixture_attest_candidate_age;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

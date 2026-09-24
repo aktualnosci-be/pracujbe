@@ -92,3 +92,10 @@ describe('applyToJob — błędy RPC (#361)', () => {
     );
   });
 });
+
+describe('applyToJob — polityka wieku (#492)', () => {
+  it('odmowa bazy bez ważnej deklaracji wieku ma własny kod (komunikat z linkiem do ustawień)', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'AGE_ATTESTATION_REQUIRED' } });
+    expect(await applyToJob(input)).toEqual({ ok: false, error: 'AGE_ATTESTATION_REQUIRED' });
+  });
+});

@@ -55,8 +55,12 @@ const candidate = {
   firstName: 'Jan',
   lastName: 'Kowalski',
   locale: 'pl' as const,
+  // #492: deklaracja progu wieku kandydata (bez daty urodzenia).
+  ageConfirmed: true as const,
+  minAge: 18,
 };
-const employer = { ...candidate, companyName: 'Firma Testowa' };
+const { ageConfirmed: _age, minAge: _minAge, ...employerBase } = candidate;
+const employer = { ...employerBase, companyName: 'Firma Testowa' };
 
 async function outcome(run: () => Promise<unknown>): Promise<unknown> {
   try {
@@ -143,5 +147,50 @@ describe('rejestracja ze zgodą — receipt akceptacji jest obowiązkowy', () =>
     const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
     expect(result).toEqual({ ok: false, error: 'INTERNAL' });
     expect(mocks.deleteUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('rejestracja kandydata — deklaracja progu wieku (#492)', () => {
+  it.each([
+    ['brak deklaracji', { ageConfirmed: undefined }],
+    ['deklaracja false', { ageConfirmed: false }],
+    ['brak progu', { minAge: undefined }],
+    ['próg poza zakresem', { minAge: 19 }],
+  ])('%s — odrzucone, konto nie powstaje', async (_label, extra) => {
+    const { registerCandidate } = await import('@/lib/actions/auth');
+    const input = { ...candidate, agreeTerms: true, ...extra } as unknown as Parameters<typeof registerCandidate>[0];
+    const result = await outcome(() => registerCandidate(input));
+    expect(result).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(mocks.signUp).not.toHaveBeenCalled();
+  });
+
+  it('zapisuje deklarację (sam próg, bez daty urodzenia) razem z receiptem dokumentów', async () => {
+    const { registerCandidate } = await import('@/lib/actions/auth');
+    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
+    expect(result).toEqual({ redirect: '/pl/potwierdzenie' });
+    expect(mocks.rpc).toHaveBeenCalledWith('record_candidate_age_attestation', {
+      p_profile_id: USER_ID,
+      p_min_age: 18,
+      p_locale: 'pl',
+    });
+  });
+
+  it('próg w bazie wyższy niż zadeklarowany — konto cofnięte, kod AGE_ATTESTATION_REQUIRED', async () => {
+    mocks.rpc.mockImplementation(async (name: string) =>
+      name === 'record_candidate_age_attestation'
+        ? { data: null, error: { message: 'AGE_ATTESTATION_REQUIRED' } }
+        : { data: null, error: null },
+    );
+    const { registerCandidate } = await import('@/lib/actions/auth');
+    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
+    expect(result).toEqual({ ok: false, error: 'AGE_ATTESTATION_REQUIRED' });
+    expect(mocks.deleteUser).toHaveBeenCalledWith(USER_ID);
+  });
+
+  it('pracodawca nie składa deklaracji wieku kandydata', async () => {
+    const { registerEmployer } = await import('@/lib/actions/auth');
+    const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true }));
+    expect(result).toEqual({ redirect: '/pl/potwierdzenie' });
+    expect(mocks.rpc).not.toHaveBeenCalledWith('record_candidate_age_attestation', expect.anything());
   });
 });

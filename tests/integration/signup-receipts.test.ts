@@ -84,6 +84,24 @@ describe('Atomowe receipty rejestracji', () => {
       expect((await admin!.query('SELECT id FROM public.document_acceptances WHERE profile_id=$1', [id])).rows).toHaveLength(0);
     });
 
+  // #492 (0110): kandydat deklaruje próg wieku w tej samej transakcji co konto.
+  it('zapisuje deklarację progu wieku kandydata (bez daty urodzenia)', async () => {
+    const id = await insert({ role: 'candidate', locale: 'nl', agree_terms: true, signup_receipt_version: 1, age_min_attested: 18 });
+    const rows = await admin!.query('SELECT min_age, source, locale FROM public.candidate_age_attestations WHERE profile_id=$1', [id]);
+    expect(rows.rows).toEqual([{ min_age: 18, source: 'signup', locale: 'nl' }]);
+  });
+
+  it.each([[{}], [{ age_min_attested: 16 }], [{ age_min_attested: '18' }]] as const)(
+    'odrzuca rejestrację kandydata bez ważnej deklaracji wieku: %j', async (age) => {
+      const id = randomUUID();
+      await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1, ...age }, id))
+        .rejects.toMatchObject({ message: expect.stringContaining('AGE_ATTESTATION_REQUIRED') });
+      for (const table of ['auth.users', 'public.profiles']) {
+        expect((await admin!.query(`SELECT id FROM ${table} WHERE id=$1`, [id])).rows).toHaveLength(0);
+      }
+      expect((await admin!.query('SELECT id FROM public.candidate_age_attestations WHERE profile_id=$1', [id])).rows).toHaveLength(0);
+    });
+
   it('nie przypisuje fikcyjnej akceptacji kontu technicznemu bez markera', async () => {
     const id = await insert({ role: 'candidate', locale: 'pl' });
     expect((await admin!.query('SELECT id FROM public.document_acceptances WHERE profile_id=$1', [id])).rows).toHaveLength(0);
@@ -95,7 +113,8 @@ describe('Atomowe receipty rejestracji', () => {
       CREATE TRIGGER fail_receipt_test BEFORE INSERT ON public.document_acceptances FOR EACH ROW EXECUTE FUNCTION public.fail_receipt_test();`);
     const id = randomUUID();
     try {
-      await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1 }, id)).rejects.toThrow('kontrolowana awaria receiptu');
+      await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1, age_min_attested: 18 }, id))
+        .rejects.toThrow('kontrolowana awaria receiptu');
       expect((await admin!.query('SELECT id FROM auth.users WHERE id=$1', [id])).rows).toHaveLength(0);
       expect((await admin!.query('SELECT id FROM public.profiles WHERE id=$1', [id])).rows).toHaveLength(0);
     } finally {

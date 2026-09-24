@@ -96,6 +96,8 @@ export async function createStack(): Promise<Stack> {
 
   const form = (email: string, locale: Locale, [firstName, lastName]: [string, string]) => ({
     email, locale, password: PASSWORD, passwordConfirm: PASSWORD, firstName, lastName, agreeTerms: true,
+    // #492: deklaracja progu wieku (bez daty urodzenia) — rejestracja kandydata jej wymaga.
+    ageConfirmed: true, minAge: 18,
   });
 
   return {

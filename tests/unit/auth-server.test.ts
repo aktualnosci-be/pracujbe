@@ -62,12 +62,18 @@ const candidate = {
   firstName: ' Anna ',
   lastName: ' Nowak ',
   agreeTerms: true,
+  ageConfirmed: true,
+  minAge: 18,
 };
 
 describe('Serwerowy kontekst rejestracji', () => {
   it.each([
     { agreeTerms: false },
     { agreeTerms: undefined },
+    // #492: bez deklaracji progu wieku kandydat nie przechodzi do SDK.
+    { ageConfirmed: false },
+    { minAge: undefined },
+    { minAge: 12 },
     { passwordConfirm: 'DifferentPassword123' },
     { password: 'abcdefgh', passwordConfirm: 'abcdefgh' },
     { locale: 'de' },
@@ -95,7 +101,7 @@ describe('Serwerowy kontekst rejestracji', () => {
       authorizeSignupRequest(body);
       expect(signupMetadataForUser(body)).toEqual({
         signup_receipt_version: 1, agree_terms: true, role: 'candidate', locale: 'fr',
-        first_name: 'Anna', last_name: 'Nowak',
+        first_name: 'Anna', last_name: 'Nowak', age_min_attested: 18,
       });
     });
   });

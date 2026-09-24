@@ -47,6 +47,8 @@ const guestInput = {
   email: 'anna@example.com',
   locale: 'pl' as const,
   agreeTerms: true as const,
+  ageConfirmed: true as const,
+  minAge: 18,
   idempotencyKey: '22222222-2222-4222-8222-222222222222',
 };
 

@@ -116,6 +116,7 @@ type FormError =
   | 'candidateOnly'
   | 'rateLimited'
   | 'jobNotActive'
+  | 'ageRequired'
   | 'demo';
 type PhoneError = 'required' | 'invalid';
 
@@ -133,6 +134,8 @@ export interface ApplyModalProps {
   screeningQuestions?: ScreeningQuestion[];
   /** Język treści oferty — tekst pytania, gdy brak tłumaczenia w języku strony. */
   contentLocale?: string;
+  /** #492: próg wieku z bazy dla deklaracji w formularzu gościa. */
+  candidateMinAge?: number;
 }
 
 export function ApplyModal({
@@ -146,6 +149,7 @@ export function ApplyModal({
   demo = false,
   screeningQuestions = [],
   contentLocale,
+  candidateMinAge,
 }: ApplyModalProps): React.JSX.Element {
   const t = useTranslations('apply');
   const tCommon = useTranslations('common');
@@ -331,6 +335,9 @@ export function ApplyModal({
       setFormError('rateLimited');
     } else if (res.error === 'JOB_NOT_ACTIVE') {
       setFormError('jobNotActive');
+    } else if (res.error === 'AGE_ATTESTATION_REQUIRED') {
+      // #492: konto bez ważnej deklaracji progu wieku — deklaracja w ustawieniach konta.
+      setFormError('ageRequired');
     } else {
       setFormError('generic');
     }
@@ -393,6 +400,7 @@ export function ApplyModal({
                 jobId={jobId}
                 companyName={companyName}
                 screeningQuestions={screeningQuestions}
+                candidateMinAge={candidateMinAge}
                 contentLocale={contentLocale}
               />
             ) : null}
@@ -586,6 +594,13 @@ export function ApplyModal({
                       tErrors('rateLimited')
                     ) : formError === 'jobNotActive' ? (
                       tErrors('jobNotActive')
+                    ) : formError === 'ageRequired' ? (
+                      <>
+                        {t('ageRequired')}{' '}
+                        <Link href="/candidate/ustawienia" className="font-medium underline">
+                          {t('ageRequiredLink')}
+                        </Link>
+                      </>
                     ) : formError === 'network' ? (
                       t('errorNetwork')
                     ) : formError === 'demo' ? (

@@ -87,7 +87,8 @@ function post(path: string, body: object, cookie?: string, origin = baseURL) {
 const cookieFrom = (response: Response) => response.headers.getSetCookie().map(value => value.split(';')[0]).join('; ');
 const readSession = async (cookie: string) => (await auth.handler(new Request(`${baseURL}/api/auth/get-session`, { headers: { cookie } }))).json();
 function form(email: string, locale: typeof locales[number] = 'pl') {
-  return { email, locale, password: signupPassword, passwordConfirm: signupPassword, firstName: 'Anna', lastName: 'Nowak', agreeTerms: true, companyName: 'Firma ' + locale };
+  return { email, locale, password: signupPassword, passwordConfirm: signupPassword, firstName: 'Anna', lastName: 'Nowak', agreeTerms: true,
+    ageConfirmed: true, minAge: 18, companyName: 'Firma ' + locale };
 }
 async function snapshot() {
   return (await admin.query(`SELECT (SELECT count(*)::int FROM auth.users) AS users,
@@ -113,7 +114,7 @@ describe('SDK Better Auth na izolowanym PostgreSQL', () => {
       expect(persisted).toMatchObject({ email_verified: false, role, first_name: 'Anna', last_name: 'Nowak',
         preferred_locale: locale, account_locale: locale, signup_locale: locale, provider_id: 'credential' });
       expect(persisted.metadata).toEqual({ signup_receipt_version: 1, agree_terms: true, role, locale,
-        first_name: 'Anna', last_name: 'Nowak', ...(role === 'employer' ? { company_name: 'Firma ' + locale } : {}) });
+        first_name: 'Anna', last_name: 'Nowak', ...(role === 'employer' ? { company_name: 'Firma ' + locale } : { age_min_attested: 18 }) });
       expect(await verifyPassword({ hash: persisted.password, password: signupPassword })).toBe(true);
       const receipts = (await admin.query(`SELECT document, document_version, locale, ip_address, user_agent,
         consent_version_id, accepted_at FROM public.document_acceptances WHERE profile_id=$1 ORDER BY document`, [result.user.id])).rows;

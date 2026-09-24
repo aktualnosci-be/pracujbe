@@ -570,14 +570,17 @@
       "termsRequired": "Vous devez accepter les conditions générales et la politique de confidentialité.",
       "companyNameRequired": "Saisissez le nom de l'entreprise.",
       "companyNameTooShort": "Le nom de l'entreprise est trop court.",
-      "companyNameTooLong": "Le nom de l'entreprise est trop long."
+      "companyNameTooLong": "Le nom de l'entreprise est trop long.",
+      "ageConfirmRequired": "Confirmez que vous avez au moins l’âge requis."
     },
     "botCheckLabel": "Vérification de sécurité",
     "botCheckLoading": "Chargement de la vérification de sécurité…",
     "botCheckRequired": "Terminez la vérification de sécurité au-dessus du bouton, puis envoyez le formulaire.",
     "botCheckExpired": "La vérification a expiré. Confirmez-la à nouveau.",
     "botCheckLoadFailed": "La vérification de sécurité n'a pas pu être chargée. Vérifiez votre connexion ou désactivez le blocage de contenu pour ce site, puis réessayez.",
-    "botCheckRetry": "Recharger la vérification"
+    "botCheckRetry": "Recharger la vérification",
+    "ageConfirm": "Je déclare avoir au moins {age} ans.",
+    "ageConfirmHint": "Nous ne demandons ni votre date de naissance ni de pièce d’identité."
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Travailler en Belgique sans CV",
@@ -626,7 +629,8 @@
     "guestApplyUnavailable": "La candidature sans compte est temporairement indisponible. Réessayez plus tard ou connectez-vous.",
     "emailNotVerified": "Confirmez d’abord l’adresse e-mail de votre compte — cliquez sur le lien envoyé lors de l’inscription.",
     "claimExpired": "Le lien de rattachement a expiré (il était valable 30 jours).",
-    "jobImportSensitiveData": "L’annonce contient un numéro d’identification de personne ou de document ; nous ne l’avons donc pas importée. Remplissez le formulaire manuellement."
+    "jobImportSensitiveData": "L’annonce contient un numéro d’identification de personne ou de document ; nous ne l’avons donc pas importée. Remplissez le formulaire manuellement.",
+    "ageAttestationRequired": "Pour continuer, confirmez que vous avez au moins l’âge requis. Si le formulaire était ouvert depuis longtemps, actualisez la page."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -1184,7 +1188,9 @@
     "screeningYes": "Oui",
     "screeningNo": "Non",
     "sensitiveIdHint": "Votre candidature ne nécessite ni numéro NISS/BIS ni numéro de pièce d’identité — ne les indiquez pas.",
-    "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
+    "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler.",
+    "ageRequired": "Avant de postuler, confirmez votre âge dans les paramètres de votre compte.",
+    "ageRequiredLink": "Ouvrir les paramètres"
   },
   "guestApply": {
     "subtitle": "Postulez sans créer de compte ou connectez-vous pour utiliser votre profil. Pas besoin de CV.",
@@ -1237,7 +1243,8 @@
       "messageTooLong": "Le message peut comporter au maximum 500 caractères.",
       "consentRequired": "Vous devez accepter le consentement pour envoyer la candidature.",
       "idempotencyKeyInvalid": "Actualisez la page et renvoyez le formulaire.",
-      "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
+      "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler.",
+      "ageConfirmRequired": "Confirmez que vous avez au moins l’âge requis."
     }
   },
   "legal": {
@@ -1801,7 +1808,8 @@
     "casePriority": "Priorité d’examen : {priority}",
     "caseFlag": "Signal automatique : {flag}",
     "auditActionModerationDecided": "Décision de modération",
-    "auditActionModerationRestored": "Levée de la restriction"
+    "auditActionModerationRestored": "Levée de la restriction",
+    "auditActionAgePolicyUpdated": "Modification de l’âge minimum des candidats"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -2004,7 +2012,8 @@
     "savedOn": "Votre profil est maintenant visible pour les entreprises vérifiées.",
     "savedOff": "Votre profil est maintenant masqué dans les recherches des entreprises.",
     "saveError": "La modification n’a pas pu être enregistrée. Le réglage n’a pas changé — veuillez réessayer.",
-    "loadError": "Impossible de charger la visibilité de votre profil. Actualisez la page dans un instant."
+    "loadError": "Impossible de charger la visibilité de votre profil. Actualisez la page dans un instant.",
+    "requiresAge": "Pour partager votre profil avec les entreprises, confirmez d’abord votre âge dans la section « Âge »."
   },
   "team": {
     "title": "Équipe",
@@ -2244,5 +2253,16 @@
     "outcomeLabel": "Résultat",
     "outcomeActionTaken": "Nous avons pris des mesures concernant le contenu signalé.",
     "outcomeNoAction": "Après examen, nous n’avons pris aucune mesure concernant le contenu signalé."
+  },
+  "ageAttestation": {
+    "sectionTitle": "Âge",
+    "sectionDescription": "Postuler et partager son profil avec les entreprises est possible à partir de {age} ans. Nous enregistrons uniquement votre déclaration et sa date — pas de date de naissance.",
+    "stateOk": "Confirmé : vous avez au moins {age} ans.",
+    "stateMissing": "Aucune confirmation. Sans elle, vous ne pouvez ni postuler ni partager votre profil avec les entreprises.",
+    "submit": "Confirmer",
+    "saving": "Enregistrement…",
+    "saved": "Confirmation d’âge enregistrée.",
+    "saveError": "Impossible d’enregistrer la confirmation. Réessayez.",
+    "loadError": "Impossible de charger les informations sur votre confirmation d’âge."
   }
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod/v3';
 import { routing } from '@/i18n/routing';
+import { minAgeSchema } from '@/lib/age-policy';
 
 /**
  * Schematy walidacji autoryzacji (logowanie, rejestracja kandydata/pracodawcy, reset hasła).
@@ -44,6 +45,16 @@ const agreeTermsSchema = z.custom<true>((value) => value === true, {
   fatal: false,
 });
 
+/**
+ * #492: deklaracja „mam co najmniej {minAge} lat” (bez daty urodzenia). Błąd niekrytyczny —
+ * jak zgoda na regulamin. `minAge` to próg pokazany w formularzu; baza porównuje go
+ * z bieżącym progiem (`candidate_min_age()`), więc wartość od klienta niczego nie obniża.
+ */
+const ageConfirmedSchema = z.custom<true>((value) => value === true, {
+  message: 'auth.error.ageConfirmRequired',
+  fatal: false,
+});
+
 /** Zgodność haseł; puste powtórzenie ma własny komunikat („Powtórz hasło”). */
 function passwordsMatch(data: { password: string; passwordConfirm: string }): boolean {
   return data.passwordConfirm.length === 0 || data.password === data.passwordConfirm;
@@ -63,6 +74,8 @@ export const registerCandidateSchema = z
     lastName: nameSchema,
     locale: localeSchema.optional(),
     agreeTerms: agreeTermsSchema,
+    ageConfirmed: ageConfirmedSchema,
+    minAge: minAgeSchema,
   })
   .refine(passwordsMatch, {
     path: ['passwordConfirm'],

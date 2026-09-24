@@ -26,7 +26,7 @@ export function ProfileVisibilitySettings({ initial }: { initial: ProfileVisibil
   const [searchable, setSearchable] = React.useState(initial.searchable);
   const [changedAt, setChangedAt] = React.useState<string | null>(initial.changedAt);
   const [pending, setPending] = React.useState(false);
-  const [error, setError] = React.useState<'save' | 'incomplete' | null>(null);
+  const [error, setError] = React.useState<'save' | 'incomplete' | 'age' | null>(null);
   const [saved, setSaved] = React.useState<boolean | null>(null);
 
   const canEnable = initial.completed;
@@ -41,7 +41,13 @@ export function ProfileVisibilitySettings({ initial }: { initial: ProfileVisibil
     try {
       const result = await setProfileVisibilityAction(next);
       if (!result.ok) {
-        setError(result.error === 'ONBOARDING_INCOMPLETE' ? 'incomplete' : 'save');
+        setError(
+          result.error === 'ONBOARDING_INCOMPLETE'
+            ? 'incomplete'
+            : result.error === 'AGE_ATTESTATION_REQUIRED'
+              ? 'age'
+              : 'save',
+        );
         return;
       }
       setSearchable(result.searchable);
@@ -148,7 +154,13 @@ export function ProfileVisibilitySettings({ initial }: { initial: ProfileVisibil
             className="mt-4 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>{error === 'incomplete' ? t('requiresComplete') : t('saveError')}</p>
+            <p>
+              {error === 'incomplete'
+                ? t('requiresComplete')
+                : error === 'age'
+                  ? t('requiresAge')
+                  : t('saveError')}
+            </p>
           </div>
         ) : null}
         {saved !== null ? (

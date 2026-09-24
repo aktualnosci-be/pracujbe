@@ -47,6 +47,7 @@ import {
   type ResetInput,
 } from '@/lib/validation/auth';
 import { safeNextPath } from '@/lib/auth/next-path';
+import { isAgeAttestationError } from '@/lib/age-policy';
 
 /**
  * Schemat ustawienia nowego hasła (po sesji recovery). Reużywa `passwordSchema`
@@ -114,6 +115,8 @@ interface SignUpArgs {
   locale: Locale;
   /** Zgoda na regulamin i politykę prywatności z walidowanego wejścia akcji. */
   agreeTerms: boolean;
+  /** #492: próg wieku zadeklarowany przez kandydata (receipt obowiązkowy dla kandydata). */
+  ageMinAttested?: number;
   /** Zwalidowany cel po potwierdzeniu e-maila (np. oferta); brak → panel wg roli. */
   next?: string | null;
 }
@@ -179,9 +182,22 @@ async function signUpUser(args: SignUpArgs): Promise<void> {
       p_user_agent: store.get('user-agent'),
     });
     if (rcErr) throw rcErr;
+    // #492: deklaracja progu wieku kandydata — tak samo obowiązkowa jak receipt dokumentów.
+    // Baza porównuje ją z BIEŻĄCYM progiem (zmieniony po wyświetleniu formularza → odmowa).
+    if (args.role === 'candidate') {
+      const { error: ageErr } = await admin.rpc('record_candidate_age_attestation', {
+        p_profile_id: user.id,
+        p_min_age: args.ageMinAttested ?? null,
+        p_locale: args.locale,
+      });
+      if (ageErr) throw ageErr;
+    }
   } catch (e) {
-    captureError(e, { area: 'auth.recordDocumentAcceptance' });
     await discardUnconfirmedSignup(user);
+    if (isAgeAttestationError(e instanceof Error ? e.message : (e as { message?: string } | null)?.message)) {
+      throw new AppError('AGE_ATTESTATION_REQUIRED', { context: { reason: 'signup_age_policy' } });
+    }
+    captureError(e, { area: 'auth.recordDocumentAcceptance' });
     throw new AppError('INTERNAL', { context: { reason: 'signup_receipt_failed' } });
   }
 
@@ -306,6 +322,7 @@ export async function registerCandidate(
       lastName: parsed.data.lastName,
       locale,
       agreeTerms: parsed.data.agreeTerms,
+      ageMinAttested: parsed.data.minAge,
       next: safeNextPath(next),
     });
   } catch (e) {

@@ -570,14 +570,17 @@
       "termsRequired": "Musisz zaakceptować regulamin i politykę prywatności.",
       "companyNameRequired": "Podaj nazwę firmy.",
       "companyNameTooShort": "Nazwa firmy jest za krótka.",
-      "companyNameTooLong": "Nazwa firmy jest za długa."
+      "companyNameTooLong": "Nazwa firmy jest za długa.",
+      "ageConfirmRequired": "Potwierdź, że masz co najmniej wymagany wiek."
     },
     "botCheckLabel": "Weryfikacja bezpieczeństwa",
     "botCheckLoading": "Ładowanie weryfikacji bezpieczeństwa…",
     "botCheckRequired": "Dokończ weryfikację bezpieczeństwa nad przyciskiem, a potem wyślij formularz.",
     "botCheckExpired": "Weryfikacja wygasła. Potwierdź ją ponownie.",
     "botCheckLoadFailed": "Nie udało się załadować weryfikacji bezpieczeństwa. Sprawdź połączenie lub wyłącz blokowanie treści dla tej strony i spróbuj ponownie.",
-    "botCheckRetry": "Załaduj weryfikację ponownie"
+    "botCheckRetry": "Załaduj weryfikację ponownie",
+    "ageConfirm": "Oświadczam, że mam co najmniej {age} lat.",
+    "ageConfirmHint": "Nie pytamy o datę urodzenia ani o dokument tożsamości."
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Praca w Belgii bez CV",
@@ -626,7 +629,8 @@
     "guestApplyUnavailable": "Aplikacja bez konta jest chwilowo niedostępna. Spróbuj później albo zaloguj się.",
     "emailNotVerified": "Najpierw potwierdź adres e-mail swojego konta — kliknij link, który wysłaliśmy przy rejestracji.",
     "claimExpired": "Link do przypisania aplikacji wygasł (był ważny 30 dni).",
-    "jobImportSensitiveData": "Ogłoszenie zawiera numer identyfikacyjny osoby lub dokumentu, więc go nie zaimportowaliśmy. Wypełnij formularz ręcznie."
+    "jobImportSensitiveData": "Ogłoszenie zawiera numer identyfikacyjny osoby lub dokumentu, więc go nie zaimportowaliśmy. Wypełnij formularz ręcznie.",
+    "ageAttestationRequired": "Aby kontynuować, potwierdź, że masz co najmniej wymagany wiek. Jeśli formularz był otwarty dłużej, odśwież stronę."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -1184,7 +1188,9 @@
     "screeningYes": "Tak",
     "screeningNo": "Nie",
     "sensitiveIdHint": "Do aplikowania nie jest potrzebny numer NISS/BIS ani numer dokumentu tożsamości — nie wpisuj ich.",
-    "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania."
+    "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania.",
+    "ageRequired": "Przed aplikowaniem potwierdź swój wiek w ustawieniach konta.",
+    "ageRequiredLink": "Przejdź do ustawień"
   },
   "guestApply": {
     "subtitle": "Aplikuj bez zakładania konta albo zaloguj się, aby użyć profilu. CV nie jest potrzebne.",
@@ -1237,7 +1243,8 @@
       "messageTooLong": "Wiadomość może mieć najwyżej 500 znaków.",
       "consentRequired": "Musisz zaakceptować zgodę, aby wysłać aplikację.",
       "idempotencyKeyInvalid": "Odśwież stronę i wyślij formularz ponownie.",
-      "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania."
+      "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania.",
+      "ageConfirmRequired": "Potwierdź, że masz co najmniej wymagany wiek."
     }
   },
   "legal": {
@@ -1801,7 +1808,8 @@
     "casePriority": "Priorytet przeglądu: {priority}",
     "caseFlag": "Sygnał automatu: {flag}",
     "auditActionModerationDecided": "Decyzja moderacyjna",
-    "auditActionModerationRestored": "Cofnięcie ograniczenia"
+    "auditActionModerationRestored": "Cofnięcie ograniczenia",
+    "auditActionAgePolicyUpdated": "Zmiana progu wieku kandydatów"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -2004,7 +2012,8 @@
     "savedOn": "Twój profil jest teraz widoczny dla zweryfikowanych firm.",
     "savedOff": "Twój profil jest teraz ukryty przed wyszukiwaniem firm.",
     "saveError": "Nie udało się zapisać zmiany. Ustawienie pozostało bez zmian — spróbuj ponownie.",
-    "loadError": "Nie udało się wczytać ustawienia widoczności profilu. Odśwież stronę za chwilę."
+    "loadError": "Nie udało się wczytać ustawienia widoczności profilu. Odśwież stronę za chwilę.",
+    "requiresAge": "Aby udostępnić profil firmom, najpierw potwierdź swój wiek w sekcji „Wiek”."
   },
   "team": {
     "title": "Zespół",
@@ -2244,5 +2253,16 @@
     "outcomeLabel": "Wynik",
     "outcomeActionTaken": "Podjęliśmy działania wobec zgłoszonej treści.",
     "outcomeNoAction": "Po analizie nie podjęliśmy działań wobec zgłoszonej treści."
+  },
+  "ageAttestation": {
+    "sectionTitle": "Wiek",
+    "sectionDescription": "Aplikować i udostępniać profil firmom mogą osoby, które mają co najmniej {age} lat. Zapisujemy tylko Twoje oświadczenie i jego datę — bez daty urodzenia.",
+    "stateOk": "Potwierdzone: masz co najmniej {age} lat.",
+    "stateMissing": "Brak potwierdzenia. Bez niego nie możesz aplikować ani udostępniać profilu firmom.",
+    "submit": "Potwierdź",
+    "saving": "Zapisywanie…",
+    "saved": "Zapisano potwierdzenie wieku.",
+    "saveError": "Nie udało się zapisać potwierdzenia. Spróbuj ponownie.",
+    "loadError": "Nie udało się wczytać informacji o potwierdzeniu wieku."
   }
 }

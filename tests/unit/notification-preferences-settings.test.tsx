@@ -43,6 +43,11 @@ vi.mock('@/lib/data/profile-visibility', () => ({
   loadProfileVisibility: async () => ({ status: 'ready', demo: false, searchable: false, completed: true, changedAt: null }),
 }));
 vi.mock('@/components/settings/ProfileVisibilitySettings', () => ({ ProfileVisibilitySettings: () => null }));
+// Deklaracja wieku (#492) ma własne testy (age-attestation, rls.sql AGE492).
+vi.mock('@/lib/data/age-policy', () => ({
+  loadMyAgeAttestation: async () => ({ status: 'ready', demo: false, requiredMinAge: 18, attestedMinAge: 18, meetsPolicy: true }),
+}));
+vi.mock('@/components/settings/AgeAttestationSettings', () => ({ AgeAttestationSettings: () => null }));
 vi.mock('@/lib/actions/notification-preferences', () => ({
   updateNotificationPreferences: vi.fn(),
 }));
