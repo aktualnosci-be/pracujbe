@@ -18,9 +18,12 @@ import { MobileNav, PrimaryNav } from './MobileNav';
  * `justify-between` z trzema bezpośrednimi dziećmi — środkowe (logo mobilne) trafia na
  * środek, gdy skrajne są wąskie. Selektor języka celowo NIE jest w headerze (jest w stopce
  * i w panelu mobilnym — zgodnie z makietą). Teksty wyłącznie z i18n (namespace `nav`).
+ *
+ * `locale` przychodzi jawnie z layoutu (#298): bez niego next-intl sięga po `headers()`,
+ * co przełącza całe drzewo stron publicznych na renderowanie dynamiczne.
  */
-export async function Header() {
-  const t = await getTranslations('nav');
+export async function Header({ locale }: { locale: string }) {
+  const t = await getTranslations({ locale, namespace: 'nav' });
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">

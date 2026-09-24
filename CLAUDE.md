@@ -700,6 +700,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
   obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
   na decyzję o workflow.
+  Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
+  `locale` jawnie do Header/Footer/SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
+  Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
+  `DATABASE_APP_URL` build nie czyta bazy (`prerenderParamsAtBuild` → strony na pierwsze żądanie);
+  ISR tylko w pamięci (`isrFlushToDisk: false`). Middleware: bramka hasła i odświeżone cookies
+  sesji → `private, no-store`. Straże: `static-public-pages.test`, `check-next-build.mjs`
+  (prerender), E2E `public-cache-headers.spec`. Lista `/oferty-pracy` (filtry), auth, panele — per żądanie.
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 

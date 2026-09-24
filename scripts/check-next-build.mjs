@@ -30,4 +30,26 @@ if (readdirSync(".next/server/app").length === 0) {
   console.error("Pusty katalog .next/server/app");
   process.exit(1);
 }
+
+// #298: strony publiczne bez danych per użytkownik muszą być w prerenderze. Jeden dynamiczny
+// odczyt (np. next-intl bez jawnego locale w layoucie) przełącza całe drzewo `(public)` na SSR
+// z `Cache-Control: no-store`. Build bez bazy (CI/E2E) prerenderuje także strony z ofertami.
+const prerendered = JSON.parse(readFileSync(".next/prerender-manifest.json", "utf8")).routes;
+const expectedStatic = [
+  "/pl",
+  "/pl/poradniki",
+  "/pl/poradniki/umowa-interim-co-warto-wiedziec",
+  "/pl/praca",
+  "/pl/praca/kategoria/construction",
+  "/pl/praca/miasto/brussels",
+  "/pl/dla-pracodawcow",
+  "/pl/regulamin",
+  "/en/faq",
+];
+const buildHasDatabase = Boolean(process.env.DATABASE_APP_URL);
+const notPrerendered = buildHasDatabase ? [] : expectedStatic.filter((route) => !prerendered[route]);
+if (notPrerendered.length > 0) {
+  console.error(`Strony publiczne poza prerenderem (renderowane dynamicznie): ${notPrerendered.join(", ")}`);
+  process.exit(1);
+}
 console.log(`Build .next kompletny (BUILD_ID ${buildId}).`);

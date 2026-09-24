@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { setRequestLocale } from 'next-intl/server';
 
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -13,16 +14,38 @@ import { SkipLink } from '@/components/layout/SkipLink';
  * własne, odrębne layouty i NIE korzystają z tego chrome'u.
  *
  * Komponent serwerowy — bez interakcji na tym poziomie.
+ *
+ * Renderowanie statyczne (#298): layouty i strony renderują się w Next 15 równolegle, więc
+ * `setRequestLocale` ze strony nie zdąży przed chrome'em. Layout sam ustawia locale i podaje
+ * je jawnie do Header/Footer/SkipLink — bez tego next-intl czyta `headers()` i każda strona
+ * publiczna staje się SSR z `Cache-Control: no-store`. Chrome nie zależy od sesji ani cookies
+ * (stan zgód i zapisanych ofert czytają wyspy klienckie), więc może trafić do cache.
  */
-export default function PublicLayout({ children }: { children: ReactNode }) {
+/**
+ * Górna granica świeżości stron publicznych (#298): treść informacyjna i poradniki zmieniają się
+ * tylko przy wdrożeniu, ale cache współdzielony (CDN) nie powinien trzymać ich rok po nowym
+ * wdrożeniu. Strony z ofertami ustawiają krótszy `revalidate` (Next bierze najmniejszą wartość).
+ */
+export const revalidate = 3600;
+
+export default async function PublicLayout({
+  children,
+  params,
+}: {
+  children: ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+
   return (
     <div className="flex min-h-screen flex-col">
-      <SkipLink />
-      <Header />
+      <SkipLink locale={locale} />
+      <Header locale={locale} />
       <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
         {children}
       </main>
-      <Footer />
+      <Footer locale={locale} />
     </div>
   );
 }

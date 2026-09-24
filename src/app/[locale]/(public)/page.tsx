@@ -46,6 +46,9 @@ const OG_LOCALE: Record<string, string> = {
   en: 'en_GB',
 };
 
+/** ISR (#298): oferty zmieniają się w ciągu dnia — HTML z cache, odświeżany co 60 s. */
+export const revalidate = 60;
+
 export async function generateMetadata({ params }: HomePageProps): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'metadata' });

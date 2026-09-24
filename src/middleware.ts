@@ -45,6 +45,15 @@ const MAINTENANCE_HTML =
 const handleIntl = createIntlMiddleware(routing);
 
 /**
+ * Nagłówek dla odpowiedzi, które nie mogą trafić do cache współdzielonego (#298). Strony
+ * publiczne są statyczne/ISR i dostają `s-maxage`; middleware wykonuje się jednak przy KAŻDYM
+ * żądaniu (także trafieniu w cache ISR), więc tu nadpisujemy nagłówek, gdy odpowiedź zależy od
+ * żądającego: bramka hasła (CDN nie może podać strony osobie bez cookie dostępu) oraz
+ * odświeżone cookies sesji (CDN nie może zapamiętać cudzego `Set-Cookie`).
+ */
+const PRIVATE_CACHE_CONTROL = 'private, no-store';
+
+/**
  * Bramka „w przygotowaniu” (`SITE_ACCESS_PASSWORD`): bez ważnego cookie każda strona zwraca
  * formularz hasła (503 + noindex). Sprawdzana przed wszystkim innym — także przed SEC-19.
  */
@@ -80,12 +89,18 @@ export default async function middleware(request: NextRequest) {
   if (!isAppReady()) {
     return new NextResponse(MAINTENANCE_HTML, {
       status: 503,
-      headers: { 'content-type': 'text/html; charset=utf-8', 'retry-after': '120' },
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        'retry-after': '120',
+      },
     });
   }
 
   // 1) next-intl — bazowa odpowiedź (może być redirectem/rewrite z prefiksem locale).
   const response = handleIntl(request);
+  // Serwis za bramką hasła: odpowiedź dla osoby z dostępem nie może trafić do cache współdzielonego.
+  if (getSiteAccessPassword()) response.headers.set('cache-control', PRIVATE_CACHE_CONTROL);
 
   // 2) Brak env → tryb demo: nie inicjuj Supabase, zwróć samą odpowiedź next-intl.
   const url = env.supabaseUrl;
@@ -104,6 +119,7 @@ export default async function middleware(request: NextRequest) {
         for (const { name, value, options } of cookiesToSet) {
           response.cookies.set(name, value, options);
         }
+        if (cookiesToSet.length > 0) response.headers.set('cache-control', PRIVATE_CACHE_CONTROL);
       },
     },
   });

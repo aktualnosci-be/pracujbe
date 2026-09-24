@@ -13,6 +13,7 @@ import { getJobs, isShowingDemoJobs, type CategoryKey } from '@/lib/jobs';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
 import { JobCard } from '@/components/public/JobCard';
+import { prerenderParamsAtBuild } from '@/lib/static-rendering';
 
 /**
  * Landing-page kategorii `/praca/kategoria/<klucz>` (SSR/SSG, INDEKSOWALNY).
@@ -51,6 +52,9 @@ type PageProps = {
   params: Promise<{ locale: string; category: string }>;
 };
 
+/** ISR (#298): oferty zmieniają się w ciągu dnia — HTML z cache, odświeżany co 60 s. */
+export const revalidate = 60;
+
 export function generateStaticParams(): Array<{ locale: string; category: string }> {
   const params: Array<{ locale: string; category: string }> = [];
   for (const locale of routing.locales) {
@@ -58,7 +62,7 @@ export function generateStaticParams(): Array<{ locale: string; category: string
       params.push({ locale, category });
     }
   }
-  return params;
+  return prerenderParamsAtBuild(params);
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
