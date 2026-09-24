@@ -3922,10 +3922,10 @@ reset role;
 -- ============================================================================
 -- UN45 (#45, 0087): wypisanie, ponowna kontrola zgody przy claimie, atomowy budżet.
 -- ============================================================================
-\set UNA 'e8700000-0000-0000-0000-0000000000a1'
-\set UNB 'e8700000-0000-0000-0000-0000000000a2'
-\set UNC 'e8700000-0000-0000-0000-0000000000a3'
-\set UNE 'e8700000-0000-0000-0000-0000000000e1'
+\set UNA 'e0450000-0000-0000-0000-0000000000a1'
+\set UNB 'e0450000-0000-0000-0000-0000000000a2'
+\set UNC 'e0450000-0000-0000-0000-0000000000a3'
+\set UNE 'e0450000-0000-0000-0000-0000000000e1'
 reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'UNA','una@test.be','Un A','{"role":"candidate","first_name":"Un","last_name":"A","locale":"fr"}'),
@@ -3998,19 +3998,19 @@ select pg_temp.assert(
 
 -- UN45-5: walidacja i uprawnienia.
 set role service_role;
-select pg_temp.expect_error('select public.email_unsubscribe(''e8700000-0000-0000-0000-0000000000a1'', ''all'')',
+select pg_temp.expect_error('select public.email_unsubscribe(''e0450000-0000-0000-0000-0000000000a1'', ''all'')',
   'VALIDATION_FAILED', 'UN45-5 nieznana kategoria odrzucona');
-select pg_temp.assert(public.email_unsubscribe('e8700000-0000-0000-0000-00000000ffff', 'offers') is false,
+select pg_temp.assert(public.email_unsubscribe('e0450000-0000-0000-0000-00000000ffff', 'offers') is false,
   'UN45-5b nieistniejący profil: neutralne false, bez błędu');
 reset role;
 set role anon; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.email_unsubscribe(''e8700000-0000-0000-0000-0000000000a2'', ''offers'')',
+select pg_temp.expect_error('select public.email_unsubscribe(''e0450000-0000-0000-0000-0000000000a2'', ''offers'')',
   'permission denied', 'UN45-5c anon nie wypisze nikogo bezpośrednio');
 select pg_temp.expect_error('select * from public.take_email_send_budget(''newsletter'')',
   'permission denied', 'UN45-5d anon nie pobiera budżetu');
 reset role;
 set role authenticated; set app.current_uid = :'UNB'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.email_unsubscribe(''e8700000-0000-0000-0000-0000000000a1'', ''offers'')',
+select pg_temp.expect_error('select public.email_unsubscribe(''e0450000-0000-0000-0000-0000000000a1'', ''offers'')',
   'permission denied', 'UN45-5e zalogowany nie wypisze innej osoby RPC');
 select pg_temp.expect_error('select count(*) from public.email_send_windows',
   'permission denied', 'UN45-5f liczniki budżetu niedostępne dla klienta');
