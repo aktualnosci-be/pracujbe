@@ -260,8 +260,16 @@ revoke all on function public.record_document_acceptance(uuid, text[], text, tex
 grant execute on function public.record_document_acceptance(uuid, text[], text, text, text) to service_role;
 
 -- --- 5. Better Auth: marker v2 ----------------------------------------------------------
+-- Obiekty auth pochodzą z database/auth (0057/0059). Sama domena (test-bootstrap) ich nie ma,
+-- więc aktualizacja triggera wykonuje się tylko, gdy funkcja z 0059 istnieje.
+do $migration$
+begin
+  if to_regprocedure('auth.record_signup_receipts()') is null then
+    return;
+  end if;
+  execute $sql$
 create or replace function auth.record_signup_receipts()
-returns trigger language plpgsql security definer set search_path = pg_catalog, public, pg_temp as $$
+returns trigger language plpgsql security definer set search_path = pg_catalog, public, pg_temp as $fn$
 declare
   meta jsonb := new.raw_user_meta_data;
   loc text := meta->>'locale';
@@ -292,9 +300,11 @@ begin
       coalesce(meta->'consent_wording', '{}'::jsonb), null, null);
   end if;
   return new;
-end $$;
-revoke all on function auth.record_signup_receipts() from public, anon, authenticated,
-  pracujbe_app, pracujbe_auth, service_role;
+end $fn$;
+  $sql$;
+  execute 'revoke all on function auth.record_signup_receipts() from public, anon, authenticated, '
+    || 'pracujbe_app, pracujbe_auth, service_role';
+end $migration$;
 
 -- --- 6. Aplikacja bez konta: znaczenie snapshotu ------------------------------------------
 comment on column public.guest_application_requests.consent_accepted_at is
