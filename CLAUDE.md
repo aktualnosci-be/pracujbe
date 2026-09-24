@@ -758,6 +758,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `scripts/subset-font.py`, fonty zastępcze z metrykami w `globals.css`) i baner zgód
   w HTML z serwera, ukrywany przed malowaniem przy zapisanej zgodzie (`consent-boot.ts`, #389);
   „Przejdź do treści” renderuje `[locale]/layout` przed banerem, każdy układ ma `#main-content`.
+  Zod poza JS stron publicznych (#390): helpery adresu `next` (`safeNextPath`, `loginHref`,
+  `registerHref`, `relocalizeNextParam`) w `src/lib/auth/next-path.ts` bez Zoda; schematy
+  zostają w `validation/auth`. Straże: graf importów `public-bundle-no-zod.test` i chunki
+  z `ZodError` w `check-next-build.mjs` (layout `(public)`, home, lista ofert, poradnik).
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
   `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy

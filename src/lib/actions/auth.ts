@@ -40,12 +40,12 @@ import {
   registerCandidateSchema,
   registerEmployerSchema,
   resetSchema,
-  safeNextPath,
   type LoginInput,
   type RegisterCandidateInput,
   type RegisterEmployerInput,
   type ResetInput,
 } from '@/lib/validation/auth';
+import { safeNextPath } from '@/lib/auth/next-path';
 
 /**
  * Schemat ustawienia nowego hasła (po sesji recovery). Reużywa `passwordSchema`

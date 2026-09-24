@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 import { Link } from '@/i18n/navigation';
 import { applyToJob } from '@/lib/actions/applications';
 import { cn } from '@/lib/utils';
-import { loginHref, registerHref } from '@/lib/validation/auth';
+import { loginHref, registerHref } from '@/lib/auth/next-path';
 import { usePublicViewerStatus } from '@/components/public/PublicSavedJobs';
 import {
   APPLY_AVAILABILITY_OPTIONS,
