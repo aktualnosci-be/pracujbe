@@ -16,7 +16,7 @@ import { LocaleSwitcher } from './LocaleSwitcher';
 /** Linki głównej nawigacji gościa — wspólne dla paska desktop (Header) i panelu mobilnego. */
 export const PRIMARY_NAV = [
   { href: '/oferty-pracy', key: 'jobs' },
-  { href: '/rejestracja-pracodawca', key: 'forEmployers' },
+  { href: '/dla-pracodawcow', key: 'forEmployers' },
 ] as const;
 
 /**

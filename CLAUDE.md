@@ -525,6 +525,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   własnym `openGraph` (#116/#182; strażnik `tests/unit/structured-data.test.ts`). **Do zrobienia:**
   `hiringOrganization.sameAs`/`logo` (wymaga rozszerzenia `get_public_job` o `companies.website`).
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
+- [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
+  BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,
+  weryfikacja przez administratora, kreator ze szkicem, zgłoszenia/wiadomości/propozycje, e-maile
+  w języku odbiorcy, bezpłatny etap z `docs/PRODUCT_DECISIONS.md`); bez cen i liczb (strażnik
+  `tests/unit/employers-page.test.ts`). „Dla pracodawców” w nawigacji i stopce prowadzi tutaj;
+  „Dodaj ofertę” i CTA strony — do `/rejestracja-pracodawca`. W bramce a11y (#221).
 
 ### Etap 3 — kandydat
 - [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — strony + Supabase Auth actions, callback (P1-01). Zgoda na regulamin sprawdzana w akcji serwerowej; receipt akceptacji obowiązkowy (błąd zapisu cofa niepotwierdzone konto) — `tests/unit/auth-register-terms.test.ts`. Guardy tras paneli komplet: `/candidate` (auth + rola≠employer→/employer), `/employer` (auth + aktywne `company_members`→/rejestracja-pracodawca), `/admin` (auth + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex.
@@ -607,7 +613,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 ### Etap 6 — komunikacja
 - [x] Wybór języka odbiorcy (fallback) — util + test + `resolve_recipient_locale()` w DB (INVARIANT #1 egzekwowany przy kolejkowaniu)
 - [~] Kolejka e-mail + worker + ponawianie — outbox (`email_deliveries`: attempts/next_attempt_at/payload), worker `src/lib/email/outbox.ts` + route `/api/email/process` (sekret) gotowe; realna wysyłka wymaga `RESEND_API_KEY`
-- [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; podpięte do outboxa (payload z RPC)
+  Harmonogram: cron Railway (`scripts/railway-cron-call.mjs` → `/api/email/process`), opis w `docs/RESEND_SETUP.md` §6 (#296).
+- [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
+  `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
+  (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
+  0073); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
+  zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
+  (#51), supportContact. Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
+  statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja NN.
   Status aplikacji w mailu = etykieta `status.*` z `src/messages` (nie enum); neutralne warianty
   treści przy braku nazwy nadawcy (`EmailCopy.anonymous`); CTA do sekcji panelu w locale odbiorcy
   (`src/lib/email/delivery-data.ts`); imię odbiorcy w powitaniu (worker czyta `profiles`); e-maile
@@ -645,6 +658,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
 - [x] `next/font/local` (offline Inter), PWA (ikony/manifest/service worker), storage signed URLs + upload CV (0018, Invariant #10).
+  Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
+  w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
+  → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
+  next-intl) — strażnik `tests/unit/pwa-manifest-route.test.ts`, E2E `pwa-locale-manifest.spec`.
   Plik CV: wspólne reguły `src/lib/validation/cv-file.ts` (5 MB, PDF/DOC/DOCX) w przeglądarce i akcji;
   plik za duży/zły format odrzucony przed wysyłką (limit ciała akcji 6mb), akcja zwraca `reason`
   (`tooLarge`/`type`/`empty`) → komunikaty `files.error*` (#362).
