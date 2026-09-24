@@ -626,6 +626,7 @@
     "guestApplyUnavailable": "Aplikacja bez konta jest chwilowo niedostępna. Spróbuj później albo zaloguj się.",
     "emailNotVerified": "Najpierw potwierdź adres e-mail swojego konta — kliknij link, który wysłaliśmy przy rejestracji.",
     "claimExpired": "Link do przypisania aplikacji wygasł (był ważny 30 dni).",
+    "jobImportSensitiveData": "Ogłoszenie zawiera numer identyfikacyjny osoby lub dokumentu, więc go nie zaimportowaliśmy. Wypełnij formularz ręcznie.",
     "screeningReviewRequired": "Oferta ma pytanie, które przed publikacją musi sprawdzić zespół portalu. Opublikujesz ją po akceptacji pytania albo po jego zmianie.",
     "screeningQuestionRejected": "Jedno z pytań nie zostało zaakceptowane. Zmień je albo usuń, aby opublikować ofertę."
   },
@@ -1185,7 +1186,9 @@
     "screeningOptional": "(opcjonalnie)",
     "screeningRequired": "Odpowiedz na to pytanie.",
     "screeningYes": "Tak",
-    "screeningNo": "Nie"
+    "screeningNo": "Nie",
+    "sensitiveIdHint": "Do aplikowania nie jest potrzebny numer NISS/BIS ani numer dokumentu tożsamości — nie wpisuj ich.",
+    "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania."
   },
   "guestApply": {
     "subtitle": "Aplikuj bez zakładania konta albo zaloguj się, aby użyć profilu. CV nie jest potrzebne.",
@@ -1237,7 +1240,8 @@
       "emailInvalid": "Podaj poprawny adres e-mail, np. jan@example.com.",
       "messageTooLong": "Wiadomość może mieć najwyżej 500 znaków.",
       "consentRequired": "Musisz zaakceptować zgodę, aby wysłać aplikację.",
-      "idempotencyKeyInvalid": "Odśwież stronę i wyślij formularz ponownie."
+      "idempotencyKeyInvalid": "Odśwież stronę i wyślij formularz ponownie.",
+      "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania."
     }
   },
   "legal": {
@@ -1461,7 +1465,8 @@
     "errorFileTooLarge": "Plik jest za duży. Maksymalny rozmiar to 5 MB.",
     "errorFileType": "Obsługujemy tylko obrazy PNG, JPG i WebP.",
     "errorUrlMissing": "Wklej link do ogłoszenia.",
-    "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie."
+    "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie.",
+    "contactNote": "Adresów e-mail, numerów telefonu i numerów identyfikacyjnych nie przenosimy do formularza. E-mail kontaktowy wpisz ręcznie w ostatnim kroku."
   },
   "messages": {
     "title": "Wiadomości",
@@ -1937,7 +1942,8 @@
       "messageTooLong": "Wiadomość jest za długa.",
       "phoneInvalid": "Podaj poprawny numer telefonu.",
       "termsRequired": "Musisz zaakceptować zgodę, aby wysłać aplikację.",
-      "idempotencyKeyInvalid": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie."
+      "idempotencyKeyInvalid": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie.",
+      "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania."
     }
   },
   "offer": {
@@ -2024,6 +2030,30 @@
     "blockedSuccess": "Firma {company} została zablokowana.",
     "manage": "Zarządzaj zablokowanymi firmami"
   },
+  "profileVisibility": {
+    "sectionTitle": "Widoczność profilu dla firm",
+    "sectionDescription": "Możesz pozwolić zweryfikowanym pracodawcom znaleźć Twój profil wśród kandydatów. Domyślnie profil jest ukryty, a to ustawienie możesz zmienić w każdej chwili.",
+    "whoTitle": "Kto zobaczy profil",
+    "whoText": "Tylko firmy zweryfikowane przez Pracuj.be. Firmy, które zablokujesz, nie zobaczą go nigdy. Firma może wysłać Ci propozycję pracy przez portal.",
+    "seenTitle": "Co zobaczy firma",
+    "seenText": "Dane zawodowe z profilu: nagłówek i opis, zawody i kategorie, umiejętności, języki, certyfikaty, doświadczenie, dostępność, miasto i zasięg dojazdu, prawo jazdy i samochód, rodzaje umowy oraz oczekiwane wynagrodzenie.",
+    "notSeenTitle": "Czego firma nie zobaczy",
+    "notSeenText": "Imienia i nazwiska, adresu e-mail, numeru telefonu ani pliku CV. Imię, nazwisko i dane kontaktowe z konta zobaczy dopiero firma, do której zaaplikujesz albo która wyśle Ci propozycję pracy.",
+    "offTitle": "Po wyłączeniu",
+    "offText": "Profil od razu znika z wyszukiwania i dopasowań firm. Firmy, do których aplikujesz albo które wysłały Ci już propozycję, nadal widzą Twój profil w tej rekrutacji. Jeśli chcesz to zatrzymać, zablokuj firmę w sekcji „Zablokowane firmy”.",
+    "toggleLabel": "Pozwól zweryfikowanym pracodawcom znaleźć mój profil",
+    "stateOn": "Profil widoczny dla zweryfikowanych firm",
+    "stateOff": "Profil ukryty przed wyszukiwaniem firm",
+    "changedAt": "Ostatnia zmiana: {date}",
+    "neverChanged": "To ustawienie nie było jeszcze zmieniane.",
+    "requiresComplete": "Aby włączyć widoczność, najpierw ukończ profil.",
+    "completeProfile": "Uzupełnij profil",
+    "saving": "Zapisywanie…",
+    "savedOn": "Twój profil jest teraz widoczny dla zweryfikowanych firm.",
+    "savedOff": "Twój profil jest teraz ukryty przed wyszukiwaniem firm.",
+    "saveError": "Nie udało się zapisać zmiany. Ustawienie pozostało bez zmian — spróbuj ponownie.",
+    "loadError": "Nie udało się wczytać ustawienia widoczności profilu. Odśwież stronę za chwilę."
+  },
   "team": {
     "title": "Zespół",
     "subtitle": "Osoby z dostępem do panelu firmy {company}.",
@@ -2109,9 +2139,11 @@
     "title": "Wypisanie z e-maili",
     "confirmText": "Potwierdź, że nie chcesz już otrzymywać e-maili: {category}.",
     "confirmButton": "Wypisz mnie",
+    "allButton": "Wypisz mnie ze wszystkich powiadomień e-mail",
     "pending": "Zapisywanie…",
     "doneTitle": "Wypisano",
     "doneText": "Nie wyślemy Ci już e-maili: {category}. Pozostałe wiadomości i powiadomienia w serwisie działają bez zmian.",
+    "allDoneText": "Nie wyślemy Ci już powiadomień e-mail ani newslettera. Nadal wyślemy wiadomości potrzebne do obsługi konta, np. reset hasła.",
     "settingsHint": "Wszystkie ustawienia powiadomień zmienisz po zalogowaniu.",
     "loginLink": "Zaloguj się",
     "invalidTitle": "Link jest nieprawidłowy",

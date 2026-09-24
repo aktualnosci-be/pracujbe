@@ -1,13 +1,19 @@
 /**
  * Wspólne komponenty layoutu wiadomości e-mail Pracuj.be (React Email).
  *
- * Styl: jasny, prosty, responsywny; tekstowe logo „pracuj.be”, jeden przycisk CTA, stopka.
- * Bez ciężkich grafik i bez zewnętrznych zasobów (maile muszą działać offline w kliencie).
+ * Wygląd = kalka prototypu „Ludzie i praca” (#6/#7): `docs/design/people-passport/prototype/
+ * materials/newsletter.html` — szare tło #f4f4f4, biała kolumna 600 px bez ramki, logo
+ * „pracuj” + biały „.be” na czerwonym kafelku (geometria nagłówka strony, `.people .logo`),
+ * nagłówek 36 px z −1 px światła, akapity 16 px / 1,7 w #666, czerwony przycisk z promieniem
+ * 11 px, sekcje paszportu oddzielone linią #e5e5e5, stopka na #f8f8f8.
  *
- * WYJĄTEK OD ZASADY KOLORÓW: klasy Tailwind (bg-primary itd.) mapowane są na zmienne CSS,
- * które NIE istnieją w kontekście klienta pocztowego. Maile wymagają stylów inline i wartości
- * heksadecymalnych — dlatego kolory marki trzymamy tu w jednym miejscu (`palette`), spójnym
- * z design tokenami aplikacji, i tylko przez ten obiekt (bez rozsypanych hexów w JSX).
+ * Odstępstwa wymuszone przez klienty pocztowe i wymogi repo (opis w PR / CLAUDE.md §2):
+ * - style inline i układ tabelaryczny (brak arkuszy i media queries w wielu klientach);
+ * - bez webfontów: `'DM Sans', Arial, sans-serif` — DM Sans tylko, gdy jest zainstalowany
+ *   u odbiorcy, inaczej Arial jak w prototypowym newsletterze;
+ * - #777 z prototypu → #767676 (WCAG AA na bieli), tekst stopki na #f8f8f8 → #6b6b6b;
+ * - wartości heksadecymalne zamiast tokenów CSS (zmienne CSS nie działają w poczcie) —
+ *   WYŁĄCZNIE przez `emailPalette` (test `email-palette.test.tsx` odrzuca inne kolory).
  */
 
 import type { CSSProperties, ReactNode } from 'react';
@@ -16,7 +22,6 @@ import {
   Container,
   Head,
   Heading,
-  Hr,
   Html,
   Link,
   Preview,
@@ -28,165 +33,351 @@ import { Button as REButton } from '@react-email/components';
 import type { Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { interpolate, layoutCopy } from '@/emails/copy';
+import type { EmailSenderIdentity } from '@/lib/email/sender';
 
 /**
- * Paleta marki (spójna z design tokenami globals.css). Jedyne źródło kolorów w mailach.
+ * Paleta maili = kolory prototypowego newslettera (tokeny `--pp-*` z globals.css).
+ * Jedyne źródło kolorów w mailach.
  */
 export const emailPalette = {
+  /** --pp-red: kafelek „.be”, przycisk. */
   primary: '#D92932',
-  primaryDark: '#B91D25',
+  /** Link tekstowy „Poznaj ofertę →” (newsletter.html). */
+  link: '#B91F29',
+  /** --pp-ink: nagłówki, wartości pól. */
   foreground: '#151515',
-  muted: '#616161',
+  /** Akapity (newsletter.html `color:#666`, --pp-text-hero). */
+  text: '#666666',
+  /** Etykiety i drobny tekst (#777 → #767676 AA, --pp-text-meta). */
+  muted: '#767676',
+  /** Tekst stopki na #f8f8f8 (--pp-text-note, AA na szarym tle). */
+  footerText: '#6B6B6B',
+  /** Linki stopki (newsletter.html `color:#555`). */
+  footerLink: '#555555',
   background: '#FFFFFF',
-  soft: '#F7F7F7',
-  border: '#DEDEDE',
-  success: '#16A34A',
-  warning: '#EA580C',
-  error: '#DC2626',
+  /** Tło wokół kolumny (newsletter.html `background:#f4f4f4`). */
+  canvas: '#F4F4F4',
+  /** --pp-section-bg: stopka. */
+  soft: '#F8F8F8',
+  /** --pp-line: linie oddzielające paszporty. */
+  border: '#E5E5E5',
+  /** --pp-note-bg / --pp-line-note: notatka (`.p-profile-note`). */
+  noteBackground: '#FFF9F9',
+  noteBorder: '#F0D8D9',
 } as const;
 
 const palette = emailPalette;
 
-const fontStack =
-  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif";
+/** Bez webfontów: DM Sans tylko z systemu odbiorcy, dalej Arial jak w newsletter.html. */
+export const emailFontStack = "'DM Sans', Arial, sans-serif";
 
 const styles = {
   body: {
-    backgroundColor: palette.soft,
+    backgroundColor: palette.canvas,
     margin: 0,
-    padding: '24px 0',
-    fontFamily: fontStack,
+    padding: 0,
+    fontFamily: emailFontStack,
     color: palette.foreground,
     WebkitFontSmoothing: 'antialiased',
   } satisfies CSSProperties,
   container: {
     backgroundColor: palette.background,
-    borderRadius: '12px',
-    border: `1px solid ${palette.border}`,
-    maxWidth: '560px',
+    width: '100%',
+    maxWidth: '600px',
     margin: '0 auto',
-    overflow: 'hidden',
   } satisfies CSSProperties,
   header: {
-    padding: '24px 32px 0 32px',
+    padding: '32px 28px 20px 28px',
   } satisfies CSSProperties,
   logoLink: {
+    // Bez jawnego koloru <Link> React Email wstawia własny niebieski (#067df7).
+    color: palette.foreground,
     textDecoration: 'none',
     display: 'inline-block',
   } satisfies CSSProperties,
+  /* Znak z nagłówka strony (`.people .logo` 29 px / 800 / −1,5 px; `.suffix`: odstęp .09em,
+     dopełnienie .1/.17/.14em, promień .22em, światło −.055em) przeliczony na piksele. */
+  logoWord: {
+    color: palette.foreground,
+    fontFamily: emailFontStack,
+    fontSize: '29px',
+    fontWeight: 800,
+    letterSpacing: '-1.5px',
+    lineHeight: '29px',
+    padding: '0 3px 0 0',
+    verticalAlign: 'baseline',
+    whiteSpace: 'nowrap',
+  } satisfies CSSProperties,
   logoTile: {
-    display: 'inline-block',
     backgroundColor: palette.primary,
     color: palette.background,
-    borderRadius: '8px',
-    fontWeight: 700,
-    fontSize: '18px',
-    lineHeight: '22px',
-    padding: '4px 6px',
-    marginLeft: '2px',
-    verticalAlign: 'middle',
-  } satisfies CSSProperties,
-  logoWordFirst: {
-    color: palette.foreground,
-    fontWeight: 700,
-    fontSize: '18px',
-    verticalAlign: 'middle',
+    borderRadius: '6px',
+    fontFamily: emailFontStack,
+    fontSize: '29px',
+    fontWeight: 800,
+    letterSpacing: '-1.6px',
+    lineHeight: '29px',
+    padding: '3px 5px 4px 5px',
+    verticalAlign: 'baseline',
+    whiteSpace: 'nowrap',
   } satisfies CSSProperties,
   content: {
-    padding: '8px 32px 8px 32px',
+    padding: '12px 28px 28px 28px',
   } satisfies CSSProperties,
   heading: {
     color: palette.foreground,
-    fontSize: '22px',
-    lineHeight: '30px',
+    fontSize: '36px',
+    lineHeight: '40px',
+    letterSpacing: '-1px',
     fontWeight: 700,
-    margin: '16px 0 8px 0',
+    margin: '20px 0',
   } satisfies CSSProperties,
   text: {
-    color: palette.foreground,
-    fontSize: '15px',
-    lineHeight: '24px',
-    margin: '0 0 14px 0',
+    color: palette.text,
+    fontSize: '16px',
+    lineHeight: '27px',
+    margin: '0 0 16px 0',
   } satisfies CSSProperties,
   textMuted: {
     color: palette.muted,
     fontSize: '13px',
-    lineHeight: '20px',
-    margin: '0 0 8px 0',
+    lineHeight: '22px',
+    margin: '0 0 12px 0',
   } satisfies CSSProperties,
   highlight: {
-    backgroundColor: palette.soft,
-    border: `1px solid ${palette.border}`,
-    borderRadius: '8px',
-    padding: '14px 16px',
+    borderTop: `1px solid ${palette.border}`,
+    borderBottom: `1px solid ${palette.border}`,
+    padding: '24px 0',
     color: palette.foreground,
-    fontSize: '16px',
-    fontWeight: 600,
-    lineHeight: '22px',
-    margin: '4px 0 18px 0',
+    fontSize: '21px',
+    fontWeight: 700,
+    lineHeight: '27px',
+    margin: '8px 0 24px 0',
   } satisfies CSSProperties,
   quote: {
-    borderLeft: `3px solid ${palette.primary}`,
-    backgroundColor: palette.soft,
-    borderRadius: '0 8px 8px 0',
-    padding: '12px 16px',
+    border: `1px solid ${palette.noteBorder}`,
+    backgroundColor: palette.noteBackground,
+    borderRadius: '19px',
+    padding: '20px 22px',
     color: palette.foreground,
-    fontSize: '14px',
-    lineHeight: '22px',
-    fontStyle: 'italic',
-    margin: '4px 0 18px 0',
+    fontSize: '15px',
+    lineHeight: '25px',
+    margin: '4px 0 24px 0',
     whiteSpace: 'pre-line',
   } satisfies CSSProperties,
   buttonWrap: {
-    margin: '8px 0 20px 0',
+    margin: '18px 0 20px 0',
   } satisfies CSSProperties,
   button: {
     backgroundColor: palette.primary,
     color: palette.background,
-    borderRadius: '8px',
+    borderRadius: '11px',
+    fontFamily: emailFontStack,
     fontSize: '15px',
     lineHeight: '18px',
-    fontWeight: 600,
+    fontWeight: 700,
     textDecoration: 'none',
     textAlign: 'center',
-    padding: '15px 24px',
+    padding: '17px 23px',
     display: 'inline-block',
   } satisfies CSSProperties,
   rawLink: {
-    color: palette.primary,
+    color: palette.link,
     fontSize: '12px',
     lineHeight: '18px',
     wordBreak: 'break-all',
     margin: '0 0 16px 0',
     display: 'inline-block',
   } satisfies CSSProperties,
-  hr: {
-    borderColor: palette.border,
-    margin: '8px 0',
-  } satisfies CSSProperties,
   footer: {
-    padding: '16px 32px 28px 32px',
+    backgroundColor: palette.soft,
+    padding: '24px 28px',
+  } satisfies CSSProperties,
+  footerStrong: {
+    color: palette.foreground,
+    fontSize: '12px',
+    fontWeight: 700,
+    lineHeight: '22px',
+    margin: 0,
   } satisfies CSSProperties,
   footerText: {
-    color: palette.muted,
+    color: palette.footerText,
     fontSize: '12px',
-    lineHeight: '18px',
-    margin: '0 0 6px 0',
+    lineHeight: '22px',
+    margin: 0,
   } satisfies CSSProperties,
   footerLink: {
-    color: palette.muted,
+    color: palette.footerLink,
     fontSize: '12px',
+    textDecoration: 'underline',
+  } satisfies CSSProperties,
+  passport: {
+    borderTop: `1px solid ${palette.border}`,
+    padding: '24px 0',
+  } satisfies CSSProperties,
+  passportEyebrow: {
+    color: palette.muted,
+    fontSize: '11px',
+    letterSpacing: '1px',
+    lineHeight: '16px',
+    margin: '0 0 10px 0',
+    textTransform: 'uppercase',
+  } satisfies CSSProperties,
+  passportTitle: {
+    color: palette.foreground,
+    fontSize: '21px',
+    fontWeight: 700,
+    lineHeight: '27px',
+    margin: '0 0 16px 0',
+  } satisfies CSSProperties,
+  passportCell: {
+    color: palette.foreground,
+    fontSize: '14px',
+    lineHeight: '20px',
+    padding: '0 12px 12px 0',
+    verticalAlign: 'top',
+    width: '50%',
+  } satisfies CSSProperties,
+  passportLabel: {
+    color: palette.muted,
+    fontSize: '11px',
+    letterSpacing: '0.5px',
+    lineHeight: '16px',
+    margin: 0,
+    textTransform: 'uppercase',
+  } satisfies CSSProperties,
+  passportValue: {
+    color: palette.foreground,
+    fontSize: '14px',
+    fontWeight: 700,
+    lineHeight: '20px',
+    margin: 0,
+  } satisfies CSSProperties,
+  passportTitleLink: {
+    color: palette.foreground,
+    textDecoration: 'none',
+  } satisfies CSSProperties,
+  passportMeta: {
+    color: palette.foreground,
+    fontSize: '14px',
+    lineHeight: '20px',
+    margin: 0,
+  } satisfies CSSProperties,
+  passportLinkWrap: {
+    margin: '5px 0 0 0',
+  } satisfies CSSProperties,
+  passportLink: {
+    color: palette.link,
+    fontSize: '13px',
+    lineHeight: '20px',
     textDecoration: 'underline',
   } satisfies CSSProperties,
 } as const;
 
-/** Tekstowe logo „pracuj.be” z białym sufiksem na czerwonym kafelku. */
+/** Znak „pracuj.be” jak w nagłówku strony: dwie komórki tabeli (Outlook ignoruje tło spanów). */
 function EmailLogo({ locale }: { locale: Locale }): ReactNode {
   const href = `${env.siteUrl}/${locale}`;
   return (
-    <Link href={href} style={styles.logoLink}>
-      <span style={styles.logoWordFirst}>pracuj</span>
-      <span style={styles.logoTile}>.be</span>
+    <Link href={href} style={styles.logoLink} aria-label="Pracuj.be">
+      <table role="presentation" cellPadding={0} cellSpacing={0} border={0}>
+        <tbody>
+          <tr>
+            <td style={styles.logoWord}>pracuj</td>
+            <td style={styles.logoTile}>.be</td>
+          </tr>
+        </tbody>
+      </table>
+    </Link>
+  );
+}
+
+/** Pole paszportu: etykieta (wersaliki 11 px) nad wartością (pogrubione 14 px), dwa akapity. */
+export interface EmailPassportField {
+  label: string;
+  value: string;
+  /** Atrybut `data-*` pola (selektory testów i podglądu), np. `['data-passport-field', 'salary']`. */
+  data?: readonly [string, string];
+}
+
+/**
+ * Sekcja „paszportu pracy” z newsletter.html: linia #e5e5e5, etykieta nad tytułem,
+ * pola w dwóch kolumnach (tabela) i opcjonalny link „Poznaj ofertę →”.
+ */
+export function EmailPassport({
+  eyebrow,
+  title,
+  fields,
+  link,
+  footer,
+  sectionData,
+}: {
+  eyebrow?: string;
+  title?: ReactNode;
+  fields: readonly EmailPassportField[];
+  link?: { href: string; label: string };
+  /** Krótka linia pod tytułem, gdy pola nie mają etykiet (np. firma · miasto w digeście). */
+  footer?: ReactNode;
+  sectionData?: Record<string, string>;
+}): ReactNode {
+  const rows: EmailPassportField[][] = [];
+  for (let index = 0; index < fields.length; index += 2) rows.push(fields.slice(index, index + 2));
+  return (
+    <Section style={styles.passport} {...sectionData}>
+      {eyebrow ? <Text style={styles.passportEyebrow}>{eyebrow}</Text> : null}
+      {title ? (
+        <Text style={rows.length > 0 ? styles.passportTitle : { ...styles.passportTitle, margin: '0 0 6px 0' }}>
+          {title}
+        </Text>
+      ) : null}
+      {rows.length > 0 ? (
+        <table role="presentation" width="100%" cellPadding={0} cellSpacing={0} border={0}>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {row.map((field, cellIndex) => (
+                  <td
+                    key={cellIndex}
+                    style={styles.passportCell}
+                    {...(field.data ? { [field.data[0]]: field.data[1] } : {})}
+                  >
+                    <Text style={styles.passportLabel}>{field.label}</Text>
+                    <Text style={styles.passportValue}>{field.value}</Text>
+                  </td>
+                ))}
+                {row.length === 1 ? <td style={styles.passportCell} /> : null}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      {footer ? <Text style={styles.passportMeta}>{footer}</Text> : null}
+      {link ? (
+        <Text style={styles.passportLinkWrap}>
+          <Link href={link.href} style={styles.passportLink}>
+            {link.label}
+          </Link>
+        </Text>
+      ) : null}
+    </Section>
+  );
+}
+
+/**
+ * Link tekstowy: `link` = kolor linków prototypu (#B91F29, „Poznaj ofertę →”),
+ * `title` = tytuł paszportu jako link (czarny, bez podkreślenia, jak nagłówek h2).
+ */
+export function EmailTextLink({
+  href,
+  children,
+  tone = 'link',
+}: {
+  href: string;
+  children: ReactNode;
+  tone?: 'link' | 'title';
+}): ReactNode {
+  return (
+    <Link href={href} style={tone === 'title' ? styles.passportTitleLink : styles.passportLink}>
+      {children}
     </Link>
   );
 }
@@ -247,6 +438,7 @@ export function EmailLayout({
   children,
   unsubscribeUrl,
   footerNote,
+  sender,
 }: {
   locale: Locale;
   preview: string;
@@ -255,6 +447,8 @@ export function EmailLayout({
   unsubscribeUrl?: string;
   /** Nadpisanie noty „masz konto…” (odbiorca bez konta, #41). */
   footerNote?: string;
+  /** Tożsamość i adres pocztowy nadawcy z konfiguracji (#45; wymagane w marketingu). */
+  sender?: EmailSenderIdentity;
 }): ReactNode {
   const lc = layoutCopy[locale];
   const year = new Date().getFullYear();
@@ -273,10 +467,8 @@ export function EmailLayout({
 
           <Section style={styles.content}>{children}</Section>
 
-          <Hr style={styles.hr} />
-
           <Section style={styles.footer}>
-            <Text style={styles.footerText}>{lc.tagline}</Text>
+            <Text style={styles.footerStrong}>{lc.tagline}</Text>
             <Text style={styles.footerText}>{footerNote ?? lc.footerNote}</Text>
             <Text style={styles.footerText}>
               <Link href={helpHref} style={styles.footerLink}>
@@ -295,6 +487,13 @@ export function EmailLayout({
                 </>
               ) : null}
             </Text>
+            {sender ? (
+              <Text style={styles.footerText} data-email-sender="">
+                {lc.sender}: {sender.identity}
+                {'  ·  '}
+                {lc.postalAddress}: {sender.postalAddress}
+              </Text>
+            ) : null}
             <Text style={styles.footerText}>{rights}</Text>
           </Section>
         </Container>

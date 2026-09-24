@@ -51,8 +51,10 @@ export const IMPORTABLE_FIELDS = [
   'accommodation',
   'transport',
   'companyDescription',
-  'contactEmail',
 ] as const;
+// `contactEmail` celowo NIE jest importowany (#500): e-mail osoby kontaktowej to dana osobowa
+// osoby trzeciej — pracodawca wpisuje go ręcznie w kroku 9, a e-maile/telefony są usuwane
+// z materiału przed wysłaniem do modelu (`minimize.ts`).
 export type ImportableField = (typeof IMPORTABLE_FIELDS)[number];
 
 /*
@@ -137,7 +139,6 @@ export const JOB_EXTRACTION_JSON_SCHEMA = {
     accommodation: triState,
     transport: triState,
     companyDescription: text,
-    contactEmail: text,
   },
 } as const;
 
@@ -203,7 +204,6 @@ export const rawExtractionSchema = z.object({
   accommodation: optBool,
   transport: optBool,
   companyDescription: optStr,
-  contactEmail: optStr,
 });
 // Zod `object` domyślnie odrzuca nieznane klucze z wyniku (strip) — np. „status: active"
 // dopisany przez model nie przechodzi dalej.

@@ -4,6 +4,7 @@ import type { ErrorCode } from '@/lib/errors';
 import { ExtractorError, type ExtractionInput, type JobExtractor } from '@/lib/ai-import/extract';
 import { checkImportImageBytes, type ImportImageProblem } from '@/lib/ai-import/image';
 import { mapExtraction, type MappedImport } from '@/lib/ai-import/map';
+import { listingSourceLabel, minimizeListingText } from '@/lib/ai-import/minimize';
 import {
   parsePublicUrl,
   safeFetchListing,
@@ -74,8 +75,11 @@ export async function runJobImport(source: ImportSource, deps: RunImportDeps): P
       if (!checked.ok) return { ok: false, error: 'JOB_IMPORT_FETCH_FAILED' };
       input = { kind: 'image', mediaType: checked.type, base64: fetched.bytes.toString('base64') };
     } else {
-      if (fetched.text.trim().length < 40) return { ok: false, error: 'JOB_IMPORT_NOT_A_LISTING' };
-      input = { kind: 'text', text: fetched.text, sourceUrl: fetched.url };
+      // #500/#495: e-maile, telefony i numery identyfikacyjne usuwamy PRZED wysłaniem do
+      // dostawcy; w prompcie tylko nazwa hosta (bez ścieżki, parametrów i fragmentu).
+      const minimized = minimizeListingText(fetched.text).text;
+      if (minimized.trim().length < 40) return { ok: false, error: 'JOB_IMPORT_NOT_A_LISTING' };
+      input = { kind: 'text', text: minimized, source: listingSourceLabel(fetched.url) };
     }
   }
 
@@ -88,6 +92,9 @@ export async function runJobImport(source: ImportSource, deps: RunImportDeps): P
   }
 
   const mapped = mapExtraction(raw);
+  // #495: numer NISS/BIS, PESEL lub dokumentu w odpowiedzi (np. ze zrzutu, którego nie da się
+  // zredagować lokalnie) — odmowa całego importu, nic nie trafia do formularza ani szkicu.
+  if (mapped.sensitiveIdentifier) return { ok: false, error: 'JOB_IMPORT_SENSITIVE_DATA' };
   if (!mapped.isJobListing) return { ok: false, error: 'JOB_IMPORT_NOT_A_LISTING' };
   if (Object.keys(mapped.values).length === 0) return { ok: false, error: 'JOB_IMPORT_NOT_A_LISTING' };
   return { ok: true, mapped };
