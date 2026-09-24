@@ -57,11 +57,11 @@ describe("model paszportu szczegółu oferty", () => {
     ],
     [
       { salaryMax: 22.5, salaryPeriod: "month" as const },
-      "up to €22.5 gross / month",
+      "up to €22.50 gross / month",
     ],
     [
       { salaryMin: 18.75, salaryMax: 22.5, salaryPeriod: "year" as const },
-      "€18.75 – €22.5 gross / year",
+      "€18.75 – €22.50 gross / year",
     ],
   ])(
     "buduje pole z granicami i okresem wyłącznie z podanych danych: %j",
@@ -78,7 +78,7 @@ describe("model paszportu szczegółu oferty", () => {
     expect(salaryField({ salaryMin: 18.75, salaryMax: 22.5 })).toEqual({
       key: "salary",
       label: "Salary",
-      primary: "€18.75 – €22.5",
+      primary: "€18.75 – €22.50",
     });
   });
 

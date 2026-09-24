@@ -42,11 +42,12 @@ function renderButton(offerSentAt: string | null = null) {
 }
 
 describe('SendOfferButton (#327)', () => {
-  it('nie wysyła od razu: najpierw dialog z kandydatem, ofertą i podglądem zaproszenia', () => {
+  it('nie wysyła od razu: najpierw dialog z kandydatem, ofertą i podglądem zaproszenia', async () => {
     renderButton();
     fireEvent.click(screen.getByRole('button', { name: 'sendOfferTo|Piotr Nowak|Operator wózka' }));
     expect(sendOffer).not.toHaveBeenCalled();
-    const dialog = screen.getByRole('dialog');
+    // Treść LightDialog montuje się po ramce z nakładką (#393).
+    const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('Piotr Nowak');
     expect(screen.getByRole('link', { name: 'Operator wózka' })).toHaveAttribute('href', '/oferty-pracy/operator-wozka');
     expect(dialog).toHaveTextContent('offerDefaultMessage');
@@ -56,6 +57,7 @@ describe('SendOfferButton (#327)', () => {
     sendOffer.mockResolvedValue({ ok: false, error: 'INTERNAL' });
     renderButton();
     fireEvent.click(screen.getByRole('button', { name: /^sendOfferTo/ }));
+    await screen.findByRole('dialog');
     const submitButton = () => screen.getAllByRole('button', { name: 'sendOffer' }).at(-1)!;
     fireEvent.click(submitButton());
     await waitFor(() => expect(sendOffer).toHaveBeenCalledTimes(1));
@@ -67,9 +69,10 @@ describe('SendOfferButton (#327)', () => {
     expect(second.idempotencyKey).toBe(first.idempotencyKey);
   });
 
-  it('za krótka własna wiadomość: błąd przy polu, brak wysyłki', () => {
+  it('za krótka własna wiadomość: błąd przy polu, brak wysyłki', async () => {
     renderButton();
     fireEvent.click(screen.getByRole('button', { name: /^sendOfferTo/ }));
+    await screen.findByRole('dialog');
     fireEvent.change(screen.getByLabelText('offerDialogMessageLabel'), { target: { value: 'Hej' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'sendOffer' }).at(-1)!);
     expect(screen.getByRole('alert')).toHaveTextContent('offer.error.messageTooShort');

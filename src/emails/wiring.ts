@@ -18,9 +18,9 @@ export const QUEUED_EMAIL_TYPES = [
   'offerDeclined', // respond_to_offer
   'newMessage', // send_message
   'jobPublished', // publish_job
-  'companyVerified', // admin_set_company_status → verified (0085)
-  'companyRejected', // admin_set_company_status → rejected (0085)
-  'companySuspended', // admin_set_company_status → suspended (0085)
+  'companyVerified', // admin_set_company_status → verified (0084)
+  'companyRejected', // admin_set_company_status → rejected (0084)
+  'companySuspended', // admin_set_company_status → suspended (0084)
 ] as const satisfies readonly EmailType[];
 
 /** E-maile konta — wysyłane przez warstwę Auth (`src/lib/email/auth-email.ts`). */

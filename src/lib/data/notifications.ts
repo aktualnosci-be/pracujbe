@@ -77,7 +77,7 @@ const TITLE_KEY_BY_TYPE: Record<string, string> = {
 };
 
 /**
- * Decyzja admina o firmie (0085, #310): odrzucenie/zawieszenie przychodzi jako `system`
+ * Decyzja admina o firmie (0084, #310): odrzucenie/zawieszenie przychodzi jako `system`
  * z `data.kind = 'company_status'` (enum `notification_type` bez zmian) — tytuł wg `data.status`.
  */
 const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {

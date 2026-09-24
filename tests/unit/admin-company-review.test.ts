@@ -80,11 +80,11 @@ describe('#310 reguły uzasadnienia (dialog i akcja)', () => {
     expect(companyReasonError('verified', null)).toBeNull();
   });
 
-  it('limit długości zgodny z CHECK w migracji 0085', () => {
+  it('limit długości zgodny z CHECK w migracji 0084', () => {
     expect(companyReasonError('rejected', 'x'.repeat(COMPANY_REASON_MAX))).toBeNull();
     expect(companyReasonError('rejected', 'x'.repeat(COMPANY_REASON_MAX + 1))).toBe('tooLong');
     const sql = readFileSync(
-      resolve(__dirname, '../../supabase/migrations/0085_admin_company_review.sql'),
+      resolve(__dirname, '../../supabase/migrations/0084_admin_company_review.sql'),
       'utf8',
     );
     expect(sql).toContain(`char_length(status_reason) <= ${COMPANY_REASON_MAX}`);

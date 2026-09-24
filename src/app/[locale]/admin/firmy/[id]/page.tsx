@@ -18,7 +18,7 @@ import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
  * Decyzja o weryfikacji nie zapada „na ślepo”: dane rejestrowe (VAT, KBO, kontakt, adres),
  * uzasadnienie ostatniego odrzucenia/zawieszenia, członkowie firmy (rola, aktywny dostęp)
  * i najnowsze oferty. Akcje statusu te same co na liście (`CompanyStatusActions` → dialog
- * z wymaganym uzasadnieniem dla odrzucenia/zawieszenia → RPC 0085: powiadomienie i e-mail
+ * z wymaganym uzasadnieniem dla odrzucenia/zawieszenia → RPC 0084: powiadomienie i e-mail
  * do właściciela w JEGO języku, wpis w dzienniku). Po decyzji fokus na nagłówku strony (#415).
  *
  * Odczyt service-rolem po potwierdzeniu roli admina (`getCompanyDetail` → `requireAdmin`).

@@ -515,12 +515,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 ### Etap 2 — strony publiczne
 - [x] Strona główna (hero + sekcje) SSR — redesign wg makiety 01
+  Hero (#166) wg `people.js`: teza w trzech wierszach, czerwona akcja „Przeglądaj oferty” +
+  link do `/rejestracja`, podpis „ilustracyjne” na zdjęciu; E2E `home-hero.spec` (4 języki,
+  320/1440 px, axe, kontrola ujemna).
 - [x] Lista ofert + filtry (FilterSidebar/FilterSheet, chipy, sort, paginacja) — wg makiety 02; infinite scroll opcjonalnie później
   Wynagrodzenie (#188, 0080): suwak = EUR brutto/mies.; filtr, sort „najwyższe wynagrodzenie”,
   licznik i facety porównują ekwiwalent miesięczny (month bez zmian, year ÷ 12). Stawek
   godzinowych nie przeliczamy (godziny pracy to wolny tekst) — jak oferty bez kwoty nie odpadają
   z filtra i są na końcu sortowania; opis `filters.salaryPeriodNote` pod suwakiem. Lustro TS dla
   demo: `src/lib/salary-compare.ts`. Dowód: `rls.sql` sekcja SAL, `salary-compare.test.ts`.
+  Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
+  dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
+  w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
+  Grosze = dwa miejsca dla obu granic, jedna granica = „od”/„do”, min = max = jedna kwota,
+  brak kwoty = brak pola, okres tylko z danych. Testy: `salary.test.ts`, E2E `job-detail-salary`.
+  **Do zrobienia (SQL):** kwoty oferty w payloadzie `jobOffer` (`send_offer`).
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner
@@ -550,12 +559,22 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   umiejętności 120, certyfikaty 160 = `CANDIDATE_ITEM_LIMITS`, zgodne z `left()` w 0028) —
   za długa nie trafia na listę (#364). Kod błędu serwera w komunikacie; `ONBOARDING_INCOMPLETE`
   przenosi do pierwszego brakującego kroku (#363).
+  Jeden krok = jedno żądanie = jedna transakcja (#142, 0082): krok 3 (doświadczenie +
+  umiejętności) i krok 5 (języki + certyfikaty) przez `save_candidate_onboarding_step3/5`
+  (wewnątrz te same `set_candidate_*` — limity, dedup, replace-all). Błąd dowolnej części cofa
+  cały krok. Krok 6 z „Zakończ”: dane kroku zapisane jednym upsertem, `finish_onboarding` tylko
+  sprawdza kompletność, receipt best-effort. Dowód: `rls.sql` sekcja OB142 (wstrzyknięty błąd
+  drugiej części + kontrola ujemna starej ścieżki).
 - [x] Panel kandydata — realne dane pod sesją (RLS) + akcje (zapis oferty, wycofanie aplikacji, odpowiedź na propozycję), noindex; fallback demo bez env
 
 Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilnym kursorem
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
 Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
 `candidate-applications-pagination`).
+Metadane ofert (#184): `get_applied_jobs_display` z filtrem `in('job_id')` tylko dla ofert
+bieżącej strony — „Pokaż więcej” nie przesyła metadanych całej historii. **Otwarte:** funkcja
+(SECURITY DEFINER, bez inliningu) nadal liczy całą historię w bazie; parametr `p_job_ids`
+wymaga migracji.
 Paszport tożsamości nad siatką `/candidate/profil` (#172, `CandidateIdentity`): imię, pierwszy
 zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie odczytu tylko komunikat.
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
@@ -599,6 +618,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Po „Dalej”/„Wstecz” fokus na nagłówku nowego kroku + ogłoszenie „Krok N z 9”, jeden region
   statusu zapisu (#402). Błąd zapisu pokazuje komunikat z kodu serwera (`toUserMessageKey`);
   `JOB_NOT_DRAFT` → link do listy ofert zamiast ponawiania (#363).
+  Zapis kroku (#192, migracja `0083`): `updateJobDraft` woła jedno RPC `save_job_draft`
+  (kolumny `jobs` z listy dozwolonych + tłumaczenie + relacje replace-all w jednej transakcji,
+  tylko szkic, recruiter+) — błąd w części kroku nie zostawia częściowego zapisu. Treść kroku
+  buduje `src/lib/job-draft-content.ts`. Dowód: `rls.sql` sekcja WZ192.
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
@@ -617,7 +640,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`create_first_company`: firma + VAT + owner w jednej transakcji, idempotentnie), a
   `/rejestracja-pracodawca` z sesją pracodawcy → panel. Chrome panelu: `getEmployerShellData`
   zwraca `demo`/`ok`/`error`; firma demonstracyjna tylko w trybie demo. Dowód: `rls.sql` sekcja MM.
-  Powód odrzucenia/zawieszenia (#310, `0085`): `companies.status_reason` w banerze `/employer/firma`.
+  Powód odrzucenia/zawieszenia (#310, `0084`): `companies.status_reason` w banerze `/employer/firma`.
   **Otwarte:** strona kontaktu (#61), orientacyjny czas weryfikacji (decyzja produktowa).
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu
 
@@ -625,10 +648,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] Matching (logika + test jednostkowy + integracja z UI) — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
   Poziomy języków (#195, 0074): każdy wymagany język = 10/n pkt; poziom ≥ wymagany (lub oferta
   bez poziomu) → pełny udział, o jeden niżej → połowa, niżej lub nieznany → 0; luka w
-  `languageGaps` (komunikat `match.languageLevel*`). Lokalizacja (#194, częściowo): odległość
-  haversine ze współrzędnych słownika `locations` vs `radius_km` (w promieniu 15, poza 0);
-  bez współrzędnych ten sam region = 10 bez etykiety „w promieniu”. **Do zrobienia (#194):**
-  współrzędne dla miast spoza 10-elementowego słownika (kanoniczny model miast/geokodowanie).
+  `languageGaps` (komunikat `match.languageLevel*`). Lokalizacja (#194): odległość haversine
+  vs `radius_km` (w promieniu 15, poza 0, remote bez ograniczeń); współrzędne: słownik
+  `locations` z bazy, potem kanoniczna lista ~46 belgijskich miast w kodzie z aliasami
+  PL/NL/FR/EN (`src/lib/matching/belgian-cities.ts`, 10 miast = wartości z `0010`, strażnik
+  w `matching-locations.test.ts`); miasto spoza obu → ten sam region = 10 bez etykiety
+  „w promieniu”. **Do zrobienia:** współrzędne w bazie dla pozostałych miast (migracja
+  `locations`), geokodowanie miejscowości spoza listy.
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
   Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
   `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
@@ -674,7 +700,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
-  0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0085); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
+  0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
   zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
   (#51), supportContact. Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
   statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja NN.
@@ -715,7 +741,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w `admin_set_company_status`/`admin_resolve_report` + `p_expected_status` (`FOR UPDATE`,
   `STALE_STATE`), firma usunięta → `NOT_FOUND`, ponowne otwarcie zgłoszenia czyści
   `resolved_*`. Dowód: `rls.sql` sekcja ADM; E2E `admin-ux.spec`.
-  Decyzja o firmie (#310, `0085`): szczegół `/admin/firmy/[id]` (`getCompanyDetail`: dane
+  Decyzja o firmie (#310, `0084`): szczegół `/admin/firmy/[id]` (`getCompanyDetail`: dane
   rejestrowe, uzasadnienie, członkowie z rolą/aktywnością, najnowsze 20 ofert + licznik), nazwa
   na liście = link. Odrzucenie/zawieszenie wymaga uzasadnienia (≤ 1000 znaków,
   `src/lib/admin/company-review.ts` = te same reguły co RPC), które trafia do
@@ -777,6 +803,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
   **Do zrobienia:** asercje `email_deliveries.locale` na żywej bazie w `rls.sql` (#348, SQL),
   raport flaków (#375).
+  Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
+  (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
+  najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami
+  (`tests/helpers/png-pixels.ts`), bo rewizje Chromium inaczej kodują IDAT.
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
@@ -785,7 +815,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391; jedyna
   wyspa = przycisk zapisu z `jobId`; względna data na serwerze po dniu kalendarzowym w
   Brukseli — `src/lib/relative-date.ts`, zmienia się tylko o północy, zgodna z ISR), dialogi
-  na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
+  na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu, z treścią montowaną
+  w osobnym zadaniu po ramce z nakładką (#393; INP otwarcia < 100 ms przy CPU 4×,
+  `dialog-open-inp.spec`), długi cache
   obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
   na decyzję o workflow. Font Inter jako podzbiór łaciński ~73 KB (#388, przepis
   `scripts/subset-font.py`, fonty zastępcze z metrykami w `globals.css`) i baner zgód

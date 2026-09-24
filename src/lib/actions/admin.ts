@@ -10,7 +10,7 @@ import { captureError } from '@/lib/sentry';
  * Server Actions panelu administratora — Pracuj.be (Etap 7g).
  *
  *   - `setCompanyStatus` — zmienia status weryfikacji firmy przez RPC `admin_set_company_status`
- *     (odrzucenie/zawieszenie z wymaganym uzasadnieniem — 0085, #310).
+ *     (odrzucenie/zawieszenie z wymaganym uzasadnieniem — 0084, #310).
  *   - `resolveReport`    — rozstrzyga zgłoszenie przez RPC `admin_resolve_report`.
  *
  * Oba RPC (0081, #420) egzekwują macierz przejść (`INVALID_TRANSITION`) i porównują status

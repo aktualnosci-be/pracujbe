@@ -33,7 +33,7 @@ import { COMPANY_STATUS_KEY } from '@/components/admin/AdminStatusBadge';
  *
  * Uzasadnienie (#310): odrzucenie i zawieszenie wymagają powodu (pole w dialogu, fokus startuje
  * na nim; błąd przy polu z `aria-invalid`/`aria-describedby`, limit jak w bazie). Powód trafia
- * do właściciela firmy (powiadomienie + e-mail w JEGO języku — RPC 0085) i do dziennika.
+ * do właściciela firmy (powiadomienie + e-mail w JEGO języku — RPC 0084) i do dziennika.
  *
  * Fokus i komunikaty (#415): Anuluj/Escape oddaje fokus przyciskowi akcji; po sukcesie toast
  * i fokus obsługuje `AdminFeedbackProvider` (poza wierszem, który po odświeżeniu może zniknąć):

@@ -1,4 +1,6 @@
 import { isLocale, type Locale } from '@/i18n/routing';
+import { formatSalaryRange, type SalaryInput } from '@/lib/salary';
+import { salaryLabelsFor } from '@/lib/salary-labels';
 
 /**
  * Dane szablonu dla wiersza kolejki `email_deliveries` (czysta funkcja, bez I/O — testowalna).
@@ -9,6 +11,10 @@ import { isLocale, type Locale } from '@/i18n/routing';
  *
  * #294: powitanie z imieniem odbiorcy (z `profiles.first_name`, odczytane przez workera), o ile
  * RPC nie przekazało własnego.
+ *
+ * #22: wynagrodzenie w e-mailu buduje ten sam formatter co karta i szczegół oferty, w locale
+ * ODBIORCY — z kwot w payloadzie (`salaryMin`/`salaryMax`/`salaryPeriod`/`currency`), a nie
+ * z gotowego tekstu nadawcy. Payload bez kwot → pole wynagrodzenia pominięte.
  */
 
 export interface DeliveryInput {
@@ -57,6 +63,21 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
   }
 }
 
+const numberOrUndefined = (value: unknown): number | undefined =>
+  typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : undefined;
+
+/** Tekst wynagrodzenia w locale odbiorcy z kwot w payloadzie albo `undefined`. */
+export function deliverySalary(payload: Record<string, unknown>, locale: Locale): string | undefined {
+  const period = payload['salaryPeriod'];
+  const input: SalaryInput = {
+    salaryMin: numberOrUndefined(payload['salaryMin']),
+    salaryMax: numberOrUndefined(payload['salaryMax']),
+    currency: typeof payload['currency'] === 'string' ? payload['currency'] : undefined,
+    salaryPeriod: period === 'hour' || period === 'month' || period === 'year' ? period : undefined,
+  };
+  return formatSalaryRange(input, locale, salaryLabelsFor(locale)) ?? undefined;
+}
+
 /** Buduje dane do `renderEmail` dla wiersza kolejki. */
 export function buildDeliveryData(
   row: DeliveryInput,
@@ -67,6 +88,7 @@ export function buildDeliveryData(
   const payload = row.payload ?? {};
   const url = `${site.replace(/\/+$/, '')}/${locale}${emailTargetPath(row.template, payload)}`;
   const firstName = recipientFirstName?.trim() || undefined;
+  const salary = deliverySalary(payload, locale);
 
   return {
     locale,
@@ -79,6 +101,7 @@ export function buildDeliveryData(
       actionUrl: url,
       messageUrl: url,
       jobUrl: url,
+      salary,
     },
   };
 }

@@ -1,7 +1,7 @@
 /**
  * Reguły decyzji admina o firmie (#310) — wspólne dla dialogu (przeglądarka) i Server Action.
  * Te same limity egzekwuje baza (RPC `admin_set_company_status` i CHECK
- * `companies_status_reason_len`, migracja 0085).
+ * `companies_status_reason_len`, migracja 0084).
  */
 
 /** Maks. długość uzasadnienia decyzji. */

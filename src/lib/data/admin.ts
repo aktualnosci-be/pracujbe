@@ -711,7 +711,7 @@ export interface AdminAuditRow {
   /** Status przed/po (surowe wartości enumów) — UI tłumaczy wg typu obiektu. */
   statusBefore: string | null;
   statusAfter: string | null;
-  /** Uzasadnienie decyzji admina (odrzucenie/zawieszenie firmy, 0085 — #310) albo null. */
+  /** Uzasadnienie decyzji admina (odrzucenie/zawieszenie firmy, 0084 — #310) albo null. */
   reason: string | null;
   /** Aktor: null = system/usługa (brak `auth.uid()`). */
   actorId: string | null;
@@ -969,7 +969,7 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   industry: string | null;
   description: string | null;
   verifiedAt: string | null;
-  /** Uzasadnienie ostatniego odrzucenia/zawieszenia (0085) — tylko dla rejected/suspended. */
+  /** Uzasadnienie ostatniego odrzucenia/zawieszenia (0084) — tylko dla rejected/suspended. */
   statusReason: string | null;
   members: AdminCompanyMember[];
   jobs: AdminCompanyJob[];

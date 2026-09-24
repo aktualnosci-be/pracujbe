@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0085_admin_company_review.sql
+-- 0084_admin_company_review.sql
 -- Decyzja admina o firmie z uzasadnieniem i powiadomieniem właściciela (#310).
 --
 -- 1. `companies.status_reason` — uzasadnienie ostatniego odrzucenia/zawieszenia (≤ 1000

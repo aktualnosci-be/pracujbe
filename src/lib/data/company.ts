@@ -25,7 +25,7 @@ export interface MyCompany {
   vatNumber: string | null;
   /** ISO timestamp weryfikacji albo null. */
   verifiedAt: string | null;
-  /** Uzasadnienie admina dla odrzuconej/zawieszonej firmy (0085, #310) — inaczej null. */
+  /** Uzasadnienie admina dla odrzuconej/zawieszonej firmy (0084, #310) — inaczej null. */
   statusReason: string | null;
   canEdit: boolean;
 }
