@@ -110,6 +110,9 @@ export interface EmailDataMap {
     inviterName?: string | null;
     actionUrl: string;
   };
+  /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
+  guestApplicationConfirm: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
+  guestApplicationSent: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
   invoice: { recipientName?: string; invoiceNumber: string; amount: string; downloadUrl: string };
@@ -559,6 +562,30 @@ export function TeamInvitationEmail(props: EmailProps<'teamInvitation'>): ReactE
   );
 }
 
+export function GuestApplicationConfirmEmail(props: EmailProps<'guestApplicationConfirm'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="guestApplicationConfirm"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
+export function GuestApplicationSentEmail(props: EmailProps<'guestApplicationSent'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="guestApplicationSent"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
 export function JobExpiringEmail(props: EmailProps<'jobExpiring'>): ReactElement {
   return (
     <EmailShell
@@ -638,6 +665,8 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   companyRejected: CompanyRejectedEmail,
   companySuspended: CompanySuspendedEmail,
   teamInvitation: TeamInvitationEmail,
+  guestApplicationConfirm: GuestApplicationConfirmEmail,
+  guestApplicationSent: GuestApplicationSentEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,
   invoice: InvoiceEmail,

@@ -24,6 +24,15 @@ export const QUEUED_EMAIL_TYPES = [
   'teamInvitation', // invite_company_member (0086)
 ] as const satisfies readonly EmailType[];
 
+/**
+ * Aplikacja bez konta (#98) — kolejkowane przez `enqueue_guest_email` (0096) na adres gościa
+ * bez profilu; link z tokenem dokłada worker (`src/lib/email/guest-delivery.ts`).
+ */
+export const GUEST_EMAIL_TYPES = [
+  'guestApplicationConfirm', // submit_guest_application
+  'guestApplicationSent', // confirm_guest_application
+] as const satisfies readonly EmailType[];
+
 /** E-maile konta — wysyłane przez warstwę Auth (`src/lib/email/auth-email.ts`). */
 export const AUTH_EMAIL_TYPES = [
   'accountConfirmation',

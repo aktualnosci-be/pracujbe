@@ -23,6 +23,7 @@ export const TURNSTILE_ACTIONS = {
   passwordReset: 'password_reset',
   contact: 'contact',
   report: 'report',
+  guestApply: 'guest_apply',
 } as const;
 
 export type TurnstileFlow = keyof typeof TURNSTILE_ACTIONS;
@@ -39,7 +40,9 @@ export type ProviderFailurePolicy = 'open' | 'closed';
  * - contact / report: `closed` — formularze bez konta (spam do moderacji). Obecnie nie ma
  *   publicznego formularza kontaktu ani zgłoszeń; polityka obowiązuje, gdy powstanie.
  *
- * Aplikowanie na ofertę nie ma Turnstile: wymaga zalogowanego kandydata (logowanie
+ * - guest_apply: `closed` — aplikacja bez konta (#98) wysyła e-mail na podany adres.
+ *
+ * Aplikowanie z konta nie ma Turnstile: wymaga zalogowanego kandydata (logowanie
  * i rejestracja są chronione), limitu `apply` i idempotencji w bazie.
  */
 export const TURNSTILE_PROVIDER_FAILURE: Record<TurnstileFlow, ProviderFailurePolicy> = {
@@ -48,6 +51,7 @@ export const TURNSTILE_PROVIDER_FAILURE: Record<TurnstileFlow, ProviderFailurePo
   passwordReset: 'closed',
   contact: 'closed',
   report: 'closed',
+  guestApply: 'closed',
 };
 
 /** Publiczny klucz witryny (build-time, trafia do przeglądarki). Pusty = widżet wyłączony. */

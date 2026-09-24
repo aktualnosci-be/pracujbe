@@ -5,6 +5,7 @@ import { Resend } from 'resend';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { renderEmail } from '@/emails/templates';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
+import { guestDeliveryToken } from '@/lib/email/guest-delivery';
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
 import { captureError } from '@/lib/sentry';
@@ -111,14 +112,15 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   }
 
   for (const row of queue) {
-    // #290: CTA do właściwej sekcji panelu, w locale odbiorcy (kolumna `locale`).
-    const { locale, data } = buildDeliveryData(
-      row,
-      site,
-      row.profile_id ? firstNames.get(row.profile_id) : undefined,
-    );
-
     try {
+      // #290: CTA do właściwej sekcji panelu, w locale odbiorcy (kolumna `locale`).
+      // #98: e-mail do gościa dostaje link z tokenem liczonym tutaj (w bazie tylko hash).
+      const { locale, data } = buildDeliveryData(
+        row,
+        site,
+        row.profile_id ? firstNames.get(row.profile_id) : undefined,
+        guestDeliveryToken(row.template, row.payload),
+      );
       const { subject, html } = await renderAny(row.template as EmailType, locale, data);
       // P1-17: idempotency key = delivery.id — jeśli po wysyłce zapis 'sent' zawiedzie i
       // wiersz wróci do puli, ponowna wysyłka jest deduplikowana po stronie Resend (bez dubletu).

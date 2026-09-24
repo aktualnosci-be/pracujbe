@@ -1,0 +1,236 @@
+'use server';
+
+import { createHash } from 'node:crypto';
+import { headers } from 'next/headers';
+import { z } from 'zod/v3';
+
+import { hasServiceRoleKey, isSupabaseConfigured } from '@/lib/env';
+import type { ErrorCode } from '@/lib/errors';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { captureError } from '@/lib/sentry';
+import { createServerClient } from '@/lib/supabase/server';
+import { enforceTurnstile } from '@/lib/turnstile/verify';
+import {
+  hashGuestToken,
+  isGuestTokenConfigured,
+  isGuestTokenFormat,
+  issueGuestToken,
+} from '@/lib/guest-apply/token';
+import { applicationPhoneSchema } from '@/lib/validation/application';
+import {
+  guestApplicationSchema,
+  type GuestApplicationInput,
+} from '@/lib/validation/guest-application';
+
+/**
+ * Jednorazowa aplikacja bez konta (#98) — cienka warstwa nad RPC z migracji 0096.
+ *
+ * 1. `submitGuestApplication` — rate limit (IP i adres), Turnstile, walidacja, zapis
+ *    zgłoszenia i e-mail z linkiem potwierdzenia. Odpowiedź zawsze neutralna („sprawdź
+ *    skrzynkę”): nie ujawnia, czy adres już aplikował albo ma konto. Firma nic nie widzi.
+ * 2. `confirmGuestApplication` — kliknięcie w e-mailu → strona z przyciskiem (POST, więc
+ *    skanery linków w poczcie nie potwierdzają za użytkownika) → aplikacja trafia do firmy.
+ * 3. `claimGuestApplication` — zalogowany kandydat ze zweryfikowanym adresem przejmuje
+ *    aplikację tokenem z drugiego e-maila.
+ *
+ * Tokeny: w bazie tylko hash (`@/lib/guest-apply/token`). RPC 1–2 są service_role-only
+ * (gość nie ma sesji); 3 działa pod sesją kandydata (auth.uid() + zweryfikowany e-mail).
+ */
+
+export type GuestApplyField = 'fullName' | 'email' | 'phone' | 'consent';
+export type GuestApplyResult = { ok: true } | { ok: false; error: ErrorCode; field?: GuestApplyField };
+
+export type GuestConfirmOutcome =
+  | 'confirmed'
+  | 'already_confirmed'
+  | 'duplicate'
+  | 'expired'
+  | 'job_closed'
+  | 'invalid';
+export type GuestConfirmResult =
+  | { ok: true; outcome: GuestConfirmOutcome; jobSlug?: string }
+  | { ok: false; error: ErrorCode };
+
+export type GuestClaimResult =
+  | { ok: true; applicationId: string }
+  | { ok: false; error: ErrorCode | 'UNAUTHENTICATED' };
+
+const OUTCOMES: ReadonlySet<string> = new Set([
+  'confirmed',
+  'already_confirmed',
+  'duplicate',
+  'expired',
+  'job_closed',
+  'invalid',
+]);
+
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,200}$/;
+
+/** Serwer fixture E2E (tryb `full`): brak bazy, formularz gościa kończy się sukcesem. */
+function isGuestApplyFixture(): boolean {
+  return process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full';
+}
+
+async function requestMeta(): Promise<{ ip: string | null; userAgent: string | null }> {
+  const store = await headers();
+  const ip =
+    store.get('x-real-ip')?.trim() ||
+    store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
+    null;
+  return { ip, userAgent: store.get('user-agent') };
+}
+
+function fieldFromIssuePath(path: ReadonlyArray<string | number>): GuestApplyField | undefined {
+  switch (path[0]) {
+    case 'fullName':
+      return 'fullName';
+    case 'email':
+      return 'email';
+    case 'agreeTerms':
+      return 'consent';
+    default:
+      return undefined;
+  }
+}
+
+/** Gość wysyła aplikację (idempotentnie po `idempotencyKey`). */
+export async function submitGuestApplication(
+  input: GuestApplicationInput,
+  botCheckToken?: string | null,
+): Promise<GuestApplyResult> {
+  // Rate limit per IP (fail-safe) — publiczny formularz bez konta wysyłający e-maile.
+  if (!(await checkRateLimit('guest-apply', { max: 10, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+  // Turnstile (#46): awaria dostawcy = fail-closed (polityka `guestApply`).
+  const botCheck = await enforceTurnstile('guestApply', botCheckToken);
+  if (botCheck) return { ok: false, error: botCheck };
+
+  const phone = applicationPhoneSchema.safeParse({ phone: input.phone, phoneCountry: input.phoneCountry });
+  if (!phone.success) return { ok: false, error: 'VALIDATION_FAILED', field: 'phone' };
+
+  // Fixture E2E ma syntetyczne identyfikatory ofert (nie UUID) — tylko tam luzujemy `jobId`.
+  const schema = isGuestApplyFixture()
+    ? guestApplicationSchema.extend({ jobId: z.string().min(1) })
+    : guestApplicationSchema;
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'VALIDATION_FAILED', field: fieldFromIssuePath(parsed.error.issues[0]?.path ?? []) };
+  }
+  const v = parsed.data;
+
+  // Limit per adres (hash — adres e-mail nie trafia do tabeli limitera): ochrona skrzynki
+  // przed zalewaniem linkami potwierdzenia z wielu IP.
+  const emailKey = createHash('sha256').update(v.email).digest('hex').slice(0, 32);
+  if (!(await checkRateLimit('guest-apply-email', { max: 5, windowSeconds: 3600, identifier: emailKey }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
+  if (isGuestApplyFixture()) return { ok: true };
+  // Tryb demo (bez bazy): oferty fikcyjne, nic nie zapisujemy.
+  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  if (!hasServiceRoleKey() || !isGuestTokenConfigured()) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
+
+  const confirm = issueGuestToken('confirm');
+  if (!confirm) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
+
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const admin = createAdminClient();
+    const meta = await requestMeta();
+    const { error } = await admin.rpc('submit_guest_application', {
+      p_job_id: v.jobId,
+      p_email: v.email,
+      p_full_name: v.fullName,
+      p_phone: phone.data.phone ?? null,
+      p_availability: v.availability ?? null,
+      p_message: v.message ? v.message : null,
+      p_locale: v.locale,
+      p_idempotency_key: v.idempotencyKey,
+      p_confirm_nonce: confirm.nonce,
+      p_confirm_token_hash: confirm.hash,
+      p_ip: meta.ip,
+      p_user_agent: meta.userAgent,
+    });
+    if (error) {
+      const message = error.message ?? '';
+      if (message.includes('JOB_NOT_ACTIVE')) return { ok: false, error: 'JOB_NOT_ACTIVE' };
+      if (message.includes('VALIDATION_FAILED')) return { ok: false, error: 'VALIDATION_FAILED' };
+      captureError(error, { area: 'guestApply.submit' });
+      return { ok: false, error: 'INTERNAL' };
+    }
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'guestApply.submit' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/** Potwierdzenie adresu e-mail tokenem z linku — dopiero teraz aplikacja trafia do firmy. */
+export async function confirmGuestApplication(token: string): Promise<GuestConfirmResult> {
+  if (!(await checkRateLimit('guest-apply-confirm', { max: 30, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+  if (!isGuestTokenFormat(token)) return { ok: true, outcome: 'invalid' };
+  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  if (!hasServiceRoleKey() || !isGuestTokenConfigured()) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
+
+  const claim = issueGuestToken('claim');
+  if (!claim) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
+
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc('confirm_guest_application', {
+      p_token_hash: hashGuestToken(token),
+      p_claim_nonce: claim.nonce,
+      p_claim_token_hash: claim.hash,
+    });
+    if (error) {
+      captureError(error, { area: 'guestApply.confirm' });
+      return { ok: false, error: 'INTERNAL' };
+    }
+    const row = (Array.isArray(data) ? data[0] : data) as { outcome?: unknown; job_slug?: unknown } | null;
+    const outcome = typeof row?.outcome === 'string' && OUTCOMES.has(row.outcome) ? row.outcome : null;
+    if (!outcome) {
+      captureError(new Error('guest_confirm_unexpected_result'), { area: 'guestApply.confirm' });
+      return { ok: false, error: 'INTERNAL' };
+    }
+    const slug = typeof row?.job_slug === 'string' && SLUG_RE.test(row.job_slug) ? row.job_slug : undefined;
+    return { ok: true, outcome: outcome as GuestConfirmOutcome, ...(slug ? { jobSlug: slug } : {}) };
+  } catch (e) {
+    captureError(e, { area: 'guestApply.confirm' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/** Zalogowany kandydat przejmuje aplikację gościa (ten sam, zweryfikowany adres e-mail). */
+export async function claimGuestApplication(token: string): Promise<GuestClaimResult> {
+  if (!(await checkRateLimit('guest-apply-claim', { max: 20, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+  if (!isGuestTokenFormat(token)) return { ok: false, error: 'NOT_FOUND' };
+  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+
+  try {
+    const supabase = await createServerClient();
+    const { data, error } = await supabase.rpc('claim_guest_application', {
+      p_claim_token_hash: hashGuestToken(token),
+    });
+    if (error) {
+      const message = error.message ?? '';
+      if (message.startsWith('UNAUTHENTICATED')) return { ok: false, error: 'UNAUTHENTICATED' };
+      if (message.includes('EMAIL_NOT_VERIFIED')) return { ok: false, error: 'EMAIL_NOT_VERIFIED' };
+      if (message.includes('CLAIM_EXPIRED')) return { ok: false, error: 'CLAIM_EXPIRED' };
+      if (message.includes('APPLICATION_ALREADY_EXISTS')) return { ok: false, error: 'APPLICATION_ALREADY_EXISTS' };
+      if (message.includes('PERMISSION_DENIED')) return { ok: false, error: 'PERMISSION_DENIED' };
+      if (message.includes('NOT_FOUND')) return { ok: false, error: 'NOT_FOUND' };
+      captureError(error, { area: 'guestApply.claim' });
+      return { ok: false, error: 'INTERNAL' };
+    }
+    return { ok: true, applicationId: String(data) };
+  } catch (e) {
+    captureError(e, { area: 'guestApply.claim' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}

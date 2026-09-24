@@ -707,6 +707,22 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i ponowienie tym samym kluczem (#360); `UNAUTHENTICATED` (link logowania) odróżniony od
   `PERMISSION_DENIED` (konto nie-kandydata), własne komunikaty `RATE_LIMITED`/`JOB_NOT_ACTIVE`.
   Dowód: `rls.sql` B3b/B3c, J7d–J7f.
+  Aplikacja bez konta (#98, migracja `0096`, `docs/GUEST_APPLY.md`): gość w ApplyModal
+  (`GuestApplyForm`: imię i nazwisko, e-mail, zgoda; reszta opcjonalna) → Turnstile
+  `guest_apply` + limity IP/adres → `submit_guest_application` (service_role, zgłoszenie
+  `pending` ze snapshotem zgody, e-mail `guestApplicationConfirm` w języku formularza) →
+  `/aplikacja/potwierdz` (przycisk, nie GET) → `confirm_guest_application` tworzy aplikację
+  z `candidate_id NULL` i snapshotem, powiadamia firmę jak `apply_to_job`, wysyła
+  `guestApplicationSent` z linkiem przejęcia → `/aplikacja/przejmij` →
+  `claim_guest_application` (kandydat ze zweryfikowanym, tym samym e-mailem; token działa
+  raz, ponowienie tego samego konta idempotentne). W bazie tylko hash tokenu; token =
+  HMAC(`GUEST_APPLY_SECRET`, cel:nonce), link składa worker. Pracodawca widzi aplikację
+  z oznaczeniem „Bez konta” (e-mail, telefon, status); rozmowa i propozycja dopiero po
+  przejęciu. Retencja w `/api/maintenance`: niepotwierdzone 7 dni po ostatnim linku,
+  duplikaty 7 dni po potwierdzeniu (z e-mailami), token przejęcia zerowany po 30 dniach.
+  Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture). **Otwarte:** powiadomienie gościa
+  o zmianie statusu (brak profilu odbiorcy); okres retencji do potwierdzenia w polityce
+  prywatności (#40).
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia

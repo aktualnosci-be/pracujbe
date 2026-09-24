@@ -12,6 +12,9 @@ import { captureError } from '@/lib/sentry';
  * otwarte, nieukończone checkouty (`release_stale_checkout_intents`) — inaczej limit kodu i
  * blokada „jeden otwarty checkout na firmę" utknęłyby po porzuceniu płatności. #72: zmienia
  * przeterminowane aktywne oferty na `expired` (`expire_due_jobs`, 0085; idempotentne).
+ * #98: retencja aplikacji bez konta (`purge_guest_application_requests`, 0096) — usuwa
+ * niepotwierdzone zgłoszenia i duplikaty 7 dni po utworzeniu (razem z ich e-mailami) i zeruje
+ * tokeny przejęcia po wygaśnięciu 30-dniowego okna.
  *
  * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
  * Wymaga service-role (RPC są service_role-only). Nie ujawnia technikaliów ani danych ofert —
@@ -51,14 +54,21 @@ async function run(request: Request): Promise<Response> {
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
     const admin = createAdminClient();
-    const [discounts, checkouts, expiredJobs] = await Promise.all([
+    const [discounts, checkouts, expiredJobs, guestRequests] = await Promise.all([
       admin.rpc('release_stale_discount_reservations', { p_older_than_hours: 24 }),
       admin.rpc('release_stale_checkout_intents', { p_older_than_minutes: 30 }),
       admin.rpc('expire_due_jobs'),
+      admin.rpc('purge_guest_application_requests'),
     ]);
-    if (discounts.error || checkouts.error || expiredJobs.error) {
-      const failed = discounts.error ? 'discounts' : checkouts.error ? 'checkouts' : 'jobExpiry';
-      captureError(discounts.error ?? checkouts.error ?? expiredJobs.error, {
+    if (discounts.error || checkouts.error || expiredJobs.error || guestRequests.error) {
+      const failed = discounts.error
+        ? 'discounts'
+        : checkouts.error
+          ? 'checkouts'
+          : expiredJobs.error
+            ? 'jobExpiry'
+            : 'guestRequests';
+      captureError(discounts.error ?? checkouts.error ?? expiredJobs.error ?? guestRequests.error, {
         area: 'maintenance.gc',
         task: failed,
       });
@@ -69,6 +79,7 @@ async function run(request: Request): Promise<Response> {
       releasedDiscounts: discounts.data ?? 0,
       releasedCheckouts: checkouts.data ?? 0,
       expiredJobs: typeof expiredJobs.data === 'number' ? expiredJobs.data : 0,
+      purgedGuestRequests: typeof guestRequests.data === 'number' ? guestRequests.data : 0,
     });
   } catch (e) {
     captureError(e, { area: 'maintenance.gc' });

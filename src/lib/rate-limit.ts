@@ -38,7 +38,14 @@ const DEFAULT_WINDOW_SECONDS = 60;
  * do bruteforce logowania / spamu rejestracji / resetu hasła. Dla pozostałych akcji
  * zachowujemy fail-open (awaria limitera nie odcina zwykłego ruchu).
  */
-const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set(['signin', 'register', 'password-reset']);
+const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
+  'signin',
+  'register',
+  'password-reset',
+  // Aplikacja bez konta (#98): publiczny formularz wysyłający e-maile na podany adres.
+  'guest-apply',
+  'guest-apply-email',
+]);
 
 /**
  * Adres IP klienta. Głównym źródłem jest `x-real-ip` (ustawiane przez platformę/proxy,

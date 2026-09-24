@@ -51,6 +51,10 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
       return '/employer/firma';
     case 'teamInvitation':
       return '/employer/zespol';
+    case 'guestApplicationConfirm':
+      return '/aplikacja/potwierdz';
+    case 'guestApplicationSent':
+      return '/aplikacja/przejmij';
     case 'newMessage': {
       const panel = payload?.['panel'] === 'employer' ? 'employer' : 'candidate';
       const conversationId = payload?.['conversationId'];
@@ -80,15 +84,31 @@ export function deliverySalary(payload: Record<string, unknown>, locale: Locale)
   return formatSalaryRange(input, locale, salaryLabelsFor(locale)) ?? undefined;
 }
 
-/** Buduje dane do `renderEmail` dla wiersza kolejki. */
+/** Szablony do gościa (#98): link niesie jednorazowy token, którego nie ma w bazie. */
+export const GUEST_TOKEN_TEMPLATES: ReadonlySet<string> = new Set([
+  'guestApplicationConfirm',
+  'guestApplicationSent',
+]);
+
+/**
+ * Buduje dane do `renderEmail` dla wiersza kolejki.
+ *
+ * #98: dla szablonów gościa `guestToken` (liczony przez workera z `nonce` i sekretu serwera)
+ * trafia do adresu CTA; `nonce` nie trafia do danych szablonu. Brak tokenu = błąd (worker
+ * ponowi wysyłkę), a nie e-mail z niedziałającym linkiem.
+ */
 export function buildDeliveryData(
   row: DeliveryInput,
   site: string,
   recipientFirstName?: string | null,
+  guestToken?: string | null,
 ): { locale: Locale; data: Record<string, unknown> } {
   const locale = deliveryLocale(row.locale);
-  const payload = row.payload ?? {};
-  const url = `${site.replace(/\/+$/, '')}/${locale}${emailTargetPath(row.template, payload)}`;
+  const { nonce: _nonce, ...payload } = row.payload ?? {};
+  const isGuest = GUEST_TOKEN_TEMPLATES.has(row.template);
+  if (isGuest && !guestToken) throw new Error('guest_token_unavailable');
+  const query = isGuest ? `?token=${encodeURIComponent(guestToken ?? '')}` : '';
+  const url = `${site.replace(/\/+$/, '')}/${locale}${emailTargetPath(row.template, payload)}${query}`;
   const firstName = recipientFirstName?.trim() || undefined;
   const salary = deliverySalary(payload, locale);
 
