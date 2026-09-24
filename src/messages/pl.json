@@ -577,7 +577,12 @@
     "jobEditConflict": "Ktoś zmienił tę ofertę w międzyczasie. Otwórz ją ponownie z listy ofert, aby zobaczyć aktualną wersję.",
     "jobExpired": "Termin ważności tej oferty minął. Otwórz ją ponownie z listy ofert — ponowne otwarcie usuwa minioną datę.",
     "botCheckFailed": "Nie udało się potwierdzić, że formularz wysyła człowiek. Zaznacz weryfikację jeszcze raz i wyślij ponownie.",
-    "botCheckUnavailable": "Weryfikacja bezpieczeństwa jest chwilowo niedostępna. Spróbuj ponownie za kilka minut."
+    "botCheckUnavailable": "Weryfikacja bezpieczeństwa jest chwilowo niedostępna. Spróbuj ponownie za kilka minut.",
+    "jobImportInvalidFile": "Tego pliku nie można zaimportować. Użyj zrzutu ekranu PNG, JPG lub WebP do 5 MB.",
+    "jobImportInvalidUrl": "Tego adresu nie możemy pobrać. Wklej publiczny link http(s) do ogłoszenia.",
+    "jobImportFetchFailed": "Nie udało się pobrać strony z ogłoszeniem. Spróbuj później albo wgraj zrzut ekranu.",
+    "jobImportNotAListing": "Nie znaleźliśmy tu ogłoszenia o pracę. Sprawdź plik lub link.",
+    "jobImportFailed": "Nie udało się odczytać ogłoszenia. Spróbuj ponownie albo wypełnij formularz ręcznie."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -1267,6 +1272,33 @@
     "editSaved": "Zmiany zapisane",
     "editSavedDemo": "Zmiany zapisane (tryb demo)",
     "editFixStep": "Nie zapisaliśmy zmian. Popraw zaznaczone pola w kroku {step}: {title}."
+  },
+  "jobImport": {
+    "title": "Zaimportuj z ogłoszenia",
+    "subtitle": "Masz już to ogłoszenie gdzie indziej? Wgraj zrzut ekranu albo wklej link, a AI wstępnie wypełni formularz. Sprawdzisz każde pole, zanim cokolwiek opublikujesz.",
+    "rightsNote": "Importuj tylko ogłoszenia, do których masz prawa, np. własne ogłoszenie z innego serwisu. Oferta nie zostanie opublikowana automatycznie.",
+    "privacyNote": "Nie zapisujemy pliku ani treści strony — trafiają do dostawcy AI wyłącznie w celu odczytania ogłoszenia. Tekst zostaje w języku oryginału.",
+    "fileLabel": "Zrzut ekranu ogłoszenia",
+    "fileHint": "PNG, JPG lub WebP, do 5 MB.",
+    "importImage": "Importuj ze zrzutu",
+    "urlLabel": "Link do ogłoszenia",
+    "urlHint": "Publiczny adres http(s) strony z ogłoszeniem.",
+    "importUrl": "Importuj z linku",
+    "importing": "Odczytujemy…",
+    "busyHint": "Odczytujemy ogłoszenie. To może potrwać do minuty.",
+    "successTitle": "{count, plural, one {Wypełniliśmy # pole z ogłoszenia.} few {Wypełniliśmy # pola z ogłoszenia.} many {Wypełniliśmy # pól z ogłoszenia.} other {Wypełniliśmy # pola z ogłoszenia.}}",
+    "successReview": "{count, plural, one {# pole wymaga sprawdzenia — zobaczysz je na liście w danym kroku.} few {# pola wymagają sprawdzenia — zobaczysz je na liście w danym kroku.} many {# pól wymaga sprawdzenia — zobaczysz je na liście w danym kroku.} other {# pola wymagają sprawdzenia — zobaczysz je na liście w danym kroku.}}",
+    "successNoReview": "Przejrzyj wszystkie kroki przed publikacją.",
+    "successDraftSaved": "Zapisaliśmy to jako szkic. Nic nie zostało opublikowane.",
+    "successDraftPending": "Szkic zapiszesz przyciskiem „Dalej”. Nic nie zostało opublikowane.",
+    "suspiciousWarning": "Ogłoszenie zawierało tekst, który wyglądał na polecenia dla AI. Nie wykonaliśmy ich, ale sprawdź dokładnie wszystkie pola, zwłaszcza opis.",
+    "reviewStepTitle": "Sprawdź pola uzupełnione z ogłoszenia:",
+    "errorFileMissing": "Wybierz plik ze zrzutem ekranu.",
+    "errorFileEmpty": "Ten plik jest pusty.",
+    "errorFileTooLarge": "Plik jest za duży. Maksymalny rozmiar to 5 MB.",
+    "errorFileType": "Obsługujemy tylko obrazy PNG, JPG i WebP.",
+    "errorUrlMissing": "Wklej link do ogłoszenia.",
+    "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie."
   },
   "messages": {
     "title": "Wiadomości",

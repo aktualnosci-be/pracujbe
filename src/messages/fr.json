@@ -577,7 +577,12 @@
     "jobEditConflict": "Quelqu'un a modifié cette offre entre-temps. Rouvrez-la depuis la liste des offres pour voir la version actuelle.",
     "jobExpired": "La date d'expiration de cette offre est dépassée. Rouvrez-la depuis la liste des offres — la réouverture supprime la date passée.",
     "botCheckFailed": "Nous n'avons pas pu confirmer que ce formulaire est envoyé par une personne. Refaites la vérification et envoyez-le à nouveau.",
-    "botCheckUnavailable": "La vérification de sécurité est momentanément indisponible. Réessayez dans quelques minutes."
+    "botCheckUnavailable": "La vérification de sécurité est momentanément indisponible. Réessayez dans quelques minutes.",
+    "jobImportInvalidFile": "Ce fichier ne peut pas être importé. Utilisez une capture PNG, JPG ou WebP de 5 Mo maximum.",
+    "jobImportInvalidUrl": "Nous ne pouvons pas récupérer cette adresse. Collez un lien http(s) public vers l’annonce.",
+    "jobImportFetchFailed": "Nous n’avons pas pu télécharger la page de l’annonce. Réessayez plus tard ou envoyez une capture d’écran.",
+    "jobImportNotAListing": "Nous n’avons pas trouvé d’offre d’emploi ici. Vérifiez le fichier ou le lien.",
+    "jobImportFailed": "Nous n’avons pas pu lire l’annonce. Réessayez ou remplissez le formulaire vous-même."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -1267,6 +1272,33 @@
     "editSaved": "Modifications enregistrées",
     "editSavedDemo": "Modifications enregistrées (mode démo)",
     "editFixStep": "Les modifications n'ont pas été enregistrées. Corrigez les champs signalés à l'étape {step} : {title}."
+  },
+  "jobImport": {
+    "title": "Importer depuis une annonce",
+    "subtitle": "Cette annonce existe déjà ailleurs ? Envoyez une capture d’écran ou collez un lien et l’IA préremplira le formulaire. Vous vérifiez chaque champ avant toute publication.",
+    "rightsNote": "N’importez que des annonces sur lesquelles vous avez des droits, par exemple votre propre annonce sur un autre site. L’offre ne sera pas publiée automatiquement.",
+    "privacyNote": "Nous ne conservons ni le fichier ni le contenu de la page — ils sont transmis au fournisseur d’IA uniquement pour lire l’annonce. Le texte reste dans sa langue d’origine.",
+    "fileLabel": "Capture d’écran de l’annonce",
+    "fileHint": "PNG, JPG ou WebP, jusqu’à 5 Mo.",
+    "importImage": "Importer la capture",
+    "urlLabel": "Lien vers l’annonce",
+    "urlHint": "Une adresse http(s) publique de la page de l’annonce.",
+    "importUrl": "Importer le lien",
+    "importing": "Lecture…",
+    "busyHint": "Nous lisons l’annonce. Cela peut prendre jusqu’à une minute.",
+    "successTitle": "{count, plural, one {Nous avons rempli # champ à partir de l’annonce.} other {Nous avons rempli # champs à partir de l’annonce.}}",
+    "successReview": "{count, plural, one {# champ est à vérifier — il figure dans la liste de son étape.} other {# champs sont à vérifier — ils figurent dans la liste de chaque étape.}}",
+    "successNoReview": "Vérifiez toutes les étapes avant de publier.",
+    "successDraftSaved": "Nous l’avons enregistré comme brouillon. Rien n’a été publié.",
+    "successDraftPending": "Le brouillon sera enregistré quand vous cliquerez sur « Suivant ». Rien n’a été publié.",
+    "suspiciousWarning": "L’annonce contenait un texte qui ressemblait à des instructions pour l’IA. Nous ne les avons pas suivies, mais vérifiez bien tous les champs, surtout la description.",
+    "reviewStepTitle": "Vérifiez les champs remplis à partir de l’annonce :",
+    "errorFileMissing": "Choisissez un fichier de capture d’écran.",
+    "errorFileEmpty": "Ce fichier est vide.",
+    "errorFileTooLarge": "Le fichier est trop volumineux. La taille maximale est de 5 Mo.",
+    "errorFileType": "Seules les images PNG, JPG et WebP sont acceptées.",
+    "errorUrlMissing": "Collez un lien vers l’annonce.",
+    "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez."
   },
   "messages": {
     "title": "Messages",

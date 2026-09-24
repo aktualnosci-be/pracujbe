@@ -577,7 +577,12 @@
     "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien.",
     "jobExpired": "De vervaldatum van deze vacature is verstreken. Open ze opnieuw via de vacaturelijst — heropenen verwijdert de verstreken datum.",
     "botCheckFailed": "We konden niet bevestigen dat een mens dit formulier verstuurt. Voltooi de verificatie opnieuw en verstuur het nog eens.",
-    "botCheckUnavailable": "De beveiligingscontrole is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw."
+    "botCheckUnavailable": "De beveiligingscontrole is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw.",
+    "jobImportInvalidFile": "Dit bestand kan niet worden geïmporteerd. Gebruik een PNG-, JPG- of WebP-screenshot tot 5 MB.",
+    "jobImportInvalidUrl": "Dit adres kunnen we niet ophalen. Plak een openbare http(s)-link naar de vacature.",
+    "jobImportFetchFailed": "We konden de pagina met de vacature niet ophalen. Probeer het later of upload een screenshot.",
+    "jobImportNotAListing": "We vonden hier geen vacature. Controleer het bestand of de link.",
+    "jobImportFailed": "We konden de vacature niet lezen. Probeer het opnieuw of vul het formulier zelf in."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -1267,6 +1272,33 @@
     "editSaved": "Wijzigingen opgeslagen",
     "editSavedDemo": "Wijzigingen opgeslagen (demomodus)",
     "editFixStep": "De wijzigingen zijn niet opgeslagen. Corrigeer de gemarkeerde velden in stap {step}: {title}."
+  },
+  "jobImport": {
+    "title": "Importeren uit een vacature",
+    "subtitle": "Staat deze vacature al ergens anders? Upload een screenshot of plak een link en AI vult het formulier alvast in. Je controleert elk veld voordat er iets gepubliceerd wordt.",
+    "rightsNote": "Importeer alleen vacatures waarop je rechten hebt, bijvoorbeeld je eigen vacature op een andere site. De vacature wordt niet automatisch gepubliceerd.",
+    "privacyNote": "We bewaren het bestand en de pagina-inhoud niet — ze gaan alleen naar de AI-aanbieder om de vacature te lezen. De tekst blijft in de oorspronkelijke taal.",
+    "fileLabel": "Screenshot van de vacature",
+    "fileHint": "PNG, JPG of WebP, tot 5 MB.",
+    "importImage": "Importeren uit screenshot",
+    "urlLabel": "Link naar de vacature",
+    "urlHint": "Een openbaar http(s)-adres van de pagina met de vacature.",
+    "importUrl": "Importeren uit link",
+    "importing": "Bezig met lezen…",
+    "busyHint": "We lezen de vacature. Dit kan tot een minuut duren.",
+    "successTitle": "{count, plural, one {We hebben # veld uit de vacature ingevuld.} other {We hebben # velden uit de vacature ingevuld.}}",
+    "successReview": "{count, plural, one {# veld moet je controleren — je ziet het in de lijst bij die stap.} other {# velden moet je controleren — je ziet ze in de lijst bij elke stap.}}",
+    "successNoReview": "Controleer alle stappen voordat je publiceert.",
+    "successDraftSaved": "We hebben het als concept opgeslagen. Er is niets gepubliceerd.",
+    "successDraftPending": "Het concept wordt opgeslagen wanneer je op „Volgende” klikt. Er is niets gepubliceerd.",
+    "suspiciousWarning": "De vacature bevatte tekst die op instructies voor AI leek. We hebben die niet uitgevoerd, maar controleer alle velden goed, vooral de beschrijving.",
+    "reviewStepTitle": "Controleer de velden die uit de vacature zijn ingevuld:",
+    "errorFileMissing": "Kies een screenshotbestand.",
+    "errorFileEmpty": "Dit bestand is leeg.",
+    "errorFileTooLarge": "Het bestand is te groot. De maximale grootte is 5 MB.",
+    "errorFileType": "Alleen PNG-, JPG- en WebP-afbeeldingen worden ondersteund.",
+    "errorUrlMissing": "Plak een link naar de vacature.",
+    "errorNetwork": "Geen verbinding met de server. Controleer je verbinding en probeer het opnieuw."
   },
   "messages": {
     "title": "Berichten",
