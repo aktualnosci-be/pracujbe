@@ -1,5 +1,6 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { useLocale, useTranslations } from 'next-intl';
@@ -28,6 +29,34 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Stepper } from '@/components/ui/stepper';
+import {
+  BTN_PRIMARY,
+  BTN_RESET,
+  BTN_SECONDARY,
+  CHECK_ROW,
+  CHECKBOX,
+  EYEBROW,
+  FORM_ERROR,
+  FORM_FIELD,
+  FORM_GRID,
+  FORM_HINT,
+  FORM_INPUT,
+  FORM_LABEL_TEXT,
+  FORM_SELECT,
+  FORM_WIDE,
+  H1_EXTENDED,
+  H2_EXTENDED,
+  H3_EXTENDED,
+  INFO_LABEL,
+  INFO_PAIRS,
+  INFO_VALUE,
+  INTRO,
+  P_EXTENDED,
+  PAPER,
+  STATUS,
+  STATUS_GOOD,
+  TEXT_LINK,
+} from '@/components/dashboard/panel-styles';
 import {
   CATEGORY_KEYS,
   CONTRACT_TYPES,
@@ -774,7 +803,7 @@ export function JobWizard({
     const message = errors[name]?.message;
     if (!message) return null;
     return (
-      <p id={`${domId(name)}-error`} className="text-sm text-error">
+      <p id={`${domId(name)}-error`} className={FORM_ERROR}>
         {tRoot(String(message))}
       </p>
     );
@@ -785,14 +814,15 @@ export function JobWizard({
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-8 sm:space-y-6">
-      {/* Nagłówek + znacznik zapisu */}
-      <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between sm:pb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+    <div className="mx-auto min-w-0 max-w-5xl pb-8">
+      {/* Nagłówek + znacznik zapisu (prototyp: `.eyebrow` + `.extended h1` + `.dash-intro`) */}
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className={EYEBROW}>{tRoot('dashboard.navOffers')}</p>
+          <h1 className={H1_EXTENDED}>
             {isEdit ? t('editTitle') : t('title')}
           </h1>
-          <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground">
+          <p className={INTRO}>
             {isEdit
               ? published?.status === 'paused'
                 ? t('editSubtitlePaused')
@@ -802,7 +832,7 @@ export function JobWizard({
           {showViewLink ? (
             <Link
               href={`/oferty-pracy/${publicSlug}`}
-              className="mt-3 inline-flex text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary"
+              className={cn(TEXT_LINK, 'mt-2')}
             >
               {t('viewOffer')}
             </Link>
@@ -810,18 +840,16 @@ export function JobWizard({
         </div>
         {/* Bez `role="status"`: stan zapisu ogłasza jeden region — SaveIndicator w stopce (#402). */}
         {!isEdit && saveState === 'saved' && badgeVisible ? (
-          <div
-            className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-success/30 bg-success/5 px-3 py-2"
-          >
+          <div className={cn(STATUS_GOOD, 'inline-flex shrink-0 items-center gap-2 self-start py-0 pr-0')}>
             <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-            <span className="text-sm font-medium text-foreground">
+            <span className="font-semibold">
               {demo ? t('savedDemo') : t('saved')}
             </span>
             <button
               type="button"
               onClick={() => setBadgeVisible(false)}
               aria-label={tn('close')}
-              className="-mr-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[8px] text-success-text transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -836,13 +864,13 @@ export function JobWizard({
         steps={steps}
         current={step - 1}
         progressLabel={t('stepProgress', { current: step, total: steps.length })}
-        className="rounded-[1.75rem] border border-border bg-card p-5 shadow-sm sm:p-7"
+        className="mt-6 border-b border-border pb-6"
       />
 
       {isEdit && editInvalidStep !== null ? (
         <p
           role="alert"
-          className="flex items-start gap-2.5 rounded-lg border border-error/40 bg-error/5 p-3 text-sm font-medium text-foreground"
+          className="mt-5 flex min-w-0 items-start gap-2.5 rounded-[16px] border border-error/40 bg-error/5 px-[23px] py-5 text-sm font-semibold text-foreground max-[600px]:p-[18px]"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
           {t('editFixStep', { step: editInvalidStep, title: steps[editInvalidStep - 1]?.title ?? '' })}
@@ -850,24 +878,27 @@ export function JobWizard({
       ) : null}
 
       {/* Formularz bieżącego kroku */}
-      <section className="min-w-0 rounded-[1.75rem] border border-border border-t-4 border-t-primary bg-card p-5 shadow-sm sm:p-8">
+      {/* Prototyp: `.paper.demo-form`, nagłówek sekcji `01 / Stanowisko i miejsce`. Numer
+          kroku jest dekoracyjny (aria-hidden) — nazwa nagłówka = tytuł kroku. */}
+      <section className={PAPER}>
         <h2
           ref={stepHeadingRef}
           tabIndex={-1}
-          className="text-xl font-semibold tracking-tight text-foreground focus:outline-none sm:text-2xl"
+          className={`${H2_EXTENDED} focus:outline-none`}
         >
+          <span aria-hidden="true">{String(step).padStart(2, '0')} / </span>
           {steps[step - 1]?.title}
         </h2>
         <p className="sr-only" aria-live="polite" aria-atomic="true">
           {stepAnnouncement}
         </p>
-        <p className="mt-1 text-base leading-relaxed text-muted-foreground">{steps[step - 1]?.desc}</p>
+        <p className={cn(P_EXTENDED, 'mt-2')}>{steps[step - 1]?.desc}</p>
         {stepReviewLabels.length > 0 ? (
           <div
             role="note"
-            className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm text-foreground"
+            className="mt-5 rounded-[16px] border border-warning/40 bg-warning/5 px-[23px] py-5 text-[13px] text-foreground max-[600px]:p-[18px]"
           >
-            <p className="font-medium">{tImport('reviewStepTitle')}</p>
+            <p className="text-[15px] font-[650]">{tImport('reviewStepTitle')}</p>
             <ul className="mt-1 list-disc pl-5">
               {stepReviewLabels.map((label) => (
                 <li key={label}>{label}</li>
@@ -877,7 +908,7 @@ export function JobWizard({
         ) : null}
 
         <form
-          className="mt-6 [&_input]:min-h-12 [&_textarea]:text-base [&_[role=combobox]]:min-h-12"
+          className="min-w-0"
           noValidate
           onSubmit={(e) => {
             e.preventDefault();
@@ -885,10 +916,11 @@ export function JobWizard({
           }}
         >
           {step === 1 ? (
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('title')}>{t('titleLabel')}</Label>
+            <div className={FORM_GRID}>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('title')} className={FORM_LABEL_TEXT}>{t('titleLabel')}</Label>
                 <Input
+                  className={FORM_INPUT}
                   id={domId('title')}
                   placeholder={t('titlePlaceholder')}
                   aria-invalid={errors.title ? true : undefined}
@@ -897,14 +929,13 @@ export function JobWizard({
                 />
                 <FieldError name="title" />
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div id={domId('category')} className="space-y-1.5">
-                  <Label htmlFor="job-category-trigger">{t('categoryLabel')}</Label>
+                <div id={domId('category')} className={FORM_FIELD}>
+                  <Label htmlFor="job-category-trigger" className={FORM_LABEL_TEXT}>{t('categoryLabel')}</Label>
                   <Select
                     value={values.category || undefined}
                     onValueChange={(val) => setValue('category', val as CategoryKey, { shouldDirty: true })}
                   >
-                    <SelectTrigger
+                    <SelectTrigger className={FORM_SELECT}
                       id="job-category-trigger"
                       aria-invalid={errors.category ? true : undefined}
                       aria-describedby={errorDescription('category')}
@@ -921,9 +952,10 @@ export function JobWizard({
                   </Select>
                   <FieldError name="category" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('occupation')}>{t('occupationLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('occupation')} className={FORM_LABEL_TEXT}>{t('occupationLabel')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('occupation')}
                     placeholder={t('occupationPlaceholder')}
                     aria-invalid={errors.occupation ? true : undefined}
@@ -932,22 +964,20 @@ export function JobWizard({
                   />
                   <FieldError name="occupation" />
                 </div>
-              </div>
             </div>
           ) : null}
 
           {step === 2 ? (
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div id={domId('contractType')} className="space-y-1.5">
-                  <Label htmlFor="job-contract-trigger">{t('contractTypeLabel')}</Label>
+            <div className={FORM_GRID}>
+                <div id={domId('contractType')} className={FORM_FIELD}>
+                  <Label htmlFor="job-contract-trigger" className={FORM_LABEL_TEXT}>{t('contractTypeLabel')}</Label>
                   <Select
                     value={values.contractType || undefined}
                     onValueChange={(val) =>
                       setValue('contractType', val as ContractType, { shouldDirty: true })
                     }
                   >
-                    <SelectTrigger
+                    <SelectTrigger className={FORM_SELECT}
                       id="job-contract-trigger"
                       aria-invalid={errors.contractType ? true : undefined}
                       aria-describedby={errorDescription('contractType')}
@@ -964,9 +994,10 @@ export function JobWizard({
                   </Select>
                   <FieldError name="contractType" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('workingHours')}>{t('workingHoursLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('workingHours')} className={FORM_LABEL_TEXT}>{t('workingHoursLabel')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('workingHours')}
                     placeholder={t('workingHoursPlaceholder')}
                     aria-invalid={errors.workingHours ? true : undefined}
@@ -975,9 +1006,10 @@ export function JobWizard({
                   />
                   <FieldError name="workingHours" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('shifts')}>{t('shiftsLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('shifts')} className={FORM_LABEL_TEXT}>{t('shiftsLabel')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('shifts')}
                     placeholder={t('shiftsPlaceholder')}
                     aria-invalid={errors.shifts ? true : undefined}
@@ -986,9 +1018,10 @@ export function JobWizard({
                   />
                   <FieldError name="shifts" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('startDate')}>{t('startDateLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('startDate')} className={FORM_LABEL_TEXT}>{t('startDateLabel')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('startDate')}
                     type="date"
                     aria-invalid={errors.startDate ? true : undefined}
@@ -997,7 +1030,6 @@ export function JobWizard({
                   />
                   <FieldError name="startDate" />
                 </div>
-              </div>
               <CheckboxField
                 id={domId('startImmediately')}
                 label={t('startImmediately')}
@@ -1008,11 +1040,11 @@ export function JobWizard({
           ) : null}
 
           {step === 3 ? (
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('city')}>{t('cityLabel')}</Label>
+            <div className={FORM_GRID}>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('city')} className={FORM_LABEL_TEXT}>{t('cityLabel')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('city')}
                     placeholder={t('cityPlaceholder')}
                     autoComplete="address-level2"
@@ -1022,9 +1054,10 @@ export function JobWizard({
                   />
                   <FieldError name="city" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('region')}>{t('regionLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('region')} className={FORM_LABEL_TEXT}>{t('regionLabel')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('region')}
                     placeholder={t('regionPlaceholder')}
                     aria-invalid={errors.region ? true : undefined}
@@ -1033,9 +1066,10 @@ export function JobWizard({
                   />
                   <FieldError name="region" />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor={domId('address')}>{t('addressLabel')}</Label>
+                <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                  <Label htmlFor={domId('address')} className={FORM_LABEL_TEXT}>{t('addressLabel')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('address')}
                     placeholder={t('addressPlaceholder')}
                     aria-invalid={errors.address ? true : undefined}
@@ -1044,7 +1078,6 @@ export function JobWizard({
                   />
                   <FieldError name="address" />
                 </div>
-              </div>
               <CheckboxField
                 id={domId('remote')}
                 label={t('remote')}
@@ -1055,11 +1088,11 @@ export function JobWizard({
           ) : null}
 
           {step === 4 ? (
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('salaryMin')}>{t('salaryMinLabel')}</Label>
+            <div className={FORM_GRID}>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('salaryMin')} className={FORM_LABEL_TEXT}>{t('salaryMinLabel')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('salaryMin')}
                     type="number"
                     inputMode="numeric"
@@ -1070,9 +1103,10 @@ export function JobWizard({
                   />
                   <FieldError name="salaryMin" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('salaryMax')}>{t('salaryMaxLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('salaryMax')} className={FORM_LABEL_TEXT}>{t('salaryMaxLabel')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('salaryMax')}
                     type="number"
                     inputMode="numeric"
@@ -1083,13 +1117,13 @@ export function JobWizard({
                   />
                   <FieldError name="salaryMax" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="job-currency-trigger">{t('currencyLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor="job-currency-trigger" className={FORM_LABEL_TEXT}>{t('currencyLabel')}</Label>
                   <Select
                     value={values.currency}
                     onValueChange={(val) => setValue('currency', val as Currency, { shouldDirty: true })}
                   >
-                    <SelectTrigger id="job-currency-trigger">
+                    <SelectTrigger className={FORM_SELECT} id="job-currency-trigger">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1101,15 +1135,15 @@ export function JobWizard({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="job-period-trigger">{t('salaryPeriodLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor="job-period-trigger" className={FORM_LABEL_TEXT}>{t('salaryPeriodLabel')}</Label>
                   <Select
                     value={values.salaryPeriod}
                     onValueChange={(val) =>
                       setValue('salaryPeriod', val as SalaryPeriod, { shouldDirty: true })
                     }
                   >
-                    <SelectTrigger id="job-period-trigger">
+                    <SelectTrigger className={FORM_SELECT} id="job-period-trigger">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1121,16 +1155,16 @@ export function JobWizard({
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <p className="text-xs text-muted-foreground">{t('salaryHint')}</p>
+              <p className={`${P_EXTENDED} ${FORM_WIDE}`}>{t('salaryHint')}</p>
             </div>
           ) : null}
 
           {step === 5 ? (
-            <div className="space-y-6">
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('description')}>{t('descriptionLabel')}</Label>
+            <div className={FORM_GRID}>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('description')} className={FORM_LABEL_TEXT}>{t('descriptionLabel')}</Label>
                 <Textarea
+                  className={FORM_INPUT}
                   id={domId('description')}
                   rows={6}
                   placeholder={t('descriptionPlaceholder')}
@@ -1140,8 +1174,8 @@ export function JobWizard({
                 />
                 <FieldError name="description" />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('responsibilities')}>{t('responsibilitiesLabel')}</Label>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('responsibilities')} className={FORM_LABEL_TEXT}>{t('responsibilitiesLabel')}</Label>
                 <ChipInput
                   id={domId('responsibilities')}
                   maxItemLength={ITEM_MAX.responsibilities}
@@ -1154,16 +1188,16 @@ export function JobWizard({
                   invalid={Boolean(errors.responsibilities)}
                   errorDescription={errorDescription('responsibilities')}
                 />
-                <p className="text-xs text-muted-foreground">{t('responsibilitiesHint')}</p>
+                <p className={FORM_HINT}>{t('responsibilitiesHint')}</p>
                 <FieldError name="responsibilities" />
               </div>
             </div>
           ) : null}
 
           {step === 6 ? (
-            <div className="space-y-6">
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('requirementsMandatory')}>
+            <div className={FORM_GRID}>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('requirementsMandatory')} className={FORM_LABEL_TEXT}>
                   {t('requirementsMandatoryLabel')}
                 </Label>
                 <ChipInput
@@ -1180,8 +1214,8 @@ export function JobWizard({
                 />
                 <FieldError name="requirementsMandatory" />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('mandatorySkills')}>{t('mandatorySkillsLabel')}</Label>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('mandatorySkills')} className={FORM_LABEL_TEXT}>{t('mandatorySkillsLabel')}</Label>
                 <ChipInput
                   id={domId('mandatorySkills')}
                   maxItemLength={ITEM_MAX.mandatorySkills}
@@ -1196,9 +1230,10 @@ export function JobWizard({
                 />
                 <FieldError name="mandatorySkills" />
               </div>
-              <div className="space-y-1.5 sm:max-w-xs">
-                <Label htmlFor={domId('minExperienceYears')}>{t('minExperienceLabel')}</Label>
+              <div className={FORM_FIELD}>
+                <Label htmlFor={domId('minExperienceYears')} className={FORM_LABEL_TEXT}>{t('minExperienceLabel')}</Label>
                 <Input
+                  className={FORM_INPUT}
                   id={domId('minExperienceYears')}
                   type="number"
                   inputMode="numeric"
@@ -1208,16 +1243,16 @@ export function JobWizard({
                   aria-describedby={errorDescription('minExperienceYears')}
                   {...register('minExperienceYears')}
                 />
-                <p className="text-xs text-muted-foreground">{t('minExperienceHint')}</p>
+                <p className={FORM_HINT}>{t('minExperienceHint')}</p>
                 <FieldError name="minExperienceYears" />
               </div>
             </div>
           ) : null}
 
           {step === 7 ? (
-            <div className="space-y-6">
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('requirementsOptional')}>
+            <div className={FORM_GRID}>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('requirementsOptional')} className={FORM_LABEL_TEXT}>
                   {t('requirementsOptionalLabel')}
                 </Label>
                 <ChipInput
@@ -1234,8 +1269,8 @@ export function JobWizard({
                 />
                 <FieldError name="requirementsOptional" />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('skills')}>{t('skillsLabel')}</Label>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('skills')} className={FORM_LABEL_TEXT}>{t('skillsLabel')}</Label>
                 <ChipInput
                   id={domId('skills')}
                   maxItemLength={ITEM_MAX.skills}
@@ -1251,12 +1286,12 @@ export function JobWizard({
                 <FieldError name="skills" />
               </div>
 
-              <div id={domId('languages')} className="space-y-2">
-                <Label htmlFor="job-language-draft">{t('languagesLabel')}</Label>
-                <div className="flex flex-col gap-2 sm:flex-row">
+              <div id={domId('languages')} className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor="job-language-draft" className={FORM_LABEL_TEXT}>{t('languagesLabel')}</Label>
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start">
                   <Input
                     id="job-language-draft"
-                    className="flex-1"
+                    className={cn(FORM_INPUT, 'sm:flex-1')}
                     value={langDraft}
                     placeholder={t('languageNamePlaceholder')}
                     aria-invalid={langError || errors.languages ? true : undefined}
@@ -1276,7 +1311,7 @@ export function JobWizard({
                   />
                   <div className="w-full sm:w-48">
                     <Select value={levelDraft} onValueChange={(val) => setLevelDraft(val as LanguageLevel)}>
-                      <SelectTrigger aria-label={LEVEL_LABEL[levelDraft]}>
+                      <SelectTrigger className={FORM_SELECT} aria-label={LEVEL_LABEL[levelDraft]}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1288,21 +1323,26 @@ export function JobWizard({
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button type="button" variant="outline" onClick={addLanguage}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addLanguage}
+                    className={`${BTN_SECONDARY} ${BTN_RESET} shrink-0`}
+                  >
                     {t('addLanguage')}
                   </Button>
                 </div>
                 {langError ? (
-                  <p id="job-language-draft-error" className="text-sm text-error">
+                  <p id="job-language-draft-error" className={FORM_ERROR}>
                     {tRoot('candidate.error.languageInvalid')}
                   </p>
                 ) : null}
                 {values.languages.length > 0 ? (
-                  <ul className="mt-1 flex flex-wrap gap-2">
+                  <ul className="flex flex-wrap gap-2">
                     {values.languages.map((entry) => (
                       <li
                         key={entry.language}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-input bg-soft px-2.5 py-1 text-sm text-foreground"
+                        className={cn(STATUS, 'inline-flex items-center gap-1 py-0 pr-0 text-[13px] text-foreground')}
                       >
                         {entry.language} · {LEVEL_LABEL[entry.level]}
                         <button
@@ -1315,7 +1355,7 @@ export function JobWizard({
                               { shouldDirty: true },
                             )
                           }
-                          className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[8px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           <X className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
@@ -1326,8 +1366,8 @@ export function JobWizard({
                 <FieldError name="languages" />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('requiredCertificates')}>{t('certificatesLabel')}</Label>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('requiredCertificates')} className={FORM_LABEL_TEXT}>{t('certificatesLabel')}</Label>
                 <ChipInput
                   id={domId('requiredCertificates')}
                   maxItemLength={ITEM_MAX.requiredCertificates}
@@ -1343,7 +1383,7 @@ export function JobWizard({
                 <FieldError name="requiredCertificates" />
               </div>
 
-              <div className="space-y-3">
+              <div className="contents">
                 <CheckboxField
                   id={domId('requiresDrivingLicense')}
                   label={t('requiresDrivingLicense')}
@@ -1372,9 +1412,9 @@ export function JobWizard({
           ) : null}
 
           {step === 8 ? (
-            <div className="space-y-6">
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('conditions')}>{t('conditionsLabel')}</Label>
+            <div className={FORM_GRID}>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('conditions')} className={FORM_LABEL_TEXT}>{t('conditionsLabel')}</Label>
                 <ChipInput
                   id={domId('conditions')}
                   maxItemLength={ITEM_MAX.conditions}
@@ -1389,8 +1429,8 @@ export function JobWizard({
                 />
                 <FieldError name="conditions" />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('benefits')}>{t('benefitsLabel')}</Label>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('benefits')} className={FORM_LABEL_TEXT}>{t('benefitsLabel')}</Label>
                 <ChipInput
                   id={domId('benefits')}
                   maxItemLength={ITEM_MAX.benefits}
@@ -1405,7 +1445,7 @@ export function JobWizard({
                 />
                 <FieldError name="benefits" />
               </div>
-              <div className="space-y-3">
+              <div className="contents">
                 <CheckboxField
                   id={domId('accommodation')}
                   label={t('accommodation')}
@@ -1423,10 +1463,11 @@ export function JobWizard({
           ) : null}
 
           {step === 9 ? (
-            <div className="space-y-6">
-              <div className="space-y-1.5">
-                <Label htmlFor={domId('companyDescription')}>{t('companyDescriptionLabel')}</Label>
+            <div className={FORM_GRID}>
+              <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <Label htmlFor={domId('companyDescription')} className={FORM_LABEL_TEXT}>{t('companyDescriptionLabel')}</Label>
                 <Textarea
+                  className={FORM_INPUT}
                   id={domId('companyDescription')}
                   rows={5}
                   placeholder={t('companyDescriptionPlaceholder')}
@@ -1436,9 +1477,10 @@ export function JobWizard({
                 />
                 <FieldError name="companyDescription" />
               </div>
-              <div className="space-y-1.5 sm:max-w-md">
-                <Label htmlFor={domId('contactEmail')}>{t('contactEmailLabel')}</Label>
+              <div className={FORM_FIELD}>
+                <Label htmlFor={domId('contactEmail')} className={FORM_LABEL_TEXT}>{t('contactEmailLabel')}</Label>
                 <Input
+                  className={FORM_INPUT}
                   id={domId('contactEmail')}
                   type="email"
                   placeholder={t('contactEmailPlaceholder')}
@@ -1450,10 +1492,11 @@ export function JobWizard({
               </div>
 
               {/* Podgląd oferty */}
-              <div className="rounded-2xl border border-border bg-soft p-5 sm:p-6">
-                <h3 className="text-base font-semibold text-foreground">{t('previewTitle')}</h3>
-                <p className="mt-0.5 text-sm text-muted-foreground">{t('previewNote')}</p>
-                <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+              {/* Prototyp: `.profile-banner` (tło soft, promień 22 px) + `.info-pairs`. */}
+              <div className={cn(FORM_WIDE, 'min-w-0 rounded-[22px] bg-soft p-[27px] max-[600px]:rounded-[18px] max-[600px]:p-5')}>
+                <h3 className={`${H3_EXTENDED} mt-0`}>{t('previewTitle')}</h3>
+                <p className={cn(P_EXTENDED, 'mt-1.5')}>{t('previewNote')}</p>
+                <dl className={cn(INFO_PAIRS, 'pb-0 max-[600px]:grid-cols-1')}>
                   <PreviewRow label={t('titleLabel')} value={values.title} empty={t('previewNothing')} />
                   <PreviewRow
                     label={t('categoryLabel')}
@@ -1500,8 +1543,8 @@ export function JobWizard({
               </div>
 
               {isEdit ? null : (
-              <div id={domId('agreePublish')} className="space-y-1.5">
-                <div className="flex items-start gap-2.5">
+              <div id={domId('agreePublish')} className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                <div className={cn(CHECK_ROW, 'my-0 min-h-11 items-start')}>
                   <Checkbox
                     id="job-agreePublish-box"
                     checked={values.agreePublish}
@@ -1510,11 +1553,11 @@ export function JobWizard({
                     }
                     aria-invalid={errors.agreePublish ? true : undefined}
                     aria-describedby={errorDescription('agreePublish')}
-                    className="mt-0.5"
+                    className={cn(CHECKBOX, 'mt-0.5 rounded-[4px]')}
                   />
                   <Label
                     htmlFor="job-agreePublish-box"
-                    className="text-sm font-normal leading-snug text-muted-foreground"
+                    className="text-[13px] font-normal leading-[1.6] text-foreground"
                   >
                     {t('agreePublish')}
                   </Label>
@@ -1526,15 +1569,15 @@ export function JobWizard({
               {publishError ? (
                 <div
                   role="alert"
-                  className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/5 p-3"
+                  className={cn(FORM_WIDE, 'flex min-w-0 items-start gap-2.5 rounded-[16px] border border-warning/40 bg-warning/5 px-[23px] py-5 max-[600px]:p-[18px]')}
                 >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
-                  <div className="text-sm">
-                    <p className="font-medium text-foreground">
+                  <div className="min-w-0 text-[13px]">
+                    <p className="text-[15px] font-[650] text-foreground">
                       {tRoot(toUserMessageKey(publishError))}
                     </p>
                     {publishError === 'COMPANY_NOT_VERIFIED' ? (
-                      <p className="mt-0.5 text-muted-foreground">{t('notVerifiedNote')}</p>
+                      <p className="mt-1.5 text-muted-foreground">{t('notVerifiedNote')}</p>
                     ) : null}
                   </div>
                 </div>
@@ -1545,8 +1588,9 @@ export function JobWizard({
       </section>
 
       {/* Stopka: wskaźnik zapisu + nawigacja */}
-      <div className="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div className="space-y-1">
+      {/* Prototyp: `.btn` pod formularzem + notka; tu pasek akcji (`.action-row`) pod `.paper`. */}
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
           <SaveIndicator
             state={saveState}
             labels={{
@@ -1565,23 +1609,35 @@ export function JobWizard({
             saveError === 'JOB_EDIT_CONFLICT') ? (
             <Link
               href="/employer/oferty"
-              className="text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary"
+              className={TEXT_LINK}
             >
               {t('goToOffers')}
             </Link>
           ) : null}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end [&_button]:min-h-12">
-          <Button asChild variant="ghost" disabled={busy}>
+        <div className="flex min-w-0 flex-wrap items-center gap-[13px] max-[600px]:flex-col max-[600px]:items-stretch sm:justify-end">
+          <Button asChild variant="ghost" disabled={busy} className={`${TEXT_LINK} ${BTN_RESET} justify-center px-3`}>
             <Link href={isEdit ? '/employer/oferty' : '/employer'}>{t('cancel')}</Link>
           </Button>
           {isEdit ? null : (
-            <Button type="button" variant="outline" onClick={() => void handleSaveExit()} disabled={busy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleSaveExit()}
+              disabled={busy}
+              className={`${BTN_SECONDARY} ${BTN_RESET}`}
+            >
               {t('saveExit')}
             </Button>
           )}
           {step > 1 ? (
-            <Button type="button" variant="outline" onClick={handleBack} disabled={busy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleBack}
+              disabled={busy}
+              className={`${BTN_SECONDARY} ${BTN_RESET}`}
+            >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               {t('back')}
             </Button>
@@ -1589,12 +1645,23 @@ export function JobWizard({
           {isEdit ? (
             <>
               {step < TOTAL_STEPS ? (
-                <Button type="button" variant="outline" onClick={() => void handleNext()} disabled={busy}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleNext()}
+                  disabled={busy}
+                  className={`${BTN_SECONDARY} ${BTN_RESET}`}
+                >
                   {t('next')}
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Button>
               ) : null}
-              <Button type="button" onClick={() => void handleSaveChanges()} disabled={busy}>
+              <Button
+                type="button"
+                onClick={() => void handleSaveChanges()}
+                disabled={busy}
+                className={`${BTN_PRIMARY} ${BTN_RESET}`}
+              >
                 {saveState === 'saving' ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
@@ -1604,7 +1671,12 @@ export function JobWizard({
               </Button>
             </>
           ) : step < TOTAL_STEPS ? (
-            <Button type="button" onClick={() => void handleNext()} disabled={busy}>
+            <Button
+              type="button"
+              onClick={() => void handleNext()}
+              disabled={busy}
+              className={`${BTN_PRIMARY} ${BTN_RESET}`}
+            >
               {saveState === 'saving' ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : null}
@@ -1612,7 +1684,12 @@ export function JobWizard({
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Button>
           ) : (
-            <Button type="button" onClick={() => void handlePublish()} disabled={busy}>
+            <Button
+              type="button"
+              onClick={() => void handlePublish()}
+              disabled={busy}
+              className={`${BTN_PRIMARY} ${BTN_RESET}`}
+            >
               {busy ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
@@ -1691,14 +1768,15 @@ function CheckboxField({
   onChange: (checked: boolean) => void;
 }): React.JSX.Element {
   return (
-    <div id={id} className="flex items-start gap-2.5">
+    // Prototyp: `.demo-form .check-row` (wiersz 19 px + etykieta 400); wiersz min. 44 px.
+    <div id={id} className={cn(CHECK_ROW, 'my-0 min-h-11')}>
       <Checkbox
         id={`${id}-box`}
         checked={checked}
         onCheckedChange={(c) => onChange(c === true)}
-        className="mt-0.5"
+        className={cn(CHECKBOX, 'rounded-[4px]')}
       />
-      <Label htmlFor={`${id}-box`} className="text-sm font-normal leading-snug text-foreground">
+      <Label htmlFor={`${id}-box`} className="text-[13px] font-normal leading-[1.6] text-foreground">
         {label}
       </Label>
     </div>
@@ -1716,9 +1794,9 @@ function PreviewRow({
   empty: string;
 }): React.JSX.Element {
   return (
-    <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 text-sm text-foreground">{value.trim() ? value : empty}</dd>
+    <div className="min-w-0">
+      <dt className={INFO_LABEL}>{label}</dt>
+      <dd className={INFO_VALUE}>{value.trim() ? value : empty}</dd>
     </div>
   );
 }
@@ -1726,9 +1804,9 @@ function PreviewRow({
 /** Lista podglądu (etykieta + pozycje). */
 function PreviewList({ label, items }: { label: string; items: string[] }): React.JSX.Element {
   return (
-    <div className="mt-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm text-foreground">
+    <div className="mt-[22px] min-w-0">
+      <p className={INFO_LABEL}>{label}</p>
+      <ul className={cn(P_EXTENDED, 'list-inside list-disc break-words text-foreground')}>
         {items.map((item) => (
           <li key={item}>{item}</li>
         ))}
@@ -1781,8 +1859,9 @@ function ChipInput({
 
   return (
     <div>
-      <div className="flex gap-2">
+      <div className="flex min-w-0 items-start gap-3">
         <Input
+          className={FORM_INPUT}
           id={id}
           value={draft}
           placeholder={placeholder}
@@ -1802,29 +1881,34 @@ function ChipInput({
             }
           }}
         />
-        <Button type="button" variant="outline" onClick={add}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={add}
+          className={`${BTN_SECONDARY} ${BTN_RESET} shrink-0`}
+        >
           <Plus className="h-4 w-4" aria-hidden="true" />
           {addLabel}
         </Button>
       </div>
       {tooLong ? (
-        <p id={draftErrorId} className="mt-1.5 text-sm text-error">
+        <p id={draftErrorId} className={cn(FORM_ERROR, 'mt-[9px]')}>
           {tooLongLabel}
         </p>
       ) : null}
       {values.length > 0 ? (
-        <ul className="mt-3 flex flex-wrap gap-2">
+        <ul className="mt-[13px] flex flex-wrap gap-2">
           {values.map((value) => (
             <li
               key={value}
-              className="inline-flex items-center gap-1.5 rounded-md border border-input bg-soft px-2.5 py-1 text-sm text-foreground"
+              className={cn(STATUS, 'inline-flex items-center gap-1 py-0 pr-0 text-[13px] text-foreground')}
             >
               {value}
               <button
                 type="button"
                 aria-label={`${removeLabel}: ${value}`}
                 onClick={() => onChange(values.filter((v) => v !== value))}
-                className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[8px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
