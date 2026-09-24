@@ -34,10 +34,11 @@ function client(failed: Read | null, empty = false) {
     failed === read ? { data: null, count: null, error: readError } : { data, error: null, ...extra };
   const supabase = {
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'candidate-1' } } })) },
-    rpc: vi.fn(async (name: string) => {
+    // RPC jak w PostgREST: łańcuch (np. `.in('job_id')` dla metadanych strony, #184), `await` daje wynik.
+    rpc: vi.fn((name: string) => chain(() => {
       if (name === 'get_public_jobs_count') return result('newJobs', 12);
       return { data: [{ job_id: 'job-1', slug: 'magazynier', title: 'Magazynier', company_name: 'Firma', city: 'Gent' }], error: null };
-    }),
+    })),
     from: vi.fn((table: string) => chain(({ head }) => {
       if (table === 'applications') {
         return head

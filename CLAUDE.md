@@ -562,6 +562,10 @@ Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilny
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
 Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
 `candidate-applications-pagination`).
+Metadane ofert (#184): `get_applied_jobs_display` z filtrem `in('job_id')` tylko dla ofert
+bieżącej strony — „Pokaż więcej” nie przesyła metadanych całej historii. **Otwarte:** funkcja
+(SECURITY DEFINER, bez inliningu) nadal liczy całą historię w bazie; parametr `p_job_ids`
+wymaga migracji.
 Paszport tożsamości nad siatką `/candidate/profil` (#172, `CandidateIdentity`): imię, pierwszy
 zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie odczytu tylko komunikat.
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
