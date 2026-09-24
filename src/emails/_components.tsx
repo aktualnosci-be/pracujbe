@@ -33,6 +33,7 @@ import { Button as REButton } from '@react-email/components';
 import type { Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { interpolate, layoutCopy } from '@/emails/copy';
+import type { EmailSenderIdentity } from '@/lib/email/sender';
 
 /**
  * Paleta maili = kolory prototypowego newslettera (tokeny `--pp-*` z globals.css).
@@ -437,6 +438,7 @@ export function EmailLayout({
   children,
   unsubscribeUrl,
   footerNote,
+  sender,
 }: {
   locale: Locale;
   preview: string;
@@ -445,6 +447,8 @@ export function EmailLayout({
   unsubscribeUrl?: string;
   /** Nadpisanie noty „masz konto…” (odbiorca bez konta, #41). */
   footerNote?: string;
+  /** Tożsamość i adres pocztowy nadawcy z konfiguracji (#45; wymagane w marketingu). */
+  sender?: EmailSenderIdentity;
 }): ReactNode {
   const lc = layoutCopy[locale];
   const year = new Date().getFullYear();
@@ -483,6 +487,13 @@ export function EmailLayout({
                 </>
               ) : null}
             </Text>
+            {sender ? (
+              <Text style={styles.footerText} data-email-sender="">
+                {lc.sender}: {sender.identity}
+                {'  ·  '}
+                {lc.postalAddress}: {sender.postalAddress}
+              </Text>
+            ) : null}
             <Text style={styles.footerText}>{rights}</Text>
           </Section>
         </Container>

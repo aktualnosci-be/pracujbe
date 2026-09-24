@@ -625,7 +625,8 @@
     "moderationLocked": "Deze inhoud is beperkt door een moderatiebeslissing, dus de status kan niet worden gewijzigd.",
     "guestApplyUnavailable": "Solliciteren zonder account is tijdelijk niet beschikbaar. Probeer later opnieuw of log in.",
     "emailNotVerified": "Bevestig eerst het e-mailadres van je account — klik op de link die we bij de registratie stuurden.",
-    "claimExpired": "De koppellink is verlopen (hij was 30 dagen geldig)."
+    "claimExpired": "De koppellink is verlopen (hij was 30 dagen geldig).",
+    "jobImportSensitiveData": "De vacature bevat een identificatienummer van een persoon of document, daarom hebben we ze niet geïmporteerd. Vul het formulier handmatig in."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -1181,7 +1182,9 @@
     "screeningOptional": "(optioneel)",
     "screeningRequired": "Beantwoord deze vraag.",
     "screeningYes": "Ja",
-    "screeningNo": "Nee"
+    "screeningNo": "Nee",
+    "sensitiveIdHint": "Voor je sollicitatie is geen INSZ-/BIS-nummer of nummer van een identiteitsdocument nodig — vul die niet in.",
+    "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
   },
   "guestApply": {
     "subtitle": "Solliciteer zonder account of log in om je profiel te gebruiken. Een cv is niet nodig.",
@@ -1233,7 +1236,8 @@
       "emailInvalid": "Vul een geldig e-mailadres in, bv. jan@example.com.",
       "messageTooLong": "Het bericht mag maximaal 500 tekens hebben.",
       "consentRequired": "Je moet de toestemming aanvinken om te solliciteren.",
-      "idempotencyKeyInvalid": "Vernieuw de pagina en verstuur het formulier opnieuw."
+      "idempotencyKeyInvalid": "Vernieuw de pagina en verstuur het formulier opnieuw.",
+      "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
     }
   },
   "legal": {
@@ -1450,7 +1454,8 @@
     "errorFileTooLarge": "Het bestand is te groot. De maximale grootte is 5 MB.",
     "errorFileType": "Alleen PNG-, JPG- en WebP-afbeeldingen worden ondersteund.",
     "errorUrlMissing": "Plak een link naar de vacature.",
-    "errorNetwork": "Geen verbinding met de server. Controleer je verbinding en probeer het opnieuw."
+    "errorNetwork": "Geen verbinding met de server. Controleer je verbinding en probeer het opnieuw.",
+    "contactNote": "E-mailadressen, telefoonnummers en identificatienummers nemen we niet over in het formulier. Vul het contact-e-mailadres zelf in bij de laatste stap."
   },
   "messages": {
     "title": "Berichten",
@@ -1889,7 +1894,8 @@
       "messageTooLong": "Het bericht is te lang.",
       "phoneInvalid": "Vul een geldig telefoonnummer in.",
       "termsRequired": "Je moet de toestemming aanvaarden om je sollicitatie te versturen.",
-      "idempotencyKeyInvalid": "Het formulier kon niet worden verzonden. Vernieuw de pagina en probeer het opnieuw."
+      "idempotencyKeyInvalid": "Het formulier kon niet worden verzonden. Vernieuw de pagina en probeer het opnieuw.",
+      "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
     }
   },
   "offer": {
@@ -2085,9 +2091,11 @@
     "title": "Afmelden voor e-mails",
     "confirmText": "Bevestig dat je deze e-mails niet meer wilt ontvangen: {category}.",
     "confirmButton": "Afmelden",
+    "allButton": "Afmelden voor alle e-mailmeldingen",
     "pending": "Opslaan…",
     "doneTitle": "Afgemeld",
     "doneText": "We sturen je deze e-mails niet meer: {category}. Andere berichten en meldingen op de site blijven werken.",
+    "allDoneText": "We sturen je geen e-mailmeldingen of nieuwsbrief meer. Berichten die nodig zijn voor je account, zoals een wachtwoordreset, sturen we nog wel.",
     "settingsHint": "Al je meldingsinstellingen wijzig je na het inloggen.",
     "loginLink": "Inloggen",
     "invalidTitle": "De link is ongeldig",
@@ -2238,5 +2246,27 @@
     "outcomeLabel": "Uitkomst",
     "outcomeActionTaken": "We hebben maatregelen genomen tegen de gemelde inhoud.",
     "outcomeNoAction": "Na onderzoek hebben we geen maatregelen genomen tegen de gemelde inhoud."
+  },
+  "campaignBanner": {
+    "eyebrow": "Vacature in België",
+    "cta": "Nu solliciteren",
+    "accessibleName": "Pracuj.be — vacature: {title}",
+    "pageTitle": "Campagnebanner",
+    "intro": "Kant-en-klare afbeeldingen van deze vacature voor campagnes en sociale media. Ze bevatten alleen gegevens die in de openbare vacature staan. Er wordt niets automatisch gepubliceerd — controleer de voorvertoning vóór gebruik.",
+    "languageLabel": "Taal van de banner",
+    "formatHeading": "{width} × {height} px",
+    "previewAlt": "Voorvertoning banner {width} × {height} px: {title}",
+    "downloadSvg": "SVG downloaden",
+    "downloadPng": "PNG downloaden",
+    "downloadPngPending": "PNG wordt voorbereid…",
+    "downloadPngError": "De PNG kon niet worden voorbereid. Probeer het opnieuw of download de SVG.",
+    "linkNote": "In het SVG-bestand leidt de knop naar de vacature. Stel bij een PNG dit adres in op de plaats van publicatie: {url}",
+    "unavailableTitle": "Banner niet beschikbaar",
+    "unavailableHint": "Een banner kan alleen worden gemaakt voor een actieve, niet-verlopen vacature van een geverifieerd bedrijf, met recruiterrechten voor dat bedrijf.",
+    "backToOffers": "Terug naar vacatures",
+    "openBanner": "Campagnebanner",
+    "openBannerLabel": "Campagnebanner: {title}",
+    "loadError": "De vacature kon niet worden geladen",
+    "loadErrorHint": "Probeer het zo meteen opnieuw. Blijft het probleem bestaan, ga dan terug naar de lijst met vacatures."
   }
 }

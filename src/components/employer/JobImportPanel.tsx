@@ -170,7 +170,7 @@ export function JobImportPanel({
 
       <div id={`${panelId}-body`} hidden={!open} className="mt-[22px] space-y-7" aria-busy={busy !== null}>
         <p className="border-b border-border pb-3 text-xs leading-[1.6] text-muted-foreground">
-          {t('rightsNote')} {t('privacyNote')}
+          {t('rightsNote')} {t('privacyNote')} {t('contactNote')}
         </p>
 
         <div className={FORM_FIELD}>

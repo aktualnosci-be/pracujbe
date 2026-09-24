@@ -625,7 +625,8 @@
     "moderationLocked": "Ce contenu est restreint par une décision de modération : son statut ne peut pas être modifié.",
     "guestApplyUnavailable": "La candidature sans compte est temporairement indisponible. Réessayez plus tard ou connectez-vous.",
     "emailNotVerified": "Confirmez d’abord l’adresse e-mail de votre compte — cliquez sur le lien envoyé lors de l’inscription.",
-    "claimExpired": "Le lien de rattachement a expiré (il était valable 30 jours)."
+    "claimExpired": "Le lien de rattachement a expiré (il était valable 30 jours).",
+    "jobImportSensitiveData": "L’annonce contient un numéro d’identification de personne ou de document ; nous ne l’avons donc pas importée. Remplissez le formulaire manuellement."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -1181,7 +1182,9 @@
     "screeningOptional": "(facultatif)",
     "screeningRequired": "Répondez à cette question.",
     "screeningYes": "Oui",
-    "screeningNo": "Non"
+    "screeningNo": "Non",
+    "sensitiveIdHint": "Votre candidature ne nécessite ni numéro NISS/BIS ni numéro de pièce d’identité — ne les indiquez pas.",
+    "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
   },
   "guestApply": {
     "subtitle": "Postulez sans créer de compte ou connectez-vous pour utiliser votre profil. Pas besoin de CV.",
@@ -1233,7 +1236,8 @@
       "emailInvalid": "Indiquez une adresse e-mail valide, par ex. jean@example.com.",
       "messageTooLong": "Le message peut comporter au maximum 500 caractères.",
       "consentRequired": "Vous devez accepter le consentement pour envoyer la candidature.",
-      "idempotencyKeyInvalid": "Actualisez la page et renvoyez le formulaire."
+      "idempotencyKeyInvalid": "Actualisez la page et renvoyez le formulaire.",
+      "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
     }
   },
   "legal": {
@@ -1450,7 +1454,8 @@
     "errorFileTooLarge": "Le fichier est trop volumineux. La taille maximale est de 5 Mo.",
     "errorFileType": "Seules les images PNG, JPG et WebP sont acceptées.",
     "errorUrlMissing": "Collez un lien vers l’annonce.",
-    "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez."
+    "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
+    "contactNote": "Nous ne reprenons pas les adresses e-mail, numéros de téléphone et numéros d’identification dans le formulaire. Indiquez vous-même l’e-mail de contact à la dernière étape."
   },
   "messages": {
     "title": "Messages",
@@ -1889,7 +1894,8 @@
       "messageTooLong": "Le message est trop long.",
       "phoneInvalid": "Indiquez un numéro de téléphone valide.",
       "termsRequired": "Vous devez accepter le consentement pour envoyer votre candidature.",
-      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez."
+      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez.",
+      "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
     }
   },
   "offer": {
@@ -2085,9 +2091,11 @@
     "title": "Désinscription des e-mails",
     "confirmText": "Confirmez que vous ne souhaitez plus recevoir ces e-mails : {category}.",
     "confirmButton": "Me désinscrire",
+    "allButton": "Me désinscrire de toutes les notifications par e-mail",
     "pending": "Enregistrement…",
     "doneTitle": "Désinscription effectuée",
     "doneText": "Nous ne vous enverrons plus ces e-mails : {category}. Les autres messages et notifications du site ne changent pas.",
+    "allDoneText": "Nous ne vous enverrons plus de notifications par e-mail ni de newsletter. Les messages nécessaires à votre compte, comme la réinitialisation du mot de passe, restent envoyés.",
     "settingsHint": "Vous pouvez modifier tous vos paramètres de notification après connexion.",
     "loginLink": "Se connecter",
     "invalidTitle": "Le lien n’est pas valide",
@@ -2238,5 +2246,27 @@
     "outcomeLabel": "Résultat",
     "outcomeActionTaken": "Nous avons pris des mesures concernant le contenu signalé.",
     "outcomeNoAction": "Après examen, nous n’avons pris aucune mesure concernant le contenu signalé."
+  },
+  "campaignBanner": {
+    "eyebrow": "Offre d’emploi en Belgique",
+    "cta": "Postuler maintenant",
+    "accessibleName": "Pracuj.be — offre d’emploi : {title}",
+    "pageTitle": "Bannière de campagne",
+    "intro": "Visuels prêts à l’emploi de cette offre pour vos campagnes et réseaux sociaux. Ils ne contiennent que les données visibles dans l’offre publique. Rien n’est publié automatiquement — vérifiez l’aperçu avant utilisation.",
+    "languageLabel": "Langue de la bannière",
+    "formatHeading": "{width} × {height} px",
+    "previewAlt": "Aperçu de la bannière {width} × {height} px : {title}",
+    "downloadSvg": "Télécharger le SVG",
+    "downloadPng": "Télécharger le PNG",
+    "downloadPngPending": "Préparation du PNG…",
+    "downloadPngError": "Impossible de préparer le PNG. Réessayez ou téléchargez le SVG.",
+    "linkNote": "Dans le fichier SVG, le bouton mène à l’offre. Pour un PNG, indiquez cette adresse à l’endroit de publication : {url}",
+    "unavailableTitle": "Bannière indisponible",
+    "unavailableHint": "Une bannière ne peut être préparée que pour une offre active et non expirée d’une entreprise vérifiée, avec les droits de recruteur de cette entreprise.",
+    "backToOffers": "Retour aux offres",
+    "openBanner": "Bannière de campagne",
+    "openBannerLabel": "Bannière de campagne : {title}",
+    "loadError": "Impossible de charger l’offre",
+    "loadErrorHint": "Réessayez dans un instant. Si le problème persiste, revenez à la liste des offres."
   }
 }
