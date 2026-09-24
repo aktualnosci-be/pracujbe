@@ -28,6 +28,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'footer',
   'home',
   'job',
+  'jobImport',
   'jobWizard',
   'jobs',
   'match',
