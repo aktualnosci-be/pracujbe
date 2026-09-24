@@ -49,6 +49,25 @@ const MUTATIONS = {
       PERFORM public.set_candidate_languages(p_languages);
       BEGIN PERFORM public.set_candidate_certificates(p_certificates); EXCEPTION WHEN others THEN NULL; END;
     END $$`,
+  // Onboarding (#66): wyszukiwalność bez sprawdzenia kompletności profilu.
+  'searchable-without-complete': `CREATE OR REPLACE FUNCTION public.set_candidate_searchable(p_searchable boolean)
+    RETURNS boolean LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+    UPDATE public.candidate_profiles SET is_searchable = coalesce(p_searchable, false) WHERE profile_id = auth.uid()
+    RETURNING is_searchable $$`,
+  // Onboarding (#66): umiejętności dopisywane zamiast replace-all (edycja nie usuwa pozycji).
+  'skills-append': `CREATE OR REPLACE FUNCTION public.set_candidate_skills(p_skills text[])
+    RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+    DECLARE v_cp uuid := public.ensure_candidate_profile();
+    BEGIN
+      INSERT INTO public.candidate_skills (candidate_profile_id, skill_label)
+        SELECT DISTINCT v_cp, left(btrim(s), 120) FROM unnest(coalesce(p_skills, '{}')) s WHERE btrim(s) <> ''
+      ON CONFLICT (candidate_profile_id, skill_label) DO NOTHING;
+    END $$`,
+  // Onboarding (#66): klient sam ustawia profile_completed/is_searchable (brak guardu 0029).
+  'completeness-guard-off': 'DROP TRIGGER trg_guard_candidate_completeness ON public.candidate_profiles',
+  // Onboarding (#66): relacje profilu zapisywalne bezpośrednim DML (obejście RPC, 0028).
+  'relations-dml-open': `GRANT INSERT, DELETE ON public.candidate_skills, public.candidate_languages,
+    public.candidate_certificates TO authenticated`,
   // Język e-maila nie z profilu odbiorcy (Invariant #1).
   'recipient-locale-en': `CREATE OR REPLACE FUNCTION public.resolve_recipient_locale(p_profile_id uuid) RETURNS text
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT 'en'::text $$`,
