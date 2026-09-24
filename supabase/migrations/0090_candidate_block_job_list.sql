@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0091 — blokada firmy przez kandydata w wynikach listy ofert (#97).
+-- 0090 — blokada firmy przez kandydata w wynikach listy ofert (#97).
 --
 -- 0078 odcięło zablokowanej firmie profil/PII, wyszukiwanie, dopasowania, propozycje
 -- i wiadomości oraz usunęło jej oferty z polecanych. Brakowało kryterium „zalogowany

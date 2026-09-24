@@ -319,7 +319,7 @@ const fetchAppliedJobsMap = cache(async (
 
 /**
  * Mapa job_id → dane oferty dla WŁASNYCH propozycji kandydata (RPC `get_offered_jobs_display`,
- * 0091). Jak `fetchAppliedJobsMap`: niezależnie od statusu oferty, top-N listy i blokad firm (#97)
+ * 0090). Jak `fetchAppliedJobsMap`: niezależnie od statusu oferty, top-N listy i blokad firm (#97)
  * — historia propozycji zachowuje tytuł i firmę. `cache()` per-request.
  */
 const fetchOfferedJobsMap = cache(async (

@@ -213,7 +213,7 @@ export default async function JobsListPage({
     ...(since ? { since } : {}),
   };
   // #97: zalogowany kandydat nie widzi ofert firm, które zablokował (lista, licznik i facety
-  // filtruje baza — 0091). Gość i pracodawca dostają wspólny wynik publiczny.
+  // filtruje baza — 0090). Gość i pracodawca dostają wspólny wynik publiczny.
   const viewer = { candidateId: await readCandidateViewerId() };
   const [results, databaseFacets] = await Promise.all([
     getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }, viewer),

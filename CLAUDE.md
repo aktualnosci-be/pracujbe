@@ -593,13 +593,13 @@ wyszukiwanie (`candidate_profiles_select_employer`, `candidate_profile_is_search
 triggery BEFORE INSERT na `offers`/`conversations`/`messages` (neutralny błąd jak brak relacji),
 polecane (`get_public_jobs_by_ids` pod sesją). Historia aplikacji/rozmów zostaje. UI: sekcja
 „Zablokowane firmy” w `/candidate/ustawienia` + kontrolka na szczególe oferty. Dowód: `rls.sql`
-sekcja BL. Lista wyników (`0091`): `get_public_jobs`/`_count`/`get_public_job_filter_facets`
+sekcja BL. Lista wyników (`0090`): `get_public_jobs`/`_count`/`get_public_job_filter_facets`
 pomijają oferty firm zablokowanych przez wywołującego (gość/pracodawca bez zmian, więc strony
 ISR zostają wspólne); `/oferty-pracy` przekazuje UUID kandydata ze zweryfikowanej sesji
 (`src/lib/auth/candidate-viewer.ts` → `readPortalIdentity`), publiczny URL oferty bez zmian.
-Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0091` pada BL97-1). **Otwarte:** działa,
+Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0090` pada BL97-1). **Otwarte:** działa,
 gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zostaje listą gościa.
-Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0091), więc blokada nie
+Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
 kasuje tytułu propozycji bez aplikacji (BL97-6).
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
@@ -800,6 +800,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   weryfikacja = `company_verified`) i e-mail `companyVerified`/`companyRejected`/`companySuspended`
   przez `enqueue_email` (język właściciela, Invariant #1). Dowód: `rls.sql` sekcja AV310;
   unit `admin-company-review`; E2E `admin-company-review.spec`.
+  Weryfikacja VAT w VIES (#92, `0088`): sekcja w `/admin/firmy/[id]` — lokalny pre-check
+  numeru BE (`src/lib/vies/belgian-vat.ts`: normalizacja, 10 cyfr, suma mod 97; zły zapis nie
+  trafia do VIES), adapter REST VIES (`src/lib/vies/client.ts`: timeout 4 s na próbę, 3 próby
+  z backoffem i jitterem). Stany: `valid`, `invalid`, `unavailable`, `rate_limited` —
+  `invalid` TYLKO przy jawnym `valid:false` w poprawnej odpowiedzi; 429/5xx/timeout/sieć/
+  `actionSucceed:false`/kody concurrent-unavailable = brak możliwości weryfikacji, osobne
+  teksty. Zapis wyłącznie wyników rozstrzygających (`company_vies_checks`, RPC
+  `admin_record_vies_check`, audyt `company.vies_checked` z samym wynikiem); awaria nie
+  nadpisuje wcześniejszego wyniku. Porównanie nazwy (`name-match.ts`) = sygnał do ręcznego
+  sprawdzenia. Status firmy zmienia tylko admin. Dowód: `rls.sql` sekcja VI92, unit
+  `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
+  `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
+  (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,

@@ -185,6 +185,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'company.created': 'auditActionCompanyCreated',
   'company.status_changed': 'auditActionCompanyStatus',
   'company.reverification_requested': 'auditActionCompanyReverification',
+  'company.vies_checked': 'auditActionCompanyVies',
   'report.resolved': 'auditActionReportStatus',
   'application.status_changed': 'auditActionApplicationStatus',
   'offer.sent': 'auditActionOfferSent',

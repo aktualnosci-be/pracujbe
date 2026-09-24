@@ -91,7 +91,7 @@ async function readCount(
 /**
  * Wyłącznie publiczne RPC. Domyślnie pod anon; `viewerId` (UUID ze zweryfikowanej sesji
  * serwera, nigdy z URL/formularza) uruchamia te same RPC pod tożsamością kandydata, żeby
- * pominąć oferty firm, które zablokował (#97, 0091). Wynik gościa się nie zmienia.
+ * pominąć oferty firm, które zablokował (#97, 0090). Wynik gościa się nie zmienia.
  */
 export async function getPublicJobs(
   pool: TransactionPool,
