@@ -526,6 +526,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   godzinowych nie przeliczamy (godziny pracy to wolny tekst) — jak oferty bez kwoty nie odpadają
   z filtra i są na końcu sortowania; opis `filters.salaryPeriodNote` pod suwakiem. Lustro TS dla
   demo: `src/lib/salary-compare.ts`. Dowód: `rls.sql` sekcja SAL, `salary-compare.test.ts`.
+  Jednostka filtra (0091): przełącznik „Miesięcznie / Za godzinę” (URL `salaryUnit=hour`,
+  RPC `p_salary_unit`, widełki 10–40 EUR/godz.). Godzinowo porównujemy tylko stawki godzinowe;
+  miesięcznych/rocznych nie przeliczamy na godziny (nieporównywalne → nie odpadają, sort na
+  końcu). Jednostka steruje też sortem po wynagrodzeniu; zmiana jednostki zeruje widełki.
+  Dowód: `rls.sql` sekcja SP188.
   Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
   dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
   w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
@@ -603,6 +608,23 @@ Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0090` pada BL97-1). **Otwar
 gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zostaje listą gościa.
 Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
 kasuje tytułu propozycji bez aplikacji (BL97-6).
+
+Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
+`/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja
+`saveSearchAction`) zapisuje KANONICZNE filtry v1 = dokładnie argumenty `get_public_jobs`
+wysłane przez listę (`src/lib/job-list-query.ts`, jedno źródło z listą; aliasy miast
+rozwinięte, bez `date`). RPC-only: `save_saved_search` (kandydat, identyczne filtry → ten sam
+wiersz, limit 20), `set_saved_search_alerts` (włączenie przesuwa `alerts_since`/watermark —
+bez zaległych ofert), `delete_saved_search`; odczyt własnych pod RLS. Worker
+`process_saved_search_alerts` (service_role, `/api/maintenance` co godzinę, `SKIP LOCKED`)
+woła `get_public_jobs` z filtrami i `p_since` = watermark − 1 h, pomija firmy zablokowane,
+rejestruje parę w `saved_search_alerts` (PK = brak ponownej wysyłki), tworzy jedno in-app
+(`job_match`, `entity_type='saved_search'`) i jeden e-mail `jobMatch` (digest ≤ 5 ofert,
+język odbiorcy, opt-out `email_job_matches`); digest najwyżej raz na dobę/tydzień. Panel:
+`/candidate/wyszukiwania` (alert, częstotliwość, usunięcie). Dowód: `rls.sql` sekcja SS100;
+unit `saved-search-alerts`; E2E `saved-search.spec`. **Otwarte:** zmiana nazwy wyszukiwania;
+link wypisania i ponowna kontrola zgody tuż przed wysyłką przychodzą z #466 (tam `jobMatch` →
+kategoria `job_matches`); na przebieg najwyżej 100 najnowszych pasujących ofert.
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
@@ -775,7 +797,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
-  0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
+  0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084), jobMatch
+  (`process_saved_search_alerts`, 0092, #100); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
   zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
   (#51), supportContact. Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
   statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja NN.
@@ -913,7 +936,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
   E2E noindex każdej strony paneli i auth z systemu plików (`panel-noindex`) i axe na wszystkich
   trasach publicznych, 4 języki, 320/1280 px, z banerem i po jego zamknięciu (`a11y-public-routes`).
-  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 25 trasach
+  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 26 trasach
   kandydata i pracodawcy (PL/EN 1280 px, 4 języki 320 px), z banerem, z otwartym menu statusu,
   centrum powiadomień i kompozytorem; kontrola ujemna (przycisk bez nazwy → czerwony). Admin: `admin-a11y`.
   Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),

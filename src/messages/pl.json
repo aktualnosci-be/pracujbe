@@ -596,7 +596,8 @@
     "jobImportInvalidUrl": "Tego adresu nie możemy pobrać. Wklej publiczny link http(s) do ogłoszenia.",
     "jobImportFetchFailed": "Nie udało się pobrać strony z ogłoszeniem. Spróbuj później albo wgraj zrzut ekranu.",
     "jobImportNotAListing": "Nie znaleźliśmy tu ogłoszenia o pracę. Sprawdź plik lub link.",
-    "jobImportFailed": "Nie udało się odczytać ogłoszenia. Spróbuj ponownie albo wypełnij formularz ręcznie."
+    "jobImportFailed": "Nie udało się odczytać ogłoszenia. Spróbuj ponownie albo wypełnij formularz ręcznie.",
+    "savedSearchLimitReached": "Masz już 20 zapisanych wyszukiwań. Usuń jedno z nich, aby dodać nowe."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -885,7 +886,8 @@
     "editJobLabel": "Edytuj ofertę: {title}",
     "viewJob": "Zobacz ofertę",
     "viewJobLabel": "Zobacz ofertę: {title}",
-    "navTeam": "Zespół"
+    "navTeam": "Zespół",
+    "navSearches": "Zapisane wyszukiwania"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1012,6 +1014,13 @@
     "chooseLocation": "Wybierz lokalizację",
     "salary": "Wynagrodzenie (brutto/mies.)",
     "salaryPeriodNote": "Porównujemy stawki miesięczne; stawki roczne dzielimy przez 12. Stawek godzinowych nie przeliczamy — oferty godzinowe i bez podanego wynagrodzenia pozostają widoczne przy tym filtrze, a w sortowaniu po wynagrodzeniu są na końcu.",
+    "salaryUnit": "Jednostka wynagrodzenia",
+    "salaryUnitMonth": "Miesięcznie",
+    "salaryUnitHour": "Za godzinę",
+    "salaryHourly": "Stawka (brutto/godz.)",
+    "salaryHourlyNote": "Przy stawce za godzinę porównujemy wyłącznie stawki godzinowe. Wynagrodzeń miesięcznych i rocznych nie przeliczamy na godziny, bo liczba godzin pracy nie jest znana — te oferty i oferty bez podanego wynagrodzenia pozostają widoczne przy tym filtrze, a w sortowaniu po stawce są na końcu.",
+    "salaryChipHourly": "Stawka: {min} – {max} /godz.",
+    "sortSalaryHourly": "Najwyższa stawka godzinowa",
     "contractType": "Rodzaj umowy",
     "requiredLanguage": "Wymagany język",
     "chooseLanguage": "Wybierz język",
@@ -1074,7 +1083,8 @@
     "markedAllRead": "Oznaczono wszystkie powiadomienia jako przeczytane.",
     "itemCompanyRejected": "Twoja firma nie przeszła weryfikacji",
     "itemCompanySuspended": "Twoja firma została zawieszona",
-    "itemTeamInvitation": "Zaproszenie do zespołu firmy"
+    "itemTeamInvitation": "Zaproszenie do zespołu firmy",
+    "itemSavedSearch": "Nowe oferty dla zapisanego wyszukiwania"
   },
   "pricing": {
     "standard": "Standard",
@@ -1376,6 +1386,7 @@
     "navUsers": "Użytkownicy",
     "title": "Panel administratora",
     "subtitle": "Zarządzaj firmami, zgłoszeniami i kontami użytkowników.",
+    "quickLinksTitle": "Przejdź do sekcji",
     "statCompanies": "Firmy",
     "statPending": "Oczekujące na weryfikację",
     "statUsers": "Użytkownicy",
@@ -1878,5 +1889,35 @@
     "untitled": "Oferta bez tytułu",
     "denied": "Lejek ofert widzą właściciel, administrator i rekruterzy firmy.",
     "loadError": "Nie udało się wczytać lejka ofert. Spróbuj ponownie."
+  },
+  "savedSearches": {
+    "hint": "Zapisz te filtry, a powiadomimy Cię w serwisie i e-mailem o nowych ofertach (najwyżej raz dziennie).",
+    "save": "Zapisz wyszukiwanie",
+    "saving": "Zapisywanie…",
+    "saved": "Zapisaliśmy wyszukiwanie. Powiadomimy Cię o nowych ofertach.",
+    "alreadySaved": "To wyszukiwanie jest już zapisane.",
+    "manage": "Zarządzaj wyszukiwaniami",
+    "loginRequired": "Aby zapisać wyszukiwanie, zaloguj się na konto kandydata.",
+    "login": "Zaloguj się",
+    "errorNetwork": "Brak połączenia. Sprawdź internet i spróbuj ponownie.",
+    "defaultName": "Moje wyszukiwanie",
+    "intro": "Wyszukiwania zapisane z listy ofert. Gdy pojawią się nowe oferty z tymi filtrami, dostaniesz powiadomienie i e-mail.",
+    "loadError": "Nie udało się wczytać zapisanych wyszukiwań.",
+    "retry": "Spróbuj ponownie",
+    "empty": "Nie masz jeszcze zapisanych wyszukiwań. Ustaw filtry na liście ofert i kliknij „Zapisz wyszukiwanie”.",
+    "demo": "W wersji demonstracyjnej nie zapisujemy wyszukiwań.",
+    "browse": "Przeglądaj oferty",
+    "lastAlert": "Ostatni alert: {date}",
+    "noAlertYet": "Jeszcze nie wysłaliśmy alertu.",
+    "open": "Pokaż oferty",
+    "alerts": "Powiadamiaj o nowych ofertach",
+    "frequency": "Jak często",
+    "daily": "Raz dziennie",
+    "weekly": "Raz w tygodniu",
+    "delete": "Usuń",
+    "deleteTitle": "Usunąć wyszukiwanie „{name}”?",
+    "deleteDescription": "Przestaniesz dostawać alerty o nowych ofertach z tymi filtrami.",
+    "deleted": "Usunęliśmy wyszukiwanie.",
+    "updated": "Zapisaliśmy zmiany."
   }
 }
