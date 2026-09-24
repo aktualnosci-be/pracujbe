@@ -1,6 +1,11 @@
 'use server';
 
-import { applyUnsubscribe, type UnsubscribeOutcome } from '@/lib/email/unsubscribe';
+import { applyUnsubscribe, inspectUnsubscribeToken, type UnsubscribeOutcome } from '@/lib/email/unsubscribe';
+
+/** Tylko sprawdzenie podpisu linku; GET strony ani ta akcja nie zmienia preferencji. */
+export async function inspectUnsubscribeLink(token: string) {
+  return inspectUnsubscribeToken(token);
+}
 
 /**
  * Akcja strony `/wypisz` (#45): świadome kliknięcie „Wypisz mnie" (kategoria z tokenu) albo
