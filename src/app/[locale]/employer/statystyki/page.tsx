@@ -6,17 +6,21 @@ import { isSupabaseConfigured } from '@/lib/env';
 import {
   getEmployerOverview,
   getFunnelStats,
+  getJobFunnel,
   DEMO_OVERVIEW_DELTAS,
 } from '@/lib/data/employer';
+import { parseFunnelRange } from '@/lib/job-funnel/range';
 import { StatCard } from '@/components/ui/stat-card';
 import { RecruitmentFunnel } from '@/components/employer/RecruitmentFunnel';
 import { EmployerStatsError } from '@/components/employer/EmployerStatsError';
+import { JobFunnelRangePicker, JobFunnelStats } from '@/components/employer/JobFunnelStats';
 
 /**
  * Panel pracodawcy — Statystyki (rozwinięcie „Zobacz szczegóły" lejka z makiety 05), REALNE dane.
  *
  * Rząd kafelków przeglądowych (`getEmployerOverview`) + pełny lejek rekrutacyjny
- * (`getFunnelStats` + RecruitmentFunnel z konwersjami między etapami). Wszystko pod sesją/RLS;
+ * (`getFunnelStats` + RecruitmentFunnel z konwersjami między etapami) oraz lejek ofert (#99,
+ * `getJobFunnel`: zakres `?dni=7|30|90`, definicje metryk, rozbicie per oferta). Wszystko pod sesją/RLS;
  * bez env — dane DEMO (delty tygodniowe StatCard tylko w trybie DEMO). NOINDEX z layoutu panelu.
  */
 
@@ -37,17 +41,25 @@ export const dynamic = 'force-dynamic';
 
 export default async function EmployerStatsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  const rangeDays = parseFunnelRange((await searchParams)['dni']);
 
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tc = await getTranslations({ locale, namespace: 'common' });
 
   const configured = isSupabaseConfigured();
-  const [overview, funnel] = await Promise.all([getEmployerOverview(), getFunnelStats()]);
+  const tf = await getTranslations({ locale, namespace: 'jobFunnel' });
+  const [overview, funnel, jobFunnel] = await Promise.all([
+    getEmployerOverview(),
+    getFunnelStats(),
+    getJobFunnel(rangeDays),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -106,6 +118,24 @@ export default async function EmployerStatsPage({
           applications={funnel.funnel.applications}
           interviews={funnel.funnel.interviews}
           hired={funnel.funnel.hired}
+        />
+      )}
+
+      {/* Lejek ofert (#99): serwerowy agregat bez śledzenia, zakres dat i definicje metryk. */}
+      <JobFunnelRangePicker range={jobFunnel.range} />
+      {jobFunnel.status === 'error' ? (
+        <EmployerStatsError title={tf('title')} message={tf('loadError')} retryLabel={tc('retry')} />
+      ) : jobFunnel.status === 'denied' ? (
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h2 className="text-base font-semibold text-foreground">{tf('title')}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{tf('denied')}</p>
+        </section>
+      ) : (
+        <JobFunnelStats
+          range={jobFunnel.range}
+          totals={jobFunnel.totals}
+          jobs={jobFunnel.jobs}
+          locale={locale}
         />
       )}
     </div>

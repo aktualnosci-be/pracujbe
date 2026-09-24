@@ -577,7 +577,12 @@
     "jobEditConflict": "Someone changed this job in the meantime. Open it again from the jobs list to see the current version.",
     "jobExpired": "This job's expiry date has passed. Reopen it from the jobs list — reopening removes the past date.",
     "botCheckFailed": "We couldn't confirm that a person is sending this form. Complete the check again and resubmit.",
-    "botCheckUnavailable": "The security check is temporarily unavailable. Please try again in a few minutes."
+    "botCheckUnavailable": "The security check is temporarily unavailable. Please try again in a few minutes.",
+    "jobImportInvalidFile": "This file cannot be imported. Use a PNG, JPG or WebP screenshot up to 5 MB.",
+    "jobImportInvalidUrl": "We cannot fetch this address. Paste a public http(s) link to the ad.",
+    "jobImportFetchFailed": "We could not download the page with the ad. Try later or upload a screenshot.",
+    "jobImportNotAListing": "We did not find a job ad here. Check the file or link.",
+    "jobImportFailed": "We could not read the ad. Try again or fill in the form manually."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -1268,6 +1273,33 @@
     "editSavedDemo": "Changes saved (demo mode)",
     "editFixStep": "Your changes weren't saved. Fix the highlighted fields in step {step}: {title}."
   },
+  "jobImport": {
+    "title": "Import from a job ad",
+    "subtitle": "Already have this ad somewhere else? Upload a screenshot or paste a link and AI will pre-fill the form. You check every field before anything is published.",
+    "rightsNote": "Only import ads you have the rights to, for example your own ad on another site. The job will not be published automatically.",
+    "privacyNote": "We do not store the file or the page content — they are sent to the AI provider only to read the ad. Text stays in its original language.",
+    "fileLabel": "Screenshot of the ad",
+    "fileHint": "PNG, JPG or WebP, up to 5 MB.",
+    "importImage": "Import from screenshot",
+    "urlLabel": "Link to the ad",
+    "urlHint": "A public http(s) address of the page with the ad.",
+    "importUrl": "Import from link",
+    "importing": "Reading…",
+    "busyHint": "Reading the ad. This can take up to a minute.",
+    "successTitle": "{count, plural, one {We filled # field from the ad.} other {We filled # fields from the ad.}}",
+    "successReview": "{count, plural, one {# field needs checking — you will see it listed in its step.} other {# fields need checking — you will see them listed in each step.}}",
+    "successNoReview": "Review every step before publishing.",
+    "successDraftSaved": "We saved it as a draft. Nothing has been published.",
+    "successDraftPending": "The draft is saved when you click “Next”. Nothing has been published.",
+    "suspiciousWarning": "The ad contained text that looked like instructions for AI. We did not follow them, but check every field carefully, especially the description.",
+    "reviewStepTitle": "Check the fields filled from the ad:",
+    "errorFileMissing": "Choose a screenshot file.",
+    "errorFileEmpty": "This file is empty.",
+    "errorFileTooLarge": "The file is too large. The maximum size is 5 MB.",
+    "errorFileType": "Only PNG, JPG and WebP images are supported.",
+    "errorUrlMissing": "Paste a link to the ad.",
+    "errorNetwork": "Could not reach the server. Check your connection and try again."
+  },
   "messages": {
     "title": "Messages",
     "subtitle": "All your conversations in one place",
@@ -1809,5 +1841,28 @@
       "job_matches": "with matching jobs",
       "marketing": "with the newsletter and marketing information"
     }
+  },
+  "jobFunnel": {
+    "title": "Job funnel",
+    "range": "Period: {from} – {to} (Brussels time)",
+    "rangeLabel": "Job funnel date range",
+    "rangeDays": "{count, plural, one {# day} other {# days}}",
+    "searchAppearances": "Search result appearances",
+    "detailViews": "Job views",
+    "applyStarted": "Applications started",
+    "applicationsSubmitted": "Applications submitted",
+    "searchAppearancesDefinition": "How many times the job appeared on a results page of the job list. One view of the list counts the job once.",
+    "detailViewsDefinition": "How many times the job detail page was opened. Resending the same count is not counted twice; refreshing the page is a new view.",
+    "applyStartedDefinition": "How many times the “Apply” form was opened on the job page — at most once per view.",
+    "applicationsSubmittedDefinition": "Applications submitted in this date range, based on the applications recorded in the system (including ones withdrawn later).",
+    "definitionsTitle": "How we count these figures",
+    "privacyTitle": "Privacy",
+    "privacyNote": "We only store daily totals per job. We do not store IP addresses, cookies, search text or personal data. Robots and link previews are not counted.",
+    "empty": "No active jobs and no data in this period.",
+    "tableCaption": "Funnel per job",
+    "offer": "Job",
+    "untitled": "Untitled job",
+    "denied": "The job funnel is visible to the company owner, administrators and recruiters.",
+    "loadError": "The job funnel could not be loaded. Please try again."
   }
 }

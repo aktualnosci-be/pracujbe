@@ -71,6 +71,8 @@ const MUTATIONS = {
   // Język e-maila nie z profilu odbiorcy (Invariant #1).
   'recipient-locale-en': `CREATE OR REPLACE FUNCTION public.resolve_recipient_locale(p_profile_id uuid) RETURNS text
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT 'en'::text $$`,
+  // Lejek ofert bez deduplikacji po nonce: ponowienie tego samego zgłoszenia liczy się dwa razy (#99).
+  'funnel-no-dedup': 'ALTER TABLE public.job_funnel_receipts DROP CONSTRAINT job_funnel_receipts_pkey',
   'retry-new-key': null,
 };
 if (mutation && !Object.hasOwn(MUTATIONS, mutation)) {
