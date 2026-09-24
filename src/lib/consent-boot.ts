@@ -6,6 +6,9 @@ import { CONSENT_COOKIE_NAME, CONSENT_POLICY_VERSION } from '@/lib/consent';
  */
 export const CONSENT_BOOT_ATTRIBUTE = 'data-consent';
 
+/** Treść `<noscript>` w <head>: bez JS baner jest nieobsługiwalny, a trackery i tak się nie ładują. */
+export const NOSCRIPT_HIDE_BANNER = '<style>#cookie-banner{display:none}</style>';
+
 /**
  * Mały skrypt inline do `<head>` (#389). Baner cookies jest w HTML z serwera, więc maluje się
  * razem z FCP zamiast po hydratacji (wcześniej był elementem LCP po ~2 s). Skrypt działa przed

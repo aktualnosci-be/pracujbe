@@ -8,7 +8,7 @@ import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { CookieConsent } from '@/components/cookies/CookieConsent';
 import { SkipLink } from '@/components/layout/SkipLink';
-import { consentBootScript } from '@/lib/consent-boot';
+import { consentBootScript, NOSCRIPT_HIDE_BANNER } from '@/lib/consent-boot';
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
 import { inter } from '../fonts';
 
@@ -96,6 +96,9 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: consentBootScript() }} />
+        {/* Bez JS przyciski banera nie działają, a bez JS nie ładuje się też żaden tracker
+            (Analytics jest komponentem klienckim) — baner tylko zasłaniałby treść. */}
+        <noscript dangerouslySetInnerHTML={{ __html: NOSCRIPT_HIDE_BANNER }} />
       </head>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>

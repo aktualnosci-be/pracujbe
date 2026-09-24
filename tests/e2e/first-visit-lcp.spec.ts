@@ -113,3 +113,13 @@ for (const [locale, sample] of Object.entries(SAMPLES)) {
     expect(fonts[0]?.isCustomFont).toBe(true);
   });
 }
+
+test('bez JS baner nie zasłania treści (nieobsługiwalny, a trackery się nie ładują)', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  await page.goto('/pl/oferty-pracy');
+  await expect(page.locator(BANNER)).toBeHidden();
+  await context.close();
+});
