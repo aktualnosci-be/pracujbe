@@ -13,22 +13,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(async () => true),
   turnstile: vi.fn(async (): Promise<string | null> => null),
-  rpc: vi.fn(),
-  getUser: vi.fn(async () => ({ data: { user: null as { id: string } | null } })),
-  configured: vi.fn(() => true),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.rateLimit }));
 vi.mock('@/lib/turnstile/verify', () => ({ enforceTurnstile: mocks.turnstile }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: mocks.configured }));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ rpc: mocks.rpc }) }));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: async () => ({ auth: { getUser: mocks.getUser } }),
-}));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 
 import { lookupReportCase, submitContentReport } from '@/lib/actions/content-reports';
 import { generateAccessCode } from '@/lib/validation/content-report';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+
+const USER = '7d7e5c1a-2b3c-4d5e-8f90-a1b2c3d4e5f6';
+
+function rpcCalls(fn: string) {
+  return fakeDb.callsTo(fn);
+}
 
 const JOB_ID = '5b0c8a1e-3f7a-4c52-9d1f-2a8e6b7c9d01';
 const KEY = '0f9a5c3e-1b2d-4e6f-8a7b-9c0d1e2f3a4b';
@@ -55,12 +55,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.rateLimit.mockResolvedValue(true);
   mocks.turnstile.mockResolvedValue(null);
-  mocks.configured.mockReturnValue(true);
-  mocks.getUser.mockResolvedValue({ data: { user: null } });
-  mocks.rpc.mockResolvedValue({
-    data: [{ report_id: 'r1', case_number: 'DSA-1A2B-3C4D-5E6F-7A8B', created: true }],
-    error: null,
-  });
+  resetFakeDb(null).rpc('submit_content_report', [
+    { report_id: 'r1', case_number: 'DSA-1A2B-3C4D-5E6F-7A8B', created: true },
+  ]);
 });
 
 describe('submitContentReport', () => {
@@ -68,7 +65,10 @@ describe('submitContentReport', () => {
     const result = await submitContentReport(input(), 'token');
     expect(result).toEqual({ ok: true, caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B', created: true });
     expect(mocks.turnstile).toHaveBeenCalledWith('report', 'token');
-    expect(mocks.rpc).toHaveBeenCalledWith('submit_content_report', {
+    const [call] = rpcCalls('submit_content_report');
+    // RPC tylko dla service_role — wywołanie w transakcji puli service, nie pod sesją.
+    expect(call?.as).toBe('service');
+    expect(call?.args).toEqual({
       p_reporter_id: null,
       p_idempotency_key: KEY,
       p_access_code: CODE,
@@ -85,22 +85,22 @@ describe('submitContentReport', () => {
   });
 
   it('zalogowany: reporterId z sesji serwera (klient nie może go podać)', async () => {
-    mocks.getUser.mockResolvedValue({ data: { user: { id: 'user-from-session' } } });
+    fakeSession.identity = { id: USER, role: 'candidate' };
     await submitContentReport({ ...input(), reporterId: 'forged' } as never, null);
-    expect(mocks.rpc.mock.calls[0]?.[1]).toMatchObject({ p_reporter_id: 'user-from-session' });
+    expect(rpcCalls('submit_content_report')[0]?.args).toMatchObject({ p_reporter_id: USER });
   });
 
   it('limiter przed Turnstile i bazą', async () => {
     mocks.rateLimit.mockResolvedValue(false);
     expect(await submitContentReport(input(), 'token')).toEqual({ ok: false, error: 'RATE_LIMITED' });
     expect(mocks.turnstile).not.toHaveBeenCalled();
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('nieudany Turnstile (spam) zatrzymuje zgłoszenie przed bazą', async () => {
     mocks.turnstile.mockResolvedValue('BOT_CHECK_FAILED');
     expect(await submitContentReport(input(), 'zly')).toEqual({ ok: false, error: 'BOT_CHECK_FAILED' });
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it.each([
@@ -114,7 +114,7 @@ describe('submitContentReport', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it.each([
@@ -123,8 +123,17 @@ describe('submitContentReport', () => {
     ['VALIDATION_FAILED: klucz idempotencji użyty z innym kodem', 'VALIDATION_FAILED'],
     ['relation "reports" violates check constraint', 'INTERNAL'],
   ])('błąd bazy „%s” → %s (bez technikaliów)', async (message, code) => {
-    mocks.rpc.mockResolvedValue({ data: null, error: { message } });
+    fakeDb.rpc('submit_content_report', () => {
+      throw pgError('P0001', message);
+    });
     expect(await submitContentReport(input(), 'token')).toEqual({ ok: false, error: code });
+  });
+
+  it('wyjątek spoza bazy (np. brak połączenia) → INTERNAL', async () => {
+    fakeDb.rpc('submit_content_report', () => {
+      throw new Error('connect ECONNREFUSED 10.0.0.1:5432 RATE_LIMITED');
+    });
+    expect(await submitContentReport(input(), 'token')).toEqual({ ok: false, error: 'INTERNAL' });
   });
 
   it('identyfikator spoza bazy → NOT_FOUND bez RPC (jak nieistniejąca treść)', async () => {
@@ -132,14 +141,13 @@ describe('submitContentReport', () => {
       ok: false,
       error: 'NOT_FOUND',
     });
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('ponowienie z tym samym kluczem zwraca tę samą sprawę (created=false)', async () => {
-    mocks.rpc.mockResolvedValue({
-      data: [{ report_id: 'r1', case_number: 'DSA-1A2B-3C4D-5E6F-7A8B', created: false }],
-      error: null,
-    });
+    fakeDb.rpc('submit_content_report', [
+      { report_id: 'r1', case_number: 'DSA-1A2B-3C4D-5E6F-7A8B', created: false },
+    ]);
     expect(await submitContentReport(input(), 'token')).toEqual({
       ok: true,
       caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B',
@@ -148,28 +156,29 @@ describe('submitContentReport', () => {
   });
 
   it('tryb demo: brak zapisu i jawny kod DEMO_UNAVAILABLE', async () => {
-    mocks.configured.mockReturnValue(false);
+    fakeSession.serviceConfigured = false;
     expect(await submitContentReport(input(), 'token')).toEqual({ ok: false, error: 'DEMO_UNAVAILABLE' });
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });
 
 describe('lookupReportCase', () => {
   it('zły kod / obcy numer (null z RPC) → NOT_FOUND', async () => {
-    mocks.rpc.mockResolvedValue({ data: null, error: null });
+    fakeDb.rpc('get_report_case', null);
     expect(
       await lookupReportCase({ caseNumber: 'dsa-1a2b-3c4d-5e6f-7a8b', accessCode: 'abcd-efgh-ijkl-mnop-qrst-uvwx' }),
     ).toEqual({ ok: false, error: 'NOT_FOUND' });
     // Normalizacja: wielkie litery, kod bez myślników.
-    expect(mocks.rpc).toHaveBeenCalledWith('get_report_case', {
-      p_case_number: 'DSA-1A2B-3C4D-5E6F-7A8B',
-      p_access_code: CODE,
-    });
+    expect(rpcCalls('get_report_case')).toEqual([
+      expect.objectContaining({
+        as: 'service',
+        args: { p_case_number: 'DSA-1A2B-3C4D-5E6F-7A8B', p_access_code: CODE },
+      }),
+    ]);
   });
 
   it('poprawna sprawa → tylko stan sprawy; nieznane wartości odrzucone', async () => {
-    mocks.rpc.mockResolvedValue({
-      data: {
+    fakeDb.rpc('get_report_case', {
         caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B',
         status: 'reviewing',
         targetType: 'company',
@@ -180,8 +189,6 @@ describe('lookupReportCase', () => {
           { type: 'submitted', toStatus: 'open', at: '2026-09-20T10:00:00Z' },
           { type: 'hacked', toStatus: 'x', at: '2026-09-20T10:00:00Z' },
         ],
-      },
-      error: null,
     });
     const result = await lookupReportCase({ caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B', accessCode: CODE });
     expect(result).toEqual({
@@ -204,7 +211,7 @@ describe('lookupReportCase', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });
 

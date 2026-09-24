@@ -4,7 +4,11 @@
  * (inaczej niż licznik w pamięci). Wołany z Server Actions (auth, aplikowanie).
  *
  * Zasady:
- * - Tryb demo (brak konfiguracji Supabase) -> zawsze `true` (nie blokujemy).
+ * - Tryb demo (brak konfiguracji bazy: ani puli domeny `isPortalDataConfigured()`, ani puli
+ *   zadań serwerowych `isServiceDatabaseConfigured()`) -> zawsze `true` (nie blokujemy).
+ *   Skonfigurowany portal BEZ puli service (dryf env) nie jest demo: wywołanie się nie
+ *   powiedzie i obowiązuje reguła fail-open/fail-safe poniżej (+ Sentry).
+ * - Licznik woła `rate_limit_hit` w krótkiej transakcji service_role (`withServiceRole`, #25).
  * - Błąd RPC / wyjątek -> fail-open (`true`) + zgłoszenie do Sentry — awaria limitera
  *   nie może odcinać użytkowników.
  * - Klucz budowany z akcji + IP (+ opcjonalny identyfikator, np. userId).
@@ -15,9 +19,9 @@
 
 import { headers } from 'next/headers';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { isPortalDataConfigured, isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
-import { createAdminClient } from '@/lib/supabase/admin';
 
 /** Opcje limitu dla pojedynczej akcji. */
 export interface RateLimitOptions {
@@ -89,10 +93,11 @@ async function clientIp(): Promise<string> {
  * Sprawdza limit zapytań dla `action` per IP (+ opcjonalny identyfikator).
  * Zwraca `true`, gdy żądanie mieści się w limicie; `false`, gdy przekroczono.
  *
- * Fail-open: brak konfiguracji Supabase oraz każdy błąd RPC/wyjątek dają `true`.
+ * Tryb demo (brak konfiguracji bazy) daje `true`; błąd RPC/wyjątek — fail-open (`true`),
+ * a dla akcji z `FAIL_SAFE_ACTIONS` fail-safe (`false`).
  */
 export async function checkRateLimit(action: string, opts?: RateLimitOptions): Promise<boolean> {
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured() && !isServiceDatabaseConfigured()) {
     return true;
   }
 
@@ -103,23 +108,18 @@ export async function checkRateLimit(action: string, opts?: RateLimitOptions): P
     const ip = opts?.perIp === false ? undefined : await clientIp();
     const key = [action, ip, opts?.identifier].filter(Boolean).join(':');
 
-    // Limiter woła się wyłącznie zaufanym klientem service_role (SEC-01): RPC `rate_limit_hit`
+    // Limiter woła się wyłącznie w transakcji service_role (SEC-01): RPC `rate_limit_hit`
     // jest odebrany anon/authenticated, a klucz/limit/okno budujemy po stronie serwera.
-    const supabase = createAdminClient();
-    const { data, error } = await supabase.rpc('rate_limit_hit', {
-      p_key: key,
-      p_max: max,
-      p_window_seconds: windowSeconds,
-    });
-
-    if (error) {
-      captureError(error, { area: 'rate-limit', action });
-      // Akcje wrażliwe: fail-safe (blokuj). Pozostałe: fail-open.
-      return !FAIL_SAFE_ACTIONS.has(action);
-    }
+    const allowed = await withServiceRole((tx) =>
+      rpc<boolean>(tx, 'rate_limit_hit', {
+        p_key: key,
+        p_max: max,
+        p_window_seconds: windowSeconds,
+      }),
+    );
 
     // RPC zwraca boolean (true = w limicie). Tylko jawne `false` blokuje.
-    return data !== false;
+    return allowed !== false;
   } catch (e) {
     captureError(e, { area: 'rate-limit', action });
     // Akcje wrażliwe: fail-safe (blokuj). Pozostałe: fail-open.

@@ -9,7 +9,14 @@ import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
 
 vi.mock('@/lib/actions/notification-preferences', () => ({ updateNotificationPreferences: vi.fn() }));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: () => false }));
+// Tryb demo: backend nieskonfigurowany (atrapa `@/lib/db/portal` z configured = false).
+vi.mock('@/lib/db/portal', async () => {
+  const fake = await import('../helpers/fake-db');
+  fake.resetFakeDb(null);
+  fake.fakeSession.configured = false;
+  fake.fakeSession.serviceConfigured = false;
+  return fake.fakePortal();
+});
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('next-intl/server', () => ({
   getTranslations: async ({ locale, namespace }: { locale: 'pl' | 'nl' | 'fr' | 'en'; namespace: string }) =>

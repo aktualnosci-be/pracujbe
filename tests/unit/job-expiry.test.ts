@@ -3,16 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { effectiveJobStatus, isPastExpiry, notExpiredFilter } from '@/lib/job-expiry';
 
-vi.mock('@/lib/env', () => ({ hasServiceRoleKey: vi.fn(), isProductionMode: vi.fn() }));
+vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn() }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/lib/actions/jobs', () => ({ setJobStatus: vi.fn() }));
 
-import { hasServiceRoleKey, isProductionMode } from '@/lib/env';
+import { isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 import { allowedActions } from '@/components/employer/JobLifecycleActions';
 import { POST } from '@/app/api/maintenance/route';
 
@@ -57,30 +57,37 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       method: 'POST',
       headers: auth ? { authorization: auth } : {},
     });
-  const rpc = vi.fn();
+  const TASKS = [
+    'release_stale_discount_reservations',
+    'release_stale_checkout_intents',
+    'expire_due_jobs',
+    'purge_guest_application_requests',
+    'process_saved_search_alerts',
+    'process_email_campaigns',
+  ];
 
   beforeEach(() => {
     vi.resetAllMocks();
+    resetFakeDb(null);
+    for (const fn of TASKS) fakeDb.rpc(fn, 0);
     process.env.MAINTENANCE_SECRET = 'maintenance-secret';
     delete process.env.CRON_SECRET;
-    vi.mocked(hasServiceRoleKey).mockReturnValue(true);
     vi.mocked(isProductionMode).mockReturnValue(true);
-    vi.mocked(createAdminClient).mockReturnValue({ rpc } as never);
   });
 
   it('bez sekretu → 401 i brak wywołań bazy', async () => {
     const res = await POST(request('Bearer wrong'));
     expect(res.status).toBe(401);
-    expect(rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('wywołuje expire_due_jobs i zwraca wyłącznie liczniki', async () => {
-    rpc.mockImplementation((name: string) =>
-      Promise.resolve({ data: name === 'expire_due_jobs' ? 3 : 0, error: null }),
-    );
+    fakeDb.rpc('expire_due_jobs', 3);
     const res = await POST(request('Bearer maintenance-secret'));
     expect(res.status).toBe(200);
-    expect(rpc).toHaveBeenCalledWith('expire_due_jobs');
+    expect(fakeDb.callsTo('expire_due_jobs')).toEqual([expect.objectContaining({ args: {}, as: 'service' })]);
+    // Każde zadanie po kolei, alerty po wygaszeniu ofert (alert nie zgłosi właśnie wygasłej).
+    expect(fakeDb.calls.map((c) => c.name)).toEqual(TASKS);
     expect(await res.json()).toEqual({
       ok: true,
       releasedDiscounts: 0,
@@ -93,15 +100,14 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
   });
 
   it('błąd wygaszania → 503 bez pozornego sukcesu i bez szczegółów w odpowiedzi', async () => {
-    rpc.mockImplementation((name: string) =>
-      Promise.resolve(
-        name === 'expire_due_jobs'
-          ? { data: null, error: { message: 'permission denied for function expire_due_jobs' } }
-          : { data: 0, error: null },
-      ),
-    );
+    fakeDb.rpc('expire_due_jobs', () => {
+      throw pgError('42501', 'permission denied for function expire_due_jobs');
+    });
     const res = await POST(request('Bearer maintenance-secret'));
     expect(res.status).toBe(503);
+    // Bez wygaszenia nie wysyłamy alertów; pozostałe zadania idą dalej (osobne transakcje).
+    expect(fakeDb.callsTo('process_saved_search_alerts')).toHaveLength(0);
+    expect(fakeDb.callsTo('process_email_campaigns')).toHaveLength(1);
     const body = await res.json();
     expect(body).toEqual({ error: 'gc failed' });
     expect(JSON.stringify(body)).not.toContain('maintenance-secret');

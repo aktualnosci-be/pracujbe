@@ -1,12 +1,13 @@
 import { Resend } from 'resend';
 
-import type { createAdminClient } from '@/lib/supabase/admin';
 import { renderEmail } from '@/emails/templates';
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
 import { authEmailLocale, buildAuthEmail, type AuthRecipientProfile } from '@/lib/email/auth-email';
 import { takeAuthSendBudget } from '@/lib/email/auth-send-budget';
 import { emailFromEnv } from '@/lib/email/sender';
+import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
+import { queryOne } from '@/lib/db/sql';
 import { env } from '@/lib/env';
 import { readTextWithLimit } from '@/lib/http/read-limited';
 import { captureError } from '@/lib/sentry';
@@ -62,26 +63,21 @@ function verifySignature(secret: string, headers: Headers, rawBody: string): boo
 }
 
 /**
- * #291: kolumny języka z profilu odbiorcy (service role, po `user.id`). Best-effort — brak
- * profilu / błąd odczytu → `null` (język z metadanych rejestracji, końcowo 'en').
+ * #291: kolumny języka z profilu odbiorcy (service_role, po `user.id`; #25: krótka transakcja
+ * puli `service`). Best-effort — brak puli / brak profilu / błąd odczytu → `null` (język
+ * z metadanych rejestracji, końcowo 'en').
  */
-async function readRecipientProfile(
-  admin: ReturnType<typeof createAdminClient> | null,
-  userId: string | undefined,
-): Promise<AuthRecipientProfile | null> {
-  if (!userId) return null;
+async function readRecipientProfile(userId: string | undefined): Promise<AuthRecipientProfile | null> {
+  if (!userId || !isServiceDatabaseConfigured()) return null;
   try {
-    const client = admin ?? (await import('@/lib/supabase/admin')).createAdminClient();
-    const { data, error } = await client
-      .from('profiles')
-      .select('preferred_locale, account_locale, signup_locale')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) {
-      captureError(error, { area: 'auth.email-hook.profile' });
-      return null;
-    }
-    return (data as AuthRecipientProfile | null) ?? null;
+    return await withServiceRole((tx) =>
+      queryOne<AuthRecipientProfile>(
+        tx,
+        'auth.email-hook.recipient-profile',
+        'SELECT preferred_locale, account_locale, signup_locale FROM public.profiles WHERE id = $1',
+        [userId],
+      ),
+    );
   } catch (err) {
     captureError(err, { area: 'auth.email-hook.profile' });
     return null;
@@ -123,7 +119,6 @@ export async function POST(request: Request): Promise<Response> {
   // GoTrue ponowi (bez wysyłki, która i tak odbiłaby się od limitu dostawcy). PRZED claimem
   // inboxu: odmowa nie zostawia dzierżawy, która kazałaby pominąć ponowienie.
   const budget = await takeAuthSendBudget(
-    null,
     buildAuthEmail(payload.email_data?.email_action_type ?? 'signup', '', undefined).type,
   );
   if (budget.status === 'denied') {
@@ -140,24 +135,22 @@ export async function POST(request: Request): Promise<Response> {
   // jest krótkie. Bez `webhook-id` claim pomijamy (podpis + świeżość ograniczają replay).
   const webhookId = request.headers.get('webhook-id');
   const inboxId = webhookId ? `auth:${webhookId}` : null;
-  let admin: ReturnType<typeof createAdminClient> | null = null;
-  if (inboxId) {
+  // #25: claim to własna, zatwierdzona transakcja service_role (dzierżawa widoczna dla
+  // równoległych ponowień), a `completed` — osobna, po wysyłce.
+  let claimed = false;
+  if (inboxId && isServiceDatabaseConfigured()) {
     try {
-      const [{ createAdminClient: makeAdmin }, { claimWebhook }] = await Promise.all([
-        import('@/lib/supabase/admin'),
-        import('@/lib/webhook-inbox'),
-      ]);
-      admin = makeAdmin();
-      const claim = await claimWebhook(admin, inboxId, 'auth-email-hook');
+      const { claimWebhook } = await import('@/lib/webhook-inbox');
+      const claim = await claimWebhook(inboxId, 'auth-email-hook');
       if (claim === 'duplicate') return Response.json({ ok: true, duplicate: true });
       // P2-06: inny worker trzyma świeżą dzierżawę → pomiń, by nie wysłać e-maila dwa razy.
       if (claim === 'locked') return Response.json({ ok: true, locked: true });
       // 'claimed' | 'error' → wysyłamy dalej (dla 'error' inbox nieosiągalny; podpis+świeżość chronią).
+      claimed = claim === 'claimed';
     } catch {
-      admin = null; // best-effort — awaria infry inboxu nie blokuje e-maila.
+      claimed = false; // best-effort — awaria infry inboxu nie blokuje e-maila.
     }
   }
-
 
   const email = payload.user?.email;
   const meta = payload.user?.user_metadata ?? {};
@@ -169,7 +162,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // INVARIANT #1: preferred_locale → account_locale → signup_locale → 'en' (#291).
-  const profile = await readRecipientProfile(admin, payload.user?.id);
+  const profile = await readRecipientProfile(payload.user?.id);
   const locale: Locale = authEmailLocale(profile, meta);
   const firstName = typeof meta['first_name'] === 'string' ? (meta['first_name'] as string) : undefined;
 
@@ -198,10 +191,10 @@ export async function POST(request: Request): Promise<Response> {
     );
     if (result.error) throw new Error(result.error.message);
     // Wysłano → oznacz inbox `completed` (dopiero teraz duplikat będzie pomijany).
-    if (admin && inboxId) {
+    if (claimed && inboxId) {
       try {
         const { completeWebhook } = await import('@/lib/webhook-inbox');
-        await completeWebhook(admin, inboxId);
+        await completeWebhook(inboxId);
       } catch {
         // best-effort — brak oznaczenia najwyżej dopuści (idempotentne po Resend) ponowienie.
       }

@@ -8,6 +8,7 @@ import { renderEmail } from "@/emails/templates";
 import { routing, type Locale } from "@/i18n/routing";
 import { processEmailQueue } from "@/lib/email/outbox";
 import { resolveRecipientLocale } from "@/lib/i18n/recipient-locale";
+import { fakeDb, resetFakeDb } from "../helpers/fake-db";
 
 /**
  * #348 — Invariant #1 na całej ścieżce: enqueue → worker → render.
@@ -201,20 +202,14 @@ describe("enqueue_email (SQL) — locale z profilu odbiorcy", () => {
 
 // --- 2. Enqueue → worker → render -----------------------------------------------------------
 
-const { send, adminRpc, adminFrom } = vi.hoisted(() => ({
-  send: vi.fn(),
-  adminRpc: vi.fn(),
-  adminFrom: vi.fn(),
-}));
+const { send } = vi.hoisted(() => ({ send: vi.fn() }));
 
 vi.mock("resend", () => ({
   Resend: class {
     emails = { send };
   },
 }));
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ rpc: adminRpc, from: adminFrom }),
-}));
+vi.mock("@/lib/db/portal", async () => (await import("../helpers/fake-db")).fakePortal());
 vi.mock("@/lib/sentry", () => ({ captureError: vi.fn() }));
 vi.mock("@/lib/env", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/env")>()),
@@ -282,10 +277,9 @@ async function assertRecipientLanguage(
 
 
 /** #45: claim zwraca wiersze, budżet wysyłki (0087) zawsze przyznany w tych testach. */
-function mockClaim(result: { data: unknown; error: unknown }) {
-  adminRpc.mockImplementation(async (name: string) =>
-    name === 'take_email_send_budget' ? { data: [{ granted: true, retry_at: null }], error: null } : result,
-  );
+function mockClaim(result: { data: unknown[] }) {
+  fakeDb.rpc("claim_email_batch", result.data);
+  fakeDb.rpc("take_email_send_budget", [{ granted: true, retry_at: null }]);
 }
 
 beforeEach(() => {
@@ -295,24 +289,16 @@ beforeEach(() => {
   // Pułapka: domyślny język serwera nie może wpływać na język odbiorcy.
   process.env.NEXT_PUBLIC_DEFAULT_LOCALE = "pl";
   send.mockResolvedValue({ data: { id: "provider-1" }, error: null });
-  adminFrom.mockImplementation((table: string) =>
-    table === "profiles"
-      ? {
-          select: () => ({
-            in: async () => ({
-              data: [{ id: "recipient", first_name: "Ola" }],
-              error: null,
-            }),
-          }),
-        }
-      : { update: () => ({ eq: async () => ({ error: null }) }) },
-  );
+  resetFakeDb(null)
+    .rows("email.outbox.recipient-names", [{ id: "recipient", first_name: "Ola" }])
+    .exec("email.outbox.mark-sent")
+    .exec("email.outbox.mark-failed");
 });
 
 async function runWorker(
   rows: ReturnType<typeof enqueue>[],
 ): Promise<SentMail[]> {
-  mockClaim({ data: rows, error: null });
+  mockClaim({ data: rows });
   const result = await processEmailQueue();
   expect(result).toMatchObject({
     processed: rows.length,
