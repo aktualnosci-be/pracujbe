@@ -55,9 +55,14 @@ test('lista ofert /pl/oferty-pracy renderuje wyniki', async ({ page }) => {
   // Tytuł strony listy.
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(pl.jobs.pageTitle);
 
-  // Co najmniej jedna oferta (link do szczegółów /oferty-pracy/<slug>).
-  const jobLinks = page.locator('a[href*="/oferty-pracy/"]');
-  expect(await jobLinks.count()).toBeGreaterThan(0);
+  // #376: co najmniej jedna KARTA wyniku (artykuł na liście w `main`) z linkiem do szczegółów.
+  // Asercja z ponawianiem, a nie jednorazowy `count()`; breadcrumb/stopka jej nie spełnią.
+  const results = page.getByRole('main').getByRole('listitem').getByRole('article');
+  await expect(results).not.toHaveCount(0);
+  await expect(results.first().getByRole('heading', { level: 3 }).getByRole('link')).toHaveAttribute(
+    'href',
+    /^\/pl\/oferty-pracy\/[^/?#]+$/,
+  );
 });
 
 /**
