@@ -624,10 +624,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] Matching (logika + test jednostkowy + integracja z UI) — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
   Poziomy języków (#195, 0074): każdy wymagany język = 10/n pkt; poziom ≥ wymagany (lub oferta
   bez poziomu) → pełny udział, o jeden niżej → połowa, niżej lub nieznany → 0; luka w
-  `languageGaps` (komunikat `match.languageLevel*`). Lokalizacja (#194, częściowo): odległość
-  haversine ze współrzędnych słownika `locations` vs `radius_km` (w promieniu 15, poza 0);
-  bez współrzędnych ten sam region = 10 bez etykiety „w promieniu”. **Do zrobienia (#194):**
-  współrzędne dla miast spoza 10-elementowego słownika (kanoniczny model miast/geokodowanie).
+  `languageGaps` (komunikat `match.languageLevel*`). Lokalizacja (#194): odległość haversine
+  vs `radius_km` (w promieniu 15, poza 0, remote bez ograniczeń); współrzędne: słownik
+  `locations` z bazy, potem kanoniczna lista ~46 belgijskich miast w kodzie z aliasami
+  PL/NL/FR/EN (`src/lib/matching/belgian-cities.ts`, 10 miast = wartości z `0010`, strażnik
+  w `matching-locations.test.ts`); miasto spoza obu → ten sam region = 10 bez etykiety
+  „w promieniu”. **Do zrobienia:** współrzędne w bazie dla pozostałych miast (migracja
+  `locations`), geokodowanie miejscowości spoza listy.
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
   Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
   `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
