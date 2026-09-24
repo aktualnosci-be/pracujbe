@@ -23,7 +23,10 @@ export async function Footer() {
     },
     {
       title: t('forEmployers'),
-      links: [{ href: '/rejestracja-pracodawca', label: t('postJob') }],
+      links: [
+        { href: '/dla-pracodawcow', label: t('howItWorks') },
+        { href: '/rejestracja-pracodawca', label: t('postJob') },
+      ],
     },
     {
       title: t('company'),

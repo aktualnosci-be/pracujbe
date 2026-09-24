@@ -31,6 +31,7 @@ const ROUTES = [
   '/praca/miasto/brussels',
   '/poradniki',
   '/poradniki/praca-w-belgii-bez-znajomosci-jezyka',
+  '/dla-pracodawcow',
   '/o-nas',
   '/faq',
   '/kontakt',
