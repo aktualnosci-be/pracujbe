@@ -44,6 +44,11 @@ export const EMAIL_TYPES = [
   'invoice',
   'supportContact',
   'reportReceived',
+  'reportDecisionActioned',
+  'reportDecisionNoAction',
+  'moderationJobRemoved',
+  'moderationCompanySuspended',
+  'moderationRestored',
 ] as const;
 
 export type EmailType = (typeof EMAIL_TYPES)[number];
@@ -190,6 +195,40 @@ export function interpolate(template: string, vars: Record<string, unknown>): st
 }
 
 /** Pełny słownik treści: typ maila -> język -> blok treści. */
+/**
+ * Etykiety uzasadnienia decyzji moderacyjnej (#42) w języku odbiorcy: podstawa ograniczenia
+ * i udział automatyzacji. Podstawiane jako `{groundLabel}` / `{automationLabel}`.
+ */
+export const moderationLabels: Record<
+  Locale,
+  { terms: string; law: string; automatedYes: string; automatedNo: string }
+> = {
+  pl: {
+    terms: 'Regulamin serwisu',
+    law: 'Przepis prawa',
+    automatedYes: 'Treść została wykryta lub oznaczona automatycznie. Decyzję podjął człowiek.',
+    automatedNo: 'Treść nie została wykryta automatycznie. Decyzję podjął człowiek.',
+  },
+  nl: {
+    terms: 'Gebruiksvoorwaarden van de website',
+    law: 'Wettelijke bepaling',
+    automatedYes: 'De inhoud werd automatisch opgespoord of gemarkeerd. De beslissing werd door een mens genomen.',
+    automatedNo: 'De inhoud werd niet automatisch opgespoord. De beslissing werd door een mens genomen.',
+  },
+  fr: {
+    terms: 'Conditions d’utilisation du site',
+    law: 'Disposition légale',
+    automatedYes: 'Le contenu a été détecté ou signalé automatiquement. La décision a été prise par une personne.',
+    automatedNo: 'Le contenu n’a pas été détecté automatiquement. La décision a été prise par une personne.',
+  },
+  en: {
+    terms: 'Website terms of use',
+    law: 'Legal provision',
+    automatedYes: 'The content was detected or flagged automatically. The decision was made by a person.',
+    automatedNo: 'The content was not detected automatically. The decision was made by a person.',
+  },
+};
+
 export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
   accountConfirmation: {
     pl: {
@@ -1289,6 +1328,204 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       highlight: '{caseNumber}',
       outro: 'We do not share your details with the author of the reported content. Do not share your access code with anyone.',
       footerNote: 'You are receiving this email because a report was sent on Pracuj.be with this email address.',
+    },
+  },
+  reportDecisionActioned: {
+    pl: {
+      subject: 'Rozpatrzyliśmy Twoje zgłoszenie {caseNumber}',
+      preview: 'Podjęliśmy działania wobec zgłoszonej treści.',
+      heading: 'Zgłoszenie rozpatrzone',
+      body: 'Rozpatrzyliśmy Twoje zgłoszenie treści w serwisie Pracuj.be i podjęliśmy działania wobec zgłoszonej treści.\n\nStatus sprawy sprawdzisz przyciskiem poniżej, podając numer sprawy i kod dostępu z wiadomości potwierdzającej przyjęcie zgłoszenia.',
+      cta: 'Sprawdź status sprawy',
+      highlight: '{caseNumber}',
+      outro: 'Nie przekazujemy Twoich danych autorowi zgłoszonej treści.',
+      footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be wysłano zgłoszenie z tym adresem e-mail.',
+    },
+    nl: {
+      subject: 'We hebben je melding {caseNumber} behandeld',
+      preview: 'We hebben maatregelen genomen tegen de gemelde inhoud.',
+      heading: 'Melding behandeld',
+      body: 'We hebben je melding over inhoud op Pracuj.be behandeld en maatregelen genomen tegen de gemelde inhoud.\n\nDe status van je dossier bekijk je via de knop hieronder, met het dossiernummer en de toegangscode uit de ontvangstbevestiging van je melding.',
+      cta: 'Status van je dossier bekijken',
+      highlight: '{caseNumber}',
+      outro: 'We geven je gegevens niet door aan de auteur van de gemelde inhoud.',
+      footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een melding met dit e-mailadres is verstuurd.',
+    },
+    fr: {
+      subject: 'Nous avons traité votre signalement {caseNumber}',
+      preview: 'Nous avons pris des mesures concernant le contenu signalé.',
+      heading: 'Signalement traité',
+      body: 'Nous avons traité votre signalement de contenu sur Pracuj.be et pris des mesures concernant le contenu signalé.\n\nVous pouvez suivre votre dossier avec le bouton ci-dessous, à l’aide du numéro de dossier et du code d’accès indiqués dans le message confirmant la réception de votre signalement.',
+      cta: 'Voir le statut du dossier',
+      highlight: '{caseNumber}',
+      outro: 'Nous ne transmettons pas vos données à l’auteur du contenu signalé.',
+      footerNote: 'Vous recevez ce message car un signalement a été envoyé sur Pracuj.be avec cette adresse e-mail.',
+    },
+    en: {
+      subject: 'We have handled your report {caseNumber}',
+      preview: 'We have taken action on the reported content.',
+      heading: 'Report handled',
+      body: 'We have handled your report about content on Pracuj.be and taken action on the reported content.\n\nYou can check the status of your case with the button below, using the case number and access code from the email confirming we received your report.',
+      cta: 'Check case status',
+      highlight: '{caseNumber}',
+      outro: 'We do not share your details with the author of the reported content.',
+      footerNote: 'You are receiving this email because a report was sent on Pracuj.be with this email address.',
+    },
+  },
+
+  reportDecisionNoAction: {
+    pl: {
+      subject: 'Rozpatrzyliśmy Twoje zgłoszenie {caseNumber}',
+      preview: 'Po analizie nie podjęliśmy działań wobec zgłoszonej treści.',
+      heading: 'Zgłoszenie rozpatrzone',
+      body: 'Rozpatrzyliśmy Twoje zgłoszenie treści w serwisie Pracuj.be. Po analizie nie stwierdziliśmy podstaw do działań wobec zgłoszonej treści.\n\nStatus sprawy sprawdzisz przyciskiem poniżej, podając numer sprawy i kod dostępu z wiadomości potwierdzającej przyjęcie zgłoszenia.',
+      cta: 'Sprawdź status sprawy',
+      highlight: '{caseNumber}',
+      outro: 'Jeśli nie zgadzasz się z tym wynikiem, napisz do nas przez stronę Pomoc i podaj numer sprawy {caseNumber}.',
+      footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be wysłano zgłoszenie z tym adresem e-mail.',
+    },
+    nl: {
+      subject: 'We hebben je melding {caseNumber} behandeld',
+      preview: 'Na onderzoek hebben we geen maatregelen genomen tegen de gemelde inhoud.',
+      heading: 'Melding behandeld',
+      body: 'We hebben je melding over inhoud op Pracuj.be behandeld. Na onderzoek vonden we geen reden om maatregelen te nemen tegen de gemelde inhoud.\n\nDe status van je dossier bekijk je via de knop hieronder, met het dossiernummer en de toegangscode uit de ontvangstbevestiging van je melding.',
+      cta: 'Status van je dossier bekijken',
+      highlight: '{caseNumber}',
+      outro: 'Ben je het niet eens met deze uitkomst? Schrijf ons via de pagina Hulp en vermeld dossiernummer {caseNumber}.',
+      footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een melding met dit e-mailadres is verstuurd.',
+    },
+    fr: {
+      subject: 'Nous avons traité votre signalement {caseNumber}',
+      preview: 'Après examen, nous n’avons pris aucune mesure concernant le contenu signalé.',
+      heading: 'Signalement traité',
+      body: 'Nous avons traité votre signalement de contenu sur Pracuj.be. Après examen, nous n’avons pas trouvé de motif de prendre des mesures concernant le contenu signalé.\n\nVous pouvez suivre votre dossier avec le bouton ci-dessous, à l’aide du numéro de dossier et du code d’accès indiqués dans le message confirmant la réception de votre signalement.',
+      cta: 'Voir le statut du dossier',
+      highlight: '{caseNumber}',
+      outro: 'Si vous n’êtes pas d’accord avec ce résultat, écrivez-nous via la page Aide en indiquant le numéro de dossier {caseNumber}.',
+      footerNote: 'Vous recevez ce message car un signalement a été envoyé sur Pracuj.be avec cette adresse e-mail.',
+    },
+    en: {
+      subject: 'We have handled your report {caseNumber}',
+      preview: 'After review, we took no action on the reported content.',
+      heading: 'Report handled',
+      body: 'We have handled your report about content on Pracuj.be. After review, we found no grounds to take action on the reported content.\n\nYou can check the status of your case with the button below, using the case number and access code from the email confirming we received your report.',
+      cta: 'Check case status',
+      highlight: '{caseNumber}',
+      outro: 'If you disagree with this outcome, write to us via the Help page and include case number {caseNumber}.',
+      footerNote: 'You are receiving this email because a report was sent on Pracuj.be with this email address.',
+    },
+  },
+
+  moderationJobRemoved: {
+    pl: {
+      subject: 'Oferta „{jobTitle}” została wycofana decyzją moderacyjną',
+      preview: 'Decyzja {decisionReference} — uzasadnienie w treści wiadomości.',
+      heading: 'Oferta wycofana z serwisu',
+      body: 'Po rozpatrzeniu zgłoszenia wycofaliśmy ofertę „{jobTitle}” firmy {companyName}. Oferta nie jest widoczna dla kandydatów i nie można jej ponownie opublikować, dopóki decyzja obowiązuje.\n\nPodstawa: {groundLabel} — {groundReference}.\n\n{automationLabel}\n\nNumer decyzji i ustalone fakty podajemy poniżej. Uzasadnienie znajdziesz też w panelu, w danych firmy.',
+      cta: 'Przejdź do danych firmy',
+      highlight: '{decisionReference}',
+      outro: 'Jeśli nie zgadzasz się z decyzją, napisz do nas przez stronę Pomoc i podaj numer decyzji {decisionReference}.',
+    },
+    nl: {
+      subject: 'De vacature ‘{jobTitle}’ is ingetrokken na een moderatiebeslissing',
+      preview: 'Beslissing {decisionReference} — de motivering staat in dit bericht.',
+      heading: 'Vacature ingetrokken',
+      body: 'Na behandeling van een melding hebben we de vacature ‘{jobTitle}’ van {companyName} ingetrokken. De vacature is niet zichtbaar voor kandidaten en kan niet opnieuw worden gepubliceerd zolang de beslissing geldt.\n\nGrond: {groundLabel} — {groundReference}.\n\n{automationLabel}\n\nHet beslissingsnummer en de vastgestelde feiten vind je hieronder. De motivering staat ook in je dashboard, bij de bedrijfsgegevens.',
+      cta: 'Naar de bedrijfsgegevens',
+      highlight: '{decisionReference}',
+      outro: 'Ben je het niet eens met de beslissing? Schrijf ons via de pagina Hulp en vermeld beslissingsnummer {decisionReference}.',
+    },
+    fr: {
+      subject: 'L’offre « {jobTitle} » a été retirée par une décision de modération',
+      preview: 'Décision {decisionReference} — la motivation figure dans ce message.',
+      heading: 'Offre retirée du site',
+      body: 'Après examen d’un signalement, nous avons retiré l’offre « {jobTitle} » de l’entreprise {companyName}. L’offre n’est pas visible par les candidats et ne peut pas être republiée tant que la décision s’applique.\n\nFondement : {groundLabel} — {groundReference}.\n\n{automationLabel}\n\nLe numéro de décision et les faits constatés figurent ci-dessous. La motivation est aussi disponible dans votre espace, dans les données de l’entreprise.',
+      cta: 'Voir les données de l’entreprise',
+      highlight: '{decisionReference}',
+      outro: 'Si vous n’êtes pas d’accord avec la décision, écrivez-nous via la page Aide en indiquant le numéro de décision {decisionReference}.',
+    },
+    en: {
+      subject: 'The job “{jobTitle}” has been removed by a moderation decision',
+      preview: 'Decision {decisionReference} — the statement of reasons is in this email.',
+      heading: 'Job removed from the website',
+      body: 'After reviewing a report, we removed the job “{jobTitle}” posted by {companyName}. The job is not visible to candidates and cannot be republished while the decision applies.\n\nGround: {groundLabel} — {groundReference}.\n\n{automationLabel}\n\nThe decision number and the facts we established are shown below. You can also find the statement of reasons in your dashboard, under company details.',
+      cta: 'Go to company details',
+      highlight: '{decisionReference}',
+      outro: 'If you disagree with the decision, write to us via the Help page and include decision number {decisionReference}.',
+    },
+  },
+
+  moderationCompanySuspended: {
+    pl: {
+      subject: 'Firma {companyName} została zawieszona decyzją moderacyjną',
+      preview: 'Decyzja {decisionReference} — uzasadnienie w treści wiadomości.',
+      heading: 'Firma zawieszona',
+      body: 'Po rozpatrzeniu zgłoszenia zawiesiliśmy firmę {companyName}. Oferty firmy nie są widoczne dla kandydatów, dopóki decyzja obowiązuje.\n\nPodstawa: {groundLabel} — {groundReference}.\n\n{automationLabel}\n\nNumer decyzji i ustalone fakty podajemy poniżej. Uzasadnienie znajdziesz też w panelu, w danych firmy.',
+      cta: 'Przejdź do danych firmy',
+      highlight: '{decisionReference}',
+      outro: 'Jeśli nie zgadzasz się z decyzją, napisz do nas przez stronę Pomoc i podaj numer decyzji {decisionReference}.',
+    },
+    nl: {
+      subject: 'Het bedrijf {companyName} is geschorst na een moderatiebeslissing',
+      preview: 'Beslissing {decisionReference} — de motivering staat in dit bericht.',
+      heading: 'Bedrijf geschorst',
+      body: 'Na behandeling van een melding hebben we het bedrijf {companyName} geschorst. De vacatures van het bedrijf zijn niet zichtbaar voor kandidaten zolang de beslissing geldt.\n\nGrond: {groundLabel} — {groundReference}.\n\n{automationLabel}\n\nHet beslissingsnummer en de vastgestelde feiten vind je hieronder. De motivering staat ook in je dashboard, bij de bedrijfsgegevens.',
+      cta: 'Naar de bedrijfsgegevens',
+      highlight: '{decisionReference}',
+      outro: 'Ben je het niet eens met de beslissing? Schrijf ons via de pagina Hulp en vermeld beslissingsnummer {decisionReference}.',
+    },
+    fr: {
+      subject: 'L’entreprise {companyName} a été suspendue par une décision de modération',
+      preview: 'Décision {decisionReference} — la motivation figure dans ce message.',
+      heading: 'Entreprise suspendue',
+      body: 'Après examen d’un signalement, nous avons suspendu l’entreprise {companyName}. Ses offres ne sont pas visibles par les candidats tant que la décision s’applique.\n\nFondement : {groundLabel} — {groundReference}.\n\n{automationLabel}\n\nLe numéro de décision et les faits constatés figurent ci-dessous. La motivation est aussi disponible dans votre espace, dans les données de l’entreprise.',
+      cta: 'Voir les données de l’entreprise',
+      highlight: '{decisionReference}',
+      outro: 'Si vous n’êtes pas d’accord avec la décision, écrivez-nous via la page Aide en indiquant le numéro de décision {decisionReference}.',
+    },
+    en: {
+      subject: 'The company {companyName} has been suspended by a moderation decision',
+      preview: 'Decision {decisionReference} — the statement of reasons is in this email.',
+      heading: 'Company suspended',
+      body: 'After reviewing a report, we suspended the company {companyName}. Its jobs are not visible to candidates while the decision applies.\n\nGround: {groundLabel} — {groundReference}.\n\n{automationLabel}\n\nThe decision number and the facts we established are shown below. You can also find the statement of reasons in your dashboard, under company details.',
+      cta: 'Go to company details',
+      highlight: '{decisionReference}',
+      outro: 'If you disagree with the decision, write to us via the Help page and include decision number {decisionReference}.',
+    },
+  },
+
+  moderationRestored: {
+    pl: {
+      subject: 'Cofnęliśmy decyzję moderacyjną {decisionReference}',
+      preview: 'Ograniczenie treści firmy {companyName} zostało cofnięte.',
+      heading: 'Ograniczenie cofnięte',
+      body: 'Cofnęliśmy decyzję {decisionReference} dotyczącą firmy {companyName}. Treść wraca do stanu sprzed decyzji, chyba że obowiązuje wobec niej inna decyzja.\n\nPowód cofnięcia podajemy poniżej.',
+      cta: 'Przejdź do danych firmy',
+      highlight: '{decisionReference}',
+    },
+    nl: {
+      subject: 'We hebben moderatiebeslissing {decisionReference} ingetrokken',
+      preview: 'De beperking van de inhoud van {companyName} is opgeheven.',
+      heading: 'Beperking opgeheven',
+      body: 'We hebben beslissing {decisionReference} over het bedrijf {companyName} ingetrokken. De inhoud krijgt weer de status van vóór de beslissing, tenzij er een andere beslissing voor geldt.\n\nDe reden vind je hieronder.',
+      cta: 'Naar de bedrijfsgegevens',
+      highlight: '{decisionReference}',
+    },
+    fr: {
+      subject: 'Nous avons annulé la décision de modération {decisionReference}',
+      preview: 'La restriction du contenu de {companyName} a été levée.',
+      heading: 'Restriction levée',
+      body: 'Nous avons annulé la décision {decisionReference} concernant l’entreprise {companyName}. Le contenu retrouve son état antérieur à la décision, sauf si une autre décision s’y applique.\n\nLe motif de l’annulation figure ci-dessous.',
+      cta: 'Voir les données de l’entreprise',
+      highlight: '{decisionReference}',
+    },
+    en: {
+      subject: 'We have reversed moderation decision {decisionReference}',
+      preview: 'The restriction on content from {companyName} has been lifted.',
+      heading: 'Restriction lifted',
+      body: 'We have reversed decision {decisionReference} concerning the company {companyName}. The content returns to its state before the decision, unless another decision applies to it.\n\nThe reason is shown below.',
+      cta: 'Go to company details',
+      highlight: '{decisionReference}',
     },
   },
 };
