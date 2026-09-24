@@ -5,6 +5,8 @@ import { renderEmail } from '@/emails/templates';
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
 import { authEmailLocale, buildAuthEmail, type AuthRecipientProfile } from '@/lib/email/auth-email';
+import { takeAuthSendBudget } from '@/lib/email/auth-send-budget';
+import { emailFromEnv } from '@/lib/email/sender';
 import { env } from '@/lib/env';
 import { readTextWithLimit } from '@/lib/http/read-limited';
 import { captureError } from '@/lib/sentry';
@@ -89,7 +91,7 @@ async function readRecipientProfile(
 export async function POST(request: Request): Promise<Response> {
   const secret = process.env.SEND_EMAIL_HOOK_SECRET;
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'Pracuj.be <no-reply@pracuj.be>';
+  const from = emailFromEnv();
   const supabaseUrl = env.supabaseUrl;
 
   // Hook został wołany, ale ten deployment nie ma pełnej konfiguracji (dryf env: brak sekretu/
@@ -107,6 +109,28 @@ export async function POST(request: Request): Promise<Response> {
   const rawBody = bodyRead.text;
   if (!verifySignature(secret, request.headers, rawBody)) {
     return Response.json({ error: 'invalid signature' }, { status: 401 });
+  }
+
+  let payload: HookPayload;
+  try {
+    payload = JSON.parse(rawBody) as HookPayload;
+  } catch {
+    return Response.json({ error: 'invalid payload' }, { status: 400 });
+  }
+
+  // #45: atomowy budżet puli `auth` (0087). Rezerwy chronią tę pulę przed newsletterem
+  // i powiadomieniami; odmowa = dostawca już wyczerpał limit okna → 503 + Retry-After, a
+  // GoTrue ponowi (bez wysyłki, która i tak odbiłaby się od limitu dostawcy). PRZED claimem
+  // inboxu: odmowa nie zostawia dzierżawy, która kazałaby pominąć ponowienie.
+  const budget = await takeAuthSendBudget(
+    null,
+    buildAuthEmail(payload.email_data?.email_action_type ?? 'signup', '', undefined).type,
+  );
+  if (budget.status === 'denied') {
+    return Response.json(
+      { error: 'rate limited' },
+      { status: 503, headers: { 'Retry-After': String(budget.retryAfterSeconds) } },
+    );
   }
 
   // P0-02 + SEC-14: inbox ze stanem (anty-replay). Duplikatem do pominięcia jest WYŁĄCZNIE wpis
@@ -134,12 +158,6 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
-  let payload: HookPayload;
-  try {
-    payload = JSON.parse(rawBody) as HookPayload;
-  } catch {
-    return Response.json({ error: 'invalid payload' }, { status: 400 });
-  }
 
   const email = payload.user?.email;
   const meta = payload.user?.user_metadata ?? {};
@@ -167,15 +185,15 @@ export async function POST(request: Request): Promise<Response> {
       t: EmailType,
       l: Locale,
       d: Record<string, unknown>,
-    ) => Promise<{ subject: string; html: string }>;
-    const { subject, html } = await render(type, locale, data);
+    ) => Promise<{ subject: string; html: string; text: string }>;
+    const { subject, html, text } = await render(type, locale, data);
     const resend = new Resend(apiKey);
     // Idempotency key = stabilny webhook-id (P0-02): ponowna wysyłka tego samego zdarzenia jest
     // deduplikowana po stronie Resend, gdyby GoTrue ponowił po tym, jak wysyłka się powiodła,
     // a oznaczenie `completed` nie.
     const idempotencyKey = webhookId ?? undefined;
     const result = await resend.emails.send(
-      { from, to: email, subject, html },
+      { from, to: email, subject, html, text },
       idempotencyKey ? { idempotencyKey } : undefined,
     );
     if (result.error) throw new Error(result.error.message);
