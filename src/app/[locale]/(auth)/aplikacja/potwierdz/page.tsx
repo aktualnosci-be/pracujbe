@@ -33,7 +33,9 @@ export default async function GuestConfirmPage({ params }: PageProps) {
         <CardTitle as="h1" className="text-2xl">{t('confirmTitle')}</CardTitle>
       </CardHeader>
       <CardContent>
-        {hasToken ? <GuestConfirmPanel /> : <GuestLinkIntake locale={locale} purpose="confirm" />}
+        <GuestLinkIntake locale={locale} purpose="confirm" hasToken={hasToken}>
+          <GuestConfirmPanel />
+        </GuestLinkIntake>
       </CardContent>
     </Card>
   );

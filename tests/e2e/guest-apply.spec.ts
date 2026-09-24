@@ -186,4 +186,14 @@ test('nowy link przejęcia: fragment znika z historii, token zostaje w cookie Ht
   expect(staged?.value).toBe(token);
   expect(staged?.httpOnly).toBe(true);
   expect(staged?.path).toBe('/en/aplikacja/przejmij');
+
+  // A second email link must replace the staged credential even while the first cookie exists.
+  const second = 'C'.repeat(43);
+  await page.goto(`/en/aplikacja/przejmij#token=${second}`);
+  await expect.poll(() => page.url()).toBe('http://127.0.0.1:4319/en/aplikacja/przejmij');
+  await expect.poll(async () => {
+    const current = await page.context().cookies();
+    return current.find((cookie) => cookie.name === 'pb_guest_claim')?.value;
+  }).toBe(second);
+  expect(requests.every((url) => !url.includes(second))).toBe(true);
 });

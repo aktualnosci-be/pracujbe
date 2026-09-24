@@ -50,11 +50,9 @@ export default async function GuestClaimPage({ params }: PageProps) {
         <CardTitle as="h1" className="text-2xl">{t('claimTitle')}</CardTitle>
       </CardHeader>
       <CardContent>
-        {hasToken ? (
-          <GuestClaimPanel returnTo={returnTo} signedIn={await hasSession()} />
-        ) : (
-          <GuestLinkIntake locale={locale} purpose="claim" />
-        )}
+        <GuestLinkIntake locale={locale} purpose="claim" hasToken={hasToken}>
+          {hasToken ? <GuestClaimPanel returnTo={returnTo} signedIn={await hasSession()} /> : null}
+        </GuestLinkIntake>
       </CardContent>
     </Card>
   );
