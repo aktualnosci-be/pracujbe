@@ -784,6 +784,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: {},
     note: 'Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers.',
   },
+  'public.screening_question_reviews': {
+    activities: ['companies'],
+    subjects: ['employer', 'admin'],
+    columns: { requested_by: 'reference', decided_by: 'reference', decision_reason: 'moderation' },
+    note:
+      'Przegląd pytania oznaczonego przez detektor (#497, 0103): kopia treści pytania firmy, kto zapisał pytanie i kto zdecydował, uzasadnienie admina. Bez odpowiedzi kandydatów.',
+  },
 
   // --- Płatności (wyłączone, #51) --------------------------------------------------------------
   'public.subscriptions': BILLING('Martwy schemat billingu; provider_customer_id identyfikuje firmę u dostawcy płatności.'),

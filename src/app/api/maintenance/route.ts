@@ -4,7 +4,12 @@ import { NextResponse } from 'next/server';
 
 import { hasServiceRoleKey, isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
-import { processStorageDeletions } from '@/lib/storage-deletion';
+import {
+  processStorageDeletions,
+  railwayDeleter,
+  supabaseDeleter,
+  type ObjectDeleter,
+} from '@/lib/storage-deletion';
 
 /**
  * Zadania utrzymaniowe (P1-20) — wywoływane przez cron Railway (`scripts/railway-cron-call.mjs`,
@@ -49,6 +54,15 @@ function authorized(request: Request): boolean {
     (s): s is string => Boolean(s),
   );
   return secrets.some((s) => safeEqual(header, `Bearer ${s}`));
+}
+
+/** Pliki CV leżą w prywatnym buckecie Railway (#26); bez jego konfiguracji — Supabase Storage. */
+async function objectDeleter(admin: Parameters<typeof supabaseDeleter>[0]): Promise<ObjectDeleter> {
+  const { fileBucketConfig } = await import('@/lib/env');
+  const config = fileBucketConfig();
+  if (!config) return supabaseDeleter(admin);
+  const { createRailwayBucket } = await import('@/lib/storage/railway-bucket');
+  return railwayDeleter(createRailwayBucket(config));
 }
 
 /** Same liczniki z `run_retention_purge` (liczby całkowite), bez innych pól. */
@@ -125,7 +139,7 @@ async function run(request: Request): Promise<Response> {
     }
     let storage;
     try {
-      storage = await processStorageDeletions(admin);
+      storage = await processStorageDeletions(admin, await objectDeleter(admin));
     } catch (error) {
       captureError(error, { area: 'maintenance.gc', task: 'storageDeletions' });
       return NextResponse.json({ error: 'gc failed' }, { status: 503 });

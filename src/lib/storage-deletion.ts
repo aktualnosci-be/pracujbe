@@ -12,7 +12,30 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * (`complete_storage_deletion`): sukces usuwa wiersz, błąd = ponowienie z backoffem.
  * Brak obiektu w storage to sukces (usuwanie idempotentne). Do logów trafia tylko kod błędu —
  * nigdy ścieżka obiektu ani URL.
+ *
+ * Obiekty usuwa `ObjectDeleter`: prywatny bucket Railway (#26), gdy jest skonfigurowany, inaczej
+ * Supabase Storage (przejściowo, `supabaseDeleter`).
  */
+
+/** Usunięcie jednego obiektu; `null` = sukces, inaczej krótki kod błędu (bez ścieżki). */
+export type ObjectDeleter = (bucket: string, path: string) => Promise<string | null>;
+
+export function supabaseDeleter(admin: SupabaseClient): ObjectDeleter {
+  return async (bucket, path) => {
+    const result = await admin.storage.from(bucket).remove([path]);
+    return result.error ? 'STORAGE_ERROR' : null;
+  };
+}
+
+/** Bucket Railway ma jedną nazwę z konfiguracji; wiersze CV mają w `files.bucket` 'candidate-files'. */
+export function railwayDeleter(
+  store: { delete(input: { key: string }): Promise<{ ok: true } | { ok: false; error: string }> },
+): ObjectDeleter {
+  return async (_bucket, path) => {
+    const result = await store.delete({ key: path });
+    return result.ok ? null : result.error;
+  };
+}
 
 export interface StorageDeletionRun {
   claimed: number;
@@ -38,6 +61,7 @@ function asRows(value: unknown): ClaimedRow[] {
 
 export async function processStorageDeletions(
   admin: SupabaseClient,
+  deleteObject: ObjectDeleter = supabaseDeleter(admin),
   limit = 50,
 ): Promise<StorageDeletionRun> {
   const { data, error } = await admin.rpc('claim_storage_deletions', { p_limit: limit });
@@ -46,15 +70,13 @@ export async function processStorageDeletions(
   let deleted = 0;
   let failed = 0;
   for (const row of rows) {
-    let ok = false;
-    let code: string | null = null;
+    let code: string | null;
     try {
-      const result = await admin.storage.from(row.bucket).remove([row.path]);
-      ok = !result.error;
-      if (result.error) code = 'STORAGE_ERROR';
+      code = await deleteObject(row.bucket, row.path);
     } catch {
       code = 'STORAGE_UNAVAILABLE';
     }
+    const ok = code === null;
     const done = await admin.rpc('complete_storage_deletion', { p_id: row.id, p_ok: ok, p_error: code });
     if (done.error) throw done.error;
     if (ok) deleted += 1;

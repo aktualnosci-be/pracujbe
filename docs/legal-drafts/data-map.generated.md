@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 84; z danymi osobowymi: 52; bez danych osobowych: 32.
+Tabele w migracjach: 85; z danymi osobowymi: 53; bez danych osobowych: 32.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -19,7 +19,7 @@ Tabele w migracjach: 84; z danymi osobowymi: 52; bez danych osobowych: 32.
 | Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Supabase, Resend, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Supabase, Resend | Kod nie usuwa danych — do ustalenia |
 | Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Supabase, Resend | Propozycje wygasają (expires_at), dane nie są usuwane. |
-| Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs` | Railway, Supabase, Resend, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
+| Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs`, `public.screening_question_reviews` | Railway, Supabase, Resend, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
 | E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Supabase, Resend | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Supabase, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
@@ -893,6 +893,19 @@ Tabele w migracjach: 84; z danymi osobowymi: 52; bez danych osobowych: 32.
 | `query` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0092_saved_search_alerts.sql` |
 | `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0092_saved_search_alerts.sql` |
 | `filters_hash` | nie dotyczy: Skrót filtrów do deduplikacji wyszukiwań — nie identyfikuje osoby poza wierszem. | — |
+
+### `public.screening_question_reviews`
+
+- **Migracja:** `supabase/migrations/0103_screening_question_review.sql`
+- **Czynności:** Konta firm, zespół i weryfikacja
+- **Osoby:** Pracodawcy i członkowie firm, Administratorzy portalu
+- **Uwaga:** Przegląd pytania oznaczonego przez detektor (#497, 0103): kopia treści pytania firmy, kto zapisał pytanie i kto zdecydował, uzasadnienie admina. Bez odpowiedzi kandydatów.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `requested_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0103_screening_question_review.sql` |
+| `decided_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0103_screening_question_review.sql` |
+| `decision_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0103_screening_question_review.sql` |
 
 ### `public.storage_deletion_queue`
 

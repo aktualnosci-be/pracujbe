@@ -54,7 +54,8 @@ wykonania na produkcji.
 `storage_deletion_queue (bucket, path)` wypełnia trigger `AFTER DELETE` na `files` —
 każda ścieżka usunięcia (akcja kandydata, usunięcie konta, retencja, ponowne usunięcie
 po restore) zostawia zadanie usunięcia obiektu. Worker: `claim_storage_deletions`
-(dzierżawa 5 min) → `storage.remove` → `complete_storage_deletion`. Brak obiektu =
+(dzierżawa 5 min) → usunięcie obiektu (prywatny bucket Railway z #26, gdy skonfigurowany;
+inaczej Supabase Storage) → `complete_storage_deletion`. Brak obiektu =
 sukces. Ścieżka, która znów ma wiersz `files`, wypada z kolejki bez usuwania.
 
 ## 4. Prawo dostępu — eksport JSON

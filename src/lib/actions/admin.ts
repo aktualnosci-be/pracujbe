@@ -13,6 +13,11 @@ import {
   type ModerationField,
   type ModerationFieldError,
 } from '@/lib/admin/moderation';
+import {
+  isScreeningReviewDecision,
+  screeningReviewReasonError,
+  type ScreeningReviewDecision,
+} from '@/lib/screening/review';
 import { isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
@@ -32,6 +37,9 @@ import { companyVatSource } from '@/lib/vies/state';
  *   - `restoreModeration` — cofnięcie ograniczenia treści (RPC `admin_restore_moderation`).
  *   - `liftEmailSuppression` — zdjęcie blokady adresu e-mail (#44) przez RPC
  *     `admin_lift_email_suppression` (0098, uzasadnienie wymagane, audyt).
+ *   - `decideScreeningReview` — decyzja o pytaniu screeningowym oznaczonym przez detektor
+ *     (#497) przez RPC `admin_decide_screening_review` (0103: tylko oczekujące, odrzucenie
+ *     z uzasadnieniem, audyt, powiadomienie firmy). Akceptacja nie publikuje oferty.
  *   - `checkCompanyVies` — ręczne sprawdzenie numeru VAT firmy w VIES (#92), zapis wyniku
  *     rozstrzygającego przez RPC `admin_record_vies_check` (0088).
  *
@@ -323,6 +331,56 @@ export type ViesActionResult =
   | { ok: true; demo: true }
   | { ok: true; demo?: false; outcome: ViesActionOutcome; saved: boolean }
   | { ok: false; error: ErrorCode };
+
+/**
+ * Decyzja admina o pytaniu screeningowym (#497). Odrzucenie wymaga uzasadnienia (trafia do
+ * firmy w kreatorze i do dziennika zdarzeń); te same reguły egzekwuje RPC.
+ */
+export async function decideScreeningReview(
+  reviewId: string,
+  decision: ScreeningReviewDecision,
+  reason: string,
+): Promise<AdminActionResult> {
+  if (!isScreeningReviewDecision(decision)) return { ok: false, error: 'VALIDATION_FAILED' };
+  const reasonError = screeningReviewReasonError(decision, typeof reason === 'string' ? reason : '');
+  if (reasonError) {
+    return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: reasonError };
+  }
+  // Tryb DEMO: identyfikatory przykładowych przeglądów nie są UUID; nic nie zapisujemy.
+  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (typeof reviewId !== 'string' || !UUID_RE.test(reviewId)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const trimmed = typeof reason === 'string' ? reason.trim() : '';
+    const { error } = await supabase.rpc('admin_decide_screening_review', {
+      p_review_id: reviewId,
+      p_decision: decision,
+      p_reason: trimmed.length > 0 ? trimmed : null,
+    });
+    if (error) {
+      const message = error.message ?? '';
+      if (message.includes('REASON_REQUIRED')) {
+        return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'required' };
+      }
+      if (message.includes('REASON_TOO_LONG')) {
+        return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'tooLong' };
+      }
+      return { ok: false, error: mapPgError(message) };
+    }
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'admin.decideScreeningReview' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -7,7 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 /** #98 — retencja zgłoszeń gościa w crona /api/maintenance: licznik i 503 przy błędzie. */
 
-vi.mock('@/lib/env', () => ({ hasServiceRoleKey: vi.fn(), isProductionMode: vi.fn() }));
+vi.mock('@/lib/env', () => ({ hasServiceRoleKey: vi.fn(), isProductionMode: vi.fn(), fileBucketConfig: () => null }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
 

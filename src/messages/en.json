@@ -626,7 +626,9 @@
     "guestApplyUnavailable": "Applying without an account is temporarily unavailable. Try again later or log in.",
     "emailNotVerified": "First confirm your account’s email address — click the link we sent when you registered.",
     "claimExpired": "The link to link the application has expired (it was valid for 30 days).",
-    "jobImportSensitiveData": "The listing contains a personal or document identification number, so we did not import it. Please fill in the form manually."
+    "jobImportSensitiveData": "The listing contains a personal or document identification number, so we did not import it. Please fill in the form manually.",
+    "screeningReviewRequired": "The job has a question that the portal team must check before publication. You can publish it once the question is approved or after you change it.",
+    "screeningQuestionRejected": "One of the questions was not approved. Change or remove it to publish the job."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -1132,7 +1134,9 @@
     "itemSavedSearch": "New jobs for a saved search",
     "itemModerationJobRemoved": "Job removed by a moderation decision",
     "itemModerationCompanySuspended": "Company suspended by a moderation decision",
-    "itemModerationRestored": "The content restriction has been lifted"
+    "itemModerationRestored": "The content restriction has been lifted",
+    "itemScreeningApproved": "A question in your job was approved",
+    "itemScreeningRejected": "A question in your job was not approved"
   },
   "pricing": {
     "standard": "Standard",
@@ -1427,7 +1431,14 @@
     "screeningRemove": "Remove question {n}",
     "screeningMoveUp": "Move question {n} up",
     "screeningMoveDown": "Move question {n} down",
-    "screeningTranslations": "Translations (optional)"
+    "screeningTranslations": "Translations (optional)",
+    "screeningRiskHint": "This question may concern protected data ({categories}). The portal team will check it before the job is published. Only ask what is needed for this position.",
+    "screeningReviewPending": "The question is waiting to be checked by the portal team ({categories}). The job will be published only after approval.",
+    "screeningReviewRejected": "The question was not approved ({categories}). Change or remove it.",
+    "screeningReviewReason": "Reason: {reason}",
+    "screeningPublishPending": "Question {n} is waiting to be checked.",
+    "screeningPublishRejected": "Question {n} was not approved.",
+    "screeningGoToQuestions": "Go to questions"
   },
   "jobImport": {
     "title": "Import from a job ad",
@@ -1500,6 +1511,9 @@
     "cvHint": "PDF, DOC or DOCX, max 5 MB. Files are private.",
     "empty": "No documents uploaded yet.",
     "delete": "Delete",
+    "download": "Download",
+    "downloadError": "The file could not be downloaded. Please try again.",
+    "quarantined": "The file is waiting for a security check — you can download it later.",
     "uploadError": "Upload failed. Check the format and size.",
     "deleteError": "Delete failed.",
     "loadError": "We couldn’t load your documents. Your files have not been deleted.",
@@ -1801,7 +1815,44 @@
     "casePriority": "Review priority: {priority}",
     "caseFlag": "Automated signal: {flag}",
     "auditActionModerationDecided": "Moderation decision",
-    "auditActionModerationRestored": "Restriction lifted"
+    "auditActionModerationRestored": "Restriction lifted",
+    "navScreening": "Job questions",
+    "screeningTitle": "Screening questions to check",
+    "screeningSubtitle": "Questions that may concern protected data. A job with such a question is not published without approval. The automatic check is only an aid and does not decide whether a question is lawful.",
+    "screeningFilterLabel": "Review status",
+    "screeningFilterPending": "Pending",
+    "screeningFilterDecided": "Decided",
+    "screeningEmpty": "No questions in this view.",
+    "screeningStatusPending": "Pending",
+    "screeningStatusApproved": "Approved",
+    "screeningStatusRejected": "Rejected",
+    "screeningNotCurrent": "No longer in the job",
+    "screeningCategories": "Possible categories: {categories}",
+    "screeningUnknownCompany": "Unknown company",
+    "screeningUnknownJob": "Untitled job",
+    "screeningTypeYesNo": "Yes / no",
+    "screeningTypeSingleChoice": "Single choice",
+    "screeningTypeDate": "Date",
+    "screeningTypeShortText": "Short answer",
+    "screeningOptions": "Answer options",
+    "screeningRequestedBy": "Saved by: {name}",
+    "screeningDecidedBy": "Decision: {name}",
+    "screeningDecisionReason": "Reason: {text}",
+    "screeningActionApprove": "Approve",
+    "screeningActionReject": "Reject",
+    "screeningApproveConfirmTitle": "Approve this question?",
+    "screeningApproveConfirmHint": "The company will be able to publish the job with this question. Approval covers only this text — any change to the question or a translation needs a new decision.",
+    "screeningRejectConfirmTitle": "Reject this question?",
+    "screeningRejectConfirmHint": "The company will see the reason in the job wizard and can change or remove the question.",
+    "screeningColQuestion": "Question",
+    "screeningColCategories": "Possible categories",
+    "screeningReasonOptionalLabel": "Reason (optional)",
+    "screeningReasonHint": "Max. {max} characters. Saved in the event log and, when rejecting, shown to the company.",
+    "screeningApproved": "The question was approved.",
+    "screeningRejected": "The question was rejected.",
+    "entityScreeningReview": "Screening question",
+    "auditActionScreeningRequested": "Question sent for review",
+    "auditActionScreeningReviewed": "Screening question decision"
   },
   "settings": {
     "title": "Notification preferences",
@@ -2294,5 +2345,18 @@
     "openBannerLabel": "Campaign banner: {title}",
     "loadError": "The job could not be loaded",
     "loadErrorHint": "Try again in a moment. If the problem persists, go back to the list of jobs."
+  },
+  "screeningReview": {
+    "categoryAge": "age",
+    "categorySex": "sex",
+    "categoryFamily": "pregnancy or family plans",
+    "categoryMarital": "marital status",
+    "categoryReligion": "religion or beliefs",
+    "categoryOrigin": "origin or nationality",
+    "categoryHealth": "health or disability",
+    "categoryOrientation": "sexual orientation or gender identity",
+    "categoryUnion": "trade union membership",
+    "categoryPolitical": "political opinions",
+    "categoryCriminal": "criminal record"
   }
 }
