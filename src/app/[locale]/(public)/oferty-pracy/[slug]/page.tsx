@@ -184,13 +184,14 @@ export default async function JobDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [t, tJobs, tContract, tCategory, tCommon, tApply, format] = await Promise.all([
+  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, format] = await Promise.all([
     getTranslations('job'),
     getTranslations('jobs'),
     getTranslations('contractTypes'),
     getTranslations('categories'),
     getTranslations('common'),
     getTranslations('apply'),
+    getTranslations('contentReport'),
     getFormatter(),
   ]);
 
@@ -543,6 +544,31 @@ export default async function JobDetailPage({ params }: PageProps) {
               {job.isDemo ? null : <JobCompanyBlockControl jobId={job.id} />}
             </div>
           </Section>
+
+          {/* Zgłoszenie treści (DSA, #41) — także bez konta. Oferta przykładowa nie jest treścią serwisu. */}
+          {job.isDemo ? null : (
+            <nav aria-label={tReport('reportNavLabel')} className="mt-8 border-t border-border pt-4 text-sm text-muted-foreground">
+              <p>{tReport('reportPrompt')}</p>
+              <ul className="mt-1 flex flex-wrap gap-x-4">
+                <li>
+                  <Link
+                    href={`/zglos-tresc?oferta=${encodeURIComponent(job.slug)}`}
+                    className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                  >
+                    {tReport('reportJob')}
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href={`/zglos-tresc?oferta=${encodeURIComponent(job.slug)}&cel=firma`}
+                    className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                  >
+                    {tReport('reportCompany')}
+                  </Link>
+                </li>
+              </ul>
+            </nav>
+          )}
         </div>
 
         {/* Panel boczny */}
@@ -559,6 +585,8 @@ export default async function JobDetailPage({ params }: PageProps) {
                 jobId={job.id}
                 companyName={job.companyName}
                 demo={job.isDemo}
+                screeningQuestions={job.screeningQuestions}
+                contentLocale={job.contentLocale}
                 triggerLabel={applyLabel}
                 triggerHint={applyHint}
                 triggerClassName="w-full"
@@ -663,6 +691,8 @@ export default async function JobDetailPage({ params }: PageProps) {
           jobId={job.id}
           companyName={job.companyName}
           demo={job.isDemo}
+          screeningQuestions={job.screeningQuestions}
+          contentLocale={job.contentLocale}
           triggerLabel={applyLabel}
           triggerSize="default"
           triggerClassName="min-w-0 flex-1"

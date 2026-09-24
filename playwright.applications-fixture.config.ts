@@ -18,8 +18,12 @@ export default defineConfig({
         '**/apply-modal-a11y.spec.ts',
         '**/apply-network-error.spec.ts',
         '**/apply-phone-validation.spec.ts',
+        // Pytania screeningowe oferty fikcyjnej 1003 (#101).
+        '**/apply-screening.spec.ts',
         '**/job-posting-fixture.spec.ts',
         '**/offer-message-login.spec.ts',
+        // Formularz zgłoszenia treści (#41).
+        '**/content-report-form.spec.ts',
       ],
   workers: 1,
   // next dev kompiluje trasę przy pierwszym żądaniu; na zimnym starcie trwa to ponad 30 s.

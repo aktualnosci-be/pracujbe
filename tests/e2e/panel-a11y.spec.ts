@@ -42,6 +42,7 @@ const ROUTES = [
   'candidate/ustawienia',
   'candidate/wiadomosci',
   'candidate/wiadomosci?c=demo-conv-0',
+  'candidate/wyszukiwania',
   'candidate/zapisane',
   'employer',
   'employer/aplikacje',

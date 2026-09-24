@@ -1,19 +1,36 @@
 import type { Metadata } from 'next';
+import { Flag } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
 import { reportFocusKey } from '@/lib/admin/focus';
 import {
   parseReportFilter,
+  parseReportKindFilter,
   REPORT_ACTIVE_FILTER,
   REPORT_FILTERS,
+  REPORT_KIND_FILTERS,
   reportReasonView,
 } from '@/lib/admin/list-params';
 import { listReports, type AdminReportRow } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
-import { cn } from '@/lib/utils';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
-import { AdminPageHeader, AdminPager } from '@/components/admin/AdminListControls';
+import {
+  AdminEmptyState,
+  AdminPageHeader,
+  AdminPager,
+} from '@/components/admin/AdminListControls';
+import {
+  chipClass,
+  ICON_BOX,
+  INLINE_LINK,
+  PANEL,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  TAG,
+} from '@/components/admin/admin-styles';
+import { cn } from '@/lib/utils';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { ReportActions } from '@/components/admin/ReportActions';
 
@@ -50,6 +67,21 @@ const FILTER_LABEL: Record<string, string> = {
   all: 'filterAll',
 };
 
+/** Etykieta chipa filtra rodzaju zgłoszenia (#41). */
+const KIND_LABEL: Record<string, string> = {
+  all: 'filterKindAll',
+  dsa_notice: 'kindDsa',
+  quality: 'kindQuality',
+};
+
+/** Etykieta statusu w historii sprawy. */
+const STATUS_LABEL: Record<string, string> = {
+  open: 'statusOpen',
+  reviewing: 'statusReviewing',
+  resolved: 'statusResolved',
+  dismissed: 'statusDismissed',
+};
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function firstValue(value: string | string[] | undefined): string | undefined {
@@ -82,15 +114,19 @@ export default async function AdminReportsPage({
   const t = await getTranslations({ locale, namespace: 'admin' });
   const sp = await searchParams;
   const filter = parseReportFilter(firstValue(sp['status']));
+  const kind = parseReportKindFilter(firstValue(sp['kind']));
   const cursor = firstValue(sp['cursor']) ?? null;
   const statusQuery = filter === REPORT_ACTIVE_FILTER ? null : filter;
+  const kindQuery = kind === 'all' ? null : kind;
 
-  const result = await listReports({ status: filter, cursor });
+  const result = await listReports({ status: filter, kind, cursor });
+  // Termin sprawy liczony w chwili renderu (strona force-dynamic).
+  const now = Date.now();
   const reports = result.status === 'ok' ? result.rows : [];
   const formatDate = createAppDateFormatter(locale, { withTime: true });
 
   const retryParams = new URLSearchParams(
-    Object.entries({ status: statusQuery, cursor }).filter((e): e is [string, string] =>
+    Object.entries({ status: statusQuery, kind: kindQuery, cursor }).filter((e): e is [string, string] =>
       Boolean(e[1]),
     ),
   ).toString();
@@ -102,8 +138,12 @@ export default async function AdminReportsPage({
   };
 
   return (
-    <div className="space-y-6">
-      <AdminPageHeader title={t('reportsTitle')} subtitle={t('reportsSubtitle')} />
+    <div className="min-w-0 space-y-[22px]">
+      <AdminPageHeader
+        eyebrow={t('brandTag')}
+        title={t('reportsTitle')}
+        subtitle={t('reportsSubtitle')}
+      />
 
       {/* Filtry statusu */}
       <nav aria-label={t('filterReportsLabel')} className="flex flex-wrap gap-2">
@@ -112,20 +152,40 @@ export default async function AdminReportsPage({
           return (
             <Link
               key={value}
-              href={
-                value === REPORT_ACTIVE_FILTER
-                  ? { pathname: BASE_PATH }
-                  : { pathname: BASE_PATH, query: { status: value } }
-              }
+              href={{
+                pathname: BASE_PATH,
+                query: {
+                  ...(value === REPORT_ACTIVE_FILTER ? {} : { status: value }),
+                  ...(kindQuery ? { kind: kindQuery } : {}),
+                },
+              }}
               aria-current={isActive ? 'true' : undefined}
-              className={cn(
-                'inline-flex min-h-11 items-center rounded-full border px-3 text-sm font-medium transition-colors',
-                isActive
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border text-muted-foreground hover:bg-soft hover:text-foreground',
-              )}
+              className={chipClass(isActive)}
             >
               {t(FILTER_LABEL[value] ?? 'filterAll')}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Rodzaj zgłoszenia (#41): sprawy DSA to osobna kolejka. */}
+      <nav aria-label={t('filterKindLabel')} className="flex flex-wrap gap-2">
+        {REPORT_KIND_FILTERS.map((value) => {
+          const isActive = value === kind;
+          return (
+            <Link
+              key={value}
+              href={{
+                pathname: BASE_PATH,
+                query: {
+                  ...(statusQuery ? { status: statusQuery } : {}),
+                  ...(value === 'all' ? {} : { kind: value }),
+                },
+              }}
+              aria-current={isActive ? 'true' : undefined}
+              className={chipClass(isActive)}
+            >
+              {t(KIND_LABEL[value] ?? 'filterKindAll')}
             </Link>
           );
         })}
@@ -134,9 +194,9 @@ export default async function AdminReportsPage({
       {result.status === 'error' ? (
         <AdminLoadError retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`} />
       ) : (
-        <section className="rounded-lg border border-border bg-card">
+        <section className={PANEL}>
           {reports.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">{t('reportsEmpty')}</p>
+            <AdminEmptyState message={t('reportsEmpty')} />
           ) : (
             <ul className="divide-y divide-border">
               {reports.map((report) => {
@@ -145,24 +205,24 @@ export default async function AdminReportsPage({
                 const reasonLabel = t(reason.key);
                 const { target } = report;
                 return (
-                  <li key={report.id} className="space-y-3 p-4 sm:px-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center rounded-md bg-soft px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                            {typeLabel}
-                          </span>
-                          <AdminStatusBadge kind="report" status={report.status} />
-                        </div>
+                  <li key={report.id} className={ROW}>
+                    <span className={ICON_BOX} aria-hidden="true">
+                      <Flag />
+                    </span>
+                    <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 basis-64 space-y-1.5">
                         <h2
                           tabIndex={-1}
                           data-admin-focus={reportFocusKey(report.id)}
-                          className="break-words text-sm font-semibold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className={cn(
+                            ROW_TITLE,
+                            'mb-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          )}
                         >
                           {reasonLabel}
                         </h2>
                         {/* Czego dotyczy zgłoszenie (#416). */}
-                        <p className="break-words text-sm text-foreground">
+                        <p className="break-words text-[13px] text-foreground">
                           <span className="text-muted-foreground">{t('reportTarget')}: </span>
                           {target.deleted ? (
                             <span className="italic text-muted-foreground">
@@ -171,7 +231,7 @@ export default async function AdminReportsPage({
                           ) : target.href ? (
                             <Link
                               href={target.href}
-                              className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                              className={cn(INLINE_LINK, 'underline')}
                             >
                               {target.label ?? t('targetUnnamed')}
                             </Link>
@@ -183,21 +243,80 @@ export default async function AdminReportsPage({
                           )}
                         </p>
                         {target.preview ? (
-                          <blockquote className="break-words rounded-md border-l-2 border-border bg-soft px-3 py-2 text-sm text-foreground">
+                          <blockquote className="break-words rounded-[14px] border border-border bg-soft px-4 py-3 text-[13px] text-foreground">
                             {target.preview}
                           </blockquote>
                         ) : null}
                         {reason.freeText ? (
-                          <p className="break-words text-sm text-muted-foreground">
+                          <p className={ROW_META}>
                             {t('reasonFreeText', { text: reason.freeText })}
                           </p>
                         ) : null}
                         {report.details ? (
-                          <p className="break-words text-sm text-muted-foreground">
+                          <p className={ROW_META}>
                             {report.details}
                           </p>
                         ) : null}
-                        <p className="text-xs text-muted-foreground">
+                        {report.dsa ? (
+                          <div className="space-y-1 rounded-[14px] border border-border px-4 py-3 text-[13px]">
+                            <p className="font-medium text-foreground">{t('caseSnapshotTitle')}</p>
+                            {report.dsa.snapshotJobTitle ? (
+                              <p className="break-words text-foreground">
+                                {t('caseSnapshotJob', { title: report.dsa.snapshotJobTitle })}
+                              </p>
+                            ) : null}
+                            {report.dsa.snapshotCompanyName ? (
+                              <p className="break-words text-foreground">
+                                {t('caseSnapshotCompany', { name: report.dsa.snapshotCompanyName })}
+                              </p>
+                            ) : null}
+                            {report.dsa.contentUrl ? (
+                              <p className="break-all text-muted-foreground">
+                                {t('caseContentUrl', { url: report.dsa.contentUrl })}
+                              </p>
+                            ) : null}
+                            {report.dsa.reporterEmail ? (
+                              <p className="break-all text-muted-foreground">
+                                {t('caseReporterContact', { email: report.dsa.reporterEmail })}
+                              </p>
+                            ) : null}
+                            {report.dsa.events.length > 0 ? (
+                              <div>
+                                <p className="font-medium text-foreground">{t('caseHistoryTitle')}</p>
+                                <ol className="text-muted-foreground">
+                                  {report.dsa.events.map((event, index) => (
+                                    <li key={`${event.at}-${index}`}>
+                                      <time dateTime={event.at}>{formatDate(event.at)}</time>{' '}
+                                      {event.type === 'submitted'
+                                        ? t('caseEventSubmitted')
+                                        : t('caseEventStatus', {
+                                            status: t(STATUS_LABEL[event.toStatus ?? ''] ?? 'statusUnknown'),
+                                          })}
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {report.dsa ? (
+                          <p className={ROW_META}>
+                            {t('caseNumber')}:{' '}
+                            <span className="font-mono font-medium text-foreground">{report.dsa.caseNumber}</span>
+                            {report.dsa.dueAt ? (
+                              <>
+                                {' '}
+                                <span aria-hidden="true">·</span>{' '}
+                                {t('caseDue', { date: formatDate(report.dsa.dueAt) })}
+                                {['open', 'reviewing'].includes(report.status) &&
+                                new Date(report.dsa.dueAt).getTime() < now ? (
+                                  <span className="ml-1 font-medium text-error">{t('caseOverdue')}</span>
+                                ) : null}
+                              </>
+                            ) : null}
+                          </p>
+                        ) : null}
+                        <p className={ROW_META}>
                           {t('reportedBy', {
                             name: report.reporterName ?? t('reporterFallback'),
                           })}{' '}
@@ -206,6 +325,15 @@ export default async function AdminReportsPage({
                             {formatDate(report.createdAt)}
                           </time>
                         </p>
+                        <div className="flex flex-wrap items-center">
+                          <span className={cn(TAG, 'mr-[5px] mt-1.5')}>{typeLabel}</span>
+                          <AdminStatusBadge kind="report" status={report.status} className="mt-1.5" />
+                          {report.dsa ? (
+                            <span className={cn(TAG, 'ml-[5px] mt-1.5 font-medium text-foreground')}>
+                              {t('kindDsa')}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                       <ReportActions
                         reportId={report.id}
@@ -225,7 +353,7 @@ export default async function AdminReportsPage({
       {result.status === 'ok' ? (
         <AdminPager
           pathname={BASE_PATH}
-          query={{ status: statusQuery }}
+          query={{ status: statusQuery, kind: kindQuery }}
           nextCursor={result.nextCursor}
           hasCursor={Boolean(cursor)}
           count={reports.length}
