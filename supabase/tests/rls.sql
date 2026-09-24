@@ -6690,4 +6690,300 @@ select pg_temp.assert((select count(*) from public.moderation_decisions) = 5
   'MOD42-14d service_role czyta decyzje i przywrócenia');
 reset role;
 
+-- ============================================================================
+-- DR486. Retencja, eksport danych kandydata, usunięcie konta, kolejka storage,
+--        ponowne usunięcie po odtworzeniu kopii (0104)
+-- ============================================================================
+\echo '--- DR486 retencja i prawa kandydata ---'
+\set RD1 'd4860000-0000-4000-8000-000000000001'
+\set RD2 'd4860000-0000-4000-8000-000000000002'
+\set RD3 'd4860000-0000-4000-8000-000000000003'
+\set RD4 'd4860000-0000-4000-8000-000000000004'
+\set RDF1 'd4860000-0000-4000-8000-0000000000f1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RD1','rd1@test.be','Rita D','{"role":"candidate","first_name":"Rita","last_name":"D","locale":"fr"}'),
+  (:'RD2','rd2@test.be','Rob E','{"role":"candidate","first_name":"Rob","last_name":"E","locale":"nl"}'),
+  (:'RD3','rd3@test.be','Ron F','{"role":"candidate","first_name":"Ron","last_name":"F","locale":"en"}'),
+  (:'RD4','rd4@test.be','Rea G','{"role":"candidate","first_name":"Rea","last_name":"G","locale":"pl"}');
+insert into public.candidate_profiles(profile_id, is_searchable) values
+  (:'RD1', true), (:'RD2', true), (:'RD3', false), (:'RD4', false);
+\set RDCO 'd4860000-0000-4000-8000-0000000000c0'
+\set RDJ  'd4860000-0000-4000-8000-0000000000a1'
+\set RDJ2 'd4860000-0000-4000-8000-0000000000a2'
+insert into public.companies(id, name, status) values (:'RDCO', 'Firma Retencja', 'verified');
+insert into public.company_members(company_id, profile_id, role, is_active) values (:'RDCO', :'EMPA', 'owner', true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'RDJ', :'RDCO', 'rd-job-1', 'Operator RD', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl'),
+  (:'RDJ2', :'RDCO', 'rd-job-2', 'Kierowca RD', 'transport', 'permanent', 'Gandawa', 'Flandria', 'active', 'pl');
+insert into auth.sessions(id, user_id, token, expires_at)
+  values (gen_random_uuid(), :'RD1', 'rd1-session-token', now() + interval '1 day');
+
+-- Proces RD1 z firmą A: aplikacja, propozycja, rozmowa w obie strony, dopasowanie, CV.
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'RDJ', 'rd1-apply', null, null, 'Proszę o kontakt') as rdapp1 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RD2'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'RDJ', 'rd2-apply', null, null, 'Cudza aplikacja') as rdapp2 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.send_offer(:'RDJ'::uuid, :'RD1'::uuid, 'rd1-offer', 'Zapraszamy na rozmowę', null) as rdoff1 \gset
+select public.get_or_create_conversation(:'rdapp1'::uuid, null) as rdconv1 \gset
+select public.send_message(:'rdconv1'::uuid, 'Wiadomość rekrutera', gen_random_uuid());
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select public.send_message(:'rdconv1'::uuid, 'Odpowiedź kandydata', gen_random_uuid());
+reset role; reset app.current_uid;
+insert into public.matches(candidate_id, job_id, score, matched, missing, strengths)
+  values (:'RD1', :'RDJ', 72, '{warehouse}', '{forklift}', '{availability}');
+insert into public.files(id, owner_id, bucket, path, file_name, mime_type, size_bytes, entity_type, visibility)
+  values (:'RDF1', :'RD1', 'candidate-files', :'RD1' || '/cv-00000000-0000-4000-8000-000000000001.pdf',
+          'cv-rita.pdf', 'application/pdf', 1000, 'candidate_cv', 'private');
+-- Zgłoszenie DSA złożone przez RD1 (sprawa zostaje po usunięciu konta, bez powiązania).
+set role service_role;
+select report_id as rdrep1 from public.submit_content_report(:'RD1', gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'RDJ2', 'fraud', 'Podejrzana oferta wymagająca opłaty.', null, 'Rita D', 'rd1@test.be', 'fr', true) \gset
+reset role;
+insert into public.report_events(report_id, event_type, actor_id) values (:'rdrep1', 'flagged', :'RD1');
+
+-- DR486-1: tabele techniczne niedostępne dla ról klienta (domyślnie deny).
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.retention_policies', 'permission denied', 'DR486-1 anon retention_policies');
+select pg_temp.expect_error('select count(*) from public.data_rights_requests', 'permission denied', 'DR486-1b anon data_rights_requests');
+select pg_temp.expect_error('select public.export_my_data()', 'permission denied', 'DR486-1c anon bez eksportu');
+select pg_temp.expect_error('select public.request_account_erasure(''rd1@test.be'')', 'permission denied', 'DR486-1d anon bez usunięcia');
+reset role;
+set role authenticated; set app.current_uid = :'RD2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.retention_policies', 'permission denied', 'DR486-1e kandydat retention_policies');
+select pg_temp.expect_error('select count(*) from public.erasure_tombstones', 'permission denied', 'DR486-1f kandydat tombstones');
+select pg_temp.expect_error('select count(*) from public.storage_deletion_queue', 'permission denied', 'DR486-1g kandydat kolejka storage');
+select pg_temp.expect_error('insert into public.data_rights_requests(subject_id, kind, channel, due_at) values (auth.uid(), ''access'', ''self_service'', now())',
+  'permission denied', 'DR486-1h kandydat nie dopisuje śladu wniosku');
+select pg_temp.expect_error('select public.run_retention_purge(10)', 'permission denied', 'DR486-1i kandydat nie uruchamia retencji');
+select pg_temp.expect_error('select * from public.claim_storage_deletions(10)', 'permission denied', 'DR486-1j kandydat nie bierze kolejki');
+select pg_temp.expect_error('select public.apply_erasure_tombstones(array[''' || :'RD1' || '''::uuid])', 'permission denied',
+  'DR486-1k kandydat nie usuwa innych przez tombstone');
+select pg_temp.expect_error('select public.erase_candidate_subject(''' || :'RD1' || ''', ''self_service'', null)', 'permission denied',
+  'DR486-1l funkcja wewnętrzna bez EXECUTE');
+reset role; reset app.current_uid;
+
+-- DR486-2: eksport — pracodawca i admin nie korzystają z eksportu kandydata.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_data()', 'PERMISSION_DENIED', 'DR486-2 pracodawca bez eksportu kandydata');
+reset role; reset app.current_uid;
+
+-- DR486-3: eksport RD1 — dane podane, proces, istniejący wynik dopasowania, wiadomości ze stroną.
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select public.export_my_data()::text as rdexp \gset
+select pg_temp.assert((select count(*) from public.data_rights_requests) = 1,
+  'DR486-3a kandydat widzi własny ślad wniosku o dostęp');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (:'rdexp')::jsonb ->> 'format' = 'pracujbe-export/1'
+  and (:'rdexp')::jsonb #>> '{account,email}' = 'rd1@test.be'
+  and jsonb_array_length((:'rdexp')::jsonb -> 'applications') = 1
+  and (:'rdexp')::jsonb #>> '{applications,0,id}' = :'rdapp1'
+  and (:'rdexp')::jsonb #>> '{applications,0,companyName}' = 'Firma Retencja'
+  and jsonb_typeof((:'rdexp')::jsonb #> '{applications,0,statusHistory}') = 'array'
+  and (:'rdexp')::jsonb #>> '{offers,0,id}' = :'rdoff1'
+  and ((:'rdexp')::jsonb #>> '{matches,0,score}')::numeric = 72
+  and (:'rdexp')::jsonb #> '{matches,0,missing}' = '["forklift"]'::jsonb
+  and (:'rdexp')::jsonb #>> '{files,0,fileName}' = 'cv-rita.pdf',
+  'DR486-3 eksport zawiera profil, aplikację z historią, propozycję, wynik dopasowania, CV (metadane)');
+select pg_temp.assert(
+  (select count(*) from jsonb_array_elements((:'rdexp')::jsonb #> '{conversations,0,messages}') m
+     where (m->>'fromMe')::boolean) = 1
+  and (select count(*) from jsonb_array_elements((:'rdexp')::jsonb #> '{conversations,0,messages}') m
+     where not (m->>'fromMe')::boolean and m->>'body' = 'Wiadomość rekrutera') = 1,
+  'DR486-3b wiadomości obu stron, strona oznaczona fromMe');
+select pg_temp.assert(
+  position(:'EMPA' in :'rdexp') = 0 and position(:'RD2' in :'rdexp') = 0
+  and position(:'rdapp2' in :'rdexp') = 0 and position('Cudza aplikacja' in :'rdexp') = 0
+  and position('rd1-apply' in :'rdexp') = 0 and position('cv-00000000' in :'rdexp') = 0,
+  'DR486-3c bez identyfikatora rekrutera, danych innego kandydata, klucza idempotencji i klucza obiektu CV');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action = 'data.exported' and entity_id = :'RD1') = 1,
+  'DR486-3d eksport w audycie');
+-- DR486-3e: limit 10 eksportów na dobę (kontrola: 10. przechodzi, 11. nie).
+insert into public.data_rights_requests(subject_id, kind, channel, due_at, completed_at)
+  select :'RD2', 'access', 'self_service', now(), now() from generate_series(1, 9);
+set role authenticated; set app.current_uid = :'RD2'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.export_my_data() ? 'profile', 'DR486-3e 10. eksport w dobie przechodzi');
+select pg_temp.expect_error('select public.export_my_data()', 'RATE_LIMITED', 'DR486-3f 11. eksport w dobie → RATE_LIMITED');
+select pg_temp.assert((select count(*) from public.data_rights_requests where subject_id = :'RD1') = 0,
+  'DR486-3g kandydat nie widzi śladu wniosków innej osoby');
+reset role; reset app.current_uid;
+
+-- DR486-4: usunięcie wymaga potwierdzenia adresem konta; pracodawca nie korzysta.
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_account_erasure(''rd2@test.be'')', 'CONFIRMATION_MISMATCH',
+  'DR486-4 cudzy adres → CONFIRMATION_MISMATCH');
+select pg_temp.expect_error('select public.request_account_erasure(null)', 'CONFIRMATION_MISMATCH',
+  'DR486-4b brak potwierdzenia');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_account_erasure(''empa@test.be'')', 'PERMISSION_DENIED',
+  'DR486-4c pracodawca nie usuwa konta tą ścieżką');
+reset role; reset app.current_uid;
+select pg_temp.assert(exists (select 1 from public.profiles where id = :'RD1')
+  and exists (select 1 from public.applications where id = :'rdapp1'),
+  'DR486-4d odmowa niczego nie usuwa');
+
+-- DR486-5 (kontrola ujemna do 0104 pkt 10): stara reguła historii DSA wywraca usunięcie.
+begin;
+create or replace function public.report_events_append_only()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+begin
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then return old; end if;
+  raise exception 'PERMISSION_DENIED: historia sprawy jest tylko do dopisywania' using errcode = '42501';
+end $$;
+select pg_temp.expect_error('select public.erase_candidate_subject(''' || :'RD1' || ''', ''self_service'', null)',
+  'tylko do dopisywania', 'DR486-5 kontrola: bez poprawki usunięcie autora zdarzenia DSA pada');
+rollback;
+-- DR486-5b (kontrola ujemna): reports_guard z 0076 odrzuca odwołanie reporter_id pod sesją
+-- usuwanego kandydata — samoobsługowe usunięcie autora zgłoszenia by padło.
+begin;
+create or replace function public.reports_guard()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+begin
+  if auth.uid() is null then return new; end if;
+  if tg_op = 'INSERT' then return new; end if;
+  if not public.is_admin() then
+    raise exception 'PERMISSION_DENIED: zgłoszenie zmienia tylko administrator' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+set local role authenticated; set local app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_account_erasure(''rd1@test.be'')',
+  'zmienia tylko administrator', 'DR486-5b kontrola: bez poprawki reports_guard usunięcie pada');
+rollback;
+
+-- DR486-6: usunięcie konta RD1 (adres wielkimi literami, ze spacjami).
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select public.request_account_erasure('  RD1@Test.be ')::text as rderase \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from auth.users where id = :'RD1')
+  and not exists (select 1 from public.profiles where id = :'RD1')
+  and not exists (select 1 from public.candidate_profiles where profile_id = :'RD1')
+  and not exists (select 1 from auth.sessions where user_id = :'RD1')
+  and not exists (select 1 from public.applications where id = :'rdapp1')
+  and not exists (select 1 from public.offers where id = :'rdoff1')
+  and not exists (select 1 from public.conversations where id = :'rdconv1')
+  and not exists (select 1 from public.messages where conversation_id = :'rdconv1')
+  and not exists (select 1 from public.matches where candidate_id = :'RD1')
+  and not exists (select 1 from public.files where owner_id = :'RD1' or id = :'RDF1'),
+  'DR486-6 konto, sesje, profil, aplikacja, propozycja, rozmowa, dopasowanie i CV usunięte');
+select pg_temp.assert(
+  not exists (select 1 from public.notifications where entity_id in (:'rdapp1'::uuid, :'rdoff1'::uuid, :'rdconv1'::uuid))
+  and not exists (select 1 from public.email_deliveries where entity_id in (:'rdapp1'::uuid, :'rdoff1'::uuid)
+                    or to_email = 'rd1@test.be'),
+  'DR486-6b powiadomienia i e-maile firmy o procesie RD1 usunięte');
+select pg_temp.assert(
+  (select reporter_id is null and kind = 'dsa_notice' from public.reports where id = :'rdrep1')
+  and (select bool_and(actor_id is null) from public.report_events where report_id = :'rdrep1'),
+  'DR486-6c sprawa DSA zostaje bez powiązania z kontem');
+select pg_temp.assert(
+  (select count(*) from public.storage_deletion_queue
+    where bucket = 'candidate-files' and path = :'RD1' || '/cv-00000000-0000-4000-8000-000000000001.pdf') = 1
+  and (select channel = 'self_service' from public.erasure_tombstones where subject_id = :'RD1')
+  and (select completed_at is not null and kind = 'erasure' and (details->>'applications')::int = 1
+            and (details->>'files')::int = 1
+         from public.data_rights_requests where subject_id = :'RD1' and kind = 'erasure')
+  and (select count(*) from public.audit_logs where action = 'account.erased' and entity_id = :'RD1') = 1,
+  'DR486-6d obiekt CV w kolejce, tombstone, ślad wniosku z licznikami, audyt');
+select pg_temp.assert(
+  exists (select 1 from public.applications where id = :'rdapp2')
+  and exists (select 1 from public.profiles where id = :'RD2')
+  and exists (select 1 from public.applications where candidate_id = :'CANDA'),
+  'DR486-6e dane innych kandydatów nienaruszone');
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_data()', 'PERMISSION_DENIED', 'DR486-6f po usunięciu brak dostępu');
+reset role; reset app.current_uid;
+
+-- DR486-7: kolejka storage — dzierżawa, backoff przy błędzie, sukces usuwa wiersz.
+set role service_role;
+select id as rdq1 from public.claim_storage_deletions(10) where path like :'RD1' || '/%' \gset
+select pg_temp.assert(not exists (select 1 from public.claim_storage_deletions(10) where id = :'rdq1'),
+  'DR486-7 wiersz w dzierżawie nie jest pobierany drugi raz');
+select public.complete_storage_deletion(:'rdq1', false, 'UNAVAILABLE');
+select pg_temp.assert((select attempts = 1 and last_error = 'UNAVAILABLE' and next_attempt_at > now() and locked_until is null
+  from public.storage_deletion_queue where id = :'rdq1'), 'DR486-7b błąd → ponowienie z backoffem');
+select pg_temp.assert(not exists (select 1 from public.claim_storage_deletions(10) where id = :'rdq1'),
+  'DR486-7c przed terminem ponowienia wiersz nie wraca');
+update public.storage_deletion_queue set next_attempt_at = now() - interval '1 second' where id = :'rdq1';
+select pg_temp.assert(exists (select 1 from public.claim_storage_deletions(10) where id = :'rdq1'),
+  'DR486-7d po terminie wiersz wraca');
+select public.complete_storage_deletion(:'rdq1', true, null);
+select pg_temp.assert(not exists (select 1 from public.storage_deletion_queue where id = :'rdq1'),
+  'DR486-7e sukces usuwa wiersz kolejki');
+reset role;
+-- DR486-7f (kontrola ujemna): bez triggera usunięcie wiersza files nie zostawia śladu obiektu.
+begin;
+drop trigger trg_files_queue_storage_deletion on public.files;
+insert into public.files(owner_id, bucket, path, entity_type) values (:'RD2', 'candidate-files', 'x/orphan.pdf', 'candidate_cv');
+delete from public.files where path = 'x/orphan.pdf';
+select pg_temp.assert(not exists (select 1 from public.storage_deletion_queue where path = 'x/orphan.pdf'),
+  'DR486-7f kontrola: bez triggera obiekt zostałby osierocony');
+rollback;
+
+-- DR486-8: retencja — przed terminem nic, po terminie usunięte; kategorie wyłączone nie działają.
+set session_replication_role = replica;
+insert into public.files(owner_id, bucket, path, entity_type, deleted_at) values
+  (:'RD2', 'candidate-files', :'RD2' || '/cv-old.pdf', 'candidate_cv', now() - interval '31 days'),
+  (:'RD2', 'candidate-files', :'RD2' || '/cv-recent.pdf', 'candidate_cv', now() - interval '5 days');
+update public.profiles set deleted_at = now() - interval '31 days', is_active = false where id = :'RD3';
+update public.profiles set deleted_at = now() - interval '1 day', is_active = false where id = :'RD4';
+update public.applications set status = 'rejected', updated_at = now() - interval '40 days' where id = :'rdapp2';
+set session_replication_role = origin;
+set role service_role;
+select public.run_retention_purge(100)::text as rdpurge1 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.files where path = :'RD2' || '/cv-old.pdf')
+  and exists (select 1 from public.storage_deletion_queue where path = :'RD2' || '/cv-old.pdf')
+  and exists (select 1 from public.files where path = :'RD2' || '/cv-recent.pdf')
+  and not exists (select 1 from public.profiles where id = :'RD3')
+  and exists (select 1 from public.erasure_tombstones where subject_id = :'RD3' and channel = 'retention')
+  and exists (select 1 from public.profiles where id = :'RD4')
+  and exists (select 1 from public.applications where id = :'rdapp2'),
+  'DR486-8 po terminie usunięte (plik, profil), przed terminem zostają, wyłączona kategoria nie działa');
+select pg_temp.assert((:'rdpurge1')::jsonb ->> 'deletedFiles' = '1' and (:'rdpurge1')::jsonb ->> 'erasedProfiles' = '1'
+  and (:'rdpurge1')::jsonb ->> 'closedApplications' = '0', 'DR486-8b liczniki zadania');
+-- Okres ustawia wyłącznie admin (z audytem); rejestr usunięć nie krótszy niż retencja kopii.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_retention_policy(''closed_application'', 30)', 'PERMISSION_DENIED',
+  'DR486-8c pracodawca nie zmienia retencji');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_retention_policy(''erasure_tombstone'', 30)', 'retencja kopii',
+  'DR486-8d tombstone krótszy niż kopie → odmowa');
+select pg_temp.expect_error('select public.admin_set_retention_policy(''nie_ma'', 30)', 'NOT_FOUND', 'DR486-8e nieznana kategoria');
+select public.admin_set_retention_policy('closed_application', 30);
+reset role; reset app.current_uid;
+set role service_role;
+select public.run_retention_purge(100)::text as rdpurge2 \gset
+select public.run_retention_purge(100)::text as rdpurge3 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.applications where id = :'rdapp2')
+  and exists (select 1 from public.applications where candidate_id = :'CANDA')
+  and (:'rdpurge3')::jsonb ->> 'closedApplications' = '0'
+  and (select count(*) from public.audit_logs where action = 'retention.policy_changed') = 1,
+  'DR486-8f po włączeniu kategorii usunięta tylko zakończona aplikacja; ponowny przebieg idempotentny');
+
+-- DR486-9: odtworzona kopia przywraca RD1 → tombstone usuwa go ponownie.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RD1','rd1@test.be','Rita D','{"role":"candidate","first_name":"Rita","last_name":"D","locale":"fr"}');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'RD1', true);
+select pg_temp.assert(exists (select 1 from public.profiles where id = :'RD1'),
+  'DR486-9 kontrola: bez ponownego zastosowania dane z kopii wracają');
+set role service_role;
+select public.apply_erasure_tombstones(array[:'RD1'::uuid, 'd4860000-0000-4000-8000-0000000000ff'::uuid])::text as rdreapply \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.profiles where id = :'RD1') and not exists (select 1 from auth.users where id = :'RD1')
+  and (:'rdreapply')::jsonb = '{"reapplied": 1, "alreadyAbsent": 1}'::jsonb
+  and (select reapplied_at is not null from public.erasure_tombstones where subject_id = :'RD1'),
+  'DR486-9b po restore osoba usunięta ponownie, tombstone oznaczony');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

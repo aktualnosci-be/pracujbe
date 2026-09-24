@@ -51,3 +51,42 @@ describe('maintenance: guest application retention', () => {
     expect(captureError).toHaveBeenCalledWith(expect.anything(), { area: 'maintenance.gc', task: 'guestRequests' });
   });
 });
+
+describe('maintenance: retencja danych i kolejka storage (#486)', () => {
+  it('zwraca liczniki retencji i kolejki storage', async () => {
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve(
+        name === 'run_retention_purge'
+          ? { data: { deletedFiles: 2, erasedProfiles: 1, note: 'x' }, error: null }
+          : name === 'claim_storage_deletions'
+            ? { data: [], error: null }
+            : { data: 0, error: null },
+      ),
+    );
+    const res = await POST(request());
+    expect(res.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith('run_retention_purge', { p_limit: 200 });
+    expect(await res.json()).toMatchObject({
+      retention: { deletedFiles: 2, erasedProfiles: 1 },
+      storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
+    });
+  });
+
+  it('błąd retencji → 503', async () => {
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve(name === 'run_retention_purge' ? { data: null, error: { message: 'x' } } : { data: 0, error: null }),
+    );
+    const res = await POST(request());
+    expect(res.status).toBe(503);
+    expect(captureError).toHaveBeenCalledWith(expect.anything(), { area: 'maintenance.gc', task: 'retention' });
+  });
+
+  it('błąd kolejki storage → 503', async () => {
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve(name === 'claim_storage_deletions' ? { data: null, error: { message: 'x' } } : { data: 0, error: null }),
+    );
+    const res = await POST(request());
+    expect(res.status).toBe(503);
+    expect(captureError).toHaveBeenCalledWith(expect.anything(), { area: 'maintenance.gc', task: 'storageDeletions' });
+  });
+});

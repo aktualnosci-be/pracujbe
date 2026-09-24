@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 
 import { hasServiceRoleKey, isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
+import { processStorageDeletions } from '@/lib/storage-deletion';
 
 /**
  * Zadania utrzymaniowe (P1-20) — wywoływane przez cron Railway (`scripts/railway-cron-call.mjs`,
@@ -18,6 +19,10 @@ import { captureError } from '@/lib/sentry';
  * #98: retencja aplikacji bez konta (`purge_guest_application_requests`, 0095) — usuwa
  * niepotwierdzone zgłoszenia 7 dni po ostatnim linku i duplikaty 7 dni po potwierdzeniu (razem
  * z ich e-mailami) i zeruje tokeny przejęcia po wygaśnięciu 30-dniowego okna.
+ * #486: retencja danych (`run_retention_purge`, 0104) — okresy jako dane w `retention_policies`
+ * (null = kategoria wyłączona), partie z limitem i SKIP LOCKED; potem kolejka usuwania obiektów
+ * storage (`processStorageDeletions`) — także obiektów plików usuniętych w tym przebiegu.
+ * Nieudane usunięcie obiektu to ponowienie w kolejnym przebiegu, nie błąd zadania.
  *
  * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
  * Wymaga service-role (RPC są service_role-only). Nie ujawnia technikaliów ani danych ofert —
@@ -44,6 +49,16 @@ function authorized(request: Request): boolean {
   return secrets.some((s) => safeEqual(header, `Bearer ${s}`));
 }
 
+/** Same liczniki z `run_retention_purge` (liczby całkowite), bez innych pól. */
+function retentionCounters(value: unknown): Record<string, number> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(
+      (entry): entry is [string, number] => Number.isInteger(entry[1]),
+    ),
+  );
+}
+
 async function run(request: Request): Promise<Response> {
   if (!authorized(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -67,7 +82,9 @@ async function run(request: Request): Promise<Response> {
     const searchAlerts = expiredJobs.error
       ? { data: null, error: null }
       : await admin.rpc('process_saved_search_alerts', { p_limit: 500 });
-    if (discounts.error || checkouts.error || expiredJobs.error || guestRequests.error || searchAlerts.error) {
+    const retention = await admin.rpc('run_retention_purge', { p_limit: 200 });
+    if (discounts.error || checkouts.error || expiredJobs.error || guestRequests.error || searchAlerts.error
+      || retention.error) {
       const failed = discounts.error
         ? 'discounts'
         : checkouts.error
@@ -76,13 +93,23 @@ async function run(request: Request): Promise<Response> {
             ? 'jobExpiry'
             : guestRequests.error
               ? 'guestRequests'
-              : 'savedSearchAlerts';
+              : searchAlerts.error
+                ? 'savedSearchAlerts'
+                : 'retention';
       captureError(
-        discounts.error ?? checkouts.error ?? expiredJobs.error ?? guestRequests.error ?? searchAlerts.error,
+        discounts.error ?? checkouts.error ?? expiredJobs.error ?? guestRequests.error ?? searchAlerts.error
+          ?? retention.error,
         {
         area: 'maintenance.gc',
         task: failed,
       });
+      return NextResponse.json({ error: 'gc failed' }, { status: 503 });
+    }
+    let storage;
+    try {
+      storage = await processStorageDeletions(admin);
+    } catch (error) {
+      captureError(error, { area: 'maintenance.gc', task: 'storageDeletions' });
       return NextResponse.json({ error: 'gc failed' }, { status: 503 });
     }
     return NextResponse.json({
@@ -92,6 +119,8 @@ async function run(request: Request): Promise<Response> {
       expiredJobs: typeof expiredJobs.data === 'number' ? expiredJobs.data : 0,
       purgedGuestRequests: typeof guestRequests.data === 'number' ? guestRequests.data : 0,
       savedSearchDigests: typeof searchAlerts.data === 'number' ? searchAlerts.data : 0,
+      retention: retentionCounters(retention.data),
+      storageDeletions: storage,
     });
   } catch (e) {
     captureError(e, { area: 'maintenance.gc' });
