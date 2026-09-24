@@ -1,14 +1,27 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { ADMIN_MAX_ROWS, listUsers } from '@/lib/data/admin';
-import { AdminLoadError, AdminTruncatedNote } from '@/components/admin/AdminLoadError';
+import {
+  normalizeAdminSearch,
+  parseUserRoleFilter,
+  USER_ROLE_FILTERS,
+} from '@/lib/admin/list-params';
+import { listUsers } from '@/lib/data/admin';
+import { createAppDateFormatter } from '@/lib/datetime';
+import { AdminLoadError } from '@/components/admin/AdminLoadError';
+import {
+  AdminPageHeader,
+  AdminPager,
+  AdminSearchForm,
+} from '@/components/admin/AdminListControls';
 import { cn } from '@/lib/utils';
 
 /**
  * Panel administratora — Użytkownicy (Etap 7g).
  *
- * Lista kont (tylko odczyt): nazwa, e-mail, rola, data utworzenia. Odczyt service-rolem po
+ * Lista kont (tylko odczyt): nazwa, e-mail, rola, data utworzenia (Europe/Brussels, #421).
+ * Wyszukiwanie po imieniu/nazwisku/e-mailu, filtr roli i stronicowanie kursorem (#418),
+ * parametry w URL (`?q=&role=&cursor=`). Odczyt service-rolem po
  * potwierdzeniu roli admina w layoucie. NOINDEX + `force-dynamic` (dziedziczone z layoutu).
  */
 
@@ -49,16 +62,38 @@ export async function generateMetadata({
   };
 }
 
-export default async function AdminUsersPage({ params }: { params: Promise<{ locale: string }> }) {
+const BASE_PATH = '/admin/uzytkownicy';
+
+type SearchParams = Record<string, string | string[] | undefined>;
+
+function firstValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function AdminUsersPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<SearchParams>;
+}) {
   const { locale } = await params;
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'admin' });
-  const result = await listUsers();
-  const users = result.status === 'ok' ? result.rows : [];
+  const sp = await searchParams;
+  const q = normalizeAdminSearch(firstValue(sp['q']));
+  const role = parseUserRoleFilter(firstValue(sp['role']));
+  const cursor = firstValue(sp['cursor']) ?? null;
 
-  const dateFmt = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
-  const formatDate = (iso: string | null): string => (iso ? dateFmt.format(new Date(iso)) : '—');
+  const result = await listUsers({ q, role, cursor });
+  const users = result.status === 'ok' ? result.rows : [];
+  const listQuery = { q, role };
+  const retryParams = new URLSearchParams(
+    Object.entries({ ...listQuery, cursor }).filter((e): e is [string, string] => Boolean(e[1])),
+  ).toString();
+
+  const formatDate = createAppDateFormatter(locale);
   const roleLabel = (role: string): string => {
     const key = ROLE_LABEL[role];
     return key ? t(key) : role;
@@ -66,13 +101,37 @@ export default async function AdminUsersPage({ params }: { params: Promise<{ loc
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('usersTitle')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t('usersSubtitle')}</p>
-      </header>
+      <AdminPageHeader title={t('usersTitle')} subtitle={t('usersSubtitle')} />
+
+      <AdminSearchForm
+        action={`/${locale}${BASE_PATH}`}
+        q={q}
+        label={t('searchUsersLabel')}
+        hint={t('searchUsersHint')}
+        clearHref={{ pathname: BASE_PATH, query: role ? { role } : {} }}
+      >
+        <div>
+          <label htmlFor="admin-role" className="block text-sm font-medium text-foreground">
+            {t('colRole')}
+          </label>
+          <select
+            id="admin-role"
+            name="role"
+            defaultValue={role ?? ''}
+            className="mt-1 block min-h-11 rounded-md border border-border bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">{t('roleAll')}</option>
+            {USER_ROLE_FILTERS.map((value) => (
+              <option key={value} value={value}>
+                {roleLabel(value)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </AdminSearchForm>
 
       {result.status === 'error' ? (
-        <AdminLoadError retryHref={`/${locale}/admin/uzytkownicy`} />
+        <AdminLoadError retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`} />
       ) : (
         <section className="rounded-lg border border-border bg-card">
           {users.length === 0 ? (
@@ -147,13 +206,13 @@ export default async function AdminUsersPage({ params }: { params: Promise<{ loc
                       {initials(user.name || t('nameFallback'))}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="truncate font-medium text-foreground">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <p className="min-w-0 break-words font-medium text-foreground">
                           {user.name || t('nameFallback')}
                         </p>
                         <span
                           className={cn(
-                            'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
+                            'max-w-full break-words rounded-full px-2 py-0.5 text-xs font-medium',
                             ROLE_TONE[user.role] ?? 'bg-muted text-muted-foreground',
                           )}
                         >
@@ -161,7 +220,7 @@ export default async function AdminUsersPage({ params }: { params: Promise<{ loc
                         </span>
                       </div>
                       {user.email ? (
-                        <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                        <p className="mt-0.5 break-all text-sm text-muted-foreground">
                           {user.email}
                         </p>
                       ) : null}
@@ -176,8 +235,15 @@ export default async function AdminUsersPage({ params }: { params: Promise<{ loc
           )}
         </section>
       )}
-      {result.status === 'ok' && result.truncated ? (
-        <AdminTruncatedNote limit={ADMIN_MAX_ROWS} />
+      {result.status === 'ok' ? (
+        <AdminPager
+          pathname={BASE_PATH}
+          query={listQuery}
+          nextCursor={result.nextCursor}
+          hasCursor={Boolean(cursor)}
+          count={users.length}
+          q={q}
+        />
       ) : null}
     </div>
   );

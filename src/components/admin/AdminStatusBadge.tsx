@@ -11,10 +11,14 @@ import { cn } from '@/lib/utils';
  * wyłącznie klasami tokenów (bez hexów). Komponent serwerowy (useTranslations działa w RSC).
  */
 
-type Tone = 'blue' | 'amber' | 'green' | 'red' | 'neutral';
+type Tone = 'info' | 'amber' | 'green' | 'red' | 'neutral';
 
+/**
+ * Czerwień (`accent` po zmianie marki i `error`) tylko dla stanów negatywnych — „W trakcie”
+ * to stan informacyjny (#422): obramowany, neutralny, kontrast AA na tokenach `foreground`.
+ */
 const TONE_CLASS: Record<Tone, string> = {
-  blue: 'bg-accent/10 text-accent-dark',
+  info: 'bg-card text-foreground ring-1 ring-inset ring-border',
   amber: 'bg-warning/10 text-warning-text',
   green: 'bg-success/10 text-success-text',
   red: 'bg-error/10 text-error-text',
@@ -39,12 +43,12 @@ export const COMPANY_STATUS_KEY: Record<string, string> = {
 
 const REPORT_TONE: Record<string, Tone> = {
   open: 'amber',
-  reviewing: 'blue',
+  reviewing: 'info',
   resolved: 'green',
   dismissed: 'neutral',
 };
 
-const REPORT_KEY: Record<string, string> = {
+export const REPORT_STATUS_KEY: Record<string, string> = {
   open: 'statusOpen',
   reviewing: 'statusReviewing',
   resolved: 'statusResolved',
@@ -66,7 +70,7 @@ export function AdminStatusBadge({
 }: AdminStatusBadgeProps): React.JSX.Element {
   const t = useTranslations('admin');
   const toneMap = kind === 'company' ? COMPANY_TONE : REPORT_TONE;
-  const keyMap = kind === 'company' ? COMPANY_STATUS_KEY : REPORT_KEY;
+  const keyMap = kind === 'company' ? COMPANY_STATUS_KEY : REPORT_STATUS_KEY;
 
   const tone: Tone = toneMap[status] ?? 'neutral';
   const messageKey = keyMap[status];

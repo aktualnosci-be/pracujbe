@@ -1,20 +1,23 @@
 'use client';
 
 import * as React from 'react';
-import { Building2, Flag, LayoutDashboard, Users } from 'lucide-react';
+import { Building2, Flag, History, LayoutDashboard, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
 import { Logo } from '@/components/brand/Logo';
+import { AdminFeedbackProvider } from '@/components/admin/AdminFeedback';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 
 /**
  * AdminShell — chrome panelu administratora. Reużywa `DashboardShell` (granatowy sidebar +
  * topbar), tak jak panele kandydata/pracodawcy, ale z własną nawigacją: Podsumowanie / Firmy
- * / Zgłoszenia / Użytkownicy. Renderowane przez `admin/layout.tsx` (guard + noindex).
+ * / Zgłoszenia / Użytkownicy / Dziennik zdarzeń (#417). Renderowane przez `admin/layout.tsx` (guard + noindex).
  *
- * Powiadomienia w panelu admina są wyłączone (pusta lista) — administracja nie korzysta z
- * kolejki notyfikacji użytkownika. Nazwa admina (`userName`) pochodzi z sesji; brak → etykieta i18n.
+ * Dzwonek powiadomień jest ukryty (#423) — administracja nie korzysta z kolejki notyfikacji
+ * użytkownika, a pusty dzwonek byłby martwym elementem. Sygnały do działania (kolejka
+ * weryfikacji, otwarte zgłoszenia) prowadzą z kafelków podsumowania. `AdminFeedbackProvider`
+ * trzyma komunikaty i fokus po akcjach ponad listami (#415). Nazwa admina (`userName`) pochodzi z sesji; brak → etykieta i18n.
  */
 
 /** Ścieżki nawigacji (bez prefiksu locale — dokłada go next-intl Link). */
@@ -23,6 +26,7 @@ const HREF = {
   companies: '/admin/firmy',
   reports: '/admin/zgloszenia',
   users: '/admin/uzytkownicy',
+  audit: '/admin/dziennik',
 } as const;
 
 /** Inicjały z nazwy (maks. 2 znaki). */
@@ -46,6 +50,7 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
     { href: HREF.companies, label: t('navCompanies'), icon: <Building2 /> },
     { href: HREF.reports, label: t('navReports'), icon: <Flag /> },
     { href: HREF.users, label: t('navUsers'), icon: <Users /> },
+    { href: HREF.audit, label: t('navAudit'), icon: <History /> },
   ];
 
   // Aktywna pozycja = najdłuższy pasujący href (obsługa podstron).
@@ -70,9 +75,9 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
       active={active}
       brand={brand}
       user={{ name: displayName, subtitle: t('brandTag'), initials: initialsOf(displayName) }}
-      notifItems={[]}
+      showNotifications={false}
     >
-      {children}
+      <AdminFeedbackProvider>{children}</AdminFeedbackProvider>
     </DashboardShell>
   );
 }
