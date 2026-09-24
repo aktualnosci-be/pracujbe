@@ -98,7 +98,11 @@ assert.ok(
   'build: budżet statyczny po weryfikacji builda, przed zapisem cache',
 );
 assert.match(e2e, /- name: Performance budget \(lab CWV\)\s*\r?\n\s*run: node scripts\/perf-lab\.mjs\s*$/m, 'e2e: krok lab CWV');
-assert.ok(stepIndex(e2e, 'Run E2E') < stepIndex(e2e, 'Performance budget (lab CWV)'), 'e2e: lab CWV po testach E2E');
+assert.ok(
+  stepIndex(e2e, 'Run E2E') < stepIndex(e2e, 'Performance budget (lab CWV)') &&
+    stepIndex(e2e, 'Performance budget (lab CWV)') < stepIndex(e2e, 'Run E2E on application fixtures'),
+  'e2e: lab CWV po testach E2E, przed fixture (`next dev` nadpisuje produkcyjny .next)',
+);
 assert.ok(
   stepIndex(e2e, 'Performance budget (lab CWV)') < e2e.indexOf('uses: actions/upload-artifact@v4'),
   'e2e: lab CWV przed wysłaniem raportu (JSON wyników w playwright-report/)',

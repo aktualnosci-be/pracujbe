@@ -90,6 +90,11 @@ function installObservers() {
 async function waitForServer(url, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    if (serverExit !== undefined) {
+      throw new Error(
+        `next start zakończył się (kod ${serverExit}) — brak produkcyjnego .next? Uruchom po \`next build\`, nie po \`next dev\`.`,
+      );
+    }
     try {
       if ((await fetch(url)).ok) return;
     } catch {
@@ -166,6 +171,7 @@ async function measure(browser, path, withConsent) {
 }
 
 let server;
+let serverExit;
 async function main() {
   if (!argValue("--base")) {
     server = spawn(
@@ -177,8 +183,7 @@ async function main() {
       },
     );
     server.on("exit", (code) => {
-      if (code !== null && code !== 0)
-        console.error(`next start zakończył się kodem ${code}`);
+      serverExit = code;
     });
   }
   await waitForServer(`${base}/pl`, 60_000);

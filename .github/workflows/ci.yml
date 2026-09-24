@@ -383,16 +383,17 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'
         run: npm run test:e2e
+      # Bramka wydajności, lab CWV (#395, ~2 min): LCP/CLS/TBT (mediana prób) na tym samym
+      # buildzie i Chromium co E2E — bez drugiego builda i bez instalacji przeglądarki.
+      # Przed krokiem fixture: `next dev` nadpisuje produkcyjny `.next`.
+      # JSON wyników trafia do playwright-report/ (artefakt tylko przy porażce).
+      - name: Performance budget (lab CWV)
+        run: node scripts/perf-lab.mjs
       # Historia aplikacji kandydata: osobny serwer z danymi fikcyjnymi (15 zgłoszeń / wymuszony błąd).
       - name: Run E2E on application fixtures
         run: |
           TEST_APPLICATIONS_FIXTURE=full npx playwright test --config playwright.applications-fixture.config.ts
           TEST_APPLICATIONS_FIXTURE=error npx playwright test --config playwright.applications-fixture.config.ts
-      # Bramka wydajności, lab CWV (#395, ~2 min): LCP/CLS/TBT (mediana prób) na tym samym
-      # buildzie i Chromium co E2E — bez drugiego builda i bez instalacji przeglądarki.
-      # JSON wyników trafia do playwright-report/ (artefakt tylko przy porażce).
-      - name: Performance budget (lab CWV)
-        run: node scripts/perf-lab.mjs
       # Raport tylko przy porażce i z krótką retencją — oszczędza płatny storage.
       - uses: actions/upload-artifact@v4
         if: failure()
