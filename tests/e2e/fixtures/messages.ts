@@ -14,7 +14,9 @@ export type TestLocale = (typeof LOCALES)[number];
 
 type Messages = {
   cookies: { bannerTitle: string; acceptAll: string; rejectOptional: string; customize: string };
-  dashboard: { greeting: string };
+  dashboard: { greeting: string; greetingNoName: string };
+  footer: { langLabel: string };
+  jobs: { applyNow: string };
 };
 
 const cache = new Map<string, Messages>();

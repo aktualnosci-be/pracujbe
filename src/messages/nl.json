@@ -1783,5 +1783,29 @@
       "companyLimit": "Je kunt maximaal 5 bedrijven beheren.",
       "lastOwner": "Het bedrijf moet minstens één actieve eigenaar hebben."
     }
+  },
+  "emailUnsubscribe": {
+    "metaTitle": "Afmelden voor e-mails",
+    "title": "Afmelden voor e-mails",
+    "confirmText": "Bevestig dat je deze e-mails niet meer wilt ontvangen: {category}.",
+    "confirmButton": "Afmelden",
+    "pending": "Opslaan…",
+    "doneTitle": "Afgemeld",
+    "doneText": "We sturen je deze e-mails niet meer: {category}. Andere berichten en meldingen op de site blijven werken.",
+    "settingsHint": "Al je meldingsinstellingen wijzig je na het inloggen.",
+    "loginLink": "Inloggen",
+    "invalidTitle": "De link is ongeldig",
+    "invalidText": "Deze afmeldlink is onvolledig of gewijzigd. Gebruik de link uit de nieuwste e-mail of wijzig je instellingen na het inloggen.",
+    "expiredTitle": "De link is verlopen",
+    "expiredText": "Deze afmeldlink is niet meer geldig. Gebruik de link uit de nieuwste e-mail of wijzig je instellingen na het inloggen.",
+    "unavailableText": "Afmelden is tijdelijk niet beschikbaar. Probeer het later opnieuw of wijzig je instellingen na het inloggen.",
+    "errorText": "De wijziging is niet opgeslagen. Probeer het opnieuw.",
+    "category": {
+      "applications": "over sollicitaties en hun status",
+      "offers": "over jobaanbiedingen",
+      "messages": "over nieuwe berichten",
+      "job_matches": "met passende vacatures",
+      "marketing": "met de nieuwsbrief en marketinginformatie"
+    }
   }
 }

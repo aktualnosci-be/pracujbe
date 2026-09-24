@@ -5,6 +5,13 @@ import { Resend } from 'resend';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { renderEmail } from '@/emails/templates';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
+import { emailPreferenceCategory, emailSendPool } from '@/lib/email/categories';
+import {
+  createUnsubscribeToken,
+  unsubscribeOneClickUrl,
+  unsubscribePageUrl,
+  unsubscribeSecretFromEnv,
+} from '@/lib/email/unsubscribe-token';
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
 import { captureError } from '@/lib/sentry';
@@ -24,6 +31,12 @@ import { isProductionMode } from '@/lib/env';
  * Claim paczki jest ATOMOWY (RPC `claim_email_batch`, 0021: FOR UPDATE SKIP LOCKED + dzierżawa
  * `locked_at`), więc dwa równoległe workery NIE pobiorą tego samego wiersza — brak podwójnej
  * wysyłki. Wiersz z wygasłą dzierżawą (padły worker) wraca do puli po `p_lease_seconds`.
+ *
+ * #45 (0087): claim ponownie sprawdza zgodę odbiorcy — wiersz osoby, która się wypisała po
+ * zakolejkowaniu, jest w bazie wygaszany i nie dociera do workera. Mail z kategorią preferencji
+ * dostaje link wypisania w stopce oraz nagłówki `List-Unsubscribe` + `List-Unsubscribe-Post`
+ * (RFC 8058). Przed wysyłką worker pobiera atomowy budżet puli (`take_email_send_budget`);
+ * odmowa odkłada wiersz do następnego okna BEZ zwiększania `attempts` (to nie błąd dostawcy).
  */
 
 const MAX_ATTEMPTS = 5;
@@ -34,7 +47,27 @@ const renderAny = renderEmail as (
   type: EmailType,
   locale: Locale,
   data: Record<string, unknown>,
+  options?: { unsubscribeUrl?: string },
 ) => Promise<{ subject: string; html: string }>;
+
+/** Linki wypisania dla wiersza; `null` = mail bez kategorii preferencji albo bez sekretu. */
+export function unsubscribeLinksFor(
+  row: { profile_id: string | null; template: string },
+  locale: string,
+  site: string,
+  secret: string | null,
+): { pageUrl: string; headers: Record<string, string> } | null {
+  const category = emailPreferenceCategory(row.template);
+  if (!category || !row.profile_id || !secret) return null;
+  const token = createUnsubscribeToken({ profileId: row.profile_id, category }, secret);
+  return {
+    pageUrl: unsubscribePageUrl(site, locale, token),
+    headers: {
+      'List-Unsubscribe': `<${unsubscribeOneClickUrl(site, locale, token)}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
+  };
+}
 
 interface DeliveryRow {
   id: string;
@@ -50,6 +83,8 @@ export interface ProcessResult {
   processed: number;
   sent: number;
   failed: number;
+  /** Wiersze odłożone do następnego okna budżetu (bez zwiększania `attempts`). */
+  deferred?: number;
   skipped?: string;
   /**
    * P1-17: sygnał zdrowia dla endpointu (200 vs 503). `false` = realny problem
@@ -89,8 +124,22 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
 
   const queue = (rows ?? []) as DeliveryRow[];
   const resend = new Resend(apiKey);
+  const unsubscribeSecret = unsubscribeSecretFromEnv();
   let sent = 0;
   let failed = 0;
+  let deferred = 0;
+  // Pula, która w tej paczce dostała odmowę, czeka do podanego okna (bez kolejnych zapytań).
+  const exhausted = new Map<string, string>();
+
+  /** Zwalnia dzierżawę i odkłada wiersz; `attempts` bez zmian — outbox pozostaje ponawialny. */
+  async function defer(rowId: string, nextAttemptAt: string): Promise<void> {
+    const { error: deferErr } = await admin
+      .from('email_deliveries')
+      .update({ locked_at: null, next_attempt_at: nextAttemptAt })
+      .eq('id', rowId);
+    if (deferErr) captureError(deferErr, { area: 'email.outbox.defer', deliveryId: rowId });
+    deferred += 1;
+  }
 
   // #294: imię ODBIORCY do powitania — jeden odczyt na paczkę. Best-effort: błąd odczytu nie
   // blokuje wysyłki (mail wychodzi z neutralnym powitaniem).
@@ -118,12 +167,49 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       row.profile_id ? firstNames.get(row.profile_id) : undefined,
     );
 
+    const pool = emailSendPool(row.template);
+    const waitUntil = exhausted.get(pool);
+    if (waitUntil) {
+      await defer(row.id, waitUntil);
+      continue;
+    }
+
     try {
-      const { subject, html } = await renderAny(row.template as EmailType, locale, data);
+      const unsubscribe = unsubscribeLinksFor(row, locale, site, unsubscribeSecret);
+      if (!unsubscribe && pool === 'marketing') {
+        // Marketing nigdy nie wychodzi bez działającego wypisania (#45).
+        throw new Error('marketing email without unsubscribe link');
+      }
+      const { subject, html } = await renderAny(row.template as EmailType, locale, data, {
+        unsubscribeUrl: unsubscribe?.pageUrl,
+      });
+
+      // #45: atomowy budżet puli tuż przed wysyłką (równoległe workery nie przekroczą limitu).
+      const { data: budget, error: budgetErr } = await admin.rpc('take_email_send_budget', {
+        p_template: row.template,
+      });
+      if (budgetErr) throw budgetErr;
+      const grant = (Array.isArray(budget) ? budget[0] : budget) as
+        | { granted?: boolean; retry_at?: string | null }
+        | null
+        | undefined;
+      if (grant?.granted !== true) {
+        const retryAt = grant?.retry_at ?? new Date(Date.now() + 60_000).toISOString();
+        exhausted.set(pool, retryAt);
+        await defer(row.id, retryAt);
+        continue;
+      }
+
       // P1-17: idempotency key = delivery.id — jeśli po wysyłce zapis 'sent' zawiedzie i
       // wiersz wróci do puli, ponowna wysyłka jest deduplikowana po stronie Resend (bez dubletu).
       const result = await resend.emails.send(
-        { from, to: row.to_email, subject, html },
+        {
+          from,
+          to: row.to_email,
+          subject,
+          html,
+          ...(unsubscribe ? { headers: unsubscribe.headers } : {}),
+        },
         { idempotencyKey: row.id },
       );
 
@@ -176,5 +262,5 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     }
   }
 
-  return { processed: queue.length, sent, failed, ok: true };
+  return { processed: queue.length, sent, failed, deferred, ok: true };
 }
