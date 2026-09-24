@@ -63,8 +63,7 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
       importuj ikony pojedynczo, nie cały pakiet.
 - [ ] Brak ciężkich bibliotek klienckich na stronach publicznych (bez dużych date-pickerów,
       wykresów itp. w bundlu głównym).
-- [ ] Analiza bundla (`@next/bundle-analyzer` lub `next build` output) — pilnuj rozmiaru
-      największych route'ów.
+- [x] Rozmiar JS kluczowych tras pilnowany w CI (budżet gzip, §10, #395).
 
 ## 5. Code splitting / lazy loading
 
@@ -121,6 +120,64 @@ i panelach: ~2,0–2,4 s → 0,64–0,86 s. Strażnik: `tests/e2e/first-visit-lc
 - [ ] Nawigacja klawiaturą, widoczny focus, etykiety pól, `aria-*` gdzie potrzebne.
 - [ ] Struktura nagłówków (h1→h6) i landmarki.
 - [ ] `html lang` ustawiany per locale.
+
+## 10. Bramka wydajności w CI (#395)
+
+Dwa kroki w istniejących jobach (bez nowego joba, drugiego builda i instalacji przeglądarki).
+Budżety i progi są w jednym pliku [`perf-budgets.json`](../perf-budgets.json) — zmiana
+budżetu to świadomy diff w PR z uzasadnieniem. Obie tabele trafiają do podsumowania
+przebiegu (`$GITHUB_STEP_SUMMARY`).
+
+**`Build (Next.js)` → „Performance budget (static)”** — `node scripts/perf-budget-static.mjs`
+(~1 s, po `check-next-build.mjs`). JS (gzip) trasy = wszystkie pliki `.js` z
+`.next/app-build-manifest.json` dla layoutów od korzenia i samej strony (to, co pobiera
+przeglądarka; więcej niż „First Load JS” z tabeli `next build`, która nie dolicza layoutów).
+Fonty: każdy `.next/static/media/*.woff2` i ich suma. Zod w JS stron publicznych (#390)
+pilnuje dalej `check-next-build.mjs`.
+
+| zasób | stan main 2026-09-24 | budżet |
+|---|---|---|
+| JS `/[locale]/(public)/page` (home) | 164,5 KB | 173 KB |
+| JS `/[locale]/(public)/oferty-pracy/page` | 166,4 KB | 175 KB |
+| JS `/[locale]/(public)/oferty-pracy/[slug]/page` | 228,9 KB | 241 KB |
+| JS `/[locale]/(public)/poradniki/[slug]/page` | 154,0 KB | 162 KB |
+| JS `/[locale]/(auth)/logowanie/page` | 184,8 KB | 194 KB |
+| font (jeden plik / razem) | 72,8 KB | 100 KB / 150 KB |
+
+Budżet JS = stan + ok. 5%: aktualizacja zależności mieści się, nowa biblioteka kliencka
+w layoucie publicznym już nie (kontrola ujemna w `tests/unit/perf-budget.test.ts`).
+
+**`E2E (Playwright)` → „Performance budget (lab CWV)”** — `node scripts/perf-lab.mjs`
+(~1,5–2 min, po testach E2E, na tym samym buildzie i Chromium co Playwright; własny
+`next start` na porcie 3100). Strony: `/pl`, `/pl/oferty-pracy`, pierwsza oferta z listy,
+pierwszy poradnik, `/pl/logowanie` × {pierwsza wizyta, z zapisaną zgodą} × 3 próby
+w świeżym kontekście, przeplatane runda po rundzie; liczy się **mediana**. Warunki: CPU 4×
+(CDP), 1,6 Mb/s / 750 kb/s, RTT 150 ms, 412×823 (mobile, DPR 2), żądania spoza serwera
+zablokowane. Metryki obserwowane (`PerformanceObserver`), nie symulacja Lighthouse: LCP
+(ostatni kandydat), CLS (największe okno sesji, bez `hadRecentInput`), TBT (część long tasków
+po FCP ponad 50 ms). Okno obserwacji: do 1 s bez nowego wpisu (LCP, long task, przesunięcie),
+co najmniej 3 s od nawigacji, najwyżej 8 s — łapie treść dorysowaną po `load` (kontrola ujemna:
+`<main>` ukryty do 800 ms po hydratacji → LCP ~3,2 s, krok czerwony). Wynik w JSON: `playwright-report/perf-lab.json`
+(artefakt tylko przy porażce joba).
+
+| metryka (mediana) | próg | lokalnie (main, 3 przebiegi) |
+|---|---|---|
+| LCP, pierwsza wizyta | 1 500 ms | 612–848 ms |
+| LCP, z zapisaną zgodą | 1 500 ms | 612–836 ms |
+| CLS | 0,05 | 0–0,001 |
+| TBT | 400 ms | 104–266 ms |
+
+Progi są granicą regresji z zapasem na rozrzut hostowanych runnerów, a nie celem (cele polowe
+w §2). Próg przekroczony → komunikat z nazwą strony, medianą i wartościami każdej próby.
+
+Lokalnie (po `npm run build`):
+
+```bash
+node scripts/perf-budget-static.mjs
+PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/perf-lab.mjs   # własny next start :3100
+node scripts/perf-lab.mjs --base http://localhost:3000                         # istniejący serwer
+node scripts/perf-lab.mjs --runs 5 --out /tmp/perf-lab.json
+```
 
 ---
 
