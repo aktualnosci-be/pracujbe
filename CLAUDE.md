@@ -543,6 +543,10 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilnym kursorem
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
+Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
+`candidate-applications-pagination`).
+Paszport tożsamości nad siatką `/candidate/profil` (#172, `CandidateIdentity`): imię, pierwszy
+zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie odczytu tylko komunikat.
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
 już wczytanych kart. Jest to część etapu wyglądu #5, nie dowód ukończenia całego etapu.
 
