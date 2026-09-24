@@ -40,9 +40,10 @@ for (const locale of LOCALES) {
       'page',
     );
 
-    // Indeksowalna: brak noindex, własny canonical i komplet hreflang. Po nawigacji klienckiej
-    // Next przez chwilę trzyma w <head> także linki poprzedniej strony — czekamy, aż zostanie
-    // dokładnie jeden (asercja na element z listy dwóch padała w trybie strict, #375).
+    // Indeksowalna: brak noindex, własny canonical i komplet hreflang. Sprawdzamy dokument
+    // z serwera (to widzi robot): po nawigacji klienckiej Next bywa, że zostawia w <head>
+    // także canonical strony głównej i asercja trafiała raz w jeden, raz w dwa linki (#375).
+    await page.goto(`/${locale}/dla-pracodawcow`);
     await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0);
     await expect(page.locator('link[rel="canonical"]')).toHaveCount(1);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
