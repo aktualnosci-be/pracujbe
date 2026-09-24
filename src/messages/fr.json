@@ -301,7 +301,10 @@
     "saveUnavailable": "Un compte candidat et un service connecté sont nécessaires",
     "saveLoading": "Chargement des offres enregistrées",
     "saveRetry": "Chargement impossible. Réessayer",
-    "saveFailed": "Modification non enregistrée. Réessayez."
+    "saveFailed": "Modification non enregistrée. Réessayez.",
+    "demoNoticeTitle": "Données d'exemple — ces offres ne sont pas réelles",
+    "demoNoticeBody": "Le site fonctionne en version de démonstration. Les offres et les entreprises de cette page sont fictives, ne sont pas vérifiées et il n'est pas possible d'y postuler.",
+    "demoBadge": "Offre d'exemple"
   },
   "job": {
     "apply": "Postuler à ce poste",
@@ -952,6 +955,7 @@
     "certificatesPlaceholder": "ex. VCA, certificat de qualification",
     "availabilityLabel": "Disponibilité",
     "availImmediate": "Immédiatement",
+    "availWithinTwoWeeks": "Dans les 2 semaines",
     "availWithinMonth": "Dans un mois",
     "availWithinThreeMonths": "Dans 3 mois",
     "availFlexible": "Flexible",
@@ -1072,7 +1076,9 @@
     "guestReturn": "Après la connexion ou la confirmation de votre e-mail, vous reviendrez à cette offre.",
     "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez — vos données saisies ont été conservées.",
     "viewApplications": "Voir vos candidatures",
-    "candidateOnly": "Seul un compte candidat peut postuler."
+    "candidateOnly": "Seul un compte candidat peut postuler.",
+    "demoJobTitle": "Ceci est une offre d'exemple",
+    "demoJobBody": "Cette offre et cette entreprise sont fictives et servent uniquement à montrer le fonctionnement du site. Il n'est pas possible d'y postuler."
   },
   "legal": {
     "termsTitle": "Conditions générales",
@@ -1259,6 +1265,7 @@
     "send": "Envoyer",
     "sending": "Envoi…",
     "sendError": "Échec de l'envoi du message. Réessayez.",
+    "sendErrorUncertain": "Nous ne savons pas si le message a été envoyé. Renvoyez-le : il ne sera pas dupliqué.",
     "you": "Vous",
     "systemLabel": "Système",
     "back": "Retour à la liste",
@@ -1440,7 +1447,15 @@
       "remoteJob": "Télétravail — le lieu importe peu",
       "withinCommuteRadius": "Lieu de travail dans votre rayon de déplacement"
     },
-    "loadError": "Impossible de calculer la compatibilité pour le moment. Ce n’est pas une évaluation de votre profil — réessayez."
+    "loadError": "Impossible de calculer la compatibilité pour le moment. Ce n’est pas une évaluation de votre profil — réessayez.",
+    "languageLevelBelow": "{language} : niveau requis {required}, votre niveau {actual}",
+    "languageLevelUnknown": "{language} : niveau requis {required} — indiquez votre niveau dans votre profil",
+    "levels": {
+      "basic": "débutant",
+      "intermediate": "intermédiaire",
+      "fluent": "courant",
+      "native": "langue maternelle"
+    }
   },
   "application": {
     "error": {

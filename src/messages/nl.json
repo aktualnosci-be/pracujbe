@@ -301,7 +301,10 @@
     "saveUnavailable": "Opslaan is beschikbaar voor kandidaten met een verbonden dienst",
     "saveLoading": "Opgeslagen vacatures laden",
     "saveRetry": "Laden mislukt. Probeer opnieuw",
-    "saveFailed": "Wijziging opslaan mislukt. Probeer opnieuw."
+    "saveFailed": "Wijziging opslaan mislukt. Probeer opnieuw.",
+    "demoNoticeTitle": "Voorbeeldgegevens — deze vacatures zijn niet echt",
+    "demoNoticeBody": "De site draait als demoversie. De vacatures en bedrijven op deze pagina zijn fictief, worden niet geverifieerd en je kunt er niet op solliciteren.",
+    "demoBadge": "Voorbeeldvacature"
   },
   "job": {
     "apply": "Solliciteer op deze functie",
@@ -952,6 +955,7 @@
     "certificatesPlaceholder": "bijv. VCA, kwalificatiegetuigschrift",
     "availabilityLabel": "Beschikbaarheid",
     "availImmediate": "Onmiddellijk",
+    "availWithinTwoWeeks": "Binnen 2 weken",
     "availWithinMonth": "Binnen een maand",
     "availWithinThreeMonths": "Binnen 3 maanden",
     "availFlexible": "Flexibel",
@@ -1072,7 +1076,9 @@
     "guestReturn": "Na het inloggen of het bevestigen van je e-mail kom je terug bij deze vacature.",
     "errorNetwork": "Er kon geen verbinding worden gemaakt met de server. Controleer je internet en probeer opnieuw — je ingevulde gegevens zijn bewaard.",
     "viewApplications": "Bekijk je sollicitaties",
-    "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount."
+    "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount.",
+    "demoJobTitle": "Dit is een voorbeeldvacature",
+    "demoJobBody": "Deze vacature en dit bedrijf zijn fictief en laten alleen zien hoe de site werkt. Je kunt er niet op solliciteren."
   },
   "legal": {
     "termsTitle": "Algemene voorwaarden",
@@ -1259,6 +1265,7 @@
     "send": "Versturen",
     "sending": "Versturen…",
     "sendError": "Bericht kon niet worden verzonden. Probeer het opnieuw.",
+    "sendErrorUncertain": "We weten niet zeker of het bericht is aangekomen. Verstuur het opnieuw — er ontstaat geen dubbel bericht.",
     "you": "Jij",
     "systemLabel": "Systeem",
     "back": "Terug naar lijst",
@@ -1440,7 +1447,15 @@
       "remoteJob": "Thuiswerk — locatie speelt geen rol",
       "withinCommuteRadius": "Werkplek binnen jouw reisafstand"
     },
-    "loadError": "De match kon nu niet worden berekend. Dit is geen beoordeling van je profiel — probeer het opnieuw."
+    "loadError": "De match kon nu niet worden berekend. Dit is geen beoordeling van je profiel — probeer het opnieuw.",
+    "languageLevelBelow": "{language}: vereist niveau {required}, jouw niveau {actual}",
+    "languageLevelUnknown": "{language}: vereist niveau {required} — vul je niveau in je profiel in",
+    "levels": {
+      "basic": "basis",
+      "intermediate": "gemiddeld",
+      "fluent": "vloeiend",
+      "native": "moedertaal"
+    }
   },
   "application": {
     "error": {

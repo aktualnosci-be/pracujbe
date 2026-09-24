@@ -9,7 +9,9 @@ import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { brandShareImageUrl } from '@/lib/seo/structured-data';
-import { getJobs, type LocationKey } from '@/lib/jobs';
+import { getJobs, isShowingDemoJobs, type LocationKey } from '@/lib/jobs';
+import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
+
 import { cityAliases } from '@/lib/locations/city-aliases';
 import { JobCard } from '@/components/public/JobCard';
 import { resolveCityAlias } from './city-alias';
@@ -193,6 +195,8 @@ export default async function CityLandingPage({ params }: PageProps) {
           {tJobs('resultsCount', { count: result.total })}
         </p>
       </header>
+
+      {isShowingDemoJobs() ? <DemoJobsNotice className="mt-6" /> : null}
 
       {/* Lista ofert */}
       <section className="mt-6" aria-labelledby="landing-jobs-heading">

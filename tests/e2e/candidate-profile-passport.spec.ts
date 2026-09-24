@@ -1,4 +1,9 @@
-import { expect, test } from '@playwright/test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { chromium, expect, test } from '@playwright/test';
+
+const extensionPath = resolve(__dirname, 'fixtures/browser-zoom');
 
 const titles = {
   pl: 'Twój profil zawodowy',
@@ -35,4 +40,53 @@ for (const [locale, title] of Object.entries(titles)) {
       expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
     });
   }
+}
+
+// #172: rzeczywiste powiększenie przeglądarki 200% (nie tylko węższy viewport).
+for (const [locale, title] of Object.entries(titles)) {
+  test(`paszport tożsamości ${locale} mieści się przy powiększeniu 200%`, async () => {
+    const profileDir = await mkdtemp(join(tmpdir(), 'pracujbe-profile-zoom-'));
+    const context = await chromium.launchPersistentContext(profileDir, {
+      channel: 'chromium',
+      headless: true,
+      viewport: { width: 1280, height: 800 },
+      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
+      ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
+        ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
+        : {}),
+    });
+    try {
+      const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
+      const page = context.pages()[0] ?? await context.newPage();
+      const baseURL = test.info().project.use.baseURL;
+      expect(baseURL).toBeTruthy();
+      await page.goto(new URL(`/${locale}/candidate/profil`, baseURL).toString());
+      const tabId = await worker.evaluate(async (url) => {
+        const tab = (await chrome.tabs.query({})).find((entry) => entry.url?.startsWith(url));
+        if (!tab?.id) throw new Error('Profile tab missing');
+        await chrome.tabs.setZoom(tab.id, 2);
+        return tab.id;
+      }, baseURL!);
+      expect(await worker.evaluate((id) => chrome.tabs.getZoom(id), tabId)).toBe(2);
+      await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(640);
+
+      await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+      const identity = page.getByTestId('candidate-identity');
+      await expect(identity.getByRole('heading', { level: 2, name: emptyNames[locale as keyof typeof emptyNames] })).toBeVisible();
+      // Demo nie ma zapisanej dostępności ani zdjęcia — karta ich nie wymyśla.
+      await expect(identity.getByTestId('candidate-identity-availability')).toHaveCount(0);
+      await expect(identity.locator('img')).toHaveCount(0);
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, 'Profil nie powinien wymagać przewijania w poziomie przy 200%.').toBeLessThanOrEqual(1);
+      const box = await identity.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x + box!.width).toBeLessThanOrEqual(641);
+    } finally {
+      await context.close();
+      await rm(profileDir, { recursive: true, force: true });
+    }
+  });
 }

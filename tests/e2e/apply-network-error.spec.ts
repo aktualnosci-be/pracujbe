@@ -3,7 +3,9 @@ import { resolve } from 'path';
 import { expect, test } from '@playwright/test';
 
 /**
- * Regresja #360 (tryb demo): przerwane żądanie server action nie zostawia modalu w „Wysyłanie…”.
+ * Regresja #360 (serwer fixture `playwright.applications-fixture.config.ts`: oferty fikcyjne
+ * z formularzem aplikowania, bez bazy — od #297 zwykły tryb demo pokazuje komunikat zamiast
+ * formularza): przerwane żądanie server action nie zostawia modalu w „Wysyłanie…”.
  * Przycisk wraca, pojawia się komunikat o połączeniu, dane zostają, a ponowienie wysyła ten sam
  * klucz idempotencji. Bez nieobsłużonego odrzucenia obietnicy w konsoli.
  * Kontrola ujemna: po usunięciu try/catch w ApplyModal przycisk zostaje „Wysyłanie…” i test pada.
@@ -15,7 +17,7 @@ const pl = JSON.parse(
   readFileSync(resolve(process.cwd(), 'src', 'messages', 'pl.json'), 'utf-8'),
 ) as { apply: Record<string, string>; jobs: { applyNow: string } };
 
-test.beforeEach(async ({ context }) => {
+test.beforeEach(async ({ context, baseURL }) => {
   await context.addCookies([
     {
       name: 'pracujbe_consent',
@@ -25,7 +27,7 @@ test.beforeEach(async ({ context }) => {
         ts: '2026-01-01T00:00:00.000Z',
         id: 'apply-network-error-e2e',
       }),
-      url: 'http://localhost:3000',
+      url: baseURL!,
       sameSite: 'Lax',
     },
   ]);

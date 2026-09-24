@@ -92,6 +92,7 @@ export default async function CandidateProfilePage({
           emptyName: tp('identityEmptyName'),
           emptyIdentity: tp('identityEmpty'),
           loadError: tp('loadError'),
+          availabilityLabel: to('availabilityLabel'),
           availability: !profile.loadFailed && !passport.loadFailed && availabilityKey ? to(availabilityKey) : null,
         }}
       />

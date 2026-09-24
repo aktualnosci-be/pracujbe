@@ -3,7 +3,9 @@ import { resolve } from "path";
 import { expect, test } from "@playwright/test";
 
 /**
- * Regresja #145 (tryb demo, bez bazy):
+ * Regresja #145 (serwer fixture `playwright.applications-fixture.config.ts`: oferty fikcyjne
+ * z formularzem aplikowania, bez bazy — od #297 zwykły tryb demo pokazuje komunikat zamiast
+ * formularza):
  * - niepoprawny numer telefonu zwraca błąd przy polu (komunikat, aria-invalid, fokus),
  *   a nie ogólny alert „Spróbuj ponownie”,
  * - poprawny numer w demo (syntetyczny jobId „1002”) daje jasny komunikat o trybie demo.
@@ -15,7 +17,7 @@ const pl = JSON.parse(
   readFileSync(resolve(process.cwd(), "src", "messages", "pl.json"), "utf-8"),
 ) as { apply: Record<string, string>; jobs: { applyNow: string } };
 
-test.beforeEach(async ({ context }) => {
+test.beforeEach(async ({ context, baseURL }) => {
   await context.addCookies([
     {
       name: "pracujbe_consent",
@@ -25,7 +27,7 @@ test.beforeEach(async ({ context }) => {
         ts: "2026-01-01T00:00:00.000Z",
         id: "apply-phone-validation-e2e",
       }),
-      url: "http://localhost:3000",
+      url: baseURL!,
       sameSite: "Lax",
     },
   ]);

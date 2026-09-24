@@ -69,6 +69,13 @@ export default defineConfig({
     '**/candidate-proposals-pagination.spec.ts',
     '**/candidate-dashboard-read-errors.spec.ts',
     '**/public-read-failures.spec.ts',
+    // Formularz aplikowania i JobPosting ofert „realnych” — od #297 tryb demo pokazuje zamiast
+    // nich komunikat, więc testujemy je na serwerze fixture.
+    '**/apply-modal-a11y.spec.ts',
+    '**/apply-network-error.spec.ts',
+    '**/apply-phone-validation.spec.ts',
+    '**/job-posting-fixture.spec.ts',
+    '**/offer-message-login.spec.ts',
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

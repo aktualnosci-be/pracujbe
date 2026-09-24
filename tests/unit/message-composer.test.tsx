@@ -111,4 +111,50 @@ describe('MessageComposer (#335, #358)', () => {
     expect(refresh).toHaveBeenCalledOnce();
     expect(sendMessage).toHaveBeenCalledOnce();
   });
+
+  async function send(field: HTMLElement): Promise<void> {
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' });
+    });
+  }
+
+  const keyOf = (call: number): string => sendMessage.mock.calls[call]?.[2] as string;
+
+  it('ponowienie tej samej treści po zerwanym połączeniu używa tego samego klucza (#147)', async () => {
+    sendMessage.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({ ok: true, id: 'm-1' });
+    renderComposer();
+    const field = screen.getByRole('textbox');
+    fireEvent.change(field, { target: { value: 'Czy mogę zacząć w poniedziałek?' } });
+    await send(field);
+    expect(screen.getByRole('alert')).toHaveTextContent(pl.messages.sendErrorUncertain);
+    expect(field).toHaveValue('Czy mogę zacząć w poniedziałek?');
+
+    await send(field);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(keyOf(0)).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keyOf(1)).toBe(keyOf(0));
+    expect(field).toHaveValue('');
+  });
+
+  it('po sukcesie kolejna wiadomość (także o tej samej treści) dostaje nowy klucz', async () => {
+    sendMessage.mockResolvedValue({ ok: true, id: 'm-1' });
+    renderComposer();
+    const field = screen.getByRole('textbox');
+    fireEvent.change(field, { target: { value: 'Dziękuję' } });
+    await send(field);
+    fireEvent.change(field, { target: { value: 'Dziękuję' } });
+    await send(field);
+    expect(keyOf(1)).not.toBe(keyOf(0));
+  });
+
+  it('zmiana treści po błędzie zaczyna nową operację (nowy klucz)', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: false, error: 'INTERNAL' }).mockResolvedValueOnce({ ok: true, id: 'm-2' });
+    renderComposer();
+    const field = screen.getByRole('textbox');
+    fireEvent.change(field, { target: { value: 'Pierwsza wersja' } });
+    await send(field);
+    fireEvent.change(field, { target: { value: 'Poprawiona wersja' } });
+    await send(field);
+    expect(keyOf(1)).not.toBe(keyOf(0));
+  });
 });

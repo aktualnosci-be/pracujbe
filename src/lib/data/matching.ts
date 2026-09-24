@@ -4,7 +4,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
-import { scoreMatch, type MatchCandidate, type MatchJob, type MatchResult } from '@/lib/matching/score';
+import { resolveCoordinates, type LocationRow } from '@/lib/matching/locations';
+import {
+  scoreMatch,
+  type LanguageEntry,
+  type MatchCandidate,
+  type MatchJob,
+  type MatchResult,
+} from '@/lib/matching/score';
 
 /**
  * Warstwa danych dla dopasowania kandydat↔oferta (Etap 5).
@@ -14,7 +21,10 @@ import { scoreMatch, type MatchCandidate, type MatchJob, type MatchResult } from
  * `scoreMatch` (bez AI, te same wejścia → ten sam wynik). Zwraca jawny wynik (#197):
  * `none`, gdy brak env (demo), brak sesji, brak profilu kandydata lub oferta niedostępna
  * publicznie; `error`, gdy którykolwiek odczyt (profil, umiejętności, języki, certyfikaty,
- * RPC oferty) się nie udał — wtedy NIE liczymy procentu z niepełnych danych.
+ * RPC oferty, słownik lokalizacji) się nie udał — wtedy NIE liczymy procentu z niepełnych danych.
+ *
+ * Języki przechodzą z poziomami po obu stronach (#195); współrzędne miejscowości pochodzą
+ * ze słownika `locations` (#194) — miasto spoza słownika = odległość nieznana.
  *
  * Prywatność: profil kandydata czytany pod RLS (własny wiersz); oferta przez SECURITY
  * DEFINER RPC ograniczone do ofert active+verified i bezpiecznych kolumn.
@@ -35,6 +45,31 @@ function asRecord(value: unknown): Record<string, unknown> {
 /** Tablica stringów (odfiltrowane puste) — dla kolumn text[]/enum[] i wyników zapytań. */
 function asStrArr(value: unknown): string[] {
   return asArr(value).map((v) => asStr(v)).filter((v) => v.length > 0);
+}
+/** Języki z poziomem: wiersze relacji {language_label, level} albo jsonb {label, level} z RPC. */
+function languagesFrom(rows: unknown, labelField: string): LanguageEntry[] {
+  return asArr(rows)
+    .map((r) => {
+      const rec = asRecord(r);
+      return { label: asStr(rec[labelField]), level: asStr(rec['level']) || null };
+    })
+    .filter((entry) => entry.label.length > 0);
+}
+function locationRows(rows: unknown): LocationRow[] {
+  return asArr(rows).map((r) => {
+    const rec = asRecord(r);
+    // numeric z PostgREST może przyjść jako string — konwersja jawna.
+    const coord = (v: unknown): number | null => {
+      const n = typeof v === 'string' ? Number(v) : v;
+      return typeof n === 'number' && Number.isFinite(n) ? n : null;
+    };
+    return {
+      name: asStr(rec['name']),
+      slug: asStr(rec['slug']),
+      latitude: coord(rec['latitude']),
+      longitude: coord(rec['longitude']),
+    };
+  });
 }
 /** Etykiety z relacji (np. candidate_skills.skill_label) po podanym polu. */
 function labelsFrom(rows: unknown, field: string): string[] {
@@ -106,32 +141,42 @@ export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
     const profileId = asStr(cp['id']);
     if (!profileId) return { status: 'none' };
 
-    const [skillsRes, langsRes, certsRes, jobRes] = await Promise.all([
+    const [skillsRes, langsRes, certsRes, jobRes, locationsRes] = await Promise.all([
       supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', profileId),
-      supabase.from('candidate_languages').select('language_label').eq('candidate_profile_id', profileId),
+      supabase.from('candidate_languages').select('language_label, level').eq('candidate_profile_id', profileId),
       supabase.from('candidate_certificates').select('certificate_label').eq('candidate_profile_id', profileId),
       supabase.rpc('get_job_match_profile', { p_job_id: jobId }),
+      supabase.from('locations').select('name, slug, latitude, longitude').eq('is_active', true),
     ]);
     // Każdy odczyt osobno: pusta relacja po sukcesie ≠ relacja nieodczytana (błąd).
     check(skillsRes, 'candidate_skills');
     check(langsRes, 'candidate_languages');
     check(certsRes, 'candidate_certificates');
     check(jobRes, 'get_job_match_profile');
+    check(locationsRes, 'locations');
 
     const jobRow = asArr(jobRes.data)[0];
     // Udany odczyt bez wiersza: oferta niedostępna publicznie (nie active/verified) lub nie istnieje.
     if (!jobRow) return { status: 'none' };
     const jr = asRecord(jobRow);
+    const locations = locationRows(locationsRes.data);
+    const candidateCity = asStr(cp['city']) || undefined;
+    const jobCity = asStr(jr['city']) || undefined;
+    // Poziomy wymagane przez ofertę (0074); starsze RPC bez kolumny → same etykiety (poziom dowolny).
+    const jobLanguages: LanguageEntry[] = Array.isArray(jr['language_requirements'])
+      ? languagesFrom(jr['language_requirements'], 'label')
+      : asStrArr(jr['languages']);
     const candidate: MatchCandidate = {
       occupations: asStrArr(cp['occupations']),
       categories: asStrArr(cp['categories']),
       skills: labelsFrom(skillsRes.data, 'skill_label'),
-      city: asStr(cp['city']) || undefined,
+      city: candidateCity,
       region: asStr(cp['region']) || undefined,
       radiusKm: asNum(cp['radius_km']),
+      coordinates: resolveCoordinates(candidateCity, locations),
       experienceYears: asNum(cp['experience_years']),
       availability: asStr(cp['availability']) || undefined,
-      languages: labelsFrom(langsRes.data, 'language_label'),
+      languages: languagesFrom(langsRes.data, 'language_label'),
       certificates: labelsFrom(certsRes.data, 'certificate_label'),
       hasDrivingLicense: cp['has_driving_license'] === true,
       hasCar: cp['has_car'] === true,
@@ -143,11 +188,12 @@ export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
       category: asStr(jr['category']) || undefined,
       skills: asStrArr(jr['skills']),
       mandatorySkills: asStrArr(jr['mandatory_skills']),
-      city: asStr(jr['city']) || undefined,
+      city: jobCity,
       region: asStr(jr['region']) || undefined,
+      coordinates: resolveCoordinates(jobCity, locations),
       minExperienceYears: asNum(jr['min_experience_years']),
       // Realne wymagania językowe/certyfikatowe oferty (relacje 0030, RPC get_job_match_profile).
-      requiredLanguages: asStrArr(jr['languages']),
+      requiredLanguages: jobLanguages,
       requiredCertificates: asStrArr(jr['certificates']),
       requiresDrivingLicense: jr['requires_driving_license'] === true,
       contractType: asStr(jr['contract_type']) || undefined,
