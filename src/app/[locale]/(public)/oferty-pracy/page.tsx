@@ -8,6 +8,7 @@ import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { brandShareImageUrl } from '@/lib/seo/structured-data';
 import { getJobFilterFacets, getJobs, isShowingDemoJobs } from '@/lib/jobs';
+import { readCandidateViewerId } from '@/lib/auth/candidate-viewer';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
 import {
@@ -211,9 +212,12 @@ export default async function JobsListPage({
     ...(sf.noLanguageRequired ? { noLanguageRequired: true } : {}),
     ...(since ? { since } : {}),
   };
+  // #97: zalogowany kandydat nie widzi ofert firm, które zablokował (lista, licznik i facety
+  // filtruje baza — 0091). Gość i pracodawca dostają wspólny wynik publiczny.
+  const viewer = { candidateId: await readCandidateViewerId() };
   const [results, databaseFacets] = await Promise.all([
-    getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }),
-    getJobFilterFacets(filterParams),
+    getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }, viewer),
+    getJobFilterFacets(filterParams, viewer),
   ]);
   const facets = databaseFacets
     ? {

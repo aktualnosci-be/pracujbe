@@ -593,8 +593,14 @@ wyszukiwanie (`candidate_profiles_select_employer`, `candidate_profile_is_search
 triggery BEFORE INSERT na `offers`/`conversations`/`messages` (neutralny błąd jak brak relacji),
 polecane (`get_public_jobs_by_ids` pod sesją). Historia aplikacji/rozmów zostaje. UI: sekcja
 „Zablokowane firmy” w `/candidate/ustawienia` + kontrolka na szczególe oferty. Dowód: `rls.sql`
-sekcja BL. **Do zrobienia:** publiczna lista `/oferty-pracy` celowo działa jako gość (anon),
-więc oferty zablokowanej firmy nadal są w wynikach listy — personalizacja wymaga osobnej decyzji.
+sekcja BL. Lista wyników (`0091`): `get_public_jobs`/`_count`/`get_public_job_filter_facets`
+pomijają oferty firm zablokowanych przez wywołującego (gość/pracodawca bez zmian, więc strony
+ISR zostają wspólne); `/oferty-pracy` przekazuje UUID kandydata ze zweryfikowanej sesji
+(`src/lib/auth/candidate-viewer.ts` → `readPortalIdentity`), publiczny URL oferty bez zmian.
+Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0091` pada BL97-1). **Otwarte:** działa,
+gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zostaje listą gościa.
+Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0091), więc blokada nie
+kasuje tytułu propozycji bez aplikacji (BL97-6).
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).

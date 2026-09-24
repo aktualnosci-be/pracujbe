@@ -88,15 +88,20 @@ async function readCount(
   return total;
 }
 
-/** Wyłącznie publiczne RPC pod anon, niezależnie od sesji osoby przeglądającej. */
+/**
+ * Wyłącznie publiczne RPC. Domyślnie pod anon; `viewerId` (UUID ze zweryfikowanej sesji
+ * serwera, nigdy z URL/formularza) uruchamia te same RPC pod tożsamością kandydata, żeby
+ * pominąć oferty firm, które zablokował (#97, 0091). Wynik gościa się nie zmienia.
+ */
 export async function getPublicJobs(
   pool: TransactionPool,
   params: GetJobsParams,
+  viewerId: string | null = null,
 ): Promise<PublicJobsResult> {
   const page = positiveInteger(params.page, 1, Number.MAX_SAFE_INTEGER);
   const pageSize = positiveInteger(params.pageSize, 12, 100);
   const values = filterValues(params);
-  return withUserTransaction(pool, null, async (transaction) => {
+  return withUserTransaction(pool, viewerId, async (transaction) => {
     // to_jsonb zachowuje daty jako tekst ISO oraz liczby/NULL/tablice, bez parserów
     // typów pg zmieniających timestamptz/date na obiekty Date w starej warstwie UI.
     const result = (await transaction.query(
@@ -130,8 +135,9 @@ type FilterFacetRow = { dimension: unknown; key: unknown; total: unknown };
 export async function getPublicJobFilterFacets(
   pool: TransactionPool,
   params: GetJobsParams,
+  viewerId: string | null = null,
 ): Promise<JobFilterFacets> {
-  return withUserTransaction(pool, null, async (transaction) => {
+  return withUserTransaction(pool, viewerId, async (transaction) => {
     const result = (await transaction.query(
       `SELECT dimension, key, to_jsonb(total) AS total
        FROM public.get_public_job_filter_facets(${FILTER_ARGUMENTS})`,
