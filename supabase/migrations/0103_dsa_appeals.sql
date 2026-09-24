@@ -774,7 +774,6 @@ declare
   v_title     text;
   v_owner     uuid;
   v_locale    text;
-  v_template  text;
 begin
   if v_uid is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
   if not public.is_admin() then raise exception 'PERMISSION_DENIED' using errcode = '42501'; end if;
@@ -930,7 +929,6 @@ begin
       'restorationId', v_rest, 'sameReviewer', v_same)));
 
   -- Osoba odwołująca się: wynik z uzasadnieniem w JEJ języku, bez danych drugiej strony.
-  v_template := case when p_outcome = 'upheld' then 'appealUpheld' else 'appealReversed' end;
   if v_appeal.appellant_role = 'author' then
     if v_appeal.appellant_id is not null then
       insert into public.notifications (profile_id, type, title, entity_type, entity_id, data)
@@ -938,7 +936,8 @@ begin
                 v_dec.company_id,
                 jsonb_build_object('kind', 'moderation', 'decision', 'appeal_' || p_outcome,
                                    'decisionId', v_dec.id, 'appealId', v_appeal.id));
-      perform public.enqueue_email(v_appeal.appellant_id, v_template, 'moderation_appeal', v_appeal.id,
+      perform public.enqueue_email(v_appeal.appellant_id,
+        case when p_outcome = 'upheld' then 'appealUpheld' else 'appealReversed' end, 'moderation_appeal', v_appeal.id,
         'appeal-decided-' || v_appeal.id::text,
         jsonb_strip_nulls(jsonb_build_object(
           'appealReference', v_appeal.reference, 'decisionReference', v_dec.reference,
@@ -952,7 +951,8 @@ begin
       v_locale := public.resolve_recipient_locale(v_report.reporter_id);
     end if;
     perform public.enqueue_email_to_address(
-      v_report.reporter_email::text, v_locale, v_report.reporter_id, v_template, 'moderation_appeal',
+      v_report.reporter_email::text, v_locale, v_report.reporter_id,
+      case when p_outcome = 'upheld' then 'appealUpheld' else 'appealReversed' end, 'moderation_appeal',
       v_appeal.id, 'appeal-decided-' || v_appeal.id::text,
       jsonb_strip_nulls(jsonb_build_object(
         'appealReference', v_appeal.reference, 'caseNumber', v_report.case_number,
@@ -1188,7 +1188,7 @@ returns jsonb language plpgsql stable security definer set search_path = public,
 declare
   v_result jsonb;
 begin
-  if p_from is null or p_to is null or p_from >= p_to or p_to - p_from > interval '5 years 1 day' then
+  if p_from is null or p_to is null or p_from >= p_to or p_to - p_from > interval '1830 days' then
     raise exception 'VALIDATION_FAILED: okres raportu' using errcode = '22023';
   end if;
 
@@ -1262,7 +1262,7 @@ returns table (
   appeal_status text, restored boolean
 ) language plpgsql stable security definer set search_path = public, pg_temp as $$
 begin
-  if p_from is null or p_to is null or p_from >= p_to or p_to - p_from > interval '5 years 1 day' then
+  if p_from is null or p_to is null or p_from >= p_to or p_to - p_from > interval '1830 days' then
     raise exception 'VALIDATION_FAILED: okres raportu' using errcode = '22023';
   end if;
   return query

@@ -14,3 +14,7 @@ export function companyFocusKey(id: string): string {
 export function reportFocusKey(id: string): string {
   return `report-${id}`;
 }
+
+export function appealFocusKey(id: string): string {
+  return `appeal-${id}`;
+}

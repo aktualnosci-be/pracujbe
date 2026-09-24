@@ -31,6 +31,8 @@ const ROUTES = [
   '/admin/zgloszenia',
   '/admin/uzytkownicy',
   '/admin/dziennik',
+  '/admin/odwolania',
+  '/admin/raport-dsa',
 ];
 
 for (const viewport of [

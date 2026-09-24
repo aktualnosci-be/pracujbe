@@ -264,3 +264,72 @@ firmy), następnie w nowej migracji zdejmij blokady (z wyłączonymi triggerami
 `get_company_moderation_decisions`, triggery i funkcje strażników, tabele
 `moderation_restorations` i `moderation_decisions`, nowe kolumny `jobs`/`companies`/`reports`/
 `report_events`. Na koniec przywróć check `report_events.event_type` i `get_report_case` z 0094.
+
+## Odwołania, terminy, retencja i raport przejrzystości DSA
+
+Migracja `supabase/migrations/0103_dsa_appeals.sql` (#43; numer tymczasowy — ostateczny nadaje
+koordynator kolejki migracji). Buduje na sprawie z 0094 i decyzji z 0099.
+
+- **Odwołanie (`moderation_appeals`, niezmienne).** Jedno na decyzję, numer
+  `APL-XXXX-XXXX-XXXX`, uzasadnienie 20–2000 znaków, klucz idempotencji, termin rozpatrzenia
+  (`due_at`). Autor treści (aktywny owner/admin firmy) odwołuje się od ograniczenia przez
+  `submit_moderation_appeal(decision, key, grounds)` pod sesją; zgłaszający — od braku działań,
+  numerem sprawy i kodem dostępu przez `submit_report_appeal` (EXECUTE tylko `service_role`,
+  woła je Server Action za limiterem). Cudza decyzja = `NOT_FOUND`. Żadna strona nie widzi
+  danych drugiej: autor dostaje swoje decyzje i odwołania (`get_company_moderation_decisions`
+  z polami odwołania), zgłaszający — wynik i własne odwołanie (`get_report_case`); zdarzenia
+  odwołań nie są widoczne w RLS historii sprawy dla zgłaszającego.
+- **Termin od poinformowania.** `moderation_informed_at(decision)` = pierwszy faktycznie wysłany
+  e-mail o decyzji (`sent`/`delivered`/`opened`/`clicked`; odbicie się nie liczy) albo odczyt
+  powiadomienia w panelu (autor). Koniec terminu = poinformowanie + `dsa_appeal_window()`.
+  Dopóki strona nie została poinformowana, termin nie biegnie. Stan drogi odwołania:
+  `moderation_appealable` (`OK`, `APPEAL_EXISTS`, `APPEAL_WINDOW_CLOSED`, `INVALID_TRANSITION`).
+- **Rozpatrzenie.** `admin_decide_appeal(appeal, expected_status, outcome, reasoning,
+  new_decision, ground_type, ground_reference)`. Autor decyzji nie rozpatruje odwołania, jeśli
+  jest inny aktywny administrator (`REVIEWER_CONFLICT`); gdy go nie ma, zapisuje się
+  `same_reviewer = true` (widoczne w raporcie). Odwołanie autora uwzględnione → cofnięcie
+  ograniczenia wspólnym rdzeniem `moderation_restore_core` (ten sam co
+  `admin_restore_moderation`, bez dubla e-maila „przywrócono”). Odwołanie zgłaszającego
+  uwzględnione → nowa decyzja ograniczająca (`moderation_decisions.appeal_id`) z egzekucją
+  i powiadomieniem autora; sprawa przechodzi `dismissed → resolved` i wskazuje nową decyzję
+  (strażnik `reports_decision_guard` dopuszcza to tylko w tej ścieżce). Historia
+  (`appeal_submitted`/`appeal_decided`), audyt (`moderation.appeal_submitted`/`_decided`),
+  e-maile `appealReceived`/`appealUpheld`/`appealReversed` w języku odbiorcy. Błąd dowolnej
+  części cofa całość.
+- **Retencja.** `dsa_retention_cases()` wyznacza dla zamkniętej sprawy koniec drogi odwołania
+  (każda decyzja: odwołanie rozpatrzone, ograniczenie cofnięte albo termin od poinformowania
+  upłynął); sprawa z odwołaniem w toku albo z niepoinformowaną stroną czeka. Po
+  `dsa_case_retention()` od tej chwili sprawa kwalifikuje się do anonimizacji.
+  `dsa_retention_report()` to podgląd bez zapisu (panel `/admin/raport-dsa`);
+  `dsa_retention_run(dry_run)` (tylko `service_role`) zapisuje przebieg w `dsa_retention_runs`
+  i przy `dry_run = false` anonimizuje: kontakt zgłaszającego, opis, adres, snapshot, kod
+  dostępu, fakty decyzji, powody przywróceń, uzasadnienia odwołań i payload e-maili (wiadomość
+  z kolejki → `failed`). Wiersze, kategorie, rodzaje, daty i numery zostają — agregaty raportu
+  przetrwają retencję. Audyt `dsa.retention_run`.
+- **Raport przejrzystości.** `dsa_transparency_report(from, to)` (agregaty: zgłoszenia wg
+  kategorii i rodzaju treści, decyzje wg rodzaju i podstawy, mediana czasu do decyzji,
+  w terminie, automatyzacja, odwołania wg strony i wyniku, odwrócone decyzje, przywrócenia)
+  i `dsa_statements_export(from, to)` (wiersz na decyzję bez danych osobowych i faktów) —
+  tylko `service_role`; panel i `GET /api/admin/dsa-report?od=&do=&format=csv|json` po
+  `requireAdmin`.
+
+**Wartości tymczasowe (#40):** okno odwołania 6 miesięcy, termin rozpatrzenia 14 dni, retencja
+12 miesięcy; zakres publikacji raportu i przekazywania do bazy DSA. Harmonogram
+`dsa_retention_run(false)` — dopiero po ich zatwierdzeniu (dziś tylko ręcznie).
+
+Dowód: `supabase/tests/rls.sql` sekcja APL43 — m.in. termin od poinformowania (e-mail w kolejce,
+odbity, doręczony 7 mies. temu), rozdzielenie rozpatrującego z kontrolą (jedyny admin),
+wstrzyknięta awaria przywrócenia, ponowne zastosowanie skutku, kontrola ujemna „naiwnej”
+retencji od zamknięcia sprawy, agregaty niezmienione po anonimizacji.
+
+### Rollback
+
+Odwołania są dowodem — przed rollbackiem wyeksportuj `moderation_appeals` i
+`dsa_retention_runs`. Wycofaj kod (formularze odwołań, `/admin/odwolania`, `/admin/raport-dsa`,
+trasa eksportu), potem w nowej migracji: usuń funkcje z 0103, przywróć z 0099
+`admin_restore_moderation`, `reports_decision_guard`, `moderation_append_only`,
+`get_company_moderation_decisions`, `get_report_case`, check `report_events.event_type`
+i unikat `moderation_decisions(report_id)`; z 0094 `reports_notice_immutable`,
+`reports_dsa_notice_complete`, politykę `report_events_select_own`; usuń tabele
+`dsa_retention_runs`, `moderation_appeals` i nowe kolumny. Zanonimizowanych danych rollback
+nie przywraca.

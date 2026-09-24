@@ -53,6 +53,11 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
     case 'moderationCompanySuspended':
     case 'moderationRestored':
       return '/employer/firma';
+    case 'appealReceived':
+    case 'appealUpheld':
+    case 'appealReversed':
+      // #43: autor wraca do danych firmy, zgłaszający — na stronę sprawy.
+      return payload?.['appellantRole'] === 'author' ? '/employer/firma' : '/zglos-tresc/sprawa';
     case 'reportDecisionActioned':
     case 'reportDecisionNoAction':
       // #42: bez kodu dostępu (baza zna tylko jego skrót) — zgłaszający wpisuje go sam.
