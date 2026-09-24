@@ -6,6 +6,8 @@ import { loadMyCompanyBlocks } from '@/lib/data/company-blocks';
 import { CompanyBlocksSettings } from '@/components/settings/CompanyBlocksSettings';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
+import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
+import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
  * Panel kandydata — Ustawienia (preferencje powiadomień, Etap 6; zablokowane firmy, #97).
@@ -41,16 +43,14 @@ export default async function CandidateSettingsPage({
 
   const t = await getTranslations({ locale, namespace: 'settings' });
   const tBlocks = await getTranslations({ locale, namespace: 'companyBlocks' });
+  const tDash = await getTranslations({ locale, namespace: 'dashboard' });
   const [load, blocks] = await Promise.all([loadNotificationPreferences(), loadMyCompanyBlocks()]);
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
-      </header>
+    <div className="min-w-0 max-w-3xl">
+      <CandidatePageHeader eyebrow={tDash('candidatePlaceEyebrow')} title={t('title')} intro={t('subtitle')} />
 
-      <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
+      <section className={PAPER}>
         {load.status === 'ready' ? (
           <NotificationPreferencesForm defaultValues={load.preferences} />
         ) : (
@@ -61,8 +61,8 @@ export default async function CandidateSettingsPage({
       {blocks.status === 'ready' ? (
         <CompanyBlocksSettings initialBlocks={blocks.blocks} />
       ) : (
-        <section aria-labelledby="company-blocks-title" className="rounded-lg border border-border bg-card p-5 sm:p-6">
-          <h2 id="company-blocks-title" className="text-lg font-semibold text-foreground">
+        <section aria-labelledby="company-blocks-title" className={PAPER}>
+          <h2 id="company-blocks-title" className={H2_EXTENDED}>
             {tBlocks('sectionTitle')}
           </h2>
           <p role="alert" className="mt-2 text-sm text-error">

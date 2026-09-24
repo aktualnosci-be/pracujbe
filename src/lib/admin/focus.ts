@@ -15,6 +15,10 @@ export function reportFocusKey(id: string): string {
   return `report-${id}`;
 }
 
+export function emailSuppressionFocusKey(id: string): string {
+  return `email-suppression-${id}`;
+}
+
 export function appealFocusKey(id: string): string {
   return `appeal-${id}`;
 }

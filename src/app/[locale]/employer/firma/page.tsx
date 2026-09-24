@@ -8,6 +8,19 @@ import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { CompanyLoadError } from '@/components/employer/CompanyLoadError';
 import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
 import { CompanyReverifyButton } from '@/components/employer/CompanyReverifyButton';
+import {
+  EYEBROW,
+  H1,
+  H2_EXTENDED,
+  ICON_BOX,
+  INFO_LABEL,
+  INFO_PAIRS,
+  INFO_VALUE,
+  INTRO,
+  PANEL,
+  PAPER,
+} from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * Panel pracodawcy — Firma (Etap 4).
@@ -76,25 +89,18 @@ export default async function EmployerCompanyPage({
       : null;
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <header className="overflow-hidden rounded-3xl bg-foreground px-5 py-7 text-background sm:px-8 sm:py-9">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-background/70">
-          {t('title')}
-        </p>
-        <div className="mt-4 flex min-w-0 flex-wrap items-center gap-4">
+    <div className="min-w-0 max-w-4xl space-y-[22px]">
+      <header className="min-w-0">
+        <p className={EYEBROW}>{t('title')}</p>
+        <div className="flex min-w-0 flex-wrap items-center gap-4">
           {company ? (
-            <span
-              className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-xl font-bold text-primary-foreground"
-              aria-hidden="true"
-            >
+            <span className={ICON_BOX} aria-hidden="true">
               {company.name.trim().charAt(0).toLocaleUpperCase(locale) || '•'}
             </span>
           ) : null}
           <div className="min-w-0 flex-1">
-            <h1 className="break-words text-2xl font-bold tracking-tight sm:text-3xl">
-              {company?.name || t('title')}
-            </h1>
-            <p className="mt-1 text-sm text-background/80">
+            <h1 className={H1}>{company?.name || t('title')}</h1>
+            <p className={INTRO}>
               {companyLoad.status === 'error'
                 ? t('loadErrorHint')
                 : company
@@ -126,35 +132,21 @@ export default async function EmployerCompanyPage({
           ) : null}
 
           {/* Dane read-only (nieedytowalne przez pracodawcę: identyfikator, status, weryfikacja). */}
-          <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
-            <h2 className="text-base font-semibold text-foreground">
-              {t('detailsTitle')}
-            </h2>
-            <dl className="mt-5 grid grid-cols-1 gap-px overflow-hidden rounded-2xl bg-border sm:grid-cols-2">
-              <div className="min-w-0 bg-card p-4 sm:p-5">
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {t('slug')}
-                </dt>
-                <dd className="mt-2 break-all text-base font-medium text-foreground">
-                  {company.slug || '—'}
-                </dd>
+          <section className={PAPER}>
+            <h2 className={H2_EXTENDED}>{t('detailsTitle')}</h2>
+            <dl className={INFO_PAIRS}>
+              <div className="min-w-0">
+                <dt className={INFO_LABEL}>{t('slug')}</dt>
+                <dd className={cn(INFO_VALUE, 'break-all')}>{company.slug || '—'}</dd>
               </div>
-              <div className="min-w-0 bg-card p-4 sm:p-5">
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {t('statusLabel')}
-                </dt>
-                <dd className="mt-2 break-words text-base font-medium text-foreground">
-                  {statusLabel}
-                </dd>
+              <div className="min-w-0">
+                <dt className={INFO_LABEL}>{t('statusLabel')}</dt>
+                <dd className={INFO_VALUE}>{statusLabel}</dd>
               </div>
               {verifiedLabel ? (
-                <div className="min-w-0 bg-card p-4 sm:p-5">
-                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {t('verifiedAt')}
-                  </dt>
-                  <dd className="mt-2 break-words text-base font-medium text-foreground">
-                    {verifiedLabel}
-                  </dd>
+                <div className="min-w-0">
+                  <dt className={INFO_LABEL}>{t('verifiedAt')}</dt>
+                  <dd className={INFO_VALUE}>{verifiedLabel}</dd>
                 </div>
               ) : null}
             </dl>
@@ -162,10 +154,8 @@ export default async function EmployerCompanyPage({
 
           {/* Edycja danych podstawowych (nazwa, VAT) — status pozostaje po stronie admina. */}
           {company.canEdit ? (
-            <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
-              <h2 className="text-base font-semibold text-foreground">
-                {t('editTitle')}
-              </h2>
+            <section className={PAPER}>
+              <h2 className={H2_EXTENDED}>{t('editTitle')}</h2>
               <div className="mt-4">
                 <CompanyForm
                   mode="edit"
@@ -178,14 +168,10 @@ export default async function EmployerCompanyPage({
               </div>
             </section>
           ) : (
-            <p className="rounded-3xl border border-border bg-card p-5 text-base text-muted-foreground sm:p-7">
-              {t('editOwnerOnly')}
-            </p>
+            <p className={cn(PANEL, 'text-sm text-muted-foreground')}>{t('editOwnerOnly')}</p>
           )}
 
-          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            {t('verificationNote')}
-          </p>
+          <p className={INTRO}>{t('verificationNote')}</p>
         </>
       ) : null}
     </div>

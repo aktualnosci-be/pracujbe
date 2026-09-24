@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { CompanyForm } from '@/components/employer/CompanyForm';
+import { DEMO_NOTE, EYEBROW, H1, INTRO, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
  * Panel pracodawcy — kolejna firma (#403). Zalogowany pracodawca zakłada następną firmę
@@ -32,16 +33,15 @@ export default async function EmployerAddCompanyPage({
   const tc = await getTranslations({ locale, namespace: 'company' });
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="min-w-0 max-w-4xl space-y-[22px]">
       <header className="min-w-0">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('addCompanyTitle')}</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('addCompanyDesc')}</p>
+        <p className={EYEBROW}>{tc('title')}</p>
+        <h1 className={H1}>{t('addCompanyTitle')}</h1>
+        <p className={INTRO}>{t('addCompanyDesc')}</p>
       </header>
-      <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
-        <p className="text-sm text-muted-foreground">{tc('verificationNote')}</p>
-        <div className="mt-4">
-          <CompanyForm mode="add" />
-        </div>
+      <section className={PAPER}>
+        <p className={DEMO_NOTE}>{tc('verificationNote')}</p>
+        <CompanyForm mode="add" />
       </section>
     </div>
   );

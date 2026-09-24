@@ -16,9 +16,13 @@
     "test:e2e": "playwright test",
     "test:e2e:real": "node scripts/test-e2e-real.mjs",
     "test:rls": "bash scripts/test-rls.sh",
+    "test:backup": "bash scripts/db/test-backup.sh",
+    "db:search-benchmark": "bash scripts/db/search-benchmark.sh",
     "test:seed": "bash scripts/test-seed.sh",
     "db:migrate:production": "node scripts/db/production-migrations.mjs",
     "db:logins": "node scripts/db/runtime-logins.mjs",
+    "esco:import": "node scripts/esco/esco-import.mjs",
+    "test:esco": "node scripts/esco/test-esco-import.mjs",
     "verify": "npm run lint && npm run typecheck && npm run test",
     "format": "prettier --write ."
   },

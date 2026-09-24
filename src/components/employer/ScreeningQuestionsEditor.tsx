@@ -1,5 +1,6 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
@@ -23,6 +24,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  BTN_RESET,
+  BTN_SECONDARY,
+  BTN_SMALL,
+  CHECKBOX,
+  FORM_ERROR,
+  FORM_FIELD,
+  FORM_INPUT,
+  FORM_LABEL_TEXT,
+  FORM_SELECT,
+  FORM_WIDE,
+  H3_EXTENDED,
+  P_EXTENDED,
+  PANEL,
+} from '@/components/dashboard/panel-styles';
 
 /**
  * Edytor pytań screeningowych w kreatorze oferty (#101): typ, „wymagane”, kolejność, treść
@@ -147,14 +163,16 @@ export function ScreeningQuestionsEditor({
   const languageName = (locale: Locale) => localeNames[locale];
 
   return (
-    <div id="job-screeningQuestions" className="space-y-3 border-t border-border pt-6">
-      <div className="space-y-1">
-        <h3 className="text-base font-semibold text-foreground">{t('screeningTitle')}</h3>
-        <p className="text-sm text-muted-foreground">
+    // Prototyp nie ma edytora pytań — złożony z prymitywów `.extended h3`, `.panel`,
+    // `.demo-form` i `.btn.secondary`; w siatce `.form-grid` zajmuje całą szerokość.
+    <div id="job-screeningQuestions" className={cn(FORM_WIDE, 'min-w-0 space-y-4 border-t border-border pt-[27px]')}>
+      <div className="space-y-1.5">
+        <h3 className={`${H3_EXTENDED} mt-0`}>{t('screeningTitle')}</h3>
+        <p className={P_EXTENDED}>
           {t('screeningHint', { max: SCREENING_LIMITS.questions })}
         </p>
         {readOnly ? (
-          <p className="text-sm text-muted-foreground" data-testid="screening-read-only">
+          <p className={P_EXTENDED} data-testid="screening-read-only">
             {t('screeningReadOnly')}
           </p>
         ) : null}
@@ -162,7 +180,7 @@ export function ScreeningQuestionsEditor({
 
       {readOnly ? (
         value.length > 0 ? (
-          <ol className="list-inside list-decimal space-y-1 text-sm text-foreground">
+          <ol className={cn(P_EXTENDED, 'list-inside list-decimal space-y-1 break-words text-foreground')}>
             {value.map((question, index) => (
               <li key={index}>
                 {localizedText(question.prompt, contentLocale, contentLocale)}{' '}
@@ -174,7 +192,7 @@ export function ScreeningQuestionsEditor({
             ))}
           </ol>
         ) : (
-          <p className="text-sm text-muted-foreground">{t('screeningEmpty')}</p>
+          <p className={P_EXTENDED}>{t('screeningEmpty')}</p>
         )
       ) : (
         <>
@@ -187,15 +205,15 @@ export function ScreeningQuestionsEditor({
             return (
               <fieldset
                 key={index}
-                className="space-y-3 rounded-lg border border-border p-3 sm:p-4"
+                className={cn(PANEL, 'space-y-[18px]')}
                 data-testid={`screening-question-${number}`}
               >
-                <legend className="px-1 text-sm font-semibold text-foreground">
+                <legend className={cn(FORM_LABEL_TEXT, 'px-1.5 text-[15px]')}>
                   {t('screeningQuestion', { n: number })}
                 </legend>
 
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <div className="w-full space-y-1.5 sm:w-60">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:gap-5">
+                  <div className={cn(FORM_FIELD, 'w-full sm:w-60')}>
                     <Label htmlFor={`job-sq-${index}-type`}>{t('screeningType')}</Label>
                     <Select
                       value={question.type}
@@ -213,6 +231,7 @@ export function ScreeningQuestionsEditor({
                       }}
                     >
                       <SelectTrigger
+                        className={FORM_SELECT}
                         id={`job-sq-${index}-type`}
                         aria-invalid={typeError ? true : undefined}
                         aria-describedby={typeError ? `job-sq-${index}-type-error` : undefined}
@@ -228,28 +247,30 @@ export function ScreeningQuestionsEditor({
                       </SelectContent>
                     </Select>
                     {typeError ? (
-                      <p id={`job-sq-${index}-type-error`} className="text-sm text-error">
+                      <p id={`job-sq-${index}-type-error`} className={FORM_ERROR}>
                         {typeError.text}
                       </p>
                     ) : null}
                   </div>
-                  <div className="flex min-h-10 items-center gap-2.5">
+                  <div className="flex min-h-12 items-center gap-[9px]">
                     <Checkbox
                       id={`job-sq-${index}-required`}
                       checked={question.required}
                       onCheckedChange={(checked) => update(index, { required: checked === true })}
+                      className={cn(CHECKBOX, 'rounded-[4px]')}
                     />
-                    <Label htmlFor={`job-sq-${index}-required`} className="text-sm font-normal">
+                    <Label htmlFor={`job-sq-${index}-required`} className="text-[13px] font-normal leading-[1.6]">
                       {t('screeningRequired')}
                     </Label>
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor={promptId}>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={promptId} className={FORM_LABEL_TEXT}>
                     {t('screeningPrompt', { language: languageName(contentLocale) })}
                   </Label>
                   <Input
+                    className={FORM_INPUT}
                     id={promptId}
                     value={question.prompt[contentLocale] ?? ''}
                     placeholder={t('screeningPromptPlaceholder')}
@@ -260,14 +281,14 @@ export function ScreeningQuestionsEditor({
                     aria-describedby={promptError ? `${promptId}-error` : undefined}
                   />
                   {promptError ? (
-                    <p id={`${promptId}-error`} className="text-sm text-error">
+                    <p id={`${promptId}-error`} className={FORM_ERROR}>
                       {promptError.text}
                     </p>
                   ) : null}
                 </div>
 
                 {question.type === 'single_choice' ? (
-                  <div className="space-y-2">
+                  <div className="space-y-[18px]">
                     {question.options.map((option, optionIndex) => {
                       const optionId = fieldOptionId(index, optionIndex, contentLocale, contentLocale);
                       const optionError = errorFor(
@@ -275,12 +296,13 @@ export function ScreeningQuestionsEditor({
                         `${index}.options.${optionIndex}.${contentLocale}`,
                       );
                       return (
-                        <div key={optionIndex} className="space-y-1">
-                          <Label htmlFor={optionId}>
+                        <div key={optionIndex} className={FORM_FIELD}>
+                          <Label htmlFor={optionId} className={FORM_LABEL_TEXT}>
                             {t('screeningOption', { n: optionIndex + 1, language: languageName(contentLocale) })}
                           </Label>
-                          <div className="flex gap-2">
+                          <div className="flex min-w-0 gap-3">
                             <Input
+                              className={FORM_INPUT}
                               id={optionId}
                               value={option.label[contentLocale] ?? ''}
                               onChange={(event) =>
@@ -299,6 +321,7 @@ export function ScreeningQuestionsEditor({
                               type="button"
                               variant="outline"
                               size="icon"
+                              className={`${BTN_SECONDARY} ${BTN_RESET} min-w-12 shrink-0 px-0`}
                               aria-label={t('screeningRemoveOption', { n: optionIndex + 1 })}
                               disabled={question.options.length <= SCREENING_LIMITS.optionsMin}
                               onClick={() =>
@@ -311,7 +334,7 @@ export function ScreeningQuestionsEditor({
                             </Button>
                           </div>
                           {optionError ? (
-                            <p id={`${optionId}-error`} className="text-sm text-error">
+                            <p id={`${optionId}-error`} className={FORM_ERROR}>
                               {optionError.text}
                             </p>
                           ) : null}
@@ -323,6 +346,7 @@ export function ScreeningQuestionsEditor({
                       type="button"
                       variant="outline"
                       size="sm"
+                      className={`${BTN_SMALL} ${BTN_RESET} self-start`}
                       disabled={question.options.length >= SCREENING_LIMITS.optionsMax}
                       aria-describedby={countError ? `job-sq-${index}-options-error` : undefined}
                       onClick={() => update(index, { options: [...question.options, { label: {} }] })}
@@ -331,7 +355,7 @@ export function ScreeningQuestionsEditor({
                       {t('screeningAddOption')}
                     </Button>
                     {countError ? (
-                      <p id={`job-sq-${index}-options-error`} className="text-sm text-error">
+                      <p id={`job-sq-${index}-options-error`} className={FORM_ERROR}>
                         {countError.text}
                       </p>
                     ) : null}
@@ -344,20 +368,21 @@ export function ScreeningQuestionsEditor({
                     const open = (event.currentTarget as HTMLDetailsElement).open;
                     setOpenTranslations((current) => ({ ...current, [index]: open }));
                   }}
-                  className="rounded-md bg-soft p-3"
+                  className="rounded-[14px] bg-soft px-4 py-1"
                 >
-                  <summary className="cursor-pointer text-sm font-medium text-foreground">
+                  <summary className="flex min-h-11 cursor-pointer items-center text-[13px] font-semibold text-foreground">
                     {t('screeningTranslations')}
                   </summary>
-                  <div className="mt-3 space-y-3">
+                  <div className="mb-4 mt-2 space-y-[18px]">
                     {others.map((locale) => {
                       const id = fieldPromptId(index, locale, contentLocale);
                       const error = errorFor(`${index}.prompt.${locale}`);
                       return (
-                        <div key={locale} className="space-y-2">
-                          <div className="space-y-1">
-                            <Label htmlFor={id}>{t('screeningPrompt', { language: languageName(locale) })}</Label>
+                        <div key={locale} className="space-y-[18px]">
+                          <div className={FORM_FIELD}>
+                            <Label htmlFor={id} className={FORM_LABEL_TEXT}>{t('screeningPrompt', { language: languageName(locale) })}</Label>
                             <Input
+                              className={FORM_INPUT}
                               id={id}
                               value={question.prompt[locale] ?? ''}
                               onChange={(event) =>
@@ -367,7 +392,7 @@ export function ScreeningQuestionsEditor({
                               aria-describedby={error ? `${id}-error` : undefined}
                             />
                             {error ? (
-                              <p id={`${id}-error`} className="text-sm text-error">
+                              <p id={`${id}-error`} className={FORM_ERROR}>
                                 {error.text}
                               </p>
                             ) : null}
@@ -377,11 +402,12 @@ export function ScreeningQuestionsEditor({
                                 const optionId = fieldOptionId(index, optionIndex, locale, contentLocale);
                                 const optionError = errorFor(`${index}.options.${optionIndex}.${locale}`);
                                 return (
-                                  <div key={optionIndex} className="space-y-1 pl-3">
-                                    <Label htmlFor={optionId}>
+                                  <div key={optionIndex} className={cn(FORM_FIELD, 'pl-3')}>
+                                    <Label htmlFor={optionId} className={FORM_LABEL_TEXT}>
                                       {t('screeningOption', { n: optionIndex + 1, language: languageName(locale) })}
                                     </Label>
                                     <Input
+                                      className={FORM_INPUT}
                                       id={optionId}
                                       value={option.label[locale] ?? ''}
                                       onChange={(event) =>
@@ -397,7 +423,7 @@ export function ScreeningQuestionsEditor({
                                       aria-describedby={optionError ? `${optionId}-error` : undefined}
                                     />
                                     {optionError ? (
-                                      <p id={`${optionId}-error`} className="text-sm text-error">
+                                      <p id={`${optionId}-error`} className={FORM_ERROR}>
                                         {optionError.text}
                                       </p>
                                     ) : null}
@@ -411,11 +437,12 @@ export function ScreeningQuestionsEditor({
                   </div>
                 </details>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2.5">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
+                    className={`${BTN_SMALL} ${BTN_RESET} min-w-11`}
                     disabled={index === 0}
                     onClick={() => move(index, -1)}
                     aria-label={t('screeningMoveUp', { n: number })}
@@ -426,6 +453,7 @@ export function ScreeningQuestionsEditor({
                     type="button"
                     variant="outline"
                     size="sm"
+                    className={`${BTN_SMALL} ${BTN_RESET} min-w-11`}
                     disabled={index === value.length - 1}
                     onClick={() => move(index, 1)}
                     aria-label={t('screeningMoveDown', { n: number })}
@@ -436,6 +464,7 @@ export function ScreeningQuestionsEditor({
                     type="button"
                     variant="outline"
                     size="sm"
+                    className={`${BTN_SMALL} ${BTN_RESET} min-w-11`}
                     onClick={() => onChange(value.filter((_, i) => i !== index))}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -449,13 +478,14 @@ export function ScreeningQuestionsEditor({
           <Button
             type="button"
             variant="outline"
+            className={`${BTN_SECONDARY} ${BTN_RESET}`}
             disabled={value.length >= SCREENING_LIMITS.questions}
             onClick={() => onChange([...value, emptyQuestion()])}
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t('screeningAdd')}
           </Button>
-          {listError ? <p className="text-sm text-error">{listError}</p> : null}
+          {listError ? <p className={FORM_ERROR}>{listError}</p> : null}
         </>
       )}
     </div>

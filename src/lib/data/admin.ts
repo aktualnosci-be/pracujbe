@@ -24,6 +24,7 @@ import {
   normalizeAdminSearch,
   parseAuditAction,
   parseAuditEntity,
+  parseEmailSuppressionFilter,
   parseReportFilter,
   parseReportKindFilter,
   parseUserRoleFilter,
@@ -1097,6 +1098,8 @@ export async function listAuditLogs(
           }
         } else if (entityType === 'report') {
           entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
+        } else if (entityType === 'email_suppression') {
+          entityHref = { pathname: '/admin/poczta', query: { status: 'all' } };
         }
         return {
           id: asString(row['id']),
@@ -1108,7 +1111,9 @@ export async function listAuditLogs(
           statusBefore: statusOf(row['before_data']),
           statusAfter: statusOf(row['after_data']),
           reason:
-            entityType === 'company' || asString(row['action']) === 'moderation.restored'
+            entityType === 'company' ||
+            entityType === 'email_suppression' ||
+            asString(row['action']) === 'moderation.restored'
               ? asNullableString(asRecord(row['after_data'])['reason'])
               : null,
           actorId,
@@ -1373,6 +1378,134 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
     };
   } catch (error) {
     captureError(error, { area: 'admin.getCompanyDetail' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Blokady adresów e-mail (#44) — podgląd i zdjęcie blokady
+ * ------------------------------------------------------------------------- */
+
+export interface AdminEmailSuppressionRow {
+  id: string;
+  email: string;
+  /** `hard_bounce` / `complaint` — UI mapuje na etykietę i18n. */
+  reason: string;
+  createdAt: string | null;
+  liftedAt: string | null;
+  liftReason: string | null;
+  liftedByName: string | null;
+}
+
+export interface AdminEmailSuppressionsQuery extends AdminListQuery {
+  status?: string | null;
+}
+
+const DEMO_EMAIL_SUPPRESSIONS: AdminEmailSuppressionRow[] = [
+  {
+    id: 'demo-s1',
+    email: 'nieaktywny.adres@example.com',
+    reason: 'hard_bounce',
+    createdAt: '2025-02-10T08:15:00.000Z',
+    liftedAt: null,
+    liftReason: null,
+    liftedByName: null,
+  },
+  {
+    id: 'demo-s2',
+    email: 'skarga@example.com',
+    reason: 'complaint',
+    createdAt: '2025-02-08T17:40:00.000Z',
+    liftedAt: null,
+    liftReason: null,
+    liftedByName: null,
+  },
+  {
+    id: 'demo-s3',
+    email: 'poprawiony.adres@example.com',
+    reason: 'hard_bounce',
+    createdAt: '2025-01-20T11:05:00.000Z',
+    liftedAt: '2025-01-22T09:30:00.000Z',
+    liftReason: 'Użytkownik poprawił skrzynkę i potwierdził adres.',
+    liftedByName: 'Zespół Pracuj.be',
+  },
+];
+
+/**
+ * Lista blokad adresów (#44): filtr aktywne/zdjęte/wszystkie (domyślnie aktywne),
+ * wyszukiwanie po adresie, stronicowanie kursorem. Bez env → DEMO.
+ */
+export async function listEmailSuppressions(
+  query: AdminEmailSuppressionsQuery = {},
+): Promise<AdminListResult<AdminEmailSuppressionRow>> {
+  const filter = parseEmailSuppressionFilter(query.status);
+  const q = normalizeAdminSearch(query.q);
+  if (!isSupabaseConfigured()) {
+    return demoList(
+      DEMO_EMAIL_SUPPRESSIONS.filter(
+        (row) =>
+          (filter === 'all' || (filter === 'active') === (row.liftedAt === null)) &&
+          matchesSearch([row.email], q),
+      ),
+    );
+  }
+  await requireAdmin();
+
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const supabase = createAdminClient();
+
+    let builder = supabase
+      .from('email_suppressions')
+      .select('id, email, reason, created_at, lifted_at, lifted_by, lift_reason');
+    if (filter === 'active') builder = builder.is('lifted_at', null);
+    if (filter === 'lifted') builder = builder.not('lifted_at', 'is', null);
+    const orFilter = combineOrFilters(
+      q ? searchOrFilter(['email'], q) : null,
+      cursorFilterOf(query.cursor),
+    );
+    if (orFilter) builder = builder.or(orFilter);
+
+    const { data, error } = await builder
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(ADMIN_PAGE_SIZE + 1);
+    if (error) throw error;
+    const rows = asRows(data);
+
+    const adminIds = [
+      ...new Set(rows.map((r) => asString(r['lifted_by'])).filter((id) => id.length > 0)),
+    ];
+    const nameById = new Map<string, string>();
+    if (adminIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .in('id', adminIds);
+      if (profilesError) throw profilesError;
+      for (const profile of asRows(profiles)) {
+        nameById.set(asString(profile['id']), fullName(profile));
+      }
+    }
+
+    return toPage(
+      rows.map((row) => {
+        const liftedBy = asString(row['lifted_by']);
+        const name = liftedBy ? (nameById.get(liftedBy) ?? '') : '';
+        return {
+          id: asString(row['id']),
+          email: asString(row['email']),
+          reason: asString(row['reason']),
+          createdAt: asNullableString(row['created_at']),
+          liftedAt: asNullableString(row['lifted_at']),
+          liftReason: asNullableString(row['lift_reason']),
+          liftedByName: name.length > 0 ? name : null,
+        };
+      }),
+      (row) => row.createdAt,
+    );
+  } catch (error) {
+    captureError(error, { area: 'admin.listEmailSuppressions' });
     return { status: 'error' };
   }
 }
