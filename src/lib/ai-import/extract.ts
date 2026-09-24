@@ -22,7 +22,8 @@ import { CATEGORY_KEYS, CONTRACT_TYPES } from '@/lib/validation/candidate';
 
 export type ExtractionInput =
   | { kind: 'image'; mediaType: 'image/png' | 'image/jpeg' | 'image/webp'; base64: string }
-  | { kind: 'text'; text: string; sourceUrl: string };
+  /** `source` = sama nazwa hosta (`listingSourceLabel`), nigdy pełny URL (#500). */
+  | { kind: 'text'; text: string; source: string };
 
 export type ExtractorFailure = 'refused' | 'failed' | 'rateLimited';
 
@@ -45,6 +46,7 @@ export const EXTRACTION_SYSTEM_PROMPT = [
   '',
   'Rules:',
   '- Keep all extracted text in the original language of the advertisement. Do not translate.',
+  '- Do not copy personal data of individual people into any field: no names, e-mail addresses, phone numbers or home addresses of contact persons, recruiters or anyone else, and no national register, BIS, passport, identity card or other identification numbers. Markers such as [email removed], [phone removed] or [identifier removed] mean data was removed on purpose; leave them out.',
   '- Only use information present in the material. Never invent salaries, dates, requirements, benefits or contact details. Leave a field empty ("", "unknown" or []) when it is not stated.',
   '- List any field you filled by inference, or that is ambiguous or partly illegible, in uncertainFields.',
   `- category must be one of: ${CATEGORY_KEYS.join(', ')} (pick the closest; list it in uncertainFields when it is a judgement call).`,
@@ -58,11 +60,14 @@ export const EXTRACTION_SYSTEM_PROMPT = [
   '- Set isJobListing to false if the material is not a job advertisement.',
 ].join('\n');
 
-/** Neutralizuje próby zamknięcia/otwarcia znacznika `<listing>` w niezaufanym tekście. */
-export function wrapUntrustedText(text: string, sourceUrl: string): string {
+/**
+ * Neutralizuje próby zamknięcia/otwarcia znacznika `<listing>` w niezaufanym tekście. Źródło
+ * to wyłącznie nazwa hosta (bez ścieżki i parametrów — #500).
+ */
+export function wrapUntrustedText(text: string, source: string): string {
   const safe = text.replace(/<\s*\/?\s*listing\b[^>]*>/gi, '[tag removed]');
-  const safeUrl = sourceUrl.replace(/[<>"]/g, '');
-  return `<listing source="${safeUrl}">\n${safe}\n</listing>\n\nExtract the job advertisement above into the required JSON structure.`;
+  const safeSource = source.replace(/[^a-z0-9.\-]/gi, '');
+  return `<listing source="${safeSource}">\n${safe}\n</listing>\n\nExtract the job advertisement above into the required JSON structure.`;
 }
 
 /** Wiadomość użytkownika dla danego wejścia (osobno testowalna). */
@@ -76,7 +81,7 @@ export function buildUserContent(input: ExtractionInput): Anthropic.ContentBlock
       },
     ];
   }
-  return [{ type: 'text', text: wrapUntrustedText(input.text, input.sourceUrl) }];
+  return [{ type: 'text', text: wrapUntrustedText(input.text, input.source) }];
 }
 
 /** Produkcyjny ekstraktor: Messages API + structured output. */
@@ -172,8 +177,8 @@ export class FixtureJobExtractor implements JobExtractor {
       accommodation: 'no',
       transport: 'unknown',
       companyDescription: 'Logistiek dienstverlener met drie magazijnen in de haven van Antwerpen.',
-      contactEmail: '',
-      // Klucze spoza schematu — test, że serwer je odrzuca.
+      // Klucze spoza schematu — test, że serwer je odrzuca (także e-mail osoby kontaktowej, #500).
+      contactEmail: 'recruiter.jan@example.be',
       status: 'active',
       publish: true,
     };

@@ -14,6 +14,7 @@ import { expect, test, type Page } from '@playwright/test';
  *   nieprawidłowy token → komunikat; przejęcie bez sesji → logowanie z powrotem (z tokenem).
  * - pytania screeningowe (#101, oferta 1003): wymagane bez odpowiedzi blokują wysyłkę gościa
  *   przy pytaniu, po odpowiedzi zgłoszenie wychodzi.
+ * - #495: NISS w wiadomości → błąd serwera przy polu, fokus, treść zostaje, brak sukcesu.
  * Kontrola ujemna (lokalnie): bez `GuestApplyForm` w ApplyModal test „formularz gościa” pada.
  */
 
@@ -28,7 +29,7 @@ const BLOCKING = new Set(['critical', 'serious']);
 
 type Messages = {
   jobs: { applyNow: string };
-  apply: { submit: string; consent: string };
+  apply: { submit: string; consent: string; message: string; sensitiveIdHint: string };
   guestApply: {
     fullName: string;
     email: string;
@@ -38,7 +39,7 @@ type Messages = {
     invalidTitle: string;
     claimTitle: string;
     claimLogin: string;
-    error: { nameRequired: string; emailRequired: string; consentRequired: string };
+    error: { nameRequired: string; emailRequired: string; consentRequired: string; sensitiveIdNotAllowed: string };
   };
 };
 
@@ -124,6 +125,30 @@ test('pytania screeningowe (#101): gość musi odpowiedzieć na wymagane, potem 
 
   await page.locator(`#apply-q-${Q_YES_NO}`).check();
   await page.locator(`#apply-q-${Q_CHOICE}`).check();
+  await form.getByRole('button', { name: t.apply.submit }).click();
+  await expect(dialog.getByTestId('guest-apply-sent')).toBeVisible();
+});
+
+test('#495: NISS w wiadomości gościa — błąd przy polu, bez wysłania zgłoszenia', async ({ page }) => {
+  const { t, dialog, form } = await openGuestForm(page, 'pl', 1280);
+  await form.getByRole('textbox', { name: t.guestApply.fullName }).fill('Anna Nowak');
+  await form.getByRole('textbox', { name: t.guestApply.email }).fill('anna@example.com');
+  const message = form.getByRole('textbox', { name: t.apply.message });
+  // Syntetyczny numer z poprawną sumą kontrolną.
+  await message.fill('Mój NISS: 85.07.30-033.28');
+  await form.getByRole('checkbox', { name: t.apply.consent }).click();
+  await form.getByRole('button', { name: t.apply.submit }).click();
+
+  await expect(message).toHaveAttribute('aria-invalid', 'true');
+  await expect(message).toBeFocused();
+  await expect(message).toHaveAccessibleDescription(
+    `${t.guestApply.error.sensitiveIdNotAllowed} ${t.apply.sensitiveIdHint}`,
+  );
+  await expect(message).toHaveValue('Mój NISS: 85.07.30-033.28');
+  await expect(dialog.getByTestId('guest-apply-sent')).toHaveCount(0);
+
+  // Po usunięciu numeru zgłoszenie wychodzi.
+  await message.fill('Mogę zacząć od zaraz.');
   await form.getByRole('button', { name: t.apply.submit }).click();
   await expect(dialog.getByTestId('guest-apply-sent')).toBeVisible();
 });

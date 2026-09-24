@@ -22,7 +22,7 @@ Import wypełnia pola `JobWizard` (nazwy = pola formularza, `src/lib/ai-import/s
 | 6 | wymagania obowiązkowe, umiejętności obowiązkowe, lata doświadczenia | limity pozycji jak `JOB_ITEM_LIMITS` (#364) |
 | 7 | wymagania dodatkowe, umiejętności, języki (+poziom), certyfikaty, prawo jazdy | język bez poziomu → „podstawowy" + do sprawdzenia |
 | 8 | warunki, benefity, zakwaterowanie, transport | — |
-| 9 | opis firmy, e-mail kontaktowy | **zgoda na publikację nigdy nie jest ustawiana przez import** |
+| 9 | opis firmy | **zgoda na publikację nigdy nie jest ustawiana przez import**; e-mail kontaktowy wpisuje pracodawca ręcznie (#500) |
 
 Każdy krok przechodzi przez **te same schematy Zod** co ręczne wypełnianie (`step1Schema` …
 `step9DraftSchema`). Pole odrzucone przez schemat jest czyszczone i oznaczane; reszta kroku
@@ -112,10 +112,45 @@ kliknięcia „Opublikuj" i zgody w kroku 9.
   API dane nie są domyślnie używane do trenowania modeli; okres retencji po stronie dostawcy
   określa aktualna polityka Anthropic (Zero Data Retention wymaga osobnej umowy). **Przed
   włączeniem w produkcji:** potwierdzić umowę powierzenia (DPA), region przetwarzania i retencję.
-- Ogłoszenie może zawierać dane osoby kontaktowej. Import zapisuje e-mail kontaktowy tylko,
-  gdy jest w ogłoszeniu i przechodzi walidację — pracodawca widzi go w kroku 9.
+- Ogłoszenie może zawierać dane osoby kontaktowej. Od #500 import **nie** przenosi e-maila
+  kontaktowego (pole usunięte ze schematu modelu) — pracodawca wpisuje go ręcznie w kroku 9.
 - UI informuje, że import dotyczy ogłoszeń, do których pracodawca ma prawa, i że plik nie jest
   przechowywany. Treści prawnych (regulamin, polityka) ta zmiana nie dodaje.
+
+## Minimalizacja danych osób trzecich i identyfikatorów (#500, #495)
+
+Bramka techniczna działa niezależnie od instrukcji dla modelu (kod: `src/lib/ai-import/minimize.ts`,
+`src/lib/privacy/sensitive-data.ts`, walidacja wyjścia w `map.ts`).
+
+**Przed wysłaniem (link):**
+
+| Co | Jak |
+|---|---|
+| Sekcja strony | gdy jest `<main>` (albo `<article>`) — tylko ona; `<nav>`, `<aside>`, `<footer>`, `<form>` usuwane |
+| JSON-LD | tylko `JobPosting` i pola z listy dozwolonych (tytuł, opis, lokalizacja, wynagrodzenie, wymagania, benefity, nazwa firmy…); bez `url`, `identifier`, `applicationContact`, `contactPoint`, e-maili organizacji; inne typy (np. `Organization`) odrzucane |
+| E-maile, telefony | zastępowane znacznikiem `[email removed]` / `[phone removed]` |
+| NISS/BIS, PESEL, karta eID, numery dokumentów | wykrywane deterministycznie (suma kontrolna mod 97 / wagi PESEL; numer po słowie kluczowym, np. „paszport nr”, także z błędną sumą) → `[identifier removed]` |
+| Adres źródła | do promptu trafia tylko nazwa hosta — bez ścieżki, parametrów (tokenów), fragmentu i danych logowania |
+
+**Zrzut ekranu:** nie da się go zredagować lokalnie (brak OCR) — obraz trafia do dostawcy
+w całości. Ograniczenia: reguła w prompcie (nie kopiować danych osób) i walidacja wyjścia.
+Decyzja, czy import obrazu ma zostać przy włączeniu flagi, należy do właściciela (#488).
+
+**Po odpowiedzi modelu (oba źródła):**
+
+- tekst z e-mailem/telefonem nie trafia do formularza — pole tekstowe jest czyszczone, pozycja
+  listy pomijana; pole oznaczone „do sprawdzenia”;
+- numer NISS/BIS, PESEL lub dokumentu w dowolnym polu → import odrzucany w całości
+  (`JOB_IMPORT_SENSITIVE_DATA`), nic nie trafia do formularza ani szkicu;
+- licznik redakcji nie zawiera wartości; materiał ani wynik nie są logowane.
+
+**Ograniczenia wykrywania:** imion i nazwisk nie wykrywamy deterministycznie (tylko reguła
+w prompcie i przegląd przez pracodawcę). Numer zapisany słownie, rozbity nietypowo albo w
+formacie innego kraju bez słowa kluczowego może nie zostać wykryty.
+
+**Otwarte (właściciel/prawnik, poza kodem):** opis przepływu danych i ról, podstawa art. 6
+i decyzja art. 14 dla osoby kontaktowej i danych przypadkowych, DPA/region/retencja dostawcy
+(#488). Flaga pozostaje wyłączona do czasu tych decyzji.
 
 ## Ryzyka i ograniczenia
 
@@ -144,6 +179,10 @@ Zmiennych nie ustawia ta zmiana. Aby włączyć:
 
 ## Testy
 
+- Unit (#500/#495): `sensitive-data` (NISS/BIS/PESEL/eID z kontrolą ujemną, brak fałszywych
+  trafień na kwotach/datach/telefonach), `ai-import-minimize` (HTML ze stopką z e-mailem i URL
+  z tokenem → nic z tego w payloadzie dostawcy; zrzut z danymi osoby → redakcja wyniku albo
+  odmowa).
 - Unit: `ai-import-image`, `ai-import-safe-fetch` (adresy wewnętrzne, przekierowania, DNS,
   limity, bomba gzip, timeout; lokalny serwer testowy, DNS-atrapa), `ai-import-map` (schematy
   kroków, oznaczenia, injection, zgodność kluczy z 0083), `ai-import-extract` (atrapa klienta

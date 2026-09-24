@@ -700,6 +700,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   opcjonalnie `AI_JOB_IMPORT_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
   produkcją (E2E `job-import.spec`). Research, koszty, prywatność: `docs/AI_JOB_IMPORT.md`.
   **Otwarte:** globalny budżet i raport kosztów (#36), DPA/retencja dostawcy (decyzja właściciela).
+  Minimalizacja (#500): przed modelem tylko `<main>`/`<article>` i `JobPosting` z listy pól
+  (`src/lib/ai-import/minimize.ts`), e-maile/telefony/NISS/numery dokumentów zastąpione
+  znacznikiem, w prompcie sam host; `contactEmail` poza schematem (ręcznie w kroku 9). Wyjście:
+  pole z e-mailem/telefonem czyszczone, identyfikator → odmowa `JOB_IMPORT_SENSITIVE_DATA`.
+  Zrzutu nie redagujemy lokalnie (brak OCR). Test: `ai-import-minimize`. **Otwarte (#500):**
+  ocena prawna (art. 6/14, role), decyzja o imporcie obrazu.
 - [x] Wygaszanie ofert (#72, migracja `0085`): `expire_due_jobs()` (service_role, `SKIP LOCKED`,
   zwraca liczbę) zmienia tylko `active` z `expires_at <= now()` na `expired`; woła je
   `/api/maintenance` (cron Railway co godzinę, `docs/railway/README.md`). Panel nie czeka na cron:
@@ -774,6 +780,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i ponowienie tym samym kluczem (#360); `UNAUTHENTICATED` (link logowania) odróżniony od
   `PERMISSION_DENIED` (konto nie-kandydata), własne komunikaty `RATE_LIMITED`/`JOB_NOT_ACTIVE`.
   Dowód: `rls.sql` B3b/B3c, J7d–J7f.
+  Bez NISS/BIS i numerów dokumentów (#495): wiadomość do firmy i odpowiedzi na pytania
+  (kandydat i gość) z numerem rejestru narodowego/BIS (mod 97), PESEL, kartą eID albo numerem
+  po słowie kluczowym („paszport nr…”) → błąd przy polu, bez zapisu (`findPersonalIdentifierField`
+  w akcjach + refine w Zod; detektor `src/lib/privacy/sensitive-data.ts`). Podpowiedź pod polem
+  wiadomości. Test: `sensitive-data`, `apply-sensitive-id`. **Otwarte:** ocena prawna, treść
+  poradnika i formularza CV (#495), import CV (#487), wiadomości w rozmowach.
   Pytania screeningowe (#101, migracja `0093`): recruiter+ ustala w kroku 7 kreatora do 10 pytań
   (`yes_no`/`single_choice`/`date`/`short_text`, „wymagane”, kolejność, treść w języku oferty +
   opcjonalne tłumaczenia) — zapis w tej samej transakcji co krok (`save_job_draft` →

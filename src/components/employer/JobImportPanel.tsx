@@ -156,7 +156,7 @@ export function JobImportPanel({
 
       <div id={`${panelId}-body`} hidden={!open} className="mt-5 space-y-6" aria-busy={busy !== null}>
         <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm leading-relaxed text-foreground">
-          {t('rightsNote')} {t('privacyNote')}
+          {t('rightsNote')} {t('privacyNote')} {t('contactNote')}
         </p>
 
         <div className="space-y-2">

@@ -24,7 +24,11 @@ import {
   type ScreeningAnswerValue,
   type ScreeningQuestion,
 } from '@/lib/screening/questions';
-import { ScreeningQuestionsFields, screeningFieldId } from '@/components/public/ScreeningQuestionsFields';
+import {
+  ScreeningQuestionsFields,
+  screeningFieldId,
+  type ScreeningAnswerError,
+} from '@/components/public/ScreeningQuestionsFields';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
@@ -148,15 +152,16 @@ export function ApplyModal({
   const [message, setMessage] = React.useState('');
   const [consent, setConsent] = React.useState(false);
   const [answers, setAnswers] = React.useState<Record<string, ScreeningAnswerValue>>({});
-  const [answerErrors, setAnswerErrors] = React.useState<Record<string, true>>({});
+  const [answerErrors, setAnswerErrors] = React.useState<Record<string, ScreeningAnswerError>>({});
   const [submitting, setSubmitting] = React.useState(false);
-  const [errors, setErrors] = React.useState<{ phone?: PhoneError; consent?: boolean }>({});
+  const [errors, setErrors] = React.useState<{ phone?: PhoneError; message?: 'sensitiveId'; consent?: boolean }>({});
   const [formError, setFormError] = React.useState<FormError | null>(null);
   const [sent, setSent] = React.useState(false);
   // #393: formularz renderuje się w transition po pierwszej ramce dialogu, żeby tap „Aplikuj”
   // malował od razu ramkę z tytułem i przyciskiem zamknięcia (INP).
   const [formReady, setFormReady] = React.useState(false);
   const phoneRef = React.useRef<HTMLInputElement>(null);
+  const messageRef = React.useRef<HTMLTextAreaElement>(null);
   const consentRef = React.useRef<HTMLButtonElement>(null);
   const formErrorRef = React.useRef<HTMLDivElement>(null);
   // Jeden klucz na otwarcie modalu: ponowienie po błędzie = ta sama próba (Invariant #4).
@@ -284,6 +289,17 @@ export function ApplyModal({
       setErrors({ phone: 'invalid' });
       phoneRef.current?.focus();
       phoneRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else if (res.reason === 'sensitiveId' && res.field === 'message') {
+      // #495: numer NISS/BIS lub dokumentu w wiadomości — błąd przy polu, dane zostają.
+      setErrors({ message: 'sensitiveId' });
+      messageRef.current?.focus();
+      messageRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else if (res.reason === 'sensitiveId' && res.questionId) {
+      const questionId = res.questionId;
+      setAnswerErrors({ [questionId]: 'sensitiveId' });
+      const field = document.getElementById(screeningFieldId(questionId));
+      field?.focus();
+      field?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     } else if (res.error === 'SCREENING_ANSWER_REQUIRED' && res.questionId) {
       // Baza odrzuciła brak odpowiedzi na pytanie wymagane — błąd przy tym pytaniu.
       const questionId = res.questionId;
@@ -461,13 +477,28 @@ export function ApplyModal({
                 <div className="space-y-1.5">
                   <Label htmlFor="apply-message">{t('message')}</Label>
                   <Textarea
+                    ref={messageRef}
                     id="apply-message"
                     value={message}
-                    onChange={(event) => setMessage(event.target.value.slice(0, MESSAGE_MAX))}
+                    onChange={(event) => {
+                      setMessage(event.target.value.slice(0, MESSAGE_MAX));
+                      if (errors.message) setErrors((current) => ({ ...current, message: undefined }));
+                    }}
                     placeholder={t('messagePlaceholder')}
                     maxLength={MESSAGE_MAX}
                     rows={4}
+                    aria-invalid={errors.message ? true : undefined}
+                    aria-describedby={errors.message ? 'apply-message-error apply-message-hint' : 'apply-message-hint'}
+                    className={errors.message ? 'border-error' : undefined}
                   />
+                  <p id="apply-message-hint" className="text-xs text-muted-foreground">
+                    {t('sensitiveIdHint')}
+                  </p>
+                  {errors.message ? (
+                    <p id="apply-message-error" className="text-sm text-error">
+                      {t('sensitiveIdNotAllowed')}
+                    </p>
+                  ) : null}
                   <p className="text-right text-xs tabular-nums text-muted-foreground">
                     {message.length} / {MESSAGE_MAX}
                   </p>

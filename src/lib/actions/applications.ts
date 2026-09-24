@@ -9,6 +9,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import {
   applicationPhoneSchema,
   applicationSchema,
+  findPersonalIdentifierField,
   type ApplicationInput,
 } from '@/lib/validation/application';
 
@@ -28,9 +29,11 @@ export type ApplyResult =
   | {
       ok: false;
       error: ErrorCode | 'UNAUTHENTICATED';
-      field?: 'phone';
+      field?: 'phone' | 'message';
       /** #101: pytanie wymagane bez odpowiedzi (walidacja w bazie) — komunikat przy pytaniu. */
       questionId?: string;
+      /** #495: pole/pytanie zawiera NISS/BIS albo numer dokumentu — komunikat przy polu. */
+      reason?: 'sensitiveId';
     };
 
 const SCREENING_REQUIRED_RE =
@@ -76,6 +79,11 @@ export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> 
     phoneCountry: input.phoneCountry,
   });
   if (!phone.success) return { ok: false, error: 'VALIDATION_FAILED', field: 'phone' };
+
+  // #495: NISS/BIS, PESEL ani numer dokumentu nie są potrzebne do aplikowania — odmowa przy
+  // polu, zanim cokolwiek trafi do bazy (sprawdza też `applicationSchema`).
+  const sensitive = findPersonalIdentifierField(input);
+  if (sensitive) return { ok: false, error: 'VALIDATION_FAILED', reason: 'sensitiveId', ...sensitive };
 
   // Tryb demo (bez bazy): oferty mają syntetyczne identyfikatory i nic nie zapisujemy.
   if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };

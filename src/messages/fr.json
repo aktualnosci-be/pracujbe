@@ -608,7 +608,8 @@
     "savedSearchLimitReached": "Vous avez déjà 20 recherches enregistrées. Supprimez-en une pour en ajouter une nouvelle.",
     "guestApplyUnavailable": "La candidature sans compte est temporairement indisponible. Réessayez plus tard ou connectez-vous.",
     "emailNotVerified": "Confirmez d’abord l’adresse e-mail de votre compte — cliquez sur le lien envoyé lors de l’inscription.",
-    "claimExpired": "Le lien de rattachement a expiré (il était valable 30 jours)."
+    "claimExpired": "Le lien de rattachement a expiré (il était valable 30 jours).",
+    "jobImportSensitiveData": "L’annonce contient un numéro d’identification de personne ou de document ; nous ne l’avons donc pas importée. Remplissez le formulaire manuellement."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -1152,7 +1153,9 @@
     "screeningOptional": "(facultatif)",
     "screeningRequired": "Répondez à cette question.",
     "screeningYes": "Oui",
-    "screeningNo": "Non"
+    "screeningNo": "Non",
+    "sensitiveIdHint": "Votre candidature ne nécessite ni numéro NISS/BIS ni numéro de pièce d’identité — ne les indiquez pas.",
+    "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
   },
   "guestApply": {
     "subtitle": "Postulez sans créer de compte ou connectez-vous pour utiliser votre profil. Pas besoin de CV.",
@@ -1203,7 +1206,8 @@
       "emailInvalid": "Indiquez une adresse e-mail valide, par ex. jean@example.com.",
       "messageTooLong": "Le message peut comporter au maximum 500 caractères.",
       "consentRequired": "Vous devez accepter le consentement pour envoyer la candidature.",
-      "idempotencyKeyInvalid": "Actualisez la page et renvoyez le formulaire."
+      "idempotencyKeyInvalid": "Actualisez la page et renvoyez le formulaire.",
+      "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
     }
   },
   "legal": {
@@ -1420,7 +1424,8 @@
     "errorFileTooLarge": "Le fichier est trop volumineux. La taille maximale est de 5 Mo.",
     "errorFileType": "Seules les images PNG, JPG et WebP sont acceptées.",
     "errorUrlMissing": "Collez un lien vers l’annonce.",
-    "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez."
+    "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
+    "contactNote": "Nous ne reprenons pas les adresses e-mail, numéros de téléphone et numéros d’identification dans le formulaire. Indiquez vous-même l’e-mail de contact à la dernière étape."
   },
   "messages": {
     "title": "Messages",
@@ -1792,7 +1797,8 @@
       "messageTooLong": "Le message est trop long.",
       "phoneInvalid": "Indiquez un numéro de téléphone valide.",
       "termsRequired": "Vous devez accepter le consentement pour envoyer votre candidature.",
-      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez."
+      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez.",
+      "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
     }
   },
   "offer": {
