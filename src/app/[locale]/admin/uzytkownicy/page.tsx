@@ -212,7 +212,7 @@ export default async function AdminUsersPage({
                         </p>
                         <span
                           className={cn(
-                            'rounded-full px-2 py-0.5 text-xs font-medium',
+                            'max-w-full break-words rounded-full px-2 py-0.5 text-xs font-medium',
                             ROLE_TONE[user.role] ?? 'bg-muted text-muted-foreground',
                           )}
                         >
