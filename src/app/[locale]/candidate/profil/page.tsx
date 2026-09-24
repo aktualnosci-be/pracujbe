@@ -1,9 +1,24 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { BriefcaseBusiness, MapPin, Pencil } from 'lucide-react';
+import { MapPin, Pencil } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
-import { Button } from '@/components/ui/button';
+import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
+import {
+  BTN_PRIMARY,
+  BTN_SECONDARY,
+  H2_EXTENDED,
+  INFO_LABEL,
+  INFO_PAIRS,
+  INFO_VALUE,
+  P_EXTENDED,
+  PANEL,
+  PANEL_H2,
+  PAPER,
+  TAG,
+} from '@/components/dashboard/panel-styles';
+import { DASH_GRID, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
+import { cn } from '@/lib/utils';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
 import { ProfileSummaryError } from '@/components/candidate/ProfileSummaryError';
@@ -15,7 +30,8 @@ import { profileChecklistItems } from '@/components/candidate/profile-checklist-
 import { getProfileLevelTitle } from '@/lib/profile-completeness';
 
 /**
- * Panel kandydata — Profil (podgląd; makieta 04, kolumna „Kompletność profilu").
+ * Panel kandydata — Profil. Wygląd: `#people/profile` z prototypu „04 Ludzie i praca”
+ * (`.profile-banner`, `.paper`, `.info-pairs`), kompletność jako `.panel` z `.progress`.
  *
  * Read-only podsumowanie: imię, wskaźnik kompletności, checklista sekcji + dokumenty (CV) — realne
  * dane pod sesją (RLS); bez env dane DEMO. Edycja odbywa się w kreatorze onboardingu (odnośnik).
@@ -23,6 +39,9 @@ import { getProfileLevelTitle } from '@/lib/profile-completeness';
  */
 
 export const dynamic = 'force-dynamic';
+
+/** Pusty stan pola `.info-pairs` — zwykły tekst muted zamiast pogrubionej wartości. */
+const INFO_EMPTY = 'text-[15px] leading-[1.6] text-muted-foreground';
 
 const availabilityLabels = {
   immediate: 'availImmediate',
@@ -70,20 +89,17 @@ export default async function CandidateProfilePage({
     : null;
 
   return (
-    <div className="min-w-0 space-y-6">
-      <header className="rounded-[1.75rem] border border-border bg-card p-5 sm:p-8">
-        <span className="text-xs font-bold uppercase tracking-[0.16em] text-accent">{tp('eyebrow')}</span>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-5">
-          <div className="min-w-0">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{tp('title')}</h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">{tp('intro')}</p>
-          </div>
-          <Button asChild className="min-h-12 rounded-xl">
-            <Link href="/candidate/onboarding"><Pencil className="mr-2 h-4 w-4" aria-hidden="true" />{tp('edit')}</Link>
-          </Button>
-        </div>
-      </header>
+    <div className="min-w-0">
+      {/* `profileScreen()` z prototypu: `.eyebrow`, `.extended h1`, `.dash-intro` + akcja edycji. */}
+      <div className="flex min-w-0 flex-wrap items-end justify-between gap-5">
+        <CandidatePageHeader eyebrow={tp('eyebrow')} title={tp('title')} intro={tp('intro')} />
+        <Link href="/candidate/onboarding" className={cn(BTN_PRIMARY, 'mb-[25px]')}>
+          <Pencil className="size-4 shrink-0" aria-hidden="true" />
+          {tp('edit')}
+        </Link>
+      </div>
 
+      {/* `.profile-banner` */}
       <CandidateIdentity
         profile={profile}
         passport={passport}
@@ -97,51 +113,49 @@ export default async function CandidateProfilePage({
         }}
       />
 
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-        <section aria-labelledby="passport-heading" className="min-w-0 overflow-hidden rounded-[1.75rem] border border-border bg-card">
-          <div className="border-b border-border bg-soft p-5 sm:p-7">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground" aria-hidden="true"><BriefcaseBusiness className="h-5 w-5" /></span>
-            <h2 id="passport-heading" className="mt-4 text-xl font-bold text-foreground sm:text-2xl">{tp('sectionTitle')}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{tp('sectionHint')}</p>
-          </div>
+      <div className={cn(DASH_GRID, 'mt-5')}>
+        {/* `.paper` z polami profilu (`.info-pairs`) */}
+        <section aria-labelledby="passport-heading" className={cn(PAPER, 'my-0 flex-[1.4_1_36rem]')}>
+          <h2 id="passport-heading" className={H2_EXTENDED}>{tp('sectionTitle')}</h2>
+          <p className={cn(P_EXTENDED, 'mt-1')}>{tp('sectionHint')}</p>
           {passport.loadFailed ? (
-            <p role="alert" className="p-5 text-sm text-error sm:p-7">{tp('loadError')}</p>
-          ) : <div className="grid gap-6 p-5 sm:grid-cols-2 sm:p-7">
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{to('occupationsLabel')}</h3>
-              {passport.occupations.length ? <ul className="mt-3 flex flex-wrap gap-2">{passport.occupations.map((occupation) => <li key={occupation} className="max-w-full break-words rounded-full border border-border bg-background px-3 py-1.5 text-sm font-semibold text-foreground">{occupation}</li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">{tp('emptyField')}</p>}
+            <p role="alert" className="mt-5 text-[15px] text-error">{tp('loadError')}</p>
+          ) : <div className={cn(INFO_PAIRS, 'mt-2 border-t border-border')}>
+            <div className="min-w-0">
+              <h3 className={INFO_LABEL}>{to('occupationsLabel')}</h3>
+              {passport.occupations.length ? <ul className="flex flex-wrap gap-1.5">{passport.occupations.map((occupation) => <li key={occupation} className={cn(TAG, 'text-[13px] font-semibold text-foreground')}>{occupation}</li>)}</ul> : <p className={INFO_EMPTY}>{tp('emptyField')}</p>}
             </div>
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{to('city')}</h3>
-              <p className="mt-3 flex items-center gap-2 text-base font-semibold text-foreground">{passport.city ? <><MapPin className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />{passport.city}</> : tp('emptyField')}</p>
-              {passport.city && passport.radiusKm !== null ? <p className="mt-1 text-sm text-muted-foreground">{tp('radius', { count: passport.radiusKm })}</p> : null}
+            <div className="min-w-0">
+              <h3 className={INFO_LABEL}>{to('city')}</h3>
+              <p className={cn(INFO_VALUE, 'flex items-center gap-2')}>{passport.city ? <><MapPin className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />{passport.city}</> : <span className="font-normal text-muted-foreground">{tp('emptyField')}</span>}</p>
+              {passport.city && passport.radiusKm !== null ? <p className="mt-1 text-[13px] text-muted-foreground">{tp('radius', { count: passport.radiusKm })}</p> : null}
             </div>
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{to('experienceLabel')}</h3>
-              <p className="mt-3 text-base font-semibold text-foreground">{passport.experienceYears !== null ? tp('years', { count: passport.experienceYears }) : tp('emptyField')}</p>
+            <div className="min-w-0">
+              <h3 className={INFO_LABEL}>{to('experienceLabel')}</h3>
+              {passport.experienceYears !== null ? <p className={INFO_VALUE}>{tp('years', { count: passport.experienceYears })}</p> : <p className={INFO_EMPTY}>{tp('emptyField')}</p>}
             </div>
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{to('availabilityLabel')}</h3>
-              <p className="mt-3 text-base font-semibold text-foreground">{availabilityKey ? to(availabilityKey) : tp('emptyField')}</p>
+            <div className="min-w-0">
+              <h3 className={INFO_LABEL}>{to('availabilityLabel')}</h3>
+              {availabilityKey ? <p className={INFO_VALUE}>{to(availabilityKey)}</p> : <p className={INFO_EMPTY}>{tp('emptyField')}</p>}
             </div>
-            {([['skills', to('skillsLabel'), passport.skills], ['languages', to('languagesLabel'), passport.languages], ['certificates', to('certificatesLabel'), passport.certificates]] as const).map(([key, label, values]) => <div key={key} className="min-w-0 sm:col-span-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</h3>
-              {values.length ? <ul className="mt-3 flex flex-wrap gap-2">{values.map((value) => <li key={value} className="max-w-full break-words rounded-xl bg-soft px-3 py-2 text-sm text-foreground">{value}</li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">{tp('emptyField')}</p>}
+            {([['skills', to('skillsLabel'), passport.skills], ['languages', to('languagesLabel'), passport.languages], ['certificates', to('certificatesLabel'), passport.certificates]] as const).map(([key, label, values]) => <div key={key} className="col-span-2 min-w-0">
+              <h3 className={INFO_LABEL}>{label}</h3>
+              {values.length ? <ul className="flex flex-wrap gap-1.5">{values.map((value) => <li key={value} className={cn(TAG, 'text-[13px] text-foreground')}>{value}</li>)}</ul> : <p className={INFO_EMPTY}>{tp('emptyField')}</p>}
             </div>)}
           </div>}
         </section>
 
-        <div className="min-w-0 space-y-6">
-        {profile.loadFailed ? <ProfileSummaryError message={tp('loadError')} retry={tc('retry')} /> : <section className="rounded-[1.75rem] border border-border bg-card p-5 sm:p-6">
-          <h2 className="text-base font-semibold text-foreground">{t('profileCompleteness')}</h2>
+        <div className={DASH_GRID_SIDE}>
+        {profile.loadFailed ? <ProfileSummaryError message={tp('loadError')} retry={tc('retry')} /> : <section className={PANEL}>
+          <h2 className={PANEL_H2}>{t('profileCompleteness')}</h2>
           <ProfileCompleteness
-            className="mt-4"
+            className="mt-2"
             value={profile.completionPct}
             title={getProfileLevelTitle(profile.completionPct, t('goodLevel'))}
             hint={t('completenessHint')}
           />
-          <ProfileChecklist className="mt-5" items={checklist} />
-          <Link href="/candidate/onboarding" className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground hover:bg-soft">{t('completeProfile')}</Link>
+          <ProfileChecklist items={checklist} />
+          <Link href="/candidate/onboarding" className={cn(BTN_SECONDARY, 'w-full')}>{t('completeProfile')}</Link>
         </section>}
 
         {/* Dokumenty / CV (prywatny bucket + signed URLs) */}

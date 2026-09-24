@@ -51,6 +51,35 @@ import type { CategoryKey, ContractType } from '@/lib/jobs';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { saveOnboardingStep, type OnboardingStep } from '@/lib/actions/onboarding';
 import { referenceDate } from '@/lib/matching/reference-date';
+import {
+  BTN_PRIMARY,
+  BTN_RESET,
+  BTN_SECONDARY,
+  chipClass,
+  EYEBROW,
+  FORM_ERROR,
+  FORM_FIELD,
+  FORM_GRID,
+  FORM_HINT,
+  FORM_INPUT,
+  FORM_LABEL_TEXT,
+  FORM_SELECT,
+  FORM_WIDE,
+  H1_EXTENDED,
+  H2_EXTENDED,
+  P_EXTENDED,
+  PANEL,
+  PANEL_H2,
+  PAPER,
+  STATUS_GOOD,
+} from '@/components/dashboard/panel-styles';
+
+/** Pozycja listy „chipów” — `.p-tag` z prototypu (tło szarości, promień 7 px). */
+const CHIP =
+  'inline-flex max-w-full items-center gap-1.5 break-words rounded-[7px] bg-muted py-1 pl-2.5 pr-1 text-[13px] text-foreground';
+/** Usuwanie chipa — cel 24 px (WCAG 2.5.8). */
+const CHIP_REMOVE =
+  'inline-flex min-h-6 min-w-6 items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
  * OnboardingWizard — kreator profilu kandydata (makieta 06), 6 kroków z REALNYM zapisem.
@@ -511,27 +540,26 @@ export function OnboardingWizard({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Nagłówek + znacznik zapisu */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('title')}</h1>
-          <p className="mt-1 max-w-2xl text-muted-foreground">{t('subtitle')}</p>
+    <div className="min-w-0">
+      {/* Nagłówek + znacznik zapisu (prototyp: `.eyebrow` + `.extended h1` + `.dash-intro`) */}
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className={EYEBROW}>{t('eyebrow')}</p>
+          <h1 className={H1_EXTENDED}>{t('title')}</h1>
+          <p className={cn(P_EXTENDED, 'max-w-2xl')}>{t('subtitle')}</p>
         </div>
         {/* Bez `role="status"`: stan zapisu ogłasza jeden region — SaveIndicator w stopce (#402). */}
         {saveState === 'saved' && badgeVisible ? (
-          <div
-            className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-success/30 bg-success/5 px-3 py-2"
-          >
-            <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-            <span className="text-sm font-medium text-foreground">
+          <div className={cn(STATUS_GOOD, 'inline-flex shrink-0 items-center gap-2 self-start py-0 pr-0')}>
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            <span className="font-semibold">
               {demoSaved ? t('savedDemo') : t('saved')}
             </span>
             <button
               type="button"
               onClick={() => setBadgeVisible(false)}
               aria-label={tn('close')}
-              className="-mr-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[8px] text-success-text transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -544,28 +572,28 @@ export function OnboardingWizard({
         steps={steps}
         current={step - 1}
         progressLabel={t('stepProgress', { current: step, total: steps.length })}
-        className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-7"
+        className="mt-6 border-b border-border pb-6"
       />
 
       {/* Kolumny: boczna + formularz */}
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-        {/* Kolumna boczna */}
-        <aside className="min-w-0 space-y-6">
-          <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="text-base font-semibold text-foreground">{t('completeness')}</h2>
+      <div className="mt-5 grid min-w-0 gap-x-[19px] xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+        {/* Kolumna boczna: `.panel` kompletności + `.p-profile-note` pomocy */}
+        <aside className="min-w-0 xl:my-5">
+          <section className={PANEL}>
+            <h2 className={PANEL_H2}>{t('completeness')}</h2>
             <ProfileCompleteness
-              className="mt-4"
+              className="mt-2"
               value={completeness}
               hint={t('completenessHint')}
               size={64}
             />
-            <ProfileChecklist className="mt-5" items={checklist} />
+            <ProfileChecklist items={checklist} />
           </section>
 
-          <section className="rounded-3xl border border-border bg-soft p-5">
-            <h2 className="text-base font-semibold text-foreground">{t('needHelp')}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t('helpText')}</p>
-            <Button asChild variant="outline" size="sm" className="mt-4 w-full bg-background">
+          <section className="mt-[19px] min-w-0 rounded-[19px] border border-primary/20 bg-primary/5 p-[26px] max-[600px]:p-[22px]">
+            <h2 className="break-words text-[19px] font-bold leading-[1.15] tracking-[-0.025em] text-foreground">{t('needHelp')}</h2>
+            <p className="mt-2 break-words text-sm leading-[1.6] text-muted-foreground">{t('helpText')}</p>
+            <Button asChild variant="outline" className={cn(BTN_SECONDARY, BTN_RESET, 'mt-4 w-full')}>
               <Link href="/poradniki">
                 {t('seeGuide')}
                 <ExternalLink className="h-4 w-4" aria-hidden="true" />
@@ -575,22 +603,23 @@ export function OnboardingWizard({
         </aside>
 
         {/* Formularz bieżącego kroku */}
-        <section className="min-w-0 rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-7">
-          <div className="mb-5 h-1 w-12 rounded-full bg-primary" aria-hidden="true" />
+        {/* Prototyp: `.paper.demo-form`, nagłówek sekcji `01 / …` (numer dekoracyjny). */}
+        <section className={PAPER}>
           <h2
             ref={stepHeadingRef}
             tabIndex={-1}
-            className="text-xl font-semibold text-foreground focus:outline-none"
+            className={`${H2_EXTENDED} focus:outline-none`}
           >
+            <span aria-hidden="true">{String(step).padStart(2, '0')} / </span>
             {steps[step - 1]?.title}
           </h2>
           <p className="sr-only" aria-live="polite" aria-atomic="true">
             {stepAnnouncement}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">{steps[step - 1]?.desc}</p>
+          <p className={cn(P_EXTENDED, 'mt-2')}>{steps[step - 1]?.desc}</p>
 
           <form
-            className="mt-5"
+            className="mt-[22px] min-w-0"
             noValidate
             onSubmit={(e) => {
               e.preventDefault();
@@ -598,10 +627,11 @@ export function OnboardingWizard({
             }}
           >
             {step === 1 ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('firstName')}>{t('firstName')}</Label>
+              <div className={FORM_GRID}>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('firstName')} className={FORM_LABEL_TEXT}>{t('firstName')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('firstName')}
                     autoComplete="given-name"
                     aria-invalid={errors.firstName ? true : undefined}
@@ -610,9 +640,10 @@ export function OnboardingWizard({
                   />
                   <FieldError name="firstName" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('lastName')}>{t('lastName')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('lastName')} className={FORM_LABEL_TEXT}>{t('lastName')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('lastName')}
                     autoComplete="family-name"
                     aria-invalid={errors.lastName ? true : undefined}
@@ -621,9 +652,10 @@ export function OnboardingWizard({
                   />
                   <FieldError name="lastName" />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor={domId('phone')}>{t('phone')}</Label>
+                <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                  <Label htmlFor={domId('phone')} className={FORM_LABEL_TEXT}>{t('phone')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('phone')}
                     type="tel"
                     autoComplete="tel"
@@ -631,7 +663,7 @@ export function OnboardingWizard({
                     aria-describedby={describedBy('phone', true)}
                     {...register('phone')}
                   />
-                  <p id={hintId('phone')} className="text-xs text-muted-foreground">
+                  <p id={hintId('phone')} className={FORM_HINT}>
                     {t('phoneHint')}
                   </p>
                   <FieldError name="phone" />
@@ -641,8 +673,8 @@ export function OnboardingWizard({
 
             {step === 2 ? (
               <div className="space-y-6">
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('occupations')}>{t('occupationsLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('occupations')} className={FORM_LABEL_TEXT}>{t('occupationsLabel')}</Label>
                   <ChipInput
                     id={domId('occupations')}
                     values={values.occupations}
@@ -655,7 +687,7 @@ export function OnboardingWizard({
                     tooLongLabel={t('itemTooLongMax', { max: CANDIDATE_ITEM_LIMITS.occupation })}
                     describedBy={describedBy('occupations', true)}
                   />
-                  <p id={hintId('occupations')} className="text-xs text-muted-foreground">
+                  <p id={hintId('occupations')} className={FORM_HINT}>
                     {t('occupationsHint')}
                   </p>
                   <FieldError name="occupations" />
@@ -666,7 +698,7 @@ export function OnboardingWizard({
                   role="group"
                   aria-labelledby={`${domId('categories')}-label`}
                   aria-describedby={describedBy('categories', true)}
-                  className="space-y-2"
+                  className={FORM_FIELD}
                 >
                   <Label id={`${domId('categories')}-label`}>{t('categoriesLabel')}</Label>
                   <div className="flex flex-wrap gap-2">
@@ -682,7 +714,7 @@ export function OnboardingWizard({
                       );
                     })}
                   </div>
-                  <p id={hintId('categories')} className="text-xs text-muted-foreground">
+                  <p id={hintId('categories')} className={FORM_HINT}>
                     {t('categoriesHint')}
                   </p>
                   <FieldError name="categories" />
@@ -692,9 +724,10 @@ export function OnboardingWizard({
 
             {step === 3 ? (
               <div className="space-y-6">
-                <div className="space-y-1.5 sm:max-w-xs">
-                  <Label htmlFor={domId('experienceYears')}>{t('experienceLabel')}</Label>
+                <div className={cn(FORM_FIELD, 'sm:max-w-xs')}>
+                  <Label htmlFor={domId('experienceYears')} className={FORM_LABEL_TEXT}>{t('experienceLabel')}</Label>
                   <Input
+                    className={FORM_INPUT}
                     id={domId('experienceYears')}
                     type="number"
                     inputMode="numeric"
@@ -704,14 +737,14 @@ export function OnboardingWizard({
                     aria-describedby={describedBy('experienceYears', true)}
                     {...register('experienceYears')}
                   />
-                  <p id={hintId('experienceYears')} className="text-xs text-muted-foreground">
+                  <p id={hintId('experienceYears')} className={FORM_HINT}>
                     {t('experienceHint')}
                   </p>
                   <FieldError name="experienceYears" />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('skills')}>{t('skillsLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('skills')} className={FORM_LABEL_TEXT}>{t('skillsLabel')}</Label>
                   <ChipInput
                     id={domId('skills')}
                     values={values.skills}
@@ -724,7 +757,7 @@ export function OnboardingWizard({
                     tooLongLabel={t('itemTooLongMax', { max: CANDIDATE_ITEM_LIMITS.skill })}
                     describedBy={describedBy('skills', true)}
                   />
-                  <p id={hintId('skills')} className="text-xs text-muted-foreground">
+                  <p id={hintId('skills')} className={FORM_HINT}>
                     {t('skillsHint')}
                   </p>
                   <FieldError name="skills" />
@@ -734,13 +767,13 @@ export function OnboardingWizard({
 
             {step === 4 ? (
               <div className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor={domId('city')}>{t('city')}</Label>
+                <div className={FORM_GRID}>
+                  <div className={FORM_FIELD}>
+                    <Label htmlFor={domId('city')} className={FORM_LABEL_TEXT}>{t('city')}</Label>
                     <div className="relative">
                       <Input
                         id={domId('city')}
-                        className="pr-10"
+                        className={cn(FORM_INPUT, 'pr-10')}
                         autoComplete="address-level2"
                         aria-invalid={errors.city ? true : undefined}
                         aria-describedby={describedBy('city')}
@@ -753,9 +786,10 @@ export function OnboardingWizard({
                     </div>
                     <FieldError name="city" />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor={domId('region')}>{t('regionLabel')}</Label>
+                  <div className={FORM_FIELD}>
+                    <Label htmlFor={domId('region')} className={FORM_LABEL_TEXT}>{t('regionLabel')}</Label>
                     <Input
+                      className={FORM_INPUT}
                       id={domId('region')}
                       aria-invalid={errors.region ? true : undefined}
                       aria-describedby={describedBy('region')}
@@ -763,9 +797,10 @@ export function OnboardingWizard({
                     />
                     <FieldError name="region" />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor={domId('radiusKm')}>{t('radiusLabel')}</Label>
+                  <div className={FORM_FIELD}>
+                    <Label htmlFor={domId('radiusKm')} className={FORM_LABEL_TEXT}>{t('radiusLabel')}</Label>
                     <Input
+                      className={FORM_INPUT}
                       id={domId('radiusKm')}
                       type="number"
                       inputMode="numeric"
@@ -785,7 +820,7 @@ export function OnboardingWizard({
                   aria-labelledby={`${domId('hasDrivingLicense')}-label`}
                 >
                   <Label id={`${domId('hasDrivingLicense')}-label`}>{t('drivingLicense')}</Label>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="mt-[9px] flex flex-wrap gap-2">
                     {(
                       [
                         { value: 'none', label: t('noLicense') },
@@ -806,12 +841,7 @@ export function OnboardingWizard({
                               shouldDirty: true,
                             });
                           }}
-                          className={cn(
-                            'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
-                            active
-                              ? 'border-accent bg-accent/10 text-accent-dark'
-                              : 'border-input text-foreground hover:bg-soft',
-                          )}
+                          className={cn(chipClass(active), 'gap-1.5')}
                         >
                           {option.label}
                           {active ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
@@ -822,9 +852,9 @@ export function OnboardingWizard({
                 </div>
 
                 <div id={domId('hasCar')}>
-                  <Label>{t('ownCar')}</Label>
+                  <Label className={FORM_LABEL_TEXT}>{t('ownCar')}</Label>
                   <div
-                    className="mt-2 inline-flex rounded-md border border-input p-1"
+                    className="mt-[9px] inline-flex rounded-[11px] border border-input p-1"
                     role="group"
                     aria-label={t('ownCar')}
                   >
@@ -833,9 +863,9 @@ export function OnboardingWizard({
                       aria-pressed={!values.hasCar}
                       onClick={() => setValue('hasCar', false, { shouldDirty: true })}
                       className={cn(
-                        'rounded px-5 py-1.5 text-sm font-medium transition-colors',
+                        'min-h-10 rounded-[8px] px-5 py-1.5 text-[13px] font-semibold transition-colors',
                         !values.hasCar
-                          ? 'bg-accent/10 text-accent-dark'
+                          ? 'bg-primary/10 text-primary-dark'
                           : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
@@ -846,9 +876,9 @@ export function OnboardingWizard({
                       aria-pressed={values.hasCar}
                       onClick={() => setValue('hasCar', true, { shouldDirty: true })}
                       className={cn(
-                        'rounded px-5 py-1.5 text-sm font-medium transition-colors',
+                        'min-h-10 rounded-[8px] px-5 py-1.5 text-[13px] font-semibold transition-colors',
                         values.hasCar
-                          ? 'bg-accent/10 text-accent-dark'
+                          ? 'bg-primary/10 text-primary-dark'
                           : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
@@ -861,12 +891,12 @@ export function OnboardingWizard({
 
             {step === 5 ? (
               <div className="space-y-6">
-                <div id={domId('languages')} className="space-y-2">
-                  <Label htmlFor="onb-language-draft">{t('languagesLabel')}</Label>
+                <div id={domId('languages')} className={FORM_FIELD}>
+                  <Label htmlFor="onb-language-draft" className={FORM_LABEL_TEXT}>{t('languagesLabel')}</Label>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Input
                       id="onb-language-draft"
-                      className="flex-1"
+                      className={cn(FORM_INPUT, 'flex-1')}
                       value={langDraft}
                       placeholder={t('languageNamePlaceholder')}
                       aria-invalid={langError || errors.languages ? true : undefined}
@@ -891,7 +921,7 @@ export function OnboardingWizard({
                         value={levelDraft}
                         onValueChange={(val) => setLevelDraft(val as LanguageLevel)}
                       >
-                        <SelectTrigger aria-label={LEVEL_LABEL[levelDraft]}>
+                        <SelectTrigger className={FORM_SELECT} aria-label={LEVEL_LABEL[levelDraft]}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -903,12 +933,12 @@ export function OnboardingWizard({
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button type="button" variant="outline" onClick={addLanguage}>
+                    <Button type="button" variant="outline" onClick={addLanguage} className={cn(BTN_SECONDARY, BTN_RESET)}>
                       {t('addLanguage')}
                     </Button>
                   </div>
                   {langError ? (
-                    <p id="onb-language-draft-error" className="text-sm text-error">
+                    <p id="onb-language-draft-error" className={FORM_ERROR}>
                       {tRoot('candidate.error.languageInvalid')}
                     </p>
                   ) : null}
@@ -917,7 +947,7 @@ export function OnboardingWizard({
                       {values.languages.map((entry) => (
                         <li
                           key={entry.language}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-input bg-soft px-2.5 py-1 text-sm text-foreground"
+                          className={CHIP}
                         >
                           {entry.language} · {LEVEL_LABEL[entry.level]}
                           <button
@@ -930,7 +960,7 @@ export function OnboardingWizard({
                                 { shouldDirty: true },
                               )
                             }
-                            className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+                            className={CHIP_REMOVE}
                           >
                             <X className="h-3.5 w-3.5" aria-hidden="true" />
                           </button>
@@ -941,8 +971,8 @@ export function OnboardingWizard({
                   <FieldError name="languages" />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('certificates')}>{t('certificatesLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('certificates')} className={FORM_LABEL_TEXT}>{t('certificatesLabel')}</Label>
                   <ChipInput
                     id={domId('certificates')}
                     values={values.certificates}
@@ -966,15 +996,15 @@ export function OnboardingWizard({
                         return (
                           <li
                             key={label}
-                            className="flex flex-col gap-1.5 rounded-md border border-input p-2.5 sm:flex-row sm:items-center sm:gap-3"
+                            className="flex min-w-0 flex-col gap-[9px] rounded-[11px] border border-border p-3.5 sm:flex-row sm:items-center sm:gap-3"
                           >
-                            <Label htmlFor={inputId} className="min-w-0 flex-1 break-words">
+                            <Label htmlFor={inputId} className={cn(FORM_LABEL_TEXT, 'min-w-0 flex-1 break-words')}>
                               {t('certificateExpiryLabel', { certificate: label })}
                             </Label>
                             <Input
                               id={inputId}
                               type="date"
-                              className="sm:w-44"
+                              className={cn(FORM_INPUT, 'sm:w-44')}
                               value={date}
                               aria-invalid={expired || errors.certificateExpiry ? true : undefined}
                               aria-describedby={
@@ -991,7 +1021,7 @@ export function OnboardingWizard({
                               }
                             />
                             {expired ? (
-                              <p id={statusId} className="text-sm font-medium text-error">
+                              <p id={statusId} className={cn(FORM_ERROR, 'font-semibold')}>
                                 {t('certificateExpired')}
                               </p>
                             ) : null}
@@ -1000,7 +1030,7 @@ export function OnboardingWizard({
                       })}
                     </ul>
                   ) : null}
-                  <p className="text-sm text-muted-foreground">{t('certificateExpiryHint')}</p>
+                  <p className={FORM_HINT}>{t('certificateExpiryHint')}</p>
                   <FieldError name="certificateExpiry" />
                 </div>
               </div>
@@ -1008,8 +1038,8 @@ export function OnboardingWizard({
 
             {step === 6 ? (
               <div className="space-y-6">
-                <div id={domId('availability')} className="space-y-1.5 sm:max-w-xs">
-                  <Label htmlFor="onb-availability-trigger">{t('availabilityLabel')}</Label>
+                <div id={domId('availability')} className={cn(FORM_FIELD, 'sm:max-w-xs')}>
+                  <Label htmlFor="onb-availability-trigger" className={FORM_LABEL_TEXT}>{t('availabilityLabel')}</Label>
                   <Select
                     value={values.availability || undefined}
                     onValueChange={(val) =>
@@ -1017,6 +1047,7 @@ export function OnboardingWizard({
                     }
                   >
                     <SelectTrigger
+                      className={FORM_SELECT}
                       id="onb-availability-trigger"
                       aria-invalid={errors.availability ? true : undefined}
                       aria-describedby={describedBy('availability')}
@@ -1039,7 +1070,7 @@ export function OnboardingWizard({
                   role="group"
                   aria-labelledby={`${domId('preferredContractTypes')}-label`}
                   aria-describedby={describedBy('preferredContractTypes')}
-                  className="space-y-2"
+                  className={FORM_FIELD}
                 >
                   <Label id={`${domId('preferredContractTypes')}-label`}>
                     {t('contractTypesLabel')}
@@ -1060,11 +1091,12 @@ export function OnboardingWizard({
                   <FieldError name="preferredContractTypes" />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('expectedSalaryMin')}>{t('expectedSalary')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('expectedSalaryMin')} className={FORM_LABEL_TEXT}>{t('expectedSalary')}</Label>
                   <div className="flex items-start gap-2">
                     <div className="flex-1">
                       <Input
+                        className={FORM_INPUT}
                         id={domId('expectedSalaryMin')}
                         type="number"
                         inputMode="numeric"
@@ -1081,7 +1113,7 @@ export function OnboardingWizard({
                           setValue('expectedSalaryCurrency', val as Currency, { shouldDirty: true })
                         }
                       >
-                        <SelectTrigger aria-label={t('currencyLabel')}>
+                        <SelectTrigger className={FORM_SELECT} aria-label={t('currencyLabel')}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1094,9 +1126,10 @@ export function OnboardingWizard({
                   <FieldError name="expectedSalaryMin" />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor={domId('bio')}>{t('bioLabel')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('bio')} className={FORM_LABEL_TEXT}>{t('bioLabel')}</Label>
                   <Textarea
+                    className={FORM_INPUT}
                     id={domId('bio')}
                     rows={4}
                     placeholder={t('bioPlaceholder')}
@@ -1107,7 +1140,7 @@ export function OnboardingWizard({
                   <FieldError name="bio" />
                 </div>
 
-                <div id={domId('agreeTerms')} className="space-y-1.5">
+                <div id={domId('agreeTerms')} className={FORM_FIELD}>
                   <div className="flex items-start gap-2.5">
                     <Checkbox
                       id="onb-agreeTerms-box"
@@ -1121,7 +1154,7 @@ export function OnboardingWizard({
                     />
                     <Label
                       htmlFor="onb-agreeTerms-box"
-                      className="text-sm font-normal leading-snug text-muted-foreground"
+                      className="text-[13px] font-normal leading-[1.5] text-foreground"
                     >
                       {t.rich('agreeTermsLinks', {
                         terms: (chunks) => (
@@ -1146,7 +1179,7 @@ export function OnboardingWizard({
       </div>
 
       {/* Stopka: wskaźnik zapisu + nawigacja */}
-      <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
         <SaveIndicator
           state={saveState}
           labels={{
@@ -1157,8 +1190,8 @@ export function OnboardingWizard({
             error: saveError ? tRoot(toUserMessageKey(saveError)) : t('saveError'),
           }}
         />
-        <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
-          <Button asChild variant="ghost" disabled={busy}>
+        <div className="flex min-w-0 flex-col gap-[13px] lg:flex-row lg:flex-wrap">
+          <Button asChild variant="ghost" disabled={busy} className={cn(BTN_RESET, 'min-h-[49px] rounded-[11px] px-[19px] text-sm font-[650]')}>
             <Link href="/candidate">{t('cancel')}</Link>
           </Button>
           {/* #323: `aria-disabled` zamiast `disabled` — przycisk zachowuje fokus podczas zapisu;
@@ -1168,7 +1201,7 @@ export function OnboardingWizard({
             variant="outline"
             onClick={() => void handleSaveExit()}
             aria-disabled={busy || undefined}
-            className={busyClass}
+            className={cn(BTN_SECONDARY, BTN_RESET, busyClass)}
           >
             {t('saveExit')}
           </Button>
@@ -1178,7 +1211,7 @@ export function OnboardingWizard({
               variant="outline"
               onClick={handleBack}
               aria-disabled={busy || undefined}
-              className={busyClass}
+              className={cn(BTN_SECONDARY, BTN_RESET, busyClass)}
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               {t('back')}
@@ -1189,7 +1222,7 @@ export function OnboardingWizard({
               type="button"
               onClick={() => void handleNext()}
               aria-disabled={busy || undefined}
-              className={busyClass}
+              className={cn(BTN_PRIMARY, BTN_RESET, busyClass)}
             >
               {busy ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -1202,7 +1235,7 @@ export function OnboardingWizard({
               type="button"
               onClick={() => void handleFinish()}
               aria-disabled={busy || undefined}
-              className={busyClass}
+              className={cn(BTN_PRIMARY, BTN_RESET, busyClass)}
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
               {t('finish')}
@@ -1233,7 +1266,7 @@ function TermsLink({
       target="_blank"
       rel="noopener noreferrer"
       onClick={(event) => event.stopPropagation()}
-      className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+      className="font-semibold text-foreground underline underline-offset-2 hover:text-primary"
     >
       {children}
       <span className="sr-only"> {newTabHint}</span>
@@ -1251,7 +1284,7 @@ function SaveIndicator({
 }): React.JSX.Element {
   if (state === 'saving') {
     return (
-      <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+      <p className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         {labels.saving}
       </p>
@@ -1259,21 +1292,21 @@ function SaveIndicator({
   }
   if (state === 'saved') {
     return (
-      <p role="status" className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-        <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+      <p role="status" className="inline-flex items-center gap-2 text-[13px] text-success-text">
+        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
         {labels.saved}
       </p>
     );
   }
   if (state === 'error') {
     return (
-      <p role="alert" className="inline-flex items-center gap-2 text-sm text-error">
+      <p role="alert" className="inline-flex items-center gap-2 text-[13px] text-error">
         <AlertCircle className="h-4 w-4" aria-hidden="true" />
         {labels.error}
       </p>
     );
   }
-  return <p className="text-sm text-muted-foreground">{labels.idle}</p>;
+  return <p className="text-[13px] text-muted-foreground">{labels.idle}</p>;
 }
 
 /** Pigułka wielokrotnego wyboru (kategorie/rodzaje umów). */
@@ -1291,12 +1324,7 @@ function TogglePill({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
-        active
-          ? 'border-accent bg-accent/10 text-accent-dark'
-          : 'border-input text-foreground hover:bg-soft',
-      )}
+      className={cn(chipClass(active), 'gap-1.5')}
     >
       {label}
       {active ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
@@ -1350,6 +1378,7 @@ function ChipInput({
     <div>
       <div className="flex gap-2">
         <Input
+          className={FORM_INPUT}
           id={id}
           value={draft}
           placeholder={placeholder}
@@ -1369,13 +1398,13 @@ function ChipInput({
             }
           }}
         />
-        <Button type="button" variant="outline" onClick={add}>
+        <Button type="button" variant="outline" onClick={add} className={cn(BTN_SECONDARY, BTN_RESET, 'shrink-0')}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           {addLabel}
         </Button>
       </div>
       {tooLong ? (
-        <p id={draftErrorId} className="mt-1.5 text-sm text-error">
+        <p id={draftErrorId} className={cn(FORM_ERROR, 'mt-1.5')}>
           {tooLongLabel}
         </p>
       ) : null}
@@ -1384,14 +1413,14 @@ function ChipInput({
           {values.map((value) => (
             <li
               key={value}
-              className="inline-flex items-center gap-1.5 rounded-md border border-input bg-soft px-2.5 py-1 text-sm text-foreground"
+              className={CHIP}
             >
               {value}
               <button
                 type="button"
                 aria-label={`${removeLabel}: ${value}`}
                 onClick={() => onChange(values.filter((v) => v !== value))}
-                className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+                className={CHIP_REMOVE}
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>

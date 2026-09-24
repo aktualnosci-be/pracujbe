@@ -905,7 +905,15 @@
     "navSearches": "Zapisane wyszukiwania",
     "employerApplicationGuestBadge": "Bez konta",
     "employerApplicationGuestHint": "Kandydat aplikował bez konta Pracuj.be i potwierdził adres e-mail. Skontaktuj się e-mailem lub telefonem — wiadomości w serwisie będą dostępne, gdy przypisze aplikację do konta.",
-    "employerApplicationEmail": "E-mail"
+    "employerApplicationEmail": "E-mail",
+    "candidateEyebrow": "Twój następny krok",
+    "candidateIntro": "Twoje aplikacje, propozycje i możliwości — w jednym miejscu.",
+    "candidatePlaceEyebrow": "Twoje miejsce",
+    "applicationStepSent": "Zgłoszenie wysłane",
+    "applicationStepReview": "Pracodawca przegląda",
+    "applicationStepInterview": "Rozmowa",
+    "applicationStepDecision": "Decyzja",
+    "employerPlaceEyebrow": "Twoja rekrutacja"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1022,7 +1030,8 @@
     "stepAnnounce": "Krok {current} z {total}: {title}",
     "agreeTermsLinks": "Akceptuję <terms>regulamin</terms> i <privacy>politykę prywatności</privacy>.",
     "opensInNewTab": "(otwiera się w nowej karcie)",
-    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy."
+    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy.",
+    "eyebrow": "PASZPORT PRACY"
   },
   "filters": {
     "title": "Filtry",
