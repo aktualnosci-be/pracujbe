@@ -427,10 +427,13 @@ function companySlug(name: string): string {
 }
 
 /**
- * Bootstrap firmy pracodawcy (idempotentny). Jeśli zalogowany użytkownik NIE jest jeszcze
- * członkiem żadnej firmy, tworzy firmę + właściciela atomowo przez RPC
- * `create_company_with_owner` (nazwa z metadanych rejestracji `company_name`).
- * Jeśli członkostwo już istnieje — nic nie robi.
+ * Bootstrap firmy pracodawcy po rejestracji (idempotentny, #28). Jedno wywołanie RPC
+ * `create_first_company` (0072): w JEDNEJ transakcji blokuje wiersz własnego profilu,
+ * ponownie sprawdza członkostwo i dopiero wtedy tworzy firmę + właściciela. Dwa
+ * równoczesne callbacki dają jedną firmę — druga transakcja czeka na blokadę i zwraca
+ * istniejącą (`created = false`). Kandydat, profil nieaktywny/usunięty oraz samo
+ * nieaktywne członkostwo (odebrany dostęp) → PERMISSION_DENIED, bez firmy zastępczej.
+ * Błąd wycofuje całą transakcję, więc ponowienie jest bezpieczne.
  *
  * Może przyjąć gotowego klienta (np. z callbacku Auth, który po wymianie kodu ma sesję
  * w pamięci); bez argumentu tworzy własnego klienta z sesji cookie.
@@ -447,17 +450,6 @@ export async function bootstrapCompany(
     }
     const user = userData.user;
 
-    // Idempotencja: jeśli użytkownik jest już członkiem firmy, kończymy sukcesem.
-    const { data: membership } = await supabase
-      .from('company_members')
-      .select('company_id')
-      .eq('profile_id', user.id)
-      .limit(1)
-      .maybeSingle();
-    if (membership) {
-      return { ok: true };
-    }
-
     const metadata = user.user_metadata as Record<string, unknown> | undefined;
     const rawName = metadata?.['company_name'];
     const companyName = typeof rawName === 'string' ? rawName.trim() : '';
@@ -465,12 +457,17 @@ export async function bootstrapCompany(
       return { ok: false, error: 'VALIDATION_FAILED' };
     }
 
-    const { error } = await supabase.rpc('create_company_with_owner', {
+    // Bez wcześniejszego SELECT członkostwa: odczyt poza blokadą był źródłem wyścigu.
+    const { error } = await supabase.rpc('create_first_company', {
       p_name: companyName,
       p_slug: companySlug(companyName),
+      p_vat_number: null,
     });
     if (error) {
-      throw new AppError('INTERNAL', { cause: error, context: { rpc: 'create_company_with_owner' } });
+      if (error.message?.includes('PERMISSION_DENIED')) {
+        return { ok: false, error: 'PERMISSION_DENIED' };
+      }
+      throw new AppError('INTERNAL', { cause: error, context: { rpc: 'create_first_company' } });
     }
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };

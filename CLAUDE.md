@@ -601,6 +601,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 
 ### Etap 4 — pracodawca
 - [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
+  Bootstrap po rejestracji (#28): callback Auth (`bootstrapCompany` w `actions/auth.ts`) woła
+  wyłącznie `create_first_company` — blokada profilu i ponowne sprawdzenie członkostwa w jednej
+  transakcji; dwa równoczesne callbacki = jedna firma, jeden owner. Bez migracji. Dowód: `rls.sql`
+  sekcja CO28 (dblink, kontrola ujemna bez `FOR UPDATE` tworzy duplikat), `company-bootstrap-callback.test`.
 - [x] Panel pracodawcy — realne dane pod sesją (RLS) + akcje (zmiana statusu aplikacji, wysyłka propozycji), noindex; fallback demo bez env
   Lejek (#302): kohorta aplikacji z 30 dni (`submitted_at`) liczona zapytaniami `count` (head,
   `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = „brak danych” (brak mechanizmu
@@ -618,6 +622,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Po „Dalej”/„Wstecz” fokus na nagłówku nowego kroku + ogłoszenie „Krok N z 9”, jeden region
   statusu zapisu (#402). Błąd zapisu pokazuje komunikat z kodu serwera (`toUserMessageKey`);
   `JOB_NOT_DRAFT` → link do listy ofert zamiast ponawiania (#363).
+  Zapis kroku (#192, migracja `0083`): `updateJobDraft` woła jedno RPC `save_job_draft`
+  (kolumny `jobs` z listy dozwolonych + tłumaczenie + relacje replace-all w jednej transakcji,
+  tylko szkic, recruiter+) — błąd w części kroku nie zostawia częściowego zapisu. Treść kroku
+  buduje `src/lib/job-draft-content.ts`. Dowód: `rls.sql` sekcja WZ192.
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
@@ -767,6 +775,21 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 ### Etap 8 — jakość
 - [x] Testy: Vitest (matching, recipient-locale, i18n keys, error-keys), integracyjne RLS+seed w CI (`postgres:16`), Playwright (smoke/seo/flows)
 - [~] Testy Playwright: języki/detal oferty/CTA/noindex paneli/cookies/SEO gotowe (`flows.spec`+smoke+seo, 12 pass); do rozbudowy: aplikowanie/propozycje pod realną sesją
+  Przepływ na PostgreSQL 16 (#351, #66 — częściowo): `npm run test:e2e:real`
+  (`scripts/test-e2e-real.mjs` + `playwright.real-flow.config.ts`, spec `tests/e2e-real/`).
+  Izolowana baza o jawnym hoście/porcie/nazwie (`E2E_PG*`, nazwa musi zawierać „e2e”), migracje
+  produkcyjne, jednorazowe ograniczone loginy app/auth. Sesje Better Auth (rejestracja →
+  weryfikacja → logowanie → cookie), tożsamość z cookie (`readPortalIdentity`) →
+  `withUserTransaction` pod RLS. Kroki: onboarding 1–6 z błędem drugiej części kroku 5
+  i `finish_onboarding`, aplikacja (podwójne kliknięcie), status, propozycja (retry), akceptacja,
+  wiadomości w obie strony z licznikiem, `email_deliveries` fr/nl, obce konta bez dostępu.
+  Przeglądarka widzi ofertę z bazy (`next dev` z `DATABASE_APP_URL`) i jej zniknięcie po
+  zamknięciu. Kontrole ujemne: `E2E_REAL_MUTATION=rls-applications-off|finish-onboarding-noop|
+  step5-swallow-error|recipient-locale-en|retry-new-key` — każda daje czerwony test.
+  **Otwarte:** panele i Server Actions nadal używają klienta Supabase (PostgREST nie ustawia
+  `app.current_uid`), więc kliknięć w panelach i `revalidatePath` ten test nie obejmuje — po
+  #24/#25 dołożyć kroki UI w tym samym configu. Wpięcie w CI (job z usługą `postgres:16`) —
+  gotowy fragment `ci.yml` w opisie PR tej zmiany.
   Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
   worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
@@ -790,6 +813,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
   **Do zrobienia:** asercje `email_deliveries.locale` na żywej bazie w `rls.sql` (#348, SQL),
   raport flaków (#375).
+  Post 1080×1080 z prawdziwej oferty (#181): `scripts/export-job-post.mjs slug locale wyjście`
+  — dane wyłącznie z `get_public_job` (`DATABASE_APP_URL`, `SET LOCAL ROLE anon`, odmowa loginu
+  superusera; `scripts/lib/job-post-source.mjs`), bez JSON od operatora; renderer przyjmuje tylko
+  obiekt ze źródła. Stawka tylko gdy podana, tytuł 2×77/3×60 px albo błąd przed zapisem.
+  Instrukcja: `docs/design/people-passport/JOB-POST-EXPORT.md`, test `job-post-export`.
+  **Otwarte (#186):** zaufana kontrola `is_demo` wymaga wąskiego RPC z migracją.
   Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami
@@ -843,6 +872,7 @@ npm run lint           # ESLint
 npm run typecheck      # tsc --noEmit
 npm run test           # Vitest (unit)
 npm run test:e2e       # Playwright
+npm run test:e2e:real  # Playwright + izolowany PostgreSQL 16 (E2E_PG*; przepływ kandydat ↔ pracodawca)
 npm run verify         # lint + typecheck + test (uruchamiaj przed commitem)
 npm run db:reset       # (supabase CLI) reset + migracje + seed [lokalnie]
 ```

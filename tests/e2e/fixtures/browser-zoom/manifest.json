@@ -2,6 +2,6 @@
   "manifest_version": 3,
   "name": "Pracuj.be browser zoom test",
   "version": "1.0",
-  "permissions": ["tabs"],
-  "background": { "service_worker": "background.js" }
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxpC2tLUyQR22zYTsIOoMpuzOn+51aAoE/VUK+8wgMaaJ2FhC0qEcjGC+2A5PONhd9dxYEsnpzmm59ILWCO0Abj+z1k5sEl7dLnIVf84mBL5IdpuZGA2nuWmGkDKA9ZtpY7/aE3eYLfzAfKt3C4L2GIzgM4m6SQEtxTHZx/I4oRXDdJ+zBlH/mcyU7ABWEdg+chd9H+71/MfaV+T46A2PdB/+iqekXFukdoDDrUWk9/sIwu7zo+Ouvz3iR5ugBvHrJgZmgcDZpdEaCe6GsFF7ylK+6d+dpulLGqfhamTCxrAtSqBPl6R2Ok0rX/yUf4WH2xI+GAvduUjZepNQVHuxowIDAQAB",
+  "permissions": ["tabs"]
 }

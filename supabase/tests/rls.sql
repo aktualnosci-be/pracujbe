@@ -2901,6 +2901,264 @@ select pg_temp.assert(
                  and p.pronargs = 2),
   'ADM8c stare dwuargumentowe sygnatury usunięte (brak obejścia macierzy)');
 
+
+-- ============================================================================
+-- CO28. Bootstrap firmy po rejestracji bez duplikatów (#28). Callback rejestracji woła
+--       `create_first_company` (0072): blokada własnego profilu + ponowne sprawdzenie
+--       członkostwa w jednej transakcji. Równoległość: osobne sesje przez dblink (PP).
+-- ============================================================================
+\set CO28A  'e2800000-0000-0000-0000-0000000000a1'
+\set CO28B  'e2800000-0000-0000-0000-0000000000a2'
+\set CO28C  'e2800000-0000-0000-0000-0000000000a3'
+\set CO28I  'e2800000-0000-0000-0000-0000000000a4'
+\set CO28D  'e2800000-0000-0000-0000-0000000000a5'
+\set CO28K  'e2800000-0000-0000-0000-0000000000a6'
+\set CO28M  'e2800000-0000-0000-0000-0000000000a7'
+reset role; reset app.current_uid;
+
+select pg_temp.remote_connect('co_setup');
+select dbl.dblink_exec('co_setup', $fx$
+  insert into auth.users(id,email,name,raw_user_meta_data) values
+    ('e2800000-0000-0000-0000-0000000000a1','co28a@test.be','Ann A','{"role":"employer","locale":"pl"}'),
+    ('e2800000-0000-0000-0000-0000000000a2','co28b@test.be','Bram B','{"role":"employer","locale":"nl"}'),
+    ('e2800000-0000-0000-0000-0000000000a3','co28c@test.be','Cleo C','{"role":"employer","locale":"fr"}'),
+    ('e2800000-0000-0000-0000-0000000000a4','co28i@test.be','Ines I','{"role":"employer","locale":"en"}'),
+    ('e2800000-0000-0000-0000-0000000000a5','co28d@test.be','Dirk D','{"role":"employer","locale":"nl"}'),
+    ('e2800000-0000-0000-0000-0000000000a6','co28k@test.be','Kaja K','{"role":"candidate","locale":"pl"}'),
+    ('e2800000-0000-0000-0000-0000000000a7','co28m@test.be','Mila M','{"role":"employer","locale":"pl"}');
+  update public.profiles set is_active = false where id = 'e2800000-0000-0000-0000-0000000000a4';
+  update public.profiles set deleted_at = now() where id = 'e2800000-0000-0000-0000-0000000000a5';
+  insert into public.companies(id,name,status) values ('e2800000-0000-0000-0000-0000000000f1','Firma CO28','unverified');
+  insert into public.company_members(company_id,profile_id,role,is_active) values
+    ('e2800000-0000-0000-0000-0000000000f1','e2800000-0000-0000-0000-0000000000a7','recruiter',false);
+$fx$);
+select dbl.dblink_disconnect('co_setup');
+
+-- CO28-1: dwa RÓWNOCZESNE bootstrapy tego samego pracodawcy — druga transakcja czeka
+-- na blokadę profilu i po commicie pierwszej zwraca tę samą firmę (created = false).
+select pg_temp.remote_begin('co_a', :'CO28A') as pid_a \gset
+select pg_temp.remote_begin('co_b', :'CO28A') as pid_b \gset
+select t.v as co1a from dbl.dblink('co_a',
+  'select (company_id::text || '':'' || created::text) from public.create_first_company(''Firma A'', ''co28-a-1'', null)')
+  as t(v text) \gset
+select dbl.dblink_send_query('co_b',
+  'select (company_id::text || '':'' || created::text) from public.create_first_company(''Firma A'', ''co28-a-2'', null)');
+select pg_temp.wait_blocked(:pid_b, 'CO28-1');
+select dbl.dblink_exec('co_a', 'commit');
+select pg_temp.remote_result('co_b') as co1b \gset
+select dbl.dblink_exec('co_b', 'commit');
+select dbl.dblink_disconnect('co_a'); select dbl.dblink_disconnect('co_b');
+select pg_temp.assert(:'co1a' like '%:true' and :'co1b' = split_part(:'co1a', ':', 1) || ':false',
+  'CO28-1 równoczesny bootstrap zwraca tę samą firmę (druga próba created = false)');
+select pg_temp.assert(
+  (select count(*) from public.company_members where profile_id = :'CO28A') = 1
+  and (select count(*) from public.company_members cm
+         where cm.company_id = split_part(:'co1a', ':', 1)::uuid and cm.role = 'owner') = 1
+  and not exists (select 1 from public.companies where slug = 'co28-a-2'),
+  'CO28-1b jedna nowa firma i jeden owner po dwóch równoczesnych wywołaniach');
+
+-- CO28-2: kontrola ujemna — ta sama funkcja z usuniętą blokadą profilu (kopia ciała
+-- z katalogu, jedyna różnica to brak FOR UPDATE) tworzy duplikat w tym samym scenariuszu.
+-- Kopię zakłada i usuwa osobna, zatwierdzana sesja: zestaw bywa uruchamiany w BEGIN …
+-- ROLLBACK (tests/integration/rate-limit.test.ts), a sesje dblink widzą tylko commit.
+do $$
+declare v_def text; v_nolock text;
+begin
+  v_def := pg_get_functiondef('public.create_first_company(text,text,text)'::regprocedure);
+  v_nolock := replace(replace(v_def, 'public.create_first_company(', 'co28_neg.create_first_company_nolock('),
+                      'where p.id = v_uid for update;', 'where p.id = v_uid;');
+  if v_nolock = v_def or v_nolock like '%for update;%'
+     or v_nolock not like '%co28_neg.create_first_company_nolock(%' then
+    raise exception 'ASSERT FAILED: CO28-2 nie udało się usunąć blokady z kopii funkcji';
+  end if;
+  perform pg_temp.remote_connect('co_setup');
+  perform dbl.dblink_exec('co_setup', 'create schema co28_neg');
+  perform dbl.dblink_exec('co_setup', v_nolock);
+  perform dbl.dblink_exec('co_setup', 'grant usage on schema co28_neg to authenticated');
+  perform dbl.dblink_exec('co_setup',
+    'grant execute on function co28_neg.create_first_company_nolock(text, text, text) to authenticated');
+  perform dbl.dblink_disconnect('co_setup');
+end $$;
+select pg_temp.remote_begin('co_a', :'CO28B') as pid_a \gset
+select pg_temp.remote_begin('co_b', :'CO28B') as pid_b \gset
+select t.v as co2a from dbl.dblink('co_a',
+  'select company_id::text from co28_neg.create_first_company_nolock(''Firma B'', ''co28-b-1'', null)')
+  as t(v text) \gset
+select t.v as co2b from dbl.dblink('co_b',
+  'select company_id::text from co28_neg.create_first_company_nolock(''Firma B'', ''co28-b-2'', null)')
+  as t(v text) \gset
+select dbl.dblink_exec('co_a', 'commit'); select dbl.dblink_exec('co_b', 'commit');
+select dbl.dblink_disconnect('co_a'); select dbl.dblink_disconnect('co_b');
+select pg_temp.remote_connect('co_setup');
+select dbl.dblink_exec('co_setup', 'drop schema co28_neg cascade');
+select dbl.dblink_disconnect('co_setup');
+select pg_temp.assert(:'co2a' <> :'co2b'
+  and (select count(*) from public.company_members where profile_id = :'CO28B' and role = 'owner') = 2,
+  'CO28-2 bez blokady profilu równoczesny bootstrap tworzy DWIE firmy (test wykrywa wyścig)');
+
+-- CO28-3: pierwsza próba wycofana (awaria w trakcie) nie zostawia firmy ani członkostwa;
+-- czekające ponowienie tworzy dokładnie jedną firmę.
+select pg_temp.remote_begin('co_a', :'CO28C') as pid_a \gset
+select pg_temp.remote_begin('co_b', :'CO28C') as pid_b \gset
+select t.v as co3a from dbl.dblink('co_a',
+  'select company_id::text from public.create_first_company(''Firma C'', ''co28-c-1'', null)') as t(v text) \gset
+select dbl.dblink_send_query('co_b',
+  'select (company_id::text || '':'' || created::text) from public.create_first_company(''Firma C'', ''co28-c-2'', null)');
+select pg_temp.wait_blocked(:pid_b, 'CO28-3');
+select dbl.dblink_exec('co_a', 'rollback');
+select pg_temp.remote_result('co_b') as co3b \gset
+select dbl.dblink_exec('co_b', 'commit');
+select dbl.dblink_disconnect('co_a'); select dbl.dblink_disconnect('co_b');
+select pg_temp.assert(:'co3b' like '%:true' and split_part(:'co3b', ':', 1) <> :'co3a'
+  and not exists (select 1 from public.companies where id = :'co3a'::uuid),
+  'CO28-3 wycofana próba nie zostawia firmy; ponowienie ją tworzy');
+select pg_temp.assert(
+  (select count(*) from public.company_members where profile_id = :'CO28C') = 1,
+  'CO28-3b po awarii i ponowieniu jedno członkostwo ownera');
+
+-- CO28-4: kandydat, profil nieaktywny, profil usunięty i samo nieaktywne członkostwo
+-- nie tworzą firmy.
+set role authenticated; set app.current_uid = :'CO28K'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma K'', ''co28-k'', null)',
+  'PERMISSION_DENIED', 'CO28-4 kandydat nie tworzy firmy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CO28I'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma I'', ''co28-i'', null)',
+  'PERMISSION_DENIED', 'CO28-4b nieaktywny profil pracodawcy nie tworzy firmy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CO28D'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma D'', ''co28-d'', null)',
+  'PERMISSION_DENIED', 'CO28-4c usunięty profil pracodawcy nie tworzy firmy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CO28M'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma M'', ''co28-m'', null)',
+  'PERMISSION_DENIED', 'CO28-4d nieaktywne członkostwo nie tworzy firmy zastępczej');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.companies where slug in ('co28-k', 'co28-i', 'co28-d', 'co28-m'))
+  and (select count(*) from public.company_members
+         where profile_id in (:'CO28K', :'CO28I', :'CO28D')) = 0
+  and (select count(*) from public.company_members where profile_id = :'CO28M') = 1,
+  'CO28-4e odmowy nie zostawiły firm ani członkostw');
+
+-- CO28-5: świadome tworzenie kolejnej firmy poza automatycznym bootstrapem nadal możliwe,
+-- a późniejszy bootstrap nie dokłada firmy.
+set role authenticated; set app.current_uid = :'CO28A'; select pg_temp.assert_client_role();
+select public.create_company_with_owner('Firma A2', 'co28-a-second') is not null as co5 \gset
+select created::text as co5b from public.create_first_company('Firma A', 'co28-a-3', null) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'co5'::boolean and :'co5b' = 'false'
+  and (select count(*) from public.company_members where profile_id = :'CO28A') = 2,
+  'CO28-5 druga firma z osobnej akcji, bootstrap po niej nie tworzy trzeciej');
+
+-- ============================================================================
+-- WZ192. Zapis kroku kreatora w jednej transakcji (0083, #192): save_job_draft — kolumny,
+--        tłumaczenie i relacje razem; błąd w części relacji = brak częściowego zapisu
+-- ============================================================================
+\set JOBWZ 'e8300000-0000-0000-0000-0000000000b1'
+reset role;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'JOBWZ', :'COMPA', :'EMPA', 'draft-wz192', '', 'logistics', 'permanent', '', '', 'draft', 'pl');
+
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+-- WZ192-1: krok 1 — kolumny oferty i tłumaczenie (tytuł) jednym wywołaniem.
+select public.save_job_draft(:'JOBWZ'::uuid,
+  '{"job": {"title": "Operator wózka", "category": "warehouse", "occupation": "Operator"}, "translation": {}}'::jsonb);
+-- WZ192-2: krok 5 i 7 — tłumaczenie (patch) oraz komplet relacji.
+select public.save_job_draft(:'JOBWZ'::uuid,
+  '{"translation": {"description": "Praca na magazynie w Antwerpii.", "responsibilities": ["Załadunek"]}}'::jsonb);
+select public.save_job_draft(:'JOBWZ'::uuid, $j${
+  "job": {"requires_driving_license": false, "no_language_required": false},
+  "requirements_optional": ["Wózek widłowy"], "skills_optional": ["Excel"],
+  "languages": [{"language": "Angielski", "level": "basic"}], "certificates": ["VCA"]
+}$j$::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title = 'Operator wózka' and category::text = 'warehouse' and occupation = 'Operator'
+          and status::text = 'draft' from public.jobs where id = :'JOBWZ')
+  and (select title = 'Operator wózka' and description = 'Praca na magazynie w Antwerpii.'
+              and responsibilities = array['Załadunek']
+         from public.job_translations where job_id = :'JOBWZ' and locale = 'pl'),
+  'WZ192-1 krok 1 i 5: kolumny i tłumaczenie zapisane, szkic zostaje szkicem');
+select pg_temp.assert(
+  (select array_agg(content) from public.job_requirements where job_id = :'JOBWZ' and kind = 'optional') = array['Wózek widłowy']
+  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBWZ') = array['Excel']
+  and (select array_agg(language_label) from public.job_languages where job_id = :'JOBWZ') = array['Angielski']
+  and (select array_agg(certificate_label) from public.job_certificates where job_id = :'JOBWZ') = array['VCA'],
+  'WZ192-2 krok 7: wszystkie relacje zapisane');
+
+-- WZ192-3 (kontrola ujemna): zmiana tytułu tłumaczenia nie nadpisuje opisu (patch).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBWZ'::uuid,
+  '{"job": {"title": "Operator wózka widłowego", "category": "warehouse", "occupation": "Operator"}, "translation": {}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title = 'Operator wózka widłowego' and description = 'Praca na magazynie w Antwerpii.'
+     from public.job_translations where job_id = :'JOBWZ' and locale = 'pl'),
+  'WZ192-3 krok bez pól tłumaczenia nie czyści opisu');
+
+-- WZ192-4 (kontrola ujemna atomowości): krok 7 z błędną relacją (nieznany poziom języka)
+-- — kolumny oferty, wymagania i umiejętności z tego samego kroku NIE zostają zapisane.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ', $j${
+    "job": {"requires_driving_license": true, "no_language_required": false},
+    "requirements_optional": ["Nowe wymaganie"], "skills_optional": ["Nowa umiejętność"],
+    "languages": [{"language": "Niemiecki", "level": "nie-ma-takiego"}], "certificates": ["Nowy certyfikat"]
+  }$j$),
+  'language_level', 'WZ192-4 błędna relacja odrzuca cały krok');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select requires_driving_license from public.jobs where id = :'JOBWZ') = false
+  and (select array_agg(content) from public.job_requirements where job_id = :'JOBWZ' and kind = 'optional') = array['Wózek widłowy']
+  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBWZ') = array['Excel']
+  and (select array_agg(language_label) from public.job_languages where job_id = :'JOBWZ') = array['Angielski']
+  and (select array_agg(certificate_label) from public.job_certificates where job_id = :'JOBWZ') = array['VCA'],
+  'WZ192-4b odrzucony krok nie zostawia częściowego zapisu (kolumny i relacje bez zmian)');
+
+-- WZ192-5 (kontrola ujemna): błąd kolumny (CHECK widełek) cofa też relacje tego wywołania.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ',
+    '{"job": {"salary_min": 20, "salary_max": 10}, "certificates": ["Inny"]}'),
+  'check constraint', 'WZ192-5 błędne widełki odrzucają cały zapis');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select array_agg(certificate_label) from public.job_certificates where job_id = :'JOBWZ') = array['VCA']
+  and (select salary_min is null from public.jobs where id = :'JOBWZ'),
+  'WZ192-5b relacje i kolumny bez zmian po błędzie kolumny');
+
+-- WZ192-6: granice — nieznane pole, nie-członek, oferta nie-szkic (edycję robi update_published_job).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ', '{"job": {"status": "active"}}'),
+  'VALIDATION_FAILED', 'WZ192-6 pole spoza listy (status) odrzucone');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ', '{"translation": {"title": "x"}}'),
+  'VALIDATION_FAILED', 'WZ192-6b pole tłumaczenia spoza listy odrzucone');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBE', '{"job": {"title": "Obejście"}}'),
+  'JOB_NOT_DRAFT', 'WZ192-6c opublikowanej oferty nie zapisuje ścieżka szkicu');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ', '{"job": {"title": "Cudzy"}}'),
+  'PERMISSION_DENIED', 'WZ192-6d nie-członek nie zapisze cudzego szkicu');
+reset role; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ', '{"job": {"title": "Anon"}}'),
+  'permission denied', 'WZ192-6e anon nie woła save_job_draft');
+reset role;
+select pg_temp.assert(
+  (select title from public.jobs where id = :'JOBWZ') = 'Operator wózka widłowego'
+  and (select status::text <> 'draft' and title <> 'Obejście' from public.jobs where id = :'JOBE'),
+  'WZ192-6f odrzucone próby nic nie zmieniły');
+
 -- ============================================================================
 -- OB142. Onboarding kandydata: jeden krok = jedna transakcja (0082, #142)
 -- Wstrzyknięty błąd w DRUGIEJ części kroku (trigger na relacji) nie zostawia pierwszej.

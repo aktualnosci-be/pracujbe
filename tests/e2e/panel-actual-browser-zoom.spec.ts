@@ -1,10 +1,11 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { chromium, expect, test, type Locator, type Page } from "@playwright/test";
 
+import { openZoomController, ZOOM_EXTENSION_ARGS } from "./fixtures/zoom-controller";
+
 const locales = ["pl", "nl", "fr", "en"] as const;
-const extensionPath = resolve(__dirname, "fixtures/browser-zoom");
 
 async function expectNoHorizontalOverflow(page: Page, route: string) {
   const widths = await page.evaluate(() => ({
@@ -31,25 +32,20 @@ for (const locale of locales) {
       channel: "chromium",
       headless: true,
       viewport: { width: 1280, height: 900 },
-      args: [
-        `--disable-extensions-except=${extensionPath}`,
-        `--load-extension=${extensionPath}`,
-      ],
+      args: ZOOM_EXTENSION_ARGS,
       ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
         ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
         : {}),
     });
 
     try {
-      const worker =
-        context.serviceWorkers()[0] ??
-        (await context.waitForEvent("serviceworker"));
       const page = context.pages()[0] ?? (await context.newPage());
+      const zoomController = await openZoomController(context, page);
       const baseURL = test.info().project.use.baseURL;
       expect(baseURL).toBeTruthy();
       await page.goto(new URL(`/${locale}/candidate`, baseURL).toString());
 
-      const tabId = await worker.evaluate(async (url) => {
+      const tabId = await zoomController.evaluate(async (url) => {
         const tab = (await chrome.tabs.query({})).find((item) =>
           item.url?.startsWith(url),
         );
@@ -67,7 +63,7 @@ for (const locale of locales) {
       let lastControl: Locator | undefined;
       for (const route of routes) {
         await page.goto(new URL(route, baseURL).toString());
-        const zoom = await worker.evaluate((id) => chrome.tabs.getZoom(id), tabId);
+        const zoom = await zoomController.evaluate((id) => chrome.tabs.getZoom(id), tabId);
         expect(zoom, `${route}: powiększenie przeglądarki`).toBe(2);
         await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(640);
         expect(await page.evaluate(() => window.devicePixelRatio)).toBe(2);
