@@ -12,6 +12,7 @@ import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoJobContentLocales, resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
 import { resolveJobContentLocales } from '@/lib/job-content-locale';
+import { compareMonthlySalaryDesc, salaryInMonthlyRange } from '@/lib/salary-compare';
 import type { TransactionPool } from '@/lib/db/transaction';
 
 export type ContractType =
@@ -236,17 +237,12 @@ function getJobsFromDemo(
       );
     }
   }
-  // Widełki: oferta bez podanego wynagrodzenia NIE jest wykluczana.
+  // Widełki miesięczne (#188, reguła jak w SQL 0080): oferta bez porównywalnej kwoty
+  // (brak wynagrodzenia albo stawka godzinowa) NIE jest wykluczana.
   if (params.salaryMin !== undefined || params.salaryMax !== undefined) {
     const lo = params.salaryMin ?? 0;
     const hi = params.salaryMax ?? Number.POSITIVE_INFINITY;
-    jobs = jobs.filter((job) => {
-      if (job.salaryMin === undefined && job.salaryMax === undefined)
-        return true;
-      const iMax = job.salaryMax ?? job.salaryMin ?? 0;
-      const iMin = job.salaryMin ?? job.salaryMax ?? 0;
-      return iMax >= lo && iMin <= hi;
-    });
+    jobs = jobs.filter((job) => salaryInMonthlyRange(job, lo, hi));
   }
   if (params.accommodation !== undefined) {
     jobs = jobs.filter((job) => job.accommodation === params.accommodation);
@@ -266,9 +262,7 @@ function getJobsFromDemo(
 
   const sorted = [...jobs].sort(
     params.sort === 'salary'
-      ? (a, b) =>
-          (b.salaryMax ?? b.salaryMin ?? 0) -
-            (a.salaryMax ?? a.salaryMin ?? 0) || newestFirst(a, b)
+      ? (a, b) => compareMonthlySalaryDesc(a, b) || newestFirst(a, b)
       : newestFirst,
   );
   const total = sorted.length;

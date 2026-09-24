@@ -2726,4 +2726,69 @@ select pg_temp.expect_error($q$select public.set_candidate_certificates('["VCA"]
   '', 'MC7d pracodawca nie zapisze certyfikatów kandydata');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- SAL. Okres stawki w filtrze, sortowaniu i facetach listy ofert (0080, #188).
+--      Suwak = EUR brutto/mies.: month bez zmian, year / 12, hour bez przeliczenia
+--      (oferta godzinowa i bez wynagrodzenia nie odpada z filtra, sort = na końcu).
+--      Fixture'y izolowane słowem kluczowym „salp188"; identyfikatory unikalne dla SAL.
+-- ============================================================================
+\set JOBSALH  'e8000000-0000-0000-0000-0000000000b1'
+\set JOBSALM  'e8000000-0000-0000-0000-0000000000b2'
+\set JOBSALY  'e8000000-0000-0000-0000-0000000000b3'
+\set JOBSALY2 'e8000000-0000-0000-0000-0000000000b4'
+\set JOBSALM2 'e8000000-0000-0000-0000-0000000000b5'
+\set JOBSALN  'e8000000-0000-0000-0000-0000000000b6'
+reset role; reset app.current_uid;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,salary_period,published_at) values
+  (:'JOBSALH', :'COMPL','sal-h', 'Salp188 H', 'warehouse','permanent','Mechelen','Flandria','active','pl', 20,   22,   'hour',  now() - interval '5 hours'),
+  (:'JOBSALM', :'COMPL','sal-m', 'Salp188 M', 'warehouse','permanent','Mechelen','Flandria','active','pl', 3000, null, 'month', now() - interval '1 hour'),
+  (:'JOBSALY', :'COMPL','sal-y', 'Salp188 Y', 'warehouse','permanent','Mechelen','Flandria','active','pl', 36000,null, 'year',  now() - interval '2 hours'),
+  (:'JOBSALY2',:'COMPL','sal-y2','Salp188 Y2','warehouse','permanent','Mechelen','Flandria','active','pl', 24000,null, 'year',  now() - interval '4 hours'),
+  (:'JOBSALM2',:'COMPL','sal-m2','Salp188 M2','warehouse','permanent','Mechelen','Flandria','active','pl', 2000, null, 'month', now() - interval '3 hours'),
+  (:'JOBSALN', :'COMPL','sal-n', 'Salp188 N', 'warehouse','permanent','Mechelen','Flandria','active','pl', null, null, 'month', now() - interval '6 hours');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- SAL1: ekwiwalent miesięczny — rok / 12, godzina bez przeliczenia.
+select pg_temp.assert(public.job_monthly_salary(36000, 'year') = 3000
+  and public.job_monthly_salary(3000, 'month') = 3000
+  and public.job_monthly_salary(20, 'hour') is null,
+  'SAL1 month = kwota, year = kwota/12, hour = brak przeliczenia');
+
+-- SAL2: filtr od 2500/mies. — roczna 36 000 (=3000) przechodzi, roczna 24 000 (=2000)
+-- odpada (kontrola ujemna: surowe 24 000 >= 2500 przeszłoby), godzinowa i bez kwoty zostają.
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,2500,null,null,null,null,null,'newest',100,0))
+    = array['sal-h','sal-m','sal-n','sal-y'],
+  'SAL2 filtr od 2500/mies. porównuje ekwiwalent miesięczny');
+
+-- SAL3: filtr do 2500/mies. — roczna 36 000 odpada, roczna 24 000 i miesięczna 2000 zostają.
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,2500,null,null,null,null,'newest',100,0))
+    = array['sal-h','sal-m2','sal-n','sal-y2'],
+  'SAL3 filtr do 2500/mies. nie porównuje surowej kwoty rocznej');
+
+-- SAL4: sortowanie „najwyższe wynagrodzenie" po ekwiwalencie miesięcznym; remis → nowsze;
+-- godzinowa i bez kwoty na końcu (kontrola ujemna: surowo 36 000 > 24 000 > 3000).
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,null,null,null,null,null,'salary',100,0))
+    = array['sal-m','sal-y','sal-m2','sal-y2','sal-h','sal-n'],
+  'SAL4 sort po ekwiwalencie miesięcznym, nieporównywalne na końcu');
+
+-- SAL5: licznik i facety stosują identyczną regułę jak listing.
+select pg_temp.assert(
+  public.get_public_jobs_count('pl','salp188',null,null,null,null,2500,null,null,null,null,null) = 4
+  and public.get_public_jobs_count('pl','salp188',null,null,null,null,null,2500,null,null,null,null) = 4
+  and (select total from public.get_public_job_filter_facets(
+         'pl','salp188',null,null,null,null,2500,null,null,null,null,null)
+       where dimension = 'total') = 4
+  and (select total from public.get_public_job_filter_facets(
+         'pl','salp188',null,null,null,null,3100,null,null,null,null,null)
+       where dimension = 'total') = 2,
+  'SAL5 licznik i facety zgodne z listingiem (od 3100: tylko godzinowa i bez kwoty)');
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

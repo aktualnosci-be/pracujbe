@@ -978,6 +978,7 @@
     "location": "Lokalizacja",
     "chooseLocation": "Wybierz lokalizację",
     "salary": "Wynagrodzenie (brutto/mies.)",
+    "salaryPeriodNote": "Porównujemy stawki miesięczne; stawki roczne dzielimy przez 12. Stawek godzinowych nie przeliczamy — oferty godzinowe i bez podanego wynagrodzenia pozostają widoczne przy tym filtrze, a w sortowaniu po wynagrodzeniu są na końcu.",
     "contractType": "Rodzaj umowy",
     "requiredLanguage": "Wymagany język",
     "chooseLanguage": "Wybierz język",
