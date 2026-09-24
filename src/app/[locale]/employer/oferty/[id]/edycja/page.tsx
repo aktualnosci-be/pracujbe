@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
@@ -6,6 +7,13 @@ import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { JobWizard } from '@/components/employer/JobWizard';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
+import {
+  BTN_RESET,
+  BTN_SECONDARY,
+  H2_EXTENDED,
+  P_EXTENDED,
+  PAPER,
+} from '@/components/dashboard/panel-styles';
 import { getEmployerShellData, getJobDraft } from '@/lib/data/employer';
 
 /**
@@ -52,10 +60,10 @@ export default async function EditJobPage({
 
   if (draft.status === 'error') {
     return (
-      <div className="mx-auto max-w-md space-y-4 py-16 text-center">
-        <h1 className="text-lg font-semibold text-foreground">{to('loadError')}</h1>
-        <p className="text-sm text-muted-foreground">{to('loadErrorHint')}</p>
-        <Button asChild variant="outline">
+      <div className={cn(PAPER, 'mx-auto max-w-md space-y-4 text-center')}>
+        <h1 className={H2_EXTENDED}>{to('loadError')}</h1>
+        <p className={P_EXTENDED}>{to('loadErrorHint')}</p>
+        <Button asChild variant="outline" className={`${BTN_SECONDARY} ${BTN_RESET}`}>
           <Link href="/employer/oferty">{td('navOffers')}</Link>
         </Button>
       </div>
@@ -64,10 +72,10 @@ export default async function EditJobPage({
 
   if (draft.status === 'not-editable') {
     return (
-      <div className="mx-auto max-w-md space-y-4 py-16 text-center">
-        <h1 className="text-lg font-semibold text-foreground">{td('jobNotEditableTitle')}</h1>
-        <p className="text-sm text-muted-foreground">{td('jobNotEditableHint')}</p>
-        <Button asChild variant="outline">
+      <div className={cn(PAPER, 'mx-auto max-w-md space-y-4 text-center')}>
+        <h1 className={H2_EXTENDED}>{td('jobNotEditableTitle')}</h1>
+        <p className={P_EXTENDED}>{td('jobNotEditableHint')}</p>
+        <Button asChild variant="outline" className={`${BTN_SECONDARY} ${BTN_RESET}`}>
           <Link href="/employer/oferty">{td('navOffers')}</Link>
         </Button>
       </div>

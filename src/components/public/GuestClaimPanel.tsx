@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -13,17 +13,16 @@ import { cn } from '@/lib/utils';
 /**
  * Przejęcie aplikacji gościa przez konto (#98). Zalogowany kandydat klika przycisk; bez sesji
  * (także gdy wygaśnie w trakcie) widzi logowanie/rejestrację z powrotem na tę stronę.
- * `returnTo` = bieżąca ścieżka z tokenem (po rejestracji link z e-maila potwierdzenia wraca tu).
+ * `returnTo` is a clean path; the HttpOnly link cookie survives login and registration.
  */
 export function GuestClaimPanel({
-  token,
   returnTo,
   signedIn,
 }: {
-  token: string;
   returnTo: string;
   signedIn: boolean;
 }): React.JSX.Element {
+  const locale = useLocale();
   const t = useTranslations('guestApply');
   const tRoot = useTranslations();
   const [pending, setPending] = React.useState(false);
@@ -45,7 +44,7 @@ export function GuestClaimPanel({
     setPending(true);
     setError(null);
     try {
-      const res = await claimGuestApplication(token);
+      const res = await claimGuestApplication(locale);
       if (res.ok) setClaimed(true);
       else if (res.error === 'UNAUTHENTICATED') setNeedsLogin(true);
       else setError(res.error);

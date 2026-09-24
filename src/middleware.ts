@@ -4,6 +4,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { routing } from './i18n/routing';
 import { resolveCitySlugAlias } from '@/lib/locations/city-aliases';
+import { isOneTimeLinkPath } from '@/lib/analytics/route-policy';
+import {
+  guestLinkCookieName,
+  guestLinkMaxAge,
+  guestLinkPath,
+  guestLinkPurpose,
+  isGuestLinkToken,
+} from '@/lib/guest-apply/link-state';
 import { env, isAppReady, isSupabaseConfigured } from '@/lib/env';
 import {
   SITE_ACCESS_COOKIE,
@@ -54,6 +62,41 @@ const handleIntl = createIntlMiddleware(routing);
  */
 const PRIVATE_CACHE_CONTROL = 'private, no-store';
 
+function protectOneTimeResponse(request: NextRequest, response: NextResponse): NextResponse {
+  if (isOneTimeLinkPath(request.nextUrl.pathname)) {
+    response.headers.set('cache-control', PRIVATE_CACHE_CONTROL);
+    response.headers.set('referrer-policy', 'no-referrer');
+    response.headers.set('x-robots-tag', 'noindex, nofollow');
+  }
+  return response;
+}
+
+/** Existing query links are exchanged for a path-scoped HttpOnly cookie and a clean URL. */
+function exchangeLegacyGuestLink(request: NextRequest): NextResponse | null {
+  const link = guestLinkPurpose(request.nextUrl.pathname);
+  if (!link || !request.nextUrl.searchParams.has('token')) return null;
+
+  const values = request.nextUrl.searchParams.getAll('token');
+  const url = request.nextUrl.clone();
+  url.search = '';
+  const response = NextResponse.redirect(url, 303);
+  const name = guestLinkCookieName(link.purpose);
+  const path = guestLinkPath(link.locale, link.purpose);
+  const token = values.length === 1 ? values[0] : null;
+  if (isGuestLinkToken(token)) {
+    response.cookies.set(name, token, {
+      path,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+      maxAge: guestLinkMaxAge(link.purpose),
+    });
+  } else {
+    response.cookies.set(name, '', { path, maxAge: 0 });
+  }
+  return protectOneTimeResponse(request, response);
+}
+
 const CITY_LANDING_RE = /^\/([a-z]{2})\/praca\/miasto\/([^/]+)\/?$/;
 
 /**
@@ -103,19 +146,22 @@ async function siteAccessGate(request: NextRequest): Promise<NextResponse | null
 }
 
 export default async function middleware(request: NextRequest) {
+  const guestRedirect = exchangeLegacyGuestLink(request);
+  if (guestRedirect) return guestRedirect;
+
   const gated = await siteAccessGate(request);
-  if (gated) return gated;
+  if (gated) return protectOneTimeResponse(request, gated);
 
   // 0) Fail-closed (SEC-19): produkcja bez konfiguracji → 503 maintenance, nie tryb demo.
   if (!isAppReady()) {
-    return new NextResponse(MAINTENANCE_HTML, {
+    return protectOneTimeResponse(request, new NextResponse(MAINTENANCE_HTML, {
       status: 503,
       headers: {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'no-store',
         'retry-after': '120',
       },
-    });
+    }));
   }
 
   const cityRedirect = cityAliasRedirect(request);
@@ -123,6 +169,7 @@ export default async function middleware(request: NextRequest) {
 
   // 1) next-intl — bazowa odpowiedź (może być redirectem/rewrite z prefiksem locale).
   const response = handleIntl(request);
+  protectOneTimeResponse(request, response);
   // Serwis za bramką hasła: odpowiedź dla osoby z dostępem nie może trafić do cache współdzielonego.
   if (getSiteAccessPassword()) response.headers.set('cache-control', PRIVATE_CACHE_CONTROL);
 

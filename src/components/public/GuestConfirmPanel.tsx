@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -35,7 +35,8 @@ const BODIES: Record<GuestConfirmOutcome, string> = {
   invalid: 'invalidBody',
 };
 
-export function GuestConfirmPanel({ token }: { token: string }): React.JSX.Element {
+export function GuestConfirmPanel(): React.JSX.Element {
+  const locale = useLocale();
   const t = useTranslations('guestApply');
   const tRoot = useTranslations();
   const [pending, setPending] = React.useState(false);
@@ -56,7 +57,7 @@ export function GuestConfirmPanel({ token }: { token: string }): React.JSX.Eleme
     setPending(true);
     setError(null);
     try {
-      const res = await confirmGuestApplication(token);
+      const res = await confirmGuestApplication(locale);
       if (res.ok) setResult({ outcome: res.outcome, jobSlug: res.jobSlug });
       else setError(res.error);
     } catch {

@@ -38,6 +38,15 @@ import {
   screeningFieldId,
   type ScreeningAnswerError,
 } from '@/components/public/ScreeningQuestionsFields';
+import {
+  BTN_PRIMARY,
+  BTN_RESET,
+  FORM_ERROR,
+  FORM_FIELD,
+  FORM_INPUT,
+  FORM_LABEL_TEXT,
+  FORM_SELECT,
+} from '@/components/dashboard/panel-styles';
 
 /**
  * Jednorazowa aplikacja bez konta (#98) — formularz w ApplyModal dla gościa.
@@ -253,8 +262,8 @@ export function GuestApplyForm({
 
   if (sentTo) {
     return (
-      <div role="status" className="space-y-3 rounded-2xl bg-success/10 p-4 text-sm text-success-text" data-testid="guest-apply-sent">
-        <h3 ref={sentHeadingRef} tabIndex={-1} className="flex items-center gap-2 text-base font-semibold text-foreground outline-none">
+      <div role="status" className="space-y-3 rounded-[16px] border border-success/30 bg-success/5 px-5 py-4 text-[13px] leading-[1.6] text-success-text" data-testid="guest-apply-sent">
+        <h3 ref={sentHeadingRef} tabIndex={-1} className="flex items-center gap-2 text-[15px] font-[650] text-foreground outline-none">
           <MailCheck className="h-5 w-5 shrink-0" aria-hidden="true" />
           {t('sentTitle')}
         </h3>
@@ -267,20 +276,20 @@ export function GuestApplyForm({
   const describedBy = (field: GuestApplyField) => (errors[field] ? `guest-apply-${field}-error` : undefined);
   const fieldError = (field: GuestApplyField) =>
     errors[field] ? (
-      <p id={`guest-apply-${field}-error`} className="text-sm text-error">
+      <p id={`guest-apply-${field}-error`} className={FORM_ERROR}>
         {errors[field]}
       </p>
     ) : null;
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit} noValidate aria-labelledby="guest-apply-title" data-testid="guest-apply-form">
+    <form className="flex min-w-0 flex-col gap-5" onSubmit={handleSubmit} noValidate aria-labelledby="guest-apply-title" data-testid="guest-apply-form">
       <div>
-        <h3 id="guest-apply-title" className="text-base font-semibold text-foreground">{t('formTitle')}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{t('formHint')}</p>
+        <h3 id="guest-apply-title" className="text-lg font-bold tracking-[-0.025em] text-foreground">{t('formTitle')}</h3>
+        <p className="mt-1 text-[13px] leading-[1.6] text-muted-foreground">{t('formHint')}</p>
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="guest-apply-name">
+      <div className={FORM_FIELD}>
+        <Label htmlFor="guest-apply-name" className={FORM_LABEL_TEXT}>
           {t('fullName')} <span className="text-error" aria-hidden="true">*</span>
         </Label>
         <Input
@@ -293,13 +302,13 @@ export function GuestApplyForm({
           aria-required="true"
           aria-invalid={errors.fullName ? true : undefined}
           aria-describedby={describedBy('fullName')}
-          className={errors.fullName ? 'border-error' : undefined}
+          className={cn(FORM_INPUT, errors.fullName ? 'border-error' : undefined)}
         />
         {fieldError('fullName')}
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="guest-apply-email">
+      <div className={FORM_FIELD}>
+        <Label htmlFor="guest-apply-email" className={FORM_LABEL_TEXT}>
           {t('email')} <span className="text-error" aria-hidden="true">*</span>
         </Label>
         <Input
@@ -313,16 +322,16 @@ export function GuestApplyForm({
           aria-required="true"
           aria-invalid={errors.email ? true : undefined}
           aria-describedby={describedBy('email')}
-          className={errors.email ? 'border-error' : undefined}
+          className={cn(FORM_INPUT, errors.email ? 'border-error' : undefined)}
         />
         {fieldError('email')}
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="guest-apply-phone">{t('phoneOptional')}</Label>
+      <div className={FORM_FIELD}>
+        <Label htmlFor="guest-apply-phone" className={FORM_LABEL_TEXT}>{t('phoneOptional')}</Label>
         <div className="flex gap-2">
           <Select value={dial} onValueChange={(value) => setDial(value as PhoneCountry)}>
-            <SelectTrigger aria-label={ta('dialCode')} className="w-28 shrink-0">
+            <SelectTrigger aria-label={ta('dialCode')} className={cn(FORM_SELECT, 'w-28 shrink-0')}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -344,16 +353,16 @@ export function GuestApplyForm({
             placeholder={ta('phonePlaceholder')}
             aria-invalid={errors.phone ? true : undefined}
             aria-describedby={describedBy('phone')}
-            className={cn('flex-1', errors.phone ? 'border-error' : undefined)}
+            className={cn(FORM_INPUT, 'flex-1', errors.phone ? 'border-error' : undefined)}
           />
         </div>
         {fieldError('phone')}
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="guest-apply-availability">{ta('availability')}</Label>
+      <div className={FORM_FIELD}>
+        <Label htmlFor="guest-apply-availability" className={FORM_LABEL_TEXT}>{ta('availability')}</Label>
         <Select value={availability} onValueChange={(value) => setAvailability(value as ApplyAvailabilityOption)}>
-          <SelectTrigger id="guest-apply-availability" aria-label={ta('availability')}>
+          <SelectTrigger id="guest-apply-availability" aria-label={ta('availability')} className={FORM_SELECT}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -366,8 +375,8 @@ export function GuestApplyForm({
         </Select>
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="guest-apply-message">{ta('message')}</Label>
+      <div className={FORM_FIELD}>
+        <Label htmlFor="guest-apply-message" className={FORM_LABEL_TEXT}>{ta('message')}</Label>
         <Textarea
           ref={refs.message}
           id="guest-apply-message"
@@ -381,12 +390,12 @@ export function GuestApplyForm({
           rows={3}
           aria-invalid={errors.message ? true : undefined}
           aria-describedby={[describedBy('message'), 'guest-apply-message-hint'].filter(Boolean).join(' ')}
-          className={errors.message ? 'border-error' : undefined}
+          className={cn(FORM_INPUT, errors.message ? 'border-error' : undefined)}
         />
         <p className="text-right text-xs tabular-nums text-muted-foreground">
           {message.length} / {GUEST_MESSAGE_MAX}
         </p>
-        <p id="guest-apply-message-hint" className="text-xs text-muted-foreground">
+        <p id="guest-apply-message-hint" className="text-xs leading-[1.5] text-muted-foreground">
           {ta('sensitiveIdHint')}
         </p>
         {fieldError('message')}
@@ -415,8 +424,8 @@ export function GuestApplyForm({
         }}
       />
 
-      <div className="space-y-1.5">
-        <div className="flex items-start gap-2.5">
+      <div className={FORM_FIELD}>
+        <div className="flex items-start gap-[9px]">
           <Checkbox
             ref={refs.consent}
             id="guest-apply-consent"
@@ -427,7 +436,7 @@ export function GuestApplyForm({
             aria-describedby={describedBy('consent')}
             className={errors.consent ? 'border-error' : undefined}
           />
-          <Label htmlFor="guest-apply-consent" className="cursor-pointer text-sm font-normal leading-snug text-muted-foreground">
+          <Label htmlFor="guest-apply-consent" className="cursor-pointer text-[13px] font-normal leading-[1.5] text-foreground">
             {ta('consent')}
           </Label>
         </div>
@@ -451,7 +460,7 @@ export function GuestApplyForm({
           ref={formErrorRef}
           role="alert"
           tabIndex={-1}
-          className="rounded-lg bg-error/10 p-3 text-sm text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="rounded-[16px] border border-error/30 bg-error/5 px-5 py-4 text-[13px] text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {formError === 'network'
             ? ta('errorNetwork')
@@ -465,7 +474,7 @@ export function GuestApplyForm({
         </div>
       ) : null}
 
-      <Button type="submit" className="w-full" disabled={submitting} aria-busy={submitting || undefined}>
+      <Button type="submit" className={cn(BTN_PRIMARY, BTN_RESET, 'w-full')} disabled={submitting} aria-busy={submitting || undefined}>
         <Send className="h-4 w-4" aria-hidden="true" />
         {submitting ? ta('submitting') : ta('submit')}
       </Button>

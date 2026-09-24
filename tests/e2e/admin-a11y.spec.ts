@@ -30,6 +30,8 @@ const ROUTES = [
   '/admin/firmy/demo-c2',
   '/admin/zgloszenia',
   '/admin/uzytkownicy',
+  // Blokady adresów e-mail (#44).
+  '/admin/poczta',
   '/admin/dziennik',
 ];
 

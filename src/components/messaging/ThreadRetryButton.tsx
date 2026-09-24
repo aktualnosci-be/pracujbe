@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from '@/i18n/navigation';
+import { BTN_SECONDARY } from '@/components/dashboard/panel-styles';
 
 /** Ponawia odczyt bieżącej trasy z tym samym parametrem rozmowy. */
 export function ThreadRetryButton({ label }: { label: string }) {
@@ -9,7 +10,7 @@ export function ThreadRetryButton({ label }: { label: string }) {
     <button
       type="button"
       onClick={() => router.refresh()}
-      className="inline-flex min-h-12 items-center rounded-xl border border-border px-4 font-semibold text-foreground hover:bg-soft"
+      className={BTN_SECONDARY}
     >
       {label}
     </button>

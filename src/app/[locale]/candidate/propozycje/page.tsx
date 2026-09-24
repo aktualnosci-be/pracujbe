@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { CandidateProposalsList } from "@/components/candidate/CandidateProposalsList";
 import { getMyOffersPage } from "@/lib/data/candidate";
+import { CandidatePageHeader } from "@/components/candidate/CandidatePageHeader";
 
 /**
  * Panel kandydata — Propozycje pracy (makieta 04, nawigacja „Propozycje").
@@ -41,13 +42,12 @@ export default async function CandidateProposalsPage({
   const initialPage = await getMyOffersPage(locale);
 
   return (
-    <div className="space-y-6">
-      <header className="max-w-2xl space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          {t("navProposals")}
-        </h1>
-        <p className="text-base text-muted-foreground">{t("proposalsIntro")}</p>
-      </header>
+    <div className="min-w-0">
+      <CandidatePageHeader
+        eyebrow={t("candidatePlaceEyebrow")}
+        title={t("navProposals")}
+        intro={t("proposalsIntro")}
+      />
 
       <CandidateProposalsList
         locale={locale}

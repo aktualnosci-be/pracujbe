@@ -1,12 +1,13 @@
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
+import { PANEL_P, PROGRESS, PROGRESS_FILL } from '@/components/dashboard/panel-styles';
 
 /**
- * ProfileCompleteness — kołowy wskaźnik kompletności profilu kandydata (%).
+ * ProfileCompleteness — wskaźnik kompletności profilu kandydata (%).
  *
- * Odwzorowuje pierścień z makiet 04 (panel: 78%) i 06 (onboarding: 45%): zielony łuk
- * (success) na jasnej ścieżce (border), procent w środku, obok krótki tytuł/opis.
+ * Wygląd: panel „Twój profil · 80%” z prototypu „04 Ludzie i praca” — procent i tytuł,
+ * opis `.panel p` oraz pasek `.progress` (6 px, wypełnienie w kolorze marki).
  * Wartość (liczba %) nie wymaga tłumaczenia; `title`/`hint` przekazuje ekran (i18n).
  *
  * Komponent czysto prezentacyjny — bez interakcji ani API serwerowych, więc może być
@@ -20,7 +21,7 @@ export interface ProfileCompletenessProps {
   title?: string;
   /** Zdanie zachęty pod tytułem. */
   hint: string;
-  /** Średnica pierścienia w px (domyślnie 88). */
+  /** Dawna średnica pierścienia — ignorowana (zgodność wywołań). */
   size?: number;
   className?: string;
 }
@@ -29,58 +30,28 @@ export function ProfileCompleteness({
   value,
   title,
   hint,
-  size = 88,
   className,
 }: ProfileCompletenessProps): React.JSX.Element {
   const pct = Math.max(0, Math.min(100, Math.round(value)));
-  const stroke = size >= 80 ? 8 : 6;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const dashOffset = circumference * (1 - pct / 100);
-  const center = size / 2;
 
   return (
-    <div className={cn('flex items-center gap-4', className)}>
-      <div className="relative shrink-0" style={{ width: size, height: size }}>
-        <svg
-          width={size}
-          height={size}
-          viewBox={`0 0 ${size} ${size}`}
-          className="-rotate-90"
-          role="img"
-          aria-label={`${pct}%`}
-        >
-          <circle
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="none"
-            strokeWidth={stroke}
-            className="stroke-border"
-          />
-          <circle
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="none"
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={dashOffset}
-            className="stroke-success transition-all"
-          />
-        </svg>
-        <span
-          className="absolute inset-0 flex items-center justify-center text-lg font-bold tabular-nums text-foreground"
-          aria-hidden="true"
-        >
+    <div className={cn('min-w-0', className)}>
+      <p className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <span className="text-[22px] font-bold tabular-nums tracking-[-0.035em] text-foreground">
           {pct}%
         </span>
-      </div>
-
-      <div className="min-w-0">
-        {title ? <p className="text-sm font-semibold text-foreground">{title}</p> : null}
-        <p className="mt-0.5 text-sm text-muted-foreground">{hint}</p>
+        {title ? <span className="break-words text-[13px] font-semibold text-foreground">{title}</span> : null}
+      </p>
+      <p className={cn(PANEL_P, 'mt-1 break-words text-[13px]')}>{hint}</p>
+      <div
+        className={PROGRESS}
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${pct}%`}
+      >
+        <span className={PROGRESS_FILL} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
