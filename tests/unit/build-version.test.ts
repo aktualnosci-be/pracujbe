@@ -1,4 +1,11 @@
-import { createBuildMetadata } from '../../scripts/build-version.mjs';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  APPROVED_RELEASE_VERSIONS,
+  createBuildMetadata,
+  createReleaseAwareBuildMetadata,
+  resolveReleaseVersion,
+} from '../../scripts/build-version.mjs';
 import { describe, expect, it } from 'vitest';
 
 describe('wersja artefaktu przed premierą 1.0', () => {
@@ -44,5 +51,64 @@ describe('wersja artefaktu przed premierą 1.0', () => {
     expect(() => createBuildMetadata(new Date('invalid'))).toThrow(
       'Data buildu musi być prawidłową datą.',
     );
+  });
+});
+
+describe('kontrolowane wejście wersji wydania (#103)', () => {
+  const builtAt = new Date('2026-09-22T11:39:05.987Z');
+  const sha = '1e4b285f4acb4cf5d24a5d2409f606241f61827c';
+
+  it.each([undefined, ''])('bez zmiennej (%j) zostaje automatyczny major 0', (release) => {
+    expect(createReleaseAwareBuildMetadata(builtAt, release, sha)).toEqual(
+      createBuildMetadata(builtAt, sha),
+    );
+  });
+
+  it('dokładnie zatwierdzona wartość 1.0.0 daje 1.0.0+SHA z tym samym czasem buildu', () => {
+    expect(createReleaseAwareBuildMetadata(builtAt, '1.0.0', '', sha)).toEqual({
+      buildTime: '2026-09-22T11:39:05.987Z',
+      version: '1.0.0+1e4b285f',
+    });
+  });
+
+  it('wydanie bez prawidłowego SHA przerywa build', () => {
+    expect(() => createReleaseAwareBuildMetadata(builtAt, '1.0.0', 'local', undefined)).toThrow(
+      /wymaga SHA commita/,
+    );
+  });
+
+  it.each(['1.0', 'v1.0.0', ' 1.0.0', '1.0.0 ', '1.0.1', '1.1.0', '2.0.0', '0.1.0', 'true', '1'])(
+    'odrzuca nieobsługiwaną wartość %j czytelnym błędem',
+    (value) => {
+      expect(() => resolveReleaseVersion(value)).toThrow(/PRACUJBE_RELEASE_VERSION=.*nie jest obsługiwaną/);
+      expect(() => createReleaseAwareBuildMetadata(builtAt, value, sha)).toThrow();
+    },
+  );
+
+  it('nie czerpie wersji z package.json ani npm_package_version', () => {
+    const previous = process.env.npm_package_version;
+    process.env.npm_package_version = '1.0.0';
+    try {
+      expect(createReleaseAwareBuildMetadata(builtAt, undefined, sha).version).toMatch(/^0\./);
+    } finally {
+      if (previous === undefined) delete process.env.npm_package_version;
+      else process.env.npm_package_version = previous;
+    }
+    const source = readFileSync(join(process.cwd(), 'scripts/build-version.mjs'), 'utf8');
+    expect(source).not.toMatch(/package\.json['"]|npm_package_version/);
+  });
+
+  it('next.config.mjs przekazuje do builda wyłącznie PRACUJBE_RELEASE_VERSION', () => {
+    const config = readFileSync(join(process.cwd(), 'next.config.mjs'), 'utf8');
+    expect(config).toMatch(
+      /createReleaseAwareBuildMetadata\(\s*new Date\(\),\s*process\.env\.PRACUJBE_RELEASE_VERSION,/,
+    );
+  });
+
+  it('CHANGELOG.md zawiera wyłącznie sekcje zatwierdzonych wersji', () => {
+    const changelog = readFileSync(join(process.cwd(), 'CHANGELOG.md'), 'utf8');
+    const released = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)].map((m) => m[1]);
+    for (const version of released) expect(APPROVED_RELEASE_VERSIONS).toContain(version);
+    expect(changelog).toMatch(/^## \[Unreleased\]/m);
   });
 });

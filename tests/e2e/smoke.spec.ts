@@ -39,10 +39,18 @@ test('strona główna /pl pokazuje nagłówek i wyszukiwarkę', async ({ page })
     search.getByRole('button', { name: pl.home.searchButton }),
   ).toBeVisible();
 
-  // Metryczka pochodzi z tego samego artefaktu co strona i pozostaje pre-1.0.
+  // Metryczka pochodzi z tego samego artefaktu co strona. Dozwolone są wyłącznie dwa
+  // tryby z docs/DEPLOYMENT.md (#103): automatyczny 0.YYYYMMDD.M[+SHA] albo 1.0.0+SHA.
   const buildTime = page.locator('footer time[datetime]').last();
   const release = buildTime.locator('..');
-  await expect(release).toContainText(/v0\.\d{8}\.\d+(?:\+[0-9a-f]{7,8})?/);
+  await expect(release).toHaveText(
+    /^v(?:0\.\d{8}\.\d+(?:\+[0-9a-f]{7,8})?|1\.0\.0\+[0-9a-f]{7,8}) · \S/,
+  );
+  // W CI build dostaje GITHUB_SHA — stopka musi wskazywać dokładnie ten commit.
+  const sha = process.env.GITHUB_SHA?.trim().toLowerCase();
+  if (sha && /^[0-9a-f]{7,40}$/.test(sha)) {
+    await expect(release).toContainText(`+${sha.slice(0, 8)} `);
+  }
   await expect(buildTime).toHaveAttribute(
     'datetime',
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
