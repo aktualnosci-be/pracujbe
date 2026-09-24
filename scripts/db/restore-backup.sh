@@ -8,12 +8,16 @@
 # 4. odtworzenie do PUSTEJ, izolowanej bazy pracujbe_restore_* (bez właścicieli i ACL;
 #    brakujące role polityk RLS tworzone na celu jako NOLOGIN bez atrybutów),
 # 5. zapytania kontrolne (scripts/db/lib/backup-controls.sh) — SHA-256 wyniku musi być
-#    równy `controlsSha256` z manifestu: historia migracji, RLS, polityki, liczności tabel.
+#    równy `controlsSha256` z manifestu: historia migracji, RLS, polityki, liczności tabel,
+# 6. (opcjonalnie, #486) ponowne usunięcie osób z rejestru usunięć NOWSZEGO niż kopia
+#    (plik z scripts/db/export-erasure-tombstones.sh) — public.apply_erasure_tombstones,
+#    potem kontrola, że żadna z nich nie istnieje w odtworzonej bazie.
 #
 # Wejście wyłącznie ze zmiennych środowiskowych:
 #   RESTORE_ARCHIVE            — ścieżka artefaktu pracujbe-*.dump.age,
 #   RESTORE_AGE_IDENTITY_FILE  — klucz prywatny age (trzymany POZA zadaniem kopii),
-#   RESTORE_TARGET_URL         — pusta baza pracujbe_restore_* (zalecany osobny klaster).
+#   RESTORE_TARGET_URL         — pusta baza pracujbe_restore_* (zalecany osobny klaster),
+#   RESTORE_TOMBSTONES_FILE    — (opcjonalnie) rejestr usunięć do ponownego zastosowania.
 # Skrypt nie wypisuje URL-i, haseł ani danych. Nie usuwa baz. Nie pisze do źródła.
 #
 # Kod wyjścia: 0 = odtworzono i zgodne z manifestem; 1 = niezgodność/błąd; 2 = konfiguracja.
@@ -55,6 +59,21 @@ occupied="$(dst -c "select count(*) from pg_class c join pg_namespace n on n.oid
     and n.nspname not like 'pg_toast_temp%'")" || fail 'Brak połączenia z bazą docelową.' 2
 [ "$occupied" = "0" ] || fail 'Baza docelowa nie jest pusta.' 2
 
+# Rejestr usunięć sprawdzamy PRZED odtworzeniem — zły plik nie zostawia bazy bez ponownego usunięcia.
+tombstone_array=''
+tombstone_count=0
+if [ -n "${RESTORE_TOMBSTONES_FILE:-}" ]; then
+  [ -r "$RESTORE_TOMBSTONES_FILE" ] || fail 'Rejestr usunięć jest nieczytelny.' 2
+  [ "$(head -1 "$RESTORE_TOMBSTONES_FILE")" = 'pracujbe-erasure-tombstones/1' ] \
+    || fail 'Nieobsługiwany format rejestru usunięć.' 2
+  if tail -n +2 "$RESTORE_TOMBSTONES_FILE" \
+      | grep -Evq '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+    fail 'Rejestr usunięć zawiera nieprawidłowy wiersz.' 2
+  fi
+  tombstone_count="$(tail -n +2 "$RESTORE_TOMBSTONES_FILE" | grep -c . || true)"
+  tombstone_array="{$(tail -n +2 "$RESTORE_TOMBSTONES_FILE" | paste -sd, -)}"
+fi
+
 echo 'RESTORE: suma kontrolna artefaktu'
 [ "$(sha256sum "$RESTORE_ARCHIVE" | cut -d' ' -f1)" = "$expected_sha" ] \
   || fail 'Suma SHA-256 artefaktu niezgodna z manifestem (uszkodzony lub podmieniony).'
@@ -94,6 +113,18 @@ table_list="$(dst -c "$BACKUP_TABLES_SQL")" || fail 'Odczyt listy tabel celu.'
 controls="$(backup_controls_sql "$table_list" | dst)" || fail 'Zapytania kontrolne na celu.'
 [ "$(printf '%s' "$controls" | sha256sum | cut -d' ' -f1)" = "$expected_controls" ] \
   || fail 'Niezgodność po odtworzeniu: historia migracji, RLS, polityki lub liczności tabel.'
+
+if [ -n "$tombstone_array" ]; then
+  echo 'RESTORE: ponowne usunięcie osób z rejestru usunięć'
+  # Identyfikatory zweryfikowane wyżej (tylko UUID) — przekazywane jako zmienna psql.
+  printf '%s\n' "select public.apply_erasure_tombstones(:'ids'::uuid[]);" \
+    | dst -v ids="$tombstone_array" >/dev/null || fail 'Ponowne usunięcie z rejestru nie powiodło się.'
+  remaining="$(printf '%s\n' "select (select count(*) from public.profiles where id = any(:'ids'::uuid[]))
+      + (select count(*) from auth.users where id = any(:'ids'::uuid[]));" | dst -v ids="$tombstone_array")" \
+    || fail 'Kontrola rejestru usunięć nie powiodła się.'
+  [ "$remaining" = "0" ] || fail 'Po ponownym usunięciu w bazie zostały osoby z rejestru usunięć.'
+  echo "RESTORE: rejestr usunięć zastosowany (liczba identyfikatorów: ${tombstone_count})."
+fi
 
 tables="$(printf '%s\n' "$table_list" | grep -c .)"
 migrations="$(dst -c 'select count(*) from app_migrations.history')"
