@@ -9,9 +9,16 @@ import {
 } from '@/lib/data/admin';
 import { isSupabaseConfigured } from '@/lib/env';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createServerClient } from '@/lib/supabase/server';
 
 vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
+vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  notFound: vi.fn(() => {
+    throw new Error('NEXT_NOT_FOUND');
+  }),
+}));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 type Result = { data?: unknown; error?: unknown; count?: number | null };
@@ -43,9 +50,51 @@ function mockClient(byTable: Record<string, Array<(calls: Array<[string, unknown
   return allCalls;
 }
 
+/** Sesja użytkownika (klient pod RLS): `user` z getUser i rola z własnego profilu. */
+function mockSession(user: { id: string } | null, role: string | null, profileError?: unknown) {
+  const single = { data: role ? { role } : null, error: profileError ?? null };
+  const profileQuery = {
+    select: () => profileQuery,
+    eq: () => profileQuery,
+    maybeSingle: () => Promise.resolve(single),
+  };
+  vi.mocked(createServerClient).mockResolvedValue({
+    auth: { getUser: () => Promise.resolve({ data: { user } }) },
+    from: vi.fn(() => profileQuery),
+  } as never);
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  mockSession({ id: 'admin-1' }, 'admin');
+});
+
+describe('panel admina — odczyt service-role tylko po potwierdzeniu roli', () => {
+  const loaders = [
+    ['getAdminStats', () => getAdminStats()],
+    ['listCompanies', () => listCompanies()],
+    ['listReports', () => listReports()],
+    ['listUsers', () => listUsers()],
+  ] as const;
+
+  it.each(loaders)('%s: brak sesji → notFound, bez klienta service-role', async (_name, load) => {
+    mockSession(null, null);
+    await expect(load()).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it.each(loaders)('%s: rola inna niż admin → notFound, bez klienta service-role', async (_name, load) => {
+    mockSession({ id: 'emp-1' }, 'employer');
+    await expect(load()).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it.each(loaders)('%s: błąd odczytu roli → notFound (fail closed)', async (_name, load) => {
+    mockSession({ id: 'admin-1' }, null, { message: 'boom' });
+    await expect(load()).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
 });
 
 describe('panel admina — błąd odczytu nie udaje pustej listy (#311)', () => {
