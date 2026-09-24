@@ -871,10 +871,30 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   ponownie sprawdza zgodę i wygasza wiersz (`suppressed_at`). Atomowy budżet okna
   (`take_email_send_budget`, rezerwy auth/transakcyjna; odmowa = odłożenie bez `attempts`).
   Dowód: `rls.sql` sekcja UN45 (dblink, kontrole ujemne), `email-unsubscribe.test.ts`, E2E
-  `email-unsubscribe.spec`. **Do zrobienia (#45):** wersjonowany dowód zgody marketingowej,
-  centrum preferencji dla wszystkich kategorii, `text/plain`, tożsamość i adres pocztowy nadawcy
-  w stopce marketingu, budżet w hooku e-maili Auth, rezerwacja kampania+odbiorca, decyzja o
-  trackingu na odebranym `.eml`.
+  `email-unsubscribe.spec`.
+  Etap 2 (#45, migracja `0101`): niezmienny dowód zgody
+  `email_consent_events` (trigger na `notification_preferences` — każda ścieżka zapisu; źródło
+  `settings`/`unsubscribe_page`/`one_click`/`direct`, język, wersja treści `sha256:` z etykiet
+  formularza — `src/lib/email/consent-wording.ts`); ustawienia przez RPC
+  `set_notification_preferences`, `/wypisz` także „ze wszystkich” (`email_unsubscribe_all`).
+  Budżet na odbiorcę przy kolejkowaniu (`email_recipient_budget_config` `pool:`/`template:`,
+  domyślnie newsletter 1/dobę, marketing 10/dobę; `INSERT … ON CONFLICT DO UPDATE WHERE used <
+  limit`; ponad limit = ślad `suppressed_recipient_budget`; wygaszony list oddaje miejsce).
+  `enqueue_email` → `enqueue_email_outcome` (wynik kolejkowania). Kampanie: `email_campaigns`
+  (slug + rewizja, treść w każdym języku serwisu) + `email_campaign_recipients` (PK rewizja +
+  odbiorca, status reserved/queued/accepted/delivered/skipped_consent/failed/cancelled, bez treści
+  i adresu), `enqueue_campaign_batch`/`process_email_campaigns` (cron `/api/maintenance`),
+  aktywacja nowej rewizji wygasza niewysłane listy starej, stara nie wraca (`STALE_STATE`),
+  claim wygasza listy nieaktywnej rewizji. Worker: newsletter z payloadu kampanii
+  (`newsletter-delivery.ts`), `text/plain` w każdym mailu (także hook Auth), marketing tylko z
+  jawnym `EMAIL_FROM` + `EMAIL_SENDER_IDENTITY` + `EMAIL_SENDER_POSTAL_ADDRESS`
+  (`src/lib/email/sender.ts`, stopka). Hook Auth pobiera budżet puli `auth` (odmowa → 503 +
+  `Retry-After`, przed claimem inboxu; błąd bazy = fail-open). Tracking wyłączony; kontrola
+  odebranej wiadomości `scripts/check-received-eml.mjs` (`docs/RESEND_SETUP.md`). Dowód:
+  `rls.sql` sekcja CM45 (dblink, kontrole ujemne), unit `email-consent-campaigns`.
+  **Do zrobienia (właściciel):** wartości `EMAIL_SENDER_*`, wyłączenie trackingu w Resend i
+  kontrola odebranego `.eml` na produkcji; treść prawna zgody marketingowej (#40). **Otwarte:**
+  panel admina kampanii (dziś RPC service_role), rejestracja z opt-in marketingu.
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
@@ -985,6 +1005,16 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `/zglos-tresc/sprawa`. Dowód: `rls.sql` sekcja MOD42; unit `moderation-decision*`; E2E
   `admin-ux` (#42). **Otwarte:** procedura odwołań (#43); znacznik treści prawnej o środkach
   odwoławczych w panelu firmy; UI kolejki według priorytetu (lista nadal po dacie).
+- [~] Mapa danych osobowych (#485/#488/#503/#504, część techniczna): `node scripts/privacy/data-map.mjs`
+  generuje `docs/legal-drafts/data-map.generated.md` z migracji produkcyjnych (parser
+  `scripts/privacy/schema.mjs`), klasyfikacji `src/lib/privacy/data-map.ts` (każda tabela, kategorie,
+  czynności) i usług `src/lib/privacy/processors.ts` (rola/region/transfer/DPA = „DO UZUPEŁNIENIA”);
+  sekcja e-maili = klucze payloadu z aktualnych funkcji SQL (`email-payloads.mjs`). Test
+  `privacy-data-map.test.ts`: tabela bez wpisu albo kolumna wyglądająca na PII (np. `email`) bez
+  klasyfikacji = czerwony, plik nieaktualny = czerwony, payload z CV/odpowiedziami/treścią wiadomości
+  = czerwony (kontrole ujemne). Szkice `docs/legal-drafts/rejestr-czynnosci.md` i
+  `dostawcy-i-transfery.md` — PROJEKT, nieopublikowany, nic w UI. **Do ustalenia (właściciel +
+  prawnik):** administrator, role portal/pracodawca, podstawy, retencja, DPA i transfery.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
@@ -1131,7 +1161,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   superusera; `scripts/lib/job-post-source.mjs`), bez JSON od operatora; renderer przyjmuje tylko
   obiekt ze źródła. Stawka tylko gdy podana, tytuł 2×77/3×60 px albo błąd przed zapisem.
   Instrukcja: `docs/design/people-passport/JOB-POST-EXPORT.md`, test `job-post-export`.
-  **Otwarte (#186):** zaufana kontrola `is_demo` wymaga wąskiego RPC z migracją.
+  Źródło danych (#186, migracja `0102`): `get_campaign_job` (anon) — tylko pola grafiki i tylko
+  oferta `active`, nieusunięta, niewygasła, `is_demo = false` (oferta i firma), firma `verified`;
+  inaczej jednakowy brak danych. Dowód: `rls.sql` sekcja CJ186 (każdy przypadek + kontrola ujemna
+  po zdjęciu każdego filtra), rollback `supabase/rollback/0102_…down.sql` (test w `test-rls.sh`).
+  Baner kampanii z oferty w panelu (#175): `/employer/oferty/[id]/baner` (noindex) + `GET
+  /api/employer/jobs/[id]/banner` — formaty 1200×300, 300×250, 300×600, język PL/NL/FR/EN, SVG
+  i PNG (kanwa w przeglądarce); dane z `get_managed_campaign_job` (recruiter+ firmy oferty albo
+  admin, te same filtry), limit 60/h na konto, `private, no-store`, CSP `sandbox`, demo = 404.
+  Znak jak `Logo.tsx`, tokeny `--pp-*`, osadzony DM Sans, pomiar tekstu tablicą szerokości
+  (`src/lib/campaign-banner/`). Opis: `docs/design/people-passport/BANNER-EXPORT.md`. Testy:
+  `campaign-banner*.test.ts` (Chromium: pomiar przeglądarki ≤ serwera), E2E `campaign-banner`.
+  **Otwarte:** link do baneru w panelu admina (admin ma dostęp tylko przez adres endpointu).
   Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami

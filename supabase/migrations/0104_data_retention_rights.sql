@@ -473,6 +473,8 @@ begin
                         from public.notifications n where n.profile_id = v_uid),
     'consents', (select coalesce(jsonb_agg(to_jsonb(cs) - 'profile_id' order by cs.created_at), '[]')
                    from public.consents cs where cs.profile_id = v_uid),
+    'emailConsentEvents', (select coalesce(jsonb_agg(to_jsonb(ec) - 'profile_id' order by ec.created_at), '[]')
+                             from public.email_consent_events ec where ec.profile_id = v_uid),
     'documentAcceptances', (select coalesce(jsonb_agg(to_jsonb(d) - 'profile_id' order by d.accepted_at), '[]')
                               from public.document_acceptances d where d.profile_id = v_uid),
     'emails', (select coalesce(jsonb_agg(jsonb_build_object(

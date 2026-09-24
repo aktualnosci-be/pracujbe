@@ -188,6 +188,9 @@ describe('przełącznik push (#312)', () => {
     await waitFor(() => expect(updateNotificationPreferences).toHaveBeenCalledOnce());
     expect(vi.mocked(updateNotificationPreferences).mock.calls[0]![0]).toMatchObject({
       pushEnabled: true,
+      // #45: język strony i rola wyznaczają wersję treści zgody w dowodzie.
+      locale: 'pl',
+      role: 'candidate',
     });
   });
 });

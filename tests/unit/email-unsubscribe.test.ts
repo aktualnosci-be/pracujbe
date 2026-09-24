@@ -167,8 +167,10 @@ describe('POST/GET /api/email/unsubscribe', () => {
     expect(second.status).toBe(200);
     expect(await second.json()).toEqual({ status: 'done' });
     expect(adminRpc).toHaveBeenCalledTimes(2);
-    expect(adminRpc).toHaveBeenNthCalledWith(1, 'email_unsubscribe', { p_profile_id: PROFILE, p_category: 'messages' });
-    expect(adminRpc).toHaveBeenNthCalledWith(2, 'email_unsubscribe', { p_profile_id: PROFILE, p_category: 'messages' });
+    // #45 (0101): źródło one-click i język linku trafiają do dowodu wycofania zgody.
+    const call = { p_profile_id: PROFILE, p_category: 'messages', p_source: 'one_click', p_locale: 'fr' };
+    expect(adminRpc).toHaveBeenNthCalledWith(1, 'email_unsubscribe', call);
+    expect(adminRpc).toHaveBeenNthCalledWith(2, 'email_unsubscribe', call);
     expect(first.headers.get('cache-control')).toBe('no-store');
   });
 
@@ -179,7 +181,9 @@ describe('POST/GET /api/email/unsubscribe', () => {
     expect(response.status).toBe(303);
     const location = new URL(response.headers.get('location')!);
     expect(location.pathname).toBe('/fr/wypisz');
-    expect(location.searchParams.get('t')).toBe(t);
+    expect(location.search).toBe('');
+    expect(location.hash).toBe(`#t=${encodeURIComponent(t)}`);
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
     expect(adminRpc).not.toHaveBeenCalled();
   });
 
@@ -230,7 +234,7 @@ describe('worker outboxa: wypisanie i budżet', () => {
     const verified = verifyUnsubscribeToken(oneClick.searchParams.get('t'), SECRET);
     expect(verified).toMatchObject({ ok: true, profileId: PROFILE, category: 'offers' });
     expect(header).not.toContain('d1@example.test');
-    expect(message.html).toContain(`${SITE}/nl/wypisz?t=`);
+    expect(message.html).toContain(`${SITE}/nl/wypisz#t=`);
     expect(message.html).toContain('Afmelden voor deze e-mails');
   });
 
@@ -240,7 +244,7 @@ describe('worker outboxa: wypisanie i budżet', () => {
     await processEmailQueue();
     for (const [message] of send.mock.calls) {
       expect(message.headers).toBeUndefined();
-      expect(message.html).not.toContain('/wypisz?t=');
+      expect(message.html).not.toContain('/wypisz#t=');
     }
   });
 

@@ -68,8 +68,8 @@ umiejętności/języki/certyfikaty, pliki (nazwa, typ, rozmiar, daty — bez klu
 sam plik CV pobiera się z profilu), aplikacje z historią statusów i odpowiedziami
 screeningowymi, propozycje z historią, **zapisane** wyniki `matches` (bez liczenia nowych),
 rozmowy (treść obu stron, strona oznaczona `fromMe`, bez tożsamości rekrutera), zapisane
-oferty i wyszukiwania, blokady firm (nazwa firmy), preferencje i powiadomienia, zgody i
-akceptacje dokumentów, e-maile (szablon, status, daty — bez treści), zgłoszenia bez konta
+oferty i wyszukiwania, blokady firm (nazwa firmy), preferencje i powiadomienia, zgody, dowody zgód e-mail
+(`email_consent_events`) i akceptacje dokumentów, e-maile (szablon, status, daty — bez treści), zgłoszenia bez konta
 przejęte przez to konto, historia wniosków.
 
 Pomijane: identyfikatory innych osób (rekruter, inny kandydat), klucze idempotencji,

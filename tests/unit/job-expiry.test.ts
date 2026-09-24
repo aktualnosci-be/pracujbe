@@ -88,6 +88,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       expiredJobs: 3,
       savedSearchDigests: 0,
       purgedGuestRequests: 0,
+      campaignEmailsQueued: 0,
       retention: {},
       storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
     });
