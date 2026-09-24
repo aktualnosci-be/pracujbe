@@ -1,6 +1,7 @@
 import { z } from 'zod/v3';
 
 import { GUEST_EMAIL_MAX, GUEST_MESSAGE_MAX, GUEST_NAME_MAX } from '@/lib/guest-apply/limits';
+import { SCREENING_LIMITS } from '@/lib/screening/questions';
 import { localeSchema } from '@/lib/validation/auth';
 import { APPLICATION_AVAILABILITY_VALUES } from '@/lib/validation/application';
 
@@ -29,6 +30,14 @@ export const guestApplicationSchema = z.object({
   locale: localeSchema,
   agreeTerms: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.consentRequired' }) }),
   idempotencyKey: z.string().uuid('guestApply.error.idempotencyKeyInvalid'),
+  /**
+   * #101: odpowiedzi na pytania oferty — ten sam kształt co w zwykłej aplikacji. Wymagalność,
+   * typ i opcje sprawdza baza (`record_screening_answers`) przy wysłaniu zgłoszenia.
+   */
+  answers: z
+    .record(z.string().uuid(), z.union([z.boolean(), z.string().trim().max(SCREENING_LIMITS.answer)]))
+    .refine((value) => Object.keys(value).length <= SCREENING_LIMITS.questions)
+    .optional(),
 });
 
 export type GuestApplicationInput = z.input<typeof guestApplicationSchema> & {

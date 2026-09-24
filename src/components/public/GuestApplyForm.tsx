@@ -28,6 +28,12 @@ import {
   type ApplyAvailabilityOption,
 } from '@/lib/validation/application';
 import type { PhoneCountry } from '@/lib/validation/phone';
+import {
+  isScreeningAnswerMissing,
+  type ScreeningAnswerValue,
+  type ScreeningQuestion,
+} from '@/lib/screening/questions';
+import { ScreeningQuestionsFields, screeningFieldId } from '@/components/public/ScreeningQuestionsFields';
 
 /**
  * Jednorazowa aplikacja bez konta (#98) — formularz w ApplyModal dla gościa.
@@ -41,6 +47,9 @@ import type { PhoneCountry } from '@/lib/validation/phone';
  * polach (`aria-invalid` + `aria-describedby`) i fokus na pierwszym błędnym polu. Jeden klucz
  * idempotencji na wypełnienie (useRef): ponowienie po zerwanym połączeniu nie tworzy drugiego
  * zgłoszenia ani drugiego e-maila. Turnstile (gdy skonfigurowany) jak w formularzach Auth.
+ *
+ * Pytania screeningowe (#101): te same pola co w zwykłej aplikacji; pytanie wymagane bez
+ * odpowiedzi blokuje wysyłkę przy pytaniu, a ten sam błąd z bazy (`questionId`) też tam trafia.
  */
 
 const DIAL_CODES: ReadonlyArray<{ code: PhoneCountry; dial: string }> = [
@@ -58,9 +67,18 @@ type FormError = ErrorCode | 'network';
 export interface GuestApplyFormProps {
   jobId: string;
   companyName: string;
+  /** Pytania screeningowe oferty (#101); brak = formularz bez pytań. */
+  screeningQuestions?: ScreeningQuestion[];
+  /** Język treści oferty — tekst pytania, gdy brak tłumaczenia w języku strony. */
+  contentLocale?: string;
 }
 
-export function GuestApplyForm({ jobId, companyName }: GuestApplyFormProps): React.JSX.Element {
+export function GuestApplyForm({
+  jobId,
+  companyName,
+  screeningQuestions = [],
+  contentLocale,
+}: GuestApplyFormProps): React.JSX.Element {
   const t = useTranslations('guestApply');
   const ta = useTranslations('apply');
   const tRoot = useTranslations();
@@ -73,6 +91,8 @@ export function GuestApplyForm({ jobId, companyName }: GuestApplyFormProps): Rea
   const [availability, setAvailability] = React.useState<ApplyAvailabilityOption>('immediate');
   const [message, setMessage] = React.useState('');
   const [consent, setConsent] = React.useState(false);
+  const [answers, setAnswers] = React.useState<Record<string, ScreeningAnswerValue>>({});
+  const [answerErrors, setAnswerErrors] = React.useState<Record<string, true>>({});
   const [errors, setErrors] = React.useState<FieldErrors>({});
   const [formError, setFormError] = React.useState<FormError | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -99,6 +119,12 @@ export function GuestApplyForm({ jobId, companyName }: GuestApplyFormProps): Rea
   React.useEffect(() => {
     if (sentTo) sentHeadingRef.current?.focus();
   }, [sentTo]);
+
+  const focusQuestion = (questionId: string) => {
+    const el = document.getElementById(screeningFieldId(questionId));
+    el?.focus();
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
 
   const focusField = (field: GuestApplyField) => {
     const el = refs[field].current;
@@ -130,11 +156,31 @@ export function GuestApplyForm({ jobId, companyName }: GuestApplyFormProps): Rea
     if (!address) next.email = t('error.emailRequired');
     else if (!looksLikeEmail(address)) next.email = t('error.emailInvalid');
     if (!consent) next.consent = t('error.consentRequired');
+    const missing = screeningQuestions.filter(
+      (question) => question.required && isScreeningAnswerMissing(answers[question.id]),
+    );
     setErrors(next);
-    const first = (['fullName', 'email', 'consent'] as const).find((field) => next[field]);
-    if (first) {
-      focusField(first);
+    setAnswerErrors(Object.fromEntries(missing.map((question) => [question.id, true as const])));
+    // Fokus na pierwszym błędzie w kolejności formularza (Invariant #11): dane, pytania, zgoda.
+    const firstField = (['fullName', 'email'] as const).find((field) => next[field]);
+    if (firstField) {
+      focusField(firstField);
       return;
+    }
+    if (missing[0]) {
+      focusQuestion(missing[0].id);
+      return;
+    }
+    if (next.consent) {
+      focusField('consent');
+      return;
+    }
+    // Tylko odpowiedzi na pytania tej oferty, bez pustych wartości (baza liczy je jak brak).
+    const answerPayload: Record<string, ScreeningAnswerValue> = {};
+    for (const question of screeningQuestions) {
+      const value = answers[question.id];
+      if (value === undefined || isScreeningAnswerMissing(value)) continue;
+      answerPayload[question.id] = typeof value === 'string' ? value.trim() : value;
     }
     if (botCheckEnabled && !botCheckToken) {
       setBotCheckMissing(true);
@@ -160,6 +206,7 @@ export function GuestApplyForm({ jobId, companyName }: GuestApplyFormProps): Rea
           locale,
           agreeTerms: true,
           idempotencyKey: idempotencyKeyRef.current,
+          ...(Object.keys(answerPayload).length > 0 ? { answers: answerPayload } : {}),
         },
         botCheckToken,
       );
@@ -181,6 +228,9 @@ export function GuestApplyForm({ jobId, companyName }: GuestApplyFormProps): Rea
     if (res.field === 'phone') {
       setErrors({ phone: ta('phoneInvalid') });
       focusField('phone');
+    } else if (res.error === 'SCREENING_ANSWER_REQUIRED' && res.questionId) {
+      setAnswerErrors({ [res.questionId]: true });
+      focusQuestion(res.questionId);
     } else if (res.field) {
       setErrors({ [res.field]: tRoot('errors.validationFailed') });
       focusField(res.field);
@@ -318,6 +368,29 @@ export function GuestApplyForm({ jobId, companyName }: GuestApplyFormProps): Rea
           {message.length} / {GUEST_MESSAGE_MAX}
         </p>
       </div>
+
+      <ScreeningQuestionsFields
+        questions={screeningQuestions}
+        contentLocale={contentLocale}
+        companyName={companyName}
+        values={answers}
+        errors={answerErrors}
+        onChange={(questionId, value) => {
+          setAnswers((current) => {
+            const nextAnswers = { ...current };
+            if (value === undefined) delete nextAnswers[questionId];
+            else nextAnswers[questionId] = value;
+            return nextAnswers;
+          });
+          if (answerErrors[questionId] && !isScreeningAnswerMissing(value)) {
+            setAnswerErrors((current) => {
+              const nextErrors = { ...current };
+              delete nextErrors[questionId];
+              return nextErrors;
+            });
+          }
+        }}
+      />
 
       <div className="space-y-1.5">
         <div className="flex items-start gap-2.5">

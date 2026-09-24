@@ -38,7 +38,18 @@ import {
  */
 
 export type GuestApplyField = 'fullName' | 'email' | 'phone' | 'consent';
-export type GuestApplyResult = { ok: true } | { ok: false; error: ErrorCode; field?: GuestApplyField };
+export type GuestApplyResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error: ErrorCode;
+      field?: GuestApplyField;
+      /** #101: pytanie wymagane bez odpowiedzi (walidacja w bazie) — komunikat przy pytaniu. */
+      questionId?: string;
+    };
+
+const SCREENING_REQUIRED_RE =
+  /SCREENING_ANSWER_REQUIRED: ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
 
 export type GuestConfirmOutcome =
   | 'confirmed'
@@ -151,10 +162,14 @@ export async function submitGuestApplication(
       p_confirm_token_hash: confirm.hash,
       p_ip: meta.ip,
       p_user_agent: meta.userAgent,
+      // #101: odpowiedzi walidowane w bazie tymi samymi regułami co apply_to_job.
+      p_answers: v.answers && Object.keys(v.answers).length > 0 ? v.answers : null,
     });
     if (error) {
       const message = error.message ?? '';
       if (message.includes('JOB_NOT_ACTIVE')) return { ok: false, error: 'JOB_NOT_ACTIVE' };
+      const questionId = SCREENING_REQUIRED_RE.exec(message)?.[1];
+      if (questionId) return { ok: false, error: 'SCREENING_ANSWER_REQUIRED', questionId };
       if (message.includes('VALIDATION_FAILED')) return { ok: false, error: 'VALIDATION_FAILED' };
       captureError(error, { area: 'guestApply.submit' });
       return { ok: false, error: 'INTERNAL' };

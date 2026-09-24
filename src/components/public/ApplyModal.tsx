@@ -19,6 +19,12 @@ import {
   type ApplyAvailabilityOption,
 } from '@/lib/validation/application';
 import type { PhoneCountry } from '@/lib/validation/phone';
+import {
+  isScreeningAnswerMissing,
+  type ScreeningAnswerValue,
+  type ScreeningQuestion,
+} from '@/lib/screening/questions';
+import { ScreeningQuestionsFields, screeningFieldId } from '@/components/public/ScreeningQuestionsFields';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
@@ -60,6 +66,10 @@ import { Toast } from '@/components/ui/toast';
  *
  * Oferta demonstracyjna (#297, `demo`): zamiast formularza modal mówi, że oferta i firma są
  * fikcyjne i nie można na nią aplikować — nikt nie wypełnia danych na próżno.
+ *
+ * Pytania screeningowe (#101): odpowiedzi idą w tym samym wywołaniu co aplikacja (jedna
+ * transakcja w bazie). Brak odpowiedzi na pytanie wymagane blokuje wysyłkę przy pytaniu;
+ * ten sam błąd z bazy (`questionId`) też trafia do pytania.
  */
 
 const MESSAGE_MAX = 500;
@@ -104,6 +114,10 @@ export interface ApplyModalProps {
   triggerSize?: 'default' | 'lg';
   /** Oferta z zestawu demonstracyjnego — modal pokazuje komunikat zamiast formularza. */
   demo?: boolean;
+  /** Pytania screeningowe oferty (#101); brak = formularz bez pytań. */
+  screeningQuestions?: ScreeningQuestion[];
+  /** Język treści oferty — tekst pytania, gdy brak tłumaczenia w języku strony. */
+  contentLocale?: string;
 }
 
 export function ApplyModal({
@@ -115,6 +129,8 @@ export function ApplyModal({
   triggerClassName,
   triggerSize = 'lg',
   demo = false,
+  screeningQuestions = [],
+  contentLocale,
 }: ApplyModalProps): React.JSX.Element {
   const t = useTranslations('apply');
   const tCommon = useTranslations('common');
@@ -131,6 +147,8 @@ export function ApplyModal({
   const [availability, setAvailability] = React.useState<Availability>('immediate');
   const [message, setMessage] = React.useState('');
   const [consent, setConsent] = React.useState(false);
+  const [answers, setAnswers] = React.useState<Record<string, ScreeningAnswerValue>>({});
+  const [answerErrors, setAnswerErrors] = React.useState<Record<string, true>>({});
   const [submitting, setSubmitting] = React.useState(false);
   const [errors, setErrors] = React.useState<{ phone?: PhoneError; consent?: boolean }>({});
   const [formError, setFormError] = React.useState<FormError | null>(null);
@@ -162,6 +180,8 @@ export function ApplyModal({
     setAvailability('immediate');
     setMessage('');
     setConsent(false);
+    setAnswers({});
+    setAnswerErrors({});
     setErrors({});
     setFormError(null);
     setSubmitting(false);
@@ -202,13 +222,28 @@ export function ApplyModal({
       phone: phone.trim().length === 0 ? ('required' as const) : undefined,
       consent: !consent,
     };
+    const missing = screeningQuestions.filter(
+      (question) => question.required && isScreeningAnswerMissing(answers[question.id]),
+    );
     setErrors(nextErrors);
-    if (nextErrors.phone || nextErrors.consent) {
-      // Fokus + przewinięcie do pierwszego błędnego pola (Invariant #11).
-      const firstInvalid = nextErrors.phone ? phoneRef.current : consentRef.current;
+    setAnswerErrors(Object.fromEntries(missing.map((question) => [question.id, true as const])));
+    if (nextErrors.phone || missing.length > 0 || nextErrors.consent) {
+      // Fokus + przewinięcie do pierwszego błędnego pola w kolejności formularza (Invariant #11).
+      const firstInvalid = nextErrors.phone
+        ? phoneRef.current
+        : missing[0]
+          ? document.getElementById(screeningFieldId(missing[0].id))
+          : consentRef.current;
       firstInvalid?.focus();
       firstInvalid?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       return;
+    }
+    // Tylko odpowiedzi na pytania tej oferty, bez pustych wartości (baza liczy je jak brak).
+    const answerPayload: Record<string, ScreeningAnswerValue> = {};
+    for (const question of screeningQuestions) {
+      const value = answers[question.id];
+      if (value === undefined || isScreeningAnswerMissing(value)) continue;
+      answerPayload[question.id] = typeof value === 'string' ? value.trim() : value;
     }
 
     setFormError(null);
@@ -227,6 +262,7 @@ export function ApplyModal({
         message: trimmedMessage.length > 0 ? trimmedMessage : undefined,
         agreeTerms: true,
         idempotencyKey: idempotencyKeyRef.current,
+        ...(Object.keys(answerPayload).length > 0 ? { answers: answerPayload } : {}),
       });
     } catch {
       // Żądanie nie wróciło (sieć/timeout/5xx przed akcją). Dane formularza zostają.
@@ -248,6 +284,13 @@ export function ApplyModal({
       setErrors({ phone: 'invalid' });
       phoneRef.current?.focus();
       phoneRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else if (res.error === 'SCREENING_ANSWER_REQUIRED' && res.questionId) {
+      // Baza odrzuciła brak odpowiedzi na pytanie wymagane — błąd przy tym pytaniu.
+      const questionId = res.questionId;
+      setAnswerErrors({ [questionId]: true });
+      const field = document.getElementById(screeningFieldId(questionId));
+      field?.focus();
+      field?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     } else if (res.error === 'DEMO_UNAVAILABLE') {
       setFormError('demo');
     } else if (res.error === 'UNAUTHENTICATED') {
@@ -318,7 +361,14 @@ export function ApplyModal({
             </p>
           ) : isGuest ? (
             <div className="space-y-5">
-            {formReady ? <GuestApplyForm jobId={jobId} companyName={companyName} /> : null}
+            {formReady ? (
+              <GuestApplyForm
+                jobId={jobId}
+                companyName={companyName}
+                screeningQuestions={screeningQuestions}
+                contentLocale={contentLocale}
+              />
+            ) : null}
             <p className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
               {tGuest('orAccount')}
             </p>
@@ -422,6 +472,29 @@ export function ApplyModal({
                     {message.length} / {MESSAGE_MAX}
                   </p>
                 </div>
+
+                <ScreeningQuestionsFields
+                  questions={screeningQuestions}
+                  contentLocale={contentLocale}
+                  companyName={companyName}
+                  values={answers}
+                  errors={answerErrors}
+                  onChange={(questionId, value) => {
+                    setAnswers((current) => {
+                      const next = { ...current };
+                      if (value === undefined) delete next[questionId];
+                      else next[questionId] = value;
+                      return next;
+                    });
+                    if (answerErrors[questionId] && !isScreeningAnswerMissing(value)) {
+                      setAnswerErrors((current) => {
+                        const next = { ...current };
+                        delete next[questionId];
+                        return next;
+                      });
+                    }
+                  }}
+                />
 
                 <div className="flex items-start gap-2.5">
                   <Checkbox

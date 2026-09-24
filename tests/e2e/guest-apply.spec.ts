@@ -12,12 +12,17 @@ import { expect, test, type Page } from '@playwright/test';
  * - dialog bez naruszeń axe critical/serious (320 i 1280 px),
  * - strony linków z e-maili: noindex, bez Referer, GET niczego nie zmienia (przycisk),
  *   nieprawidłowy token → komunikat; przejęcie bez sesji → logowanie z powrotem (z tokenem).
+ * - pytania screeningowe (#101, oferta 1003): wymagane bez odpowiedzi blokują wysyłkę gościa
+ *   przy pytaniu, po odpowiedzi zgłoszenie wychodzi.
  * Kontrola ujemna (lokalnie): bez `GuestApplyForm` w ApplyModal test „formularz gościa” pada.
  */
 
 const LOCALES = ['pl', 'nl', 'fr', 'en'] as const;
 type Locale = (typeof LOCALES)[number];
 const JOB_SLUG = 'bricklayer-brussels-1002';
+const SCREENING_JOB_SLUG = 'truck-driver-ghent-1003';
+const Q_YES_NO = 'f1010000-0000-4000-8000-000000000001';
+const Q_CHOICE = 'f1010000-0000-4000-8000-000000000002';
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const BLOCKING = new Set(['critical', 'serious']);
 
@@ -58,10 +63,10 @@ test.beforeEach(async ({ context, baseURL }) => {
   ]);
 });
 
-async function openGuestForm(page: Page, locale: Locale, width: number) {
+async function openGuestForm(page: Page, locale: Locale, width: number, slug = JOB_SLUG) {
   const t = msgs(locale);
   await page.setViewportSize({ width, height: 900 });
-  await page.goto(`/${locale}/oferty-pracy/${JOB_SLUG}`);
+  await page.goto(`/${locale}/oferty-pracy/${slug}`);
   // Na danej szerokości widoczny jest dokładnie jeden przycisk (pasek mobilny albo panel boczny).
   await page.getByRole('button', { name: t.jobs.applyNow }).click();
   const dialog = page.getByRole('dialog');
@@ -106,6 +111,22 @@ for (const locale of LOCALES) {
     expect(actions).toHaveLength(1);
   });
 }
+
+test('pytania screeningowe (#101): gość musi odpowiedzieć na wymagane, potem zgłoszenie wychodzi', async ({ page }) => {
+  const { t, dialog, form } = await openGuestForm(page, 'pl', 1280, SCREENING_JOB_SLUG);
+  await form.getByRole('textbox', { name: t.guestApply.fullName }).fill('Anna Nowak');
+  await form.getByRole('textbox', { name: t.guestApply.email }).fill('anna@example.com');
+  await form.getByRole('checkbox', { name: t.apply.consent }).click();
+  await form.getByRole('button', { name: t.apply.submit }).click();
+
+  await expect(page.locator(`#apply-q-${Q_YES_NO}`)).toBeFocused();
+  await expect(dialog.getByTestId('guest-apply-sent')).toHaveCount(0);
+
+  await page.locator(`#apply-q-${Q_YES_NO}`).check();
+  await page.locator(`#apply-q-${Q_CHOICE}`).check();
+  await form.getByRole('button', { name: t.apply.submit }).click();
+  await expect(dialog.getByTestId('guest-apply-sent')).toBeVisible();
+});
 
 for (const width of [320, 1280]) {
   test(`dialog gościa bez naruszeń axe critical/serious (${width}px)`, async ({ page }) => {

@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GuestApplyForm } from '@/components/public/GuestApplyForm';
+import { screeningFieldId } from '@/components/public/ScreeningQuestionsFields';
 import { submitGuestApplication } from '@/lib/actions/guest-applications';
 import en from '@/messages/en.json';
 import fr from '@/messages/fr.json';
@@ -31,10 +32,24 @@ beforeEach(() => vi.mocked(submitGuestApplication).mockReset());
 
 type Messages = typeof en;
 
-function renderForm(locale = 'en', messages: Messages = en) {
+const REQUIRED_QUESTION = {
+  id: '44444444-4444-4444-8444-444444444444',
+  position: 0,
+  type: 'yes_no' as const,
+  required: true,
+  prompt: { en: 'Do you have a C driving licence?' },
+  options: [],
+};
+
+function renderForm(locale = 'en', messages: Messages = en, questions: (typeof REQUIRED_QUESTION)[] = []) {
   render(
     <NextIntlClientProvider locale={locale} messages={messages}>
-      <GuestApplyForm jobId="11111111-1111-4111-8111-111111111111" companyName="ACME" />
+      <GuestApplyForm
+        jobId="11111111-1111-4111-8111-111111111111"
+        companyName="ACME"
+        screeningQuestions={questions}
+        contentLocale="en"
+      />
     </NextIntlClientProvider>,
   );
   const m = messages.guestApply;
@@ -113,6 +128,28 @@ describe('GuestApplyForm', () => {
     const phone = await screen.findByRole('textbox', { name: en.guestApply.phoneOptional });
     await waitFor(() => expect(phone).toHaveAttribute('aria-invalid', 'true'));
     expect(phone).toHaveAccessibleDescription(en.apply.phoneInvalid);
+  });
+
+  it('#101: required screening question blocks sending; the database error lands on the question', async () => {
+    const f = renderForm('en', en, [REQUIRED_QUESTION]);
+    fireEvent.change(f.name, { target: { value: 'Anna' } });
+    fireEvent.change(f.email, { target: { value: 'anna@example.com' } });
+    fireEvent.click(f.consent);
+    fireEvent.click(f.submit);
+    expect(submitGuestApplication).not.toHaveBeenCalled();
+    expect(document.activeElement?.id).toBe(screeningFieldId(REQUIRED_QUESTION.id));
+
+    vi.mocked(submitGuestApplication).mockResolvedValueOnce({
+      ok: false,
+      error: 'SCREENING_ANSWER_REQUIRED',
+      questionId: REQUIRED_QUESTION.id,
+    });
+    const yes = screen.getByRole('radio', { name: en.apply.screeningYes });
+    fireEvent.click(yes);
+    fireEvent.click(f.submit);
+    await waitFor(() => expect(submitGuestApplication).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(submitGuestApplication).mock.calls[0]![0].answers).toEqual({ [REQUIRED_QUESTION.id]: true });
+    await waitFor(() => expect(document.activeElement?.id).toBe(screeningFieldId(REQUIRED_QUESTION.id)));
   });
 
   it('rate limit and unavailable feature show their own messages', async () => {

@@ -11,12 +11,16 @@ sekcja GA98 (z kontrolami ujemnymi).
 
 1. **Formularz** (`GuestApplyForm` w `ApplyModal`, tylko dla gościa): imię i nazwisko,
    e-mail i zgoda (ten sam tekst co przy zwykłej aplikacji). Telefon, dostępność i wiadomość
-   są opcjonalne. Action `submitGuestApplication` sprawdza kolejno: limit per IP (`guest-apply`,
+   są opcjonalne. Pytania screeningowe oferty (#101) są te same co w zwykłej aplikacji
+   (`ScreeningQuestionsFields`); odpowiedź na pytanie wymagane jest obowiązkowa także dla
+   gościa. Action `submitGuestApplication` sprawdza kolejno: limit per IP (`guest-apply`,
    10/h, przy błędzie limitera blokuje), Turnstile (`guest_apply`, przy awarii dostawcy
    blokuje), walidację Zod i limit per adres (`guest-apply-email`, 5/h; klucz to hash adresu).
 2. **Zgłoszenie**: RPC `submit_guest_application` (tylko service_role) zapisuje wiersz
    `guest_application_requests` w stanie `pending` ze snapshotem zgody: aktualną wersję
    polityki prywatności z `consent_versions` (jeśli jest opublikowana), język, IP, UA i czas.
+   Odpowiedzi na pytania sprawdza `record_screening_answers` w trybie bez aplikacji — te same
+   reguły co `apply_to_job` (`SCREENING_ANSWER_REQUIRED: <id>` → błąd przy pytaniu).
    Kolejkuje też e-mail `guestApplicationConfirm`. Firma nic jeszcze nie widzi.
    Odpowiedź jest zawsze neutralna („sprawdź skrzynkę”), więc nie zdradza, czy adres już
    aplikował albo ma konto.
@@ -28,7 +32,9 @@ sekcja GA98 (z kontrolami ujemnymi).
    - powiadamia aktywnych recruiter+ firmy (in-app i `newApplication` w języku odbiorcy,
      tak samo jak `apply_to_job`);
    - kolejkuje do gościa `guestApplicationSent` z linkiem przejęcia (ważnym 30 dni);
-   - kasuje telefon i wiadomość w zgłoszeniu, bo od teraz są tylko w aplikacji.
+   - zapisuje odpowiedzi screeningowe do `application_screening_answers` (snapshot jak przy
+     zwykłej aplikacji);
+   - kasuje telefon, wiadomość i odpowiedzi w zgłoszeniu, bo od teraz są tylko w aplikacji.
    Wyniki: `confirmed`, `already_confirmed` (ponowne kliknięcie niczego nie zmienia),
    `duplicate` (adres już aplikował na tę ofertę jako gość albo z konta), `expired` (48 h),
    `job_closed`, `invalid`.
@@ -110,7 +116,7 @@ Najpierw wyłącz kod (formularz gościa i strony linków), potem w nowej migrac
 delete from public.applications where candidate_id is null;
 drop trigger if exists trg_conversations_guest_guard on public.conversations;
 drop function if exists public.guard_conversation_guest_application();
-drop function if exists public.submit_guest_application(uuid, text, text, text, text, text, text, text, text, text, text, text);
+drop function if exists public.submit_guest_application(uuid, text, text, text, text, text, text, text, text, text, text, text, jsonb);
 drop function if exists public.confirm_guest_application(text, text, text);
 drop function if exists public.claim_guest_application(text);
 drop function if exists public.purge_guest_application_requests();
@@ -126,6 +132,6 @@ alter table public.applications
 drop table if exists public.guest_application_requests;
 ```
 
-Na koniec odtwórz `enforce_application_integrity` z `0020` i `transition_application` z
-`0073`. Zwykłe aplikacje zostają. Przejęte aplikacje gościa (z `candidate_id`) też zostają,
+Na koniec odtwórz `enforce_application_integrity` z `0020`, `transition_application` z
+`0073` i `record_screening_answers` z `0093`. Zwykłe aplikacje zostają. Przejęte aplikacje gościa (z `candidate_id`) też zostają,
 bez snapshotu gościa.

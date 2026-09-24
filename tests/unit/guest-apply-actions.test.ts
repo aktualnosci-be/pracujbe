@@ -110,6 +110,19 @@ describe('submitGuestApplication', () => {
     expect(adminRpc).not.toHaveBeenCalled();
   });
 
+  it('#101: passes screening answers and maps a missing required answer to its question', async () => {
+    const q = '33333333-3333-4333-8333-333333333333';
+    adminRpc.mockResolvedValueOnce({ data: null, error: { message: `SCREENING_ANSWER_REQUIRED: ${q}` } });
+    expect(await submitGuestApplication({ ...input, answers: { [q]: true } })).toEqual({
+      ok: false,
+      error: 'SCREENING_ANSWER_REQUIRED',
+      questionId: q,
+    });
+    expect(adminRpc.mock.calls[0]![1]).toMatchObject({ p_answers: { [q]: true } });
+    await submitGuestApplication(input);
+    expect(adminRpc.mock.calls[1]![1]).toMatchObject({ p_answers: null });
+  });
+
   it('maps RPC errors without leaking technical details', async () => {
     adminRpc.mockResolvedValueOnce({ data: null, error: { message: 'JOB_NOT_ACTIVE' } });
     expect(await submitGuestApplication(input)).toEqual({ ok: false, error: 'JOB_NOT_ACTIVE' });

@@ -35,7 +35,10 @@
 --     gościa, zmiana candidate_id wyłącznie NULL → auth.uid() wewnątrz claim_guest_application;
 --   * transition_application (0073): aplikacja gościa nie ma profilu odbiorcy — bez
 --     powiadomienia/e-maila kandydata (reszta 1:1);
---   * trigger na conversations: rozmowa wymaga konta kandydata (aplikacja gościa → błąd).
+--   * trigger na conversations: rozmowa wymaga konta kandydata (aplikacja gościa → błąd);
+--   * record_screening_answers (0093): `p_application_id` NULL = sama walidacja (te same
+--     reguły co apply_to_job) — zgłoszenie gościa sprawdza odpowiedzi na pytania oferty przy
+--     wysłaniu, a potwierdzenie zapisuje je do aplikacji. Reszta funkcji 1:1 z 0093.
 --
 -- Rollback (bezpieczny, bez utraty zwykłych aplikacji):
 --   delete from public.applications where candidate_id is null;
@@ -46,7 +49,8 @@
 --     drop column guest_name, guest_email, guest_request_id, claimed_at,
 --     alter column candidate_id set not null;
 --   drop table public.guest_application_requests;
---   odtworzyć enforce_application_integrity z 0020 i transition_application z 0073.
+--   odtworzyć enforce_application_integrity z 0020, transition_application z 0073
+--   i record_screening_answers z 0093.
 -- =============================================================================
 
 -- --- 1. Zgłoszenia gościa (przed potwierdzeniem e-maila) ------------------------------------
@@ -58,6 +62,9 @@ create table public.guest_application_requests (
   phone               text check (phone is null or char_length(phone) <= 40),
   availability        public.availability_status,
   message             text check (message is null or char_length(message) <= 4000),
+  -- Odpowiedzi na pytania screeningowe oferty (#101), zwalidowane przy wysłaniu; po
+  -- potwierdzeniu przechodzą do application_screening_answers i są tu zerowane.
+  screening_answers   jsonb check (screening_answers is null or jsonb_typeof(screening_answers) = 'object'),
   -- Język, w którym gość wypełnił formularz = język ODBIORCY e-maili do gościa (Invariant #1;
   -- gość nie ma profilu z preferred/account/signup_locale).
   locale              text not null references public.supported_locales(code),
@@ -307,6 +314,84 @@ end $$;
 revoke all on function public.enqueue_guest_email(public.citext, text, text, uuid, text, jsonb)
   from public, anon, authenticated;
 
+-- --- 6b. Walidacja odpowiedzi bez aplikacji (0093 + tryb gościa) ------------------------------
+create or replace function public.record_screening_answers(p_application_id uuid, p_job_id uuid, p_answers jsonb)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  a jsonb := coalesce(p_answers, '{}'::jsonb);
+  q record; v jsonb; v_text text; v_date date; v_bad text;
+  v_bool boolean; v_ans_date date; v_ans_text text;
+begin
+  if jsonb_typeof(a) <> 'object' then
+    raise exception 'VALIDATION_FAILED: odpowiedzi' using errcode = '42501';
+  end if;
+  select k into v_bad from jsonb_object_keys(a) k
+    where not exists (select 1 from public.job_screening_questions sq
+                      where sq.job_id = p_job_id and sq.id::text = k)
+    limit 1;
+  if v_bad is not null then
+    raise exception 'VALIDATION_FAILED: odpowiedź na nieznane pytanie' using errcode = '42501';
+  end if;
+
+  for q in select * from public.job_screening_questions where job_id = p_job_id order by position loop
+    v := a->(q.id::text);
+    v_bool := null; v_ans_date := null; v_ans_text := null;
+    -- Brak odpowiedzi: brak klucza, JSON null albo pusty tekst.
+    if v is not null and jsonb_typeof(v) = 'string' and btrim(v #>> '{}') = '' then v := null; end if;
+    if v is not null and jsonb_typeof(v) = 'null' then v := null; end if;
+
+    if v is not null then
+      if q.type = 'yes_no' then
+        if jsonb_typeof(v) <> 'boolean' then
+          raise exception 'VALIDATION_FAILED: odpowiedź tak/nie' using errcode = '42501';
+        end if;
+        v_bool := (v #>> '{}')::boolean;
+      elsif jsonb_typeof(v) <> 'string' then
+        raise exception 'VALIDATION_FAILED: odpowiedź' using errcode = '42501';
+      else
+        v_text := btrim(v #>> '{}');
+        if q.type = 'single_choice' then
+          if not exists (select 1 from jsonb_array_elements(q.options) o where o->>'id' = v_text) then
+            raise exception 'VALIDATION_FAILED: nieznana opcja' using errcode = '42501';
+          end if;
+          v_ans_text := v_text;
+        elsif q.type = 'date' then
+          if v_text !~ '^\d{4}-\d{2}-\d{2}$' then
+            raise exception 'VALIDATION_FAILED: data' using errcode = '42501';
+          end if;
+          begin
+            v_date := v_text::date;
+          exception when others then
+            raise exception 'VALIDATION_FAILED: data' using errcode = '42501';
+          end;
+          if v_date not between date '1900-01-01' and date '2100-12-31' then
+            raise exception 'VALIDATION_FAILED: data' using errcode = '42501';
+          end if;
+          v_ans_date := v_date;
+        else
+          if length(v_text) > 500 then
+            raise exception 'VALIDATION_FAILED: odpowiedź za długa' using errcode = '42501';
+          end if;
+          v_ans_text := v_text;
+        end if;
+      end if;
+    elsif q.required then
+      raise exception 'SCREENING_ANSWER_REQUIRED: %', q.id using errcode = '23514';
+    end if;
+
+    -- #98: bez aplikacji (zgłoszenie gościa przed potwierdzeniem) — tylko walidacja.
+    if p_application_id is not null then
+      insert into public.application_screening_answers
+        (application_id, question_id, position, type, required, prompt, options,
+         answer_boolean, answer_date, answer_text)
+      values (p_application_id, q.id, q.position, q.type, q.required, q.prompt, q.options,
+              v_bool, v_ans_date, v_ans_text);
+    end if;
+  end loop;
+end $$;
+
+revoke all on function public.record_screening_answers(uuid, uuid, jsonb) from public, anon, authenticated;
+
 -- --- 7. submit_guest_application ---------------------------------------------------------------
 -- Wynik zawsze neutralny („sprawdź skrzynkę”): nie ujawnia, czy adres już aplikował ani czy ma
 -- konto. Duplikat wykrywa dopiero potwierdzenie (właściciel adresu).
@@ -322,7 +407,8 @@ create or replace function public.submit_guest_application(
   p_confirm_nonce      text,
   p_confirm_token_hash text,
   p_ip                 text default null,
-  p_user_agent         text default null
+  p_user_agent         text default null,
+  p_answers            jsonb default null
 ) returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_email public.citext; v_name text; v_locale text; v_id uuid; v_existing record;
@@ -354,6 +440,8 @@ begin
   end if;
 
   if not public.job_is_public(p_job_id) then raise exception 'JOB_NOT_ACTIVE' using errcode = '42501'; end if;
+  -- #101: te same reguły odpowiedzi co apply_to_job (SCREENING_ANSWER_REQUIRED: <id> itd.).
+  perform public.record_screening_answers(null, p_job_id, p_answers);
   select j.title, c.name, j.slug into v_job_title, v_company_name, v_slug
     from public.jobs j join public.companies c on c.id = j.company_id where j.id = p_job_id;
 
@@ -374,6 +462,7 @@ begin
      set full_name = v_name, phone = nullif(btrim(coalesce(p_phone, '')), ''),
          availability = nullif(p_availability, '')::public.availability_status,
          message = nullif(btrim(coalesce(p_message, '')), ''), locale = v_locale,
+         screening_answers = p_answers,
          idempotency_key = p_idempotency_key,
          confirm_token_hash = p_confirm_token_hash, confirm_nonce = p_confirm_nonce,
          confirm_expires_at = now() + interval '48 hours',
@@ -385,13 +474,13 @@ begin
 
   if v_id is null then
     insert into public.guest_application_requests
-      (job_id, email, full_name, phone, availability, message, locale, idempotency_key,
+      (job_id, email, full_name, phone, availability, message, screening_answers, locale, idempotency_key,
        confirm_token_hash, confirm_nonce, confirm_expires_at,
        consent_version_id, consent_document_version, consent_accepted_at, consent_ip, consent_user_agent)
     values
       (p_job_id, v_email, v_name, nullif(btrim(coalesce(p_phone, '')), ''),
        nullif(p_availability, '')::public.availability_status,
-       nullif(btrim(coalesce(p_message, '')), ''), v_locale, p_idempotency_key,
+       nullif(btrim(coalesce(p_message, '')), ''), p_answers, v_locale, p_idempotency_key,
        p_confirm_token_hash, p_confirm_nonce, now() + interval '48 hours',
        v_version_id, v_version, now(), v_ip, nullif(left(coalesce(p_user_agent, ''), 512), ''))
     returning id into v_id;
@@ -404,9 +493,9 @@ begin
                        'jobSlug', coalesce(v_slug, '')));
   return v_id;
 end $$;
-revoke all on function public.submit_guest_application(uuid, text, text, text, text, text, text, text, text, text, text, text)
+revoke all on function public.submit_guest_application(uuid, text, text, text, text, text, text, text, text, text, text, text, jsonb)
   from public, anon, authenticated;
-grant execute on function public.submit_guest_application(uuid, text, text, text, text, text, text, text, text, text, text, text)
+grant execute on function public.submit_guest_application(uuid, text, text, text, text, text, text, text, text, text, text, text, jsonb)
   to service_role;
 
 -- --- 8. confirm_guest_application --------------------------------------------------------------
@@ -453,7 +542,7 @@ begin
      or exists (select 1 from public.applications a join auth.users u on u.id = a.candidate_id
                   where a.job_id = r.job_id and a.deleted_at is null and lower(u.email::text) = lower(r.email::text)) then
     update public.guest_application_requests
-       set status = 'duplicate', confirmed_at = now(), phone = null, message = null
+       set status = 'duplicate', confirmed_at = now(), phone = null, message = null, screening_answers = null
      where id = r.id;
     return query select 'duplicate'::text, r.locale, v_slug; return;
   end if;
@@ -468,16 +557,19 @@ begin
   returning id into v_app_id;
   if v_app_id is null then
     update public.guest_application_requests
-       set status = 'duplicate', confirmed_at = now(), phone = null, message = null
+       set status = 'duplicate', confirmed_at = now(), phone = null, message = null, screening_answers = null
      where id = r.id;
     return query select 'duplicate'::text, r.locale, v_slug; return;
   end if;
 
-  -- Minimalizacja: telefon i wiadomość żyją już tylko w aplikacji; zgłoszenie trzyma snapshot
-  -- zgody, adres (do przejęcia) i hash tokenu przejęcia.
+  -- #101: odpowiedzi na pytania oferty trafiają do aplikacji jak w apply_to_job (snapshot).
+  perform public.record_screening_answers(v_app_id, r.job_id, r.screening_answers);
+
+  -- Minimalizacja: telefon, wiadomość i odpowiedzi żyją już tylko w aplikacji; zgłoszenie
+  -- trzyma snapshot zgody, adres (do przejęcia) i hash tokenu przejęcia.
   update public.guest_application_requests
      set status = 'confirmed', confirmed_at = now(), application_id = v_app_id,
-         phone = null, message = null,
+         phone = null, message = null, screening_answers = null,
          claim_token_hash = p_claim_token_hash, claim_nonce = p_claim_nonce,
          claim_expires_at = now() + interval '30 days'
    where id = r.id;

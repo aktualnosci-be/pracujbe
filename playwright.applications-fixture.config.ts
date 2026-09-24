@@ -18,6 +18,8 @@ export default defineConfig({
         '**/apply-modal-a11y.spec.ts',
         '**/apply-network-error.spec.ts',
         '**/apply-phone-validation.spec.ts',
+        // Pytania screeningowe oferty fikcyjnej 1003 (#101).
+        '**/apply-screening.spec.ts',
         // #98: aplikacja bez konta (gość = cookie fixture, bez bazy).
         '**/guest-apply.spec.ts',
         '**/job-posting-fixture.spec.ts',
