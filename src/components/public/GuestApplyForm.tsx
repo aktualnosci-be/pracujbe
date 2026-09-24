@@ -5,7 +5,6 @@ import { MailCheck, Send } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { isTurnstileWidgetEnabled, TurnstileWidget, type TurnstileHandle } from '@/components/auth/TurnstileWidget';
-import { AgeDeclarationField } from '@/components/auth/AgeDeclarationField';
 import { CANDIDATE_MIN_AGE_FALLBACK } from '@/lib/age-policy/constants';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -446,18 +445,30 @@ export function GuestApplyForm({
       />
 
       <div className={FORM_FIELD}>
-        <AgeDeclarationField
-          ref={refs.age}
-          id="guest-apply-age"
-          variant="compact"
-          minAge={candidateMinAge}
-          checked={ageConfirmed}
-          onCheckedChange={(value) => {
-            setAgeConfirmed(value);
-            if (value && errors.age) setErrors((current) => ({ ...current, age: undefined }));
-          }}
-          error={errors.age ?? null}
-        />
+        {/* #492: ta sama treść i semantyka co AgeDeclarationField (rejestracja), inline —
+            wspólny komponent dzielił chunk JS szczegółu oferty ponad budżet (perf-budgets). */}
+        <div className="flex items-start gap-[9px]">
+          <Checkbox
+            ref={refs.age}
+            id="guest-apply-age"
+            checked={ageConfirmed}
+            onCheckedChange={(value) => {
+              setAgeConfirmed(value === true);
+              if (value === true && errors.age) setErrors((current) => ({ ...current, age: undefined }));
+            }}
+            aria-required="true"
+            aria-invalid={errors.age ? true : undefined}
+            aria-describedby={['guest-apply-age-hint', describedBy('age')].filter(Boolean).join(' ')}
+            className={errors.age ? 'border-error' : undefined}
+          />
+          <Label htmlFor="guest-apply-age" className="cursor-pointer text-[13px] font-normal leading-[1.5] text-foreground">
+            {tRoot('auth.ageConfirm', { age: candidateMinAge })}
+          </Label>
+        </div>
+        <p id="guest-apply-age-hint" className="text-xs text-muted-foreground">
+          {tRoot('auth.ageConfirmHint')}
+        </p>
+        {fieldError('age')}
       </div>
 
       <div className={FORM_FIELD}>

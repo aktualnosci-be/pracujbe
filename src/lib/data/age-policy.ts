@@ -16,10 +16,12 @@ import 'server-only';
 import { CANDIDATE_MIN_AGE_FALLBACK, normalizeCandidateMinAge } from '@/lib/age-policy/constants';
 import { isDatabaseConfigured, isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
+import { isBuildPhase } from '@/lib/static-rendering';
 
 export async function getCandidateMinAge(): Promise<number> {
   try {
-    if (isDatabaseConfigured()) {
+    // `next build` nie łączy się z bazą (#534) — wartość awaryjna, ISR odświeży po starcie.
+    if (isDatabaseConfigured() && !isBuildPhase()) {
       const [{ getDomainPool }, { withUserTransaction }] = await Promise.all([
         import('@/lib/db/runtime'),
         import('@/lib/db/transaction'),

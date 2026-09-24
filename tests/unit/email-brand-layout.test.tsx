@@ -8,6 +8,8 @@ import {
   EmailLayout,
   EmailQuote,
 } from '@/emails/_components';
+import { layoutCopy } from '@/emails/copy';
+import { routing, type Locale } from '@/i18n/routing';
 
 describe('wspólny layout e-maili', () => {
   it('renderuje zatwierdzone logo i paletę marki w gotowym HTML wiadomości', async () => {
@@ -57,4 +59,27 @@ describe('wspólny layout e-maili', () => {
     expect(quote?.style.backgroundColor).toBe('rgb(255, 249, 249)');
     expect(document.body.style.backgroundColor).toBe('rgb(244, 244, 244)');
   });
+
+  it.each(routing.locales)(
+    'prowadzi ze stopki do pomocy i prywatności w języku odbiorcy (%s)',
+    async (locale: Locale) => {
+      const html = await render(
+        <EmailLayout locale={locale} preview="Podgląd wiadomości">
+          <EmailHeading>Wiadomość</EmailHeading>
+        </EmailLayout>,
+      );
+
+      const document = new DOMParser().parseFromString(html, 'text/html');
+      const footerLinks = Array.from(document.querySelectorAll('a')).filter((link) =>
+        [layoutCopy[locale].help, layoutCopy[locale].privacy].includes(link.textContent ?? ''),
+      );
+      const homeHref = `http://localhost:3000/${locale}`;
+
+      expect(footerLinks).toHaveLength(2);
+      expect(footerLinks.map((link) => link.getAttribute('href'))).toEqual([
+        `${homeHref}/pomoc`,
+        `${homeHref}/polityka-prywatnosci`,
+      ]);
+    },
+  );
 });

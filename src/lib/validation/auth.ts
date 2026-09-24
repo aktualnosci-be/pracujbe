@@ -1,6 +1,6 @@
 import { z } from 'zod/v3';
-import { routing } from '@/i18n/routing';
 import { minAgeSchema } from '@/lib/age-policy';
+import { localeSchema } from '@/lib/validation/locale';
 
 /**
  * Schematy walidacji autoryzacji (logowanie, rejestracja kandydata/pracodawcy, reset hasła).
@@ -9,7 +9,7 @@ import { minAgeSchema } from '@/lib/age-policy';
  * warstwa formularza mapuje je na tłumaczenia.
  */
 
-export const localeSchema = z.enum(routing.locales);
+export { localeSchema };
 
 export const emailSchema = z
   .string({ required_error: 'auth.error.emailRequired' })

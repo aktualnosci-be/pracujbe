@@ -97,14 +97,51 @@ describe('prerenderParamsAtBuild — build nie łączy się z bazą', () => {
     expect(prerenderParamsAtBuild([{ locale: 'pl' }])).toEqual([]);
   });
 
-  it('layout [locale] i landingi z ofertami korzystają z helpera', () => {
+  it('landingi z ofertami korzystają z helpera', () => {
     for (const file of [
-      'src/app/[locale]/layout.tsx',
       `${PUBLIC}/praca/page.tsx`,
       `${PUBLIC}/praca/kategoria/[category]/page.tsx`,
       `${PUBLIC}/praca/miasto/[city]/page.tsx`,
     ]) {
       expect(read(file), file).toContain('prerenderParamsAtBuild(');
     }
+  });
+
+  it('layout [locale] zawsze prerenderuje komplet języków (pusta lista = 500 DYNAMIC_SERVER_USAGE)', () => {
+    // Pusta lista w layoucie sprawiała, że build nie renderował stron pod [locale] i nie wykrywał
+    // tych, które czytają cookies/nagłówki (logowanie, rejestracja, lista ofert) — na produkcji
+    // z DATABASE_APP_URL kończyły się błędem 500.
+    const layout = read('src/app/[locale]/layout.tsx');
+    expect(layout).not.toContain('prerenderParamsAtBuild(');
+    expect(layout).toMatch(/return routing\.locales\.map\(\(locale\) => \(\{ locale \}\)\);/);
+  });
+});
+
+describe('isBuildPhase — odczyty ofert w buildzie nie łączą się z bazą', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('w next build ze skonfigurowaną bazą getJobs zwraca pusty wynik bez dostępu do bazy', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://app@db.internal/pracujbe');
+    vi.stubEnv('NEXT_PHASE', 'phase-production-build');
+    const runtime = await import('@/lib/db/runtime');
+    const pool = vi.spyOn(runtime, 'getDomainPool');
+    const { getJobs, getJobBySlug, getCategoryCounts } = await import('@/lib/jobs');
+    await expect(getJobs({ locale: 'pl' })).resolves.toMatchObject({ jobs: [], total: 0 });
+    await expect(getJobBySlug('dowolna', 'pl')).resolves.toBeNull();
+    await expect(getCategoryCounts('pl', ['warehouse'])).resolves.toBeNull();
+    expect(pool).not.toHaveBeenCalled();
+  });
+
+  it('kontrola ujemna: poza buildem skonfigurowana baza jest odpytywana', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://app@db.internal/pracujbe');
+    vi.stubEnv('NEXT_PHASE', 'phase-production-server');
+    const runtime = await import('@/lib/db/runtime');
+    const pool = vi.spyOn(runtime, 'getDomainPool').mockRejectedValue(new Error('brak bazy'));
+    const { getJobs } = await import('@/lib/jobs');
+    await expect(getJobs({ locale: 'pl' })).rejects.toBeTruthy();
+    expect(pool).toHaveBeenCalled();
   });
 });

@@ -100,6 +100,8 @@ const MODERATION_TITLE_KEY: Record<string, string> = {
   job_removed: 'itemModerationJobRemoved',
   company_suspended: 'itemModerationCompanySuspended',
   restored: 'itemModerationRestored',
+  appeal_upheld: 'itemModerationAppealUpheld',
+  appeal_reversed: 'itemModerationAppealReversed',
 };
 
 /** Tytuły powiadomień typu `system` rozróżniane po `entity_type` (#403). */

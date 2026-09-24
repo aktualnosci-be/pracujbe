@@ -6,6 +6,7 @@ import { loadMyCompanyBlocks } from '@/lib/data/company-blocks';
 import { loadProfileVisibility } from '@/lib/data/profile-visibility';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
 import { AgeAttestationSettings } from '@/components/settings/AgeAttestationSettings';
+import { AccountDataSettings } from '@/components/settings/AccountDataSettings';
 import { CompanyBlocksSettings } from '@/components/settings/CompanyBlocksSettings';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
@@ -15,7 +16,7 @@ import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
  * Panel kandydata — Ustawienia (preferencje powiadomień, Etap 6; wiek, #492; widoczność
- * profilu, #494; zablokowane firmy, #97).
+ * profilu, #494; zablokowane firmy, #97; pobranie danych i usunięcie konta, #486).
  *
  * Formularz przełączników preferencji (`notification_preferences`), dane pod sesją/RLS z
  * `@/lib/data/notification-preferences`; bez env — wartości domyślne. Błąd odczytu → stan
@@ -108,6 +109,8 @@ export default async function CandidateSettingsPage({
           </p>
         </section>
       )}
+
+      <AccountDataSettings />
     </div>
   );
 }

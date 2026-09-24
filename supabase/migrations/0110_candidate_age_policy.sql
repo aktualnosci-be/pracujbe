@@ -32,7 +32,8 @@
 -- docs/legal-drafts/kandydaci-niepelnoletni.md): wariant z niepełnoletnimi (zgoda opiekuna,
 -- oznaczanie ofert dla młodocianych), treść regulaminu i polityki prywatności.
 --
--- Rollback: przywrócić `auth.record_signup_receipts` z database/auth/0059; zmienić nazwę
+-- Rollback: przywrócić `auth.record_signup_receipts` z database/auth/0059; drop nowego
+-- `export_my_data()` i zmienić nazwę `export_my_data_base` z powrotem (grant authenticated); zmienić nazwę
 -- `submit_guest_application_core` z powrotem na `submit_guest_application` (drop wrappera,
 -- grant execute dla service_role); drop triggerów `*_age_policy`, funkcji z tej migracji,
 -- tabel `candidate_age_attestations`, `age_policy`, kolumn `guest_application_requests.age_*`.
@@ -355,6 +356,35 @@ begin
 end $$;
 revoke all on function public.admin_set_candidate_min_age(integer, boolean, text) from public, anon;
 grant execute on function public.admin_set_candidate_min_age(integer, boolean, text) to authenticated;
+
+-- --- 5b. Eksport danych kandydata (#486, art. 15/20) obejmuje deklaracje wieku --------------
+-- Bez kopiowania całej funkcji z 0105: dotychczasowa staje się wewnętrzną częścią, a nowa
+-- dopisuje klucz `ageAttestations` (sam próg, źródło, język, czas). Usunięcie konta kasuje
+-- deklaracje kaskadą FK (profiles → candidate_age_attestations).
+do $mig$
+begin
+  if to_regprocedure('public.export_my_data()') is null
+     or to_regprocedure('public.export_my_data_base()') is not null then
+    return;
+  end if;
+  alter function public.export_my_data() rename to export_my_data_base;
+  revoke all on function public.export_my_data_base() from public, anon, authenticated;
+end
+$mig$;
+
+create or replace function public.export_my_data()
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_out jsonb;
+begin
+  v_out := public.export_my_data_base();
+  return v_out || jsonb_build_object('ageAttestations',
+    (select coalesce(jsonb_agg(jsonb_build_object(
+              'minAge', a.min_age, 'source', a.source, 'locale', a.locale, 'createdAt', a.created_at)
+              order by a.created_at), '[]'::jsonb)
+       from public.candidate_age_attestations a where a.profile_id = auth.uid()));
+end $$;
+revoke all on function public.export_my_data() from public, anon;
+grant execute on function public.export_my_data() to authenticated;
 
 -- --- 6. Rejestracja Better Auth: deklaracja w tej samej transakcji co konto -----------------
 -- Funkcja istnieje tylko w bazie z migracjami auth (database/auth/0059, stosowana wcześniej

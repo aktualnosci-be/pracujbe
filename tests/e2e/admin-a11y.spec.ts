@@ -35,6 +35,8 @@ const ROUTES = [
   // Przegląd pytań screeningowych (#497).
   '/admin/pytania',
   '/admin/dziennik',
+  '/admin/odwolania',
+  '/admin/raport-dsa',
 ];
 
 for (const viewport of [
