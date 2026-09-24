@@ -30,7 +30,7 @@
 -- Import nie zmienia profili, ofert, aplikacji ani dopasowań (dowód: rls.sql ESCO93).
 --
 -- Rollback: supabase/rollback/0098_esco_taxonomy.down.sql (usuwa dane ESCO, tabele,
--- funkcje i kolumny; wiersze ręczne zostają). Dowód rollbacku: rls.sql ESCO93-R.
+-- funkcje i kolumny; wiersze ręczne zostają). Dowód rollbacku: supabase/tests/esco93-rollback.sql (ESCO93-R, w test-rls.sh).
 -- =============================================================================
 
 -- --- 1. Metadane snapshotu --------------------------------------------------------------

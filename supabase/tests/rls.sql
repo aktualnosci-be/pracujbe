@@ -4376,16 +4376,7 @@ select pg_temp.assert(pg_temp.e93_fingerprint() = :'e93fp', 'ESCO93-8 import nie
 select pg_temp.assert((select count(*) from public.occupations where source = 'manual') = :e93manual,
   'ESCO93-8b ręczne zawody z 0010 nietknięte');
 
--- ESCO93-R: rollback 0098 w transakcji — usuwa ESCO, zostawia ręczne; potem cofnięty.
-begin;
-\ir ../rollback/0098_esco_taxonomy.down.sql
-select pg_temp.assert(to_regclass('public.esco_snapshots') is null
-  and to_regclass('public.occupation_labels') is null
-  and not exists (select 1 from information_schema.columns
-                  where table_schema = 'public' and table_name = 'occupations' and column_name = 'esco_uri')
-  and (select count(*) from public.occupations) = :e93manual,
-  'ESCO93-R rollback usuwa taksonomię ESCO, zostawia ręczne wiersze');
-rollback;
-select pg_temp.assert(to_regclass('public.esco_snapshots') is not null, 'ESCO93-R2 rollback testu cofnięty');
+-- ESCO93-R (rollback 0098): supabase/tests/esco93-rollback.sql, uruchamiany przez test-rls.sh
+-- po tym pliku (psql -f, bo \ir ścieżki rollbacku nie działa przy wejściu ze stdin).
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

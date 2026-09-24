@@ -150,7 +150,8 @@ Testy:
 
 - `tests/unit/esco-snapshot.test.ts` — parser, manifest, sumy i orkiestracja importu.
 - `supabase/tests/rls.sql`, sekcja ESCO93 — uprawnienia, przypięcie, idempotencja,
-  dane ręczne, fallback, brak wpływu na dane procesowe, rollback.
+  dane ręczne, fallback, brak wpływu na dane procesowe; rollback w
+  `supabase/tests/esco93-rollback.sql`.
 - `npm run test:esco` (`scripts/esco/test-esco-import.mjs`) — pełny pipeline na
   pustej bazie `pracujbe_esco_test`.
 
@@ -161,8 +162,9 @@ w jednej transakcji (`psql -1 -f …`). Usuwa wiersze ESCO, etykiety, relacje,
 metadane, funkcje i kolumny 0098. Wiersze ręczne zostają. W profilach i ofertach
 zostają etykiety tekstowe (`skill_label`), a `skill_id` przechodzi na `NULL` (FK
 `ON DELETE SET NULL`). Po rollbacku usuń wpis `0098_esco_taxonomy.sql` z
-`app_migrations.history`. Dowód działania: `rls.sql` ESCO93-R, gdzie rollback
-wykonuje się w transakcji i jest cofany.
+`app_migrations.history`. Dowód działania: `supabase/tests/esco93-rollback.sql` (ESCO93-R, uruchamiany
+przez `scripts/test-rls.sh` po `rls.sql`), gdzie rollback wykonuje się w transakcji
+i jest cofany.
 
 ## Licencja i atrybucja ESCO
 
