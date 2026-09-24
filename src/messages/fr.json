@@ -1536,5 +1536,24 @@
     "contactProposalsDesc": "Vous pouvez envoyer au candidat une proposition d'emploi qu'il accepte ou refuse.",
     "finalTitle": "Vous voulez publier votre première offre ?",
     "finalDesc": "Créez un compte employeur. Vous publierez l'offre après la vérification de l'entreprise."
+  },
+  "companyBlocks": {
+    "sectionTitle": "Entreprises bloquées",
+    "sectionDescription": "Une entreprise bloquée ne voit pas votre profil, ne vous trouve pas parmi les candidats, ne peut pas vous envoyer de proposition ni de nouveau message, et ses offres disparaissent de vos recommandations. L’entreprise n’est pas informée du blocage. Vos candidatures et conversations existantes sont conservées.",
+    "empty": "Vous n’avez bloqué aucune entreprise. Vous pouvez bloquer une entreprise depuis la page de son offre.",
+    "blockedAt": "Bloquée le {date}",
+    "unblock": "Débloquer",
+    "unblockNamed": "Débloquer l’entreprise {company}",
+    "unblocking": "Déblocage…",
+    "unblockedSuccess": "L’entreprise {company} a été débloquée.",
+    "loadError": "Impossible de charger la liste des entreprises bloquées. Actualisez la page dans un instant.",
+    "saveError": "Impossible d’enregistrer la modification. Réessayez.",
+    "jobTitle": "Contact avec cette entreprise",
+    "jobDescription": "Si vous ne souhaitez pas que {company} voie votre profil et vous contacte, vous pouvez la bloquer. L’entreprise n’en sera pas informée.",
+    "jobBlockedDescription": "{company} est bloquée : elle ne voit pas votre profil et ne peut pas vous envoyer de proposition ni de message. Ses offres n’apparaissent pas dans vos recommandations.",
+    "block": "Bloquer l’entreprise",
+    "blocking": "Blocage…",
+    "blockedSuccess": "L’entreprise {company} a été bloquée.",
+    "manage": "Gérer les entreprises bloquées"
   }
 }
