@@ -559,6 +559,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Po „Dalej”/„Wstecz” fokus na nagłówku nowego kroku + ogłoszenie „Krok N z 9”, jeden region
   statusu zapisu (#402). Błąd zapisu pokazuje komunikat z kodu serwera (`toUserMessageKey`);
   `JOB_NOT_DRAFT` → link do listy ofert zamiast ponawiania (#363).
+- [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
+  na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
+  weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”
+  (`request_company_reverification`, rejected→pending, owner/admin, audyt). Zmiana nazwy/VAT
+  zweryfikowanej firmy wraca do `pending` (trigger `protect_company_verification`) z komunikatem
+  w formularzu. Pracodawca bez firmy widzi w panelu formularz zakładania firmy
+  (`create_first_company`: firma + VAT + owner w jednej transakcji, idempotentnie), a
+  `/rejestracja-pracodawca` z sesją pracodawcy → panel. Chrome panelu: `getEmployerShellData`
+  zwraca `demo`/`ok`/`error`; firma demonstracyjna tylko w trybie demo. Dowód: `rls.sql` sekcja MM.
+  **Otwarte:** powód odrzucenia i powiadomienie admina (#310), strona kontaktu (#61),
+  orientacyjny czas weryfikacji (decyzja produktowa).
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu
 
 ### Etap 5 — procesy

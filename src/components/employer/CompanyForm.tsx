@@ -30,9 +30,11 @@ export interface CompanyFormProps {
   mode: 'create' | 'edit';
   /** Wartości początkowe (tryb edycji). */
   defaultValues?: { name?: string; vatNumber?: string };
+  /** Tryb edycji zweryfikowanej firmy: ostrzeżenie, że zmiana nazwy/VAT wraca do weryfikacji. */
+  verified?: boolean;
 }
 
-export function CompanyForm({ mode, defaultValues }: CompanyFormProps): React.JSX.Element {
+export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFormProps): React.JSX.Element {
   const t = useTranslations('company');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -40,6 +42,7 @@ export function CompanyForm({ mode, defaultValues }: CompanyFormProps): React.JS
 
   const [serverError, setServerError] = React.useState<ErrorCode | null>(null);
   const [success, setSuccess] = React.useState(false);
+  const [reverification, setReverification] = React.useState(false);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
 
   const resolver = React.useMemo(
@@ -70,6 +73,7 @@ export function CompanyForm({ mode, defaultValues }: CompanyFormProps): React.JS
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
     setSuccess(false);
+    setReverification(false);
 
     try {
       const result =
@@ -82,6 +86,7 @@ export function CompanyForm({ mode, defaultValues }: CompanyFormProps): React.JS
         return;
       }
 
+      setReverification('reverificationRequired' in result && result.reverificationRequired === true);
       setSuccess(true);
       // Tryb create: odśwież, by RSC przeładował widok firmy (baner + dane). Tryb edit: odśwież dane.
       router.refresh();
@@ -91,7 +96,12 @@ export function CompanyForm({ mode, defaultValues }: CompanyFormProps): React.JS
   });
 
   const submitLabel = mode === 'create' ? t('submitCreate') : t('submitSave');
-  const successMessage = mode === 'create' ? t('createdSuccess') : t('savedSuccess');
+  const successMessage =
+    mode === 'create'
+      ? t('createdSuccess')
+      : reverification
+        ? t('savedReverification')
+        : t('savedSuccess');
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-4">
@@ -159,6 +169,10 @@ export function CompanyForm({ mode, defaultValues }: CompanyFormProps): React.JS
           </p>
         ) : null}
       </div>
+
+      {mode === 'edit' && verified ? (
+        <p className="text-sm text-muted-foreground">{t('editVerifiedHint')}</p>
+      ) : null}
 
       <Button type="submit" size="lg" disabled={isSubmitting} className="w-full sm:w-auto">
         {isSubmitting ? (

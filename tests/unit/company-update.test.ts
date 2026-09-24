@@ -60,11 +60,34 @@ describe('company update authorization', () => {
       ok: false,
       error: 'PERMISSION_DENIED',
     });
-    expect(query.select).toHaveBeenCalledWith('id');
+    expect(query.select).toHaveBeenCalledWith('id, status');
   });
 
   it('accepts one confirmed update by an owner', async () => {
     client([{ id: 'company-1' }]);
+    expect(await updateCompany({ name: 'Acme' })).toEqual({ ok: true });
+  });
+
+  it('informuje, gdy zmiana danych zweryfikowanej firmy wraca do weryfikacji', async () => {
+    vi.mocked(getActiveCompany).mockResolvedValue({
+      activeId: 'company-1',
+      activeRole: 'owner',
+      activeStatus: 'verified',
+    } as never);
+    client([{ id: 'company-1', status: 'pending' }]);
+    expect(await updateCompany({ name: 'Acme Nowa' })).toEqual({
+      ok: true,
+      reverificationRequired: true,
+    });
+  });
+
+  it('bez zmiany statusu nie zgłasza ponownej weryfikacji', async () => {
+    vi.mocked(getActiveCompany).mockResolvedValue({
+      activeId: 'company-1',
+      activeRole: 'owner',
+      activeStatus: 'verified',
+    } as never);
+    client([{ id: 'company-1', status: 'verified' }]);
     expect(await updateCompany({ name: 'Acme' })).toEqual({ ok: true });
   });
 });

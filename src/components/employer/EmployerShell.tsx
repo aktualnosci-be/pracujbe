@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { usePathname } from '@/i18n/navigation';
+import { usePathname, useRouter } from '@/i18n/navigation';
+import { Button } from '@/components/ui/button';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { CompanySwitcher, type CompanySwitcherCompany } from '@/components/employer/CompanySwitcher';
@@ -21,7 +22,9 @@ import { CompanySwitcher, type CompanySwitcherCompany } from '@/components/emplo
  * EmployerShell — chrome panelu pracodawcy (makieta 05): granatowy sidebar z REALNYM
  * przełącznikiem firmy (FUN-07) + topbar z powiadomieniami i danymi użytkownika. Renderowane
  * przez `employer/layout.tsx` (serwerowy, ustawia NOINDEX). Dane firmy/użytkownika pochodzą
- * z sesji (props); bez env layout podaje fallback demo.
+ * z sesji (props). Nazwa firmy demonstracyjnej pojawia się WYŁĄCZNIE w trybie `demo` (bez env);
+ * przy błędzie odczytu (`error`) lub pustej nazwie — neutralna etykieta, a w trybie `error`
+ * dyskretny komunikat z ponowieniem (#401).
  */
 
 /** Ścieżki nawigacji panelu (bez prefiksu locale — dokłada go next-intl Link). */
@@ -35,11 +38,16 @@ const HREF = {
   settings: '/employer/ustawienia',
 } as const;
 
-// Fallback DEMO (bez env / bez sesji) — panel działa bez backendu.
+// Fallback DEMO (tylko bez env) — panel działa bez backendu.
 const DEMO_COMPANY_NAME = 'AGO Jobs & HR';
+
+/** `demo` = brak backendu; `ok` = dane z sesji; `error` = odczyt danych konta nie powiódł się. */
+export type EmployerShellMode = 'demo' | 'ok' | 'error';
 
 export interface EmployerShellProps {
   children: React.ReactNode;
+  /** Źródło danych chrome'u. Domyślnie `demo` (bez backendu). */
+  mode?: EmployerShellMode;
   /** Realne powiadomienia (z sesji/RLS). Bez nich DashboardShell użyje fallbacku DEMO. */
   notifItems?: NotificationItem[];
   /** Liczba nieprzeczytanych powiadomień (badge na dzwonku). */
@@ -68,8 +76,26 @@ function initialsOf(name: string): string {
   return letters || '•';
 }
 
+function ShellLoadError(): React.JSX.Element {
+  const td = useTranslations('dashboard');
+  const tc = useTranslations('common');
+  const router = useRouter();
+  return (
+    <div
+      role="alert"
+      className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-foreground"
+    >
+      <p className="min-w-0 flex-1">{td('employerShellLoadError')}</p>
+      <Button type="button" variant="outline" size="sm" onClick={() => router.refresh()}>
+        {tc('retry')}
+      </Button>
+    </div>
+  );
+}
+
 export function EmployerShell({
   children,
+  mode = 'demo',
   notifItems,
   notifUnread,
   notificationError,
@@ -99,10 +125,20 @@ export function EmployerShell({
     return item.href.length > best.length ? item.href : best;
   }, HREF.summary);
 
-  // Realny przełącznik firmy (FUN-07). Bez danych z sesji → fallback demo (jedna firma).
+  // Realny przełącznik firmy (FUN-07). Firma demonstracyjna tylko w trybie demo (#401).
+  const neutralName = td('companyFallback');
   const shellCompanies: CompanySwitcherCompany[] =
-    companies && companies.length > 0 ? companies : [{ id: 'demo', name: DEMO_COMPANY_NAME, role: 'owner' }];
-  const activeName = activeCompanyName || shellCompanies[0]?.name || DEMO_COMPANY_NAME;
+    companies && companies.length > 0
+      ? companies
+      : mode === 'demo'
+        ? [{ id: 'demo', name: DEMO_COMPANY_NAME, role: 'owner' }]
+        : [];
+  const namedFallback = mode === 'demo' ? DEMO_COMPANY_NAME : neutralName;
+  const activeName =
+    activeCompanyName?.trim() ||
+    shellCompanies.find((c) => c.id === activeCompanyId)?.name.trim() ||
+    shellCompanies[0]?.name.trim() ||
+    namedFallback;
   const brand = (
     <CompanySwitcher
       companies={shellCompanies}
@@ -121,9 +157,10 @@ export function EmployerShell({
       user={{ name: displayUser, subtitle: activeName, initials: initialsOf(displayUser) }}
       notifications={notifUnread}
       notificationError={notificationError}
-      notifItems={notifItems}
+      notifItems={mode === 'demo' ? notifItems : (notifItems ?? [])}
       unreadMessages={unreadMessages}
     >
+      {mode === 'error' ? <ShellLoadError /> : null}
       {children}
     </DashboardShell>
   );
