@@ -1,6 +1,6 @@
 -- =============================================================================
--- 0103 — DSA: odwołania od decyzji moderacyjnych, terminy, retencja spraw i dane do raportu
--- przejrzystości (#43). NUMER TYMCZASOWY — ostateczny poda koordynator kolejki migracji.
+-- 0102 — DSA: odwołania od decyzji moderacyjnych, terminy, retencja spraw i dane do raportu
+-- przejrzystości (#43). Numer według kolejki koordynatora (po 0100 i 0101).
 --
 -- Buduje na sprawie `dsa_notice` (0094, #41) i decyzji moderacyjnej (0099, #42).
 --

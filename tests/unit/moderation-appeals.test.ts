@@ -18,7 +18,7 @@ import { titleKeyForType } from '@/lib/data/notifications';
 import { buildDeliveryData, emailTargetPath } from '@/lib/email/delivery-data';
 
 /**
- * #43 — odwołania od decyzji moderacyjnych: reguły wspólne z formularzami i bazą (0103),
+ * #43 — odwołania od decyzji moderacyjnych: reguły wspólne z formularzami i bazą (0102),
  * akcje wołające jedno RPC z mapowaniem błędów, e-maile w języku odbiorcy bez danych drugiej
  * strony, widok sprawy zgłaszającego, raport przejrzystości i eksport bez danych osobowych.
  */

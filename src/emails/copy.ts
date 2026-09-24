@@ -108,6 +108,9 @@ export interface LayoutCopy {
   privacy: string;
   /** Link wypisania z kategorii tej wiadomości (#45); tylko gdy mail ma kategorię preferencji. */
   unsubscribe: string;
+  /** Etykiety tożsamości nadawcy w stopce (#45; wartości z konfiguracji, nie z kodu). */
+  sender: string;
+  postalAddress: string;
   /** Tekst wprowadzający surowy link (gdy przycisk nie działa). */
   buttonFallback: string;
 }
@@ -120,6 +123,8 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     help: 'Pomoc',
     privacy: 'Prywatność',
     unsubscribe: 'Wypisz się z tych e-maili',
+    sender: 'Nadawca',
+    postalAddress: 'Adres pocztowy',
     buttonFallback: 'Jeśli przycisk nie działa, skopiuj i wklej ten adres do przeglądarki:',
   },
   nl: {
@@ -129,6 +134,8 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     help: 'Help',
     privacy: 'Privacy',
     unsubscribe: 'Afmelden voor deze e-mails',
+    sender: 'Afzender',
+    postalAddress: 'Postadres',
     buttonFallback: 'Werkt de knop niet? Kopieer en plak deze link in je browser:',
   },
   fr: {
@@ -138,6 +145,8 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     help: 'Aide',
     privacy: 'Confidentialité',
     unsubscribe: 'Se désinscrire de ces e-mails',
+    sender: 'Expéditeur',
+    postalAddress: 'Adresse postale',
     buttonFallback: 'Le bouton ne fonctionne pas ? Copiez-collez ce lien dans votre navigateur :',
   },
   en: {
@@ -147,6 +156,8 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     help: 'Help',
     privacy: 'Privacy',
     unsubscribe: 'Unsubscribe from these emails',
+    sender: 'Sender',
+    postalAddress: 'Postal address',
     buttonFallback: 'If the button does not work, copy and paste this link into your browser:',
   },
 };

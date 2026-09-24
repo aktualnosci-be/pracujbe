@@ -20,8 +20,11 @@ export const dynamic = 'force-dynamic';
 const NO_STORE = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' };
 
 export async function POST(request: Request): Promise<Response> {
-  const token = new URL(request.url).searchParams.get('t');
-  const outcome = await applyUnsubscribe(token);
+  const url = new URL(request.url);
+  const outcome = await applyUnsubscribe(url.searchParams.get('t'), {
+    source: 'one_click',
+    locale: url.searchParams.get('l'),
+  });
   const status = {
     done: 200,
     invalid: 400,
