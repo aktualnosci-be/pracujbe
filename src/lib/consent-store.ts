@@ -93,7 +93,8 @@ export interface TrackerConsent {
  *
  * - analytics WYŁĄCZONE → `window['ga-disable-<ID>']=true` (GA respektuje to nawet po załadowaniu)
  *   + usunięcie cookies `_ga*`; analytics WŁĄCZONE → flaga = false (ponowne włączenie po re-zgodzie).
- * - marketing WYŁĄCZONE → `fbq('consent','revoke')` (jeśli obecne) + usunięcie cookies `_fbp`/`_fbc`.
+ * - marketing WYŁĄCZONE → `fbq('consent','revoke')` (jeśli obecne) + usunięcie cookies `_fbp`/`_fbc`;
+ *   marketing WŁĄCZONE → `fbq('consent','grant')` (jeśli obecne — ponowna zgoda po wycofaniu).
  *
  * Invariant #7 (zero trackingu przed zgodą): gdy kategoria nie jest przyznana, flaga blokująca
  * jest ustawiona, a cookies wyczyszczone; skrypty i tak nie są renderowane przez <Analytics/>.
@@ -115,7 +116,17 @@ export function syncTrackers({ analytics, marketing }: TrackerConsent): void {
   }
 
   // --- Meta Pixel ---
-  if (!marketing) {
+  if (marketing) {
+    // Pixel załadowany wcześniej i odwołany (`revoke`) nie wznawia się sam — ponowna zgoda
+    // w tej samej sesji strony musi go jawnie przywrócić.
+    if (typeof w.fbq === 'function') {
+      try {
+        w.fbq('consent', 'grant');
+      } catch {
+        // pixel w trakcie inicjalizacji — ignorujemy
+      }
+    }
+  } else {
     if (typeof w.fbq === 'function') {
       try {
         w.fbq('consent', 'revoke');

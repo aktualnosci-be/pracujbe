@@ -13,6 +13,7 @@ import {
   necessaryOnly,
   type ConsentCategories,
   type ConsentCategory,
+  type ConsentSource,
 } from '@/lib/consent';
 import { CONSENT_BOOT_ATTRIBUTE } from '@/lib/consent-boot';
 import { OPEN_SETTINGS_EVENT, updateConsent } from '@/lib/consent-store';
@@ -206,25 +207,32 @@ export function CookieConsent() {
     };
   }, [mounted, bannerVisible]);
 
-  const persist = useCallback((categories: ConsentCategories) => {
-    updateConsent(categories);
+  // Źródło trafia do serwerowego dowodu zgody (`record_consent`): baner albo centrum ustawień.
+  const persist = useCallback((categories: ConsentCategories, source: ConsentSource) => {
+    updateConsent(categories, source);
     setBannerVisible(false);
     setSettingsOpen(false);
   }, []);
 
-  const handleAcceptAll = useCallback(() => persist(acceptAllCategories()), [persist]);
-  const handleRejectOptional = useCallback(() => persist(necessaryOnly()), [persist]);
-  const handleSaveSelection = useCallback(() => persist(draft), [persist, draft]);
+  const handleAcceptAll = useCallback(
+    () => persist(acceptAllCategories(), 'cookie_settings'),
+    [persist],
+  );
+  const handleRejectOptional = useCallback(
+    () => persist(necessaryOnly(), 'cookie_settings'),
+    [persist],
+  );
+  const handleSaveSelection = useCallback(() => persist(draft, 'cookie_settings'), [persist, draft]);
 
   // Wybór w banerze usuwa baner razem z przyciskiem, który miał fokus → fokus na treść.
   const handleBannerAcceptAll = useCallback(() => {
-    handleAcceptAll();
+    persist(acceptAllCategories(), 'cookie_banner');
     focusMainContent();
-  }, [handleAcceptAll]);
+  }, [persist]);
   const handleBannerRejectOptional = useCallback(() => {
-    handleRejectOptional();
+    persist(necessaryOnly(), 'cookie_banner');
     focusMainContent();
-  }, [handleRejectOptional]);
+  }, [persist]);
 
   // Po zamknięciu centrum: fokus wraca na element otwierający, a gdy zniknął (np. „Dostosuj”
   // po zapisaniu zgody z banera) — na główną treść.

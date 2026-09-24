@@ -758,8 +758,16 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   render (#348, `email-recipient-locale-e2e`): kontrakt najnowszych `resolve_recipient_locale`/
   `enqueue_email` z migracji (kolejność preferred → account → signup → `en`, locale z
   `p_profile_id`), zgodność z TS, nadawca i odbiorca w różnych językach, kontrola ujemna.
+  Zgody cookies (#349, `cookie-consent-categories.spec`, 4 języki): „Tylko niezbędne”, sama
+  analityka (GA bez Meta), sam marketing (Meta bez GA), wycofanie ze stopki (`ga-disable`,
+  `fbq('consent','revoke')`, usunięcie `_ga*`/`_fbp`/`_fbc`, po odświeżeniu zero żądań), stara
+  wersja polityki / uszkodzone cookie → baner z serwera nieukryty przed hydratacją; cookie na
+  180 dni; wywołanie `recordConsent` z kategoriami i źródłem (centrum = `cookie_settings`).
+  Ponowna zgoda na marketing po wycofaniu woła `fbq('consent','grant')`. Kontrakt parametrów
+  `recordConsent` ↔ `record_consent` z migracji (`consent-action.test`). **Otwarte:** wersja
+  polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
   **Do zrobienia:** asercje `email_deliveries.locale` na żywej bazie w `rls.sql` (#348, SQL),
-  E2E kategorii zgód (#349), raport flaków (#375).
+  raport flaków (#375).
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
