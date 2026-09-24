@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { BTN_SMALL, NOTICE_TEXT } from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 import { useRouter } from '@/i18n/navigation';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { requestCompanyReverification } from '@/lib/actions/company';
@@ -44,8 +46,14 @@ export function CompanyReverifyButton(): React.JSX.Element {
 
   return (
     <div className="space-y-2">
-      <p className="text-muted-foreground">{t('reverifyHint')}</p>
-      <Button type="button" size="sm" onClick={onClick} disabled={pending || done}>
+      <p className={cn(NOTICE_TEXT, 'my-0')}>{t('reverifyHint')}</p>
+      <Button
+        type="button"
+        size="sm"
+        className={cn(BTN_SMALL, 'h-auto whitespace-normal border-primary bg-primary text-primary-foreground hover:bg-primary-dark')}
+        onClick={onClick}
+        disabled={pending || done}
+      >
         {pending ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -56,11 +64,11 @@ export function CompanyReverifyButton(): React.JSX.Element {
         )}
       </Button>
       {error ? (
-        <p role="alert" className="text-error">
+        <p role="alert" className="text-[13px] text-error-text">
           {tRoot(toUserMessageKey(error))}
         </p>
       ) : null}
-      {done ? <p role="status">{t('reverifySuccess')}</p> : null}
+      {done ? <p role="status" className="text-[13px] text-foreground">{t('reverifySuccess')}</p> : null}
     </div>
   );
 }

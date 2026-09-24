@@ -6,6 +6,7 @@ import { createAppDateFormatter } from '@/lib/datetime';
 import type { JobFunnelItem, JobFunnelMetrics } from '@/lib/data/employer';
 import { FUNNEL_RANGE_OPTIONS, type FunnelDateRange } from '@/lib/job-funnel/range';
 import { cn } from '@/lib/utils';
+import { PANEL, PANEL_H2, STAT_LABEL, STAT_VALUE, chipClass } from '@/components/dashboard/panel-styles';
 
 /**
  * Lejek ofert panelu pracodawcy (#99): pojawienia w wynikach → wyświetlenia → rozpoczęte
@@ -32,10 +33,8 @@ export function JobFunnelRangePicker({ range }: { range: FunnelDateRange }): Rea
             href={{ pathname: '/employer/statystyki', query: { dni: String(days) } }}
             aria-current={current ? 'page' : undefined}
             className={cn(
-              'inline-flex min-h-12 items-center rounded-xl border px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-              current
-                ? 'border-foreground bg-foreground text-background'
-                : 'border-border bg-background text-foreground hover:bg-soft',
+              // `.side-item.active` jako chip zakresu (jak filtry panelu admina).
+              chipClass(current),
             )}
           >
             {t('rangeDays', { count: days })}
@@ -63,9 +62,9 @@ export function JobFunnelStats({
   const day = (ymd: string) => formatDay(`${ymd}T12:00:00Z`);
 
   return (
-    <section aria-labelledby="job-funnel-title" className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5">
+    <section aria-labelledby="job-funnel-title" className={cn(PANEL, 'space-y-4')}>
       <div className="space-y-1">
-        <h2 id="job-funnel-title" className="text-base font-semibold text-foreground">
+        <h2 id="job-funnel-title" className={PANEL_H2}>
           {t('title')}
         </h2>
         <p className="text-sm text-muted-foreground" data-testid="job-funnel-range">
@@ -75,16 +74,16 @@ export function JobFunnelStats({
 
       <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-3">
         {METRICS.map((metric) => (
-          <div key={metric.key} className="min-w-0 rounded-lg border border-border bg-background p-3">
-            <dt className="break-words text-sm font-medium text-muted-foreground">{t(metric.label)}</dt>
-            <dd className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+          <div key={metric.key} className="min-w-0 rounded-[14px] border border-border bg-card p-4">
+            <dt className={STAT_LABEL}>{t(metric.label)}</dt>
+            <dd className={cn(STAT_VALUE, 'mb-0 tabular-nums')}>
               {format.number(totals[metric.key])}
             </dd>
           </div>
         ))}
       </dl>
 
-      <details className="rounded-lg border border-border bg-background p-3">
+      <details className="rounded-[14px] border border-border bg-soft p-4">
         <summary className="min-h-12 cursor-pointer content-center text-sm font-semibold text-foreground">
           {t('definitionsTitle')}
         </summary>
@@ -107,7 +106,7 @@ export function JobFunnelStats({
       ) : (
         <ul aria-label={t('tableCaption')} className="space-y-3">
           {jobs.map((job) => (
-            <li key={job.jobId} className="min-w-0 rounded-lg border border-border bg-background p-3">
+            <li key={job.jobId} className="min-w-0 rounded-[14px] border border-border bg-card p-4">
               <h3 className="break-words text-sm font-semibold text-foreground">{job.title || t('untitled')}</h3>
               <dl className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-x-4 gap-y-2">
                 {METRICS.map((metric) => (

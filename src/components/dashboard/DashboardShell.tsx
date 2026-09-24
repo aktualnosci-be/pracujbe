@@ -58,6 +58,15 @@ export interface DashboardShellProps {
 
 const MOBILE_TABS = 5;
 
+/**
+ * `.people .side-item` (prototyp „04 Ludzie i praca”) — 13 px, padding 13/10 px, promień 10 px,
+ * odstęp 10 px, margines 7 px; aktywna: jasne tło marki, ciemniejsza czerwień, 650.
+ * Cel dotyku ≥ 44 px, długie etykiety NL/FR zawijają się zamiast ucinać.
+ */
+const SIDE_ITEM =
+  'my-[7px] flex min-h-11 items-center gap-2.5 rounded-[10px] px-2.5 py-[13px] text-[13px] leading-[1.5] transition-colors [&_svg]:size-[18px] [&_svg]:shrink-0';
+const SIDE_ITEM_MUTED = `${SIDE_ITEM} text-muted-foreground hover:bg-muted hover:text-foreground`;
+
 export function DashboardShell({
   nav,
   active,
@@ -258,17 +267,20 @@ export function DashboardShell({
   return (
     <div className="min-h-screen bg-soft">
       {/* Sidebar — desktop */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-background text-foreground lg:flex">
-        <div className="flex h-16 items-center px-6">{brand ?? defaultBrand}</div>
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+      {/* `.people .sidebar` — 195 px, tło soft, linia, padding 27/18 px; `.side-person` = brand. */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[195px] flex-col border-r border-border bg-soft text-foreground lg:flex">
+        <div className="mx-[18px] flex min-h-16 items-center border-b border-border pb-[22px] pt-[27px]">
+          {brand ?? defaultBrand}
+        </div>
+        <nav className="flex-1 overflow-y-auto px-[18px] py-[22px]">
           {effectiveNav.map((item) => (
             <SidebarLink key={item.href} item={item} active={item.href === active} />
           ))}
         </nav>
-        <div className="space-y-1 border-t border-border px-3 py-4">
+        <div className="mx-[18px] border-t border-border py-4">
           <Link
             href="/pomoc"
-            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground"
+            className={SIDE_ITEM_MUTED}
           >
             <HelpCircle className="size-5 shrink-0" aria-hidden="true" />
             <span>{td('help')}</span>
@@ -278,7 +290,7 @@ export function DashboardShell({
       </aside>
 
       {/* Kolumna główna */}
-      <div className="flex min-h-screen flex-col lg:pl-64">
+      <div className="flex min-h-screen flex-col lg:pl-[195px]">
         {/* Topbar */}
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background px-4 lg:px-8">
           <button
@@ -361,10 +373,11 @@ export function DashboardShell({
         </header>
 
         {/* Treść */}
+        {/* `.people .dash-content` — białe tło, padding 32 px; ≤ 600 px: 26 px 6%. */}
         <main
           id="main-content"
           tabIndex={-1}
-          className="min-w-0 flex-1 px-4 py-6 pb-24 outline-none lg:px-8 lg:pb-8"
+          className="min-w-0 flex-1 bg-background px-[6%] py-[26px] pb-24 outline-none min-[601px]:p-8 lg:pb-8"
         >
           {children}
         </main>
@@ -402,7 +415,7 @@ export function DashboardShell({
             role="dialog"
             aria-modal="true"
             aria-label={tnav('menu')}
-            className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col border-r border-border bg-background text-foreground shadow-xl"
+            className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col border-r border-border bg-soft text-foreground shadow-xl"
           >
             <div className="flex h-16 items-center justify-between px-6">
               {brand ?? defaultBrand}
@@ -416,7 +429,7 @@ export function DashboardShell({
                 <X className="size-5" aria-hidden="true" />
               </button>
             </div>
-            <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+            <nav className="flex-1 overflow-y-auto px-[18px] py-[22px]">
               {effectiveNav.map((item) => (
                 <SidebarLink
                   key={item.href}
@@ -426,11 +439,11 @@ export function DashboardShell({
                 />
               ))}
             </nav>
-            <div className="space-y-1 border-t border-border px-3 py-4">
+            <div className="mx-[18px] border-t border-border py-4">
               <Link
                 href="/pomoc"
                 onClick={() => setDrawerOpen(false)}
-                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground"
+                className={SIDE_ITEM_MUTED}
               >
                 <HelpCircle className="size-5 shrink-0" aria-hidden="true" />
                 <span>{td('help')}</span>
@@ -467,7 +480,7 @@ function LogoutButton({
           await signOut();
         });
       }}
-      className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+      className={cn(SIDE_ITEM_MUTED, 'w-full disabled:cursor-not-allowed disabled:opacity-60')}
     >
       <LogOut className="size-5 shrink-0" aria-hidden="true" />
       <span>{label}</span>
@@ -490,16 +503,16 @@ function SidebarLink({
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors [&_svg]:size-5 [&_svg]:shrink-0',
-        active ? 'bg-primary/10 text-primary-dark' : 'text-muted-foreground hover:bg-soft hover:text-foreground',
+        SIDE_ITEM,
+        active ? 'bg-primary/10 font-[650] text-primary-dark' : 'text-foreground hover:bg-muted',
       )}
     >
       <span className="shrink-0" aria-hidden="true">
         {item.icon}
       </span>
-      <span className="flex-1 truncate">{item.label}</span>
+      <span className="min-w-0 flex-1 break-words">{item.label}</span>
       {item.badge && item.badge > 0 ? (
-        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-medium text-accent-foreground">
+        <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">
           {item.badge}
         </span>
       ) : null}

@@ -16,6 +16,18 @@ import { teamErrorKey, type TeamError } from '@/lib/team/errors';
 import { assignableRoles, canManageRole } from '@/lib/team/permissions';
 import { teamInviteSchema, type TeamInviteInput } from '@/lib/validation/team';
 import { roleLabelKey } from './role-keys';
+import {
+  BTN_PRIMARY,
+  BTN_SMALL,
+  FORM_CONTROL,
+  FORM_LABEL,
+  NOTICE,
+  PANEL_P,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+} from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * Zaproszenie do zespołu + lista oczekujących zaproszeń (#403).
@@ -32,8 +44,7 @@ export interface TeamInvitationView {
   expiresLabel: string;
 }
 
-const controlClass =
-  'min-h-12 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+const controlClass = FORM_CONTROL;
 
 export function TeamInvite({
   actorRole,
@@ -101,19 +112,20 @@ export function TeamInvite({
 
   return (
     <div className="space-y-6">
-      <p role="status" aria-live="polite" className={notice ? 'rounded-md border border-success/30 bg-success/10 p-3 text-sm text-foreground' : 'sr-only'}>
+      <p role="status" aria-live="polite" className={notice ? cn(NOTICE, 'my-0 border-success/30 bg-success/10 text-foreground') : 'sr-only'}>
         {notice ?? ''}
       </p>
       {serverError ? (
-        <p role="alert" className="rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text">
+        <p role="alert" className={cn(NOTICE, 'my-0 border-error/30 bg-error/10 text-error-text')}>
           {errorText(serverError)}
         </p>
       ) : null}
 
-      <form onSubmit={onSubmit} noValidate className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,14rem)_auto] sm:items-end">
-        <div className="min-w-0 space-y-1.5">
-          <Label htmlFor="team-invite-email">{t('emailLabel')}</Label>
+      <form onSubmit={onSubmit} noValidate className="grid min-w-0 gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,14rem)_auto] sm:items-end">
+        <div className="flex min-w-0 flex-col gap-[9px]">
+          <Label htmlFor="team-invite-email" className={FORM_LABEL}>{t('emailLabel')}</Label>
           <Input
+            className={FORM_CONTROL}
             id="team-invite-email"
             type="email"
             autoComplete="off"
@@ -123,13 +135,13 @@ export function TeamInvite({
             {...register('email')}
           />
           {errors.email?.message ? (
-            <p id="team-invite-email-error" className="text-sm text-error-text">
+            <p id="team-invite-email-error" className="text-[13px] text-error-text">
               {tRoot(String(errors.email.message))}
             </p>
           ) : null}
         </div>
-        <div className="min-w-0 space-y-1.5">
-          <Label htmlFor="team-invite-role">{t('roleLabel')}</Label>
+        <div className="flex min-w-0 flex-col gap-[9px]">
+          <Label htmlFor="team-invite-role" className={FORM_LABEL}>{t('roleLabel')}</Label>
           <select
             id="team-invite-role"
             className={controlClass}
@@ -144,31 +156,34 @@ export function TeamInvite({
             ))}
           </select>
           {errors.role?.message ? (
-            <p id="team-invite-role-error" className="text-sm text-error-text">
+            <p id="team-invite-role-error" className="text-[13px] text-error-text">
               {tRoot(String(errors.role.message))}
             </p>
           ) : null}
         </div>
-        <Button type="submit" className="min-h-12" disabled={isSubmitting}>
+        <Button type="submit" className={cn(BTN_PRIMARY, 'h-auto whitespace-normal')} disabled={isSubmitting}>
           {isSubmitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
           {isSubmitting ? t('saving') : t('inviteSubmit')}
         </Button>
       </form>
-      <p className="text-sm text-muted-foreground">{t('inviteNoAccountHint')}</p>
+      <p className={PANEL_P}>{t('inviteNoAccountHint')}</p>
 
       <section aria-labelledby="team-invitations-title" className="space-y-3">
-        <h3 id="team-invitations-title" className="text-base font-semibold text-foreground">
+        <h3 id="team-invitations-title" className={ROW_TITLE}>
           {t('invitationsTitle')}
         </h3>
         {invitations.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('invitationsEmpty')}</p>
+          <p className={PANEL_P}>{t('invitationsEmpty')}</p>
         ) : (
-          <ul className="divide-y divide-border rounded-2xl border border-border">
+          <ul className="border-t border-border pt-[25px] max-[600px]:pt-[22px]">
             {invitations.map((inv) => (
-              <li key={inv.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <li
+                key={inv.id}
+                className={cn(ROW, 'flex-col sm:flex-row sm:items-center sm:justify-between')}
+              >
                 <div className="min-w-0">
-                  <p className="break-all font-medium text-foreground">{inv.email}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className={cn(ROW_TITLE, 'break-all')}>{inv.email}</p>
+                  <p className={ROW_META}>
                     {t(roleLabelKey(inv.role))}
                     {inv.expiresLabel ? ` · ${inv.expiresLabel}` : ''}
                   </p>
@@ -177,7 +192,7 @@ export function TeamInvite({
                   <Button
                     type="button"
                     variant="outline"
-                    className="min-h-12 self-start sm:self-auto"
+                    className={cn(BTN_SMALL, 'h-auto whitespace-normal border-border text-foreground hover:bg-soft self-start sm:self-auto')}
                     disabled={revoking !== null}
                     aria-label={t('revokeLabel', { email: inv.email })}
                     onClick={() => void revoke(inv.id)}

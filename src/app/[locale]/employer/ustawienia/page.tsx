@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { loadNotificationPreferences } from '@/lib/data/notification-preferences';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
+import { EYEBROW, H1, INTRO, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
  * Panel pracodawcy — Ustawienia (preferencje powiadomień, Etap 6).
@@ -38,16 +39,18 @@ export default async function EmployerSettingsPage({
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'settings' });
+  const tDash = await getTranslations({ locale, namespace: 'dashboard' });
   const load = await loadNotificationPreferences();
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
+    <div className="min-w-0 max-w-3xl space-y-[22px]">
+      <header className="min-w-0">
+        <p className={EYEBROW}>{tDash('navSettings')}</p>
+        <h1 className={H1}>{t('title')}</h1>
+        <p className={INTRO}>{t('subtitle')}</p>
       </header>
 
-      <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
+      <section className={PAPER}>
         {load.status === 'ready' ? (
           <NotificationPreferencesForm defaultValues={load.preferences} role="employer" />
         ) : (

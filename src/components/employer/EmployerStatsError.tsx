@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from '@/i18n/navigation';
-import { Button } from '@/components/ui/button';
+import { BTN_PRIMARY, PANEL, PANEL_H2 } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
 
 /**
@@ -23,12 +23,12 @@ export function EmployerStatsError({
   const router = useRouter();
 
   return (
-    <section role="alert" className={cn('space-y-3 rounded-lg border border-border bg-card p-5', className)}>
-      {title ? <h2 className="text-base font-semibold text-foreground">{title}</h2> : null}
-      <p className="text-base text-foreground">{message}</p>
-      <Button type="button" size="lg" className="min-h-12" onClick={() => router.refresh()}>
+    <section role="alert" className={cn(PANEL, 'space-y-3', className)}>
+      {title ? <h2 className={PANEL_H2}>{title}</h2> : null}
+      <p className="text-[15px] text-foreground">{message}</p>
+      <button type="button" className={BTN_PRIMARY} onClick={() => router.refresh()}>
         {retryLabel}
-      </Button>
+      </button>
     </section>
   );
 }

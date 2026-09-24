@@ -8,6 +8,18 @@ import { StatusPill, toCamel } from '@/components/ui/status-pill';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import { MessageCandidateButton } from '@/components/employer/MessageCandidateButton';
 import { localizedText, type ScreeningAnswer } from '@/lib/screening/questions';
+import {
+  EYEBROW,
+  H1,
+  INFO_LABEL,
+  INFO_VALUE,
+  INTRO,
+  PANEL,
+  PANEL_H2,
+  PANEL_P,
+  TAG,
+  TEXT_LINK,
+} from '@/components/dashboard/panel-styles';
 
 /**
  * Szczegół zgłoszenia w panelu pracodawcy (#300). Odczyt pod sesją i RLS (recruiter+ firmy —
@@ -57,7 +69,7 @@ export default async function EmployerApplicationDetailPage({
   if (result.status === 'not_found') notFound();
 
   const back = (
-    <Link href="/employer/aplikacje" className="text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+    <Link href="/employer/aplikacje" className={TEXT_LINK}>
       {t('employerApplicationBack')}
     </Link>
   );
@@ -66,9 +78,9 @@ export default async function EmployerApplicationDetailPage({
     return (
       <div className="space-y-7">
         {back}
-        <section role="alert" className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-          <h1 className="text-xl font-semibold text-foreground">{t('employerApplicationLoadError')}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{t('employerApplicationsLoadErrorHint')}</p>
+        <section role="alert" className={PANEL}>
+          <h1 className={PANEL_H2}>{t('employerApplicationLoadError')}</h1>
+          <p className={`mt-2 ${PANEL_P}`}>{t('employerApplicationsLoadErrorHint')}</p>
           <a href={`/${locale}/employer/aplikacje/${encodeURIComponent(id)}`} className={`mt-5 ${LINK_CLASS}`}>
             {t('employerApplicationsRetry')}
           </a>
@@ -104,8 +116,8 @@ export default async function EmployerApplicationDetailPage({
 
   const field = (label: string, value: React.ReactNode) => (
     <div className="min-w-0">
-      <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words text-base font-semibold text-foreground">{value}</dd>
+      <dt className={INFO_LABEL}>{label}</dt>
+      <dd className={INFO_VALUE}>{value}</dd>
     </div>
   );
 
@@ -113,14 +125,14 @@ export default async function EmployerApplicationDetailPage({
     <div className="space-y-7">
       {back}
       <header>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t('employerApplicationsCandidateLabel')}</p>
-        <h1 className="break-words text-3xl font-bold tracking-tight text-foreground">{name}</h1>
-        <p className="mt-2 break-words text-sm text-muted-foreground">
+        <p className={EYEBROW}>{t('employerApplicationsCandidateLabel')}</p>
+        <h1 className={H1}>{name}</h1>
+        <p className={INTRO}>
           {t('employerApplicationsJobLabel')}:{' '}
           <span className="font-semibold text-foreground">{jobTitle}</span>
         </p>
         {isDemo ? (
-          <p className="mt-3 inline-flex rounded-full bg-soft px-3 py-1 text-xs font-semibold text-muted-foreground">{t('employerApplicationsDemo')}</p>
+          <p className={`mt-3 ${TAG}`}>{t('employerApplicationsDemo')}</p>
         ) : null}
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <StatusPill status={application.status} />
@@ -129,8 +141,8 @@ export default async function EmployerApplicationDetailPage({
         </div>
       </header>
 
-      <section aria-labelledby="application-submission" className="rounded-3xl border border-border bg-card p-5 sm:p-6">
-        <h2 id="application-submission" className="text-xl font-bold text-foreground">{t('employerApplicationSubmission')}</h2>
+      <section aria-labelledby="application-submission" className={PANEL}>
+        <h2 id="application-submission" className={PANEL_H2}>{t('employerApplicationSubmission')}</h2>
         <dl className="mt-5 grid gap-5 sm:grid-cols-2">
           {field(t('employerApplicationSubmittedAt'), date(application.submittedAt))}
           {field(t('employerApplicationPhone'), application.phone ? (
@@ -140,27 +152,27 @@ export default async function EmployerApplicationDetailPage({
           {field(t('employerApplicationMatch'), application.matchScore === null ? notProvided : t('employerApplicationMatchValue', { score: application.matchScore }))}
         </dl>
         <div className="mt-6 border-t border-border pt-5">
-          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('employerApplicationMessageHeading')}</h3>
+          <h3 className={INFO_LABEL}>{t('employerApplicationMessageHeading')}</h3>
           {application.message ? (
             <p className="mt-2 whitespace-pre-line break-words text-base text-foreground">{application.message}</p>
           ) : (
-            <p className="mt-2 text-sm text-muted-foreground">{t('employerApplicationNoMessage')}</p>
+            <p className={`mt-2 ${PANEL_P}`}>{t('employerApplicationNoMessage')}</p>
           )}
         </div>
       </section>
 
       {application.screeningAnswers.length > 0 ? (
-        <section aria-labelledby="application-screening" className="rounded-3xl border border-border bg-card p-5 sm:p-6">
-          <h2 id="application-screening" className="text-xl font-bold text-foreground">{t('employerApplicationScreening')}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t('employerApplicationScreeningHint')}</p>
+        <section aria-labelledby="application-screening" className={PANEL}>
+          <h2 id="application-screening" className={PANEL_H2}>{t('employerApplicationScreening')}</h2>
+          <p className={`mt-1 ${PANEL_P}`}>{t('employerApplicationScreeningHint')}</p>
           <dl className="mt-5 grid gap-5">
             {application.screeningAnswers.map((answer) => (
               <div key={answer.position} className="min-w-0">
-                <dt className="break-words text-sm font-medium text-muted-foreground">
+                <dt className={INFO_LABEL}>
                   {localizedText(answer.prompt, locale)}
                   {answer.required ? ` (${t('employerApplicationScreeningRequired')})` : ''}
                 </dt>
-                <dd className="mt-1 break-words text-base font-semibold text-foreground">
+                <dd className={INFO_VALUE}>
                   {screeningAnswerText(answer)}
                 </dd>
               </div>
@@ -169,8 +181,8 @@ export default async function EmployerApplicationDetailPage({
         </section>
       ) : null}
 
-      <section aria-labelledby="application-profile" className="rounded-3xl border border-border bg-card p-5 sm:p-6">
-        <h2 id="application-profile" className="text-xl font-bold text-foreground">{t('employerApplicationProfile')}</h2>
+      <section aria-labelledby="application-profile" className={PANEL}>
+        <h2 id="application-profile" className={PANEL_H2}>{t('employerApplicationProfile')}</h2>
         {profile ? (
           <dl className="mt-5 grid gap-5 sm:grid-cols-2">
             {field(t('employerApplicationHeadline'), profile.headline || notProvided)}
@@ -187,23 +199,23 @@ export default async function EmployerApplicationDetailPage({
             {field(to('certificatesLabel'), profile.certificates.length ? profile.certificates.join(', ') : notProvided)}
           </dl>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">{t('employerApplicationNoProfile')}</p>
+          <p className={`mt-3 ${PANEL_P}`}>{t('employerApplicationNoProfile')}</p>
         )}
       </section>
 
-      <section aria-labelledby="application-history" className="rounded-3xl border border-border bg-card p-5 sm:p-6">
-        <h2 id="application-history" className="text-xl font-bold text-foreground">{t('employerApplicationHistory')}</h2>
+      <section aria-labelledby="application-history" className={PANEL}>
+        <h2 id="application-history" className={PANEL_H2}>{t('employerApplicationHistory')}</h2>
         {application.history.length ? (
           <ol className="mt-4 space-y-3">
             {application.history.map((entry, index) => (
               <li key={`${entry.toStatus}-${entry.at}-${index}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3 last:border-b-0 last:pb-0">
                 <span className="font-semibold text-foreground">{ts(toCamel(entry.toStatus))}</span>
-                <time dateTime={entry.at} className="text-sm text-muted-foreground">{date(entry.at)}</time>
+                <time dateTime={entry.at} className={`text-xs text-muted-foreground`}>{date(entry.at)}</time>
               </li>
             ))}
           </ol>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">{t('employerApplicationNoHistory')}</p>
+          <p className={`mt-3 ${PANEL_P}`}>{t('employerApplicationNoHistory')}</p>
         )}
       </section>
     </div>
