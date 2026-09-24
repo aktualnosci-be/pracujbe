@@ -24,6 +24,7 @@ function view(n: number, mine = false): ThreadMessageView {
     createdAt: `2026-09-01T10:00:${String(n % 60).padStart(2, '0')}.000001+00:00`,
     mine,
     senderName: mine ? 'Ja' : 'Anna Nowak',
+    senderSide: mine ? 'candidate' : 'company',
     isSystem: false,
     timeLabel: `10:${n}`,
   };

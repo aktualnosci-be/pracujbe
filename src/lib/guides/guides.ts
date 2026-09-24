@@ -44,6 +44,8 @@ export interface Guide {
   readonly category: GuideCategory;
   /** Data publikacji (ISO, `YYYY-MM-DD`) — stabilna między buildami. */
   readonly publishedAt: string;
+  /** Data ostatniej zmiany treści (ISO, `YYYY-MM-DD`); brak = bez zmian od publikacji. */
+  readonly updatedAt?: string;
   readonly translations: Record<Locale, GuideTranslation>;
 }
 
@@ -60,6 +62,8 @@ export interface GuideListEntry {
 
 /** Pełny poradnik rozwiązany do jednego języka (z treścią). */
 export interface GuideFull extends GuideListEntry {
+  /** Data ostatniej zmiany treści (Article.dateModified); równa publikacji, gdy bez zmian. */
+  readonly updatedAt: string;
   readonly body: readonly GuideBlock[];
 }
 
@@ -793,6 +797,7 @@ export function getGuideBySlug(slug: string, locale: string): GuideFull | null {
     slug: guide.slug,
     category: guide.category,
     publishedAt: guide.publishedAt,
+    updatedAt: guide.updatedAt ?? guide.publishedAt,
     readingMinutes: readingMinutesOf(t),
     title: t.title,
     excerpt: t.excerpt,

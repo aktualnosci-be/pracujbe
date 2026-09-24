@@ -375,6 +375,13 @@ export function JobWizard({
   const [step, setStep] = React.useState<WizardStep>(1);
   const [jobId, setJobId] = React.useState<string | null>(initialJobId ?? null);
   const [saveState, setSaveState] = React.useState<SaveState>('idle');
+  // #363: kod błędu z serwera → własny komunikat (zamiast zawsze „Nie udało się zapisać”).
+  const [saveError, setSaveError] = React.useState<ErrorCode | null>(null);
+  // #402: po zmianie kroku fokus na nagłówku nowego kroku + komunikat dla czytnika ekranu
+  // (ten sam wzorzec co onboarding kandydata, #323).
+  const stepHeadingRef = React.useRef<HTMLHeadingElement>(null);
+  const isFirstRenderRef = React.useRef(true);
+  const [stepAnnouncement, setStepAnnouncement] = React.useState('');
   const [demo, setDemo] = React.useState(false);
   const [badgeVisible, setBadgeVisible] = React.useState(false);
   const [publishing, setPublishing] = React.useState(false);
@@ -410,6 +417,19 @@ export function JobWizard({
   ];
 
   const busy = saveState === 'saving' || publishing;
+
+  React.useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    stepHeadingRef.current?.focus();
+    setStepAnnouncement(
+      t('stepAnnounce', { current: step, total: steps.length, title: steps[step - 1]?.title ?? '' }),
+    );
+    // Reaguje wyłącznie na zmianę kroku; tytuły kroków są stałe w obrębie locale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   function scrollToFirstError(current: WizardStep, erroredFields: Set<string>): void {
     const first = STEP_FIELDS[current].find((f) => erroredFields.has(f));
@@ -460,12 +480,14 @@ export function JobWizard({
       return false;
     }
 
+    setSaveError(null);
     setSaveState('saving');
     try {
       let id = jobId;
       if (!id) {
         const created = await createJobDraft(locale);
         if (!created.ok) {
+          setSaveError(created.error);
           setSaveState('error');
           return false;
         }
@@ -476,6 +498,7 @@ export function JobWizard({
 
       const res = await updateJobDraft(id, current, data);
       if (!res.ok) {
+        setSaveError(res.error);
         setSaveState('error');
         return false;
       }
@@ -484,6 +507,7 @@ export function JobWizard({
       setBadgeVisible(true);
       return true;
     } catch {
+      setSaveError('INTERNAL');
       setSaveState('error');
       return false;
     }
@@ -498,6 +522,7 @@ export function JobWizard({
     if (step <= 1) return;
     clearErrors();
     setPublishError(null);
+    setSaveError(null);
     setSaveState('idle');
     setStep((step - 1) as WizardStep);
   }
@@ -555,9 +580,9 @@ export function JobWizard({
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{t('title')}</h1>
           <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground">{t('subtitle')}</p>
         </div>
+        {/* Bez `role="status"`: stan zapisu ogłasza jeden region — SaveIndicator w stopce (#402). */}
         {saveState === 'saved' && badgeVisible ? (
           <div
-            role="status"
             className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-success/30 bg-success/5 px-3 py-2"
           >
             <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
@@ -586,7 +611,16 @@ export function JobWizard({
 
       {/* Formularz bieżącego kroku */}
       <section className="min-w-0 rounded-[1.75rem] border border-border border-t-4 border-t-primary bg-card p-5 shadow-sm sm:p-8">
-        <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{steps[step - 1]?.title}</h2>
+        <h2
+          ref={stepHeadingRef}
+          tabIndex={-1}
+          className="text-xl font-semibold tracking-tight text-foreground focus:outline-none sm:text-2xl"
+        >
+          {steps[step - 1]?.title}
+        </h2>
+        <p className="sr-only" aria-live="polite" aria-atomic="true">
+          {stepAnnouncement}
+        </p>
         <p className="mt-1 text-base leading-relaxed text-muted-foreground">{steps[step - 1]?.desc}</p>
 
         <form
@@ -1246,15 +1280,28 @@ export function JobWizard({
 
       {/* Stopka: wskaźnik zapisu + nawigacja */}
       <div className="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <SaveIndicator
-          state={saveState}
-          labels={{
-            idle: t('saveHint'),
-            saving: t('saving'),
-            saved: demo ? t('savedDemo') : t('saved'),
-            error: t('saveError'),
-          }}
-        />
+        <div className="space-y-1">
+          <SaveIndicator
+            state={saveState}
+            labels={{
+              idle: t('saveHint'),
+              saving: t('saving'),
+              saved: demo ? t('savedDemo') : t('saved'),
+              // Kod z serwera ma własny komunikat; brak kodu (np. zerwane połączenie) → ogólny.
+              error: saveError ? tRoot(toUserMessageKey(saveError)) : t('saveError'),
+            }}
+          />
+          {/* Oferta już nie jest szkicem (np. opublikowana w innej karcie) — ponawianie nic nie
+              da, więc prowadzimy do listy ofert (#363). */}
+          {saveState === 'error' && saveError === 'JOB_NOT_DRAFT' ? (
+            <Link
+              href="/employer/oferty"
+              className="text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary"
+            >
+              {t('goToOffers')}
+            </Link>
+          ) : null}
+        </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end [&_button]:min-h-12">
           <Button asChild variant="ghost" disabled={busy}>
             <Link href="/employer">{t('cancel')}</Link>

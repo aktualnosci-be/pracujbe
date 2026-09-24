@@ -10,6 +10,24 @@ import en from '@/messages/en.json';
 import nl from '@/messages/nl.json';
 import fr from '@/messages/fr.json';
 
+const intl = vi.hoisted(() => ({ locale: 'en' }));
+vi.mock('next-intl/server', async () => {
+  const { createFormatter, createTranslator } = await import('next-intl');
+  const all = {
+    pl: (await import('@/messages/pl.json')).default,
+    en: (await import('@/messages/en.json')).default,
+    nl: (await import('@/messages/nl.json')).default,
+    fr: (await import('@/messages/fr.json')).default,
+  };
+  const current = () => intl.locale as keyof typeof all;
+  return {
+    getLocale: async () => current(),
+    getTranslations: async (namespace: string) =>
+      createTranslator({ locale: current(), messages: all[current()], namespace: namespace as never }),
+    getFormatter: async () => createFormatter({ locale: current(), timeZone: 'Europe/Brussels' }),
+  };
+});
+
 vi.mock('@/lib/actions/public-saved-jobs', () => ({ getPublicSavedJobs: vi.fn() }));
 vi.mock('@/lib/actions/candidate', () => ({ toggleSavedJob: vi.fn() }));
 
@@ -28,17 +46,20 @@ const job: JobListItem = {
 };
 const messages = { pl, en, nl, fr };
 
-function renderCard(overrides: Partial<JobListItem> = {}, locale: keyof typeof messages = 'en', matchScore?: number) {
+async function renderCard(overrides: Partial<JobListItem> = {}, locale: keyof typeof messages = 'en', matchScore?: number) {
+  intl.locale = locale;
+  // Komponent serwerowy (async): renderujemy zwrócony element jak RSC.
+  const card = await JobCard({ job: { ...job, ...overrides }, showMatch: matchScore !== undefined, matchScore });
   return render(
     <NextIntlClientProvider locale={locale} messages={messages[locale]} timeZone="Europe/Brussels">
-      <JobCard job={{ ...job, ...overrides }} showMatch={matchScore !== undefined} matchScore={matchScore} />
+      {card}
     </NextIntlClientProvider>,
   );
 }
 
 describe('Paszport oferty', () => {
-  it('bez stawki pomija całe pole i zachowuje miejsce oraz warunki', () => {
-    const { container } = renderCard();
+  it('bez stawki pomija całe pole i zachowuje miejsce oraz warunki', async () => {
+    const { container } = await renderCard();
     expect([...container.querySelectorAll('dt')].map((el) => el.textContent)).toEqual(['Location', 'Conditions']);
     expect(screen.getByText('Antwerp')).toBeVisible();
     expect(screen.getByText('Flanders')).toBeVisible();
@@ -52,23 +73,23 @@ describe('Paszport oferty', () => {
     [{ salaryMin: 18.75, salaryPeriod: 'month' as const }, 'from €18.75 gross / month'],
     [{ salaryMax: 22.5, salaryPeriod: 'year' as const }, 'up to €22.5 gross / year'],
     [{ salaryMin: 0, salaryPeriod: 'hour' as const }, 'from €0 gross / hour'],
-  ])('pokazuje podane granice i okres: %j', (salary, expected) => {
-    const { container } = renderCard(salary);
+  ])('pokazuje podane granice i okres: %j', async (salary, expected) => {
+    const { container } = await renderCard(salary);
     const salaryField = screen.getByText('Salary', { selector: 'dt' }).parentElement!;
     expect(within(salaryField).getByText(expected)).toBeVisible();
     expect(container.querySelectorAll('dt')).toHaveLength(3);
   });
 
-  it('dla starego wiersza bez okresu pokazuje stawkę bez domyślnego miesiąca', () => {
-    renderCard({ salaryMin: 18.75, salaryPeriod: undefined });
+  it('dla starego wiersza bez okresu pokazuje stawkę bez domyślnego miesiąca', async () => {
+    await renderCard({ salaryMin: 18.75, salaryPeriod: undefined });
     const salaryField = screen.getByText('Salary', { selector: 'dt' }).parentElement!;
 
     expect(within(salaryField).getByText('from €18.75')).toBeVisible();
     expect(salaryField).not.toHaveTextContent(/month|gross \/ month/i);
   });
 
-  it.each(['pl', 'en', 'nl', 'fr'] as const)('tłumaczy pola i granice stawki: %s', (locale) => {
-    renderCard({ salaryMin: 18.75, salaryPeriod: 'hour' }, locale);
+  it.each(['pl', 'en', 'nl', 'fr'] as const)('tłumaczy pola i granice stawki: %s', async (locale) => {
+    await renderCard({ salaryMin: 18.75, salaryPeriod: 'hour' }, locale);
     const labels = messages[locale].jobs.passport;
     for (const label of [labels.location, labels.salary, labels.conditions]) {
       expect(screen.getByText(label, { selector: 'dt' })).toBeVisible();
@@ -79,8 +100,8 @@ describe('Paszport oferty', () => {
     expect(screen.getByText(labels.viewOffer)).toBeVisible();
   });
 
-  it('zachowuje dopasowanie także przy podanej stawce, weryfikację i datę', () => {
-    const { container } = renderCard({ salaryMin: 18 }, 'en', 82);
+  it('zachowuje dopasowanie także przy podanej stawce, weryfikację i datę', async () => {
+    const { container } = await renderCard({ salaryMin: 18 }, 'en', 82);
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '82');
     expect(screen.getByText('from €18 gross / month')).toBeVisible();
     expect(screen.getByText(en.job.verified)).toBeVisible();
@@ -88,8 +109,8 @@ describe('Paszport oferty', () => {
     expect(screen.getByRole('link', { name: job.title })).toHaveAttribute('href', '/oferty-pracy/electrician');
   });
 
-  it('zachowuje odrębny przycisk zapisu i nie powiela regionu', () => {
-    renderCard({ region: job.city, companyVerified: false });
+  it('zachowuje odrębny przycisk zapisu i nie powiela regionu', async () => {
+    await renderCard({ region: job.city, companyVerified: false });
     expect(screen.getAllByText('Antwerp')).toHaveLength(1);
     expect(screen.queryByText(en.job.verified)).not.toBeInTheDocument();
     const button = screen.getByRole('button', { name: en.jobs.saveUnavailable });

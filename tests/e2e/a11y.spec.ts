@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { rejectOptionalCookies } from './fixtures/messages';
+
 /**
  * Testy dostępności (a11y) — audyt QA-01.
  *
@@ -108,9 +110,7 @@ for (const viewport of [
   }) => {
     await page.setViewportSize(viewport);
     await page.goto('/pl/oferty-pracy?category=construction,transport,warehouse,production');
-    const banner = page.locator('[aria-labelledby="cookie-banner-title"]');
-    await banner.getByRole('button').first().click();
-    await expect(banner).toHaveCount(0);
+    await rejectOptionalCookies(page, 'pl');
 
     await page.locator('footer a').last().focus();
     const hidden: string[] = [];

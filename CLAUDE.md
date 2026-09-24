@@ -518,11 +518,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
 - [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
+  Dane strukturalne (#313) w `src/lib/seo/structured-data.ts`: JobPosting bez wymyślonego
+  `validThrough` (tylko realne `expires_at`), pełny opis HTML (opis, obowiązki, wymagania, warunki,
+  godziny, zmiany; escapowany); Article z `image`, `dateModified` (`guides.ts` `updatedAt`) i logo
+  wydawcy. Obraz marki `/og.png` przez `brandShareImageUrl` na wszystkich publicznych stronach z
+  własnym `openGraph` (#116/#182; strażnik `tests/unit/structured-data.test.ts`). **Do zrobienia:**
+  `hiringOrganization.sameAs`/`logo` (wymaga rozszerzenia `get_public_job` o `companies.website`).
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 
 ### Etap 3 — kandydat
 - [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — strony + Supabase Auth actions, callback (P1-01). Zgoda na regulamin sprawdzana w akcji serwerowej; receipt akceptacji obowiązkowy (błąd zapisu cofa niepotwierdzone konto) — `tests/unit/auth-register-terms.test.ts`. Guardy tras paneli komplet: `/candidate` (auth + rola≠employer→/employer), `/employer` (auth + aktywne `company_members`→/rejestracja-pracodawca), `/admin` (auth + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex.
 - [x] Onboarding kandydata (6 kroków) — UI + realny zapis per krok do DB (`saveOnboardingStep`, RHF + stan zapisu)
+  Pusta nazwa/imię/nazwisko → „wymagane” (także formularz firmy, #367); pozycje list (zawody 80,
+  umiejętności 120, certyfikaty 160 = `CANDIDATE_ITEM_LIMITS`, zgodne z `left()` w 0028) —
+  za długa nie trafia na listę (#364). Kod błędu serwera w komunikacie; `ONBOARDING_INCOMPLETE`
+  przenosi do pierwszego brakującego kroku (#363).
 - [x] Panel kandydata — realne dane pod sesją (RLS) + akcje (zapis oferty, wycofanie aplikacji, odpowiedź na propozycję), noindex; fallback demo bez env
 
 Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilnym kursorem
@@ -552,6 +562,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   limity `JOB_ITEM_LIMITS` równe obcięciom w RPC relacji (test porównuje z migracjami) — za długa
   pozycja nie trafia na listę (#364, część kreatora). Błędy pól: `aria-invalid` + `aria-describedby`
   + fokus na pierwszym błędzie; puste pole → komunikat „wymagane” (#160, #367 część kreatora).
+  Po „Dalej”/„Wstecz” fokus na nagłówku nowego kroku + ogłoszenie „Krok N z 9”, jeden region
+  statusu zapisu (#402). Błąd zapisu pokazuje komunikat z kodu serwera (`toUserMessageKey`);
+  `JOB_NOT_DRAFT` → link do listy ofert zamiast ponawiania (#363).
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu
 
 ### Etap 5 — procesy
@@ -572,6 +585,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Odbiorcy powiadomień/e-maili firmowych (aplikacja, wiadomość, odpowiedź na propozycję) = aktywni
   recruiter+ z aktywnym profilem (`company_recipient_ok`, 0070); e-mail o wiadomości od firmy do
   kandydata podpisany nazwą firmy. Dowód: `rls.sql` sekcja LL.
+  Nadawca w wątku (#355): profil niewidoczny pod RLS → nazwa firmy dla strony firmowej (strona
+  ustalana z `company_members` pod RLS), inaczej etykieta `messages.sender*Fallback`; imienia
+  rekrutera nie ujawniamy (0023). Demo wiadomości w języku strony (#359). Stan ładowania listy
+  i wątku (#177): `wiadomosci/loading.tsx` + `ConversationOpenPending`, E2E `messages-loading.spec`.
 
 ### Etap 6 — komunikacja
 - [x] Wybór języka odbiorcy (fallback) — util + test + `resolve_recipient_locale()` w DB (INVARIANT #1 egzekwowany przy kolejkowaniu)
@@ -587,6 +604,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
   tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” ukryte do czasu
   dedykowanej listy (#148).
+  Dzwonek (#353): nazwa z liczbą nieprzeczytanych (ICU `notifications.bellLabel`), panel = region
+  nazwany tytułem, „Nieprzeczytane” dla czytnika; Escape zamyka i wraca fokusem na dzwonek, wyjście
+  fokusem poza panel go zamyka. „Oznacz wszystkie” (#354): `aria-busy` + „Zapisywanie…”, jedno
+  wywołanie naraz, błąd `role="alert"` bez refresh, sukces `role="status"` + fokus na tytule.
+  Tryb demo (#359): layouty biorą demo z `getNotifications(locale, rola)` (czas przez Intl), bez
+  literałów w `DashboardShell`. Ustawienia pracodawcy (#357): własne opisy (`settings.employer*`),
+  bez przełącznika dopasowanych ofert, opis powiązany `aria-describedby`.
 
 ### Etap 7 — admin / prywatność / płatności
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)
@@ -614,11 +638,23 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 ### Etap 8 — jakość
 - [x] Testy: Vitest (matching, recipient-locale, i18n keys, error-keys), integracyjne RLS+seed w CI (`postgres:16`), Playwright (smoke/seo/flows)
 - [~] Testy Playwright: języki/detal oferty/CTA/noindex paneli/cookies/SEO gotowe (`flows.spec`+smoke+seo, 12 pass); do rozbudowy: aplikowanie/propozycje pod realną sesją
+  Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
+  worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
+  (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
+  E2E noindex każdej strony paneli i auth z systemu plików (`panel-noindex`) i axe na wszystkich
+  trasach publicznych, 4 języki, 320/1280 px, z banerem i po jego zamknięciu (`a11y-public-routes`).
+  Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),
+  bez `.first()`/`.nth()` na przyciskach o znaczeniu. **Do zrobienia:** asercje
+  `email_deliveries.locale` w `rls.sql` (#348, SQL), E2E kategorii zgód (#349), raport flaków (#375).
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
   logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny). **Do zrobienia:**
   Core Web Vitals / audyt wydajności (Lighthouse w CI).
+  Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391), dialogi
+  na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
+  obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
+  na decyzję o workflow.
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 

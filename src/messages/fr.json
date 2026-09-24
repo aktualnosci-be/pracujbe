@@ -939,7 +939,8 @@
     "agreeTerms": "J'accepte les conditions d'utilisation et la politique de confidentialité.",
     "stepAnnounce": "Étape {current} sur {total} : {title}",
     "agreeTermsLinks": "J'accepte les <terms>conditions d'utilisation</terms> et la <privacy>politique de confidentialité</privacy>.",
-    "opensInNewTab": "(s’ouvre dans un nouvel onglet)"
+    "opensInNewTab": "(s’ouvre dans un nouvel onglet)",
+    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste."
   },
   "filters": {
     "title": "Filtres",
@@ -993,9 +994,6 @@
     "title": "Notifications",
     "markAllRead": "Tout marquer comme lu",
     "seeAll": "Voir tout",
-    "sampleNewJob": "Nouvelle offre adaptée à votre profil",
-    "sampleAppViewed": "Votre candidature a été consultée",
-    "sampleMessage": "Vous avez un nouveau message d'un employeur",
     "itemApplicationReceived": "Nouvelle candidature reçue",
     "itemApplicationStatusChanged": "Le statut de votre candidature a changé",
     "itemOfferReceived": "Vous avez reçu une proposition d'emploi",
@@ -1006,7 +1004,11 @@
     "itemSystem": "Notification système",
     "empty": "Aucune notification",
     "loadError": "Impossible de charger les notifications. Réessayez.",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "bellLabel": "{count, plural, =0 {Notifications} one {Notifications, 1 non lue} other {Notifications, # non lues}}",
+    "unreadItem": "Non lue",
+    "markingAllRead": "Enregistrement…",
+    "markedAllRead": "Toutes les notifications ont été marquées comme lues."
   },
   "pricing": {
     "standard": "Standard",
@@ -1093,7 +1095,8 @@
       "bioTooLong": "La description est trop longue.",
       "termsRequired": "Vous devez accepter les conditions et la politique de confidentialité.",
       "availabilityRequired": "Choisissez votre disponibilité.",
-      "invalid": "Valeur invalide."
+      "invalid": "Valeur invalide.",
+      "itemTooLong": "Un des éléments de la liste est trop long. Raccourcissez-le."
     }
   },
   "jobWizard": {
@@ -1202,7 +1205,9 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Non précisé",
     "notVerifiedNote": "Le brouillon est enregistré. La publication sera possible une fois l'entreprise vérifiée.",
-    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste."
+    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste.",
+    "stepAnnounce": "Étape {current} sur {total} : {title}",
+    "goToOffers": "Voir la liste des offres"
   },
   "messages": {
     "title": "Messages",
@@ -1235,7 +1240,9 @@
     "loadOlder": "Charger les messages plus anciens",
     "loadingOlder": "Chargement des messages plus anciens…",
     "loadOlderError": "Impossible de charger les messages plus anciens. Réessayez.",
-    "threadStart": "C'est le début de la conversation."
+    "threadStart": "C'est le début de la conversation.",
+    "senderCompanyFallback": "Employeur",
+    "senderCandidateFallback": "Candidat"
   },
   "files": {
     "cvTitle": "Votre CV / documents",
@@ -1354,7 +1361,10 @@
     "saving": "Enregistrement...",
     "savedSuccess": "Vos préférences de notification ont été enregistrées.",
     "loadError": "Impossible de charger vos préférences de notification.",
-    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant."
+    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant.",
+    "employerEmailApplicationsDescription": "Nouvelles candidatures à vos offres d’emploi.",
+    "employerEmailOffersDescription": "Lorsqu’un candidat accepte ou refuse votre proposition d’emploi.",
+    "employerEmailMessagesDescription": "Nouveaux messages de candidats dans vos conversations."
   },
   "guides": {
     "pageTitle": "Guides",

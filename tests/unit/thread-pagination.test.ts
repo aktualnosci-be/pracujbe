@@ -189,7 +189,7 @@ describe('mergeThreadMessages', () => {
     const at = '2026-09-01T00:00:00.000001+00:00';
     const later = '2026-09-01T00:00:00.000002+00:00';
     const view = (id: string, createdAt: string) => ({
-      id, createdAt, body: id, mine: false, senderName: '', isSystem: false, timeLabel: '',
+      id, createdAt, body: id, mine: false, senderName: '', senderSide: 'company' as const, isSystem: false, timeLabel: '',
     });
     const merged = mergeThreadMessages(
       [view('b', at), view('c', later)],
