@@ -36,6 +36,12 @@ import { demoJobs } from '@/lib/data/demo';
 import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 import { createServerClient } from '@/lib/supabase/server';
+import {
+  buildViesState,
+  companyVatSource,
+  type AdminViesState,
+  type StoredViesCheck,
+} from '@/lib/vies/state';
 
 /* ---------------------------------------------------------------------------
  * Kontrakty dla UI
@@ -172,7 +178,7 @@ const DEMO_STATS: AdminStats = {
 const DEMO_COMPANIES: AdminCompanyRow[] = [
   { id: 'demo-c1', name: 'AGO Jobs & HR', status: 'verified', createdAt: '2025-01-15T09:00:00.000Z', vatNumber: 'BE0123456789', registrationNumber: '0123.456.789', email: 'jobs@example.com', city: 'Antwerpen' },
   { id: 'demo-c2', name: 'Bouwbedrijf De Vos', status: 'pending', createdAt: '2025-02-03T11:30:00.000Z', vatNumber: 'BE0987654321', registrationNumber: null, email: 'info@example.com', city: 'Gent' },
-  { id: 'demo-c3', name: 'Logistiek Antwerpen NV', status: 'pending', createdAt: '2025-02-10T08:15:00.000Z', vatNumber: null, registrationNumber: null, email: null, city: null },
+  { id: 'demo-c3', name: 'Logistiek Antwerpen NV', status: 'pending', createdAt: '2025-02-10T08:15:00.000Z', vatNumber: 'BE0417497106', registrationNumber: null, email: null, city: null },
   { id: 'demo-c4', name: 'Horeca Brussel Group', status: 'unverified', createdAt: '2025-02-18T14:45:00.000Z', vatNumber: null, registrationNumber: null, email: null, city: null },
   { id: 'demo-c5', name: 'CleanPro Services', status: 'rejected', createdAt: '2025-01-28T10:00:00.000Z', vatNumber: null, registrationNumber: null, email: null, city: null },
   { id: 'demo-c6', name: 'TransEuro Trucking', status: 'suspended', createdAt: '2024-12-11T16:20:00.000Z', vatNumber: null, registrationNumber: null, email: null, city: null },
@@ -975,6 +981,8 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   jobs: AdminCompanyJob[];
   /** Łączna liczba ofert (bez usuniętych); `jobs` to najnowsze `ADMIN_COMPANY_JOBS_LIMIT`. */
   jobsTotal: number;
+  /** Weryfikacja numeru VAT w VIES (#92) — informacja dla admina, nie decyzja. */
+  vies: AdminViesState;
 }
 
 export type AdminCompanyDetailResult =
@@ -1018,8 +1026,50 @@ function demoCompanyDetail(id: string): AdminCompanyDetailResult {
       ],
       jobs,
       jobsTotal: jobs.length,
+      vies: buildViesState({
+        companyName: row.name,
+        vatSource: companyVatSource(row.vatNumber, row.registrationNumber),
+        stored: null,
+      }),
     },
   };
+}
+
+/**
+ * Ostatni rozstrzygający wynik VIES (0088). Błąd odczytu nie psuje szczegółu firmy —
+ * stan `load_error` pozwala i tak sprawdzić numer ręcznie.
+ */
+async function readStoredViesCheck(
+  supabase: ReturnType<typeof import('@/lib/supabase/admin').createAdminClient>,
+  companyId: string,
+): Promise<{ stored: StoredViesCheck | null; failed: boolean }> {
+  try {
+    const { data, error } = await supabase
+      .from('company_vies_checks')
+      .select('vat_number, result, vies_name, checked_at')
+      .eq('company_id', companyId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { stored: null, failed: false };
+    const row = asRecord(data);
+    const result = asString(row['result']);
+    const checkedAt = asNullableString(row['checked_at']);
+    if ((result !== 'valid' && result !== 'invalid') || !checkedAt) {
+      return { stored: null, failed: true };
+    }
+    return {
+      stored: {
+        vatNumber: asString(row['vat_number']),
+        result,
+        viesName: asNullableString(row['vies_name']),
+        checkedAt,
+      },
+      failed: false,
+    };
+  } catch (error) {
+    captureError(error, { area: 'admin.readStoredViesCheck' });
+    return { stored: null, failed: true };
+  }
 }
 
 /**
@@ -1071,6 +1121,13 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
 
     const c = asRecord(companyRes.data);
     const status = asString(c['status'], 'unverified');
+    const vatSource = companyVatSource(
+      asNullableString(c['vat_number']),
+      asNullableString(c['registration_number']),
+    );
+    const viesRead = vatSource
+      ? await readStoredViesCheck(supabase, uuid)
+      : { stored: null, failed: false };
     const jobs = asRows(jobsRes.data).map((row) => ({
       id: asString(row['id']),
       title: asString(row['title']),
@@ -1118,6 +1175,12 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
         }),
         jobs,
         jobsTotal: typeof jobsRes.count === 'number' ? jobsRes.count : jobs.length,
+        vies: buildViesState({
+          companyName: asString(c['name']),
+          vatSource,
+          stored: viesRead.stored,
+          storedLoadFailed: viesRead.failed,
+        }),
       },
     };
   } catch (error) {

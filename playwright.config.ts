@@ -38,6 +38,15 @@ const TRACKER_ENV = {
   NEXT_PUBLIC_META_PIXEL_ID: E2E_META_PIXEL_ID,
 };
 
+/**
+ * Import ogłoszenia (#465) z atrapą dostawcy AI — czytane w runtime serwera, więc działa także
+ * z gotowym buildem z CI. Atrapa nie odpowiada w `APP_MODE=production` i nie łączy się z siecią.
+ */
+const JOB_IMPORT_ENV = {
+  AI_JOB_IMPORT_ENABLED: '1',
+  AI_JOB_IMPORT_PROVIDER: 'fixture',
+};
+
 /** Czy gotowy build (.next) ma wklejone testowe ID trackerów. */
 function buildHasTrackerIds(): boolean {
   const dir = join(process.cwd(), '.next', 'static', 'chunks');
@@ -118,8 +127,8 @@ export default defineConfig({
   webServer: {
     // CI buduje w osobnym kroku; limit gotowości mierzy wtedy wyłącznie start serwera.
     command: reuseBuild ? 'npm run start' : 'npm run build && npm run start',
-    // Sekret linków wypisania (#45) czytany w runtime — nie wymaga przebudowy.
-    env: { ...TRACKER_ENV, EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET },
+    // Sekret linków wypisania (#45) i atrapa importu AI (#465) czytane w runtime — bez przebudowy.
+    env: { ...TRACKER_ENV, ...JOB_IMPORT_ENV, EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET },
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: reuseBuild ? 180_000 : 900_000,

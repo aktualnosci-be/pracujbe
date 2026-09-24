@@ -4118,6 +4118,254 @@ select pg_temp.un45_sql('with c as (update public.email_send_budget_config
    returning 1), w as (delete from public.email_send_windows returning 1) select ''ok''');
 
 -- ============================================================================
+-- VI92. Weryfikacja VAT w VIES jako informacja dla admina (0088, #92)
+-- Zapis tylko wyników rozstrzygających (valid/invalid); awaria/limit VIES nigdy nie
+-- staje się „nieważny” i nie nadpisuje poprzedniego wyniku. Status firmy bez zmian.
+-- ============================================================================
+select status as vi92_status_before from public.companies where id = :'COMPA' \gset
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+-- VI92-1: admin zapisuje wynik ważny z nazwą z rejestru.
+select public.admin_record_vies_check(:'COMPA', '0417497106', 'valid', '  NV FIRMA A  ', date '2026-09-24');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select result = 'valid' and vies_name = 'NV FIRMA A' and vat_number = '0417497106'
+          and checked_by = :'ADMIN'::uuid and request_date = date '2026-09-24'
+     from public.company_vies_checks where company_id = :'COMPA'),
+  'VI92-1 wynik ważny zapisany z nazwą, datą i adminem');
+select pg_temp.assert(
+  (select status from public.companies where id = :'COMPA') = :'vi92_status_before',
+  'VI92-1b zapis wyniku nie zmienia statusu firmy');
+select pg_temp.assert(
+  (select after_data = '{"result":"valid"}'::jsonb and actor_id = :'ADMIN'::uuid
+     from public.audit_logs
+    where entity_id = :'COMPA' and action = 'company.vies_checked'
+    order by created_at desc limit 1),
+  'VI92-1c audyt company.vies_checked tylko z wynikiem (bez nazwy i numeru)');
+
+-- VI92-2: KONTROLA UJEMNA — stany nierozstrzygające są odrzucane i nie nadpisują wyniku.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''unavailable'')',
+  'RESULT_NOT_PERSISTABLE', 'VI92-2 niedostępność VIES nie jest zapisywana');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''rate_limited'')',
+  'RESULT_NOT_PERSISTABLE', 'VI92-2b limit VIES nie jest zapisywany');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', null)',
+  'RESULT_NOT_PERSISTABLE', 'VI92-2c brak wyniku nie jest zapisywany');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select result from public.company_vies_checks where company_id = :'COMPA') = 'valid',
+  'VI92-2d po awarii poprzedni wynik ważny zostaje (brak negatywnego cache)');
+select pg_temp.expect_error(
+  'insert into public.company_vies_checks(company_id, vat_number, result) values (''bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'', ''0417497106'', ''unavailable'')',
+  'company_vies_checks_result', 'VI92-2e CHECK tabeli odrzuca stan awarii nawet z pominięciem RPC');
+
+-- VI92-3: wynik nieważny zastępuje ważny, bez nazwy; firma NIE jest odrzucana automatycznie.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_record_vies_check(:'COMPA', '0417497106', 'invalid', 'ignorowana', null);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select result = 'invalid' and vies_name is null
+     from public.company_vies_checks where company_id = :'COMPA'),
+  'VI92-3 wynik nieważny zapisany bez nazwy');
+select pg_temp.assert(
+  (select status from public.companies where id = :'COMPA') = :'vi92_status_before',
+  'VI92-3b nieważny numer nie zmienia statusu firmy (bez automatycznego odrzucania)');
+select pg_temp.assert(
+  (select count(*) from public.company_vies_checks where company_id = :'COMPA') = 1,
+  'VI92-3c jeden wiersz na firmę');
+
+-- VI92-4: walidacja numeru i firmy.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0123456789'', ''valid'')',
+  'VAT_FORMAT', 'VI92-4 zła suma kontrolna odrzucona');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''BE0417497106'', ''valid'')',
+  'VAT_FORMAT', 'VI92-4b numer z prefiksem (nieznormalizowany) odrzucony');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''00000000-0000-0000-0000-00000000092f'', ''0417497106'', ''valid'')',
+  'NOT_FOUND', 'VI92-4c nieistniejąca firma → NOT_FOUND');
+reset role; reset app.current_uid;
+
+-- VI92-5: pracodawca i anon bez dostępu do zapisu i odczytu.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''valid'')',
+  'PERMISSION_DENIED', 'VI92-5 pracodawca nie zapisze wyniku VIES własnej firmy');
+select pg_temp.expect_error('select * from public.company_vies_checks',
+  'permission denied', 'VI92-5b pracodawca nie czyta tabeli wyników VIES');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''valid'')',
+  'permission denied', 'VI92-5c anon bez EXECUTE');
+select pg_temp.expect_error('select * from public.company_vies_checks',
+  'permission denied', 'VI92-5d anon nie czyta tabeli wyników VIES');
+reset role;
+
+-- ============================================================================
+-- FN99. Serwerowy lejek ofert bez śledzenia (0089, #99): agregat per oferta i dzień,
+--       deduplikacja po nonce, tylko oferty publiczne, odczyt recruiter+ własnej firmy
+-- ============================================================================
+\set FNEA  'f9900000-0000-0000-0000-0000000000a1'
+\set FNEB  'f9900000-0000-0000-0000-0000000000a2'
+\set FNMEM 'f9900000-0000-0000-0000-0000000000a3'
+\set FNCAN 'f9900000-0000-0000-0000-0000000000a4'
+\set FNCA  'f9900000-0000-0000-0000-000000000001'
+\set FNCB  'f9900000-0000-0000-0000-000000000002'
+\set FNCC  'f9900000-0000-0000-0000-000000000003'
+\set FNJA  'f9900000-0000-0000-0000-0000000000b1'
+\set FNJB  'f9900000-0000-0000-0000-0000000000b2'
+\set FNJC  'f9900000-0000-0000-0000-0000000000b3'
+\set FNJD  'f9900000-0000-0000-0000-0000000000b4'
+\set FNN1  'f9900000-0000-0000-0000-0000000000c1'
+\set FNN2  'f9900000-0000-0000-0000-0000000000c2'
+\set FNN3  'f9900000-0000-0000-0000-0000000000c3'
+\set FNN4  'f9900000-0000-0000-0000-0000000000c4'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'FNEA','fnea@test.be','Fn A','{"role":"employer","first_name":"Fn","last_name":"A","locale":"pl"}'),
+  (:'FNEB','fneb@test.be','Fn B','{"role":"employer","first_name":"Fn","last_name":"B","locale":"nl"}'),
+  (:'FNMEM','fnmem@test.be','Fn M','{"role":"employer","first_name":"Fn","last_name":"M","locale":"pl"}'),
+  (:'FNCAN','fncan@test.be','Fn C','{"role":"candidate","first_name":"Fn","last_name":"C","locale":"pl"}');
+insert into public.companies(id, name, status) values
+  (:'FNCA', 'Firma FN A', 'verified'), (:'FNCB', 'Firma FN B', 'verified'), (:'FNCC', 'Firma FN C', 'unverified');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'FNCA', :'FNEA', 'owner', true), (:'FNCB', :'FNEB', 'owner', true), (:'FNCA', :'FNMEM', 'member', true);
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'FNJA', :'FNCA', 'fn99-a', 'Magazynier FN', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl'),
+  (:'FNJB', :'FNCB', 'fn99-b', 'Kierowca FN', 'transport', 'permanent', 'Gandawa', 'Flandria', 'active', 'pl'),
+  (:'FNJC', :'FNCC', 'fn99-c', 'Oferta firmy niezweryfikowanej', 'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl'),
+  (:'FNJD', :'FNCA', 'fn99-d', 'Szkic FN', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'draft', 'pl');
+-- Dwie złożone aplikacje dziś, jeden szkic (nie liczy się) i jedna sprzed 40 dni (poza zakresem).
+insert into public.applications(job_id, candidate_id, company_id, status, submitted_at) values
+  (:'FNJA', :'FNCAN', :'FNCA', 'submitted', now());
+insert into public.applications(job_id, candidate_id, company_id, status, submitted_at) values
+  (:'FNJB', :'FNCAN', :'FNCB', 'submitted', now() - interval '40 days');
+
+-- FN99-1: bez bramki serwera anon nie zapisze zdarzenia (np. wywołanie z pominięciem endpointu).
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.record_job_funnel_event(''detail_view'', ''f9900000-0000-0000-0000-0000000000c1''::uuid, array[''f9900000-0000-0000-0000-0000000000b1''::uuid])',
+  'PERMISSION_DENIED', 'FN99-1 zapis bez bramki endpointu odrzucony');
+
+-- FN99-2: zapis przez endpoint (anon + bramka); ponowienie z tym samym nonce = brak drugiego zliczenia.
+select set_config('pracujbe.funnel_writer', 'on', false);
+select public.record_job_funnel_event('detail_view', :'FNN1'::uuid, array[:'FNJA'::uuid]) as fn2a \gset
+select public.record_job_funnel_event('detail_view', :'FNN1'::uuid, array[:'FNJA'::uuid]) as fn2b \gset
+select pg_temp.assert(:'fn2a'::int = 1 and :'fn2b'::int = 0, 'FN99-2 retry z tym samym nonce nie dubluje zliczenia');
+-- FN99-3: odświeżenie (nowy nonce) liczy się ponownie; apply_started z tym samym nonce co wyświetlenie osobno.
+select public.record_job_funnel_event('detail_view', :'FNN2'::uuid, array[:'FNJA'::uuid]);
+select public.record_job_funnel_event('apply_started', :'FNN2'::uuid, array[:'FNJA'::uuid]);
+select public.record_job_funnel_event('apply_started', :'FNN2'::uuid, array[:'FNJA'::uuid]);
+-- FN99-4: wyniki listy — duplikat liczony raz, firma niezweryfikowana i szkic pominięte.
+select public.record_job_funnel_event('search_appearance', :'FNN3'::uuid,
+  array[:'FNJA'::uuid, :'FNJA'::uuid, :'FNJB'::uuid, :'FNJC'::uuid, :'FNJD'::uuid]) as fn4 \gset
+select pg_temp.assert(:'fn4'::int = 2, 'FN99-4 liczone tylko oferty publiczne zweryfikowanych firm');
+-- FN99-5: walidacja wejścia.
+select pg_temp.expect_error(
+  format('select public.record_job_funnel_event(''detail_view'', %L::uuid, array[%L::uuid, %L::uuid])',
+         'f9900000-0000-0000-0000-0000000000c9', 'f9900000-0000-0000-0000-0000000000b1', 'f9900000-0000-0000-0000-0000000000b2'),
+  'VALIDATION_FAILED', 'FN99-5 wyświetlenie szczegółu dotyczy jednej oferty');
+select pg_temp.expect_error(
+  format('select public.record_job_funnel_event(''search_appearance'', %L::uuid, (select array_agg(gen_random_uuid()) from generate_series(1, 51)))',
+         'f9900000-0000-0000-0000-0000000000c8'),
+  'VALIDATION_FAILED', 'FN99-5b wyniki listy ≤ 50 ofert');
+select pg_temp.expect_error(
+  format('select public.record_job_funnel_event(''click'', %L::uuid, array[%L::uuid])',
+         'f9900000-0000-0000-0000-0000000000c7', 'f9900000-0000-0000-0000-0000000000b1'),
+  'VALIDATION_FAILED', 'FN99-5c nieznane zdarzenie odrzucone');
+-- FN99-6: anon nie czyta agregatu, pokwitowań ani lejka firmy.
+select pg_temp.expect_error('select count(*) from public.job_funnel_daily', 'permission denied',
+  'FN99-6 anon nie czyta agregatu');
+select pg_temp.expect_error('select count(*) from public.job_funnel_receipts', 'permission denied',
+  'FN99-6b anon nie czyta pokwitowań');
+select pg_temp.expect_error(
+  'select * from public.get_company_job_funnel(''f9900000-0000-0000-0000-000000000001''::uuid, current_date - 29, current_date)',
+  'permission denied', 'FN99-6c anon bez EXECUTE na odczycie lejka');
+reset pracujbe.funnel_writer;
+reset role;
+
+-- FN99-7: agregat nie przechowuje danych osób — wyłącznie oferta, dzień i liczniki.
+select pg_temp.assert(
+  (select array_agg(column_name::text order by column_name::text) from information_schema.columns
+    where table_schema = 'public' and table_name = 'job_funnel_daily')
+  = array['apply_started','day','detail_views','job_id','search_appearances','updated_at']
+  and (select array_agg(column_name::text order by column_name::text) from information_schema.columns
+    where table_schema = 'public' and table_name = 'job_funnel_receipts')
+  = array['created_at','event','nonce'],
+  'FN99-7 brak kolumn z IP, użytkownikiem, zapytaniem lub profilem');
+select pg_temp.assert(
+  (select detail_views = 2 and apply_started = 1 and search_appearances = 1
+     from public.job_funnel_daily where job_id = :'FNJA' and day = (now() at time zone 'Europe/Brussels')::date)
+  and (select search_appearances = 1 and detail_views = 0 from public.job_funnel_daily where job_id = :'FNJB')
+  and not exists (select 1 from public.job_funnel_daily where job_id in (:'FNJC', :'FNJD')),
+  'FN99-7b agregat dzienny: 2 wyświetlenia, 1 rozpoczęcie, 1 pojawienie w wynikach');
+
+-- FN99-8: rekruter firmy A czyta swój lejek; submitted = stan domenowy w zakresie.
+set role authenticated; set app.current_uid = :'FNEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select search_appearances = 1 and detail_views = 2 and apply_started = 1 and applications_submitted = 1
+     from public.get_company_job_funnel(:'FNCA'::uuid, current_date - 29, current_date) where job_id = :'FNJA')
+  and not exists (select 1 from public.get_company_job_funnel(:'FNCA'::uuid, current_date - 29, current_date)
+                   where job_id in (:'FNJB', :'FNJD')),
+  'FN99-8 lejek firmy A: liczniki i złożone aplikacje, bez ofert innych firm i szkiców');
+-- FN99-8b: kontrola ujemna — firma A nie widzi lejka firmy B.
+select pg_temp.expect_error(
+  'select * from public.get_company_job_funnel(''f9900000-0000-0000-0000-000000000002''::uuid, current_date - 29, current_date)',
+  'PERMISSION_DENIED', 'FN99-8b firma A nie czyta lejka firmy B');
+select pg_temp.expect_error('select count(*) from public.job_funnel_daily', 'permission denied',
+  'FN99-8c zalogowany pracodawca nie czyta agregatu bezpośrednio');
+select pg_temp.expect_error(
+  'select * from public.get_company_job_funnel(''f9900000-0000-0000-0000-000000000001''::uuid, current_date, current_date - 1)',
+  'VALIDATION_FAILED', 'FN99-8d odwrócony zakres dat odrzucony');
+reset role; reset app.current_uid;
+-- FN99-9: firma B widzi aplikację sprzed 40 dni tylko w zakresie, który ją obejmuje.
+set role authenticated; set app.current_uid = :'FNEB'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select applications_submitted = 0 and search_appearances = 1
+     from public.get_company_job_funnel(:'FNCB'::uuid, current_date - 29, current_date) where job_id = :'FNJB')
+  and (select applications_submitted = 1 and search_appearances = 0
+     from public.get_company_job_funnel(:'FNCB'::uuid, current_date - 59, current_date - 30) where job_id = :'FNJB'),
+  'FN99-9 aplikacja poza zakresem nie wlicza się; zakres historyczny ją obejmuje');
+reset role; reset app.current_uid;
+-- FN99-10: zwykły członek (member) i kandydat nie czytają lejka.
+set role authenticated; set app.current_uid = :'FNMEM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.get_company_job_funnel(''f9900000-0000-0000-0000-000000000001''::uuid, current_date - 29, current_date)',
+  'PERMISSION_DENIED', 'FN99-10 member bez prawa do lejka');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'FNCAN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.get_company_job_funnel(''f9900000-0000-0000-0000-000000000001''::uuid, current_date - 29, current_date)',
+  'PERMISSION_DENIED', 'FN99-10b kandydat bez prawa do lejka');
+reset role; reset app.current_uid;
+
+-- FN99-11: pokwitowania poza oknem deduplikacji są usuwane przy kolejnym zapisie.
+insert into public.job_funnel_receipts(nonce, event, created_at)
+  values ('f9900000-0000-0000-0000-0000000000cf', 'detail_view', now() - interval '3 days');
+set role anon; select pg_temp.assert_client_role();
+select set_config('pracujbe.funnel_writer', 'on', false);
+select public.record_job_funnel_event('detail_view', :'FNN4'::uuid, array[:'FNJB'::uuid]);
+reset pracujbe.funnel_writer;
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.job_funnel_receipts where nonce = 'f9900000-0000-0000-0000-0000000000cf')
+  and exists (select 1 from public.job_funnel_receipts where nonce = :'FNN4'),
+  'FN99-11 stare pokwitowania usunięte, bieżące zachowane');
+
+-- FN99-12: kontrola ujemna asercji — gdyby anon dostał SELECT, FN99-6 wykryłby odczyt.
+grant select on public.job_funnel_daily to anon;
+set role anon; select pg_temp.assert_client_role();
+select count(*) >= 0 as fn12 from public.job_funnel_daily \gset
+reset role;
+revoke select on public.job_funnel_daily from anon;
+select pg_temp.assert(:'fn12'::boolean, 'FN99-12 kontrola ujemna: z grantem anon czyta agregat (test FN99-6 by to wykrył)');
+
+-- ============================================================================
 -- GA98. Jednorazowa aplikacja bez konta (0096, #98): zgłoszenie → potwierdzenie
 -- e-mailem → aplikacja widoczna dla firmy → przejęcie przez konto o tym samym adresie.
 -- Kontrole ujemne: bezpośredni DML/odczyt, niepotwierdzony adres nie trafia do firmy,

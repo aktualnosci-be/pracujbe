@@ -21,6 +21,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isSupabaseConfigured } from '@/lib/env';
 import { effectiveJobStatus, isPastExpiry, notExpiredFilter } from '@/lib/job-expiry';
 import { captureError } from '@/lib/sentry';
+import {
+  DEFAULT_FUNNEL_RANGE,
+  funnelDateRange,
+  type FunnelDateRange,
+  type FunnelRangeDays,
+} from '@/lib/job-funnel/range';
 
 /* ---------------------------------------------------------------------------
  * Kontrakt (typy zwracane do UI)
@@ -92,9 +98,9 @@ export interface EmployerMatchedCandidate {
 
 export interface FunnelStats {
   /**
-   * Wyświetlenia ofert w okresie lejka. `null` = brak danych: `jobs.views_count` nie ma
-   * mechanizmu zliczania (#302, powiązane z #99), więc zamiast fałszywego 0 UI pokazuje
-   * „brak danych" i pomija konwersję wyświetlenia → aplikacje.
+   * Wyświetlenia szczegółów ofert w okresie lejka — serwerowy agregat bez śledzenia (#99).
+   * `null` = brak danych (np. brak uprawnień rekrutera): UI pokazuje „brak danych"
+   * i pomija konwersję wyświetlenia → aplikacje, zamiast fałszywego 0.
    */
   views: number | null;
   applications: number;
@@ -952,6 +958,134 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
   }
 }
 
+/** Wiersz RPC `get_company_job_funnel` (0089). Liczniki bigint przychodzą jako number/string. */
+interface JobFunnelRow {
+  job_id: string;
+  title: string | null;
+  slug: string | null;
+  status: string | null;
+  search_appearances: number | string | null;
+  detail_views: number | string | null;
+  apply_started: number | string | null;
+  applications_submitted: number | string | null;
+}
+
+function funnelCount(value: number | string | null | undefined): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+}
+
+/** Błąd uprawnień RPC (np. zwykły członek firmy bez roli rekrutera) — to nie awaria odczytu. */
+function isPermissionDenied(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === '42501';
+}
+
+type EmployerSupabase = EmployerContext['supabase'];
+
+async function readJobFunnelRows(
+  supabase: EmployerSupabase,
+  companyId: string,
+  range: FunnelDateRange,
+): Promise<JobFunnelRow[] | 'denied'> {
+  const { data, error } = await supabase.rpc('get_company_job_funnel', {
+    p_company_id: companyId,
+    p_from: range.from,
+    p_to: range.to,
+  });
+  if (error) {
+    if (isPermissionDenied(error)) return 'denied';
+    throw error;
+  }
+  return (data ?? []) as JobFunnelRow[];
+}
+
+/**
+ * Wyświetlenia szczegółów ofert z serwerowego lejka (#99) w oknie {@link FUNNEL_PERIOD_DAYS}
+ * dni kalendarzowych (Europe/Brussels). `null` = brak uprawnień do lejka (nie zero).
+ */
+async function readFunnelViews(
+  supabase: EmployerSupabase,
+  companyId: string,
+  now: Date,
+): Promise<number | null> {
+  const rows = await readJobFunnelRows(supabase, companyId, funnelDateRange(FUNNEL_PERIOD_DAYS, now));
+  if (rows === 'denied') return null;
+  return rows.reduce((sum, row) => sum + funnelCount(row.detail_views), 0);
+}
+
+export interface JobFunnelMetrics {
+  searchAppearances: number;
+  detailViews: number;
+  applyStarted: number;
+  applicationsSubmitted: number;
+}
+
+export interface JobFunnelItem extends JobFunnelMetrics {
+  jobId: string;
+  title: string;
+  slug: string;
+  status: string;
+}
+
+/** Jawny stan odczytu lejka ofert (#99): brak uprawnień ≠ błąd ≠ zera. */
+export type JobFunnelLoad =
+  | { status: 'ok'; range: FunnelDateRange; totals: JobFunnelMetrics; jobs: JobFunnelItem[] }
+  | { status: 'denied'; range: FunnelDateRange }
+  | { status: 'error'; range: FunnelDateRange };
+
+const DEMO_JOB_FUNNEL: JobFunnelItem[] = [
+  { jobId: '12345', title: 'Operator wózka widłowego', slug: '', status: 'active', searchAppearances: 1840, detailViews: 412, applyStarted: 61, applicationsSubmitted: 38 },
+  { jobId: '12344', title: 'Pracownik magazynu', slug: '', status: 'active', searchAppearances: 1322, detailViews: 305, applyStarted: 40, applicationsSubmitted: 26 },
+  { jobId: '12343', title: 'Elektryk przemysłowy', slug: '', status: 'active', searchAppearances: 764, detailViews: 158, applyStarted: 19, applicationsSubmitted: 11 },
+];
+
+function sumFunnel(jobs: readonly JobFunnelMetrics[]): JobFunnelMetrics {
+  return jobs.reduce<JobFunnelMetrics>(
+    (acc, job) => ({
+      searchAppearances: acc.searchAppearances + job.searchAppearances,
+      detailViews: acc.detailViews + job.detailViews,
+      applyStarted: acc.applyStarted + job.applyStarted,
+      applicationsSubmitted: acc.applicationsSubmitted + job.applicationsSubmitted,
+    }),
+    { searchAppearances: 0, detailViews: 0, applyStarted: 0, applicationsSubmitted: 0 },
+  );
+}
+
+/**
+ * Lejek ofert aktywnej firmy (#99): pojawienia w wynikach → wyświetlenia → rozpoczęte
+ * aplikowanie → wysłane aplikacje, per oferta, w zakresie dni Europe/Brussels. Odczyt przez
+ * RPC `get_company_job_funnel` (recruiter+ aktywnej firmy, 0089). Bez env — dane DEMO.
+ */
+export async function getJobFunnel(
+  days: FunnelRangeDays = DEFAULT_FUNNEL_RANGE,
+  now: Date = new Date(),
+): Promise<JobFunnelLoad> {
+  const range = funnelDateRange(days, now);
+  if (!isSupabaseConfigured()) {
+    return { status: 'ok', range, totals: sumFunnel(DEMO_JOB_FUNNEL), jobs: DEMO_JOB_FUNNEL };
+  }
+  try {
+    const ctx = await loadContext();
+    if (!ctx) return { status: 'denied', range };
+    const rows = await readJobFunnelRows(ctx.supabase, ctx.companyId, range);
+    if (rows === 'denied') return { status: 'denied', range };
+    const jobs: JobFunnelItem[] = rows.map((row) => ({
+      jobId: row.job_id,
+      title: row.title ?? '',
+      slug: row.slug ?? '',
+      status: row.status ?? '',
+      searchAppearances: funnelCount(row.search_appearances),
+      detailViews: funnelCount(row.detail_views),
+      applyStarted: funnelCount(row.apply_started),
+      applicationsSubmitted: funnelCount(row.applications_submitted),
+    }));
+    return { status: 'ok', range, totals: sumFunnel(jobs), jobs };
+  } catch (error) {
+    captureError(error, { area: 'employer.getJobFunnel' });
+    return { status: 'error', range };
+  }
+}
+
 /**
  * Lejek rekrutacyjny z ostatnich {@link FUNNEL_PERIOD_DAYS} dni (#302): kohorta aplikacji
  * złożonych w oknie (`submitted_at`), a w niej te, które KIEDYKOLWIEK osiągnęły etap rozmowy
@@ -960,7 +1094,8 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
  * Wszystkie trzy liczby to zapytania `count` (head) liczone w bazie pod RLS: brak limitu
  * 1000 wierszy PostgREST i brak listy tysięcy UUID w URL. Etapy liczone jako aplikacje
  * z `!inner` na historii → każda aplikacja liczona raz (odpowiednik `count(distinct)`).
- * Wyświetlenia = `null` (brak mechanizmu zliczania — nie udajemy zera).
+ * Wyświetlenia = suma `detail_views` z serwerowego lejka ofert (#99) w tym samym oknie dni;
+ * `null`, gdy użytkownik nie ma uprawnień rekrutera (nie udajemy zera).
  */
 export async function getFunnelStats(now: Date = new Date()): Promise<FunnelStatsLoad> {
   if (!isSupabaseConfigured()) return { status: 'ok', funnel: DEMO_FUNNEL };
@@ -998,10 +1133,12 @@ export async function getFunnelStats(now: Date = new Date()): Promise<FunnelStat
     if (interviewError) throw interviewError;
     if (hiredError) throw hiredError;
 
+    const views = await readFunnelViews(supabase, companyId, now);
+
     return {
       status: 'ok',
       funnel: {
-        views: null,
+        views,
         applications: appCount ?? 0,
         interviews: interviewCount ?? 0,
         hired: hiredCount ?? 0,
