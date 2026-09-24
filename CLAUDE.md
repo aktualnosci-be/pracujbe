@@ -865,6 +865,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Przeglądarka widzi ofertę z bazy (`next dev` z `DATABASE_APP_URL`) i jej zniknięcie po
   zamknięciu. Kontrole ujemne: `E2E_REAL_MUTATION=rls-applications-off|finish-onboarding-noop|
   step5-swallow-error|recipient-locale-en|retry-new-key` — każda daje czerwony test.
+  Onboarding (#66, `tests/e2e-real/candidate-onboarding.spec.ts`): kroki 1–6 osobno z odczytem
+  po każdym (`support/onboarding.ts` = kontrakt `saveOnboardingStep` ze schematami kroków
+  z produkcji + loader kreatora z relacjami), wznowienie („Dalej” z danymi z bazy nie gubi
+  skills/languages/certificates, edycja usuwa pozycję), walidacja pól i odrzucenia w bazie bez
+  zmiany stanu, równoległe zapisy kroków 3/5 i „Zakończ” bez duplikatów, `finish_onboarding`
+  (niekompletny → `ONBOARDING_INCOMPLETE`), wyszukiwalność tylko po ukończeniu i opt-in
+  (widok pracodawcy pod RLS). Mutacje: `searchable-without-complete|skills-append|
+  completeness-guard-off|relations-dml-open`. Zestaw real-flow nie jest w CI (uruchamiany ręcznie).
   **Otwarte:** panele i Server Actions nadal używają klienta Supabase (PostgREST nie ustawia
   `app.current_uid`), więc kliknięć w panelach i `revalidatePath` ten test nie obejmuje — po
   #24/#25 dołożyć kroki UI w tym samym configu. Wpięcie w CI (job z usługą `postgres:16`) —
