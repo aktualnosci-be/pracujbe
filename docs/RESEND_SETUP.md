@@ -56,6 +56,8 @@ EMAIL_REPLY_TO="kontakt@pracuj.be"             # adres odpowiedzi
 EMAIL_QUEUE_SECRET="…"                          # chroni endpoint przetwarzający kolejkę
 EMAIL_UNSUBSCRIBE_SECRET="…"                    # podpis HMAC linków wypisania (≥ 32 znaki)
 RESEND_WEBHOOK_SECRET="whsec_…"                 # signing secret webhooka doręczeń (§6)
+EMAIL_SENDER_IDENTITY="…"                       # nazwa podmiotu-nadawcy (stopka, #45)
+EMAIL_SENDER_POSTAL_ADDRESS="…"                 # adres pocztowy nadawcy (stopka, #45)
 ```
 
 - `EMAIL_FROM` musi być na **zweryfikowanej** domenie z §2.
@@ -64,6 +66,10 @@ RESEND_WEBHOOK_SECRET="whsec_…"                 # signing secret webhooka dor�
 - `EMAIL_UNSUBSCRIBE_SECRET` — silny losowy sekret (np. `openssl rand -base64 48`). Bez niego
   e-maile transakcyjne wychodzą bez linku wypisania, a marketingowe nie wychodzą wcale.
   Zmiana sekretu unieważnia linki w wysłanych wiadomościach (strona kieruje wtedy do ustawień).
+- `EMAIL_SENDER_IDENTITY` / `EMAIL_SENDER_POSTAL_ADDRESS` — prawdziwa nazwa i adres pocztowy
+  podmiotu wysyłającego (jedna linia, ≤ 300 znaków). Pokazywane w stopce każdego maila, gdy są
+  ustawione. Newsletter wymaga ich oraz jawnego `EMAIL_FROM` — bez kompletu worker nie wysyła
+  (wiersz wraca do ponowienia, błąd w Sentry). Kod nie ma wartości domyślnych.
 
 ---
 
@@ -188,7 +194,51 @@ jednocześnie harmonogramów Vercel i Railway.
   rezerwa transakcyjna 30). Marketing kończy się przy 50 w oknie, transakcyjne przy 80,
   auth może użyć całego limitu. Dopasuj limit do planu Resend (zmiana wiersza przez
   migrację lub service role). Odmowa odkłada wiersz do następnego okna bez zwiększania
-  `attempts`. Hook e-maili Auth nie pobiera jeszcze budżetu — chroni go rezerwa.
+  `attempts`. Hook e-maili Auth pobiera budżet puli `auth` przed wysyłką: odmowa (okno
+  dostawcy pełne) = 503 + `Retry-After`, GoTrue ponawia; błąd bazy nie blokuje e-maila Auth.
+
+### Dowód zgody, budżet odbiorcy i kampanie (#45, etap 2, migracja `0101`)
+
+- **Dowód zgody** — `email_consent_events` (niezmienna): każda zmiana `email_*` w
+  `notification_preferences` zapisuje kategorię, zgodę/wycofanie, źródło (`settings`,
+  `unsubscribe_page`, `one_click`, `direct`), język i dla zgody wersję pokazanej treści
+  (`sha256:` z etykiet formularza w danym języku i roli, `src/lib/email/consent-wording.ts`).
+  Zapis ustawień idzie przez RPC `set_notification_preferences`; użytkownik widzi tylko swoje
+  wpisy.
+- **Centrum preferencji** — wszystkie kategorie po zalogowaniu (`/candidate/ustawienia`,
+  `/employer/ustawienia`); strona `/wypisz` z linku pozwala wypisać się z kategorii z linku
+  albo ze wszystkich kategorii naraz (bez logowania, token z linku). Włączenie zgody tylko
+  po zalogowaniu.
+- **Budżet odbiorcy przy kolejkowaniu** — `email_recipient_budget_config` (`pool:<pula>` albo
+  `template:<typ>`, okno, limit). Domyślnie newsletter 1/dobę, pula marketingowa 10/dobę,
+  transakcyjne bez limitu (dodaj wiersz, jeśli potrzeba). Ponad limit: wiersz
+  `failed` + `suppressed_recipient_budget` (ślad, bez wysyłki). List wygaszony przed wysyłką
+  oddaje miejsce.
+- **Kampanie (newsletter)** — rewizja = wiersz `email_campaigns` (slug + numer, treść dla
+  każdego języka serwisu: `{"<język>": {"jobs": [1–3 oferty]}}`). Operator (service role):
+  `select public.create_email_campaign_revision('<slug>', '<treść>'::jsonb)` →
+  `select public.activate_email_campaign('<id>')`. Cron `/api/maintenance` woła
+  `process_email_campaigns`: rezerwacja `rewizja + odbiorca` (PK) przed kolejkowaniem, zgoda
+  sprawdzana teraz, list w języku odbiorcy. Status odbiorcy w `email_campaign_recipients`
+  (`reserved/queued/accepted/delivered/skipped_consent/failed/cancelled`, bez treści i adresu).
+  Nowa rewizja wygasza niewysłane listy poprzedniej i pomija osoby, które ją dostały lub mają
+  ją w drodze; stara rewizja nie wraca (`STALE_STATE`). `cancel_email_campaign` zatrzymuje
+  niewysłane listy. Kampania bez nowych odbiorców przechodzi w `completed`.
+- **text/plain** — każdy mail z kolejki i z hooka Auth ma wersję tekstową (multipart/alternative).
+
+### Tracking otwarć i kliknięć (#45) — wyłączony
+
+Decyzja: bez pikseli otwarć i bez przepisywania linków. Kod nie dodaje ani jednego, a w Resend
+(**Domains → domena → Configuration**) *Open tracking* i *Click tracking* muszą być wyłączone.
+Potwierdzenie na **odebranej** wiadomości (nie w konfiguracji SDK):
+
+1. Wyślij newsletter/powiadomienie na własną skrzynkę, pobierz oryginał (`.eml`).
+2. `NEXT_PUBLIC_SITE_URL=https://pracuj.be EMAIL_SENDER_IDENTITY="…" EMAIL_SENDER_POSTAL_ADDRESS="…"
+   node scripts/check-received-eml.mjs wiadomosc.eml --marketing`
+3. Wynik `received message OK` = HTML i `text/plain`, nadawca i adres w obu wersjach,
+   `List-Unsubscribe` + `List-Unsubscribe-Post`, wszystkie linki i obrazy tylko do hostów
+   serwisu (`EML_ALLOWED_HOSTS` dla dodatkowych, np. CDN). Każdy obcy host (piksel,
+   przekierowanie dostawcy) = błąd.
 
 ### Webhook doręczeń Resend (#44, migracja `0098`)
 
