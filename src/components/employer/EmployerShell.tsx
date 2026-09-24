@@ -20,7 +20,7 @@ import type { NotificationItem } from '@/components/dashboard/NotificationsDropd
 import { CompanySwitcher, type CompanySwitcherCompany } from '@/components/employer/CompanySwitcher';
 
 /**
- * EmployerShell — chrome panelu pracodawcy (makieta 05): granatowy sidebar z REALNYM
+ * EmployerShell — chrome panelu pracodawcy (makieta 05): jasny sidebar `.side-item` z REALNYM
  * przełącznikiem firmy (FUN-07) + topbar z powiadomieniami i danymi użytkownika. Renderowane
  * przez `employer/layout.tsx` (serwerowy, ustawia NOINDEX). Dane firmy/użytkownika pochodzą
  * z sesji (props). Nazwa firmy demonstracyjnej pojawia się WYŁĄCZNIE w trybie `demo` (bez env);

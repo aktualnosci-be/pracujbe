@@ -9,7 +9,7 @@ import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMe
 import {
   BTN_SECONDARY,
   EYEBROW,
-  H1,
+  H1_EXTENDED,
   ICON_BOX,
   INFO_LABEL,
   INFO_VALUE,
@@ -60,7 +60,7 @@ export default async function EmployerApplicationsPage({
     <div className="space-y-7">
       <header>
         <p className={EYEBROW}>{t('employerRole')}</p>
-        <h1 className={H1}>{t('navEmployerApplications')}</h1>
+        <h1 className={H1_EXTENDED}>{t('navEmployerApplications')}</h1>
         <p className={INTRO}>{t('employerApplicationsIntro')}</p>
         {result.status === 'ok' && result.isDemo ? (
           <p className={`mt-3 ${TAG}`}>{t('employerApplicationsDemo')}</p>

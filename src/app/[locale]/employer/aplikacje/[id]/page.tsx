@@ -10,7 +10,7 @@ import { MessageCandidateButton } from '@/components/employer/MessageCandidateBu
 import { localizedText, type ScreeningAnswer } from '@/lib/screening/questions';
 import {
   EYEBROW,
-  H1,
+  H1_EXTENDED,
   INFO_LABEL,
   INFO_VALUE,
   INTRO,
@@ -126,7 +126,7 @@ export default async function EmployerApplicationDetailPage({
       {back}
       <header>
         <p className={EYEBROW}>{t('employerApplicationsCandidateLabel')}</p>
-        <h1 className={H1}>{name}</h1>
+        <h1 className={H1_EXTENDED}>{name}</h1>
         <p className={INTRO}>
           {t('employerApplicationsJobLabel')}:{' '}
           <span className="font-semibold text-foreground">{jobTitle}</span>

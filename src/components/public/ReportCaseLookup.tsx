@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocale, useTranslations } from 'next-intl';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
+import { AppealForm } from '@/components/moderation/AppealForm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +33,12 @@ const STATUS_KEY: Record<ReportStatus, string> = {
   reviewing: 'statusReviewing',
   resolved: 'statusResolved',
   dismissed: 'statusDismissed',
+};
+
+const APPEAL_STATUS_KEY: Record<string, string> = {
+  pending: 'appealStatusPending',
+  upheld: 'appealStatusUpheld',
+  reversed: 'appealStatusReversed',
 };
 
 const CATEGORY_KEY: Record<ReportCategory, string> = {
@@ -69,6 +76,7 @@ export function ReportCaseLookup(): React.JSX.Element {
     register,
     handleSubmit,
     reset,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<ReportCaseLookupInput>({
     resolver: zodResolver(reportCaseLookupSchema),
@@ -225,6 +233,52 @@ export function ReportCaseLookup(): React.JSX.Element {
               </div>
             ) : null}
           </dl>
+          {report.appeal ? (
+            <div className="space-y-1 rounded-md bg-soft p-3 text-sm" data-testid="report-case-appeal">
+              <h3 className="font-semibold text-foreground">
+                {t('appealStatusTitle', { reference: report.appeal.reference })}
+              </h3>
+              <p className="text-muted-foreground">
+                {t(APPEAL_STATUS_KEY[report.appeal.status] ?? 'appealStatusPending', {
+                  date: formatDate(
+                    report.appeal.status === 'pending'
+                      ? (report.appeal.dueAt ?? report.appeal.submittedAt)
+                      : (report.appeal.decidedAt ?? report.appeal.submittedAt),
+                  ),
+                })}
+              </p>
+              {report.appeal.reasoning ? (
+                <p className="break-words text-foreground">
+                  <span className="text-xs text-muted-foreground">{t('appealReasoning')}: </span>
+                  {report.appeal.reasoning}
+                </p>
+              ) : null}
+            </div>
+          ) : report.appealState === 'OK' ? (
+            <div className="space-y-3" data-testid="report-case-appeal-form">
+              <h3 className="text-sm font-semibold text-foreground">{t('appealTitle')}</h3>
+              <p className="text-sm text-muted-foreground">
+                {t('appealIntro')}{' '}
+                {report.appealDeadline
+                  ? t('appealDeadline', { date: formatDate(report.appealDeadline) })
+                  : t('appealDeadlineNotStarted')}
+              </p>
+              <AppealForm
+                target={{
+                  kind: 'case',
+                  caseNumber: getValues('caseNumber'),
+                  accessCode: getValues('accessCode'),
+                }}
+                messages="contentReport"
+                onSubmitted={() => undefined}
+              />
+              <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+                {t('appealLegalPlaceholder')}
+              </p>
+            </div>
+          ) : report.appealState === 'APPEAL_WINDOW_CLOSED' ? (
+            <p className="text-sm text-muted-foreground">{t('appealWindowClosed')}</p>
+          ) : null}
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">{t('historyTitle')}</h3>
             <ol className="space-y-1 text-sm">

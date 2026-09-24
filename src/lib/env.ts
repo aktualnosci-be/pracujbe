@@ -161,6 +161,55 @@ export function hasCanonicalAuthUrl(): boolean {
 }
 
 /**
+ * Prywatny bucket S3 Railway na CV (#26). Nazwy zmiennych = preset „AWS SDK” w zakładce
+ * Credentials bucketu Railway (także `railway bucket credentials`). Wartości tylko serwerowe,
+ * nigdy `NEXT_PUBLIC_*`. `AWS_S3_URL_STYLE`: `virtual` (domyślnie) albo `path` — jak pokazuje
+ * Credentials. Pełną walidację (HTTPS, nazwa, region) robi adapter `railway-bucket.ts`.
+ */
+export interface FileBucketConfig {
+  endpoint: string;
+  region: string;
+  bucket: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  forcePathStyle: boolean;
+}
+
+export function fileBucketConfig(): FileBucketConfig | null {
+  const endpoint = process.env.AWS_ENDPOINT_URL?.trim();
+  const region = process.env.AWS_DEFAULT_REGION?.trim();
+  const bucket = process.env.AWS_S3_BUCKET_NAME?.trim();
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
+  const style = process.env.AWS_S3_URL_STYLE?.trim() || 'virtual';
+  if (!endpoint || !region || !bucket || !accessKeyId || !secretAccessKey) return null;
+  if (style !== 'virtual' && style !== 'path') return null;
+  try {
+    const url = new URL(endpoint);
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash ||
+      url.pathname !== '/') return null;
+  } catch {
+    return null;
+  }
+  return { endpoint, region, bucket, accessKeyId, secretAccessKey, forcePathStyle: style === 'path' };
+}
+
+/** Sekret HMAC krótkich linków pobrania CV (`FILE_DOWNLOAD_SECRET`, min. 32 bajty). */
+export function fileDownloadSecret(): string | null {
+  const secret = process.env.FILE_DOWNLOAD_SECRET;
+  return secret && Buffer.byteLength(secret, 'utf8') >= 32 ? secret : null;
+}
+
+/**
+ * Komplet konfiguracji plików kandydata (#26): bucket + sekret linków + baza aplikacji +
+ * sesje Better Auth (właściciel pliku pochodzi wyłącznie z potwierdzonej sesji).
+ */
+export function isFileStorageConfigured(): boolean {
+  return Boolean(fileBucketConfig() && fileDownloadSecret() && isDatabaseConfigured() &&
+    isAuthRuntimeConfigured());
+}
+
+/**
  * Zależności KRYTYCZNE dla gotowości (P1-18, #429). Produkcja nie obsługuje ruchu bez rdzenia
  * PostgreSQL Railway: pula domeny (`DATABASE_APP_URL`), Better Auth (`DATABASE_AUTH_URL`,
  * `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` = origin serwisu), limiter prób logowania/rejestracji
@@ -182,6 +231,9 @@ export function readinessChecks(): Record<string, boolean> {
     resend: Boolean(process.env.RESEND_API_KEY),
     queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),
     sentry: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN),
+    // #26: prywatny bucket Railway (endpoint/region/bucket/klucze) + sekret linków pobrania CV.
+    fileBucket: fileBucketConfig() !== null,
+    fileDownloadSecret: fileDownloadSecret() !== null,
   };
 }
 
