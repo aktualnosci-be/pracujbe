@@ -5,7 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Link } from '@/i18n/navigation';
+import { Link, usePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import {
   acceptAllCategories,
@@ -154,6 +154,24 @@ export function CookieConsent() {
       document.documentElement.removeAttribute(CONSENT_BOOT_ATTRIBUTE);
     }
   }, []);
+
+  // Nawigacja kliencka do innego układu usuwa kliknięty odnośnik razem z fokusem, a punkt
+  // startu Tab zostaje w nowej treści — za banerem, który stoi na początku <body>. Gdy fokus
+  // spadł na <body>, ustawiamy punkt startu na baner (fokus bez przewijania i od razu blur),
+  // żeby następny Tab trafił do banera, a nie ominął go (#212, WCAG 2.4.3).
+  const pathname = usePathname();
+  const lastPathnameRef = useRef(pathname);
+  useEffect(() => {
+    if (lastPathnameRef.current === pathname) return;
+    lastPathnameRef.current = pathname;
+    const banner = bannerRef.current;
+    if (!bannerVisible || !banner) return;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    banner.setAttribute('tabindex', '-1');
+    banner.focus({ preventScroll: true });
+    banner.blur();
+    banner.removeAttribute('tabindex');
+  }, [pathname, bannerVisible]);
 
   // Otwarcie panelu na żądanie z zewnątrz (np. przycisk w stopce).
   useEffect(() => {
