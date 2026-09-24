@@ -17,7 +17,8 @@
  * kandydata nieznany przy wymaganym poziomie → 0 (konserwatywnie). Niespełniony poziom trafia do
  * `languageGaps` (nie do `matched`).
  *
- * Lokalizacja (#194): gdy znamy współrzędne obu miejscowości (słownik `locations`), odległość
+ * Lokalizacja (#194): gdy znamy współrzędne obu miejscowości (słownik `locations` albo
+ * kanoniczna lista `belgian-cities.ts` — patrz `resolveCoordinates`), odległość
  * po wielkim kole porównujemy z promieniem kandydata — w promieniu 15 pkt niezależnie od granicy
  * regionu, poza nim 0. Bez współrzędnych nie udajemy odległości: to samo miasto 15, ten sam
  * region 10 (bez etykiety „w promieniu"), inaczej 0.

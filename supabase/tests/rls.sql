@@ -3055,4 +3055,136 @@ select pg_temp.assert(:'co5'::boolean and :'co5b' = 'false'
   and (select count(*) from public.company_members where profile_id = :'CO28A') = 2,
   'CO28-5 druga firma z osobnej akcji, bootstrap po niej nie tworzy trzeciej');
 
+-- ============================================================================
+-- OB142. Onboarding kandydata: jeden krok = jedna transakcja (0082, #142)
+-- Wstrzyknięty błąd w DRUGIEJ części kroku (trigger na relacji) nie zostawia pierwszej.
+-- Kontrola ujemna: stara ścieżka (dwa osobne żądania) zostawia częściowy zapis.
+-- ============================================================================
+\set OBC '0b142000-0000-0000-0000-000000000001'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'OBC','ob142@test.be','Ola B','{"role":"candidate","first_name":"Ola","last_name":"B","locale":"pl"}');
+
+-- Wstrzykiwacz błędu: aktywny tylko, gdy ustawiono GUC ob142.fail_<tabela> = 'on'.
+create function public.ob142_inject_failure() returns trigger language plpgsql as $$
+begin
+  if current_setting('ob142.fail_' || tg_table_name, true) = 'on' then
+    raise exception 'OB142_INJECTED_FAILURE %', tg_table_name;
+  end if;
+  return new;
+end $$;
+create trigger ob142_fail before insert on public.candidate_skills
+  for each row execute function public.ob142_inject_failure();
+create trigger ob142_fail before insert on public.candidate_certificates
+  for each row execute function public.ob142_inject_failure();
+
+create function pg_temp.ob142_count(p_table text) returns bigint language plpgsql as $$
+declare n bigint;
+begin
+  execute format('select count(*) from public.%I r join public.candidate_profiles cp '
+                 'on cp.id = r.candidate_profile_id where cp.profile_id = %L::uuid',
+                 p_table, '0b142000-0000-0000-0000-000000000001') into n;
+  return n;
+end $$;
+
+set role authenticated; set app.current_uid = :'OBC'; select pg_temp.assert_client_role();
+-- OB142-1: krok 3 — sukces zapisuje doświadczenie i umiejętności.
+select public.save_candidate_onboarding_step3(4, array['Spawanie','Wózek widłowy','Spawanie']);
+select public.save_candidate_onboarding_step3(4, array['Spawanie','Wózek widłowy','Spawanie']);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select experience_years from public.candidate_profiles where profile_id = :'OBC') = 4,
+  'OB142-1 krok 3 zapisuje experience_years');
+select pg_temp.assert(pg_temp.ob142_count('candidate_skills') = 2,
+  'OB142-1b krok 3 zapisuje umiejętności; retry bez duplikatów (dedup do 2)');
+
+set role authenticated; set app.current_uid = :'OBC'; select pg_temp.assert_client_role();
+-- OB142-2: krok 5 — sukces zapisuje języki i certyfikaty; retry idempotentny.
+select public.save_candidate_onboarding_step5(
+  '[{"language":"polski","level":"native"},{"language":"niderlandzki","level":"basic"}]'::jsonb,
+  '[{"label":"VCA","expires_at":"2030-01-31"},{"label":"HACCP","expires_at":null}]'::jsonb);
+select public.save_candidate_onboarding_step5(
+  '[{"language":"polski","level":"native"},{"language":"niderlandzki","level":"basic"}]'::jsonb,
+  '[{"label":"VCA","expires_at":"2030-01-31"},{"label":"HACCP","expires_at":null}]'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.ob142_count('candidate_languages') = 2,
+  'OB142-2 krok 5 zapisuje języki; retry bez duplikatów');
+select pg_temp.assert(pg_temp.ob142_count('candidate_certificates') = 2,
+  'OB142-2b krok 5 zapisuje certyfikaty; retry bez duplikatów');
+select pg_temp.assert(
+  (select expires_at from public.candidate_certificates cc
+     join public.candidate_profiles cp on cp.id = cc.candidate_profile_id
+    where cp.profile_id = :'OBC' and cc.certificate_label = 'VCA') = date '2030-01-31',
+  'OB142-2c krok 5 zapisuje datę ważności certyfikatu');
+
+-- OB142-3: krok 3 — błąd w zapisie umiejętności cofa też doświadczenie.
+set role authenticated; set app.current_uid = :'OBC'; select pg_temp.assert_client_role();
+set ob142.fail_candidate_skills = 'on';
+select pg_temp.expect_error(
+  'select public.save_candidate_onboarding_step3(9, array[''Murarz''])',
+  'OB142_INJECTED_FAILURE', 'OB142-3 wstrzyknięty błąd umiejętności zwraca błąd kroku');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select experience_years from public.candidate_profiles where profile_id = :'OBC') = 4,
+  'OB142-3b po błędzie umiejętności experience_years bez zmian');
+select pg_temp.assert(pg_temp.ob142_count('candidate_skills') = 2
+    and not exists (select 1 from public.candidate_skills cs
+                      join public.candidate_profiles cp on cp.id = cs.candidate_profile_id
+                     where cp.profile_id = :'OBC' and cs.skill_label = 'Murarz'),
+  'OB142-3c po błędzie poprzednie umiejętności nietknięte');
+
+-- OB142-4: krok 5 — błąd w zapisie certyfikatów cofa też języki.
+set role authenticated; set app.current_uid = :'OBC'; select pg_temp.assert_client_role();
+set ob142.fail_candidate_certificates = 'on';
+select pg_temp.expect_error(
+  'select public.save_candidate_onboarding_step5(''[{"language":"francuski","level":"fluent"}]''::jsonb, ''["ADR"]''::jsonb)',
+  'OB142_INJECTED_FAILURE', 'OB142-4 wstrzyknięty błąd certyfikatów zwraca błąd kroku');
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.ob142_count('candidate_languages') = 2
+    and not exists (select 1 from public.candidate_languages cl
+                      join public.candidate_profiles cp on cp.id = cl.candidate_profile_id
+                     where cp.profile_id = :'OBC' and cl.language_label = 'francuski'),
+  'OB142-4b po błędzie certyfikatów języki bez zmian');
+select pg_temp.assert(pg_temp.ob142_count('candidate_certificates') = 2,
+  'OB142-4c po błędzie poprzednie certyfikaty nietknięte');
+
+-- OB142-5: KONTROLA UJEMNA — stara ścieżka (osobne żądania, każde zatwierdzane samo)
+-- przy tym samym wstrzykniętym błędzie zostawia częściowy zapis. Dowodzi, że test wykrywa błąd.
+set role authenticated; set app.current_uid = :'OBC'; select pg_temp.assert_client_role();
+update public.candidate_profiles set experience_years = 9 where profile_id = :'OBC';
+select pg_temp.expect_error('select public.set_candidate_skills(array[''Murarz''])',
+  'OB142_INJECTED_FAILURE', 'OB142-5 stara ścieżka: drugie żądanie kroku 3 zawodzi');
+select public.set_candidate_languages('[{"language":"francuski","level":"fluent"}]'::jsonb);
+select pg_temp.expect_error('select public.set_candidate_certificates(''["ADR"]''::jsonb)',
+  'OB142_INJECTED_FAILURE', 'OB142-5b stara ścieżka: drugie żądanie kroku 5 zawodzi');
+reset ob142.fail_candidate_skills; reset ob142.fail_candidate_certificates;
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select experience_years from public.candidate_profiles where profile_id = :'OBC') = 9,
+  'OB142-5c stara ścieżka zostawia nowe experience_years mimo błędu (częściowy zapis)');
+select pg_temp.assert(pg_temp.ob142_count('candidate_languages') = 1,
+  'OB142-5d stara ścieżka zostawia zastąpione języki mimo błędu (częściowy zapis)');
+
+-- OB142-6: walidacja i uprawnienia nowych funkcji.
+set role authenticated; set app.current_uid = :'OBC'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.save_candidate_onboarding_step3(61, array[''x''])',
+  'VALIDATION_FAILED', 'OB142-6 doświadczenie > 60 odrzucone');
+select pg_temp.expect_error(
+  'select public.save_candidate_onboarding_step5(''{"language":"x"}''::jsonb, ''[]''::jsonb)',
+  'VALIDATION_FAILED', 'OB142-6b języki nie-tablica odrzucone');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.save_candidate_onboarding_step3(1, array[''x''])',
+  'PERMISSION_DENIED', 'OB142-6c pracodawca nie zapisze kroku kandydata');
+select pg_temp.expect_error('select public.save_candidate_onboarding_step5(''[]''::jsonb, ''[]''::jsonb)',
+  'PERMISSION_DENIED', 'OB142-6d pracodawca nie zapisze kroku 5 kandydata');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.save_candidate_onboarding_step3(1, array[''x''])',
+  'permission denied', 'OB142-6e anon bez EXECUTE na kroku 3');
+reset role;
+
+drop trigger ob142_fail on public.candidate_skills;
+drop trigger ob142_fail on public.candidate_certificates;
+drop function public.ob142_inject_failure();
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -69,9 +69,9 @@ describe('Paszport oferty', () => {
   });
 
   it.each([
-    [{ salaryMin: 18.75, salaryMax: 22.5, salaryPeriod: 'hour' as const }, '€18.75 – €22.5 gross / hour'],
+    [{ salaryMin: 18.75, salaryMax: 22.5, salaryPeriod: 'hour' as const }, '€18.75 – €22.50 gross / hour'],
     [{ salaryMin: 18.75, salaryPeriod: 'month' as const }, 'from €18.75 gross / month'],
-    [{ salaryMax: 22.5, salaryPeriod: 'year' as const }, 'up to €22.5 gross / year'],
+    [{ salaryMax: 22.5, salaryPeriod: 'year' as const }, 'up to €22.50 gross / year'],
     [{ salaryMin: 0, salaryPeriod: 'hour' as const }, 'from €0 gross / hour'],
   ])('pokazuje podane granice i okres: %j', async (salary, expected) => {
     const { container } = await renderCard(salary);
@@ -94,7 +94,7 @@ describe('Paszport oferty', () => {
     for (const label of [labels.location, labels.salary, labels.conditions]) {
       expect(screen.getByText(label, { selector: 'dt' })).toBeVisible();
     }
-    const amount = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(18.75);
+    const amount = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(18.75);
     const field = screen.getByText(labels.salary, { selector: 'dt' }).parentElement!;
     expect(field.querySelector('dd')?.textContent).toBe(`${labels.salaryFrom.replace('{value}', amount)} ${labels.salaryPeriods.hour}`);
     expect(screen.getByText(labels.viewOffer)).toBeVisible();
