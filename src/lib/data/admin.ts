@@ -711,6 +711,8 @@ export interface AdminAuditRow {
   /** Status przed/po (surowe wartości enumów) — UI tłumaczy wg typu obiektu. */
   statusBefore: string | null;
   statusAfter: string | null;
+  /** Uzasadnienie decyzji admina (odrzucenie/zawieszenie firmy, 0085 — #310) albo null. */
+  reason: string | null;
   /** Aktor: null = system/usługa (brak `auth.uid()`). */
   actorId: string | null;
   actorName: string | null;
@@ -743,6 +745,7 @@ const DEMO_AUDIT: AdminAuditRow[] = [
     entityHref: { pathname: '/admin/firmy', query: { q: 'AGO Jobs & HR' } },
     statusBefore: 'pending',
     statusAfter: 'verified',
+    reason: null,
     actorId: 'demo-u5',
     actorName: 'Zespół Pracuj.be',
     createdAt: '2025-02-19T12:00:00.000Z',
@@ -756,6 +759,7 @@ const DEMO_AUDIT: AdminAuditRow[] = [
     entityHref: { pathname: '/admin/zgloszenia', query: { status: 'all' } },
     statusBefore: 'open',
     statusAfter: 'reviewing',
+    reason: null,
     actorId: 'demo-u5',
     actorName: 'Zespół Pracuj.be',
     createdAt: '2025-02-10T09:30:00.000Z',
@@ -769,6 +773,7 @@ const DEMO_AUDIT: AdminAuditRow[] = [
     entityHref: { pathname: '/admin/firmy', query: { q: 'Horeca Brussel Group' } },
     statusBefore: null,
     statusAfter: 'unverified',
+    reason: null,
     actorId: null,
     actorName: null,
     createdAt: '2025-02-18T14:45:00.000Z',
@@ -890,7 +895,11 @@ export async function listAuditLogs(
           const company = companyName.get(id);
           entityLabel = company?.name ?? null;
           if (company?.name && !company.deleted) {
-            entityHref = { pathname: '/admin/firmy', query: { q: company.name } };
+            const uuid = parseUuid(id);
+            // Szczegół firmy (#310); identyfikator spoza formatu UUID → wyszukiwanie po nazwie.
+            entityHref = uuid
+              ? { pathname: `/admin/firmy/${uuid}` }
+              : { pathname: '/admin/firmy', query: { q: company.name } };
           }
         } else if (entityType === 'report') {
           entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
@@ -904,6 +913,10 @@ export async function listAuditLogs(
           entityHref,
           statusBefore: statusOf(row['before_data']),
           statusAfter: statusOf(row['after_data']),
+          reason:
+            entityType === 'company'
+              ? asNullableString(asRecord(row['after_data'])['reason'])
+              : null,
           actorId,
           actorName: actorId ? (actorName.get(actorId) ?? null) : null,
           createdAt: asNullableString(row['created_at']),
@@ -913,6 +926,202 @@ export async function listAuditLogs(
     );
   } catch (error) {
     captureError(error, { area: 'admin.listAuditLogs' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Szczegół firmy (#310) — dane rejestrowe, członkowie, oferty
+ * ------------------------------------------------------------------------- */
+
+/** Maks. liczba ofert w szczególe firmy (reszta: licznik `jobsTotal`). */
+export const ADMIN_COMPANY_JOBS_LIMIT = 20;
+
+export interface AdminCompanyMember {
+  id: string;
+  /** Imię i nazwisko (może być puste). */
+  name: string;
+  email: string | null;
+  /** `company_member_role`: owner/admin/recruiter/member. */
+  role: string;
+  isActive: boolean;
+  /** Członkostwo od (joined_at albo created_at). */
+  since: string | null;
+}
+
+export interface AdminCompanyJob {
+  id: string;
+  title: string;
+  /** `job_status`: draft/active/paused/closed/expired. */
+  status: string;
+  /** Slug publicznej oferty — link tylko dla aktywnych ofert. */
+  slug: string | null;
+  createdAt: string | null;
+}
+
+export interface AdminCompanyDetail extends AdminCompanyRow {
+  website: string | null;
+  phone: string | null;
+  address: string | null;
+  postalCode: string | null;
+  region: string | null;
+  country: string | null;
+  industry: string | null;
+  description: string | null;
+  verifiedAt: string | null;
+  /** Uzasadnienie ostatniego odrzucenia/zawieszenia (0085) — tylko dla rejected/suspended. */
+  statusReason: string | null;
+  members: AdminCompanyMember[];
+  jobs: AdminCompanyJob[];
+  /** Łączna liczba ofert (bez usuniętych); `jobs` to najnowsze `ADMIN_COMPANY_JOBS_LIMIT`. */
+  jobsTotal: number;
+}
+
+export type AdminCompanyDetailResult =
+  | { status: 'ok'; company: AdminCompanyDetail }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+function demoCompanyDetail(id: string): AdminCompanyDetailResult {
+  const row = DEMO_COMPANIES.find((c) => c.id === id);
+  if (!row) return { status: 'not_found' };
+  const jobs = demoJobs.slice(0, 2).map((job, index) => ({
+    id: `${row.id}-job-${index + 1}`,
+    title: job.title,
+    status: index === 0 ? 'active' : 'draft',
+    slug: index === 0 ? job.slug : null,
+    createdAt: row.createdAt,
+  }));
+  return {
+    status: 'ok',
+    company: {
+      ...row,
+      website: null,
+      phone: null,
+      address: null,
+      postalCode: null,
+      region: null,
+      country: 'BE',
+      industry: null,
+      description: null,
+      verifiedAt: row.status === 'verified' ? row.createdAt : null,
+      statusReason: null,
+      members: [
+        {
+          id: `${row.id}-m1`,
+          name: 'Jan Peeters',
+          email: 'jan.peeters@example.com',
+          role: 'owner',
+          isActive: true,
+          since: row.createdAt,
+        },
+      ],
+      jobs,
+      jobsTotal: jobs.length,
+    },
+  };
+}
+
+/**
+ * Szczegół firmy dla decyzji admina (#310): dane rejestrowe, uzasadnienie ostatniej decyzji,
+ * członkowie (z rolą i aktywnością) oraz najnowsze oferty. Nieistniejąca/usunięta firma albo
+ * zły identyfikator → `not_found`; błąd któregokolwiek odczytu → `error` (bez częściowych danych).
+ */
+export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailResult> {
+  if (!isSupabaseConfigured()) return demoCompanyDetail(id);
+  await requireAdmin();
+
+  const uuid = parseUuid(id);
+  if (!uuid) return { status: 'not_found' };
+
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const supabase = createAdminClient();
+
+    const [companyRes, membersRes, jobsRes] = await Promise.all([
+      supabase
+        .from('companies')
+        .select(
+          'id, name, status, status_reason, created_at, verified_at, vat_number, registration_number, email, phone, website, address, postal_code, city, region, country, industry, description',
+        )
+        .eq('id', uuid)
+        .is('deleted_at', null)
+        .maybeSingle(),
+      supabase
+        .from('company_members')
+        .select(
+          'id, role, is_active, joined_at, created_at, profiles!company_members_profile_id_fkey(first_name, last_name, email)',
+        )
+        .eq('company_id', uuid)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true }),
+      supabase
+        .from('jobs')
+        .select('id, title, status, slug, created_at', { count: 'exact' })
+        .eq('company_id', uuid)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(ADMIN_COMPANY_JOBS_LIMIT),
+    ]);
+    if (companyRes.error) throw companyRes.error;
+    if (membersRes.error) throw membersRes.error;
+    if (jobsRes.error) throw jobsRes.error;
+    if (!companyRes.data) return { status: 'not_found' };
+
+    const c = asRecord(companyRes.data);
+    const status = asString(c['status'], 'unverified');
+    const jobs = asRows(jobsRes.data).map((row) => ({
+      id: asString(row['id']),
+      title: asString(row['title']),
+      status: asString(row['status'], 'draft'),
+      slug: asNullableString(row['slug']),
+      createdAt: asNullableString(row['created_at']),
+    }));
+
+    return {
+      status: 'ok',
+      company: {
+        id: asString(c['id']),
+        name: asString(c['name']),
+        status,
+        createdAt: asNullableString(c['created_at']),
+        vatNumber: asNullableString(c['vat_number']),
+        registrationNumber: asNullableString(c['registration_number']),
+        email: asNullableString(c['email']),
+        city: asNullableString(c['city']),
+        website: asNullableString(c['website']),
+        phone: asNullableString(c['phone']),
+        address: asNullableString(c['address']),
+        postalCode: asNullableString(c['postal_code']),
+        region: asNullableString(c['region']),
+        country: asNullableString(c['country']),
+        industry: asNullableString(c['industry']),
+        description: asNullableString(c['description']),
+        verifiedAt: asNullableString(c['verified_at']),
+        statusReason:
+          status === 'rejected' || status === 'suspended'
+            ? asNullableString(c['status_reason'])
+            : null,
+        members: asRows(membersRes.data).map((row) => {
+          const profile = asRecord(
+            Array.isArray(row['profiles']) ? row['profiles'][0] : row['profiles'],
+          );
+          return {
+            id: asString(row['id']),
+            name: fullName(profile),
+            email: asNullableString(profile['email']),
+            role: asString(row['role'], 'member'),
+            isActive: row['is_active'] === true,
+            since: asNullableString(row['joined_at']) ?? asNullableString(row['created_at']),
+          };
+        }),
+        jobs,
+        jobsTotal: typeof jobsRes.count === 'number' ? jobsRes.count : jobs.length,
+      },
+    };
+  } catch (error) {
+    captureError(error, { area: 'admin.getCompanyDetail' });
     return { status: 'error' };
   }
 }

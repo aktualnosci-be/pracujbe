@@ -52,6 +52,11 @@ Object.defineProperty(HTMLElement.prototype, 'getClientRects', {
   },
 });
 
+/** Uzasadnienie wymagane przy zawieszeniu/odrzuceniu (#310). */
+function fillReason(value = 'Zgłoszenia oszustwa') {
+  fireEvent.change(screen.getByRole('textbox', { name: 'reasonLabel' }), { target: { value } });
+}
+
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -74,7 +79,9 @@ describe('CompanyStatusActions — potwierdzenie zmiany statusu (#310)', () => {
     expect(dialog).toHaveTextContent('info@example.com');
     expect(dialog).toHaveTextContent('Gent');
     expect(dialog).toHaveTextContent('3 lut 2025');
-    expect(screen.getByRole('button', { name: 'confirmCancel' })).toHaveFocus();
+    // Zawieszenie wymaga uzasadnienia — fokus startuje na polu (#310).
+    expect(screen.getByRole('textbox', { name: 'reasonLabel' })).toHaveFocus();
+    expect(dialog).toHaveTextContent('ownerNotifiedNote');
     expect(setCompanyStatus).not.toHaveBeenCalled();
   });
 
@@ -103,11 +110,17 @@ describe('CompanyStatusActions — potwierdzenie zmiany statusu (#310)', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'actionSuspend' }));
+    fillReason('  Zgłoszenia oszustwa  ');
     const dialogButtons = screen.getAllByRole('button', { name: 'actionSuspend' });
     fireEvent.click(dialogButtons[dialogButtons.length - 1]!);
 
     await waitFor(() =>
-      expect(setCompanyStatus).toHaveBeenCalledWith('company-1', 'suspended', 'verified'),
+      expect(setCompanyStatus).toHaveBeenCalledWith(
+        'company-1',
+        'suspended',
+        'verified',
+        '  Zgłoszenia oszustwa  ',
+      ),
     );
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(refresh).toHaveBeenCalledOnce();
@@ -123,6 +136,7 @@ describe('CompanyStatusActions — fokus po potwierdzeniu (#415, WCAG 2.4.3)', (
       </Page>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'actionSuspend' }));
+    fillReason();
     const buttons = screen.getAllByRole('button', { name: 'actionSuspend' });
     fireEvent.click(buttons[buttons.length - 1]!);
 
@@ -157,6 +171,7 @@ describe('CompanyStatusActions — fokus po potwierdzeniu (#415, WCAG 2.4.3)', (
       </Page>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'actionSuspend' }));
+    fillReason();
     const buttons = screen.getAllByRole('button', { name: 'actionSuspend' });
     fireEvent.click(buttons[buttons.length - 1]!);
 
@@ -175,11 +190,97 @@ describe('CompanyStatusActions — fokus po potwierdzeniu (#415, WCAG 2.4.3)', (
       </Page>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'actionSuspend' }));
+    fillReason();
     const buttons = screen.getAllByRole('button', { name: 'actionSuspend' });
     fireEvent.click(buttons[buttons.length - 1]!);
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('errors.staleState'));
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(refresh).toHaveBeenCalledOnce();
+  });
+});
+
+describe('CompanyStatusActions — uzasadnienie decyzji (#310)', () => {
+  it('kontrola ujemna: odrzucenie bez uzasadnienia nie woła akcji, błąd przy polu z fokusem', () => {
+    render(
+      <Page>
+        <CompanyStatusActions company={{ ...company, status: 'pending' }} createdLabel="—" />
+      </Page>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'actionRejectCompany' }));
+    fillReason('   ');
+    const buttons = screen.getAllByRole('button', { name: 'actionRejectCompany' });
+    fireEvent.click(buttons[buttons.length - 1]!);
+
+    const field = screen.getByRole('textbox', { name: 'reasonLabel' });
+    expect(setCompanyStatus).not.toHaveBeenCalled();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveFocus();
+    expect(field.getAttribute('aria-describedby')).toContain(
+      screen.getByText('reasonRequired').id,
+    );
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  it('odrzucenie z uzasadnieniem woła akcję z powodem', async () => {
+    setCompanyStatus.mockResolvedValue({ ok: true });
+    render(
+      <Page>
+        <CompanyStatusActions company={{ ...company, status: 'pending' }} createdLabel="—" />
+      </Page>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'actionRejectCompany' }));
+    fillReason('VAT nie zgadza się z KBO');
+    const buttons = screen.getAllByRole('button', { name: 'actionRejectCompany' });
+    fireEvent.click(buttons[buttons.length - 1]!);
+
+    await waitFor(() =>
+      expect(setCompanyStatus).toHaveBeenCalledWith(
+        'company-1',
+        'rejected',
+        'pending',
+        'VAT nie zgadza się z KBO',
+      ),
+    );
+  });
+
+  it('weryfikacja nie pokazuje pola uzasadnienia i wysyła null', async () => {
+    setCompanyStatus.mockResolvedValue({ ok: true });
+    render(
+      <Page>
+        <CompanyStatusActions company={{ ...company, status: 'pending' }} createdLabel="—" />
+      </Page>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'actionVerify' }));
+    expect(screen.queryByRole('textbox', { name: 'reasonLabel' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'confirmCancel' })).toHaveFocus();
+    const buttons = screen.getAllByRole('button', { name: 'actionVerify' });
+    fireEvent.click(buttons[buttons.length - 1]!);
+
+    await waitFor(() =>
+      expect(setCompanyStatus).toHaveBeenCalledWith('company-1', 'verified', 'pending', null),
+    );
+  });
+
+  it('błąd pola z serwera (REASON_REQUIRED) zostawia dialog z komunikatem przy polu', async () => {
+    setCompanyStatus.mockResolvedValue({
+      ok: false,
+      error: 'VALIDATION_FAILED',
+      field: 'reason',
+      reason: 'required',
+    });
+    render(
+      <Page>
+        <CompanyStatusActions company={company} createdLabel="—" />
+      </Page>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'actionSuspend' }));
+    fillReason();
+    const buttons = screen.getAllByRole('button', { name: 'actionSuspend' });
+    fireEvent.click(buttons[buttons.length - 1]!);
+
+    await waitFor(() => expect(screen.getByText('reasonRequired')).toBeInTheDocument());
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
   });
 });
