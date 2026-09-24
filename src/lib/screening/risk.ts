@@ -11,7 +11,7 @@ import type { LocalizedText } from '@/lib/screening/questions';
  * decyzji oferta nie może zostać opublikowana. Brak trafienia nie dowodzi zgodności.
  *
  * Decyzję podejmuje BAZA: te same wzorce i to samo składanie znaków są w migracji
- * `0099_screening_question_review.sql` (`screening_risk_patterns`, `screening_fold`) —
+ * `0103_screening_question_review.sql` (`screening_risk_patterns`, `screening_fold`) —
  * test `screening-risk.test.ts` porównuje oba zestawy. Ten moduł służy do podpowiedzi
  * w kreatorze (przed zapisem) i do testów.
  *
@@ -36,7 +36,7 @@ export type ScreeningRiskCategory = (typeof SCREENING_RISK_CATEGORIES)[number];
 /**
  * Składanie znaków: te znaki zamieniane są 1:1 na odpowiadające litery ASCII (wielkie
  * i małe osobno — `lower()` w PostgreSQL z lokalizacją C nie zmienia znaków spoza ASCII).
- * Identyczne literały są w `screening_fold` (migracja 0099).
+ * Identyczne literały są w `screening_fold` (migracja 0103).
  */
 export const SCREENING_FOLD_FROM =
   'ąćęłńóśźżàâäáãåçéèêëíìîïñòôöõúùûüýÿĄĆĘŁŃÓŚŹŻÀÂÄÁÃÅÇÉÈÊËÍÌÎÏÑÒÔÖÕÚÙÛÜÝŸøØ';
@@ -227,7 +227,7 @@ const FOLD_MAP: ReadonlyMap<string, string> = (() => {
 /**
  * Tekst do dopasowania: znaki ze słownika na ASCII, œ/æ/ß rozwinięte, małe litery, wszystko
  * poza [a-z0-9] → spacja, pojedyncze spacje, spacja na początku i końcu.
- * Lustro `public.screening_fold` (0099).
+ * Lustro `public.screening_fold` (0103).
  */
 export function foldScreeningText(text: string): string {
   const folded = Array.from(text)
@@ -280,7 +280,7 @@ export function isScreeningRiskCategory(value: unknown): value is ScreeningRiskC
   );
 }
 
-/** Status przeglądu pytania (tabela `screening_question_reviews`, 0099). */
+/** Status przeglądu pytania (tabela `screening_question_reviews`, 0103). */
 export const SCREENING_REVIEW_STATUSES = ['pending', 'approved', 'rejected', 'superseded'] as const;
 export type ScreeningReviewStatus = (typeof SCREENING_REVIEW_STATUSES)[number];
 

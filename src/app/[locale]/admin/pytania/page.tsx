@@ -17,7 +17,7 @@ import { ScreeningReviewActions } from '@/components/admin/ScreeningReviewAction
 /**
  * Panel administratora — Przegląd pytań screeningowych (#497).
  *
- * Pytania, które detektor (0099) uznał za mogące dotyczyć danych chronionych albo kryteriów
+ * Pytania, które detektor (0103) uznał za mogące dotyczyć danych chronionych albo kryteriów
  * objętych zakazem dyskryminacji. Oferta z takim pytaniem nie zostanie opublikowana, dopóki
  * admin nie zaakceptuje bieżącej treści. Pytanie w każdym języku i każda opcja są widoczne,
  * bo kontrola obejmuje tłumaczenia. Filtr oczekujące/rozstrzygnięte/wszystkie (domyślnie

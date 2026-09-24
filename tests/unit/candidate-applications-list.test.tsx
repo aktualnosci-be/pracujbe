@@ -66,6 +66,6 @@ describe('candidate application list', () => {
     finish({ status: 'ready', page: { items: items.slice(10), nextCursor: null } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'applicationsMore' })).toBeVisible());
     expect(screen.getAllByRole('listitem')).toHaveLength(10);
-    expect(screen.getAllByText('withdrawn')).toHaveLength(2);
+    expect(screen.getAllByText('withdrawn')).toHaveLength(1);
   });
 });

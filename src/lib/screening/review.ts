@@ -5,7 +5,7 @@ import {
 } from '@/lib/screening/risk';
 
 /**
- * Przegląd pytań screeningowych (#497, migracja 0099) — wspólne dla kreatora (przeglądarka),
+ * Przegląd pytań screeningowych (#497, migracja 0103) — wspólne dla kreatora (przeglądarka),
  * Server Actions i panelu admina. Moduł bez zależności serwerowych.
  */
 

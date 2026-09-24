@@ -9,6 +9,17 @@ import { ProposalActions } from '@/components/candidate/ProposalActions';
 import { canRespondToProposal, proposalAnchorId, proposalDisplayStatus } from '@/lib/candidate-offers';
 import { loadMoreProposals } from '@/lib/actions/candidate-proposals';
 import type { MyOffer, MyOffersPage } from '@/lib/data/candidate';
+import {
+  ACTION_ROW,
+  BTN_PRIMARY,
+  BTN_SECONDARY,
+  EYEBROW,
+  H2_EXTENDED,
+  P_EXTENDED,
+  PAPER,
+  TEXT_LINK,
+} from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 /** Formatuje datę ISO do krótkiej postaci wg locale (bez rzucania na złej wartości). */
 function formatDate(iso: string, locale: string): string {
@@ -74,13 +85,10 @@ export function CandidateProposalsList({
 
   if (items.length === 0) {
     return (
-      <section className="rounded-2xl border border-border bg-card p-6 sm:p-8">
-        <h2 className="text-xl font-semibold text-foreground">{t('proposalsEmptyTitle')}</h2>
-        <p className="mt-2 text-base text-muted-foreground">{t('proposalsEmptyBody')}</p>
-        <Link
-          href="/candidate/profil"
-          className="mt-5 inline-flex min-h-12 items-center font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        >
+      <section className={cn(PAPER, 'px-[25px] py-[45px] text-center')}>
+        <h2 className={H2_EXTENDED}>{t('proposalsEmptyTitle')}</h2>
+        <p className={cn(P_EXTENDED, 'mt-2')}>{t('proposalsEmptyBody')}</p>
+        <Link href="/candidate/profil" className={cn(BTN_PRIMARY, 'mt-5')}>
           {t('navProfile')}
         </Link>
       </section>
@@ -88,34 +96,33 @@ export function CandidateProposalsList({
   }
 
   return (
-    <div className="space-y-5">
-      <ul className="space-y-4">
+    <div className="min-w-0">
+      <ul className="min-w-0">
         {items.map((offer: MyOffer) => {
           const date = formatDate(offer.date, locale);
           return (
-            <li key={offer.id} id={proposalAnchorId(offer.id)} className="min-w-0 scroll-mt-24 rounded-2xl border border-border bg-card p-5 sm:p-6">
-              <article className="space-y-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1 space-y-2">
-                    {offer.companyName ? (
-                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                        {offer.companyName}
-                      </p>
-                    ) : null}
+            <li key={offer.id} id={proposalAnchorId(offer.id)} className={cn(PAPER, 'scroll-mt-24')}>
+              <article className="min-w-0">
+                {/* `proposalsScreen()`: `.section-head` — `.eyebrow` firma, h2, `.status`. */}
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-5 max-[600px]:gap-2.5">
+                  <div className="min-w-0 flex-1">
+                    {offer.companyName ? <p className={cn(EYEBROW, 'normal-case')}>{offer.companyName}</p> : null}
                     {offer.slug ? (
-                      <Link
-                        href={`/oferty-pracy/${offer.slug}`}
-                        className="break-words text-xl font-semibold leading-snug text-foreground hover:text-primary hover:underline"
-                      >
-                        {offer.jobTitle || t('applicationUnknownJob')}
-                      </Link>
+                      <h2 className={cn(H2_EXTENDED, 'mt-0.5')}>
+                        <Link
+                          href={`/oferty-pracy/${offer.slug}`}
+                          className="break-words hover:text-primary hover:underline"
+                        >
+                          {offer.jobTitle || t('applicationUnknownJob')}
+                        </Link>
+                      </h2>
                     ) : (
-                      <p className="break-words text-xl font-semibold leading-snug text-foreground">
+                      <h2 className={cn(H2_EXTENDED, 'mt-0.5')}>
                         {offer.jobTitle || t('applicationUnknownJob')}
-                      </p>
+                      </h2>
                     )}
                     {date ? (
-                      <p className="text-sm text-muted-foreground">{t('proposalSentOn', { date })}</p>
+                      <p className={cn(P_EXTENDED, 'mt-1')}>{t('proposalSentOn', { date })}</p>
                     ) : null}
                   </div>
                   <ProposalStatusPill
@@ -126,21 +133,18 @@ export function CandidateProposalsList({
 
                 {/* Pusta treść = standardowe zaproszenie w języku KANDYDATA (Invariant #1, #289);
                     loader zamienia zapisany wcześniej szablon na ''. Własna treść bez zmian. */}
-                <p className="whitespace-pre-line break-words border-l-4 border-primary bg-soft px-4 py-3 text-base leading-relaxed text-foreground">
+                <p className={cn(P_EXTENDED, 'mt-4 whitespace-pre-line break-words')}>
                   {offer.message || t('offerDefaultMessage')}
                 </p>
 
-                <div className="flex flex-wrap items-center gap-4 border-t border-border pt-4">
+                <div className={ACTION_ROW}>
                   <ProposalActions
                     offerId={offer.id}
                     expiresAt={offer.expiresAt}
                     jobTitle={offer.jobTitle || undefined}
                     initialCanRespond={canRespondToProposal(offer.status, offer.expiresAt, nowDate)}
                   />
-                  <Link
-                    href="/candidate/wiadomosci"
-                    className="inline-flex min-h-12 items-center font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                  >
+                  <Link href="/candidate/wiadomosci" className={TEXT_LINK}>
                     {t('navMessages')}
                   </Link>
                 </div>
@@ -149,18 +153,18 @@ export function CandidateProposalsList({
           );
         })}
       </ul>
-      {failed ? <p role="alert" className="text-base text-error">{t('proposalsMoreError')}</p> : null}
+      {failed ? <p role="alert" className="mb-3 text-[15px] text-error">{t('proposalsMoreError')}</p> : null}
       {cursor ? (
         <button
           type="button"
           onClick={loadMore}
           disabled={pending}
           aria-busy={pending}
-          className="inline-flex min-h-12 max-w-full items-center whitespace-normal break-words rounded-xl border border-border bg-card px-5 text-left font-semibold text-foreground hover:bg-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
+          className={BTN_SECONDARY}
         >
           {pending ? t('proposalsLoading') : failed ? t('candidateListRetry') : t('proposalsMore')}
         </button>
-      ) : <p className="text-sm text-muted-foreground">{t('proposalsEnd')}</p>}
+      ) : <p className="text-[13px] text-muted-foreground">{t('proposalsEnd')}</p>}
     </div>
   );
 }

@@ -86,10 +86,20 @@ const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {
   suspended: 'itemCompanySuspended',
 };
 
-/** Decyzja admina o pytaniu screeningowym (0099, #497): `system` + `data.kind = 'screening_review'`. */
+/** Decyzja admina o pytaniu screeningowym (0103, #497): `system` + `data.kind = 'screening_review'`. */
 const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
   approved: 'itemScreeningApproved',
   rejected: 'itemScreeningRejected',
+};
+
+/**
+ * Decyzja moderacyjna (0099, #42): `system` z `data.kind = 'moderation'` — tytuł wg
+ * `data.decision` (wycofanie oferty, zawieszenie firmy, cofnięcie ograniczenia).
+ */
+const MODERATION_TITLE_KEY: Record<string, string> = {
+  job_removed: 'itemModerationJobRemoved',
+  company_suspended: 'itemModerationCompanySuspended',
+  restored: 'itemModerationRestored',
 };
 
 /** Tytuły powiadomień typu `system` rozróżniane po `entity_type` (#403). */
@@ -114,6 +124,10 @@ export function titleKeyForType(type: string, data?: unknown, entityType = ''): 
   }
   if (d['kind'] === 'screening_review') {
     const key = SCREENING_REVIEW_TITLE_KEY[asStr(d['status'])];
+    if (key) return key;
+  }
+  if (d['kind'] === 'moderation') {
+    const key = MODERATION_TITLE_KEY[asStr(d['decision'])];
     if (key) return key;
   }
   return TITLE_KEY_BY_TYPE[type] ?? TITLE_KEY_BY_TYPE['system']!;

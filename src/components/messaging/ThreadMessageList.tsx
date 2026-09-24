@@ -7,6 +7,8 @@ import { loadOlderMessages } from '@/lib/actions/messages';
 import type { ThreadCursor } from '@/lib/data/messages';
 import { mergeThreadMessages, type ThreadMessageView } from '@/lib/messaging/thread-view';
 import { cn } from '@/lib/utils';
+import { BTN_SECONDARY } from '@/components/dashboard/panel-styles';
+import { BUBBLE, BUBBLE_MINE } from '@/components/candidate/candidate-styles';
 
 /**
  * ThreadMessageList — lista wiadomości wątku ze stronicowaniem od najnowszych (#146).
@@ -119,7 +121,13 @@ export function ThreadMessageList({
   }
 
   return (
-    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4">
+    <div
+        ref={scrollRef}
+        // Przewijany obszar z fokusem klawiatury (WCAG 2.1.1, axe `scrollable-region-focusable`):
+        // dymki `.bubble` z prototypu są wyższe, więc wątek szybciej wymaga przewijania.
+        tabIndex={0}
+        className="min-h-0 flex-1 overflow-y-auto px-7 py-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-[600px]:px-5"
+      >
       {failed || olderCursor || loadedOlder ? (
         <div className="mb-3 flex flex-col items-center gap-2 text-center">
           {failed ? (
@@ -133,7 +141,7 @@ export function ThreadMessageList({
               onClick={loadOlder}
               aria-busy={pending}
               aria-disabled={pending}
-              className="inline-flex min-h-12 max-w-full items-center whitespace-normal break-words rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary aria-disabled:opacity-60"
+              className={cn(BTN_SECONDARY, 'aria-disabled:opacity-60')}
             >
               {pending ? t('loadingOlder') : failed ? t('retry') : t('loadOlder')}
             </button>
@@ -145,12 +153,12 @@ export function ThreadMessageList({
         </div>
       ) : null}
 
-      <ul aria-label={t('threadListLabel', { name: displayName })} className="space-y-3">
+      <ul aria-label={t('threadListLabel', { name: displayName })} className="flex flex-col gap-4">
         {messages.map((message) => {
           if (message.isSystem) {
             return (
               <li key={message.id} className="flex justify-center">
-                <div className="max-w-[85%] rounded-full bg-soft px-3 py-1 text-center text-xs text-muted-foreground">
+                <div className="max-w-[85%] rounded-[8px] bg-muted px-3 py-2 text-center text-xs text-muted-foreground">
                   <span className="font-medium">{t('systemLabel')}</span>
                   {' · '}
                   {message.body}
@@ -164,17 +172,11 @@ export function ThreadMessageList({
               className={cn('flex flex-col', message.mine ? 'items-end' : 'items-start')}
             >
               {/* Nadawca i czas PRZED treścią w DOM (czytnik), wizualnie pod dymkiem. */}
-              <span className="order-last mt-1 px-1 text-[11px] text-muted-foreground">
+              <span className="order-last mt-1.5 px-1 text-[11px] text-muted-foreground">
                 {senderLine(message)}
               </span>
-              <div
-                className={cn(
-                  'max-w-[85%] rounded-lg px-3 py-2 text-sm leading-snug sm:max-w-[70%]',
-                  message.mine
-                    ? 'rounded-br-sm bg-primary text-primary-foreground'
-                    : 'rounded-bl-sm bg-soft text-foreground',
-                )}
-              >
+              {/* `.bubble` / `.bubble.mine` z prototypu „04 Ludzie i praca”. */}
+              <div className={message.mine ? BUBBLE_MINE : BUBBLE}>
                 <p className="whitespace-pre-wrap break-words">{message.body}</p>
               </div>
             </li>

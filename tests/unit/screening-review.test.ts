@@ -198,7 +198,7 @@ describe('powiązania UI', () => {
     );
   });
 
-  it('dziennik zna akcje audytu z migracji 0099, filtr kolejki domyślnie oczekujące', () => {
+  it('dziennik zna akcje audytu z migracji 0103, filtr kolejki domyślnie oczekujące', () => {
     expect(AUDIT_ACTION_KEY['screening_question.review_requested']).toBeDefined();
     expect(AUDIT_ACTION_KEY['screening_question.reviewed']).toBeDefined();
     expect(parseScreeningReviewFilter('xxx')).toBe('pending');

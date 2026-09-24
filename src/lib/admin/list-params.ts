@@ -157,7 +157,7 @@ export function parseEmailSuppressionFilter(raw: string | undefined | null): Ema
     : 'active';
 }
 
-/** Filtr kolejki przeglądu pytań screeningowych (#497, 0099). Domyślnie oczekujące. */
+/** Filtr kolejki przeglądu pytań screeningowych (#497, 0103). Domyślnie oczekujące. */
 export const SCREENING_REVIEW_FILTERS = ['pending', 'decided', 'all'] as const;
 export type ScreeningReviewFilter = (typeof SCREENING_REVIEW_FILTERS)[number];
 
@@ -240,6 +240,8 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'company.reverification_requested': 'auditActionCompanyReverification',
   'company.vies_checked': 'auditActionCompanyVies',
   'report.resolved': 'auditActionReportStatus',
+  'moderation.decided': 'auditActionModerationDecided',
+  'moderation.restored': 'auditActionModerationRestored',
   'application.status_changed': 'auditActionApplicationStatus',
   'offer.sent': 'auditActionOfferSent',
   'offer.status_changed': 'auditActionOfferStatus',

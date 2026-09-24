@@ -118,6 +118,7 @@ function errorMessage(error: unknown): string | undefined {
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  if (m.includes('MODERATION_LOCKED')) return 'MODERATION_LOCKED';
   if (m.includes('JOB_EDIT_CONFLICT')) return 'JOB_EDIT_CONFLICT';
   if (m.includes('JOB_NOT_EDITABLE')) return 'JOB_NOT_EDITABLE';
   if (m.includes('JOB_EXPIRED')) return 'JOB_EXPIRED';
@@ -443,7 +444,7 @@ export async function updatePublishedJob(
 type ServerClient = Awaited<ReturnType<typeof createServerClient>>;
 
 /**
- * Stan przeglądu pytań oznaczonych przez detektor (#497, migracja 0099), odczyt pod RLS
+ * Stan przeglądu pytań oznaczonych przez detektor (#497, migracja 0103), odczyt pod RLS
  * (członek firmy oferty). Tylko pytania bez akceptacji bieżącej treści. Błąd odczytu → pusta
  * lista (kod błędu publikacji i tak trafia do kreatora).
  */

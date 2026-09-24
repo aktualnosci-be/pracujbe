@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0099 — kontrola treści pytań screeningowych przed publikacją (#497).
+-- 0103 — kontrola treści pytań screeningowych przed publikacją (#497).
 --
 -- Po #101 (0093) baza sprawdzała strukturę pytań, ale nie ich treść. Ta migracja dodaje
 -- deterministyczną kontrolę (wzorce PL/NL/FR/EN, bez modelu językowego) i kolejkę przeglądu

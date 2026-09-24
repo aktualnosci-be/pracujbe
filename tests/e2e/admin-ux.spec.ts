@@ -130,6 +130,40 @@ test('admin #416: filtr „Rozwiązane” i kafelek otwartych zgłoszeń', async
   await expect(page.getByRole('main').getByText(t.reportsEmpty)).toBeVisible();
 });
 
+test('admin #42: sprawę DSA rozstrzyga decyzja z uzasadnieniem, nie sama zmiana statusu', async ({
+  page,
+}) => {
+  const t = admin('pl');
+  await page.goto('/pl/admin/zgloszenia?kind=dsa_notice');
+  await rejectOptionalCookies(page, 'pl');
+  const card = page.getByRole('main').getByRole('listitem').filter({ hasText: 'DSA-7F3A-19C2-B4E0-5D11' });
+  await expect(card).toHaveCount(1);
+  // Kontrola ujemna: brak skrótu „Rozwiąż”/„Oddal” dla sprawy DSA.
+  await expect(card.getByRole('button', { name: t.actionResolve, exact: true })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: t.actionDismissReport, exact: true })).toHaveCount(0);
+
+  const trigger = card.getByRole('button', { name: t.actionDecide, exact: true });
+  await trigger.click();
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog).toContainText('DSA-7F3A-19C2-B4E0-5D11');
+
+  // Ograniczenie bez faktów i podstawy → błąd przy polu, dialog zostaje otwarty.
+  await dialog.getByRole('radio', { name: t.decisionJobRemoved }).check();
+  await dialog.getByRole('button', { name: t.decisionConfirm, exact: true }).click();
+  const facts = dialog.getByRole('textbox', { name: t.decisionFactsLabel });
+  await expect(facts).toBeFocused();
+  await expect(facts).toHaveAttribute('aria-invalid', 'true');
+  expect(await blockingViolations(page)).toEqual([]);
+
+  await facts.fill('Oferta wymaga od kandydatów opłaty za rekrutację z góry.');
+  await dialog.getByRole('radio', { name: t.decisionGroundTerms }).check();
+  await dialog.getByRole('textbox', { name: t.decisionGroundReferenceLabel }).fill('§ 4 ust. 2');
+  await dialog.getByRole('button', { name: t.decisionConfirm, exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: t.decisionSaved })).toBeVisible();
+  await expect.poll(() => activeTag(page)).not.toBe('BODY');
+});
+
 test('admin #418: wyszukiwanie firm i użytkowników po stronie serwera (parametry w URL)', async ({
   page,
 }) => {
