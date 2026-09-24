@@ -112,6 +112,17 @@ function contentLanguage(job: JobDetail, locale: string): {
   };
 }
 
+/**
+ * ISR (#298): szczegół oferty powstaje przy pierwszym żądaniu (pusta lista parametrów — build
+ * nie czyta ofert z bazy) i jest odświeżany co 60 s, więc zamknięta oferta znika najpóźniej
+ * po minucie. Strona nie czyta sesji: dopasowanie, zapisywanie i aplikowanie to wyspy klienckie.
+ */
+export const revalidate = 60;
+
+export function generateStaticParams(): Array<{ locale: string; slug: string }> {
+  return [];
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { locale, slug } = await params;
   const job = await getJobBySlug(slug, locale);

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { Footer } from '@/components/layout/Footer';
@@ -20,10 +20,11 @@ export const metadata: Metadata = {
 };
 
 export default async function NotFound() {
+  const locale = await getLocale();
   const [tErrors, tCommon, tNav] = await Promise.all([
-    getTranslations('errors'),
-    getTranslations('common'),
-    getTranslations('nav'),
+    getTranslations({ locale, namespace: 'errors' }),
+    getTranslations({ locale, namespace: 'common' }),
+    getTranslations({ locale, namespace: 'nav' }),
   ]);
 
   // Metadane z not-found nie nadpisują tytułu z layoutu (zostawał tytuł strony głównej),
@@ -31,8 +32,8 @@ export default async function NotFound() {
   return (
     <div className="flex min-h-screen flex-col">
       <title>{`${tErrors('notFound')} · ${tCommon('appName')}`}</title>
-      <SkipLink />
-      <Header />
+      <SkipLink locale={locale} />
+      <Header locale={locale} />
       <main
         id="main-content"
         tabIndex={-1}
@@ -53,7 +54,7 @@ export default async function NotFound() {
           </Link>
         </div>
       </main>
-      <Footer />
+      <Footer locale={locale} />
     </div>
   );
 }
