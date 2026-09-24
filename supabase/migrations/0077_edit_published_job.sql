@@ -25,10 +25,14 @@
 --    przyjmują ofertę inną niż szkic tylko wewnątrz `update_published_job` (znacznik
 --    transakcyjny `pracujbe.job_edit` = id oferty — ten sam wzorzec co `company_reverify`, 0072).
 --    Ciała funkcji bez innych zmian (0047/0051/0069).
+-- 5. `strict_job_version` (BEFORE UPDATE na `jobs`, po `trg_set_updated_at`): `updated_at` oferty
+--    rośnie ściśle przy każdej zmianie — także dwóch w jednej transakcji, gdzie `now()` jest stałe.
+--    To token CAS edycji, więc nie może się powtórzyć po zapisie.
 --
 -- Rollback: `drop function public.update_published_job(uuid, jsonb, timestamptz)`;
 -- `drop trigger trg_guard_published_job_content on public.jobs` i
 -- `drop trigger trg_guard_published_job_children on public.<tabela>` dla pięciu tabel relacji,
+-- `drop trigger trg_strict_job_version on public.jobs`, `drop function public.strict_job_version()`,
 -- `drop function public.guard_published_job_content()`, `public.guard_published_job_children()`,
 -- `public.assert_job_draft_or_editing(uuid)`; set_job_* odtworzyć z 0047/0051 (wymagania
 -- z warunkiem `is_supported_locale`, 0069). Migracja nie zmienia danych.
@@ -202,6 +206,22 @@ begin
          for each row execute function public.guard_published_job_children()', t);
   end loop;
 end $$;
+
+-- --- Ściśle rosnąca wersja oferty (token CAS) -------------------------------------------------
+create or replace function public.strict_job_version()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+begin
+  if new.updated_at is null or new.updated_at <= old.updated_at then
+    new.updated_at := old.updated_at + interval '1 microsecond';
+  end if;
+  return new;
+end $$;
+revoke all on function public.strict_job_version() from public;
+
+-- Nazwa po `trg_set_updated_at` (triggery BEFORE wykonują się alfabetycznie).
+create trigger trg_strict_job_version
+  before update on public.jobs
+  for each row execute function public.strict_job_version();
 
 -- --- update_published_job: atomowa rewizja aktywnej/wstrzymanej oferty -----------------------
 -- p_content (kształt budowany przez akcję serwerową updatePublishedJob po walidacji Zod):
