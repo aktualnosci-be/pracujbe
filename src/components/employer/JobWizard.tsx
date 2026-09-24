@@ -49,7 +49,12 @@ import {
 } from '@/lib/validation/job';
 import type { CategoryKey, ContractType } from '@/lib/jobs';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
-import { createJobDraft, publishJob, updateJobDraft } from '@/lib/actions/jobs';
+import {
+  createJobDraft,
+  publishJob,
+  updateJobDraft,
+  updatePublishedJob,
+} from '@/lib/actions/jobs';
 
 /**
  * JobWizard — kreator oferty pracy (Etap 5), 9 kroków z REALNYM zapisem wersji roboczej.
@@ -64,8 +69,10 @@ import { createJobDraft, publishJob, updateJobDraft } from '@/lib/actions/jobs';
  * Publikacja wymaga firmy `verified` — `COMPANY_NOT_VERIFIED` pokazujemy jako czytelną informację
  * (szkic zostaje zapisany). Tryb DEMO (brak env): zapis nie trafia do DB, ale przepływ działa.
  *
- * TODO(data): języki oferty i wymagane certyfikaty (krok 7) są zbierane i walidowane, ale nie
- * utrwalane — patrz `@/lib/actions/jobs` (brak relacji job_languages / job_certificates).
+ * Tryb edycji opublikowanej oferty (#325, prop `published`): kroki NIE zapisują się pojedynczo
+ * (publiczna oferta byłaby mieszanką starej i nowej treści) — „Dalej" tylko waliduje krok, a
+ * „Zapisz zmiany" waliduje wszystkie kroki i wysyła całość jednym wywołaniem
+ * `updatePublishedJob` (transakcyjne RPC). Status oferty i zgłoszenia się nie zmieniają.
  */
 
 const TOTAL_STEPS = 9;
@@ -314,6 +321,11 @@ export interface JobWizardProps {
    */
   initialJobId?: string;
   initialValues?: JobWizardInitialValues;
+  /**
+   * #325: oferta już opublikowana (aktywna/wstrzymana) — kreator w trybie edycji. `updatedAt`
+   * = wczytana wersja (ochrona przed cichym nadpisaniem równoległej poprawki).
+   */
+  published?: { status: 'active' | 'paused'; slug: string; updatedAt: string };
 }
 
 /** Zawężenie surowych wartości z DB do unii formularza (nieznane wartości → domyślne/puste). */
@@ -347,6 +359,7 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
 export function JobWizard({
   initialJobId,
   initialValues,
+  published,
 }: JobWizardProps = {}): React.JSX.Element {
   const t = useTranslations('jobWizard');
   const tRoot = useTranslations();
@@ -386,6 +399,22 @@ export function JobWizard({
   const [badgeVisible, setBadgeVisible] = React.useState(false);
   const [publishing, setPublishing] = React.useState(false);
   const [publishError, setPublishError] = React.useState<ErrorCode | null>(null);
+  // #325: tryb edycji opublikowanej oferty.
+  const isEdit = Boolean(published && initialJobId);
+  const [editVersion, setEditVersion] = React.useState<string | null>(published?.updatedAt || null);
+  const [publicSlug, setPublicSlug] = React.useState(published?.slug ?? '');
+  // Krok z błędami wykryty przy „Zapisz zmiany" (komunikat nad formularzem).
+  const [editInvalidStep, setEditInvalidStep] = React.useState<WizardStep | null>(null);
+  const pendingErrorsRef = React.useRef<Set<string> | null>(null);
+  // Tryb edycji: po zapisie każda kolejna zmiana pola znów jest niezapisana — komunikat
+  // „Zmiany zapisane" nie może wisieć nad nową, niewysłaną treścią.
+  React.useEffect(() => {
+    if (!isEdit || saveState !== 'saved') return;
+    const sub = watch(() => setSaveState('idle'));
+    return () => sub.unsubscribe();
+  }, [isEdit, saveState, watch]);
+  const showViewLink =
+    isEdit && published?.status === 'active' && publicSlug !== '' && !publicSlug.startsWith('draft-');
 
   // Roboczy wiersz dodawania języka (relacja — nieutrwalana w tej iteracji, TODO(data)).
   const [langDraft, setLangDraft] = React.useState('');
@@ -423,7 +452,11 @@ export function JobWizard({
       isFirstRenderRef.current = false;
       return;
     }
-    stepHeadingRef.current?.focus();
+    // Przejście do kroku z błędami po „Zapisz zmiany": fokus na pierwszym błędnym polu.
+    const pending = pendingErrorsRef.current;
+    pendingErrorsRef.current = null;
+    if (pending) scrollToFirstError(step, pending);
+    else stepHeadingRef.current?.focus();
     setStepAnnouncement(
       t('stepAnnounce', { current: step, total: steps.length, title: steps[step - 1]?.title ?? '' }),
     );
@@ -451,10 +484,14 @@ export function JobWizard({
    * `intent='publish'` dokłada w kroku 9 wymóg zgody na publikację; zwykły zapis szkicu
    * („Zapisz i wyjdź") jej nie wymaga (#193).
    */
-  async function persistStep(
+  /**
+   * Waliduje krok i oznacza błędy przy polach. Zwraca dane kroku albo zbiór błędnych pól
+   * (przewijanie do pierwszego błędu robi wywołujący — krok może nie być wyrenderowany).
+   */
+  function validateStep(
     current: WizardStep,
-    intent: 'draft' | 'publish' = 'draft',
-  ): Promise<boolean> {
+    intent: 'draft' | 'publish',
+  ): { ok: true; data: unknown } | { ok: false; erroredFields: Set<string> } {
     clearErrors(STEP_FIELDS[current]);
     const data = buildStepData(current, getValues());
     const schema = current === 9 && intent === 'draft' ? step9DraftSchema : SCHEMAS[current];
@@ -475,10 +512,22 @@ export function JobWizard({
           });
         }
       }
+      return { ok: false, erroredFields };
+    }
+    return { ok: true, data };
+  }
+
+  async function persistStep(
+    current: WizardStep,
+    intent: 'draft' | 'publish' = 'draft',
+  ): Promise<boolean> {
+    const checked = validateStep(current, intent);
+    if (!checked.ok) {
       setSaveState('idle');
-      scrollToFirstError(current, erroredFields);
+      scrollToFirstError(current, checked.erroredFields);
       return false;
     }
+    const data = checked.data;
 
     setSaveError(null);
     setSaveState('saving');
@@ -514,8 +563,60 @@ export function JobWizard({
   }
 
   async function handleNext(): Promise<void> {
+    if (isEdit) {
+      // Tryb edycji: krok tylko walidujemy — zapis całości przyciskiem „Zapisz zmiany".
+      const checked = validateStep(step, 'draft');
+      if (!checked.ok) {
+        scrollToFirstError(step, checked.erroredFields);
+        return;
+      }
+      if (editInvalidStep === step) setEditInvalidStep(null);
+      if (step < TOTAL_STEPS) setStep((step + 1) as WizardStep);
+      return;
+    }
     const ok = await persistStep(step);
     if (ok && step < TOTAL_STEPS) setStep((step + 1) as WizardStep);
+  }
+
+  /** #325: waliduje wszystkie kroki i zapisuje całą treść opublikowanej oferty naraz. */
+  async function handleSaveChanges(): Promise<void> {
+    if (!initialJobId) return;
+    setSaveError(null);
+    setEditInvalidStep(null);
+    const stepsData: unknown[] = [];
+    for (let i = 1; i <= TOTAL_STEPS; i += 1) {
+      const current = i as WizardStep;
+      const checked = validateStep(current, 'draft');
+      if (!checked.ok) {
+        setSaveState('idle');
+        setEditInvalidStep(current);
+        if (current === step) {
+          scrollToFirstError(current, checked.erroredFields);
+        } else {
+          pendingErrorsRef.current = checked.erroredFields;
+          setStep(current);
+        }
+        return;
+      }
+      stepsData.push(checked.data);
+    }
+
+    setSaveState('saving');
+    try {
+      const res = await updatePublishedJob(initialJobId, stepsData, editVersion);
+      if (!res.ok) {
+        setSaveError(res.error);
+        setSaveState('error');
+        return;
+      }
+      if (res.demo) setDemo(true);
+      if (res.updatedAt) setEditVersion(res.updatedAt);
+      if (res.slug) setPublicSlug(res.slug);
+      setSaveState('saved');
+    } catch {
+      setSaveError('INTERNAL');
+      setSaveState('error');
+    }
   }
 
   function handleBack(): void {
@@ -577,11 +678,27 @@ export function JobWizard({
       {/* Nagłówek + znacznik zapisu */}
       <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between sm:pb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{t('title')}</h1>
-          <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground">{t('subtitle')}</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            {isEdit ? t('editTitle') : t('title')}
+          </h1>
+          <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground">
+            {isEdit
+              ? published?.status === 'paused'
+                ? t('editSubtitlePaused')
+                : t('editSubtitleActive')
+              : t('subtitle')}
+          </p>
+          {showViewLink ? (
+            <Link
+              href={`/oferty-pracy/${publicSlug}`}
+              className="mt-3 inline-flex text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary"
+            >
+              {t('viewOffer')}
+            </Link>
+          ) : null}
         </div>
         {/* Bez `role="status"`: stan zapisu ogłasza jeden region — SaveIndicator w stopce (#402). */}
-        {saveState === 'saved' && badgeVisible ? (
+        {!isEdit && saveState === 'saved' && badgeVisible ? (
           <div
             className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-success/30 bg-success/5 px-3 py-2"
           >
@@ -608,6 +725,16 @@ export function JobWizard({
         progressLabel={t('stepProgress', { current: step, total: steps.length })}
         className="rounded-[1.75rem] border border-border bg-card p-5 shadow-sm sm:p-7"
       />
+
+      {isEdit && editInvalidStep !== null ? (
+        <p
+          role="alert"
+          className="flex items-start gap-2.5 rounded-lg border border-error/40 bg-error/5 p-3 text-sm font-medium text-foreground"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
+          {t('editFixStep', { step: editInvalidStep, title: steps[editInvalidStep - 1]?.title ?? '' })}
+        </p>
+      ) : null}
 
       {/* Formularz bieżącego kroku */}
       <section className="min-w-0 rounded-[1.75rem] border border-border border-t-4 border-t-primary bg-card p-5 shadow-sm sm:p-8">
@@ -1235,6 +1362,7 @@ export function JobWizard({
                 ) : null}
               </div>
 
+              {isEdit ? null : (
               <div id={domId('agreePublish')} className="space-y-1.5">
                 <div className="flex items-start gap-2.5">
                   <Checkbox
@@ -1256,6 +1384,7 @@ export function JobWizard({
                 </div>
                 <FieldError name="agreePublish" />
               </div>
+              )}
 
               {publishError ? (
                 <div
@@ -1284,16 +1413,19 @@ export function JobWizard({
           <SaveIndicator
             state={saveState}
             labels={{
-              idle: t('saveHint'),
+              idle: isEdit ? t('editSaveHint') : t('saveHint'),
               saving: t('saving'),
-              saved: demo ? t('savedDemo') : t('saved'),
+              saved: isEdit ? (demo ? t('editSavedDemo') : t('editSaved')) : demo ? t('savedDemo') : t('saved'),
               // Kod z serwera ma własny komunikat; brak kodu (np. zerwane połączenie) → ogólny.
               error: saveError ? tRoot(toUserMessageKey(saveError)) : t('saveError'),
             }}
           />
           {/* Oferta już nie jest szkicem (np. opublikowana w innej karcie) — ponawianie nic nie
               da, więc prowadzimy do listy ofert (#363). */}
-          {saveState === 'error' && saveError === 'JOB_NOT_DRAFT' ? (
+          {saveState === 'error' &&
+          (saveError === 'JOB_NOT_DRAFT' ||
+            saveError === 'JOB_NOT_EDITABLE' ||
+            saveError === 'JOB_EDIT_CONFLICT') ? (
             <Link
               href="/employer/oferty"
               className="text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary"
@@ -1304,18 +1436,37 @@ export function JobWizard({
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end [&_button]:min-h-12">
           <Button asChild variant="ghost" disabled={busy}>
-            <Link href="/employer">{t('cancel')}</Link>
+            <Link href={isEdit ? '/employer/oferty' : '/employer'}>{t('cancel')}</Link>
           </Button>
-          <Button type="button" variant="outline" onClick={() => void handleSaveExit()} disabled={busy}>
-            {t('saveExit')}
-          </Button>
+          {isEdit ? null : (
+            <Button type="button" variant="outline" onClick={() => void handleSaveExit()} disabled={busy}>
+              {t('saveExit')}
+            </Button>
+          )}
           {step > 1 ? (
             <Button type="button" variant="outline" onClick={handleBack} disabled={busy}>
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               {t('back')}
             </Button>
           ) : null}
-          {step < TOTAL_STEPS ? (
+          {isEdit ? (
+            <>
+              {step < TOTAL_STEPS ? (
+                <Button type="button" variant="outline" onClick={() => void handleNext()} disabled={busy}>
+                  {t('next')}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              ) : null}
+              <Button type="button" onClick={() => void handleSaveChanges()} disabled={busy}>
+                {saveState === 'saving' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                )}
+                {saveState === 'saving' ? t('saving') : t('saveChanges')}
+              </Button>
+            </>
+          ) : step < TOTAL_STEPS ? (
             <Button type="button" onClick={() => void handleNext()} disabled={busy}>
               {saveState === 'saving' ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

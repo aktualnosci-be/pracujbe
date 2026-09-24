@@ -1,8 +1,8 @@
 import { getTranslations } from 'next-intl/server';
 
-/** Widoczny po fokusie skrót klawiaturowy do głównej treści strony. */
-export async function SkipLink(): Promise<React.JSX.Element> {
-  const t = await getTranslations('common');
+/** Widoczny po fokusie skrót klawiaturowy do głównej treści strony. `locale` jawnie (#298). */
+export async function SkipLink({ locale }: { locale: string }): Promise<React.JSX.Element> {
+  const t = await getTranslations({ locale, namespace: 'common' });
 
   return (
     <a

@@ -554,7 +554,7 @@
     "rateLimited": "Te veel pogingen. Wacht even en probeer opnieuw.",
     "companyNotVerified": "Je bedrijf is nog niet geverifieerd.",
     "onboardingIncomplete": "Vul alle vereiste profielvelden in om de configuratie te voltooien.",
-    "jobNotDraft": "Deze vacature kan alleen als concept worden bewerkt.",
+    "jobNotDraft": "Deze vacature is al geplaatst. Pas ze aan met „Bewerken” in de vacaturelijst.",
     "billingUnavailable": "Betalingen zijn tijdelijk niet beschikbaar. Probeer het later opnieuw.",
     "checkoutInProgress": "Je hebt al een betaling gestart. Rond die af of probeer het zo opnieuw.",
     "entitlementLimit": "Je hebt de limiet van actieve vacatures in je plan bereikt. Upgrade om er meer te plaatsen.",
@@ -562,7 +562,9 @@
     "internal": "Er is een fout aan onze kant opgetreden. We werken eraan.",
     "generic": "Er ging iets mis. Probeer opnieuw.",
     "demoUnavailable": "Deze functie werkt niet in de demoversie van de website.",
-    "invalidTransition": "Deze statuswijziging is in de huidige fase niet mogelijk. Vernieuw de pagina en kies een andere optie."
+    "invalidTransition": "Deze statuswijziging is in de huidige fase niet mogelijk. Vernieuw de pagina en kies een andere optie.",
+    "jobNotEditable": "Deze vacature kan nu niet worden bewerkt. Alleen een actieve of gepauzeerde vacature kan worden aangepast.",
+    "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -678,8 +680,6 @@
     "jobReopen": "Opnieuw openen",
     "jobStatusUpdated": "Status van de vacature bijgewerkt.",
     "resumeDraft": "Concept afmaken",
-    "jobNotDraftTitle": "Deze vacature is geen concept meer",
-    "jobNotDraftHint": "Een geplaatste vacature beheer je via de vacaturelijst: pauzeren, sluiten of opnieuw openen.",
     "activeOffers": "Actieve vacatures",
     "newApplications": "Nieuwe sollicitaties",
     "matchedCandidates": "Gematchte kandidaten",
@@ -846,7 +846,13 @@
     "viewProposal": "Bekijk het voorstel",
     "rowActionsFor": "Acties: {title}",
     "companyFallback": "Je bedrijf",
-    "employerShellLoadError": "We konden de gegevens van je bedrijfsaccount niet laden. Probeer het opnieuw."
+    "employerShellLoadError": "We konden de gegevens van je bedrijfsaccount niet laden. Probeer het opnieuw.",
+    "jobNotEditableTitle": "Deze vacature kan nu niet worden bewerkt",
+    "jobNotEditableHint": "Open een gesloten of verlopen vacature eerst opnieuw via de vacaturelijst en pas ze daarna aan.",
+    "editJob": "Bewerken",
+    "editJobLabel": "Vacature bewerken: {title}",
+    "viewJob": "Vacature bekijken",
+    "viewJobLabel": "Vacature bekijken: {title}"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -1233,7 +1239,16 @@
     "notVerifiedNote": "Het concept is opgeslagen. Publiceren kan zodra het bedrijf is geverifieerd.",
     "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen.",
     "stepAnnounce": "Stap {current} van {total}: {title}",
-    "goToOffers": "Naar je vacatures"
+    "goToOffers": "Naar je vacatures",
+    "editTitle": "Vacature bewerken",
+    "editSubtitleActive": "De vacature is geplaatst. Sla je wijzigingen op met „Wijzigingen opslaan”; kandidaten zien ze meteen. De status en sollicitaties blijven ongewijzigd.",
+    "editSubtitlePaused": "De vacature is gepauzeerd. Sla je wijzigingen op met „Wijzigingen opslaan”; kandidaten zien ze zodra je de vacature hervat. Sollicitaties blijven ongewijzigd.",
+    "viewOffer": "Geplaatste vacature bekijken",
+    "saveChanges": "Wijzigingen opslaan",
+    "editSaveHint": "De wijzigingen zijn nog niet opgeslagen. Sla ze op met „Wijzigingen opslaan”.",
+    "editSaved": "Wijzigingen opgeslagen",
+    "editSavedDemo": "Wijzigingen opgeslagen (demomodus)",
+    "editFixStep": "De wijzigingen zijn niet opgeslagen. Corrigeer de gemarkeerde velden in stap {step}: {title}."
   },
   "messages": {
     "title": "Berichten",

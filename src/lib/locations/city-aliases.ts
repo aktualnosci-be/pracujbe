@@ -37,6 +37,43 @@ for (const key of LOCATION_KEYS) {
   for (const names of Object.values(NAMES_BY_LOCALE)) KEY_BY_ALIAS.set(names[key], key);
 }
 
+/**
+ * Normalizacja sluga miasta z adresu: dekodowanie URL, małe litery, bez diakrytyków,
+ * spacje → myślniki (tak, jak człowiek wpisuje nazwę w pasku adresu).
+ */
+export function normalizeCitySlug(value: string): string {
+  let decoded = value;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    // Niepoprawne kodowanie — porównujemy surową wartość.
+  }
+  return decoded
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+const KEY_BY_SLUG = new Map<string, LocationKey>();
+for (const key of LOCATION_KEYS) KEY_BY_SLUG.set(normalizeCitySlug(key), key);
+for (const names of Object.values(NAMES_BY_LOCALE)) {
+  for (const key of LOCATION_KEYS) {
+    const slug = normalizeCitySlug(names[key]);
+    if (!KEY_BY_SLUG.has(slug)) KEY_BY_SLUG.set(slug, key);
+  }
+}
+
+/**
+ * Slug landingu miasta (`bruksela`, `Brussels`, `bruxelles`) → kanoniczny klucz; `null`, gdy
+ * nieznany. Synchroniczne i bez next-intl — używa go middleware (przekierowanie przed cache ISR).
+ */
+export function resolveCitySlugAlias(slug: string): LocationKey | null {
+  const wanted = normalizeCitySlug(slug);
+  return wanted ? (KEY_BY_SLUG.get(wanted) ?? null) : null;
+}
+
 /** Klucz miasta dla dokładnej nazwy w dowolnym obsługiwanym języku; `null` gdy nieznana. */
 export function resolveLocationKey(value: string): LocationKey | null {
   return KEY_BY_ALIAS.get(value.trim()) ?? null;

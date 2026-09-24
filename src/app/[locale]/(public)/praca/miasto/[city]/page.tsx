@@ -15,6 +15,7 @@ import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 import { cityAliases } from '@/lib/locations/city-aliases';
 import { JobCard } from '@/components/public/JobCard';
 import { resolveCityAlias } from './city-alias';
+import { prerenderParamsAtBuild } from '@/lib/static-rendering';
 
 /**
  * Landing-page miasta `/praca/miasto/<klucz>` (SSR/SSG, INDEKSOWALNY).
@@ -54,6 +55,9 @@ type PageProps = {
   params: Promise<{ locale: string; city: string }>;
 };
 
+/** ISR (#298): oferty zmieniają się w ciągu dnia — HTML z cache, odświeżany co 60 s. */
+export const revalidate = 60;
+
 export function generateStaticParams(): Array<{ locale: string; city: string }> {
   const params: Array<{ locale: string; city: string }> = [];
   for (const locale of routing.locales) {
@@ -61,7 +65,7 @@ export function generateStaticParams(): Array<{ locale: string; city: string }> 
       params.push({ locale, city });
     }
   }
-  return params;
+  return prerenderParamsAtBuild(params);
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {

@@ -38,6 +38,8 @@ export interface EmployerJob {
   city: string;
   /** Surowy `job_status` (draft/active/paused/closed/expired) — mapowany w StatusPill. */
   status: string;
+  /** Publiczny adres oferty (link „Zobacz ofertę" dla aktywnej, #325). */
+  slug: string;
   newApplications: number;
   matched: number;
   /** Data utworzenia (ISO) — pokazywana zamiast technicznego identyfikatora (Invariant #8). */
@@ -102,11 +104,11 @@ export const DEMO_OVERVIEW_DELTAS = {
 } as const;
 
 const DEMO_JOBS: EmployerJob[] = [
-  { id: '12345', title: 'Operator wózka widłowego', city: 'Liège', status: 'active', newApplications: 12, matched: 6, createdAt: '2026-09-18T09:00:00Z' },
-  { id: '12344', title: 'Pracownik magazynu', city: 'Antwerpia', status: 'active', newApplications: 8, matched: 4, createdAt: '2026-09-15T09:00:00Z' },
-  { id: '12343', title: 'Elektryk przemysłowy', city: 'Charleroi', status: 'active', newApplications: 5, matched: 3, createdAt: '2026-09-11T09:00:00Z' },
-  { id: '12342', title: 'Produkcja – operator maszyn', city: 'Genk', status: 'active', newApplications: 7, matched: 4, createdAt: '2026-09-08T09:00:00Z' },
-  { id: '12341', title: 'Specjalista ds. logistyki', city: 'Bruksela', status: 'active', newApplications: 3, matched: 2, createdAt: '2026-09-02T09:00:00Z' },
+  { id: '12345', title: 'Operator wózka widłowego', city: 'Liège', status: 'active', slug: '', newApplications: 12, matched: 6, createdAt: '2026-09-18T09:00:00Z' },
+  { id: '12344', title: 'Pracownik magazynu', city: 'Antwerpia', status: 'active', slug: '', newApplications: 8, matched: 4, createdAt: '2026-09-15T09:00:00Z' },
+  { id: '12343', title: 'Elektryk przemysłowy', city: 'Charleroi', status: 'active', slug: '', newApplications: 5, matched: 3, createdAt: '2026-09-11T09:00:00Z' },
+  { id: '12342', title: 'Produkcja – operator maszyn', city: 'Genk', status: 'active', slug: '', newApplications: 7, matched: 4, createdAt: '2026-09-08T09:00:00Z' },
+  { id: '12341', title: 'Specjalista ds. logistyki', city: 'Bruksela', status: 'active', slug: '', newApplications: 3, matched: 2, createdAt: '2026-09-02T09:00:00Z' },
 ];
 
 const DEMO_APPLICATIONS: EmployerApplication[] = [
@@ -443,12 +445,31 @@ export interface JobDraftValues {
   contactEmail: string;
 }
 
-/** Wynik wczytania szkicu: jawnie rozdziela „brak/obcy", „nie-szkic" i błąd odczytu. */
+/** Stany oferty, które kreator otwiera: szkic (zapis per krok) i opublikowana (#325, rewizja). */
+export type EditableJobStatus = 'draft' | 'active' | 'paused';
+
+/**
+ * Wynik wczytania oferty do kreatora: jawnie rozdziela „brak/obcy", „nieedytowalna"
+ * (zamknięta/wygasła — najpierw ponowne otwarcie) i błąd odczytu.
+ */
 export type JobDraftLoad =
-  | { status: 'ok'; jobId: string; jobStatus: string; values: JobDraftValues }
+  | {
+      status: 'ok';
+      jobId: string;
+      jobStatus: EditableJobStatus;
+      /** Publiczny adres oferty (`/oferty-pracy/[slug]`); dla szkicu techniczny `draft-…`. */
+      slug: string;
+      /** Wersja wczytana do kreatora — CAS przy zapisie opublikowanej oferty. */
+      updatedAt: string;
+      values: JobDraftValues;
+    }
   | { status: 'not-found' }
-  | { status: 'not-draft'; jobStatus: string }
+  | { status: 'not-editable'; jobStatus: string }
   | { status: 'error' };
+
+function isEditableJobStatus(status: string): status is EditableJobStatus {
+  return status === 'draft' || status === 'active' || status === 'paused';
+}
 
 function numToText(value: unknown): string {
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
@@ -458,14 +479,66 @@ function asStringArray(value: unknown): string[] {
 }
 
 /**
- * Wczytuje szkic oferty firmy do kształtu pól kreatora (P1-04: koniec osieroconych draftów —
+ * Tryb DEMO (brak env): aktywna oferta z listy demo otwiera kreator w trybie edycji (#325) —
+ * „Edytuj" nie prowadzi na 404; zapis w demo nie trafia do bazy.
+ */
+function demoPublishedJob(jobId: string): JobDraftLoad {
+  const job = DEMO_JOBS.find((j) => j.id === jobId);
+  if (!job) return { status: 'not-found' };
+  return {
+    status: 'ok',
+    jobId: job.id,
+    jobStatus: 'active',
+    slug: job.slug,
+    updatedAt: job.createdAt ?? '',
+    values: {
+      title: job.title,
+      category: 'warehouse',
+      occupation: job.title,
+      contractType: 'permanent',
+      workingHours: '38 h / tydzień',
+      shifts: '',
+      startImmediately: true,
+      startDate: '',
+      city: job.city,
+      region: 'Flandria',
+      address: '',
+      remote: false,
+      salaryMin: '16',
+      salaryMax: '18',
+      currency: 'EUR',
+      salaryPeriod: 'hour',
+      description: 'Praca w stałym zespole, szkolenie na start i jasny grafik zmian.',
+      responsibilities: ['Obsługa stanowiska zgodnie z instrukcją'],
+      requirementsMandatory: ['Dyspozycyjność'],
+      mandatorySkills: [],
+      minExperienceYears: '',
+      requirementsOptional: [],
+      skills: [],
+      languages: [],
+      requiredCertificates: [],
+      requiresDrivingLicense: false,
+      noLanguageRequired: true,
+      conditions: [],
+      benefits: [],
+      accommodation: false,
+      transport: false,
+      companyDescription: 'Firma demonstracyjna z branży logistycznej.',
+      contactEmail: '',
+    },
+  };
+}
+
+/**
+ * Wczytuje ofertę firmy (szkic albo opublikowaną — aktywną/wstrzymaną, #325) do kształtu pól
+ * kreatora (P1-04: koniec osieroconych draftów —
  * „Zapisz i wyjdź" nie gubi już pracy). Czyta POD SESJĄ (RLS: tylko oferty własnej firmy), więc
  * członek innej firmy dostanie `not-found`. Relacje (wymagania/umiejętności/języki/certyfikaty)
  * są wczytywane, bo kreator zapisuje je przez replace-all — bez nich „Dalej" by je wyczyścił
  * (ta sama pułapka co P1-07/P1-08). Błąd odczytu → 'error' (UI pokazuje retry, nie pusty kreator).
  */
 export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
-  if (!isSupabaseConfigured()) return { status: 'not-found' };
+  if (!isSupabaseConfigured()) return demoPublishedJob(jobId);
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'not-found' };
@@ -477,7 +550,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         'id, company_id, status, title, category, occupation, contract_type, working_hours, shifts, ' +
           'start_immediately, start_date, city, region, address, remote, salary_min, salary_max, ' +
           'currency, salary_period, min_experience_years, requires_driving_license, ' +
-          'no_language_required, accommodation, transport, contact_email, default_locale',
+          'no_language_required, accommodation, transport, contact_email, default_locale, slug, updated_at',
       )
       .eq('id', jobId)
       .eq('company_id', companyId)
@@ -488,7 +561,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
     if (!asString(job['id'])) return { status: 'not-found' };
 
     const jobStatus = asString(job['status']);
-    if (jobStatus !== 'draft') return { status: 'not-draft', jobStatus };
+    if (!isEditableJobStatus(jobStatus)) return { status: 'not-editable', jobStatus };
 
     const locale = asString(job['default_locale'], 'pl');
     const [translation, requirements, skills, languages, certificates] = await Promise.all([
@@ -529,6 +602,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
       status: 'ok',
       jobId,
       jobStatus,
+      slug: asString(job['slug']),
+      updatedAt: asString(job['updated_at']),
       values: {
         title: asString(job['title']),
         category: asString(job['category']),
@@ -609,7 +684,7 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
 
     const { data: jobsData, error: jobsError } = await supabase
       .from('jobs')
-      .select('id, title, city, status, created_at')
+      .select('id, title, city, status, slug, created_at')
       .eq('company_id', companyId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
@@ -643,6 +718,7 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
         title: asString(r['title']),
         city: asString(r['city']),
         status: asString(r['status'], 'draft'),
+        slug: asString(r['slug']),
         newApplications: countsByJob.get(id)?.newApplications ?? 0,
         matched: countsByJob.get(id)?.matched ?? 0,
         createdAt: asString(r['created_at']) || null,
