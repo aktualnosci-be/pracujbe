@@ -725,9 +725,11 @@ begin
         'noticeBody', btrim(p_content -> v_rec.locale ->> 'body'),
         'incidentReference', v_row.reference,
         'panel', case when v_rec.role = 'employer' then 'employer' else 'candidate' end));
-    -- Adres zablokowany (#44) albo brak adresu → enqueue_email nic nie kolejkuje.
+    -- Adres zablokowany (#44), brak adresu → brak wiersza; budżet odbiorcy (#45, 0101) →
+    -- wiersz wygaszony ('failed'). Liczymy tylko wiersze faktycznie czekające w kolejce.
     update pg_temp.breach_recipients
-       set queued = exists (select 1 from public.email_deliveries d where d.idempotency_key = v_key)
+       set queued = exists (select 1 from public.email_deliveries d
+                             where d.idempotency_key = v_key and d.status = 'queued')
      where profile_id = v_rec.profile_id;
   end loop;
 
