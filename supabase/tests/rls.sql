@@ -55,22 +55,20 @@ end $$;
 \set JOBC  'c1111111-1111-1111-1111-111111111111'
 
 -- ---------------- FIXTURE #492: deklaracja wieku kont testowych ----------------
--- Od 0110 aplikacja/propozycja/widoczność wymagają deklaracji progu wieku. Konta testowe
--- sekcji sprzed #492 deklarują próg przy utworzeniu (jak formularz rejestracji). Sekcja AGE492
--- wyłącza ten trigger i sprawdza konta BEZ deklaracji (kontrole ujemne).
+-- Od 0110 aplikacja/propozycja/widoczność wymagają deklaracji progu wieku. Konta kandydatów
+-- sekcji sprzed #492 deklarują próg zaraz po utworzeniu (jak formularz rejestracji):
+-- `select test_fixture.attest_candidates();` po każdym bloku `insert into auth.users`.
+-- Celowo funkcja, a NIE trigger na profiles: DDL na profiles w transakcji harnessu
+-- (tests/integration/rate-limit.test.ts: cały plik w BEGIN…ROLLBACK) blokowałby sesje dblink.
+-- Sekcja AGE492 tworzy konta bez wywołania — kontrole ujemne na kontach bez deklaracji.
 create schema if not exists test_fixture;
-create function test_fixture.attest_candidate_age() returns trigger
-language plpgsql security definer set search_path = public, pg_temp as $$
-begin
-  if new.role = 'candidate' then
-    insert into public.candidate_age_attestations (profile_id, min_age, source)
-    values (new.id, 18, 'signup');
-  end if;
-  return new;
-end $$;
-create trigger zz_test_fixture_attest_candidate_age
-  after insert on public.profiles
-  for each row execute function test_fixture.attest_candidate_age();
+create function test_fixture.attest_candidates() returns void
+language sql set search_path = public, pg_temp as $$
+  insert into public.candidate_age_attestations (profile_id, min_age, source)
+  select p.id, 18, 'signup' from public.profiles p
+  where p.role = 'candidate'
+    and not exists (select 1 from public.candidate_age_attestations a where a.profile_id = p.id);
+$$;
 
 -- ---------------- SEED (jako superuser; profiles z triggera handle_new_user) ----------------
 insert into auth.users(id,email,name,raw_user_meta_data) values
@@ -80,6 +78,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'EMPB','empb@test.be','Emp B','{"role":"employer","first_name":"Emp","last_name":"B","locale":"fr"}'),
   (:'EMPC','empc@test.be','Emp C','{"role":"employer","first_name":"Emp","last_name":"C","locale":"en"}'),
   (:'ADMIN','admin@test.be','Ad Min','{"role":"employer","first_name":"Ad","last_name":"Min","locale":"en"}');
+select test_fixture.attest_candidates();
 -- Nadaj rolę admina (self-signup ogranicza do candidate/employer; admin tylko ręcznie).
 update public.profiles set role = 'admin' where id = :'ADMIN';
 
@@ -1467,6 +1466,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'EXL','exl@test.be','Ewa X','{"role":"employer","first_name":"Ewa","last_name":"Exowska","locale":"pl"}'),
   (:'MEML','meml@test.be','Mia M','{"role":"employer","first_name":"Mia","last_name":"Memberska","locale":"en"}'),
   (:'DELL','dell@test.be','Dirk D','{"role":"employer","first_name":"Dirk","last_name":"Deleted","locale":"nl"}');
+select test_fixture.attest_candidates();
 insert into public.companies(id,name,status) values (:'COMPL','Firma L','verified');
 insert into public.company_members(company_id,profile_id,role,is_active) values
   (:'COMPL',:'OWNL','owner',true),
@@ -1590,6 +1590,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'EXM','exm@test.be','Ex M','{"role":"employer","first_name":"Ex","last_name":"M","locale":"pl"}'),
   (:'NOCO2','noco2@test.be','Nina C','{"role":"employer","first_name":"Nina","last_name":"C","locale":"pl"}'),
   (:'CANDM','candm@test.be','Cleo M','{"role":"candidate","first_name":"Cleo","last_name":"M","locale":"pl"}');
+select test_fixture.attest_candidates();
 insert into public.companies(id,name,status,vat_number,verified_at) values
   (:'COMPM','Firma M','rejected',null,null),
   (:'COMPN','Firma N','verified','BE0111111111',now()),
@@ -1958,6 +1959,9 @@ select dbl.dblink_exec('pp_setup', $fx$
     ('e7500000-0000-0000-0000-0000000000b3','e7500000-0000-0000-0000-0000000000f1','job-p3','Operator P3','warehouse','permanent','Leuven','Flandria','active','pl'),
     ('e7500000-0000-0000-0000-0000000000b4','e7500000-0000-0000-0000-0000000000f1','job-p4','Operator P4','warehouse','permanent','Leuven','Flandria','active','pl');
   insert into public.candidate_profiles(profile_id, is_searchable) values ('e7500000-0000-0000-0000-00000000000c', false);
+  insert into public.candidate_age_attestations(profile_id, min_age, source)
+    select p.id, 18, 'signup' from public.profiles p where p.role = 'candidate'
+      and not exists (select 1 from public.candidate_age_attestations a where a.profile_id = p.id);
 $fx$);
 select dbl.dblink_disconnect('pp_setup');
 
@@ -2412,6 +2416,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'BLC2','blc2@test.be','Bl C2','{"role":"candidate","first_name":"Kontrola","last_name":"Dwa","locale":"nl"}'),
   (:'BLE1','ble1@test.be','Bl E1','{"role":"employer","first_name":"Rek","last_name":"Jeden","locale":"pl"}'),
   (:'BLE2','ble2@test.be','Bl E2','{"role":"employer","first_name":"Rek","last_name":"Dwa","locale":"pl"}');
+select test_fixture.attest_candidates();
 insert into public.companies(id,name,status) values
   (:'BLF1','Firma Blok 1','verified'), (:'BLF2','Firma Blok 2','verified');
 insert into public.company_members(company_id,profile_id,role,is_active) values
@@ -2612,6 +2617,7 @@ insert into auth.users(id,email,name,raw_user_meta_data)
                (:'CANDMH','h','candidate'), (:'CANDMG','g','candidate'),
                (:'OWNMC','own','employer'), (:'MEMMC','mem','employer'), (:'OWNMY','owny','employer'))
        as c(id, tag, role);
+select test_fixture.attest_candidates();
 insert into public.companies(id,name,status) values
   (:'COMPMC','Firma MC','verified'), (:'COMPMY','Firma MY','verified');
 insert into public.company_members(company_id,profile_id,role,is_active) values
@@ -3039,6 +3045,9 @@ select dbl.dblink_exec('co_setup', $fx$
   insert into public.companies(id,name,status) values ('e2800000-0000-0000-0000-0000000000f1','Firma CO28','unverified');
   insert into public.company_members(company_id,profile_id,role,is_active) values
     ('e2800000-0000-0000-0000-0000000000f1','e2800000-0000-0000-0000-0000000000a7','recruiter',false);
+  insert into public.candidate_age_attestations(profile_id, min_age, source)
+    select p.id, 18, 'signup' from public.profiles p where p.role = 'candidate'
+      and not exists (select 1 from public.candidate_age_attestations a where a.profile_id = p.id);
 $fx$);
 select dbl.dblink_disconnect('co_setup');
 
@@ -3176,6 +3185,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'OWN310','own310@test.be','Own 310','{"role":"employer","first_name":"Own","last_name":"310","locale":"pl"}'),
   (:'OWN310B','own310b@test.be','Own 310B','{"role":"employer","first_name":"Old","last_name":"Owner","locale":"pl"}'),
   (:'REC310','rec310@test.be','Rec 310','{"role":"employer","first_name":"Rec","last_name":"310","locale":"pl"}');
+select test_fixture.attest_candidates();
 -- Właściciel wybrał francuski (preferred_locale), admin ma 'en' — e-mail musi być 'fr'.
 update public.profiles set preferred_locale = 'fr' where id = :'OWN310';
 insert into public.companies(id, name, status, vat_number) values
@@ -3429,6 +3439,7 @@ select pg_temp.assert(
 \set OBC '0b142000-0000-0000-0000-000000000001'
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'OBC','ob142@test.be','Ola B','{"role":"candidate","first_name":"Ola","last_name":"B","locale":"pl"}');
+select test_fixture.attest_candidates();
 
 -- Wstrzykiwacz błędu: aktywny tylko, gdy ustawiono GUC ob142.fail_<tabela> = 'on'.
 create function public.ob142_inject_failure() returns trigger language plpgsql as $$
@@ -3755,6 +3766,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'TMM','tmm@test.be','Marc M','{"role":"employer","first_name":"Marc","last_name":"Member","locale":"nl"}'),
   (:'TMB','tmb@test.be','Bert B','{"role":"employer","first_name":"Bert","last_name":"B","locale":"en"}'),
   (:'TMX','tmx@test.be','Xena X','{"role":"candidate","first_name":"Xena","last_name":"X","locale":"pl"}');
+select test_fixture.attest_candidates();
 -- TMR na razie z NIEZWERYFIKOWANYM adresem (TM403-2); reszta zweryfikowana.
 update auth.users set email_verified = true where id in (:'TMO', :'TMM', :'TMB', :'TMX');
 insert into public.companies(id,name,status) values
@@ -4038,6 +4050,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'UNA','una@test.be','Un A','{"role":"candidate","first_name":"Un","last_name":"A","locale":"fr"}'),
   (:'UNB','unb@test.be','Un B','{"role":"candidate","first_name":"Un","last_name":"B","locale":"nl"}'),
   (:'UNC','unc@test.be','Un C','{"role":"candidate","first_name":"Un","last_name":"C","locale":"en"}');
+select test_fixture.attest_candidates();
 
 -- UN45-1: enqueue → wypisanie → claim NIE zwraca wiersza; wiersz wygaszony, nie usunięty.
 select public.enqueue_email(:'UNA', 'statusChanged', 'application', :'UNE', 'un45-status-1',
@@ -4329,6 +4342,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'MLA','mla@test.be','Ml A','{"role":"candidate","first_name":"Ml","last_name":"A","locale":"pl"}'),
   (:'MLB','mlb@test.be','Ml B','{"role":"candidate","first_name":"Ml","last_name":"B","locale":"nl"}'),
   (:'MLC','mlc@test.be','Ml C','{"role":"candidate","first_name":"Ml","last_name":"C","locale":"fr"}');
+select test_fixture.attest_candidates();
 
 -- Wysłana wiadomość z identyfikatorem dostawcy (jak po udanej wysyłce workera).
 select public.enqueue_email(:'MLA', 'jobOffer', 'offer', :'MLE', 'ml44-a-1', '{}'::jsonb);
@@ -4541,6 +4555,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'FNEB','fneb@test.be','Fn B','{"role":"employer","first_name":"Fn","last_name":"B","locale":"nl"}'),
   (:'FNMEM','fnmem@test.be','Fn M','{"role":"employer","first_name":"Fn","last_name":"M","locale":"pl"}'),
   (:'FNCAN','fncan@test.be','Fn C','{"role":"candidate","first_name":"Fn","last_name":"C","locale":"pl"}');
+select test_fixture.attest_candidates();
 insert into public.companies(id, name, status) values
   (:'FNCA', 'Firma FN A', 'verified'), (:'FNCB', 'Firma FN B', 'verified'), (:'FNCC', 'Firma FN C', 'unverified');
 insert into public.company_members(company_id, profile_id, role, is_active) values
@@ -4695,6 +4710,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'B97C2','b97c2@test.be','B97 C2','{"role":"candidate","first_name":"Lista","last_name":"Dwa","locale":"fr"}'),
   (:'B97E1','b97e1@test.be','B97 E1','{"role":"employer","first_name":"Rek","last_name":"Jeden","locale":"pl"}'),
   (:'B97E2','b97e2@test.be','B97 E2','{"role":"employer","first_name":"Rek","last_name":"Dwa","locale":"nl"}');
+select test_fixture.attest_candidates();
 insert into public.companies(id,name,status) values
   (:'B97F1','Firma Lista 1','verified'), (:'B97F2','Firma Lista 2','verified');
 insert into public.company_members(company_id,profile_id,role,is_active) values
@@ -4936,6 +4952,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'SSA','ssa@test.be','Sara A','{"role":"candidate","first_name":"Sara","last_name":"A","locale":"fr"}'),
   (:'SSB','ssb@test.be','Seb B','{"role":"candidate","first_name":"Seb","last_name":"B","locale":"nl"}'),
   (:'SSE','sse@test.be','Emil E','{"role":"employer","first_name":"Emil","last_name":"E","locale":"pl"}');
+select test_fixture.attest_candidates();
 insert into public.companies(id,name,status) values
   (:'SSC','Firma SS','verified'), (:'SSC2','Firma SS Blok','verified');
 insert into public.company_members(company_id,profile_id,role,is_active) values
@@ -5202,6 +5219,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'SQMEM','sqmem@test.be','Sq Mem','{"role":"employer","first_name":"Sq","last_name":"Mem","locale":"pl"}'),
   (:'SQCAND','sqcand@test.be','Sq Cand','{"role":"candidate","first_name":"Sq","last_name":"Cand","locale":"fr"}'),
   (:'SQCAND2','sqcand2@test.be','Sq Cand2','{"role":"candidate","first_name":"Sq","last_name":"Cand2","locale":"nl"}');
+select test_fixture.attest_candidates();
 insert into public.company_members(company_id, profile_id, role, is_active) values (:'COMPA', :'SQMEM', 'member', true);
 insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
   (:'SQJOB', :'COMPA', :'EMPA', 'draft-sq101', 'Kierowca C+E', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
@@ -5807,6 +5825,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   -- GAR: konto kandydata na adres gościa, na razie NIEZWERYFIKOWANE (GA98-10).
   (:'GAR','ga-guest@test.be','Gosia G','{"role":"candidate","first_name":"Gosia","last_name":"G","locale":"pl"}'),
   (:'GAX','gax@test.be','Xavier X','{"role":"candidate","first_name":"Xavier","last_name":"X","locale":"en"}');
+select test_fixture.attest_candidates();
 update auth.users set email_verified = true where id in (:'GAO', :'GAB', :'GAX');
 insert into public.companies(id,name,status) values
   (:'GAC','Firma GA','verified'), (:'GACB','Firma GA B','verified');
@@ -6358,6 +6377,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'VISE1','vise1@test.be','Vis E1','{"role":"employer","first_name":"Rek","last_name":"V1","locale":"fr"}'),
   (:'VISE2','vise2@test.be','Vis E2','{"role":"employer","first_name":"Rek","last_name":"V2","locale":"en"}'),
   (:'VISEU','viseu@test.be','Vis EU','{"role":"employer","first_name":"Rek","last_name":"VU","locale":"nl"}');
+select test_fixture.attest_candidates();
 insert into public.companies(id,name,status) values
   (:'VISF1','Firma Vis 1','verified'), (:'VISF2','Firma Vis 2','verified'), (:'VISFU','Firma Vis U','unverified');
 insert into public.company_members(company_id,profile_id,role,is_active) values
@@ -6937,12 +6957,10 @@ reset role;
 -- AGE492. Polityka wieku kandydatów (#492, 0110): próg jako dane (domyślnie 18,
 -- niezatwierdzony), deklaracja „mam co najmniej N lat” bez daty urodzenia, egzekwowana
 -- w bazie dla aplikacji, propozycji, widoczności profilu, aplikacji gościa i rejestracji.
--- Fixture deklaracji jest tu WYŁĄCZONY — konta poniżej nie mają deklaracji, dopóki jej
--- nie złożą. Kontrole ujemne: bez triggera aplikacja przechodzi (AGE9n), bez wrappera
+-- Konta poniżej są tworzone BEZ fixture'u deklaracji — nie mają jej, dopóki jej nie złożą. Kontrole ujemne: bez triggera aplikacja przechodzi (AGE9n), bez wrappera
 -- gość bez deklaracji przechodzi (AGE14n).
 -- ============================================================================
 reset role; reset app.current_uid;
-alter table public.profiles disable trigger zz_test_fixture_attest_candidate_age;
 \set AGC  'e4920000-0000-0000-0000-000000000001'
 \set AGC2 'e4920000-0000-0000-0000-000000000002'
 \set AGE  'e4920000-0000-0000-0000-000000000003'
@@ -7165,6 +7183,5 @@ set role authenticated; set app.current_uid = :'AGC'; select pg_temp.assert_clie
 select pg_temp.expect_error(format('select public.record_candidate_age_attestation(%L, 18, ''pl'')', :'AGC2'),
   'permission denied', 'AGE16c klient nie zapisuje receiptu rejestracji');
 reset role; reset app.current_uid;
-alter table public.profiles enable trigger zz_test_fixture_attest_candidate_age;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
