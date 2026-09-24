@@ -775,6 +775,21 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 ### Etap 8 — jakość
 - [x] Testy: Vitest (matching, recipient-locale, i18n keys, error-keys), integracyjne RLS+seed w CI (`postgres:16`), Playwright (smoke/seo/flows)
 - [~] Testy Playwright: języki/detal oferty/CTA/noindex paneli/cookies/SEO gotowe (`flows.spec`+smoke+seo, 12 pass); do rozbudowy: aplikowanie/propozycje pod realną sesją
+  Przepływ na PostgreSQL 16 (#351, #66 — częściowo): `npm run test:e2e:real`
+  (`scripts/test-e2e-real.mjs` + `playwright.real-flow.config.ts`, spec `tests/e2e-real/`).
+  Izolowana baza o jawnym hoście/porcie/nazwie (`E2E_PG*`, nazwa musi zawierać „e2e”), migracje
+  produkcyjne, jednorazowe ograniczone loginy app/auth. Sesje Better Auth (rejestracja →
+  weryfikacja → logowanie → cookie), tożsamość z cookie (`readPortalIdentity`) →
+  `withUserTransaction` pod RLS. Kroki: onboarding 1–6 z błędem drugiej części kroku 5
+  i `finish_onboarding`, aplikacja (podwójne kliknięcie), status, propozycja (retry), akceptacja,
+  wiadomości w obie strony z licznikiem, `email_deliveries` fr/nl, obce konta bez dostępu.
+  Przeglądarka widzi ofertę z bazy (`next dev` z `DATABASE_APP_URL`) i jej zniknięcie po
+  zamknięciu. Kontrole ujemne: `E2E_REAL_MUTATION=rls-applications-off|finish-onboarding-noop|
+  step5-swallow-error|recipient-locale-en|retry-new-key` — każda daje czerwony test.
+  **Otwarte:** panele i Server Actions nadal używają klienta Supabase (PostgREST nie ustawia
+  `app.current_uid`), więc kliknięć w panelach i `revalidatePath` ten test nie obejmuje — po
+  #24/#25 dołożyć kroki UI w tym samym configu. Wpięcie w CI (job z usługą `postgres:16`) —
+  gotowy fragment `ci.yml` w opisie PR tej zmiany.
   Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
   worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
@@ -853,6 +868,7 @@ npm run lint           # ESLint
 npm run typecheck      # tsc --noEmit
 npm run test           # Vitest (unit)
 npm run test:e2e       # Playwright
+npm run test:e2e:real  # Playwright + izolowany PostgreSQL 16 (E2E_PG*; przepływ kandydat ↔ pracodawca)
 npm run verify         # lint + typecheck + test (uruchamiaj przed commitem)
 npm run db:reset       # (supabase CLI) reset + migracje + seed [lokalnie]
 ```
