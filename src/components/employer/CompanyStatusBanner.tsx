@@ -67,6 +67,11 @@ export interface CompanyStatusBannerProps {
   variant?: 'company' | 'dashboard' | 'wizard';
   /** Dodatkowa akcja pod opisem (wariant `company`). */
   action?: React.ReactNode;
+  /**
+   * Uzasadnienie admina dla odrzuconej/zawieszonej firmy (#310) — pokazywane w wariancie
+   * `company` tylko przy statusie rejected/suspended.
+   */
+  reason?: string | null;
   className?: string;
 }
 
@@ -74,6 +79,7 @@ export function CompanyStatusBanner({
   status,
   variant = 'company',
   action,
+  reason,
   className,
 }: CompanyStatusBannerProps): React.JSX.Element | null {
   const t = useTranslations('company');
@@ -115,6 +121,13 @@ export function CompanyStatusBanner({
             {t('bannerLink')}
             <ArrowRight className="size-3.5" aria-hidden="true" />
           </Link>
+        ) : null}
+
+        {variant === 'company' && reason && (status === 'rejected' || status === 'suspended') ? (
+          <div>
+            <p className="font-medium">{t('bannerReasonLabel')}</p>
+            <p className="whitespace-pre-line break-words text-foreground">{reason}</p>
+          </div>
         ) : null}
 
         {variant === 'company' && action ? action : null}
