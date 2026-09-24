@@ -113,10 +113,13 @@ export function PublicSaveJobButton({
   jobId,
   className,
   iconOnly = false,
+  plain = false,
 }: {
   jobId: string;
   className?: string;
   iconOnly?: boolean;
+  /** Bez obramowania (karta-paszport) — tylko z `iconOnly`. */
+  plain?: boolean;
 }) {
   const context = React.useContext(SavedContext);
   const t = useTranslations('jobs');
@@ -138,14 +141,19 @@ export function PublicSaveJobButton({
             : saved
               ? t('saved')
               : t('save');
-  const style = cn(
-    'relative z-10 inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 text-sm transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
-    saved ? 'text-accent' : 'text-muted-foreground',
-  );
+  // Wariant `plain` (karta-paszport) = `.p-save` z prototypu (klasa `.pp-save` w globals.css):
+  // sama zakładka 30 × 30 px bez obramowania, zapisana na jasnoczerwonym tle (aria-pressed).
+  const flat = iconOnly && plain;
+  const style = flat
+    ? 'pp-save focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60'
+    : cn(
+        'relative z-10 inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 text-sm transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
+        saved ? 'text-accent' : 'text-muted-foreground',
+      );
   const Icon = saved ? BookmarkCheck : Bookmark;
   const content = (
     <>
-      <Icon className="h-5 w-5" aria-hidden="true" />
+      <Icon className={flat ? undefined : 'h-5 w-5'} strokeWidth={flat ? 1.5 : undefined} aria-hidden="true" />
       {!iconOnly && label}
     </>
   );
@@ -164,7 +172,7 @@ export function PublicSaveJobButton({
     <span className={cn('relative z-10 inline-flex flex-col', className)}>
       <button
         type="button"
-        className={cn(style, 'w-full')}
+        className={flat ? style : cn(style, 'w-full')}
         aria-label={label}
         title={label}
         aria-pressed={status === 'candidate' ? saved : undefined}

@@ -21,7 +21,8 @@ function messages(locale: string): Messages {
   ) as Messages;
 }
 
-const cards = 'main ul.divide-y > li';
+// Karty wyników (siatka `<ul>` z kartą-paszportem w każdym `<li>`).
+const cards = 'main li:has(> article)';
 
 for (const locale of ['pl', 'en'] as const) {
   test(`pusty wynik samego słowa kluczowego ma działający reset: ${locale}`, async ({

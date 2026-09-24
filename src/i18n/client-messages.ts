@@ -26,6 +26,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'files',
   'filters',
   'footer',
+  'guestApply',
   'home',
   'job',
   'jobImport',

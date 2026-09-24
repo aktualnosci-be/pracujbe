@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """
-Podzbiór fontu Inter dla Pracuj.be (#388).
+Podzbiór fontu DM Sans dla Pracuj.be (#388, font z prototypu „Ludzie i praca” — #5/#7).
 
-Wejście: assets/fonts/InterVariable-4.001.woff2 — oryginalny wariant zmienny Inter 4.001
-(rsms/inter, licencja SIL OFL 1.1; ~352 KB, 2 937 glifów: cyrylica, greka, wietnamski...).
-Wyjście: src/app/fonts/InterVariable-latin.woff2 — tylko to, czego potrzebują pl/nl/fr/en.
+Wejście: assets/fonts/DMSans-4.004[opsz,wght].ttf — oryginalny wariant zmienny DM Sans 4.004
+(googlefonts/dm-fonts przez google/fonts `ofl/dmsans`, licencja SIL OFL 1.1 — pełny tekst
+w assets/fonts/DMSans-OFL.txt; ~235 KB TTF, 486 glifów, osie opsz 9–40 i wght 100–1000).
+Wyjście: src/app/fonts/DMSans-latin.woff2 — tylko to, czego potrzebują pl/nl/fr/en.
 
 Co zostaje:
-- oś `wght` zawężona do 400–700 (kod używa tylko font-normal/medium/semibold/bold);
-- oś `opsz` 14–32 bez zmian (automatyczny krój optyczny dla nagłówków);
+- oś `wght` zawężona do 400–800 (font-normal … font-bold oraz 750/800 nagłówków i logo
+  z prototypu);
+- oś `opsz` 9–40 bez zmian (domyślnie 9). Strony publiczne w stylu prototypu (`.pp-*`) mają
+  `font-optical-sizing: none`, czyli opsz 9 — dokładnie plik „DM Sans 9pt”, który prototyp
+  dostaje z Google Fonts; panele zostają przy automatycznym kroju optycznym;
 - znaki: Basic Latin + Latin-1 + Latin Extended-A (ąćęłńóśźż, éèêëàâçîïôûùœ, ĳ),
   ș/ț, akcenty łączone, interpunkcja typograficzna („” ‘’ – — … • « »), €, ™, strzałki,
   znaki matematyczne używane w UI (− ≈ ≠ ≤ ≥), ✓;
@@ -28,8 +32,8 @@ from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "assets" / "fonts" / "InterVariable-4.001.woff2"
-TARGET = ROOT / "src" / "app" / "fonts" / "InterVariable-latin.woff2"
+SOURCE = ROOT / "assets" / "fonts" / "DMSans-4.004[opsz,wght].ttf"
+TARGET = ROOT / "src" / "app" / "fonts" / "DMSans-latin.woff2"
 
 # Znaki zachowane w podzbiorze (lista sprawdzana w tests/unit/font-subset.test.ts).
 UNICODES = [
@@ -81,7 +85,7 @@ def main() -> None:
     subsetter = subset.Subsetter(options)
     subsetter.populate(unicodes=UNICODES)
     subsetter.subset(font)
-    font = instantiateVariableFont(font, {"wght": (400, 700)})
+    font = instantiateVariableFont(font, {"wght": (400, 800)})
 
     TARGET.parent.mkdir(parents=True, exist_ok=True)
     font.flavor = "woff2"

@@ -12,8 +12,9 @@ import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
 
 /**
- * #303 — gość po kliknięciu „Aplikuj” od razu widzi wybór „załóż profil / zaloguj się”
- * z powrotem na ofertę, a nie formularz, który i tak odrzuci po wysłaniu.
+ * #303 — gość po kliknięciu „Aplikuj” widzi wybór „załóż profil / zaloguj się” z powrotem na
+ * ofertę, a nie formularz zalogowanego kandydata, który i tak odrzuci po wysłaniu.
+ * #98 — obok tego wyboru gość ma jednorazową aplikację bez konta (osobny formularz).
  */
 
 const JOB_PATH = '/pl/oferty-pracy/murarz-bruksela-1002';
@@ -21,6 +22,7 @@ const NEXT = encodeURIComponent(JOB_PATH);
 const JOB_ID = '11111111-1111-4111-8111-111111111111';
 
 vi.mock('@/lib/actions/applications', () => ({ applyToJob: vi.fn() }));
+vi.mock('@/lib/actions/guest-applications', () => ({ submitGuestApplication: vi.fn() }));
 vi.mock('@/lib/actions/candidate', () => ({ toggleSavedJob: vi.fn() }));
 vi.mock('@/lib/actions/public-saved-jobs', () => ({ getPublicSavedJobs: vi.fn() }));
 vi.mock('next/navigation', () => ({ usePathname: () => JOB_PATH }));
@@ -68,7 +70,7 @@ function renderModal(locale: string, messages: typeof en, demo = false) {
 
 describe('ApplyModal — gość (#303)', () => {
   for (const [locale, messages] of Object.entries({ pl, nl, fr, en })) {
-    it(`gość widzi rejestrację i logowanie z powrotem na ofertę, bez formularza (${locale})`, async () => {
+    it(`gość widzi aplikację bez konta oraz rejestrację i logowanie z powrotem na ofertę (${locale})`, async () => {
       vi.mocked(getPublicSavedJobs).mockResolvedValue({ status: 'anonymous' });
       renderModal(locale, messages as typeof en);
 
@@ -84,10 +86,13 @@ describe('ApplyModal — gość (#303)', () => {
         'href',
         `/logowanie?next=${NEXT}`,
       );
-      expect(dialog).toHaveTextContent(messages.apply.guestSubtitle);
-      // Bez formularza i bez tekstów o „danych z profilu”.
+      expect(dialog).toHaveTextContent(messages.guestApply.subtitle);
+      // #98: formularz gościa (imię, e-mail), bez formularza kandydata i tekstów o „danych z profilu”.
+      const guestForm = await within(dialog).findByTestId('guest-apply-form');
+      expect(within(guestForm).getByRole('textbox', { name: new RegExp(messages.guestApply.fullName) })).toBeVisible();
+      expect(within(guestForm).getByRole('textbox', { name: new RegExp(messages.guestApply.email) })).toBeVisible();
       expect(document.getElementById('apply-phone')).toBeNull();
-      expect(within(dialog).queryByRole('button', { name: messages.apply.submit })).toBeNull();
+      expect(within(dialog).getAllByRole('button', { name: messages.apply.submit })).toHaveLength(1);
       expect(dialog).not.toHaveTextContent(messages.apply.profileNote);
       expect(dialog).not.toHaveTextContent(messages.apply.subtitle);
     });
@@ -102,6 +107,7 @@ describe('ApplyModal — gość (#303)', () => {
     await within(dialog).findByRole('button', { name: en.apply.submit });
     expect(document.getElementById('apply-phone')).not.toBeNull();
     expect(within(dialog).queryByTestId('apply-guest')).toBeNull();
+    expect(within(dialog).queryByTestId('guest-apply-form')).toBeNull();
     expect(dialog).toHaveTextContent(en.apply.profileNote);
   });
 

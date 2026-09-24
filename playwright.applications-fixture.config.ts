@@ -20,6 +20,8 @@ export default defineConfig({
         '**/apply-phone-validation.spec.ts',
         // Pytania screeningowe oferty fikcyjnej 1003 (#101).
         '**/apply-screening.spec.ts',
+        // #98: aplikacja bez konta (gość = cookie fixture, bez bazy).
+        '**/guest-apply.spec.ts',
         '**/job-posting-fixture.spec.ts',
         '**/offer-message-login.spec.ts',
         // Formularz zgłoszenia treści (#41).

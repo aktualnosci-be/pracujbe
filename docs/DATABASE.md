@@ -114,6 +114,18 @@ alter table public.messages drop column if exists client_message_id;
 
 Rollback usuwa tylko identyfikatory operacji; treść wiadomości pozostaje bez zmian.
 
+## Aplikacja bez konta
+
+`applications.candidate_id` może być `NULL` wyłącznie z kompletem snapshotu gościa
+(`applications_candidate_or_guest_chk`: `guest_name`, `guest_email`). Częściowy unikat
+`uq_applications_guest_email_job (job_id, guest_email)` dopuszcza jedną aktywną aplikację
+gościa na (oferta, e-mail). Oczekujące zgłoszenia (`guest_application_requests`) nie mają
+grantów ani polityk — tylko RPC `submit_guest_application` / `confirm_guest_application`
+(service_role) i `claim_guest_application` (authenticated). Tokeny są przechowywane
+wyłącznie jako hash SHA-256. Zmianę `candidate_id` (NULL → `auth.uid()`) trigger
+`enforce_application_integrity` dopuszcza tylko wewnątrz `claim_guest_application`.
+Szczegóły, retencja i rollback: [`GUEST_APPLY.md`](./GUEST_APPLY.md). Migracja: `0095`.
+
 ## Publiczne zgłoszenia treści (DSA) i trwały model sprawy
 
 Migracja `supabase/migrations/0094_dsa_notices.sql` (#41). Zgłoszenie z publicznego

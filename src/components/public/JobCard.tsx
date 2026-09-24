@@ -1,7 +1,7 @@
-import { formatSalaryRange } from '@/lib/salary';
+import { formatSalaryParts } from '@/lib/salary';
 
 import * as React from 'react';
-import { ArrowUpRight, BadgeCheck } from 'lucide-react';
+import { ArrowRight, BadgeCheck } from 'lucide-react';
 import { getFormatter, getLocale, getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
@@ -22,6 +22,13 @@ import { formatPublishedRelative, PUBLISHED_DATE_TIME_ZONE } from '@/lib/relativ
  * tras), więc inne strony dociągałyby wtedy chunki strony głównej i listy. Względna data liczy
  * się raz, na serwerze, z dokładnością do dnia kalendarzowego (`formatPublishedRelative`,
  * zgodne z ISR); pełna data jest w `title`, więc HTML z cache nie wprowadza w błąd.
+ *
+ * Wygląd = kalka `.job-passport` z prototypu (conditions.css + extended.css; klasy `.pp-passport*`
+ * w globals.css): jedna ramka, promień 24 px (20 px ≤ 500 px), pola GDZIE / WYNAGRODZENIE /
+ * WARUNKI między liniami, okres stawki drobniej pod kwotą, stopka z logotypem i „Poznaj ofertę →”.
+ * Bez stawki zostają dwa pola na całą szerokość. Karta nie ma marginesów — siatkę daje lista
+ * (`.pp-job-grid`). Stany aplikacji spoza prototypu (demo, nowa, weryfikacja, data) są w wierszu
+ * nazwy firmy.
  */
 
 /** Ścieżka szczegółów oferty (prefiks języka dokłada next-intl Link). */
@@ -49,7 +56,7 @@ export async function JobCard({
     getFormatter(),
   ]);
 
-  const salary = formatSalaryRange(job, locale, {
+  const salary = formatSalaryParts(job, locale, {
     from: value => t('passport.salaryFrom', { value }),
     to: value => t('passport.salaryTo', { value }),
     period: period => t(`passport.salaryPeriods.${period}`),
@@ -58,80 +65,77 @@ export async function JobCard({
   const relative = formatPublishedRelative(job.publishedAt, locale);
   const withMatch = showMatch === true && typeof matchScore === 'number';
   const showRegion = job.region.length > 0 && job.region !== job.city;
+  // Fikcyjna firma demo nie dostaje odznaki weryfikacji (#297).
+  const verified = job.companyVerified && !job.isDemo;
 
   return (
-    <article
-      className={cn(
-        'relative min-w-0 rounded-3xl border border-border bg-card p-5 transition-colors hover:border-muted-foreground sm:p-6',
-        className,
-      )}
-    >
-      <header className="flex items-center justify-between gap-3">
-        <p className="flex min-w-0 items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-          {tCategory(job.category)}
-        </p>
-        <PublicSaveJobButton jobId={job.id} iconOnly />
+    <article className={cn('pp-passport', className)}>
+      <header>
+        <p className="pp-passport-category">{tCategory(job.category)}</p>
+        <PublicSaveJobButton jobId={job.id} iconOnly plain />
       </header>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <h3 className="min-w-0 break-words text-2xl font-bold leading-tight tracking-tight text-foreground">
-          <Link
-            href={`${JOB_DETAIL_BASE}/${job.slug}`}
-            className="after:absolute after:inset-0 after:rounded-3xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2"
-          >
-            {job.title}
-          </Link>
-        </h3>
+      <h3>
+        <Link
+          href={`${JOB_DETAIL_BASE}/${job.slug}`}
+          className="after:absolute after:inset-0 after:rounded-[24px] after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 max-[500px]:after:rounded-[20px]"
+        >
+          {job.title}
+        </Link>
+      </h3>
+      {/* Wiersz firmy; stany spoza prototypu (oznaczenie demo — Invariant #12, nowa oferta,
+          weryfikacja, data) w tym samym wierszu, żeby karta zachowała wysokość z prototypu. */}
+      <p className="pp-passport-company">
+        <span>{job.companyName}</span>
         {job.isDemo ? (
-          <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning-text">
+          <span className="pp-passport-tag rounded-full border border-warning/40 bg-warning/10 px-2 font-medium text-warning-text">
             {t('demoBadge')}
           </span>
         ) : null}
         {job.isNew ? (
-          <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent-dark">
+          <span className="pp-passport-tag rounded-full bg-accent/10 px-2 font-medium text-accent-dark">
             {t('newBadge')}
           </span>
         ) : null}
-      </div>
-      <p className="mb-6 mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-        <span>{job.companyName}</span>
-        {/* Fikcyjna firma demo nie dostaje odznaki weryfikacji (#297). */}
-        {job.companyVerified && !job.isDemo ? (
-          <span className="inline-flex items-center gap-1 text-success-text">
+        {verified ? (
+          <span className="pp-passport-tag text-success-text">
             <BadgeCheck className="h-4 w-4" aria-hidden="true" />
             {tJob('verified')}
           </span>
         ) : null}
+        {relative ? (
+          <time
+            className="pp-passport-tag"
+            dateTime={job.publishedAt}
+            title={format.dateTime(new Date(job.publishedAt), { dateStyle: 'long', timeZone: PUBLISHED_DATE_TIME_ZONE })}
+          >
+            {relative}
+          </time>
+        ) : null}
       </p>
 
-      <dl className={cn(
-        'grid grid-cols-2 gap-x-4 gap-y-5 border-y border-border py-5',
-        salary !== null && 'sm:grid-cols-3',
-      )}>
-        <div className="min-w-0">
-          <dt className="mb-2 break-words hyphens-auto text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('passport.location')}</dt>
-          <dd className="break-words text-base font-semibold text-foreground">
+      <dl className={cn('pp-passport-data', salary === null && 'pp-without-salary')}>
+        <div>
+          <dt>{t('passport.location')}</dt>
+          <dd>
             {job.city}
-            {showRegion ? <span className="mt-1 block text-sm font-normal text-muted-foreground">{job.region}</span> : null}
+            {showRegion ? <small>{job.region}</small> : null}
           </dd>
         </div>
         {salary !== null ? (
-          <div className="min-w-0 border-l border-border pl-4">
-            <dt className="mb-2 break-words hyphens-auto text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('passport.salary')}</dt>
-            <dd className="break-words text-base font-semibold text-foreground">{salary}</dd>
+          <div>
+            <dt>{t('passport.salary')}</dt>
+            <dd>
+              {salary.amount}
+              {salary.period ? <>{' '}<small>{salary.period}</small></> : null}
+            </dd>
           </div>
         ) : null}
-        <div className={cn(
-          'min-w-0',
-          salary !== null
-            ? 'col-span-2 border-t border-border pt-4 sm:col-span-1 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0'
-            : 'border-l border-border pl-4',
-        )}>
-          <dt className="mb-2 break-words hyphens-auto text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('passport.conditions')}</dt>
-          <dd className="break-words text-base font-semibold text-foreground">
+        <div>
+          <dt>{t('passport.conditions')}</dt>
+          <dd>
             {tContract(job.contractType)}
-            {highlights.length > 0 ? <span className="mt-1 block text-sm font-normal text-muted-foreground">{highlights.join(' · ')}</span> : null}
+            {highlights.length > 0 ? <small>{highlights.join(' · ')}</small> : null}
           </dd>
         </div>
       </dl>
@@ -142,19 +146,15 @@ export async function JobCard({
           <MatchBar value={matchScore as number} showLabel />
         </div>
       ) : null}
-      <footer className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        {relative ? (
-          <time
-            dateTime={job.publishedAt}
-            title={format.dateTime(new Date(job.publishedAt), { dateStyle: 'long', timeZone: PUBLISHED_DATE_TIME_ZONE })}
-            className="text-xs text-muted-foreground"
-          >
-            {relative}
-          </time>
-        ) : null}
-        <span className="ml-auto inline-flex min-h-12 items-center gap-3 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground" aria-hidden="true">
+      {/* Stopka jak `.job-passport > footer`: logotyp tekstowy i „Poznaj ofertę →”. Oba są
+          dekoracyjne — link tytułu obejmuje całą kartę, więc czytnik ogłasza tylko tytuł. */}
+      <footer>
+        <span className="pp-passport-brand" aria-hidden="true">
+          pracuj<span className="pp-passport-dot">.be</span>
+        </span>
+        <span className="pp-passport-cta" aria-hidden="true">
           {t('passport.viewOffer')}
-          <ArrowUpRight className="h-4 w-4" />
+          <ArrowRight strokeWidth={1.5} />
         </span>
       </footer>
     </article>

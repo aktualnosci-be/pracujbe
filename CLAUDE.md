@@ -55,7 +55,9 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 **Paleta:** tokeny w `src/app/globals.css`, mapowane przez Tailwind. Kolor marki: czerwień około `#D92932`, tekst około `#151515`, tło `#FFFFFF`. Kolory semantyczne sukcesu, ostrzeżeń i błędów zachowują swoje znaczenie. Nie wpisuj hexów w komponentach. Kontrast WCAG 2.2 AA obowiązkowy.
 
-**Typografia:** obecnie lokalny Inter z polskimi znakami. Zmiana fontu wymaga sprawdzenia czytelności i wpływu na układ.
+**Typografia:** lokalny DM Sans jak w prototypie (`next/font/local`, podzbiór ~42 KB z polskimi znakami, osie wght 400–800 i opsz; sekcje `.pp-*` mają `font-optical-sizing: none` = opsz 9, czyli plik, który prototyp dostaje z Google Fonts; SIL OFL 1.1 — `assets/fonts/DMSans-OFL.txt`, przepis `scripts/subset-font.py`). Zmiana fontu wymaga sprawdzenia czytelności, budżetu fontów i CLS (`perf-budget-static.mjs`, `perf-lab.mjs`).
+
+**Kalka prototypu (#5/#7, decyzja właściciela 2026-09-24: „kalka jeden do jednego”):** nagłówek, hero, wyszukiwarka, „Najnowsze oferty”, karta-paszport, „W czym jesteś dobry?” i dolny pasek stopki mają reguły przepisane dosłownie z `docs/design/people-passport/prototype` (style.css → directions.css → people.css → conditions.css → extended.css) jako klasy `.pp-*` w `src/app/globals.css`; kolory tylko jako tokeny `--pp-*` w `:root`. Progi `@container` prototypu (1050/950/850/760/600/500 px) są media queries. Siatka ofert = to, co prototyp renderuje: 2 kolumny, 1 ≤ 950 px (conditions.css nadpisuje 3 kolumny z people.css); lista z filtrami 1 kolumna. Odstępstwa (tylko wymogi repo): #777 → #767676 (AA), fokus widoczny, stany demo i statusy karty w wierszu firmy, przycisk menu ≤ 850 px, sekcje aplikacji spoza prototypu pod „W czym jesteś dobry?”. Zmieniając te widoki, porównuj zrzuty 1280/390 px z prototypem (nakładka); nie owijaj kart ramką `divide-y` (podwójne krawędzie).
 
 **Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Zasoby favicon/PWA/OG wymagają spójnej aktualizacji w etapie #7.
 
@@ -102,6 +104,7 @@ pracujbe/
 │  └─ LAUNCH_CHECKLIST.md
 ├─ supabase/
 │  ├─ migrations/                 # *.sql wersjonowane (kolejność wg prefiksu)
+│  ├─ rollback/                   # ręczne skrypty wycofania (np. 0097 ESCO)
 │  └─ seed.sql                    # dane demonstracyjne (oznaczone is_demo=true)
 ├─ src/
 │  ├─ app/
@@ -749,6 +752,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się
   policzyć” z ponowieniem, nigdy procent z niepełnych danych.
+- [~] Taksonomia ESCO v1.2.1 (#93, migracja `0097`, `docs/ESCO.md`): zawody/umiejętności z
+  przypiętego snapshotu tylko w PL/NL/FR/EN (RO/UK z issue pominięte — decyzja właściciela).
+  `esco_uri` = klucz, `occupation_labels`/`skill_labels` (preferred/alternative, FK do
+  `supported_locales`), `occupation_skills` (essential/optional), `esco_snapshots` (pliki +
+  SHA-256, atrybucja, raport). Import `npm run esco:import` (`scripts/esco/`): jedna transakcja
+  jako service_role, upsert po URI, ponowny import = zero zmian, inne pliki tej wersji →
+  `ESCO_CHECKSUM_MISMATCH`, wiersz ręczny z tym samym URI → `ESCO_MANUAL_CONFLICT` (skip/overwrite
+  tylko jawnie). Fallback `occupation_label`/`skill_label`: język → en → name. Słowniki czytelne
+  publicznie, zapis tylko service_role. Dowód: `rls.sql` ESCO93, unit `esco-snapshot`,
+  `npm run test:esco`. Fragment testowy (API ESCO, `is_demo`) w `tests/fixtures/esco/`.
+  **Do zrobienia (właściciel):** pobranie oficjalnych paczek CSV (formularz z linkiem e-mail),
+  zatwierdzenie `data/esco/esco-v1.2.1.manifest.json`, pełny import; atrybucja w UI i matching
+  na ESCO = osobne issues.
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -771,6 +787,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
   `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
   zgłoszeń (RLS gotowe).
+  Aplikacja bez konta (#98, migracja `0095`, `docs/GUEST_APPLY.md`): gość w ApplyModal
+  (`GuestApplyForm`: imię i nazwisko, e-mail, zgoda; reszta opcjonalna) → Turnstile
+  `guest_apply` + limity IP/adres → `submit_guest_application` (service_role, zgłoszenie
+  `pending` ze snapshotem zgody, e-mail `guestApplicationConfirm` w języku formularza) →
+  `/aplikacja/potwierdz` (przycisk, nie GET) → `confirm_guest_application` tworzy aplikację
+  z `candidate_id NULL` i snapshotem, powiadamia firmę jak `apply_to_job`, wysyła
+  `guestApplicationSent` z linkiem przejęcia → `/aplikacja/przejmij` →
+  `claim_guest_application` (kandydat ze zweryfikowanym, tym samym e-mailem; token działa
+  raz, ponowienie tego samego konta idempotentne). W bazie tylko hash tokenu; token =
+  HMAC(`GUEST_APPLY_SECRET`, cel:nonce), link składa worker. Pracodawca widzi aplikację
+  z oznaczeniem „Bez konta” (e-mail, telefon, status); rozmowa i propozycja dopiero po
+  przejęciu. Pytania screeningowe (#101) obowiązują także gościa: `record_screening_answers`
+  w trybie bez aplikacji waliduje odpowiedzi przy wysłaniu, potwierdzenie zapisuje je do
+  `application_screening_answers` (GA98-13). Retencja w `/api/maintenance`: niepotwierdzone 7 dni po ostatnim linku,
+  duplikaty 7 dni po potwierdzeniu (z e-mailami), token przejęcia zerowany po 30 dniach.
+  Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture). **Otwarte:** powiadomienie gościa
+  o zmianie statusu (brak profilu odbiorcy); okres retencji do potwierdzenia w polityce
+  prywatności (#40).
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
@@ -930,6 +964,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Bez kluczy poza produkcją = wyłączony; w produkcji brak kluczy = fail-closed rejestracji/resetu.
   CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. Polityka `report`
   chroni formularz zgłoszenia treści (#41). **Do zrobienia:** formularz kontaktu (`contact`).
+- [~] Operacje #47 (część kodowa, migracja `0096`): czujki `GET /api/health/ops` — tylko z
+  `HEALTH_CHECK_SECRET` (inaczej 404), same liczby z `ops_metrics()` (rola `pracujbe_ops` bez praw
+  do tabel; login `DATABASE_OPS_URL`, pula `ops` w `pool.ts`, fallback service-role), progi w
+  `src/lib/ops/sensors.ts` (wiek kolejek e-mail/auth, porzucone dzierżawy, zawieszone webhooki,
+  opóźnienie maintenance, 80% połączeń) → 503 `alert` / 200 = recovery. Kopia zaszyfrowana `age`
+  z manifestem i retencją (`scripts/db/backup.sh`) + odtworzenie z porównaniem sum
+  (`restore-backup.sh`), test `npm run test:backup` (PG16, 8 kontroli ujemnych; nie w CI).
+  `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
+  sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
+  `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
+  cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
+  `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
