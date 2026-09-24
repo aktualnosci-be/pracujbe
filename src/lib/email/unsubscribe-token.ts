@@ -93,7 +93,7 @@ export function verifyUnsubscribeToken(
 
 /** Adres strony potwierdzenia (link HTML/tekstowy w mailu), w języku odbiorcy. */
 export function unsubscribePageUrl(site: string, locale: string, token: string): string {
-  return `${site}/${locale}/wypisz?t=${encodeURIComponent(token)}`;
+  return `${site}/${locale}/wypisz#t=${encodeURIComponent(token)}`;
 }
 
 /**

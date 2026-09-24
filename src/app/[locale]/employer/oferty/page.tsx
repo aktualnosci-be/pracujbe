@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ExternalLink, MapPin, Pencil, Plus } from "lucide-react";
+import { ExternalLink, ImageIcon, MapPin, Pencil, Plus } from "lucide-react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
@@ -12,7 +12,7 @@ import {
   BTN_PRIMARY,
   BTN_SECONDARY,
   EYEBROW,
-  H1,
+  H1_EXTENDED,
   INFO_LABEL,
   INTRO,
   JOB_CARD,
@@ -80,6 +80,7 @@ export default async function EmployerOffersPage({
       : 1;
   setRequestLocale(locale);
   const td = await getTranslations("dashboard");
+  const tb = await getTranslations("campaignBanner");
   const [result, shell] = await Promise.all([
     getCompanyJobsLoad(page),
     getEmployerShellData(),
@@ -96,7 +97,7 @@ export default async function EmployerOffersPage({
           <p className={EYEBROW}>
             {td("employerRole")}
           </p>
-          <h1 className={H1}>
+          <h1 className={H1_EXTENDED}>
             {td("navOffers")}
           </h1>
           <p className={INTRO}>
@@ -234,6 +235,21 @@ export default async function EmployerOffersPage({
                           >
                             <ExternalLink className="size-4" aria-hidden="true" />
                             {td("viewJob")}
+                          </Link>
+                        ) : null}
+                        {/* #175: baner kampanii tylko dla aktywnej oferty (dostęp i filtry egzekwuje baza). */}
+                        {canRecruitHere &&
+                        offer.status === "active" &&
+                        !offer.pastExpiry &&
+                        offer.slug &&
+                        !offer.slug.startsWith("draft-") ? (
+                          <Link
+                            href={`/employer/oferty/${offer.id}/baner`}
+                            aria-label={tb("openBannerLabel", { title: offer.title })}
+                            className={TEXT_LINK}
+                          >
+                            <ImageIcon className="size-4" aria-hidden="true" />
+                            {tb("openBanner")}
                           </Link>
                         ) : null}
                         {canRecruitHere ? (

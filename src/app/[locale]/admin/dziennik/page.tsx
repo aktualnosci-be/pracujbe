@@ -54,6 +54,7 @@ const ENTITY_LABEL: Record<string, string> = {
   application: 'entityApplication',
   offer: 'entityOffer',
   email_suppression: 'entityEmailSuppression',
+  screening_question_review: 'entityScreeningReview',
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -117,6 +118,11 @@ export default async function AdminAuditPage({
     if (entityType === 'report' && REPORT_STATUS_KEY[value]) return t(REPORT_STATUS_KEY[value]);
     if (entityType === 'application' && tStatus.has(camel(value))) return tStatus(camel(value));
     if (entityType === 'offer' && tOffer.has(value)) return tOffer(value);
+    if (entityType === 'screening_question_review') {
+      if (value === 'pending') return t('screeningStatusPending');
+      if (value === 'approved') return t('screeningStatusApproved');
+      if (value === 'rejected') return t('screeningStatusRejected');
+    }
     if (entityType === 'email_suppression') {
       if (value === 'lifted') return t('emailStatusLifted');
       if (EMAIL_SUPPRESSION_REASON_KEY[value]) return t(EMAIL_SUPPRESSION_REASON_KEY[value]);

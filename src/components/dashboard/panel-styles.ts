@@ -13,9 +13,9 @@
  * Breakpoint prototypu to `@container (max-width: 600px)` → tu `max-[600px]:`.
  */
 
-/** `.eyebrow` — 11 px, 700, rozstrzelenie .16em, kolor marki. */
+/** `.eyebrow` — 11 px, 700, interlinia `normal` DM Sans (≈ 1,3), rozstrzelenie .16em, kolor marki. */
 export const EYEBROW =
-  'block break-words text-[11px] font-bold uppercase tracking-[0.16em] text-primary';
+  'block break-words text-[11px] font-bold uppercase leading-[1.3] tracking-[0.16em] text-primary';
 
 /** `.dash-content h1` — 34 px / 750, interlinia 1.08, −0.05em, margines 8 px; ≤ 600 px: 30 px. */
 export const H1 =

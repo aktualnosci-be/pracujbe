@@ -9,6 +9,7 @@
  * klienta bez wpisu tutaj (albo wpis, którego klient nie używa) psuje test.
  */
 export const CLIENT_MESSAGE_NAMESPACES = [
+  'accountData',
   'admin',
   'application',
   'apply',
@@ -41,6 +42,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'onboarding',
   'profileVisibility',
   'savedSearches',
+  'screeningReview',
   'settings',
   'status',
   'team',

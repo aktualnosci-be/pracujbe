@@ -8,7 +8,7 @@ import { MatchBar } from "@/components/ui/match-bar";
 import { SendOfferButton } from "@/components/employer/SendOfferButton";
 import {
   EYEBROW,
-  H1,
+  H1_EXTENDED,
   INFO_VALUE,
   INTRO,
   H2_EXTENDED,
@@ -76,7 +76,7 @@ export default async function EmployerCandidatesPage({
         <p className={EYEBROW}>
           {td("topMatched")}
         </p>
-        <h1 className={H1}>
+        <h1 className={H1_EXTENDED}>
           {td("navCandidates")}
         </h1>
         <p className={INTRO}>

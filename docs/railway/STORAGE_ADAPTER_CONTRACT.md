@@ -1,6 +1,6 @@
 # Kontrakt adaptera prywatnych plików — część #26
 
-Stan zweryfikowany 21 września 2026: zaimplementowano `src/lib/storage/railway-bucket.ts` i testy transportu w `tests/unit/railway-bucket.test.ts`; przypięto SDK S3 w manifestach. Nie skonfigurowano bucketa i nie wykonano żądań do Railway. Adapter pozostaje niepodłączony do akcji i tras. Uwierzytelnienie i repozytorium metadanych z #24/#25 muszą być gotowe przed podpięciem endpointów. Kierunek storage: Railway Buckets, zgodnie z STORAGE_REPLACEMENT_REVIEW.md; jedna produkcja, pusta instalacja.
+Stan 24 września 2026: adapter `src/lib/storage/railway-bucket.ts` i repozytorium `src/lib/db/candidate-files.ts` są **podłączone** do akcji, trasy pobrania i UI (sekcja „Wdrożenie w aplikacji” niżej). Bucketu nie utworzono i nie wykonano żądań do Railway — tworzy go właściciel/integrator. Sesja pochodzi z Better Auth (`readPortalIdentity`); podpięcie tras paneli do tych sesji należy do #24. Kierunek storage: Railway Buckets, zgodnie z STORAGE_REPLACEMENT_REVIEW.md; jedna produkcja, pusta instalacja.
 
 ## Dokładny kontrakt zastępowanych funkcji
 
@@ -119,3 +119,28 @@ Wykonano dwie kontrole ujemne: dopuszczenie dodatkowego bajtu ponad limit i usun
 62 testy `tests/integration/candidate-files.test.ts` przeszły na osobnym PostgreSQL 16 z produkcyjnym loaderem migracji, ograniczonym loginem aplikacji i rzeczywistym RLS. Obejmują migrację istniejącej faktury, CHECK checksumy, własność mimo publicznej widoczności, role/aktywność konta, kwarantannę, walidację zapisu, dwa DELETE tego samego rekordu, błędy INSERT i odroczoną awarię COMMIT usunięcia. Usunięcie kontroli własności oraz filtra `scan_status` osobno oblało testy; po odtworzeniu kodu testy ponownie przeszły. Kontenery testowe usunięto i sprawdzono ich zniknięcie.
 
 Nie podłączono jeszcze tras CV, akcji ani UI. Testy pełnej sesji/cookie i endpointów pozostają do wykonania przy integracji #24/#25. Nie sprawdzono rzeczywistej prywatności bucketa, zgodności Railway z warunkowym PUT i checksumami SDK, jego Credentials i adresowania, przerwanego transferu sieciowego, restartu, dwóch replik ani backup/restore. Nie ma jeszcze GC/retry sprzątania, nowej walidacji OOXML ani AV. Adapter nie wystawia żadnych URL. Odbiór Railway wymaga osobno zatwierdzonego prywatnego bucketa; test SDK z zastąpionym transportem nie dowodzi działania dostawcy. Issue #26 pozostaje otwarte.
+
+## Wdrożenie w aplikacji (#26, 24 września 2026)
+
+- **Serwis** `src/lib/files/candidate-cv.ts` (`server-only`): `storeCandidateCv` (limit rozmiaru z odczytanych bajtów, sygnatura, OOXML dla DOCX → `put` pod kluczem `createCandidateCvKey(uid)` → `createOwnCandidateCv` ze `scanStatus='skipped'` i SHA-256 z adaptera; błąd INSERT albo niepewny PUT → `delete` tego klucza z jedną ponowną próbą przy błędzie przejściowym), `removeCandidateCv` (`deleteOwnCandidateCv … RETURNING` → dopiero potem `delete` obiektu; błąd sprzątania nie cofa sukcesu), `listCandidateCvs` (`id,fileName,downloadable`, bez URL/klucza), `issueCvDownloadLink` (`getOwnDownloadableCv` → token `private-download-token.ts`, TTL 60 s), `openCvDownload`.
+- **Runtime** `src/lib/files/runtime.ts`: pula `DATABASE_APP_URL`, jeden bucket z env na proces, `readCandidateSession` = `readPortalIdentity` dla nagłówków bieżącego żądania (aktywny profil, zweryfikowany e-mail, rola z bazy).
+- **Akcje** `src/lib/actions/files.ts`: `uploadCandidateCv`, `prepareCvDownload`, `deleteCandidateFile`. Klient podaje plik albo ID rekordu. Bez konfiguracji: poza produkcją `DEMO_UNAVAILABLE` (koniec fikcyjnego sukcesu demo), w produkcji `INTERNAL`.
+- **Trasa** `GET /api/files/cv/[id]?t=<token>` (Node, dynamiczna): brak konfiguracji/sesji/zły lub wygasły podpis/cudzy, usunięty albo niedopuszczony plik → 404 bez treści; awaria bazy lub bucketu → 503. Strumień z `openStream` (bez przekierowania na S3), zgodność długości i MIME z rekordem, nagłówki `attachment` (ASCII + `filename*`), `private, no-store`, `nosniff`, `no-referrer`, `CSP: default-src 'none'; sandbox`. Usunięcie rekordu lub kwarantanna od razu unieważnia wystawiony link.
+- **UI** `CvUpload`: nazwa pliku to przycisk „Pobierz” — link powstaje dopiero przy kliknięciu (`window.location.assign`, bez popupu). Plik w kwarantannie (`pending`/`infected`/nieznany) pokazuje opis `files.quarantined` bez pobrania; usunąć go można.
+- **Supabase Storage**: CV już go nie używa. `src/lib/storage.ts` zostaje wyłącznie dla PDF faktur (billing wyłączony, #51) — domknięcie w #27.
+- **Readiness**: `/api/health` (`checks.fileBucket`, `checks.fileDownloadSecret`) — same booleany, bez wartości. Nie blokuje `isAppReady`.
+- **Migracja**: brak nowej (wystarcza `database/auth/0060_file_checksum.sql`).
+
+### Uruchomienie na Railway (właściciel / integrator)
+
+1. Utworzyć bucket w projekcie (region jest nieodwracalny). Bucket Railway jest zawsze prywatny.
+2. W usłudze `pracujbe` dodać zmienne referencyjne presetu **AWS SDK** z zakładki Credentials bucketu: `AWS_ENDPOINT_URL`, `AWS_DEFAULT_REGION`, `AWS_S3_BUCKET_NAME` (faktyczna nazwa S3 z hashem, nie nazwa wyświetlana), `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` oraz `AWS_S3_URL_STYLE` (`virtual` albo `path`, jak podaje Credentials). Źródło nazw: [Railway Storage Buckets](https://docs.railway.com/storage-buckets), [`railway bucket` CLI](https://docs.railway.com/cli/bucket).
+3. Ustawić `FILE_DOWNLOAD_SECRET` (losowy, ≥ 32 znaki, niezależny od innych sekretów).
+4. Po wdrożeniu sprawdzić `/api/health` z `x-health-token`: `fileBucket` i `fileDownloadSecret` = `true`.
+5. Odbiór ręczny (przed #27): upload PDF/DOCX, pobranie, usunięcie, brak pobrania po wylogowaniu i z drugiego konta przy znanym linku, oraz czy Railway honoruje `If-None-Match: *` (drugi PUT tego samego klucza = 412).
+
+### Dowód
+
+`tests/unit/candidate-cv-storage.test.ts` (22 testy, rzeczywisty adapter i SDK S3 z transportem w pamięci; repozytorium zastąpione — jego RLS sprawdza test integracyjny wyżej), `candidate-cv-route-actions.test.ts` (11), `file-storage-env.test.ts` (13), `candidate-files-load.test.ts` (6), `cv-upload.test.tsx` (pobranie, błąd w 4 językach, kwarantanna). Kontrole ujemne (każda czerwona, po przywróceniu zielono): trasa bez weryfikacji podpisu, brak sprzątania obiektu po błędzie INSERT, brak porównania rozmiaru/MIME z rekordem, brak walidacji treści. E2E `cv-upload-size`, `cv-upload-mobile`, `panel-a11y` zielone.
+
+**Otwarte:** GC sierot po nieudanym sprzątaniu (dziś sam kod błędu w Sentry), AV/CDR (`pending` → `clean`), test na prawdziwym buckecie Railway, pobranie CV przez pracodawcę (brak polityki grantów).

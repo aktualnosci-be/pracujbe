@@ -32,7 +32,11 @@ const ROUTES = [
   '/admin/uzytkownicy',
   // Blokady adresów e-mail (#44).
   '/admin/poczta',
+  // Przegląd pytań screeningowych (#497).
+  '/admin/pytania',
   '/admin/dziennik',
+  '/admin/odwolania',
+  '/admin/raport-dsa',
 ];
 
 for (const viewport of [
