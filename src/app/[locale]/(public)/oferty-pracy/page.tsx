@@ -19,6 +19,7 @@ import {
 import { FilterSidebar, SortMenu } from '@/components/public/FilterSidebar';
 import { FilterSheet } from '@/components/public/FilterSheet';
 import { JobCard } from '@/components/public/JobCard';
+import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { Pagination } from '@/components/public/Pagination';
 import {
   SALARY_MAX_BOUND,
@@ -611,6 +612,12 @@ export default async function JobsListPage({
               ) : null}
             </div>
           ) : (
+            <>
+            {/* Lejek ofert (#99): pojawienie się w wynikach — bez ofert demonstracyjnych. */}
+            <JobFunnelBeacon
+              event="search_appearance"
+              jobIds={pageItems.filter((job) => !job.isDemo).map((job) => job.id)}
+            />
             <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
               {pageItems.map((job) => (
                 <li key={job.id}>
@@ -618,6 +625,7 @@ export default async function JobsListPage({
                 </li>
               ))}
             </ul>
+            </>
           )}
 
           <Pagination

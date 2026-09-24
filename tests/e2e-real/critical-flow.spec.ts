@@ -39,6 +39,7 @@ let otherEmployer: Actor; // inna firma — kontrola ujemna
 let otherCandidate: Actor; // inny kandydat — kontrola ujemna
 let admin: Actor;
 let jobId: string;
+let companyId: string;
 let applicationId: string;
 let offerId: string;
 let conversationId: string;
@@ -101,7 +102,7 @@ test('konta: prawdziwe sesje Better Auth, tożsamość tylko z cookie', async ()
 });
 
 test('pracodawca: firma zweryfikowana, szkic i publikacja; oferta widoczna publicznie z bazy', async ({ page }) => {
-  const companyId = await verifyCompany(employer, 'Logistiek NV');
+  companyId = await verifyCompany(employer, 'Logistiek NV');
   await verifyCompany(otherEmployer, 'Other Ltd');
 
   jobId = await employer.request(async (tx) => {
@@ -127,6 +128,93 @@ test('pracodawca: firma zweryfikowana, szkic i publikacja; oferta widoczna publi
   expect(response?.status()).toBe(200);
   await expect(page.getByRole('heading', { level: 1, name: JOB_TITLE })).toBeVisible();
   await expect(page.getByTestId('demo-jobs-notice')).toHaveCount(0);
+});
+
+/** Liczniki lejka (#99) oferty na dziś — odczyt operatora bazy (agregat nie ma dostępu klienta). */
+async function funnelToday(): Promise<{ detail_views: number; apply_started: number; search_appearances: number }> {
+  const [row] = rows<{ detail_views: number; apply_started: number; search_appearances: number }>(await stack.admin.query(
+    `SELECT detail_views, apply_started, search_appearances FROM public.job_funnel_daily
+      WHERE job_id = $1 AND day = (now() AT TIME ZONE 'Europe/Brussels')::date`, [jobId]));
+  return row ?? { detail_views: 0, apply_started: 0, search_appearances: 0 };
+}
+
+test('lejek ofert (#99): wyświetlenie, „Aplikuj” i wyniki listy liczone serwerowo, bez cookies; bot pominięty', async ({ browser }) => {
+  const start = await funnelToday();
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    const beacons: { body: Record<string, unknown>; cookie: string | undefined }[] = [];
+    page.on('request', (req) => {
+      if (req.url().endsWith('/api/job-funnel')) {
+        beacons.push({ body: req.postDataJSON() as Record<string, unknown>, cookie: req.headers()['cookie'] });
+      }
+    });
+
+    const view = page.waitForResponse((res) => res.url().endsWith('/api/job-funnel') && res.status() === 204);
+    await page.goto(`/fr/oferty-pracy/${JOB_SLUG}`);
+    await view;
+    await expect.poll(async () => (await funnelToday()).detail_views).toBe(start.detail_views + 1);
+
+    // Otwarcie formularza „Aplikuj” (także jako gość) — raz na wyświetlenie oferty.
+    const started = page.waitForResponse((res) => res.url().endsWith('/api/job-funnel') && res.status() === 204);
+    await page.getByRole('button', { name: /Postuler maintenant/ }).click();
+    await started;
+    await expect.poll(async () => (await funnelToday()).apply_started).toBe(start.apply_started + 1);
+
+    // Odświeżenie = nowe wyświetlenie (udokumentowana reguła), zdarzenia bez cookies i danych osób.
+    const refreshed = page.waitForResponse((res) => res.url().endsWith('/api/job-funnel') && res.status() === 204);
+    await page.reload();
+    await refreshed;
+    await expect.poll(async () => (await funnelToday()).detail_views).toBe(start.detail_views + 2);
+
+    // Wyniki listy: oferta pokazana na liście liczy się jako pojawienie w wynikach.
+    const listed = page.waitForResponse((res) => res.url().endsWith('/api/job-funnel') && res.status() === 204);
+    await page.goto('/fr/oferty-pracy');
+    await listed;
+    await expect.poll(async () => (await funnelToday()).search_appearances).toBe(start.search_appearances + 1);
+
+    expect(beacons.length).toBeGreaterThanOrEqual(4);
+    for (const beacon of beacons) {
+      expect(beacon.cookie).toBeUndefined();
+      expect(Object.keys(beacon.body).sort()).toEqual(['event', 'jobIds', 'nonce']);
+    }
+    // Endpoint lejka nie ustawia cookies (jedyne cookie kontekstu to język strony z next-intl).
+    for (const response of [await view, await started, await refreshed, await listed]) {
+      expect(await response.headerValue('set-cookie')).toBeNull();
+    }
+    expect((await context.cookies()).map((cookie) => cookie.name).filter((name) => name !== 'NEXT_LOCALE')).toEqual([]);
+  } finally {
+    await context.close();
+  }
+
+  // Ponowienie tego samego zgłoszenia (ten sam nonce) nie dubluje zliczenia; robot nie jest liczony.
+  const api = await browser.newContext();
+  try {
+    const nonce = uuid();
+    const send = (userAgent: string) => api.request.post('/api/job-funnel', {
+      data: { event: 'detail_view', nonce, jobIds: [jobId] },
+      headers: { 'user-agent': userAgent, 'sec-fetch-site': 'same-origin' },
+    });
+    const before = (await funnelToday()).detail_views;
+    const browserUa = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36';
+    expect((await send(browserUa)).status()).toBe(204);
+    expect((await send(browserUa)).status()).toBe(204);
+    expect((await send('Mozilla/5.0 (compatible; Googlebot/2.1)')).status()).toBe(204);
+    expect((await funnelToday()).detail_views).toBe(before + 1);
+  } finally {
+    await api.close();
+  }
+
+  // Panel: pracodawca (recruiter+) widzi lejek swojej oferty; inna firma nie ma dostępu.
+  const today = rows<{ d: string }>(await stack.admin.query(
+    "SELECT to_char((now() AT TIME ZONE 'Europe/Brussels')::date, 'YYYY-MM-DD') AS d"))[0]!.d;
+  const [mine] = (await employer.request((tx) => rpcRows<{ job_id: string; detail_views: string; apply_started: string }>(
+    tx, 'get_company_job_funnel', { p_company_id: companyId, p_from: today, p_to: today })))
+    .filter((row) => row.job_id === jobId);
+  expect(Number(mine?.detail_views)).toBe(start.detail_views + 3);
+  expect(Number(mine?.apply_started)).toBe(start.apply_started + 1);
+  await expectDomainError(otherEmployer.request((tx) => rpcRows(
+    tx, 'get_company_job_funnel', { p_company_id: companyId, p_from: today, p_to: today })), 'PERMISSION_DENIED');
 });
 
 test('onboarding kandydata (#66): kroki 1–6, błąd kroku 5 nie narusza zapisanych danych, finish_onboarding', async () => {

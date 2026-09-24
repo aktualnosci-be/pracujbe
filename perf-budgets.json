@@ -1,0 +1,26 @@
+{
+  "$comment": "Bramka wydajności (#395) — opis w docs/PERFORMANCE_CHECKLIST.md §10. Zmiana budżetu = świadomy diff w PR z uzasadnieniem. Wartości: stan main 2026-09-24 + ok. 5% (JS) lub zapas na rozrzut hostowanych runnerów (lab).",
+  "static": {
+    "routeJsGzipKb": {
+      "/[locale]/(public)/page": 173,
+      "/[locale]/(public)/oferty-pracy/page": 175,
+      "/[locale]/(public)/oferty-pracy/[slug]/page": 241,
+      "/[locale]/(public)/poradniki/[slug]/page": 162,
+      "/[locale]/(auth)/logowanie/page": 194
+    },
+    "fontFileMaxKb": 100,
+    "fontTotalMaxKb": 150
+  },
+  "lab": {
+    "runs": 3,
+    "cpuThrottling": 4,
+    "network": { "downloadKbps": 1600, "uploadKbps": 750, "latencyMs": 150 },
+    "viewport": { "width": 412, "height": 823 },
+    "thresholds": {
+      "lcpMsFirstVisit": 1500,
+      "lcpMsWithConsent": 1500,
+      "cls": 0.05,
+      "tbtMs": 400
+    }
+  }
+}
