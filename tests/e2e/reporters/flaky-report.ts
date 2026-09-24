@@ -9,11 +9,10 @@ import type { FullResult, Reporter, Suite, TestCase } from '@playwright/test/rep
  * sukces, więc bez tego raportu ponowienia ukrywały niestabilność. Reporter:
  * - wypisuje listę flaków z błędem nieudanej próby na stdout,
  * - dopisuje ją do podsumowania joba GitHub Actions (`GITHUB_STEP_SUMMARY`),
- * - zapisuje `test-results/flaky-tests.json` (także pusty — ślad, że raport powstał).
+ * - zapisuje JSON (`outputFile`, domyślnie `test-results/flaky-tests.json`; w CI do
+ *   `playwright-report/`, który trafia do artefaktu) — także pusty, jako ślad raportu.
  * Status przebiegu ustala `failOnFlakyTests` w playwright.config.ts, nie ten reporter.
  */
-
-const REPORT_FILE = 'test-results/flaky-tests.json';
 
 interface FlakyEntry {
   title: string;
@@ -31,7 +30,8 @@ function firstLine(message: string | undefined): string {
 
 function toEntry(test: TestCase): FlakyEntry {
   return {
-    title: test.titlePath().filter(Boolean).slice(1).join(' › '),
+    // titlePath: [projekt, plik, …describe, test] — plik podajemy osobno.
+    title: test.titlePath().filter(Boolean).slice(2).join(' › '),
     file: test.location.file.replace(`${process.cwd()}/`, ''),
     line: test.location.line,
     attempts: test.results.length,
@@ -43,6 +43,11 @@ function toEntry(test: TestCase): FlakyEntry {
 
 export default class FlakyReporter implements Reporter {
   private root: Suite | undefined;
+  private readonly outputFile: string;
+
+  constructor(options: { outputFile?: string } = {}) {
+    this.outputFile = options.outputFile ?? 'test-results/flaky-tests.json';
+  }
 
   onBegin(_config: unknown, suite: Suite): void {
     this.root = suite;
@@ -51,12 +56,12 @@ export default class FlakyReporter implements Reporter {
   onEnd(_result: FullResult): void {
     const flaky = (this.root?.allTests() ?? []).filter((test) => test.outcome() === 'flaky').map(toEntry);
 
-    mkdirSync(dirname(REPORT_FILE), { recursive: true });
-    writeFileSync(REPORT_FILE, `${JSON.stringify({ flaky }, null, 2)}\n`);
+    mkdirSync(dirname(this.outputFile), { recursive: true });
+    writeFileSync(this.outputFile, `${JSON.stringify({ flaky }, null, 2)}\n`);
 
     if (flaky.length === 0) return;
 
-    console.log(`\n${flaky.length} niestabilnych testów (przeszły dopiero przy ponowieniu):`);
+    console.log(`\nNiestabilne testy (przeszły dopiero przy ponowieniu): ${flaky.length}`);
     for (const entry of flaky) {
       console.log(`  - ${entry.file}:${entry.line} ${entry.title}`);
       for (const error of entry.errors) console.log(`      ${error}`);

@@ -83,12 +83,18 @@ export default defineConfig({
   // od stale czerwonego i zbiera trace ('on-first-retry'), ale test, który przeszedł
   // dopiero przy ponowieniu, i tak czerwieni przebieg (`failOnFlakyTests`). Listę flaków
   // z błędami nieudanych prób wypisuje tests/e2e/reporters/flaky-report.ts (stdout,
-  // podsumowanie joba, test-results/flaky-tests.json); reporter `github` dodaje adnotacje.
+  // podsumowanie joba, plik flaky-tests.json); reporter `github` dodaje adnotacje.
   retries: process.env.CI ? 1 : 0,
   failOnFlakyTests: !!process.env.CI,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI
-    ? [['line'], ['github'], ['html', { open: 'never' }], ['./tests/e2e/reporters/flaky-report.ts']]
+    ? [
+        ['line'],
+        ['github'],
+        ['html', { open: 'never' }],
+        // Po reporterze html: plik trafia do playwright-report/, wysyłanego jako artefakt.
+        ['./tests/e2e/reporters/flaky-report.ts', { outputFile: 'playwright-report/flaky-tests.json' }],
+      ]
     : [['html'], ['./tests/e2e/reporters/flaky-report.ts']],
   // Świeżo zbudowany serwer (next start) hydratuje pierwsze żądania „na zimno" — elementy
   // montowane po stronie klienta (np. baner cookies) mogą pojawić się nieco później niż
