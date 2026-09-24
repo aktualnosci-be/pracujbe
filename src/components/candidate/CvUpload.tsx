@@ -5,12 +5,15 @@ import { useTranslations } from 'next-intl';
 import { FileText, Trash2, UploadCloud } from 'lucide-react';
 
 import { useRouter } from '@/i18n/navigation';
-import { uploadCandidateCv, deleteCandidateFile } from '@/lib/actions/files';
+import { uploadCandidateCv, deleteCandidateFile, prepareCvDownload } from '@/lib/actions/files';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
 
 /**
- * Upload CV kandydata (PDF/DOC/DOCX, <=5 MB) — prywatny bucket + signed URLs (Invariant #10).
+ * Upload CV kandydata (PDF/DOC/DOCX, <=5 MB) — prywatny bucket Railway (#26, Invariant #10).
+ * Pobranie: klik „nazwa pliku” → akcja `prepareCvDownload` wystawia krótki (60 s) podpisany
+ * link aplikacji dopiero przy kliknięciu (działa po długo otwartym panelu i bez popupów).
+ * Plik w kwarantannie (`downloadable=false`) nie ma akcji pobrania, tylko opis stanu.
  * Kliencki fragment: FormData -> server action `uploadCandidateCv`; blokada w trakcie
  * (useTransition), komunikaty z i18n. Po sukcesie odświeża panel (router.refresh).
  *
@@ -26,8 +29,8 @@ import { checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
 export interface CvItem {
   id: string;
   fileName: string;
-  /** Krótkotrwały signed URL (może być null — wtedy bez linku pobrania). */
-  url: string | null;
+  /** false = plik w kwarantannie (czeka na sprawdzenie) — bez pobrania. */
+  downloadable: boolean;
 }
 
 export function CvUpload({
@@ -78,12 +81,28 @@ export function CvUpload({
         if (res.ok) router.refresh();
         else if (res.reason) setError(problemMessage(res.reason));
         else if (res.error === 'RATE_LIMITED') setError(tErrors('rateLimited'));
+        else if (res.error === 'DEMO_UNAVAILABLE') setError(tErrors('demoUnavailable'));
         else setError(t('uploadError'));
       } catch {
         // Żądanie nie wróciło (sieć, limit ciała, 5xx) — komunikat zamiast granicy błędu.
         setError(t('uploadError'));
       } finally {
         if (inputRef.current) inputRef.current.value = '';
+      }
+    });
+  }
+
+  function onDownload(item: CvItem): void {
+    setError(null);
+    setDeleted(false);
+    startTransition(async () => {
+      try {
+        const res = await prepareCvDownload(item.id);
+        if (res.ok) window.location.assign(res.url);
+        else if (res.error === 'DEMO_UNAVAILABLE') setError(tErrors('demoUnavailable'));
+        else setError(t('downloadError'));
+      } catch {
+        setError(t('downloadError'));
       }
     });
   }
@@ -173,12 +192,21 @@ export function CvUpload({
             >
               <span className="flex min-w-0 items-center gap-2 overflow-hidden text-sm text-foreground">
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                {item.url ? (
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="truncate text-accent hover:underline">
+                {item.downloadable ? (
+                  <button
+                    type="button"
+                    onClick={() => onDownload(item)}
+                    disabled={pending}
+                    aria-label={`${t('download')}: ${item.fileName}`}
+                    className="min-h-12 min-w-0 truncate text-left text-accent hover:underline disabled:opacity-60"
+                  >
                     {item.fileName}
-                  </a>
+                  </button>
                 ) : (
-                  <span className="truncate">{item.fileName}</span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate">{item.fileName}</span>
+                    <span className="text-xs text-muted-foreground">{t('quarantined')}</span>
+                  </span>
                 )}
               </span>
               <button
