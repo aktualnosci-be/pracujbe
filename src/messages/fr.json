@@ -573,6 +573,7 @@
     "staleState": "Le statut a changé entre-temps (par exemple par un autre administrateur). La liste a été actualisée : vérifiez l’état actuel.",
     "jobNotEditable": "Cette offre ne peut pas être modifiée pour le moment. Seule une offre active ou suspendue peut être corrigée.",
     "jobEditConflict": "Quelqu'un a modifié cette offre entre-temps. Rouvrez-la depuis la liste des offres pour voir la version actuelle.",
+    "jobExpired": "La date d'expiration de cette offre est dépassée. Rouvrez-la depuis la liste des offres — la réouverture supprime la date passée.",
     "botCheckFailed": "Nous n'avons pas pu confirmer que ce formulaire est envoyé par une personne. Refaites la vérification et envoyez-le à nouveau.",
     "botCheckUnavailable": "La vérification de sécurité est momentanément indisponible. Réessayez dans quelques minutes."
   },
