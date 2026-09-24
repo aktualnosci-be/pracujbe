@@ -48,6 +48,11 @@ export interface DashboardShellProps {
   notifItems?: NotificationItem[];
   /** Liczba konwersacji z nieprzeczytanymi — badge pozycji „Wiadomości" w nawigacji. */
   unreadMessages?: number;
+  /**
+   * false → bez dzwonka powiadomień (panel admina nie ma kolejki notyfikacji, #423 — martwy
+   * przycisk byłby ogłaszany przez czytnik ekranu). Domyślnie true.
+   */
+  showNotifications?: boolean;
   children: React.ReactNode;
 }
 
@@ -62,6 +67,7 @@ export function DashboardShell({
   notificationError = false,
   notifItems,
   unreadMessages,
+  showNotifications = true,
   children,
 }: DashboardShellProps): React.JSX.Element {
   const tc = useTranslations('common');
@@ -292,51 +298,53 @@ export function DashboardShell({
           <div className="hidden flex-1 lg:block" />
 
           {/* Dzwonek + dropdown */}
-          <div ref={notifRef} className="relative" onBlur={handleNotifBlur}>
-            <button
-              ref={bellRef}
-              type="button"
-              onClick={toggleNotifications}
-              // #353: nazwa dostępna niesie liczbę nieprzeczytanych (plakietka jest aria-hidden).
-              aria-label={
-                notificationError ? tn('loadError') : tn('bellLabel', { count: notifications ?? 0 })
-              }
-              aria-haspopup="true"
-              aria-expanded={notifOpen}
-              className="relative inline-flex size-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-soft"
-            >
-              <Bell className="size-5" aria-hidden="true" />
-              {notificationError ? (
-                <span
-                  aria-hidden="true"
-                  className="absolute right-1 top-1 inline-flex size-4 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground"
-                >
-                  !
-                </span>
-              ) : notifications && notifications > 0 ? (
-                <span
-                  aria-hidden="true"
-                  className="absolute right-1.5 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-foreground">
-                  {notifications}
-                </span>
+          {showNotifications ? (
+            <div ref={notifRef} className="relative" onBlur={handleNotifBlur}>
+              <button
+                ref={bellRef}
+                type="button"
+                onClick={toggleNotifications}
+                // #353: nazwa dostępna niesie liczbę nieprzeczytanych (plakietka jest aria-hidden).
+                aria-label={
+                  notificationError ? tn('loadError') : tn('bellLabel', { count: notifications ?? 0 })
+                }
+                aria-haspopup="true"
+                aria-expanded={notifOpen}
+                className="relative inline-flex size-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-soft"
+              >
+                <Bell className="size-5" aria-hidden="true" />
+                {notificationError ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute right-1 top-1 inline-flex size-4 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground"
+                  >
+                    !
+                  </span>
+                ) : notifications && notifications > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute right-1.5 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-foreground">
+                    {notifications}
+                  </span>
+                ) : null}
+              </button>
+              {notifOpen ? (
+                <div className="absolute right-0 top-full z-30 mt-2">
+                  <NotificationsDropdown
+                    items={items}
+                    count={notifications}
+                    error={notificationError}
+                    onRetry={() => router.refresh()}
+                    onMarkAllRead={handleMarkAllRead}
+                    onItemOpen={handleItemOpen}
+                    markAllPending={markAllPending}
+                    markAllDone={markAllDone}
+                    markAllError={markAllError ? tRoot(toUserMessageKey(markAllError)) : null}
+                  />
+                </div>
               ) : null}
-            </button>
-            {notifOpen ? (
-              <div className="absolute right-0 top-full z-30 mt-2">
-                <NotificationsDropdown
-                  items={items}
-                  count={notifications}
-                  error={notificationError}
-                  onRetry={() => router.refresh()}
-                  onMarkAllRead={handleMarkAllRead}
-                  onItemOpen={handleItemOpen}
-                  markAllPending={markAllPending}
-                  markAllDone={markAllDone}
-                  markAllError={markAllError ? tRoot(toUserMessageKey(markAllError)) : null}
-                />
-              </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           {/* Użytkownik — desktop */}
           <div className="hidden items-center gap-3 lg:flex">
@@ -353,7 +361,13 @@ export function DashboardShell({
         </header>
 
         {/* Treść */}
-        <main className="min-w-0 flex-1 px-4 py-6 pb-24 lg:px-8 lg:pb-8">{children}</main>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="min-w-0 flex-1 px-4 py-6 pb-24 outline-none lg:px-8 lg:pb-8"
+        >
+          {children}
+        </main>
       </div>
 
       {/* Dolny tab bar — mobile */}

@@ -52,4 +52,28 @@ if (notPrerendered.length > 0) {
   console.error(`Strony publiczne poza prerenderem (renderowane dynamicznie): ${notPrerendered.join(", ")}`);
   process.exit(1);
 }
+// #390: Zod (~15 KB gz) nie trafia do JS stron publicznych bez formularzy. Graf importów pilnuje
+// tego już w teście jednostkowym `public-bundle-no-zod`; tu sprawdzamy realne chunki builda.
+const appPages = JSON.parse(readFileSync(".next/app-build-manifest.json", "utf8")).pages;
+const zodFreeEntries = [
+  "/[locale]/(public)/layout",
+  "/[locale]/(public)/page",
+  "/[locale]/(public)/oferty-pracy/page",
+  "/[locale]/(public)/poradniki/[slug]/page",
+];
+const zodChunks = [];
+for (const entry of zodFreeEntries) {
+  const files = appPages[entry];
+  if (!files) {
+    console.error(`Brak wpisu ${entry} w app-build-manifest.json`);
+    process.exit(1);
+  }
+  for (const file of files.filter((name) => name.endsWith(".js"))) {
+    if (readFileSync(`.next/${file}`, "utf8").includes("ZodError")) zodChunks.push(`${entry}: ${file}`);
+  }
+}
+if (zodChunks.length > 0) {
+  console.error(`Zod w JS stron publicznych (#390):\n  ${zodChunks.join("\n  ")}`);
+  process.exit(1);
+}
 console.log(`Build .next kompletny (BUILD_ID ${buildId}).`);

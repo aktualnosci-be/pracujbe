@@ -2,6 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Fonty zastępcze Intera (#388) z metrykami dopasowanymi do Intera (wght 400, opsz 14):
+   tekst malowany przed dociągnięciem fontu ma tę samą wysokość linii i prawie tę samą
+   szerokość, więc podmiana (font-display: swap) nie przesuwa układu. Wartości generuje
+   scripts/font-fallback-metrics.py; kolejność w stosie ustala src/app/fonts.ts. */
+@font-face {
+  font-family: 'Inter Fallback Arial';
+  src: local('Arial'), local('ArialMT'), local('Helvetica'), local('Liberation Sans'),
+    local('LiberationSans'), local('Arimo');
+  ascent-override: 90.48%;
+  descent-override: 22.53%;
+  line-gap-override: 0%;
+  size-adjust: 107.07%;
+}
+
+@font-face {
+  font-family: 'Inter Fallback Roboto';
+  src: local('Roboto'), local('Roboto-Regular'), local('Roboto Regular');
+  ascent-override: 90.28%;
+  descent-override: 22.48%;
+  line-gap-override: 0%;
+  size-adjust: 107.31%;
+}
+
+@font-face {
+  font-family: 'Inter Fallback DejaVu';
+  src: local('DejaVu Sans'), local('DejaVuSans');
+  ascent-override: 102.86%;
+  descent-override: 25.61%;
+  line-gap-override: 0%;
+  size-adjust: 94.19%;
+}
+
+
 /*
  * System kolorów Pracuj.be — single source of truth.
  * Wartości to trójki HSL (H S% L%) używane w tailwind.config.ts jako hsl(var(--token)).
@@ -71,6 +104,13 @@
   body {
     @apply bg-background font-sans text-foreground antialiased;
     padding-bottom: var(--cookie-banner-h, 0px);
+  }
+
+  /* #389: baner zgód jest w HTML z serwera. Gdy zgoda jest już zapisana, skrypt z <head>
+     (src/lib/consent-boot.ts) ustawia data-consent="set" przed pierwszym malowaniem —
+     baner nie mignie powracającemu użytkownikowi. Po hydratacji decyduje CookieConsent. */
+  html[data-consent='set'] #cookie-banner {
+    display: none;
   }
 
   /* WCAG 2.1 (2.4.7): wyraźny, widoczny wskaźnik fokusu klawiatury.

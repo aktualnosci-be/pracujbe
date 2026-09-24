@@ -21,6 +21,7 @@ import type { JobMatchLoad } from '@/lib/data/matching';
  * pozycje `missing`/`matched` to surowe etykiety danych (np. nazwa umiejętności) — pokazywane
  * bez tłumaczenia. `summaryKey` zawsze jest jednym z good/partial/low. `languageGaps` (#195)
  * to języki znane poniżej wymaganego poziomu — opisane z poziomem wymaganym i deklarowanym.
+ * `expiredCertificates` (#96) to wymagane certyfikaty kandydata z upływem ważności.
  */
 
 const KNOWN_CRITERIA = new Set([
@@ -99,6 +100,11 @@ export function JobMatchCard({ jobId }: { jobId: string }): React.JSX.Element | 
             actual: t(`levels.${g.actual}`),
           })
         : t('languageLevelUnknown', { language: g.language, required: t(`levels.${g.required}`) }),
+    })),
+    // Wymagany certyfikat, którego ważność minęła (#96) — nie daje punktów.
+    ...(result.expiredCertificates ?? []).map((c) => ({
+      key: `certificate:${c}`,
+      text: t('certificateExpired', { certificate: c }),
     })),
   ];
 

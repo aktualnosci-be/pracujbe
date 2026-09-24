@@ -17,12 +17,19 @@
  * kandydata nieznany przy wymaganym poziomie → 0 (konserwatywnie). Niespełniony poziom trafia do
  * `languageGaps` (nie do `matched`).
  *
- * Lokalizacja (#194): gdy znamy współrzędne obu miejscowości (słownik `locations`), odległość
+ * Lokalizacja (#194): gdy znamy współrzędne obu miejscowości (słownik `locations` albo
+ * kanoniczna lista `belgian-cities.ts` — patrz `resolveCoordinates`), odległość
  * po wielkim kole porównujemy z promieniem kandydata — w promieniu 15 pkt niezależnie od granicy
  * regionu, poza nim 0. Bez współrzędnych nie udajemy odległości: to samo miasto 15, ten sam
  * region 10 (bez etykiety „w promieniu"), inaczej 0.
  *
- * Silnik jest czysty i deterministyczny: te same wejścia => ten sam wynik. Brak I/O, brak losowości.
+ * Certyfikaty (#96): certyfikat kandydata z `expiresAt` wcześniejszym niż data odniesienia
+ * (`options.today`, 'YYYY-MM-DD') nie spełnia wymagania — ważny jest jeszcze w dniu wygaśnięcia.
+ * Brak `expiresAt` = certyfikat bezterminowy (jak dotąd). Wymagany, a wygasły certyfikat trafia
+ * do `expiredCertificates` (nie do `matched` ani `missing`).
+ *
+ * Silnik jest czysty i deterministyczny: te same wejścia (łącznie z `options.today`) => ten sam
+ * wynik. Brak I/O, brak losowości; bez `options.today` datą odniesienia jest bieżąca data UTC.
  */
 
 export const LANGUAGE_LEVEL_ORDER = ['basic', 'intermediate', 'fluent', 'native'] as const;
@@ -41,6 +48,17 @@ export type LanguageGap = {
   actual: LanguageLevel | null;
 };
 
+/**
+ * Certyfikat kandydata. Sam string = certyfikat bez daty ważności (bezterminowy).
+ * `expiresAt` w formacie 'YYYY-MM-DD'.
+ */
+export type CertificateEntry = string | { label: string; expiresAt?: string | null };
+
+export type MatchOptions = {
+  /** Data odniesienia 'YYYY-MM-DD' dla ważności certyfikatów (domyślnie bieżąca data UTC). */
+  today?: string;
+};
+
 export type Coordinates = { lat: number; lng: number };
 
 export type MatchResult = {
@@ -53,6 +71,8 @@ export type MatchResult = {
   summaryKey: 'good' | 'partial' | 'low';
   /** Wymagane języki, które kandydat zna, ale poniżej wymaganego poziomu (#195). */
   languageGaps: LanguageGap[];
+  /** Wymagane certyfikaty, które kandydat ma, ale z upływem ważności (#96). */
+  expiredCertificates: string[];
 };
 
 export type MatchCandidate = {
@@ -67,7 +87,7 @@ export type MatchCandidate = {
   experienceYears?: number;
   availability?: string;
   languages: LanguageEntry[];
-  certificates: string[];
+  certificates: CertificateEntry[];
   hasDrivingLicense?: boolean;
   hasCar?: boolean;
   preferredContractTypes: string[];
@@ -180,7 +200,30 @@ export function distanceKm(a: Coordinates, b: Coordinates): number {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResult {
+/** Bieżąca data UTC 'YYYY-MM-DD' (domyślna data odniesienia ważności certyfikatów). */
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Czy certyfikat jest ważny w dniu `today` (#96). Daty 'YYYY-MM-DD' porównujemy leksykalnie —
+ * format ISO zachowuje kolejność. Wygasa dopiero dzień PO `expiresAt`; brak daty = bezterminowy.
+ */
+export function isCertificateValid(entry: CertificateEntry, today: string): boolean {
+  if (typeof entry === 'string') return true;
+  const expiresAt = entry.expiresAt?.slice(0, 10);
+  return !expiresAt || expiresAt >= today;
+}
+
+function certificateLabel(entry: CertificateEntry): string {
+  return typeof entry === 'string' ? entry : entry.label;
+}
+
+export function scoreMatch(
+  candidate: MatchCandidate,
+  job: MatchJob,
+  options: MatchOptions = {},
+): MatchResult {
   const matched: string[] = [];
   const missing: string[] = [];
   const strengths: string[] = [];
@@ -299,6 +342,7 @@ export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResul
 
   // --- Język (10) — każdy wymagany język osobno, z poziomem (#195) ---
   const languageGaps: LanguageGap[] = [];
+  const expiredCertificates: string[] = [];
   if (job.requiredLanguages.length === 0) {
     score += WEIGHTS.language;
     strengths.push('noLanguageBarrier');
@@ -340,12 +384,22 @@ export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResul
   if (requiredCertificates.length === 0) {
     score += WEIGHTS.certificates;
   } else {
-    const result = overlap(candidate.certificates, requiredCertificates);
+    const today = options.today ?? todayUtc();
+    const valid = candidate.certificates.filter((c) => isCertificateValid(c, today));
+    const expired = new Set(
+      candidate.certificates
+        .filter((c) => !isCertificateValid(c, today))
+        .map((c) => norm(certificateLabel(c))),
+    );
+    const result = overlap(valid.map(certificateLabel), requiredCertificates);
     score += Math.round(
       (result.matched.length / requiredCertificates.length) * WEIGHTS.certificates,
     );
     matched.push(...result.matched);
-    missing.push(...result.missing);
+    for (const label of result.missing) {
+      if (expired.has(norm(label))) expiredCertificates.push(label);
+      else missing.push(label);
+    }
   }
 
   // --- Transport / prawo jazdy (5) ---
@@ -394,5 +448,6 @@ export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResul
     mandatoryTotal,
     summaryKey,
     languageGaps,
+    expiredCertificates: dedupe(expiredCertificates),
   };
 }

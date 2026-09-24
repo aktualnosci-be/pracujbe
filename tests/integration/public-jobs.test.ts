@@ -150,6 +150,8 @@ beforeAll(async () => {
       city: 'Antwerp',
       accommodation: true,
       noLanguage: true,
+      // Okres bez kwoty nie wpływa na filtr ani sortowanie (#188) — sprawdza przekazanie okresu.
+      period: 'hour',
     },
     {
       slug: 'fallback-default',
@@ -183,7 +185,7 @@ beforeAll(async () => {
       `INSERT INTO public.jobs(id,company_id,slug,title,status,category,contract_type,city,region,
       salary_min,salary_max,salary_period,published_at,expires_at,accommodation,immediate,no_language_required,
       default_locale,transport,start_date,working_hours,shifts,contact_email,address)
-      VALUES ($1,$2,$3,$4,'active',$5,$6,$7,'Flandria',$8,$9,'hour',$10,$11,$12,$13,$14,$15,true,
+      VALUES ($1,$2,$3,$4,'active',$5,$6,$7,'Flandria',$8,$9,$16,$10,$11,$12,$13,$14,$15,true,
         '2026-10-01','40 godzin','Dzienna','private-job@example.invalid','private-job-address')`,
       [
         index === 0 ? richJobId : randomUUID(),
@@ -201,6 +203,7 @@ beforeAll(async () => {
         fixture.immediate ?? false,
         fixture.noLanguage ?? false,
         fixture.locale ?? 'pl',
+        fixture.period ?? 'month',
       ],
     );
   }
@@ -498,7 +501,7 @@ describe('Publiczne oferty — pełne migracje i rzeczywisty PostgreSQL 16', () 
     expect(detail).toMatchObject({
       salary_min: 3000,
       salary_max: 3500,
-      salary_period: 'hour',
+      salary_period: 'month',
       start_date: '2026-10-01',
       description: 'Opis pl',
       responsibilities: ['Obowiązek pl'],
@@ -522,9 +525,12 @@ describe('Publiczne oferty — pełne migracje i rzeczywisty PostgreSQL 16', () 
     expect(
       (await getPublicJob(app!, 'without-salary', 'pl'))?.salary_min,
     ).toBeNull();
+    expect(
+      (await getPublicJob(app!, 'without-salary', 'pl'))?.salary_period,
+    ).toBe('hour');
     const list = await getPublicJobs(app!, { locale: 'pl' });
     expect(
-      list.rows.find((row) => row.slug === 'warehouse-rich'),
+      list.rows.find((row) => row.slug === 'without-salary'),
     ).toMatchObject({ salary_period: 'hour' });
     for (const row of [...list.rows, detail!]) {
       expect(JSON.stringify(row)).not.toContain('private');

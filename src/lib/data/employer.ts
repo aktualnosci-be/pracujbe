@@ -834,18 +834,15 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
     // Dostęp do bazy dopasowanych kandydatów wymaga zweryfikowanej firmy.
     if (companyStatus !== 'verified') return [];
 
-    const jobIds = await companyJobIds(supabase, companyId);
-    if (jobIds.length === 0) return [];
-
-    const { data: matchData, error: matchError } = await supabase
-      .from('matches')
-      .select('candidate_id, job_id, score')
-      .in('job_id', jobIds)
-      .order('score', { ascending: false })
-      .limit(24);
+    // Najlepsze dopasowanie NA KANDYDATA liczone w bazie PRZED limitem (#141, 0079): kandydat
+    // dopasowany do wielu ofert firmy nie wypiera innych. RPC działa pod RLS wywołującego
+    // (recruiter+ firmy, widoczność kandydata) i zwraca już posortowanych zwycięzców.
+    const { data: matchData, error: matchError } = await supabase.rpc('get_company_top_matches', {
+      p_company_id: companyId,
+      p_limit: 5,
+    });
     if (matchError) throw matchError;
 
-    // Deduplikacja po kandydacie (zachowujemy najwyższy wynik = pierwsze wystąpienie).
     const best = new Map<string, { jobId: string; score: number }>();
     for (const r of asRows(matchData)) {
       const candidateId = asString(r['candidate_id']);

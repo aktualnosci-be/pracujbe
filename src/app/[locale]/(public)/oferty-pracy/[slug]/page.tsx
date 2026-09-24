@@ -29,8 +29,9 @@ import { brandShareImageUrl, buildJobPostingJsonLd, serializeJsonLd } from '@/li
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
-import { loginHref } from '@/lib/validation/auth';
+import { loginHref } from '@/lib/auth/next-path';
 import { JobMatchCard } from '@/components/public/JobMatchCard';
+import { JobCompanyBlockControl } from '@/components/public/JobCompanyBlockControl';
 import { SimilarJobsError } from '@/components/public/SimilarJobsError';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
@@ -535,6 +536,8 @@ export default async function JobDetailPage({ params }: PageProps) {
                 {t('learnMoreCompany')}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
+              {/* Blokada firmy (tylko zalogowany kandydat; wyspa kliencka, #97). Demo — brak. */}
+              {job.isDemo ? null : <JobCompanyBlockControl jobId={job.id} />}
             </div>
           </Section>
         </div>

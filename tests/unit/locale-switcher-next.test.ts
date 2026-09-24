@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { relocalizeNextParam } from '../../src/lib/validation/auth';
+import { relocalizeNextParam } from '../../src/lib/auth/next-path';
 
 /** Zmiana języka na logowaniu przenosi też cel powrotu (`?next=`) na wybrany język. */
 describe('relocalizeNextParam', () => {

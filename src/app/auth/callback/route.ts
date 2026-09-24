@@ -4,7 +4,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { env } from '@/lib/env';
 import { routing, type Locale } from '@/i18n/routing';
 import { bootstrapCompany } from '@/lib/actions/auth';
-import { safeNextPath } from '@/lib/validation/auth';
+import { safeNextPath } from '@/lib/auth/next-path';
 
 /**
  * Route handler callbacku Auth: wymienia kod (PKCE) na sesję (`exchangeCodeForSession`)

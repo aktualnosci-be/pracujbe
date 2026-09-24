@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { loginHref, safeNextPath } from '@/lib/validation/auth';
+import { loginHref, registerHref, safeNextPath } from '@/lib/auth/next-path';
 
 describe('safeNextPath — bezpieczny parametr powrotu po logowaniu', () => {
   it.each([
@@ -96,6 +96,22 @@ describe('loginHref — link logowania z powrotem na bieżącą stronę', () => 
     'bez bezpiecznej ścieżki (%s) zwraca zwykły link logowania',
     (input) => {
       expect(loginHref(input)).toBe('/logowanie');
+    },
+  );
+});
+
+describe('registerHref — link rejestracji z tym samym bezpiecznym powrotem', () => {
+  it('przekazuje bezpieczną ścieżkę oferty w next', () => {
+    expect(registerHref('/nl/oferty-pracy/x#apply')).toEqual({
+      pathname: '/rejestracja',
+      query: { next: '/nl/oferty-pracy/x#apply' },
+    });
+  });
+
+  it.each([null, undefined, '', '//evil.example/pl', '/\\evil.example', 'javascript:alert(1)'])(
+    'bez bezpiecznej ścieżki (%s) zwraca zwykły link rejestracji',
+    (input) => {
+      expect(registerHref(input)).toBe('/rejestracja');
     },
   );
 });

@@ -37,9 +37,22 @@ function mapPgError(message: string | undefined): ErrorCode {
   return 'INTERNAL';
 }
 
-/** Zapisuje/usuwa ofertę z listy zapisanych kandydata (toggle). Zwraca nowy stan `saved`. */
-export async function toggleSavedJob(jobId: string): Promise<ToggleSavedResult> {
+/**
+ * Zapisuje/usuwa ofertę z listy zapisanych kandydata. Zwraca stan `saved` po zapisie.
+ *
+ * Z `desired` akcja ustawia stan docelowy i jest idempotentna: ponowienie tego samego żądania
+ * (zgubiona odpowiedź, druga karta, podwójne kliknięcie) daje ten sam wynik zamiast go odwracać.
+ * Równoległy insert tej samej pary kończy się naruszeniem unikatu `(candidate_id, job_id)`,
+ * które oznacza, że oferta jest już zapisana. Bez `desired` — dotychczasowy toggle.
+ */
+export async function toggleSavedJob(
+  jobId: string,
+  desired?: boolean,
+): Promise<ToggleSavedResult> {
   if (typeof jobId !== 'string' || !UUID_RE.test(jobId)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  if (desired !== undefined && typeof desired !== 'boolean') {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
 
@@ -53,16 +66,21 @@ export async function toggleSavedJob(jobId: string): Promise<ToggleSavedResult> 
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    // Stan bieżący (RLS: kandydat czyta wyłącznie własne saved_jobs).
-    const { data: existing, error: selError } = await supabase
-      .from('saved_jobs')
-      .select('id')
-      .eq('candidate_id', user.id)
-      .eq('job_id', jobId)
-      .maybeSingle();
-    if (selError) return { ok: false, error: mapPgError(selError.message) };
+    let target = desired;
+    if (target === undefined) {
+      // Stan bieżący (RLS: kandydat czyta wyłącznie własne saved_jobs).
+      const { data: existing, error: selError } = await supabase
+        .from('saved_jobs')
+        .select('id')
+        .eq('candidate_id', user.id)
+        .eq('job_id', jobId)
+        .maybeSingle();
+      if (selError) return { ok: false, error: mapPgError(selError.message) };
+      target = !existing;
+    }
 
-    if (existing) {
+    if (!target) {
+      // DELETE brakującego wiersza nie jest błędem — ponowienie daje ten sam stan.
       const { error: delError } = await supabase
         .from('saved_jobs')
         .delete()
@@ -75,7 +93,10 @@ export async function toggleSavedJob(jobId: string): Promise<ToggleSavedResult> 
     const { error: insError } = await supabase
       .from('saved_jobs')
       .insert({ candidate_id: user.id, job_id: jobId });
-    if (insError) return { ok: false, error: mapPgError(insError.message) };
+    // 23505 = unique_violation: wiersz już istnieje, więc oferta jest zapisana.
+    if (insError && insError.code !== '23505') {
+      return { ok: false, error: mapPgError(insError.message) };
+    }
     return { ok: true, saved: true };
   } catch {
     return { ok: false, error: 'INTERNAL' };

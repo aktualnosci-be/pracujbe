@@ -390,6 +390,12 @@ export function FilterFields({
           {currency.format(value.salaryMin)}{' '}
           <span className="text-muted-foreground">–</span> {maxLabel}
         </p>
+        <p
+          id={`${idPrefix}-salary-note`}
+          className="mb-2 text-xs text-muted-foreground"
+        >
+          {t('salaryPeriodNote')}
+        </p>
         <div className="space-y-2">
           <input
             type="range"
@@ -406,6 +412,7 @@ export function FilterFields({
               })
             }
             aria-label={t('salaryMin')}
+            aria-describedby={`${idPrefix}-salary-note`}
             data-filter-target="range"
             className="h-12 w-full accent-accent"
           />
@@ -424,6 +431,7 @@ export function FilterFields({
               })
             }
             aria-label={t('salaryMax')}
+            aria-describedby={`${idPrefix}-salary-note`}
             data-filter-target="range"
             className="h-12 w-full accent-accent"
           />

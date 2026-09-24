@@ -84,7 +84,21 @@ describe('syncTrackers — wycofanie zgody', () => {
 
     expect(cookieNames()).toEqual(['_fbp']);
     expect(w[`ga-disable-${GA_ID}`]).toBe(true);
-    expect(fbq).not.toHaveBeenCalled();
+    expect(fbq).not.toHaveBeenCalledWith('consent', 'revoke');
+  });
+
+  it('ponowna zgoda na marketing po wycofaniu przywraca Pixel (grant), a GA odblokowuje', () => {
+    const fbq = vi.fn();
+    w.fbq = fbq;
+
+    store.syncTrackers({ analytics: false, marketing: false });
+    store.syncTrackers({ analytics: true, marketing: true });
+
+    expect(fbq.mock.calls).toEqual([
+      ['consent', 'revoke'],
+      ['consent', 'grant'],
+    ]);
+    expect(w[`ga-disable-${GA_ID}`]).toBe(false);
   });
 });
 

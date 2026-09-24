@@ -15,6 +15,24 @@
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 
+import {
+  ADMIN_PAGE_SIZE,
+  cursorOrFilter,
+  decodeAdminCursor,
+  encodeAdminCursor,
+  matchesSearch,
+  normalizeAdminSearch,
+  parseAuditAction,
+  parseAuditEntity,
+  parseReportFilter,
+  parseUserRoleFilter,
+  parseUuid,
+  parseYmd,
+  reportStatusesFor,
+  searchOrFilter,
+} from '@/lib/admin/list-params';
+import { appDayStartUtc } from '@/lib/datetime';
+import { demoJobs } from '@/lib/data/demo';
 import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 import { createServerClient } from '@/lib/supabase/server';
@@ -56,9 +74,19 @@ export type AdminListResult<T> =
   | {
       status: 'ok';
       rows: T[];
-      /** true, gdy lista obcięta do `ADMIN_MAX_ROWS`. */ truncated: boolean;
+      /**
+       * Token kursora następnej strony (`created_at`, `id`) albo null, gdy to ostatnia strona
+       * (#418 — każda pozycja osiągalna, bez twardego limitu 200).
+       */
+      nextCursor: string | null;
     }
   | { status: 'error' };
+
+/** Wspólne parametry list: fraza wyszukiwania i kursor z URL (niezaufane — walidowane). */
+export interface AdminListQuery {
+  q?: string | null;
+  cursor?: string | null;
+}
 
 /** Wynik odczytu statystyk: błąd jest jawny, nie udaje zer (#311). */
 export type AdminStatsResult = { status: 'ok'; stats: AdminStats } | { status: 'error' };
@@ -69,11 +97,30 @@ export const AWAITING_COMPANY_STATUSES = ['unverified', 'pending'] as const;
 /** Wartość filtra listy firm dla kolejki weryfikacji (`?status=awaiting`). */
 export const AWAITING_FILTER = 'awaiting';
 
+/** Link w panelu (ścieżka bez prefiksu locale — dokłada go next-intl `Link`). */
+export interface AdminHref {
+  pathname: string;
+  query?: Record<string, string>;
+}
+
+/** Czego dotyczy zgłoszenie (#416): nazwa/tytuł celu, link albo bezpieczny podgląd. */
+export interface AdminReportTarget {
+  /** Nazwa firmy / tytuł oferty / imię i nazwisko użytkownika; null, gdy brak. */
+  label: string | null;
+  /** Link do celu (publiczna oferta, lista firm/użytkowników admina z wyszukiwaniem). */
+  href: AdminHref | null;
+  /** Podgląd treści zgłoszonej wiadomości (skrócony, tylko tekst). */
+  preview: string | null;
+  /** Cel usunięty (także miękko) albo nieistniejący. */
+  deleted: boolean;
+}
+
 export interface AdminReportRow {
   id: string;
   /** `report_target_type`: job/company/user/message. */
   targetType: string;
   targetId: string;
+  target: AdminReportTarget;
   reason: string;
   details: string | null;
   /** `report_status`: open/reviewing/resolved/dismissed. */
@@ -91,6 +138,24 @@ export interface AdminUserRow {
   /** `user_role`: candidate/employer/admin/moderator. */
   role: string;
   createdAt: string | null;
+}
+
+/** Filtry listy zgłoszeń. */
+export interface AdminReportsQuery {
+  /** Wartość z URL (`active` domyślnie = otwarte + w analizie). */
+  status?: string | null;
+  cursor?: string | null;
+}
+
+/** Filtry listy użytkowników. */
+export interface AdminUsersQuery extends AdminListQuery {
+  role?: string | null;
+}
+
+/** Filtry listy firm. */
+export interface AdminCompaniesQuery extends AdminListQuery {
+  /** Status firmy albo `awaiting`/`all`. */
+  status?: string | null;
 }
 
 /* ---------------------------------------------------------------------------
@@ -119,6 +184,12 @@ const DEMO_REPORTS: AdminReportRow[] = [
     id: 'demo-r1',
     targetType: 'job',
     targetId: 'demo-job-1',
+    target: {
+      label: demoJobs[0]?.title ?? null,
+      href: demoJobs[0] ? { pathname: `/oferty-pracy/${demoJobs[0].slug}` } : null,
+      preview: null,
+      deleted: false,
+    },
     reason: 'spam',
     details: 'Oferta wygląda na duplikat i zawiera link do zewnętrznego formularza.',
     status: 'open',
@@ -129,6 +200,12 @@ const DEMO_REPORTS: AdminReportRow[] = [
     id: 'demo-r2',
     targetType: 'company',
     targetId: 'demo-c6',
+    target: {
+      label: 'TransEuro Trucking',
+      href: { pathname: '/admin/firmy', query: { q: 'TransEuro Trucking' } },
+      preview: null,
+      deleted: false,
+    },
     reason: 'misleading',
     details: null,
     status: 'open',
@@ -139,6 +216,12 @@ const DEMO_REPORTS: AdminReportRow[] = [
     id: 'demo-r3',
     targetType: 'message',
     targetId: 'demo-msg-9',
+    target: {
+      label: null,
+      href: null,
+      preview: 'Odpowiedz od razu albo zapomnij o tej pracy.',
+      deleted: false,
+    },
     reason: 'harassment',
     details: 'Niestosowne treści w wiadomości do kandydata.',
     status: 'reviewing',
@@ -196,20 +279,27 @@ function filterDemoCompanies(filter?: string): AdminCompanyRow[] {
   return DEMO_COMPANIES.filter((c) => c.status === filter);
 }
 
-/** Limit wierszy list admina (brak paginacji — P2-04); UI informuje o obcięciu. */
-export const ADMIN_MAX_ROWS = 200;
-
-/** Odczyt listy z limitem: pobieramy o 1 więcej, żeby wiedzieć, czy lista jest obcięta. */
-function toList<T>(rows: T[]): AdminListResult<T> {
-  return {
-    status: 'ok',
-    rows: rows.slice(0, ADMIN_MAX_ROWS),
-    truncated: rows.length > ADMIN_MAX_ROWS,
-  };
+/** Lista DEMO: bez stronicowania (kilka wierszy). */
+function demoList<T>(rows: T[]): AdminListResult<T> {
+  return { status: 'ok', rows, nextCursor: null };
 }
 
-function demoList<T>(rows: T[]): AdminListResult<T> {
-  return { status: 'ok', rows, truncated: false };
+/**
+ * Strona listy: pobieramy `ADMIN_PAGE_SIZE + 1`, nadmiarowy wiersz oznacza, że jest następna
+ * strona — kursor = ostatni pokazany wiersz (sortowanie `created_at desc, id desc`).
+ */
+function toPage<T extends { id: string }>(
+  rows: T[],
+  createdAtOf: (row: T) => string | null,
+): AdminListResult<T> {
+  const page = rows.slice(0, ADMIN_PAGE_SIZE);
+  const last = page[page.length - 1];
+  const lastCreatedAt = last ? createdAtOf(last) : null;
+  const nextCursor =
+    rows.length > ADMIN_PAGE_SIZE && last && lastCreatedAt
+      ? encodeAdminCursor({ createdAt: lastCreatedAt, id: last.id })
+      : null;
+  return { status: 'ok', rows: page, nextCursor };
 }
 
 /**
@@ -287,30 +377,64 @@ export async function getAdminStats(): Promise<AdminStatsResult> {
   }
 }
 
+/** Filtr kursora z tokenu URL (zły token = pierwsza strona). */
+function cursorFilterOf(token: string | null | undefined): string | null {
+  const cursor = decodeAdminCursor(token);
+  return cursor ? cursorOrFilter(cursor) : null;
+}
+
 /**
- * Lista firm (opcjonalnie filtr statusu; `awaiting` = kolejka weryfikacji). Bez env → DEMO.
+ * Łączy warunki `or` (wyszukiwanie + kursor) w jeden parametr PostgREST: dwa osobne `.or()`
+ * dałyby dwa parametry `or` w URL, więc zagnieżdżamy je w `and(or(..),or(..))`.
  */
-export async function listCompanies(filter?: string): Promise<AdminListResult<AdminCompanyRow>> {
-  if (!isSupabaseConfigured()) return demoList(filterDemoCompanies(filter));
+function combineOrFilters(...filters: Array<string | null>): string | null {
+  const present = filters.filter((f): f is string => Boolean(f));
+  if (present.length === 0) return null;
+  if (present.length === 1) return present[0]!;
+  return `and(${present.map((f) => `or(${f})`).join(',')})`;
+}
+
+/**
+ * Lista firm (#418): filtr statusu (`awaiting` = kolejka weryfikacji), wyszukiwanie po nazwie,
+ * VAT, KBO i e-mailu, stronicowanie kursorem. Bez env → DEMO.
+ */
+export async function listCompanies(
+  query: AdminCompaniesQuery = {},
+): Promise<AdminListResult<AdminCompanyRow>> {
+  const filter = query.status ?? undefined;
+  const q = normalizeAdminSearch(query.q);
+  if (!isSupabaseConfigured()) {
+    return demoList(
+      filterDemoCompanies(filter).filter((c) =>
+        matchesSearch([c.name, c.vatNumber, c.registrationNumber, c.email], q),
+      ),
+    );
+  }
   await requireAdmin();
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
     const supabase = createAdminClient();
 
-    let query = supabase
+    let builder = supabase
       .from('companies')
       .select('id, name, status, created_at, vat_number, registration_number, email, city')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(ADMIN_MAX_ROWS + 1);
-    if (filter === AWAITING_FILTER) query = query.in('status', [...AWAITING_COMPANY_STATUSES]);
-    else if (filter && filter !== 'all') query = query.eq('status', filter);
+      .is('deleted_at', null);
+    if (filter === AWAITING_FILTER) builder = builder.in('status', [...AWAITING_COMPANY_STATUSES]);
+    else if (filter && filter !== 'all') builder = builder.eq('status', filter);
+    const orFilter = combineOrFilters(
+      q ? searchOrFilter(['name', 'vat_number', 'registration_number', 'email'], q) : null,
+      cursorFilterOf(query.cursor),
+    );
+    if (orFilter) builder = builder.or(orFilter);
 
-    const { data, error } = await query;
+    const { data, error } = await builder
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(ADMIN_PAGE_SIZE + 1);
     if (error) throw error;
 
-    return toList(
+    return toPage(
       asRows(data).map((row) => ({
         id: asString(row['id']),
         name: asString(row['name']),
@@ -321,6 +445,7 @@ export async function listCompanies(filter?: string): Promise<AdminListResult<Ad
         email: asNullableString(row['email']),
         city: asNullableString(row['city']),
       })),
+      (row) => row.createdAt,
     );
   } catch (error) {
     captureError(error, { area: 'admin.listCompanies' });
@@ -328,20 +453,143 @@ export async function listCompanies(filter?: string): Promise<AdminListResult<Ad
   }
 }
 
-/** Lista zgłoszeń (najnowsze pierwsze) z nazwą zgłaszającego. Bez env → DEMO. */
-export async function listReports(): Promise<AdminListResult<AdminReportRow>> {
-  if (!isSupabaseConfigured()) return demoList(DEMO_REPORTS);
+/** Maks. długość podglądu zgłoszonej wiadomości. */
+const MESSAGE_PREVIEW_MAX = 280;
+
+type SupabaseAdmin = ReturnType<typeof import('@/lib/supabase/admin').createAdminClient>;
+
+/** Cel nieodnaleziony albo usunięty. */
+const DELETED_TARGET: AdminReportTarget = { label: null, href: null, preview: null, deleted: true };
+
+/**
+ * Cele zgłoszeń (#416) — jeden batchowy odczyt na typ (bez N+1). Błąd któregokolwiek odczytu
+ * rzuca (lista zgłoszeń bez celów = rozstrzyganie na ślepo, więc to błąd, nie pusta treść).
+ */
+async function loadReportTargets(
+  supabase: SupabaseAdmin,
+  rows: Record<string, unknown>[],
+): Promise<Map<string, AdminReportTarget>> {
+  const idsOf = (type: string) => [
+    ...new Set(
+      rows
+        .filter((r) => asString(r['target_type']) === type)
+        .map((r) => asString(r['target_id']))
+        .filter((id) => id.length > 0),
+    ),
+  ];
+  const targets = new Map<string, AdminReportTarget>();
+  const key = (type: string, id: string) => `${type}:${id}`;
+
+  const jobIds = idsOf('job');
+  const companyIds = idsOf('company');
+  const userIds = idsOf('user');
+  const messageIds = idsOf('message');
+
+  const [jobs, companies, users, messages] = await Promise.all([
+    jobIds.length
+      ? supabase.from('jobs').select('id, title, slug, status, deleted_at').in('id', jobIds)
+      : null,
+    companyIds.length
+      ? supabase.from('companies').select('id, name, deleted_at').in('id', companyIds)
+      : null,
+    userIds.length
+      ? supabase
+          .from('profiles')
+          .select('id, first_name, last_name, email, deleted_at')
+          .in('id', userIds)
+      : null,
+    messageIds.length
+      ? supabase.from('messages').select('id, body, deleted_at').in('id', messageIds)
+      : null,
+  ]);
+  for (const res of [jobs, companies, users, messages]) {
+    if (res?.error) throw res.error;
+  }
+
+  for (const job of asRows(jobs?.data)) {
+    if (asNullableString(job['deleted_at'])) continue;
+    const slug = asNullableString(job['slug']);
+    targets.set(key('job', asString(job['id'])), {
+      label: asNullableString(job['title']),
+      // Link publiczny tylko do aktywnej oferty — inna nie ma strony publicznej.
+      href:
+        slug && asString(job['status']) === 'active'
+          ? { pathname: `/oferty-pracy/${slug}` }
+          : null,
+      preview: null,
+      deleted: false,
+    });
+  }
+  for (const company of asRows(companies?.data)) {
+    if (asNullableString(company['deleted_at'])) continue;
+    const name = asNullableString(company['name']);
+    targets.set(key('company', asString(company['id'])), {
+      label: name,
+      href: name ? { pathname: '/admin/firmy', query: { q: name } } : null,
+      preview: null,
+      deleted: false,
+    });
+  }
+  for (const user of asRows(users?.data)) {
+    if (asNullableString(user['deleted_at'])) continue;
+    const name = fullName(user);
+    const email = asNullableString(user['email']);
+    const search = email ?? (name.length > 0 ? name : null);
+    targets.set(key('user', asString(user['id'])), {
+      label: name.length > 0 ? name : email,
+      href: search ? { pathname: '/admin/uzytkownicy', query: { q: search } } : null,
+      preview: null,
+      deleted: false,
+    });
+  }
+  for (const message of asRows(messages?.data)) {
+    if (asNullableString(message['deleted_at'])) continue;
+    const body = asString(message['body']).replace(/\s+/g, ' ').trim();
+    targets.set(key('message', asString(message['id'])), {
+      label: null,
+      href: null,
+      preview:
+        body.length > MESSAGE_PREVIEW_MAX ? `${body.slice(0, MESSAGE_PREVIEW_MAX - 1)}…` : body,
+      deleted: false,
+    });
+  }
+
+  return new Map(
+    rows.map((r) => {
+      const k = key(asString(r['target_type']), asString(r['target_id']));
+      return [k, targets.get(k) ?? DELETED_TARGET];
+    }),
+  );
+}
+
+/**
+ * Lista zgłoszeń (#416): filtr statusu (domyślnie otwarte + w analizie), cel zgłoszenia, nazwa
+ * zgłaszającego, stronicowanie kursorem (#418). Bez env → DEMO.
+ */
+export async function listReports(
+  query: AdminReportsQuery = {},
+): Promise<AdminListResult<AdminReportRow>> {
+  const statuses = reportStatusesFor(parseReportFilter(query.status));
+  if (!isSupabaseConfigured()) {
+    return demoList(DEMO_REPORTS.filter((r) => !statuses || statuses.includes(r.status)));
+  }
   await requireAdmin();
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
     const supabase = createAdminClient();
 
-    const { data, error } = await supabase
+    let builder = supabase
       .from('reports')
-      .select('id, reporter_id, target_type, target_id, reason, details, status, created_at')
+      .select('id, reporter_id, target_type, target_id, reason, details, status, created_at');
+    if (statuses) builder = builder.in('status', statuses);
+    const orFilter = cursorFilterOf(query.cursor);
+    if (orFilter) builder = builder.or(orFilter);
+
+    const { data, error } = await builder
       .order('created_at', { ascending: false })
-      .limit(ADMIN_MAX_ROWS + 1);
+      .order('id', { ascending: false })
+      .limit(ADMIN_PAGE_SIZE + 1);
     if (error) throw error;
 
     const rows = asRows(data);
@@ -362,14 +610,19 @@ export async function listReports(): Promise<AdminListResult<AdminReportRow>> {
       }
     }
 
-    return toList(
+    const targets = await loadReportTargets(supabase, rows);
+
+    return toPage(
       rows.map((row) => {
         const reporterId = asString(row['reporter_id']);
         const name = reporterId ? (nameById.get(reporterId) ?? '') : '';
+        const targetType = asString(row['target_type']);
+        const targetId = asString(row['target_id']);
         return {
           id: asString(row['id']),
-          targetType: asString(row['target_type']),
-          targetId: asString(row['target_id']),
+          targetType,
+          targetId,
+          target: targets.get(`${targetType}:${targetId}`) ?? DELETED_TARGET,
           reason: asString(row['reason']),
           details: asNullableString(row['details']),
           status: asString(row['status'], 'open'),
@@ -377,6 +630,7 @@ export async function listReports(): Promise<AdminListResult<AdminReportRow>> {
           createdAt: asNullableString(row['created_at']),
         };
       }),
+      (row) => row.createdAt,
     );
   } catch (error) {
     captureError(error, { area: 'admin.listReports' });
@@ -384,24 +638,46 @@ export async function listReports(): Promise<AdminListResult<AdminReportRow>> {
   }
 }
 
-/** Lista kont użytkowników (tylko odczyt). Bez env → DEMO. */
-export async function listUsers(): Promise<AdminListResult<AdminUserRow>> {
-  if (!isSupabaseConfigured()) return demoList(DEMO_USERS);
+/**
+ * Lista kont użytkowników (tylko odczyt, #418): wyszukiwanie po imieniu, nazwisku i e-mailu,
+ * filtr roli, stronicowanie kursorem. Bez env → DEMO.
+ */
+export async function listUsers(
+  query: AdminUsersQuery = {},
+): Promise<AdminListResult<AdminUserRow>> {
+  const q = normalizeAdminSearch(query.q);
+  const role = parseUserRoleFilter(query.role);
+  if (!isSupabaseConfigured()) {
+    return demoList(
+      DEMO_USERS.filter(
+        (u) => (!role || u.role === role) && matchesSearch([u.name, u.email], q),
+      ),
+    );
+  }
   await requireAdmin();
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
     const supabase = createAdminClient();
 
-    const { data, error } = await supabase
+    let builder = supabase
       .from('profiles')
       .select('id, first_name, last_name, email, role, created_at')
-      .is('deleted_at', null)
+      .is('deleted_at', null);
+    if (role) builder = builder.eq('role', role);
+    const orFilter = combineOrFilters(
+      q ? searchOrFilter(['first_name', 'last_name', 'email'], q) : null,
+      cursorFilterOf(query.cursor),
+    );
+    if (orFilter) builder = builder.or(orFilter);
+
+    const { data, error } = await builder
       .order('created_at', { ascending: false })
-      .limit(ADMIN_MAX_ROWS + 1);
+      .order('id', { ascending: false })
+      .limit(ADMIN_PAGE_SIZE + 1);
     if (error) throw error;
 
-    return toList(
+    return toPage(
       asRows(data).map((row) => ({
         id: asString(row['id']),
         name: fullName(row),
@@ -409,9 +685,234 @@ export async function listUsers(): Promise<AdminListResult<AdminUserRow>> {
         role: asString(row['role'], 'candidate'),
         createdAt: asNullableString(row['created_at']),
       })),
+      (row) => row.createdAt,
     );
   } catch (error) {
     captureError(error, { area: 'admin.listUsers' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Dziennik zdarzeń (audit_logs) — tylko odczyt (#417)
+ * ------------------------------------------------------------------------- */
+
+export interface AdminAuditRow {
+  id: string;
+  /** Surowa akcja (`company.status_changed` …) — UI mapuje na etykietę i18n. */
+  action: string;
+  /** `company`/`report`/`application`/`offer` albo null. */
+  entityType: string | null;
+  entityId: string | null;
+  /** Nazwa obiektu (firma) albo null, gdy brak/nieznana. */
+  entityLabel: string | null;
+  /** Link do obiektu w panelu admina albo null. */
+  entityHref: AdminHref | null;
+  /** Status przed/po (surowe wartości enumów) — UI tłumaczy wg typu obiektu. */
+  statusBefore: string | null;
+  statusAfter: string | null;
+  /** Aktor: null = system/usługa (brak `auth.uid()`). */
+  actorId: string | null;
+  actorName: string | null;
+  createdAt: string | null;
+}
+
+export interface AdminAuditQuery {
+  entity?: string | null;
+  action?: string | null;
+  /** Historia jednego obiektu (`entity_id`). */
+  entityId?: string | null;
+  /** Aktor: fraza (imię/nazwisko/e-mail) albo `system`. */
+  actor?: string | null;
+  /** Zakres dat `YYYY-MM-DD` (włącznie) w Europe/Brussels. */
+  from?: string | null;
+  to?: string | null;
+  cursor?: string | null;
+}
+
+/** Słowo kluczowe filtra aktora: wpisy bez aktora (trigger/usługa). */
+export const AUDIT_ACTOR_SYSTEM = 'system';
+
+const DEMO_AUDIT: AdminAuditRow[] = [
+  {
+    id: 'demo-a1',
+    action: 'company.status_changed',
+    entityType: 'company',
+    entityId: 'demo-c1',
+    entityLabel: 'AGO Jobs & HR',
+    entityHref: { pathname: '/admin/firmy', query: { q: 'AGO Jobs & HR' } },
+    statusBefore: 'pending',
+    statusAfter: 'verified',
+    actorId: 'demo-u5',
+    actorName: 'Zespół Pracuj.be',
+    createdAt: '2025-02-19T12:00:00.000Z',
+  },
+  {
+    id: 'demo-a2',
+    action: 'report.resolved',
+    entityType: 'report',
+    entityId: 'demo-r3',
+    entityLabel: null,
+    entityHref: { pathname: '/admin/zgloszenia', query: { status: 'all' } },
+    statusBefore: 'open',
+    statusAfter: 'reviewing',
+    actorId: 'demo-u5',
+    actorName: 'Zespół Pracuj.be',
+    createdAt: '2025-02-10T09:30:00.000Z',
+  },
+  {
+    id: 'demo-a3',
+    action: 'company.created',
+    entityType: 'company',
+    entityId: 'demo-c4',
+    entityLabel: 'Horeca Brussel Group',
+    entityHref: { pathname: '/admin/firmy', query: { q: 'Horeca Brussel Group' } },
+    statusBefore: null,
+    statusAfter: 'unverified',
+    actorId: null,
+    actorName: null,
+    createdAt: '2025-02-18T14:45:00.000Z',
+  },
+];
+
+function statusOf(value: unknown): string | null {
+  return asNullableString(asRecord(value)['status']);
+}
+
+/**
+ * Dziennik zdarzeń: filtry typu obiektu, akcji, obiektu, aktora i zakresu dat; stronicowanie
+ * kursorem (`created_at`, `id`). Nazwy aktorów i firm — batchowe odczyty. Bez env → DEMO.
+ */
+export async function listAuditLogs(
+  query: AdminAuditQuery = {},
+): Promise<AdminListResult<AdminAuditRow>> {
+  const entity = parseAuditEntity(query.entity);
+  const action = parseAuditAction(query.action);
+  const entityId = parseUuid(query.entityId);
+  const actorQuery = normalizeAdminSearch(query.actor);
+  const fromIso = appDayStartUtc(parseYmd(query.from));
+  const toIso = appDayStartUtc(parseYmd(query.to), true);
+
+  if (!isSupabaseConfigured()) {
+    return demoList(
+      DEMO_AUDIT.filter(
+        (row) =>
+          (!entity || row.entityType === entity) &&
+          (!action || row.action === action) &&
+          (!actorQuery ||
+            (actorQuery.toLowerCase() === AUDIT_ACTOR_SYSTEM
+              ? row.actorId === null
+              : matchesSearch([row.actorName], actorQuery))),
+      ),
+    );
+  }
+  await requireAdmin();
+
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const supabase = createAdminClient();
+
+    // Aktor po nazwie/e-mailu → id profili (max 100 dopasowań); brak dopasowań = pusta lista.
+    let actorIdsFilter: string[] | null = null;
+    const systemActor = actorQuery?.toLowerCase() === AUDIT_ACTOR_SYSTEM;
+    if (actorQuery && !systemActor) {
+      const { data: actors, error: actorsError } = await supabase
+        .from('profiles')
+        .select('id')
+        .or(searchOrFilter(['first_name', 'last_name', 'email'], actorQuery))
+        .limit(100);
+      if (actorsError) throw actorsError;
+      actorIdsFilter = asRows(actors)
+        .map((r) => asString(r['id']))
+        .filter(Boolean);
+      if (actorIdsFilter.length === 0) return { status: 'ok', rows: [], nextCursor: null };
+    }
+
+    let builder = supabase
+      .from('audit_logs')
+      .select('id, actor_id, action, entity_type, entity_id, before_data, after_data, created_at');
+    if (entity) builder = builder.eq('entity_type', entity);
+    if (action) builder = builder.eq('action', action);
+    if (entityId) builder = builder.eq('entity_id', entityId);
+    if (fromIso) builder = builder.gte('created_at', fromIso);
+    if (toIso) builder = builder.lt('created_at', toIso);
+    if (systemActor) builder = builder.is('actor_id', null);
+    if (actorIdsFilter) builder = builder.in('actor_id', actorIdsFilter);
+
+    const orFilter = cursorFilterOf(query.cursor);
+    if (orFilter) builder = builder.or(orFilter);
+
+    const { data, error } = await builder
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(ADMIN_PAGE_SIZE + 1);
+    if (error) throw error;
+    const rows = asRows(data);
+
+    const uniq = (values: string[]) => [...new Set(values.filter((v) => v.length > 0))];
+    const actorIds = uniq(rows.map((r) => asString(r['actor_id'])));
+    const companyIds = uniq(
+      rows.filter((r) => asString(r['entity_type']) === 'company').map((r) => asString(r['entity_id'])),
+    );
+
+    const [actorsRes, companiesRes] = await Promise.all([
+      actorIds.length
+        ? supabase.from('profiles').select('id, first_name, last_name, email').in('id', actorIds)
+        : null,
+      companyIds.length
+        ? supabase.from('companies').select('id, name, deleted_at').in('id', companyIds)
+        : null,
+    ]);
+    if (actorsRes?.error) throw actorsRes.error;
+    if (companiesRes?.error) throw companiesRes.error;
+
+    const actorName = new Map<string, string | null>();
+    for (const p of asRows(actorsRes?.data)) {
+      const name = fullName(p);
+      actorName.set(asString(p['id']), name.length > 0 ? name : asNullableString(p['email']));
+    }
+    const companyName = new Map<string, { name: string | null; deleted: boolean }>();
+    for (const c of asRows(companiesRes?.data)) {
+      companyName.set(asString(c['id']), {
+        name: asNullableString(c['name']),
+        deleted: Boolean(asNullableString(c['deleted_at'])),
+      });
+    }
+
+    return toPage(
+      rows.map((row) => {
+        const entityType = asNullableString(row['entity_type']);
+        const id = asNullableString(row['entity_id']);
+        const actorId = asNullableString(row['actor_id']);
+        let entityLabel: string | null = null;
+        let entityHref: AdminHref | null = null;
+        if (entityType === 'company' && id) {
+          const company = companyName.get(id);
+          entityLabel = company?.name ?? null;
+          if (company?.name && !company.deleted) {
+            entityHref = { pathname: '/admin/firmy', query: { q: company.name } };
+          }
+        } else if (entityType === 'report') {
+          entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
+        }
+        return {
+          id: asString(row['id']),
+          action: asString(row['action']),
+          entityType,
+          entityId: id,
+          entityLabel,
+          entityHref,
+          statusBefore: statusOf(row['before_data']),
+          statusAfter: statusOf(row['after_data']),
+          actorId,
+          actorName: actorId ? (actorName.get(actorId) ?? null) : null,
+          createdAt: asNullableString(row['created_at']),
+        };
+      }),
+      (row) => row.createdAt,
+    );
+  } catch (error) {
+    captureError(error, { area: 'admin.listAuditLogs' });
     return { status: 'error' };
   }
 }
