@@ -2,7 +2,7 @@ import 'server-only';
 import { Pool, type PoolConfig } from 'pg';
 
 export type DatabasePurpose = 'domain' | 'auth' | 'ops';
-/** 'ops' (#47, 0097): login monitoringu — wyłącznie EXECUTE na public.ops_metrics(). */
+/** 'ops' (#47, 0096): login monitoringu — wyłącznie EXECUTE na public.ops_metrics(). */
 const roles = { domain: 'pracujbe_app', auth: 'pracujbe_auth', ops: 'pracujbe_ops' } as const;
 
 /** Konfiguracja jawna; nie odczytuje DATABASE_URL migratora ani nie łączy przy imporcie. */

@@ -1,7 +1,7 @@
 import { z } from 'zod/v3';
 
 /**
- * Czujki operacyjne (#47). Baza zwraca same liczby (`public.ops_metrics()`, 0097);
+ * Czujki operacyjne (#47). Baza zwraca same liczby (`public.ops_metrics()`, 0096);
  * tutaj — walidacja kształtu i progi alarmowe. Moduł jest czysty (bez I/O), więc
  * progi są testowane jednostkowo, a endpoint `/api/health/ops` tylko go wywołuje.
  *

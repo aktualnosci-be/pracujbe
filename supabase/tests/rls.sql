@@ -4608,7 +4608,7 @@ select pg_temp.expect_error('select * from public.get_offered_jobs_display(''pl'
   'permission denied', 'BL97-6d gość bez EXECUTE');
 reset role; reset app.current_uid;
 -- =============================================================================
--- OPS47 — czujki operacyjne (0097): ops_metrics tylko dla pracujbe_ops/service_role,
+-- OPS47 — czujki operacyjne (0096): ops_metrics tylko dla pracujbe_ops/service_role,
 -- same liczby (bez PII), poprawne zaległości/dzierżawy/webhooki/maintenance,
 -- indeks trigramowy miasta używany przez filtr `city ilike`.
 -- =============================================================================

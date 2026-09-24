@@ -40,7 +40,7 @@ identyfikatorów ani konfiguracji.
 | `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h | błędne adresy, odrzucenia dostawcy |
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |
 
-Liczby pochodzą z `public.ops_metrics()` (migracja `0097`, `SECURITY DEFINER`,
+Liczby pochodzą z `public.ops_metrics()` (migracja `0096`, `SECURITY DEFINER`,
 EXECUTE mają tylko `pracujbe_ops` i `service_role`). Rola `pracujbe_ops` nie ma
 żadnych praw do tabel. Dowód: `supabase/tests/rls.sql` sekcja OPS47 i
 `tests/integration/ops-metrics.test.ts` z prawdziwym loginem, kontrolą ujemną
@@ -72,7 +72,7 @@ Tworzy jednorazową bazę z migracjami, 20 000 syntetycznych ofert (16 000
 aktywnych) z tytułami PL/RO/UK/FR/NL/EN i miastami w kilku zapisach. Dla każdego
 zapytania wypisuje liczbę wyników `get_public_jobs_count` oraz czas i węzeł
 planu ciała `get_public_jobs` (auto_explain, drugie wywołanie w sesji).
-Porównuje stan bez indeksu `idx_jobs_city_trgm` (sprzed `0097`) i z nim.
+Porównuje stan bez indeksu `idx_jobs_city_trgm` (sprzed `0096`) i z nim.
 
 Wyniki z 24.09.2026 (lokalnie, czas w ms):
 
@@ -132,8 +132,8 @@ Railway przed migracją: `select * from pg_available_extensions where name = 'un
 | Warstwa | Jak cofnąć | Czego NIE robić |
 |---|---|---|
 | **Kod** (route `/api/health/ops`, `src/lib/ops/*`, skrypty) | redeploy poprzedniego SHA w Railway; endpoint znika, pozostałe trasy bez zmian | — |
-| **Schemat** (`0097`) | NOWA migracja naprawcza: `drop function public.ops_metrics()`, `drop index public.idx_jobs_city_trgm`, `revoke usage on schema public from pracujbe_ops`, a po odebraniu członkostwa loginowi monitoringu `drop role pracujbe_ops` | nie edytuj zastosowanej `0097`; kod starszy niż `0097` działa na bazie z `0097` (funkcja i indeks są addytywne) |
-| **Dane** | `0097` nie zmienia danych. Utracone dane odtwarzasz z kopii: `restore-backup.sh` do izolowanej bazy, weryfikacja, potem decyzja o przełączeniu/eksporcie | nigdy nie odtwarzaj kopii bezpośrednio do produkcyjnej bazy; skrypty odmawiają celu spoza `pracujbe_restore_*` |
+| **Schemat** (`0096`) | NOWA migracja naprawcza: `drop function public.ops_metrics()`, `drop index public.idx_jobs_city_trgm`, `revoke usage on schema public from pracujbe_ops`, a po odebraniu członkostwa loginowi monitoringu `drop role pracujbe_ops` | nie edytuj zastosowanej `0096`; kod starszy niż `0096` działa na bazie z `0096` (funkcja i indeks są addytywne) |
+| **Dane** | `0096` nie zmienia danych. Utracone dane odtwarzasz z kopii: `restore-backup.sh` do izolowanej bazy, weryfikacja, potem decyzja o przełączeniu/eksporcie | nigdy nie odtwarzaj kopii bezpośrednio do produkcyjnej bazy; skrypty odmawiają celu spoza `pracujbe_restore_*` |
 
 Kopie logiczne nie zastępują snapshotów wolumenu Railway i odwrotnie. Snapshot
 cofa całą bazę do chwili wykonania, a kopia logiczna pozwala odtworzyć bazę do
@@ -143,7 +143,7 @@ izolowanego celu i sprawdzić jej zawartość.
 
 1. **Sekret monitoringu:** ustaw `HEALTH_CHECK_SECRET` w usłudze web Railway
    (losowe ≥ 32 znaki). Bez niego `/api/health/ops` zwraca 404.
-2. **Login monitoringu PostgreSQL** (po `0097`, jako migrator):
+2. **Login monitoringu PostgreSQL** (po `0096`, jako migrator):
    ```sql
    create role pracujbe_ops_monitor login password '<losowe>'
      noinherit nosuperuser nobypassrls nocreatedb nocreaterole;

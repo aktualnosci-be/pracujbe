@@ -92,8 +92,8 @@ describe('Czujki operacyjne (#47)', () => {
     expect(parseOpsMetrics(negative)).toBeNull();
   });
 
-  it('klucze schematu zgadzają się z ops_metrics() z migracji 0097', () => {
-    const sql = readFileSync(resolve(__dirname, '../../supabase/migrations/0097_ops_metrics.sql'), 'utf8');
+  it('klucze schematu zgadzają się z ops_metrics() z migracji 0096', () => {
+    const sql = readFileSync(resolve(__dirname, '../../supabase/migrations/0096_ops_metrics.sql'), 'utf8');
     const keys = new Set<string>();
     const collect = (shape: Record<string, unknown>) => {
       for (const [key, value] of Object.entries(shape)) {

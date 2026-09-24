@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0097_ops_metrics.sql
+-- 0096_ops_metrics.sql
 -- #47: czujki operacyjne i indeks wyszukiwania miasta.
 --
 -- 1. Rola pracujbe_ops (NOLOGIN, NOINHERIT, bez atrybutów). Osobny login monitoringu

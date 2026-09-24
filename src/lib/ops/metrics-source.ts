@@ -11,7 +11,7 @@ export type OpsMetricsResult =
   | { kind: 'error' };
 
 /**
- * Odczyt `public.ops_metrics()` (#47, 0097). Kolejność źródeł:
+ * Odczyt `public.ops_metrics()` (#47, 0096). Kolejność źródeł:
  * 1. `DATABASE_OPS_URL` — PostgreSQL Railway: osobny login z członkostwem WYŁĄCZNIE
  *    w `pracujbe_ops` (kontrola uprawnień w `createRuntimePool`, jedna sesja na proces);
  * 2. service-role Supabase (ścieżka przejściowa, jak `/api/maintenance`).

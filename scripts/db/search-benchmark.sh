@@ -7,7 +7,7 @@
 # i dla zestawu zapytań wypisuje: liczbę wyników `get_public_jobs_count`, czas
 # i węzeł planu dla tabeli jobs z wywołania `get_public_jobs` (auto_explain z
 # zagnieżdżonymi instrukcjami — plan ciała funkcji, nie kopii SQL). Pomiar wykonuje
-# dwa razy: BEZ indeksu `idx_jobs_city_trgm` (stan sprzed 0097) i Z nim.
+# dwa razy: BEZ indeksu `idx_jobs_city_trgm` (stan sprzed 0096) i Z nim.
 #
 # Użycie jak test-rls.sh (peer auth: sudo -u postgres bash …, albo PGHOST/PGUSER/…).
 #   BENCH_JOBS — liczba ofert (domyślnie 20000). Baza jest usuwana na końcu.
@@ -133,8 +133,8 @@ Q
 }
 
 "${psql_base[@]}" -d "$DB" -c 'drop index public.idx_jobs_city_trgm; analyze public.jobs;' >/dev/null
-run_queries 'PRZED 0097 (bez idx_jobs_city_trgm)'
+run_queries 'PRZED 0096 (bez idx_jobs_city_trgm)'
 "${psql_base[@]}" -d "$DB" -c "create index idx_jobs_city_trgm on public.jobs using gin (city gin_trgm_ops) where status = 'active' and deleted_at is null; analyze public.jobs;" >/dev/null
-run_queries 'PO 0097 (idx_jobs_city_trgm)'
+run_queries 'PO 0096 (idx_jobs_city_trgm)'
 echo
 echo "Search benchmark: DONE ($JOBS ofert, PostgreSQL $("${psql_base[@]}" -d "$DB" -At -c 'show server_version'))"
