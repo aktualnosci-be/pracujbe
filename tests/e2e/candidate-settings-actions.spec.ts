@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { cookieBanner, rejectOptionalCookies } from './fixtures/messages';
+
 type Messages = {
   common: { cancel: string };
   dashboard: {
@@ -24,9 +26,8 @@ function messages(locale: string): Messages {
   return JSON.parse(readFileSync(resolve('src/messages', `${locale}.json`), 'utf8')) as Messages;
 }
 
-async function dismissCookies(page: Page) {
-  const banner = page.locator('[aria-labelledby="cookie-banner-title"] button').first();
-  if (await banner.isVisible()) await banner.click();
+async function dismissCookies(page: Page, locale: string) {
+  if (await cookieBanner(page).isVisible()) await rejectOptionalCookies(page, locale);
 }
 
 for (const locale of LOCALES) {
@@ -35,7 +36,7 @@ for (const locale of LOCALES) {
       const m = messages(locale);
       await page.setViewportSize({ width: 320, height: 800 });
       await page.goto(`/${locale}/candidate${path ? `/${path}` : ''}`);
-      await dismissCookies(page);
+      await dismissCookies(page, locale);
 
       const add = page.getByRole('link', { name: `${m.dashboard.add}: ${m.dashboard.checkSkills}` });
       await add.focus();
@@ -58,7 +59,7 @@ test('odrzucenie propozycji wymaga potwierdzenia, anulowanie niczego nie wysyła
   const m = messages('pl');
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto('/pl/candidate/propozycje');
-  await dismissCookies(page);
+  await dismissCookies(page, 'pl');
 
   const decline = page.getByRole('button', { name: m.dashboard.declineProposal });
   await decline.click();
@@ -77,7 +78,7 @@ test('odrzucenie propozycji wymaga potwierdzenia, anulowanie niczego nie wysyła
 test('wycofanie aplikacji wymaga potwierdzenia i oddaje fokus „…” (#328)', async ({ page }) => {
   const m = messages('pl');
   await page.goto('/pl/candidate/aplikacje');
-  await dismissCookies(page);
+  await dismissCookies(page, 'pl');
 
   const trigger = page.getByRole('button', { name: m.dashboard.rowActions }).first();
   await trigger.click();

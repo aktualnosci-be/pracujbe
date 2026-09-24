@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { brandShareImageUrl } from '@/lib/seo/structured-data';
 import { getAllGuides } from '@/lib/guides/guides';
 import { GuideCard } from '@/components/public/GuideCard';
 
@@ -31,7 +32,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const base = env.siteUrl;
   const url = `${base}/${locale}${GUIDES_PATH}`;
-  const shareImage = new URL('/og.png', base).href;
+  const shareImage = brandShareImageUrl(base);
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
     languages[supported] = `${base}/${supported}${GUIDES_PATH}`;

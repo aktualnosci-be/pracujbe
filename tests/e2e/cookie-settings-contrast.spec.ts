@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { clickCookieBanner } from './fixtures/messages';
+
 /**
  * WCAG 1.4.11 (#214): przełączniki kategorii w centrum zgód muszą być widoczne w stanie „wył.”
  * — obrys lub tor kontrolki ma kontrast ≥ 3:1 z tłem dialogu.
@@ -8,9 +10,8 @@ import { expect, test } from '@playwright/test';
 for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
   test(`wyłączony przełącznik cookies ma kontrast ≥ 3:1 (${locale})`, async ({ page }) => {
     await page.goto(`/${locale}`);
-    const banner = page.locator('[aria-labelledby="cookie-banner-title"]');
-    // Drugi przycisk banera otwiera centrum ustawień (kolejność: odrzuć · dostosuj · akceptuj).
-    await banner.getByRole('button').nth(1).click();
+    // Centrum ustawień po nazwie przycisku, nie po pozycji (#376).
+    await clickCookieBanner(page, locale, 'customize');
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
 

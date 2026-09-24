@@ -231,28 +231,42 @@ const loadContext = cache(async (): Promise<EmployerContext | null> => {
 });
 
 /**
- * Dane do chrome panelu pracodawcy (FUN-07/FUN-13): lista firm użytkownika + aktywna firma +
- * dane użytkownika. Bez env → null (layout użyje fallbacku demo).
+ * Dane do chrome panelu pracodawcy (FUN-07/FUN-13): lista firm użytkownika + aktywna firma
+ * (z jej statusem weryfikacji) + dane użytkownika.
+ *
+ * Wynik jest jawny (#401): `demo` tylko bez env; `error` przy każdej awarii odczytu — UI
+ * pokazuje wtedy neutralną etykietę i ponowienie, NIGDY nazwę firmy demonstracyjnej jako
+ * realną. `cache()` — layout i strony panelu dzielą jeden odczyt na żądanie.
  */
-export async function getEmployerShellData(): Promise<{
-  companies: { id: string; name: string; role: string }[];
-  activeId: string | null;
-  activeName: string;
-  activeRole: string;
-  userName: string;
-} | null> {
-  if (!isSupabaseConfigured()) return null;
+export type EmployerShellData =
+  | { status: 'demo' }
+  | {
+      status: 'ok';
+      companies: { id: string; name: string; role: string }[];
+      activeId: string | null;
+      activeName: string;
+      activeRole: string;
+      /** Surowy `company_status` aktywnej firmy. */
+      activeStatus: string;
+      userName: string;
+    }
+  | { status: 'error' };
+
+export const getEmployerShellData = cache(async (): Promise<EmployerShellData> => {
+  if (!isSupabaseConfigured()) return { status: 'demo' };
   try {
     const { createServerClient } = await import('@/lib/supabase/server');
     const supabase = await createServerClient();
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
-    if (!user) return null;
+    if (authError || !user) return { status: 'error' };
 
     const { getActiveCompany } = await import('@/lib/company-context');
     const ctx = await getActiveCompany(supabase, user.id);
 
+    // Brak imienia/nazwiska (lub chwilowy błąd profilu) → neutralna etykieta w UI, nie błąd panelu.
     const { data: profileRow } = await supabase
       .from('profiles')
       .select('first_name, last_name')
@@ -265,17 +279,19 @@ export async function getEmployerShellData(): Promise<{
       .join(' ');
 
     return {
+      status: 'ok',
       companies: ctx.companies.map((c) => ({ id: c.id, name: c.name, role: c.role })),
       activeId: ctx.activeId,
       activeName: ctx.activeName,
       activeRole: ctx.activeRole,
+      activeStatus: ctx.activeStatus,
       userName,
     };
   } catch (error) {
     captureError(error, { area: 'employer.getEmployerShellData' });
-    return null;
+    return { status: 'error' };
   }
-}
+});
 
 /** Identyfikatory (nie usuniętych) ofert aktywnej firmy — do zapytań o aplikacje/dopasowania. */
 async function companyJobIds(supabase: SupabaseClient, companyId: string): Promise<string[]> {

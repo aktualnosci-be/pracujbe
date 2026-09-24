@@ -29,6 +29,7 @@ import { SendOfferButton } from '@/components/employer/SendOfferButton';
 import { RecentApplicationsError } from '@/components/employer/RecentApplicationsError';
 import { EmployerStatsError } from '@/components/employer/EmployerStatsError';
 import { EmployerOffersPreview } from '@/components/employer/EmployerOffersPreview';
+import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 
 /**
  * Panel pracodawcy — Podsumowanie (makieta 05), na REALNYCH danych.
@@ -80,7 +81,7 @@ export default async function EmployerDashboardPage({
     getEmployerShellData(),
   ]);
   // P1-09: realne imię pracodawcy w powitaniu (bez zmyślonego „Jan"). Brak → wariant bez imienia.
-  const firstName = shell?.userName?.trim().split(/\s+/)[0] ?? '';
+  const firstName = shell.status === 'ok' ? (shell.userName.trim().split(/\s+/)[0] ?? '') : '';
 
   return (
     <div className="space-y-6">
@@ -104,6 +105,11 @@ export default async function EmployerDashboardPage({
           </Link>
         </Button>
       </div>
+
+      {/* #399: status weryfikacji firmy od pierwszego wejścia (verified → brak baneru). */}
+      {shell.status === 'ok' ? (
+        <CompanyStatusBanner status={shell.activeStatus} variant="dashboard" />
+      ) : null}
 
       {/* Statystyki */}
       {overview.status === 'error' ? (

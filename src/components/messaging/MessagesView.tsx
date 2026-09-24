@@ -47,7 +47,7 @@ export async function MessagesView({
 }: MessagesViewProps) {
   const t = await getTranslations({ locale, namespace: 'messages' });
 
-  const result = await getConversationsResult();
+  const result = await getConversationsResult(locale);
   const conversations = result.items;
 
   // Aktywna konwersacja tylko wtedy, gdy należy do użytkownika (jest na jego liście).
@@ -59,7 +59,7 @@ export async function MessagesView({
   let threadResult: ConversationThreadResult = { status: 'not-found' };
   let markedRead = false;
   if (activeId) {
-    threadResult = await getConversationThread(activeId);
+    threadResult = await getConversationThread(activeId, locale);
     if (threadResult.status === 'ready') {
       // Oznaczamy tylko wątek, który udało się odczytać; licznik zmieniamy po sukcesie RPC.
       try {

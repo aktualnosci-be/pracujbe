@@ -47,8 +47,14 @@ export interface ThreadMessage {
   createdAt: string;
   /** Czy wiadomość wysłał bieżący użytkownik. */
   mine: boolean;
-  /** Nazwa nadawcy (pusty = brak dostępu → UI: fallback). */
+  /**
+   * Nazwa nadawcy. Profil niewidoczny pod RLS (kandydat nie widzi rekrutera — decyzja z 0023)
+   * → nazwa firmy rozmowy, gdy nadawca jest po stronie firmy; pusty = nic nierozwiązywalne
+   * → UI: neutralna etykieta wg `senderSide` (#355). Imienia rekrutera nigdy nie ujawniamy.
+   */
   senderName: string;
+  /** Strona nadawcy: firma (rekruter/zespół) albo kandydat — wybór etykiety zastępczej w UI. */
+  senderSide: 'company' | 'candidate';
   isSystem: boolean;
 }
 
@@ -212,21 +218,83 @@ async function fetchMessagePage(
   return { rows: visible.reverse(), olderCursor };
 }
 
-/** Mapuje wiersze `messages` na kontrakt UI (nazwa nadawcy tylko z profili widocznych pod RLS). */
-function toThreadMessages(
-  rows: unknown[],
+/**
+ * Kontekst nadawców wątku (#355): nazwy z profili widocznych pod RLS, nazwa firmy rozmowy
+ * i zbiór nadawców będących członkami tej firmy (RLS `company_members`: członek widzi zespół,
+ * kandydat tylko własne wiersze — więc dla kandydata zbiór jest pusty).
+ */
+interface SenderContext {
+  nameByProfile: Map<string, string>;
+  companyName: string;
+  teamIds: Set<string>;
+  /** Bieżący użytkownik jest członkiem firmy rozmowy (perspektywa pracodawcy). */
+  viewerIsCompany: boolean;
+}
+
+/** Członkowie firmy rozmowy spośród `profileIds` (widoczni tylko dla członków tej firmy). */
+async function fetchCompanyMemberIds(
+  supabase: SupabaseClient,
+  companyId: string,
+  profileIds: string[],
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+  if (!companyId || profileIds.length === 0) return ids;
+  const { data, error } = await supabase
+    .from('company_members')
+    .select('profile_id')
+    .eq('company_id', companyId)
+    .in('profile_id', profileIds);
+  if (error) throw error;
+  for (const row of asArr(data)) {
+    const pid = asStr(asRecord(row)['profile_id']);
+    if (pid) ids.add(pid);
+  }
+  return ids;
+}
+
+/** Nazwy nadawców + nazwa firmy + zespół — jeden zestaw zapytań pod RLS dla strony wątku. */
+async function fetchSenderContext(
+  supabase: SupabaseClient,
   uid: string,
-  nameByProfile: Map<string, string>,
-): ThreadMessage[] {
+  companyId: string,
+  profileIds: Set<string>,
+): Promise<SenderContext> {
+  const [nameByProfile, companyNameById, memberIds] = await Promise.all([
+    fetchProfileNames(supabase, [...profileIds]),
+    fetchCompanyNames(supabase, companyId ? [companyId] : []),
+    fetchCompanyMemberIds(supabase, companyId, [...new Set([...profileIds, uid])]),
+  ]);
+  return {
+    nameByProfile,
+    companyName: companyNameById.get(companyId) ?? '',
+    teamIds: memberIds,
+    viewerIsCompany: memberIds.has(uid),
+  };
+}
+
+/**
+ * Mapuje wiersze `messages` na kontrakt UI. Nadawca z profilu widocznego pod RLS; bez niego
+ * (#355) wiadomość strony firmowej podpisujemy nazwą firmy, a stronę ustalamy tak: kandydat
+ * widzi po drugiej stronie wyłącznie firmę, pracodawca — zespół (członkowie firmy) albo kandydata.
+ */
+function toThreadMessages(rows: unknown[], uid: string, ctx: SenderContext): ThreadMessage[] {
   return rows.map((row) => {
     const r = asRecord(row);
     const senderId = asStr(r['sender_id']);
+    const mine = senderId === uid;
+    const fromCompany = mine
+      ? ctx.viewerIsCompany
+      : ctx.viewerIsCompany
+        ? ctx.teamIds.has(senderId)
+        : true;
+    const resolved = ctx.nameByProfile.get(senderId) ?? '';
     return {
       id: asStr(r['id']),
       body: asStr(r['body']),
       createdAt: asStr(r['created_at']),
-      mine: senderId === uid,
-      senderName: nameByProfile.get(senderId) ?? '',
+      mine,
+      senderName: resolved || (fromCompany ? ctx.companyName : ''),
+      senderSide: fromCompany ? 'company' : 'candidate',
       isSystem: Boolean(r['is_system']),
     };
   });
@@ -301,6 +369,7 @@ function demoThreadMessages(seed: DemoSeed, locale: Locale, companyName: string)
     createdAt: new Date(base + i * HOUR_MS).toISOString(),
     mine: !fromCompany,
     senderName: fromCompany ? companyName : DEMO_SELF_NAME,
+    senderSide: fromCompany ? 'company' : 'candidate',
     isSystem: false,
   }));
 }
@@ -350,9 +419,19 @@ export type ConversationsResult =
   | { status: 'ready'; items: ConversationListItem[] }
   | { status: 'error'; items: [] };
 
-/** Zachowuje różnicę między brakiem rozmów a awarią odczytu. */
-export async function getConversationsResult(): Promise<ConversationsResult> {
-  if (!isSupabaseConfigured()) return { status: 'ready', items: buildDemo(routing.defaultLocale).list };
+/** Zawęża dowolny string do obsługiwanego `Locale` (fallback: język domyślny). */
+function toLocale(locale: string | undefined): Locale {
+  return locale && (routing.locales as readonly string[]).includes(locale)
+    ? (locale as Locale)
+    : routing.defaultLocale;
+}
+
+/**
+ * Zachowuje różnicę między brakiem rozmów a awarią odczytu. `locale` = język strony — steruje
+ * wyłącznie treścią DEMO (#359); realne wiadomości to dane użytkowników, bez tłumaczenia.
+ */
+export async function getConversationsResult(locale?: string): Promise<ConversationsResult> {
+  if (!isSupabaseConfigured()) return { status: 'ready', items: buildDemo(toLocale(locale)).list };
 
   try {
     const { createServerClient } = await import('@/lib/supabase/server');
@@ -468,8 +547,8 @@ export async function getConversationsResult(): Promise<ConversationsResult> {
 }
 
 /** Kompatybilność z istniejącymi licznikami wiadomości. */
-export async function getConversations(): Promise<ConversationListItem[]> {
-  return (await getConversationsResult()).items;
+export async function getConversations(locale?: string): Promise<ConversationListItem[]> {
+  return (await getConversationsResult(locale)).items;
 }
 
 /**
@@ -478,9 +557,10 @@ export async function getConversations(): Promise<ConversationListItem[]> {
  */
 export async function getConversationThread(
   conversationId: string,
+  locale?: string,
 ): Promise<ConversationThreadResult> {
   if (!isSupabaseConfigured()) {
-    const thread = buildDemo(routing.defaultLocale).threads.get(conversationId);
+    const thread = buildDemo(toLocale(locale)).threads.get(conversationId);
     return thread ? { status: 'ready', thread } : { status: 'not-found' };
   }
 
@@ -528,19 +608,20 @@ export async function getConversationThread(
     }
 
     const companyId = asStr(conv['company_id']);
-    const [nameByProfile, companyNameById] = await Promise.all([
-      fetchProfileNames(supabase, [...senderIds]),
-      fetchCompanyNames(supabase, companyId ? [companyId] : []),
-    ]);
-
-    const messages = toThreadMessages(messageRows, uid, nameByProfile);
+    const ctx = await fetchSenderContext(supabase, uid, companyId, senderIds);
+    const messages = toThreadMessages(messageRows, uid, ctx);
 
     return {
       status: 'ready',
       thread: {
         id: cid,
         subject: asStr(conv['subject']),
-        counterpartyName: resolveCounterparty(otherIds, companyId, nameByProfile, companyNameById),
+        counterpartyName: resolveCounterparty(
+          otherIds,
+          companyId,
+          ctx.nameByProfile,
+          new Map([[companyId, ctx.companyName]]),
+        ),
         messages,
         olderCursor,
       },
@@ -561,7 +642,7 @@ export async function getOlderThreadMessages(
 ): Promise<OlderMessagesResult> {
   if (!isSupabaseConfigured()) {
     // Demo ma krótkie wątki (bez kursora), więc starsza strona zawsze jest pusta.
-    return buildDemo(routing.defaultLocale).threads.has(conversationId)
+    return DEMO_SEEDS.some((seed) => seed.id === conversationId)
       ? { status: 'ready', messages: [], olderCursor: null }
       : { status: 'not-found' };
   }
@@ -574,16 +655,17 @@ export async function getOlderThreadMessages(
 
     const { data: convRow, error: convError } = await supabase
       .from('conversations')
-      .select('id')
+      .select('id, company_id')
       .eq('id', conversationId)
       .is('deleted_at', null)
       .maybeSingle();
     if (convError) throw convError;
-    if (!asStr(asRecord(convRow)['id'])) return { status: 'not-found' };
+    const conv = asRecord(convRow);
+    if (!asStr(conv['id'])) return { status: 'not-found' };
 
     const { rows, olderCursor } = await fetchMessagePage(supabase, conversationId, cursor);
-    const nameByProfile = await fetchProfileNames(supabase, [...senderIdsOf(rows)]);
-    return { status: 'ready', messages: toThreadMessages(rows, uid, nameByProfile), olderCursor };
+    const ctx = await fetchSenderContext(supabase, uid, asStr(conv['company_id']), senderIdsOf(rows));
+    return { status: 'ready', messages: toThreadMessages(rows, uid, ctx), olderCursor };
   } catch (error) {
     captureError(error, { area: 'messages.getOlderThreadMessages' });
     return { status: 'error' };
@@ -591,8 +673,8 @@ export async function getOlderThreadMessages(
 }
 
 /** Liczba konwersacji z nieprzeczytanymi wiadomościami (np. do plakietki w nawigacji). */
-export async function getUnreadConversationsCount(): Promise<number> {
+export async function getUnreadConversationsCount(locale?: string): Promise<number> {
   // Reużywa `getConversations` (obsługuje demo/env/błędy → nigdy nie rzuca).
-  const conversations = await getConversations();
+  const conversations = await getConversations(locale);
   return conversations.filter((c) => c.unread).length;
 }

@@ -98,6 +98,14 @@ export default async function CandidateLayout({
     }));
     notifUnread = notif.status === 'ready' ? notif.unread : undefined;
     unreadMessages = unread;
+  } else {
+    // Tryb demo (#359): to samo źródło co realne powiadomienia — tytuły z i18n, czas przez
+    // `Intl.RelativeTimeFormat` w języku strony, cele linków wg roli panelu.
+    const notif = await getNotifications(locale, 'candidate');
+    if (notif.status === 'ready') {
+      notifItems = notif.items;
+      notifUnread = notif.unread;
+    }
   }
 
   return (

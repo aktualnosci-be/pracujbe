@@ -14,6 +14,7 @@ import { usePublicViewerStatus } from '@/components/public/PublicSavedJobs';
 import type { PhoneCountry } from '@/lib/validation/phone';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -130,6 +131,9 @@ export function ApplyModal({
   const [errors, setErrors] = React.useState<{ phone?: PhoneError; consent?: boolean }>({});
   const [formError, setFormError] = React.useState<FormError | null>(null);
   const [sent, setSent] = React.useState(false);
+  // #393: formularz renderuje się w transition po pierwszej ramce dialogu, żeby tap „Aplikuj”
+  // malował od razu ramkę z tytułem i przyciskiem zamknięcia (INP).
+  const [formReady, setFormReady] = React.useState(false);
   const phoneRef = React.useRef<HTMLInputElement>(null);
   const consentRef = React.useRef<HTMLButtonElement>(null);
   const formErrorRef = React.useRef<HTMLDivElement>(null);
@@ -161,9 +165,16 @@ export function ApplyModal({
   };
 
   const handleOpenChange = (next: boolean) => {
-    if (next) reset();
+    if (next) {
+      reset();
+      setFormReady(false);
+    }
     setOpen(next);
   };
+
+  React.useEffect(() => {
+    if (open) React.startTransition(() => setFormReady(true));
+  }, [open]);
 
   // Po błędzie z serwera przycisk był zablokowany (fokus spadał na kontener dialogu) —
   // przenosimy fokus na komunikat, aby użytkownik klawiatury/czytnika wiedział, co się stało.
@@ -251,7 +262,7 @@ export function ApplyModal({
 
   return (
     <>
-      <Dialog.Root open={open} onOpenChange={handleOpenChange}>
+      <LightDialogRoot open={open} onOpenChange={handleOpenChange}>
         <Dialog.Trigger
           className={cn(
             buttonVariants({ variant: triggerVariant, size: triggerSize }),
@@ -273,57 +284,58 @@ export function ApplyModal({
           ) : null}
         </Dialog.Trigger>
 
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-          <Dialog.Content
-            className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-          >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <Dialog.Title className="text-lg font-semibold text-foreground">
-                  {t('title')}
-                </Dialog.Title>
-                <Dialog.Description className="mt-1 text-sm text-muted-foreground">
-                  {isGuest ? t('guestSubtitle') : t('subtitle')}
-                </Dialog.Description>
-              </div>
-              <Dialog.Close
-                aria-label={t('close')}
-                className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-9 w-9')}
+        <LightDialogContent
+          open={open}
+          overlayClassName="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        >
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <Dialog.Title className="text-lg font-semibold text-foreground">
+                {t('title')}
+              </Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-muted-foreground">
+                {isGuest ? t('guestSubtitle') : t('subtitle')}
+              </Dialog.Description>
+            </div>
+            <Dialog.Close
+              aria-label={t('close')}
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-9 w-9')}
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </Dialog.Close>
+          </div>
+
+          {viewer === 'loading' ? (
+            <p role="status" className="py-6 text-center text-sm text-muted-foreground">
+              {tCommon('loading')}
+            </p>
+          ) : isGuest ? (
+            <div className="space-y-3" data-testid="apply-guest">
+              <Link
+                href={registerHref(pathname)}
+                className={cn(buttonVariants({ size: 'lg' }), 'h-auto min-h-12 w-full whitespace-normal text-center')}
               >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </Dialog.Close>
+                <UserPlus className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {t('guestRegister')}
+              </Link>
+              <Link
+                href={loginHref(pathname)}
+                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'h-auto min-h-12 w-full whitespace-normal text-center')}
+              >
+                <LogIn className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {t('guestLogin')}
+              </Link>
+              <p className="text-center text-sm text-muted-foreground">{t('guestReturn')}</p>
+            </div>
+          ) : (
+            <>
+            <div className="mb-4 flex items-start gap-2 rounded-lg bg-success/10 p-3 text-sm text-success-text">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>{t('profileNote')}</span>
             </div>
 
-            {viewer === 'loading' ? (
-              <p role="status" className="py-6 text-center text-sm text-muted-foreground">
-                {tCommon('loading')}
-              </p>
-            ) : isGuest ? (
-              <div className="space-y-3" data-testid="apply-guest">
-                <Link
-                  href={registerHref(pathname)}
-                  className={cn(buttonVariants({ size: 'lg' }), 'h-auto min-h-12 w-full whitespace-normal text-center')}
-                >
-                  <UserPlus className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  {t('guestRegister')}
-                </Link>
-                <Link
-                  href={loginHref(pathname)}
-                  className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'h-auto min-h-12 w-full whitespace-normal text-center')}
-                >
-                  <LogIn className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  {t('guestLogin')}
-                </Link>
-                <p className="text-center text-sm text-muted-foreground">{t('guestReturn')}</p>
-              </div>
-            ) : (
-              <>
-              <div className="mb-4 flex items-start gap-2 rounded-lg bg-success/10 p-3 text-sm text-success-text">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>{t('profileNote')}</span>
-              </div>
-
+            {formReady ? (
               <form className="space-y-4" onSubmit={handleSubmit} noValidate>
                 <div className="space-y-1.5">
                   <Label htmlFor="apply-phone">
@@ -466,11 +478,11 @@ export function ApplyModal({
                   {t('sentTo', { company: companyName })}
                 </p>
               </form>
-              </>
-            )}
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+            ) : null}
+            </>
+          )}
+        </LightDialogContent>
+      </LightDialogRoot>
 
       {sent ? (
         <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">

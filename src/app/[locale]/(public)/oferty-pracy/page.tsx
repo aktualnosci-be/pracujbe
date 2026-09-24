@@ -6,6 +6,7 @@ import { MapPin, Search, SearchX, X } from 'lucide-react';
 import { Link, redirect } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { brandShareImageUrl } from '@/lib/seo/structured-data';
 import { getJobFilterFacets, getJobs } from '@/lib/jobs';
 import {
   localizedLocationLabel,
@@ -111,7 +112,7 @@ export async function generateMetadata({
   ]);
 
   const base = env.siteUrl;
-  const shareImage = new URL('/og.png', base).href;
+  const shareImage = brandShareImageUrl(base);
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
     languages[supported] = `${base}/${supported}${BASE_PATH}${query}`;
