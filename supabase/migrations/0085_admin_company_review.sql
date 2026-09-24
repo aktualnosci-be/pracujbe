@@ -147,12 +147,18 @@ begin
         updated_at = now()
     where id = p_company_id;
 
-  -- Wpis audytu tej decyzji (trigger audit_company_change w tej transakcji).
+  -- Wpis audytu tej decyzji (trigger audit_company_change w tej transakcji). Dopasowanie po
+  -- przejściu i aktorze, nie tylko po czasie: w jednej transakcji now() jest stałe, więc samo
+  -- `order by created_at` wybrałoby dowolny wcześniejszy wpis (i klucz e-maila innej decyzji).
   select a.id into v_audit
     from public.audit_logs a
     where a.entity_type = 'company' and a.entity_id = p_company_id
       and a.action = 'company.status_changed'
-    order by a.created_at desc, a.id desc
+      and a.actor_id = auth.uid()
+      and a.before_data->>'status' = v_from::text
+      and a.after_data->>'status' = v_to::text
+      and a.created_at = now()
+    order by a.id desc
     limit 1;
   if v_audit is null then
     raise exception 'INTERNAL: brak wpisu audytu decyzji' using errcode = 'P0001';
