@@ -493,7 +493,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > `validThrough` z `expires_at` + `unitText` z `salary_period` — wymaga rozszerzenia zwrotu
 > `get_public_job`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR),
-> P1-18 (moderacja zgłoszeń end-to-end), P1-19 (webhook Resend bounce/complaint = zewn.),
+> P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
 > P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
 > P2-06 i P4-* (atomowy lease inboxa, alerty/CWV; P2-13 zarządzanie zespołem zamknięte w #403); P2-04 (paginacja
@@ -588,6 +588,9 @@ zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie od
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
 już wczytanych kart. Jest to część etapu wyglądu #5, nie dowód ukończenia całego etapu.
 
+Wygląd panelu kandydata, onboardingu, wiadomości, powiadomień, toastu i aplikowania = kalka
+prototypu „04 Ludzie i praca” (#5/#6): klasy `panel-styles.ts` (wspólne z pracodawcą/adminem)
++ `src/components/candidate/candidate-styles.ts`; odstępstwa w `docs/design/people-passport/README.md`.
 Kompletność profilu (pulpit + profil) = 6 kroków kreatora onboardingu, jedno źródło
 `src/lib/profile-completeness.ts` (`PROFILE_SECTIONS`/`computeProfileChecklist`); kompletny
 kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma własne kryteria.
@@ -941,8 +944,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
   `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
   (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
-- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy gotowe; decyzje i egzekucja
-  (#42) oraz odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
+- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy i decyzja z egzekucją
+  (#42) gotowe; odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
   → Zod → RPC `submit_content_report` (EXECUTE tylko service_role, `reporterId` z sesji). Sprawa
   = `reports.kind='dsa_notice'`: numer `DSA-XXXX-…` (64 bity), kod dostępu z przeglądarki (w bazie
@@ -955,6 +958,23 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `content-report-actions`, `report-received-email`; E2E `content-report`, `content-report-form`
   (fixture). **Do uzupełnienia przez właściciela:** treść prawna (znacznik na stronie
   formularza), katalog kategorii, termin 7 dni i wymagane pola — wg mapy DSA (#40).
+  Decyzja moderacyjna (#42, migracja `0099`): sprawę DSA zamyka tylko `admin_decide_report`,
+  które w jednej transakcji zapisuje niezmienną decyzję (`moderation_decisions`: rodzaj
+  `no_action`/`job_removed`/`company_suspended`, fakty, podstawa regulamin/prawo + wskazanie
+  postanowienia, udział automatyzacji, numer `DEC-…`), wykonuje skutek (oferta `closed` /
+  firma `suspended` + blokada `moderation_decision_id`, której nie zdejmie żadna zmiana statusu
+  — `MODERATION_LOCKED`), zamyka sprawę, dopisuje historię i audyt `moderation.decided`,
+  a potem kolejkuje e-maile. Właściciele firmy dostają uzasadnienie w swoim języku, zgłaszający
+  sam wynik. Awaria dowolnej części cofa całość. Odroczony trigger odrzuca decyzję bez skutku.
+  `admin_resolve_report` nie zamyka już sprawy DSA (regresja z kontrolą ujemną). CAS
+  `expected_status` + `FOR UPDATE` (dwie decyzje → `STALE_STATE`). Przywrócenie:
+  `admin_restore_moderation` (powód wymagany, blokada przechodzi na inną aktywną decyzję).
+  Kolejka: `flag_report_for_review` (service_role — automat tylko flaguje i ustala priorytet).
+  UI: dialog decyzji i cofnięcia w `/admin/zgloszenia` (`ModerationDecisionActions`),
+  uzasadnienie w `/employer/firma` (`get_company_moderation_decisions`), wynik w
+  `/zglos-tresc/sprawa`. Dowód: `rls.sql` sekcja MOD42; unit `moderation-decision*`; E2E
+  `admin-ux` (#42). **Otwarte:** procedura odwołań (#43); znacznik treści prawnej o środkach
+  odwoławczych w panelu firmy; UI kolejki według priorytetu (lista nadal po dacie).
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,

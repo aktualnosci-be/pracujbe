@@ -27,7 +27,7 @@ import {
   EmailText,
 } from '@/emails/_components';
 import type { EmailCopy, EmailType } from '@/emails/copy';
-import { emailCopy, greetings, interpolate, jobOfferPassportCopy, layoutCopy } from '@/emails/copy';
+import { emailCopy, greetings, interpolate, jobOfferPassportCopy, layoutCopy, moderationLabels } from '@/emails/copy';
 import { applicationStatusLabel } from '@/emails/status-labels';
 import type { EmailSenderIdentity } from '@/lib/email/sender';
 
@@ -137,6 +137,36 @@ export interface EmailDataMap {
     targetType?: string;
     actionUrl: string;
   };
+  /** Wynik sprawy DSA dla zgłaszającego (#42) — bez uzasadnienia i danych autora. */
+  reportDecisionActioned: { recipientName?: string | null; caseNumber: string; actionUrl: string };
+  reportDecisionNoAction: { recipientName?: string | null; caseNumber: string; actionUrl: string };
+  /**
+   * Uzasadnienie decyzji moderacyjnej dla autora treści (#42): fakty (cytat), podstawa
+   * (`groundType` → etykieta w języku odbiorcy + `groundReference`), udział automatyzacji.
+   */
+  moderationJobRemoved: ModerationEmailData & { jobTitle: string };
+  moderationCompanySuspended: ModerationEmailData;
+  /** Cofnięcie ograniczenia (#42): `reason` renderowany jako cytat. */
+  moderationRestored: {
+    recipientName?: string;
+    companyName: string;
+    jobTitle?: string | null;
+    reason: string;
+    decisionReference: string;
+    actionUrl: string;
+  };
+}
+
+/** Wspólne dane uzasadnienia decyzji moderacyjnej (#42). */
+interface ModerationEmailData {
+  recipientName?: string;
+  companyName: string;
+  facts: string;
+  groundType: string;
+  groundReference: string;
+  automatedDetection?: boolean;
+  decisionReference: string;
+  actionUrl: string;
 }
 
 /** Propsy komponentu szablonu: język + dane danego typu. */
@@ -742,6 +772,81 @@ export function ReportReceivedEmail(props: EmailProps<'reportReceived'>): ReactE
   );
 }
 
+export function ReportDecisionActionedEmail(props: EmailProps<'reportDecisionActioned'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="reportDecisionActioned"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+    />
+  );
+}
+
+export function ReportDecisionNoActionEmail(props: EmailProps<'reportDecisionNoAction'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="reportDecisionNoAction"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+    />
+  );
+}
+
+/** Etykiety podstawy i automatyzacji w języku odbiorcy (nieznana podstawa → pusta). */
+function moderationVars(locale: Locale, props: ModerationEmailData): Record<string, unknown> {
+  const labels = moderationLabels[locale];
+  return {
+    ...props,
+    groundLabel: props.groundType === 'terms' ? labels.terms : props.groundType === 'law' ? labels.law : '',
+    automationLabel: props.automatedDetection === true ? labels.automatedYes : labels.automatedNo,
+  };
+}
+
+export function ModerationJobRemovedEmail(props: EmailProps<'moderationJobRemoved'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="moderationJobRemoved"
+      vars={moderationVars(props.locale, props)}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+      quote={props.facts}
+    />
+  );
+}
+
+export function ModerationCompanySuspendedEmail(
+  props: EmailProps<'moderationCompanySuspended'>,
+): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="moderationCompanySuspended"
+      vars={moderationVars(props.locale, props)}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+      quote={props.facts}
+    />
+  );
+}
+
+export function ModerationRestoredEmail(props: EmailProps<'moderationRestored'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="moderationRestored"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+      quote={props.reason}
+    />
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Rejestr + renderEmail                                                      */
 /* -------------------------------------------------------------------------- */
@@ -778,6 +883,11 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   invoice: InvoiceEmail,
   supportContact: SupportContactEmail,
   reportReceived: ReportReceivedEmail,
+  reportDecisionActioned: ReportDecisionActionedEmail,
+  reportDecisionNoAction: ReportDecisionNoActionEmail,
+  moderationJobRemoved: ModerationJobRemovedEmail,
+  moderationCompanySuspended: ModerationCompanySuspendedEmail,
+  moderationRestored: ModerationRestoredEmail,
 };
 
 /**

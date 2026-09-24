@@ -7,6 +7,7 @@ import { AlertCircle, Ban, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { setCompanyBlockAction } from '@/lib/actions/company-blocks';
 import type { CompanyBlock } from '@/lib/data/company-blocks';
+import { PAPER } from '@/components/dashboard/panel-styles';
 
 /**
  * CompanyBlocksSettings — lista firm zablokowanych przez kandydata z odblokowaniem (#97).
@@ -47,17 +48,17 @@ export function CompanyBlocksSettings({ initialBlocks }: { initialBlocks: Compan
   };
 
   return (
-    <section aria-labelledby="company-blocks-title" className="rounded-lg border border-border bg-card p-5 sm:p-6">
+    <section aria-labelledby="company-blocks-title" className={PAPER}>
       <h2
         id="company-blocks-title"
         ref={headingRef}
         tabIndex={-1}
-        className="flex items-center gap-2 text-lg font-semibold text-foreground focus:outline-none"
+        className="flex items-center gap-2 text-[23px] font-bold leading-[1.3] tracking-[-0.025em] text-foreground focus:outline-none"
       >
         <Ban className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
         {t('sectionTitle')}
       </h2>
-      <p className="mt-1 text-sm text-muted-foreground">{t('sectionDescription')}</p>
+      <p className="mt-1 text-[15px] leading-[1.7] text-muted-foreground">{t('sectionDescription')}</p>
 
       <div aria-live="polite">
         {error ? (

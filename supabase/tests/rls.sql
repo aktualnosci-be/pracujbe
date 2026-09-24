@@ -6675,4 +6675,376 @@ select dbl.dblink_disconnect('cm45_b');
 -- ESCO93-R (rollback 0097): supabase/tests/esco93-rollback.sql, uruchamiany przez test-rls.sh
 -- po tym pliku (psql -f, bo \ir ścieżki rollbacku nie działa przy wejściu ze stdin).
 
+-- ============================================================================
+-- MOD42. Decyzja moderacyjna z uzasadnieniem i atomową egzekucją (0099, #42):
+-- decyzja + skutek + stan sprawy + historia + audyt + powiadomienia w jednej transakcji;
+-- sam status nie rozstrzyga sprawy DSA; blokada treści; awaria cofa całość; wyścig;
+-- przywrócenie; kolejka przeglądu (flaga bez decyzji); uzasadnienie dla autora.
+-- ============================================================================
+\set MODJ1 'e9600000-0000-0000-0000-0000000000b1'
+\set MODJ2 'e9600000-0000-0000-0000-0000000000b2'
+\set MODJ3 'e9600000-0000-0000-0000-0000000000b3'
+\set MODJ4 'e9600000-0000-0000-0000-0000000000b4'
+\set MODJ5 'e9600000-0000-0000-0000-0000000000b5'
+\set MODCO 'e9600000-0000-0000-0000-0000000000c1'
+\set MODCA 'e9600000-0000-0000-0000-0000000000c2'
+\set MODFACTS 'Oferta wymaga od kandydatów opłaty za rekrutację z góry.'
+reset role; reset app.current_uid;
+insert into public.companies(id,name,status) values (:'MODCO','Firma Moderowana','verified'), (:'MODCA','Firma Ofert M','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'MODCO',:'EMPB','owner',true), (:'MODCA',:'EMPA','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'MODJ1',:'MODCA','mod-job-1','Magazynier M1','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'MODJ2',:'MODCA','mod-job-2','Magazynier M2','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'MODJ3',:'MODCO','mod-job-3','Kierowca M3','transport','permanent','Gandawa','Flandria','active','pl'),
+  (:'MODJ4',:'MODCA','mod-job-4','Magazynier M4','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'MODJ5',:'MODCA','mod-job-5','Magazynier M5','warehouse','permanent','Antwerpia','Flandria','active','pl');
+-- MODJ1 kompletna: `reopen` przeszedłby walidację — blokuje go wyłącznie decyzja.
+insert into public.job_translations (job_id, locale, title, description, responsibilities)
+  values (:'MODJ1', 'pl', 'Magazynier M1', 'Dłuższy opis stanowiska magazynowego.', array['Obsługa magazynu']);
+insert into public.job_requirements (job_id, kind, locale, content, position)
+  values (:'MODJ1', 'mandatory', 'pl', 'Doświadczenie', 1);
+
+set role service_role;
+select report_id as mr1 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'MODJ1', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, 'Gość M', 'mod1@test.be', 'fr', true) \gset
+select report_id as mr2 from public.submit_content_report(:'CANDA', gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'MODJ2', 'other', 'Opis oferty wydaje się niepełny i mylący.', null, null, 'mod2@test.be', 'en', true) \gset
+select report_id as mr3 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'company', :'MODJ3', 'impersonation', 'Firma podszywa się pod znanego pracodawcę.', null, null, 'mod3@test.be', 'nl', true) \gset
+select report_id as mr4 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'MODJ1', 'fraud', 'Druga osoba zgłasza tę samą opłatę z góry.', null, null, 'mod4@test.be', 'en', true) \gset
+select report_id as mr5, case_number as mcase5 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'MODJ5', 'fraud', 'Zgłoszenie do testu równoległych decyzji.', null, null, 'mod5@test.be', 'pl', true) \gset
+select report_id as mr6 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'MODJ4', 'fraud', 'Zgłoszenie do testu awarii egzekucji.', null, null, 'mod6@test.be', 'pl', true) \gset
+select report_id as mr7 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'MODJ4', 'other', 'Zgłoszenie do testu kolejki przeglądu.', null, null, 'mod7@test.be', 'pl', true) \gset
+select case_number as mcase1 from public.reports where id = :'mr1' \gset
+reset role;
+
+-- MOD42-1: tylko admin decyduje; klient nie czyta decyzji ani nie flaguje.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_decide_report(''' || :'mr1' || ''', ''open'', ''no_action'', ''Fakty opisane wystarczająco długo.'')',
+  'permission denied', 'MOD42-1 anon bez EXECUTE admin_decide_report');
+reset role;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_decide_report(''' || :'mr1' || ''', ''open'', ''no_action'', ''Fakty opisane wystarczająco długo.'')',
+  'PERMISSION_DENIED', 'MOD42-1b pracodawca nie decyduje o sprawie');
+select pg_temp.expect_error('select count(*) from public.moderation_decisions', 'permission denied',
+  'MOD42-1c klient nie czyta tabeli decyzji');
+select pg_temp.expect_error('select public.flag_report_for_review(''' || :'mr7' || ''', 3, ''x'')',
+  'permission denied', 'MOD42-1d klient nie ustawia priorytetu przeglądu');
+select pg_temp.expect_error(
+  'update public.jobs set moderation_decision_id = gen_random_uuid() where id = ''' || :'MODJ1' || '''',
+  'blokadę moderacyjną', 'MOD42-1e pracodawca nie ustawia blokady moderacyjnej');
+reset role; reset app.current_uid;
+
+-- MOD42-2 (regresja): sam status nie rozstrzyga sprawy DSA — treść zostałaby publiczna.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_resolve_report(''' || :'mr1' || ''', ''resolved'', ''open'')',
+  'INVALID_TRANSITION', 'MOD42-2 admin_resolve_report nie zamyka sprawy DSA bez decyzji');
+select pg_temp.expect_error('select public.admin_resolve_report(''' || :'mr1' || ''', ''dismissed'', ''open'')',
+  'INVALID_TRANSITION', 'MOD42-2b ani nie oddala jej bez decyzji');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.reports where id = :'mr1') = 'open'
+  and public.job_is_public(:'MODJ1'), 'MOD42-2c sprawa otwarta, treść bez zmian');
+-- Kontrola ujemna: bez strażnika (stan sprzed #42) status „resolved” zapisuje się, a oferta
+-- zostaje publiczna — dokładnie błąd, który naprawia decyzja z egzekucją.
+begin;
+alter table public.reports disable trigger trg_reports_decision_guard;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report(:'mr1', 'resolved', 'open');
+reset role;
+select pg_temp.assert((select status::text from public.reports where id = :'mr1') = 'resolved'
+  and public.job_is_public(:'MODJ1'),
+  'MOD42-2d kontrola ujemna: bez strażnika sprawa „rozstrzygnięta”, a oferta nadal publiczna');
+rollback;
+
+-- MOD42-3: walidacja decyzji (bez skutków).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_decide_report(''' || :'mr1' || ''', ''open'', ''job_removed'', ''za krótko'', ''terms'', ''§ 4'')',
+  'FACTS_REQUIRED', 'MOD42-3 fakty wymagane');
+select pg_temp.expect_error(
+  'select public.admin_decide_report(''' || :'mr1' || ''', ''open'', ''job_removed'', ''' || :'MODFACTS' || ''')',
+  'GROUND_REQUIRED', 'MOD42-3b ograniczenie wymaga podstawy');
+select pg_temp.expect_error(
+  'select public.admin_decide_report(''' || :'mr1' || ''', ''open'', ''job_removed'', ''' || :'MODFACTS' || ''', ''terms'', null)',
+  'GROUND_REFERENCE_REQUIRED', 'MOD42-3c ograniczenie wymaga wskazania postanowienia');
+select pg_temp.expect_error(
+  'select public.admin_decide_report(''' || :'mr3' || ''', ''open'', ''job_removed'', ''' || :'MODFACTS' || ''', ''terms'', ''§ 4'')',
+  'DECISION_SCOPE', 'MOD42-3d zgłoszenie firmy nie usuwa pojedynczej oferty');
+select pg_temp.expect_error(
+  'select public.admin_decide_report(''' || :'mr1' || ''', ''reviewing'', ''job_removed'', ''' || :'MODFACTS' || ''', ''terms'', ''§ 4'')',
+  'STALE_STATE', 'MOD42-3e nieaktualny status sprawy → STALE_STATE');
+select pg_temp.expect_error(
+  'select public.admin_decide_report(''' || :'mr1' || ''', ''open'', ''ban'', ''' || :'MODFACTS' || ''', ''terms'', ''§ 4'')',
+  'VALIDATION_FAILED', 'MOD42-3f nieznany rodzaj decyzji');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.moderation_decisions) = 0
+  and public.job_is_public(:'MODJ1'), 'MOD42-3g odrzucone decyzje bez zapisu i skutku');
+
+-- MOD42-4: decyzja „oferta wycofana” — skutek, sprawa, historia, audyt, powiadomienia.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'mr1', 'open', 'job_removed', :'MODFACTS', 'terms', 'Regulamin § 4 ust. 2', true) as md1 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'closed' and moderation_decision_id = :'md1'::uuid from public.jobs where id = :'MODJ1')
+  and not public.job_is_public(:'MODJ1')
+  and not exists (select 1 from public.get_public_jobs('pl', p_limit => 100, p_offset => 0) g where g.id = :'MODJ1'),
+  'MOD42-4 oferta wycofana z publicznego widoku i zablokowana decyzją');
+select pg_temp.assert(
+  (select status::text = 'resolved' and decision_id = :'md1'::uuid and resolved_by = :'ADMIN'::uuid
+     from public.reports where id = :'mr1'),
+  'MOD42-4b sprawa rozstrzygnięta tą decyzją');
+select pg_temp.assert(
+  (select decision = 'job_removed' and job_id = :'MODJ1'::uuid and company_id = :'MODCA'::uuid
+          and facts = :'MODFACTS' and ground_type = 'terms' and ground_reference = 'Regulamin § 4 ust. 2'
+          and automated_detection and not automated_decision and decided_by = :'ADMIN'::uuid
+          and previous_status = 'active' and reference ~ '^DEC-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$'
+     from public.moderation_decisions where id = :'md1'),
+  'MOD42-4c uzasadnienie: rodzaj, zasięg, fakty, podstawa, automatyzacja, człowiek, stan sprzed');
+select pg_temp.assert(
+  (select count(*) from public.report_events where report_id = :'mr1' and event_type = 'decision'
+     and decision_id = :'md1'::uuid and to_status = 'resolved') = 1
+  and (select count(*) from public.report_events where report_id = :'mr1' and event_type = 'status_changed'
+     and to_status = 'resolved' and actor_id = :'ADMIN'::uuid) = 1,
+  'MOD42-4d historia sprawy: decyzja i zmiana statusu');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action = 'moderation.decided' and entity_id = :'mr1'
+     and actor_id = :'ADMIN'::uuid and after_data->>'decisionId' = :'md1' and after_data->>'jobId' = :'MODJ1') = 1,
+  'MOD42-4e wpis audytu decyzji');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and data->>'kind' = 'moderation'
+     and data->>'decisionId' = :'md1') = 1
+  and (select count(*) from public.email_deliveries where profile_id = :'EMPA' and template = 'moderationJobRemoved'
+     and entity_id = :'md1' and locale = 'nl' and payload->>'facts' = :'MODFACTS'
+     and payload->>'groundReference' = 'Regulamin § 4 ust. 2' and payload->>'jobTitle' = 'Magazynier M1') = 1,
+  'MOD42-4f autor: powiadomienie i uzasadnienie e-mailem w JEGO języku (nl)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where to_email = 'mod1@test.be' and template = 'reportDecisionActioned'
+     and locale = 'fr' and entity_id = :'mr1' and payload->>'caseNumber' = :'mcase1'
+     and not (payload ? 'facts') and not (payload ? 'companyName') and not (payload ? 'groundReference')) = 1,
+  'MOD42-4g zgłaszający: sam wynik, bez uzasadnienia i danych autora, w jego języku (fr)');
+set role service_role;
+select public.get_report_case(:'mcase1', 'ABCDEFGHIJKLMNOPQRSTUVWX') as mlookup1 \gset
+reset role;
+select pg_temp.assert((:'mlookup1'::jsonb)->>'outcome' = 'action_taken'
+  and (:'mlookup1'::jsonb)->>'status' = 'resolved'
+  and position(:'MODFACTS' in :'mlookup1') = 0,
+  'MOD42-4h sprawdzenie sprawy: wynik bez uzasadnienia');
+
+-- MOD42-5: blokada — pracodawca, admin i właściciel tabel nie przywrócą treści statusem.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.set_job_status(''' || :'MODJ1' || ''', ''reopen'')',
+  'MODERATION_LOCKED', 'MOD42-5 pracodawca nie otworzy ponownie wycofanej oferty');
+reset role; reset app.current_uid;
+select pg_temp.expect_error('update public.jobs set status = ''active'' where id = ''' || :'MODJ1' || '''',
+  'MODERATION_LOCKED', 'MOD42-5b właściciel tabel nie zmieni statusu zablokowanej oferty');
+select pg_temp.expect_error('update public.jobs set moderation_decision_id = null where id = ''' || :'MODJ1' || '''',
+  'blokadę moderacyjną', 'MOD42-5c blokady nie zdejmuje się z pominięciem przywrócenia');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_decide_report(''' || :'mr1' || ''', ''resolved'', ''no_action'', ''' || :'MODFACTS' || ''')',
+  'INVALID_TRANSITION', 'MOD42-5d druga decyzja w rozstrzygniętej sprawie odrzucona');
+select pg_temp.expect_error('select public.admin_resolve_report(''' || :'mr1' || ''', ''reviewing'', ''resolved'')',
+  'INVALID_TRANSITION', 'MOD42-5e rozstrzygniętej sprawy DSA nie otwiera zmiana statusu');
+reset role; reset app.current_uid;
+
+-- MOD42-6: decyzja niezmienna; decyzja bez skutku odrzucana przy COMMIT także poza RPC.
+select pg_temp.expect_error('update public.moderation_decisions set facts = ''podmiana faktów decyzji'' where id = ''' || :'md1' || '''',
+  'niezmienna', 'MOD42-6 fakty decyzji niezmienne');
+select pg_temp.expect_error('delete from public.moderation_decisions where id = ''' || :'md1' || '''',
+  'niezmienna', 'MOD42-6b decyzji nie można usunąć');
+begin;
+set constraints all immediate;
+select pg_temp.expect_error(
+  'insert into public.moderation_decisions(reference, report_id, decision, job_id, company_id, facts, ground_type, ground_reference)
+   values (''DEC-TEST-0000-0001'', ''' || :'mr6' || ''', ''job_removed'', ''' || :'MODJ4' || ''', ''' || :'MODCA' || ''', '''
+   || :'MODFACTS' || ''', ''terms'', ''§ 4'')',
+  'MODERATION_EFFECT_MISSING', 'MOD42-6c decyzja bez wykonanego skutku nie zapisze się');
+rollback;
+select pg_temp.expect_error('update public.reports set status = ''resolved'' where id = ''' || :'mr6' || '''',
+  'INVALID_TRANSITION', 'MOD42-6d sprawy DSA nie zamyka bezpośredni zapis statusu');
+
+-- MOD42-7: awaria egzekucji cofa całą transakcję — sprawa otwarta, zero skutków.
+create function pg_temp.mod_fail_job() returns trigger language plpgsql as $$
+begin
+  if new.id = 'e9600000-0000-0000-0000-0000000000b4'::uuid then raise exception 'INJECTED_ENFORCEMENT_FAILURE'; end if;
+  return new;
+end $$;
+create trigger trg_mod_fail before update on public.jobs for each row execute function pg_temp.mod_fail_job();
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_decide_report(''' || :'mr6' || ''', ''open'', ''job_removed'', ''' || :'MODFACTS' || ''', ''law'', ''Art. 1'')',
+  'INJECTED_ENFORCEMENT_FAILURE', 'MOD42-7 awaria egzekucji przerywa decyzję');
+reset role; reset app.current_uid;
+drop trigger trg_mod_fail on public.jobs;
+select pg_temp.assert(
+  (select status::text = 'open' and decision_id is null from public.reports where id = :'mr6')
+  and (select count(*) from public.moderation_decisions where report_id = :'mr6') = 0
+  and (select count(*) from public.report_events where report_id = :'mr6' and event_type <> 'submitted') = 0
+  and (select count(*) from public.email_deliveries where entity_id = :'mr6' and template like 'reportDecision%') = 0
+  and (select count(*) from public.audit_logs where action = 'moderation.decided' and entity_id = :'mr6') = 0
+  and public.job_is_public(:'MODJ4'),
+  'MOD42-7b po awarii: sprawa otwarta, brak decyzji, historii, e-maili i audytu, treść bez zmian');
+
+-- MOD42-8: brak działań — sprawa oddalona, treść publiczna, autor nie jest powiadamiany.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'mr2', 'open', 'no_action', 'Treść oferty nie narusza regulaminu ani prawa.') as md2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'dismissed' and decision_id = :'md2'::uuid from public.reports where id = :'mr2')
+  and public.job_is_public(:'MODJ2')
+  and (select ground_type is null and company_id is null from public.moderation_decisions where id = :'md2'),
+  'MOD42-8 brak działań: sprawa oddalona, oferta publiczna');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where entity_id = :'md2') = 0
+  and (select count(*) from public.notifications where data->>'decisionId' = :'md2') = 0
+  and (select count(*) from public.email_deliveries where entity_id = :'mr2' and template = 'reportDecisionNoAction'
+         and locale = 'pl' and to_email = 'mod2@test.be') = 1,
+  'MOD42-8b tylko zgłaszający dostaje wynik — w języku profilu (pl), nie formularza (en)');
+
+-- MOD42-9: zawieszenie firmy — oferty znikają, admin nie przywróci statusem.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'mr3', 'open', 'company_suspended',
+  'Firma podaje dane innego, znanego pracodawcy.', 'law', 'Art. 1 ustawy (do uzupełnienia)') as md3 \gset
+select pg_temp.expect_error(
+  'select public.admin_set_company_status(''' || :'MODCO' || ''', ''verified'', ''suspended'')',
+  'MODERATION_LOCKED', 'MOD42-9 admin nie przywróci firmy zmianą statusu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'suspended' and moderation_decision_id = :'md3'::uuid
+          and status_reason = 'Firma podaje dane innego, znanego pracodawcy.' from public.companies where id = :'MODCO')
+  and not exists (select 1 from public.get_public_jobs('pl', p_limit => 100, p_offset => 0) g where g.id = :'MODJ3'),
+  'MOD42-9b firma zawieszona i zablokowana, jej oferty poza listą');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id = :'EMPB' and template = 'moderationCompanySuspended'
+     and entity_id = :'md3' and locale = 'fr') = 1
+  and (select count(*) from public.email_deliveries where to_email = 'mod3@test.be'
+     and template = 'reportDecisionActioned' and locale = 'nl') = 1,
+  'MOD42-9c właściciel (fr) i zgłaszający (nl) — każdy w swoim języku');
+
+-- MOD42-10: dwie równoległe decyzje w tej samej sprawie → jedna wygrywa, druga STALE_STATE.
+select 'select public.admin_decide_report(''' || :'mr5' || ''', ''open'', ''job_removed'', ''' || :'MODFACTS'
+  || ''', ''terms'', ''§ 4'')::text' as mod_race_a \gset
+select 'select public.admin_decide_report(''' || :'mr5' || ''', ''open'', ''no_action'', ''Treść nie narusza regulaminu serwisu.'')::text'
+  as mod_race_b \gset
+select pg_temp.remote_begin('mod_a', :'ADMIN') as mod_pid_a \gset
+select pg_temp.remote_begin('mod_b', :'ADMIN') as mod_pid_b \gset
+select t.v as mod_res_a from dbl.dblink('mod_a', :'mod_race_a') as t(v text) \gset
+select dbl.dblink_send_query('mod_b', :'mod_race_b');
+select pg_temp.wait_blocked(:mod_pid_b, 'MOD42-10');
+select dbl.dblink_exec('mod_a', 'commit');
+select pg_temp.remote_result('mod_b') as mod_res_b \gset
+select dbl.dblink_exec('mod_b', 'rollback');
+select dbl.dblink_disconnect('mod_a'); select dbl.dblink_disconnect('mod_b');
+select pg_temp.assert(position('STALE_STATE' in :'mod_res_b') > 0, 'MOD42-10 druga decyzja → STALE_STATE');
+select pg_temp.assert(
+  (select count(*) from public.moderation_decisions where report_id = :'mr5') = 1
+  and (select decision_id = :'mod_res_a'::uuid and status::text = 'resolved' from public.reports where id = :'mr5')
+  and (select status::text = 'closed' from public.jobs where id = :'MODJ5')
+  and (select count(*) from public.email_deliveries where entity_id = :'mr5' and template like 'reportDecision%') = 1,
+  'MOD42-10b jedna decyzja, jeden skutek, jeden wynik dla zgłaszającego');
+
+-- MOD42-11: druga decyzja o już wycofanej ofercie; przywrócenie przekazuje blokadę dalej.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'mr4', 'open', 'job_removed', :'MODFACTS', 'terms', 'Regulamin § 4 ust. 2') as md4 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select moderation_decision_id = :'md1'::uuid and status::text = 'closed' from public.jobs where id = :'MODJ1')
+  and (select previous_status = 'active' from public.moderation_decisions where id = :'md4'),
+  'MOD42-11 skutek już w mocy: blokada bez zmian, stan sprzed pierwszego ograniczenia');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_restore_moderation(''' || :'md1' || ''', ''za krótko'')',
+  'REASON_REQUIRED', 'MOD42-11b przywrócenie wymaga uzasadnienia');
+select pg_temp.expect_error('select public.admin_restore_moderation(''' || :'md2' || ''', ''Brak ograniczenia do cofnięcia tutaj.'')',
+  'INVALID_TRANSITION', 'MOD42-11c decyzji bez ograniczenia nie przywraca się');
+select public.admin_restore_moderation(:'md1', 'Autor usunął wymóg opłaty i wyjaśnił sprawę.') as mrest1 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select moderation_decision_id = :'md4'::uuid and status::text = 'closed' from public.jobs where id = :'MODJ1')
+  and not public.job_is_public(:'MODJ1'),
+  'MOD42-11d inna aktywna decyzja przejmuje blokadę — oferta nadal wycofana');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_restore_moderation(''' || :'md4' || ''', ''Pracodawca próbuje sam przywrócić.'')',
+  'PERMISSION_DENIED', 'MOD42-11e pracodawca nie przywraca treści');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_restore_moderation(:'md4', 'Autor usunął wymóg opłaty i wyjaśnił sprawę.') as mrest4 \gset
+select pg_temp.expect_error('select public.admin_restore_moderation(''' || :'md4' || ''', ''Autor usunął wymóg opłaty i wyjaśnił sprawę.'')',
+  'STALE_STATE', 'MOD42-11f ponowne przywrócenie → STALE_STATE');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select moderation_decision_id is null and status::text = 'active' from public.jobs where id = :'MODJ1')
+  and public.job_is_public(:'MODJ1'),
+  'MOD42-11g po cofnięciu ostatniej decyzji oferta wraca do stanu sprzed ograniczenia');
+-- Kontrola do MOD42-5: bez blokady ta sama oferta zamyka się i otwiera ponownie.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'MODJ1'::uuid, 'close');
+select pg_temp.assert(public.set_job_status(:'MODJ1'::uuid, 'reopen') = 'active',
+  'MOD42-11g2 kontrola: po przywróceniu reopen działa (wcześniej blokowała go tylko decyzja)');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.report_events where decision_id in (:'md1'::uuid, :'md4'::uuid) and event_type = 'restored') = 2
+  and (select count(*) from public.audit_logs where action = 'moderation.restored' and entity_id in (:'mr1'::uuid, :'mr4'::uuid)) = 2
+  and (select count(*) from public.email_deliveries where profile_id = :'EMPA' and template = 'moderationRestored'
+         and locale = 'nl' and entity_id in (:'md1'::uuid, :'md4'::uuid)) = 2
+  and (select status::text from public.reports where id = :'mr1') = 'resolved',
+  'MOD42-11h przywrócenie: historia, audyt, e-mail do autora; sprawa pozostaje rozstrzygnięta');
+
+-- MOD42-12: przywrócenie firmy.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_restore_moderation(:'md3', 'Firma wykazała, że jest uprawnionym pracodawcą.') as mrest3 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'verified' and moderation_decision_id is null and status_reason is null
+     from public.companies where id = :'MODCO')
+  and exists (select 1 from public.get_public_jobs('pl', p_limit => 100, p_offset => 0) g where g.id = :'MODJ3'),
+  'MOD42-12 firma przywrócona do stanu sprzed zawieszenia, oferty wracają');
+
+-- MOD42-13: kolejka przeglądu — automat tylko flaguje, niczego nie rozstrzyga.
+set role service_role;
+select public.flag_report_for_review(:'mr7', 3, 'Wykryto podobieństwo do znanych oszustw');
+reset role;
+select pg_temp.assert(
+  (select review_priority = 3 and review_flag = 'Wykryto podobieństwo do znanych oszustw'
+          and status::text = 'open' and decision_id is null from public.reports where id = :'mr7')
+  and (select count(*) from public.report_events where report_id = :'mr7' and event_type = 'flagged') = 1
+  and public.job_is_public(:'MODJ4'),
+  'MOD42-13 flaga i priorytet bez decyzji i bez skutku');
+select pg_temp.expect_error('update public.reports set review_priority = 0 where id = ''' || :'mr7' || '''',
+  'priorytet przeglądu', 'MOD42-13b priorytet tylko przez RPC flagi');
+set role service_role;
+select pg_temp.expect_error('select public.flag_report_for_review(''' || :'mr1' || ''', 1, null)',
+  'NOT_FOUND', 'MOD42-13c rozstrzygniętej sprawy się nie flaguje');
+reset role;
+
+-- MOD42-14: uzasadnienie dostępne autorowi (właściciel/admin firmy), nikomu innemu.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_company_moderation_decisions(:'MODCA')) = 3
+  and (select bool_and(facts = :'MODFACTS' and restored_at is not null)
+         from public.get_company_moderation_decisions(:'MODCA') where job_id = :'MODJ1'),
+  'MOD42-14 autor widzi swoje decyzje z uzasadnieniem i przywróceniem');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_company_moderation_decisions(:'MODCA')) = 0,
+  'MOD42-14b kandydat nie widzi decyzji firmy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_company_moderation_decisions(:'MODCA')) = 0
+  and (select count(*) from public.get_company_moderation_decisions(:'MODCO')) = 1,
+  'MOD42-14c inna firma nie widzi cudzych decyzji');
+reset role; reset app.current_uid;
+-- MOD42-14d: panel admina czyta decyzje i przywrócenia (service_role po potwierdzeniu roli).
+set role service_role;
+select pg_temp.assert((select count(*) from public.moderation_decisions) = 5
+  and (select count(*) from public.moderation_restorations) = 3,
+  'MOD42-14d service_role czyta decyzje i przywrócenia');
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
+import { BTN_SECONDARY } from '@/components/dashboard/panel-styles';
 
 /**
  * NotificationsDropdown — panel powiadomień (state-showcase §5).
@@ -88,22 +89,22 @@ export function NotificationsDropdown({
     <div
       role="region"
       aria-labelledby={titleId}
-      className="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-background text-left shadow-lg"
+      className="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[17px] border border-border bg-card text-left shadow-lg"
     >
-      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3.5">
         <div className="flex items-center gap-2">
           <h2
             id={titleId}
             ref={titleRef}
             tabIndex={-1}
-            className="text-sm font-semibold text-foreground focus:outline-none"
+            className="text-[15px] font-bold tracking-[-0.03em] text-foreground focus:outline-none"
           >
             {t('title')}
           </h2>
           {!error && unread > 0 ? (
             <span
               aria-hidden="true"
-              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-medium text-accent-foreground">
+              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">
               {unread}
             </span>
           ) : null}
@@ -118,7 +119,7 @@ export function NotificationsDropdown({
             // `aria-disabled` zamiast `disabled` w trakcie zapisu: fokus zostaje na przycisku.
             aria-disabled={markAllPending || undefined}
             aria-busy={markAllPending || undefined}
-            className="rounded text-xs font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline aria-disabled:cursor-wait aria-disabled:opacity-60"
+            className="inline-flex min-h-11 items-center rounded text-xs font-bold text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline aria-disabled:cursor-wait aria-disabled:opacity-60"
           >
             {markAllPending ? t('markingAllRead') : t('markAllRead')}
           </button>
@@ -126,24 +127,24 @@ export function NotificationsDropdown({
       </div>
 
       {!error && markAllError ? (
-        <p role="alert" className="border-b border-border px-4 py-2 text-sm text-error">
+        <p role="alert" className="border-b border-border px-5 py-2 text-[13px] text-error">
           {markAllError}
         </p>
       ) : null}
       {!error && markAllDone && !markAllError ? (
-        <p role="status" className="border-b border-border px-4 py-2 text-sm text-foreground">
+        <p role="status" className="border-b border-border px-5 py-2 text-[13px] text-success-text">
           {t('markedAllRead')}
         </p>
       ) : null}
 
       {error ? (
-        <div role="alert" className="px-4 py-6 text-sm text-foreground">
+        <div role="alert" className="px-5 py-6 text-[13px] text-foreground">
           <p>{t('loadError')}</p>
           {onRetry ? (
             <button
               type="button"
               onClick={onRetry}
-              className="mt-3 min-h-12 rounded-md border border-border px-4 py-2 font-medium text-accent hover:bg-soft"
+              className={cn(BTN_SECONDARY, 'mt-3')}
             >
               {t('retry')}
             </button>
@@ -158,13 +159,13 @@ export function NotificationsDropdown({
                   aria-hidden="true"
                   className={cn(
                     'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-                    item.unread ? 'bg-accent' : 'bg-transparent',
+                    item.unread ? 'bg-primary' : 'bg-transparent',
                   )}
                 />
                 <div className="min-w-0">
                   <p
                     className={cn(
-                      'text-sm leading-snug',
+                      'text-[13px] leading-snug',
                       item.unread
                         ? 'font-medium text-foreground'
                         : 'text-muted-foreground',
@@ -183,26 +184,26 @@ export function NotificationsDropdown({
                   <Link
                     href={item.href}
                     onClick={() => onItemOpen?.(item)}
-                    className="flex gap-3 px-4 py-3 transition-colors hover:bg-soft focus-visible:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    className="flex gap-3 px-5 py-3.5 transition-colors hover:bg-soft focus-visible:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
                     {content}
                   </Link>
                 ) : (
-                  <div className="flex gap-3 px-4 py-3">{content}</div>
+                  <div className="flex gap-3 px-5 py-3.5">{content}</div>
                 )}
               </li>
             );
           })}
         </ul>
       ) : (
-        <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t('empty')}</p>
+        <p className="px-5 py-[45px] text-center text-[13px] text-muted-foreground">{t('empty')}</p>
       )}
 
       {!error && seeAllHref ? (
-        <div className="border-t border-border px-4 py-2.5 text-center">
+        <div className="border-t border-border px-5 py-2.5 text-center">
           <Link
             href={seeAllHref}
-            className="rounded text-sm font-medium text-accent hover:underline"
+            className="inline-flex min-h-11 items-center rounded text-sm font-bold text-primary hover:underline"
           >
             {t('seeAll')}
           </Link>

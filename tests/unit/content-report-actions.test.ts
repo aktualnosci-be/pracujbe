@@ -193,6 +193,7 @@ describe('lookupReportCase', () => {
         category: 'impersonation',
         createdAt: '2026-09-20T10:00:00Z',
         dueAt: '2026-09-27T10:00:00Z',
+        outcome: null,
         events: [{ type: 'submitted', toStatus: 'open', at: '2026-09-20T10:00:00Z' }],
       },
     });

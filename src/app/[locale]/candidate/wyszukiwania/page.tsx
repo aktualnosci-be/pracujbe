@@ -4,9 +4,11 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
 import { SavedSearchList } from '@/components/candidate/SavedSearchList';
-import { Button } from '@/components/ui/button';
 import { loadMySavedSearches } from '@/lib/data/saved-searches';
 import { createAppDateFormatter } from '@/lib/datetime';
+import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
+import { BTN_PRIMARY, BTN_SECONDARY, P_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * Panel kandydata — Zapisane wyszukiwania i alerty o nowych ofertach (#100).
@@ -45,28 +47,19 @@ export default async function CandidateSavedSearchesPage({
   const formatDate = createAppDateFormatter(locale, { withTime: true });
 
   return (
-    <div className="min-w-0 space-y-6">
-      <header className="rounded-[1.75rem] border border-border bg-card p-5 sm:p-8">
-        <h1 className="break-words text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          {td('navSearches')}
-        </h1>
-        <p className="mt-2 break-words text-base text-muted-foreground">{t('intro')}</p>
-      </header>
+    <div className="min-w-0">
+      <CandidatePageHeader eyebrow={td('candidatePlaceEyebrow')} title={td('navSearches')} intro={t('intro')} />
 
       {load.status === 'error' ? (
-        <section role="alert" className="space-y-4 rounded-[1.75rem] border border-border bg-card p-5 sm:p-7">
-          <p className="break-words text-base text-foreground">{t('loadError')}</p>
-          <Button asChild variant="outline" className="min-h-12 rounded-xl">
-            <Link href="/candidate/wyszukiwania">{t('retry')}</Link>
-          </Button>
+        <section role="alert" className={PAPER}>
+          <p className={cn(P_EXTENDED, 'text-foreground')}>{t('loadError')}</p>
+          <Link href="/candidate/wyszukiwania" className={cn(BTN_SECONDARY, 'mt-4')}>{t('retry')}</Link>
         </section>
       ) : load.searches.length === 0 ? (
-        <section className="space-y-4 rounded-[1.75rem] border border-border bg-card p-5 sm:p-7">
-          <BellRing className="h-8 w-8 text-accent" aria-hidden="true" />
-          <p className="break-words text-base text-foreground">{load.demo ? t('demo') : t('empty')}</p>
-          <Button asChild className="min-h-12 whitespace-normal rounded-xl text-center">
-            <Link href="/oferty-pracy">{t('browse')}</Link>
-          </Button>
+        <section className={cn(PAPER, 'px-[25px] py-[45px] text-center')}>
+          <BellRing className="mx-auto h-8 w-8 text-primary" aria-hidden="true" />
+          <p className={cn(P_EXTENDED, 'mt-3')}>{load.demo ? t('demo') : t('empty')}</p>
+          <Link href="/oferty-pracy" className={cn(BTN_PRIMARY, 'mt-5')}>{t('browse')}</Link>
         </section>
       ) : (
         <SavedSearchList

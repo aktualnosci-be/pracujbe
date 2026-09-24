@@ -5,6 +5,14 @@ import type { ConversationThread } from '@/lib/data/messages';
 import { threadDisplayName, toMessageViews } from '@/lib/messaging/thread-view';
 
 import { ThreadMessageList } from './ThreadMessageList';
+import { CONVERSATION_HEAD } from '@/components/candidate/candidate-styles';
+import { ICON_BOX } from '@/components/dashboard/panel-styles';
+
+/** Inicjały rozmówcy (placeholder `.company-icon`). */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '•';
+}
 
 /**
  * MessageThread — wątek jednej konwersacji (makieta „Wiadomości").
@@ -29,13 +37,21 @@ export async function MessageThread({ thread, locale, headingId }: MessageThread
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Nagłówek wątku */}
-      <div className="shrink-0 border-b border-border px-4 py-3">
-        <h2 id={headingId} className="truncate text-sm font-semibold text-foreground">
-          {displayName}
-        </h2>
-        {thread.subject && thread.counterpartyName ? (
-          <p className="truncate text-xs text-muted-foreground">{thread.subject}</p>
-        ) : null}
+      {/* `.conversation header` z prototypu: `.company-icon` + nazwa i temat. */}
+      <div className="shrink-0 px-7 pt-6 max-[600px]:px-5">
+        <div className={CONVERSATION_HEAD}>
+          <span className={ICON_BOX} aria-hidden="true">
+            {initialsOf(displayName)}
+          </span>
+          <div className="min-w-0">
+            <h2 id={headingId} className="truncate text-[15px] font-bold text-foreground">
+              {displayName}
+            </h2>
+            {thread.subject && thread.counterpartyName ? (
+              <p className="mt-1 truncate text-xs text-muted-foreground">{thread.subject}</p>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       {/* `key` = nowy stan listy przy zmianie rozmowy (bez przenoszenia starszych stron). */}

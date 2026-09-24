@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { ArrowRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
@@ -8,6 +9,44 @@ import { ApplicationActions } from '@/components/candidate/ApplicationActions';
 import { StatusPill } from '@/components/ui/status-pill';
 import { loadMoreApplications } from '@/lib/actions/candidate-applications';
 import type { MyApplication, MyApplicationsPage } from '@/lib/data/candidate';
+import {
+  BTN_PRIMARY,
+  BTN_SECONDARY,
+  EYEBROW,
+  H2_EXTENDED,
+  P_EXTENDED,
+  PAPER,
+  TEXT_LINK,
+} from '@/components/dashboard/panel-styles';
+import { APP_STEP, APP_STEP_DONE, APP_STEPS } from '@/components/candidate/candidate-styles';
+import { cn } from '@/lib/utils';
+
+/** Etapy `.application-steps` z prototypu (klucze `dashboard.*`). */
+const APPLICATION_STEPS = [
+  'applicationStepSent',
+  'applicationStepReview',
+  'applicationStepInterview',
+  'applicationStepDecision',
+] as const;
+
+/** Ostatni osiągnięty etap dla statusu aplikacji (wycofana/szkic = tylko wysłanie). */
+function applicationStepIndex(status: string): number {
+  switch (status) {
+    case 'viewed':
+    case 'shortlisted':
+      return 1;
+    case 'interview':
+      return 2;
+    case 'offer_sent':
+    case 'offer_accepted':
+    case 'offer_declined':
+    case 'rejected':
+    case 'hired':
+      return 3;
+    default:
+      return 0;
+  }
+}
 
 function formatDate(iso: string, locale: string): string {
   const ts = Date.parse(iso);
@@ -64,13 +103,10 @@ export function CandidateApplicationsList({
 
   if (items.length === 0) {
     return (
-      <section className="rounded-2xl border border-border bg-card p-6 sm:p-8">
-        <h2 className="text-xl font-semibold text-foreground">{t('applicationsEmptyTitle')}</h2>
-        <p className="mt-2 text-base text-muted-foreground">{t('applicationsEmptyBody')}</p>
-        <Link
-          href="/oferty-pracy"
-          className="mt-5 inline-flex min-h-12 items-center rounded-xl bg-primary px-5 font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        >
+      <section className={cn(PAPER, 'px-[25px] py-[45px] text-center')}>
+        <h2 className={H2_EXTENDED}>{t('applicationsEmptyTitle')}</h2>
+        <p className={cn(P_EXTENDED, 'mt-2')}>{t('applicationsEmptyBody')}</p>
+        <Link href="/oferty-pracy" className={cn(BTN_PRIMARY, 'mt-5')}>
           {t('applicationsFindJobs')}
         </Link>
       </section>
@@ -78,40 +114,40 @@ export function CandidateApplicationsList({
   }
 
   return (
-    <div className="space-y-5">
-      <ul className="space-y-4">
+    <div className="min-w-0">
+      <ul className="min-w-0">
         {items.map((app: MyApplication) => {
           const date = formatDate(app.date, locale);
           return (
-            <li key={app.id} className="min-w-0 rounded-2xl border border-border bg-card p-5 sm:p-6">
-              <article className="space-y-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1 space-y-2">
-                    {app.companyName ? (
-                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{app.companyName}</p>
-                    ) : null}
-                    <h2 className="break-words text-xl font-semibold leading-snug text-foreground">
+            <li key={app.id} className={PAPER}>
+              <article className="min-w-0">
+                {/* `.section-head`: `.eyebrow` firma, h2 stanowisko, data; `.status` po prawej. */}
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-5 max-[600px]:gap-2.5">
+                  <div className="min-w-0 flex-1">
+                    {app.companyName ? <p className={cn(EYEBROW, 'normal-case')}>{app.companyName}</p> : null}
+                    <h2 className={cn(H2_EXTENDED, 'mt-0.5')}>
                       {app.jobTitle || t('applicationUnknownJob')}
                     </h2>
-                    {date ? <p className="text-sm text-muted-foreground">{t('applicationSentOn', { date })}</p> : null}
+                    {date ? <p className={cn(P_EXTENDED, 'mt-1')}>{t('applicationSentOn', { date })}</p> : null}
                   </div>
-                  <StatusPill status={app.status} />
+                  <StatusPill status={app.status} className="rounded-[8px] px-3 py-2" />
                 </div>
-                <div className="border-t border-border pt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t('applicationCurrentStatus')}
-                  </p>
-                  <div className="mt-3 border-l-4 border-primary py-1 pl-4 text-sm font-medium text-foreground">
-                    <StatusPill status={app.status} />
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  {app.slug ? (
-                    <Link
-                      href={`/oferty-pracy/${app.slug}`}
-                      className="inline-flex min-h-12 items-center font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                {/* `.application-steps` — etapy; aktualny status niesie odznaka powyżej. */}
+                <div className={APP_STEPS} aria-hidden="true">
+                  {APPLICATION_STEPS.map((step, index) => (
+                    <span
+                      key={step}
+                      className={index <= applicationStepIndex(app.status) ? APP_STEP_DONE : APP_STEP}
                     >
+                      {t(step)}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                  {app.slug ? (
+                    <Link href={`/oferty-pracy/${app.slug}`} className={TEXT_LINK}>
                       {t('actionView')}
+                      <ArrowRight className="size-3.5" aria-hidden="true" />
                     </Link>
                   ) : <span />}
                   <ApplicationActions applicationId={app.id} status={app.status} slug={app.slug} jobTitle={app.jobTitle || undefined} />
@@ -121,18 +157,18 @@ export function CandidateApplicationsList({
           );
         })}
       </ul>
-      {failed ? <p role="alert" className="text-base text-error">{t('applicationsMoreError')}</p> : null}
+      {failed ? <p role="alert" className="mb-3 text-[15px] text-error">{t('applicationsMoreError')}</p> : null}
       {cursor ? (
         <button
           type="button"
           onClick={loadMore}
           disabled={pending}
           aria-busy={pending}
-          className="inline-flex min-h-12 items-center rounded-xl border border-border bg-card px-5 font-semibold text-foreground hover:bg-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
+          className={BTN_SECONDARY}
         >
           {pending ? t('applicationsLoading') : failed ? t('candidateListRetry') : t('applicationsMore')}
         </button>
-      ) : <p className="text-sm text-muted-foreground">{t('applicationsEnd')}</p>}
+      ) : <p className="text-[13px] text-muted-foreground">{t('applicationsEnd')}</p>}
     </div>
   );
 }

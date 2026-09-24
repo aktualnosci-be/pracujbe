@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/nextjs';
+import { redactSentryEvent } from './src/lib/sentry-egress';
 
 /**
  * Inicjalizacja Sentry po stronie serwera (Node.js runtime).
@@ -15,8 +16,9 @@ if (dsn) {
   Sentry.init({
     dsn,
     environment: process.env.NODE_ENV,
-    // Umiarkowane próbkowanie tras (10%) — kontrola kosztów i wpływu na wydajność.
-    tracesSampleRate: 0.1,
+    // Tracing wyłączony, dopóki spany nie mają bramki prywatności przed wysyłką (#502).
+    tracesSampleRate: 0,
+    beforeSend: redactSentryEvent,
     // Prywatność: nie dołączaj danych osobowych do zdarzeń.
     sendDefaultPii: false,
     // Cichy w konsoli produkcyjnej.
