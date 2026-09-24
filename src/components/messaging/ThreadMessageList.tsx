@@ -121,7 +121,13 @@ export function ThreadMessageList({
   }
 
   return (
-    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-7 py-6 max-[600px]:px-5">
+    <div
+        ref={scrollRef}
+        // Przewijany obszar z fokusem klawiatury (WCAG 2.1.1, axe `scrollable-region-focusable`):
+        // dymki `.bubble` z prototypu są wyższe, więc wątek szybciej wymaga przewijania.
+        tabIndex={0}
+        className="min-h-0 flex-1 overflow-y-auto px-7 py-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-[600px]:px-5"
+      >
       {failed || olderCursor || loadedOlder ? (
         <div className="mb-3 flex flex-col items-center gap-2 text-center">
           {failed ? (
