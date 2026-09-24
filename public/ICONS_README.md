@@ -1,36 +1,32 @@
-# Ikony PWA i Open Graph marki Pracuj.be
+# Ikony PWA, favicon i Open Graph marki Pracuj.be
 
-Te pliki są **statycznymi assetami** i muszą trafić do katalogu `public/` (serwowane z roota, np. `/icon-192.png`).
-Generujemy je z zatwierdzonego znaku: biały `.be` na czerwonym kafelku `#D92932`.
-Pliki można odtworzyć poleceniem `node scripts/generate-icons.mjs` (zależność `sharp`).
+Statyczne zasoby w `public/` (serwowane z roota, np. `/icon-192.png`). Źródłem jest znak
+z prototypu „Ludzie i praca” (`docs/design/people-passport/prototype`, `.people .logo` +
+`.people .logo .suffix` w people.css/extended.css): czarne „pracuj” i biały „.be” na czerwonym
+kafelku `#D92932`, DM Sans 800 (opsz 9), światło −1,5 px / 29 px, kafelek z odstępem .09em,
+dopełnieniem .1/.17/.14em i promieniem .22em, światło sufiksu −.055em.
 
-## Wymagane pliki (referencjonowane przez `src/app/manifest.ts`)
+Odtworzenie (dwa kroki, wynik deterministyczny):
 
-| Plik                          | Rozmiar   | `purpose`  | Uwagi                                                                 |
-| ----------------------------- | --------- | ---------- | -------------------------------------------------------------------- |
-| `public/icon-192.png`         | 192×192   | `any`      | Standardowa ikona PWA. Pełny znak, przezroczyste lub białe tło.      |
-| `public/icon-512.png`         | 512×512   | `any`      | Duża ikona PWA (splash / instalacja).                                |
-| `public/icon-maskable-192.png`| 192×192   | `maskable` | Maskable: znak w bezpiecznej strefie ~80% (min. 10% marginesu z każdej strony), tło pełne `#2563EB` lub `#FFFFFF`. Bez przezroczystości. |
-| `public/icon-maskable-512.png`| 512×512   | `maskable` | Jw., większy rozmiar.                                                |
+```bash
+pip install fonttools==4.66.0
+python3 scripts/brand-glyphs.py     # kontury glifów DM Sans → assets/brand/logo-glyphs.json
+node scripts/generate-icons.mjs     # icon.svg, ikony PNG i og.png (sharp)
+```
 
-> Zasada maskable: system może przyciąć ikonę do koła/rombu. Trzymaj istotną treść wewnątrz
-> okręgu bezpiecznego (safe zone ≈ 80% szerokości), resztę wypełnij jednolitym tłem.
+Glify są konturami (bez `<text>`), więc ikony nie zależą od fontu zainstalowanego w systemie.
+Porównanie z logo prototypu wyrenderowanym w Chromium (ten sam plik fontu, 140 px): kafelek
+w tym samym miejscu co do 0,01 px, różnice pikseli tylko na krawędziach antyaliasingu.
 
-## Favicon i ikony platformowe (zalecane — dopina je layout/metadata inny agent)
+| Plik                            | Rozmiar  | `purpose`  | Opis                                                            |
+| ------------------------------- | -------- | ---------- | --------------------------------------------------------------- |
+| `icon.svg`                      | wektor   | favicon    | Kafelek `.be` (bok = szerokość kafelka z logo), promień .22em.  |
+| `icon-32.png`                   | 32×32    | favicon    | Jak `icon.svg`.                                                 |
+| `icon-192.png`, `icon-512.png`  | 192, 512 | `any`      | Jak `icon.svg`, przezroczyste rogi.                             |
+| `icon-maskable-192/512.png`     | 192, 512 | `maskable` | Pełne czerwone tło, `.be` w strefie bezpiecznej (koło 80%).     |
+| `apple-touch-icon.png`          | 180×180  | —          | Pełne tło bez przezroczystości (iOS sam zaokrągla rogi).        |
+| `og.png`                        | 1200×630 | Open Graph | Cały znak „pracuj.be” na białym tle, bez tekstu (wspólny dla PL/NL/FR/EN). |
 
-| Plik                          | Rozmiar   | Uwagi                                                                 |
-| ----------------------------- | --------- | -------------------------------------------------------------------- |
-| `public/favicon.ico`          | 16/32/48  | Multi-rozmiarowy ICO. Klasyczny favicon dla starszych przeglądarek.  |
-| `public/icon.svg`             | wektor    | Skalowalny favicon (nowoczesne przeglądarki), respektuje dark mode.  |
-| `public/apple-touch-icon.png` | 180×180   | Ekran główny iOS. Bez przezroczystości, tło pełne, bez zaokrągleń (iOS zaokrągla sam). |
-| `public/favicon-32.png`       | 32×32     | Opcjonalny PNG favicon.                                              |
-| `public/favicon-16.png`       | 16×16     | Opcjonalny PNG favicon.                                              |
-
-## Wskazówki generowania
-
-- Format: PNG 24-bit z kanałem alfa dla `any`; PNG bez przezroczystości (pełne tło) dla `maskable` i `apple-touch-icon`.
-- Kolory zgodne z design tokens: primary `#D92932`, tło `#FFFFFF` (patrz `tailwind.config.ts`).
-- Eksportuj z jednego źródła wektorowego, żeby wszystkie rozmiary były ostre.
-- Weryfikacja maskable: https://maskable.app/ (podgląd przycięć).
-- Po dodaniu plików sprawdź manifesty `/{locale}/manifest.webmanifest` (generator `src/lib/pwa/manifest.ts`; stary `/manifest.webmanifest` pozostaje dla PL) —
-  wszystkie `src` muszą wskazywać istniejące pliki, inaczej instalacja PWA zgłosi błąd ikon.
+Manifesty `/{locale}/manifest.webmanifest` (generator `src/lib/pwa/manifest.ts`) mają
+`theme_color` = czerwień marki `#D92932` (`--pp-red`) i `background_color` = biel.
+Strażnik: `tests/unit/brand-assets.test.ts` (rozmiary, kontury zamiast tekstu, tylko czerwień i biel).
