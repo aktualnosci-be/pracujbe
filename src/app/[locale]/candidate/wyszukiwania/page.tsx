@@ -11,7 +11,7 @@ import { createAppDateFormatter } from '@/lib/datetime';
 /**
  * Panel kandydata — Zapisane wyszukiwania i alerty o nowych ofertach (#100).
  *
- * Odczyt pod sesją (RLS: własne `saved_searches`, 0093), zapis przez RPC w
+ * Odczyt pod sesją (RLS: własne `saved_searches`, 0092), zapis przez RPC w
  * `SavedSearchList`. Błąd odczytu = jawny komunikat z ponowieniem. NOINDEX + guard
  * dziedziczone z `candidate/layout.tsx`. Daty ostatniego alertu w Europe/Brussels.
  */

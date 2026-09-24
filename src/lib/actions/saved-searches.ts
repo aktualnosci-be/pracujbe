@@ -9,7 +9,7 @@ import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
 
 /**
- * Server Actions zapisanych wyszukiwań (#100) — cienka warstwa nad RPC z 0093.
+ * Server Actions zapisanych wyszukiwań (#100) — cienka warstwa nad RPC z 0092.
  *
  * Kanonizacja filtrów, limit 20, brak duplikatów, rola kandydata i własność są w bazie
  * (`save_saved_search` / `set_saved_search_alerts` / `delete_saved_search`); tu: walidacja
@@ -29,6 +29,7 @@ const filtersSchema = z
     contractTypes: list.optional(),
     salaryMin: z.number().int().min(0).max(1_000_000).optional(),
     salaryMax: z.number().int().min(0).max(1_000_000).optional(),
+    salaryUnit: z.literal('hour').optional(),
     accommodation: z.boolean().optional(),
     immediate: z.literal(true).optional(),
     noLanguage: z.literal(true).optional(),

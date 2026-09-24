@@ -12,7 +12,7 @@ import { captureError } from '@/lib/sentry';
  * otwarte, nieukończone checkouty (`release_stale_checkout_intents`) — inaczej limit kodu i
  * blokada „jeden otwarty checkout na firmę" utknęłyby po porzuceniu płatności. #72: zmienia
  * przeterminowane aktywne oferty na `expired` (`expire_due_jobs`, 0085; idempotentne).
- * #100: alerty zapisanych wyszukiwań (`process_saved_search_alerts`, 0093) — digest nowych
+ * #100: alerty zapisanych wyszukiwań (`process_saved_search_alerts`, 0092) — digest nowych
  * ofert per wyszukiwanie najwyżej raz na dobę/tydzień, bez ponownej wysyłki tej samej oferty;
  * e-maile trafiają do outboxa (`enqueue_email`), wysyła je `/api/email/process`.
  *

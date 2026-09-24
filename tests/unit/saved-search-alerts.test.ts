@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * #100 — zapisane wyszukiwania i alerty o nowych ofertach.
  *
  * - filtry zapisu = te same argumenty `get_public_jobs`, które wysyła lista (jedno źródło),
- * - lustro kluczy filtrów TS ↔ kanonizacja SQL (0093),
+ * - lustro kluczy filtrów TS ↔ kanonizacja SQL (0092),
  * - akcje: walidacja, tryb demo, brak sesji → link logowania, limit, błąd bez technikaliów,
  * - e-mail `jobMatch`: CTA i adresy ofert w locale ODBIORCY, zły slug pominięty, 4 języki,
  * - powiadomienie in-app prowadzi do zarządzania wyszukiwaniami.
@@ -42,7 +42,7 @@ import { resolveHref, titleKeyForType } from '@/lib/data/notifications';
 import { mapSavedSearchRow } from '@/lib/data/saved-searches';
 
 const MIGRATION = readFileSync(
-  resolve(__dirname, '../../supabase/migrations/0093_saved_search_alerts.sql'),
+  resolve(__dirname, '../../supabase/migrations/0092_saved_search_alerts.sql'),
   'utf8',
 );
 const LOCALES: readonly Locale[] = ['pl', 'nl', 'fr', 'en'];
@@ -108,8 +108,9 @@ describe('filtry listy → zapisane wyszukiwanie', () => {
           category: 'warehouse',
           location: 'Liège',
           contractType: 'permanent',
-          salaryMin: '2000',
-          salaryMax: '3000',
+          salaryUnit: 'hour',
+          salaryMin: '15',
+          salaryMax: '30',
           accommodation: 'provided',
           immediate: '1',
           noLang: '1',
@@ -119,6 +120,16 @@ describe('filtry listy → zapisane wyszukiwanie', () => {
       ),
     );
     expect(Object.keys(full).sort()).toEqual(sqlKeys);
+  });
+
+  it('jednostka godzinowa (0091) trafia do zapisu tylko przy widełkach, jak do zapytania listy', () => {
+    const hourly = parseJobListQuery({ salaryUnit: 'hour', salaryMin: '15', salaryMax: '30' }, 'pl', NOW);
+    expect(hourly.filterParams.salaryUnit).toBe('hour');
+    expect(savedSearchFiltersFromQuery(hourly)).toEqual({ salaryMin: 15, salaryMax: 30, salaryUnit: 'hour' });
+    expect(savedSearchQueryString(hourly)).toContain('salaryUnit=hour');
+    // Kontrola ujemna: sama jednostka bez widełek niczego nie zawęża — nie ma czego zapisać.
+    const unitOnly = parseJobListQuery({ salaryUnit: 'hour' }, 'pl', NOW);
+    expect(hasSavedSearchFilters(savedSearchFiltersFromQuery(unitOnly))).toBe(false);
   });
 });
 

@@ -524,6 +524,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   godzinowych nie przeliczamy (godziny pracy to wolny tekst) — jak oferty bez kwoty nie odpadają
   z filtra i są na końcu sortowania; opis `filters.salaryPeriodNote` pod suwakiem. Lustro TS dla
   demo: `src/lib/salary-compare.ts`. Dowód: `rls.sql` sekcja SAL, `salary-compare.test.ts`.
+  Jednostka filtra (0091): przełącznik „Miesięcznie / Za godzinę” (URL `salaryUnit=hour`,
+  RPC `p_salary_unit`, widełki 10–40 EUR/godz.). Godzinowo porównujemy tylko stawki godzinowe;
+  miesięcznych/rocznych nie przeliczamy na godziny (nieporównywalne → nie odpadają, sort na
+  końcu). Jednostka steruje też sortem po wynagrodzeniu; zmiana jednostki zeruje widełki.
+  Dowód: `rls.sql` sekcja SP188.
   Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
   dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
   w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
@@ -602,7 +607,7 @@ gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zos
 Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
 kasuje tytułu propozycji bez aplikacji (BL97-6).
 
-Zapisane wyszukiwania i alerty (#100, migracja `0093`): „Zapisz wyszukiwanie” na
+Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
 `/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja
 `saveSearchAction`) zapisuje KANONICZNE filtry v1 = dokładnie argumenty `get_public_jobs`
 wysłane przez listę (`src/lib/job-list-query.ts`, jedno źródło z listą; aliasy miast
@@ -791,7 +796,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
   0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084), jobMatch
-  (`process_saved_search_alerts`, 0093, #100); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
+  (`process_saved_search_alerts`, 0092, #100); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
   zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
   (#51), supportContact. Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
   statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja NN.

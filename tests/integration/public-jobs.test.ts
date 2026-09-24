@@ -394,6 +394,12 @@ describe('Publiczne oferty — pełne migracje i rzeczywisty PostgreSQL 16', () 
       ['warehouse-rich', 'without-salary'],
     ],
     ['pensja nie wyklucza niepodanej', { salaryMin: 5000 }, ['without-salary']],
+    // #188 (0091): w jednostce godzinowej kwoty miesięczne są nieporównywalne — nie odpadają.
+    [
+      'stawka godzinowa nie porównuje kwot miesięcznych',
+      { salaryMin: 20, salaryUnit: 'hour' },
+      visibleSlugs,
+    ],
     [
       'pensja maksymalna',
       { salaryMax: 2200 },
@@ -458,6 +464,13 @@ describe('Publiczne oferty — pełne migracje i rzeczywisty PostgreSQL 16', () 
       'canonical',
       'without-salary',
     ]);
+    // Jednostka godzinowa: brak stawek godzinowych → kolejność jak „najnowsze”.
+    const hourly = await getPublicJobs(app!, {
+      locale: 'pl',
+      sort: 'salary',
+      salaryUnit: 'hour',
+    });
+    expect(hourly.rows.map((row) => row.slug)).toEqual(visibleSlugs);
     const page = await getPublicJobs(app!, {
       locale: 'pl',
       page: 2,

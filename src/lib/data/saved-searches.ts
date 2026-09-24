@@ -1,6 +1,6 @@
 /**
  * Zapisane wyszukiwania kandydata (#100) — odczyt POD SESJĄ (RLS `saved_searches_select_own`,
- * 0093; nigdy service-role). Błąd odczytu = jawny `error` (bez udawania pustej listy);
+ * 0092; nigdy service-role). Błąd odczytu = jawny `error` (bez udawania pustej listy);
  * technikalia wyłącznie do Sentry (Invariant #8). Tryb demo: pusta lista z `demo: true` —
  * zapis wymaga bazy, więc nie pokazujemy zmyślonych wyszukiwań.
  */

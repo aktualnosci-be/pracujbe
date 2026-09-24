@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0093 — zapisane wyszukiwania i alerty o nowych ofertach (#100).
+-- 0092 — zapisane wyszukiwania i alerty o nowych ofertach (#100).
 --
 -- Model:
 --   * saved_searches — właściciel (kandydat), nazwa, locale, KANONICZNE i wersjonowane
@@ -121,7 +121,8 @@ revoke all on function public.saved_search_text_array(jsonb, integer) from publi
 --   keyword, city (tekst ≤ 100, przycięty, małe litery — oba porównywane ILIKE),
 --   categories / contractTypes (wartości enumów job_category / contract_type),
 --   locations (dokładne nazwy miast, jak `j.city = any(...)`),
---   salaryMin / salaryMax (EUR brutto/mies., 0..1 000 000, min ≤ max),
+--   salaryMin / salaryMax (EUR brutto w jednostce salaryUnit, 0..1 000 000, min ≤ max),
+--   salaryUnit ('hour' zapisywane tylko przy widełkach; brak = 'month', jak w 0091),
 --   accommodation (bool), immediate / noLanguage (tylko true),
 --   locale — wyłącznie przy słowie kluczowym (dopasowanie tytułu zależy od języka).
 -- Klucze spoza listy → VALIDATION_FAILED (brak cichego gubienia filtrów). Pusty zestaw
@@ -141,7 +142,8 @@ begin
   if exists (
     select 1 from jsonb_object_keys(p_filters) k
     where k not in ('keyword', 'city', 'categories', 'locations', 'contractTypes',
-                    'salaryMin', 'salaryMax', 'accommodation', 'immediate', 'noLanguage')
+                    'salaryMin', 'salaryMax', 'salaryUnit', 'accommodation', 'immediate',
+                    'noLanguage')
   ) then
     raise exception 'VALIDATION_FAILED: nieznany filtr' using errcode = '22023';
   end if;
@@ -193,6 +195,18 @@ begin
   v_max := (v_out ->> 'salaryMax')::integer;
   if v_min is not null and v_max is not null and v_min > v_max then
     raise exception 'VALIDATION_FAILED: minimum powyżej maksimum' using errcode = '22023';
+  end if;
+
+  -- Jednostka widełek (0091): 'month' (domyślna) albo 'hour'. Zapisujemy tylko 'hour'
+  -- i tylko przy widełkach — bez kwot jednostka nie zawęża wyników.
+  if p_filters ? 'salaryUnit' and jsonb_typeof(p_filters -> 'salaryUnit') <> 'null' then
+    if jsonb_typeof(p_filters -> 'salaryUnit') <> 'string'
+       or p_filters ->> 'salaryUnit' not in ('month', 'hour') then
+      raise exception 'VALIDATION_FAILED: nieprawidłowa jednostka wynagrodzenia' using errcode = '22023';
+    end if;
+    if p_filters ->> 'salaryUnit' = 'hour' and (v_min is not null or v_max is not null) then
+      v_out := v_out || jsonb_build_object('salaryUnit', 'hour');
+    end if;
   end if;
 
   if p_filters ? 'accommodation' and jsonb_typeof(p_filters -> 'accommodation') <> 'null' then
@@ -407,7 +421,8 @@ begin
                                      v_search.alerts_since),
         p_sort           => 'newest',
         p_limit          => 100,
-        p_offset         => 0
+        p_offset         => 0,
+        p_salary_unit    => coalesce(v_f ->> 'salaryUnit', 'month')
       ) g
       join public.jobs j on j.id = g.id
       where not public.candidate_blocked_company(v_search.profile_id, j.company_id)

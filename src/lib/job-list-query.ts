@@ -1,10 +1,9 @@
 import type { GetJobsParams } from '@/lib/jobs';
 import { resolveCityFilters } from '@/lib/locations/city-aliases';
 import {
-  SALARY_MAX_BOUND,
-  isSalaryNarrowed,
   parseSidebarFilters,
   parseSort,
+  salaryQueryParams,
   sidebarFiltersToParams,
   type SidebarFilters,
   type SortValue,
@@ -45,7 +44,6 @@ export function parseJobListQuery(flat: FlatSearchParams, locale: string, now = 
   const sinceWindow =
     sidebar.date === '24h' ? DAY_MS : sidebar.date === '7d' ? 7 * DAY_MS : sidebar.date === '30d' ? 30 * DAY_MS : 0;
   const since = sinceWindow ? new Date(now - sinceWindow).toISOString() : undefined;
-  const narrowed = isSalaryNarrowed(sidebar);
 
   const filterParams: JobListFilterParams = {
     locale,
@@ -54,8 +52,8 @@ export function parseJobListQuery(flat: FlatSearchParams, locale: string, now = 
     categories: sidebar.categories,
     locations: cityFilters.queryLocations,
     contractTypes: sidebar.contractTypes,
-    ...(narrowed ? { salaryMin: sidebar.salaryMin } : {}),
-    ...(narrowed && sidebar.salaryMax < SALARY_MAX_BOUND ? { salaryMax: sidebar.salaryMax } : {}),
+    // Jednostka widełek (#188, 0091) — ta sama funkcja co lista; steruje też sortowaniem.
+    ...salaryQueryParams(sidebar),
     ...(sidebar.accommodation.length === 1 ? { accommodation: sidebar.accommodation.includes('provided') } : {}),
     ...(sidebar.immediate ? { immediate: true } : {}),
     ...(sidebar.noLanguageRequired ? { noLanguageRequired: true } : {}),
@@ -67,7 +65,7 @@ export function parseJobListQuery(flat: FlatSearchParams, locale: string, now = 
 
 /**
  * Filtry zapisanego wyszukiwania (wersja 1) — klucze = kanoniczna postać w bazie
- * (`saved_search_canonical_filters`, 0093). Świeżość (`date`) pomijamy: alert i tak
+ * (`saved_search_canonical_filters`, 0092). Świeżość (`date`) pomijamy: alert i tak
  * wybiera wyłącznie oferty nowsze niż watermark.
  */
 export interface SavedSearchFilters {
@@ -78,6 +76,8 @@ export interface SavedSearchFilters {
   contractTypes?: string[];
   salaryMin?: number;
   salaryMax?: number;
+  /** Tylko `hour` i tylko przy widełkach — `month` to domyślna jednostka (0091). */
+  salaryUnit?: 'hour';
   accommodation?: boolean;
   immediate?: true;
   noLanguage?: true;
@@ -93,6 +93,10 @@ export function savedSearchFiltersFromQuery(query: JobListQuery): SavedSearchFil
   if (p.contractTypes?.length) out.contractTypes = [...p.contractTypes];
   if (p.salaryMin !== undefined) out.salaryMin = p.salaryMin;
   if (p.salaryMax !== undefined) out.salaryMax = p.salaryMax;
+  // Jednostka ma znaczenie wyłącznie dla widełek (sortowanie alertu jest zawsze „najnowsze”).
+  if (p.salaryUnit === 'hour' && (p.salaryMin !== undefined || p.salaryMax !== undefined)) {
+    out.salaryUnit = 'hour';
+  }
   if (p.accommodation !== undefined) out.accommodation = p.accommodation;
   if (p.immediate) out.immediate = true;
   if (p.noLanguageRequired) out.noLanguage = true;
