@@ -3004,6 +3004,8 @@ select pg_temp.assert(
   (select title from public.jobs where id = :'JOBWZ') = 'Operator wózka widłowego'
   and (select status::text <> 'draft' and title <> 'Obejście' from public.jobs where id = :'JOBE'),
   'WZ192-6f odrzucone próby nic nie zmieniły');
+
+-- ============================================================================
 -- OB142. Onboarding kandydata: jeden krok = jedna transakcja (0082, #142)
 -- Wstrzyknięty błąd w DRUGIEJ części kroku (trigger na relacji) nie zostawia pierwszej.
 -- Kontrola ujemna: stara ścieżka (dwa osobne żądania) zostawia częściowy zapis.
