@@ -1,7 +1,7 @@
 /**
  * Reguły zdjęcia blokady adresu e-mail (#44) — wspólne dla dialogu (przeglądarka) i Server
  * Action. Te same limity egzekwuje baza (RPC `admin_lift_email_suppression` i CHECK
- * `email_suppressions_lift`, migracja 0099).
+ * `email_suppressions_lift`, migracja 0098).
  */
 
 /** Maks. długość uzasadnienia zdjęcia blokady. */

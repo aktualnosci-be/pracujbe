@@ -4296,7 +4296,7 @@ select pg_temp.expect_error('select * from public.company_vies_checks',
 reset role;
 
 -- ============================================================================
--- ML44 (#44, 0099): zdarzenia doręczeń dostawcy, blokady adresów (suppression),
+-- ML44 (#44, 0098): zdarzenia doręczeń dostawcy, blokady adresów (suppression),
 -- ręczne zdjęcie blokady przez admina. Kontrole ujemne: bezpośredni DML klienta,
 -- zapis blokady tylko service_role, enqueue na zablokowany adres, replay webhooka.
 -- ============================================================================

@@ -190,7 +190,7 @@ jednocześnie harmonogramów Vercel i Railway.
   migrację lub service role). Odmowa odkłada wiersz do następnego okna bez zwiększania
   `attempts`. Hook e-maili Auth nie pobiera jeszcze budżetu — chroni go rezerwa.
 
-### Webhook doręczeń Resend (#44, migracja `0099`)
+### Webhook doręczeń Resend (#44, migracja `0098`)
 
 Endpoint: `POST /api/email/webhook/resend`. Kroki dla właściciela (jednorazowo):
 

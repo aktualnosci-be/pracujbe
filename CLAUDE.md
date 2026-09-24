@@ -839,7 +839,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   centrum preferencji dla wszystkich kategorii, `text/plain`, tożsamość i adres pocztowy nadawcy
   w stopce marketingu, budżet w hooku e-maili Auth, rezerwacja kampania+odbiorca, decyzja o
   trackingu na odebranym `.eml`.
-  Doręczenia i blokady (#44, migracja `0099`): webhook `POST /api/email/webhook/resend`
+  Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
   niezależny od dostawcy: `src/lib/email/provider-events.ts`. RPC `record_email_event`

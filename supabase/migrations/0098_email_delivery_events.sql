@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0099_email_delivery_events.sql — #44: zdarzenia doręczeń dostawcy poczty,
+-- 0098_email_delivery_events.sql — #44: zdarzenia doręczeń dostawcy poczty,
 -- lista blokad adresów (suppression) i ręczne zdjęcie blokady przez admina.
 --
 -- 1. email_deliveries: czasy zdarzeń dostawcy (bounced_at, complained_at, delayed_at,

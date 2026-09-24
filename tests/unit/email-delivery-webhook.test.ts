@@ -251,8 +251,8 @@ describe('POST /api/email/webhook/resend', () => {
   });
 });
 
-describe('kontrakt z migracją 0099', () => {
-  const sql = readFileSync(join(process.cwd(), 'supabase/migrations/0099_email_delivery_events.sql'), 'utf8');
+describe('kontrakt z migracją 0098', () => {
+  const sql = readFileSync(join(process.cwd(), 'supabase/migrations/0098_email_delivery_events.sql'), 'utf8');
 
   it('record_email_event przyjmuje dokładnie rodzaje zdarzeń modelu', async () => {
     const { EMAIL_EVENT_KINDS } = await import('@/lib/email/provider-events');

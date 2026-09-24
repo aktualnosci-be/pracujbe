@@ -24,7 +24,7 @@ import { EmailSuppressionActions } from '@/components/admin/EmailSuppressionActi
  * Panel administratora — Blokady adresów e-mail (#44).
  *
  * Adresy, na które portal nie wysyła powiadomień z kolejki po trwałym odbiciu albo skardze
- * (webhook dostawcy → `record_email_event`, 0099). Filtr aktywne/zdjęte/wszystkie (domyślnie
+ * (webhook dostawcy → `record_email_event`, 0098). Filtr aktywne/zdjęte/wszystkie (domyślnie
  * aktywne), wyszukiwanie po adresie, stronicowanie kursorem, daty w Europe/Brussels. Zdjęcie
  * blokady z uzasadnieniem przez `EmailSuppressionActions` (RPC z audytem). Odczyt service-rolem
  * po potwierdzeniu roli admina. NOINDEX + `force-dynamic` (z layoutu).

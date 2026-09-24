@@ -17,7 +17,7 @@ import { verifyStandardWebhook } from '@/lib/webhooks';
  *   4. normalizacja do modelu zdarzeń (`provider-events.ts`); zdarzenie spoza modelu → 200,
  *   5. inbox `processed_webhooks` (claim z dzierżawą): powtórzone zakończone zdarzenie
  *      (`duplicate`) albo równoległa dostawa (`locked`) → 200 bez zmian,
- *   6. RPC `record_email_event` (0099): status tylko „w górę”, trwałe odbicie i skarga →
+ *   6. RPC `record_email_event` (0098): status tylko „w górę”, trwałe odbicie i skarga →
  *      blokada adresu. Błąd → 500 (dostawca ponowi; zapis jest idempotentny),
  *   7. inbox `completed` → 200.
  *

@@ -19,7 +19,7 @@ import { useAdminFeedback } from '@/components/admin/AdminFeedback';
  * EmailSuppressionActions — zdjęcie blokady adresu e-mail (#44, panel admina).
  *
  * Zdjęcie wymaga potwierdzenia w dialogu z adresem i powodem blokady oraz uzasadnienia
- * (trafia do dziennika zdarzeń; te same limity w RPC `admin_lift_email_suppression`, 0099).
+ * (trafia do dziennika zdarzeń; te same limity w RPC `admin_lift_email_suppression`, 0098).
  * Fokus i komunikaty przez `AdminFeedbackProvider` (#415): po sukcesie nagłówek wiersza,
  * a gdy wiersz opuścił filtr „Aktywne” — nagłówek strony.
  */

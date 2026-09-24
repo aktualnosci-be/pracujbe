@@ -135,7 +135,7 @@ enqueueEmail({ template, recipientProfileId, entityType, entityId,
         │     ├─ sukces → status='sent', provider_message_id, sent_at
         │     └─ błąd   → status='failed', error_message, attempts++ (retry z backoffem)
         ▼
-Webhook Resend (#44)  →  POST /api/email/webhook/resend  →  record_email_event (0099)
+Webhook Resend (#44)  →  POST /api/email/webhook/resend  →  record_email_event (0098)
         ├─ aktualizacja status: delivered / bounced / complained (tylko „w górę”)
         │  (dopasowanie po provider_message_id — kolumna z UNIQUE indeksem)
         └─ trwałe odbicie / skarga → email_suppressions (enqueue/claim pomijają adres)

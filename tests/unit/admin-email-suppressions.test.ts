@@ -17,7 +17,7 @@ import { createServerClient } from '@/lib/supabase/server';
 
 /**
  * #44 — panel admina: podgląd blokad adresów e-mail i ręczne zdjęcie blokady
- * z uzasadnieniem (akcja + reguły wspólne z dialogiem + kontrakt z migracją 0099).
+ * z uzasadnieniem (akcja + reguły wspólne z dialogiem + kontrakt z migracją 0098).
  */
 
 vi.mock('@/lib/env', async (importOriginal) => ({
@@ -35,7 +35,7 @@ vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const SUPPRESSION_ID = '5a0e8f4c-2b1d-4c3e-9f7a-1d2e3f4a5b6c';
 const MIGRATION = readFileSync(
-  resolve(process.cwd(), 'supabase/migrations/0099_email_delivery_events.sql'),
+  resolve(process.cwd(), 'supabase/migrations/0098_email_delivery_events.sql'),
   'utf8',
 );
 
@@ -77,7 +77,7 @@ describe('reguły uzasadnienia zdjęcia blokady', () => {
     expect(emailLiftReasonError('Użytkownik potwierdził adres')).toBeNull();
   });
 
-  it('limit zgodny z RPC i CHECK tabeli w migracji 0099', () => {
+  it('limit zgodny z RPC i CHECK tabeli w migracji 0098', () => {
     expect(MIGRATION).toContain(`char_length(v_reason) > ${EMAIL_LIFT_REASON_MAX}`);
     expect(MIGRATION).toContain(`between 1 and ${EMAIL_LIFT_REASON_MAX}))`);
   });

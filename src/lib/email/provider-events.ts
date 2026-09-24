@@ -3,7 +3,7 @@
  *
  * Model (`NormalizedEmailEvent`) jest niezależny od dostawcy: webhook Resend (dziś) i przyszły
  * adapter innego dostawcy mapują swoje zdarzenia na te same cztery rodzaje, które zapisuje RPC
- * `record_email_event` (0099). Zdarzenie spoza modelu (np. `email.opened`, `email.sent`) jest
+ * `record_email_event` (0098). Zdarzenie spoza modelu (np. `email.opened`, `email.sent`) jest
  * pomijane — nigdy nie udaje doręczenia.
  *
  * Macierz możliwości Resend:

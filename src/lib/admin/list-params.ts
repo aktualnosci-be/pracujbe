@@ -157,7 +157,7 @@ export function parseEmailSuppressionFilter(raw: string | undefined | null): Ema
     : 'active';
 }
 
-/** Powód blokady (`email_suppressions.reason`, 0099) → klucz i18n (namespace `admin`). */
+/** Powód blokady (`email_suppressions.reason`, 0098) → klucz i18n (namespace `admin`). */
 export const EMAIL_SUPPRESSION_REASON_KEY: Record<string, string> = {
   hard_bounce: 'emailReasonHardBounce',
   complaint: 'emailReasonComplaint',

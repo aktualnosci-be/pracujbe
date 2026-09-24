@@ -17,7 +17,7 @@ import { companyVatSource } from '@/lib/vies/state';
  *     (odrzucenie/zawieszenie z wymaganym uzasadnieniem — 0084, #310).
  *   - `resolveReport`    — rozstrzyga zgłoszenie przez RPC `admin_resolve_report`.
  *   - `liftEmailSuppression` — zdjęcie blokady adresu e-mail (#44) przez RPC
- *     `admin_lift_email_suppression` (0099, uzasadnienie wymagane, audyt).
+ *     `admin_lift_email_suppression` (0098, uzasadnienie wymagane, audyt).
  *   - `checkCompanyVies` — ręczne sprawdzenie numeru VAT firmy w VIES (#92), zapis wyniku
  *     rozstrzygającego przez RPC `admin_record_vies_check` (0088).
  *
