@@ -1,11 +1,12 @@
 /**
- * Zapisane wyszukiwania kandydata (#100) — odczyt POD SESJĄ (RLS `saved_searches_select_own`,
- * 0092; nigdy service-role). Błąd odczytu = jawny `error` (bez udawania pustej listy);
+ * Zapisane wyszukiwania kandydata (#100) — odczyt POD SESJĄ (`withPortalTransaction`, RLS
+ * `saved_searches_select_own`, 0092; nigdy service-role). Błąd odczytu = jawny `error` (bez udawania pustej listy);
  * technikalia wyłącznie do Sentry (Invariant #8). Tryb demo: pusta lista z `demo: true` —
  * zapis wymaga bazy, więc nie pokazujemy zmyślonych wyszukiwań.
  */
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { queryRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
 
 export type SavedSearchFrequency = 'daily' | 'weekly';
@@ -50,18 +51,21 @@ export function mapSavedSearchRow(row: unknown): SavedSearch | null {
 }
 
 export async function loadMySavedSearches(): Promise<SavedSearchesLoad> {
-  if (!isSupabaseConfigured()) return { status: 'ready', searches: [], demo: true };
+  if (!isPortalDataConfigured()) return { status: 'ready', searches: [], demo: true };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data, error } = await supabase
-      .from('saved_searches')
-      .select('id, name, query, frequency, alerts_enabled, last_alert_at, created_at')
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (error) throw error;
-    const searches = (Array.isArray(data) ? data : [])
+    const me = await getPortalIdentity();
+    // Bez sesji RLS i tak nie zwróci żadnego wiersza — nie pytamy bazy.
+    if (!me) return { status: 'ready', searches: [], demo: false };
+    const rows = await withPortalTransaction(me, (tx) =>
+      queryRows(tx, 'saved-searches.mine',
+        `SELECT id, name, query, frequency, alerts_enabled, last_alert_at, created_at
+           FROM public.saved_searches
+          WHERE profile_id = $1
+          ORDER BY created_at DESC
+          LIMIT 20`, [me.id]),
+    );
+    const searches = rows
       .map(mapSavedSearchRow)
       .filter((s): s is SavedSearch => s !== null);
     return { status: 'ready', searches, demo: false };
