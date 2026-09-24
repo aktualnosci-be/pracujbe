@@ -563,8 +563,10 @@
     "onboardingIncomplete": "Vul alle vereiste profielvelden in om de configuratie te voltooien.",
     "jobNotDraft": "Deze vacature is al geplaatst. Pas ze aan met „Bewerken” in de vacaturelijst.",
     "billingUnavailable": "Betalingen zijn tijdelijk niet beschikbaar. Probeer het later opnieuw.",
+    "billingDisabled": "Pracuj.be is momenteel gratis. Betalingen en pakketten zijn niet beschikbaar.",
     "checkoutInProgress": "Je hebt al een betaling gestart. Rond die af of probeer het zo opnieuw.",
     "entitlementLimit": "Je hebt de limiet van actieve vacatures in je plan bereikt. Upgrade om er meer te plaatsen.",
+    "activeJobLimit": "Het maximale aantal actieve vacatures voor dit bedrijf is bereikt. Pauzeer of sluit een vacature om een nieuwe te publiceren.",
     "notFound": "We konden dit niet vinden.",
     "internal": "Er is een fout aan onze kant opgetreden. We werken eraan.",
     "generic": "Er ging iets mis. Probeer opnieuw.",
@@ -1814,6 +1816,30 @@
       "invitationLimit": "De limiet van 50 openstaande uitnodigingen is bereikt. Trek verouderde uitnodigingen in.",
       "companyLimit": "Je kunt maximaal 5 bedrijven beheren.",
       "lastOwner": "Het bedrijf moet minstens één actieve eigenaar hebben."
+    }
+  },
+  "emailUnsubscribe": {
+    "metaTitle": "Afmelden voor e-mails",
+    "title": "Afmelden voor e-mails",
+    "confirmText": "Bevestig dat je deze e-mails niet meer wilt ontvangen: {category}.",
+    "confirmButton": "Afmelden",
+    "pending": "Opslaan…",
+    "doneTitle": "Afgemeld",
+    "doneText": "We sturen je deze e-mails niet meer: {category}. Andere berichten en meldingen op de site blijven werken.",
+    "settingsHint": "Al je meldingsinstellingen wijzig je na het inloggen.",
+    "loginLink": "Inloggen",
+    "invalidTitle": "De link is ongeldig",
+    "invalidText": "Deze afmeldlink is onvolledig of gewijzigd. Gebruik de link uit de nieuwste e-mail of wijzig je instellingen na het inloggen.",
+    "expiredTitle": "De link is verlopen",
+    "expiredText": "Deze afmeldlink is niet meer geldig. Gebruik de link uit de nieuwste e-mail of wijzig je instellingen na het inloggen.",
+    "unavailableText": "Afmelden is tijdelijk niet beschikbaar. Probeer het later opnieuw of wijzig je instellingen na het inloggen.",
+    "errorText": "De wijziging is niet opgeslagen. Probeer het opnieuw.",
+    "category": {
+      "applications": "over sollicitaties en hun status",
+      "offers": "over jobaanbiedingen",
+      "messages": "over nieuwe berichten",
+      "job_matches": "met passende vacatures",
+      "marketing": "met de nieuwsbrief en marketinginformatie"
     }
   }
 }

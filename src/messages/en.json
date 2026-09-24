@@ -563,8 +563,10 @@
     "onboardingIncomplete": "Complete all required profile fields to finish setup.",
     "jobNotDraft": "This job is already published. Edit it with “Edit” in the jobs list.",
     "billingUnavailable": "Payments are temporarily unavailable. Please try again later.",
+    "billingDisabled": "Pracuj.be is currently free. Payments and plans are not available.",
     "checkoutInProgress": "You already have a checkout in progress. Finish it or try again shortly.",
     "entitlementLimit": "You've reached your plan's active job limit. Upgrade your plan to publish more.",
+    "activeJobLimit": "Your company has reached the limit of active jobs. Pause or close a job to publish another one.",
     "notFound": "We couldn't find what you're looking for.",
     "internal": "Something went wrong on our end. We're working on it.",
     "generic": "Something went wrong. Please try again.",
@@ -1814,6 +1816,30 @@
       "invitationLimit": "You have reached the limit of 50 pending invitations. Revoke outdated invitations.",
       "companyLimit": "You can manage up to 5 companies.",
       "lastOwner": "The company must have at least one active owner."
+    }
+  },
+  "emailUnsubscribe": {
+    "metaTitle": "Unsubscribe from emails",
+    "title": "Unsubscribe from emails",
+    "confirmText": "Confirm that you no longer want to receive these emails: {category}.",
+    "confirmButton": "Unsubscribe",
+    "pending": "Saving…",
+    "doneTitle": "Unsubscribed",
+    "doneText": "We will no longer send you these emails: {category}. Other messages and notifications on the site stay the same.",
+    "settingsHint": "You can change all notification settings after logging in.",
+    "loginLink": "Log in",
+    "invalidTitle": "The link is not valid",
+    "invalidText": "This unsubscribe link is incomplete or has been changed. Use the link from the latest email or change your settings after logging in.",
+    "expiredTitle": "The link has expired",
+    "expiredText": "This unsubscribe link is no longer valid. Use the link from the latest email or change your settings after logging in.",
+    "unavailableText": "Unsubscribing is temporarily unavailable. Try again later or change your settings after logging in.",
+    "errorText": "The change was not saved. Please try again.",
+    "category": {
+      "applications": "about applications and their status",
+      "offers": "about job proposals",
+      "messages": "about new messages",
+      "job_matches": "with matching jobs",
+      "marketing": "with the newsletter and marketing information"
     }
   }
 }

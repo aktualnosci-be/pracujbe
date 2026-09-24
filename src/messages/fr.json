@@ -563,8 +563,10 @@
     "onboardingIncomplete": "Complétez tous les champs requis du profil pour terminer la configuration.",
     "jobNotDraft": "Cette offre est déjà publiée. Modifiez-la avec « Modifier » dans la liste des offres.",
     "billingUnavailable": "Les paiements sont momentanément indisponibles. Réessayez plus tard.",
+    "billingDisabled": "Pracuj.be est actuellement gratuit. Les paiements et les forfaits ne sont pas disponibles.",
     "checkoutInProgress": "Un paiement est déjà en cours. Terminez-le ou réessayez dans un instant.",
     "entitlementLimit": "Vous avez atteint la limite d'offres actives de votre formule. Changez de formule pour en publier davantage.",
+    "activeJobLimit": "La limite d'offres actives de l'entreprise est atteinte. Mettez en pause ou clôturez une offre pour en publier une nouvelle.",
     "notFound": "Nous n'avons pas trouvé ce que vous cherchez.",
     "internal": "Une erreur est survenue de notre côté. Nous y travaillons.",
     "generic": "Une erreur est survenue. Réessayez.",
@@ -1814,6 +1816,30 @@
       "invitationLimit": "La limite de 50 invitations en attente est atteinte. Annulez les invitations obsolètes.",
       "companyLimit": "Vous pouvez gérer au maximum 5 entreprises.",
       "lastOwner": "L’entreprise doit avoir au moins un propriétaire actif."
+    }
+  },
+  "emailUnsubscribe": {
+    "metaTitle": "Désinscription des e-mails",
+    "title": "Désinscription des e-mails",
+    "confirmText": "Confirmez que vous ne souhaitez plus recevoir ces e-mails : {category}.",
+    "confirmButton": "Me désinscrire",
+    "pending": "Enregistrement…",
+    "doneTitle": "Désinscription effectuée",
+    "doneText": "Nous ne vous enverrons plus ces e-mails : {category}. Les autres messages et notifications du site ne changent pas.",
+    "settingsHint": "Vous pouvez modifier tous vos paramètres de notification après connexion.",
+    "loginLink": "Se connecter",
+    "invalidTitle": "Le lien n’est pas valide",
+    "invalidText": "Ce lien de désinscription est incomplet ou a été modifié. Utilisez le lien du dernier e-mail ou modifiez vos paramètres après connexion.",
+    "expiredTitle": "Le lien a expiré",
+    "expiredText": "Ce lien de désinscription n’est plus valable. Utilisez le lien du dernier e-mail ou modifiez vos paramètres après connexion.",
+    "unavailableText": "La désinscription est momentanément indisponible. Réessayez plus tard ou modifiez vos paramètres après connexion.",
+    "errorText": "La modification n’a pas été enregistrée. Réessayez.",
+    "category": {
+      "applications": "sur les candidatures et leur statut",
+      "offers": "sur les propositions d’emploi",
+      "messages": "sur les nouveaux messages",
+      "job_matches": "avec des offres correspondantes",
+      "marketing": "avec la newsletter et les informations marketing"
     }
   }
 }

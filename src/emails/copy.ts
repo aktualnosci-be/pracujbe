@@ -91,6 +91,8 @@ export interface LayoutCopy {
   help: string;
   /** Etykieta linku do polityki prywatności. */
   privacy: string;
+  /** Link wypisania z kategorii tej wiadomości (#45); tylko gdy mail ma kategorię preferencji. */
+  unsubscribe: string;
   /** Tekst wprowadzający surowy link (gdy przycisk nie działa). */
   buttonFallback: string;
 }
@@ -102,6 +104,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     rights: '© {year} Pracuj.be. Wszelkie prawa zastrzeżone.',
     help: 'Pomoc',
     privacy: 'Prywatność',
+    unsubscribe: 'Wypisz się z tych e-maili',
     buttonFallback: 'Jeśli przycisk nie działa, skopiuj i wklej ten adres do przeglądarki:',
   },
   nl: {
@@ -110,6 +113,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     rights: '© {year} Pracuj.be. Alle rechten voorbehouden.',
     help: 'Help',
     privacy: 'Privacy',
+    unsubscribe: 'Afmelden voor deze e-mails',
     buttonFallback: 'Werkt de knop niet? Kopieer en plak deze link in je browser:',
   },
   fr: {
@@ -118,6 +122,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     rights: '© {year} Pracuj.be. Tous droits réservés.',
     help: 'Aide',
     privacy: 'Confidentialité',
+    unsubscribe: 'Se désinscrire de ces e-mails',
     buttonFallback: 'Le bouton ne fonctionne pas ? Copiez-collez ce lien dans votre navigateur :',
   },
   en: {
@@ -126,6 +131,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     rights: '© {year} Pracuj.be. All rights reserved.',
     help: 'Help',
     privacy: 'Privacy',
+    unsubscribe: 'Unsubscribe from these emails',
     buttonFallback: 'If the button does not work, copy and paste this link into your browser:',
   },
 };
