@@ -12,9 +12,9 @@ Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
 
 | Czynność | Co robi kod | Tabele | Usługi zewnętrzne | Retencja/usuwanie w kodzie |
 |---|---|---|---|---|
-| Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.document_acceptances`, `public.profiles` | Railway, Supabase, Resend, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kod nie usuwa kont automatycznie (soft delete profiles.deleted_at). |
+| Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.document_acceptances`, `public.profiles` | Railway, Supabase, Resend, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile). |
 | Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.candidate_visibility_events`, `public.saved_jobs` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
-| Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files` | Railway, Supabase | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts); brak automatycznej retencji. |
+| Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.storage_deletion_queue` | Railway, Supabase | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona. |
 | Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Supabase, Resend | Kod nie usuwa danych — do ustalenia |
 | Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Supabase, Resend, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Supabase, Resend | Kod nie usuwa danych — do ustalenia |
@@ -27,7 +27,8 @@ Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Supabase, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway, Supabase | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
 | Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
-| Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy. | — | Railway | BACKUP_RETENTION najnowszych kopii (domyślnie 14). |
+| Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.storage_deletion_queue` | Railway, Supabase | run_retention_purge (/api/maintenance): okresy z retention_policies; domyślnie tylko pliki i profile oznaczone jako usunięte (30 dni), pozostałe kategorie wyłączone. Ślad wniosków i rejestr usunięć bez usuwania do decyzji właściciela. |
+| Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy. | `public.erasure_tombstones` | Railway | BACKUP_RETENTION najnowszych kopii (domyślnie 14). |
 | Płatności (wyłączone) (`billing-disabled`) | Martwy schemat po wyłączonym billingu (#51); brak aktywnego przepływu. | — | Stripe | Kod nie usuwa danych — do ustalenia |
 
 ## 2. Usługi zewnętrzne (subprocesorzy — kandydaci do weryfikacji)
@@ -547,6 +548,18 @@ Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
 | `subject` | Korespondencja i treści swobodne | `supabase/migrations/0006_messaging.sql` |
 | `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0006_messaging.sql` |
 
+### `public.data_rights_requests`
+
+- **Migracja:** `supabase/migrations/0105_data_retention_rights.sql`
+- **Czynności:** Prawa osób i retencja
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Ślad obsługi wniosku bez FK do profilu — przetrwa usunięcie konta.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `subject_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0105_data_retention_rights.sql` |
+| `details` | nie dotyczy: Same liczniki usuniętych obiektów (bez treści danych). | — |
+
 ### `public.document_acceptances`
 
 - **Migracja:** `supabase/migrations/0054_document_acceptances.sql`
@@ -648,6 +661,17 @@ Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
 | `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0002_core_tables.sql` |
 | `job_title` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0002_core_tables.sql` |
 | `phone` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0002_core_tables.sql` |
+
+### `public.erasure_tombstones`
+
+- **Migracja:** `supabase/migrations/0105_data_retention_rights.sql`
+- **Czynności:** Prawa osób i retencja, Kopie zapasowe bazy
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Tylko UUID usuniętej osoby — do ponownego usunięcia po odtworzeniu kopii.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `subject_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0105_data_retention_rights.sql` |
 
 ### `public.files`
 
@@ -888,6 +912,17 @@ Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
 | `good_faith_at` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0094_dsa_notices.sql` |
 | `target_snapshot` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0094_dsa_notices.sql` |
 
+### `public.retention_policies`
+
+- **Migracja:** `supabase/migrations/0105_data_retention_rights.sql`
+- **Czynności:** Prawa osób i retencja
+- **Osoby:** Administratorzy portalu
+- **Uwaga:** Konfiguracja okresów retencji; jedyną daną osobową jest identyfikator admina, który zmienił okres.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `updated_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0105_data_retention_rights.sql` |
+
 ### `public.saved_jobs`
 
 - **Migracja:** `supabase/migrations/0004_candidate_relations.sql`
@@ -937,6 +972,18 @@ Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
 | `requested_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0103_screening_question_review.sql` |
 | `decided_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0103_screening_question_review.sql` |
 | `decision_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0103_screening_question_review.sql` |
+
+### `public.storage_deletion_queue`
+
+- **Migracja:** `supabase/migrations/0105_data_retention_rights.sql`
+- **Czynności:** Prawa osób i retencja, Pliki CV
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Klucz obiektu do usunięcia (zawiera UUID właściciela); wiersz znika po usunięciu obiektu.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `path` | Pliki (CV) i ich metadane | `supabase/migrations/0105_data_retention_rights.sql` |
+| `bucket` | nie dotyczy: Nazwa bucketa. | — |
 
 ### `public.system_events`
 

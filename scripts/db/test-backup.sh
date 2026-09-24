@@ -5,7 +5,9 @@
 # Źródło z produkcyjnym bootstrapem, migracjami i danymi; trzy kopie przy retencji 2,
 # odtworzenie najnowszej do pracujbe_restore_bk_ci i kontrole ujemne: podmieniony
 # artefakt, zmieniony manifest, zły klucz, niepusty cel, klucz prywatny jako odbiorca,
-# brak odbiorców, zła retencja. Wymaga: psql/pg_dump/pg_restore, age, age-keygen.
+# brak odbiorców, zła retencja. #486: kandydat usunięty PO kopii wraca przy zwykłym
+# odtworzeniu (kontrola ujemna), a z rejestrem usunięć (RESTORE_TOMBSTONES_FILE) jest
+# usuwany ponownie; zły rejestr = odmowa. Wymaga: psql/pg_dump/pg_restore, age, age-keygen.
 # Użycie jak test-rls.sh (PGHOST/PGUSER/PGPASSWORD albo peer auth jako postgres).
 # Nie łączy się z internetem (BACKUP_HEARTBEAT_URL nieustawiony).
 # =============================================================================
@@ -60,6 +62,11 @@ insert into auth.users(id, email, name, raw_user_meta_data) values
   ('0f000000-0000-4000-8000-0000000000b1', 'backup@test.invalid', 'Backup', '{"role":"employer"}');
 insert into public.companies(id, name, status) values
   ('0f000000-0000-4000-8000-0000000000b2', 'Firma-kopii-zaszyfrowanej', 'verified');
+insert into auth.users(id, email, name, raw_user_meta_data) values
+  ('0f000000-0000-4000-8000-0000000000c1', 'erased@test.invalid', 'Erased', '{"role":"candidate"}');
+insert into public.candidate_profiles(profile_id) values ('0f000000-0000-4000-8000-0000000000c1');
+insert into public.files(owner_id, bucket, path, entity_type) values
+  ('0f000000-0000-4000-8000-0000000000c1', 'candidate-files', '0f000000-0000-4000-8000-0000000000c1/cv.pdf', 'candidate_cv');
 SQL
 
 age-keygen -o "$work/identity.txt" 2>/dev/null
@@ -93,6 +100,18 @@ grep -q '"controlsSha256": "[0-9a-f]\{64\}"' "${latest%.dump.age}.json" || { ech
 
 # Zmiana źródła PO kopii nie wpływa na odtworzenie (kontrola dotyczy chwili zrzutu).
 "${psql_base[@]}" -d "$SRC_DB" -c "insert into public.companies(name, status) values ('Po kopii', 'verified')" >/dev/null
+# #486: kandydat usuwa konto PO kopii; rejestr usunięć eksportujemy z bieżącego źródła.
+ERASED=0f000000-0000-4000-8000-0000000000c1
+"${psql_base[@]}" -d "$SRC_DB" -c "select public.erase_candidate_subject('$ERASED', 'self_service', null)" >/dev/null
+env TOMBSTONE_SOURCE_URL="$(url "$SRC_DB")" TOMBSTONE_OUTPUT="$work/tombstones.txt" \
+  bash "$ROOT/scripts/db/export-erasure-tombstones.sh" | tail -1
+[ "$(stat -c %a "$work/tombstones.txt")" = 600 ] && [ "$(sed -n 2p "$work/tombstones.txt")" = "$ERASED" ] \
+  || { echo 'Rejestr usunięć: zły plik lub prawa'; exit 1; }
+erased_rows() {
+  "${psql_base[@]}" -At -d "$DST_DB" -c "select (select count(*) from auth.users where id = '$ERASED')
+    + (select count(*) from public.profiles where id = '$ERASED')
+    + (select count(*) from public.files where owner_id = '$ERASED')"
+}
 
 echo '>> odtworzenie najnowszej kopii'
 recreate "$DST_DB"
@@ -105,6 +124,19 @@ printf '%s\n' "$out" | tail -1
 grep -q '^RESTORE: PASS' <<<"$out" || { echo 'Brak PASS odtworzenia'; exit 1; }
 [ "$("${psql_base[@]}" -At -d "$DST_DB" -c "select string_agg(name, ',' order by name) from public.companies")" \
   = 'Firma-kopii-zaszyfrowanej' ] || { echo 'Dane nie zostały odtworzone'; exit 1; }
+# Kontrola ujemna #486: bez rejestru usunięć osoba usunięta po kopii wraca.
+[ "$(erased_rows)" = 3 ] || { echo 'Kontrola: kandydat z kopii powinien wrócić bez rejestru usunięć'; exit 1; }
+echo '>> kontrola ujemna OK: bez rejestru usunięć dane usuniętej osoby wracają'
+
+echo '>> odtworzenie z rejestrem usunięć (#486)'
+recreate "$DST_DB"
+out="$(restore RESTORE_TOMBSTONES_FILE="$work/tombstones.txt")"
+printf '%s\n' "$out" | tail -2
+grep -q '^RESTORE: PASS' <<<"$out" || { echo 'Brak PASS odtworzenia z rejestrem'; exit 1; }
+[ "$(erased_rows)" = 0 ] || { echo 'Po odtworzeniu z rejestrem usunięta osoba nadal istnieje'; exit 1; }
+[ "$("${psql_base[@]}" -At -d "$DST_DB" -c "select count(*) from public.storage_deletion_queue
+    where path = '$ERASED/cv.pdf'")" = 1 ] || { echo 'Obiekt CV z kopii nie trafił do kolejki usuwania'; exit 1; }
+recreate "$DST_DB"
 
 expect_code() {
   local expected="$1" label="$2" code=0
@@ -114,6 +146,11 @@ expect_code() {
   echo ">> kontrola ujemna OK: $label"
 }
 
+printf 'pracujbe-erasure-tombstones/1\nnot-a-uuid\n' >"$work/bad-tombstones.txt"
+expect_code 2 'zły rejestr usunięć' restore RESTORE_TOMBSTONES_FILE="$work/bad-tombstones.txt"
+[ "$("${psql_base[@]}" -At -d "$DST_DB" -c "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'")" = 0 ] || { echo 'Zły rejestr: baza została odtworzona mimo odmowy'; exit 1; }
+restore >/dev/null
 expect_code 2 'cel niepusty' restore
 recreate "$DST_DB"
 expect_code 1 'zły klucz prywatny' restore RESTORE_AGE_IDENTITY_FILE="$work/other-identity.txt"

@@ -84,6 +84,7 @@ export type ActivityId =
   | 'job-statistics'
   | 'analytics-marketing'
   | 'backups'
+  | 'data-rights'
   | 'billing-disabled';
 
 export interface Activity {
@@ -103,7 +104,8 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     name: 'Konto i uwierzytelnianie',
     inCode: 'Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta.',
     processors: [...HOSTING, 'resend', 'cloudflare-turnstile'],
-    retentionInCode: 'Sesje i weryfikacje mają expires_at; kod nie usuwa kont automatycznie (soft delete profiles.deleted_at).',
+    retentionInCode:
+      'Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile).',
   },
   'candidate-profile': {
     name: 'Profil zawodowy kandydata',
@@ -115,7 +117,8 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     name: 'Pliki CV',
     inCode: 'Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela.',
     processors: HOSTING,
-    retentionInCode: 'Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts); brak automatycznej retencji.',
+    retentionInCode:
+      'Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona.',
   },
   applications: {
     name: 'Aplikacje na oferty',
@@ -189,6 +192,14 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     inCode: 'Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies.',
     processors: ['google-analytics', 'meta-pixel'],
     retentionInCode: 'Cookie zgody ważne 180 dni.',
+  },
+  'data-rights': {
+    name: 'Prawa osób i retencja',
+    inCode:
+      'Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii.',
+    processors: HOSTING,
+    retentionInCode:
+      'run_retention_purge (/api/maintenance): okresy z retention_policies; domyślnie tylko pliki i profile oznaczone jako usunięte (30 dni), pozostałe kategorie wyłączone. Ślad wniosków i rejestr usunięć bez usuwania do decyzji właściciela.',
   },
   backups: {
     name: 'Kopie zapasowe bazy',
@@ -729,6 +740,32 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   },
 
   // --- Bezpieczeństwo i audyt ----------------------------------------------------------------
+  'public.retention_policies': {
+    activities: ['data-rights'],
+    subjects: ['admin'],
+    columns: { updated_by: 'reference' },
+    note: 'Konfiguracja okresów retencji; jedyną daną osobową jest identyfikator admina, który zmienił okres.',
+  },
+  'public.data_rights_requests': {
+    activities: ['data-rights'],
+    subjects: ['candidate'],
+    columns: { subject_id: 'reference' },
+    notPersonal: { details: 'Same liczniki usuniętych obiektów (bez treści danych).' },
+    note: 'Ślad obsługi wniosku bez FK do profilu — przetrwa usunięcie konta.',
+  },
+  'public.erasure_tombstones': {
+    activities: ['data-rights', 'backups'],
+    subjects: ['candidate'],
+    columns: { subject_id: 'reference' },
+    note: 'Tylko UUID usuniętej osoby — do ponownego usunięcia po odtworzeniu kopii.',
+  },
+  'public.storage_deletion_queue': {
+    activities: ['data-rights', 'cv-files'],
+    subjects: ['candidate'],
+    columns: { path: 'file' },
+    notPersonal: { bucket: 'Nazwa bucketa.' },
+    note: 'Klucz obiektu do usunięcia (zawiera UUID właściciela); wiersz znika po usunięciu obiektu.',
+  },
   'public.audit_logs': {
     activities: ['security-audit'],
     subjects: ['candidate', 'employer', 'admin'],

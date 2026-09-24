@@ -4,6 +4,12 @@ import { NextResponse } from 'next/server';
 
 import { hasServiceRoleKey, isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
+import {
+  processStorageDeletions,
+  railwayDeleter,
+  supabaseDeleter,
+  type ObjectDeleter,
+} from '@/lib/storage-deletion';
 
 /**
  * Zadania utrzymaniowe (P1-20) — wywoływane przez cron Railway (`scripts/railway-cron-call.mjs`,
@@ -18,6 +24,10 @@ import { captureError } from '@/lib/sentry';
  * #98: retencja aplikacji bez konta (`purge_guest_application_requests`, 0095) — usuwa
  * niepotwierdzone zgłoszenia 7 dni po ostatnim linku i duplikaty 7 dni po potwierdzeniu (razem
  * z ich e-mailami) i zeruje tokeny przejęcia po wygaśnięciu 30-dniowego okna.
+ * #486: retencja danych (`run_retention_purge`, 0105) — okresy jako dane w `retention_policies`
+ * (null = kategoria wyłączona), partie z limitem i SKIP LOCKED; potem kolejka usuwania obiektów
+ * storage (`processStorageDeletions`) — także obiektów plików usuniętych w tym przebiegu.
+ * Nieudane usunięcie obiektu to ponowienie w kolejnym przebiegu, nie błąd zadania.
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
  *
@@ -46,6 +56,25 @@ function authorized(request: Request): boolean {
   return secrets.some((s) => safeEqual(header, `Bearer ${s}`));
 }
 
+/** Pliki CV leżą w prywatnym buckecie Railway (#26); bez jego konfiguracji — Supabase Storage. */
+async function objectDeleter(admin: Parameters<typeof supabaseDeleter>[0]): Promise<ObjectDeleter> {
+  const { fileBucketConfig } = await import('@/lib/env');
+  const config = fileBucketConfig();
+  if (!config) return supabaseDeleter(admin);
+  const { createRailwayBucket } = await import('@/lib/storage/railway-bucket');
+  return railwayDeleter(createRailwayBucket(config));
+}
+
+/** Same liczniki z `run_retention_purge` (liczby całkowite), bez innych pól. */
+function retentionCounters(value: unknown): Record<string, number> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(
+      (entry): entry is [string, number] => Number.isInteger(entry[1]),
+    ),
+  );
+}
+
 async function run(request: Request): Promise<Response> {
   if (!authorized(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -71,13 +100,15 @@ async function run(request: Request): Promise<Response> {
       : await admin.rpc('process_saved_search_alerts', { p_limit: 500 });
     // #45: rezerwacja i kolejkowanie paczki odbiorców aktywnych rewizji kampanii (0101).
     const campaigns = await admin.rpc('process_email_campaigns', { p_limit: 500 });
+    const retention = await admin.rpc('run_retention_purge', { p_limit: 200 });
     if (
       discounts.error ||
       checkouts.error ||
       expiredJobs.error ||
       guestRequests.error ||
       searchAlerts.error ||
-      campaigns.error
+      campaigns.error ||
+      retention.error
     ) {
       const failed = discounts.error
         ? 'discounts'
@@ -89,18 +120,28 @@ async function run(request: Request): Promise<Response> {
               ? 'guestRequests'
               : searchAlerts.error
                 ? 'savedSearchAlerts'
-                : 'emailCampaigns';
+                : campaigns.error
+                  ? 'emailCampaigns'
+                  : 'retention';
       captureError(
         discounts.error ??
           checkouts.error ??
           expiredJobs.error ??
           guestRequests.error ??
           searchAlerts.error ??
-          campaigns.error,
+          campaigns.error ??
+          retention.error,
         {
         area: 'maintenance.gc',
         task: failed,
       });
+      return NextResponse.json({ error: 'gc failed' }, { status: 503 });
+    }
+    let storage;
+    try {
+      storage = await processStorageDeletions(admin, await objectDeleter(admin));
+    } catch (error) {
+      captureError(error, { area: 'maintenance.gc', task: 'storageDeletions' });
       return NextResponse.json({ error: 'gc failed' }, { status: 503 });
     }
     return NextResponse.json({
@@ -111,6 +152,8 @@ async function run(request: Request): Promise<Response> {
       purgedGuestRequests: typeof guestRequests.data === 'number' ? guestRequests.data : 0,
       savedSearchDigests: typeof searchAlerts.data === 'number' ? searchAlerts.data : 0,
       campaignEmailsQueued: typeof campaigns.data === 'number' ? campaigns.data : 0,
+      retention: retentionCounters(retention.data),
+      storageDeletions: storage,
     });
   } catch (e) {
     captureError(e, { area: 'maintenance.gc' });

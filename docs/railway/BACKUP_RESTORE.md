@@ -84,6 +84,7 @@ każdym z kluczy) i usuń stary po wygaśnięciu retencji.
 RESTORE_ARCHIVE             # ścieżka pracujbe-<UTC>.dump.age (manifest obok)
 RESTORE_AGE_IDENTITY_FILE   # klucz prywatny age
 RESTORE_TARGET_URL          # pusta baza pracujbe_restore_* na OSOBNYM klastrze
+RESTORE_TOMBSTONES_FILE     # (opcjonalnie, #486) rejestr usunięć nowszy niż kopia
 ```
 
 Kolejne kroki: zgodność SHA-256 artefaktu z manifestem, odszyfrowanie, pełny
@@ -92,10 +93,33 @@ odczyt, utworzenie brakujących ról polityk jako `NOLOGIN`, `pg_restore
 z manifestem. Kody wyjścia jak wyżej. Podmieniony artefakt, zły klucz, zmieniony
 manifest, niepusty cel i nazwa spoza `pracujbe_restore_*` kończą się błędem.
 
+### Usunięcia po dacie kopii (#486)
+
+Kopia sprzed usunięcia konta zawiera dane tej osoby. Dlatego odtworzenie, które ma
+zastąpić bazę, zawsze idzie z rejestrem usunięć:
+
+1. `TOMBSTONE_SOURCE_URL=<bieżąca baza, odczyt> TOMBSTONE_OUTPUT=<plik> bash
+   scripts/db/export-erasure-tombstones.sh` — plik `pracujbe-erasure-tombstones/1`
+   z samymi UUID z `erasure_tombstones` (prawa 0600). Gdy bieżąca baza jest
+   niedostępna, użyj najnowszego pliku eksportowanego okresowo obok kopii.
+2. `restore-backup.sh` z `RESTORE_TOMBSTONES_FILE=<plik>` — format sprawdzany przed
+   odtworzeniem (zły plik = kod 2, cel pusty), po kontrolach manifestu
+   `apply_erasure_tombstones` usuwa te osoby ponownie, a skrypt sprawdza, że w
+   `profiles` i `auth.users` nie został żaden identyfikator z rejestru. Pliki CV tych
+   osób trafiają do `storage_deletion_queue` odtworzonej bazy, więc worker w
+   `/api/maintenance` usuwa także obiekty odtworzone z kopii bucketu.
+
+Rejestr zawiera tylko osoby usunięte do chwili eksportu. Utrata bazy bez aktualnego
+pliku oznacza utratę usunięć od ostatniego eksportu — dlatego eksport powinien iść
+tym samym harmonogramem co kopia, do innego miejsca niż baza. Szczegóły i otwarte
+decyzje: [DATA_RETENTION.md](../DATA_RETENTION.md).
+
 Test obu skryptów: `sudo -u postgres npm run test:backup` (lokalny PG16) albo
 `PGHOST=… PGUSER=… PGPASSWORD=… npm run test:backup`. Test wykonuje trzy kopie
 przy retencji 2, sprawdza prawa plików, format `age` i brak plaintextu w
-artefakcie, odtwarza najnowszą kopię i wykonuje 8 kontroli ujemnych. Wymaga `age`
+artefakcie, odtwarza najnowszą kopię i wykonuje 8 kontroli ujemnych. Scenariusz #486:
+kandydat usunięty po kopii wraca przy odtworzeniu bez rejestru (kontrola ujemna), z
+rejestrem jest usuwany ponownie, a zły rejestr kończy się odmową bez odtworzenia. Wymaga `age`
 i `age-keygen`, nie łączy się z internetem. Workflow CI nie uruchamia go
 automatycznie. Gotowy krok dla właściciela jest w [OPERATIONS.md](OPERATIONS.md) §5.
 
