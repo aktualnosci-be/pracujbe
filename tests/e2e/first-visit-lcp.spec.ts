@@ -3,7 +3,7 @@ import { expect, test, type BrowserContext } from '@playwright/test';
 /**
  * #389 — baner zgód jest w HTML z serwera, więc maluje się razem z FCP i nie czeka na
  * hydratację (wcześniej był elementem LCP po ~2 s przy pierwszej wizycie).
- * #388 — polskie, niderlandzkie i francuskie znaki renderują się podzbiorem Intera.
+ * #388 — polskie, niderlandzkie i francuskie znaki renderują się podzbiorem DM Sans (wcześniej Inter; font od #5/#7).
  *
  * „Pierwsza klatka” sprawdzamy z zablokowanym JS: to, co widać wtedy, to HTML z serwera
  * + skrypt inline z <head> + CSS — dokładnie stan przed hydratacją.
@@ -86,7 +86,7 @@ const SAMPLES: Record<string, string> = {
 };
 
 for (const [locale, sample] of Object.entries(SAMPLES)) {
-  test(`znaki ${locale} renderują się Interem (podzbiór #388)`, async ({ page, context }) => {
+  test(`znaki ${locale} renderują się DM Sans (podzbiór #388)`, async ({ page, context }) => {
     await page.goto(`/${locale}`);
     await page.evaluate((text) => {
       const probe = document.createElement('p');
@@ -108,8 +108,8 @@ for (const [locale, sample] of Object.entries(SAMPLES)) {
       selector: '#font-probe',
     });
     const { fonts } = await cdp.send('CSS.getPlatformFontsForNode', { nodeId });
-    // Wszystkie glify (poza spacjami, które też są w Interze) z jednego fontu — Intera.
-    expect(fonts.map((f) => f.familyName)).toEqual([expect.stringMatching(/^Inter/)]);
+    // Wszystkie glify (poza spacjami, które też są w DM Sans) z jednego fontu — DM Sans.
+    expect(fonts.map((f) => f.familyName)).toEqual([expect.stringMatching(/^DM Sans/)]);
     expect(fonts[0]?.isCustomFont).toBe(true);
   });
 }

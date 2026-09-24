@@ -76,7 +76,9 @@ describe('Paszport oferty', () => {
   ])('pokazuje podane granice i okres: %j', async (salary, expected) => {
     const { container } = await renderCard(salary);
     const salaryField = screen.getByText('Salary', { selector: 'dt' }).parentElement!;
-    expect(within(salaryField).getByText(expected)).toBeVisible();
+    // Kwota i okres (w <small> pod kwotą, jak `.passport-data small` w prototypie) = jeden zapis.
+    expect(salaryField.querySelector('dd')).toHaveTextContent(expected);
+    expect(salaryField.querySelector('dd')).toBeVisible();
     expect(container.querySelectorAll('dt')).toHaveLength(3);
   });
 
@@ -103,7 +105,7 @@ describe('Paszport oferty', () => {
   it('zachowuje dopasowanie także przy podanej stawce, weryfikację i datę', async () => {
     const { container } = await renderCard({ salaryMin: 18 }, 'en', 82);
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '82');
-    expect(screen.getByText('from €18 gross / month')).toBeVisible();
+    expect(screen.getByText('Salary', { selector: 'dt' }).parentElement!.querySelector('dd')).toHaveTextContent('from €18 gross / month');
     expect(screen.getByText(en.job.verified)).toBeVisible();
     expect(container.querySelector('time')).toHaveAttribute('datetime', job.publishedAt);
     expect(screen.getByRole('link', { name: job.title })).toHaveAttribute('href', '/oferty-pracy/electrician');
