@@ -1,7 +1,7 @@
 -- =============================================================================
--- 0109 — import CV przez AI: zapis WYŁĄCZNIE zatwierdzonych propozycji (#487, #498).
+-- 0102 — import CV przez AI: zapis WYŁĄCZNIE zatwierdzonych propozycji (#487, #498).
 --
--- Numer tymczasowy (koordynator może go zmienić przy scalaniu).
+-- Numer tymczasowy (koordynator może go zmienić przy scalaniu); runner wymaga ciągłego zakresu.
 --
 -- Import CV (src/lib/cv-import) nie zapisuje niczego sam: model zwraca propozycje, które
 -- kandydat przegląda i zatwierdza pojedynczo. Dopiero zatwierdzone pozycje wysyła akcja

@@ -7273,7 +7273,7 @@ select pg_temp.assert((select count(*) from public.moderation_decisions) = 5
 reset role;
 
 -- ============================================================================
--- CV487. Import CV przez AI (#487, #498, 0109): do profilu trafiają WYŁĄCZNIE pozycje
+-- CV487. Import CV przez AI (#487, #498, 0102): do profilu trafiają WYŁĄCZNIE pozycje
 -- zatwierdzone przez kandydata, dopisane (nie replace-all) w jednej transakcji. Brak
 -- zatwierdzenia = brak zapisu; za długa pozycja cofa całe wywołanie; tylko własny profil
 -- konta kandydata. Kontrola ujemna: wersja replace-all kasuje ręcznie wpisane pozycje.

@@ -647,7 +647,7 @@ unit `saved-search-alerts`; E2E `saved-search.spec`. **Otwarte:** zmiana nazwy w
 link wypisania i ponowna kontrola zgody tuż przed wysyłką przychodzą z #466 (tam `jobMatch` →
 kategoria `job_matches`); na przebieg najwyżej 100 najnowszych pasujących ofert.
 
-Import CV przez AI (#487, #498, migracja `0109`, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
+Import CV przez AI (#487, #498, migracja `0102`, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
 profilu tylko z flagą). PDF/DOCX → tekst lokalnie (`src/lib/cv-import/text.ts`: pdf.js 5 bez
 `eval`, DOCX tylko `word/document.xml` z limitem dekompresji) → minimalizacja
