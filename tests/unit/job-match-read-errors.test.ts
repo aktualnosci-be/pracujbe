@@ -6,8 +6,8 @@ import { captureError } from '@/lib/sentry';
 import { createServerClient } from '@/lib/supabase/server';
 
 /**
- * #197: dopasowanie nie jest liczone z niepełnych danych. Błąd KAŻDEGO z pięciu odczytów
- * (profil, umiejętności, języki, certyfikaty, RPC oferty) → `error` + telemetria, nigdy
+ * #197: dopasowanie nie jest liczone z niepełnych danych. Błąd KAŻDEGO z sześciu odczytów
+ * (profil, umiejętności, języki, certyfikaty, RPC oferty, słownik lokalizacji) → `error` + telemetria, nigdy
  * procent ani udawany brak profilu/oferty. Pusta relacja po sukcesie to nadal wynik.
  */
 
@@ -16,8 +16,8 @@ vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
-type Read = 'candidate_profiles' | 'candidate_skills' | 'candidate_languages' | 'candidate_certificates' | 'get_job_match_profile';
-const READS: Read[] = ['candidate_profiles', 'candidate_skills', 'candidate_languages', 'candidate_certificates', 'get_job_match_profile'];
+type Read = 'candidate_profiles' | 'candidate_skills' | 'candidate_languages' | 'candidate_certificates' | 'get_job_match_profile' | 'locations';
+const READS: Read[] = ['candidate_profiles', 'candidate_skills', 'candidate_languages', 'candidate_certificates', 'get_job_match_profile', 'locations'];
 const readError = { code: 'read-failed', message: 'relation does not exist' };
 
 const JOB = {
@@ -105,6 +105,37 @@ describe('getMyJobMatch (#197)', () => {
     client({ jobRows: [] });
     await expect(getMyJobMatch('job-1')).resolves.toEqual({ status: 'none' });
     expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it('przekazuje poziomy języków z obu stron bez utraty informacji (#195)', async () => {
+    client({
+      jobRows: [{ ...JOB, language_requirements: [{ label: 'nl', level: 'fluent' }] }],
+      relations: { candidate_languages: [{ language_label: 'nl', level: 'basic' }] },
+    });
+    const load = await getMyJobMatch('job-1');
+    expect(load.status === 'ok' && load.result.languageGaps).toEqual([
+      { language: 'nl', required: 'fluent', actual: 'basic' },
+    ]);
+  });
+
+  it('liczy odległość ze współrzędnych słownika lokalizacji (#194)', async () => {
+    const far = {
+      jobRows: [{ ...JOB, city: 'Mechelen', region: 'Flanders' }],
+      profile: { ...PROFILE, city: 'Bruges', region: 'Flanders', radius_km: 50 },
+      relations: {
+        locations: [
+          { name: 'Mechelen', slug: 'mechelen', latitude: '51.028100', longitude: '4.477600' },
+          { name: 'Bruges', slug: 'bruges', latitude: 51.2097, longitude: 3.2247 },
+        ],
+      },
+    };
+    client(far);
+    const load = await getMyJobMatch('job-1');
+    expect(load.status === 'ok' && load.result.missing).toContain('location');
+
+    client({ ...far, profile: { ...far.profile, radius_km: 100 } });
+    const near = await getMyJobMatch('job-1');
+    expect(near.status === 'ok' && near.result.strengths).toContain('withinCommuteRadius');
   });
 
   it('bez konfiguracji (demo) → none', async () => {

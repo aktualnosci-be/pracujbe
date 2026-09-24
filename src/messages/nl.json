@@ -946,6 +946,7 @@
     "certificatesPlaceholder": "bijv. VCA, kwalificatiegetuigschrift",
     "availabilityLabel": "Beschikbaarheid",
     "availImmediate": "Onmiddellijk",
+    "availWithinTwoWeeks": "Binnen 2 weken",
     "availWithinMonth": "Binnen een maand",
     "availWithinThreeMonths": "Binnen 3 maanden",
     "availFlexible": "Flexibel",
@@ -1426,7 +1427,15 @@
       "remoteJob": "Thuiswerk — locatie speelt geen rol",
       "withinCommuteRadius": "Werkplek binnen jouw reisafstand"
     },
-    "loadError": "De match kon nu niet worden berekend. Dit is geen beoordeling van je profiel — probeer het opnieuw."
+    "loadError": "De match kon nu niet worden berekend. Dit is geen beoordeling van je profiel — probeer het opnieuw.",
+    "languageLevelBelow": "{language}: vereist niveau {required}, jouw niveau {actual}",
+    "languageLevelUnknown": "{language}: vereist niveau {required} — vul je niveau in je profiel in",
+    "levels": {
+      "basic": "basis",
+      "intermediate": "gemiddeld",
+      "fluent": "vloeiend",
+      "native": "moedertaal"
+    }
   },
   "application": {
     "error": {
