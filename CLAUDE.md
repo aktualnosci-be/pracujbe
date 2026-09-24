@@ -521,6 +521,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   godzinowych nie przeliczamy (godziny pracy to wolny tekst) — jak oferty bez kwoty nie odpadają
   z filtra i są na końcu sortowania; opis `filters.salaryPeriodNote` pod suwakiem. Lustro TS dla
   demo: `src/lib/salary-compare.ts`. Dowód: `rls.sql` sekcja SAL, `salary-compare.test.ts`.
+  Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
+  dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
+  w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
+  Grosze = dwa miejsca dla obu granic, jedna granica = „od”/„do”, min = max = jedna kwota,
+  brak kwoty = brak pola, okres tylko z danych. Testy: `salary.test.ts`, E2E `job-detail-salary`.
+  **Do zrobienia (SQL):** kwoty oferty w payloadzie `jobOffer` (`send_offer`).
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner
@@ -550,12 +556,22 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   umiejętności 120, certyfikaty 160 = `CANDIDATE_ITEM_LIMITS`, zgodne z `left()` w 0028) —
   za długa nie trafia na listę (#364). Kod błędu serwera w komunikacie; `ONBOARDING_INCOMPLETE`
   przenosi do pierwszego brakującego kroku (#363).
+  Jeden krok = jedno żądanie = jedna transakcja (#142, 0082): krok 3 (doświadczenie +
+  umiejętności) i krok 5 (języki + certyfikaty) przez `save_candidate_onboarding_step3/5`
+  (wewnątrz te same `set_candidate_*` — limity, dedup, replace-all). Błąd dowolnej części cofa
+  cały krok. Krok 6 z „Zakończ”: dane kroku zapisane jednym upsertem, `finish_onboarding` tylko
+  sprawdza kompletność, receipt best-effort. Dowód: `rls.sql` sekcja OB142 (wstrzyknięty błąd
+  drugiej części + kontrola ujemna starej ścieżki).
 - [x] Panel kandydata — realne dane pod sesją (RLS) + akcje (zapis oferty, wycofanie aplikacji, odpowiedź na propozycję), noindex; fallback demo bez env
 
 Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilnym kursorem
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
 Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
 `candidate-applications-pagination`).
+Metadane ofert (#184): `get_applied_jobs_display` z filtrem `in('job_id')` tylko dla ofert
+bieżącej strony — „Pokaż więcej” nie przesyła metadanych całej historii. **Otwarte:** funkcja
+(SECURITY DEFINER, bez inliningu) nadal liczy całą historię w bazie; parametr `p_job_ids`
+wymaga migracji.
 Paszport tożsamości nad siatką `/candidate/profil` (#172, `CandidateIdentity`): imię, pierwszy
 zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie odczytu tylko komunikat.
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
@@ -629,10 +645,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] Matching (logika + test jednostkowy + integracja z UI) — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
   Poziomy języków (#195, 0074): każdy wymagany język = 10/n pkt; poziom ≥ wymagany (lub oferta
   bez poziomu) → pełny udział, o jeden niżej → połowa, niżej lub nieznany → 0; luka w
-  `languageGaps` (komunikat `match.languageLevel*`). Lokalizacja (#194, częściowo): odległość
-  haversine ze współrzędnych słownika `locations` vs `radius_km` (w promieniu 15, poza 0);
-  bez współrzędnych ten sam region = 10 bez etykiety „w promieniu”. **Do zrobienia (#194):**
-  współrzędne dla miast spoza 10-elementowego słownika (kanoniczny model miast/geokodowanie).
+  `languageGaps` (komunikat `match.languageLevel*`). Lokalizacja (#194): odległość haversine
+  vs `radius_km` (w promieniu 15, poza 0, remote bez ograniczeń); współrzędne: słownik
+  `locations` z bazy, potem kanoniczna lista ~46 belgijskich miast w kodzie z aliasami
+  PL/NL/FR/EN (`src/lib/matching/belgian-cities.ts`, 10 miast = wartości z `0010`, strażnik
+  w `matching-locations.test.ts`); miasto spoza obu → ten sam region = 10 bez etykiety
+  „w promieniu”. **Do zrobienia:** współrzędne w bazie dla pozostałych miast (migracja
+  `locations`), geokodowanie miejscowości spoza listy.
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
   Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
   `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
@@ -772,6 +791,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
   **Do zrobienia:** asercje `email_deliveries.locale` na żywej bazie w `rls.sql` (#348, SQL),
   raport flaków (#375).
+  Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
+  (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
+  najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami
+  (`tests/helpers/png-pixels.ts`), bo rewizje Chromium inaczej kodują IDAT.
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,

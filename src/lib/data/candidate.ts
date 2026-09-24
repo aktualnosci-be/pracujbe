@@ -314,7 +314,30 @@ const fetchAppliedJobsMap = cache(async (
 ): Promise<Map<string, PublicJobLite>> => {
   const { data, error } = await supabase.rpc('get_applied_jobs_display', { p_locale: locale });
   if (error) throw error;
+  return toAppliedJobsMap(data);
+});
 
+/**
+ * Metadane ofert tylko dla `job_id` jednej strony historii zgłoszeń (#184). Filtr `in`
+ * zawęża wynik RPC po stronie bazy, więc „Pokaż więcej” nie przesyła danych całej historii.
+ * RPC zwraca wyłącznie oferty własnych aplikacji (auth.uid()), dlatego cudze lub
+ * niepowiązane `job_id` w filtrze nie dają żadnego wiersza.
+ */
+async function fetchAppliedJobsForPage(
+  supabase: SupabaseClient,
+  locale: Locale,
+  jobIds: string[],
+): Promise<Map<string, PublicJobLite>> {
+  const ids = [...new Set(jobIds.filter((id) => id.length > 0))];
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabase
+    .rpc('get_applied_jobs_display', { p_locale: locale })
+    .in('job_id', ids);
+  if (error) throw error;
+  return toAppliedJobsMap(data);
+}
+
+function toAppliedJobsMap(data: unknown): Map<string, PublicJobLite> {
   const map = new Map<string, PublicJobLite>();
   for (const row of asArr(data)) {
     const r = asRecord(row);
@@ -329,7 +352,7 @@ const fetchAppliedJobsMap = cache(async (
     });
   }
   return map;
-});
+}
 
 /** Zbiór job_id zapisanych przez kandydata. */
 async function fetchSavedJobIds(supabase: SupabaseClient, userId: string): Promise<Set<string>> {
@@ -820,7 +843,12 @@ export async function getMyApplicationsPage(
     // (auth.uid()) — zwraca tytuł/firmę/slug NIEZALEŻNIE od statusu oferty, więc aplikacje
     // do ofert zamkniętych/wstrzymanych/wygasłych nie tracą nazwy (get_public_jobs zwraca
     // tylko active+verified top-N, przez co dawały puste wiersze).
-    const jobsMap = await fetchAppliedJobsMap(supabase, resolvedLocale);
+    // Tylko oferty z tej strony (#184), nie cała historia.
+    const jobsMap = await fetchAppliedJobsForPage(
+      supabase,
+      resolvedLocale,
+      visibleRows.map((row) => asStr(asRecord(row)['job_id'])),
+    );
     const items = visibleRows.map((row) => {
       const r = asRecord(row);
       const job = jobsMap.get(asStr(r['job_id']));
