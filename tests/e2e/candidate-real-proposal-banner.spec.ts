@@ -13,9 +13,10 @@ test('pulpit pokazuje banner dla istniejącej propozycji i pozwala zamknąć go 
   const cookieButton = page.getByRole('button', { name: 'Tylko niezbędne' });
   if (await cookieButton.isVisible()) await cookieButton.click();
 
-  const link = page.getByRole('link', { name: 'Zobacz ofertę' });
+  // Baner prowadzi do karty propozycji, gdzie można odpowiedzieć, nie do publicznej oferty (#324).
+  const link = page.getByRole('link', { name: 'Zobacz propozycję' });
   await expect(link).toBeVisible();
-  await expect(link).toHaveAttribute('href', /^\/pl\/oferty-pracy\//);
+  await expect(link).toHaveAttribute('href', /^\/pl\/candidate\/propozycje#offer-/);
 
   const close = page.getByRole('button', { name: 'Zamknij' });
   const box = await close.boundingBox();

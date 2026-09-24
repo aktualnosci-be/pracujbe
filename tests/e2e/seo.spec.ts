@@ -52,7 +52,8 @@ for (const [locale, titles] of Object.entries(seoTitles)) {
  * Testy SEO — działają na danych demonstracyjnych (bez Supabase).
  *
  * Zakres:
- *  1. Szczegóły oferty: dane strukturalne JobPosting (JSON-LD) + <html lang="pl">.
+ *  1. Szczegóły oferty demo: <html lang="pl"> i BRAK JobPosting (fikcyjna oferta, #297).
+ *     JobPosting ofert „realnych” sprawdza tests/e2e/job-posting-fixture.spec.ts.
  */
 
 /** Pobiera slug pierwszej oferty demonstracyjnej z listy. */
@@ -63,35 +64,13 @@ async function firstJobSlugHref(page: import('@playwright/test').Page): Promise<
   return href as string;
 }
 
-test('szczegóły oferty zawierają JSON-LD JobPosting oraz <html lang="pl">', async ({ page }) => {
+test('szczegóły oferty demo mają <html lang="pl">, noindex i nie emitują JobPosting (#297)', async ({ page }) => {
   const href = await firstJobSlugHref(page);
   await page.goto(href);
 
-  // <html lang="pl">
   await expect(page.locator('html')).toHaveAttribute('lang', 'pl');
-
-  // Dane strukturalne JobPosting (JSON-LD).
-  const jsonLdBlocks = page.locator('script[type="application/ld+json"]');
-  const count = await jsonLdBlocks.count();
-  expect(count).toBeGreaterThan(0);
-
-  let foundJobPosting = false;
-  for (let i = 0; i < count; i += 1) {
-    const raw = await jsonLdBlocks.nth(i).textContent();
-    if (!raw) continue;
-    const parsed: unknown = JSON.parse(raw);
-    const type = (parsed as { '@type'?: unknown })['@type'];
-    if (type === 'JobPosting') {
-      foundJobPosting = true;
-      const data = parsed as Record<string, unknown>;
-      expect(typeof data['title']).toBe('string');
-      expect(typeof data['datePosted']).toBe('string');
-      expect(data['hiringOrganization']).toBeTruthy();
-      expect(data['jobLocation']).toBeTruthy();
-      break;
-    }
-  }
-  expect(foundJobPosting, 'Brak danych strukturalnych JobPosting (JSON-LD)').toBe(true);
+  await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(1);
+  expect(await jobPostingCount(page)).toBe(0);
 });
 
 // #118: tytuł z nazwą marki nie może dodatkowo przejść przez szablon layoutu
@@ -182,7 +161,9 @@ test('oferta bez tłumaczenia: wersja NL jest kanoniczna, hreflang tylko dla NL'
   await expect(hreflang(page, 'nl')).toHaveAttribute('href', `${SITE}/nl${NL_ONLY_JOB}`);
   await expect(hreflang(page, 'x-default')).toHaveAttribute('href', `${SITE}/nl${NL_ONLY_JOB}`);
   for (const lang of ['pl', 'fr', 'en']) await expect(hreflang(page, lang)).toHaveCount(0);
-  expect(await jobPostingCount(page)).toBe(1);
+  // Oferta demo nie emituje JobPosting (#297); wersję kanoniczną z JobPosting sprawdza
+  // tests/e2e/job-posting-fixture.spec.ts.
+  expect(await jobPostingCount(page)).toBe(0);
   await expect(page.getByRole('heading', { level: 1 })).not.toHaveAttribute('lang', /.+/);
   await expect(page.getByTestId('job-content-language')).toHaveCount(0);
 });

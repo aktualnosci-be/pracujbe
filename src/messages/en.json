@@ -72,7 +72,7 @@
     "detailsSubtitle": "Manage your company details and check its verification status.",
     "editTitle": "Edit company details",
     "name": "Company name",
-    "namePlaceholder": "e.g. AGO Jobs & HR",
+    "namePlaceholder": "e.g. Your company name",
     "vatNumber": "VAT / KBO number (optional)",
     "vatPlaceholder": "BE0123456789",
     "vatHint": "The Belgian company number (KBO/BCE) makes verification easier.",
@@ -84,14 +84,14 @@
     "statusLabel": "Verification status",
     "verifiedAt": "Verification date",
     "verificationNote": "Posting jobs and sending offers requires the “verified” status, granted by an administrator.",
-    "bannerPendingTitle": "Company awaiting verification",
-    "bannerPendingDesc": "We're reviewing your company details. Posting jobs and sending offers will be available once an administrator approves the company.",
+    "bannerPendingTitle": "Your company is awaiting verification",
+    "bannerPendingDesc": "Your company details are in the queue to be checked by a Pracuj.be administrator. You can publish jobs and send offers once they are approved.",
     "bannerVerifiedTitle": "Company verified",
     "bannerVerifiedDesc": "You can post jobs and send offers to candidates.",
     "bannerRejectedTitle": "Verification rejected",
-    "bannerRejectedDesc": "We couldn't verify the company. Please correct the details or contact us.",
+    "bannerRejectedDesc": "An administrator did not approve your company details. Check the name and VAT/KBO number, correct them and send your company for verification again.",
     "bannerSuspendedTitle": "Company account suspended",
-    "bannerSuspendedDesc": "The company account has been suspended. Posting jobs is on hold.",
+    "bannerSuspendedDesc": "Your company account has been suspended by an administrator. Publishing jobs and sending offers are on hold.",
     "statusUnverified": "Unverified",
     "statusPending": "Awaiting verification",
     "statusVerified": "Verified",
@@ -103,7 +103,21 @@
       "nameTooLong": "The company name is too long.",
       "vatInvalid": "Invalid VAT/KBO number.",
       "vatTooLong": "The VAT/KBO number is too long."
-    }
+    },
+    "bannerUnverifiedTitle": "Your company is awaiting verification",
+    "bannerUnverifiedDesc": "Before you publish your first job, a Pracuj.be administrator will check your company details. You don’t need to send anything — your company is already in the queue.",
+    "bannerLink": "Go to company details",
+    "stepsTitle": "First steps",
+    "stepVat": "Add your company’s VAT/KBO number — it makes checking your details easier.",
+    "stepWait": "Wait for an administrator to verify your company — you don’t need to click anything.",
+    "stepDraft": "Prepare a draft job — you can publish it after verification.",
+    "wizardNotice": "You can already prepare and save a draft job. Publishing will be possible once your company is verified.",
+    "reverifySubmit": "Send for verification again",
+    "reverifyHint": "First correct and save your company details, then send your company for verification again.",
+    "reverifySuccess": "Your company is back in the verification queue.",
+    "editVerifiedHint": "Changing the name or VAT/KBO number of a verified company requires verification again. Until it is approved, your company’s jobs will not be publicly visible and publishing and sending offers will be on hold.",
+    "savedReverification": "Company details saved. Your company is back in verification — an administrator will check the new details.",
+    "onboardingEyebrow": "Employer account"
   },
   "common": {
     "appName": "Pracuj.be",
@@ -287,7 +301,10 @@
     "saveUnavailable": "Saving is available for candidate accounts with a connected service",
     "saveLoading": "Loading saved jobs",
     "saveRetry": "Could not load saved jobs. Retry",
-    "saveFailed": "Could not save the change. Try again."
+    "saveFailed": "Could not save the change. Try again.",
+    "demoNoticeTitle": "Sample data — these job offers are not real",
+    "demoNoticeBody": "The site is running as a demo. The job offers and companies on this page are fictional, not verified, and you cannot apply to them.",
+    "demoBadge": "Sample offer"
   },
   "job": {
     "apply": "Apply for this job",
@@ -824,7 +841,12 @@
     "employerApplicationMessage": "Write a message",
     "employerApplicationMessageLabel": "Write a message to: {name}",
     "employerApplicationView": "View application",
-    "employerApplicationViewLabel": "View application: {name}, {job}"
+    "employerApplicationViewLabel": "View application: {name}, {job}",
+    "greetingNoName": "Welcome!",
+    "viewProposal": "View proposal",
+    "rowActionsFor": "Actions: {title}",
+    "companyFallback": "Your company",
+    "employerShellLoadError": "We couldn’t load your company account details. Please try again."
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -927,6 +949,7 @@
     "certificatesPlaceholder": "e.g. VCA, qualification certificate",
     "availabilityLabel": "Availability",
     "availImmediate": "Immediately",
+    "availWithinTwoWeeks": "Within 2 weeks",
     "availWithinMonth": "Within a month",
     "availWithinThreeMonths": "Within 3 months",
     "availFlexible": "Flexible",
@@ -1047,7 +1070,9 @@
     "guestReturn": "After you log in or confirm your email, you will come back to this job.",
     "errorNetwork": "We couldn't reach the server. Check your connection and try again — what you entered has been kept.",
     "viewApplications": "View your applications",
-    "candidateOnly": "Only a candidate account can apply."
+    "candidateOnly": "Only a candidate account can apply.",
+    "demoJobTitle": "This is a sample job offer",
+    "demoJobBody": "This offer and company are fictional and only show how the site works. You cannot apply to it."
   },
   "legal": {
     "termsTitle": "Terms of Service",
@@ -1225,6 +1250,7 @@
     "send": "Send",
     "sending": "Sending…",
     "sendError": "Could not send the message. Please try again.",
+    "sendErrorUncertain": "We couldn't confirm the message was sent. Send it again — it won't be duplicated.",
     "you": "You",
     "systemLabel": "System",
     "back": "Back to list",
@@ -1406,7 +1432,15 @@
       "remoteJob": "Remote work — location does not matter",
       "withinCommuteRadius": "Workplace within your commute radius"
     },
-    "loadError": "Your match could not be calculated right now. This is not an assessment of your profile — please try again."
+    "loadError": "Your match could not be calculated right now. This is not an assessment of your profile — please try again.",
+    "languageLevelBelow": "{language}: required level {required}, your level {actual}",
+    "languageLevelUnknown": "{language}: required level {required} — add your level to your profile",
+    "levels": {
+      "basic": "basic",
+      "intermediate": "intermediate",
+      "fluent": "fluent",
+      "native": "native"
+    }
   },
   "application": {
     "error": {
@@ -1444,5 +1478,43 @@
     "heading": "No internet connection",
     "body": "Check your connection. Once it is back, go to the home page or open the page you were looking for again.",
     "goHome": "Go to the home page"
+  },
+  "employers": {
+    "metaTitle": "For employers — job offers in Belgium | Pracuj.be",
+    "metaDescription": "How to post a job offer in Belgium on Pracuj.be: company account, verification, job wizard and contact with candidates. Free of charge at this stage.",
+    "pageTitle": "For employers",
+    "title": "Hire in Belgium more simply",
+    "intro": "Pracuj.be connects companies with people looking for work in Belgium — including those without a traditional CV. Here is how to post a job offer and how contact with candidates works.",
+    "ctaRegister": "Create an employer account",
+    "ctaLogin": "Already have an account? Log in",
+    "photoCaption": "Hiring is about people.",
+    "photoDisclaimer": "Illustrative photo — does not show a specific employer.",
+    "stepsTitle": "How it works",
+    "step1Title": "Create an account",
+    "step1Desc": "Enter your details and the company name, then confirm your email address.",
+    "step2Title": "Company verification",
+    "step2Desc": "Our team checks the company. Only verified companies can publish job offers.",
+    "step3Title": "Prepare the job offer",
+    "step3Desc": "The wizard guides you step by step through the position, location, conditions and requirements. You can prepare a draft before verification.",
+    "step4Title": "Run the recruitment",
+    "step4Desc": "Applications arrive in the company panel. There you change their status, write to candidates and send job proposals.",
+    "freeTitle": "Free of charge at this stage",
+    "freeDesc": "At this stage of development, Pracuj.be does not charge for a company account or for publishing job offers. We do not sell packages or subscriptions.",
+    "candidatesTitle": "Who you will find",
+    "candidatesProfileTitle": "A profile instead of a CV",
+    "candidatesProfileDesc": "Candidates fill in a simple work profile: occupations, skills, languages, certificates, experience and availability. They may attach a CV, but do not have to.",
+    "candidatesLanguagesTitle": "Four languages",
+    "candidatesLanguagesDesc": "The portal works in Polish, Dutch, French and English. Every email reaches the recipient in their own language.",
+    "candidatesMatchTitle": "A clear match",
+    "candidatesMatchDesc": "For each application you see which requirements of the job offer the candidate meets and which are missing.",
+    "contactTitle": "Contact with candidates",
+    "contactApplicationsTitle": "Applications",
+    "contactApplicationsDesc": "The candidate applies with their profile — one application per job offer. You change the status in the panel and the candidate is notified.",
+    "contactMessagesTitle": "Messages",
+    "contactMessagesDesc": "You talk to the candidate through messages in the company panel.",
+    "contactProposalsTitle": "Job proposals",
+    "contactProposalsDesc": "You can send the candidate a job proposal, which they accept or decline.",
+    "finalTitle": "Ready to post your first job offer?",
+    "finalDesc": "Create an employer account. You will publish the offer once the company is verified."
   }
 }

@@ -5,12 +5,12 @@ import { NextResponse } from 'next/server';
 import { processEmailQueue } from '@/lib/email/outbox';
 
 /**
- * Route handler przetwarzający kolejkę e-mail (outbox) — wywoływany przez cron/worker.
+ * Route handler przetwarzający kolejkę e-mail (outbox) — `/api/email/process`.
  * Chroniony sekretem `EMAIL_QUEUE_SECRET` lub `CRON_SECRET` (nagłówek `Authorization: Bearer`).
  *
- * P1-20: obsługuje GET (Vercel Cron wysyła GET z `Authorization: Bearer <CRON_SECRET>`) oraz POST
- * (ręczne/inne wywołania z `EMAIL_QUEUE_SECRET`). Harmonogram w `vercel.json` (co 5 min).
- * Nigdy nie jest indeksowany ani cache'owany.
+ * P1-20: harmonogram prowadzi cron Railway (`scripts/railway-cron-call.mjs`, POST co 5 min,
+ * `CRON_AUTH_SECRET` = `EMAIL_QUEUE_SECRET`; patrz `docs/RESEND_SETUP.md` §6). GET zostaje
+ * dla ręcznych wywołań i zgodności. Nigdy nie jest indeksowany ani cache'owany.
  */
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +23,7 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-/** Autoryzacja: Bearer == EMAIL_QUEUE_SECRET (worker) LUB CRON_SECRET (Vercel Cron). */
+/** Autoryzacja: Bearer == EMAIL_QUEUE_SECRET (cron Railway / worker) LUB CRON_SECRET. */
 function authorized(request: Request): boolean {
   const header = request.headers.get('authorization');
   if (!header) return false;
@@ -43,12 +43,12 @@ async function run(request: Request): Promise<Response> {
   return NextResponse.json(result, { status: result.ok ? 200 : 503 });
 }
 
-/** Vercel Cron (GET). */
+/** Ręczne wywołanie / zgodność (GET). */
 export async function GET(request: Request): Promise<Response> {
   return run(request);
 }
 
-/** Ręczny worker / inne wywołania (POST). */
+/** Cron Railway (POST). */
 export async function POST(request: Request): Promise<Response> {
   return run(request);
 }

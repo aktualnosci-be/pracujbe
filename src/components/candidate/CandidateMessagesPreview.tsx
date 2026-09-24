@@ -9,6 +9,8 @@ interface Labels {
   loadError: string;
   retry: string;
   seeAll: string;
+  /** Tekstowy odpowiednik kropki nieprzeczytania (`messages.unreadBadge`). */
+  unread: string;
 }
 
 /** Inicjały nadawcy (placeholder avatara). */
@@ -46,28 +48,34 @@ export function CandidateMessagesPreview({
       ) : (
         <ul className="divide-y divide-border">
           {result.items.map((msg) => (
-            <li key={msg.id} className="flex min-w-0 gap-3 p-5 sm:px-6">
-              <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-                aria-hidden="true"
+            <li key={msg.id} className="min-w-0">
+              {/* Cała pozycja otwiera rozmowę (#340); stan nieprzeczytania dostępny tekstowo. */}
+              <Link
+                href={`/candidate/wiadomosci?c=${encodeURIComponent(msg.id)}`}
+                className="flex min-h-11 min-w-0 gap-3 p-5 transition-colors hover:bg-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary sm:px-6"
               >
-                {initials(msg.title)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <p className="min-w-0 break-words text-sm font-semibold text-foreground">{msg.title}</p>
-                  <span className="text-xs text-muted-foreground">
-                    {formatShort(msg.time, locale)}
-                  </span>
-                </div>
-                <p className="mt-1 break-words text-sm text-muted-foreground">{msg.preview}</p>
-              </div>
-              {msg.unread ? (
                 <span
-                  className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
                   aria-hidden="true"
-                />
-              ) : null}
+                >
+                  {initials(msg.title)}
+                </span>
+                <span className="block min-w-0 flex-1">
+                  <span className="flex flex-wrap items-start justify-between gap-2">
+                    <span className="min-w-0 break-words text-sm font-semibold text-foreground">{msg.title}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatShort(msg.time, locale)}
+                    </span>
+                  </span>
+                  <span className="mt-1 block break-words text-sm text-muted-foreground">{msg.preview}</span>
+                </span>
+                {msg.unread ? (
+                  <>
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+                    <span className="sr-only">{labels.unread}</span>
+                  </>
+                ) : null}
+              </Link>
             </li>
           ))}
         </ul>

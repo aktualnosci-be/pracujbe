@@ -56,11 +56,11 @@ afterEach(() => {
   vi.mocked(getPublicSavedJobs).mockReset();
 });
 
-function renderModal(locale: string, messages: typeof en) {
+function renderModal(locale: string, messages: typeof en, demo = false) {
   return render(
     <NextIntlClientProvider locale={locale} messages={messages}>
       <PublicSavedJobsProvider jobIds={[JOB_ID]}>
-        <ApplyModal jobId={JOB_ID} companyName="ACME" triggerLabel="Apply" />
+        <ApplyModal jobId={JOB_ID} companyName="ACME" triggerLabel="Apply" demo={demo} />
       </PublicSavedJobsProvider>
     </NextIntlClientProvider>,
   );
@@ -113,5 +113,32 @@ describe('ApplyModal — gość (#303)', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('status')).toHaveTextContent(en.common.loading);
     expect(document.getElementById('apply-phone')).toBeNull();
+  });
+});
+
+describe('ApplyModal — oferta demonstracyjna (#297)', () => {
+  for (const [locale, messages] of Object.entries({ pl, nl, fr, en })) {
+    it(`komunikat o przykładowej ofercie zamiast formularza, także dla kandydata (${locale})`, async () => {
+      vi.mocked(getPublicSavedJobs).mockResolvedValue({ status: 'candidate', savedIds: [] });
+      renderModal(locale, messages as typeof en, true);
+
+      fireEvent.click(screen.getByRole('button', { name: /Apply/ }));
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByRole('heading', { name: messages.apply.demoJobTitle })).toBeVisible();
+      expect(dialog).toHaveTextContent(messages.apply.demoJobBody);
+      expect(document.getElementById('apply-phone')).toBeNull();
+      expect(within(dialog).queryByRole('button', { name: messages.apply.submit })).toBeNull();
+      expect(within(dialog).queryByTestId('apply-guest')).toBeNull();
+    });
+  }
+
+  it('dialog demo zamyka się przyciskiem „Zamknij”', async () => {
+    vi.mocked(getPublicSavedJobs).mockResolvedValue({ status: 'anonymous' });
+    renderModal('en', en, true);
+
+    fireEvent.click(screen.getByRole('button', { name: /Apply/ }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: en.apply.close }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

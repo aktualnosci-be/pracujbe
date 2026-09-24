@@ -232,7 +232,8 @@ test("długie nazwy w panelu kandydata są w całości widoczne bez przewijania 
   const labels = [
     section(t.recommendedJobs).locator("ul li:first-child a").first(),
     section(t.myApplications).locator("ul li:first-child a").first(),
-    section(t.latestMessages).locator("ul li:first-child p").first(),
+    // Pozycja wiadomości to link do wątku (#340); tytuł rozmowy = pierwszy pogrubiony tekst.
+    section(t.latestMessages).locator("ul li:first-child a span.font-semibold").first(),
   ];
   const longTitle = "Koordynator ds. obsługi międzynarodowych zamówień i procesów magazynowych w belgijskim centrum dystrybucji";
   for (const [index, title] of labels.entries()) {

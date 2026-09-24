@@ -72,7 +72,7 @@
     "detailsSubtitle": "Zarządzaj danymi swojej firmy i sprawdź status weryfikacji.",
     "editTitle": "Edytuj dane firmy",
     "name": "Nazwa firmy",
-    "namePlaceholder": "np. AGO Jobs & HR",
+    "namePlaceholder": "np. Nazwa Twojej firmy",
     "vatNumber": "Numer VAT / KBO (opcjonalnie)",
     "vatPlaceholder": "BE0123456789",
     "vatHint": "Belgijski numer przedsiębiorstwa (KBO/BCE) ułatwia weryfikację firmy.",
@@ -84,14 +84,14 @@
     "statusLabel": "Status weryfikacji",
     "verifiedAt": "Data weryfikacji",
     "verificationNote": "Publikacja ofert i wysyłka propozycji wymaga statusu „zweryfikowana”, który nadaje administrator.",
-    "bannerPendingTitle": "Firma oczekuje na weryfikację",
-    "bannerPendingDesc": "Sprawdzamy dane Twojej firmy. Publikacja ofert i wysyłka propozycji będą możliwe po zatwierdzeniu przez administratora.",
+    "bannerPendingTitle": "Firma czeka na weryfikację",
+    "bannerPendingDesc": "Dane firmy czekają w kolejce na sprawdzenie przez administratora Pracuj.be. Publikacja ofert i wysyłka propozycji będą możliwe po zatwierdzeniu.",
     "bannerVerifiedTitle": "Firma zweryfikowana",
     "bannerVerifiedDesc": "Możesz publikować oferty i wysyłać propozycje kandydatom.",
     "bannerRejectedTitle": "Weryfikacja odrzucona",
-    "bannerRejectedDesc": "Nie udało się zweryfikować firmy. Popraw dane lub skontaktuj się z nami.",
+    "bannerRejectedDesc": "Administrator nie zatwierdził danych firmy. Sprawdź nazwę i numer VAT/KBO, popraw je i wyślij firmę ponownie do weryfikacji.",
     "bannerSuspendedTitle": "Konto firmy zawieszone",
-    "bannerSuspendedDesc": "Konto firmy zostało zawieszone. Publikacja ofert jest wstrzymana.",
+    "bannerSuspendedDesc": "Konto firmy zostało zawieszone przez administratora. Publikacja ofert i wysyłka propozycji są wstrzymane.",
     "statusUnverified": "Niezweryfikowana",
     "statusPending": "Oczekuje na weryfikację",
     "statusVerified": "Zweryfikowana",
@@ -103,7 +103,21 @@
       "nameTooLong": "Nazwa firmy jest za długa.",
       "vatInvalid": "Niepoprawny numer VAT/KBO.",
       "vatTooLong": "Numer VAT/KBO jest za długi."
-    }
+    },
+    "bannerUnverifiedTitle": "Firma czeka na weryfikację",
+    "bannerUnverifiedDesc": "Zanim opublikujesz pierwszą ofertę, administrator Pracuj.be sprawdzi dane firmy. Nie musisz niczego wysyłać — firma jest już w kolejce.",
+    "bannerLink": "Przejdź do danych firmy",
+    "stepsTitle": "Pierwsze kroki",
+    "stepVat": "Uzupełnij numer VAT/KBO firmy — ułatwia sprawdzenie danych.",
+    "stepWait": "Poczekaj na weryfikację przez administratora — nie trzeba niczego klikać.",
+    "stepDraft": "Przygotuj szkic oferty — opublikujesz go po weryfikacji.",
+    "wizardNotice": "Możesz już przygotować i zapisać szkic oferty. Publikacja będzie możliwa po weryfikacji firmy.",
+    "reverifySubmit": "Wyślij ponownie do weryfikacji",
+    "reverifyHint": "Najpierw popraw i zapisz dane firmy, a potem wyślij ją ponownie do weryfikacji.",
+    "reverifySuccess": "Firma wróciła do kolejki weryfikacji.",
+    "editVerifiedHint": "Zmiana nazwy lub numeru VAT/KBO zweryfikowanej firmy wymaga ponownej weryfikacji. Do czasu zatwierdzenia oferty firmy nie będą widoczne publicznie, a publikacja i wysyłka propozycji zostaną wstrzymane.",
+    "savedReverification": "Dane firmy zostały zapisane. Firma wróciła do weryfikacji — administrator sprawdzi nowe dane.",
+    "onboardingEyebrow": "Konto pracodawcy"
   },
   "common": {
     "appName": "Pracuj.be",
@@ -287,7 +301,10 @@
     "saveUnavailable": "Zapisywanie wymaga konta kandydata i połączenia z serwisem",
     "saveLoading": "Wczytywanie zapisanych ofert",
     "saveRetry": "Nie udało się wczytać zapisanych ofert. Spróbuj ponownie",
-    "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie."
+    "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "demoNoticeTitle": "Dane przykładowe — te oferty nie są prawdziwe",
+    "demoNoticeBody": "Serwis działa w wersji demonstracyjnej. Oferty i firmy na tej stronie są fikcyjne, nie są weryfikowane i nie można na nie aplikować.",
+    "demoBadge": "Przykładowa oferta"
   },
   "job": {
     "apply": "Aplikuj na to stanowisko",
@@ -824,7 +841,12 @@
     "employerApplicationMessage": "Napisz wiadomość",
     "employerApplicationMessageLabel": "Napisz wiadomość do: {name}",
     "employerApplicationView": "Zobacz zgłoszenie",
-    "employerApplicationViewLabel": "Zobacz zgłoszenie: {name}, {job}"
+    "employerApplicationViewLabel": "Zobacz zgłoszenie: {name}, {job}",
+    "greetingNoName": "Witaj!",
+    "viewProposal": "Zobacz propozycję",
+    "rowActionsFor": "Działania: {title}",
+    "companyFallback": "Twoja firma",
+    "employerShellLoadError": "Nie udało się wczytać danych konta firmy. Spróbuj ponownie."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -927,6 +949,7 @@
     "certificatesPlaceholder": "np. VCA, świadectwo kwalifikacji",
     "availabilityLabel": "Dostępność",
     "availImmediate": "Od zaraz",
+    "availWithinTwoWeeks": "W ciągu 2 tygodni",
     "availWithinMonth": "W ciągu miesiąca",
     "availWithinThreeMonths": "W ciągu 3 miesięcy",
     "availFlexible": "Elastycznie",
@@ -1047,7 +1070,9 @@
     "guestReturn": "Po zalogowaniu lub potwierdzeniu e-maila wrócisz do tej oferty.",
     "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź internet i spróbuj ponownie — wpisane dane zostały zachowane.",
     "viewApplications": "Zobacz swoje aplikacje",
-    "candidateOnly": "Aplikować można tylko z konta kandydata."
+    "candidateOnly": "Aplikować można tylko z konta kandydata.",
+    "demoJobTitle": "To jest przykładowa oferta",
+    "demoJobBody": "Ta oferta i firma są fikcyjne — służą wyłącznie do pokazania, jak działa serwis. Nie można na nią aplikować."
   },
   "legal": {
     "termsTitle": "Regulamin",
@@ -1225,6 +1250,7 @@
     "send": "Wyślij",
     "sending": "Wysyłanie…",
     "sendError": "Nie udało się wysłać wiadomości. Spróbuj ponownie.",
+    "sendErrorUncertain": "Nie wiemy, czy wiadomość dotarła. Wyślij ją ponownie — nie powstanie duplikat.",
     "you": "Ty",
     "systemLabel": "System",
     "back": "Wróć do listy",
@@ -1406,7 +1432,15 @@
       "remoteJob": "Praca zdalna — lokalizacja bez znaczenia",
       "withinCommuteRadius": "Miejsce pracy w Twoim promieniu dojazdu"
     },
-    "loadError": "Nie udało się teraz policzyć dopasowania. To nie jest ocena Twojego profilu — spróbuj ponownie."
+    "loadError": "Nie udało się teraz policzyć dopasowania. To nie jest ocena Twojego profilu — spróbuj ponownie.",
+    "languageLevelBelow": "{language}: wymagany poziom {required}, Twój poziom {actual}",
+    "languageLevelUnknown": "{language}: wymagany poziom {required} — podaj swój poziom w profilu",
+    "levels": {
+      "basic": "podstawowy",
+      "intermediate": "średni",
+      "fluent": "biegły",
+      "native": "ojczysty"
+    }
   },
   "application": {
     "error": {
@@ -1444,5 +1478,43 @@
     "heading": "Brak połączenia z internetem",
     "body": "Sprawdź połączenie. Gdy wróci, przejdź na stronę główną albo otwórz ponownie stronę, której szukasz.",
     "goHome": "Przejdź na stronę główną"
+  },
+  "employers": {
+    "metaTitle": "Dla pracodawców — oferty pracy w Belgii | Pracuj.be",
+    "metaDescription": "Jak opublikować ofertę pracy w Belgii na Pracuj.be: konto firmy, weryfikacja, kreator oferty i kontakt z kandydatami. Na obecnym etapie bez opłat.",
+    "pageTitle": "Dla pracodawców",
+    "title": "Rekrutuj w Belgii prościej",
+    "intro": "Pracuj.be łączy firmy z osobami szukającymi pracy w Belgii — także z tymi, które nie mają klasycznego CV. Zobacz, jak opublikować ofertę i jak wygląda kontakt z kandydatem.",
+    "ctaRegister": "Załóż konto pracodawcy",
+    "ctaLogin": "Masz już konto? Zaloguj się",
+    "photoCaption": "Rekrutacja to rozmowa z ludźmi.",
+    "photoDisclaimer": "Zdjęcie ilustracyjne — nie przedstawia konkretnego pracodawcy.",
+    "stepsTitle": "Jak to działa",
+    "step1Title": "Załóż konto",
+    "step1Desc": "Podaj swoje dane i nazwę firmy, a potem potwierdź adres e-mail.",
+    "step2Title": "Weryfikacja firmy",
+    "step2Desc": "Nasz zespół sprawdza firmę. Oferty publikują wyłącznie zweryfikowane firmy.",
+    "step3Title": "Przygotuj ofertę",
+    "step3Desc": "Kreator prowadzi krok po kroku przez stanowisko, lokalizację, warunki i wymagania. Szkic możesz przygotować jeszcze przed weryfikacją.",
+    "step4Title": "Prowadź rekrutację",
+    "step4Desc": "Zgłoszenia trafiają do panelu firmy. Tam zmieniasz ich status, piszesz do kandydatów i wysyłasz propozycje pracy.",
+    "freeTitle": "Bez opłat na obecnym etapie",
+    "freeDesc": "Na obecnym etapie rozwoju Pracuj.be nie pobiera opłat za konto firmy ani za publikację ofert. Nie sprzedajemy pakietów ani subskrypcji.",
+    "candidatesTitle": "Kogo znajdziesz",
+    "candidatesProfileTitle": "Profil zamiast CV",
+    "candidatesProfileDesc": "Kandydaci wypełniają prosty profil zawodowy: zawody, umiejętności, języki, certyfikaty, doświadczenie i dostępność. CV mogą dołączyć, ale nie muszą.",
+    "candidatesLanguagesTitle": "Cztery języki",
+    "candidatesLanguagesDesc": "Portal działa po polsku, niderlandzku, francusku i angielsku. Każdy e-mail trafia do odbiorcy w jego języku.",
+    "candidatesMatchTitle": "Czytelne dopasowanie",
+    "candidatesMatchDesc": "Przy zgłoszeniu widzisz, które wymagania oferty kandydat spełnia, a których mu brakuje.",
+    "contactTitle": "Kontakt z kandydatem",
+    "contactApplicationsTitle": "Zgłoszenia",
+    "contactApplicationsDesc": "Kandydat aplikuje swoim profilem — jedno zgłoszenie na ofertę. Status zgłoszenia zmieniasz w panelu, a kandydat dostaje powiadomienie.",
+    "contactMessagesTitle": "Wiadomości",
+    "contactMessagesDesc": "Z kandydatem rozmawiasz w wiadomościach w panelu firmy.",
+    "contactProposalsTitle": "Propozycje pracy",
+    "contactProposalsDesc": "Możesz wysłać kandydatowi propozycję pracy, którą on akceptuje albo odrzuca.",
+    "finalTitle": "Chcesz dodać pierwszą ofertę?",
+    "finalDesc": "Załóż konto pracodawcy. Ofertę opublikujesz po weryfikacji firmy."
   }
 }

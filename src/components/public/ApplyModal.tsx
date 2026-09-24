@@ -11,6 +11,11 @@ import { applyToJob } from '@/lib/actions/applications';
 import { cn } from '@/lib/utils';
 import { loginHref, registerHref } from '@/lib/validation/auth';
 import { usePublicViewerStatus } from '@/components/public/PublicSavedJobs';
+import {
+  APPLY_AVAILABILITY_OPTIONS,
+  APPLY_AVAILABILITY_TO_DB,
+  type ApplyAvailabilityOption,
+} from '@/lib/validation/application';
 import type { PhoneCountry } from '@/lib/validation/phone';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -50,6 +55,9 @@ import { Toast } from '@/components/ui/toast';
  * wysyła TEN SAM klucz idempotencji (trzymany w `useRef` na czas otwartego modalu), więc
  * żądanie, które mimo błędu doszło do serwera, nie tworzy drugiej aplikacji (Invariant #4).
  * Ponowna aplikacja na tę samą ofertę (#361) daje „Już aplikowałeś…” z linkiem do historii.
+ *
+ * Oferta demonstracyjna (#297, `demo`): zamiast formularza modal mówi, że oferta i firma są
+ * fikcyjne i nie można na nią aplikować — nikt nie wypełnia danych na próżno.
  */
 
 const MESSAGE_MAX = 500;
@@ -68,19 +76,9 @@ const DIAL_CODES: ReadonlyArray<{ code: PhoneCountry; dial: string }> = [
   { code: 'LU', dial: '+352' },
 ];
 
-const AVAILABILITY = ['immediate', 'twoWeeks', 'oneMonth', 'flexible'] as const;
-type Availability = (typeof AVAILABILITY)[number];
-
-/** Mapowanie opcji UI na wartości enuma `availability_status` w bazie (0001). */
-const AVAILABILITY_TO_DB: Record<
-  Availability,
-  'immediate' | 'within_month' | 'within_three_months' | 'flexible'
-> = {
-  immediate: 'immediate',
-  twoWeeks: 'within_month',
-  oneMonth: 'within_month',
-  flexible: 'flexible',
-};
+const AVAILABILITY = APPLY_AVAILABILITY_OPTIONS;
+type Availability = ApplyAvailabilityOption;
+const AVAILABILITY_TO_DB = APPLY_AVAILABILITY_TO_DB;
 
 /** Rodzaj błędu formularza (mapowany na komunikat i18n, bez technikaliów). */
 type FormError =
@@ -102,6 +100,8 @@ export interface ApplyModalProps {
   triggerVariant?: 'default' | 'outline';
   triggerClassName?: string;
   triggerSize?: 'default' | 'lg';
+  /** Oferta z zestawu demonstracyjnego — modal pokazuje komunikat zamiast formularza. */
+  demo?: boolean;
 }
 
 export function ApplyModal({
@@ -112,6 +112,7 @@ export function ApplyModal({
   triggerVariant = 'default',
   triggerClassName,
   triggerSize = 'lg',
+  demo = false,
 }: ApplyModalProps): React.JSX.Element {
   const t = useTranslations('apply');
   const tCommon = useTranslations('common');
@@ -292,10 +293,10 @@ export function ApplyModal({
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="text-lg font-semibold text-foreground">
-                {t('title')}
+                {demo ? t('demoJobTitle') : t('title')}
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-muted-foreground">
-                {isGuest ? t('guestSubtitle') : t('subtitle')}
+                {demo ? t('demoJobBody') : isGuest ? t('guestSubtitle') : t('subtitle')}
               </Dialog.Description>
             </div>
             <Dialog.Close
@@ -306,7 +307,7 @@ export function ApplyModal({
             </Dialog.Close>
           </div>
 
-          {viewer === 'loading' ? (
+          {demo ? null : viewer === 'loading' ? (
             <p role="status" className="py-6 text-center text-sm text-muted-foreground">
               {tCommon('loading')}
             </p>

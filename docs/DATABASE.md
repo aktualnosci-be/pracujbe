@@ -75,3 +75,41 @@ drop function if exists public.get_public_job_filter_facets(
 ```
 
 Rollback usuwa wyłącznie funkcję agregującą i nie modyfikuje danych.
+
+## Idempotentna wysyłka wiadomości
+
+`public.send_message(uuid, text, uuid)` przyjmuje `p_client_message_id` — UUID generowany
+przez klienta raz na operację wysyłki i powtarzany przy każdym ponowieniu tej samej operacji.
+Unikalny indeks `messages_client_message_id_uniq` na
+`(conversation_id, sender_id, client_message_id)` rozstrzyga ponowienia i próby równoległe:
+pierwsza zapisuje wiadomość, `last_message_at`, powiadomienia i e-maile; kolejna (także
+czekająca na commit pierwszej) zwraca id istniejącej wiadomości bez ponownych efektów
+ubocznych. Treść nie jest kluczem — dwa różne identyfikatory z tą samą treścią dają dwie
+wiadomości. Stary podpis `send_message(uuid, text)` został usunięty; wywołanie bez klucza
+(`null`) kończy się `VALIDATION_FAILED`. Kontrola członkostwa rozmowy działa przed
+deduplikacją, więc cudzy klucz niczego nie ujawnia.
+
+## Granica wygaśnięcia propozycji
+
+`public.respond_to_offer(uuid, boolean)` odrzuca propozycję, gdy `expires_at <= now()`.
+Warstwa odczytu (`expires_at > now()`) i UI (`canRespondToProposal`) uznają propozycję za
+aktywną tylko ściśle przed terminem, więc chwila `expires_at` jest już po terminie wszędzie.
+Równoległe accept/decline serializuje blokada wiersza (`for update`) i compare-and-swap:
+wygrywa pierwsza transakcja, druga dostaje `VALIDATION_FAILED`, a historia, powiadomienie
+i e-mail powstają raz. Dowód: `supabase/tests/rls.sql` sekcja PP (dwie sesje przez dblink).
+
+Migracja (oba kontrakty): `supabase/migrations/0075_idempotent_message_offer_expiry.sql`.
+
+### Rollback
+
+Najpierw wycofaj kod aplikacji przekazujący `p_client_message_id`, następnie w nowej migracji
+odtwórz `send_message(uuid, text)` i `respond_to_offer(uuid, boolean)` z
+`0070_company_recipients_active_members.sql` (z grantami `execute` dla `authenticated`) i wykonaj:
+
+```sql
+drop function if exists public.send_message(uuid, text, uuid);
+drop index if exists public.messages_client_message_id_uniq;
+alter table public.messages drop column if exists client_message_id;
+```
+
+Rollback usuwa tylko identyfikatory operacji; treść wiadomości pozostaje bez zmian.

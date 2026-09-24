@@ -72,7 +72,7 @@
     "detailsSubtitle": "Beheer de gegevens van je bedrijf en controleer de verificatiestatus.",
     "editTitle": "Bedrijfsgegevens bewerken",
     "name": "Bedrijfsnaam",
-    "namePlaceholder": "bijv. AGO Jobs & HR",
+    "namePlaceholder": "bijv. Naam van je bedrijf",
     "vatNumber": "Btw-nummer / KBO (optioneel)",
     "vatPlaceholder": "BE0123456789",
     "vatHint": "Het Belgische ondernemingsnummer (KBO/BCE) vergemakkelijkt de verificatie.",
@@ -84,14 +84,14 @@
     "statusLabel": "Verificatiestatus",
     "verifiedAt": "Verificatiedatum",
     "verificationNote": "Vacatures plaatsen en voorstellen versturen vereist de status ‘geverifieerd’, die door een beheerder wordt toegekend.",
-    "bannerPendingTitle": "Bedrijf wacht op verificatie",
-    "bannerPendingDesc": "We controleren de gegevens van je bedrijf. Vacatures plaatsen en voorstellen versturen is mogelijk zodra een beheerder het bedrijf goedkeurt.",
+    "bannerPendingTitle": "Je bedrijf wacht op verificatie",
+    "bannerPendingDesc": "De bedrijfsgegevens staan in de wachtrij om door een beheerder van Pracuj.be te worden gecontroleerd. Na goedkeuring kun je vacatures publiceren en voorstellen versturen.",
     "bannerVerifiedTitle": "Bedrijf geverifieerd",
     "bannerVerifiedDesc": "Je kunt vacatures plaatsen en voorstellen naar kandidaten sturen.",
     "bannerRejectedTitle": "Verificatie geweigerd",
-    "bannerRejectedDesc": "We konden het bedrijf niet verifiëren. Corrigeer de gegevens of neem contact met ons op.",
+    "bannerRejectedDesc": "Een beheerder heeft de bedrijfsgegevens niet goedgekeurd. Controleer de naam en het btw-/KBO-nummer, corrigeer ze en stuur je bedrijf opnieuw ter verificatie.",
     "bannerSuspendedTitle": "Bedrijfsaccount opgeschort",
-    "bannerSuspendedDesc": "Het bedrijfsaccount is opgeschort. Het plaatsen van vacatures is stopgezet.",
+    "bannerSuspendedDesc": "Het bedrijfsaccount is door een beheerder opgeschort. Vacatures publiceren en voorstellen versturen zijn gepauzeerd.",
     "statusUnverified": "Niet geverifieerd",
     "statusPending": "Wacht op verificatie",
     "statusVerified": "Geverifieerd",
@@ -103,7 +103,21 @@
       "nameTooLong": "De bedrijfsnaam is te lang.",
       "vatInvalid": "Ongeldig btw-/KBO-nummer.",
       "vatTooLong": "Het btw-/KBO-nummer is te lang."
-    }
+    },
+    "bannerUnverifiedTitle": "Je bedrijf wacht op verificatie",
+    "bannerUnverifiedDesc": "Voordat je je eerste vacature publiceert, controleert een beheerder van Pracuj.be de bedrijfsgegevens. Je hoeft niets op te sturen — je bedrijf staat al in de wachtrij.",
+    "bannerLink": "Naar bedrijfsgegevens",
+    "stepsTitle": "Eerste stappen",
+    "stepVat": "Vul het btw-/KBO-nummer van je bedrijf in — dat maakt de controle eenvoudiger.",
+    "stepWait": "Wacht op verificatie door een beheerder — je hoeft niets aan te klikken.",
+    "stepDraft": "Bereid een conceptvacature voor — je publiceert ze na de verificatie.",
+    "wizardNotice": "Je kunt nu al een conceptvacature voorbereiden en opslaan. Publiceren kan zodra je bedrijf geverifieerd is.",
+    "reverifySubmit": "Opnieuw ter verificatie sturen",
+    "reverifyHint": "Corrigeer en bewaar eerst de bedrijfsgegevens en stuur je bedrijf daarna opnieuw ter verificatie.",
+    "reverifySuccess": "Je bedrijf staat weer in de verificatiewachtrij.",
+    "editVerifiedHint": "Als je de naam of het btw-/KBO-nummer van een geverifieerd bedrijf wijzigt, is opnieuw verificatie nodig. Tot de goedkeuring zijn de vacatures van je bedrijf niet openbaar zichtbaar en zijn publiceren en voorstellen versturen gepauzeerd.",
+    "savedReverification": "Bedrijfsgegevens opgeslagen. Je bedrijf wordt opnieuw geverifieerd — een beheerder controleert de nieuwe gegevens.",
+    "onboardingEyebrow": "Werkgeversaccount"
   },
   "common": {
     "appName": "Pracuj.be",
@@ -287,7 +301,10 @@
     "saveUnavailable": "Opslaan is beschikbaar voor kandidaten met een verbonden dienst",
     "saveLoading": "Opgeslagen vacatures laden",
     "saveRetry": "Laden mislukt. Probeer opnieuw",
-    "saveFailed": "Wijziging opslaan mislukt. Probeer opnieuw."
+    "saveFailed": "Wijziging opslaan mislukt. Probeer opnieuw.",
+    "demoNoticeTitle": "Voorbeeldgegevens — deze vacatures zijn niet echt",
+    "demoNoticeBody": "De site draait als demoversie. De vacatures en bedrijven op deze pagina zijn fictief, worden niet geverifieerd en je kunt er niet op solliciteren.",
+    "demoBadge": "Voorbeeldvacature"
   },
   "job": {
     "apply": "Solliciteer op deze functie",
@@ -824,7 +841,12 @@
     "employerApplicationMessage": "Bericht sturen",
     "employerApplicationMessageLabel": "Bericht sturen naar: {name}",
     "employerApplicationView": "Sollicitatie bekijken",
-    "employerApplicationViewLabel": "Sollicitatie bekijken: {name}, {job}"
+    "employerApplicationViewLabel": "Sollicitatie bekijken: {name}, {job}",
+    "greetingNoName": "Welkom!",
+    "viewProposal": "Bekijk het voorstel",
+    "rowActionsFor": "Acties: {title}",
+    "companyFallback": "Je bedrijf",
+    "employerShellLoadError": "We konden de gegevens van je bedrijfsaccount niet laden. Probeer het opnieuw."
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -927,6 +949,7 @@
     "certificatesPlaceholder": "bijv. VCA, kwalificatiegetuigschrift",
     "availabilityLabel": "Beschikbaarheid",
     "availImmediate": "Onmiddellijk",
+    "availWithinTwoWeeks": "Binnen 2 weken",
     "availWithinMonth": "Binnen een maand",
     "availWithinThreeMonths": "Binnen 3 maanden",
     "availFlexible": "Flexibel",
@@ -1047,7 +1070,9 @@
     "guestReturn": "Na het inloggen of het bevestigen van je e-mail kom je terug bij deze vacature.",
     "errorNetwork": "Er kon geen verbinding worden gemaakt met de server. Controleer je internet en probeer opnieuw — je ingevulde gegevens zijn bewaard.",
     "viewApplications": "Bekijk je sollicitaties",
-    "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount."
+    "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount.",
+    "demoJobTitle": "Dit is een voorbeeldvacature",
+    "demoJobBody": "Deze vacature en dit bedrijf zijn fictief en laten alleen zien hoe de site werkt. Je kunt er niet op solliciteren."
   },
   "legal": {
     "termsTitle": "Algemene voorwaarden",
@@ -1225,6 +1250,7 @@
     "send": "Versturen",
     "sending": "Versturen…",
     "sendError": "Bericht kon niet worden verzonden. Probeer het opnieuw.",
+    "sendErrorUncertain": "We weten niet zeker of het bericht is aangekomen. Verstuur het opnieuw — er ontstaat geen dubbel bericht.",
     "you": "Jij",
     "systemLabel": "Systeem",
     "back": "Terug naar lijst",
@@ -1406,7 +1432,15 @@
       "remoteJob": "Thuiswerk — locatie speelt geen rol",
       "withinCommuteRadius": "Werkplek binnen jouw reisafstand"
     },
-    "loadError": "De match kon nu niet worden berekend. Dit is geen beoordeling van je profiel — probeer het opnieuw."
+    "loadError": "De match kon nu niet worden berekend. Dit is geen beoordeling van je profiel — probeer het opnieuw.",
+    "languageLevelBelow": "{language}: vereist niveau {required}, jouw niveau {actual}",
+    "languageLevelUnknown": "{language}: vereist niveau {required} — vul je niveau in je profiel in",
+    "levels": {
+      "basic": "basis",
+      "intermediate": "gemiddeld",
+      "fluent": "vloeiend",
+      "native": "moedertaal"
+    }
   },
   "application": {
     "error": {
@@ -1444,5 +1478,43 @@
     "heading": "Geen internetverbinding",
     "body": "Controleer je verbinding. Als die terug is, ga je naar de startpagina of open je de gezochte pagina opnieuw.",
     "goHome": "Naar de startpagina"
+  },
+  "employers": {
+    "metaTitle": "Voor werkgevers — vacatures in België | Pracuj.be",
+    "metaDescription": "Zo plaats je een vacature in België op Pracuj.be: bedrijfsaccount, verificatie, vacaturewizard en contact met kandidaten. In de huidige fase zonder kosten.",
+    "pageTitle": "Voor werkgevers",
+    "title": "Eenvoudiger rekruteren in België",
+    "intro": "Pracuj.be brengt bedrijven in contact met mensen die werk zoeken in België — ook met mensen zonder klassiek cv. Zo plaats je een vacature en zo verloopt het contact met kandidaten.",
+    "ctaRegister": "Werkgeversaccount aanmaken",
+    "ctaLogin": "Al een account? Log in",
+    "photoCaption": "Rekruteren draait om mensen.",
+    "photoDisclaimer": "Illustratieve foto — toont geen specifieke werkgever.",
+    "stepsTitle": "Hoe het werkt",
+    "step1Title": "Maak een account aan",
+    "step1Desc": "Vul je gegevens en de bedrijfsnaam in en bevestig daarna je e-mailadres.",
+    "step2Title": "Verificatie van het bedrijf",
+    "step2Desc": "Ons team controleert het bedrijf. Alleen geverifieerde bedrijven kunnen vacatures publiceren.",
+    "step3Title": "Stel de vacature op",
+    "step3Desc": "De wizard leidt je stap voor stap door functie, locatie, voorwaarden en vereisten. Een concept kun je al vóór de verificatie voorbereiden.",
+    "step4Title": "Voer de selectie uit",
+    "step4Desc": "Sollicitaties komen binnen in het bedrijfspaneel. Daar wijzig je hun status, schrijf je kandidaten en verstuur je voorstellen.",
+    "freeTitle": "Zonder kosten in de huidige fase",
+    "freeDesc": "In de huidige ontwikkelingsfase rekent Pracuj.be geen kosten aan voor een bedrijfsaccount of voor het publiceren van vacatures. We verkopen geen pakketten of abonnementen.",
+    "candidatesTitle": "Wie je vindt",
+    "candidatesProfileTitle": "Profiel in plaats van cv",
+    "candidatesProfileDesc": "Kandidaten vullen een eenvoudig beroepsprofiel in: beroepen, vaardigheden, talen, certificaten, ervaring en beschikbaarheid. Een cv toevoegen mag, maar hoeft niet.",
+    "candidatesLanguagesTitle": "Vier talen",
+    "candidatesLanguagesDesc": "Het portaal werkt in het Pools, Nederlands, Frans en Engels. Elke e-mail bereikt de ontvanger in de eigen taal.",
+    "candidatesMatchTitle": "Duidelijke match",
+    "candidatesMatchDesc": "Bij een sollicitatie zie je aan welke vereisten van de vacature de kandidaat voldoet en welke ontbreken.",
+    "contactTitle": "Contact met kandidaten",
+    "contactApplicationsTitle": "Sollicitaties",
+    "contactApplicationsDesc": "De kandidaat solliciteert met het eigen profiel — één sollicitatie per vacature. Je wijzigt de status in het paneel en de kandidaat krijgt een melding.",
+    "contactMessagesTitle": "Berichten",
+    "contactMessagesDesc": "Je spreekt met de kandidaat via berichten in het bedrijfspaneel.",
+    "contactProposalsTitle": "Voorstellen",
+    "contactProposalsDesc": "Je kunt de kandidaat een jobvoorstel sturen dat de kandidaat aanvaardt of weigert.",
+    "finalTitle": "Wil je je eerste vacature plaatsen?",
+    "finalDesc": "Maak een werkgeversaccount aan. Je publiceert de vacature na de verificatie van het bedrijf."
   }
 }

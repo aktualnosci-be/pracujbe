@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { ProposalStatusPill } from '@/components/candidate/ProposalStatusPill';
 import { ProposalActions } from '@/components/candidate/ProposalActions';
-import { canRespondToProposal, proposalDisplayStatus } from '@/lib/candidate-offers';
+import { canRespondToProposal, proposalAnchorId, proposalDisplayStatus } from '@/lib/candidate-offers';
 import { loadMoreProposals } from '@/lib/actions/candidate-proposals';
 import type { MyOffer, MyOffersPage } from '@/lib/data/candidate';
 
@@ -93,7 +93,7 @@ export function CandidateProposalsList({
         {items.map((offer: MyOffer) => {
           const date = formatDate(offer.date, locale);
           return (
-            <li key={offer.id} className="min-w-0 rounded-2xl border border-border bg-card p-5 sm:p-6">
+            <li key={offer.id} id={proposalAnchorId(offer.id)} className="min-w-0 scroll-mt-24 rounded-2xl border border-border bg-card p-5 sm:p-6">
               <article className="space-y-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1 space-y-2">

@@ -12,8 +12,36 @@
  *     zwracamy oryginalne etykiety,
  *   - dla warunków wymiarowych (lokalizacja, doświadczenie, dostępność, prawo jazdy) klucze.
  *
+ * Język (#195): każdy wymagany język waży 10/n pkt. Poziom deklarowany ≥ wymagany (albo oferta
+ * nie podaje poziomu) → pełny udział; o jeden poziom niżej → połowa; o dwa i więcej → 0; poziom
+ * kandydata nieznany przy wymaganym poziomie → 0 (konserwatywnie). Niespełniony poziom trafia do
+ * `languageGaps` (nie do `matched`).
+ *
+ * Lokalizacja (#194): gdy znamy współrzędne obu miejscowości (słownik `locations`), odległość
+ * po wielkim kole porównujemy z promieniem kandydata — w promieniu 15 pkt niezależnie od granicy
+ * regionu, poza nim 0. Bez współrzędnych nie udajemy odległości: to samo miasto 15, ten sam
+ * region 10 (bez etykiety „w promieniu"), inaczej 0.
+ *
  * Silnik jest czysty i deterministyczny: te same wejścia => ten sam wynik. Brak I/O, brak losowości.
  */
+
+export const LANGUAGE_LEVEL_ORDER = ['basic', 'intermediate', 'fluent', 'native'] as const;
+export type LanguageLevel = (typeof LANGUAGE_LEVEL_ORDER)[number];
+
+/**
+ * Język z poziomem. Sam string = sama etykieta: po stronie oferty „poziom dowolny",
+ * po stronie kandydata „poziom nieznany".
+ */
+export type LanguageEntry = string | { label: string; level?: string | null };
+
+export type LanguageGap = {
+  language: string;
+  required: LanguageLevel;
+  /** null = kandydat zna język, ale poziom nieznany. */
+  actual: LanguageLevel | null;
+};
+
+export type Coordinates = { lat: number; lng: number };
 
 export type MatchResult = {
   score: number;
@@ -23,6 +51,8 @@ export type MatchResult = {
   mandatoryMet: number;
   mandatoryTotal: number;
   summaryKey: 'good' | 'partial' | 'low';
+  /** Wymagane języki, które kandydat zna, ale poniżej wymaganego poziomu (#195). */
+  languageGaps: LanguageGap[];
 };
 
 export type MatchCandidate = {
@@ -32,9 +62,11 @@ export type MatchCandidate = {
   city?: string;
   region?: string;
   radiusKm?: number;
+  /** Współrzędne miejscowości kandydata ze słownika (brak = nieznane, bez szacowania). */
+  coordinates?: Coordinates;
   experienceYears?: number;
   availability?: string;
-  languages: string[];
+  languages: LanguageEntry[];
   certificates: string[];
   hasDrivingLicense?: boolean;
   hasCar?: boolean;
@@ -48,8 +80,10 @@ export type MatchJob = {
   mandatorySkills?: string[];
   city?: string;
   region?: string;
+  /** Współrzędne miejsca pracy ze słownika (brak = nieznane). */
+  coordinates?: Coordinates;
   minExperienceYears?: number;
-  requiredLanguages: string[];
+  requiredLanguages: LanguageEntry[];
   requiredCertificates?: string[];
   requiresDrivingLicense?: boolean;
   contractType?: string;
@@ -102,6 +136,48 @@ function dedupe(values: readonly string[]): string[] {
     }
   }
   return out;
+}
+
+function toLevel(value: string | null | undefined): LanguageLevel | null {
+  if (!value) return null;
+  const v = norm(value);
+  return (LANGUAGE_LEVEL_ORDER as readonly string[]).includes(v) ? (v as LanguageLevel) : null;
+}
+
+function entryLabel(entry: LanguageEntry): string {
+  return typeof entry === 'string' ? entry : entry.label;
+}
+
+function entryLevel(entry: LanguageEntry): LanguageLevel | null {
+  return typeof entry === 'string' ? null : toLevel(entry.level);
+}
+
+/**
+ * Udział (0..1) jednego wymaganego języka według jawnej reguły poziomów (#195).
+ * `null` od kandydata = brak języka.
+ */
+export function languageShare(
+  required: LanguageLevel | null,
+  actual: LanguageLevel | null | undefined,
+): number {
+  if (actual === undefined) return 0;
+  if (required === null) return 1;
+  if (actual === null) return 0;
+  const diff = LANGUAGE_LEVEL_ORDER.indexOf(required) - LANGUAGE_LEVEL_ORDER.indexOf(actual);
+  if (diff <= 0) return 1;
+  return diff === 1 ? 0.5 : 0;
+}
+
+const EARTH_RADIUS_KM = 6371;
+
+/** Odległość po wielkim kole (haversine) w km — deterministyczna, bez usług zewnętrznych. */
+export function distanceKm(a: Coordinates, b: Coordinates): number {
+  const rad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
 export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResult {
@@ -159,7 +235,7 @@ export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResul
     strengths.push('allMandatorySkills');
   }
 
-  // --- Lokalizacja (15) — remote znosi ograniczenie; promień wzmacnia dopasowanie regionu ---
+  // --- Lokalizacja (15) — remote znosi ograniczenie; odległość tylko ze znanych współrzędnych ---
   if (job.remote) {
     score += WEIGHTS.location;
     strengths.push('remoteJob');
@@ -173,14 +249,18 @@ export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResul
     if (cityMatch) {
       score += WEIGHTS.location;
       strengths.push('localCandidate');
-    } else if (regionMatch) {
-      // Kandydat gotów dojeżdżać w obrębie regionu (duży promień) => pełne punkty.
-      if ((candidate.radiusKm ?? 0) >= 50) {
+    } else if (candidate.coordinates && job.coordinates) {
+      // Znana odległość: rozstrzyga promień, nie nazwa regionu (#194).
+      const km = distanceKm(candidate.coordinates, job.coordinates);
+      if (km <= (candidate.radiusKm ?? 0)) {
         score += WEIGHTS.location;
         strengths.push('withinCommuteRadius');
       } else {
-        score += 10;
+        missing.push('location');
       }
+    } else if (regionMatch) {
+      // Odległość nieznana — ten sam region to tylko przesłanka, nie „w promieniu dojazdu".
+      score += 10;
     } else {
       missing.push('location');
     }
@@ -217,15 +297,42 @@ export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResul
     missing.push('availability');
   }
 
-  // --- Język (10) ---
+  // --- Język (10) — każdy wymagany język osobno, z poziomem (#195) ---
+  const languageGaps: LanguageGap[] = [];
   if (job.requiredLanguages.length === 0) {
     score += WEIGHTS.language;
     strengths.push('noLanguageBarrier');
   } else {
-    const result = overlap(candidate.languages, job.requiredLanguages);
-    score += Math.round((result.matched.length / job.requiredLanguages.length) * WEIGHTS.language);
-    matched.push(...result.matched);
-    missing.push(...result.missing);
+    const candidateLevels = new Map<string, LanguageLevel | null>();
+    for (const entry of candidate.languages) {
+      const key = norm(entryLabel(entry));
+      const level = entryLevel(entry);
+      const prev = candidateLevels.get(key);
+      // Duplikat etykiety: bierzemy wyższy znany poziom.
+      if (
+        prev === undefined ||
+        (level !== null &&
+          (prev === null || LANGUAGE_LEVEL_ORDER.indexOf(level) > LANGUAGE_LEVEL_ORDER.indexOf(prev)))
+      ) {
+        candidateLevels.set(key, level);
+      }
+    }
+    let shares = 0;
+    for (const entry of job.requiredLanguages) {
+      const label = entryLabel(entry);
+      const required = entryLevel(entry);
+      const actual = candidateLevels.get(norm(label));
+      const share = languageShare(required, actual);
+      shares += share;
+      if (actual === undefined) {
+        missing.push(label);
+      } else if (share === 1) {
+        matched.push(label);
+      } else if (required !== null) {
+        languageGaps.push({ language: label, required, actual });
+      }
+    }
+    score += Math.round((shares / job.requiredLanguages.length) * WEIGHTS.language);
   }
 
   // --- Certyfikaty (5) ---
@@ -286,5 +393,6 @@ export function scoreMatch(candidate: MatchCandidate, job: MatchJob): MatchResul
     mandatoryMet,
     mandatoryTotal,
     summaryKey,
+    languageGaps,
   };
 }
