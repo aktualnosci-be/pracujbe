@@ -5,14 +5,12 @@ import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 
 /**
- * Dostęp do prywatnego magazynu plików (Supabase Storage) — Invariant #10:
- * pliki wrażliwe NIGDY przez publiczne buckety, wyłącznie przez SIGNED URLs o krótkim TTL.
- *
- * Bucket `candidate-files` jest prywatny (0018_storage.sql); polityki pozwalają operować
- * tylko na własnym folderze (`<auth.uid()>/...`). Podpisany URL generujemy pod sesją usera,
- * więc odczyt cudzych plików jest niemożliwy (RLS storage).
+ * Supabase Storage — pozostałość WYŁĄCZNIE dla PDF faktur (billing wyłączony, #51).
+ * CV kandydata NIE przechodzą tędy: upload/pobranie/usunięcie idą przez prywatny bucket
+ * Railway (`src/lib/files/*`, #26). Nie używaj tego modułu dla nowych plików; domknięcie
+ * billing = osobne zadanie (docs/railway/STORAGE_ADAPTER_CONTRACT.md).
+ * Invariant #10: tylko SIGNED URLs o krótkim TTL, pod sesją użytkownika (RLS storage).
  */
-export const CANDIDATE_BUCKET = 'candidate-files';
 
 /** Domyślny TTL podpisanego URL: 60 s (wystarcza na pobranie, nie nadaje się do udostępniania). */
 const DEFAULT_TTL_SECONDS = 60;
@@ -23,7 +21,7 @@ const DEFAULT_TTL_SECONDS = 60;
  */
 export async function getSignedFileUrl(
   path: string,
-  bucket: string = CANDIDATE_BUCKET,
+  bucket: string,
   ttlSeconds: number = DEFAULT_TTL_SECONDS,
 ): Promise<string | null> {
   if (!isSupabaseConfigured()) return null;
@@ -38,25 +36,5 @@ export async function getSignedFileUrl(
   } catch (error) {
     captureError(error, { area: 'storage.getSignedFileUrl', bucket });
     return null;
-  }
-}
-
-/**
- * Usuwa plik z prywatnego bucketa (pod sesją usera — RLS storage pilnuje własności).
- * Zwraca true/false (bez rzucania do UI).
- */
-export async function removeFile(path: string, bucket: string = CANDIDATE_BUCKET): Promise<boolean> {
-  if (!isSupabaseConfigured()) return true;
-  try {
-    const supabase = await createServerClient();
-    const { error } = await supabase.storage.from(bucket).remove([path]);
-    if (error) {
-      captureError(error, { area: 'storage.removeFile', bucket });
-      return false;
-    }
-    return true;
-  } catch (error) {
-    captureError(error, { area: 'storage.removeFile', bucket });
-    return false;
   }
 }
