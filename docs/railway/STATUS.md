@@ -43,6 +43,12 @@ To fundament, nie gotowa migracja: publiczny odczyt ofert jest już przełączon
 
 Pule runtime (`src/lib/db/pool.ts`) używają oddzielnych loginów i ról startup dla auth oraz domeny. Kontrola odrzuca login superusera, CREATEROLE, ADMIN OPTION, dodatkowe członkostwo i właściciela bazy. Siedem testów na rzeczywistym PG16 potwierdza startup na dwóch różnych połączeniach, odmowę dostępu między pulami i brak eskalacji. Helper sesji (`src/lib/auth/session.ts`) bierze uprawnienia z aktywnego profilu, a nie pól klienta/cookie, oraz wymaga zweryfikowanego adresu. Sesje oczekują na spięcie z trasami; prywatne panele nadal korzystają ze starego dostawcy.
 
+## Warstwa danych paneli na PostgreSQL — 24 września 2026 (#25)
+
+Loadery, Server Actions, layouty paneli kandydata/pracodawcy/admina, onboarding, worker poczty, webhooki, limiter i cron korzystają z `src/lib/db/*` zamiast klienta Supabase: tożsamość z sesji Better Auth (`getPortalIdentity`), jedno połączenie na transakcję z `SET LOCAL ROLE authenticated`/`anon` i `app.current_uid`, RLS i te same RPC w bazie. Zadania uprzywilejowane idą osobną pulą `service` (`DATABASE_SERVICE_URL`, login z jedynym członkostwem `service_role`, piąty login `db:logins`). Migracja `0102` nadaje `claim_email_batch` EXECUTE dla `service_role`. Opis: `docs/railway/WARSTWA_DANYCH.md`.
+
+Dowód: 8 plików `tests/integration/portal-*.test.ts` na PostgreSQL 16 z pełnymi migracjami i loginami jak w produkcji (prywatność: inny kandydat, obca firma, gość; stronicowanie; idempotencja RPC), testy unit na atrapie transakcji. Klient Supabase został wyłącznie w sesjach/trasach auth i middleware (#24) oraz w uploadzie CV (#26); SDK usuwa #27. Nie ustawiono zmiennych Railway. Znane braki: nazwa firmy z rejestracji nie podpowiada się w formularzu zakładania firmy (metadane konta niedostępne dla `authenticated` — wymaga #24 albo wąskiego RPC); kandydat nie widzi nazwy firmy w wiadomościach (stan od 0014, bez zmian).
+
 ## Integracja zmian — 21 września 2026, wieczór
 
 - PR #8 ze stylem scalono do `main` jako `d2de4bbe` po pełnym zielonym CI `35652405154` dla dokładnej wersji PR. PR #21 kieruje już do `main` i zawiera ten merge. Wynik CI samego commita na `main` należy sprawdzić osobno.

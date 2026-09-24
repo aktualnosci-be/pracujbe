@@ -74,6 +74,8 @@ export async function startPortalDb(): Promise<PortalDb> {
   }
 
   const admin = new Pool({ connectionString: base.toString(), max: 2 });
+  // Sprzątanie bazy (pg_terminate_backend) może zamknąć bezczynne połączenie — to nie błąd testu.
+  admin.on('error', () => undefined);
   await waitFor(admin);
   const migrations = await loadProductionMigrations();
   const migrator = await admin.connect();
