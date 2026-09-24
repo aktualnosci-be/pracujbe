@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
+import { rejectOptionalCookies } from './fixtures/messages';
+
 /**
  * Panel administratora w trybie DEMO (bez Supabase): bramka axe-core WCAG 2.x A/AA
  * (critical/serious) na wszystkich trasach `/admin/*` (#316), dialog potwierdzenia zmiany
@@ -20,13 +22,6 @@ async function blockingViolations(page: Page) {
     .map((v) => `[${v.impact}] ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(' | ')}`);
 }
 
-async function dismissCookies(page: Page) {
-  const banner = page.locator('[aria-labelledby="cookie-banner-title"]');
-  if (await banner.count()) {
-    await banner.getByRole('button').first().click();
-    await expect(banner).toHaveCount(0);
-  }
-}
 
 const ROUTES = [
   '/admin',
@@ -59,7 +54,7 @@ for (const viewport of [
 
 test('admin: zawieszenie firmy wymaga potwierdzenia w dialogu z danymi firmy', async ({ page }) => {
   await page.goto('/pl/admin/firmy?status=verified');
-  await dismissCookies(page);
+  await rejectOptionalCookies(page, 'pl');
   const row = page.getByRole('row', { name: /AGO Jobs & HR/ });
   await row.getByRole('button', { name: 'Zawieś' }).click();
 
