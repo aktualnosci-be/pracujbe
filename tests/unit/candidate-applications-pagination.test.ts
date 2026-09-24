@@ -19,6 +19,27 @@ const records = Array.from({ length: 15 }, (_, index) => ({
   submitted_at: submittedAt,
 }));
 
+type AppliedJobRow = { job_id: string; slug: string; title: string; company_name: string };
+
+/**
+ * Atrapa `rpc('get_applied_jobs_display')`: bez filtra zwraca całą historię, z `.in('job_id')`
+ * tylko wskazane oferty. `transferred` liczy wiersze, które faktycznie opuściły „bazę”.
+ */
+function appliedJobsBuilder(history: AppliedJobRow[], stats = { transferred: 0 }) {
+  const respond = (rows: AppliedJobRow[]) => {
+    stats.transferred += rows.length;
+    return { data: rows, error: null };
+  };
+  return {
+    in: vi.fn(async (column: string, ids: string[]) => {
+      expect(column).toBe('job_id');
+      return respond(history.filter((row) => ids.includes(row.job_id)));
+    }),
+    then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
+      Promise.resolve(respond(history)).then(resolve, reject),
+  };
+}
+
 function client(options: { fail?: boolean; userId?: string | null; rows?: typeof records } = {}) {
   let beforeId: string | null = null;
   let beforeDate: string | null = null;
@@ -43,7 +64,7 @@ function client(options: { fail?: boolean; userId?: string | null; rows?: typeof
   const supabase = {
     auth: { getUser: vi.fn().mockResolvedValue({ data: { user: options.userId === null ? null : { id: options.userId ?? ownerId } } }) },
     from: vi.fn().mockReturnValue(query),
-    rpc: vi.fn().mockResolvedValue({ data: [{ job_id: jobId, slug: 'older-job', title: 'Older job', company_name: 'Company' }], error: null }),
+    rpc: vi.fn(() => appliedJobsBuilder([{ job_id: jobId, slug: 'older-job', title: 'Older job', company_name: 'Company' }])),
   };
   vi.mocked(createServerClient).mockResolvedValue(supabase as never);
   return { supabase, query };
@@ -71,6 +92,7 @@ describe('candidate application history', () => {
     expect(query.or).toHaveBeenCalledWith(`submitted_at.lt."${submittedAt}",and(submitted_at.eq."${submittedAt}",id.lt.${records[9]!.id})`);
     expect(query.limit).toHaveBeenCalledWith(11);
     expect(supabase.rpc).toHaveBeenCalledWith('get_applied_jobs_display', { p_locale: 'pl' });
+    expect(second.items.every((row) => row.jobTitle === 'Older job' && row.slug === 'older-job')).toBe(true);
   });
 
   it('does not query applications without a session', async () => {
@@ -119,5 +141,77 @@ describe('candidate application history', () => {
     const second = await getMyApplicationsPage('pl', first.nextCursor);
     expect(second.items.map((row) => row.id)).toEqual([records[10]!.id]);
     expect(second.nextCursor).toBeNull();
+  });
+
+  // #184: metadane ofert tylko dla rekordów bieżącej strony, nie całej historii.
+  describe('job metadata scoped to the current page', () => {
+    const jobIdAt = (index: number) => `bbbbbbbb-bbbb-4bbb-8bbb-${String(index).padStart(12, '0')}`;
+    const longHistory = Array.from({ length: 120 }, (_, index) => ({
+      id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(120 - index).padStart(12, '0')}`,
+      job_id: jobIdAt(index),
+      status: 'submitted',
+      submitted_at: submittedAt,
+    }));
+    const history: AppliedJobRow[] = longHistory.map((row, index) => ({
+      job_id: row.job_id, slug: `job-${index}`, title: `Job ${index}`, company_name: `Company ${index}`,
+    }));
+
+    function scopedClient() {
+      const stats = { transferred: 0 };
+      const builders: ReturnType<typeof appliedJobsBuilder>[] = [];
+      const { supabase } = client({ rows: longHistory });
+      supabase.rpc.mockImplementation(() => {
+        const builder = appliedJobsBuilder(history, stats);
+        builders.push(builder);
+        return builder;
+      });
+      return { supabase, stats, builders };
+    }
+
+    it('asks only for the job IDs of the page, also on the next page of 120+ applications', async () => {
+      const { stats, builders } = scopedClient();
+      const first = await getMyApplicationsPage('pl');
+      expect(builders[0]!.in).toHaveBeenCalledWith('job_id', longHistory.slice(0, 10).map((row) => row.job_id));
+      expect(first.items.map((row) => row.jobTitle)).toEqual(history.slice(0, 10).map((row) => row.title));
+
+      const second = await getMyApplicationsPage('pl', first.nextCursor);
+      expect(builders).toHaveLength(2);
+      expect(builders[1]!.in).toHaveBeenCalledWith('job_id', longHistory.slice(10, 20).map((row) => row.job_id));
+      expect(second.items.map((row) => row.slug)).toEqual(history.slice(10, 20).map((row) => row.slug));
+      // Dwie strony = 20 wierszy metadanych, nie 2 × 120.
+      expect(stats.transferred).toBe(20);
+    });
+
+    it('sends each job ID once when several applications on a page share an offer', async () => {
+      const shared = longHistory.slice(0, 10).map((row) => ({ ...row, job_id: jobIdAt(0) }));
+      const { supabase } = client({ rows: shared });
+      const builder = appliedJobsBuilder(history);
+      supabase.rpc.mockReturnValue(builder);
+      const page = await getMyApplicationsPage('pl');
+      expect(builder.in).toHaveBeenCalledWith('job_id', [jobIdAt(0)]);
+      expect(page.items.every((row) => row.jobTitle === 'Job 0')).toBe(true);
+    });
+
+    it('skips the metadata read for an empty page', async () => {
+      const { supabase } = client({ rows: [] });
+      expect(await getMyApplicationsPage('pl')).toEqual({ items: [], nextCursor: null });
+      expect(supabase.rpc).not.toHaveBeenCalled();
+    });
+
+    it('propagates a failed metadata read instead of rendering nameless cards', async () => {
+      const { supabase } = client({ rows: longHistory });
+      supabase.rpc.mockReturnValue({
+        in: vi.fn().mockResolvedValue({ data: null, error: { message: 'metadata unavailable' } }),
+      } as never);
+      await expect(getMyApplicationsPage('pl')).rejects.toEqual({ message: 'metadata unavailable' });
+    });
+
+    // Kontrola ujemna: ten sam licznik wychwytuje odczyt bez ograniczenia do strony.
+    it('negative control: an unscoped read transfers the whole history and fails the page bound', async () => {
+      const stats = { transferred: 0 };
+      await appliedJobsBuilder(history, stats);
+      expect(stats.transferred).toBe(120);
+      expect(stats.transferred).toBeGreaterThan(10);
+    });
   });
 });
