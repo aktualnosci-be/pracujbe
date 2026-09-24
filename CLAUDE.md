@@ -773,6 +773,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
   `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
   zgłoszeń (RLS gotowe).
+  Aplikacja bez konta (#98, migracja `0095`, `docs/GUEST_APPLY.md`): gość w ApplyModal
+  (`GuestApplyForm`: imię i nazwisko, e-mail, zgoda; reszta opcjonalna) → Turnstile
+  `guest_apply` + limity IP/adres → `submit_guest_application` (service_role, zgłoszenie
+  `pending` ze snapshotem zgody, e-mail `guestApplicationConfirm` w języku formularza) →
+  `/aplikacja/potwierdz` (przycisk, nie GET) → `confirm_guest_application` tworzy aplikację
+  z `candidate_id NULL` i snapshotem, powiadamia firmę jak `apply_to_job`, wysyła
+  `guestApplicationSent` z linkiem przejęcia → `/aplikacja/przejmij` →
+  `claim_guest_application` (kandydat ze zweryfikowanym, tym samym e-mailem; token działa
+  raz, ponowienie tego samego konta idempotentne). W bazie tylko hash tokenu; token =
+  HMAC(`GUEST_APPLY_SECRET`, cel:nonce), link składa worker. Pracodawca widzi aplikację
+  z oznaczeniem „Bez konta” (e-mail, telefon, status); rozmowa i propozycja dopiero po
+  przejęciu. Pytania screeningowe (#101) obowiązują także gościa: `record_screening_answers`
+  w trybie bez aplikacji waliduje odpowiedzi przy wysłaniu, potwierdzenie zapisuje je do
+  `application_screening_answers` (GA98-13). Retencja w `/api/maintenance`: niepotwierdzone 7 dni po ostatnim linku,
+  duplikaty 7 dni po potwierdzeniu (z e-mailami), token przejęcia zerowany po 30 dniach.
+  Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture). **Otwarte:** powiadomienie gościa
+  o zmianie statusu (brak profilu odbiorcy); okres retencji do potwierdzenia w polityce
+  prywatności (#40).
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia

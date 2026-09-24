@@ -5478,4 +5478,384 @@ reset role;
 select pg_temp.assert(:dsa_lim_ok = 5, 'DSA41-12c pięć spraw w limicie');
 select pg_temp.assert(:'dsa_other_email'::boolean, 'DSA41-12d kontrola ujemna: limit jest per adres');
 
+-- ============================================================================
+-- GA98. Jednorazowa aplikacja bez konta (0095, #98): zgłoszenie → potwierdzenie
+-- e-mailem → aplikacja widoczna dla firmy → przejęcie przez konto o tym samym adresie.
+-- Kontrole ujemne: bezpośredni DML/odczyt, niepotwierdzony adres nie trafia do firmy,
+-- cudza firma/sesja nie widzi ani nie przejmie, duplikat, wygasłe tokeny, retencja.
+-- ============================================================================
+\set GAO 'e9800000-0000-0000-0000-0000000000a1'
+\set GAB 'e9800000-0000-0000-0000-0000000000a2'
+\set GAR 'e9800000-0000-0000-0000-0000000000a3'
+\set GAX 'e9800000-0000-0000-0000-0000000000a4'
+\set GAC 'e9800000-0000-0000-0000-0000000000c1'
+\set GACB 'e9800000-0000-0000-0000-0000000000c2'
+\set GAJ 'e9800000-0000-0000-0000-0000000000d1'
+\set GAJ2 'e9800000-0000-0000-0000-0000000000d2'
+\set GAJ3 'e9800000-0000-0000-0000-0000000000d3'
+\set GAPV 'e9800000-0000-0000-0000-0000000000f1'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'GAO','gao@test.be','Olaf O','{"role":"employer","first_name":"Olaf","last_name":"Owner","locale":"fr"}'),
+  (:'GAB','gab@test.be','Bram B','{"role":"employer","first_name":"Bram","last_name":"B","locale":"nl"}'),
+  -- GAR: konto kandydata na adres gościa, na razie NIEZWERYFIKOWANE (GA98-10).
+  (:'GAR','ga-guest@test.be','Gosia G','{"role":"candidate","first_name":"Gosia","last_name":"G","locale":"pl"}'),
+  (:'GAX','gax@test.be','Xavier X','{"role":"candidate","first_name":"Xavier","last_name":"X","locale":"en"}');
+update auth.users set email_verified = true where id in (:'GAO', :'GAB', :'GAX');
+insert into public.companies(id,name,status) values
+  (:'GAC','Firma GA','verified'), (:'GACB','Firma GA B','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'GAC',:'GAO','owner',true), (:'GACB',:'GAB','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'GAJ',:'GAC','ga-job','Magazynier GA','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'GAJ2',:'GAC','ga-job-2','Kierowca GA','transport','permanent','Gent','Flandria','active','pl'),
+  (:'GAJ3',:'GAC','ga-job-3','Sprzątanie GA','cleaning','permanent','Gent','Flandria','active','pl');
+insert into public.consent_versions(id, document, version, locale, is_current, published_at)
+  values (:'GAPV', 'privacy', 'ga-1', 'nl', true, now());
+
+-- GA98-1: klient nie woła RPC gościa i nie czyta zgłoszeń.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.submit_guest_application(''' || :'GAJ' || ''', ''a@b.be'', ''A'', null, null, null, ''pl'', ''idem-ga-anon'', repeat(''n'',32), repeat(''a'',64))',
+  'permission denied', 'GA98-1 anon bez EXECUTE submit_guest_application');
+select pg_temp.expect_error('select public.confirm_guest_application(repeat(''a'',64), repeat(''n'',32), repeat(''b'',64))',
+  'permission denied', 'GA98-1b anon bez EXECUTE confirm_guest_application');
+select pg_temp.expect_error('select count(*) from public.guest_application_requests',
+  'permission denied', 'GA98-1c anon nie czyta zgłoszeń gościa');
+reset role;
+set role authenticated; set app.current_uid = :'GAX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.guest_application_requests',
+  'permission denied', 'GA98-1d zalogowany nie czyta zgłoszeń gościa');
+select pg_temp.expect_error('select public.purge_guest_application_requests()',
+  'permission denied', 'GA98-1e klient nie woła retencji');
+reset role; reset app.current_uid;
+
+-- GA98-2: zgłoszenie (service_role) — pending, e-mail do gościa w jego języku, snapshot zgody.
+set role service_role;
+select public.submit_guest_application(:'GAJ', ' GA-Guest@test.be ', 'Gosia Gość', '+32470123456',
+  'immediate', 'Mogę od zaraz', 'nl', 'idem-ga-0001', 'nonce-ga-0001-aaaaaaaa',
+  encode(sha256('tok-ga-1'::bytea), 'hex'), '203.0.113.7', 'UA test') as gareq \gset
+select public.submit_guest_application(:'GAJ', 'ga-guest@test.be', 'Gosia Gość', '+32470123456',
+  'immediate', 'Mogę od zaraz', 'nl', 'idem-ga-0001', 'nonce-ga-0001-aaaaaaaa',
+  encode(sha256('tok-ga-1'::bytea), 'hex')) as gareq2 \gset
+reset role;
+select pg_temp.assert(:'gareq' = :'gareq2', 'GA98-2 ponowienie tym samym kluczem → to samo zgłoszenie');
+select pg_temp.assert(
+  (select status = 'pending' and email = 'ga-guest@test.be' and consent_version_id = :'GAPV'
+          and consent_document_version = 'ga-1' and consent_ip = '203.0.113.7'::inet
+          and consent_accepted_at is not null and confirm_expires_at > now() + interval '47 hours'
+     from public.guest_application_requests where id = :'gareq'),
+  'GA98-2b pending ze snapshotem zgody (wersja polityki, IP, czas)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'guestApplicationConfirm' and entity_id = :'gareq') = 1
+  and (select locale = 'nl' and profile_id is null and to_email = 'ga-guest@test.be'
+              and payload ? 'nonce' and payload::text not like '%' || encode(sha256('tok-ga-1'::bytea), 'hex') || '%'
+         from public.email_deliveries where template = 'guestApplicationConfirm' and entity_id = :'gareq'),
+  'GA98-2c jeden e-mail potwierdzenia w języku gościa (nl), bez tokenu ani hasha w bazie');
+-- Nowe wysłanie (inny klucz) na ten sam adres i ofertę zastępuje oczekujące zgłoszenie.
+set role service_role;
+select public.submit_guest_application(:'GAJ', 'ga-guest@test.be', 'Gosia Gość', '+32470123456',
+  'immediate', 'Mogę od zaraz', 'nl', 'idem-ga-0002', 'nonce-ga-0002-aaaaaaaa',
+  encode(sha256('tok-ga-2'::bytea), 'hex')) as gareq3 \gset
+select pg_temp.expect_error(
+  'select public.submit_guest_application(''' || :'GAJ2' || ''', ''ga-guest@test.be'', ''G'', null, null, null, ''nl'', ''idem-ga-0002'', repeat(''n'',32), repeat(''c'',64))',
+  'VALIDATION_FAILED', 'GA98-2d klucz idempotencji z innego zgłoszenia → odrzucony');
+select pg_temp.expect_error(
+  'select public.submit_guest_application(''' || :'GAJ' || ''', ''zly-adres'', ''G'', null, null, null, ''nl'', ''idem-ga-bad1'', repeat(''n'',32), repeat(''c'',64))',
+  'VALIDATION_FAILED', 'GA98-2e niepoprawny e-mail → VALIDATION_FAILED');
+reset role;
+select pg_temp.assert(:'gareq3' = :'gareq'
+  and (select count(*) from public.guest_application_requests where job_id = :'GAJ') = 1
+  and (select count(*) from public.email_deliveries where template = 'guestApplicationConfirm' and entity_id = :'gareq') = 2,
+  'GA98-2f jedno oczekujące zgłoszenie na (oferta, e-mail); nowy link wysłany');
+
+-- GA98-3: niepotwierdzony adres NIE trafia do firmy.
+select pg_temp.assert(
+  not exists (select 1 from public.applications where job_id = :'GAJ')
+  and not exists (select 1 from public.notifications where profile_id = :'GAO')
+  and not exists (select 1 from public.email_deliveries where profile_id = :'GAO' and template = 'newApplication'),
+  'GA98-3 przed potwierdzeniem: brak aplikacji, powiadomienia i e-maila do firmy');
+set role authenticated; set app.current_uid = :'GAO'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.applications where job_id = :'GAJ') = 0,
+  'GA98-3b firma nie widzi niepotwierdzonego zgłoszenia');
+reset role; reset app.current_uid;
+
+-- GA98-4: potwierdzenie — stary token nieważny, nowy tworzy aplikację gościa.
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-1'::bytea), 'hex'),
+     'nonce-claim-ga-00001', encode(sha256('claim-ga-x'::bytea), 'hex'))) = 'invalid',
+  'GA98-4 zastąpiony token → invalid');
+select pg_temp.assert(
+  (select outcome = 'confirmed' and locale = 'nl' and job_slug = 'ga-job'
+     from public.confirm_guest_application(encode(sha256('tok-ga-2'::bytea), 'hex'),
+       'nonce-claim-ga-00001', encode(sha256('claim-ga-1'::bytea), 'hex'))),
+  'GA98-4b poprawny token → confirmed');
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-2'::bytea), 'hex'),
+     'nonce-claim-ga-00002', encode(sha256('claim-ga-2'::bytea), 'hex'))) = 'already_confirmed',
+  'GA98-4c ponowne kliknięcie → already_confirmed');
+reset role;
+select id as gaapp from public.applications where job_id = :'GAJ' \gset
+select pg_temp.assert(
+  (select count(*) from public.applications where job_id = :'GAJ') = 1
+  and (select candidate_id is null and guest_email = 'ga-guest@test.be' and guest_name = 'Gosia Gość'
+              and phone = '+32470123456' and status = 'submitted' and company_id = :'GAC'
+              and guest_request_id = :'gareq'
+         from public.applications where id = :'gaapp')
+  and (select phone is null and message is null and status = 'confirmed' and application_id = :'gaapp'
+              and claim_token_hash = encode(sha256('claim-ga-1'::bytea), 'hex')
+         from public.guest_application_requests where id = :'gareq'),
+  'GA98-4d jedna aplikacja gościa ze snapshotem; zgłoszenie bez telefonu/wiadomości');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'GAO' and entity_id = :'gaapp') = 1
+  and (select locale from public.email_deliveries where profile_id = :'GAO' and template = 'newApplication'
+         and entity_id = :'gaapp') = 'fr'
+  and (select count(*) from public.email_deliveries where template = 'guestApplicationSent' and entity_id = :'gareq') = 1
+  and (select locale from public.email_deliveries where template = 'guestApplicationSent' and entity_id = :'gareq') = 'nl',
+  'GA98-4e firma: powiadomienie + newApplication (fr, odbiorca); gość: guestApplicationSent (nl)');
+
+-- GA98-5: firma widzi jak zwykłą aplikację; cudza firma i obcy kandydat nie widzą.
+set role authenticated; set app.current_uid = :'GAO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select guest_name from public.applications where id = :'gaapp') = 'Gosia Gość',
+  'GA98-5 firma widzi aplikację gościa z oznaczeniem (guest_name)');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'GAB'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.applications where id = :'gaapp') = 0,
+  'GA98-5b cudza firma nie widzi aplikacji gościa');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'GAX'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.applications where id = :'gaapp') = 0,
+  'GA98-5c obcy kandydat nie widzi aplikacji gościa');
+
+-- GA98-7: bezpośredni DML odrzucony (aplikacje i zgłoszenia).
+select pg_temp.expect_error(
+  'insert into public.applications(job_id, guest_name, guest_email) values (''' || :'GAJ3' || ''', ''X'', ''x@y.be'')',
+  'permission denied', 'GA98-7 bezpośredni INSERT aplikacji gościa odrzucony');
+select pg_temp.expect_error(
+  'update public.applications set candidate_id = auth.uid() where id = ''' || :'gaapp' || '''',
+  'permission denied', 'GA98-7b bezpośrednie przejęcie (UPDATE) odrzucone');
+select pg_temp.expect_error(
+  'insert into public.guest_application_requests(job_id) values (''' || :'GAJ3' || ''')',
+  'permission denied', 'GA98-7c bezpośredni INSERT zgłoszenia odrzucony');
+reset role; reset app.current_uid;
+-- Trigger integralności (defense-in-depth): zmiana kandydata poza claim_guest_application.
+set app.current_uid = :'GAX';
+select pg_temp.expect_error(
+  'update public.applications set candidate_id = ''' || :'GAX' || ''' where id = ''' || :'gaapp' || '''',
+  'PERMISSION_DENIED', 'GA98-7d trigger blokuje zmianę kandydata bez przejęcia');
+select pg_temp.expect_error(
+  'update public.applications set guest_email = ''inny@test.be'' where id = ''' || :'gaapp' || '''',
+  'PERMISSION_DENIED', 'GA98-7e snapshot gościa niezmienny');
+reset app.current_uid;
+
+-- GA98-8: zmiana statusu przez firmę — historia jest, brak powiadomienia bez odbiorcy.
+set role authenticated; set app.current_uid = :'GAO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gaapp', 'viewed');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.applications where id = :'gaapp') = 'viewed'
+  and (select count(*) from public.application_status_history where application_id = :'gaapp' and to_status = 'viewed') = 1
+  and not exists (select 1 from public.email_deliveries where entity_id = :'gaapp'
+                    and template in ('applicationViewed', 'statusChanged')),
+  'GA98-8 status gościa zmieniony, historia zapisana, bez e-maila do kandydata');
+
+-- GA98-9: rozmowa wymaga konta kandydata.
+set role authenticated; set app.current_uid = :'GAO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.get_or_create_conversation(''' || :'gaapp' || ''', null)',
+  'GUEST_APPLICATION', 'GA98-9 rozmowa z aplikacji gościa → kontrolowany błąd');
+reset role; reset app.current_uid;
+
+-- GA98-6: duplikat (ten sam adres, ta sama oferta) i wygasły link.
+set role service_role;
+select public.submit_guest_application(:'GAJ', 'ga-guest@test.be', 'Gosia', null, null, null, 'pl',
+  'idem-ga-0003', 'nonce-ga-0003-aaaaaaaa', encode(sha256('tok-ga-3'::bytea), 'hex')) as gadup \gset
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-3'::bytea), 'hex'),
+     'nonce-claim-ga-00003', encode(sha256('claim-ga-3'::bytea), 'hex'))) = 'duplicate',
+  'GA98-6 drugi raz na tę samą ofertę → duplicate');
+select public.submit_guest_application(:'GAJ2', 'late@test.be', 'Late L', null, null, null, 'fr',
+  'idem-ga-0004', 'nonce-ga-0004-aaaaaaaa', encode(sha256('tok-ga-4'::bytea), 'hex')) as galate \gset
+reset role;
+update public.guest_application_requests set confirm_expires_at = now() - interval '1 minute' where id = :'galate';
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-4'::bytea), 'hex'),
+     'nonce-claim-ga-00004', encode(sha256('claim-ga-4'::bytea), 'hex'))) = 'expired',
+  'GA98-6b wygasły link → expired');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.applications where job_id = :'GAJ') = 1
+  and not exists (select 1 from public.applications where job_id = :'GAJ2'),
+  'GA98-6c duplikat i wygasły link nie tworzą aplikacji');
+-- Adres, który aplikował z konta (GAX), jako gość na tę samą ofertę → duplicate.
+set role authenticated; set app.current_uid = :'GAX'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'GAJ3', 'idem-ga-gax-3');
+reset role; reset app.current_uid;
+set role service_role;
+select public.submit_guest_application(:'GAJ3', 'gax@test.be', 'Xavier', null, null, null, 'en',
+  'idem-ga-0005', 'nonce-ga-0005-aaaaaaaa', encode(sha256('tok-ga-5'::bytea), 'hex')) as gaacct \gset
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-5'::bytea), 'hex'),
+     'nonce-claim-ga-00005', encode(sha256('claim-ga-5'::bytea), 'hex'))) = 'duplicate',
+  'GA98-6d adres z kontem, które już aplikowało → duplicate');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.applications where job_id = :'GAJ3') = 1
+  and (select guest_email is null and candidate_id = :'GAX' from public.applications where job_id = :'GAJ3'),
+  'GA98-6e zwykła aplikacja z konta bez pól gościa (ścieżka zalogowanego bez regresji)');
+
+-- GA98-10: przejęcie — obca sesja, niezweryfikowany adres, właściciel adresu, ponowienie.
+set role authenticated; set app.current_uid = :'GAX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.claim_guest_application(''' || encode(sha256('claim-ga-1'::bytea), 'hex') || ''')',
+  'NOT_FOUND', 'GA98-10 obca sesja (inny adres) nie przejmie aplikacji');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'GAR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.claim_guest_application(''' || encode(sha256('claim-ga-1'::bytea), 'hex') || ''')',
+  'EMAIL_NOT_VERIFIED', 'GA98-10b niezweryfikowany adres nie przejmie aplikacji');
+select pg_temp.expect_error(
+  'select public.claim_guest_application(''' || encode(sha256('tok-ga-2'::bytea), 'hex') || ''')',
+  'EMAIL_NOT_VERIFIED', 'GA98-10c token potwierdzenia nie jest tokenem przejęcia (najpierw weryfikacja)');
+reset role; reset app.current_uid;
+update auth.users set email_verified = true where id = :'GAR';
+set role authenticated; set app.current_uid = :'GAR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.claim_guest_application(''' || encode(sha256('tok-ga-2'::bytea), 'hex') || ''')',
+  'NOT_FOUND', 'GA98-10d token potwierdzenia nie przejmuje aplikacji');
+select public.claim_guest_application(encode(sha256('claim-ga-1'::bytea), 'hex')) as gaclaim \gset
+select public.claim_guest_application(encode(sha256('claim-ga-1'::bytea), 'hex')) as gaclaim2 \gset
+select pg_temp.assert(:'gaclaim' = :'gaapp' and :'gaclaim2' = :'gaapp',
+  'GA98-10e właściciel adresu przejmuje; ponowienie zwraca tę samą aplikację');
+select pg_temp.assert(
+  (select count(*) from public.applications where candidate_id = :'GAR') = 1
+  and (select status::text from public.applications where id = :'gaapp') = 'viewed',
+  'GA98-10f kandydat widzi przejętą aplikację ze statusem');
+select pg_temp.assert(
+  (select count(*) from public.application_status_history where application_id = :'gaapp') >= 1,
+  'GA98-10g historia statusów zachowana i widoczna dla kandydata');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select candidate_id = :'GAR' and claimed_at is not null and guest_email = 'ga-guest@test.be'
+     from public.applications where id = :'gaapp')
+  and not exists (select 1 from public.candidate_profiles where profile_id = :'GAR' and is_searchable)
+  and exists (select 1 from public.audit_logs where action = 'application.guest_claimed' and entity_id = :'gaapp'),
+  'GA98-10h przypisanie z audytem; profil nie publikowany automatycznie');
+set role authenticated; set app.current_uid = :'GAX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.claim_guest_application(''' || encode(sha256('claim-ga-1'::bytea), 'hex') || ''')',
+  'NOT_FOUND', 'GA98-10i token już użyty — inne konto nie przejmie');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'GAO'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.applications where id = :'gaapp') = 1,
+  'GA98-10j firma nadal widzi aplikację po przejęciu');
+select pg_temp.expect_error(
+  'select public.claim_guest_application(''' || encode(sha256('claim-ga-1'::bytea), 'hex') || ''')',
+  'PERMISSION_DENIED', 'GA98-10k konto pracodawcy nie przejmuje aplikacji');
+reset role; reset app.current_uid;
+
+-- GA98-11: wygasły token przejęcia.
+set role service_role;
+select public.submit_guest_application(:'GAJ2', 'gax@test.be', 'Xavier', null, null, null, 'en',
+  'idem-ga-0006', 'nonce-ga-0006-aaaaaaaa', encode(sha256('tok-ga-6'::bytea), 'hex')) as gaexp \gset
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-6'::bytea), 'hex'),
+     'nonce-claim-ga-00006', encode(sha256('claim-ga-6'::bytea), 'hex'))) = 'confirmed',
+  'GA98-11 potwierdzenie drugiego zgłoszenia');
+reset role;
+update public.guest_application_requests set claim_expires_at = now() - interval '1 minute' where id = :'gaexp';
+set role authenticated; set app.current_uid = :'GAX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.claim_guest_application(''' || encode(sha256('claim-ga-6'::bytea), 'hex') || ''')',
+  'CLAIM_EXPIRED', 'GA98-11b wygasły token przejęcia');
+reset role; reset app.current_uid;
+
+-- GA98-12: retencja — niepotwierdzone 7 dni po ostatnim linku i duplikaty 7 dni po
+-- potwierdzeniu usunięte razem z e-mailami; potwierdzone zostają, wygasły token przejęcia
+-- jest zerowany. Kontrola ujemna: stare created_at z ŚWIEŻYM linkiem (ponowne wysłanie)
+-- nie jest usuwane.
+set role service_role;
+select public.submit_guest_application(:'GAJ3', 'fresh@test.be', 'Fresh F', null, null, null, 'pl',
+  'idem-ga-0007', 'nonce-ga-0007-aaaaaaaa', encode(sha256('tok-ga-7'::bytea), 'hex')) as gafresh \gset
+reset role;
+update public.guest_application_requests
+   set confirm_expires_at = now() - interval '6 days', created_at = now() - interval '8 days'
+ where id = :'galate';
+update public.guest_application_requests
+   set confirmed_at = now() - interval '8 days', created_at = now() - interval '8 days'
+ where id = :'gadup';
+update public.guest_application_requests set created_at = now() - interval '30 days' where id = :'gafresh';
+set role service_role;
+select public.purge_guest_application_requests() as gapurged \gset
+reset role;
+select pg_temp.assert(:'gapurged'::int = 2
+  and not exists (select 1 from public.guest_application_requests where id in (:'galate', :'gadup'))
+  and not exists (select 1 from public.email_deliveries
+                    where entity_type = 'guest_application_request' and entity_id in (:'galate', :'gadup'))
+  and exists (select 1 from public.guest_application_requests where id = :'gareq')
+  and exists (select 1 from public.guest_application_requests where id = :'gaacct')
+  and exists (select 1 from public.guest_application_requests where id = :'gafresh')
+  and (select claim_token_hash is null from public.guest_application_requests where id = :'gaexp')
+  and (select claim_token_hash is not null from public.guest_application_requests where id = :'gareq'),
+  'GA98-12 retencja: stare niepotwierdzone usunięte z e-mailami, świeże i potwierdzone zostają');
+
+-- GA98-13: pytania screeningowe (#101) także dla gościa — te same reguły co apply_to_job,
+-- odpowiedzi trafiają do application_screening_answers dopiero po potwierdzeniu.
+\set GAJ4 'e9800000-0000-0000-0000-0000000000d4'
+reset role; reset app.current_uid;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'GAJ4', :'GAC', :'GAO', 'draft-ga98-sq', 'Kierowca GA SQ', 'transport', 'permanent', 'Gent', 'Flandria', 'draft', 'pl');
+set role authenticated; set app.current_uid = :'GAO'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'GAJ4'::uuid, $j${
+  "screening_questions": [
+    {"type": "yes_no", "required": true, "prompt": {"pl": "Masz prawo jazdy C?"}},
+    {"type": "short_text", "required": false, "prompt": {"pl": "Doświadczenie?"}}
+  ]
+}$j$::jsonb);
+reset role; reset app.current_uid;
+update public.jobs set status = 'active', published_at = now(), slug = 'ga98-sq' where id = :'GAJ4';
+select id as gaq1 from public.job_screening_questions where job_id = :'GAJ4' and position = 0 \gset
+select id as gaq2 from public.job_screening_questions where job_id = :'GAJ4' and position = 1 \gset
+set role service_role;
+select pg_temp.expect_error(
+  'select public.submit_guest_application(''' || :'GAJ4' || ''', ''sq@test.be'', ''Sq'', null, null, null, ''pl'', ''idem-ga-sq-1'', ''nonce-ga-sq-1-aaaaaaaa'', ''' || encode(sha256('tok-ga-sq-0'::bytea), 'hex') || ''')',
+  'SCREENING_ANSWER_REQUIRED: ' || :'gaq1', 'GA98-13 gość bez odpowiedzi na pytanie wymagane → odrzucony');
+select pg_temp.expect_error(
+  'select public.submit_guest_application(''' || :'GAJ4' || ''', ''sq@test.be'', ''Sq'', null, null, null, ''pl'', ''idem-ga-sq-2'', ''nonce-ga-sq-2-aaaaaaaa'', ''' || encode(sha256('tok-ga-sq-00'::bytea), 'hex') || ''', null, null, ''{"' || :'gaq1' || '": "tak"}''::jsonb)',
+  'VALIDATION_FAILED', 'GA98-13b zły typ odpowiedzi → VALIDATION_FAILED');
+select public.submit_guest_application(:'GAJ4', 'sq@test.be', 'Sq Gość', null, null, null, 'pl',
+  'idem-ga-sq-3', 'nonce-ga-sq-3-aaaaaaaa', encode(sha256('tok-ga-sq-3'::bytea), 'hex'), null, null,
+  jsonb_build_object(:'gaq1', true, :'gaq2', '  3 lata  ')) as gasq \gset
+reset role;
+select pg_temp.assert(
+  (select screening_answers ? :'gaq1' from public.guest_application_requests where id = :'gasq')
+  and not exists (select 1 from public.guest_application_requests where job_id = :'GAJ4'
+                    and idempotency_key in ('idem-ga-sq-1', 'idem-ga-sq-2'))
+  and not exists (select 1 from public.applications where job_id = :'GAJ4'),
+  'GA98-13c odpowiedzi zapisane w zgłoszeniu; odrzucone próby nie zostawiły zgłoszeń ani aplikacji');
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-sq-3'::bytea), 'hex'),
+     'nonce-claim-ga-sq-01', encode(sha256('claim-ga-sq'::bytea), 'hex'))) = 'confirmed',
+  'GA98-13d potwierdzenie zgłoszenia z odpowiedziami');
+reset role;
+select id as gasqapp from public.applications where job_id = :'GAJ4' \gset
+select pg_temp.assert(
+  (select count(*) from public.application_screening_answers where application_id = :'gasqapp') = 2
+  and (select answer_boolean from public.application_screening_answers
+         where application_id = :'gasqapp' and position = 0)
+  and (select answer_text from public.application_screening_answers
+         where application_id = :'gasqapp' and position = 1) = '3 lata'
+  and (select screening_answers is null from public.guest_application_requests where id = :'gasq'),
+  'GA98-13e odpowiedzi w snapshotcie aplikacji; w zgłoszeniu wyzerowane');
+set role authenticated; set app.current_uid = :'GAO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.application_screening_answers where application_id = :'gasqapp') = 2,
+  'GA98-13f firma czyta odpowiedzi gościa pod RLS');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

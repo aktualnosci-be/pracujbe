@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { loginHref, registerHref } from '@/lib/auth/next-path';
 import { reportApplyStarted } from '@/lib/job-funnel/client';
 import { usePublicViewerStatus } from '@/components/public/PublicSavedJobs';
+import { GuestApplyForm } from '@/components/public/GuestApplyForm';
 import {
   APPLY_AVAILABILITY_OPTIONS,
   APPLY_AVAILABILITY_TO_DB,
@@ -52,9 +53,9 @@ import { Toast } from '@/components/ui/toast';
  * Sukces (potwierdzenie + zamknięcie) pokazujemy DOPIERO po `res.ok`. Błędy z warstwy domenowej
  * mapujemy na komunikat i18n (bez technikaliów — Invariant #8): brak logowania → link do logowania.
  *
- * Gość (#303): gdy odczyt sesji strony (`PublicSavedJobsProvider`) mówi „anonymous”, modal nie
- * pokazuje formularza, tylko od razu wybór „załóż profil / zaloguj się” z bezpiecznym powrotem
- * na tę ofertę (`?next=`). Nic nie jest wpisywane, więc nic nie przepada przy przejściu.
+ * Gość (#303, #98): gdy odczyt sesji strony (`PublicSavedJobsProvider`) mówi „anonymous”, modal
+ * pokazuje jednorazową aplikację bez konta (`GuestApplyForm`, potwierdzenie e-mailem), a pod nią
+ * wybór „załóż profil / zaloguj się” z bezpiecznym powrotem na tę ofertę (`?next=`).
  * Poza providerem albo gdy sesja wygaśnie w trakcie, zostaje dotychczasowy link po wysłaniu.
  *
  * Błąd sieci (#360): wyjątek z wywołania akcji (utrata połączenia, 413/5xx przed akcją) nie
@@ -134,6 +135,7 @@ export function ApplyModal({
   const t = useTranslations('apply');
   const tCommon = useTranslations('common');
   const tErrors = useTranslations('errors');
+  const tGuest = useTranslations('guestApply');
   const viewer = usePublicViewerStatus();
   const isGuest = viewer === 'anonymous';
   // Pełna ścieżka z prefiksem języka — po zalogowaniu wracamy na tę ofertę.
@@ -342,7 +344,7 @@ export function ApplyModal({
                 {demo ? t('demoJobTitle') : t('title')}
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-muted-foreground">
-                {demo ? t('demoJobBody') : isGuest ? t('guestSubtitle') : t('subtitle')}
+                {demo ? t('demoJobBody') : isGuest ? tGuest('subtitle') : t('subtitle')}
               </Dialog.Description>
             </div>
             <Dialog.Close
@@ -358,6 +360,18 @@ export function ApplyModal({
               {tCommon('loading')}
             </p>
           ) : isGuest ? (
+            <div className="space-y-5">
+            {formReady ? (
+              <GuestApplyForm
+                jobId={jobId}
+                companyName={companyName}
+                screeningQuestions={screeningQuestions}
+                contentLocale={contentLocale}
+              />
+            ) : null}
+            <p className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+              {tGuest('orAccount')}
+            </p>
             <div className="space-y-3" data-testid="apply-guest">
               <Link
                 href={registerHref(pathname)}
@@ -374,6 +388,7 @@ export function ApplyModal({
                 {t('guestLogin')}
               </Link>
               <p className="text-center text-sm text-muted-foreground">{t('guestReturn')}</p>
+            </div>
             </div>
           ) : (
             <>

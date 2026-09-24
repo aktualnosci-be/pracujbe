@@ -211,6 +211,9 @@ export default async function EmployerDashboardPage({
                         {application.candidateName || td('candidateFallback')}
                       </p>
                       <p className="truncate text-sm text-muted-foreground">{application.jobTitle}</p>
+                      {application.isGuest ? (
+                        <p className="mt-1 inline-flex rounded-full bg-soft px-2 py-0.5 text-xs font-semibold text-foreground">{td('employerApplicationGuestBadge')}</p>
+                      ) : null}
                     </div>
                     <StatusPill status={application.status} />
                     <Link
