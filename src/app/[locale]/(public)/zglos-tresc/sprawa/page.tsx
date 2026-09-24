@@ -25,7 +25,7 @@ export default async function ReportCasePage({ params }: { params: Promise<{ loc
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6">
-      <h1 className="text-2xl font-bold text-foreground sm:text-3xl">{t('lookupTitle')}</h1>
+      <h1 className="pp-page-title">{t('lookupTitle')}</h1>
       <p className="mt-3 text-muted-foreground">{t('lookupIntro')}</p>
       <div className="mt-8">
         <ReportCaseLookup />

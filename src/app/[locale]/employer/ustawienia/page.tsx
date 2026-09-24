@@ -4,7 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { loadNotificationPreferences } from '@/lib/data/notification-preferences';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
-import { EYEBROW, H1, INTRO, PAPER } from '@/components/dashboard/panel-styles';
+import { EYEBROW, H1_EXTENDED, INTRO, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
  * Panel pracodawcy — Ustawienia (preferencje powiadomień, Etap 6).
@@ -46,7 +46,7 @@ export default async function EmployerSettingsPage({
     <div className="min-w-0 max-w-3xl space-y-[22px]">
       <header className="min-w-0">
         <p className={EYEBROW}>{tDash('navSettings')}</p>
-        <h1 className={H1}>{t('title')}</h1>
+        <h1 className={H1_EXTENDED}>{t('title')}</h1>
         <p className={INTRO}>{t('subtitle')}</p>
       </header>
 

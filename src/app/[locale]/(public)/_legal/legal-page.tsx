@@ -87,7 +87,7 @@ export async function LegalPage({
   return (
     <div className="container py-12 md:py-16">
       <article className="mx-auto max-w-3xl">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+        <h1 className="pp-page-title">
           {t(titleKey)}
         </h1>
         <p className="mt-4 text-base text-muted-foreground">{t('intro')}</p>

@@ -10,7 +10,7 @@ import { AdminFeedbackProvider } from '@/components/admin/AdminFeedback';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 
 /**
- * AdminShell — chrome panelu administratora. Reużywa `DashboardShell` (granatowy sidebar +
+ * AdminShell — chrome panelu administratora. Reużywa `DashboardShell` (jasny sidebar `.side-item` +
  * topbar), tak jak panele kandydata/pracodawcy, ale z własną nawigacją: Podsumowanie / Firmy
  * / Zgłoszenia / Użytkownicy / Blokady poczty (#44) / Dziennik zdarzeń (#417). Renderowane przez `admin/layout.tsx` (guard + noindex).
  *

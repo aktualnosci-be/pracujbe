@@ -125,3 +125,50 @@ for (const locale of locales) {
     await context.close();
   });
 }
+
+/**
+ * #7 — nagłówek listy = kalka `.p-list-header` + `.people .search` prototypu „Ludzie i praca”:
+ * nadtytuł w kolorze marki, H1 40 px (≤ 600 px: 32 px), jeden kontener wyszukiwarki z promieniem
+ * 17 px, pola bez własnych ramek (fokus = obrys komórki), czerwony przycisk 58 px (≤ 850 px:
+ * pełna szerokość w kolumnie, ≤ 600 px: 48 px — cel dotyku nadal ≥ 48 px).
+ */
+for (const { width, h1, button, columns } of [
+  { width: 1280, h1: 40, button: 58, columns: 3 },
+  { width: 390, h1: 32, button: 48, columns: 1 },
+]) {
+  test(`nagłówek i wyszukiwarka listy w stylu prototypu (${width} px)`, async ({ page }) => {
+    const t = messages("pl");
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/pl/oferty-pracy");
+
+    const heading = page.getByRole("heading", { level: 1, name: t.jobs.pageTitle });
+    const header = page.locator("header", { has: heading });
+    const eyebrow = header.locator(".pp-eyebrow");
+    await expect(eyebrow).toBeVisible();
+    await expect(eyebrow).toHaveCSS("color", "rgb(217, 41, 50)");
+    await expect(eyebrow).toHaveCSS("text-transform", "uppercase");
+    await expect(heading).toHaveCSS("font-size", `${h1}px`);
+    await expect(heading).toHaveCSS("font-weight", "700");
+
+    const search = page.getByRole("search");
+    await expect(search).toHaveCSS("border-top-left-radius", "17px");
+    const keyword = search.getByLabel(t.jobs.keyword, { exact: true });
+    await expect(keyword).toHaveCSS("border-top-width", "0px");
+    const columnCount = await search.evaluate(
+      (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length,
+    );
+    expect(columnCount).toBe(columns);
+
+    const submit = search.getByRole("button", { name: t.jobs.searchJobs, exact: true });
+    await expect(submit).toHaveCSS("background-color", "rgb(217, 41, 50)");
+    expect(Math.round((await submit.boundingBox())?.height ?? 0)).toBeGreaterThanOrEqual(button);
+
+    // Fokus klawiatury: widoczny obrys komórki pola (pole nie ma własnej ramki).
+    await keyword.focus();
+    const cellShadow = await keyword.evaluate(
+      (el) => getComputedStyle(el.closest("label") as Element).boxShadow,
+    );
+    expect(cellShadow).not.toBe("none");
+    await expectNoDocumentOverflow(page);
+  });
+}
