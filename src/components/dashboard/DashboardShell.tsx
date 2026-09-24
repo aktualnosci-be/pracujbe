@@ -361,7 +361,13 @@ export function DashboardShell({
         </header>
 
         {/* Treść */}
-        <main className="min-w-0 flex-1 px-4 py-6 pb-24 lg:px-8 lg:pb-8">{children}</main>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="min-w-0 flex-1 px-4 py-6 pb-24 outline-none lg:px-8 lg:pb-8"
+        >
+          {children}
+        </main>
       </div>
 
       {/* Dolny tab bar — mobile */}

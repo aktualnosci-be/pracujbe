@@ -25,12 +25,18 @@ const JOB_PAGES = [
 ];
 
 describe('chrome stron publicznych nie wymusza renderowania dynamicznego', () => {
-  it('layout (public) ustawia locale i podaje je jawnie do Header/Footer/SkipLink', () => {
+  it('layout (public) ustawia locale i podaje je jawnie do Header/Footer', () => {
     const layout = read(`${PUBLIC}/layout.tsx`);
     expect(layout).toMatch(/setRequestLocale\(locale\)/);
-    for (const component of ['SkipLink', 'Header', 'Footer']) {
+    for (const component of ['Header', 'Footer']) {
       expect(layout).toContain(`<${component} locale={locale} />`);
     }
+  });
+
+  it('layout [locale] podaje locale jawnie do SkipLink (przed banerem zgód, #389)', () => {
+    const layout = read('src/app/[locale]/layout.tsx');
+    expect(layout).toMatch(/setRequestLocale\(locale\)/);
+    expect(layout).toContain('<SkipLink locale={locale} />');
   });
 
   for (const file of ['Header', 'Footer', 'SkipLink']) {
@@ -45,6 +51,8 @@ describe('chrome stron publicznych nie wymusza renderowania dynamicznego', () =>
 
   it('strony publiczne i chrome nie czytają cookies/nagłówków żądania', () => {
     const files = [
+      'src/app/[locale]/layout.tsx',
+      'src/components/cookies/CookieConsent.tsx',
       `${PUBLIC}/layout.tsx`,
       ...JOB_PAGES,
       'src/components/layout/Header.tsx',

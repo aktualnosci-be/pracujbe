@@ -22,6 +22,8 @@ function client(error: unknown = null) {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
     },
     from: vi.fn().mockReturnValue(query),
+    // Najlepsze dopasowanie na kandydata liczy RPC (#141, 0079).
+    rpc: vi.fn().mockResolvedValue({ data: [], error }),
   };
   vi.mocked(createServerClient).mockResolvedValue(supabase as never);
   return { supabase, query };
@@ -84,11 +86,15 @@ describe("employer candidates read", () => {
     expect(captureError).not.toHaveBeenCalled();
   });
 
-  it.each(["matches", "candidate_profiles", "profiles"])(
+  it.each(["get_company_top_matches", "candidate_profiles", "profiles"])(
     "propagates %s query errors instead of rendering an empty state",
     async (failedTable) => {
       const error = { message: `${failedTable} unavailable` };
       const { supabase } = client();
+      supabase.rpc.mockResolvedValue({
+        data: [{ candidate_id: "candidate-1", job_id: "job-1", score: 92 }],
+        error: failedTable === "get_company_top_matches" ? error : null,
+      });
       const rows: Record<string, unknown[]> = {
         jobs: [{ id: "job-1" }],
         matches: [{ candidate_id: "candidate-1", job_id: "job-1", score: 92 }],
@@ -137,6 +143,38 @@ describe("employer candidates read", () => {
     });
     expect(await getTopMatchedCandidates({ throwOnError: true })).toEqual([]);
     expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it("asks the database for five distinct candidates of the active company (#141)", async () => {
+    const { supabase } = client();
+    // RPC zwraca już zwycięzców na kandydata; loader zachowuje kolejność i job_id dopasowania.
+    const winners = ["A", "B", "C", "D", "E"].map((c, i) => ({
+      candidate_id: `candidate-${c}`,
+      job_id: `job-${c}`,
+      score: 100 - i,
+    }));
+    supabase.rpc.mockResolvedValue({ data: winners, error: null });
+    supabase.from.mockImplementation(() => {
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        then: (resolve: (value: { data: unknown[]; error: null }) => void) =>
+          Promise.resolve({ data: [], error: null }).then(resolve),
+      };
+      return query;
+    });
+
+    const result = await getTopMatchedCandidates({ throwOnError: true });
+    expect(supabase.rpc).toHaveBeenCalledWith("get_company_top_matches", {
+      p_company_id: "company-1",
+      p_limit: 5,
+    });
+    expect(result.map((c) => [c.candidateId, c.jobId])).toEqual(
+      winners.map((w) => [w.candidate_id, w.job_id]),
+    );
   });
 
   it("returns the target job title and the active offer state from the database (#327)", async () => {
@@ -149,12 +187,6 @@ describe("employer candidates read", () => {
           return columns.includes("title")
             ? [{ id: "job-1", title: "Operator wózka", slug: "operator-wozka" }]
             : [{ id: "job-1" }];
-        }
-        if (table === "matches") {
-          return [
-            { candidate_id: "candidate-1", job_id: "job-1", score: 92 },
-            { candidate_id: "candidate-2", job_id: "job-1", score: 80 },
-          ];
         }
         if (table === "offers") {
           return [{ candidate_id: "candidate-1", job_id: "job-1", sent_at: "2026-09-20T10:00:00Z" }];
@@ -180,6 +212,13 @@ describe("employer candidates read", () => {
       return query;
     });
 
+    supabase.rpc.mockResolvedValue({
+      data: [
+        { candidate_id: "candidate-1", job_id: "job-1", score: 92 },
+        { candidate_id: "candidate-2", job_id: "job-1", score: 80 },
+      ],
+      error: null,
+    });
     const result = await getTopMatchedCandidates({ throwOnError: true });
     expect(result.map((c) => [c.candidateId, c.jobTitle, c.jobSlug, c.offerSentAt])).toEqual([
       ["candidate-1", "Operator wózka", "operator-wozka", "2026-09-20T10:00:00Z"],

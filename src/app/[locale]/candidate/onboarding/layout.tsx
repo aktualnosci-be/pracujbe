@@ -52,7 +52,13 @@ export default async function OnboardingLayout({
           <Logo />
         </Link>
       </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 lg:px-8 lg:py-10">{children}</main>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 outline-none lg:px-8 lg:py-10"
+      >
+        {children}
+      </main>
     </div>
   );
 }

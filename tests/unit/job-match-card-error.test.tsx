@@ -76,6 +76,18 @@ for (const [locale, messages] of Object.entries({ pl, nl, fr, en })) {
       expect(screen.getByText(unknown)).toBeTruthy();
     });
 
+    it('wygasły wymagany certyfikat opisany jako wygasły, nie jako brak (#96)', async () => {
+      const expired = scoreMatch(
+        { occupations: [], categories: [], skills: [], languages: [], certificates: [{ label: 'VCA', expiresAt: '2026-09-23' }], preferredContractTypes: [] },
+        { skills: [], requiredLanguages: [], requiredCertificates: ['VCA'] },
+        { today: '2026-09-24' },
+      );
+      vi.mocked(getMyJobMatchAction).mockResolvedValue({ status: 'ok', result: expired });
+      view();
+      expect(await screen.findByText(messages.match.certificateExpired.replace('{certificate}', 'VCA'))).toBeTruthy();
+      expect(screen.queryByText('VCA')).toBeNull();
+    });
+
     it('none (anonim/brak profilu): nic nie renderuje', async () => {
       vi.mocked(getMyJobMatchAction).mockResolvedValue({ status: 'none' });
       const { container } = view();

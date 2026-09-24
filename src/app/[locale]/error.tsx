@@ -30,7 +30,11 @@ export default function LocaleError({
   }, [error]);
 
   return (
-    <main className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-4 py-16 text-center">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-4 py-16 text-center outline-none"
+    >
       <h1 className="max-w-md text-balance text-2xl font-semibold text-foreground">
         {t('internal')}
       </h1>

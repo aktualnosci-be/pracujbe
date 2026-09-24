@@ -12,7 +12,7 @@ const viewports = [
 type Locale = (typeof locales)[number];
 
 type Messages = {
-  common: { appName: string; cancel: string };
+  common: { appName: string; cancel: string; skipToContent: string };
   dashboard: {
     addJob: string;
     navSummary: string;
@@ -189,6 +189,11 @@ for (const locale of locales) {
         await page.evaluate(() =>
           (document.activeElement as HTMLElement)?.blur(),
         );
+        // Pierwszy przystanek: „Przejdź do treści” (#389 — renderuje go [locale]/layout).
+        await page.keyboard.press("Tab");
+        await expect(
+          page.getByRole("link", { name: t.common.skipToContent, exact: true }),
+        ).toBeFocused();
         await page.keyboard.press("Tab");
         await expect(menuTrigger).toBeFocused();
 
