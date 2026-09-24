@@ -29,6 +29,9 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 - [ ] `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `EMAIL_QUEUE_SECRET`,
       `SENTRY_AUTH_TOKEN` jako **sekrety** (nie `NEXT_PUBLIC_*`).
 - [ ] Użyte są wyłącznie produkcyjne klucze i sekrety.
+- [ ] Turnstile (#46): `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (dostępny przy buildzie) i sekret
+      `TURNSTILE_SECRET_KEY`. Bez nich w produkcji rejestracja i reset hasła są odrzucane —
+      patrz [`TURNSTILE.md`](./TURNSTILE.md).
 - [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` zgodny z aktualną polityką.
 
 ## 3. Baza danych (Supabase produkcja)
@@ -111,7 +114,7 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 
 ## 11. CI/CD
 
-- [ ] `ci.yml` zielony na `main` (lint/typecheck/unit/e2e/build) na self-hosted runnerach.
+- [ ] `ci.yml` zielony na `main` (lint/typecheck/unit/migrations/sca/rls/build/e2e) na `ubuntu-latest`.
 - [ ] Railway śledzi `main`, a `Wait for CI` jest włączone.
 - [ ] Udane CI i wdrożenie Railway wskazują ten sam SHA.
 
@@ -161,6 +164,26 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 
 ---
 
+## 15. Odbiór wersji 1.0.0
+
+Wykonaj na końcu, po sekcjach 1–14. Kryteria, blokery i kroki opisuje
+[`RELEASE_1_0.md`](./RELEASE_1_0.md). Do tego czasu build zostaje w trybie
+automatycznym `0.YYYYMMDD.M+SHA`.
+
+- [ ] Wszystkie blokery z `RELEASE_1_0.md` §2 zamknięte albo jawnie odłożone przez
+      właściciela w decyzji poniżej.
+- [ ] **Decyzja właściciela** o wydaniu 1.0.0 zapisana (link do komentarza w issue
+      albo `docs/railway/DECYZJE.md`): …
+- [ ] **Zielone CI** dla wydawanego commita na `main` (link do przebiegu): …
+- [ ] **Wdrożony SHA** w Railway `production` = SHA z zielonego CI (link do
+      wdrożenia): …
+- [ ] `PRACUJBE_RELEASE_VERSION=1.0.0` ustawione w Railway, build zakończony,
+      stopka pokazuje `v1.0.0+<pierwsze 8 znaków SHA>`.
+- [ ] Adnotowany tag `v1.0.0` na tym SHA wypchnięty (link do tagu): …
+- [ ] `CHANGELOG.md` ma sekcję `## [1.0.0] — RRRR-MM-DD`.
+
+---
+
 ## Po starcie (pierwsze 48 h)
 
 - [ ] Monitoruj Sentry i kolejkę e-mail.
@@ -172,7 +195,8 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 
 ## Powiązane
 
-- [`DEPLOYMENT.md`](./DEPLOYMENT.md) · [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md) ·
+- [`DEPLOYMENT.md`](./DEPLOYMENT.md) · [`RELEASE_1_0.md`](./RELEASE_1_0.md) ·
+  [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md) ·
   [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) ·
   [`PERFORMANCE_CHECKLIST.md`](./PERFORMANCE_CHECKLIST.md) ·
   [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) · [`RESEND_SETUP.md`](./RESEND_SETUP.md).

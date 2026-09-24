@@ -2,6 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import { launchChromium } from "./lib/launch-chromium.mjs";
+import { captureStableScreenshot } from "./lib/stable-screenshot.mjs";
 
 const source = resolve("assets/brand/organic/pl/profile-story-1080x1920.svg");
 const output = resolve(
@@ -21,7 +22,11 @@ try {
   await page.setContent(
     `<style>html,body{margin:0;width:1080px;height:1920px;overflow:hidden}</style>${svg}`,
   );
-  await page.screenshot({ animations: "disabled", path: output, type: "png" });
+  await captureStableScreenshot(page, {
+    animations: "disabled",
+    path: output,
+    type: "png",
+  });
   // Wersja przeglądarki: test porównujący PNG bajt w bajt podaje ją w komunikacie (#378).
   console.log(`chromium ${browser.version()}`);
 } finally {

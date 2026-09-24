@@ -47,6 +47,7 @@ const ROUTES = [
   'employer/aplikacje',
   'employer/aplikacje/demo-app-1',
   'employer/firma',
+  'employer/firma/nowa',
   'employer/kandydaci',
   'employer/oferty',
   'employer/oferty/nowa',
@@ -56,6 +57,7 @@ const ROUTES = [
   'employer/ustawienia',
   'employer/wiadomosci',
   'employer/wiadomosci?c=demo-conv-0',
+  'employer/zespol',
 ] as const;
 
 type Copy = {

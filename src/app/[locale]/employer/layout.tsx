@@ -11,6 +11,8 @@ import { createServerClient } from '@/lib/supabase/server';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
 import { getEmployerShellData } from '@/lib/data/employer';
+import { getMyTeamInvitations } from '@/lib/data/team';
+import { getTranslations } from 'next-intl/server';
 import type { CompanySwitcherCompany } from '@/components/employer/CompanySwitcher';
 
 /**
@@ -88,9 +90,25 @@ export default async function EmployerLayout({
         redirect({ href: '/rejestracja-pracodawca', locale: locale as Locale });
       }
       const rawName = (user.user_metadata as Record<string, unknown> | undefined)?.['company_name'];
+      // #403: zaproszenia do zespołów (błąd odczytu nie blokuje zakładania własnej firmy).
+      const mine = await getMyTeamInvitations();
+      const tTeam = await getTranslations({ locale, namespace: 'team' });
+      const dateFmt = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'Europe/Brussels' });
+      const invitations = (mine.status === 'ok' ? mine.invitations : []).map((inv) => {
+        const date = new Date(inv.expiresAt);
+        return {
+          ...inv,
+          expiresLabel: Number.isNaN(date.getTime())
+            ? ''
+            : tTeam('expiresOn', { date: dateFmt.format(date) }),
+        };
+      });
       return (
         <EmployerShell mode="ok">
-          <CompanyOnboarding defaultName={typeof rawName === 'string' ? rawName.trim() : ''} />
+          <CompanyOnboarding
+            defaultName={typeof rawName === 'string' ? rawName.trim() : ''}
+            invitations={invitations}
+          />
         </EmployerShell>
       );
     }

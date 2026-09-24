@@ -9,6 +9,7 @@ import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
 import { ACTIVE_COMPANY_COOKIE, getActiveCompany } from '@/lib/company-context';
+import { mapTeamError, type TeamError } from '@/lib/team/errors';
 
 /** UUID v4 (walidacja identyfikatorów przekazywanych z klienta). */
 const UUID_RE =
@@ -29,6 +30,9 @@ import {
  *   - `updateCompany` — aktualizuje dane firmy aktywnego członkostwa (RLS `companies_update_member`).
  *                        Statusu nie ustawia; zmiana nazwy/VAT zweryfikowanej firmy przywraca
  *                        w bazie status `pending` (trigger `protect_company_verification`, 0072).
+ *   - `createAdditionalCompany` — KOLEJNA firma zalogowanego pracodawcy (#403) — RPC
+ *                        `create_additional_company` (0086: owner, limit 5 firm, audyt,
+ *                        idempotentne dla podwójnego kliknięcia); nowa firma staje się aktywna.
  *   - `requestCompanyReverification` — odrzucona firma wraca do kolejki weryfikacji admina
  *                        (RPC `request_company_reverification`, 0072).
  *
@@ -43,6 +47,8 @@ export type CreateCompanyResult =
 export type UpdateCompanyResult =
   | { ok: true; demo?: boolean; reverificationRequired?: boolean }
   | { ok: false; error: ErrorCode };
+export type AddCompanyResult =
+  { ok: true; id: string; demo?: boolean } | { ok: false; error: TeamError };
 export type ReverificationResult =
   { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
 
@@ -200,6 +206,64 @@ export async function createCompany(
     return { ok: true, id };
   } catch (e) {
     captureError(e, { area: 'company.createCompany' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * createAdditionalCompany
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Zakłada KOLEJNĄ firmę (#403) z użytkownikiem jako ownerem i przełącza na nią panel.
+ * Limit liczby firm i idempotencję egzekwuje baza; tu walidacja + limit per IP.
+ */
+export async function createAdditionalCompany(
+  input: CompanyFormInput,
+): Promise<AddCompanyResult> {
+  const parsed = companyFormSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
+  const v = parsed.data;
+
+  if (!isSupabaseConfigured()) return { ok: true, id: DEMO_COMPANY_ID, demo: true };
+
+  if (
+    !(await checkRateLimit('company-create', {
+      max: CREATE_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    }))
+  ) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const { data, error } = await supabase.rpc('create_additional_company', {
+      p_name: v.name,
+      p_slug: companySlug(v.name),
+      p_vat_number: nullIfEmpty(v.vatNumber),
+    });
+    if (error) return { ok: false, error: mapTeamError(error.message) };
+
+    const row = asRecord(Array.isArray(data) ? data[0] : data);
+    const id = asString(row['company_id']);
+    if (!UUID_RE.test(id)) return { ok: false, error: 'INTERNAL' };
+
+    (await cookies()).set(ACTIVE_COMPANY_COOKIE, id, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+    });
+    revalidatePath('/employer', 'layout');
+    return { ok: true, id };
+  } catch (e) {
+    captureError(e, { area: 'company.createAdditionalCompany' });
     return { ok: false, error: 'INTERNAL' };
   }
 }
