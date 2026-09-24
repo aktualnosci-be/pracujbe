@@ -150,9 +150,9 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'email-notifications': {
     name: 'E-maile i powiadomienia',
-    inCode: 'Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje, wypisanie, blokady adresów po odbiciach/skargach.',
+    inCode: 'Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach.',
     processors: [...HOSTING, 'resend'],
-    retentionInCode: 'email_send_windows czyszczone po 1 dniu; kod nie usuwa email_deliveries (retencja odłożona — CLAUDE.md).',
+    retentionInCode: 'email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md).',
   },
   consents: {
     name: 'Zgody cookies i akceptacja dokumentów',
@@ -587,6 +587,38 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['candidate', 'guest', 'employer', 'reporter', 'invitee'],
     columns: { email: 'contact', reason: 'technical', lifted_by: 'reference', lift_reason: 'moderation' },
   },
+  'public.email_consent_events': {
+    activities: ['email-notifications', 'consents'],
+    subjects: ['candidate', 'employer'],
+    columns: {
+      profile_id: 'reference',
+      category: 'consent',
+      granted: 'consent',
+      source: 'consent',
+      locale: 'preferences',
+      wording_version: 'consent',
+      created_at: 'consent',
+    },
+    note: 'Niezmienny dowód każdej zmiany zgody e-mail (0101), zapisywany triggerem na notification_preferences.',
+  },
+  'public.email_recipient_windows': {
+    activities: ['email-notifications'],
+    subjects: ['candidate', 'employer'],
+    columns: { profile_id: 'reference', used: 'technical', window_start: 'technical' },
+    note: 'Licznik budżetu wysyłki na odbiorcę (0101).',
+  },
+  'public.email_campaign_recipients': {
+    activities: ['email-notifications'],
+    subjects: ['candidate', 'employer'],
+    columns: { profile_id: 'reference', status: 'technical', reason: 'technical', reserved_at: 'technical' },
+    note: 'Rezerwacja odbiorcy kampanii (rewizja + odbiorca), bez treści i adresu e-mail (0101).',
+  },
+  'public.email_campaigns': {
+    activities: ['email-notifications'],
+    subjects: [],
+    columns: {},
+    note: 'Treść i status kampanii (per język) — bez danych odbiorców.',
+  },
   'public.notifications': {
     activities: ['email-notifications'],
     subjects: ['candidate', 'employer'],
@@ -740,4 +772,5 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.consent_versions': DICTIONARY('wersje dokumentów zgód'),
   'public.email_send_budget_config': DICTIONARY('budżet wysyłki e-mail'),
   'public.email_send_windows': DICTIONARY('liczniki okien wysyłki'),
+  'public.email_recipient_budget_config': DICTIONARY('limity wysyłki na odbiorcę'),
 };

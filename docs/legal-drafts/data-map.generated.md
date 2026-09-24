@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 75; z danymi osobowymi: 45; bez danych osobowych: 30.
+Tabele w migracjach: 80; z danymi osobowymi: 48; bez danych osobowych: 32.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -20,8 +20,8 @@ Tabele w migracjach: 75; z danymi osobowymi: 45; bez danych osobowych: 30.
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Supabase, Resend | Kod nie usuwa danych — do ustalenia |
 | Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Supabase, Resend | Propozycje wygasają (expires_at), dane nie są usuwane. |
 | Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs` | Railway, Supabase, Resend, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
-| E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje, wypisanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.email_deliveries`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Supabase, Resend | email_send_windows czyszczone po 1 dniu; kod nie usuwa email_deliveries (retencja odłożona — CLAUDE.md). |
-| Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
+| E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Supabase, Resend | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
+| Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Supabase, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.rate_limits`, `public.system_events` | Railway, Supabase, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Supabase, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
@@ -510,6 +510,37 @@ Tabele w migracjach: 75; z danymi osobowymi: 45; bez danych osobowych: 30.
 | `ip_address` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0054_document_acceptances.sql` |
 | `user_agent` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0054_document_acceptances.sql` |
 
+### `public.email_campaign_recipients`
+
+- **Migracja:** `supabase/migrations/0101_email_consent_campaigns.sql`
+- **Czynności:** E-maile i powiadomienia
+- **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
+- **Uwaga:** Rezerwacja odbiorcy kampanii (rewizja + odbiorca), bez treści i adresu e-mail (0101).
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `status` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `reason` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `reserved_at` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0101_email_consent_campaigns.sql` |
+
+### `public.email_consent_events`
+
+- **Migracja:** `supabase/migrations/0101_email_consent_campaigns.sql`
+- **Czynności:** E-maile i powiadomienia, Zgody cookies i akceptacja dokumentów
+- **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
+- **Uwaga:** Niezmienny dowód każdej zmiany zgody e-mail (0101), zapisywany triggerem na notification_preferences.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `category` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `granted` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `source` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `wording_version` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `created_at` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0101_email_consent_campaigns.sql` |
+
 ### `public.email_deliveries`
 
 - **Migracja:** `supabase/migrations/0006_messaging.sql`
@@ -528,6 +559,19 @@ Tabele w migracjach: 75; z danymi osobowymi: 45; bez danych osobowych: 30.
 | `error_message` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0006_messaging.sql` |
 | `provider_message_id` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0006_messaging.sql` |
 | `bounce_type` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0098_email_delivery_events.sql` |
+
+### `public.email_recipient_windows`
+
+- **Migracja:** `supabase/migrations/0101_email_consent_campaigns.sql`
+- **Czynności:** E-maile i powiadomienia
+- **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
+- **Uwaga:** Licznik budżetu wysyłki na odbiorcę (0101).
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `used` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0101_email_consent_campaigns.sql` |
+| `window_start` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0101_email_consent_campaigns.sql` |
 
 ### `public.email_suppressions`
 
@@ -868,6 +912,8 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `public.consent_versions` | Słownik/konfiguracja (wersje dokumentów zgód) — bez danych osobowych. |
 | `public.discount_codes` | Słownik/konfiguracja (kody rabatowe) — bez danych osobowych. |
 | `public.discount_redemptions` | Martwy schemat billingu. |
+| `public.email_campaigns` | Treść i status kampanii (per język) — bez danych odbiorców. |
+| `public.email_recipient_budget_config` | Słownik/konfiguracja (limity wysyłki na odbiorcę) — bez danych osobowych. |
 | `public.email_send_budget_config` | Słownik/konfiguracja (budżet wysyłki e-mail) — bez danych osobowych. |
 | `public.email_send_windows` | Słownik/konfiguracja (liczniki okien wysyłki) — bez danych osobowych. |
 | `public.esco_snapshots` | Słownik/konfiguracja (metadane importu ESCO) — bez danych osobowych. |
