@@ -516,6 +516,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Strona główna (hero + sekcje) SSR — redesign wg makiety 01
 - [x] Lista ofert + filtry (FilterSidebar/FilterSheet, chipy, sort, paginacja) — wg makiety 02; infinite scroll opcjonalnie później
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
+  Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
+  `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner
+  `DemoJobsNotice`, karty etykietę „przykładowa”, bez odznaki „Zweryfikowana firma”; szczegół demo
+  = noindex, bez JobPosting i „Wyślij wiadomość”, ApplyModal z komunikatem zamiast formularza.
+  Formularz aplikowania i JobPosting testuje serwer fixture (tryb `full` nie oznacza ofert jako demo).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
 - [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
   Dane strukturalne (#313) w `src/lib/seo/structured-data.ts`: JobPosting bez wymyślonego

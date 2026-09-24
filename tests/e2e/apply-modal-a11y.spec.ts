@@ -7,7 +7,9 @@ import { expect, test } from "@playwright/test";
  * - pole kierunkowego i pole numeru mają różne nazwy dostępne,
  * - wymagane pola są oznaczone programowo (aria-required), a gwiazdka nie jest czytana,
  * - po błędzie z serwera fokus trafia na komunikat błędu (nie na kontener dialogu).
- * Tryb demo nie ma bazy, więc wysyłka zawsze kończy się błędem — to stabilny scenariusz błędu.
+ * Serwer fixture (`playwright.applications-fixture.config.ts`) pokazuje formularz dla ofert
+ * fikcyjnych, ale nie ma bazy, więc wysyłka zawsze kończy się błędem — stabilny scenariusz błędu.
+ * (Od #297 zwykły tryb demo pokazuje w tym dialogu komunikat zamiast formularza.)
  */
 
 const locales = ["pl", "nl", "fr", "en"] as const;

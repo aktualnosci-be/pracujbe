@@ -68,6 +68,12 @@ export interface JobListItem {
   accommodation: boolean;
   immediate: boolean;
   noLanguageRequired: boolean;
+  /**
+   * Oferta z zestawu demonstracyjnego (#297, Invariant #12) — fikcyjna firma i treść. UI
+   * oznacza ją jako przykładową, nie pokazuje odznaki weryfikacji, nie emituje JobPosting
+   * i nie pozwala aplikować. Oferty z bazy nigdy nie mają tej flagi.
+   */
+  isDemo?: true;
 }
 
 export interface JobDetail extends JobListItem {
@@ -159,6 +165,27 @@ function toLocale(locale: string): Locale {
  * Ścieżka DEMO (fallback bez bazy)
  * ------------------------------------------------------------------------- */
 
+/**
+ * Serwer fixture E2E (`playwright.applications-fixture.config.ts`, tryb `full`): oferty
+ * fikcyjne zastępują realny backend, więc nie są oznaczane jako demo — tam testujemy
+ * formularz aplikowania i JobPosting. Nie działa w buildzie produkcyjnym.
+ */
+function isRealJobsFixture(): boolean {
+  return process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full';
+}
+
+/**
+ * Czy publiczne strony pokazują zestaw demonstracyjny (brak bazy poza APP_MODE=production).
+ * Strony z ofertami pokazują wtedy baner „dane przykładowe” (#297).
+ */
+export function isShowingDemoJobs(): boolean {
+  return !isDatabaseConfigured() && !isProductionMode() && !isRealJobsFixture();
+}
+
+function markDemo<T extends JobListItem>(job: T): T {
+  return isRealJobsFixture() ? job : { ...job, isDemo: true };
+}
+
 function newestFirst(a: JobListItem, b: JobListItem): number {
   return b.publishedAt.localeCompare(a.publishedAt);
 }
@@ -169,7 +196,7 @@ function getJobsFromDemo(
   page: number,
   pageSize: number,
 ): GetJobsResult {
-  let jobs: JobDetail[] = resolveDemoJobs(locale);
+  let jobs: JobDetail[] = resolveDemoJobs(locale).map(markDemo);
 
   // Kategorie/typy umów: pojedyncze (landing) + tablice (sidebar) połączone (P1-12).
   const categories =
@@ -466,7 +493,8 @@ export async function getJobBySlug(
   }
 
   if (isProductionMode()) throw new AppError('INTERNAL');
-  return resolveDemoJobBySlug(slug, resolvedLocale);
+  const job = resolveDemoJobBySlug(slug, resolvedLocale);
+  return job ? markDemo(job) : null;
 }
 
 /**

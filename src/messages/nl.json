@@ -301,7 +301,10 @@
     "saveUnavailable": "Opslaan is beschikbaar voor kandidaten met een verbonden dienst",
     "saveLoading": "Opgeslagen vacatures laden",
     "saveRetry": "Laden mislukt. Probeer opnieuw",
-    "saveFailed": "Wijziging opslaan mislukt. Probeer opnieuw."
+    "saveFailed": "Wijziging opslaan mislukt. Probeer opnieuw.",
+    "demoNoticeTitle": "Voorbeeldgegevens — deze vacatures zijn niet echt",
+    "demoNoticeBody": "De site draait als demoversie. De vacatures en bedrijven op deze pagina zijn fictief, worden niet geverifieerd en je kunt er niet op solliciteren.",
+    "demoBadge": "Voorbeeldvacature"
   },
   "job": {
     "apply": "Solliciteer op deze functie",
@@ -1066,7 +1069,9 @@
     "guestReturn": "Na het inloggen of het bevestigen van je e-mail kom je terug bij deze vacature.",
     "errorNetwork": "Er kon geen verbinding worden gemaakt met de server. Controleer je internet en probeer opnieuw — je ingevulde gegevens zijn bewaard.",
     "viewApplications": "Bekijk je sollicitaties",
-    "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount."
+    "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount.",
+    "demoJobTitle": "Dit is een voorbeeldvacature",
+    "demoJobBody": "Deze vacature en dit bedrijf zijn fictief en laten alleen zien hoe de site werkt. Je kunt er niet op solliciteren."
   },
   "legal": {
     "termsTitle": "Algemene voorwaarden",

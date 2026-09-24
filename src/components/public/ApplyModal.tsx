@@ -50,6 +50,9 @@ import { Toast } from '@/components/ui/toast';
  * wysyła TEN SAM klucz idempotencji (trzymany w `useRef` na czas otwartego modalu), więc
  * żądanie, które mimo błędu doszło do serwera, nie tworzy drugiej aplikacji (Invariant #4).
  * Ponowna aplikacja na tę samą ofertę (#361) daje „Już aplikowałeś…” z linkiem do historii.
+ *
+ * Oferta demonstracyjna (#297, `demo`): zamiast formularza modal mówi, że oferta i firma są
+ * fikcyjne i nie można na nią aplikować — nikt nie wypełnia danych na próżno.
  */
 
 const MESSAGE_MAX = 500;
@@ -102,6 +105,8 @@ export interface ApplyModalProps {
   triggerVariant?: 'default' | 'outline';
   triggerClassName?: string;
   triggerSize?: 'default' | 'lg';
+  /** Oferta z zestawu demonstracyjnego — modal pokazuje komunikat zamiast formularza. */
+  demo?: boolean;
 }
 
 export function ApplyModal({
@@ -112,6 +117,7 @@ export function ApplyModal({
   triggerVariant = 'default',
   triggerClassName,
   triggerSize = 'lg',
+  demo = false,
 }: ApplyModalProps): React.JSX.Element {
   const t = useTranslations('apply');
   const tCommon = useTranslations('common');
@@ -292,10 +298,10 @@ export function ApplyModal({
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="text-lg font-semibold text-foreground">
-                {t('title')}
+                {demo ? t('demoJobTitle') : t('title')}
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-muted-foreground">
-                {isGuest ? t('guestSubtitle') : t('subtitle')}
+                {demo ? t('demoJobBody') : isGuest ? t('guestSubtitle') : t('subtitle')}
               </Dialog.Description>
             </div>
             <Dialog.Close
@@ -306,7 +312,7 @@ export function ApplyModal({
             </Dialog.Close>
           </div>
 
-          {viewer === 'loading' ? (
+          {demo ? null : viewer === 'loading' ? (
             <p role="status" className="py-6 text-center text-sm text-muted-foreground">
               {tCommon('loading')}
             </p>

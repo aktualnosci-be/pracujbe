@@ -9,7 +9,9 @@ import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { brandShareImageUrl } from '@/lib/seo/structured-data';
-import { getJobs, type CategoryKey } from '@/lib/jobs';
+import { getJobs, isShowingDemoJobs, type CategoryKey } from '@/lib/jobs';
+import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
+
 import { JobCard } from '@/components/public/JobCard';
 
 /**
@@ -181,6 +183,8 @@ export default async function CategoryLandingPage({ params }: PageProps) {
           {tJobs('resultsCount', { count: result.total })}
         </p>
       </header>
+
+      {isShowingDemoJobs() ? <DemoJobsNotice className="mt-6" /> : null}
 
       {/* Lista ofert */}
       <section className="mt-6" aria-labelledby="landing-jobs-heading">

@@ -11,7 +11,15 @@ export default defineConfig({
   testDir: './tests/e2e',
   testMatch: mode === 'error'
     ? ['**/candidate-applications-error.spec.ts', '**/candidate-dashboard-read-errors.spec.ts', '**/public-read-failures.spec.ts']
-    : ['**/candidate-applications-pagination.spec.ts', '**/candidate-proposals-pagination.spec.ts'],
+    : [
+        '**/candidate-applications-pagination.spec.ts',
+        '**/candidate-proposals-pagination.spec.ts',
+        // Oferty fikcyjne bez flagi demo (#297): formularz aplikowania i JobPosting.
+        '**/apply-modal-a11y.spec.ts',
+        '**/apply-network-error.spec.ts',
+        '**/apply-phone-validation.spec.ts',
+        '**/job-posting-fixture.spec.ts',
+      ],
   workers: 1,
   // next dev kompiluje trasę przy pierwszym żądaniu; na zimnym starcie trwa to ponad 30 s.
   timeout: 120_000,

@@ -102,6 +102,11 @@ export async function JobCard({
             {job.title}
           </Link>
         </h3>
+        {job.isDemo ? (
+          <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning-text">
+            {t('demoBadge')}
+          </span>
+        ) : null}
         {job.isNew ? (
           <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent-dark">
             {t('newBadge')}
@@ -110,7 +115,8 @@ export async function JobCard({
       </div>
       <p className="mb-6 mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
         <span>{job.companyName}</span>
-        {job.companyVerified ? (
+        {/* Fikcyjna firma demo nie dostaje odznaki weryfikacji (#297). */}
+        {job.companyVerified && !job.isDemo ? (
           <span className="inline-flex items-center gap-1 text-success-text">
             <BadgeCheck className="h-4 w-4" aria-hidden="true" />
             {tJob('verified')}
