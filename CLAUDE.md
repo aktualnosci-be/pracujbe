@@ -707,6 +707,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i ponowienie tym samym kluczem (#360); `UNAUTHENTICATED` (link logowania) odróżniony od
   `PERMISSION_DENIED` (konto nie-kandydata), własne komunikaty `RATE_LIMITED`/`JOB_NOT_ACTIVE`.
   Dowód: `rls.sql` B3b/B3c, J7d–J7f.
+  Pytania screeningowe (#101, migracja `0094`): recruiter+ ustala w kroku 7 kreatora do 10 pytań
+  (`yes_no`/`single_choice`/`date`/`short_text`, „wymagane”, kolejność, treść w języku oferty +
+  opcjonalne tłumaczenia) — zapis w tej samej transakcji co krok (`save_job_draft` →
+  `set_job_screening_questions`, replace-all), WYŁĄCZNIE w szkicu (RPC + strażnik na tabeli; w
+  edycji opublikowanej oferty tylko podgląd). Kandydat odpowiada w ApplyModal (widzi, że odpowiedzi
+  idą do firmy i nie zmieniają dopasowania ani statusu); `apply_to_job(…, p_answers)` waliduje je
+  w bazie (`SCREENING_ANSWER_REQUIRED: <id>` → błąd przy pytaniu) i zapisuje niezmienny snapshot
+  pytania i odpowiedzi (`application_screening_answers`) w tej samej transakcji; retry z tym samym
+  kluczem nie nadpisuje odpowiedzi. Odczyt odpowiedzi: kandydat i recruiter+ firmy oferty; widok
+  w szczególe zgłoszenia. Bez reguł dyskwalifikujących i bez LLM (osobny etap). Dowód: `rls.sql`
+  sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
+  `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
+  zgłoszeń (RLS gotowe).
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia

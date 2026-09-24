@@ -4,6 +4,8 @@ import {
   contractTypeSchema,
   candidateLanguageSchema,
 } from '@/lib/validation/candidate';
+import { localeSchema } from '@/lib/validation/auth';
+import { refineScreeningPrimaryLocale, screeningQuestionsSchema } from '@/lib/validation/screening';
 
 /**
  * Walidacja kreatora oferty pracy — dziewięć kroków + pełny jobSchema.
@@ -170,8 +172,13 @@ const step7Base = z.object({
     .default([]),
   requiresDrivingLicense: z.boolean().default(false),
   noLanguageRequired: z.boolean().default(false),
+  // #101: pytania screeningowe; `screeningLocale` = język treści oferty (tekst wymagany).
+  screeningQuestions: screeningQuestionsSchema,
+  screeningLocale: localeSchema.optional(),
 });
-export const step7Schema = step7Base;
+export const step7Schema = step7Base.superRefine((data, ctx) =>
+  refineScreeningPrimaryLocale(data.screeningQuestions, data.screeningLocale, ctx),
+);
 
 /** Krok 8 — warunki i benefity. */
 const step8Base = z.object({

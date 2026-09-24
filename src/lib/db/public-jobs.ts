@@ -280,3 +280,21 @@ export async function getPublicJobTranslations(
     return result.rows.filter((row) => isLocale(row.locale));
   });
 }
+
+/**
+ * Pytania screeningowe publicznej oferty (#101) — RPC `get_public_job_screening_questions`
+ * (0094) pod rolą anon zwraca wiersze tylko dla oferty publicznej (`job_is_public`).
+ */
+export async function getPublicJobScreeningQuestions(
+  pool: TransactionPool,
+  jobId: string,
+): Promise<PublicJobRow[]> {
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT id::text AS id, position, type, required, prompt, options
+       FROM public.get_public_job_screening_questions(p_job_id => $1::uuid)`,
+      [jobId],
+    )) as { rows: PublicJobRow[] };
+    return result.rows;
+  });
+}

@@ -386,7 +386,14 @@
       "contactEmailInvalid": "Ongeldig e-mailadres.",
       "publishAgreementRequired": "Bevestig om de vacature te publiceren.",
       "invalid": "Ongeldige waarde.",
-      "itemTooLong": "Een van de items in de lijst is te lang. Maak het korter."
+      "itemTooLong": "Een van de items in de lijst is te lang. Maak het korter.",
+      "screeningTypeInvalid": "Kies een soort antwoord.",
+      "screeningPromptRequired": "Vul de vraag in de taal van de vacature in.",
+      "screeningPromptTooLong": "Een vraag mag maximaal 300 tekens hebben.",
+      "screeningOptionRequired": "Vul het antwoord in de taal van de vacature in.",
+      "screeningOptionTooLong": "Een antwoord mag maximaal 120 tekens hebben.",
+      "screeningOptionsCount": "Een lijstvraag heeft 2 tot 10 antwoorden nodig.",
+      "screeningTooMany": "Een vacature kan maximaal 10 vragen hebben."
     },
     "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
     "contentLanguageNames": {
@@ -575,7 +582,8 @@
     "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien.",
     "jobExpired": "De vervaldatum van deze vacature is verstreken. Open ze opnieuw via de vacaturelijst — heropenen verwijdert de verstreken datum.",
     "botCheckFailed": "We konden niet bevestigen dat een mens dit formulier verstuurt. Voltooi de verificatie opnieuw en verstuur het nog eens.",
-    "botCheckUnavailable": "De beveiligingscontrole is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw."
+    "botCheckUnavailable": "De beveiligingscontrole is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw.",
+    "screeningAnswerRequired": "Beantwoord de verplichte vragen van de werkgever."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -864,7 +872,11 @@
     "editJobLabel": "Vacature bewerken: {title}",
     "viewJob": "Vacature bekijken",
     "viewJobLabel": "Vacature bekijken: {title}",
-    "navTeam": "Team"
+    "navTeam": "Team",
+    "employerApplicationScreening": "Antwoorden op vragen",
+    "employerApplicationScreeningHint": "Vragen zoals ze waren bij het indienen. De antwoorden veranderen de match en de status niet.",
+    "employerApplicationScreeningRequired": "verplicht",
+    "employerApplicationScreeningNoAnswer": "Geen antwoord"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -1097,7 +1109,13 @@
     "viewApplications": "Bekijk je sollicitaties",
     "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount.",
     "demoJobTitle": "Dit is een voorbeeldvacature",
-    "demoJobBody": "Deze vacature en dit bedrijf zijn fictief en laten alleen zien hoe de site werkt. Je kunt er niet op solliciteren."
+    "demoJobBody": "Deze vacature en dit bedrijf zijn fictief en laten alleen zien hoe de site werkt. Je kunt er niet op solliciteren.",
+    "screeningTitle": "Vragen van de werkgever",
+    "screeningNote": "{company} ziet je antwoorden samen met je sollicitatie. Ze veranderen je matchscore niet en wijzen je sollicitatie niet automatisch af.",
+    "screeningOptional": "(optioneel)",
+    "screeningRequired": "Beantwoord deze vraag.",
+    "screeningYes": "Ja",
+    "screeningNo": "Nee"
   },
   "legal": {
     "termsTitle": "Algemene voorwaarden",
@@ -1264,7 +1282,29 @@
     "editSaveHint": "De wijzigingen zijn nog niet opgeslagen. Sla ze op met „Wijzigingen opslaan”.",
     "editSaved": "Wijzigingen opgeslagen",
     "editSavedDemo": "Wijzigingen opgeslagen (demomodus)",
-    "editFixStep": "De wijzigingen zijn niet opgeslagen. Corrigeer de gemarkeerde velden in stap {step}: {title}."
+    "editFixStep": "De wijzigingen zijn niet opgeslagen. Corrigeer de gemarkeerde velden in stap {step}: {title}.",
+    "screeningTitle": "Vragen aan kandidaten",
+    "screeningHint": "Optioneel, maximaal {max} korte vragen, bijv. over rijbewijs, VCA of vervoer. Je ziet de antwoorden in de sollicitatie; ze veranderen de match niet en wijzen kandidaten niet automatisch af.",
+    "screeningReadOnly": "Vragen kun je alleen in een concept wijzigen — kandidaten hebben de huidige versie al beantwoord.",
+    "screeningEmpty": "Deze vacature heeft geen vragen aan kandidaten.",
+    "screeningAdd": "Vraag toevoegen",
+    "screeningQuestion": "Vraag {n}",
+    "screeningType": "Soort antwoord",
+    "screeningTypeYesNo": "Ja / nee",
+    "screeningTypeSingleChoice": "Eén uit een lijst",
+    "screeningTypeDate": "Datum",
+    "screeningTypeShortText": "Korte tekst",
+    "screeningRequired": "Antwoord verplicht",
+    "screeningRequiredBadge": "verplicht",
+    "screeningPrompt": "Vraag ({language})",
+    "screeningPromptPlaceholder": "bijv. Heb je een rijbewijs B?",
+    "screeningOption": "Antwoord {n} ({language})",
+    "screeningAddOption": "Antwoord toevoegen",
+    "screeningRemoveOption": "Antwoord {n} verwijderen",
+    "screeningRemove": "Vraag {n} verwijderen",
+    "screeningMoveUp": "Vraag {n} omhoog",
+    "screeningMoveDown": "Vraag {n} omlaag",
+    "screeningTranslations": "Vertalingen (optioneel)"
   },
   "messages": {
     "title": "Berichten",

@@ -74,6 +74,7 @@ export default defineConfig({
     '**/apply-modal-a11y.spec.ts',
     '**/apply-network-error.spec.ts',
     '**/apply-phone-validation.spec.ts',
+    '**/apply-screening.spec.ts',
     '**/job-posting-fixture.spec.ts',
     '**/offer-message-login.spec.ts',
   ],

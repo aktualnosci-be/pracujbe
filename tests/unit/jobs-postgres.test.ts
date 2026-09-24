@@ -8,6 +8,7 @@ const adapters = vi.hoisted(() => ({
   cityCounts: vi.fn(),
   filterFacets: vi.fn(),
   translations: vi.fn(),
+  screening: vi.fn(async () => [] as unknown[]),
   pool: {},
 }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
@@ -18,6 +19,7 @@ vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJobCityCounts: adapters.cityCounts,
   getPublicJobFilterFacets: adapters.filterFacets,
   getPublicJobTranslations: adapters.translations,
+  getPublicJobScreeningQuestions: adapters.screening,
 }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
@@ -76,6 +78,31 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
 
     expect(job).toMatchObject({ title: 'Magazynier' });
     expect(job).not.toHaveProperty('availableLocales');
+  });
+  it('detal niesie pytania screeningowe oferty w kolejności (#101)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+    adapters.translations.mockResolvedValue([]);
+    adapters.screening.mockResolvedValueOnce([
+      { id: 'q-2', position: 1, type: 'single_choice', required: false, prompt: { pl: 'Dojazd', xx: 'x' }, options: [{ id: 'o1', label: { pl: 'Auto' } }] },
+      { id: 'q-1', position: 0, type: 'yes_no', required: true, prompt: { pl: 'C+E?' }, options: [] },
+    ]);
+
+    const job = await getJobBySlug('kierowca', 'pl');
+
+    expect(adapters.screening).toHaveBeenCalledWith(adapters.pool, 'job-1');
+    expect(job?.screeningQuestions).toEqual([
+      { id: 'q-1', position: 0, type: 'yes_no', required: true, prompt: { pl: 'C+E?' }, options: [] },
+      { id: 'q-2', position: 1, type: 'single_choice', required: false, prompt: { pl: 'Dojazd' }, options: [{ id: 'o1', label: { pl: 'Auto' } }] },
+    ]);
+  });
+  it('awaria odczytu pytań screeningowych nie udaje oferty bez pytań (#101)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+    adapters.translations.mockResolvedValue([]);
+    adapters.screening.mockRejectedValueOnce(new Error('permission denied'));
+
+    await expect(getJobBySlug('kierowca', 'pl')).rejects.toMatchObject({ code: 'INTERNAL' });
   });
   it('brak oferty w bazie pozostaje brakiem oferty', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');

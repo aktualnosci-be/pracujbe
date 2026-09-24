@@ -386,7 +386,14 @@
       "contactEmailInvalid": "Adresse e-mail invalide.",
       "publishAgreementRequired": "Confirmez pour publier l'offre.",
       "invalid": "Valeur invalide.",
-      "itemTooLong": "Un des éléments de la liste est trop long. Raccourcissez-le."
+      "itemTooLong": "Un des éléments de la liste est trop long. Raccourcissez-le.",
+      "screeningTypeInvalid": "Choisissez un type de réponse.",
+      "screeningPromptRequired": "Saisissez la question dans la langue de l'offre.",
+      "screeningPromptTooLong": "Une question peut contenir 300 caractères au maximum.",
+      "screeningOptionRequired": "Saisissez la réponse dans la langue de l'offre.",
+      "screeningOptionTooLong": "Une réponse peut contenir 120 caractères au maximum.",
+      "screeningOptionsCount": "Une question à choix nécessite de 2 à 10 réponses.",
+      "screeningTooMany": "Une offre peut contenir 10 questions au maximum."
     },
     "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
     "contentLanguageNames": {
@@ -575,7 +582,8 @@
     "jobEditConflict": "Quelqu'un a modifié cette offre entre-temps. Rouvrez-la depuis la liste des offres pour voir la version actuelle.",
     "jobExpired": "La date d'expiration de cette offre est dépassée. Rouvrez-la depuis la liste des offres — la réouverture supprime la date passée.",
     "botCheckFailed": "Nous n'avons pas pu confirmer que ce formulaire est envoyé par une personne. Refaites la vérification et envoyez-le à nouveau.",
-    "botCheckUnavailable": "La vérification de sécurité est momentanément indisponible. Réessayez dans quelques minutes."
+    "botCheckUnavailable": "La vérification de sécurité est momentanément indisponible. Réessayez dans quelques minutes.",
+    "screeningAnswerRequired": "Répondez aux questions obligatoires de l'employeur."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -864,7 +872,11 @@
     "editJobLabel": "Modifier l'offre : {title}",
     "viewJob": "Voir l'offre",
     "viewJobLabel": "Voir l'offre : {title}",
-    "navTeam": "Équipe"
+    "navTeam": "Équipe",
+    "employerApplicationScreening": "Réponses aux questions",
+    "employerApplicationScreeningHint": "Questions telles qu’au moment de la candidature. Les réponses ne modifient ni la compatibilité ni le statut.",
+    "employerApplicationScreeningRequired": "obligatoire",
+    "employerApplicationScreeningNoAnswer": "Pas de réponse"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1097,7 +1109,13 @@
     "viewApplications": "Voir vos candidatures",
     "candidateOnly": "Seul un compte candidat peut postuler.",
     "demoJobTitle": "Ceci est une offre d'exemple",
-    "demoJobBody": "Cette offre et cette entreprise sont fictives et servent uniquement à montrer le fonctionnement du site. Il n'est pas possible d'y postuler."
+    "demoJobBody": "Cette offre et cette entreprise sont fictives et servent uniquement à montrer le fonctionnement du site. Il n'est pas possible d'y postuler.",
+    "screeningTitle": "Questions de l'employeur",
+    "screeningNote": "{company} verra vos réponses avec votre candidature. Elles ne modifient pas votre score de compatibilité et ne rejettent pas votre candidature automatiquement.",
+    "screeningOptional": "(facultatif)",
+    "screeningRequired": "Répondez à cette question.",
+    "screeningYes": "Oui",
+    "screeningNo": "Non"
   },
   "legal": {
     "termsTitle": "Conditions générales",
@@ -1264,7 +1282,29 @@
     "editSaveHint": "Les modifications ne sont pas encore enregistrées. Enregistrez-les avec « Enregistrer les modifications ».",
     "editSaved": "Modifications enregistrées",
     "editSavedDemo": "Modifications enregistrées (mode démo)",
-    "editFixStep": "Les modifications n'ont pas été enregistrées. Corrigez les champs signalés à l'étape {step} : {title}."
+    "editFixStep": "Les modifications n'ont pas été enregistrées. Corrigez les champs signalés à l'étape {step} : {title}.",
+    "screeningTitle": "Questions aux candidats",
+    "screeningHint": "Facultatif, {max} questions courtes au maximum, par ex. sur le permis, le VCA ou le trajet. Vous verrez les réponses dans la candidature ; elles ne modifient pas la compatibilité et ne rejettent pas les candidats automatiquement.",
+    "screeningReadOnly": "Les questions ne peuvent être modifiées que dans un brouillon — les candidats ont déjà répondu à la version actuelle.",
+    "screeningEmpty": "Cette offre n'a pas de questions aux candidats.",
+    "screeningAdd": "Ajouter une question",
+    "screeningQuestion": "Question {n}",
+    "screeningType": "Type de réponse",
+    "screeningTypeYesNo": "Oui / non",
+    "screeningTypeSingleChoice": "Un choix dans une liste",
+    "screeningTypeDate": "Date",
+    "screeningTypeShortText": "Texte court",
+    "screeningRequired": "Réponse obligatoire",
+    "screeningRequiredBadge": "obligatoire",
+    "screeningPrompt": "Question ({language})",
+    "screeningPromptPlaceholder": "par ex. Avez-vous le permis B ?",
+    "screeningOption": "Réponse {n} ({language})",
+    "screeningAddOption": "Ajouter une réponse",
+    "screeningRemoveOption": "Supprimer la réponse {n}",
+    "screeningRemove": "Supprimer la question {n}",
+    "screeningMoveUp": "Monter la question {n}",
+    "screeningMoveDown": "Descendre la question {n}",
+    "screeningTranslations": "Traductions (facultatif)"
   },
   "messages": {
     "title": "Messages",

@@ -14,6 +14,8 @@ import { demoJobContentLocales, resolveDemoJobBySlug, resolveDemoJobs } from '@/
 import { resolveJobContentLocales } from '@/lib/job-content-locale';
 import { compareMonthlySalaryDesc, salaryInMonthlyRange } from '@/lib/salary-compare';
 import type { TransactionPool } from '@/lib/db/transaction';
+import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
+import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
 
 export type ContractType =
   | 'permanent'
@@ -95,6 +97,8 @@ export interface JobDetail extends JobListItem {
   contentLocale?: Locale;
   /** Języki z własnym tłumaczeniem treści; brak = nieznane, traktowane jak wszystkie (#301). */
   availableLocales?: Locale[];
+  /** Pytania screeningowe do formularza aplikowania (#101); brak = oferta bez pytań. */
+  screeningQuestions?: ScreeningQuestion[];
 }
 
 export interface GetJobsParams {
@@ -417,7 +421,15 @@ async function getJobBySlugFromDb(
   const first = await getPublicJob(pool, slug, locale);
   if (!first) return null;
   const job = rowToJobDetail(first);
-  return { ...job, ...(await readContentLocales(pool, job, toLocale(locale))) };
+  // #101: pytania są częścią formularza aplikowania — błąd odczytu przerywa jak błąd oferty
+  // (formularz bez pytań i tak zostałby odrzucony przez bazę przy pytaniach wymaganych).
+  const { getPublicJobScreeningQuestions } = await import('@/lib/db/public-jobs');
+  const screeningQuestions = parseScreeningQuestions(await getPublicJobScreeningQuestions(pool, job.id));
+  return {
+    ...job,
+    ...(await readContentLocales(pool, job, toLocale(locale))),
+    ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),
+  };
 }
 
 /**
@@ -488,7 +500,10 @@ export async function getJobBySlug(
 
   if (isProductionMode()) throw new AppError('INTERNAL');
   const job = resolveDemoJobBySlug(slug, resolvedLocale);
-  return job ? markDemo(job) : null;
+  if (!job) return null;
+  // Serwer fixture E2E: pytania screeningowe na wybranej ofercie fikcyjnej (#101).
+  const screeningQuestions = isRealJobsFixture() ? fixtureScreeningQuestions(job.id) : [];
+  return markDemo(screeningQuestions.length > 0 ? { ...job, screeningQuestions } : job);
 }
 
 /**

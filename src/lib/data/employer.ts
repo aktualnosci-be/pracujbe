@@ -21,6 +21,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isSupabaseConfigured } from '@/lib/env';
 import { effectiveJobStatus, isPastExpiry, notExpiredFilter } from '@/lib/job-expiry';
 import { captureError } from '@/lib/sentry';
+import {
+  parseScreeningAnswers,
+  parseScreeningQuestions,
+  type ScreeningAnswer,
+  type ScreeningQuestionDraft,
+} from '@/lib/screening/questions';
 
 /* ---------------------------------------------------------------------------
  * Kontrakt (typy zwracane do UI)
@@ -451,6 +457,8 @@ export interface JobDraftValues {
   transport: boolean;
   companyDescription: string;
   contactEmail: string;
+  /** #101: pytania screeningowe — wczytywane, bo krok 7 zapisuje je replace-all. */
+  screeningQuestions: ScreeningQuestionDraft[];
 }
 
 /** Stany oferty, które kreator otwiera: szkic (zapis per krok) i opublikowana (#325, rewizja). */
@@ -469,6 +477,8 @@ export type JobDraftLoad =
       slug: string;
       /** Wersja wczytana do kreatora — CAS przy zapisie opublikowanej oferty. */
       updatedAt: string;
+      /** Język treści oferty (`default_locale`) — pytania screeningowe wymagają tekstu w nim. */
+      contentLocale: string;
       values: JobDraftValues;
     }
   | { status: 'not-found' }
@@ -499,6 +509,7 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
     jobStatus: 'active',
     slug: job.slug,
     updatedAt: job.createdAt ?? '',
+    contentLocale: 'pl',
     values: {
       title: job.title,
       category: 'warehouse',
@@ -533,6 +544,7 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       transport: false,
       companyDescription: 'Firma demonstracyjna z branży logistycznej.',
       contactEmail: '',
+      screeningQuestions: [],
     },
   };
 }
@@ -574,7 +586,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
     if (!isEditableJobStatus(jobStatus)) return { status: 'not-editable', jobStatus };
 
     const locale = asString(job['default_locale'], 'pl');
-    const [translation, requirements, skills, languages, certificates] = await Promise.all([
+    const [translation, requirements, skills, languages, certificates, screening] = await Promise.all([
       supabase
         .from('job_translations')
         .select('description, responsibilities, conditions, benefits, company_description')
@@ -585,6 +597,12 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
       supabase.from('job_skills').select('skill_label, is_mandatory').eq('job_id', jobId),
       supabase.from('job_languages').select('language_label, level').eq('job_id', jobId),
       supabase.from('job_certificates').select('certificate_label').eq('job_id', jobId),
+      // job_screening_questions_select (0094): członek firmy oferty.
+      supabase
+        .from('job_screening_questions')
+        .select('id, position, type, required, prompt, options')
+        .eq('job_id', jobId)
+        .order('position'),
     ]);
     // Każdy błąd relacji → 'error': kreator startujący z pustych relacji SKASOWAŁBY je przy zapisie.
     if (
@@ -592,7 +610,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
       requirements.error ||
       skills.error ||
       languages.error ||
-      certificates.error
+      certificates.error ||
+      screening.error
     ) {
       return { status: 'error' };
     }
@@ -614,6 +633,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
       jobStatus,
       slug: asString(job['slug']),
       updatedAt: asString(job['updated_at']),
+      contentLocale: locale,
       values: {
         title: asString(job['title']),
         category: asString(job['category']),
@@ -662,6 +682,12 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         transport: job['transport'] === true,
         companyDescription: asString(tr['company_description']),
         contactEmail: asString(job['contact_email']),
+        screeningQuestions: parseScreeningQuestions(screening.data).map((q) => ({
+          type: q.type,
+          required: q.required,
+          prompt: q.prompt,
+          options: q.options.map((o) => ({ label: o.label })),
+        })),
       },
     };
   } catch (error) {
@@ -1033,6 +1059,8 @@ export interface EmployerApplicationDetail {
     certificates: string[];
   } | null;
   history: { toStatus: string; at: string }[];
+  /** #101: odpowiedzi na pytania oferty (snapshot z chwili aplikowania); pusta = brak pytań. */
+  screeningAnswers: ScreeningAnswer[];
 }
 
 /**
@@ -1047,12 +1075,18 @@ export type EmployerApplicationDetailLoad =
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const DEMO_APPLICATION_DETAILS: Record<string, Omit<EmployerApplicationDetail, 'id' | 'candidateName' | 'jobTitle' | 'status'>> = {
+const DEMO_APPLICATION_DETAILS: Record<string, Omit<EmployerApplicationDetail, 'id' | 'candidateName' | 'jobTitle' | 'status' | 'screeningAnswers'> & { screeningAnswers?: ScreeningAnswer[] }> = {
   'demo-app-1': {
     candidateId: 'demo-c-1', jobId: '12343', message: 'Mam 6 lat doświadczenia w utrzymaniu ruchu i uprawnienia SEP. Mogę zacząć od zaraz.',
     phone: '+32 470 12 34 56', availability: 'immediate', submittedAt: '2026-09-20T08:30:00Z', matchScore: 92,
     profile: { headline: 'Elektryk przemysłowy', city: 'Charleroi', experienceYears: 6, hasDrivingLicense: true, skills: ['Instalacje przemysłowe', 'Automatyka PLC'], languages: [{ label: 'Polski', level: 'native' }, { label: 'Francuski', level: 'intermediate' }], certificates: ['VCA Basis'] },
     history: [{ toStatus: 'submitted', at: '2026-09-20T08:30:00Z' }],
+    screeningAnswers: [
+      { position: 0, type: 'yes_no', required: true, prompt: { pl: 'Czy masz uprawnienia SEP?', en: 'Do you hold an SEP certificate?' }, options: [], answerBoolean: true, answerDate: null, answerText: null },
+      { position: 1, type: 'single_choice', required: true, prompt: { pl: 'Jak dojedziesz do pracy?', en: 'How will you get to work?' }, options: [{ id: 'o1', label: { pl: 'Własnym samochodem', en: 'Own car' } }, { id: 'o2', label: { pl: 'Komunikacją publiczną', en: 'Public transport' } }], answerBoolean: null, answerDate: null, answerText: 'o1' },
+      { position: 2, type: 'date', required: false, prompt: { pl: 'Od kiedy możesz zacząć?', en: 'When can you start?' }, options: [], answerBoolean: null, answerDate: '2026-10-01', answerText: null },
+      { position: 3, type: 'short_text', required: false, prompt: { pl: 'Doświadczenie z automatyką PLC', en: 'Experience with PLC automation' }, options: [], answerBoolean: null, answerDate: null, answerText: null },
+    ],
   },
   'demo-app-2': {
     candidateId: 'demo-c-2', jobId: '12345', message: '',
@@ -1079,7 +1113,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
     const base = DEMO_APPLICATIONS.find((application) => application.id === id);
     const extra = DEMO_APPLICATION_DETAILS[id];
     if (!base || !extra) return { status: 'not_found' };
-    return { status: 'ok', isDemo: true, application: { ...base, ...extra } };
+    return { status: 'ok', isDemo: true, application: { ...base, ...extra, screeningAnswers: extra.screeningAnswers ?? [] } };
   }
 
   if (!UUID_RE.test(id)) return { status: 'not_found' };
@@ -1110,6 +1144,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
       { data: historyData, error: historyError },
       { data: cpData, error: cpError },
       { data: matchData, error: matchError },
+      { data: answerData, error: answerError },
     ] = await Promise.all([
       supabase
         .from('application_status_history')
@@ -1125,8 +1160,15 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         .is('deleted_at', null)
         .maybeSingle(),
       supabase.from('matches').select('score').eq('candidate_id', candidateId).eq('job_id', jobId).maybeSingle(),
+      // application_screening_answers_select (0094): kandydat albo recruiter+ firmy oferty.
+      supabase
+        .from('application_screening_answers')
+        .select('position, type, required, prompt, options, answer_boolean, answer_date, answer_text')
+        .eq('application_id', id)
+        .order('position'),
     ]);
     if (historyError) throw historyError;
+    if (answerError) throw answerError;
     if (cpError) throw cpError;
     if (matchError) throw matchError;
 
@@ -1181,6 +1223,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         matchScore,
         profile,
         history: asRows(historyData).map((r) => ({ toStatus: asString(r['to_status']), at: asString(r['created_at']) })),
+        screeningAnswers: parseScreeningAnswers(answerData),
       },
     };
   } catch (error) {

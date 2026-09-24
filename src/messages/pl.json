@@ -386,7 +386,14 @@
       "contactEmailInvalid": "Nieprawidłowy adres e-mail.",
       "publishAgreementRequired": "Potwierdź, aby opublikować ofertę.",
       "invalid": "Nieprawidłowa wartość.",
-      "itemTooLong": "Jedna z pozycji listy jest za długa. Skróć ją."
+      "itemTooLong": "Jedna z pozycji listy jest za długa. Skróć ją.",
+      "screeningTypeInvalid": "Wybierz rodzaj odpowiedzi.",
+      "screeningPromptRequired": "Wpisz treść pytania w języku oferty.",
+      "screeningPromptTooLong": "Pytanie może mieć maksymalnie 300 znaków.",
+      "screeningOptionRequired": "Wpisz treść odpowiedzi w języku oferty.",
+      "screeningOptionTooLong": "Odpowiedź może mieć maksymalnie 120 znaków.",
+      "screeningOptionsCount": "Pytanie z listą wymaga od 2 do 10 odpowiedzi.",
+      "screeningTooMany": "Oferta może mieć maksymalnie 10 pytań."
     },
     "contentLanguageNotice": "Treść tej oferty jest dostępna tylko w języku: {language}.",
     "contentLanguageNames": {
@@ -575,7 +582,8 @@
     "jobEditConflict": "Ktoś zmienił tę ofertę w międzyczasie. Otwórz ją ponownie z listy ofert, aby zobaczyć aktualną wersję.",
     "jobExpired": "Termin ważności tej oferty minął. Otwórz ją ponownie z listy ofert — ponowne otwarcie usuwa minioną datę.",
     "botCheckFailed": "Nie udało się potwierdzić, że formularz wysyła człowiek. Zaznacz weryfikację jeszcze raz i wyślij ponownie.",
-    "botCheckUnavailable": "Weryfikacja bezpieczeństwa jest chwilowo niedostępna. Spróbuj ponownie za kilka minut."
+    "botCheckUnavailable": "Weryfikacja bezpieczeństwa jest chwilowo niedostępna. Spróbuj ponownie za kilka minut.",
+    "screeningAnswerRequired": "Odpowiedz na wymagane pytania pracodawcy."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -864,7 +872,11 @@
     "editJobLabel": "Edytuj ofertę: {title}",
     "viewJob": "Zobacz ofertę",
     "viewJobLabel": "Zobacz ofertę: {title}",
-    "navTeam": "Zespół"
+    "navTeam": "Zespół",
+    "employerApplicationScreening": "Odpowiedzi na pytania",
+    "employerApplicationScreeningHint": "Treść pytań z chwili złożenia zgłoszenia. Odpowiedzi nie zmieniają dopasowania ani statusu.",
+    "employerApplicationScreeningRequired": "wymagane",
+    "employerApplicationScreeningNoAnswer": "Brak odpowiedzi"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1097,7 +1109,13 @@
     "viewApplications": "Zobacz swoje aplikacje",
     "candidateOnly": "Aplikować można tylko z konta kandydata.",
     "demoJobTitle": "To jest przykładowa oferta",
-    "demoJobBody": "Ta oferta i firma są fikcyjne — służą wyłącznie do pokazania, jak działa serwis. Nie można na nią aplikować."
+    "demoJobBody": "Ta oferta i firma są fikcyjne — służą wyłącznie do pokazania, jak działa serwis. Nie można na nią aplikować.",
+    "screeningTitle": "Pytania od pracodawcy",
+    "screeningNote": "Odpowiedzi zobaczy {company} razem z Twoim zgłoszeniem. Nie zmieniają wyniku dopasowania i nie odrzucają zgłoszenia automatycznie.",
+    "screeningOptional": "(opcjonalnie)",
+    "screeningRequired": "Odpowiedz na to pytanie.",
+    "screeningYes": "Tak",
+    "screeningNo": "Nie"
   },
   "legal": {
     "termsTitle": "Regulamin",
@@ -1264,7 +1282,29 @@
     "editSaveHint": "Zmiany nie są jeszcze zapisane. Zapiszesz je przyciskiem „Zapisz zmiany”.",
     "editSaved": "Zmiany zapisane",
     "editSavedDemo": "Zmiany zapisane (tryb demo)",
-    "editFixStep": "Nie zapisaliśmy zmian. Popraw zaznaczone pola w kroku {step}: {title}."
+    "editFixStep": "Nie zapisaliśmy zmian. Popraw zaznaczone pola w kroku {step}: {title}.",
+    "screeningTitle": "Pytania do kandydatów",
+    "screeningHint": "Opcjonalnie, maksymalnie {max} krótkich pytań, np. o prawo jazdy, VCA czy dojazd. Odpowiedzi zobaczysz w zgłoszeniu; nie zmieniają dopasowania i nie odrzucają kandydatów automatycznie.",
+    "screeningReadOnly": "Pytania można zmieniać tylko w szkicu oferty — kandydaci odpowiadali już na obecną wersję.",
+    "screeningEmpty": "Oferta nie ma pytań do kandydatów.",
+    "screeningAdd": "Dodaj pytanie",
+    "screeningQuestion": "Pytanie {n}",
+    "screeningType": "Rodzaj odpowiedzi",
+    "screeningTypeYesNo": "Tak / nie",
+    "screeningTypeSingleChoice": "Jedna z listy",
+    "screeningTypeDate": "Data",
+    "screeningTypeShortText": "Krótki tekst",
+    "screeningRequired": "Odpowiedź wymagana",
+    "screeningRequiredBadge": "wymagane",
+    "screeningPrompt": "Treść pytania ({language})",
+    "screeningPromptPlaceholder": "np. Czy masz prawo jazdy kat. B?",
+    "screeningOption": "Odpowiedź {n} ({language})",
+    "screeningAddOption": "Dodaj odpowiedź",
+    "screeningRemoveOption": "Usuń odpowiedź {n}",
+    "screeningRemove": "Usuń pytanie {n}",
+    "screeningMoveUp": "Przesuń pytanie {n} wyżej",
+    "screeningMoveDown": "Przesuń pytanie {n} niżej",
+    "screeningTranslations": "Tłumaczenia (opcjonalnie)"
   },
   "messages": {
     "title": "Wiadomości",
