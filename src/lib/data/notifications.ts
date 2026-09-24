@@ -152,6 +152,9 @@ const DEMO_SEEDS: readonly DemoNotificationSeed[] = [
   { id: 'demo-notif-2', type: 'message_received', entityType: 'conversation', minutesAgo: 1440, unread: false },
 ];
 
+/** Panel, dla którego budujemy powiadomienia DEMO (bez sesji rola nie wynika z profilu). */
+export type DemoRole = 'candidate' | 'employer';
+
 export type NotificationsResult =
   | { status: 'ready'; items: NotificationView[]; unread: number }
   | { status: 'error' };
@@ -159,6 +162,7 @@ export type NotificationsResult =
 function demoNotifications(
   t: NotificationsTranslator,
   locale: Locale,
+  role: DemoRole,
 ): NotificationsResult {
   const now = Date.now();
   const items: NotificationView[] = DEMO_SEEDS.map((seed) => ({
@@ -166,8 +170,8 @@ function demoNotifications(
     title: t(titleKeyForType(seed.type)),
     meta: formatRelativeTime(new Date(now - seed.minutesAgo * MINUTE).toISOString(), locale),
     unread: seed.unread,
-    // Panel kandydata jako domyślny kontekst demo (brak sesji/roli).
-    href: resolveHref(seed.entityType, 'candidate'),
+    // Brak sesji/roli: kontekst demo = panel, który renderuje dzwonek.
+    href: resolveHref(seed.entityType, role),
   }));
   return { status: 'ready', items, unread: items.filter((item) => item.unread).length };
 }
@@ -178,16 +182,17 @@ function demoNotifications(
 
 /**
  * Ostatnie powiadomienia bieżącego użytkownika (created_at desc, limit 20) + licznik
- * nieprzeczytanych. Bez env → 3 pozycje DEMO. Błąd → Sentry + stan błędu.
+ * nieprzeczytanych. Bez env → 3 pozycje DEMO (linki wg `demoRole`). Błąd → Sentry + stan błędu.
  */
 export async function getNotifications(
   locale: string,
+  demoRole: DemoRole = 'candidate',
 ): Promise<NotificationsResult> {
   const resolvedLocale = toLocale(locale);
   const t = await getTranslations({ locale: resolvedLocale, namespace: 'notifications' });
 
   if (!isSupabaseConfigured()) {
-    return demoNotifications(t, resolvedLocale);
+    return demoNotifications(t, resolvedLocale, demoRole);
   }
 
   try {

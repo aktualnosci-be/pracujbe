@@ -579,6 +579,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Odbiorcy powiadomień/e-maili firmowych (aplikacja, wiadomość, odpowiedź na propozycję) = aktywni
   recruiter+ z aktywnym profilem (`company_recipient_ok`, 0070); e-mail o wiadomości od firmy do
   kandydata podpisany nazwą firmy. Dowód: `rls.sql` sekcja LL.
+  Nadawca w wątku (#355): profil niewidoczny pod RLS → nazwa firmy dla strony firmowej (strona
+  ustalana z `company_members` pod RLS), inaczej etykieta `messages.sender*Fallback`; imienia
+  rekrutera nie ujawniamy (0023). Demo wiadomości w języku strony (#359). Stan ładowania listy
+  i wątku (#177): `wiadomosci/loading.tsx` + `ConversationOpenPending`, E2E `messages-loading.spec`.
 
 ### Etap 6 — komunikacja
 - [x] Wybór języka odbiorcy (fallback) — util + test + `resolve_recipient_locale()` w DB (INVARIANT #1 egzekwowany przy kolejkowaniu)
@@ -594,6 +598,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
   tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” ukryte do czasu
   dedykowanej listy (#148).
+  Dzwonek (#353): nazwa z liczbą nieprzeczytanych (ICU `notifications.bellLabel`), panel = region
+  nazwany tytułem, „Nieprzeczytane” dla czytnika; Escape zamyka i wraca fokusem na dzwonek, wyjście
+  fokusem poza panel go zamyka. „Oznacz wszystkie” (#354): `aria-busy` + „Zapisywanie…”, jedno
+  wywołanie naraz, błąd `role="alert"` bez refresh, sukces `role="status"` + fokus na tytule.
+  Tryb demo (#359): layouty biorą demo z `getNotifications(locale, rola)` (czas przez Intl), bez
+  literałów w `DashboardShell`. Ustawienia pracodawcy (#357): własne opisy (`settings.employer*`),
+  bez przełącznika dopasowanych ofert, opis powiązany `aria-describedby`.
 
 ### Etap 7 — admin / prywatność / płatności
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)

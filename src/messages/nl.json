@@ -991,9 +991,6 @@
     "title": "Meldingen",
     "markAllRead": "Alles als gelezen markeren",
     "seeAll": "Alles bekijken",
-    "sampleNewJob": "Nieuwe vacature afgestemd op je profiel",
-    "sampleAppViewed": "Je sollicitatie is bekeken",
-    "sampleMessage": "Je hebt een nieuw bericht van een werkgever",
     "itemApplicationReceived": "Nieuwe sollicitatie ontvangen",
     "itemApplicationStatusChanged": "De status van je sollicitatie is gewijzigd",
     "itemOfferReceived": "Je hebt een werkaanbod ontvangen",
@@ -1004,7 +1001,11 @@
     "itemSystem": "Systeemmelding",
     "empty": "Geen meldingen",
     "loadError": "Meldingen konden niet worden geladen. Probeer het opnieuw.",
-    "retry": "Opnieuw proberen"
+    "retry": "Opnieuw proberen",
+    "bellLabel": "{count, plural, =0 {Meldingen} one {Meldingen, 1 ongelezen} other {Meldingen, # ongelezen}}",
+    "unreadItem": "Ongelezen",
+    "markingAllRead": "Opslaan…",
+    "markedAllRead": "Alle meldingen zijn als gelezen gemarkeerd."
   },
   "pricing": {
     "standard": "Standaard",
@@ -1236,7 +1237,9 @@
     "loadOlder": "Oudere berichten laden",
     "loadingOlder": "Oudere berichten worden geladen…",
     "loadOlderError": "Oudere berichten konden niet worden geladen. Probeer het opnieuw.",
-    "threadStart": "Dit is het begin van het gesprek."
+    "threadStart": "Dit is het begin van het gesprek.",
+    "senderCompanyFallback": "Werkgever",
+    "senderCandidateFallback": "Kandidaat"
   },
   "files": {
     "cvTitle": "Je cv / documenten",
@@ -1355,7 +1358,10 @@
     "saving": "Opslaan...",
     "savedSuccess": "Je meldingsvoorkeuren zijn opgeslagen.",
     "loadError": "Je meldingsvoorkeuren konden niet worden geladen.",
-    "loadErrorHint": "We tonen het formulier niet, zodat opslaan je eerdere keuzes niet overschrijft. Probeer het zo meteen opnieuw."
+    "loadErrorHint": "We tonen het formulier niet, zodat opslaan je eerdere keuzes niet overschrijft. Probeer het zo meteen opnieuw.",
+    "employerEmailApplicationsDescription": "Nieuwe sollicitaties van kandidaten op je vacatures.",
+    "employerEmailOffersDescription": "Wanneer een kandidaat je werkaanbod aanvaardt of weigert.",
+    "employerEmailMessagesDescription": "Nieuwe berichten van kandidaten in je gesprekken."
   },
   "guides": {
     "pageTitle": "Gidsen",

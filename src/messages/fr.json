@@ -991,9 +991,6 @@
     "title": "Notifications",
     "markAllRead": "Tout marquer comme lu",
     "seeAll": "Voir tout",
-    "sampleNewJob": "Nouvelle offre adaptée à votre profil",
-    "sampleAppViewed": "Votre candidature a été consultée",
-    "sampleMessage": "Vous avez un nouveau message d'un employeur",
     "itemApplicationReceived": "Nouvelle candidature reçue",
     "itemApplicationStatusChanged": "Le statut de votre candidature a changé",
     "itemOfferReceived": "Vous avez reçu une proposition d'emploi",
@@ -1004,7 +1001,11 @@
     "itemSystem": "Notification système",
     "empty": "Aucune notification",
     "loadError": "Impossible de charger les notifications. Réessayez.",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "bellLabel": "{count, plural, =0 {Notifications} one {Notifications, 1 non lue} other {Notifications, # non lues}}",
+    "unreadItem": "Non lue",
+    "markingAllRead": "Enregistrement…",
+    "markedAllRead": "Toutes les notifications ont été marquées comme lues."
   },
   "pricing": {
     "standard": "Standard",
@@ -1236,7 +1237,9 @@
     "loadOlder": "Charger les messages plus anciens",
     "loadingOlder": "Chargement des messages plus anciens…",
     "loadOlderError": "Impossible de charger les messages plus anciens. Réessayez.",
-    "threadStart": "C'est le début de la conversation."
+    "threadStart": "C'est le début de la conversation.",
+    "senderCompanyFallback": "Employeur",
+    "senderCandidateFallback": "Candidat"
   },
   "files": {
     "cvTitle": "Votre CV / documents",
@@ -1355,7 +1358,10 @@
     "saving": "Enregistrement...",
     "savedSuccess": "Vos préférences de notification ont été enregistrées.",
     "loadError": "Impossible de charger vos préférences de notification.",
-    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant."
+    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant.",
+    "employerEmailApplicationsDescription": "Nouvelles candidatures à vos offres d’emploi.",
+    "employerEmailOffersDescription": "Lorsqu’un candidat accepte ou refuse votre proposition d’emploi.",
+    "employerEmailMessagesDescription": "Nouveaux messages de candidats dans vos conversations."
   },
   "guides": {
     "pageTitle": "Guides",

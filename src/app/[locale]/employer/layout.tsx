@@ -95,6 +95,14 @@ export default async function EmployerLayout({
       activeCompanyName = shell.activeName;
       userName = shell.userName;
     }
+  } else {
+    // Tryb demo (#359): to samo źródło co realne powiadomienia — tytuły z i18n, czas przez
+    // `Intl.RelativeTimeFormat` w języku strony, cele linków wg roli panelu.
+    const notif = await getNotifications(locale, 'employer');
+    if (notif.status === 'ready') {
+      notifItems = notif.items;
+      notifUnread = notif.unread;
+    }
   }
 
   return (

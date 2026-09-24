@@ -90,7 +90,8 @@ export async function ConversationList({
                     {formatWhen(item.lastMessageAt, locale)}
                   </span>
                 </div>
-                {item.subject ? (
+                {/* #355: bez nazwy drugiej strony temat jest już nazwą pozycji — nie powtarzamy go. */}
+                {item.subject && item.counterpartyName ? (
                   <p className="truncate text-xs text-muted-foreground">{item.subject}</p>
                 ) : null}
                 <div className="mt-0.5 flex items-center gap-2">
