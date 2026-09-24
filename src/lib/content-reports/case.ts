@@ -2,7 +2,7 @@ import { REPORT_CATEGORIES, REPORT_TARGETS, type ReportCategory, type ReportTarg
 
 /**
  * Widok sprawy zgłoszenia dla zgłaszającego (#41) — parsowanie odpowiedzi `get_report_case`
- * (0095). Czysta funkcja: nieznane wartości odrzucamy zamiast pokazywać surowe kody.
+ * (0094). Czysta funkcja: nieznane wartości odrzucamy zamiast pokazywać surowe kody.
  */
 
 export const REPORT_STATUSES = ['open', 'reviewing', 'resolved', 'dismissed'] as const;

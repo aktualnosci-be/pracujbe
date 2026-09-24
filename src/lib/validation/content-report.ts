@@ -4,7 +4,7 @@ import { routing } from '@/i18n/routing';
 
 /**
  * Walidacja publicznego zgłoszenia treści (DSA, #41) — ten sam schemat w formularzu
- * (React Hook Form) i w Server Action. Reguły lustrzane do `submit_content_report` (0095);
+ * (React Hook Form) i w Server Action. Reguły lustrzane do `submit_content_report` (0094);
  * baza sprawdza je ponownie, więc ominięcie formularza niczego nie daje.
  *
  * Komunikaty błędów to klucze i18n (`contentReport.error.*`), tłumaczone w formularzu.
@@ -12,7 +12,7 @@ import { routing } from '@/i18n/routing';
  * Katalog kategorii jest TYMCZASOWY — do potwierdzenia w mapie obowiązków DSA (#40).
  */
 
-/** Kategorie zgłoszenia (kolejność = kolejność w formularzu). Zgodne z CHECK w 0095. */
+/** Kategorie zgłoszenia (kolejność = kolejność w formularzu). Zgodne z CHECK w 0094. */
 export const REPORT_CATEGORIES = [
   'fraud',
   'impersonation',

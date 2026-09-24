@@ -21,7 +21,7 @@ import {
 
 /**
  * Publiczne zgłoszenie treści (DSA, #41) — cienka warstwa nad RPC `submit_content_report`
- * (0095). Kolejność: limiter (IP) → Turnstile (polityka `report`: fail-closed) → walidacja
+ * (0094). Kolejność: limiter (IP) → Turnstile (polityka `report`: fail-closed) → walidacja
  * Zod → tożsamość z sesji (gość = null) → RPC service_role. Idempotencja, limit per adres,
  * dowód, historia i e-mail potwierdzenia są w bazie.
  *

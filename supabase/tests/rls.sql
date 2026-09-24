@@ -2128,7 +2128,7 @@ select pg_temp.expect_error(
   'PERMISSION_DENIED', 'QQ1b nie-admin nie rozstrzyga zgłoszenia');
 reset role; reset app.current_uid;
 
--- QQ2: zgłoszenie zapisuje wyłącznie RPC (0095) — bezpośredni INSERT klienta odrzucony,
+-- QQ2: zgłoszenie zapisuje wyłącznie RPC (0094) — bezpośredni INSERT klienta odrzucony,
 -- także z podrobionym stanem moderacji albo w cudzym imieniu.
 set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
@@ -5166,7 +5166,7 @@ select pg_temp.assert(:'sq13_ok'::boolean, 'SQ101-13b oferta bez pytań: aplikac
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- DSA41. Publiczne zgłoszenia treści i trwały model sprawy (0095, #41):
+-- DSA41. Publiczne zgłoszenia treści i trwały model sprawy (0094, #41):
 -- RPC tylko service_role, idempotencja (także wyścig), tylko treść publiczna, izolacja
 -- spraw, niezmienny zapis i dowód, historia statusów, limit, e-mail w języku zgłaszającego.
 -- ============================================================================

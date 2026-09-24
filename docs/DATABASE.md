@@ -116,7 +116,7 @@ Rollback usuwa tylko identyfikatory operacji; treść wiadomości pozostaje bez 
 
 ## Publiczne zgłoszenia treści (DSA) i trwały model sprawy
 
-Migracja `supabase/migrations/0095_dsa_notices.sql` (#41). Zgłoszenie z publicznego
+Migracja `supabase/migrations/0094_dsa_notices.sql` (#41). Zgłoszenie z publicznego
 formularza (`/zglos-tresc`, także bez konta) to wiersz `public.reports` z `kind = 'dsa_notice'`
 — osobna kolejka od dotychczasowych zgłoszeń (`kind = 'quality'`).
 

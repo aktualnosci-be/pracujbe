@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0095 — publiczne zgłoszenia treści (DSA) i trwały model sprawy (#41).
+-- 0094 — publiczne zgłoszenia treści (DSA) i trwały model sprawy (#41).
 --
 -- 1. `reports` dostaje rodzaj (`kind`): `quality` (dotychczasowe zgłoszenia) albo
 --    `dsa_notice` (zgłoszenie treści z publicznego formularza). Sprawa `dsa_notice` ma:

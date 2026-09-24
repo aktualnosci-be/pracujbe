@@ -122,7 +122,7 @@ export interface AdminReportTarget {
   deleted: boolean;
 }
 
-/** Zdarzenie historii sprawy DSA (`report_events`, 0095). */
+/** Zdarzenie historii sprawy DSA (`report_events`, 0094). */
 export interface AdminReportEvent {
   type: 'submitted' | 'status_changed';
   toStatus: string | null;

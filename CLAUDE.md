@@ -872,7 +872,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
   `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
   (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
-- [~] Zgłoszenia treści DSA (#41, migracja `0095`) — przyjęcie sprawy gotowe; decyzje i egzekucja
+- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy gotowe; decyzje i egzekucja
   (#42) oraz odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
   → Zod → RPC `submit_content_report` (EXECUTE tylko service_role, `reporterId` z sesji). Sprawa

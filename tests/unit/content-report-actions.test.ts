@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * #41 — publiczne zgłoszenie treści: kolejność ochron w Server Action (limiter → Turnstile →
- * walidacja) i kontrakt z RPC `submit_content_report` / `get_report_case` (0095).
+ * walidacja) i kontrakt z RPC `submit_content_report` / `get_report_case` (0094).
  * Tożsamość zgłaszającego pochodzi z sesji serwera, nigdy z danych klienta.
  */
 
@@ -215,9 +215,9 @@ describe('kod dostępu', () => {
   });
 });
 
-describe('kontrakt z migracją 0095', () => {
+describe('kontrakt z migracją 0094', () => {
   const sql = readdirSync(resolve(process.cwd(), 'supabase/migrations'))
-    .filter((f) => f.startsWith('0095_'))
+    .filter((f) => f.startsWith('0094_'))
     .map((f) => readFileSync(resolve(process.cwd(), 'supabase/migrations', f), 'utf8'))
     .join('\n');
 
