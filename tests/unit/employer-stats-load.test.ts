@@ -24,7 +24,7 @@ function client(results: Record<string, Result[]>) {
     from: vi.fn((table: string) => {
       const result = queues[table]?.shift() ?? { data: [], count: 0, error: null };
       const builder: Record<string, unknown> = {};
-      for (const method of ['select', 'eq', 'is', 'in', 'order', 'limit', 'gte']) {
+      for (const method of ['select', 'eq', 'is', 'in', 'order', 'limit', 'gte', 'or']) {
         builder[method] = vi.fn(() => builder);
       }
       builders.push({ table, builder });
@@ -85,6 +85,14 @@ describe('employer overview tiles', () => {
       status: 'ok',
       overview: { activeOffersCount: 3, newApplicationsCount: 5, matchedCandidatesCount: 7, messagesToAnswerCount: 2 },
     });
+  });
+
+  it('does not count an active job past expires_at as active (#72)', async () => {
+    client({ jobs: [{ data: [], error: null }, { count: 0, error: null }] });
+    await getEmployerOverview();
+    const activeCount = builders.filter((b) => b.table === 'jobs')[1]!.builder;
+    expect(activeCount.eq).toHaveBeenCalledWith('status', 'active');
+    expect(activeCount.or).toHaveBeenCalledWith(expect.stringMatching(/^expires_at\.is\.null,expires_at\.gt\.\d{4}-/));
   });
 });
 

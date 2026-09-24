@@ -229,6 +229,7 @@ export default async function EmployerOffersPage({
                         <JobLifecycleActions
                           jobId={offer.id}
                           status={offer.status}
+                          pastExpiry={offer.pastExpiry}
                         />
                       </>
                     )}
