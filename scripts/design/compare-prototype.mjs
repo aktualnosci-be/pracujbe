@@ -550,11 +550,24 @@ async function brandColours(base) {
 function parseArgs(argv) {
   const args = { base: "http://localhost:3000", out: "test-results/prototype-compare", only: null, widths: [1280, 390] };
   for (let i = 0; i < argv.length; i += 1) {
-    const [k, v] = [argv[i], argv[i + 1]];
-    if (k === "--base") (args.base = v), (i += 1);
-    else if (k === "--out") (args.out = v), (i += 1);
-    else if (k === "--only") (args.only = new Set(v.split(","))), (i += 1);
-    else if (k === "--widths") (args.widths = v.split(",").map(Number)), (i += 1);
+    const value = argv[i + 1];
+    switch (argv[i]) {
+      case "--base":
+        args.base = value;
+        break;
+      case "--out":
+        args.out = value;
+        break;
+      case "--only":
+        args.only = new Set(value.split(","));
+        break;
+      case "--widths":
+        args.widths = value.split(",").map(Number);
+        break;
+      default:
+        continue;
+    }
+    i += 1;
   }
   return args;
 }
