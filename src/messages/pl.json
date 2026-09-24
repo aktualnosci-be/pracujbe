@@ -625,7 +625,8 @@
     "moderationLocked": "Ta treść jest ograniczona decyzją moderacyjną, więc nie można zmienić jej statusu.",
     "guestApplyUnavailable": "Aplikacja bez konta jest chwilowo niedostępna. Spróbuj później albo zaloguj się.",
     "emailNotVerified": "Najpierw potwierdź adres e-mail swojego konta — kliknij link, który wysłaliśmy przy rejestracji.",
-    "claimExpired": "Link do przypisania aplikacji wygasł (był ważny 30 dni)."
+    "claimExpired": "Link do przypisania aplikacji wygasł (był ważny 30 dni).",
+    "jobImportSensitiveData": "Ogłoszenie zawiera numer identyfikacyjny osoby lub dokumentu, więc go nie zaimportowaliśmy. Wypełnij formularz ręcznie."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -1181,7 +1182,9 @@
     "screeningOptional": "(opcjonalnie)",
     "screeningRequired": "Odpowiedz na to pytanie.",
     "screeningYes": "Tak",
-    "screeningNo": "Nie"
+    "screeningNo": "Nie",
+    "sensitiveIdHint": "Do aplikowania nie jest potrzebny numer NISS/BIS ani numer dokumentu tożsamości — nie wpisuj ich.",
+    "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania."
   },
   "guestApply": {
     "subtitle": "Aplikuj bez zakładania konta albo zaloguj się, aby użyć profilu. CV nie jest potrzebne.",
@@ -1233,7 +1236,8 @@
       "emailInvalid": "Podaj poprawny adres e-mail, np. jan@example.com.",
       "messageTooLong": "Wiadomość może mieć najwyżej 500 znaków.",
       "consentRequired": "Musisz zaakceptować zgodę, aby wysłać aplikację.",
-      "idempotencyKeyInvalid": "Odśwież stronę i wyślij formularz ponownie."
+      "idempotencyKeyInvalid": "Odśwież stronę i wyślij formularz ponownie.",
+      "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania."
     }
   },
   "legal": {
@@ -1450,7 +1454,8 @@
     "errorFileTooLarge": "Plik jest za duży. Maksymalny rozmiar to 5 MB.",
     "errorFileType": "Obsługujemy tylko obrazy PNG, JPG i WebP.",
     "errorUrlMissing": "Wklej link do ogłoszenia.",
-    "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie."
+    "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie.",
+    "contactNote": "Adresów e-mail, numerów telefonu i numerów identyfikacyjnych nie przenosimy do formularza. E-mail kontaktowy wpisz ręcznie w ostatnim kroku."
   },
   "messages": {
     "title": "Wiadomości",
@@ -1889,7 +1894,8 @@
       "messageTooLong": "Wiadomość jest za długa.",
       "phoneInvalid": "Podaj poprawny numer telefonu.",
       "termsRequired": "Musisz zaakceptować zgodę, aby wysłać aplikację.",
-      "idempotencyKeyInvalid": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie."
+      "idempotencyKeyInvalid": "Nie udało się wysłać formularza. Odśwież stronę i spróbuj ponownie.",
+      "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania."
     }
   },
   "offer": {
