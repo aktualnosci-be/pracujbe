@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
+import { usePathname } from 'next/navigation';
 import { getConsent, type ConsentRecord } from '@/lib/consent';
 import { subscribeConsent, syncTrackers } from '@/lib/consent-store';
+import { allowsTrackingOnPath } from '@/lib/analytics/route-policy';
 
 /**
  * Ładowanie skryptów analityki/marketingu — WYŁĄCZNIE po świadomej zgodzie.
@@ -23,6 +25,8 @@ const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
 export function Analytics() {
   const [record, setRecord] = useState<ConsentRecord | null>(null);
+  const pathname = usePathname();
+  const routeAllowed = allowsTrackingOnPath(pathname);
 
   useEffect(() => {
     // Stan początkowy z cookie (np. zgoda z poprzedniej wizyty) + subskrypcja zmian.
@@ -30,8 +34,8 @@ export function Analytics() {
     return subscribeConsent(setRecord);
   }, []);
 
-  const analyticsGranted = record?.categories.analytics === true;
-  const marketingGranted = record?.categories.marketing === true;
+  const analyticsGranted = routeAllowed && record?.categories.analytics === true;
+  const marketingGranted = routeAllowed && record?.categories.marketing === true;
 
   // Egzekwuj stan trackerów przy każdej zmianie zgody: skuteczne WYCOFANIE (ga-disable / fbq
   // revoke + czyszczenie cookies), a przy ponownej zgodzie zdjęcie blokady. Uzupełnia (nie

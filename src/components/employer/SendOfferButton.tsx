@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Toast } from '@/components/ui/toast';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
+import { BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, INFO_LABEL, INFO_VALUE, PANEL_H2 } from '@/components/dashboard/panel-styles';
 
 /**
  * SendOfferButton — wysłanie propozycji do dopasowanego kandydata (panel pracodawcy).
@@ -151,7 +152,7 @@ export function SendOfferButton({
       <LightDialogRoot open={open} onOpenChange={(next) => (pending ? undefined : setOpen(next))}>
         <Dialog.Trigger
           aria-label={td('sendOfferTo', { name: candidateName, job })}
-          className={cn(buttonVariants({ size: 'sm' }), className)}
+          className={cn(BTN_SMALL, 'border-primary bg-primary text-primary-foreground hover:bg-primary-dark', className)}
         >
           <Send className="size-4" aria-hidden="true" />
           {td('sendOffer')}
@@ -164,7 +165,7 @@ export function SendOfferButton({
         >
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <Dialog.Title className="text-lg font-semibold text-foreground">
+              <Dialog.Title className={PANEL_H2}>
                 {td('offerDialogTitle')}
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-muted-foreground">
@@ -180,20 +181,20 @@ export function SendOfferButton({
             </Dialog.Close>
           </div>
 
-          <dl className="mb-4 grid gap-3 rounded-lg border border-border p-4">
+          <dl className="mb-4 grid gap-3 rounded-[16px] border border-border bg-soft p-4">
             <div className="min-w-0">
-              <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <dt className={INFO_LABEL}>
                 {td('offerDialogCandidate')}
               </dt>
-              <dd className="mt-1 break-words text-base font-semibold text-foreground">
+              <dd className={INFO_VALUE}>
                 {candidateName}
               </dd>
             </div>
             <div className="min-w-0">
-              <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <dt className={INFO_LABEL}>
                 {td('offerDialogJob')}
               </dt>
-              <dd className="mt-1 break-words text-base font-semibold text-foreground">
+              <dd className={INFO_VALUE}>
                 {jobSlug ? (
                   <Link href={`/oferty-pracy/${jobSlug}`} className="text-primary hover:underline">
                     {job}
@@ -239,11 +240,11 @@ export function SendOfferButton({
 
             <div className="flex flex-wrap justify-end gap-2">
               <Dialog.Close asChild>
-                <Button type="button" variant="outline" disabled={pending}>
+                <Button type="button" variant="outline" disabled={pending} className={cn(BTN_SECONDARY, 'h-auto whitespace-normal')}>
                   {tc('cancel')}
                 </Button>
               </Dialog.Close>
-              <Button type="submit" disabled={pending} aria-busy={pending || undefined}>
+              <Button type="submit" disabled={pending} aria-busy={pending || undefined} className={cn(BTN_PRIMARY, 'h-auto whitespace-normal')}>
                 <Send className="size-4" aria-hidden="true" />
                 {td('sendOffer')}
               </Button>

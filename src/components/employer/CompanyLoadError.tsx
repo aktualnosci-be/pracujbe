@@ -3,6 +3,8 @@
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
+import { BTN_PRIMARY, NOTICE, NOTICE_TEXT, NOTICE_TITLE } from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 export function CompanyLoadError(): React.JSX.Element {
   const t = useTranslations('company');
@@ -10,22 +12,12 @@ export function CompanyLoadError(): React.JSX.Element {
   const router = useRouter();
 
   return (
-    <section
-      role="alert"
-      className="rounded-3xl border border-error/30 bg-card p-5 sm:p-7"
-    >
-      <h2 className="text-xl font-semibold text-foreground">
-        {t('loadError')}
-      </h2>
-      <p className="mt-2 text-base leading-relaxed text-muted-foreground">
-        {t('loadErrorHint')}
-      </p>
-      <Button
-        type="button"
-        size="lg"
-        className="mt-5 min-h-12"
-        onClick={() => router.refresh()}
-      >
+    <section role="alert" className={cn(NOTICE, 'border-error/30 bg-card')}>
+      <div className="min-w-0">
+        <h2 className={NOTICE_TITLE}>{t('loadError')}</h2>
+        <p className={NOTICE_TEXT}>{t('loadErrorHint')}</p>
+      </div>
+      <Button type="button" className={cn(BTN_PRIMARY, 'h-auto whitespace-normal')} onClick={() => router.refresh()}>
         {tCommon('retry')}
       </Button>
     </section>

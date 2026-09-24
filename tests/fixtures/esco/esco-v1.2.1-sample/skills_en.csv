@@ -1,0 +1,157 @@
+conceptType,conceptUri,skillType,reuseLevel,preferredLabel,altLabels,hiddenLabels,status,modifiedDate,scopeNote,definition,inScheme,description
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/01fec851-b5f4-419b-940a-3b4c835adfa8,skill/competence,cross-sector,tend packaging machines,"mind packaging machines
+look after packaging machines
+take care of packaging machines
+watch packaging machines
+tend a packaging machines
+tend packaging machinery",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/02e235f4-a30a-412a-a06e-1c471ad28678,skill/competence,sector-specific,follow procedures to control substances hazardous to health,"follow control of substances hazardous to health procedures
+follow control of health procedures for hazardous substances
+ensure safe use of substances hazardous to health
+comply with guidelines for use of hazardous substances
+follow health procedures for the control of hazardous substances",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/055ff233-6569-43db-9f95-a4b03dca97da,skill/competence,sector-specific,operate warehouse record systems,"maintain records of products and order information using warehouse system
+use warehouse record systems
+record product information using warehouse systems
+record information using warehouse systems
+use record systems in warehouses
+operate record systems in warehouses
+utilise warehouse record systems
+log information with warehouse record system
+utilise record systems in warehouses",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/059b2748-e1df-43d2-8a08-0331fb8d0ddf,knowledge,sector-specific,types of cargo,"types of freight
+categories of cargo
+classes of cargo
+classifications of cargo
+forms of freight
+classes of freight
+cargo types
+kinds of cargo
+categories of freight
+classifications of freight
+freight types
+forms of cargo",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/078861f5-b901-48a5-951e-a3ad0a4fa0bd,skill/competence,cross-sector,operate warehouse materials,"operation of warehouse materials
+conduct warehouse materials
+operate warehouse material
+run warehouse materials
+operating warehouse materials
+perform warehouse materials
+undertake warehouse materials",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/082967d4-b94c-4305-aa13-35a6aa8c5c7c,skill/competence,cross-sector,cooperate with colleagues,"collaborate with colleagues
+work cooperatively
+work together with colleagues
+work in collaboration with co-workers
+work in collaboration with colleague
+work in cooperation with colleagues
+work together with co-workers
+collaborate with co-workers
+work collaboratively
+cooperate with co-workers
+work in cooperation with co-workers",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/0da516ee-e70e-4384-be13-f5ff80be8127,skill/competence,cross-sector,communicate with customers,"supply customer service
+assist customers
+communicate with clients
+respond to customers
+engage with customers
+interact with customers
+respond to customer requests
+talk with customers
+interact with clients
+provide customer service
+help customers",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/0ff99f51-40d9-42f1-a1ec-377b2bb5e15f,skill/competence,cross-sector,comply with food safety and hygiene,"comply with hygiene and food safety
+comply with safety and hygiene of food
+maintain food safety practices in kitchen
+follow food safety and hygiene practices",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/110d7aa3-e44e-4cce-a927-8d4de615f3d9,skill/competence,cross-sector,sort waste,"categorise waste
+sort refuse
+organise waste
+separate waste into different categories
+perform activities to separate waste
+sort rubbish
+conduct activities to separate waste
+sort garbage
+organise refuse
+perform waste separation activities
+arrange waste
+group waste according to characteristics",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/1316577b-31f7-437f-97ce-27c408b87a55,skill/competence,sector-specific,prepare dairy products for use in a dish,"prepare and use dairy products in a dish
+use dairy items for meals
+utilise dairy products in recipes
+prepare dishes with dairy products",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/13d96098-2ff0-46b8-b326-b7c0e18cc1f1,knowledge,sector-specific,nutrition,diet,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/13e1c0a2-b90d-46f4-be51-11730360b38d,skill/competence,sector-specific,lay bricks,"brick laying
+bricklaying
+build with bricks
+brickworking
+build brick wall
+brickbuilding
+laying bricks
+build wall with bricks",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/143d889d-3128-45af-805b-a2d5a1d501c7,skill/competence,cross-sector,manage stocked company material,"supervise stocked company material
+stocked company material management
+manage stocked company materials
+oversee stocked company material
+managing stocked company material
+regulate stocked company material
+maintain stocked company material",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/144318ce-d147-49fb-ae0b-3c5a9a677c14,skill/competence,sector-specific,control the performance of the vehicle,"anticipate performance of vehicle
+control the behaviour of the vehicle
+steer vehicle effectively
+steer the performance of the vehicle
+understand and anticipate vehicle behaviour
+steer the behaviour of the vehicle
+control vehicle performance
+anticipate vehicle performance
+control vehicle behaviour",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/156f8c5b-894a-4ccc-a70e-37a2726f3f00,skill/competence,cross-sector,work ergonomically,"plan an ergonomic work station
+work to set up an ergonomic work station
+work in an ergonomic way",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/16801a68-549b-4eaf-9531-f2d516a9380c,skill/competence,cross-sector,apply proofing membranes,"installing proofing membranes
+apply waterproofing membranes
+applying damp-proofing membranes
+applying waterproofing membranes
+installing waterproofing membranes
+apply damp-proofing membranes
+applying proofing membranes
+install damp-proofing membranes
+installing damp-proofing membranes
+install waterproofing membranes",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/1a16f557-01fc-4d64-b25e-a51279a45992,knowledge,sector-specific,car cleaning procedures,"car tidying up procedures
+car tidying procedures
+car cleansing procedures
+car cleansing procedure
+car cleaning procedure
+car clear procedures",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/20b9852f-a445-4097-8273-4a18fa6bfff0,skill/competence,sector-specific,apply restoration techniques,"apply restorative techniques
+apply restoration methods
+apply techniques for restoration
+implement restoration methods",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/210827e3-3129-45a2-8683-70399f3f561f,skill/competence,cross-sector,order supplies,"order of supplies
+select supplies to be ordered
+order supply
+place a product order",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/29b326ea-a9c8-4963-b35a-8541d0cdff77,skill/competence,cross-sector,store raw food materials,"stock raw prime ingredients
+stored raw food materials
+stock raw food materials
+store materials of raw food",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/3172f001-a4dd-4e7e-9f74-9707b2e7c6e1,skill/competence,cross-sector,read maps,"interpret a map
+read a map
+map reading
+map interpreting
+reading maps
+interpret maps
+interpreting maps",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/8215bbba-2f6d-4530-bf41-904d871eaf72,skill/competence,cross-sector,manoeuvre heavy trucks,"maneuver heavy trucks
+drive heavy trucks
+control movement of lorries
+drive lorries
+manipulate movement of trucks
+drive heavy goods vehicles
+manoeuvre heavy goods vehicles
+manipulate movement of lorries
+manipulate movement of heavy goods vehicles
+control movement of trucks
+control movement of heavy goods vehicles
+manoeuvre lorries",,released,,,,,

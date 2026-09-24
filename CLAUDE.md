@@ -104,6 +104,7 @@ pracujbe/
 │  └─ LAUNCH_CHECKLIST.md
 ├─ supabase/
 │  ├─ migrations/                 # *.sql wersjonowane (kolejność wg prefiksu)
+│  ├─ rollback/                   # ręczne skrypty wycofania (np. 0097 ESCO)
 │  └─ seed.sql                    # dane demonstracyjne (oznaczone is_demo=true)
 ├─ src/
 │  ├─ app/
@@ -640,6 +641,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = suma `detail_views` z lejka ofert
   (#99), „brak danych” tylko bez uprawnień rekrutera — bez fałszywej konwersji 0%. Kafelki/lejek/kolumny zawijają się przy
   200% tekstu (#318). Przełącznik firmy: nazwa w etykiecie, `aria-current`, komunikat błędu (#322).
+  Wygląd panelu i kreatora oferty = kalka prototypu „04 Ludzie i praca” (#5/#6): klasy w
+  `src/components/dashboard/panel-styles.ts` (wspólne z adminem), sidebar `.side-item`, opis
+  odstępstw w `docs/design/people-passport/README.md`.
   Pulpit: karty ofert w stylu paszportu (#171), jawny błąd najnowszych zgłoszeń z ponowieniem
   (#157), „Zobacz wszystkie” → `/employer/aplikacje` (#164); bramka axe 320/1280 px i 200% tekstu
   w 4 językach — `tests/e2e/employer-dashboard-a11y.spec.ts`.
@@ -751,6 +755,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się
   policzyć” z ponowieniem, nigdy procent z niepełnych danych.
+- [~] Taksonomia ESCO v1.2.1 (#93, migracja `0097`, `docs/ESCO.md`): zawody/umiejętności z
+  przypiętego snapshotu tylko w PL/NL/FR/EN (RO/UK z issue pominięte — decyzja właściciela).
+  `esco_uri` = klucz, `occupation_labels`/`skill_labels` (preferred/alternative, FK do
+  `supported_locales`), `occupation_skills` (essential/optional), `esco_snapshots` (pliki +
+  SHA-256, atrybucja, raport). Import `npm run esco:import` (`scripts/esco/`): jedna transakcja
+  jako service_role, upsert po URI, ponowny import = zero zmian, inne pliki tej wersji →
+  `ESCO_CHECKSUM_MISMATCH`, wiersz ręczny z tym samym URI → `ESCO_MANUAL_CONFLICT` (skip/overwrite
+  tylko jawnie). Fallback `occupation_label`/`skill_label`: język → en → name. Słowniki czytelne
+  publicznie, zapis tylko service_role. Dowód: `rls.sql` ESCO93, unit `esco-snapshot`,
+  `npm run test:esco`. Fragment testowy (API ESCO, `is_demo`) w `tests/fixtures/esco/`.
+  **Do zrobienia (właściciel):** pobranie oficjalnych paczek CSV (formularz z linkiem e-mail),
+  zatwierdzenie `data/esco/esco-v1.2.1.manifest.json`, pełny import; atrybucja w UI i matching
+  na ESCO = osobne issues.
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -825,6 +842,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   centrum preferencji dla wszystkich kategorii, `text/plain`, tożsamość i adres pocztowy nadawcy
   w stopce marketingu, budżet w hooku e-maili Auth, rezerwacja kampania+odbiorca, decyzja o
   trackingu na odebranym `.eml`.
+  Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
+  (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
+  `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
+  niezależny od dostawcy: `src/lib/email/provider-events.ts`. RPC `record_email_event`
+  (service_role): status tylko „w górę”, czasy zdarzeń; trwałe odbicie i skarga → aktywna
+  blokada w `email_suppressions` (jedna na adres, historia zostaje). `enqueue_email` pomija
+  zablokowany adres, `claim_email_batch` wygasza wcześniejsze wiersze (`suppressed_address`).
+  E-maile Auth nie są blokowane (obowiązkowe). Panel `/admin/poczta`: lista, filtr, zdjęcie
+  blokady z uzasadnieniem (`admin_lift_email_suppression`, audyt). Dowód: `rls.sql` sekcja
+  ML44, `email-delivery-webhook.test.ts`, `admin-email-suppressions.test.ts`, E2E
+  `admin-email-suppressions.spec`. **Do zrobienia (#44):** alarmy (wiek kolejki, wzrost
+  bounce/complaint), stany w `/api/health`, adapter drugiego dostawcy.
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
@@ -955,6 +984,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Bez kluczy poza produkcją = wyłączony; w produkcji brak kluczy = fail-closed rejestracji/resetu.
   CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. Polityka `report`
   chroni formularz zgłoszenia treści (#41). **Do zrobienia:** formularz kontaktu (`contact`).
+- [~] Operacje #47 (część kodowa, migracja `0096`): czujki `GET /api/health/ops` — tylko z
+  `HEALTH_CHECK_SECRET` (inaczej 404), same liczby z `ops_metrics()` (rola `pracujbe_ops` bez praw
+  do tabel; login `DATABASE_OPS_URL`, pula `ops` w `pool.ts`, fallback service-role), progi w
+  `src/lib/ops/sensors.ts` (wiek kolejek e-mail/auth, porzucone dzierżawy, zawieszone webhooki,
+  opóźnienie maintenance, 80% połączeń) → 503 `alert` / 200 = recovery. Kopia zaszyfrowana `age`
+  z manifestem i retencją (`scripts/db/backup.sh`) + odtworzenie z porównaniem sum
+  (`restore-backup.sh`), test `npm run test:backup` (PG16, 8 kontroli ujemnych; nie w CI).
+  `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
+  sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
+  `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
+  cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
+  `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).

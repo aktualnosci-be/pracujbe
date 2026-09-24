@@ -15,6 +15,7 @@ import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import { toCamel } from '@/components/ui/status-pill';
 import { Toast } from '@/components/ui/toast';
+import { BTN_SMALL } from '@/components/dashboard/panel-styles';
 
 /**
  * ApplicationStatusMenu — menu zmiany statusu aplikacji (panel pracodawcy).
@@ -173,7 +174,7 @@ export function ApplicationStatusMenu({
         aria-expanded={open}
         disabled={pending}
         onClick={() => (open ? close() : setOpen(true))}
-        className="inline-flex min-h-12 items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-soft hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        className={cn(BTN_SMALL, 'min-h-12 border-border text-foreground hover:bg-soft')}
       >
         {td('colStatusEmp')}
         <ChevronDown className="size-3.5" aria-hidden="true" />
@@ -182,7 +183,7 @@ export function ApplicationStatusMenu({
       {open ? (
         <div
           id={panelId}
-          className="absolute right-0 top-[calc(100%+0.25rem)] z-50 min-w-[12rem] max-w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-border bg-background p-1 shadow-md"
+          className="absolute right-0 top-[calc(100%+0.25rem)] z-50 min-w-[12rem] max-w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-[14px] border border-border bg-card p-1 shadow-[0_5px_20px_hsl(var(--foreground)/0.07)]"
         >
           {confirmTarget ? (
             <div className="space-y-3 p-2" role="group" aria-label={td('statusMenuOptions', labelParams)}>
@@ -194,14 +195,14 @@ export function ApplicationStatusMenu({
                   ref={confirmRef}
                   type="button"
                   onClick={() => submit(confirmTarget)}
-                  className="inline-flex min-h-12 items-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                  className={cn(BTN_SMALL, 'border-primary bg-primary text-primary-foreground hover:bg-primary-dark')}
                 >
                   {td('statusConfirmAction')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmTarget(null)}
-                  className="inline-flex min-h-12 items-center rounded-md border border-border px-4 text-sm font-medium text-foreground hover:bg-soft"
+                  className={cn(BTN_SMALL, 'border-border text-foreground hover:bg-soft')}
                 >
                   {tc('cancel')}
                 </button>
@@ -214,7 +215,7 @@ export function ApplicationStatusMenu({
                   <button
                     type="button"
                     onClick={() => handleSelect(target)}
-                    className="flex min-h-12 w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-soft"
+                    className="flex min-h-12 w-full items-center gap-2 rounded-[10px] px-2.5 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-muted"
                   >
                     <span className="truncate">{ts(toCamel(target))}</span>
                   </button>

@@ -144,6 +144,26 @@ export function parseUserRoleFilter(raw: string | undefined | null): UserRoleFil
 }
 
 /* ---------------------------------------------------------------------------
+ * Blokady adresów e-mail (#44)
+ * ------------------------------------------------------------------------- */
+
+/** Filtr listy blokad: domyślnie aktywne. */
+export const EMAIL_SUPPRESSION_FILTERS = ['active', 'lifted', 'all'] as const;
+export type EmailSuppressionFilter = (typeof EMAIL_SUPPRESSION_FILTERS)[number];
+
+export function parseEmailSuppressionFilter(raw: string | undefined | null): EmailSuppressionFilter {
+  return raw && (EMAIL_SUPPRESSION_FILTERS as readonly string[]).includes(raw)
+    ? (raw as EmailSuppressionFilter)
+    : 'active';
+}
+
+/** Powód blokady (`email_suppressions.reason`, 0098) → klucz i18n (namespace `admin`). */
+export const EMAIL_SUPPRESSION_REASON_KEY: Record<string, string> = {
+  hard_bounce: 'emailReasonHardBounce',
+  complaint: 'emailReasonComplaint',
+};
+
+/* ---------------------------------------------------------------------------
  * Powody zgłoszeń
  * ------------------------------------------------------------------------- */
 
@@ -193,7 +213,13 @@ export function reportReasonView(reason: string): ReportReasonView {
  * ------------------------------------------------------------------------- */
 
 /** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072). */
-export const AUDIT_ENTITY_TYPES = ['company', 'report', 'application', 'offer'] as const;
+export const AUDIT_ENTITY_TYPES = [
+  'company',
+  'report',
+  'application',
+  'offer',
+  'email_suppression',
+] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
 /** Akcje audytu → klucz i18n (namespace `admin`). Nieznana akcja → `auditActionOther`. */
@@ -208,6 +234,8 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'application.status_changed': 'auditActionApplicationStatus',
   'offer.sent': 'auditActionOfferSent',
   'offer.status_changed': 'auditActionOfferStatus',
+  'email.suppressed': 'auditActionEmailSuppressed',
+  'email.suppression_lifted': 'auditActionEmailSuppressionLifted',
 };
 
 export function parseAuditEntity(raw: string | undefined | null): AuditEntityType | null {

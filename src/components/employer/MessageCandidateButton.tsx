@@ -9,6 +9,8 @@ import { openConversation } from '@/lib/actions/messages';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { Button } from '@/components/ui/button';
 import { Toast } from '@/components/ui/toast';
+import { BTN_SECONDARY } from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * MessageCandidateButton — „Napisz wiadomość" ze szczegółu zgłoszenia (#300).
@@ -64,7 +66,7 @@ export function MessageCandidateButton({
         disabled={pending}
         aria-busy={pending}
         aria-label={td('employerApplicationMessageLabel', { name: candidateName })}
-        className="min-h-12 rounded-xl px-5"
+        className={cn(BTN_SECONDARY, 'h-auto whitespace-normal')}
       >
         <MessageSquare aria-hidden="true" />
         {td('employerApplicationMessage')}
