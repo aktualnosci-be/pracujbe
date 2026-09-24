@@ -1,28 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import plMessages from '../../src/messages/pl.json';
-
-/** Dane strukturalne w wyrenderowanym HTML (#313): JobPosting i Article. */
+/**
+ * Dane strukturalne w wyrenderowanym HTML (#313): Article. JobPosting — oferty demo go nie
+ * emitują (#297), więc sprawdza go tests/e2e/job-posting-fixture.spec.ts.
+ */
 async function jsonLdOfType(page: Page, type: string): Promise<Record<string, unknown> | undefined> {
   return (await page.locator('script[type="application/ld+json"]').allTextContents())
     .map((raw) => JSON.parse(raw) as Record<string, unknown>)
     .find((item) => item['@type'] === type);
 }
-
-test('JobPosting ma pełny opis HTML i validThrough tylko z realnej daty wygaśnięcia', async ({ page }) => {
-  await page.goto('/pl/oferty-pracy');
-  const href = await page.locator('a[href*="/oferty-pracy/"]').first().getAttribute('href');
-  expect(href).toBeTruthy();
-  await page.goto(href!);
-
-  const data = await jsonLdOfType(page, 'JobPosting');
-  expect(data).toBeTruthy();
-  const description = String(data!.description);
-  expect(description).toMatch(/^<p>/);
-  expect(description).toContain(`<h3>${plMessages.job.requirementsMandatory}</h3><ul><li>`);
-  // Dane demonstracyjne nie mają daty wygaśnięcia → pole pominięte, bez „datePosted + 60 dni”.
-  expect(data).not.toHaveProperty('validThrough');
-});
 
 test('Article poradnika ma obraz marki, dateModified i logo wydawcy', async ({ page }) => {
   await page.goto('/pl/poradniki/praca-w-belgii-bez-znajomosci-jezyka');

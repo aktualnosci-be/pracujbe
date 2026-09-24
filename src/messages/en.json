@@ -301,7 +301,10 @@
     "saveUnavailable": "Saving is available for candidate accounts with a connected service",
     "saveLoading": "Loading saved jobs",
     "saveRetry": "Could not load saved jobs. Retry",
-    "saveFailed": "Could not save the change. Try again."
+    "saveFailed": "Could not save the change. Try again.",
+    "demoNoticeTitle": "Sample data — these job offers are not real",
+    "demoNoticeBody": "The site is running as a demo. The job offers and companies on this page are fictional, not verified, and you cannot apply to them.",
+    "demoBadge": "Sample offer"
   },
   "job": {
     "apply": "Apply for this job",
@@ -551,7 +554,7 @@
     "rateLimited": "Too many attempts. Please wait a moment and try again.",
     "companyNotVerified": "Your company hasn't been verified yet.",
     "onboardingIncomplete": "Complete all required profile fields to finish setup.",
-    "jobNotDraft": "This job can only be edited while it's a draft.",
+    "jobNotDraft": "This job is already published. Edit it with “Edit” in the jobs list.",
     "billingUnavailable": "Payments are temporarily unavailable. Please try again later.",
     "checkoutInProgress": "You already have a checkout in progress. Finish it or try again shortly.",
     "entitlementLimit": "You've reached your plan's active job limit. Upgrade your plan to publish more.",
@@ -559,7 +562,9 @@
     "internal": "Something went wrong on our end. We're working on it.",
     "generic": "Something went wrong. Please try again.",
     "demoUnavailable": "This feature is not available in the demo version of the site.",
-    "invalidTransition": "This status change is not possible at the current stage. Refresh the page and choose another option."
+    "invalidTransition": "This status change is not possible at the current stage. Refresh the page and choose another option.",
+    "jobNotEditable": "This job can't be edited right now. Only an active or paused job can be changed.",
+    "jobEditConflict": "Someone changed this job in the meantime. Open it again from the jobs list to see the current version."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -675,8 +680,6 @@
     "jobReopen": "Reopen",
     "jobStatusUpdated": "Job status updated.",
     "resumeDraft": "Finish draft",
-    "jobNotDraftTitle": "This job is no longer a draft",
-    "jobNotDraftHint": "Manage a published job from the jobs list: pause, close or reopen it.",
     "activeOffers": "Active offers",
     "newApplications": "New applications",
     "matchedCandidates": "Matched candidates",
@@ -843,7 +846,13 @@
     "viewProposal": "View proposal",
     "rowActionsFor": "Actions: {title}",
     "companyFallback": "Your company",
-    "employerShellLoadError": "We couldn’t load your company account details. Please try again."
+    "employerShellLoadError": "We couldn’t load your company account details. Please try again.",
+    "jobNotEditableTitle": "This job can't be edited right now",
+    "jobNotEditableHint": "Reopen a closed or expired job from the jobs list first, then edit it.",
+    "editJob": "Edit",
+    "editJobLabel": "Edit job: {title}",
+    "viewJob": "View job",
+    "viewJobLabel": "View job: {title}"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -946,6 +955,7 @@
     "certificatesPlaceholder": "e.g. VCA, qualification certificate",
     "availabilityLabel": "Availability",
     "availImmediate": "Immediately",
+    "availWithinTwoWeeks": "Within 2 weeks",
     "availWithinMonth": "Within a month",
     "availWithinThreeMonths": "Within 3 months",
     "availFlexible": "Flexible",
@@ -1066,7 +1076,9 @@
     "guestReturn": "After you log in or confirm your email, you will come back to this job.",
     "errorNetwork": "We couldn't reach the server. Check your connection and try again — what you entered has been kept.",
     "viewApplications": "View your applications",
-    "candidateOnly": "Only a candidate account can apply."
+    "candidateOnly": "Only a candidate account can apply.",
+    "demoJobTitle": "This is a sample job offer",
+    "demoJobBody": "This offer and company are fictional and only show how the site works. You cannot apply to it."
   },
   "legal": {
     "termsTitle": "Terms of Service",
@@ -1223,7 +1235,16 @@
     "notVerifiedNote": "The draft has been saved. Publishing will be available once the company is verified.",
     "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list.",
     "stepAnnounce": "Step {current} of {total}: {title}",
-    "goToOffers": "Go to your job list"
+    "goToOffers": "Go to your job list",
+    "editTitle": "Edit job",
+    "editSubtitleActive": "This job is published. Save your changes with “Save changes” and candidates will see them right away. The job status and applications stay as they are.",
+    "editSubtitlePaused": "This job is paused. Save your changes with “Save changes”; candidates will see them once you resume the job. Applications stay as they are.",
+    "viewOffer": "View the published job",
+    "saveChanges": "Save changes",
+    "editSaveHint": "Your changes are not saved yet. Save them with “Save changes”.",
+    "editSaved": "Changes saved",
+    "editSavedDemo": "Changes saved (demo mode)",
+    "editFixStep": "Your changes weren't saved. Fix the highlighted fields in step {step}: {title}."
   },
   "messages": {
     "title": "Messages",
@@ -1244,6 +1265,7 @@
     "send": "Send",
     "sending": "Sending…",
     "sendError": "Could not send the message. Please try again.",
+    "sendErrorUncertain": "We couldn't confirm the message was sent. Send it again — it won't be duplicated.",
     "you": "You",
     "systemLabel": "System",
     "back": "Back to list",
@@ -1425,7 +1447,15 @@
       "remoteJob": "Remote work — location does not matter",
       "withinCommuteRadius": "Workplace within your commute radius"
     },
-    "loadError": "Your match could not be calculated right now. This is not an assessment of your profile — please try again."
+    "loadError": "Your match could not be calculated right now. This is not an assessment of your profile — please try again.",
+    "languageLevelBelow": "{language}: required level {required}, your level {actual}",
+    "languageLevelUnknown": "{language}: required level {required} — add your level to your profile",
+    "levels": {
+      "basic": "basic",
+      "intermediate": "intermediate",
+      "fluent": "fluent",
+      "native": "native"
+    }
   },
   "application": {
     "error": {

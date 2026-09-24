@@ -6,6 +6,7 @@ import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server
 import { pickClientMessages } from '@/i18n/client-messages';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { prerenderParamsAtBuild } from '@/lib/static-rendering';
 import { CookieConsent } from '@/components/cookies/CookieConsent';
 import { SkipLink } from '@/components/layout/SkipLink';
 import { consentBootScript, NOSCRIPT_HIDE_BANNER } from '@/lib/consent-boot';
@@ -33,8 +34,14 @@ type LocaleLayoutProps = {
   params: Promise<{ locale: string }>;
 };
 
+/**
+ * Języki do prerenderu w buildzie. Przy skonfigurowanej bazie lista jest pusta (#298): strony
+ * z ofertami nie mogą czytać bazy w buildzie, a strona główna dziedziczy parametry z tego layoutu.
+ * Strony wtedy powstają przy pierwszym żądaniu i trafiają do cache ISR; strony treściowe z własnym
+ * `generateStaticParams` (poradniki, „Dla pracodawców”) nadal prerenderują się w buildzie.
+ */
 export function generateStaticParams(): Array<{ locale: string }> {
-  return routing.locales.map((locale) => ({ locale }));
+  return prerenderParamsAtBuild(routing.locales.map((locale) => ({ locale })));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -102,7 +109,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
       </head>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <SkipLink />
+          <SkipLink locale={locale} />
           <CookieConsent />
           {children}
           <ServiceWorkerRegister />

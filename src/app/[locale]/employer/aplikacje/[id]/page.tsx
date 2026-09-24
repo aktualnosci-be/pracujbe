@@ -23,6 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 
 const AVAILABILITY_KEYS: Record<string, string> = {
   immediate: 'availImmediate',
+  within_two_weeks: 'availWithinTwoWeeks',
   within_month: 'availWithinMonth',
   within_three_months: 'availWithinThreeMonths',
   flexible: 'availFlexible',

@@ -7,7 +7,9 @@ import { Link, redirect } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { brandShareImageUrl } from '@/lib/seo/structured-data';
-import { getJobFilterFacets, getJobs } from '@/lib/jobs';
+import { getJobFilterFacets, getJobs, isShowingDemoJobs } from '@/lib/jobs';
+import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
+
 import {
   localizedLocationLabel,
   localizeLocationFacets,
@@ -434,6 +436,8 @@ export default async function JobsListPage({
             {t('subtitle')}
           </p>
       </header>
+
+      {isShowingDemoJobs() ? <DemoJobsNotice className="mb-6" /> : null}
 
       {/* Wyszukiwarka (GET — działa bez JS, zachowuje aktywne filtry) */}
       <form

@@ -118,4 +118,17 @@ describe('Paszport oferty', () => {
     expect(button).toBeDisabled();
     expect(button).not.toHaveAttribute('aria-pressed');
   });
+
+  // #297: fikcyjna oferta demo jest oznaczona i nie ma odznaki weryfikacji firmy.
+  it.each(Object.entries(messages))('oferta demo: etykieta „przykładowa”, bez odznaki weryfikacji (%s)', async (locale, m) => {
+    await renderCard({ isDemo: true, companyVerified: true }, locale as keyof typeof messages);
+    expect(screen.getByText(m.jobs.demoBadge)).toBeVisible();
+    expect(screen.queryByText(m.job.verified)).not.toBeInTheDocument();
+  });
+
+  it('kontrola ujemna: oferta z bazy (bez isDemo) zachowuje odznakę i nie ma etykiety demo', async () => {
+    await renderCard({ companyVerified: true });
+    expect(screen.getByText(en.job.verified)).toBeVisible();
+    expect(screen.queryByText(en.jobs.demoBadge)).not.toBeInTheDocument();
+  });
 });

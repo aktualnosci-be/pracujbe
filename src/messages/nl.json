@@ -301,7 +301,10 @@
     "saveUnavailable": "Opslaan is beschikbaar voor kandidaten met een verbonden dienst",
     "saveLoading": "Opgeslagen vacatures laden",
     "saveRetry": "Laden mislukt. Probeer opnieuw",
-    "saveFailed": "Wijziging opslaan mislukt. Probeer opnieuw."
+    "saveFailed": "Wijziging opslaan mislukt. Probeer opnieuw.",
+    "demoNoticeTitle": "Voorbeeldgegevens — deze vacatures zijn niet echt",
+    "demoNoticeBody": "De site draait als demoversie. De vacatures en bedrijven op deze pagina zijn fictief, worden niet geverifieerd en je kunt er niet op solliciteren.",
+    "demoBadge": "Voorbeeldvacature"
   },
   "job": {
     "apply": "Solliciteer op deze functie",
@@ -551,7 +554,7 @@
     "rateLimited": "Te veel pogingen. Wacht even en probeer opnieuw.",
     "companyNotVerified": "Je bedrijf is nog niet geverifieerd.",
     "onboardingIncomplete": "Vul alle vereiste profielvelden in om de configuratie te voltooien.",
-    "jobNotDraft": "Deze vacature kan alleen als concept worden bewerkt.",
+    "jobNotDraft": "Deze vacature is al geplaatst. Pas ze aan met „Bewerken” in de vacaturelijst.",
     "billingUnavailable": "Betalingen zijn tijdelijk niet beschikbaar. Probeer het later opnieuw.",
     "checkoutInProgress": "Je hebt al een betaling gestart. Rond die af of probeer het zo opnieuw.",
     "entitlementLimit": "Je hebt de limiet van actieve vacatures in je plan bereikt. Upgrade om er meer te plaatsen.",
@@ -559,7 +562,9 @@
     "internal": "Er is een fout aan onze kant opgetreden. We werken eraan.",
     "generic": "Er ging iets mis. Probeer opnieuw.",
     "demoUnavailable": "Deze functie werkt niet in de demoversie van de website.",
-    "invalidTransition": "Deze statuswijziging is in de huidige fase niet mogelijk. Vernieuw de pagina en kies een andere optie."
+    "invalidTransition": "Deze statuswijziging is in de huidige fase niet mogelijk. Vernieuw de pagina en kies een andere optie.",
+    "jobNotEditable": "Deze vacature kan nu niet worden bewerkt. Alleen een actieve of gepauzeerde vacature kan worden aangepast.",
+    "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -675,8 +680,6 @@
     "jobReopen": "Opnieuw openen",
     "jobStatusUpdated": "Status van de vacature bijgewerkt.",
     "resumeDraft": "Concept afmaken",
-    "jobNotDraftTitle": "Deze vacature is geen concept meer",
-    "jobNotDraftHint": "Een geplaatste vacature beheer je via de vacaturelijst: pauzeren, sluiten of opnieuw openen.",
     "activeOffers": "Actieve vacatures",
     "newApplications": "Nieuwe sollicitaties",
     "matchedCandidates": "Gematchte kandidaten",
@@ -843,7 +846,13 @@
     "viewProposal": "Bekijk het voorstel",
     "rowActionsFor": "Acties: {title}",
     "companyFallback": "Je bedrijf",
-    "employerShellLoadError": "We konden de gegevens van je bedrijfsaccount niet laden. Probeer het opnieuw."
+    "employerShellLoadError": "We konden de gegevens van je bedrijfsaccount niet laden. Probeer het opnieuw.",
+    "jobNotEditableTitle": "Deze vacature kan nu niet worden bewerkt",
+    "jobNotEditableHint": "Open een gesloten of verlopen vacature eerst opnieuw via de vacaturelijst en pas ze daarna aan.",
+    "editJob": "Bewerken",
+    "editJobLabel": "Vacature bewerken: {title}",
+    "viewJob": "Vacature bekijken",
+    "viewJobLabel": "Vacature bekijken: {title}"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -946,6 +955,7 @@
     "certificatesPlaceholder": "bijv. VCA, kwalificatiegetuigschrift",
     "availabilityLabel": "Beschikbaarheid",
     "availImmediate": "Onmiddellijk",
+    "availWithinTwoWeeks": "Binnen 2 weken",
     "availWithinMonth": "Binnen een maand",
     "availWithinThreeMonths": "Binnen 3 maanden",
     "availFlexible": "Flexibel",
@@ -1066,7 +1076,9 @@
     "guestReturn": "Na het inloggen of het bevestigen van je e-mail kom je terug bij deze vacature.",
     "errorNetwork": "Er kon geen verbinding worden gemaakt met de server. Controleer je internet en probeer opnieuw — je ingevulde gegevens zijn bewaard.",
     "viewApplications": "Bekijk je sollicitaties",
-    "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount."
+    "candidateOnly": "Solliciteren kan alleen met een kandidatenaccount.",
+    "demoJobTitle": "Dit is een voorbeeldvacature",
+    "demoJobBody": "Deze vacature en dit bedrijf zijn fictief en laten alleen zien hoe de site werkt. Je kunt er niet op solliciteren."
   },
   "legal": {
     "termsTitle": "Algemene voorwaarden",
@@ -1223,7 +1235,16 @@
     "notVerifiedNote": "Het concept is opgeslagen. Publiceren kan zodra het bedrijf is geverifieerd.",
     "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen.",
     "stepAnnounce": "Stap {current} van {total}: {title}",
-    "goToOffers": "Naar je vacatures"
+    "goToOffers": "Naar je vacatures",
+    "editTitle": "Vacature bewerken",
+    "editSubtitleActive": "De vacature is geplaatst. Sla je wijzigingen op met „Wijzigingen opslaan”; kandidaten zien ze meteen. De status en sollicitaties blijven ongewijzigd.",
+    "editSubtitlePaused": "De vacature is gepauzeerd. Sla je wijzigingen op met „Wijzigingen opslaan”; kandidaten zien ze zodra je de vacature hervat. Sollicitaties blijven ongewijzigd.",
+    "viewOffer": "Geplaatste vacature bekijken",
+    "saveChanges": "Wijzigingen opslaan",
+    "editSaveHint": "De wijzigingen zijn nog niet opgeslagen. Sla ze op met „Wijzigingen opslaan”.",
+    "editSaved": "Wijzigingen opgeslagen",
+    "editSavedDemo": "Wijzigingen opgeslagen (demomodus)",
+    "editFixStep": "De wijzigingen zijn niet opgeslagen. Corrigeer de gemarkeerde velden in stap {step}: {title}."
   },
   "messages": {
     "title": "Berichten",
@@ -1244,6 +1265,7 @@
     "send": "Versturen",
     "sending": "Versturen…",
     "sendError": "Bericht kon niet worden verzonden. Probeer het opnieuw.",
+    "sendErrorUncertain": "We weten niet zeker of het bericht is aangekomen. Verstuur het opnieuw — er ontstaat geen dubbel bericht.",
     "you": "Jij",
     "systemLabel": "Systeem",
     "back": "Terug naar lijst",
@@ -1425,7 +1447,15 @@
       "remoteJob": "Thuiswerk — locatie speelt geen rol",
       "withinCommuteRadius": "Werkplek binnen jouw reisafstand"
     },
-    "loadError": "De match kon nu niet worden berekend. Dit is geen beoordeling van je profiel — probeer het opnieuw."
+    "loadError": "De match kon nu niet worden berekend. Dit is geen beoordeling van je profiel — probeer het opnieuw.",
+    "languageLevelBelow": "{language}: vereist niveau {required}, jouw niveau {actual}",
+    "languageLevelUnknown": "{language}: vereist niveau {required} — vul je niveau in je profiel in",
+    "levels": {
+      "basic": "basis",
+      "intermediate": "gemiddeld",
+      "fluent": "vloeiend",
+      "native": "moedertaal"
+    }
   },
   "application": {
     "error": {

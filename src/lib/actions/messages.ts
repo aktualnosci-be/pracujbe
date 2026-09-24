@@ -67,10 +67,23 @@ export async function openConversation(input: {
   return { ok: true, id: String(data) };
 }
 
-/** Wysyła wiadomość w konwersacji (tylko uczestnik — egzekwuje RPC). */
-export async function sendMessage(conversationId: string, body: string): Promise<MsgResult> {
+const clientMessageIdSchema = z.string().uuid();
+
+/**
+ * Wysyła wiadomość w konwersacji (tylko uczestnik — egzekwuje RPC).
+ * `clientMessageId` = stały UUID jednej operacji wysyłki (#147): ponowienie po utracie
+ * odpowiedzi z tym samym kluczem zwraca istniejącą wiadomość bez duplikatu i alertów.
+ */
+export async function sendMessage(
+  conversationId: string,
+  body: string,
+  clientMessageId: string,
+): Promise<MsgResult> {
   const parsed = messageBodySchema.safeParse(body);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!clientMessageIdSchema.safeParse(clientMessageId).success) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
 
   if (!isSupabaseConfigured()) return { ok: true, id: 'demo' };
 
@@ -83,6 +96,7 @@ export async function sendMessage(conversationId: string, body: string): Promise
   const { data, error } = await supabase.rpc('send_message', {
     p_conversation_id: conversationId,
     p_body: parsed.data,
+    p_client_message_id: clientMessageId,
   });
 
   if (error) return { ok: false, error: mapPgError(error.message) };

@@ -40,6 +40,10 @@ import {
  *   - `updateJobDraft`  — waliduje pojedynczy krok (schemat z `@/lib/validation/job`) i zapisuje
  *                          odpowiednie kolumny `jobs` + `job_translations` (locale = default oferty)
  *                          + `job_requirements` / `job_skills`. RLS pilnuje własności.
+ *   - `updatePublishedJob` — poprawka AKTYWNEJ/WSTRZYMANEJ oferty (#325): wszystkie kroki naraz,
+ *                          jedno transakcyjne RPC `update_published_job` (kompletność jak przy
+ *                          publikacji, firma verified, CAS po `updated_at`); status i zgłoszenia
+ *                          bez zmian.
  *   - `publishJob`      — ustawia `status = 'active'`, `published_at = now()`. Publikacja wymaga
  *                          firmy `verified` (RLS/with-check); niezweryfikowaną firmę mapujemy
  *                          proaktywnie na `COMPANY_NOT_VERIFIED` (backstop: RLS).
@@ -64,6 +68,9 @@ export type CreateDraftResult =
   | { ok: false; error: ErrorCode };
 export type SaveDraftResult = { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
 export type PublishResult = { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
+export type UpdatePublishedResult =
+  | { ok: true; demo?: boolean; slug?: string; updatedAt?: string }
+  | { ok: false; error: ErrorCode };
 
 /** Syntetyczny identyfikator szkicu w trybie DEMO (brak env) — przepływ działa bez DB. */
 const DEMO_DRAFT_ID = 'demo-draft';
@@ -74,6 +81,7 @@ const PLACEHOLDER_CONTRACT = 'permanent';
 
 /** Limity (okno 1 h) — chronią przed masowym tworzeniem/publikacją ofert. */
 const DRAFT_RATE_MAX = 30;
+const EDIT_RATE_MAX = 60;
 const PUBLISH_RATE_MAX = 20;
 const RATE_WINDOW_SECONDS = 3600;
 
@@ -103,6 +111,9 @@ function errorMessage(error: unknown): string | undefined {
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  if (m.includes('JOB_EDIT_CONFLICT')) return 'JOB_EDIT_CONFLICT';
+  if (m.includes('JOB_NOT_EDITABLE')) return 'JOB_NOT_EDITABLE';
+  if (m.includes('JOB_NOT_DRAFT')) return 'JOB_NOT_DRAFT';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
   if (m.includes('ENTITLEMENT_LIMIT')) return 'ENTITLEMENT_LIMIT';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
@@ -512,6 +523,132 @@ async function applyStep(
 
     default:
       return 'VALIDATION_FAILED';
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * updatePublishedJob — poprawka opublikowanej oferty (#325)
+ * ------------------------------------------------------------------------- */
+
+/** Treść kroków 1–9 → kształt `p_content` RPC `update_published_job` (0077). */
+function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
+  const s1 = steps[0] as JobStep1;
+  const s2 = steps[1] as JobStep2;
+  const s3 = steps[2] as JobStep3;
+  const s4 = steps[3] as JobStep4;
+  const s5 = steps[4] as JobStep5;
+  const s6 = steps[5] as JobStep6;
+  const s7 = steps[6] as JobStep7;
+  const s8 = steps[7] as JobStep8;
+  const s9 = steps[8] as JobStep9Draft;
+  return {
+    job: {
+      title: s1.title,
+      category: s1.category,
+      occupation: s1.occupation,
+      contract_type: s2.contractType,
+      working_hours: s2.workingHours,
+      shifts: nullIfEmpty(s2.shifts),
+      start_immediately: s2.startImmediately,
+      start_date: s2.startDate ?? null,
+      city: s3.city,
+      region: s3.region,
+      address: nullIfEmpty(s3.address),
+      remote: s3.remote,
+      salary_min: s4.salaryMin ?? null,
+      salary_max: s4.salaryMax ?? null,
+      currency: s4.currency,
+      salary_period: s4.salaryPeriod,
+      min_experience_years: s6.minExperienceYears ?? null,
+      requires_driving_license: s7.requiresDrivingLicense,
+      no_language_required: s7.noLanguageRequired,
+      accommodation: s8.accommodation,
+      transport: s8.transport,
+      contact_email: nullIfEmpty(s9.contactEmail),
+    },
+    translation: {
+      description: s5.description,
+      responsibilities: s5.responsibilities,
+      conditions: s8.conditions,
+      benefits: s8.benefits,
+      company_description: s9.companyDescription,
+    },
+    requirements_mandatory: s6.requirementsMandatory,
+    requirements_optional: s7.requirementsOptional,
+    skills_mandatory: s6.mandatorySkills,
+    skills_optional: s7.skills,
+    languages: s7.languages.map((l) => ({ language: l.language, level: l.level })),
+    certificates: s7.requiredCertificates,
+  };
+}
+
+/**
+ * Zapisuje poprawioną treść AKTYWNEJ lub WSTRZYMANEJ oferty. Kreator w trybie edycji wysyła
+ * dane wszystkich 9 kroków naraz (`steps[0]` = krok 1); każdy krok przechodzi ten sam schemat
+ * Zod co przy tworzeniu. Zapis to jedno transakcyjne RPC — publiczna oferta nigdy nie jest
+ * mieszanką starej i nowej treści, a niekompletna treść (jak przy publikacji) jest odrzucana
+ * w całości. `expectedUpdatedAt` (wersja wczytana do kreatora) chroni przed cichym
+ * nadpisaniem cudzej, równoległej poprawki → `JOB_EDIT_CONFLICT`.
+ */
+export async function updatePublishedJob(
+  jobId: string,
+  steps: unknown[],
+  expectedUpdatedAt: string | null,
+): Promise<UpdatePublishedResult> {
+  // Demo (brak env) edytuje oferty z listy demonstracyjnej o nie-UUID identyfikatorach.
+  const demo = !isSupabaseConfigured();
+  if (typeof jobId !== 'string' || (!UUID_RE.test(jobId) && !(demo && /^[\w-]{1,40}$/.test(jobId)))) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  if (!Array.isArray(steps) || steps.length !== 9) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (
+    expectedUpdatedAt !== null &&
+    (typeof expectedUpdatedAt !== 'string' || Number.isNaN(Date.parse(expectedUpdatedAt)))
+  ) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  const parsed: unknown[] = [];
+  for (let i = 0; i < 9; i += 1) {
+    const value = validateJobStep(i + 1, steps[i]);
+    if (value === null) return { ok: false, error: 'VALIDATION_FAILED' };
+    parsed.push(value);
+  }
+  const content = buildPublishedContent(parsed);
+
+  if (demo) return { ok: true, demo: true };
+
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const allowed = await checkRateLimit('job-edit', {
+      identifier: user.id,
+      max: EDIT_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
+    if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
+
+    const { data, error } = await supabase.rpc('update_published_job', {
+      p_job_id: jobId,
+      p_content: content,
+      p_expected_updated_at: expectedUpdatedAt,
+    });
+    if (error) return { ok: false, error: mapPgError(error.message) };
+
+    revalidatePath('/[locale]/employer/oferty', 'page');
+    revalidatePath('/[locale]/oferty-pracy/[slug]', 'page');
+    const saved = asRecord(data);
+    return {
+      ok: true,
+      slug: asString(saved['slug']) || undefined,
+      updatedAt: asString(saved['updated_at']) || undefined,
+    };
+  } catch {
+    return { ok: false, error: 'INTERNAL' };
   }
 }
 

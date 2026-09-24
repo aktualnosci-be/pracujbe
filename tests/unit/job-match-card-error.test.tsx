@@ -10,7 +10,7 @@ import fr from '@/messages/fr.json';
 import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
 
-/** #197: błąd odczytu dopasowania → komunikat z ponowieniem, nigdy procent. */
+/** #197: błąd odczytu dopasowania → komunikat z ponowieniem, nigdy procent; #195: luki poziomu języka. */
 
 vi.mock('@/lib/actions/matching', () => ({ getMyJobMatchAction: vi.fn() }));
 
@@ -56,6 +56,24 @@ for (const [locale, messages] of Object.entries({ pl, nl, fr, en })) {
       await waitFor(() => expect(screen.getByText(`${result.score}%`)).toBeTruthy());
       expect(screen.queryByRole('alert')).toBeNull();
       expect(getMyJobMatchAction).toHaveBeenCalledTimes(2);
+    });
+
+    it('luka poziomu języka opisana poziomem wymaganym i deklarowanym (#195)', async () => {
+      const gaps = scoreMatch(
+        { occupations: [], categories: [], skills: [], languages: [{ label: 'NL', level: 'basic' }, 'FR'], certificates: [], preferredContractTypes: [] },
+        { skills: [], requiredLanguages: [{ label: 'NL', level: 'fluent' }, { label: 'FR', level: 'intermediate' }] },
+      );
+      vi.mocked(getMyJobMatchAction).mockResolvedValue({ status: 'ok', result: gaps });
+      view();
+      const below = messages.match.languageLevelBelow
+        .replace('{language}', 'NL')
+        .replace('{required}', messages.match.levels.fluent)
+        .replace('{actual}', messages.match.levels.basic);
+      const unknown = messages.match.languageLevelUnknown
+        .replace('{language}', 'FR')
+        .replace('{required}', messages.match.levels.intermediate);
+      expect(await screen.findByText(below)).toBeTruthy();
+      expect(screen.getByText(unknown)).toBeTruthy();
     });
 
     it('none (anonim/brak profilu): nic nie renderuje', async () => {
