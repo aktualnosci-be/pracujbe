@@ -968,6 +968,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`src/lib/storage-deletion.ts`; `storage_deletion_queue` wypełnia trigger AFTER DELETE na `files`,
   backoff, brak ścieżek w logach). Domyślnie włączone tylko sprzątanie danych już oznaczonych
   (`deleted_file`, `deleted_profile` — 30 dni); reszta czeka na decyzję administratora danych.
+  `confirmed_guest_request` = tylko wartość do decyzji właściciela (bez zadania, ślad gościa zostaje
+  także przy `closed_application`); tokeny gościa czyści `purge_guest_application_requests` (#522).
   Eksport JSON (`POST /api/account/export`, Origin tej witryny, `no-store` → `export_my_data`:
   dane podane, proces, zapisane `matches`, rozmowy z `fromMe` bez tożsamości rekrutera, limit
   10/dobę, ślad `data_rights_requests` + audyt). Usunięcie konta (`request_account_erasure`,

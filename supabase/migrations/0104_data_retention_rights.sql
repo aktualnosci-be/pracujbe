@@ -9,6 +9,9 @@
 --    wyłączone). Wartości domyślne obejmują tylko sprzątanie techniczne (rekordy już
 --    oznaczone jako usunięte). Okresy wymagające decyzji administratora danych startują
 --    jako null — patrz docs/legal-drafts/retencja-i-prawa-kandydata.md (PROJEKT).
+--    `confirmed_guest_request` to wyłącznie wartość do decyzji właściciela — żadne zadanie
+--    jej nie używa; tokeny/linki zgłoszeń gościa czyści purge_guest_application_requests
+--    (0095 i osobna zmiana #522), nie ta migracja.
 --    Zmiana wyłącznie przez admin_set_retention_policy (is_admin, audyt).
 -- 2. data_rights_requests — ślad obsługi wniosku (rodzaj, termin art. 12(3), liczniki),
 --    BEZ treści danych i bez FK do profilu, żeby przetrwał usunięcie konta. Kandydat
@@ -68,7 +71,7 @@ insert into public.retention_policies (key, period, description) values
   ('inactive_candidate_cv', null,
    'CV kandydata bez aktywności konta (last_seen_at): oznaczenie pliku jako usuniętego.'),
   ('confirmed_guest_request', null,
-   'Potwierdzone zgłoszenie bez konta po zamknięciu okna przejęcia: usunięcie wiersza.'),
+   'Minimalny ślad potwierdzonego zgłoszenia bez konta: cel i okres do decyzji właściciela; bez zadania automatycznego.'),
   ('data_rights_request_log', null,
    'Ślad obsługi wniosku o dostęp/usunięcie (bez treści danych).'),
   ('erasure_tombstone', null,
@@ -555,7 +558,8 @@ begin
              order by a.updated_at limit v_limit for update skip locked) x;
     delete from public.notifications n where n.entity_id = any(v_ids);
     delete from public.email_deliveries e where e.entity_id = any(v_ids);
-    delete from public.guest_application_requests g where g.application_id = any(v_ids);
+    -- Ślad zgłoszenia bez konta zostaje (FK application_id → null) — jego okres ustala
+    -- właściciel (confirmed_guest_request); tokeny gościa czyści purge_guest_application_requests.
     delete from public.applications a where a.id = any(v_ids);
     get diagnostics v_n = row_count;
   end if;
@@ -575,18 +579,8 @@ begin
   end if;
   v_out := v_out || jsonb_build_object('inactiveCvMarked', v_n);
 
-  -- Potwierdzone zgłoszenia bez konta po zamknięciu okna przejęcia.
-  v_period := public.retention_period('confirmed_guest_request');
-  v_n := 0;
-  if v_period is not null then
-    delete from public.guest_application_requests g
-     where g.id in (select x.id from public.guest_application_requests x
-                     where x.status = 'confirmed' and coalesce(x.confirmed_at, x.created_at) < now() - v_period
-                       and (x.claim_expires_at is null or x.claim_expires_at <= now())
-                     order by x.created_at limit v_limit for update skip locked);
-    get diagnostics v_n = row_count;
-  end if;
-  v_out := v_out || jsonb_build_object('confirmedGuestRequests', v_n);
+  -- confirmed_guest_request: celowo bez zadania — wartość konfigurowalna, cel i okres
+  -- minimalnego śladu potwierdzonego zgłoszenia gościa ustala właściciel (#486/#522).
 
   v_period := public.retention_period('data_rights_request_log');
   v_n := 0;

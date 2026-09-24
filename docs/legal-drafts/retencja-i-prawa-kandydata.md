@@ -51,7 +51,7 @@ rozmowy, nie wartość ustawiona w systemie (poza wierszami oznaczonymi „ustaw
 | Aplikacja zakończona zatrudnieniem | do ustalenia | brak zadania | czy platforma w ogóle powinna ją trzymać |
 | CV nieaktywnego kandydata | np. 24 miesiące bez aktywności | wyłączone | kryterium aktywności; uprzedzenie przed usunięciem |
 | Zgłoszenie bez konta — niepotwierdzone / duplikat | 7 dni | działa (#98) | — |
-| Zgłoszenie bez konta — potwierdzone | np. 30 dni po zamknięciu okna przejęcia | wyłączone | które pola snapshotu zgody są potrzebne i jak długo (#486, komentarz z 24.09) |
+| Zgłoszenie bez konta — potwierdzone (minimalny ślad) | do decyzji właściciela (cel i okres) | wartość konfigurowalna, bez zadania | które pola snapshotu zgody są potrzebne i jak długo (#486, komentarz z 24.09; #522) |
 | Ślad obsługi wniosku | np. 3 lata | wyłączone | okres dowodowy |
 | Rejestr usunięć | co najmniej retencja kopii + margines (system wymusza ≥ 400 dni) | bez limitu | czy pseudonimowy UUID bezterminowo jest dopuszczalny |
 | Kopie zapasowe | 14 kopii dziennych | skrypt | okres i miejsce przechowywania |

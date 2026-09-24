@@ -20,11 +20,16 @@ dla ról klienta.
 |---|---|---|
 | `deleted_file` | 30 dni | usuwa wiersz `files` z `deleted_at`; obiekt storage trafia do kolejki |
 | `deleted_profile` | 30 dni | pełne usunięcie kandydata z `profiles.deleted_at` (np. oznaczonego przez admina) |
-| `closed_application` | wyłączone | usuwa aplikacje `rejected`/`withdrawn`/`offer_declined` (od `updated_at`) wraz z powiadomieniami i e-mailami o nich |
+| `closed_application` | wyłączone | usuwa aplikacje `rejected`/`withdrawn`/`offer_declined` (od `updated_at`) wraz z powiadomieniami i e-mailami o nich; ślad zgłoszenia gościa zostaje (FK → `null`) |
 | `inactive_candidate_cv` | wyłączone | oznacza CV kandydata bez aktywności (`last_seen_at`) jako usunięte → potem `deleted_file` |
-| `confirmed_guest_request` | wyłączone | usuwa potwierdzone zgłoszenia bez konta po zamknięciu okna przejęcia |
+| `confirmed_guest_request` | do decyzji właściciela | **brak zadania** — tylko wartość konfigurowalna; cel i okres minimalnego śladu ustala właściciel |
 | `data_rights_request_log` | wyłączone | usuwa ślad obsługi wniosku |
 | `erasure_tombstone` | wyłączone (bez limitu) | usuwa wpis rejestru usunięć |
+
+Zgłoszenia bez konta: tokeny i linki czyści `purge_guest_application_requests` (0095,
+wygasłe linki potwierdzenia — osobna zmiana #522). Ta zmiana nie dotyka tokenów gościa i nie
+usuwa automatycznie potwierdzonych zgłoszeń. Wyjątek: samoobsługowe usunięcie konta kasuje
+zgłoszenia przejęte przez to konto lub powiązane z jego aplikacjami (wniosek osoby).
 
 Domyślne wartości dotyczą wyłącznie danych już oznaczonych jako usunięte. Kategorie,
 których okres wymaga decyzji administratora danych, startują wyłączone. `last_seen_at`

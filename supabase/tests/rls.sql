@@ -6959,7 +6959,17 @@ select pg_temp.expect_error('select public.admin_set_retention_policy(''erasure_
   'DR486-8d tombstone krótszy niż kopie → odmowa');
 select pg_temp.expect_error('select public.admin_set_retention_policy(''nie_ma'', 30)', 'NOT_FOUND', 'DR486-8e nieznana kategoria');
 select public.admin_set_retention_policy('closed_application', 30);
+select public.admin_set_retention_policy('confirmed_guest_request', 1);
 reset role; reset app.current_uid;
+-- Ślad potwierdzonego zgłoszenia gościa powiązanego z zamkniętą aplikacją (#522: okres ustala
+-- właściciel) — retencja go nie usuwa, nawet po ustawieniu wartości.
+set session_replication_role = replica;
+insert into public.guest_application_requests(job_id, email, full_name, locale, idempotency_key, status,
+    confirm_token_hash, confirm_nonce, confirm_expires_at, consent_accepted_at, confirmed_at, application_id)
+  values (:'RDJ', 'gosc-rd@test.be', 'Gość RD', 'pl', 'rd-guest-trail-1', 'confirmed', repeat('a', 64),
+    'rd-guest-nonce-0001', now() - interval '60 days', now() - interval '60 days', now() - interval '60 days', :'rdapp2')
+  returning id as rdguest \gset
+set session_replication_role = origin;
 set role service_role;
 select public.run_retention_purge(100)::text as rdpurge2 \gset
 select public.run_retention_purge(100)::text as rdpurge3 \gset
@@ -6968,8 +6978,10 @@ select pg_temp.assert(
   not exists (select 1 from public.applications where id = :'rdapp2')
   and exists (select 1 from public.applications where candidate_id = :'CANDA')
   and (:'rdpurge3')::jsonb ->> 'closedApplications' = '0'
-  and (select count(*) from public.audit_logs where action = 'retention.policy_changed') = 1,
-  'DR486-8f po włączeniu kategorii usunięta tylko zakończona aplikacja; ponowny przebieg idempotentny');
+  and (select application_id is null from public.guest_application_requests where id = :'rdguest')
+  and not ((:'rdpurge2')::jsonb ? 'confirmedGuestRequests')
+  and (select count(*) from public.audit_logs where action = 'retention.policy_changed') = 2,
+  'DR486-8f po włączeniu kategorii usunięta tylko zakończona aplikacja (ślad gościa zostaje); ponowny przebieg idempotentny');
 
 -- DR486-9: odtworzona kopia przywraca RD1 → tombstone usuwa go ponownie.
 insert into auth.users(id,email,name,raw_user_meta_data) values
