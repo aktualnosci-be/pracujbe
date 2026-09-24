@@ -636,10 +636,11 @@ reset role; reset app.current_uid;
 -- ============================================================================
 -- O. Języki/certyfikaty oferty 0030 (FUN-03) — persystencja + detal + matching
 -- ============================================================================
--- EMPA (członek COMPA, właściciel JOBA) dodaje wymagania językowe/certyfikatowe (jak kreator).
-set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+-- Wymagania językowe/certyfikatowe aktywnej JOBA (fixture superusera — od 0077 klient nie zmienia
+-- relacji opublikowanej oferty bezpośrednio; ścieżka edycji = update_published_job, sekcja OO).
 insert into public.job_languages(job_id, language_label, level) values (:'JOBA', 'Niderlandzki', 'intermediate');
 insert into public.job_certificates(job_id, certificate_label) values (:'JOBA', 'VCA');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select 'Niderlandzki' = any(languages) from public.get_public_job('job-a', 'pl')),
   'O1 get_public_job zwraca języki oferty (koniec pustej listy, FUN-03)');
@@ -1073,6 +1074,9 @@ reset role;
 -- BB. Audyt produkcyjny 0047 (P1-09) — atomowe RPC replace relacji oferty (recruiter+)
 -- ============================================================================
 -- EMPA (recruiter+ COMPA, właściciel JOBA) zastępuje języki atomowo (JOBA miało 'Niderlandzki').
+-- set_job_* to ścieżka kreatora SZKICU (0077) — na czas sekcji JOBA jest szkicem.
+reset role;
+update public.jobs set status = 'draft' where id = :'JOBA';
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_languages(:'JOBA'::uuid, '[{"language":"Francuski","level":"basic"}]'::jsonb);
 reset role; reset app.current_uid;
@@ -1087,6 +1091,7 @@ select pg_temp.expect_error(
   'select public.set_job_skills('''|| :'JOBA' ||'''::uuid, true, array[''x''])',
   'PERMISSION_DENIED', 'BB2 zwykły member nie zapisuje relacji oferty (recruiter+)');
 reset role; reset app.current_uid;
+update public.jobs set status = 'active' where id = :'JOBA';
 
 -- ============================================================================
 -- CC. AUDIT_REPORT 0048 (P1-11) — wygasłe oferty znikają publicznie i blokują apply
@@ -1158,7 +1163,10 @@ reset role;
 -- ============================================================================
 -- EE. AUDIT_REPORT 0051 (P1-08) — umiejętność realnie przechodzi mandatory↔optional
 -- ============================================================================
--- Punkt wyjścia: EMPA (recruiter+ w COMPA, właściciel JOBA) ustawia zakresy jak kreator.
+-- Punkt wyjścia: EMPA (recruiter+ w COMPA, właściciel JOBA) ustawia zakresy jak kreator
+-- (ścieżka szkicu — na czas sekcji JOBA jest szkicem, 0077).
+reset role;
+update public.jobs set status = 'draft' where id = :'JOBA';
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_skills(:'JOBA'::uuid, false, array['Java', 'Python']); -- optional
 select public.set_job_skills(:'JOBA'::uuid, true,  array['SQL']);            -- mandatory
@@ -1180,6 +1188,7 @@ select pg_temp.assert(
 select pg_temp.assert(
   (select is_mandatory from public.job_skills where job_id = :'JOBA' and skill_label = 'Python') = false,
   'EE4 Python nietknięty (nadal optional)');
+update public.jobs set status = 'active' where id = :'JOBA';
 
 -- ============================================================================
 -- FF. AUDIT_REPORT 0054 (P1-16) — niezmienny receipt akceptacji regulaminu/polityki
@@ -1756,5 +1765,181 @@ select pg_temp.assert(
   (select payload->>'jobTitle' from public.email_deliveries
      where entity_id = 'a2222222-2222-2222-2222-222222222222' and template = 'jobPublished') = 'Nowa oferta',
   'NN4b payload jobPublished zawiera tytuł oferty');
+
+-- ============================================================================
+-- OO. Edycja opublikowanej oferty (0077, #325): update_published_job — atomowa rewizja
+--     aktywnej/wstrzymanej oferty z kompletnością jak publish_job; bezpośredni zapis zablokowany
+-- ============================================================================
+\set JOBE 'a2222222-2222-2222-2222-222222222222'
+-- Punkt wyjścia: JOBE aktywna (HH7), opublikowana przez EMPA (owner COMPA, verified).
+-- Zgłoszenie kandydata na ofertę — po edycji musi zostać nietknięte razem z historią.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JOBE'::uuid, 'oo-app-1', null, null, 'chętnie') as appoo \gset
+reset role; reset app.current_uid;
+select slug as oo_slug, published_at as oo_pub, updated_at as oo_upd from public.jobs where id = :'JOBE' \gset
+select count(*) as oo_hist from public.application_status_history where application_id = :'appoo' \gset
+
+-- Pełna, poprawna treść (kształt z akcji updatePublishedJob).
+select set_config('pb.oo_ok', $j${
+  "job": {"title": "Magazynier – zmiana nocna", "category": "warehouse", "occupation": "Magazynier",
+          "contract_type": "temporary", "working_hours": "40 h", "shifts": "noc",
+          "start_immediately": false, "start_date": "2026-10-15", "city": "Gandawa",
+          "region": "Flandria", "address": null, "remote": false, "salary_min": 16,
+          "salary_max": 18, "currency": "EUR", "salary_period": "hour",
+          "min_experience_years": 1, "requires_driving_license": false,
+          "no_language_required": true, "accommodation": true, "transport": false,
+          "contact_email": "hr@firma-a.be"},
+  "translation": {"description": "Praca na magazynie w Gandawie, zmiana nocna, stała ekipa.",
+                  "responsibilities": ["Kompletacja zamówień", "Załadunek"],
+                  "conditions": ["Umowa przez agencję"], "benefits": ["Dodatek nocny", "Parking"],
+                  "company_description": "Firma A — logistyka."},
+  "requirements_mandatory": ["Praca w nocy"], "requirements_optional": ["Wózek widłowy"],
+  "skills_mandatory": ["Skaner"], "skills_optional": ["Excel"],
+  "languages": [{"language": "Angielski", "level": "basic"}], "certificates": ["VCA"]
+}$j$, false);
+-- Ta sama treść z pustą listą wymagań obowiązkowych (niekompletna jak przy publish_job).
+select set_config('pb.oo_bad', (current_setting('pb.oo_ok')::jsonb
+  || '{"requirements_mandatory": []}'::jsonb)::text, false);
+
+-- OO1: recruiter+ poprawia aktywną ofertę — status, slug, published_at i zgłoszenie bez zmian.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JOBE'::uuid, current_setting('pb.oo_ok')::jsonb, :'oo_upd'::timestamptz) as oo_res \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (:'oo_res'::jsonb ->> 'slug') = :'oo_slug'
+  and (:'oo_res'::jsonb ->> 'updated_at')::timestamptz = (select updated_at from public.jobs where id = :'JOBE')
+  and (:'oo_res'::jsonb ->> 'updated_at')::timestamptz > :'oo_upd'::timestamptz,
+  'OO1 update_published_job zwraca niezmieniony slug i nową wersję (updated_at)');
+select pg_temp.assert(
+  (select status::text = 'active' and slug = :'oo_slug' and published_at = :'oo_pub'::timestamptz
+          and title = 'Magazynier – zmiana nocna' and salary_min = 16 and salary_period::text = 'hour'
+          and start_date = '2026-10-15'::date and contract_type::text = 'temporary'
+     from public.jobs where id = :'JOBE'),
+  'OO1b nowa treść zapisana, status/slug/published_at bez zmian');
+select pg_temp.assert(
+  (select description like 'Praca na magazynie%' and responsibilities = array['Kompletacja zamówień', 'Załadunek']
+          and highlights = array['Dodatek nocny', 'Parking'] and title = 'Magazynier – zmiana nocna'
+     from public.job_translations where job_id = :'JOBE' and locale = 'pl')
+  and (select array_agg(content order by position) from public.job_requirements
+         where job_id = :'JOBE' and kind = 'mandatory') = array['Praca w nocy']
+  and (select count(*) from public.job_skills where job_id = :'JOBE') = 2
+  and exists (select 1 from public.job_languages where job_id = :'JOBE' and language_label = 'Angielski')
+  and exists (select 1 from public.job_certificates where job_id = :'JOBE' and certificate_label = 'VCA'),
+  'OO1c tłumaczenie i relacje zastąpione nową treścią');
+select pg_temp.assert(
+  (select status::text from public.applications where id = :'appoo') = 'submitted'
+  and (select count(*) from public.application_status_history where application_id = :'appoo') = :'oo_hist'::int,
+  'OO1d zgłoszenie i historia statusów nietknięte');
+select pg_temp.assert(
+  (select count(*) from public.get_public_job(:'oo_slug', 'pl') where title = 'Magazynier – zmiana nocna') = 1,
+  'OO1e zmiana widoczna publicznie pod tym samym adresem');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs where action = 'job.update_published'
+            and entity_id = :'JOBE'::uuid and actor_id = :'EMPA'::uuid
+            and before_data->>'title' = 'Nowa oferta' and after_data->>'title' = 'Magazynier – zmiana nocna'),
+  'OO1f wpis audytu z treścią przed/po');
+
+-- OO2: CAS — nieaktualny updated_at (drugie okno edycji) nie nadpisuje po cichu.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb, %L::timestamptz)',
+         :'JOBE', current_setting('pb.oo_ok'), :'oo_upd'),
+  'JOB_EDIT_CONFLICT', 'OO2 nieaktualna wersja → JOB_EDIT_CONFLICT');
+-- OO2b: kolejna poprawka z wersją zwróconą przez poprzedni zapis przechodzi.
+select pg_temp.assert(
+  (public.update_published_job(:'JOBE'::uuid, current_setting('pb.oo_ok')::jsonb,
+     (:'oo_res'::jsonb ->> 'updated_at')::timestamptz) ->> 'slug') = :'oo_slug',
+  'OO2b kolejna poprawka z aktualną wersją przechodzi');
+
+-- OO3 (kontrola ujemna kompletności): brak wymagań obowiązkowych odrzucony, rewizja cofnięta w całości.
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE',
+         jsonb_set(current_setting('pb.oo_bad')::jsonb, '{job,title}', '"Tytuł, który nie może wejść"')::text),
+  'VALIDATION_FAILED', 'OO3 niekompletna treść odrzucona (jak publish_job)');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title from public.jobs where id = :'JOBE') = 'Magazynier – zmiana nocna'
+  and (select count(*) from public.job_requirements where job_id = :'JOBE' and kind = 'mandatory') = 1,
+  'OO3b odrzucona rewizja nie zostawia częściowych zmian (rollback)');
+
+-- OO4: pusty tytuł / placeholder odrzucony.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE',
+         jsonb_set(current_setting('pb.oo_ok')::jsonb, '{job,title}', '"   "')::text),
+  'VALIDATION_FAILED', 'OO4 pusty tytuł odrzucony');
+
+-- OO5: klient nie ominie RPC — bezpośredni UPDATE/relacje opublikowanej oferty zablokowane.
+select pg_temp.expect_error(
+  format($$update public.jobs set title = '' where id = %L$$, :'JOBE'),
+  'JOB_NOT_DRAFT', 'OO5 bezpośredni UPDATE treści aktywnej oferty zablokowany');
+select pg_temp.expect_error(
+  format($$delete from public.job_requirements where job_id = %L$$, :'JOBE'),
+  'JOB_NOT_DRAFT', 'OO5b bezpośrednie usunięcie wymagań aktywnej oferty zablokowane');
+select pg_temp.expect_error(
+  format($$update public.job_translations set description = '' where job_id = %L$$, :'JOBE'),
+  'JOB_NOT_DRAFT', 'OO5c bezpośrednia zmiana tłumaczenia aktywnej oferty zablokowana');
+select pg_temp.expect_error(
+  format($$select public.set_job_requirements(%L::uuid, 'pl', 'mandatory', array[]::text[])$$, :'JOBE'),
+  'JOB_NOT_DRAFT', 'OO5d set_job_* (ścieżka szkicu) nie opróżni relacji aktywnej oferty');
+select pg_temp.expect_error(
+  format($$select set_config('pracujbe.job_edit', %L, true), public.set_job_requirements(%L::uuid, 'pl', 'mandatory', array[]::text[])$$, '00000000-0000-0000-0000-000000000000', :'JOBE'),
+  'JOB_NOT_DRAFT', 'OO5e znacznik innej oferty nie otwiera zapisu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.job_requirements where job_id = :'JOBE' and kind = 'mandatory') = 1,
+  'OO5f wymagania aktywnej oferty nietknięte po próbach obejścia');
+
+-- OO6: wstrzymaną ofertę też można poprawić (status zostaje paused).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'JOBE'::uuid, 'pause');
+select public.update_published_job(:'JOBE'::uuid,
+  jsonb_set(current_setting('pb.oo_ok')::jsonb, '{job,salary_min}', '17'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'paused' and salary_min = 17 from public.jobs where id = :'JOBE'),
+  'OO6 edycja wstrzymanej oferty zachowuje status paused');
+
+-- OO7: bez weryfikacji firmy nie ma edycji (nawet wstrzymanej).
+update public.companies set status = 'pending' where id = :'COMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.oo_ok')),
+  'COMPANY_NOT_VERIFIED', 'OO7 niezweryfikowana firma nie edytuje opublikowanej oferty');
+reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'COMPA';
+
+-- OO8: zwykły member i obca firma bez prawa edycji.
+insert into public.company_members(company_id, profile_id, role, is_active)
+  values (:'COMPA', :'CANDB', 'member', true) on conflict do nothing;
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.oo_ok')),
+  'PERMISSION_DENIED', 'OO8 zwykły member nie edytuje oferty (recruiter+)');
+reset role; reset app.current_uid;
+delete from public.company_members where company_id = :'COMPA' and profile_id = :'CANDB';
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.oo_ok')),
+  'PERMISSION_DENIED', 'OO8b obca firma nie edytuje oferty');
+
+-- OO9: zamknięta oferta i szkic nie idą tą ścieżką.
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'JOBE'::uuid, 'close');
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.oo_ok')),
+  'JOB_NOT_EDITABLE', 'OO9 zamkniętej oferty nie edytuje się bez ponownego otwarcia');
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)',
+         'e2222222-2222-2222-2222-222222222222', current_setting('pb.oo_ok')),
+  'JOB_NOT_EDITABLE', 'OO9b szkic edytuje się kreatorem, nie update_published_job');
+-- Kontrola: szkic nadal zapisuje relacje ścieżką kreatora (set_job_*).
+select public.set_job_certificates('e2222222-2222-2222-2222-222222222222'::uuid, array['BHP']);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.job_certificates
+            where job_id = 'e2222222-2222-2222-2222-222222222222' and certificate_label = 'BHP'),
+  'OO9c szkic dalej zapisuje relacje przez set_job_*');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
