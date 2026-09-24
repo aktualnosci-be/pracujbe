@@ -625,7 +625,8 @@
     "moderationLocked": "This content is restricted by a moderation decision, so its status cannot be changed.",
     "guestApplyUnavailable": "Applying without an account is temporarily unavailable. Try again later or log in.",
     "emailNotVerified": "First confirm your account’s email address — click the link we sent when you registered.",
-    "claimExpired": "The link to link the application has expired (it was valid for 30 days)."
+    "claimExpired": "The link to link the application has expired (it was valid for 30 days).",
+    "jobImportSensitiveData": "The listing contains a personal or document identification number, so we did not import it. Please fill in the form manually."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -1181,7 +1182,9 @@
     "screeningOptional": "(optional)",
     "screeningRequired": "Please answer this question.",
     "screeningYes": "Yes",
-    "screeningNo": "No"
+    "screeningNo": "No",
+    "sensitiveIdHint": "Your application does not need a NISS/BIS number or an identity document number — please leave them out.",
+    "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
   },
   "guestApply": {
     "subtitle": "Apply without creating an account, or log in to use your profile. No CV needed.",
@@ -1233,7 +1236,8 @@
       "emailInvalid": "Enter a valid email address, e.g. john@example.com.",
       "messageTooLong": "The message can have at most 500 characters.",
       "consentRequired": "You must accept the consent to send the application.",
-      "idempotencyKeyInvalid": "Refresh the page and send the form again."
+      "idempotencyKeyInvalid": "Refresh the page and send the form again.",
+      "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
     }
   },
   "legal": {
@@ -1450,7 +1454,8 @@
     "errorFileTooLarge": "The file is too large. The maximum size is 5 MB.",
     "errorFileType": "Only PNG, JPG and WebP images are supported.",
     "errorUrlMissing": "Paste a link to the ad.",
-    "errorNetwork": "Could not reach the server. Check your connection and try again."
+    "errorNetwork": "Could not reach the server. Check your connection and try again.",
+    "contactNote": "We do not copy email addresses, phone numbers or identification numbers into the form. Enter the contact email yourself in the last step."
   },
   "messages": {
     "title": "Messages",
@@ -1889,7 +1894,8 @@
       "messageTooLong": "Your message is too long.",
       "phoneInvalid": "Enter a valid phone number.",
       "termsRequired": "You need to accept the consent to send your application.",
-      "idempotencyKeyInvalid": "The form couldn't be sent. Refresh the page and try again."
+      "idempotencyKeyInvalid": "The form couldn't be sent. Refresh the page and try again.",
+      "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
     }
   },
   "offer": {
@@ -1976,6 +1982,30 @@
     "blockedSuccess": "{company} has been blocked.",
     "manage": "Manage blocked companies"
   },
+  "profileVisibility": {
+    "sectionTitle": "Profile visibility for companies",
+    "sectionDescription": "You can let verified employers find your profile among candidates. Your profile is hidden by default, and you can change this setting at any time.",
+    "whoTitle": "Who will see your profile",
+    "whoText": "Only companies verified by Pracuj.be. Companies you block will never see it. A company can send you a job offer through the portal.",
+    "seenTitle": "What a company will see",
+    "seenText": "The professional details of your profile: headline and description, occupations and categories, skills, languages, certificates, experience, availability, city and travel distance, driving licence and car, contract types and expected pay.",
+    "notSeenTitle": "What a company will not see",
+    "notSeenText": "Your first and last name, email address, phone number or CV. Your name and account contact details are only visible to a company you apply to or that sends you a job offer.",
+    "offTitle": "After you turn it off",
+    "offText": "Your profile disappears from companies’ searches and matches immediately. Companies you have already applied to, or that have already sent you an offer, can still see your profile in that recruitment. To stop that, block the company in the “Blocked companies” section.",
+    "toggleLabel": "Let verified employers find my profile",
+    "stateOn": "Profile visible to verified companies",
+    "stateOff": "Profile hidden from company searches",
+    "changedAt": "Last changed: {date}",
+    "neverChanged": "This setting has not been changed yet.",
+    "requiresComplete": "To turn on visibility, finish your profile first.",
+    "completeProfile": "Complete your profile",
+    "saving": "Saving…",
+    "savedOn": "Your profile is now visible to verified companies.",
+    "savedOff": "Your profile is now hidden from company searches.",
+    "saveError": "We couldn’t save the change. The setting has not changed — please try again.",
+    "loadError": "We couldn’t load your profile visibility setting. Refresh the page in a moment."
+  },
   "team": {
     "title": "Team",
     "subtitle": "People with access to the {company} company panel.",
@@ -2061,9 +2091,11 @@
     "title": "Unsubscribe from emails",
     "confirmText": "Confirm that you no longer want to receive these emails: {category}.",
     "confirmButton": "Unsubscribe",
+    "allButton": "Unsubscribe from all email notifications",
     "pending": "Saving…",
     "doneTitle": "Unsubscribed",
     "doneText": "We will no longer send you these emails: {category}. Other messages and notifications on the site stay the same.",
+    "allDoneText": "We will no longer send you email notifications or the newsletter. We will still send messages needed for your account, such as a password reset.",
     "settingsHint": "You can change all notification settings after logging in.",
     "loginLink": "Log in",
     "invalidTitle": "The link is not valid",

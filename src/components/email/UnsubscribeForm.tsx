@@ -7,17 +7,22 @@ import { unsubscribeFromEmail } from '@/lib/actions/email-unsubscribe';
 import type { UnsubscribeOutcome } from '@/lib/email/unsubscribe';
 
 /**
- * Formularz potwierdzenia wypisania (#45). Teksty przychodzą z serwera (w języku strony),
+ * Formularz potwierdzenia wypisania (#45): z kategorii z linku albo ze wszystkich kategorii. Teksty przychodzą z serwera (w języku strony),
  * więc wyspa nie potrzebuje wiadomości next-intl. Przycisk zablokowany podczas zapisu
  * (Invariant #11); wynik ogłaszany w regionie statusu/alertu, z fokusem na komunikacie.
  */
 export function UnsubscribeForm({
   token,
+  locale,
   labels,
 }: {
   token: string;
+  /** Język strony — trafia do dowodu wycofania zgody. */
+  locale: string;
   labels: {
     confirmButton: string;
+    allButton: string;
+    allDoneText: string;
     pending: string;
     doneTitle: string;
     doneText: string;
@@ -41,7 +46,9 @@ export function UnsubscribeForm({
     return (
       <div ref={messageRef} tabIndex={-1} role="status" className="space-y-2 outline-none">
         <h2 className="text-lg font-semibold text-foreground">{labels.doneTitle}</h2>
-        <p className="text-sm text-muted-foreground">{labels.doneText}</p>
+        <p className="text-sm text-muted-foreground">
+          {state.scope === 'all' ? labels.allDoneText : labels.doneText}
+        </p>
       </div>
     );
   }
@@ -59,6 +66,7 @@ export function UnsubscribeForm({
   return (
     <form action={action} className="space-y-4" aria-busy={pending}>
       <input type="hidden" name="t" value={token} />
+      <input type="hidden" name="l" value={locale} />
       {failure ? (
         <div
           ref={messageRef}
@@ -69,8 +77,18 @@ export function UnsubscribeForm({
           {failure}
         </div>
       ) : null}
-      <Button type="submit" className="w-full" disabled={pending}>
+      <Button type="submit" name="scope" value="category" className="w-full" disabled={pending}>
         {pending ? labels.pending : labels.confirmButton}
+      </Button>
+      <Button
+        type="submit"
+        name="scope"
+        value="all"
+        variant="outline"
+        className="w-full"
+        disabled={pending}
+      >
+        {labels.allButton}
       </Button>
     </form>
   );

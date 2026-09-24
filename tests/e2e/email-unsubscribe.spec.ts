@@ -19,6 +19,7 @@ type UnsubscribeMessages = {
   title: string;
   confirmText: string;
   confirmButton: string;
+  allButton: string;
   invalidTitle: string;
   expiredTitle: string;
   unavailableText: string;
@@ -42,8 +43,19 @@ for (const locale of LOCALES) {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(t.title);
     await expect(page.getByText(t.confirmText.replace('{category}', t.category.offers!))).toBeVisible();
     await expect(page.getByRole('button', { name: t.confirmButton, exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: t.allButton, exact: true })).toBeEnabled();
   });
 }
+
+test('„ze wszystkich” w trybie demo: ten sam jawny komunikat, bez udawanego sukcesu', async ({ page }) => {
+  const t = copy('nl');
+  await page.goto(`/nl/wypisz?t=${encodeURIComponent(token())}`);
+  await clickCookieBanner(page, 'nl', 'rejectOptional');
+  await page.getByRole('button', { name: t.allButton, exact: true }).click();
+  const alert = page.getByRole('alert').filter({ hasText: t.unavailableText });
+  await expect(alert).toBeVisible();
+  await expect(alert).toBeFocused();
+});
 
 test('wysłanie formularza w trybie demo: jawny komunikat, bez udawanego sukcesu', async ({ page }) => {
   const t = copy('fr');
@@ -64,6 +76,7 @@ test('zmanipulowany token → „link nieprawidłowy", bez przycisku', async ({ 
   await page.goto(`/nl/wypisz?t=${v}.${forgedData}.${sig}`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(t.invalidTitle);
   await expect(page.getByRole('button', { name: t.confirmButton, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: t.allButton, exact: true })).toHaveCount(0);
 });
 
 test('wygasły token → „link wygasł", bez przycisku; pusty → nieprawidłowy', async ({ page }) => {

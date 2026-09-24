@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,12 @@ import { Label } from '@/components/ui/label';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { updateNotificationPreferences } from '@/lib/actions/notification-preferences';
 import type { NotificationPreferences } from '@/lib/data/notification-preferences';
+import {
+  descriptionKey,
+  EMAIL_FIELDS,
+  type NotificationPreferencesRole,
+  type ToggleField,
+} from '@/lib/settings/email-preference-fields';
 
 /**
  * NotificationPreferencesForm — przełączniki preferencji powiadomień (Etap 6, kandydat + pracodawca).
@@ -23,35 +29,8 @@ import type { NotificationPreferences } from '@/lib/data/notification-preference
  * Pola to same wartości logiczne (checkboxy), więc walidację robi wyłącznie server action.
  */
 
-/** Nazwy pól = jednocześnie bazy kluczy i18n (`<field>Label` / `<field>Description`). */
-type ToggleField = keyof NotificationPreferences;
-
-export type NotificationPreferencesRole = 'candidate' | 'employer';
-
-/**
- * Pola e-mail wg roli (#357). Pracodawca nie dostaje e-maili `jobMatch`, więc przełącznik
- * dopasowanych ofert byłby atrapą — ukrywamy go (wartość z bazy przechodzi bez zmian
- * w `defaultValues`). Ta sama flaga `email_offers` u pracodawcy steruje e-mailami
- * `offerAccepted`/`offerDeclined` (0020) — stąd osobne opisy z perspektywy pracodawcy.
- */
-const EMAIL_FIELDS: Record<NotificationPreferencesRole, readonly ToggleField[]> = {
-  candidate: ['emailApplications', 'emailOffers', 'emailMessages', 'emailJobMatches', 'emailMarketing'],
-  employer: ['emailApplications', 'emailOffers', 'emailMessages', 'emailMarketing'],
-};
-
-/** Pola z opisem z perspektywy pracodawcy (`employer<Field>Description`). */
-const EMPLOYER_DESCRIPTION_FIELDS: ReadonlySet<ToggleField> = new Set([
-  'emailApplications',
-  'emailOffers',
-  'emailMessages',
-]);
-
-function descriptionKey(field: ToggleField, role: NotificationPreferencesRole): string {
-  if (role === 'employer' && EMPLOYER_DESCRIPTION_FIELDS.has(field)) {
-    return `employer${field.charAt(0).toUpperCase()}${field.slice(1)}Description`;
-  }
-  return `${field}Description`;
-}
+// Pola e-mail wg roli i klucze opisów: `@/lib/settings/email-preference-fields` (#357, #45).
+export type { NotificationPreferencesRole };
 
 /**
  * `pushEnabled` celowo pominięte (#312): Web Push nie jest zaimplementowany, więc kontrolka
@@ -73,6 +52,7 @@ export function NotificationPreferencesForm({
 }: NotificationPreferencesFormProps): React.JSX.Element {
   const t = useTranslations('settings');
   const tRoot = useTranslations();
+  const locale = useLocale();
 
   const [serverError, setServerError] = React.useState<ErrorCode | null>(null);
   const [success, setSuccess] = React.useState(false);
@@ -98,7 +78,8 @@ export function NotificationPreferencesForm({
     setServerError(null);
     setSuccess(false);
     try {
-      const result = await updateNotificationPreferences(values);
+      // #45: język i rola wyznaczają wersję pokazanej treści zgody (dowód w bazie).
+      const result = await updateNotificationPreferences({ ...values, locale, role });
       if (!result.ok) {
         setServerError(result.error);
         return;
