@@ -90,7 +90,7 @@ describe('#490 kontrakt z migracją 0105', () => {
     expect(MIGRATION).toContain(`char_length(btrim(description)) between 1 and ${BREACH_LIMITS.description}`);
     expect(MIGRATION).toContain(`char_length(closure_summary) <= ${BREACH_LIMITS.closureSummary}`);
     expect(MIGRATION).toContain(`cardinality(p_recipients) > ${BREACH_LIMITS.recipients}`);
-    expect(MIGRATION).toContain(`not between 1 and ${BREACH_LIMITS.noticeBody}`);
+    expect(MIGRATION).toContain(`not between 1 and ${BREACH_LIMITS.noticeText}`);
   });
 
   it('akcje audytu i typ obiektu mają etykiety dziennika', () => {
@@ -314,7 +314,7 @@ describe('#490 szablon zawiadomienia (Invariant #1)', () => {
         locale: 'nl',
         payload: {
           noticeSubject: 'Onderwerp NL',
-          noticeBody: 'Eerste alinea <b>{recipientName}</b>\n\nTweede alinea',
+          noticeText: 'Eerste alinea <b>{recipientName}</b>\n\nTweede alinea',
           incidentReference: 'NAR-2026-ABCDEF0123',
           panel: 'employer',
         },

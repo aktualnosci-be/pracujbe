@@ -47,7 +47,7 @@ export const BREACH_LIMITS = {
   closureSummary: 2000,
   reopenReason: 2000,
   noticeSubject: 200,
-  noticeBody: 5000,
+  noticeText: 5000,
   affectedCount: 100_000_000,
   recipients: 5000,
 } as const;

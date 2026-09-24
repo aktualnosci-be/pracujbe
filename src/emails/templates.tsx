@@ -162,7 +162,7 @@ export interface EmailDataMap {
   breachNotice: {
     recipientName?: string;
     noticeSubject: string;
-    noticeBody: string;
+    noticeText: string;
     incidentReference: string;
     actionUrl: string;
   };

@@ -50,6 +50,9 @@ echo ">> asercje RLS/triggery"
 echo ">> rollback 0097 (ESCO, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/esco93-rollback.sql"
 
+echo ">> rollback 0102 (materiały kampanii, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/campaign-job-rollback.sql"
+
 echo ">> sprzątanie"
 "${psql_base[@]}" -d postgres -c "drop database if exists ${DB};" >/dev/null
 

@@ -146,7 +146,7 @@ export function BreachNoticeForm({ incidentId }: { incidentId: string }): React.
               : res.field === 'recipients'
                 ? t('breachNoticeRecipientsRequired')
                 : t(res.fieldError === 'tooLong' ? 'breachErrorTooLong' : 'breachErrorRequired', {
-                    max: res.field.startsWith('body') ? BREACH_LIMITS.noticeBody : BREACH_LIMITS.noticeSubject,
+                    max: res.field.startsWith('body') ? BREACH_LIMITS.noticeText : BREACH_LIMITS.noticeSubject,
                   });
           setProblem({ field: res.field, message });
           focusField(res.field);
@@ -222,7 +222,7 @@ export function BreachNoticeForm({ incidentId }: { incidentId: string }): React.
                 id={`${idBase}-body_${l}`}
                 rows={6}
                 lang={l}
-                maxLength={BREACH_LIMITS.noticeBody}
+                maxLength={BREACH_LIMITS.noticeText}
                 value={content[l]?.body ?? ''}
                 disabled={pending}
                 aria-invalid={invalid(`body_${l}`)}

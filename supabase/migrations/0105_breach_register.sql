@@ -722,7 +722,7 @@ begin
     perform public.enqueue_email(v_rec.profile_id, 'breachNotice', 'breach_incident', p_id, v_key,
       jsonb_build_object(
         'noticeSubject', btrim(p_content -> v_rec.locale ->> 'subject'),
-        'noticeBody', btrim(p_content -> v_rec.locale ->> 'body'),
+        'noticeText', btrim(p_content -> v_rec.locale ->> 'body'),
         'incidentReference', v_row.reference,
         'panel', case when v_rec.role = 'employer' then 'employer' else 'candidate' end));
     -- Adres zablokowany (#44), brak adresu → brak wiersza; budżet odbiorcy (#45, 0101) →

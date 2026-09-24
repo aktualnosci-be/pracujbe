@@ -243,7 +243,7 @@ export async function notifyBreachSubjects(
     if (subject.length === 0 || subject.length > BREACH_LIMITS.noticeSubject) {
       return { ok: false, error: 'VALIDATION_FAILED', field: `subject_${locale}`, fieldError: subject ? 'tooLong' : 'required' };
     }
-    if (body.length === 0 || body.length > BREACH_LIMITS.noticeBody) {
+    if (body.length === 0 || body.length > BREACH_LIMITS.noticeText) {
       return { ok: false, error: 'VALIDATION_FAILED', field: `body_${locale}`, fieldError: body ? 'tooLong' : 'required' };
     }
     content[locale] = { subject, body };
