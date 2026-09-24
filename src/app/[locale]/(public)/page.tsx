@@ -94,26 +94,33 @@ export default async function HomePage({ params }: HomePageProps) {
   return (
     // Bez własnego <main> — layout (public) już dostarcza landmark <main> (unikamy duplikatu, a11y).
     <PublicSavedJobsProvider key={JSON.stringify(latestJobs.map(job => job.id))} jobIds={latestJobs.map(job => job.id)}>
-      {/* Fotografia jest ilustracyjna, nie przedstawia konkretnej oferty ani pracodawcy. */}
+      {/*
+        Hero wg `people.js` (#166): trzywierszowa teza, opis, czerwona akcja główna + link do
+        rejestracji kandydata, fotografia na wysokość kolumny tekstu z podpisem na zdjęciu.
+        Fotografia jest ilustracyjna, nie przedstawia konkretnej oferty ani pracodawcy.
+        Zdjęcie leży pod podpisem (absolute), a wysokość figury wyznacza min-h + podpis w
+        przepływie — przy powiększeniu tekstu figura rośnie zamiast ucinać podpis, a stała
+        minimalna wysokość chroni CLS i LCP (zdjęcie z priority, bez zmiany rozmiaru po załadowaniu).
+      */}
       <section className="border-b border-border bg-background">
         <div className="container py-8 md:py-12">
-          <div className="grid items-center gap-8 md:grid-cols-[1.16fr_1fr] lg:gap-12">
-            <div className="min-w-0">
-              <p className="mb-5 text-xs font-bold uppercase tracking-[0.18em] text-accent-dark">
+          <div className="grid gap-8 md:grid-cols-[1.16fr_1fr] md:items-stretch lg:gap-12">
+            <div className="flex min-w-0 flex-col justify-center">
+              <p className="mb-5 text-xs font-bold uppercase tracking-[0.12em] text-accent-dark">
                 {t('heroEyebrow')}
               </p>
-              <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
+              <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.5rem] xl:text-[4rem]">
                 <span className="block">{t('heroTitleLine1')}</span>{' '}
                 <span className="block">{t('heroTitleLine2')}</span>{' '}
                 <span className="block text-accent-dark">{t('heroTitleLine3')}</span>
               </h1>
-              <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
+              <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
                 {t('heroSubtitle')}
               </p>
               <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-4">
                 <Link
                   href={JOBS_PATH}
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-foreground px-6 py-3 text-sm font-semibold text-background transition-colors hover:bg-foreground/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   {t('heroBrowseJobs')}
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -127,20 +134,18 @@ export default async function HomePage({ params }: HomePageProps) {
                 </Link>
               </div>
             </div>
-            <figure className="min-w-0 overflow-hidden rounded-3xl rounded-tl-[5rem] bg-soft lg:rounded-tl-[6rem]">
-              <div className="relative aspect-[3/2] md:aspect-[4/3]">
-                <Image
-                  src="/images/people/team.webp"
-                  alt=""
-                  fill
-                  priority
-                  sizes="(min-width: 1280px) 520px, (min-width: 768px) 45vw, 100vw"
-                  className="object-cover"
-                />
-              </div>
-              <figcaption className="flex items-center gap-3 px-5 py-4 text-sm leading-snug text-foreground">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent font-bold text-white" aria-hidden="true">.be</span>
-                <span><strong className="block">{t('heroPhotoCaption')}</strong><span className="text-muted-foreground">{t('heroPhotoDisclaimer')}</span></span>
+            <figure className="relative flex min-h-64 min-w-0 flex-col justify-end overflow-hidden rounded-3xl rounded-tl-[3.5rem] bg-soft p-3 sm:min-h-80 sm:p-4 md:min-h-[22rem] md:rounded-tl-[5rem] lg:rounded-tl-[6.25rem] lg:p-5">
+              <Image
+                src="/images/people/team.webp"
+                alt=""
+                fill
+                priority
+                sizes="(min-width: 1280px) 560px, (min-width: 768px) 45vw, 100vw"
+                className="object-cover"
+              />
+              <figcaption className="relative flex items-center gap-3 rounded-xl bg-background px-4 py-3 text-sm leading-snug text-foreground shadow-lg sm:gap-4 sm:px-5 sm:py-4">
+                <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent font-bold text-accent-foreground sm:flex md:hidden lg:flex" aria-hidden="true">.be</span>
+                <span className="min-w-0"><strong className="block">{t('heroPhotoCaption')}</strong><span className="mt-0.5 block text-muted-foreground">{t('heroPhotoDisclaimer')}</span></span>
               </figcaption>
             </figure>
           </div>

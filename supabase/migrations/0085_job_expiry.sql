@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0086_job_expiry.sql
+-- 0085_job_expiry.sql
 -- #72: spójne wygaszanie ofert po `expires_at` — operacja domenowa dla maintenance
 -- oraz reguły cyklu życia dla ofert po terminie.
 --

@@ -1,11 +1,14 @@
 import * as React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { act, cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 function Harness({ open }: { open: boolean }) {
   return (
@@ -46,5 +49,34 @@ describe('LightDialog (#393)', () => {
     expect(rootOverflow()).toBe('hidden');
     act(() => second.unmount());
     expect(rootOverflow()).toBe('');
+  });
+
+  it('otwarcie: w pierwszym renderze tylko nakładka, treść po ramce; zamknięcie od razu', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'setTimeout', 'clearTimeout'] });
+    const { rerender } = render(<Harness open={false} />);
+    const overlay = () => document.querySelector("body > [aria-hidden='true'][data-state]");
+
+    act(() => rerender(<Harness open />));
+    expect(overlay()).toHaveAttribute('data-state', 'open');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(rootOverflow()).toBe('');
+
+    act(() => vi.runAllTimers());
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(rootOverflow()).toBe('hidden');
+
+    act(() => rerender(<Harness open={false} />));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(overlay()).toBeNull();
+    expect(rootOverflow()).toBe('');
+  });
+
+  it('zamknięcie przed narysowaniem ramki nie otwiera treści później', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'setTimeout', 'clearTimeout'] });
+    const { rerender } = render(<Harness open={false} />);
+    act(() => rerender(<Harness open />));
+    act(() => rerender(<Harness open={false} />));
+    act(() => vi.runAllTimers());
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

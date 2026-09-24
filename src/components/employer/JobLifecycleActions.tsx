@@ -33,7 +33,7 @@ export interface JobLifecycleActionsProps {
   pastExpiry?: boolean;
 }
 
-/** Dozwolone przejścia per stan — odzwierciedla macierz z RPC (`set_job_status`, 0086). */
+/** Dozwolone przejścia per stan — odzwierciedla macierz z RPC (`set_job_status`, 0085). */
 export function allowedActions(status: string, pastExpiry = false): JobLifecycleAction[] {
   switch (status) {
     case 'active':

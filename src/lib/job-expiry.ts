@@ -1,7 +1,7 @@
 /**
  * Wygaszanie ofert po `expires_at` (#72) — jedno źródło reguły dla panelu pracodawcy.
  *
- * Status `expired` ustawia maintenance (`expire_due_jobs`, 0086), ale cron może się spóźnić.
+ * Status `expired` ustawia maintenance (`expire_due_jobs`, 0085), ale cron może się spóźnić.
  * Panel nie może wtedy liczyć ani pokazywać przeterminowanej oferty jako aktywnej, więc
  * wyznacza status efektywny tym samym predykatem co publiczne odczyty (0048):
  * oferta jest po terminie, gdy `expires_at` jest ustawione i `expires_at <= now`.

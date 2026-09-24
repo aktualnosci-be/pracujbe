@@ -3,12 +3,12 @@
 import { randomUUID } from 'node:crypto';
 
 import { revalidatePath } from 'next/cache';
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { buildDraftStepContent } from '@/lib/job-draft-content';
 import { routing } from '@/i18n/routing';
 import {
   step1Schema,
@@ -38,8 +38,9 @@ import {
  *   - `createJobDraft`  — tworzy szkic oferty (`jobs.status = 'draft'`) dla aktywnej firmy
  *                          zalogowanego (created_by = auth.uid(), company_id z company_members).
  *   - `updateJobDraft`  — waliduje pojedynczy krok (schemat z `@/lib/validation/job`) i zapisuje
- *                          odpowiednie kolumny `jobs` + `job_translations` (locale = default oferty)
- *                          + `job_requirements` / `job_skills`. RLS pilnuje własności.
+ *                          go JEDNYM transakcyjnym RPC `save_job_draft` (0083, #192): kolumny
+ *                          `jobs` + `job_translations` (locale = default oferty) + relacje
+ *                          replace-all. Błąd w dowolnej części = brak częściowego zapisu kroku.
  *   - `updatePublishedJob` — poprawka AKTYWNEJ/WSTRZYMANEJ oferty (#325): wszystkie kroki naraz,
  *                          jedno transakcyjne RPC `update_published_job` (kompletność jak przy
  *                          publikacji, firma verified, CAS po `updated_at`); status i zgłoszenia
@@ -273,7 +274,7 @@ export async function updateJobDraft(
     // Odczyt oferty (RLS jobs_select_member) — potwierdza własność i daje default_locale/tytuł.
     const { data: jobData, error: jobErr } = await supabase
       .from('jobs')
-      .select('id, default_locale, title, status')
+      .select('id, status')
       .eq('id', jobId)
       .is('deleted_at', null)
       .maybeSingle();
@@ -287,243 +288,17 @@ export async function updateJobDraft(
     // a nieudany replace-all mógłby ją opróżnić). Rewizję aktywnej oferty publikuje się atomowo.
     if (asString(job['status']) !== 'draft') return { ok: false, error: 'JOB_NOT_DRAFT' };
 
-    const locale = normalizeLocale(asString(job['default_locale'], routing.defaultLocale));
-    const anchorTitle = asString(job['title']);
-
-    const error = await applyStep(supabase, jobId, step, parsed, locale, anchorTitle);
+    // #192: cały krok (kolumny + tłumaczenie + relacje) w JEDNEJ transakcji — błąd w dowolnej
+    // części cofa krok w całości, szkic nie zostaje w stanie mieszanym.
+    const content = buildDraftStepContent(step, parsed);
+    if (!content) return { ok: false, error: 'VALIDATION_FAILED' };
+    const error = await write(
+      supabase.rpc('save_job_draft', { p_job_id: jobId, p_content: content }),
+    );
     if (error) return { ok: false, error };
     return { ok: true };
   } catch {
     return { ok: false, error: 'INTERNAL' };
-  }
-}
-
-/** Upsert wiersza tłumaczenia (locale oferty). Zawsze niesie `title` (kolumna NOT NULL). */
-async function upsertTranslation(
-  supabase: SupabaseClient,
-  jobId: string,
-  locale: string,
-  title: string,
-  patch: Record<string, unknown>,
-): Promise<ErrorCode | null> {
-  return write(
-    supabase
-      .from('job_translations')
-      .upsert({ job_id: jobId, locale, title: title || '', ...patch }, { onConflict: 'job_id,locale' }),
-  );
-}
-
-/** Zastępuje linie wymagań danego rodzaju (mandatory/optional) w locale oferty. */
-// P1-09: zamiana relacji oferty przez ATOMOWE RPC replace-all (DELETE+INSERT w jednym ciele
-// funkcji = transakcja). Wcześniej kliencki DELETE, a potem INSERT jako dwa żądania — awaria
-// drugiego OPRÓŻNIAŁA relację (utrata danych). RPC gejtowane recruiter+ (is_job_manager).
-
-async function replaceRequirements(
-  supabase: SupabaseClient,
-  jobId: string,
-  locale: string,
-  kind: 'mandatory' | 'optional',
-  lines: string[],
-): Promise<ErrorCode | null> {
-  return write(
-    supabase.rpc('set_job_requirements', {
-      p_job_id: jobId,
-      p_locale: locale,
-      p_kind: kind,
-      p_lines: lines,
-    }),
-  );
-}
-
-/** Zastępuje umiejętności danego zakresu (obowiązkowe / dodatkowe) — atomowo (RPC). */
-async function replaceSkills(
-  supabase: SupabaseClient,
-  jobId: string,
-  mandatory: boolean,
-  labels: string[],
-): Promise<ErrorCode | null> {
-  return write(
-    supabase.rpc('set_job_skills', { p_job_id: jobId, p_mandatory: mandatory, p_labels: labels }),
-  );
-}
-
-/** Replace-all języków wymaganych oferty (job_languages) — atomowo (RPC). */
-async function replaceLanguages(
-  supabase: SupabaseClient,
-  jobId: string,
-  langs: ReadonlyArray<{ language: string; level: string }>,
-): Promise<ErrorCode | null> {
-  return write(
-    supabase.rpc('set_job_languages', {
-      p_job_id: jobId,
-      p_languages: langs.map((l) => ({ language: l.language, level: l.level })),
-    }),
-  );
-}
-
-/** Replace-all certyfikatów wymaganych oferty (job_certificates) — atomowo (RPC). */
-async function replaceCertificates(
-  supabase: SupabaseClient,
-  jobId: string,
-  labels: string[],
-): Promise<ErrorCode | null> {
-  return write(supabase.rpc('set_job_certificates', { p_job_id: jobId, p_labels: labels }));
-}
-
-/** Utrwala pojedynczy krok kreatora. Zwraca kod błędu albo null (sukces). */
-async function applyStep(
-  supabase: SupabaseClient,
-  jobId: string,
-  step: number,
-  parsed: unknown,
-  locale: string,
-  anchorTitle: string,
-): Promise<ErrorCode | null> {
-  switch (step) {
-    case 1: {
-      const v = parsed as JobStep1;
-      const e = await write(
-        supabase
-          .from('jobs')
-          .update({ title: v.title, category: v.category, occupation: v.occupation })
-          .eq('id', jobId),
-      );
-      if (e) return e;
-      return upsertTranslation(supabase, jobId, locale, v.title, { title: v.title });
-    }
-
-    case 2: {
-      const v = parsed as JobStep2;
-      const e = await write(
-        supabase
-          .from('jobs')
-          .update({
-            contract_type: v.contractType,
-            working_hours: v.workingHours,
-            shifts: nullIfEmpty(v.shifts),
-            start_immediately: v.startImmediately,
-            immediate: v.startImmediately,
-            start_date: v.startDate ?? null,
-          })
-          .eq('id', jobId),
-      );
-      if (e) return e;
-      return upsertTranslation(supabase, jobId, locale, anchorTitle, {
-        working_hours: v.workingHours,
-        shifts: nullIfEmpty(v.shifts),
-      });
-    }
-
-    case 3: {
-      const v = parsed as JobStep3;
-      return write(
-        supabase
-          .from('jobs')
-          .update({ city: v.city, region: v.region, address: nullIfEmpty(v.address), remote: v.remote })
-          .eq('id', jobId),
-      );
-    }
-
-    case 4: {
-      const v = parsed as JobStep4;
-      return write(
-        supabase
-          .from('jobs')
-          .update({
-            salary_min: v.salaryMin ?? null,
-            salary_max: v.salaryMax ?? null,
-            currency: v.currency,
-            salary_period: v.salaryPeriod,
-          })
-          .eq('id', jobId),
-      );
-    }
-
-    case 5: {
-      const v = parsed as JobStep5;
-      return upsertTranslation(supabase, jobId, locale, anchorTitle, {
-        description: v.description,
-        responsibilities: v.responsibilities,
-      });
-    }
-
-    case 6: {
-      const v = parsed as JobStep6;
-      const e = await write(
-        supabase
-          .from('jobs')
-          .update({ min_experience_years: v.minExperienceYears ?? null })
-          .eq('id', jobId),
-      );
-      if (e) return e;
-      const reqErr = await replaceRequirements(
-        supabase,
-        jobId,
-        locale,
-        'mandatory',
-        v.requirementsMandatory,
-      );
-      if (reqErr) return reqErr;
-      return replaceSkills(supabase, jobId, true, v.mandatorySkills);
-    }
-
-    case 7: {
-      const v = parsed as JobStep7;
-      const e = await write(
-        supabase
-          .from('jobs')
-          .update({
-            requires_driving_license: v.requiresDrivingLicense,
-            no_language_required: v.noLanguageRequired,
-          })
-          .eq('id', jobId),
-      );
-      if (e) return e;
-      const reqErr = await replaceRequirements(
-        supabase,
-        jobId,
-        locale,
-        'optional',
-        v.requirementsOptional,
-      );
-      if (reqErr) return reqErr;
-      const skErr = await replaceSkills(supabase, jobId, false, v.skills);
-      if (skErr) return skErr;
-      // Języki i certyfikaty oferty są teraz REALNIE zapisywane (FUN-03, relacje 0030).
-      const langErr = await replaceLanguages(supabase, jobId, v.languages);
-      if (langErr) return langErr;
-      return replaceCertificates(supabase, jobId, v.requiredCertificates);
-    }
-
-    case 8: {
-      const v = parsed as JobStep8;
-      const e = await write(
-        supabase
-          .from('jobs')
-          .update({ accommodation: v.accommodation, transport: v.transport })
-          .eq('id', jobId),
-      );
-      if (e) return e;
-      return upsertTranslation(supabase, jobId, locale, anchorTitle, {
-        conditions: v.conditions,
-        benefits: v.benefits,
-        highlights: v.benefits.slice(0, 4),
-      });
-    }
-
-    case 9: {
-      const v = parsed as JobStep9Draft;
-      const e = await write(
-        supabase.from('jobs').update({ contact_email: nullIfEmpty(v.contactEmail) }).eq('id', jobId),
-      );
-      if (e) return e;
-      return upsertTranslation(supabase, jobId, locale, anchorTitle, {
-        company_description: v.companyDescription,
-      });
-    }
-
-    default:
-      return 'VALIDATION_FAILED';
   }
 }
 

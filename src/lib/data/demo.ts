@@ -19,6 +19,7 @@ import type {
   JobDetail,
   JobListItem,
   LocationKey,
+  SalaryPeriod,
 } from '@/lib/jobs';
 import { routing, type Locale } from '@/i18n/routing';
 
@@ -515,6 +516,8 @@ interface DemoJobRaw {
   contractType: ContractType;
   salaryMin?: number;
   salaryMax?: number;
+  /** Okres stawki; brak = miesiąc (domyślna wartość `jobs.salary_period`). */
+  salaryPeriod?: SalaryPeriod;
   postedDaysAgo: number;
   accommodation: boolean;
   immediate: boolean;
@@ -698,21 +701,24 @@ const RAW_JOBS: DemoJobRaw[] = [
   },
   {
     id: '1024', occKey: 'warehouseSupervisor', companyId: 'c7', locationKey: 'liege', category: 'warehouse', contractType: 'permanent',
-    salaryMin: 3000, salaryMax: 3600, postedDaysAgo: 7, accommodation: false, immediate: false, noLanguageRequired: false, transport: false,
+    // Bez kwoty (#22): paszport pomija pole wynagrodzenia.
+    postedDaysAgo: 7, accommodation: false, immediate: false, noLanguageRequired: false, transport: false,
     languageKeys: ['fr'], responsibilityKeys: ['lead', 'stock', 'planLogistics'], mandatoryKeys: ['experience', 'french', 'reliable'],
     optionalKeys: ['leadership', 'computer'], conditionKeys: ['holiday', 'bonus', 'growth'], highlightKeys: ['permanent', 'teamLead', 'bonus'],
     workingHoursKey: 'fulltime', shiftsKey: 'two', contextKeys: ['stable', 'growth'],
   },
   {
     id: '1025', occKey: 'gardener', companyId: 'c10', locationKey: 'leuven', category: 'seasonal', contractType: 'seasonal',
-    salaryMin: 2100, salaryMax: 2400, postedDaysAgo: 3, accommodation: false, immediate: true, noLanguageRequired: false, transport: true,
+    // Stawka godzinowa z groszami (#22).
+    salaryMin: 14.5, salaryMax: 16.75, salaryPeriod: 'hour', postedDaysAgo: 3, accommodation: false, immediate: true, noLanguageRequired: false, transport: true,
     startDate: '2026-08-01', languageKeys: ['nl'], responsibilityKeys: ['garden', 'harvest', 'site'], mandatoryKeys: ['physical', 'reliable', 'ownTransport'],
     optionalKeys: ['experienceBonus', 'flexible'], conditionKeys: ['weekly', 'travel', 'ppe'], highlightKeys: ['seasonal', 'immediate', 'travel'],
     workingHoursKey: 'seasonal', shiftsKey: 'day', contextKeys: ['seasonal', 'immediate', 'team'],
   },
   {
     id: '1026', occKey: 'logisticsIntern', companyId: 'c7', locationKey: 'ghent', category: 'logistics', contractType: 'internship',
-    salaryMin: 850, salaryMax: 1000, postedDaysAgo: 5, accommodation: false, immediate: false, noLanguageRequired: false, transport: false,
+    // Tylko dolna granica (#22).
+    salaryMin: 850, postedDaysAgo: 5, accommodation: false, immediate: false, noLanguageRequired: false, transport: false,
     languageKeys: ['nl'], responsibilityKeys: ['stock', 'orderPick', 'planLogistics'], mandatoryKeys: ['student', 'reliable', 'dutch'],
     optionalKeys: ['computer', 'langBonus'], conditionKeys: ['training', 'mealVouchers', 'youngTeam'], highlightKeys: ['student', 'training'],
     workingHoursKey: 'parttime', shiftsKey: 'day', contextKeys: ['growth', 'team'],
@@ -763,7 +769,7 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     salaryMin: raw.salaryMin,
     salaryMax: raw.salaryMax,
     currency: CURRENCY,
-    salaryPeriod: 'month',
+    salaryPeriod: raw.salaryPeriod ?? 'month',
     publishedAt,
     isNew: raw.postedDaysAgo <= NEW_DAYS,
     highlights: raw.highlightKeys.map((k) => HL[k][content]),

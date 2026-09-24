@@ -11,7 +11,7 @@ import { captureError } from '@/lib/sentry';
  * Zwalnia porzucone rezerwacje kodów rabatowych (`release_stale_discount_reservations`) oraz
  * otwarte, nieukończone checkouty (`release_stale_checkout_intents`) — inaczej limit kodu i
  * blokada „jeden otwarty checkout na firmę" utknęłyby po porzuceniu płatności. #72: zmienia
- * przeterminowane aktywne oferty na `expired` (`expire_due_jobs`, 0086; idempotentne).
+ * przeterminowane aktywne oferty na `expired` (`expire_due_jobs`, 0085; idempotentne).
  *
  * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
  * Wymaga service-role (RPC są service_role-only). Nie ujawnia technikaliów ani danych ofert —

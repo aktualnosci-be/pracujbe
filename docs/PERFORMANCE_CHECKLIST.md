@@ -39,6 +39,11 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 - [x] INP dialogów: `src/components/ui/light-dialog.tsx` zamiast trybu `modal` Radix — bez
       arkusza w `<head>` i `pointer-events` na `<body>` przy otwarciu (#393; pilnuje
       `tests/e2e/dialog-open-cost.spec.ts`). Nowy dialog modalny buduj na `LightDialog*`.
+      Otwarcie w dwóch ramkach: w ramce tapnięcia rysuje się tylko nakładka, a Root Radix
+      dostaje `open` w osobnym zadaniu zaraz po niej (nie transition — ta czekałaby na
+      trwającą nawigację); zamknięcie od razu
+      (CPU 4×, 412 px: „Aplikuj” 104→64 ms, menu 128→56 ms; pilnuje
+      `tests/e2e/dialog-open-inp.spec.ts`, próg 200 ms).
 
 ## 3. Strategia renderowania (RSC / SSR / SSG / ISR)
 

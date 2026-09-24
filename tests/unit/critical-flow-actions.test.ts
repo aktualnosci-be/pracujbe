@@ -295,27 +295,29 @@ describe('saveOnboardingStep', () => {
   };
   const STEP6 = { availability: 'immediate', preferredContractTypes: ['permanent'], agreeTerms: true };
 
-  it('krok 3: umiejętności przez set_candidate_skills (nie bezpośredni DML)', async () => {
+  it('krok 3: doświadczenie i umiejętności jednym RPC (jedna transakcja, #142)', async () => {
     expect(await saveOnboardingStep(3, STEP3)).toEqual({ ok: true });
-    expect(upsert).toHaveBeenCalledWith(
-      { profile_id: USER, experience_years: 3 },
-      { onConflict: 'profile_id' },
-    );
-    expect(rpc).toHaveBeenCalledWith('set_candidate_skills', { p_skills: ['wózek widłowy'] });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('save_candidate_onboarding_step3', {
+      p_experience_years: 3,
+      p_skills: ['wózek widłowy'],
+    });
+    // Żadnego osobnego zapisu doświadczenia przed RPC — inaczej błąd RPC zostawiłby część kroku.
+    expect(upsert).not.toHaveBeenCalled();
   });
 
-  it('krok 5: języki i certyfikaty przez set_candidate_languages/certificates', async () => {
+  it('krok 5: języki i certyfikaty jednym RPC (jedna transakcja, #142)', async () => {
     expect(await saveOnboardingStep(5, STEP5)).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledWith('set_candidate_languages', {
-      p_languages: [{ language: 'nl', level: 'basic' }],
-    });
+    expect(rpc).toHaveBeenCalledTimes(1);
     // Data ważności trafia do RPC (#96); certyfikat bez daty = bezterminowy (null).
-    expect(rpc).toHaveBeenCalledWith('set_candidate_certificates', {
+    expect(rpc).toHaveBeenCalledWith('save_candidate_onboarding_step5', {
+      p_languages: [{ language: 'nl', level: 'basic' }],
       p_certificates: [
         { label: 'VCA', expires_at: '2027-01-31' },
         { label: 'ADR', expires_at: null },
       ],
     });
+    expect(upsert).not.toHaveBeenCalled();
   });
 
   it('krok 6 z finish: finish_onboarding i receipt zgody', async () => {
@@ -338,9 +340,8 @@ describe('saveOnboardingStep', () => {
   });
 
   it.each([
-    [3, STEP3, 'set_candidate_skills'],
-    [5, STEP5, 'set_candidate_languages'],
-    [5, STEP5, 'set_candidate_certificates'],
+    [3, STEP3, 'save_candidate_onboarding_step3'],
+    [5, STEP5, 'save_candidate_onboarding_step5'],
     [6, STEP6, 'finish_onboarding'],
   ] as const)('krok %s: błąd RPC %s → ok:false (nie sukces)', async (step, data, failing) => {
     rpc.mockImplementation(async (name: string) =>
