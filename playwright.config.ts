@@ -75,6 +75,7 @@ export default defineConfig({
     '**/apply-network-error.spec.ts',
     '**/apply-phone-validation.spec.ts',
     '**/job-posting-fixture.spec.ts',
+    '**/offer-message-login.spec.ts',
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

@@ -19,6 +19,7 @@ export default defineConfig({
         '**/apply-network-error.spec.ts',
         '**/apply-phone-validation.spec.ts',
         '**/job-posting-fixture.spec.ts',
+        '**/offer-message-login.spec.ts',
       ],
   workers: 1,
   // next dev kompiluje trasę przy pierwszym żądaniu; na zimnym starcie trwa to ponad 30 s.
