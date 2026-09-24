@@ -142,14 +142,15 @@ export const PROCESSORS: readonly Processor[] = [
     name: 'Anthropic (Claude API)',
     purpose: 'Import ogłoszenia o pracę do szkicu oferty (zrzut ekranu albo treść strony pobranej z linku).',
     dataCategories: [
-      'Tekst strony z ogłoszeniem i jej adres URL albo obraz zrzutu ekranu (base64)',
-      'Dane osobowe obecne w ogłoszeniu (np. kontakt do rekrutera), jeśli występują',
+      'Tekst strony z ogłoszeniem po minimalizacji (bez e-maili, telefonów i numerów identyfikacyjnych) i sama nazwa hosta źródła',
+      'Albo obraz zrzutu ekranu (base64) — bez lokalnej redakcji; może zawierać dane osób z ogłoszenia',
     ],
     dataSubjects: ['Osoby wymienione w importowanym ogłoszeniu', 'Pracodawca wykonujący import (pośrednio)'],
     activation: 'AI_JOB_IMPORT_ENABLED=1/true + ANTHROPIC_API_KEY; domyślnie wyłączone. Model: DEFAULT_JOB_IMPORT_MODEL albo AI_JOB_IMPORT_MODEL.',
-    codeRefs: ['src/lib/ai-import/extract.ts', 'src/lib/ai-import/config.ts', 'docs/AI_JOB_IMPORT.md'],
+    codeRefs: ['src/lib/ai-import/extract.ts', 'src/lib/ai-import/minimize.ts', 'src/lib/ai-import/run-import.ts', 'src/lib/ai-import/config.ts', 'docs/AI_JOB_IMPORT.md'],
     notes: [
       'Kod nie wysyła do modelu danych kandydatów, profili ani CV.',
+      'Tekst: z JSON-LD zostają tylko dozwolone pola JobPosting; redakcja e-maili, telefonów, NISS/BIS, PESEL i numerów dokumentów przed wysyłką (minimize.ts). Numer identyfikacyjny w odpowiedzi modelu = odmowa importu.',
       'Kod nie ustawia parametru inference_geo ani innych ustawień regionu.',
     ],
     ...UNKNOWN,

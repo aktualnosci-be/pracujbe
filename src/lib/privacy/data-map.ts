@@ -174,7 +174,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'ai-job-import': {
     name: 'Import ogłoszenia przez AI',
-    inCode: 'Pracodawca przesyła zrzut ekranu lub link; treść trafia do modelu, wynik do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone.',
+    inCode: 'Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone.',
     processors: [...HOSTING, 'anthropic'],
     retentionInCode: 'Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty.',
   },
@@ -337,7 +337,14 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       preferred_contract_types: 'professional',
       expected_salary_min: 'professional',
       is_searchable: 'preferences',
+      searchable_changed_at: 'preferences',
     },
+  },
+  'public.candidate_visibility_events': {
+    activities: ['candidate-profile'],
+    subjects: ['candidate'],
+    columns: { candidate_id: 'reference', searchable: 'preferences', created_at: 'preferences' },
+    note: 'Historia włączania/wyłączania widoczności profilu (0100); firma nie ma ścieżki odczytu.',
   },
   'public.candidate_skills': {
     activities: ['candidate-profile', 'matching-search'],

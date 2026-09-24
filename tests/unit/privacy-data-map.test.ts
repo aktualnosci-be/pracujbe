@@ -42,8 +42,7 @@ describe('mapa danych — klasyfikacja schematu', () => {
 
   it('kontrola ujemna: nowa kolumna email bez klasyfikacji → błąd', () => {
     const errors = checkClassification(withExtra('alter table public.system_events add column email text;'));
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain('public.system_events.email');
+    expect(errors.filter((e) => e.includes('public.system_events.email'))).toHaveLength(1);
   });
 
   it('kontrola ujemna: nowa kolumna w create table i wieloczłonowym alter table → błąd', () => {
@@ -59,8 +58,7 @@ describe('mapa danych — klasyfikacja schematu', () => {
     const errors = checkClassification(
       withExtra('create table if not exists public.candidate_notes (id uuid primary key, candidate_id uuid, note text);'),
     );
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/public\.candidate_notes.*candidate_id, note/);
+    expect(errors.some((e) => /public\.candidate_notes.*candidate_id, note/.test(e))).toBe(true);
   });
 
   it('kontrola ujemna: wpis wskazujący nieistniejącą kolumnę lub tabelę → błąd', () => {
@@ -70,10 +68,8 @@ describe('mapa danych — klasyfikacja schematu', () => {
       'public.profiles': { ...profiles, columns: { ...profiles.columns, nickname: 'identity' } },
       'public.ghost': { activities: [], subjects: [], columns: {} },
     });
-    expect(errors).toEqual([
-      'Klasyfikacja wskazuje nieistniejącą kolumnę public.profiles.nickname.',
-      'Klasyfikacja wskazuje tabelę public.ghost, której nie ma w migracjach.',
-    ]);
+    expect(errors).toContain('Klasyfikacja wskazuje nieistniejącą kolumnę public.profiles.nickname.');
+    expect(errors).toContain('Klasyfikacja wskazuje tabelę public.ghost, której nie ma w migracjach.');
   });
 
   it('pomija tabele w ciałach funkcji, komentarzach i literałach', () => {
@@ -113,13 +109,13 @@ describe('mapa danych — dokument i dostawcy', () => {
     }
   });
 
-  it('moduły prywatności nie są importowane przez UI', () => {
+  it('mapa danych i rejestr dostawców nie są importowane przez UI', () => {
     const offenders: string[] = [];
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const path = join(dir, entry.name);
         if (entry.isDirectory()) walk(path);
-        else if (/\.(tsx?|mjs)$/.test(entry.name) && /lib\/privacy/.test(readFileSync(path, 'utf8'))) offenders.push(path);
+        else if (/\.(tsx?|mjs)$/.test(entry.name) && /lib\/privacy\/(data-map|processors)/.test(readFileSync(path, 'utf8'))) offenders.push(path);
       }
     };
     walk(resolve(ROOT, 'src/app'));

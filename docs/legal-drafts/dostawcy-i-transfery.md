@@ -39,11 +39,15 @@ potwierdzenia przez właściciela** w panelu Railway, bez publikowania wartości
 - Funkcja dla pracodawcy (owner/admin/recruiter aktywnej firmy), za flagą `AI_JOB_IMPORT_ENABLED`,
   domyślnie wyłączona także w produkcji. Bez klucza funkcja jest niedostępna; atrapa
   `AI_JOB_IMPORT_PROVIDER=fixture` nie działa w trybie produkcyjnym.
-- Do API wysyłane jest **jedno** z dwóch: obraz zrzutu ekranu (PNG/JPG/WebP ≤ 5 MB, base64) albo
-  tekst strony pobranej z linku podanego przez pracodawcę wraz z adresem URL. Oprócz tego
-  instrukcja systemowa i schemat odpowiedzi.
-- Kod **nie wysyła** danych kandydatów, profili, CV ani wiadomości. Ogłoszenie może jednak
-  zawierać dane osobowe (np. kontakt do rekrutera).
+- Do API wysyłane jest **jedno** z dwóch, plus instrukcja systemowa i schemat odpowiedzi:
+  - tekst strony pobranej z linku podanego przez pracodawcę — **po minimalizacji**
+    (`src/lib/ai-import/minimize.ts`): z JSON-LD zostają tylko dozwolone pola `JobPosting`,
+    e-maile, telefony, NISS/BIS, PESEL i numery dokumentów są usuwane, a zamiast adresu URL
+    trafia sama nazwa hosta;
+  - obraz zrzutu ekranu (PNG/JPG/WebP ≤ 5 MB, base64) — **bez lokalnej redakcji** (brak OCR);
+    może zawierać dane osób z ogłoszenia. Numer identyfikacyjny w odpowiedzi modelu powoduje
+    odmowę importu (`JOB_IMPORT_SENSITIVE_DATA`).
+- Kod **nie wysyła** danych kandydatów, profili, CV ani wiadomości.
 - Model: stała `DEFAULT_JOB_IMPORT_MODEL` albo `AI_JOB_IMPORT_MODEL`. Kod nie ustawia parametru
   regionu przetwarzania (`inference_geo`) ani innych ustawień geograficznych.
 - Portal nie zapisuje obrazu ani pobranej strony — tylko wynik po walidacji w szkicu oferty

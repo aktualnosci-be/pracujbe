@@ -6,14 +6,14 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 74; z danymi osobowymi: 44; bez danych osobowych: 30.
+Tabele w migracjach: 75; z danymi osobowymi: 45; bez danych osobowych: 30.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
 | Czynność | Co robi kod | Tabele | Usługi zewnętrzne | Retencja/usuwanie w kodzie |
 |---|---|---|---|---|
 | Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.document_acceptances`, `public.profiles` | Railway, Supabase, Resend, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kod nie usuwa kont automatycznie (soft delete profiles.deleted_at). |
-| Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.saved_jobs` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
+| Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.candidate_visibility_events`, `public.saved_jobs` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
 | Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files` | Railway, Supabase | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts); brak automatycznej retencji. |
 | Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Supabase, Resend | Kod nie usuwa danych — do ustalenia |
 | Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Supabase, Resend, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
@@ -24,7 +24,7 @@ Tabele w migracjach: 74; z danymi osobowymi: 44; bez danych osobowych: 30.
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Supabase, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.rate_limits`, `public.system_events` | Railway, Supabase, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
-| Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; treść trafia do modelu, wynik do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Supabase, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
+| Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Supabase, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway, Supabase | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
 | Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
 | Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy. | — | Railway | BACKUP_RETENTION najnowszych kopii (domyślnie 14). |
@@ -110,11 +110,12 @@ Tabele w migracjach: 74; z danymi osobowymi: 44; bez danych osobowych: 30.
 ### Anthropic (Claude API) (`anthropic`)
 
 - **Cel w portalu:** Import ogłoszenia o pracę do szkicu oferty (zrzut ekranu albo treść strony pobranej z linku).
-- **Kategorie danych:** Tekst strony z ogłoszeniem i jej adres URL albo obraz zrzutu ekranu (base64); Dane osobowe obecne w ogłoszeniu (np. kontakt do rekrutera), jeśli występują
+- **Kategorie danych:** Tekst strony z ogłoszeniem po minimalizacji (bez e-maili, telefonów i numerów identyfikacyjnych) i sama nazwa hosta źródła; Albo obraz zrzutu ekranu (base64) — bez lokalnej redakcji; może zawierać dane osób z ogłoszenia
 - **Osoby:** Osoby wymienione w importowanym ogłoszeniu, Pracodawca wykonujący import (pośrednio)
 - **Aktywacja:** AI_JOB_IMPORT_ENABLED=1/true + ANTHROPIC_API_KEY; domyślnie wyłączone. Model: DEFAULT_JOB_IMPORT_MODEL albo AI_JOB_IMPORT_MODEL.
-- **Kod:** `src/lib/ai-import/extract.ts`, `src/lib/ai-import/config.ts`, `docs/AI_JOB_IMPORT.md`
+- **Kod:** `src/lib/ai-import/extract.ts`, `src/lib/ai-import/minimize.ts`, `src/lib/ai-import/run-import.ts`, `src/lib/ai-import/config.ts`, `docs/AI_JOB_IMPORT.md`
 - **Uwaga:** Kod nie wysyła do modelu danych kandydatów, profili ani CV.
+- **Uwaga:** Tekst: z JSON-LD zostają tylko dozwolone pola JobPosting; redakcja e-maili, telefonów, NISS/BIS, PESEL i numerów dokumentów przed wysyłką (minimize.ts). Numer identyfikacyjny w odpowiedzi modelu = odmowa importu.
 - **Uwaga:** Kod nie ustawia parametru inference_geo ani innych ustawień regionu.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
@@ -372,6 +373,7 @@ Tabele w migracjach: 74; z danymi osobowymi: 44; bez danych osobowych: 30.
 | `preferred_contract_types` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0002_core_tables.sql` |
 | `expected_salary_min` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0002_core_tables.sql` |
 | `is_searchable` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0002_core_tables.sql` |
+| `searchable_changed_at` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0100_candidate_visibility.sql` |
 
 ### `public.candidate_skills`
 
@@ -384,6 +386,19 @@ Tabele w migracjach: 74; z danymi osobowymi: 44; bez danych osobowych: 30.
 | `candidate_profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0004_candidate_relations.sql` |
 | `skill_label` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0004_candidate_relations.sql` |
 | `years` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0004_candidate_relations.sql` |
+
+### `public.candidate_visibility_events`
+
+- **Migracja:** `supabase/migrations/0100_candidate_visibility.sql`
+- **Czynności:** Profil zawodowy kandydata
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Historia włączania/wyłączania widoczności profilu (0100); firma nie ma ścieżki odczytu.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `candidate_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0100_candidate_visibility.sql` |
+| `searchable` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0100_candidate_visibility.sql` |
+| `created_at` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0100_candidate_visibility.sql` |
 
 ### `public.companies`
 
