@@ -36,6 +36,8 @@ const ROUTES = [
   '/admin/naruszenia',
   '/admin/naruszenia/nowy',
   '/admin/naruszenia/demo-b1',
+  // Przegląd pytań screeningowych (#497).
+  '/admin/pytania',
   '/admin/dziennik',
 ];
 

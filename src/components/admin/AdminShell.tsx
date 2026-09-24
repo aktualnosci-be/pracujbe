@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Building2, Flag, History, LayoutDashboard, MailX, ShieldAlert, Users } from 'lucide-react';
+import { Building2, Flag, History, LayoutDashboard, ListChecks, MailX, ShieldAlert, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
@@ -12,7 +12,7 @@ import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/Da
 /**
  * AdminShell — chrome panelu administratora. Reużywa `DashboardShell` (granatowy sidebar +
  * topbar), tak jak panele kandydata/pracodawcy, ale z własną nawigacją: Podsumowanie / Firmy
- * / Zgłoszenia / Użytkownicy / Blokady poczty (#44) / Rejestr naruszeń (#490) / Dziennik zdarzeń (#417). Renderowane przez `admin/layout.tsx` (guard + noindex).
+ * / Zgłoszenia / Pytania screeningowe (#497) / Użytkownicy / Blokady poczty (#44) / Rejestr naruszeń (#490) / Dziennik zdarzeń (#417). Renderowane przez `admin/layout.tsx` (guard + noindex).
  *
  * Dzwonek powiadomień jest ukryty (#423) — administracja nie korzysta z kolejki notyfikacji
  * użytkownika, a pusty dzwonek byłby martwym elementem. Sygnały do działania (kolejka
@@ -29,6 +29,7 @@ const HREF = {
   audit: '/admin/dziennik',
   email: '/admin/poczta',
   breaches: '/admin/naruszenia',
+  screening: '/admin/pytania',
 } as const;
 
 /** Inicjały z nazwy (maks. 2 znaki). */
@@ -51,6 +52,7 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
     { href: HREF.summary, label: t('navSummary'), icon: <LayoutDashboard /> },
     { href: HREF.companies, label: t('navCompanies'), icon: <Building2 /> },
     { href: HREF.reports, label: t('navReports'), icon: <Flag /> },
+    { href: HREF.screening, label: t('navScreening'), icon: <ListChecks /> },
     { href: HREF.users, label: t('navUsers'), icon: <Users /> },
     { href: HREF.email, label: t('navEmail'), icon: <MailX /> },
     { href: HREF.breaches, label: t('navBreaches'), icon: <ShieldAlert /> },
