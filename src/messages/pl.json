@@ -1797,5 +1797,29 @@
       "companyLimit": "Możesz prowadzić maksymalnie 5 firm.",
       "lastOwner": "Firma musi mieć co najmniej jednego aktywnego właściciela."
     }
+  },
+  "emailUnsubscribe": {
+    "metaTitle": "Wypisanie z e-maili",
+    "title": "Wypisanie z e-maili",
+    "confirmText": "Potwierdź, że nie chcesz już otrzymywać e-maili: {category}.",
+    "confirmButton": "Wypisz mnie",
+    "pending": "Zapisywanie…",
+    "doneTitle": "Wypisano",
+    "doneText": "Nie wyślemy Ci już e-maili: {category}. Pozostałe wiadomości i powiadomienia w serwisie działają bez zmian.",
+    "settingsHint": "Wszystkie ustawienia powiadomień zmienisz po zalogowaniu.",
+    "loginLink": "Zaloguj się",
+    "invalidTitle": "Link jest nieprawidłowy",
+    "invalidText": "Ten link wypisania jest niepełny lub został zmieniony. Skorzystaj z linku z najnowszego e-maila albo zmień ustawienia po zalogowaniu.",
+    "expiredTitle": "Link wygasł",
+    "expiredText": "Ten link wypisania jest już nieaktualny. Skorzystaj z linku z najnowszego e-maila albo zmień ustawienia po zalogowaniu.",
+    "unavailableText": "Wypisanie jest chwilowo niedostępne. Spróbuj później albo zmień ustawienia po zalogowaniu.",
+    "errorText": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "category": {
+      "applications": "o zgłoszeniach i ich statusach",
+      "offers": "o propozycjach pracy",
+      "messages": "o nowych wiadomościach",
+      "job_matches": "z dopasowanymi ofertami",
+      "marketing": "z newsletterem i informacjami marketingowymi"
+    }
   }
 }

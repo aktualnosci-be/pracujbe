@@ -227,9 +227,12 @@ function EmailShell(props: {
   const outro = copy.outro ? interpolate(copy.outro, vars) : undefined;
   const name = greetingName?.trim();
   const greeting = `${greetings[locale]}${name ? ` ${name}` : ''},`;
+  // #45: adres wypisania przekazuje renderEmail (opcja workera), nie payload kolejki.
+  const unsubscribeUrl =
+    typeof props.vars.unsubscribeUrl === 'string' ? props.vars.unsubscribeUrl : undefined;
 
   return (
-    <EmailLayout locale={locale} preview={preview}>
+    <EmailLayout locale={locale} preview={preview} unsubscribeUrl={unsubscribeUrl}>
       <EmailHeading>{heading}</EmailHeading>
       <EmailText>{greeting}</EmailText>
       {paragraphs.map((paragraph, index) => (
@@ -652,12 +655,18 @@ export async function renderEmail<T extends EmailType>(
   type: T,
   locale: Locale,
   data: EmailDataMap[T],
+  options: { unsubscribeUrl?: string } = {},
 ): Promise<{ subject: string; html: string }> {
   // Rejestr jest w pełni typowany; tu kasujemy generyk wyłącznie na potrzeby createElement
   // (TS nie potrafi skorelować EmailDataMap[T] z sygnaturą createElement).
   const Component = templates[type] as unknown as FunctionComponent<Record<string, unknown>>;
   // `locale` PO danych: klucz `locale` w payloadzie kolejki nie może nadpisać języka odbiorcy (#348).
-  const element = createElement(Component, { ...data, locale });
+  // `unsubscribeUrl` też PO danych: payload kolejki nie może podmienić adresu wypisania (#45).
+  const element = createElement(Component, {
+    ...data,
+    locale,
+    unsubscribeUrl: options.unsubscribeUrl,
+  });
   const html = await render(element);
   const vars = prepareVars(type, locale, data as Record<string, unknown>);
   const subject = interpolate(resolveCopy(type, locale, vars).subject, vars);
