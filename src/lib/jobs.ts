@@ -7,6 +7,7 @@
  */
 
 import { isDatabaseConfigured, isProductionMode } from '@/lib/env';
+import { isBuildPhase } from '@/lib/static-rendering';
 import { AppError } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
@@ -484,6 +485,7 @@ export async function getJobs(
   );
 
   if (isDatabaseConfigured()) {
+    if (isBuildPhase()) return { jobs: [], total: 0, page, pageSize };
     try {
       return await getJobsFromDb(params, page, pageSize, viewer?.candidateId ?? null);
     } catch (error) {
@@ -505,6 +507,7 @@ export async function getJobBySlug(
   const resolvedLocale = toLocale(locale);
 
   if (isDatabaseConfigured()) {
+    if (isBuildPhase()) return null;
     try {
       return await getJobBySlugFromDb(slug, resolvedLocale);
     } catch (error) {
@@ -568,7 +571,7 @@ export async function getLatestJobs(
 }
 
 export async function getJobFilterFacets(params: GetJobsParams, viewer?: JobsViewer) {
-  if (!isDatabaseConfigured()) return null;
+  if (!isDatabaseConfigured() || isBuildPhase()) return null;
   try {
     const [{ getDomainPool }, { getPublicJobFilterFacets }] = await Promise.all(
       [import('@/lib/db/runtime'), import('@/lib/db/public-jobs')],
@@ -594,6 +597,7 @@ export async function getJobsAvailableLocales(
   if (!isDatabaseConfigured()) {
     return Object.fromEntries(jobIds.map((id) => [id, demoJobContentLocales(id)]));
   }
+  if (isBuildPhase()) return null;
   try {
     const [{ getDomainPool }, { getPublicJobTranslations }] = await Promise.all([
       import('@/lib/db/runtime'),
@@ -623,7 +627,7 @@ export async function getCategoryCounts(
   _locale: string,
   keys: readonly string[],
 ): Promise<Record<string, number> | null> {
-  if (!isDatabaseConfigured()) return null;
+  if (!isDatabaseConfigured() || isBuildPhase()) return null;
   try {
     const [{ getDomainPool }, { getPublicJobCategoryCounts }] =
       await Promise.all([
@@ -652,7 +656,7 @@ export async function getCityCounts(
   locale: string,
   keys: readonly LocationKey[],
 ): Promise<Record<LocationKey, number> | null> {
-  if (!isDatabaseConfigured()) return null;
+  if (!isDatabaseConfigured() || isBuildPhase()) return null;
   try {
     const [{ getDomainPool }, { getPublicJobFilterFacets }, { countByLocationKey }] =
       await Promise.all([
