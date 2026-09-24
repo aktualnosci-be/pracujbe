@@ -14,7 +14,7 @@ import { getUnreadConversationsCount } from '@/lib/data/messages';
 /**
  * Layout panelu kandydata (grupa tras `/candidate/*`).
  *
- * Owija strony w chrome panelu (DashboardShell: granatowy sidebar + topbar) poprzez
+ * Owija strony w chrome panelu (DashboardShell: jasny sidebar `.side-item` + topbar) poprzez
  * kliencki `CandidateShell`, który — dla ścieżek kreatora onboardingu — świadomie
  * przepuszcza treść bez sidebara (kreator ma własny lekki layout).
  *
