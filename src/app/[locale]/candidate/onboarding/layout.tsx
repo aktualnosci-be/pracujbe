@@ -5,8 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { Link, redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { Logo } from '@/components/brand/Logo';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
+import { getPortalIdentity, isPortalDataConfigured } from '@/lib/db/portal';
 
 /**
  * Layout kreatora onboardingu kandydata (makieta 06).
@@ -15,7 +14,7 @@ import { createServerClient } from '@/lib/supabase/server';
  * z samym logo (odnośnik do strony głównej) skupia uwagę na wypełnianiu profilu; sam
  * Stepper i treść kroków renderuje strona. NOINDEX (Invariant #9).
  *
- * GUARD: przy skonfigurowanym Supabase wymaga zalogowanego użytkownika (onboarding zapisuje
+ * GUARD: przy skonfigurowanej bazie wymaga zalogowanego użytkownika (`getPortalIdentity`) (onboarding zapisuje
  * profil) — brak sesji → /logowanie. Bez env → tryb demo. `force-dynamic`, bo zależy od sesji.
  */
 export const dynamic = 'force-dynamic';
@@ -33,12 +32,9 @@ export default async function OnboardingLayout({
 }) {
   const { locale } = await params;
 
-  if (isSupabaseConfigured()) {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+  if (isPortalDataConfigured()) {
+    const me = await getPortalIdentity();
+    if (!me) {
       redirect({ href: '/logowanie', locale: locale as Locale });
     }
   }

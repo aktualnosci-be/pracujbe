@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { getCandidateOverview, getCandidatePassport, getCandidateProfileSummary } from '@/lib/data/candidate';
 
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: () => false }));
+vi.mock('@/lib/db/portal', () => ({
+  isPortalDataConfigured: () => false,
+  getPortalIdentity: vi.fn(),
+  withPortalTransaction: vi.fn(),
+}));
 
 describe('profil w trybie demonstracyjnym', () => {
   it('nie przedstawia nieistniejącej osoby ani postępu jako danych kandydata', async () => {

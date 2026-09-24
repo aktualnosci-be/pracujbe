@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { applyToJob } from '@/lib/actions/applications';
-import { isSupabaseConfigured } from '@/lib/env';
+import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 import {
   localizedText,
   parseScreeningAnswers,
@@ -19,12 +19,9 @@ import { screeningErrorKey } from '@/components/employer/ScreeningQuestionsEdito
  * polach kreatora, odpowiedzi przekazane do `apply_to_job` i błąd bazy przy pytaniu.
  */
 
-const rpc = vi.fn();
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn(() => true) }));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: vi.fn(async () => ({ rpc })),
-}));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
+vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const MIGRATION = readFileSync(
   join(process.cwd(), 'supabase/migrations/0093_screening_questions.sql'),
@@ -51,8 +48,8 @@ function issues(screeningQuestions: unknown[]): { key: string; message: string }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
-  rpc.mockResolvedValue({ data: 'application-1', error: null });
+  resetFakeDb({ id: '55555555-5555-4555-8555-555555555555', role: 'candidate' });
+  fakeDb.rpc('apply_to_job', 'application-1');
 });
 
 describe('limity pytań = limity migracji 0093', () => {
@@ -139,20 +136,20 @@ describe('applyToJob — odpowiedzi w tym samym wywołaniu co aplikacja', () => 
       ok: true,
       id: 'application-1',
     });
-    expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledWith(
-      'apply_to_job',
-      expect.objectContaining({ p_answers: { [Q1]: true, [Q2]: 'o2' }, p_idempotency_key: input.idempotencyKey }),
-    );
+    expect(fakeDb.calls).toHaveLength(1);
+    const { args } = fakeDb.callsTo('apply_to_job')[0]!;
+    // jsonb: obiekt wysłany jako JSON (nie literał PG).
+    expect(JSON.parse(args['p_answers'] as string)).toEqual({ [Q1]: true, [Q2]: 'o2' });
+    expect(args['p_idempotency_key']).toBe(input.idempotencyKey);
   });
 
   it('bez odpowiedzi → p_answers null (oferta bez pytań jak dotąd)', async () => {
     await applyToJob(input);
-    expect(rpc).toHaveBeenCalledWith('apply_to_job', expect.objectContaining({ p_answers: null }));
+    expect(fakeDb.callsTo('apply_to_job')[0]!.args).toMatchObject({ p_answers: null });
   });
 
   it('brak odpowiedzi na pytanie wymagane (baza) → kod użytkowy i id pytania, bez tekstu bazy', async () => {
-    rpc.mockResolvedValue({ data: null, error: { message: `SCREENING_ANSWER_REQUIRED: ${Q2}` } });
+    fakeDb.rpc('apply_to_job', () => { throw pgError('P0001', `SCREENING_ANSWER_REQUIRED: ${Q2}`); });
     expect(await applyToJob(input)).toEqual({
       ok: false,
       error: 'SCREENING_ANSWER_REQUIRED',
@@ -165,6 +162,6 @@ describe('applyToJob — odpowiedzi w tym samym wywołaniu co aplikacja', () => 
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });

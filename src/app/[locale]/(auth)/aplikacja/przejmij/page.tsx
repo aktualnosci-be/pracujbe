@@ -5,8 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { GuestClaimPanel } from '@/components/public/GuestClaimPanel';
 import { GuestLinkIntake } from '@/components/public/GuestLinkIntake';
 import { readGuestLinkToken } from '@/lib/guest-apply/link-cookie';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
+import { getPortalIdentity, isPortalDataConfigured } from '@/lib/db/portal';
 
 /**
  * Przypisanie aplikacji gościa do konta kandydata (#98) — cel linku z e-maila
@@ -26,11 +25,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 async function hasSession(): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+  if (!isPortalDataConfigured()) return false;
   try {
-    const supabase = await createServerClient();
-    const { data } = await supabase.auth.getUser();
-    return Boolean(data.user);
+    return (await getPortalIdentity()) !== null;
   } catch {
     // Brak odczytu sesji → panel pokaże logowanie; akcja i tak sprawdza sesję w bazie.
     return false;

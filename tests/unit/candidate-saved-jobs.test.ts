@@ -1,61 +1,56 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSavedJobs } from '@/lib/data/candidate';
-import { createServerClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured } from '@/lib/env';
+import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: (fn: unknown) => fn }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const userId = '22222222-2222-4222-8222-222222222222';
 const jobId = '11111111-1111-4111-8111-111111111111';
 const oldSavedJob = { id: jobId, slug: 'stara-praca', title: 'Starsza oferta', company_name: 'Firma', city: 'Gent' };
 
-function client({ rows = [], readError = null, user = { id: userId } }: {
+function db({ rows = [], readError = false, user = true }: {
   rows?: typeof oldSavedJob[];
-  readError?: object | null;
-  user?: { id: string } | null;
+  readError?: boolean;
+  user?: boolean;
 } = {}) {
-  const supabase = {
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
-    from: vi.fn(),
-    rpc: vi.fn().mockResolvedValue({ data: rows, error: readError }),
-  };
-  vi.mocked(createServerClient).mockResolvedValue(supabase as never);
-  return supabase;
+  resetFakeDb(user ? { id: userId, role: 'candidate' } : null);
+  fakeDb.rpc('get_saved_jobs_display', () => {
+    if (readError) throw pgError('XX000', 'read failed');
+    return rows;
+  });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
 });
 
 describe('saved jobs read', () => {
   it('reports a genuine empty collection', async () => {
-    const supabase = client();
+    db();
     expect(await getSavedJobs('pl')).toEqual({ status: 'ready', jobs: [] });
-    expect(supabase.rpc).toHaveBeenCalledWith('get_saved_jobs_display', { p_locale: 'pl' });
-    expect(supabase.from).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(1);
+    expect(fakeDb.callsTo('get_saved_jobs_display')[0]).toMatchObject({ as: userId, args: { p_locale: 'pl' } });
   });
 
   it('keeps failed reads and missing auth distinct from empty', async () => {
-    client({ readError: { message: 'read failed' } });
+    db({ readError: true });
     expect(await getSavedJobs('pl')).toEqual({ status: 'error' });
-    const anonymous = client({ user: null });
+    db({ user: false });
     expect(await getSavedJobs('pl')).toEqual({ status: 'error' });
-    expect(anonymous.rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('shows an older saved job beyond the first 100 public offers', async () => {
-    const supabase = client({ rows: [oldSavedJob] });
+    db({ rows: [oldSavedJob] });
     expect(await getSavedJobs('nl')).toEqual({
       status: 'ready',
       jobs: [{ id: jobId, slug: 'stara-praca', title: 'Starsza oferta', companyName: 'Firma', city: 'Gent', match: null, saved: true }],
     });
-    expect(supabase.rpc).toHaveBeenCalledWith('get_saved_jobs_display', { p_locale: 'nl' });
-    expect(supabase.rpc).not.toHaveBeenCalledWith('get_public_jobs', expect.anything());
+    expect(fakeDb.callsTo('get_saved_jobs_display')[0]!.args).toEqual({ p_locale: 'nl' });
+    expect(fakeDb.callsTo('get_public_jobs')).toHaveLength(0);
   });
 
   it('RPC joins saved rows before sorting and restricts results to the owner and public jobs', () => {
