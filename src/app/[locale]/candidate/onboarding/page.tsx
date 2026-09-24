@@ -99,6 +99,7 @@ async function loadInitialValues(): Promise<LoadResult> {
     let skills: string[] | undefined;
     let languages: OnboardingInitialValues['languages'] | undefined;
     let certificates: string[] | undefined;
+    let certificateExpiry: Record<string, string> | undefined;
     if (c?.id) {
       const [skillsRes, langsRes, certsRes] = await Promise.all([
         supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', c.id),
@@ -108,7 +109,7 @@ async function loadInitialValues(): Promise<LoadResult> {
           .eq('candidate_profile_id', c.id),
         supabase
           .from('candidate_certificates')
-          .select('certificate_label')
+          .select('certificate_label,expires_at')
           .eq('candidate_profile_id', c.id),
       ]);
       // P1-07/P1-08: błąd odczytu relacji → stan błędu, by nie skasować danych przy zapisie.
@@ -120,8 +121,10 @@ async function loadInitialValues(): Promise<LoadResult> {
         const row = r as { language_label: string; level: string };
         return { language: row.language_label, level: row.level };
       }) as OnboardingInitialValues['languages'];
-      certificates = (certsRes.data ?? []).map(
-        (r) => (r as { certificate_label: string }).certificate_label,
+      const certRows = (certsRes.data ?? []) as { certificate_label: string; expires_at: string | null }[];
+      certificates = certRows.map((r) => r.certificate_label);
+      certificateExpiry = Object.fromEntries(
+        certRows.filter((r) => r.expires_at).map((r) => [r.certificate_label, String(r.expires_at).slice(0, 10)]),
       );
     }
 
@@ -143,6 +146,7 @@ async function loadInitialValues(): Promise<LoadResult> {
         availability: c?.availability ?? undefined,
         languages,
         certificates,
+        certificateExpiry,
         preferredContractTypes: c?.preferred_contract_types ?? undefined,
         expectedSalaryMin: c?.expected_salary_min ?? undefined,
         expectedSalaryCurrency: c?.expected_salary_currency ?? undefined,

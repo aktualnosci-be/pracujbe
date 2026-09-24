@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -15,6 +14,7 @@ import {
   type ConsentCategories,
   type ConsentCategory,
 } from '@/lib/consent';
+import { CONSENT_BOOT_ATTRIBUTE } from '@/lib/consent-boot';
 import { OPEN_SETTINGS_EVENT, updateConsent } from '@/lib/consent-store';
 import { Analytics } from './Analytics';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
@@ -30,12 +30,14 @@ import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialo
  *   przełącznika).
  * - Renderuje <Analytics/>, który sam pilnuje, by nic nie ładować przed zgodą.
  *
- * Do momentu zamontowania po stronie klienta komponent nie renderuje banera (uniknięcie
- * niezgodności hydratacji — zgoda żyje w cookie dostępnym dopiero w przeglądarce).
+ * Baner jest w HTML z serwera (#389): maluje się razem z FCP, a nie po hydratacji — inaczej
+ * przy pierwszej wizycie był elementem LCP (~2 s). Powracającemu użytkownikowi ukrywa go
+ * przed pierwszym malowaniem skrypt z `consent-boot.ts` (atrybut `data-consent` na <html>
+ * + reguła w globals.css). Po hydratacji o widoczności decyduje `getConsent()`.
  *
  * Dostępność banera (WCAG 2.4.3 / 2.4.11 / 1.4.4 / 1.4.10):
- * - baner trafia do kontenera wstawianego tuż za odnośnikiem „Przejdź do treści" (albo na
- *   początek <body>, gdy strona go nie ma), więc jest na początku kolejności Tab, a nie za stopką;
+ * - [locale]/layout renderuje komponent na początku <body>, tuż za odnośnikiem „Przejdź do
+ *   treści", więc baner jest na początku kolejności Tab (także po zmianie układu), a nie za stopką;
  * - jego wysokość jest wystawiana jako `--cookie-banner-h` na <html>; globals.css zamienia ją
  *   na `scroll-padding-bottom` i `padding-bottom`, dzięki czemu element z fokusem i koniec strony
  *   dają się przewinąć ponad baner;
@@ -47,16 +49,6 @@ import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialo
 const BANNER_HEIGHT_VAR = '--cookie-banner-h';
 /** Zapas nad banerem dla przewijanego elementu z fokusem (px). */
 const BANNER_SCROLL_GAP = 8;
-
-/** Wstawia kontener banera za odnośnikiem do treści (lub na początek body). */
-function placeBannerHost(host: HTMLElement) {
-  const skipLink = document.querySelector('a[href="#main-content"]');
-  if (skipLink?.parentNode) {
-    if (skipLink.nextSibling !== host) skipLink.after(host);
-  } else if (document.body.firstChild !== host) {
-    document.body.prepend(host);
-  }
-}
 
 /**
  * Cel fokusu, gdy element, który miał fokus, znika razem z banerem (#212, WCAG 2.4.3):
@@ -140,24 +132,46 @@ export function CookieConsent() {
   const rowIdBase = useId();
 
   const [mounted, setMounted] = useState(false);
-  const [bannerVisible, setBannerVisible] = useState(false);
+  // Serwer nie zna zgody, więc HTML zawsze zawiera baner; ukrywa go CSS (data-consent),
+  // a po hydratacji — ten stan.
+  const [bannerVisible, setBannerVisible] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draft, setDraft] = useState<ConsentCategories>(necessaryOnly());
-  const [bannerHost, setBannerHost] = useState<HTMLElement | null>(null);
-  const hostRef = useRef<HTMLElement | null>(null);
   const bannerRef = useRef<HTMLDivElement | null>(null);
   // Centrum zgód otwierane jest zdarzeniem, bez Dialog.Trigger — Radix nie wie, gdzie oddać
   // fokus, więc zapamiętujemy element otwierający sami (#212).
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const pathname = usePathname();
 
   // Odczyt istniejącej zgody po stronie klienta.
   useEffect(() => {
     setMounted(true);
     const existing = getConsent();
     setBannerVisible(existing === null);
-    if (existing) setDraft(existing.categories);
+    if (existing) {
+      setDraft(existing.categories);
+    } else {
+      // Skrypt z <head> uznał cookie za ważne, a getConsent() nie — baner musi być widoczny.
+      document.documentElement.removeAttribute(CONSENT_BOOT_ATTRIBUTE);
+    }
   }, []);
+
+  // Nawigacja kliencka do innego układu usuwa kliknięty odnośnik razem z fokusem, a punkt
+  // startu Tab zostaje w nowej treści — za banerem, który stoi na początku <body>. Gdy fokus
+  // spadł na <body>, ustawiamy punkt startu na baner (fokus bez przewijania i od razu blur),
+  // żeby następny Tab trafił do banera, a nie ominął go (#212, WCAG 2.4.3).
+  const pathname = usePathname();
+  const lastPathnameRef = useRef(pathname);
+  useEffect(() => {
+    if (lastPathnameRef.current === pathname) return;
+    lastPathnameRef.current = pathname;
+    const banner = bannerRef.current;
+    if (!bannerVisible || !banner) return;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    banner.setAttribute('tabindex', '-1');
+    banner.focus({ preventScroll: true });
+    banner.blur();
+    banner.removeAttribute('tabindex');
+  }, [pathname, bannerVisible]);
 
   // Otwarcie panelu na żądanie z zewnątrz (np. przycisk w stopce).
   useEffect(() => {
@@ -171,35 +185,11 @@ export function CookieConsent() {
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpenSettings);
   }, []);
 
-  // Kontener banera na początku kolejności Tab. Po zmianie trasy layout mógł się wymienić
-  // (np. publiczny → auth), więc kontener jest ponownie umieszczany we właściwym miejscu.
-  useEffect(() => {
-    if (!bannerVisible) return;
-    const host = hostRef.current ?? document.createElement('div');
-    hostRef.current = host;
-    placeBannerHost(host);
-    setBannerHost(host);
-  }, [bannerVisible, pathname]);
-
-  useEffect(() => {
-    return () => {
-      hostRef.current?.remove();
-      document.documentElement.style.removeProperty(BANNER_HEIGHT_VAR);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (bannerVisible) return;
-    hostRef.current?.remove();
-    hostRef.current = null;
-    setBannerHost(null);
-  }, [bannerVisible]);
-
   // Wysokość banera → zmienna CSS (scroll-padding/padding strony w globals.css).
   useEffect(() => {
     const root = document.documentElement;
     const banner = bannerRef.current;
-    if (!bannerVisible || !bannerHost || !banner) {
+    if (!mounted || !bannerVisible || !banner) {
       root.style.removeProperty(BANNER_HEIGHT_VAR);
       return;
     }
@@ -214,7 +204,7 @@ export function CookieConsent() {
       observer.disconnect();
       root.style.removeProperty(BANNER_HEIGHT_VAR);
     };
-  }, [bannerVisible, bannerHost]);
+  }, [mounted, bannerVisible]);
 
   const persist = useCallback((categories: ConsentCategories) => {
     updateConsent(categories);
@@ -264,51 +254,49 @@ export function CookieConsent() {
     <>
       {mounted ? <Analytics /> : null}
 
-      {mounted && bannerVisible && bannerHost
-        ? createPortal(
-            <div
-              ref={bannerRef}
-              role="region"
-              aria-labelledby="cookie-banner-title"
-              aria-describedby="cookie-banner-desc"
-              className="fixed inset-x-0 bottom-0 z-50 max-h-[60dvh] overflow-y-auto overscroll-contain border-t border-border bg-background shadow-[0_-4px_24px_rgba(15,42,71,0.08)]"
-            >
-              <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
-                <div className="space-y-1 lg:max-w-2xl">
-                  <p id="cookie-banner-title" className="text-base font-semibold text-foreground">
-                    {t('bannerTitle')}
-                  </p>
-                  <p id="cookie-banner-desc" className="text-sm text-muted-foreground">
-                    {t('bannerDesc')}{' '}
-                    <Link
-                      href="/polityka-cookies"
-                      className="font-medium text-accent underline-offset-4 hover:underline"
-                    >
-                      {t('moreInfo')}
-                    </Link>
-                  </p>
-                </div>
-                {/* Invariant #7: trzy równorzędne opcje — odrzucenie tak samo łatwe jak akceptacja. */}
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:max-w-[60%] lg:shrink-0">
-                  <Button
-                    variant="outline"
-                    onClick={handleBannerRejectOptional}
-                    className={BANNER_BUTTON}
-                  >
-                    {t('rejectOptional')}
-                  </Button>
-                  <Button variant="outline" onClick={openCustomize} className={BANNER_BUTTON}>
-                    {t('customize')}
-                  </Button>
-                  <Button variant="outline" onClick={handleBannerAcceptAll} className={BANNER_BUTTON}>
-                    {t('acceptAll')}
-                  </Button>
-                </div>
-              </div>
-            </div>,
-            bannerHost,
-          )
-        : null}
+      {bannerVisible ? (
+        <div
+          ref={bannerRef}
+          id="cookie-banner"
+          role="region"
+          aria-labelledby="cookie-banner-title"
+          aria-describedby="cookie-banner-desc"
+          className="fixed inset-x-0 bottom-0 z-50 max-h-[60dvh] overflow-y-auto overscroll-contain border-t border-border bg-background shadow-[0_-4px_24px_rgba(15,42,71,0.08)]"
+        >
+          <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-1 lg:max-w-2xl">
+              <p id="cookie-banner-title" className="text-base font-semibold text-foreground">
+                {t('bannerTitle')}
+              </p>
+              <p id="cookie-banner-desc" className="text-sm text-muted-foreground">
+                {t('bannerDesc')}{' '}
+                <Link
+                  href="/polityka-cookies"
+                  className="font-medium text-accent underline-offset-4 hover:underline"
+                >
+                  {t('moreInfo')}
+                </Link>
+              </p>
+            </div>
+            {/* Invariant #7: trzy równorzędne opcje — odrzucenie tak samo łatwe jak akceptacja. */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:max-w-[60%] lg:shrink-0">
+              <Button
+                variant="outline"
+                onClick={handleBannerRejectOptional}
+                className={BANNER_BUTTON}
+              >
+                {t('rejectOptional')}
+              </Button>
+              <Button variant="outline" onClick={openCustomize} className={BANNER_BUTTON}>
+                {t('customize')}
+              </Button>
+              <Button variant="outline" onClick={handleBannerAcceptAll} className={BANNER_BUTTON}>
+                {t('acceptAll')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <LightDialogRoot open={settingsOpen} onOpenChange={setSettingsOpen}>
         <LightDialogContent
@@ -381,11 +369,7 @@ export function CookieConsent() {
           {/* Kolejność DOM: odrzuć · zapisz · akceptuj (desktop lewo→prawo).
               Na mobile flex-col-reverse podnosi „Akceptuj wszystkie" na górę — wg makiety. */}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button
-              variant="outline"
-              onClick={handleRejectOptional}
-              className="w-full sm:w-auto"
-            >
+            <Button variant="outline" onClick={handleRejectOptional} className="w-full sm:w-auto">
               {t('rejectOptional')}
             </Button>
             <Button variant="outline" onClick={handleSaveSelection} className="w-full sm:w-auto">

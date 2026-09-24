@@ -624,6 +624,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   bez współrzędnych ten sam region = 10 bez etykiety „w promieniu”. **Do zrobienia (#194):**
   współrzędne dla miast spoza 10-elementowego słownika (kanoniczny model miast/geokodowanie).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
+  Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
+  `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
+  oznaczenie „Wygasł”); `scoreMatch(…, { today })` nie liczy certyfikatu z `expires_at` < dziś
+  (dzień w Europe/Brussels, `referenceDate`), wygasły wymagany → `expiredCertificates` z wyjaśnieniem.
+  Top dopasowani (#141, 0079): `get_company_top_matches` — najlepsze dopasowanie na kandydata
+  (DISTINCT ON) przed limitem 5, pod RLS (recruiter+, widoczność kandydata, firma verified).
+  Dowód: `rls.sql` sekcja MC.
   Odporność odczytu (#191/#197): `getSimilarJobs` i `getMyJobMatch` zwracają jawny wynik
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się
@@ -734,16 +741,21 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
   logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny). **Do zrobienia:**
   Core Web Vitals / audyt wydajności (Lighthouse w CI).
-  Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391), dialogi
+  Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391; jedyna
+  wyspa = przycisk zapisu z `jobId`; względna data na serwerze po dniu kalendarzowym w
+  Brukseli — `src/lib/relative-date.ts`, zmienia się tylko o północy, zgodna z ISR), dialogi
   na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
-  obrazów z optymalizatora i plików `public/` (#394).
+  obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
+  na decyzję o workflow. Font Inter jako podzbiór łaciński ~73 KB (#388, przepis
+  `scripts/subset-font.py`, fonty zastępcze z metrykami w `globals.css`) i baner zgód
+  w HTML z serwera, ukrywany przed malowaniem przy zapisanej zgodzie (`consent-boot.ts`, #389);
+  „Przejdź do treści” renderuje `[locale]/layout` przed banerem, każdy układ ma `#main-content`.
   Zod poza JS stron publicznych (#390): helpery adresu `next` (`safeNextPath`, `loginHref`,
   `registerHref`, `relocalizeNextParam`) w `src/lib/auth/next-path.ts` bez Zoda; schematy
   zostają w `validation/auth`. Straże: graf importów `public-bundle-no-zod.test` i chunki
-  z `ZodError` w `check-next-build.mjs` (layout `(public)`, home, lista ofert, poradnik). Bramka wydajności w CI (#395) czeka
-  na decyzję o workflow.
+  z `ZodError` w `check-next-build.mjs` (layout `(public)`, home, lista ofert, poradnik).
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
-  `locale` jawnie do Header/Footer/SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
+  `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
   `DATABASE_APP_URL` build nie czyta bazy (`prerenderParamsAtBuild` → strony na pierwsze żądanie);
   layout `(public)` odrzuca nieobsługiwany locale (`notFound`). Middleware: bramka hasła i

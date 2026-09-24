@@ -132,9 +132,10 @@ test('przycisk formularza na krótkiej stronie da się przewinąć ponad baner (
 test('po zamknięciu banera strona nie zostawia dodatkowego odstępu', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await openFresh(page, '/pl/oferty-pracy');
-  expect(
-    await page.evaluate(() => parseFloat(getComputedStyle(document.body).paddingBottom)),
-  ).toBeGreaterThan(0);
+  // Baner jest w HTML z serwera (#389); jego wysokość mierzy CookieConsent po hydratacji.
+  await expect
+    .poll(() => page.evaluate(() => parseFloat(getComputedStyle(document.body).paddingBottom)))
+    .toBeGreaterThan(0);
 
   await page.locator(`${BANNER} button`).first().click();
   await expect(page.locator(BANNER)).toHaveCount(0);

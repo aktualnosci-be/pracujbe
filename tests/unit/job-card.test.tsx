@@ -109,6 +109,20 @@ describe('Paszport oferty', () => {
     expect(screen.getByRole('link', { name: job.title })).toHaveAttribute('href', '/oferty-pracy/electrician');
   });
 
+  // #391: data liczona na serwerze po dniu kalendarzowym w Brukseli (zgodna z ISR).
+  it('względna data: ten sam dzień w Brukseli = „today”, pełna data w title', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-24T11:45:00Z'));
+    try {
+      const { container } = await renderCard({ publishedAt: '2026-09-23T22:30:00Z' });
+      const time = container.querySelector('time');
+      expect(time).toHaveTextContent('today');
+      expect(time).toHaveAttribute('title', 'September 24, 2026');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('zachowuje odrębny przycisk zapisu i nie powiela regionu', async () => {
     await renderCard({ region: job.city, companyVerified: false });
     expect(screen.getAllByText('Antwerp')).toHaveLength(1);

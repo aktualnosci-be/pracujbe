@@ -205,3 +205,37 @@ describe("OnboardingWizard: za długa pozycja listy (#364)", () => {
     expect(input).not.toHaveAttribute("aria-invalid");
   });
 });
+
+describe("OnboardingWizard: data ważności certyfikatu (#96)", () => {
+  it("wygasły certyfikat oznaczony, poprawiona data zapisuje się razem z krokiem 5", async () => {
+    render(
+      <OnboardingWizard
+        initialStep={5}
+        initialValues={{
+          ...onboardingValues,
+          certificates: ["VCA", "ADR"],
+          certificateExpiry: { VCA: "2000-01-01" },
+        }}
+      />,
+    );
+    const vca = screen.getByLabelText(`certificateExpiryLabel:${JSON.stringify({ certificate: "VCA" })}`);
+    expect(vca).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getAllByText("certificateExpired")).toHaveLength(1);
+
+    fireEvent.change(vca, { target: { value: "2999-12-31" } });
+    expect(screen.queryByText("certificateExpired")).toBeNull();
+    expect(vca).not.toHaveAttribute("aria-invalid");
+
+    fireEvent.click(screen.getByRole("button", { name: /^next/ }));
+    await waitFor(() =>
+      expect(saveOnboardingStep).toHaveBeenCalledWith(
+        5,
+        expect.objectContaining({
+          certificates: ["VCA", "ADR"],
+          certificateExpiry: { VCA: "2999-12-31" },
+        }),
+        expect.anything(),
+      ),
+    );
+  });
+});

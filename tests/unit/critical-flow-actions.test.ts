@@ -288,7 +288,11 @@ describe('loadOlderMessages', () => {
 
 describe('saveOnboardingStep', () => {
   const STEP3 = { skills: ['wózek widłowy'], experienceYears: 3 };
-  const STEP5 = { languages: [{ language: 'nl', level: 'basic' }], certificates: ['VCA'] };
+  const STEP5 = {
+    languages: [{ language: 'nl', level: 'basic' }],
+    certificates: ['VCA', 'ADR'],
+    certificateExpiry: { VCA: '2027-01-31' },
+  };
   const STEP6 = { availability: 'immediate', preferredContractTypes: ['permanent'], agreeTerms: true };
 
   it('krok 3: umiejętności przez set_candidate_skills (nie bezpośredni DML)', async () => {
@@ -305,7 +309,13 @@ describe('saveOnboardingStep', () => {
     expect(rpc).toHaveBeenCalledWith('set_candidate_languages', {
       p_languages: [{ language: 'nl', level: 'basic' }],
     });
-    expect(rpc).toHaveBeenCalledWith('set_candidate_certificates', { p_certificates: ['VCA'] });
+    // Data ważności trafia do RPC (#96); certyfikat bez daty = bezterminowy (null).
+    expect(rpc).toHaveBeenCalledWith('set_candidate_certificates', {
+      p_certificates: [
+        { label: 'VCA', expires_at: '2027-01-31' },
+        { label: 'ADR', expires_at: null },
+      ],
+    });
   });
 
   it('krok 6 z finish: finish_onboarding i receipt zgody', async () => {

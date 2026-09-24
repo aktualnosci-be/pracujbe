@@ -80,11 +80,22 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 
 ## 7. Fonty
 
-- [ ] **Inter** przez `next/font` (self-hosted, bez zewnętrznego żądania do Google Fonts).
-- [ ] Subset `latin` + `latin-ext` (polskie znaki diakrytyczne) — nie ładuj pełnego zakresu.
-- [ ] `font-display: swap` (domyślne w `next/font`) — brak niewidocznego tekstu (FOIT).
-- [ ] Maksymalnie 1–2 rodziny fontów (obecnie jedna).
-- [ ] Preload dla podstawowej wagi używanej nad linią zgięcia.
+- [x] **Inter** przez `next/font/local` (self-hosted, bez zewnętrznego żądania do Google Fonts).
+- [x] Podzbiór (#388): `src/app/fonts/InterVariable-latin.woff2` (~73 KB zamiast 344 KB) —
+      Latin, Latin-1, Latin Extended-A, interpunkcja typograficzna, €, ™, strzałki; oś `wght`
+      400–700. Przepis: `python3 scripts/subset-font.py` (źródło `assets/fonts/`), strażnik
+      `tests/unit/font-subset.test.ts` (≤ 90 KB, każdy znak z `src/messages`).
+- [x] `font-display: swap` z fontami zastępczymi o dopasowanych metrykach (#388): grupy Arial/
+      Liberation Sans, Roboto (Android), DejaVu Sans (Linux) w `globals.css`, wartości ze
+      `scripts/font-fallback-metrics.py`. CLS od podmiany fontu: `/pl` 0,036 → 0, poradnik
+      0,069 → 0,016 (Playwright, CPU 4×, 1,6 Mb/s).
+- [x] Maksymalnie 1–2 rodziny fontów (obecnie jedna).
+- [x] Preload dla podstawowej wagi używanej nad linią zgięcia (`next/font`, jeden plik).
+
+Baner zgód a LCP (#389): baner jest w HTML z serwera (maluje się z FCP), a powracającemu
+użytkownikowi ukrywa go przed pierwszym malowaniem skrypt z `src/lib/consent-boot.ts`
+(`data-consent` na `<html>`). LCP pierwszej wizyty na liście ofert, detalu, logowaniu
+i panelach: ~2,0–2,4 s → 0,64–0,86 s. Strażnik: `tests/e2e/first-visit-lcp.spec.ts`.
 
 ## 8. Sieć / cache / dostarczanie
 
