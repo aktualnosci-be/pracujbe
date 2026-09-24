@@ -521,6 +521,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   godzinowych nie przeliczamy (godziny pracy to wolny tekst) — jak oferty bez kwoty nie odpadają
   z filtra i są na końcu sortowania; opis `filters.salaryPeriodNote` pod suwakiem. Lustro TS dla
   demo: `src/lib/salary-compare.ts`. Dowód: `rls.sql` sekcja SAL, `salary-compare.test.ts`.
+  Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
+  dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
+  w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
+  Grosze = dwa miejsca dla obu granic, jedna granica = „od”/„do”, min = max = jedna kwota,
+  brak kwoty = brak pola, okres tylko z danych. Testy: `salary.test.ts`, E2E `job-detail-salary`.
+  **Do zrobienia (SQL):** kwoty oferty w payloadzie `jobOffer` (`send_offer`).
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner
