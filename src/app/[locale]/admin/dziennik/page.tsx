@@ -5,6 +5,7 @@ import { Link } from '@/i18n/navigation';
 import {
   AUDIT_ACTION_KEY,
   AUDIT_ENTITY_TYPES,
+  EMAIL_SUPPRESSION_REASON_KEY,
   normalizeAdminSearch,
   parseAuditAction,
   parseAuditEntity,
@@ -34,6 +35,7 @@ const ENTITY_LABEL: Record<string, string> = {
   report: 'entityReport',
   application: 'entityApplication',
   offer: 'entityOffer',
+  email_suppression: 'entityEmailSuppression',
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -97,6 +99,10 @@ export default async function AdminAuditPage({
     if (entityType === 'report' && REPORT_STATUS_KEY[value]) return t(REPORT_STATUS_KEY[value]);
     if (entityType === 'application' && tStatus.has(camel(value))) return tStatus(camel(value));
     if (entityType === 'offer' && tOffer.has(value)) return tOffer(value);
+    if (entityType === 'email_suppression') {
+      if (value === 'lifted') return t('emailStatusLifted');
+      if (EMAIL_SUPPRESSION_REASON_KEY[value]) return t(EMAIL_SUPPRESSION_REASON_KEY[value]);
+    }
     return t('statusUnknown');
   };
 

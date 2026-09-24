@@ -741,6 +741,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   centrum preferencji dla wszystkich kategorii, `text/plain`, tożsamość i adres pocztowy nadawcy
   w stopce marketingu, budżet w hooku e-maili Auth, rezerwacja kampania+odbiorca, decyzja o
   trackingu na odebranym `.eml`.
+  Doręczenia i blokady (#44, migracja `0099`): webhook `POST /api/email/webhook/resend`
+  (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
+  `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
+  niezależny od dostawcy: `src/lib/email/provider-events.ts`. RPC `record_email_event`
+  (service_role): status tylko „w górę”, czasy zdarzeń; trwałe odbicie i skarga → aktywna
+  blokada w `email_suppressions` (jedna na adres, historia zostaje). `enqueue_email` pomija
+  zablokowany adres, `claim_email_batch` wygasza wcześniejsze wiersze (`suppressed_address`).
+  E-maile Auth nie są blokowane (obowiązkowe). Panel `/admin/poczta`: lista, filtr, zdjęcie
+  blokady z uzasadnieniem (`admin_lift_email_suppression`, audyt). Dowód: `rls.sql` sekcja
+  ML44, `email-delivery-webhook.test.ts`, `admin-email-suppressions.test.ts`, E2E
+  `admin-email-suppressions.spec`. **Do zrobienia (#44):** alarmy (wiek kolejki, wzrost
+  bounce/complaint), stany w `/api/health`, adapter drugiego dostawcy.
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,

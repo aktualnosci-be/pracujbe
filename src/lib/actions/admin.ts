@@ -2,6 +2,7 @@
 
 import { createServerClient } from '@/lib/supabase/server';
 import { companyReasonError, companyStatusNeedsReason } from '@/lib/admin/company-review';
+import { emailLiftReasonError } from '@/lib/admin/email-suppression';
 import { isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
@@ -15,6 +16,8 @@ import { companyVatSource } from '@/lib/vies/state';
  *   - `setCompanyStatus` — zmienia status weryfikacji firmy przez RPC `admin_set_company_status`
  *     (odrzucenie/zawieszenie z wymaganym uzasadnieniem — 0084, #310).
  *   - `resolveReport`    — rozstrzyga zgłoszenie przez RPC `admin_resolve_report`.
+ *   - `liftEmailSuppression` — zdjęcie blokady adresu e-mail (#44) przez RPC
+ *     `admin_lift_email_suppression` (0099, uzasadnienie wymagane, audyt).
  *   - `checkCompanyVies` — ręczne sprawdzenie numeru VAT firmy w VIES (#92), zapis wyniku
  *     rozstrzygającego przez RPC `admin_record_vies_check` (0088).
  *
@@ -145,6 +148,52 @@ export async function resolveReport(
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'admin.resolveReport' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/**
+ * Zdejmuje blokadę adresu e-mail (#44) — tylko admin (egzekwowane przez RPC `is_admin()`).
+ * Uzasadnienie trafia do dziennika zdarzeń. Blokada zdjęta w międzyczasie → `STALE_STATE`.
+ */
+export async function liftEmailSuppression(
+  suppressionId: string,
+  reason: string,
+): Promise<AdminActionResult> {
+  const reasonError = emailLiftReasonError(typeof reason === 'string' ? reason : '');
+  if (reasonError) {
+    return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: reasonError };
+  }
+  // Tryb DEMO: identyfikatory przykładowych blokad nie są UUID; nic nie zapisujemy.
+  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (typeof suppressionId !== 'string' || !UUID_RE.test(suppressionId)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const { error } = await supabase.rpc('admin_lift_email_suppression', {
+      p_id: suppressionId,
+      p_reason: reason.trim(),
+    });
+    if (error) {
+      const message = error.message ?? '';
+      if (message.includes('REASON_REQUIRED')) {
+        return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'required' };
+      }
+      if (message.includes('REASON_TOO_LONG')) {
+        return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'tooLong' };
+      }
+      return { ok: false, error: mapPgError(message) };
+    }
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'admin.liftEmailSuppression' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

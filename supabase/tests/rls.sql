@@ -4206,4 +4206,207 @@ select pg_temp.expect_error('select * from public.company_vies_checks',
   'permission denied', 'VI92-5d anon nie czyta tabeli wyników VIES');
 reset role;
 
+-- ============================================================================
+-- ML44 (#44, 0099): zdarzenia doręczeń dostawcy, blokady adresów (suppression),
+-- ręczne zdjęcie blokady przez admina. Kontrole ujemne: bezpośredni DML klienta,
+-- zapis blokady tylko service_role, enqueue na zablokowany adres, replay webhooka.
+-- ============================================================================
+\set MLA 'e0440000-0000-0000-0000-0000000000a1'
+\set MLB 'e0440000-0000-0000-0000-0000000000a2'
+\set MLC 'e0440000-0000-0000-0000-0000000000a3'
+\set MLE 'e0440000-0000-0000-0000-0000000000e1'
+reset role; reset app.current_uid;
+-- Stały czas zdarzeń: dostawca ponawia ten sam payload z tym samym `created_at`.
+select now() as ml44_t \gset
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'MLA','mla@test.be','Ml A','{"role":"candidate","first_name":"Ml","last_name":"A","locale":"pl"}'),
+  (:'MLB','mlb@test.be','Ml B','{"role":"candidate","first_name":"Ml","last_name":"B","locale":"nl"}'),
+  (:'MLC','mlc@test.be','Ml C','{"role":"candidate","first_name":"Ml","last_name":"C","locale":"fr"}');
+
+-- Wysłana wiadomość z identyfikatorem dostawcy (jak po udanej wysyłce workera).
+select public.enqueue_email(:'MLA', 'jobOffer', 'offer', :'MLE', 'ml44-a-1', '{}'::jsonb);
+update public.email_deliveries set status = 'sent', sent_at = now(), provider_message_id = 'ml44-msg-a1'
+ where idempotency_key = 'ml44-a-1';
+
+-- ML44-1: delivered → status delivered, czas zapisany; ponowienie nie zmienia wiersza.
+set role service_role;
+select pg_temp.assert(
+  public.record_email_event('resend', 'ml44-msg-a1', 'delivered', :'ml44_t'::timestamptz - interval '5 minutes', null, null) = 'applied',
+  'ML44-1 delivered zapisany');
+reset role;
+select updated_at as ml44_upd from public.email_deliveries where idempotency_key = 'ml44-a-1' \gset
+select pg_temp.assert(
+  (select status::text = 'delivered' and delivered_at is not null
+     from public.email_deliveries where idempotency_key = 'ml44-a-1'),
+  'ML44-1b status delivered i delivered_at');
+set role service_role;
+select pg_temp.assert(
+  public.record_email_event('resend', 'ml44-msg-a1', 'delivered', :'ml44_t'::timestamptz - interval '5 minutes', null, null) = 'unchanged',
+  'ML44-1c powtórzone zdarzenie → unchanged');
+reset role;
+select pg_temp.assert(
+  (select updated_at from public.email_deliveries where idempotency_key = 'ml44-a-1') = :'ml44_upd'::timestamptz,
+  'ML44-1d powtórzone zdarzenie nie dotyka wiersza');
+
+-- ML44-2: skarga → complained + blokada adresu; spóźnione delivered nie cofa stanu.
+set role service_role;
+select pg_temp.assert(
+  public.record_email_event('resend', 'ml44-msg-a1', 'complained', :'ml44_t'::timestamptz - interval '1 minute', null, null) = 'applied',
+  'ML44-2 complained zapisany');
+select pg_temp.assert(
+  public.record_email_event('resend', 'ml44-msg-a1', 'delivered', :'ml44_t'::timestamptz - interval '10 minutes', null, null) = 'unchanged',
+  'ML44-2b spóźnione delivered → unchanged');
+reset role;
+select pg_temp.assert(
+  (select status::text = 'complained' and complained_at is not null
+     from public.email_deliveries where idempotency_key = 'ml44-a-1'),
+  'ML44-2c status zostaje complained (bez cofania nowszego stanu)');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(reason = 'complaint' and lifted_at is null)
+     from public.email_suppressions where email = 'mla@test.be'),
+  'ML44-2d jedna aktywna blokada (complaint)');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs a join public.email_suppressions s on s.id = a.entity_id
+    where a.action = 'email.suppressed' and s.email = 'mla@test.be'
+      and a.after_data = '{"status":"complaint"}'::jsonb) = 1,
+  'ML44-2e audyt blokady bez adresu e-mail');
+
+-- ML44-3: enqueue na zablokowany adres nic nie kolejkuje.
+select public.enqueue_email(:'MLA', 'statusChanged', 'application', :'MLE', 'ml44-a-2', '{}'::jsonb);
+select pg_temp.assert(not exists (select 1 from public.email_deliveries where idempotency_key = 'ml44-a-2'),
+  'ML44-3 enqueue na adres z blokadą nie tworzy wiersza');
+
+-- ML44-4: wiersz zakolejkowany PRZED blokadą — claim go wygasza (mechanizm z #45).
+-- Trwałe odbicie wiadomości spoza kolejki (np. Auth): blokada po adresie z webhooka.
+select public.enqueue_email(:'MLB', 'newMessage', 'conversation', :'MLE', 'ml44-b-1', '{}'::jsonb);
+set role service_role;
+select pg_temp.assert(
+  public.record_email_event('resend', 'ml44-msg-auth-b', 'bounced', now(), 'MLB@test.be', 'Permanent') = 'applied',
+  'ML44-4 trwałe odbicie nieznanej wiadomości zakłada blokadę adresu');
+select pg_temp.assert(public.email_address_suppressed('mlb@test.be') is true,
+  'ML44-4b adres zablokowany (bez względu na wielkość liter)');
+reset role;
+-- KONTROLA UJEMNA: claim z 0087 (tylko zgoda) wydałby wiersz na zablokowany adres.
+create function pg_temp.ml44_claim_0087(p_key text) returns setof public.email_deliveries
+language sql as $$
+  update public.email_deliveries d set locked_at = now()
+   where d.id in (select e.id from public.email_deliveries e
+                   where e.status = 'queued' and e.next_attempt_at <= now() and e.locked_at is null
+                     and e.idempotency_key = p_key
+                     and public.email_allowed(e.profile_id, e.template)
+                   for update skip locked)
+  returning d.*;
+$$;
+select pg_temp.assert(exists (select 1 from pg_temp.ml44_claim_0087('ml44-b-1')),
+  'ML44-4c stary claim wydaje e-mail na zablokowany adres (test wykrywa błąd)');
+update public.email_deliveries set locked_at = null where idempotency_key = 'ml44-b-1';
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c where c.idempotency_key = 'ml44-b-1'),
+  'ML44-4d nowy claim nie wydaje e-maila na zablokowany adres');
+select pg_temp.assert(
+  (select status::text = 'failed' and suppressed_at is not null and error_message = 'suppressed_address'
+     from public.email_deliveries where idempotency_key = 'ml44-b-1'),
+  'ML44-4e wiersz wygaszony z powodem suppressed_address');
+
+-- ML44-5: odbicie przejściowe i opóźnienie — bez blokady i bez zmiany statusu.
+select public.enqueue_email(:'MLC', 'jobOffer', 'offer', :'MLE', 'ml44-c-1', '{}'::jsonb);
+update public.email_deliveries set status = 'sent', sent_at = now(), provider_message_id = 'ml44-msg-c1'
+ where idempotency_key = 'ml44-c-1';
+set role service_role;
+select public.record_email_event('resend', 'ml44-msg-c1', 'delivery_delayed', now(), null, null);
+select public.record_email_event('resend', 'ml44-msg-c1', 'bounced', now(), null, 'Transient');
+reset role;
+select pg_temp.assert(
+  (select status::text = 'sent' and delayed_at is not null and bounce_type = 'transient'
+     from public.email_deliveries where idempotency_key = 'ml44-c-1'),
+  'ML44-5 przejściowe odbicie i opóźnienie nie zmieniają statusu');
+select pg_temp.assert(public.email_address_suppressed('mlc@test.be') is false,
+  'ML44-5b odbicie przejściowe nie blokuje adresu');
+
+-- ML44-6: walidacja zdarzenia.
+set role service_role;
+select pg_temp.expect_error(
+  'select public.record_email_event(''resend'', ''ml44-msg-c1'', ''opened'', now(), null, null)',
+  'VALIDATION_FAILED', 'ML44-6 nieobsługiwane zdarzenie odrzucone');
+select pg_temp.expect_error(
+  'select public.record_email_event(''resend'', null, ''delivered'', now(), null, null)',
+  'VALIDATION_FAILED', 'ML44-6b brak identyfikatora wiadomości odrzucony');
+reset role;
+
+select id as ml44_supp from public.email_suppressions where email = 'mla@test.be' and lifted_at is null \gset
+-- ML44-7: KONTROLE UJEMNE uprawnień — klient nie czyta, nie pisze i nie woła RPC dostawcy.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.email_suppressions',
+  'permission denied', 'ML44-7 anon nie czyta blokad');
+select pg_temp.expect_error(
+  'select public.record_email_event(''resend'', ''ml44-msg-c1'', ''complained'', now(), null, null)',
+  'permission denied', 'ML44-7b anon nie zapisze zdarzenia dostawcy');
+reset role;
+set role authenticated; set app.current_uid = :'MLC'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.email_suppressions',
+  'permission denied', 'ML44-7c zalogowany nie czyta blokad');
+select pg_temp.expect_error(
+  'insert into public.email_suppressions(email, reason) values (''x@test.be'', ''complaint'')',
+  'permission denied', 'ML44-7d zalogowany nie wstawi blokady bezpośrednio');
+select pg_temp.expect_error(
+  'update public.email_suppressions set lifted_at = now(), lift_reason = ''x''',
+  'permission denied', 'ML44-7e zalogowany nie zdejmie blokady bezpośrednio');
+select pg_temp.expect_error('delete from public.email_suppressions',
+  'permission denied', 'ML44-7f zalogowany nie usunie blokady');
+select pg_temp.expect_error(
+  'select public.record_email_event(''resend'', ''ml44-msg-c1'', ''complained'', now(), null, null)',
+  'permission denied', 'ML44-7g zalogowany nie zapisze zdarzenia dostawcy');
+select pg_temp.expect_error('select public.email_address_suppressed(''mla@test.be'')',
+  'permission denied', 'ML44-7h zalogowany nie sprawdzi blokady cudzego adresu');
+select pg_temp.expect_error(
+  format('select public.admin_lift_email_suppression(%L, ''prośba'')', :'ml44_supp'),
+  'PERMISSION_DENIED', 'ML44-7i kandydat nie zdejmie blokady przez RPC');
+reset role; reset app.current_uid;
+select pg_temp.assert(public.email_address_suppressed('mlc@test.be') is false
+    and (select status::text from public.email_deliveries where idempotency_key = 'ml44-c-1') = 'sent',
+  'ML44-7j odrzucone próby klienta niczego nie zmieniły');
+
+-- ML44-8: replay webhooka — inbox pomija zdarzenie już zakończone.
+set role service_role;
+select pg_temp.assert(public.claim_webhook('resend:ml44-evt-1', 'resend-email-events', 300) = 'claimed',
+  'ML44-8 pierwsza dostawa zdarzenia przejęta');
+select public.record_email_event('resend', 'ml44-msg-c1', 'delivered', now(), null, null);
+select pg_temp.assert(public.complete_webhook('resend:ml44-evt-1'), 'ML44-8b zdarzenie zakończone');
+select pg_temp.assert(public.claim_webhook('resend:ml44-evt-1', 'resend-email-events', 300) = 'duplicate',
+  'ML44-8c replay tego samego zdarzenia → duplicate');
+reset role;
+
+-- ML44-9: admin zdejmuje blokadę (uzasadnienie wymagane, audyt, STALE_STATE przy powtórce).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_lift_email_suppression(%L, ''   '')', :'ml44_supp'),
+  'REASON_REQUIRED', 'ML44-9 zdjęcie bez uzasadnienia odrzucone');
+select pg_temp.expect_error(
+  format('select public.admin_lift_email_suppression(%L, %L)', :'ml44_supp', repeat('x', 1001)),
+  'REASON_TOO_LONG', 'ML44-9b za długie uzasadnienie odrzucone');
+select public.admin_lift_email_suppression(:'ml44_supp', 'Użytkownik potwierdził adres');
+select pg_temp.expect_error(format('select public.admin_lift_email_suppression(%L, ''ponownie'')', :'ml44_supp'),
+  'STALE_STATE', 'ML44-9c ponowne zdjęcie → STALE_STATE');
+select pg_temp.expect_error(
+  'select public.admin_lift_email_suppression(''e0440000-0000-0000-0000-00000000ffff'', ''x'')',
+  'NOT_FOUND', 'ML44-9d nieistniejąca blokada → NOT_FOUND');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select lifted_at is not null and lifted_by = :'ADMIN'::uuid and lift_reason = 'Użytkownik potwierdził adres'
+     from public.email_suppressions where id = :'ml44_supp'),
+  'ML44-9e blokada zdjęta z adminem i uzasadnieniem');
+select pg_temp.assert(
+  (select actor_id = :'ADMIN'::uuid and after_data->>'reason' = 'Użytkownik potwierdził adres'
+     from public.audit_logs where action = 'email.suppression_lifted' and entity_id = :'ml44_supp'),
+  'ML44-9f audyt zdjęcia blokady z aktorem');
+select public.enqueue_email(:'MLA', 'statusChanged', 'application', :'MLE', 'ml44-a-3', '{}'::jsonb);
+select pg_temp.assert(exists (select 1 from public.email_deliveries where idempotency_key = 'ml44-a-3'),
+  'ML44-9g po zdjęciu blokady adres znowu dostaje e-maile');
+set role service_role;
+select public.record_email_event('resend', 'ml44-msg-a3', 'complained', now(), 'mla@test.be', null);
+reset role;
+select pg_temp.assert(
+  (select count(*) = 2 and count(*) filter (where lifted_at is null) = 1
+     from public.email_suppressions where email = 'mla@test.be'),
+  'ML44-9h nowa skarga zakłada nową blokadę, historia zostaje');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
