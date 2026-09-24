@@ -31,7 +31,11 @@ export default async function OfflinePage({ params }: OfflinePageProps) {
   const t = await getTranslations('offline');
 
   return (
-    <main className="flex min-h-[70vh] flex-col items-center justify-center gap-6 px-4 py-16 text-center">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="flex min-h-[70vh] flex-col items-center justify-center gap-6 px-4 py-16 text-center outline-none"
+    >
       <span
         className="flex h-16 w-16 items-center justify-center rounded-full bg-soft text-muted-foreground"
         aria-hidden="true"

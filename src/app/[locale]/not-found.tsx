@@ -4,7 +4,6 @@ import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { Footer } from '@/components/layout/Footer';
 import { Header } from '@/components/layout/Header';
-import { SkipLink } from '@/components/layout/SkipLink';
 
 /**
  * Strona 404 dla segmentu językowego.
@@ -31,7 +30,6 @@ export default async function NotFound() {
   return (
     <div className="flex min-h-screen flex-col">
       <title>{`${tErrors('notFound')} · ${tCommon('appName')}`}</title>
-      <SkipLink />
       <Header />
       <main
         id="main-content"

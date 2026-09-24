@@ -7,6 +7,8 @@ import { pickClientMessages } from '@/i18n/client-messages';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { CookieConsent } from '@/components/cookies/CookieConsent';
+import { SkipLink } from '@/components/layout/SkipLink';
+import { consentBootScript } from '@/lib/consent-boot';
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
 import { inter } from '../fonts';
 
@@ -20,6 +22,10 @@ import { inter } from '../fonts';
  * grupy `(public)` — src/app/[locale]/(public)/layout.tsx — aby panele (candidate/employer),
  * strony auth i onboarding mogły mieć własne, odrębne layouty. Ten layout to wyłącznie
  * powłoka dokumentu + providery.
+ *
+ * Kolejność na początku <body> (#212, #389): „Przejdź do treści" (każdy układ ma
+ * `#main-content`) → baner zgód (w HTML z serwera, więc maluje się z FCP) → treść.
+ * Skrypt w <head> ukrywa baner przed pierwszym malowaniem, gdy zgoda jest już zapisana.
  */
 
 type LocaleLayoutProps = {
@@ -88,10 +94,14 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 
   return (
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: consentBootScript() }} />
+      </head>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          {children}
+          <SkipLink />
           <CookieConsent />
+          {children}
           <ServiceWorkerRegister />
         </NextIntlClientProvider>
       </body>
