@@ -2792,6 +2792,96 @@ select pg_temp.assert(
 reset role;
 
 -- ============================================================================
+-- SP188. Jednostka filtra/sortu wynagrodzeń (0091, #188): p_salary_unit.
+--        'month' = reguła 0080 bez zmian; 'hour' = tylko stawki godzinowe, miesięczne
+--        i roczne NIE są przeliczane na godziny (nieporównywalne → nie odpadają, sort na
+--        końcu). Fixture'y SAL + dwie stawki godzinowe o różnym wymiarze czasu pracy.
+-- ============================================================================
+\set JOBSPH2 'e8000000-0000-0000-0000-0000000000b7'
+\set JOBSPH3 'e8000000-0000-0000-0000-0000000000b8'
+reset role; reset app.current_uid;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,salary_period,working_hours,published_at) values
+  (:'JOBSPH2',:'COMPL','sal-h2','Salp188 H2','warehouse','permanent','Mechelen','Flandria','active','pl', 14, null, 'hour', '20 h/tydz.', now() - interval '7 hours'),
+  (:'JOBSPH3',:'COMPL','sal-h3','Salp188 H3','warehouse','permanent','Mechelen','Flandria','active','pl', 14, 16,   'hour', '38 h/tydz.', now() - interval '8 hours');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- SP188-1: kwota porównywalna w jednostce.
+select pg_temp.assert(public.job_comparable_salary(20, 'hour', 'hour') = 20
+  and public.job_comparable_salary(3000, 'month', 'hour') is null
+  and public.job_comparable_salary(36000, 'year', 'hour') is null
+  and public.job_comparable_salary(36000, 'year', 'month') = 3000
+  and public.job_comparable_salary(20, 'hour', 'month') is null
+  and public.job_comparable_salary(36000, 'year', 'week') = 3000,
+  'SP188-1 hour = tylko stawka godzinowa; month = reguła 0080; nieznana jednostka = month');
+
+-- SP188-2: od 18 EUR/godz. — 20–22/h przechodzi, 14/h i 14–16/h odpadają niezależnie od
+-- wymiaru czasu pracy; miesięczne, roczne i bez kwoty zostają (nieporównywalne).
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,18,null,null,null,null,null,'newest',100,0,'hour'))
+    = array['sal-h','sal-m','sal-m2','sal-n','sal-y','sal-y2'],
+  'SP188-2 filtr od 18 EUR/godz. porównuje wyłącznie stawki godzinowe');
+
+-- SP188-3 (kontrola ujemna): ten sam próg w jednostce miesięcznej (domyślnej) nie wyklucza
+-- stawek godzinowych i przepuszcza wszystkie kwoty miesięczne/roczne ≥ 18.
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,18,null,null,null,null,null,'newest',100,0)) = 8
+  and (select count(*) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,18,null,null,null,null,null,'newest',100,0,'month')) = 8,
+  'SP188-3 bez jednostki = month (0080), stawki godzinowe nie są filtrowane');
+
+-- SP188-4: sort po stawce godzinowej — godzinowe malejąco (remis → nowsze), reszta na końcu
+-- wg daty publikacji; sort miesięczny bez zmian względem SAL4.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,null,null,null,null,null,'salary',100,0,'hour'))
+    = array['sal-h','sal-h3','sal-h2','sal-m','sal-y','sal-m2','sal-y2','sal-n']
+  and (select array_agg(slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,null,null,null,null,null,'salary',100,0))
+    = array['sal-m','sal-y','sal-m2','sal-y2','sal-h','sal-n','sal-h2','sal-h3'],
+  'SP188-4 sort po stawce godzinowej; sort miesięczny jak 0080');
+
+-- SP188-5: licznik i facety w jednostce godzinowej zgodne z listingiem; do 15 EUR/godz.
+-- odpada tylko 20–22/h (14–16 zachodzi na widełki).
+select pg_temp.assert(
+  public.get_public_jobs_count('pl','salp188',null,null,null,null,18,null,null,null,null,null,'hour') = 6
+  and (select total from public.get_public_job_filter_facets(
+         'pl','salp188',null,null,null,null,18,null,null,null,null,null,'hour')
+       where dimension = 'total') = 6
+  and public.get_public_jobs_count('pl','salp188',null,null,null,null,null,15,null,null,null,null,'hour') = 7
+  and (select total from public.get_public_job_filter_facets(
+         'pl','salp188',null,null,null,null,null,15,null,null,null,null,'hour')
+       where dimension = 'total') = 7
+  and (select array_agg(slug order by slug) from public.get_public_jobs(
+     'pl','salp188',null,null,null,null,null,15,null,null,null,null,'newest',100,0,'hour'))
+    = array['sal-h2','sal-h3','sal-m','sal-m2','sal-n','sal-y','sal-y2'],
+  'SP188-5 licznik, facety i listing — ta sama reguła jednostki godzinowej');
+
+-- SP188-6: wywołania nazwane bez p_salary_unit (PostgREST/supabase-js) nie są
+-- niejednoznaczne — stare sygnatury usunięte, została jedna funkcja każdego RPC.
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs(p_locale => 'pl', p_keyword => 'salp188')) = 8
+  and public.get_public_jobs_count(p_keyword => 'salp188', p_city => null) = 8
+  and (select count(*) from pg_proc where pronamespace = 'public'::regnamespace
+         and proname in ('get_public_jobs','get_public_jobs_count','get_public_job_filter_facets')) = 3,
+  'SP188-6 jedna sygnatura każdego RPC, wywołanie nazwane bez jednostki działa');
+reset role;
+
+-- SP188-7: granty jak dotąd — anon/authenticated tak, PUBLIC nie.
+select pg_temp.assert(
+  has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text)', 'execute')
+  and has_function_privilege('authenticated', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
+  and not exists (
+    select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+    where p.pronamespace = 'public'::regnamespace
+      and p.proname in ('get_public_jobs','get_public_jobs_count','get_public_job_filter_facets')
+      and a.grantee = 0),
+  'SP188-7 granty anon/authenticated odtworzone, bez PUBLIC');
+
+-- ============================================================================
 -- ADM. RPC admina (0081, #420): macierz przejść, STALE_STATE, deleted_at, reopen
 -- ============================================================================
 reset role; reset app.current_uid;

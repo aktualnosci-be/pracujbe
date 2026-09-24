@@ -22,16 +22,16 @@ import {
   CATEGORY_KEYS,
   CONTRACT_TYPES,
   DATE_VALUES,
-  SALARY_MAX_BOUND,
-  SALARY_MIN_BOUND,
-  SALARY_STEP,
   emptySidebarFilters,
+  salaryBounds,
+  withSalaryUnit,
   sidebarFiltersToParams,
   type AccommodationValue,
   type DateValue,
   type SidebarFilters,
   type SortValue,
 } from '@/components/public/job-filters';
+import { SALARY_UNITS, type SalaryUnit } from '@/lib/salary-compare';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 
 /**
@@ -303,10 +303,14 @@ export function FilterFields({
   const hiddenLocationCount =
     filteredLocations.length - visibleLocations.length;
 
+  const bounds = salaryBounds(value.salaryUnit);
+  const hourly = value.salaryUnit === 'hour';
   const maxLabel =
-    value.salaryMax >= SALARY_MAX_BOUND
+    value.salaryMax >= bounds.max
       ? t('salaryMaxCap', { value: currency.format(value.salaryMax) })
       : currency.format(value.salaryMax);
+  const unitLabel = (unit: SalaryUnit): string =>
+    unit === 'hour' ? t('salaryUnitHour') : t('salaryUnitMonth');
 
   return (
     <div className="space-y-5 [&>section+section]:border-t [&>section+section]:border-border/70 [&>section+section]:pt-5">
@@ -385,7 +389,35 @@ export function FilterFields({
 
       {/* Wynagrodzenie */}
       <section>
-        <SectionTitle>{t('salary')}</SectionTitle>
+        <SectionTitle>{hourly ? t('salaryHourly') : t('salary')}</SectionTitle>
+        {/* Jednostka (#188, 0091): kwot miesięcznych i godzinowych nie przeliczamy. */}
+        <fieldset className="mb-2">
+          <legend className="sr-only">{t('salaryUnit')}</legend>
+          <div className="flex gap-2">
+            {SALARY_UNITS.map((unit) => (
+              <label
+                key={unit}
+                data-filter-target="salary-unit"
+                className={cn(
+                  'relative inline-flex min-h-12 flex-1 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+                  value.salaryUnit === unit
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-border text-foreground hover:bg-muted',
+                )}
+              >
+                <input
+                  type="radio"
+                  name={`${idPrefix}-salary-unit`}
+                  value={unit}
+                  checked={value.salaryUnit === unit}
+                  onChange={() => onChange(withSalaryUnit(value, unit))}
+                  className="sr-only"
+                />
+                {unitLabel(unit)}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <p className="mb-2 text-sm font-medium text-foreground">
           {currency.format(value.salaryMin)}{' '}
           <span className="text-muted-foreground">–</span> {maxLabel}
@@ -394,14 +426,14 @@ export function FilterFields({
           id={`${idPrefix}-salary-note`}
           className="mb-2 text-xs text-muted-foreground"
         >
-          {t('salaryPeriodNote')}
+          {hourly ? t('salaryHourlyNote') : t('salaryPeriodNote')}
         </p>
         <div className="space-y-2">
           <input
             type="range"
-            min={SALARY_MIN_BOUND}
-            max={SALARY_MAX_BOUND}
-            step={SALARY_STEP}
+            min={bounds.min}
+            max={bounds.max}
+            step={bounds.step}
             value={value.salaryMin}
             onChange={(event) =>
               patch({
@@ -418,9 +450,9 @@ export function FilterFields({
           />
           <input
             type="range"
-            min={SALARY_MIN_BOUND}
-            max={SALARY_MAX_BOUND}
-            step={SALARY_STEP}
+            min={bounds.min}
+            max={bounds.max}
+            step={bounds.step}
             value={value.salaryMax}
             onChange={(event) =>
               patch({
