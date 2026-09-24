@@ -16,6 +16,8 @@
     "test:e2e": "playwright test",
     "test:e2e:real": "node scripts/test-e2e-real.mjs",
     "test:rls": "bash scripts/test-rls.sh",
+    "test:backup": "bash scripts/db/test-backup.sh",
+    "db:search-benchmark": "bash scripts/db/search-benchmark.sh",
     "test:seed": "bash scripts/test-seed.sh",
     "db:migrate:production": "node scripts/db/production-migrations.mjs",
     "db:logins": "node scripts/db/runtime-logins.mjs",
