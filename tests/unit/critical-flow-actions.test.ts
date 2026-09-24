@@ -39,6 +39,7 @@ const KEY = '22222222-2222-4222-8222-222222222222';
 const CANDIDATE = '33333333-3333-4333-8333-333333333333';
 const OFFER = '44444444-4444-4444-8444-444444444444';
 const CONVERSATION = '55555555-5555-4555-8555-555555555555';
+const CLIENT_MSG = '66666666-6666-4666-8666-666666666666';
 const USER = '66666666-6666-4666-8666-666666666666';
 
 /** Surowe komunikaty Postgresa/PostgREST → oczekiwany kod użytkowy. */
@@ -213,26 +214,38 @@ describe('wiadomości', () => {
   });
 
   it('sendMessage: sukces i limit przed RPC', async () => {
-    expect(await sendMessage(CONVERSATION, 'Dzień dobry, kiedy mogę przyjść?')).toEqual({ ok: true, id: 'row-1' });
+    expect(await sendMessage(CONVERSATION, 'Dzień dobry, kiedy mogę przyjść?', CLIENT_MSG)).toEqual({
+      ok: true,
+      id: 'row-1',
+    });
     expect(rpc).toHaveBeenCalledWith('send_message', {
       p_conversation_id: CONVERSATION,
       p_body: 'Dzień dobry, kiedy mogę przyjść?',
+      p_client_message_id: CLIENT_MSG,
     });
     rpc.mockClear();
     vi.mocked(checkRateLimit).mockResolvedValue(false);
-    expect(await sendMessage(CONVERSATION, 'Druga wiadomość')).toEqual({ ok: false, error: 'RATE_LIMITED' });
+    expect(await sendMessage(CONVERSATION, 'Druga wiadomość', CLIENT_MSG)).toEqual({
+      ok: false,
+      error: 'RATE_LIMITED',
+    });
     expect(rpc).not.toHaveBeenCalled();
   });
 
   it('sendMessage: pusta treść → VALIDATION_FAILED bez RPC', async () => {
-    expect(await sendMessage(CONVERSATION, '   ')).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(await sendMessage(CONVERSATION, '   ', CLIENT_MSG)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it.each(['', 'msg-1', `${CLIENT_MSG}x`])('sendMessage: klucz operacji „%s” nie-UUID → VALIDATION_FAILED bez RPC (#147)', async (key) => {
+    expect(await sendMessage(CONVERSATION, 'Dzień dobry', key)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
     expect(rpc).not.toHaveBeenCalled();
   });
 
   it.each(MSG_ERRORS)('sendMessage/openConversation/markConversationRead: „%s” → %s', async (message, code) => {
     rpc.mockResolvedValue({ data: null, error: { message } });
     for (const result of [
-      await sendMessage(CONVERSATION, 'Dzień dobry'),
+      await sendMessage(CONVERSATION, 'Dzień dobry', CLIENT_MSG),
       await openConversation({ applicationId: JOB }),
       await markConversationRead(CONVERSATION),
     ]) {

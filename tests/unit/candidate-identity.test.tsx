@@ -53,6 +53,7 @@ function labels(locale: keyof typeof translations) {
     emptyName: m.identityEmptyName,
     emptyIdentity: m.identityEmpty,
     loadError: m.loadError,
+    availabilityLabel: translations[locale].onboarding.availabilityLabel,
     availability: availability[locale],
   };
 }
@@ -129,4 +130,77 @@ describe("paszport tożsamości kandydata", () => {
       expect(card).not.toHaveTextContent(availability.pl);
     },
   );
+
+  it.each(["pl", "nl", "fr", "en"] as const)(
+    "nazywa odznakę dostępności dla czytnika ekranu w %s",
+    (locale) => {
+      render(
+        <CandidateIdentity
+          profile={profile}
+          passport={passport}
+          labels={labels(locale)}
+        />,
+      );
+      const badge = screen.getByTestId("candidate-identity-availability");
+      expect(badge).toHaveTextContent(
+        `${translations[locale].onboarding.availabilityLabel} ${availability[locale]}`,
+      );
+    },
+  );
+
+  it("nie pokazuje zdjęcia ani inicjałów, gdy profil nie ma zdjęcia", () => {
+    render(
+      <CandidateIdentity
+        profile={profile}
+        passport={passport}
+        labels={labels("pl")}
+      />,
+    );
+    const card = screen.getByTestId("candidate-identity");
+    expect(within(card).queryByRole("img")).not.toBeInTheDocument();
+    expect(card.querySelector("img")).toBeNull();
+    // Inicjały z makiety („MK”) nie mogą powstać z imienia ani zawodu.
+    expect(card).not.toHaveTextContent(/\bM\s?O\b|\bMK\b/);
+  });
+
+  // Kontrola ujemna: same spacje to brak danych, a nie imię czy zawód.
+  it("traktuje wartości z samych spacji jak brak danych", () => {
+    render(
+      <CandidateIdentity
+        profile={{ ...profile, firstName: "   " }}
+        passport={{
+          ...passport,
+          occupations: ["  "],
+          city: " ",
+          availability: null,
+        }}
+        labels={{ ...labels("pl"), availability: null }}
+      />,
+    );
+    const card = screen.getByTestId("candidate-identity");
+    expect(
+      within(card).getByRole("heading", {
+        level: 2,
+        name: pl.candidatePassport.identityEmptyName,
+      }),
+    ).toBeInTheDocument();
+    expect(card).toHaveTextContent(pl.candidatePassport.identityEmpty);
+    expect(
+      screen.queryByTestId("candidate-identity-availability"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("po błędzie odczytu nie pokazuje odznaki dostępności ani nagłówka z imieniem", () => {
+    render(
+      <CandidateIdentity
+        profile={{ ...profile, loadFailed: true }}
+        passport={passport}
+        labels={labels("pl")}
+      />,
+    );
+    expect(
+      screen.queryByTestId("candidate-identity-availability"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+  });
 });

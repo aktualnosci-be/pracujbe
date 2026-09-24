@@ -1250,6 +1250,7 @@
     "send": "Versturen",
     "sending": "Versturen…",
     "sendError": "Bericht kon niet worden verzonden. Probeer het opnieuw.",
+    "sendErrorUncertain": "We weten niet zeker of het bericht is aangekomen. Verstuur het opnieuw — er ontstaat geen dubbel bericht.",
     "you": "Jij",
     "systemLabel": "Systeem",
     "back": "Terug naar lijst",

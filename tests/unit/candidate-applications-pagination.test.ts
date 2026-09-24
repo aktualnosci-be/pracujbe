@@ -101,4 +101,23 @@ describe('candidate application history', () => {
     client({ fail: true });
     await expect(getMyApplicationsPage('pl')).rejects.toEqual({ message: 'database unavailable' });
   });
+
+  // #180: granica strony — 10 zgłoszeń to koniec listy, jedenaste musi dać kursor, nie zniknąć.
+  it('treats exactly 10 applications as the end of the list', async () => {
+    const { query } = client({ rows: records.slice(0, 10) });
+    const page = await getMyApplicationsPage('pl');
+    expect(page.items).toHaveLength(10);
+    expect(page.nextCursor).toBeNull();
+    expect(query.or).not.toHaveBeenCalled();
+  });
+
+  it('keeps the 11th application reachable on the next page', async () => {
+    client({ rows: records.slice(0, 11) });
+    const first = await getMyApplicationsPage('pl');
+    expect(first.items).toHaveLength(10);
+    expect(first.nextCursor).toEqual({ submittedAt, id: records[9]!.id });
+    const second = await getMyApplicationsPage('pl', first.nextCursor);
+    expect(second.items.map((row) => row.id)).toEqual([records[10]!.id]);
+    expect(second.nextCursor).toBeNull();
+  });
 });

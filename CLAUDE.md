@@ -548,6 +548,10 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilnym kursorem
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
+Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
+`candidate-applications-pagination`).
+Paszport tożsamości nad siatką `/candidate/profil` (#172, `CandidateIdentity`): imię, pierwszy
+zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie odczytu tylko komunikat.
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
 już wczytanych kart. Jest to część etapu wyglądu #5, nie dowód ukończenia całego etapu.
 
@@ -625,7 +629,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `PERMISSION_DENIED` (konto nie-kandydata), własne komunikaty `RATE_LIMITED`/`JOB_NOT_ACTIVE`.
   Dowód: `rls.sql` B3b/B3c, J7d–J7f.
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
+  Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
+  i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
+  i alerty pojedyncze (`rls.sql` PP7–PP8).
 - [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** załączniki, zgłoszenia
+  Wysyłka idempotentna (0075, #147): `send_message(conversation, body, client_message_id)` —
+  `MessageComposer` trzyma jeden UUID na operację danej treści (`useRef`), ponowienie po
+  zerwanym połączeniu = ta sama wiadomość bez drugiego powiadomienia/e-maila. Dowód: `rls.sql`
+  sekcja PP (retry, dwie równoległe sesje przez dblink, rollback pierwszej próby).
   Odbiorcy powiadomień/e-maili firmowych (aplikacja, wiadomość, odpowiedź na propozycję) = aktywni
   recruiter+ z aktywnym profilem (`company_recipient_ok`, 0070); e-mail o wiadomości od firmy do
   kandydata podpisany nazwą firmy. Dowód: `rls.sql` sekcja LL.
@@ -667,6 +678,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)
 - [x] Panel administratora — `/admin/**` (guard role='admin'→notFound, noindex): dashboard, firmy
   (weryfikuj/odrzuć/zawieś), zgłoszenia (moderacja), użytkownicy; odczyt service-role, zapis przez RPC (0019)
+  Każdy odczyt service-role w `src/lib/data/admin.ts` sam potwierdza rolę admina sesji
+  (`requireAdmin` → `notFound()`), niezależnie od layoutu. `0076`: pola tożsamości i moderacji
+  zgłoszeń ustala baza (trigger `reports_guard`, limity długości), helpery ról bez EXECUTE dla
+  anon/PUBLIC (`is_job_company_member` zostaje — polityki anon). Dowód: `rls.sql` sekcja QQ.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
 - [x] Płatności / subskrypcje / faktury / kody rabatowe — REALNY Stripe (FUN-08), provider-gated:
   `startCheckout` tworzy sesję Stripe Checkout (subskrypcja, inline `price_data` z `PLANS`, kupon z

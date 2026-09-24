@@ -1,17 +1,23 @@
 /**
  * Warstwa danych panelu administratora — Pracuj.be (Etap 7g).
  *
- * ⚠️ ODCZYTY przez `createAdminClient()` (service-role, OMIJA RLS). Funkcje ZAKŁADAJĄ, że
- * wywołujący (layout/strony `/admin/*`) potwierdził już rolę `admin` — guard w
- * `admin/layout.tsx`. Klient service-role importowany LENIWIE, żeby moduł nie ciągnął
+ * ⚠️ ODCZYTY przez `createAdminClient()` (service-role, OMIJA RLS). Każda funkcja publiczna
+ * SAMA potwierdza rolę `admin` sesji (`requireAdmin`) PRZED utworzeniem klienta service-role —
+ * guard w `admin/layout.tsx` nie wystarcza (layout nie musi się renderować razem ze stroną).
+ * Brak sesji, inna rola albo błąd odczytu roli → `notFound()` (fail closed, nie ujawniamy
+ * panelu). Klient service-role importowany LENIWIE, żeby moduł nie ciągnął
  * `server-only`/klienta do bundla trybu DEMO oraz żeby build bez env przechodził.
  *
  * Bez konfiguracji Supabase (`isSupabaseConfigured() === false`) zwracamy dane DEMO —
  * dzięki temu panel renderuje się w podglądzie/buildzie bez backendu.
  */
 
+import { notFound } from 'next/navigation';
+import { cache } from 'react';
+
 import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
+import { createServerClient } from '@/lib/supabase/server';
 
 /* ---------------------------------------------------------------------------
  * Kontrakty dla UI
@@ -206,6 +212,35 @@ function demoList<T>(rows: T[]): AdminListResult<T> {
   return { status: 'ok', rows, truncated: false };
 }
 
+/**
+ * Potwierdza rolę `admin` bieżącej sesji (odczyt własnego profilu pod RLS). Wynik
+ * zapamiętany na czas jednego żądania (`cache`), więc kilka odczytów strony = jedno sprawdzenie.
+ */
+const isAdminSession = cache(async (): Promise<boolean> => {
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (error) throw error;
+    return asString(asRecord(data)['role']) === 'admin';
+  } catch (error) {
+    captureError(error, { area: 'admin.requireAdmin' });
+    return false;
+  }
+});
+
+/** Bez roli admina → `notFound()` (rzuca). Wołane przed każdym odczytem service-role. */
+async function requireAdmin(): Promise<void> {
+  if (!(await isAdminSession())) notFound();
+}
+
 /* ---------------------------------------------------------------------------
  * Publiczne API
  * ------------------------------------------------------------------------- */
@@ -213,6 +248,7 @@ function demoList<T>(rows: T[]): AdminListResult<T> {
 /** Kafelki statystyk dashboardu admina. Bez env → dane DEMO. Błąd dowolnego licznika → `error`. */
 export async function getAdminStats(): Promise<AdminStatsResult> {
   if (!isSupabaseConfigured()) return { status: 'ok', stats: DEMO_STATS };
+  await requireAdmin();
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
@@ -256,6 +292,7 @@ export async function getAdminStats(): Promise<AdminStatsResult> {
  */
 export async function listCompanies(filter?: string): Promise<AdminListResult<AdminCompanyRow>> {
   if (!isSupabaseConfigured()) return demoList(filterDemoCompanies(filter));
+  await requireAdmin();
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
@@ -294,6 +331,7 @@ export async function listCompanies(filter?: string): Promise<AdminListResult<Ad
 /** Lista zgłoszeń (najnowsze pierwsze) z nazwą zgłaszającego. Bez env → DEMO. */
 export async function listReports(): Promise<AdminListResult<AdminReportRow>> {
   if (!isSupabaseConfigured()) return demoList(DEMO_REPORTS);
+  await requireAdmin();
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
@@ -349,6 +387,7 @@ export async function listReports(): Promise<AdminListResult<AdminReportRow>> {
 /** Lista kont użytkowników (tylko odczyt). Bez env → DEMO. */
 export async function listUsers(): Promise<AdminListResult<AdminUserRow>> {
   if (!isSupabaseConfigured()) return demoList(DEMO_USERS);
+  await requireAdmin();
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
