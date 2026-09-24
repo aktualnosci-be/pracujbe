@@ -174,7 +174,7 @@ export function ApplicationStatusMenu({
         aria-expanded={open}
         disabled={pending}
         onClick={() => (open ? close() : setOpen(true))}
-        className={cn(BTN_SMALL, 'border-border text-foreground hover:bg-soft')}
+        className={cn(BTN_SMALL, 'min-h-12 border-border text-foreground hover:bg-soft')}
       >
         {td('colStatusEmp')}
         <ChevronDown className="size-3.5" aria-hidden="true" />
