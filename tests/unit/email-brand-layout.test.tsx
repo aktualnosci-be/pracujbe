@@ -22,7 +22,8 @@ describe('wspólny layout e-maili', () => {
 
     const document = new DOMParser().parseFromString(html, 'text/html');
     const homeLink = document.querySelector('a[href="http://localhost:3000/pl"]');
-    const logoParts = homeLink?.querySelectorAll('span');
+    // Logo jak w nagłówku strony / newsletter.html prototypu: dwie komórki tabeli (#7).
+    const logoParts = homeLink?.querySelectorAll('td');
     const brandButton = document.querySelector(
       'a[href="https://pracuj.be/pl/oferty-pracy/test"]',
     ) as HTMLElement | null;
@@ -48,7 +49,12 @@ describe('wspólny layout e-maili', () => {
     const paddingBottom = readPixels(brandButton?.style.paddingBottom);
     expect(lineHeight + paddingTop + paddingBottom).toBeGreaterThanOrEqual(48);
 
-    expect(quote?.style.borderLeftColor).toBe('rgb(217, 41, 50)');
-    expect(document.body.style.backgroundColor).toBe('rgb(247, 247, 247)');
+    expect((logoParts?.[1] as HTMLElement).style.borderRadius).toBe('6px');
+    expect(brandButton?.style.borderRadius).toBe('11px');
+
+    // Notatka jak `.p-profile-note` prototypu; tło wokół kolumny jak newsletter.html.
+    expect(quote?.style.borderColor).toBe('rgb(240, 216, 217)');
+    expect(quote?.style.backgroundColor).toBe('rgb(255, 249, 249)');
+    expect(document.body.style.backgroundColor).toBe('rgb(244, 244, 244)');
   });
 });
