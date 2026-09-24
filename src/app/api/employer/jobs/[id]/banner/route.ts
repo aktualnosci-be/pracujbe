@@ -4,10 +4,9 @@ import { isLocale } from '@/i18n/routing';
 import { bannerFontBase64 } from '@/lib/campaign-banner/font';
 import { isBannerFormat, renderCampaignBanner } from '@/lib/campaign-banner/render';
 import { campaignBannerTexts, isCampaignJobId, loadManagedCampaignJob } from '@/lib/campaign-banner/source';
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured } from '@/lib/db/portal';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
 
 /**
  * Eksport baneru kampanii z oferty (#175, dane z #186): `GET ?format=1200x300&locale=pl`,
@@ -43,19 +42,16 @@ export async function GET(
   const format = search.get('format') ?? '1200x300';
   const locale = search.get('locale') ?? 'pl';
   if (!isCampaignJobId(id) || !isBannerFormat(format) || !isLocale(locale)) return empty(400);
-  if (!isSupabaseConfigured()) return empty(404);
+  if (!isPortalDataConfigured()) return empty(404);
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return empty(401);
+    const me = await getPortalIdentity();
+    if (!me) return empty(401);
 
-    const allowed = await checkRateLimit('campaign-banner', { identifier: user.id, perIp: false, ...RATE_LIMIT });
+    const allowed = await checkRateLimit('campaign-banner', { identifier: me.id, perIp: false, ...RATE_LIMIT });
     if (!allowed) return empty(429);
 
-    const loaded = await loadManagedCampaignJob(supabase, id, locale);
+    const loaded = await loadManagedCampaignJob(me, id, locale);
     if (loaded.status === 'error') return empty(500);
     if (loaded.status === 'unavailable') return empty(404);
 

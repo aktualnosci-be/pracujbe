@@ -831,6 +831,29 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
   `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
   zgłoszeń (RLS gotowe).
+  Kontrola treści pytań przed publikacją (#497, migracja `0103`): detektor
+  deterministyczny (wzorce PL/NL/FR/EN, bez AI) w bazie (`screening_fold`,
+  `screening_risk_patterns`, `screening_question_risk`) sprawdza treść i KAŻDĄ opcję we
+  WSZYSTKICH językach; lustro `src/lib/screening/risk.ts` (podpowiedź w kreatorze, test
+  `screening-risk` porównuje wzorce 1:1 i pilnuje braku trafień na pytania o doświadczenie,
+  prawo jazdy, dostępność, języki, VCA). Kategorie: wiek, płeć, ciąża/plany rodzinne, stan
+  cywilny, religia, pochodzenie, zdrowie, orientacja, związki zawodowe, poglądy polityczne,
+  karalność. Trafienie ≠ ocena prawna: przy zapisie kroku pytanie trafia do
+  `screening_question_reviews` (jeden wiersz na ofertę × odcisk treści, audyt
+  `screening_question.review_requested`), strażnik `enforce_screening_review` blokuje KAŻDĄ
+  aktywację oferty (publikacja, wznowienie, ponowne otwarcie) do akceptacji bieżącej treści
+  (`SCREENING_REVIEW_REQUIRED`/`SCREENING_QUESTION_REJECTED: <pozycja>` → komunikat przy pytaniu
+  w kreatorze). Zmiana treści/tłumaczenia = nowy odcisk = nowa decyzja; akceptacja nie
+  publikuje. Admin: `/admin/pytania` (treść we wszystkich językach, `admin_decide_screening_review`
+  — odrzucenie z uzasadnieniem, STALE_STATE dla treści nieobecnej w ofercie, audyt
+  `screening_question.reviewed`, powiadomienie in-app dla zapisującego). Dowód: `rls.sql` sekcja
+  SR497 (kontrola ujemna: bez strażnika oferta się publikuje); unit `screening-risk`,
+  `screening-review`, `screening-review-editor`; E2E `admin-screening-review`,
+  `job-wizard-screening`. Teksty komunikatów do akceptacji właściciela. **Otwarte (#497):**
+  katalog dopuszczalnych wzorców i wyjątków art. 9/10 (właściciel + prawnik), wstrzymanie
+  zbierania odpowiedzi dla ofert JUŻ aktywnych z pytaniem odrzuconym po publikacji i los
+  zapisanych odpowiedzi, zgłoszenie pytania przez kandydata (dziś ogólne zgłoszenie oferty DSA
+  #41), e-mail o decyzji, informacja dla kandydata (#61), rejestr (#485), retencja (#486).
   Aplikacja bez konta (#98, migracja `0095`, `docs/GUEST_APPLY.md`): gość w ApplyModal
   (`GuestApplyForm`: imię i nazwisko, e-mail, zgoda; reszta opcjonalna) → Turnstile
   `guest_apply` + limity IP/adres → `submit_guest_application` (service_role, zgłoszenie
@@ -1090,7 +1113,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   jest wpięte (brak `instrumentation-client`).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
-  `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0103`
+  `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0104`
   (`claim_email_batch` dla `service_role`). Dowód: `tests/integration/portal-*.test.ts` (PG16). **Otwarte:** nazwa
   firmy z rejestracji w formularzu firmy (metadane konta), nazwa firmy w wiadomościach kandydata (od 0014);
   spięcie z trasami sesji (#24) i usunięcie SDK (#27).

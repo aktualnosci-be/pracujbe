@@ -16,8 +16,7 @@ import {
 } from '@/components/dashboard/panel-styles';
 import { BANNER_FORMATS, bannerJobUrl, bannerSize } from '@/lib/campaign-banner/render';
 import { isCampaignJobId, loadManagedCampaignJob, type CampaignJobLoad } from '@/lib/campaign-banner/source';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
+import { getPortalIdentity, isPortalDataConfigured } from '@/lib/db/portal';
 
 /**
  * Baner kampanii z oferty (#175) — `/employer/oferty/[id]/baner?jezyk=pl|nl|fr|en`.
@@ -57,9 +56,10 @@ export default async function CampaignBannerPage({
   const td = await getTranslations('dashboard');
 
   let loaded: CampaignJobLoad = { status: 'unavailable' };
-  if (isSupabaseConfigured() && isCampaignJobId(id)) {
+  if (isPortalDataConfigured() && isCampaignJobId(id)) {
     try {
-      loaded = await loadManagedCampaignJob(await createServerClient(), id, bannerLocale);
+      const me = await getPortalIdentity();
+      if (me) loaded = await loadManagedCampaignJob(me, id, bannerLocale);
     } catch {
       loaded = { status: 'error' };
     }

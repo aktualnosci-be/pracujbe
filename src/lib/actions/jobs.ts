@@ -7,10 +7,15 @@ import { revalidatePath } from 'next/cache';
 import { getActiveCompanyId } from '@/lib/company-context';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { execute, jsonArg, queryOne, rpc } from '@/lib/db/sql';
+import type { PortalIdentity } from '@/lib/auth/session';
+import { execute, jsonArg, queryOne, queryRows, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
+import {
+  buildScreeningReviewNotices,
+  type ScreeningReviewNotice,
+} from '@/lib/screening/review';
 import { routing } from '@/i18n/routing';
 import {
   step1Schema,
@@ -72,7 +77,9 @@ export type CreateDraftResult =
   | { ok: true; id: string; demo?: boolean }
   | { ok: false; error: ErrorCode };
 export type SaveDraftResult = { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
-export type PublishResult = { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
+export type PublishResult =
+  | { ok: true; demo?: boolean }
+  | { ok: false; error: ErrorCode; screening?: ScreeningReviewNotice[] };
 export type UpdatePublishedResult =
   | { ok: true; demo?: boolean; slug?: string; updatedAt?: string }
   | { ok: false; error: ErrorCode };
@@ -112,6 +119,8 @@ function mapPgError(message: string | undefined): ErrorCode {
   if (m.includes('JOB_NOT_EDITABLE')) return 'JOB_NOT_EDITABLE';
   if (m.includes('JOB_EXPIRED')) return 'JOB_EXPIRED';
   if (m.includes('JOB_NOT_DRAFT')) return 'JOB_NOT_DRAFT';
+  if (m.includes('SCREENING_QUESTION_REJECTED')) return 'SCREENING_QUESTION_REJECTED';
+  if (m.includes('SCREENING_REVIEW_REQUIRED')) return 'SCREENING_REVIEW_REQUIRED';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
   if (m.includes('ENTITLEMENT_LIMIT')) return 'ENTITLEMENT_LIMIT';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
@@ -406,6 +415,31 @@ export async function updatePublishedJob(
  * publishJob
  * ------------------------------------------------------------------------- */
 
+/**
+ * Stan przeglądu pytań oznaczonych przez detektor (#497, migracja 0103), odczyt pod RLS
+ * (członek firmy oferty) w osobnej transakcji — nieudana publikacja cofnęła swoją. Tylko
+ * pytania bez akceptacji bieżącej treści. Błąd odczytu → pusta lista (kod błędu publikacji
+ * i tak trafia do kreatora).
+ */
+async function loadScreeningReviewNotices(
+  me: PortalIdentity,
+  jobId: string,
+): Promise<ScreeningReviewNotice[]> {
+  try {
+    return await withPortalTransaction(me, async (tx) => {
+      const questions = await queryRows(tx, 'jobs.screening-questions-review',
+        `SELECT position, content_fingerprint, risk_categories
+           FROM public.job_screening_questions WHERE job_id = $1`, [jobId]);
+      const reviews = await queryRows(tx, 'jobs.screening-reviews',
+        `SELECT content_fingerprint, status, decision_reason
+           FROM public.screening_question_reviews WHERE job_id = $1`, [jobId]);
+      return buildScreeningReviewNotices(questions, reviews);
+    });
+  } catch {
+    return [];
+  }
+}
+
 /** Publikuje ofertę (status='active', published_at=now()). Wymaga firmy `verified`. */
 export async function publishJob(jobId: string): Promise<PublishResult> {
   if (typeof jobId !== 'string' || (!UUID_RE.test(jobId) && jobId !== DEMO_DRAFT_ID)) {
@@ -414,8 +448,9 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
 
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
+  let me: PortalIdentity | null = null;
   try {
-    const me = await getPortalIdentity();
+    me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
     const allowed = await checkRateLimit('job-publish', {
@@ -442,7 +477,13 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     if (outcome) return { ok: false, error: outcome };
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: failureCode(error) };
+    const code = failureCode(error);
+    // #497: pytanie screeningowe czeka na przegląd albo zostało odrzucone — kreator pokazuje,
+    // których pytań to dotyczy (i uzasadnienie odrzucenia), żeby firma mogła je poprawić.
+    if (me && (code === 'SCREENING_REVIEW_REQUIRED' || code === 'SCREENING_QUESTION_REJECTED')) {
+      return { ok: false, error: code, screening: await loadScreeningReviewNotices(me, jobId) };
+    }
+    return { ok: false, error: code };
   }
 }
 

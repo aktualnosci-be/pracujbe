@@ -87,6 +87,12 @@ const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {
   suspended: 'itemCompanySuspended',
 };
 
+/** Decyzja admina o pytaniu screeningowym (0103, #497): `system` + `data.kind = 'screening_review'`. */
+const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
+  approved: 'itemScreeningApproved',
+  rejected: 'itemScreeningRejected',
+};
+
 /**
  * Decyzja moderacyjna (0099, #42): `system` z `data.kind = 'moderation'` — tytuł wg
  * `data.decision` (wycofanie oferty, zawieszenie firmy, cofnięcie ograniczenia).
@@ -115,6 +121,10 @@ export function titleKeyForType(type: string, data?: unknown, entityType = ''): 
   const d = asRecord(data);
   if (d['kind'] === 'company_status') {
     const key = COMPANY_STATUS_TITLE_KEY[asStr(d['status'])];
+    if (key) return key;
+  }
+  if (d['kind'] === 'screening_review') {
+    const key = SCREENING_REVIEW_TITLE_KEY[asStr(d['status'])];
     if (key) return key;
   }
   if (d['kind'] === 'moderation') {
