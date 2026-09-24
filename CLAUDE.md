@@ -796,6 +796,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
   connect/img/font, GA/Meta/Supabase/Sentry). Wariant nonce/strict-dynamic = follow-up (E2E).
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
+- [x] Cloudflare Turnstile (#46) — logowanie/rejestracja/reset: siteverify w Server Actions
+  (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
+  per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.
+  Bez kluczy poza produkcją = wyłączony; w produkcji brak kluczy = fail-closed rejestracji/resetu.
+  CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. **Do zrobienia:**
+  formularze kontaktu i zgłoszeń (polityki `contact`/`report` gotowe, formularzy brak).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
