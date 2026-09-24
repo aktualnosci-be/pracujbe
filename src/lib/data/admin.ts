@@ -135,7 +135,15 @@ export interface AdminReportTarget {
 
 /** Zdarzenie historii sprawy DSA (`report_events`, 0094; decyzja/przywrócenie/flaga — 0099). */
 export interface AdminReportEvent {
-  type: 'submitted' | 'status_changed' | 'decision' | 'restored' | 'flagged';
+  type:
+    | 'submitted'
+    | 'status_changed'
+    | 'decision'
+    | 'restored'
+    | 'flagged'
+    | 'appeal_submitted'
+    | 'appeal_decided'
+    | 'redacted';
   toStatus: string | null;
   at: string;
 }
@@ -146,6 +154,9 @@ const REPORT_EVENT_TYPES: readonly AdminReportEvent['type'][] = [
   'decision',
   'restored',
   'flagged',
+  'appeal_submitted',
+  'appeal_decided',
+  'redacted',
 ];
 
 /** Decyzja moderacyjna w sprawie DSA (#42, `moderation_decisions`) — uzasadnienie. */
@@ -421,7 +432,7 @@ const isAdminSession = cache(async (): Promise<boolean> => {
 });
 
 /** Bez roli admina → `notFound()` (rzuca). Wołane przed każdym odczytem service-role. */
-async function requireAdmin(): Promise<void> {
+export async function requireAdmin(): Promise<void> {
   if (!(await isAdminSession())) notFound();
 }
 

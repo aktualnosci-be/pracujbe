@@ -503,7 +503,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-12 (JSON-LD:
 > `validThrough` z `expires_at` + `unitText` z `salary_period` — wymaga rozszerzenia zwrotu
 > `get_public_job`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
-> (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR),
+> (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
+> techniczna dla kandydata zrobiona w #486, patrz Etap 7),
 > P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
 > P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
@@ -1005,8 +1006,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
   `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
   (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
-- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy i decyzja z egzekucją
-  (#42) gotowe; odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
+- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy, decyzja z egzekucją
+  (#42) i odwołania z retencją i raportem (#43) gotowe; treść prawna i wartości terminów (#40) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
   → Zod → RPC `submit_content_report` (EXECUTE tylko service_role, `reporterId` z sesji). Sprawa
   = `reports.kind='dsa_notice'`: numer `DSA-XXXX-…` (64 bity), kod dostępu z przeglądarki (w bazie
@@ -1034,8 +1035,31 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   UI: dialog decyzji i cofnięcia w `/admin/zgloszenia` (`ModerationDecisionActions`),
   uzasadnienie w `/employer/firma` (`get_company_moderation_decisions`), wynik w
   `/zglos-tresc/sprawa`. Dowód: `rls.sql` sekcja MOD42; unit `moderation-decision*`; E2E
-  `admin-ux` (#42). **Otwarte:** procedura odwołań (#43); znacznik treści prawnej o środkach
-  odwoławczych w panelu firmy; UI kolejki według priorytetu (lista nadal po dacie).
+  `admin-ux` (#42). **Otwarte:** znacznik treści prawnej o środkach odwoławczych w panelu
+  firmy; UI kolejki według priorytetu (lista nadal po dacie).
+  Odwołania, terminy, retencja, raport (#43, migracja `0104`): tabela
+  `moderation_appeals` (jedno na decyzję, `APL-…`, niezmienne). Autor (owner/admin firmy)
+  odwołuje się od ograniczenia w `/employer/firma` (`submit_moderation_appeal` pod sesją),
+  zgłaszający od braku działań na `/zglos-tresc/sprawa` (numer + kod, `submit_report_appeal`
+  service_role za limiterem); cudza decyzja = `NOT_FOUND`, strony nie widzą swoich danych.
+  Termin liczony od POINFORMOWANIA (`moderation_informed_at`: wysłany e-mail o decyzji albo
+  odczyt powiadomienia; odbicie się nie liczy; bez poinformowania termin nie biegnie).
+  `admin_decide_appeal` w `/admin/odwolania`: autor decyzji nie rozpatruje, gdy jest inny admin
+  (`REVIEWER_CONFLICT`, inaczej `same_reviewer`); uwzględnienie odwołania autora cofa
+  ograniczenie (`moderation_restore_core`, wspólny z `admin_restore_moderation`), zgłaszającego
+  — nowa decyzja z `appeal_id` i egzekucją (sprawa dismissed → resolved tylko tą ścieżką);
+  historia, audyt, e-maile `appealReceived/Upheld/Reversed` w języku odbiorcy; awaria cofa
+  całość. Retencja: `dsa_retention_report()` (podgląd) i `dsa_retention_run(dry_run)`
+  (service_role, `dsa_retention_runs`) anonimizują sprawy dopiero po końcu drogi odwołania
+  i okresie retencji — wiersze i liczby zostają. Raport: `dsa_transparency_report` + eksport
+  `dsa_statements_export` (bez danych osobowych i faktów) w `/admin/raport-dsa` i
+  `GET /api/admin/dsa-report` (CSV/JSON). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
+  APL43 (kontrole ujemne: jedyny admin, naiwna retencja, flaga bez odwołania); unit
+  `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
+  `admin-a11y` (nowe trasy). **Do zatwierdzenia przez właściciela (#40):** okno odwołania
+  6 mies., termin rozpatrzenia 14 dni, retencja 12 mies., zakres publikacji i przekazywania do
+  bazy DSA, treść prawna o procedurze. **Otwarte:** harmonogram czyszczenia (po #40), odwołanie
+  zgłaszającego od cofnięcia ograniczenia, retencja `audit_logs` z uzasadnieniami.
 - [~] Mapa danych osobowych (#485/#488/#503/#504, część techniczna): `node scripts/privacy/data-map.mjs`
   generuje `docs/legal-drafts/data-map.generated.md` z migracji produkcyjnych (parser
   `scripts/privacy/schema.mjs`), klasyfikacji `src/lib/privacy/data-map.ts` (każda tabela, kategorie,
@@ -1051,6 +1075,31 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
   obiekt z linkiem; filtry typu obiektu, akcji, aktora, zakresu dat i `id` (skrót „Historia
   statusów” w wierszu firmy), stronicowanie kursorem.
+- [~] Retencja i prawa kandydata (#486, migracja `0105`, `docs/DATA_RETENTION.md`):
+  okresy jako dane (`retention_policies`, null = kategoria wyłączona; zmiana tylko
+  `admin_set_retention_policy` z audytem, rejestr usunięć ≥ 400 dni). `/api/maintenance` woła
+  `run_retention_purge` (partie, SKIP LOCKED, liczniki) i worker kolejki storage
+  (`src/lib/storage-deletion.ts`; `storage_deletion_queue` wypełnia trigger AFTER DELETE na `files`,
+  backoff, brak ścieżek w logach). Domyślnie włączone tylko sprzątanie danych już oznaczonych
+  (`deleted_file`, `deleted_profile` — 30 dni); reszta czeka na decyzję administratora danych.
+  `confirmed_guest_request` = tylko wartość do decyzji właściciela (bez zadania, ślad gościa zostaje
+  także przy `closed_application`); tokeny gościa czyści `purge_guest_application_requests` (#522).
+  Eksport JSON (`POST /api/account/export`, Origin tej witryny, `no-store` → `export_my_data`:
+  dane podane, proces, zapisane `matches`, rozmowy z `fromMe` bez tożsamości rekrutera, limit
+  10/dobę, ślad `data_rights_requests` + audyt). Usunięcie konta (`request_account_erasure`,
+  potwierdzenie adresem konta): jedna transakcja `erase_candidate_subject` — proces widoczny
+  dla firm, powiadomienia/e-maile o nim, pliki → kolejka, `auth.users` (kaskada), tombstone;
+  sprawy DSA zostają bez powiązania (`reports_guard`/`report_events_append_only` przepuszczają
+  tylko FK → null). Tombstone po restore: `scripts/db/export-erasure-tombstones.sh` +
+  `RESTORE_TOMBSTONES_FILE` w `restore-backup.sh` (`apply_erasure_tombstones`). UI: sekcja
+  „Twoje dane i konto” w `/candidate/ustawienia` (`AccountDataSettings`, klucze `accountData.*`
+  — tylko etykiety funkcji). Dowód: `rls.sql` sekcja DR486 (kontrole ujemne 5/5b/7f/9),
+  `npm run test:backup` (scenariusz #486), unit `account-data`, `storage-deletion`, E2E
+  `candidate-account-data`. Szkic dla prawnika (PROJEKT, nieopublikowany):
+  `docs/legal-drafts/retencja-i-prawa-kandydata.md`. **Otwarte:** zatwierdzone okresy i treść
+  dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13), aktualizacja
+  `last_seen_at`, sprostowanie/ograniczenie/sprzeciw, eksport i usunięcie konta pracodawcy,
+  potwierdzenie linkiem e-mail.
 - [x] Płatności — **WYŁĄCZONE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Stan aktywny:
   portal bez cennika, pakietów, CTA zakupu i limitów planu; billing niedostępny. Jedna jawna flaga
   `BILLING_ENABLED` (`src/lib/billing/flag.ts`), domyślnie wyłączona — włącza ją tylko dokładne
@@ -1113,7 +1162,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   jest wpięte (brak `instrumentation-client`).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
-  `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0104`
+  `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0106`
   (`claim_email_batch` dla `service_role`). Dowód: `tests/integration/portal-*.test.ts` (PG16). **Otwarte:** nazwa
   firmy z rejestracji w formularzu firmy (metadane konta), nazwa firmy w wiadomościach kandydata (od 0014);
   spięcie z trasami sesji (#24) i usunięcie SDK (#27).
@@ -1239,7 +1288,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
   `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
-  `DATABASE_APP_URL` build nie czyta bazy (`prerenderParamsAtBuild` → strony na pierwsze żądanie);
+  `DATABASE_APP_URL` build nie czyta bazy: landingi przez `prerenderParamsAtBuild` (strony na pierwsze
+  żądanie), odczyty ofert w `next build` zwracają pusty wynik (`isBuildPhase`), a layout `[locale]`
+  ZAWSZE prerenderuje komplet języków — pusta lista dawała 500 DYNAMIC_SERVER_USAGE na logowaniu,
+  rejestracji i liście ofert (strażnik `static-public-pages.test`);
   layout `(public)` odrzuca nieobsługiwany locale (`notFound`). Middleware: bramka hasła i
   odświeżone cookies sesji → `private, no-store`; alias miasta → 308 w middleware (redirect z ISR
   dublował `Location`). **Otwarte:** ISR zapisuje na dysk także 404 losowych slugów ofert

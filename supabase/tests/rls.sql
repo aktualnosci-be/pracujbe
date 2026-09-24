@@ -4538,6 +4538,10 @@ insert into public.applications(job_id, candidate_id, company_id, status, submit
 insert into public.applications(job_id, candidate_id, company_id, status, submitted_at) values
   (:'FNJB', :'FNCAN', :'FNCB', 'submitted', now() - interval '40 days');
 
+-- Lejek liczy dni w Europe/Brussels (zapis i odczyt). `current_date` w asercjach musi być tym
+-- samym dniem — inaczej między 22:00 a 24:00 UTC (CEST) zakres kończy się „wczoraj” i FN99-8 pada.
+set timezone = 'Europe/Brussels';
+
 -- FN99-1: bez bramki serwera anon nie zapisze zdarzenia (np. wywołanie z pominięciem endpointu).
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
@@ -4656,6 +4660,7 @@ select count(*) >= 0 as fn12 from public.job_funnel_daily \gset
 reset role;
 revoke select on public.job_funnel_daily from anon;
 select pg_temp.assert(:'fn12'::boolean, 'FN99-12 kontrola ujemna: z grantem anon czyta agregat (test FN99-6 by to wykrył)');
+reset timezone;
 
 -- ============================================================================
 -- BL97. Blokada firmy w wynikach listy ofert (0090, #97): get_public_jobs / _count /
@@ -7487,6 +7492,687 @@ select pg_temp.assert((select count(*) from public.moderation_decisions) = 5
   'MOD42-14d service_role czyta decyzje i przywrócenia');
 reset role;
 
+-- ============================================================================
+-- DR486. Retencja, eksport danych kandydata, usunięcie konta, kolejka storage,
+--        ponowne usunięcie po odtworzeniu kopii (0105)
+-- ============================================================================
+\echo '--- DR486 retencja i prawa kandydata ---'
+\set RD1 'd4860000-0000-4000-8000-000000000001'
+\set RD2 'd4860000-0000-4000-8000-000000000002'
+\set RD3 'd4860000-0000-4000-8000-000000000003'
+\set RD4 'd4860000-0000-4000-8000-000000000004'
+\set RDF1 'd4860000-0000-4000-8000-0000000000f1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RD1','rd1@test.be','Rita D','{"role":"candidate","first_name":"Rita","last_name":"D","locale":"fr"}'),
+  (:'RD2','rd2@test.be','Rob E','{"role":"candidate","first_name":"Rob","last_name":"E","locale":"nl"}'),
+  (:'RD3','rd3@test.be','Ron F','{"role":"candidate","first_name":"Ron","last_name":"F","locale":"en"}'),
+  (:'RD4','rd4@test.be','Rea G','{"role":"candidate","first_name":"Rea","last_name":"G","locale":"pl"}');
+insert into public.candidate_profiles(profile_id, is_searchable) values
+  (:'RD1', true), (:'RD2', true), (:'RD3', false), (:'RD4', false);
+\set RDCO 'd4860000-0000-4000-8000-0000000000c0'
+\set RDJ  'd4860000-0000-4000-8000-0000000000a1'
+\set RDJ2 'd4860000-0000-4000-8000-0000000000a2'
+insert into public.companies(id, name, status) values (:'RDCO', 'Firma Retencja', 'verified');
+insert into public.company_members(company_id, profile_id, role, is_active) values (:'RDCO', :'EMPA', 'owner', true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'RDJ', :'RDCO', 'rd-job-1', 'Operator RD', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl'),
+  (:'RDJ2', :'RDCO', 'rd-job-2', 'Kierowca RD', 'transport', 'permanent', 'Gandawa', 'Flandria', 'active', 'pl');
+insert into auth.sessions(id, user_id, token, expires_at)
+  values (gen_random_uuid(), :'RD1', 'rd1-session-token', now() + interval '1 day');
+
+-- Proces RD1 z firmą A: aplikacja, propozycja, rozmowa w obie strony, dopasowanie, CV.
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'RDJ', 'rd1-apply', null, null, 'Proszę o kontakt') as rdapp1 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RD2'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'RDJ', 'rd2-apply', null, null, 'Cudza aplikacja') as rdapp2 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.send_offer(:'RDJ'::uuid, :'RD1'::uuid, 'rd1-offer', 'Zapraszamy na rozmowę', null) as rdoff1 \gset
+select public.get_or_create_conversation(:'rdapp1'::uuid, null) as rdconv1 \gset
+select public.send_message(:'rdconv1'::uuid, 'Wiadomość rekrutera', gen_random_uuid());
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select public.send_message(:'rdconv1'::uuid, 'Odpowiedź kandydata', gen_random_uuid());
+reset role; reset app.current_uid;
+insert into public.matches(candidate_id, job_id, score, matched, missing, strengths)
+  values (:'RD1', :'RDJ', 72, '{warehouse}', '{forklift}', '{availability}');
+insert into public.files(id, owner_id, bucket, path, file_name, mime_type, size_bytes, entity_type, visibility)
+  values (:'RDF1', :'RD1', 'candidate-files', :'RD1' || '/cv-00000000-0000-4000-8000-000000000001.pdf',
+          'cv-rita.pdf', 'application/pdf', 1000, 'candidate_cv', 'private');
+-- Zgłoszenie DSA złożone przez RD1 (sprawa zostaje po usunięciu konta, bez powiązania).
+set role service_role;
+select report_id as rdrep1 from public.submit_content_report(:'RD1', gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'RDJ2', 'fraud', 'Podejrzana oferta wymagająca opłaty.', null, 'Rita D', 'rd1@test.be', 'fr', true) \gset
+reset role;
+insert into public.report_events(report_id, event_type, actor_id) values (:'rdrep1', 'flagged', :'RD1');
+
+-- DR486-1: tabele techniczne niedostępne dla ról klienta (domyślnie deny).
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.retention_policies', 'permission denied', 'DR486-1 anon retention_policies');
+select pg_temp.expect_error('select count(*) from public.data_rights_requests', 'permission denied', 'DR486-1b anon data_rights_requests');
+select pg_temp.expect_error('select public.export_my_data()', 'permission denied', 'DR486-1c anon bez eksportu');
+select pg_temp.expect_error('select public.request_account_erasure(''rd1@test.be'')', 'permission denied', 'DR486-1d anon bez usunięcia');
+reset role;
+set role authenticated; set app.current_uid = :'RD2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.retention_policies', 'permission denied', 'DR486-1e kandydat retention_policies');
+select pg_temp.expect_error('select count(*) from public.erasure_tombstones', 'permission denied', 'DR486-1f kandydat tombstones');
+select pg_temp.expect_error('select count(*) from public.storage_deletion_queue', 'permission denied', 'DR486-1g kandydat kolejka storage');
+select pg_temp.expect_error('insert into public.data_rights_requests(subject_id, kind, channel, due_at) values (auth.uid(), ''access'', ''self_service'', now())',
+  'permission denied', 'DR486-1h kandydat nie dopisuje śladu wniosku');
+select pg_temp.expect_error('select public.run_retention_purge(10)', 'permission denied', 'DR486-1i kandydat nie uruchamia retencji');
+select pg_temp.expect_error('select * from public.claim_storage_deletions(10)', 'permission denied', 'DR486-1j kandydat nie bierze kolejki');
+select pg_temp.expect_error('select public.apply_erasure_tombstones(array[''' || :'RD1' || '''::uuid])', 'permission denied',
+  'DR486-1k kandydat nie usuwa innych przez tombstone');
+select pg_temp.expect_error('select public.erase_candidate_subject(''' || :'RD1' || ''', ''self_service'', null)', 'permission denied',
+  'DR486-1l funkcja wewnętrzna bez EXECUTE');
+reset role; reset app.current_uid;
+
+-- DR486-2: eksport — pracodawca i admin nie korzystają z eksportu kandydata.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_data()', 'PERMISSION_DENIED', 'DR486-2 pracodawca bez eksportu kandydata');
+reset role; reset app.current_uid;
+
+-- DR486-3: eksport RD1 — dane podane, proces, istniejący wynik dopasowania, wiadomości ze stroną.
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select public.export_my_data()::text as rdexp \gset
+select pg_temp.assert((select count(*) from public.data_rights_requests) = 1,
+  'DR486-3a kandydat widzi własny ślad wniosku o dostęp');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (:'rdexp')::jsonb ->> 'format' = 'pracujbe-export/1'
+  and (:'rdexp')::jsonb #>> '{account,email}' = 'rd1@test.be'
+  and jsonb_array_length((:'rdexp')::jsonb -> 'applications') = 1
+  and (:'rdexp')::jsonb #>> '{applications,0,id}' = :'rdapp1'
+  and (:'rdexp')::jsonb #>> '{applications,0,companyName}' = 'Firma Retencja'
+  and jsonb_typeof((:'rdexp')::jsonb #> '{applications,0,statusHistory}') = 'array'
+  and (:'rdexp')::jsonb #>> '{offers,0,id}' = :'rdoff1'
+  and ((:'rdexp')::jsonb #>> '{matches,0,score}')::numeric = 72
+  and (:'rdexp')::jsonb #> '{matches,0,missing}' = '["forklift"]'::jsonb
+  and (:'rdexp')::jsonb #>> '{files,0,fileName}' = 'cv-rita.pdf'
+  and jsonb_typeof((:'rdexp')::jsonb -> 'emailConsentEvents') = 'array'
+  and jsonb_typeof((:'rdexp')::jsonb -> 'moderationAppeals') = 'array',
+  'DR486-3 eksport zawiera profil, aplikację z historią, propozycję, wynik dopasowania, CV (metadane)');
+select pg_temp.assert(
+  (select count(*) from jsonb_array_elements((:'rdexp')::jsonb #> '{conversations,0,messages}') m
+     where (m->>'fromMe')::boolean) = 1
+  and (select count(*) from jsonb_array_elements((:'rdexp')::jsonb #> '{conversations,0,messages}') m
+     where not (m->>'fromMe')::boolean and m->>'body' = 'Wiadomość rekrutera') = 1,
+  'DR486-3b wiadomości obu stron, strona oznaczona fromMe');
+select pg_temp.assert(
+  position(:'EMPA' in :'rdexp') = 0 and position(:'RD2' in :'rdexp') = 0
+  and position(:'rdapp2' in :'rdexp') = 0 and position('Cudza aplikacja' in :'rdexp') = 0
+  and position('rd1-apply' in :'rdexp') = 0 and position('cv-00000000' in :'rdexp') = 0,
+  'DR486-3c bez identyfikatora rekrutera, danych innego kandydata, klucza idempotencji i klucza obiektu CV');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action = 'data.exported' and entity_id = :'RD1') = 1,
+  'DR486-3d eksport w audycie');
+-- DR486-3e: limit 10 eksportów na dobę (kontrola: 10. przechodzi, 11. nie).
+insert into public.data_rights_requests(subject_id, kind, channel, due_at, completed_at)
+  select :'RD2', 'access', 'self_service', now(), now() from generate_series(1, 9);
+set role authenticated; set app.current_uid = :'RD2'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.export_my_data() ? 'profile', 'DR486-3e 10. eksport w dobie przechodzi');
+select pg_temp.expect_error('select public.export_my_data()', 'RATE_LIMITED', 'DR486-3f 11. eksport w dobie → RATE_LIMITED');
+select pg_temp.assert((select count(*) from public.data_rights_requests where subject_id = :'RD1') = 0,
+  'DR486-3g kandydat nie widzi śladu wniosków innej osoby');
+reset role; reset app.current_uid;
+
+-- DR486-4: usunięcie wymaga potwierdzenia adresem konta; pracodawca nie korzysta.
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_account_erasure(''rd2@test.be'')', 'CONFIRMATION_MISMATCH',
+  'DR486-4 cudzy adres → CONFIRMATION_MISMATCH');
+select pg_temp.expect_error('select public.request_account_erasure(null)', 'CONFIRMATION_MISMATCH',
+  'DR486-4b brak potwierdzenia');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_account_erasure(''empa@test.be'')', 'PERMISSION_DENIED',
+  'DR486-4c pracodawca nie usuwa konta tą ścieżką');
+reset role; reset app.current_uid;
+select pg_temp.assert(exists (select 1 from public.profiles where id = :'RD1')
+  and exists (select 1 from public.applications where id = :'rdapp1'),
+  'DR486-4d odmowa niczego nie usuwa');
+
+-- DR486-5 (kontrola ujemna do 0105 pkt 10): stara reguła historii DSA wywraca usunięcie.
+begin;
+create or replace function public.report_events_append_only()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+begin
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then return old; end if;
+  raise exception 'PERMISSION_DENIED: historia sprawy jest tylko do dopisywania' using errcode = '42501';
+end $$;
+select pg_temp.expect_error('select public.erase_candidate_subject(''' || :'RD1' || ''', ''self_service'', null)',
+  'tylko do dopisywania', 'DR486-5 kontrola: bez poprawki usunięcie autora zdarzenia DSA pada');
+rollback;
+-- DR486-5b (kontrola ujemna): reports_guard z 0076 odrzuca odwołanie reporter_id pod sesją
+-- usuwanego kandydata — samoobsługowe usunięcie autora zgłoszenia by padło.
+begin;
+create or replace function public.reports_guard()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+begin
+  if auth.uid() is null then return new; end if;
+  if tg_op = 'INSERT' then return new; end if;
+  if not public.is_admin() then
+    raise exception 'PERMISSION_DENIED: zgłoszenie zmienia tylko administrator' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+set local role authenticated; set local app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_account_erasure(''rd1@test.be'')',
+  'zmienia tylko administrator', 'DR486-5b kontrola: bez poprawki reports_guard usunięcie pada');
+rollback;
+
+-- DR486-6: usunięcie konta RD1 (adres wielkimi literami, ze spacjami).
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select public.request_account_erasure('  RD1@Test.be ')::text as rderase \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from auth.users where id = :'RD1')
+  and not exists (select 1 from public.profiles where id = :'RD1')
+  and not exists (select 1 from public.candidate_profiles where profile_id = :'RD1')
+  and not exists (select 1 from auth.sessions where user_id = :'RD1')
+  and not exists (select 1 from public.applications where id = :'rdapp1')
+  and not exists (select 1 from public.offers where id = :'rdoff1')
+  and not exists (select 1 from public.conversations where id = :'rdconv1')
+  and not exists (select 1 from public.messages where conversation_id = :'rdconv1')
+  and not exists (select 1 from public.matches where candidate_id = :'RD1')
+  and not exists (select 1 from public.files where owner_id = :'RD1' or id = :'RDF1'),
+  'DR486-6 konto, sesje, profil, aplikacja, propozycja, rozmowa, dopasowanie i CV usunięte');
+select pg_temp.assert(
+  not exists (select 1 from public.notifications where entity_id in (:'rdapp1'::uuid, :'rdoff1'::uuid, :'rdconv1'::uuid))
+  and not exists (select 1 from public.email_deliveries where entity_id in (:'rdapp1'::uuid, :'rdoff1'::uuid)
+                    or to_email = 'rd1@test.be'),
+  'DR486-6b powiadomienia i e-maile firmy o procesie RD1 usunięte');
+select pg_temp.assert(
+  (select reporter_id is null and kind = 'dsa_notice' from public.reports where id = :'rdrep1')
+  and (select bool_and(actor_id is null) from public.report_events where report_id = :'rdrep1'),
+  'DR486-6c sprawa DSA zostaje bez powiązania z kontem');
+select pg_temp.assert(
+  (select count(*) from public.storage_deletion_queue
+    where bucket = 'candidate-files' and path = :'RD1' || '/cv-00000000-0000-4000-8000-000000000001.pdf') = 1
+  and (select channel = 'self_service' from public.erasure_tombstones where subject_id = :'RD1')
+  and (select completed_at is not null and kind = 'erasure' and (details->>'applications')::int = 1
+            and (details->>'files')::int = 1
+         from public.data_rights_requests where subject_id = :'RD1' and kind = 'erasure')
+  and (select count(*) from public.audit_logs where action = 'account.erased' and entity_id = :'RD1') = 1,
+  'DR486-6d obiekt CV w kolejce, tombstone, ślad wniosku z licznikami, audyt');
+select pg_temp.assert(
+  exists (select 1 from public.applications where id = :'rdapp2')
+  and exists (select 1 from public.profiles where id = :'RD2')
+  and exists (select 1 from public.applications where candidate_id = :'CANDA'),
+  'DR486-6e dane innych kandydatów nienaruszone');
+set role authenticated; set app.current_uid = :'RD1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_data()', 'PERMISSION_DENIED', 'DR486-6f po usunięciu brak dostępu');
+reset role; reset app.current_uid;
+
+-- DR486-7: kolejka storage — dzierżawa, backoff przy błędzie, sukces usuwa wiersz.
+set role service_role;
+select id as rdq1 from public.claim_storage_deletions(10) where path like :'RD1' || '/%' \gset
+select pg_temp.assert(not exists (select 1 from public.claim_storage_deletions(10) where id = :'rdq1'),
+  'DR486-7 wiersz w dzierżawie nie jest pobierany drugi raz');
+select public.complete_storage_deletion(:'rdq1', false, 'UNAVAILABLE');
+select pg_temp.assert((select attempts = 1 and last_error = 'UNAVAILABLE' and next_attempt_at > now() and locked_until is null
+  from public.storage_deletion_queue where id = :'rdq1'), 'DR486-7b błąd → ponowienie z backoffem');
+select pg_temp.assert(not exists (select 1 from public.claim_storage_deletions(10) where id = :'rdq1'),
+  'DR486-7c przed terminem ponowienia wiersz nie wraca');
+update public.storage_deletion_queue set next_attempt_at = now() - interval '1 second' where id = :'rdq1';
+select pg_temp.assert(exists (select 1 from public.claim_storage_deletions(10) where id = :'rdq1'),
+  'DR486-7d po terminie wiersz wraca');
+select public.complete_storage_deletion(:'rdq1', true, null);
+select pg_temp.assert(not exists (select 1 from public.storage_deletion_queue where id = :'rdq1'),
+  'DR486-7e sukces usuwa wiersz kolejki');
+reset role;
+-- DR486-7f (kontrola ujemna): bez triggera usunięcie wiersza files nie zostawia śladu obiektu.
+begin;
+drop trigger trg_files_queue_storage_deletion on public.files;
+insert into public.files(owner_id, bucket, path, entity_type) values (:'RD2', 'candidate-files', 'x/orphan.pdf', 'candidate_cv');
+delete from public.files where path = 'x/orphan.pdf';
+select pg_temp.assert(not exists (select 1 from public.storage_deletion_queue where path = 'x/orphan.pdf'),
+  'DR486-7f kontrola: bez triggera obiekt zostałby osierocony');
+rollback;
+
+-- DR486-8: retencja — przed terminem nic, po terminie usunięte; kategorie wyłączone nie działają.
+set session_replication_role = replica;
+insert into public.files(owner_id, bucket, path, entity_type, deleted_at) values
+  (:'RD2', 'candidate-files', :'RD2' || '/cv-old.pdf', 'candidate_cv', now() - interval '31 days'),
+  (:'RD2', 'candidate-files', :'RD2' || '/cv-recent.pdf', 'candidate_cv', now() - interval '5 days');
+update public.profiles set deleted_at = now() - interval '31 days', is_active = false where id = :'RD3';
+update public.profiles set deleted_at = now() - interval '1 day', is_active = false where id = :'RD4';
+update public.applications set status = 'rejected', updated_at = now() - interval '40 days' where id = :'rdapp2';
+set session_replication_role = origin;
+set role service_role;
+select public.run_retention_purge(100)::text as rdpurge1 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.files where path = :'RD2' || '/cv-old.pdf')
+  and exists (select 1 from public.storage_deletion_queue where path = :'RD2' || '/cv-old.pdf')
+  and exists (select 1 from public.files where path = :'RD2' || '/cv-recent.pdf')
+  and not exists (select 1 from public.profiles where id = :'RD3')
+  and exists (select 1 from public.erasure_tombstones where subject_id = :'RD3' and channel = 'retention')
+  and exists (select 1 from public.profiles where id = :'RD4')
+  and exists (select 1 from public.applications where id = :'rdapp2'),
+  'DR486-8 po terminie usunięte (plik, profil), przed terminem zostają, wyłączona kategoria nie działa');
+select pg_temp.assert((:'rdpurge1')::jsonb ->> 'deletedFiles' = '1' and (:'rdpurge1')::jsonb ->> 'erasedProfiles' = '1'
+  and (:'rdpurge1')::jsonb ->> 'closedApplications' = '0', 'DR486-8b liczniki zadania');
+-- Okres ustawia wyłącznie admin (z audytem); rejestr usunięć nie krótszy niż retencja kopii.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_retention_policy(''closed_application'', 30)', 'PERMISSION_DENIED',
+  'DR486-8c pracodawca nie zmienia retencji');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_retention_policy(''erasure_tombstone'', 30)', 'retencja kopii',
+  'DR486-8d tombstone krótszy niż kopie → odmowa');
+select pg_temp.expect_error('select public.admin_set_retention_policy(''nie_ma'', 30)', 'NOT_FOUND', 'DR486-8e nieznana kategoria');
+select public.admin_set_retention_policy('closed_application', 30);
+select public.admin_set_retention_policy('confirmed_guest_request', 1);
+reset role; reset app.current_uid;
+-- Ślad potwierdzonego zgłoszenia gościa powiązanego z zamkniętą aplikacją (#522: okres ustala
+-- właściciel) — retencja go nie usuwa, nawet po ustawieniu wartości.
+set session_replication_role = replica;
+insert into public.guest_application_requests(job_id, email, full_name, locale, idempotency_key, status,
+    confirm_token_hash, confirm_nonce, confirm_expires_at, consent_accepted_at, confirmed_at, application_id)
+  values (:'RDJ', 'gosc-rd@test.be', 'Gość RD', 'pl', 'rd-guest-trail-1', 'confirmed', repeat('a', 64),
+    'rd-guest-nonce-0001', now() - interval '60 days', now() - interval '60 days', now() - interval '60 days', :'rdapp2')
+  returning id as rdguest \gset
+set session_replication_role = origin;
+set role service_role;
+select public.run_retention_purge(100)::text as rdpurge2 \gset
+select public.run_retention_purge(100)::text as rdpurge3 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.applications where id = :'rdapp2')
+  and exists (select 1 from public.applications where candidate_id = :'CANDA')
+  and (:'rdpurge3')::jsonb ->> 'closedApplications' = '0'
+  and (select application_id is null from public.guest_application_requests where id = :'rdguest')
+  and not ((:'rdpurge2')::jsonb ? 'confirmedGuestRequests')
+  and (select count(*) from public.audit_logs where action = 'retention.policy_changed') = 2,
+  'DR486-8f po włączeniu kategorii usunięta tylko zakończona aplikacja (ślad gościa zostaje); ponowny przebieg idempotentny');
+
+-- DR486-9: odtworzona kopia przywraca RD1 → tombstone usuwa go ponownie.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RD1','rd1@test.be','Rita D','{"role":"candidate","first_name":"Rita","last_name":"D","locale":"fr"}');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'RD1', true);
+select pg_temp.assert(exists (select 1 from public.profiles where id = :'RD1'),
+  'DR486-9 kontrola: bez ponownego zastosowania dane z kopii wracają');
+set role service_role;
+select public.apply_erasure_tombstones(array[:'RD1'::uuid, 'd4860000-0000-4000-8000-0000000000ff'::uuid])::text as rdreapply \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.profiles where id = :'RD1') and not exists (select 1 from auth.users where id = :'RD1')
+  and (:'rdreapply')::jsonb = '{"reapplied": 1, "alreadyAbsent": 1}'::jsonb
+  and (select reapplied_at is not null from public.erasure_tombstones where subject_id = :'RD1'),
+  'DR486-9b po restore osoba usunięta ponownie, tombstone oznaczony');
+
+-- ============================================================================
+-- APL43. Odwołania od decyzji moderacyjnych, terminy, retencja i raport przejrzystości
+-- (0104, #43): obie strony odwołują się bez dostępu do danych drugiej; termin od
+-- POINFORMOWANIA; rozpatruje inny człowiek; skuteczne odwołanie atomowo zmienia decyzję,
+-- treść i audyt; czyszczenie nie rusza sprawy przed końcem drogi odwołania; agregaty.
+-- =====================================================================
+\set ADMIN2 '78787878-7878-7878-7878-787878787878'
+\set APCO 'e9700000-0000-0000-0000-0000000000c1'
+\set APJ1 'e9700000-0000-0000-0000-0000000000b1'
+\set APJ2 'e9700000-0000-0000-0000-0000000000b2'
+\set APJ3 'e9700000-0000-0000-0000-0000000000b3'
+\set APJ4 'e9700000-0000-0000-0000-0000000000b4'
+\set APFACTS 'Oferta żąda od kandydatów opłaty za rekrutację z góry.'
+\set APGROUNDS 'Nie pobieramy opłat; wymóg był błędem w szablonie ogłoszenia.'
+\set APREASON 'Autor wykazał, że opłata nie była pobierana od kandydatów.'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'ADMIN2','admin2@test.be','Ad Two','{"role":"employer","first_name":"Ad","last_name":"Two","locale":"fr"}');
+update public.profiles set role = 'admin' where id = :'ADMIN2';
+insert into public.companies(id,name,status) values (:'APCO','Firma Odwołań','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'APCO',:'EMPA','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'APJ1',:'APCO','apl-job-1','Magazynier A1','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'APJ2',:'APCO','apl-job-2','Magazynier A2','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'APJ3',:'APCO','apl-job-3','Magazynier A3','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'APJ4',:'APCO','apl-job-4','Magazynier A4','warehouse','permanent','Antwerpia','Flandria','active','pl');
+
+set role service_role;
+select report_id as ar1 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'APJ1', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, 'Gość A', 'apl1@test.be', 'fr', true) \gset
+select report_id as ar2, case_number as acase2 from public.submit_content_report(:'CANDA', gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'APJ2', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, null,
+  'apl2@test.be', 'en', true) \gset
+select report_id as ar3 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'APJ3', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, null, 'apl3@test.be', 'nl', true) \gset
+select report_id as ar4, case_number as acase4 from public.submit_content_report(null, gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'APJ4', 'other', 'Opis oferty wydaje się niepełny i mylący.', null, null,
+  'apl4@test.be', 'nl', true) \gset
+select report_id as ar5, case_number as acase5 from public.submit_content_report(null, gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'APJ4', 'other', 'Opis oferty wydaje się niepełny i mylący.', 'https://example.test/x',
+  'Gość Pięć', 'apl5@test.be', 'pl', true) \gset
+select report_id as ar6 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'APJ4', 'other', 'Opis oferty wydaje się niepełny i mylący.', null, null, 'apl6@test.be', 'pl', true) \gset
+select report_id as ar7 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'APJ4', 'other', 'Opis oferty wydaje się niepełny i mylący.', null, null, 'apl7@test.be', 'pl', true) \gset
+reset role;
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'ar1', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as ad1 \gset
+select public.admin_decide_report(:'ar2', 'open', 'no_action', 'Treść nie narusza regulaminu ani prawa.') as ad2 \gset
+select public.admin_decide_report(:'ar3', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as ad3 \gset
+select public.admin_decide_report(:'ar4', 'open', 'no_action', 'Treść nie narusza regulaminu ani prawa.') as ad4 \gset
+select public.admin_decide_report(:'ar5', 'open', 'no_action', 'Treść nie narusza regulaminu ani prawa.') as ad5 \gset
+select public.admin_decide_report(:'ar6', 'open', 'no_action', 'Treść nie narusza regulaminu ani prawa.') as ad6 \gset
+select public.admin_decide_report(:'ar7', 'open', 'no_action', 'Treść nie narusza regulaminu ani prawa.') as ad7 \gset
+reset role; reset app.current_uid;
+
+-- APL43-1: odwołanie autora — tylko aktywny owner/admin firmy decyzji; cudza decyzja = NOT_FOUND.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.submit_moderation_appeal(''' || :'ad1' || ''', gen_random_uuid(), ''' || :'APGROUNDS' || ''')',
+  'permission denied', 'APL43-1 anon bez EXECUTE');
+reset role;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.submit_moderation_appeal(''' || :'ad1' || ''', gen_random_uuid(), ''' || :'APGROUNDS' || ''')',
+  'NOT_FOUND', 'APL43-1b inna firma nie odwołuje się od cudzej decyzji');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.submit_moderation_appeal(''' || :'ad2' || ''', gen_random_uuid(), ''' || :'APGROUNDS' || ''')',
+  'NOT_FOUND', 'APL43-1c zgłaszający nie korzysta ze ścieżki autora (decyzja bez ograniczenia)');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.submit_moderation_appeal(''' || :'ad2' || ''', gen_random_uuid(), ''' || :'APGROUNDS' || ''')',
+  'NOT_FOUND', 'APL43-1d autor nie odwołuje się od decyzji o braku działań');
+select pg_temp.expect_error('select * from public.submit_moderation_appeal(''' || :'ad1' || ''', gen_random_uuid(), ''za krótko'')',
+  'GROUNDS_REQUIRED', 'APL43-1e uzasadnienie odwołania wymagane');
+select 'e9700000-0000-0000-0000-00000000a001' as akey1 \gset
+select appeal_id as aa1, reference as aref1, created as acreated1
+  from public.submit_moderation_appeal(:'ad1', :'akey1', :'APGROUNDS') \gset
+select appeal_id as aa1r, created as acreated1r from public.submit_moderation_appeal(:'ad1', :'akey1', :'APGROUNDS') \gset
+select pg_temp.expect_error('select * from public.submit_moderation_appeal(''' || :'ad1' || ''', gen_random_uuid(), ''' || :'APGROUNDS' || ''')',
+  'APPEAL_EXISTS', 'APL43-1f drugie odwołanie od tej samej decyzji');
+select pg_temp.expect_error('select count(*) from public.moderation_appeals', 'permission denied',
+  'APL43-1g klient nie czyta tabeli odwołań');
+select appeal_id as aa3 from public.submit_moderation_appeal(:'ad3', gen_random_uuid(), :'APGROUNDS') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'acreated1'::boolean and not :'acreated1r'::boolean and :'aa1' = :'aa1r'
+  and :'aref1' ~ '^APL-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$',
+  'APL43-1h idempotencja: ponowienie tym samym kluczem = to samo odwołanie');
+select pg_temp.assert(
+  (select appellant_role = 'author' and appellant_id = :'EMPA'::uuid and appellant_locale = 'nl'
+          and status = 'pending' and due_at > now() from public.moderation_appeals where id = :'aa1')
+  and (select count(*) from public.email_deliveries where template = 'appealReceived' and entity_id = :'aa1'
+         and profile_id = :'EMPA' and locale = 'nl') = 1
+  and (select count(*) from public.report_events where report_id = :'ar1' and event_type = 'appeal_submitted') = 1
+  and (select count(*) from public.audit_logs where action = 'moderation.appeal_submitted' and entity_id = :'ar1') = 1,
+  'APL43-1i odwołanie: stan, e-mail w języku autora (nl), historia, audyt');
+
+-- APL43-2: odwołanie zgłaszającego — numer sprawy + kod, tylko od braku działań.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.submit_report_appeal(''' || :'acase2' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'APGROUNDS' || ''')',
+  'permission denied', 'APL43-2 klient nie woła RPC zgłaszającego z pominięciem limitera');
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.expect_error('select * from public.submit_report_appeal(''' || :'acase2' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWY'', gen_random_uuid(), ''' || :'APGROUNDS' || ''')',
+  'NOT_FOUND', 'APL43-2b zły kod dostępu = NOT_FOUND');
+select pg_temp.expect_error('select * from public.submit_report_appeal(''' || (select case_number from public.reports where id = :'ar1') || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'APGROUNDS' || ''')',
+  'INVALID_TRANSITION', 'APL43-2c zgłaszający nie odwołuje się od ograniczenia treści');
+select appeal_id as aa2 from public.submit_report_appeal(:'acase2', 'ABCDEFGHIJKLMNOPQRSTUVWX', gen_random_uuid(),
+  'Oferta nadal wymaga opłaty; załączam opis rozmowy z rekruterem.') \gset
+reset role;
+select pg_temp.assert(
+  (select appellant_role = 'reporter' and appellant_id = :'CANDA'::uuid and appellant_locale = 'pl'
+     from public.moderation_appeals where id = :'aa2')
+  and (select count(*) from public.email_deliveries where template = 'appealReceived' and entity_id = :'aa2'
+         and to_email = 'apl2@test.be' and locale = 'pl' and not (payload ? 'companyName')) = 1,
+  'APL43-2d odwołanie zgłaszającego: język profilu (pl), bez danych autora');
+
+-- APL43-3: termin od POINFORMOWANIA, nie od utworzenia rekordu.
+set role service_role;
+select pg_temp.assert(public.moderation_appeal_deadline(:'ad4') is null
+  and public.moderation_appealable(:'ad4') = 'OK',
+  'APL43-3 e-mail w kolejce: strona nie poinformowana, termin nie biegnie');
+reset role;
+update public.email_deliveries set status = 'bounced', sent_at = now() - interval '7 months'
+  where entity_id = :'ar4' and template = 'reportDecisionNoAction';
+set role service_role;
+select pg_temp.assert(public.moderation_appeal_deadline(:'ad4') is null,
+  'APL43-3b odbity e-mail nie jest poinformowaniem');
+reset role;
+update public.email_deliveries set status = 'delivered' where entity_id = :'ar4' and template = 'reportDecisionNoAction';
+set role service_role;
+select pg_temp.assert(public.moderation_appealable(:'ad4') = 'APPEAL_WINDOW_CLOSED',
+  'APL43-3c 7 miesięcy od doręczenia: termin odwołania upłynął');
+select pg_temp.expect_error('select * from public.submit_report_appeal(''' || :'acase4' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'APGROUNDS' || ''')',
+  'APPEAL_WINDOW_CLOSED', 'APL43-3d odwołanie po terminie odrzucone');
+select (public.get_report_case(:'acase4', 'ABCDEFGHIJKLMNOPQRSTUVWX'))->>'appealState' as astate4 \gset
+reset role;
+select pg_temp.assert(:'astate4' = 'APPEAL_WINDOW_CLOSED', 'APL43-3e zgłaszający widzi, że termin upłynął');
+-- Autor: odczyt powiadomienia w panelu = poinformowanie (wcześniejsze niż e-mail).
+update public.notifications set read_at = now() - interval '1 day'
+  where data->>'decisionId' = :'ad3' and profile_id = :'EMPA';
+set role service_role;
+select pg_temp.assert(public.moderation_informed_at(:'ad3') between now() - interval '25 hours' and now() - interval '23 hours',
+  'APL43-3f autor poinformowany odczytem powiadomienia w panelu');
+reset role;
+
+-- APL43-4: ponowny przegląd przez INNEGO człowieka, gdy to możliwe.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'aa1' || ''', ''pending'', ''reversed'', ''' || :'APREASON' || ''')',
+  'PERMISSION_DENIED', 'APL43-4 autor nie rozpatruje własnego odwołania');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'aa1' || ''', ''pending'', ''reversed'', ''' || :'APREASON' || ''')',
+  'REVIEWER_CONFLICT', 'APL43-4b autor decyzji nie rozpatruje odwołania, gdy jest inny admin');
+reset role; reset app.current_uid;
+-- Kontrola: jedyny administrator może rozpatrzyć — z zapisem `same_reviewer`.
+begin;
+update public.profiles set role = 'employer' where id = :'ADMIN2';
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_appeal(:'aa3', 'pending', 'upheld', 'Decyzja jest zasadna, opłata była pobierana.');
+reset role;
+select pg_temp.assert((select same_reviewer and status = 'upheld' from public.moderation_appeals where id = :'aa3'),
+  'APL43-4c jedyny admin rozpatruje odwołanie, zapis same_reviewer');
+rollback;
+
+-- APL43-5: awaria skutku cofa rozpatrzenie w całości.
+create function pg_temp.apl_fail_job() returns trigger language plpgsql as $$
+begin
+  if new.id = 'e9700000-0000-0000-0000-0000000000b1'::uuid then raise exception 'INJECTED_APPEAL_FAILURE'; end if;
+  return new;
+end $$;
+create trigger trg_apl_fail before update on public.jobs for each row execute function pg_temp.apl_fail_job();
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'aa1' || ''', ''pending'', ''reversed'', ''' || :'APREASON' || ''')',
+  'INJECTED_APPEAL_FAILURE', 'APL43-5 awaria przywrócenia przerywa rozpatrzenie');
+reset role; reset app.current_uid;
+drop trigger trg_apl_fail on public.jobs;
+select pg_temp.assert(
+  (select status = 'pending' and decided_at is null from public.moderation_appeals where id = :'aa1')
+  and not exists (select 1 from public.moderation_restorations where decision_id = :'ad1')
+  and (select status::text = 'closed' and moderation_decision_id = :'ad1'::uuid from public.jobs where id = :'APJ1')
+  and (select count(*) from public.audit_logs where action = 'moderation.appeal_decided' and entity_id = :'ar1') = 0,
+  'APL43-5b po awarii: odwołanie oczekuje, treść nadal ograniczona, bez audytu');
+
+-- APL43-6: uwzględnione odwołanie autora — cofnięcie ograniczenia, audyt, wynik w języku autora.
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'aa1' || ''', ''upheld'', ''reversed'', ''' || :'APREASON' || ''')',
+  'STALE_STATE', 'APL43-6 nieaktualny status odwołania → STALE_STATE');
+select public.admin_decide_appeal(:'aa1', 'pending', 'reversed', :'APREASON');
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'aa1' || ''', ''pending'', ''upheld'', ''' || :'APREASON' || ''')',
+  'STALE_STATE', 'APL43-6b drugie rozpatrzenie odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select a.status = 'reversed' and a.decided_by = :'ADMIN2'::uuid and not a.same_reviewer
+          and a.restoration_id = r.id and r.reason = :'APREASON'
+     from public.moderation_appeals a join public.moderation_restorations r on r.decision_id = a.decision_id
+    where a.id = :'aa1')
+  and (select status::text = 'active' and moderation_decision_id is null from public.jobs where id = :'APJ1')
+  and public.job_is_public(:'APJ1'),
+  'APL43-6c decyzja cofnięta, oferta wraca do stanu sprzed ograniczenia');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action = 'moderation.appeal_decided' and entity_id = :'ar1'
+     and actor_id = :'ADMIN2'::uuid and after_data->>'status' = 'reversed') = 1
+  and (select count(*) from public.audit_logs where action = 'moderation.restored' and entity_id = :'ar1') = 1
+  and (select count(*) from public.report_events where report_id = :'ar1' and event_type in ('restored', 'appeal_decided')) = 2
+  and (select count(*) from public.email_deliveries where template = 'appealReversed' and entity_id = :'aa1'
+         and profile_id = :'EMPA' and locale = 'nl' and payload->>'reasoning' = :'APREASON') = 1
+  and (select count(*) from public.email_deliveries where template = 'moderationRestored' and entity_id = :'ad1') = 0
+  and (select count(*) from public.notifications where profile_id = :'EMPA' and data->>'appealId' = :'aa1'
+         and data->>'decision' = 'appeal_reversed') = 1,
+  'APL43-6d audyt, historia, jeden e-mail z wynikiem w języku autora (bez dubla „przywrócono”)');
+
+-- APL43-7: uwzględnione odwołanie zgłaszającego — ponowne zastosowanie skutku.
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'aa2' || ''', ''pending'', ''reversed'', ''' || :'APREASON' || ''')',
+  'VALIDATION_FAILED: DECISION', 'APL43-7 uwzględnienie odwołania zgłaszającego wymaga rodzaju ograniczenia');
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'aa2' || ''', ''pending'', ''reversed'', ''' || :'APREASON' || ''', ''job_removed'', ''terms'', null)',
+  'GROUND_REFERENCE_REQUIRED', 'APL43-7b ograniczenie wymaga podstawy');
+select public.admin_decide_appeal(:'aa2', 'pending', 'reversed', 'Rekruter potwierdził pobieranie opłaty od kandydatów.',
+  'job_removed', 'terms', 'Regulamin § 4 ust. 2');
+reset role; reset app.current_uid;
+select new_decision_id as ad2n from public.moderation_appeals where id = :'aa2' \gset
+select pg_temp.assert(
+  (select appeal_id = :'aa2'::uuid and decision = 'job_removed' and decided_by = :'ADMIN2'::uuid
+          and previous_status = 'active' from public.moderation_decisions where id = :'ad2n')
+  and (select status::text = 'resolved' and decision_id = :'ad2n'::uuid from public.reports where id = :'ar2')
+  and (select status::text = 'closed' and moderation_decision_id = :'ad2n'::uuid from public.jobs where id = :'APJ2')
+  and not public.job_is_public(:'APJ2')
+  and (select count(*) from public.moderation_decisions where id = :'ad2') = 1,
+  'APL43-7c nowa decyzja z odwołania: treść ograniczona, sprawa wskazuje nową decyzję, pierwotna zostaje');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where template = 'moderationJobRemoved' and entity_id = :'ad2n'
+     and profile_id = :'EMPA' and locale = 'nl' and not (payload ? 'caseNumber')) = 1
+  and (select count(*) from public.email_deliveries where template = 'appealReversed' and entity_id = :'aa2'
+     and to_email = 'apl2@test.be' and locale = 'pl' and not (payload ? 'companyName')) = 1
+  and (select count(*) from public.audit_logs where action = 'moderation.decided' and entity_id = :'ar2'
+     and after_data->>'appealId' = :'aa2') = 1,
+  'APL43-7d autor dostaje uzasadnienie nowej decyzji (nl), zgłaszający wynik odwołania (pl)');
+set role service_role;
+select public.get_report_case(:'acase2', 'ABCDEFGHIJKLMNOPQRSTUVWX') as alookup2 \gset
+reset role;
+select pg_temp.assert((:'alookup2'::jsonb)->>'outcome' = 'action_taken'
+  and (:'alookup2'::jsonb)->'appeal'->>'status' = 'reversed'
+  and (:'alookup2'::jsonb)->>'appealState' is null,
+  'APL43-7e zgłaszający widzi wynik odwołania, bez kolejnej drogi odwołania');
+-- Kontrola ujemna: poza ścieżką odwołania rozstrzygniętej sprawy nie da się przepiąć ani otworzyć.
+select pg_temp.expect_error('update public.reports set decision_id = ''' || :'ad2' || ''' where id = ''' || :'ar2' || '''',
+  'nie można zmienić', 'APL43-7f decyzji sprawy nie przepina bezpośredni zapis');
+begin;
+set local pracujbe.appeal = 'on';
+select pg_temp.expect_error('update public.reports set decision_id = ''' || :'ad5' || ''', status = ''dismissed'' where id = ''' || :'ar2' || '''',
+  'nie można zmienić', 'APL43-7g sama flaga nie wystarcza — decyzja musi wynikać z odwołania tej sprawy');
+rollback;
+
+-- APL43-8: utrzymanie decyzji niczego nie zmienia; odwołanie niezmienne.
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select public.admin_decide_appeal(:'aa3', 'pending', 'upheld', 'Decyzja jest zasadna, opłata była pobierana.');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'upheld' and new_decision_id is null and restoration_id is null from public.moderation_appeals where id = :'aa3')
+  and (select status::text = 'closed' and moderation_decision_id = :'ad3'::uuid from public.jobs where id = :'APJ3')
+  and (select count(*) from public.email_deliveries where template = 'appealUpheld' and entity_id = :'aa3' and locale = 'nl') = 1,
+  'APL43-8 utrzymana decyzja: treść nadal ograniczona, wynik do autora');
+select pg_temp.expect_error('update public.moderation_appeals set grounds = ''podmiana uzasadnienia odwołania'' where id = ''' || :'aa3' || '''',
+  'niezmienne', 'APL43-8b uzasadnienie odwołania niezmienne');
+select pg_temp.expect_error('update public.moderation_appeals set status = ''reversed'' where id = ''' || :'aa3' || '''',
+  'niezmienne', 'APL43-8c wyniku nie zmienia bezpośredni zapis');
+select pg_temp.expect_error('delete from public.moderation_appeals where id = ''' || :'aa3' || '''',
+  'nie można usunąć', 'APL43-8d odwołania nie można usunąć');
+
+-- APL43-9: izolacja stron.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_company_moderation_decisions(:'APCO') where appeal_id is not null) = 2
+  and not exists (select 1 from public.get_company_moderation_decisions(:'APCO') where appeal_id = :'aa2'::uuid)
+  and (select appeal_state from public.get_company_moderation_decisions(:'APCO') where id = :'ad2n') = 'OK',
+  'APL43-9 autor widzi swoje odwołania; odwołanie zgłaszającego pozostaje niewidoczne');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.report_events where report_id = :'ar2') > 0
+  and (select count(*) from public.report_events where report_id = :'ar2' and event_type like 'appeal%') = 0,
+  'APL43-9b zgłaszający nie widzi zdarzeń odwołań w historii (RLS)');
+reset role; reset app.current_uid;
+select pg_temp.assert(position(:'APGROUNDS' in :'alookup2') = 0 and position('Firma' in :'alookup2') = 0,
+  'APL43-9c wynik dla zgłaszającego bez danych autora');
+
+-- APL43-10: retencja — dry-run, termin od poinformowania, anonimizacja bez utraty agregatów.
+-- ar5: poinformowany 2 lata temu → poza drogą odwołania i retencją; ar6: poinformowany
+-- 7 mies. temu, zamknięty 2 lata temu → nadal w retencji (naiwne „resolved_at + 12 mies.”
+-- usunęłoby go); ar7: nigdy nie poinformowany → czeka; ar2: odwołanie rozstrzygnięte dziś.
+update public.email_deliveries set status = 'sent', sent_at = now() - interval '2 years'
+  where entity_id = :'ar5' and template = 'reportDecisionNoAction';
+update public.email_deliveries set status = 'sent', sent_at = now() - interval '7 months'
+  where entity_id = :'ar6' and template = 'reportDecisionNoAction';
+update public.reports set resolved_at = now() - interval '2 years' where id in (:'ar5', :'ar6', :'ar7');
+select pg_temp.assert((select resolved_at + public.dsa_case_retention() < now() from public.reports where id = :'ar6'),
+  'APL43-10 kontrola: naiwna retencja od zamknięcia objęłaby już sprawę ar6');
+set role service_role;
+select public.dsa_transparency_report(now() - interval '1 day', now() + interval '1 day') as atr_before \gset
+select public.dsa_retention_run(true) as adry \gset
+select pg_temp.assert(
+  exists (select 1 from public.dsa_retention_cases() where report_id = :'ar5' and eligible_at <= now())
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'ar6' and eligible_at > now())
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'ar7' and retention_start is null)
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'ar2' and (retention_start is null or eligible_at > now())),
+  'APL43-10b kwalifikacja: tylko sprawa poza terminem odwołania od poinformowania i retencją');
+reset role;
+select pg_temp.assert((:'adry'::jsonb)->>'dryRun' = 'true' and ((:'adry'::jsonb)->>'eligibleCases')::int >= 1
+  and (select reporter_email is not null and redacted_at is null from public.reports where id = :'ar5')
+  and (select count(*) from public.dsa_retention_runs where dry_run) = 1,
+  'APL43-10c dry-run: raport zapisany, dane nienaruszone');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.dsa_retention_run(false)', 'permission denied',
+  'APL43-10d czyszczenie tylko service_role');
+select pg_temp.expect_error('select public.dsa_transparency_report(now() - interval ''1 day'', now())', 'permission denied',
+  'APL43-10e raport przejrzystości tylko przez panel (service_role)');
+reset role; reset app.current_uid;
+select pg_temp.expect_error('update public.reports set reporter_email = null where id = ''' || :'ar5' || '''',
+  'niezmienna', 'APL43-10f poza przebiegiem retencji dane sprawy niezmienne');
+set role service_role;
+select public.dsa_retention_run(false) as arun \gset
+select pg_temp.assert(public.get_report_case(:'acase5', 'ABCDEFGHIJKLMNOPQRSTUVWX') is null,
+  'APL43-10g po anonimizacji sprawy nie da się odczytać kodem dostępu');
+select public.dsa_transparency_report(now() - interval '1 day', now() + interval '1 day') as atr_after \gset
+reset role;
+select pg_temp.assert(
+  (select redacted_at is not null and reporter_email is null and reporter_name is null and content_url is null
+          and details is null and target_snapshot is null and access_code_hash is null
+          and case_number = :'acase5' and category = 'other' and status::text = 'dismissed'
+     from public.reports where id = :'ar5')
+  and (select facts is null and redacted_at is not null and decision = 'no_action' from public.moderation_decisions where id = :'ad5')
+  and (select count(*) from public.email_deliveries where entity_id = :'ar5' and payload <> '{}'::jsonb) = 0
+  and (select count(*) from public.report_events where report_id = :'ar5' and event_type = 'redacted') = 1,
+  'APL43-10h anonimizacja: dane osobowe i dowód usunięte, kategoria/rodzaj/daty zostają');
+select pg_temp.assert(
+  (select redacted_at is null and reporter_email is not null from public.reports where id = :'ar6')
+  and (select redacted_at is null from public.reports where id = :'ar7')
+  and (select redacted_at is null and details is not null from public.reports where id = :'ar2')
+  and (select grounds is not null from public.moderation_appeals where id = :'aa2'),
+  'APL43-10i sprawy w terminie odwołania, niepoinformowane i świeżo po odwołaniu — nienaruszone');
+select pg_temp.assert((:'arun'::jsonb)->>'dryRun' = 'false' and ((:'arun'::jsonb)->>'redactedCases')::int >= 1
+  and (select count(*) from public.audit_logs where action = 'dsa.retention_run') = 1
+  and (:'atr_before'::jsonb)->'decisions' = (:'atr_after'::jsonb)->'decisions',
+  'APL43-10j przebieg zapisany i w audycie; agregaty raportu bez zmian po anonimizacji');
+
+-- APL43-11: raport przejrzystości i eksport — liczby i brak danych osobowych.
+set role service_role;
+select public.dsa_transparency_report(now() - interval '1 day', now() + interval '1 day') as atr \gset
+select pg_temp.assert(
+  ((:'atr'::jsonb)->'appeals'->>'total')::int = (select count(*) from public.moderation_appeals)
+  and ((:'atr'::jsonb)->'appeals'->'byStatus'->>'reversed')::int = 2
+  and ((:'atr'::jsonb)->'appeals'->'byAppellant'->>'reporter')::int = 1
+  and ((:'atr'::jsonb)->'decisions'->>'fromAppeal')::int = 1
+  and ((:'atr'::jsonb)->'decisions'->>'total')::int = (select count(*) from public.moderation_decisions
+                                                         where decided_at > now() - interval '1 day')
+  and ((:'atr'::jsonb)->'decisions'->>'automatedDecision')::int = 0
+  and ((:'atr'::jsonb)->'restorations'->>'viaAppeal')::int = 1
+  and ((:'atr'::jsonb)->'notices'->'byCategory'->>'fraud')::int
+        = (select count(*) from public.reports where kind = 'dsa_notice' and category = 'fraud'
+             and created_at > now() - interval '1 day'),
+  'APL43-11 agregaty: zgłoszenia, podstawy, automatyzacja, odwołania i odwrócone decyzje');
+select pg_temp.assert(
+  (select count(*) from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day'))
+    = (select count(*) from public.moderation_decisions where decided_at > now() - interval '1 day')
+  and not exists (select 1 from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day') e
+                   where to_jsonb(e)::text ~ '@|Gość|Oferta żąda'),
+  'APL43-11b eksport: wiersz na decyzję, bez adresów, imion i faktów');
+select pg_temp.expect_error('select public.dsa_transparency_report(now(), now() - interval ''1 day'')',
+  'VALIDATION_FAILED', 'APL43-11c zły okres raportu');
+reset role;
 -- ============================================================================
 -- CJ186. Zaufany odczyt oferty do materiałów kampanii (#186, #175, 0102): tylko aktywna,
 -- niedemonstracyjna, niewygasła oferta zweryfikowanej firmy; wąskie pola bez PII; wejście

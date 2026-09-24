@@ -132,6 +132,8 @@ describe('company moderation decisions', () => {
         id: 'd1', reference: 'DEC-1', decision: 'job_removed', jobTitle: 'Magazynier', facts: 'F',
         groundType: 'terms', groundReference: '§3', automatedDetection: false,
         decidedAt: '2026-09-01T10:00:00Z', restoredAt: null, restoreReason: null,
+        // #43: bez pól odwołania w wierszu — brak drogi i brak własnego odwołania.
+        appealState: null, appealDeadline: null, appeal: null,
       }],
     });
     expect(fakeDb.callsTo('get_company_moderation_decisions')[0]).toMatchObject({

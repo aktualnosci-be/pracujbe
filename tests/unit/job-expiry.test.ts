@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { effectiveJobStatus, isPastExpiry, notExpiredFilter } from '@/lib/job-expiry';
 
-vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn() }));
+vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(), fileBucketConfig: () => null }));
+// Bez bucketu Railway kolejka storage używa (przejściowo) klienta Storage Supabase.
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => ({ storage: { from: () => ({ remove: async () => ({ error: null }) }) } }),
+}));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
@@ -64,12 +68,15 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     'purge_guest_application_requests',
     'process_saved_search_alerts',
     'process_email_campaigns',
+    'run_retention_purge',
+    'claim_storage_deletions',
   ];
 
   beforeEach(() => {
     vi.resetAllMocks();
     resetFakeDb(null);
     for (const fn of TASKS) fakeDb.rpc(fn, 0);
+    fakeDb.rpc('claim_storage_deletions', []);
     process.env.MAINTENANCE_SECRET = 'maintenance-secret';
     delete process.env.CRON_SECRET;
     vi.mocked(isProductionMode).mockReturnValue(true);
@@ -96,6 +103,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       savedSearchDigests: 0,
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,
+      retention: {},
+      storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
     });
   });
 

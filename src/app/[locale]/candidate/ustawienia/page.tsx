@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { loadNotificationPreferences } from '@/lib/data/notification-preferences';
 import { loadMyCompanyBlocks } from '@/lib/data/company-blocks';
 import { loadProfileVisibility } from '@/lib/data/profile-visibility';
+import { AccountDataSettings } from '@/components/settings/AccountDataSettings';
 import { CompanyBlocksSettings } from '@/components/settings/CompanyBlocksSettings';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
@@ -13,7 +14,7 @@ import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
  * Panel kandydata — Ustawienia (preferencje powiadomień, Etap 6; widoczność profilu, #494;
- * zablokowane firmy, #97).
+ * zablokowane firmy, #97; pobranie danych i usunięcie konta, #486).
  *
  * Formularz przełączników preferencji (`notification_preferences`), dane pod sesją/RLS z
  * `@/lib/data/notification-preferences`; bez env — wartości domyślne. Błąd odczytu → stan
@@ -91,6 +92,8 @@ export default async function CandidateSettingsPage({
           </p>
         </section>
       )}
+
+      <AccountDataSettings />
     </div>
   );
 }

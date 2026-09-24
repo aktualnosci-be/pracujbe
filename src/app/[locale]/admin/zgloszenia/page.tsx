@@ -96,6 +96,9 @@ const EVENT_LABEL: Record<string, string> = {
   decision: 'caseEventDecision',
   restored: 'caseEventRestored',
   flagged: 'caseEventFlagged',
+  appeal_submitted: 'caseEventAppealSubmitted',
+  appeal_decided: 'caseEventAppealDecided',
+  redacted: 'caseEventRedacted',
 };
 
 /** Etykieta statusu w historii sprawy. */

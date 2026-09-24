@@ -15,6 +15,8 @@ import {
 } from '@/lib/validation/content-report';
 import {
   FIXTURE_CASE_NUMBER,
+  FIXTURE_DISMISSED_CASE_NUMBER,
+  fixtureDismissedReportCase,
   fixtureReportCase,
   isReportFixtureMode,
   parseReportCase,
@@ -135,9 +137,9 @@ export async function lookupReportCase(input: ReportCaseLookupInput): Promise<Lo
 
   if (!isServiceDatabaseConfigured()) {
     if (isReportFixtureMode()) {
-      return caseNumber === FIXTURE_CASE_NUMBER
-        ? { ok: true, report: fixtureReportCase() }
-        : { ok: false, error: 'NOT_FOUND' };
+      if (caseNumber === FIXTURE_CASE_NUMBER) return { ok: true, report: fixtureReportCase() };
+      if (caseNumber === FIXTURE_DISMISSED_CASE_NUMBER) return { ok: true, report: fixtureDismissedReportCase() };
+      return { ok: false, error: 'NOT_FOUND' };
     }
     return { ok: false, error: 'DEMO_UNAVAILABLE' };
   }

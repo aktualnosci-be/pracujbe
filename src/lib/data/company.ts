@@ -11,6 +11,7 @@
  * członkostw, FUN-07), czytany w tej samej transakcji.
  */
 
+import { isAppealStatus, parseAppealState, type AppealState, type AppealStatus } from '@/lib/admin/appeals';
 import { getActiveCompany } from '@/lib/company-context';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, rpcRows } from '@/lib/db/sql';
@@ -147,6 +148,22 @@ export interface CompanyModerationDecision {
   decidedAt: string;
   restoredAt: string | null;
   restoreReason: string | null;
+  /** Droga odwołania (#43, `moderation_appealable`): `OK` = można się odwołać. */
+  appealState: AppealState | null;
+  /** Koniec terminu odwołania; null = termin jeszcze nie biegnie (brak poinformowania). */
+  appealDeadline: string | null;
+  /** Własne odwołanie autora od tej decyzji albo null. */
+  appeal: CompanyModerationAppeal | null;
+}
+
+export interface CompanyModerationAppeal {
+  id: string;
+  reference: string;
+  status: AppealStatus;
+  submittedAt: string;
+  dueAt: string | null;
+  decidedAt: string | null;
+  reasoning: string | null;
 }
 
 export type CompanyModerationLoad =
@@ -180,6 +197,20 @@ export async function getCompanyModerationDecisions(companyId: string): Promise<
         decidedAt: asString(row['decided_at']),
         restoredAt: asNullableString(row['restored_at']),
         restoreReason: asNullableString(row['restore_reason']),
+        appealState: parseAppealState(row['appeal_state']),
+        appealDeadline: asNullableString(row['appeal_deadline']),
+        appeal:
+          typeof row['appeal_id'] === 'string' && isAppealStatus(row['appeal_status'])
+            ? {
+                id: row['appeal_id'],
+                reference: asString(row['appeal_reference']),
+                status: row['appeal_status'],
+                submittedAt: asString(row['appeal_submitted_at']),
+                dueAt: asNullableString(row['appeal_due_at']),
+                decidedAt: asNullableString(row['appeal_decided_at']),
+                reasoning: asNullableString(row['appeal_reasoning']),
+              }
+            : null,
       })),
     };
   } catch (error) {
