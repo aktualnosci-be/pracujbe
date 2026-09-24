@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { effectiveJobStatus, isPastExpiry, notExpiredFilter } from '@/lib/job-expiry';
 
-vi.mock('@/lib/env', () => ({ hasServiceRoleKey: vi.fn(), isProductionMode: vi.fn() }));
+vi.mock('@/lib/env', () => ({ hasServiceRoleKey: vi.fn(), isProductionMode: vi.fn(), fileBucketConfig: () => null }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
@@ -89,6 +89,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       savedSearchDigests: 0,
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,
+      retention: {},
+      storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
     });
   });
 

@@ -17,3 +17,12 @@ export const PUBLIC_JOBS_REVALIDATE_SECONDS = 60;
 export function prerenderParamsAtBuild<T>(params: readonly T[]): T[] {
   return isDatabaseConfigured() ? [] : [...params];
 }
+
+/**
+ * Czy kod wykonuje się w `next build` (prerender). Build nie łączy się z bazą (patrz wyżej),
+ * więc odczyty ofert zwracają wtedy pusty wynik zamiast danych demonstracyjnych; ISR po starcie
+ * serwera odświeża stronę realnymi danymi.
+ */
+export function isBuildPhase(): boolean {
+  return process.env.NEXT_PHASE === 'phase-production-build';
+}

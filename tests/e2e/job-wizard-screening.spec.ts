@@ -96,3 +96,28 @@ test('opublikowana oferta: pytania tylko do odczytu (#101)', async ({ page }) =>
   await expect(page.getByTestId('screening-read-only')).toHaveText(t.screeningReadOnly);
   await expect(page.getByRole('button', { name: t.screeningAdd })).toHaveCount(0);
 });
+
+// #497: pytanie mogące dotyczyć danych chronionych ma informację o przeglądzie przed
+// publikacją (detektor = te same wzorce co baza); typowe pytanie jej nie ma (kontrola ujemna).
+test('pytania screeningowe: informacja o przeglądzie tylko przy pytaniu wysokiego ryzyka', async ({ page }) => {
+  await page.goto('/pl/employer/oferty/nowa');
+  await page.getByRole('button', { name: pl.cookies.rejectOptional }).click();
+  await goToStep7(page);
+
+  const add = page.getByRole('button', { name: t.screeningAdd });
+  await add.click();
+  await add.click();
+  const first = page.getByTestId('screening-question-1');
+  const second = page.getByTestId('screening-question-2');
+  await first.getByLabel(promptLabel).fill('Czy masz prawo jazdy C+E?');
+  await second.getByLabel(promptLabel).fill('Ile masz lat?');
+
+  const hint = page.getByTestId('screening-question-2-review');
+  await expect(hint).toContainText(pl.screeningReview.categoryAge);
+  await expect(second.getByLabel(promptLabel)).toHaveAttribute('aria-describedby', /job-sq-1-risk/);
+  await expect(page.getByTestId('screening-question-1-review')).toHaveCount(0);
+
+  // Poprawa treści usuwa informację.
+  await second.getByLabel(promptLabel).fill('Od kiedy możesz zacząć?');
+  await expect(hint).toHaveCount(0);
+});

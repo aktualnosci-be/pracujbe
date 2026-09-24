@@ -53,6 +53,7 @@ const ROUTES = [
   'employer/oferty',
   'employer/oferty/nowa',
   'employer/oferty/12345/edycja',
+  'employer/oferty/12345/baner',
   'employer/platnosci',
   'employer/statystyki',
   'employer/ustawienia',
