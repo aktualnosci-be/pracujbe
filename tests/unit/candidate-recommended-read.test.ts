@@ -92,8 +92,18 @@ describe('polecane oferty kandydata', () => {
   });
 
   it('gdy żadne dopasowanie nie jest już publiczne → fallback najnowszych bez procentu', async () => {
-    client({ matches: [{ job_id: 'gone', score: 99 }], publicJobs: [job], byIds: [] });
+    client({ matches: [{ job_id: 'gone', score: 99 }], publicJobs: [job], byIds: [job] });
     await expect(getRecommendedJobs('pl', true)).resolves.toMatchObject([{ id: 'job-1', match: null }]);
+  });
+
+  it('fallback pomija oferty, których RPC po ID nie zwraca pod sesją (firma zablokowana, #97)', async () => {
+    const blocked = { ...job, id: 'job-blocked', slug: 'zablokowana', company_name: 'Zablokowana' };
+    const { supabase } = client({ publicJobs: [blocked, job], byIds: [job] });
+    const result = await getRecommendedJobs('pl', true);
+    expect(result.map((r) => r.id)).toEqual(['job-1']);
+    expect(supabase.rpc).toHaveBeenCalledWith('get_public_jobs_by_ids', {
+      p_ids: ['job-blocked', 'job-1'], p_locale: 'pl',
+    });
   });
 
   it('bez dopasowań pokazuje najnowszą publiczną ofertę bez wymyślonego procentu', async () => {

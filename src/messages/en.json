@@ -1515,5 +1515,24 @@
     "contactProposalsDesc": "You can send the candidate a job proposal, which they accept or decline.",
     "finalTitle": "Ready to post your first job offer?",
     "finalDesc": "Create an employer account. You will publish the offer once the company is verified."
+  },
+  "companyBlocks": {
+    "sectionTitle": "Blocked companies",
+    "sectionDescription": "A blocked company cannot see your profile, will not find you among candidates, cannot send you a job offer or a new message, and its jobs disappear from your recommendations. The company is not told about the block. Your existing applications and conversations are kept.",
+    "empty": "You have not blocked any companies. You can block a company on the page of one of its jobs.",
+    "blockedAt": "Blocked on {date}",
+    "unblock": "Unblock",
+    "unblockNamed": "Unblock company {company}",
+    "unblocking": "Unblocking…",
+    "unblockedSuccess": "{company} has been unblocked.",
+    "loadError": "We could not load your blocked companies. Please refresh the page in a moment.",
+    "saveError": "We could not save the change. Please try again.",
+    "jobTitle": "Contact with this company",
+    "jobDescription": "If you do not want {company} to see your profile or contact you, you can block it. The company will not be told.",
+    "jobBlockedDescription": "{company} is blocked: it cannot see your profile or send you a job offer or message. Its jobs do not appear in your recommendations.",
+    "block": "Block company",
+    "blocking": "Blocking…",
+    "blockedSuccess": "{company} has been blocked.",
+    "manage": "Manage blocked companies"
   }
 }

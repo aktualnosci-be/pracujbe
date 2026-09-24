@@ -557,6 +557,16 @@ kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma w
 Baner nowej propozycji prowadzi do `/candidate/propozycje#offer-{id}` (#324); „Najnowsze
 wiadomości” linkują do `?c={id}` (#340); menu „…” aplikacji ma pełny wzorzec ARIA menu (#341).
 
+Blokada firmy przez kandydata (#97, migracja `0078`): tabela `candidate_company_blocks`
+(RPC-only `set_company_block`, odczyt `get_my_company_blocks`/`get_job_company_block`, firma nie
+ma ścieżki odczytu). Egzekwowanie w bazie: `company_can_view_candidate` (profil/PII),
+wyszukiwanie (`candidate_profiles_select_employer`, `candidate_profile_is_searchable`), `matches`,
+triggery BEFORE INSERT na `offers`/`conversations`/`messages` (neutralny błąd jak brak relacji),
+polecane (`get_public_jobs_by_ids` pod sesją). Historia aplikacji/rozmów zostaje. UI: sekcja
+„Zablokowane firmy” w `/candidate/ustawienia` + kontrolka na szczególe oferty. Dowód: `rls.sql`
+sekcja BL. **Do zrobienia:** publiczna lista `/oferty-pracy` celowo działa jako gość (anon),
+więc oferty zablokowanej firmy nadal są w wynikach listy — personalizacja wymaga osobnej decyzji.
+
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
 

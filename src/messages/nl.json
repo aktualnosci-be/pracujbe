@@ -1515,5 +1515,24 @@
     "contactProposalsDesc": "Je kunt de kandidaat een jobvoorstel sturen dat de kandidaat aanvaardt of weigert.",
     "finalTitle": "Wil je je eerste vacature plaatsen?",
     "finalDesc": "Maak een werkgeversaccount aan. Je publiceert de vacature na de verificatie van het bedrijf."
+  },
+  "companyBlocks": {
+    "sectionTitle": "Geblokkeerde bedrijven",
+    "sectionDescription": "Een geblokkeerd bedrijf ziet je profiel niet, vindt je niet tussen de kandidaten, kan je geen voorstel of nieuw bericht sturen en zijn vacatures verdwijnen uit je aanbevelingen. Het bedrijf krijgt geen melding van de blokkering. Je bestaande sollicitaties en gesprekken blijven bewaard.",
+    "empty": "Je hebt geen geblokkeerde bedrijven. Je kunt een bedrijf blokkeren op de pagina van zijn vacature.",
+    "blockedAt": "Geblokkeerd op {date}",
+    "unblock": "Deblokkeren",
+    "unblockNamed": "Bedrijf {company} deblokkeren",
+    "unblocking": "Deblokkeren…",
+    "unblockedSuccess": "Bedrijf {company} is gedeblokkeerd.",
+    "loadError": "De lijst met geblokkeerde bedrijven kon niet worden geladen. Vernieuw de pagina straks.",
+    "saveError": "De wijziging kon niet worden opgeslagen. Probeer het opnieuw.",
+    "jobTitle": "Contact met dit bedrijf",
+    "jobDescription": "Wil je niet dat {company} je profiel ziet en contact met je opneemt, dan kun je het bedrijf blokkeren. Het bedrijf krijgt hier geen melding van.",
+    "jobBlockedDescription": "{company} is geblokkeerd: het ziet je profiel niet en kan je geen voorstel of bericht sturen. Zijn vacatures verschijnen niet in je aanbevelingen.",
+    "block": "Bedrijf blokkeren",
+    "blocking": "Blokkeren…",
+    "blockedSuccess": "Bedrijf {company} is geblokkeerd.",
+    "manage": "Geblokkeerde bedrijven beheren"
   }
 }
