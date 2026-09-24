@@ -161,6 +161,8 @@ describe('Wgrywanie CV — rozmiar i format (#362)', () => {
     pick(container, fakeFile('cv.pdf', 'application/pdf', 1024));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(pl.files.uploadError);
-    expect(screen.getByRole('button', { name: pl.files.upload })).toBeEnabled();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: pl.files.upload })).toBeEnabled();
+    });
   });
 });

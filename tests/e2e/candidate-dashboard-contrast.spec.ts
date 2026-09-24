@@ -12,7 +12,7 @@ for (const locale of ['pl', 'nl', 'fr', 'en']) {
     await page.setViewportSize({ width: 320, height: 800 });
     await page.goto(`/${locale}/candidate`);
     await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('link', { name: messages.dashboard.viewProposal })).toHaveClass(/text-accent-dark/);
+    await expect(page.getByRole('link', { name: messages.dashboard.viewProposal })).toHaveClass(/bg-primary/);
     await expect(page.getByText(messages.status.rejected, { exact: true })).toHaveClass(/text-error-text/);
 
     await expectNoContrastViolations(page, `${locale}/candidate`);

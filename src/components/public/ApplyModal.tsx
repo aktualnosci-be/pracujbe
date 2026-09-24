@@ -24,7 +24,11 @@ import {
   type ScreeningAnswerValue,
   type ScreeningQuestion,
 } from '@/lib/screening/questions';
-import { ScreeningQuestionsFields, screeningFieldId } from '@/components/public/ScreeningQuestionsFields';
+import {
+  ScreeningQuestionsFields,
+  screeningFieldId,
+  type ScreeningAnswerError,
+} from '@/components/public/ScreeningQuestionsFields';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
@@ -39,6 +43,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Toast } from '@/components/ui/toast';
+import {
+  BTN_PRIMARY,
+  BTN_RESET,
+  BTN_SECONDARY,
+  FORM_ERROR,
+  FORM_FIELD,
+  FORM_INPUT,
+  FORM_LABEL_TEXT,
+  FORM_SELECT,
+  H2_EXTENDED,
+} from '@/components/dashboard/panel-styles';
 
 /**
  * ApplyModal — modal „Aplikuj teraz” (szybka aplikacja) wg makiety 03-job-detail.
@@ -148,15 +163,16 @@ export function ApplyModal({
   const [message, setMessage] = React.useState('');
   const [consent, setConsent] = React.useState(false);
   const [answers, setAnswers] = React.useState<Record<string, ScreeningAnswerValue>>({});
-  const [answerErrors, setAnswerErrors] = React.useState<Record<string, true>>({});
+  const [answerErrors, setAnswerErrors] = React.useState<Record<string, ScreeningAnswerError>>({});
   const [submitting, setSubmitting] = React.useState(false);
-  const [errors, setErrors] = React.useState<{ phone?: PhoneError; consent?: boolean }>({});
+  const [errors, setErrors] = React.useState<{ phone?: PhoneError; message?: 'sensitiveId'; consent?: boolean }>({});
   const [formError, setFormError] = React.useState<FormError | null>(null);
   const [sent, setSent] = React.useState(false);
   // #393: formularz renderuje się w transition po pierwszej ramce dialogu, żeby tap „Aplikuj”
   // malował od razu ramkę z tytułem i przyciskiem zamknięcia (INP).
   const [formReady, setFormReady] = React.useState(false);
   const phoneRef = React.useRef<HTMLInputElement>(null);
+  const messageRef = React.useRef<HTMLTextAreaElement>(null);
   const consentRef = React.useRef<HTMLButtonElement>(null);
   const formErrorRef = React.useRef<HTMLDivElement>(null);
   // Jeden klucz na otwarcie modalu: ponowienie po błędzie = ta sama próba (Invariant #4).
@@ -284,6 +300,17 @@ export function ApplyModal({
       setErrors({ phone: 'invalid' });
       phoneRef.current?.focus();
       phoneRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else if (res.reason === 'sensitiveId' && res.field === 'message') {
+      // #495: numer NISS/BIS lub dokumentu w wiadomości — błąd przy polu, dane zostają.
+      setErrors({ message: 'sensitiveId' });
+      messageRef.current?.focus();
+      messageRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else if (res.reason === 'sensitiveId' && res.questionId) {
+      const questionId = res.questionId;
+      setAnswerErrors({ [questionId]: 'sensitiveId' });
+      const field = document.getElementById(screeningFieldId(questionId));
+      field?.focus();
+      field?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     } else if (res.error === 'SCREENING_ANSWER_REQUIRED' && res.questionId) {
       // Baza odrzuciła brak odpowiedzi na pytanie wymagane — błąd przy tym pytaniu.
       const questionId = res.questionId;
@@ -336,20 +363,20 @@ export function ApplyModal({
         <LightDialogContent
           open={open}
           overlayClassName="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-          className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-[22px] border border-border bg-card p-7 shadow-lg max-[600px]:rounded-[18px] max-[600px]:p-5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
         >
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <Dialog.Title className="text-lg font-semibold text-foreground">
+              <Dialog.Title className={H2_EXTENDED}>
                 {demo ? t('demoJobTitle') : t('title')}
               </Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-muted-foreground">
+              <Dialog.Description className="mt-1.5 text-sm leading-[1.6] text-muted-foreground">
                 {demo ? t('demoJobBody') : isGuest ? tGuest('subtitle') : t('subtitle')}
               </Dialog.Description>
             </div>
             <Dialog.Close
               aria-label={t('close')}
-              className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-9 w-9')}
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), '-mr-2 -mt-2 h-11 w-11 shrink-0 rounded-[10px]')}
             >
               <X className="h-5 w-5" aria-hidden="true" />
             </Dialog.Close>
@@ -369,43 +396,43 @@ export function ApplyModal({
                 contentLocale={contentLocale}
               />
             ) : null}
-            <p className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+            <p className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
               {tGuest('orAccount')}
             </p>
             <div className="space-y-3" data-testid="apply-guest">
               <Link
                 href={registerHref(pathname)}
-                className={cn(buttonVariants({ size: 'lg' }), 'h-auto min-h-12 w-full whitespace-normal text-center')}
+                className={cn(BTN_PRIMARY, 'w-full')}
               >
                 <UserPlus className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {t('guestRegister')}
               </Link>
               <Link
                 href={loginHref(pathname)}
-                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'h-auto min-h-12 w-full whitespace-normal text-center')}
+                className={cn(BTN_SECONDARY, 'w-full')}
               >
                 <LogIn className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {t('guestLogin')}
               </Link>
-              <p className="text-center text-sm text-muted-foreground">{t('guestReturn')}</p>
+              <p className="text-center text-[13px] text-muted-foreground">{t('guestReturn')}</p>
             </div>
             </div>
           ) : (
             <>
-            <div className="mb-4 flex items-start gap-2 rounded-lg bg-success/10 p-3 text-sm text-success-text">
+            <div className="mb-5 flex items-start gap-2 rounded-[8px] bg-success/10 px-3 py-2.5 text-[13px] text-success-text">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{t('profileNote')}</span>
             </div>
 
             {formReady ? (
-              <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-                <div className="space-y-1.5">
-                  <Label htmlFor="apply-phone">
+              <form className="flex min-w-0 flex-col gap-5" onSubmit={handleSubmit} noValidate>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor="apply-phone" className={FORM_LABEL_TEXT}>
                     {t('phone')} <span className="text-error" aria-hidden="true">*</span>
                   </Label>
                   <div className="flex gap-2">
                     <Select value={dial} onValueChange={(value) => setDial(value as PhoneCountry)}>
-                      <SelectTrigger aria-label={t('dialCode')} className="w-28 shrink-0">
+                      <SelectTrigger aria-label={t('dialCode')} className={cn(FORM_SELECT, 'w-28 shrink-0')}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -427,25 +454,25 @@ export function ApplyModal({
                       aria-required="true"
                       aria-invalid={errors.phone ? true : undefined}
                       aria-describedby={errors.phone ? 'apply-phone-error' : undefined}
-                      className={cn('flex-1', errors.phone ? 'border-error' : undefined)}
+                      className={cn(FORM_INPUT, 'flex-1', errors.phone ? 'border-error' : undefined)}
                     />
                   </div>
                   {errors.phone ? (
-                    <p id="apply-phone-error" className="text-sm text-error">
+                    <p id="apply-phone-error" className={FORM_ERROR}>
                       {errors.phone === 'invalid' ? t('phoneInvalid') : t('phoneRequired')}
                     </p>
                   ) : null}
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="apply-availability">
+                <div className={FORM_FIELD}>
+                  <Label htmlFor="apply-availability" className={FORM_LABEL_TEXT}>
                     {t('availability')} <span className="text-error" aria-hidden="true">*</span>
                   </Label>
                   <Select
                     value={availability}
                     onValueChange={(value) => setAvailability(value as Availability)}
                   >
-                    <SelectTrigger id="apply-availability" aria-label={t('availability')}>
+                    <SelectTrigger id="apply-availability" aria-label={t('availability')} className={FORM_SELECT}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -458,16 +485,31 @@ export function ApplyModal({
                   </Select>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="apply-message">{t('message')}</Label>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor="apply-message" className={FORM_LABEL_TEXT}>{t('message')}</Label>
                   <Textarea
+                    ref={messageRef}
                     id="apply-message"
                     value={message}
-                    onChange={(event) => setMessage(event.target.value.slice(0, MESSAGE_MAX))}
+                    onChange={(event) => {
+                      setMessage(event.target.value.slice(0, MESSAGE_MAX));
+                      if (errors.message) setErrors((current) => ({ ...current, message: undefined }));
+                    }}
                     placeholder={t('messagePlaceholder')}
                     maxLength={MESSAGE_MAX}
                     rows={4}
+                    aria-invalid={errors.message ? true : undefined}
+                    aria-describedby={errors.message ? 'apply-message-error apply-message-hint' : 'apply-message-hint'}
+                    className={cn(FORM_INPUT, errors.message ? 'border-error' : undefined)}
                   />
+                  <p id="apply-message-hint" className="text-xs leading-[1.5] text-muted-foreground">
+                    {t('sensitiveIdHint')}
+                  </p>
+                  {errors.message ? (
+                    <p id="apply-message-error" className={FORM_ERROR}>
+                      {t('sensitiveIdNotAllowed')}
+                    </p>
+                  ) : null}
                   <p className="text-right text-xs tabular-nums text-muted-foreground">
                     {message.length} / {MESSAGE_MAX}
                   </p>
@@ -496,7 +538,7 @@ export function ApplyModal({
                   }}
                 />
 
-                <div className="flex items-start gap-2.5">
+                <div className="flex items-start gap-[9px]">
                   <Checkbox
                     ref={consentRef}
                     id="apply-consent"
@@ -509,13 +551,13 @@ export function ApplyModal({
                   />
                   <Label
                     htmlFor="apply-consent"
-                    className="cursor-pointer text-sm font-normal leading-snug text-muted-foreground"
+                    className="cursor-pointer text-[13px] font-normal leading-[1.5] text-foreground"
                   >
                     {t('consent')}
                   </Label>
                 </div>
                 {errors.consent ? (
-                  <p id="apply-consent-error" className="-mt-2 text-sm text-error">
+                  <p id="apply-consent-error" className={cn(FORM_ERROR, '-mt-3')}>
                     {t('consentRequired')}
                   </p>
                 ) : null}
@@ -525,7 +567,7 @@ export function ApplyModal({
                     ref={formErrorRef}
                     role="alert"
                     tabIndex={-1}
-                    className="rounded-lg bg-error/10 p-3 text-sm text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-[16px] border border-error/30 bg-error/5 px-5 py-4 text-[13px] text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {formError === 'login' ? (
                       <Link href={loginHref(pathname)} className="font-medium underline">
@@ -554,12 +596,12 @@ export function ApplyModal({
                   </div>
                 ) : null}
 
-                <Button type="submit" className="w-full" disabled={submitting}>
+                <Button type="submit" className={cn(BTN_PRIMARY, BTN_RESET, 'w-full')} disabled={submitting}>
                   <Lock className="h-4 w-4" aria-hidden="true" />
                   {submitting ? t('submitting') : t('submit')}
                 </Button>
 
-                <p className="text-center text-xs text-muted-foreground">
+                <p className="text-center text-xs leading-[1.6] text-muted-foreground">
                   {t('sentTo', { company: companyName })}
                 </p>
               </form>

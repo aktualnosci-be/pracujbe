@@ -65,8 +65,9 @@ export function SaveJobButton({
         aria-pressed={saved}
         title={label}
         className={cn(
-          'inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-soft disabled:opacity-50',
-          saved ? 'text-accent' : 'text-muted-foreground hover:text-accent',
+          // `.p-save` z prototypu (jasne tło marki i czerwień po zapisaniu); cel 48 px zamiast 30 px.
+          'relative z-10 inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] transition-colors disabled:opacity-50 [&_svg]:size-[18px]',
+          saved ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-soft hover:text-foreground',
           className,
         )}
       >

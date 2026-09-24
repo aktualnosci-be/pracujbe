@@ -112,6 +112,7 @@ function errorMessage(error: unknown): string | undefined {
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  if (m.includes('MODERATION_LOCKED')) return 'MODERATION_LOCKED';
   if (m.includes('JOB_EDIT_CONFLICT')) return 'JOB_EDIT_CONFLICT';
   if (m.includes('JOB_NOT_EDITABLE')) return 'JOB_NOT_EDITABLE';
   if (m.includes('JOB_EXPIRED')) return 'JOB_EXPIRED';

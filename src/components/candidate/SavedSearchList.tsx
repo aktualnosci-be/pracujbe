@@ -14,6 +14,8 @@ import {
 } from '@/lib/actions/saved-searches';
 import type { SavedSearch, SavedSearchFrequency } from '@/lib/data/saved-searches';
 import { toUserMessageKey } from '@/lib/errors';
+import { BTN_SECONDARY, FORM_CONTROL, H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * Zarządzanie zapisanymi wyszukiwaniami (#100): otwarcie listy z filtrami, włączenie/wyłączenie
@@ -64,7 +66,7 @@ export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.E
     run(search.id, () => setSavedSearchAlertsAction(search.id, enabled, frequency), t('updated'));
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0">
       <p
         ref={statusRef}
         tabIndex={-1}
@@ -73,23 +75,23 @@ export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.E
       >
         {feedback?.text ?? ''}
       </p>
-      <ul className="divide-y divide-border overflow-hidden rounded-[1.75rem] border border-border bg-card">
+      <ul className="min-w-0">
         {searches.map((search) => {
           const busy = pendingId === search.id;
           const alertsId = `ss-alerts-${search.id}`;
           const freqId = `ss-freq-${search.id}`;
           return (
-            <li key={search.id} className="space-y-4 p-5 sm:px-7" aria-busy={busy || undefined}>
+            <li key={search.id} className={cn(PAPER, 'space-y-4')} aria-busy={busy || undefined}>
               <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <h2 className="break-words text-base font-semibold text-foreground">{search.name}</h2>
-                  <p className="text-sm text-muted-foreground">
+                  <h2 className={H2_EXTENDED}>{search.name}</h2>
+                  <p className="mt-1 text-[15px] leading-[1.7] text-muted-foreground">
                     {search.lastAlertLabel ? t('lastAlert', { date: search.lastAlertLabel }) : t('noAlertYet')}
                   </p>
                 </div>
                 <Link
                   href={`/oferty-pracy${search.query}`}
-                  className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-border px-4 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className={cn(BTN_SECONDARY, 'min-h-11 shrink-0 px-[17px] py-[11px] text-xs')}
                 >
                   <Search className="h-4 w-4" aria-hidden="true" />
                   {t('open')}
@@ -119,7 +121,7 @@ export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.E
                     onChange={(event) =>
                       void setAlerts(search, search.alertsEnabled, event.target.value === 'weekly' ? 'weekly' : 'daily')
                     }
-                    className="h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
+                    className={cn(FORM_CONTROL, 'w-auto')}
                   >
                     <option value="daily">{t('daily')}</option>
                     <option value="weekly">{t('weekly')}</option>
@@ -129,7 +131,7 @@ export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.E
                   type="button"
                   onClick={() => setConfirm(search)}
                   disabled={pendingId !== null}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-error-text hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:ml-auto"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-[11px] px-3 text-[13px] font-semibold text-error-text hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:ml-auto"
                 >
                   {busy ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

@@ -59,7 +59,9 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 **Kalka prototypu (#5/#7, decyzja właściciela 2026-09-24: „kalka jeden do jednego”):** nagłówek, hero, wyszukiwarka, „Najnowsze oferty”, karta-paszport, „W czym jesteś dobry?” i dolny pasek stopki mają reguły przepisane dosłownie z `docs/design/people-passport/prototype` (style.css → directions.css → people.css → conditions.css → extended.css) jako klasy `.pp-*` w `src/app/globals.css`; kolory tylko jako tokeny `--pp-*` w `:root`. Progi `@container` prototypu (1050/950/850/760/600/500 px) są media queries. Siatka ofert = to, co prototyp renderuje: 2 kolumny, 1 ≤ 950 px (conditions.css nadpisuje 3 kolumny z people.css); lista z filtrami 1 kolumna. Odstępstwa (tylko wymogi repo): #777 → #767676 (AA), fokus widoczny, stany demo i statusy karty w wierszu firmy, przycisk menu ≤ 850 px, sekcje aplikacji spoza prototypu pod „W czym jesteś dobry?”. Zmieniając te widoki, porównuj zrzuty 1280/390 px z prototypem (nakładka); nie owijaj kart ramką `divide-y` (podwójne krawędzie).
 
-**Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Zasoby favicon/PWA/OG wymagają spójnej aktualizacji w etapie #7.
+**Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Favicon, ikony PWA i `og.png` (#7) = ten sam znak z konturów DM Sans 800 (`scripts/brand-glyphs.py` → `assets/brand/logo-glyphs.json` → `scripts/generate-icons.mjs`; opis `public/ICONS_README.md`, strażnik `brand-assets.test.ts`).
+
+**E-maile (#7):** layout `src/emails/_components.tsx` = kalka `prototype/materials/newsletter.html` (tło #f4f4f4, biała kolumna 600 px, logo jak w nagłówku, H1 36 px, akapity 16 px/1,7 #666, przycisk z promieniem 11 px, sekcje „paszportu” z linią #e5e5e5, stopka #f8f8f8). Kolory wyłącznie z `emailPalette` (test `email-palette.test.tsx` odrzuca inne, z kontrolą ujemną). Odstępstwa klienta pocztowego: style inline + tabele, bez webfontów (`'DM Sans', Arial, sans-serif`), #777 → #767676, tekst stopki #6b6b6b (AA na #f8f8f8); bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii nagłówka (treść maili bez zmian).
 
 ---
 
@@ -493,7 +495,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > `validThrough` z `expires_at` + `unitText` z `salary_period` — wymaga rozszerzenia zwrotu
 > `get_public_job`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR),
-> P1-18 (moderacja zgłoszeń end-to-end), P1-19 (webhook Resend bounce/complaint = zewn.),
+> P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
 > P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
 > P2-06 i P4-* (atomowy lease inboxa, alerty/CWV; P2-13 zarządzanie zespołem zamknięte w #403); P2-04 (paginacja
@@ -588,6 +590,9 @@ zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie od
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
 już wczytanych kart. Jest to część etapu wyglądu #5, nie dowód ukończenia całego etapu.
 
+Wygląd panelu kandydata, onboardingu, wiadomości, powiadomień, toastu i aplikowania = kalka
+prototypu „04 Ludzie i praca” (#5/#6): klasy `panel-styles.ts` (wspólne z pracodawcą/adminem)
++ `src/components/candidate/candidate-styles.ts`; odstępstwa w `docs/design/people-passport/README.md`.
 Kompletność profilu (pulpit + profil) = 6 kroków kreatora onboardingu, jedno źródło
 `src/lib/profile-completeness.ts` (`PROFILE_SECTIONS`/`computeProfileChecklist`); kompletny
 kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma własne kryteria.
@@ -609,6 +614,21 @@ Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0090` pada BL97-1). **Otwar
 gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zostaje listą gościa.
 Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
 kasuje tytułu propozycji bez aplikacji (BL97-6).
+
+Widoczność profilu dla firm (#494, migracja `0100`): przełącznik
+„Pozwól zweryfikowanym pracodawcom znaleźć mój profil” w `/candidate/ustawienia`
+(`ProfileVisibilitySettings`, akcja `setProfileVisibilityAction` → `set_candidate_searchable`
+pod sesją; stan UI = ponowny odczyt z bazy, bez optymistycznej zmiany). Domyślnie wyłączone
+(także po `finish_onboarding`); włączenie tylko dla ukończonego profilu, wyłączenie zawsze.
+Znacznik `candidate_profiles.searchable_changed_at` + historia `candidate_visibility_events`
+(tylko przy realnej zmianie, RPC-only, odczyt własny). Po włączeniu zweryfikowana firma widzi
+dane zawodowe profilu i relacje; imię/kontakt (`profiles`) i CV — nie. Wyłączenie działa od razu
+dla wyszukiwania i `matches` (polityka wymaga widoczności kandydata, także po znanym ID);
+relacja z aplikacji/propozycji (`company_can_view_candidate`) zostaje — zatrzymuje ją blokada
+firmy. Dowód: `rls.sql` sekcja VIS494 (kontrole ujemne: polityka `matches` z 0078, guard z 0029);
+unit `profile-visibility`; E2E `candidate-profile-visibility.spec`. **Otwarte:** propozycja
+od firmy odsłania jej imię i kontakt z konta (`company_can_view_candidate` po `offers`) —
+decyzja produktowo-prawna (#485/#34).
 
 Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
 `/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja
@@ -703,6 +723,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   opcjonalnie `AI_JOB_IMPORT_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
   produkcją (E2E `job-import.spec`). Research, koszty, prywatność: `docs/AI_JOB_IMPORT.md`.
   **Otwarte:** globalny budżet i raport kosztów (#36), DPA/retencja dostawcy (decyzja właściciela).
+  Minimalizacja (#500): przed modelem tylko `<main>`/`<article>` i `JobPosting` z listy pól
+  (`src/lib/ai-import/minimize.ts`), e-maile/telefony/NISS/numery dokumentów zastąpione
+  znacznikiem, w prompcie sam host; `contactEmail` poza schematem (ręcznie w kroku 9). Wyjście:
+  pole z e-mailem/telefonem czyszczone, identyfikator → odmowa `JOB_IMPORT_SENSITIVE_DATA`.
+  Zrzutu nie redagujemy lokalnie (brak OCR). Test: `ai-import-minimize`. **Otwarte (#500):**
+  ocena prawna (art. 6/14, role), decyzja o imporcie obrazu.
 - [x] Wygaszanie ofert (#72, migracja `0085`): `expire_due_jobs()` (service_role, `SKIP LOCKED`,
   zwraca liczbę) zmienia tylko `active` z `expires_at <= now()` na `expired`; woła je
   `/api/maintenance` (cron Railway co godzinę, `docs/railway/README.md`). Panel nie czeka na cron:
@@ -792,6 +818,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i ponowienie tym samym kluczem (#360); `UNAUTHENTICATED` (link logowania) odróżniony od
   `PERMISSION_DENIED` (konto nie-kandydata), własne komunikaty `RATE_LIMITED`/`JOB_NOT_ACTIVE`.
   Dowód: `rls.sql` B3b/B3c, J7d–J7f.
+  Bez NISS/BIS i numerów dokumentów (#495): wiadomość do firmy i odpowiedzi na pytania
+  (kandydat i gość) z numerem rejestru narodowego/BIS (mod 97), PESEL, kartą eID albo numerem
+  po słowie kluczowym („paszport nr…”) → błąd przy polu, bez zapisu (`findPersonalIdentifierField`
+  w akcjach + refine w Zod; detektor `src/lib/privacy/sensitive-data.ts`). Podpowiedź pod polem
+  wiadomości. Test: `sensitive-data`, `apply-sensitive-id`. **Otwarte:** ocena prawna, treść
+  poradnika i formularza CV (#495), import CV (#487), wiadomości w rozmowach.
   Pytania screeningowe (#101, migracja `0093`): recruiter+ ustala w kroku 7 kreatora do 10 pytań
   (`yes_no`/`single_choice`/`date`/`short_text`, „wymagane”, kolejność, treść w języku oferty +
   opcjonalne tłumaczenia) — zapis w tej samej transakcji co krok (`save_job_draft` →
@@ -853,10 +885,30 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   ponownie sprawdza zgodę i wygasza wiersz (`suppressed_at`). Atomowy budżet okna
   (`take_email_send_budget`, rezerwy auth/transakcyjna; odmowa = odłożenie bez `attempts`).
   Dowód: `rls.sql` sekcja UN45 (dblink, kontrole ujemne), `email-unsubscribe.test.ts`, E2E
-  `email-unsubscribe.spec`. **Do zrobienia (#45):** wersjonowany dowód zgody marketingowej,
-  centrum preferencji dla wszystkich kategorii, `text/plain`, tożsamość i adres pocztowy nadawcy
-  w stopce marketingu, budżet w hooku e-maili Auth, rezerwacja kampania+odbiorca, decyzja o
-  trackingu na odebranym `.eml`.
+  `email-unsubscribe.spec`.
+  Etap 2 (#45, migracja `0101`): niezmienny dowód zgody
+  `email_consent_events` (trigger na `notification_preferences` — każda ścieżka zapisu; źródło
+  `settings`/`unsubscribe_page`/`one_click`/`direct`, język, wersja treści `sha256:` z etykiet
+  formularza — `src/lib/email/consent-wording.ts`); ustawienia przez RPC
+  `set_notification_preferences`, `/wypisz` także „ze wszystkich” (`email_unsubscribe_all`).
+  Budżet na odbiorcę przy kolejkowaniu (`email_recipient_budget_config` `pool:`/`template:`,
+  domyślnie newsletter 1/dobę, marketing 10/dobę; `INSERT … ON CONFLICT DO UPDATE WHERE used <
+  limit`; ponad limit = ślad `suppressed_recipient_budget`; wygaszony list oddaje miejsce).
+  `enqueue_email` → `enqueue_email_outcome` (wynik kolejkowania). Kampanie: `email_campaigns`
+  (slug + rewizja, treść w każdym języku serwisu) + `email_campaign_recipients` (PK rewizja +
+  odbiorca, status reserved/queued/accepted/delivered/skipped_consent/failed/cancelled, bez treści
+  i adresu), `enqueue_campaign_batch`/`process_email_campaigns` (cron `/api/maintenance`),
+  aktywacja nowej rewizji wygasza niewysłane listy starej, stara nie wraca (`STALE_STATE`),
+  claim wygasza listy nieaktywnej rewizji. Worker: newsletter z payloadu kampanii
+  (`newsletter-delivery.ts`), `text/plain` w każdym mailu (także hook Auth), marketing tylko z
+  jawnym `EMAIL_FROM` + `EMAIL_SENDER_IDENTITY` + `EMAIL_SENDER_POSTAL_ADDRESS`
+  (`src/lib/email/sender.ts`, stopka). Hook Auth pobiera budżet puli `auth` (odmowa → 503 +
+  `Retry-After`, przed claimem inboxu; błąd bazy = fail-open). Tracking wyłączony; kontrola
+  odebranej wiadomości `scripts/check-received-eml.mjs` (`docs/RESEND_SETUP.md`). Dowód:
+  `rls.sql` sekcja CM45 (dblink, kontrole ujemne), unit `email-consent-campaigns`.
+  **Do zrobienia (właściciel):** wartości `EMAIL_SENDER_*`, wyłączenie trackingu w Resend i
+  kontrola odebranego `.eml` na produkcji; treść prawna zgody marketingowej (#40). **Otwarte:**
+  panel admina kampanii (dziś RPC service_role), rejestracja z opt-in marketingu.
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
@@ -936,8 +988,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
   `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
   (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
-- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy gotowe; decyzje i egzekucja
-  (#42) oraz odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
+- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy i decyzja z egzekucją
+  (#42) gotowe; odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
   → Zod → RPC `submit_content_report` (EXECUTE tylko service_role, `reporterId` z sesji). Sprawa
   = `reports.kind='dsa_notice'`: numer `DSA-XXXX-…` (64 bity), kod dostępu z przeglądarki (w bazie
@@ -950,6 +1002,23 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `content-report-actions`, `report-received-email`; E2E `content-report`, `content-report-form`
   (fixture). **Do uzupełnienia przez właściciela:** treść prawna (znacznik na stronie
   formularza), katalog kategorii, termin 7 dni i wymagane pola — wg mapy DSA (#40).
+  Decyzja moderacyjna (#42, migracja `0099`): sprawę DSA zamyka tylko `admin_decide_report`,
+  które w jednej transakcji zapisuje niezmienną decyzję (`moderation_decisions`: rodzaj
+  `no_action`/`job_removed`/`company_suspended`, fakty, podstawa regulamin/prawo + wskazanie
+  postanowienia, udział automatyzacji, numer `DEC-…`), wykonuje skutek (oferta `closed` /
+  firma `suspended` + blokada `moderation_decision_id`, której nie zdejmie żadna zmiana statusu
+  — `MODERATION_LOCKED`), zamyka sprawę, dopisuje historię i audyt `moderation.decided`,
+  a potem kolejkuje e-maile. Właściciele firmy dostają uzasadnienie w swoim języku, zgłaszający
+  sam wynik. Awaria dowolnej części cofa całość. Odroczony trigger odrzuca decyzję bez skutku.
+  `admin_resolve_report` nie zamyka już sprawy DSA (regresja z kontrolą ujemną). CAS
+  `expected_status` + `FOR UPDATE` (dwie decyzje → `STALE_STATE`). Przywrócenie:
+  `admin_restore_moderation` (powód wymagany, blokada przechodzi na inną aktywną decyzję).
+  Kolejka: `flag_report_for_review` (service_role — automat tylko flaguje i ustala priorytet).
+  UI: dialog decyzji i cofnięcia w `/admin/zgloszenia` (`ModerationDecisionActions`),
+  uzasadnienie w `/employer/firma` (`get_company_moderation_decisions`), wynik w
+  `/zglos-tresc/sprawa`. Dowód: `rls.sql` sekcja MOD42; unit `moderation-decision*`; E2E
+  `admin-ux` (#42). **Otwarte:** procedura odwołań (#43); znacznik treści prawnej o środkach
+  odwoławczych w panelu firmy; UI kolejki według priorytetu (lista nadal po dacie).
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
@@ -994,6 +1063,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
   cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
   `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
+- [x] Telemetria bez danych kandydata (#502, część kodowa): Sentry — #508
+  (`src/lib/sentry-egress.ts`: `beforeSend` buduje nowe zdarzenie z samym kodem błędu,
+  `captureError` wysyła tylko kod, tracing wyłączony). Logi serwera — wspólne reguły redakcji
+  `src/lib/privacy/redact.ts` (e-mail, telefon, NISS/BIS, IBAN, tokeny/JWT, query i fragment URL,
+  nazwy plików dokumentów, wiersze błędów Postgresa; pola wrażliwe po nazwie; `cause`)
+  w `installConsoleRedaction()` (`register()`, poza `next dev`). Dowód: `privacy-redaction`,
+  `privacy-sentry-sdk` (payload z SDK z opcjami jak w configach) + kontrola ujemna
+  `privacy-sentry-sdk-control`, `sentry-egress`, `sentry-capture`. Opis: `docs/TELEMETRY_PRIVACY.md`.
+  **Otwarte (właściciel):** region/retencja/DPA/dostęp Sentry i logów Railway, rejestr (#485),
+  usuwanie danych już wysłanych (#486); do tego czasu Sentry bez DSN. Sentry w przeglądarce nie
+  jest wpięte (brak `instrumentation-client`).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).

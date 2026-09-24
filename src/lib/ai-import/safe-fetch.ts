@@ -6,6 +6,8 @@ import https from 'node:https';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
 import zlib from 'node:zlib';
 
+import { minimizeJobPostingJsonLd } from '@/lib/ai-import/minimize';
+
 /**
  * Serwerowe pobieranie strony ogłoszenia (#465) odporne na SSRF.
  *
@@ -383,23 +385,34 @@ function normalizeWhitespace(s: string): string {
 
 /**
  * Zamienia HTML na czytelny tekst. Treść `<script>`/`<style>`/`<noscript>`/`<template>`/
- * `<iframe>`/`<svg>` jest usuwana w całości — z wyjątkiem danych strukturalnych
- * `application/ld+json` (np. JobPosting), które zachowujemy jako surowe dane. Komentarze HTML
- * (częste miejsce ukrytych „instrukcji") również usuwamy.
+ * `<iframe>`/`<svg>` jest usuwana w całości. Komentarze HTML (częste miejsce ukrytych
+ * „instrukcji”) również usuwamy.
+ *
+ * Minimalizacja (#500): gdy strona ma `<main>` (albo `<article>`), bierzemy tylko tę sekcję;
+ * nawigacja, `<aside>`, stopki i formularze są usuwane (tam zwykle są dane serwisu i osób
+ * niezwiązanych z ofertą). Z danych strukturalnych `application/ld+json` zostaje wyłącznie
+ * `JobPosting` z listy dozwolonych pól (`minimizeJobPostingJsonLd`).
  */
 export function htmlToText(html: string): string {
   const jsonLd: string[] = [];
   const withoutLd = html.replace(
     /<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script\s*>/gi,
     (_m, body: string) => {
-      jsonLd.push(body.trim().slice(0, 8000));
+      const posting = minimizeJobPostingJsonLd(body.trim().slice(0, 64_000));
+      if (posting) jsonLd.push(posting);
       return ' ';
     },
   );
   const titleMatch = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(withoutLd);
-  let s = withoutLd
+  const cleaned = withoutLd
     .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<(script|style|noscript|template|iframe|svg|object|embed|head)\b[\s\S]*?<\/\1\s*>/gi, ' ')
+    .replace(/<(script|style|noscript|template|iframe|svg|object|embed|head)\b[\s\S]*?<\/\1\s*>/gi, ' ');
+  const main =
+    /<main\b[^>]*>([\s\S]*)<\/main\s*>/i.exec(cleaned)?.[1] ??
+    /<article\b[^>]*>([\s\S]*?)<\/article\s*>/i.exec(cleaned)?.[1] ??
+    cleaned;
+  let s = main
+    .replace(/<(nav|aside|footer|form)\b[\s\S]*?<\/\1\s*>/gi, ' ')
     .replace(/<(br|hr)\b[^>]*>/gi, '\n')
     .replace(/<li\b[^>]*>/gi, '\n• ')
     .replace(/<\/?(p|div|section|article|header|footer|li|ul|ol|h[1-6]|tr|table|dd|dt|dl|main|aside|nav|blockquote)\b[^>]*>/gi, '\n')

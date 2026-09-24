@@ -3,12 +3,17 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { loadNotificationPreferences } from '@/lib/data/notification-preferences';
 import { loadMyCompanyBlocks } from '@/lib/data/company-blocks';
+import { loadProfileVisibility } from '@/lib/data/profile-visibility';
 import { CompanyBlocksSettings } from '@/components/settings/CompanyBlocksSettings';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
+import { ProfileVisibilitySettings } from '@/components/settings/ProfileVisibilitySettings';
+import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
+import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
- * Panel kandydata — Ustawienia (preferencje powiadomień, Etap 6; zablokowane firmy, #97).
+ * Panel kandydata — Ustawienia (preferencje powiadomień, Etap 6; widoczność profilu, #494;
+ * zablokowane firmy, #97).
  *
  * Formularz przełączników preferencji (`notification_preferences`), dane pod sesją/RLS z
  * `@/lib/data/notification-preferences`; bez env — wartości domyślne. Błąd odczytu → stan
@@ -41,16 +46,19 @@ export default async function CandidateSettingsPage({
 
   const t = await getTranslations({ locale, namespace: 'settings' });
   const tBlocks = await getTranslations({ locale, namespace: 'companyBlocks' });
-  const [load, blocks] = await Promise.all([loadNotificationPreferences(), loadMyCompanyBlocks()]);
+  const tDash = await getTranslations({ locale, namespace: 'dashboard' });
+  const tVisibility = await getTranslations({ locale, namespace: 'profileVisibility' });
+  const [load, blocks, visibility] = await Promise.all([
+    loadNotificationPreferences(),
+    loadMyCompanyBlocks(),
+    loadProfileVisibility(),
+  ]);
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
-      </header>
+    <div className="min-w-0 max-w-3xl">
+      <CandidatePageHeader eyebrow={tDash('candidatePlaceEyebrow')} title={t('title')} intro={t('subtitle')} />
 
-      <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
+      <section className={PAPER}>
         {load.status === 'ready' ? (
           <NotificationPreferencesForm defaultValues={load.preferences} />
         ) : (
@@ -58,11 +66,24 @@ export default async function CandidateSettingsPage({
         )}
       </section>
 
+      {visibility.status === 'ready' ? (
+        <ProfileVisibilitySettings initial={visibility} />
+      ) : (
+        <section aria-labelledby="profile-visibility-title" className={PAPER}>
+          <h2 id="profile-visibility-title" className={H2_EXTENDED}>
+            {tVisibility('sectionTitle')}
+          </h2>
+          <p role="alert" className="mt-2 text-sm text-error">
+            {tVisibility('loadError')}
+          </p>
+        </section>
+      )}
+
       {blocks.status === 'ready' ? (
         <CompanyBlocksSettings initialBlocks={blocks.blocks} />
       ) : (
-        <section aria-labelledby="company-blocks-title" className="rounded-lg border border-border bg-card p-5 sm:p-6">
-          <h2 id="company-blocks-title" className="text-lg font-semibold text-foreground">
+        <section aria-labelledby="company-blocks-title" className={PAPER}>
+          <h2 id="company-blocks-title" className={H2_EXTENDED}>
             {tBlocks('sectionTitle')}
           </h2>
           <p role="alert" className="mt-2 text-sm text-error">

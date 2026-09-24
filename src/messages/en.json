@@ -118,7 +118,23 @@
     "editVerifiedHint": "Changing the name or VAT/KBO number of a verified company requires verification again. Until it is approved, your company’s jobs will not be publicly visible and publishing and sending offers will be on hold.",
     "savedReverification": "Company details saved. Your company is back in verification — an administrator will check the new details.",
     "onboardingEyebrow": "Employer account",
-    "bannerReasonLabel": "Administrator’s reason"
+    "bannerReasonLabel": "Administrator’s reason",
+    "moderationTitle": "Moderation decisions",
+    "moderationLoadError": "Moderation decisions could not be loaded. Refresh the page.",
+    "moderationJobRemoved": "Job removed from the website",
+    "moderationCompanySuspended": "Company and its jobs suspended",
+    "moderationReference": "Decision number",
+    "moderationDecidedAt": "Decision date",
+    "moderationFacts": "Facts established",
+    "moderationGround": "Ground",
+    "moderationGroundTerms": "Website terms of use",
+    "moderationGroundLaw": "Legal provision",
+    "moderationAutomation": "Automation",
+    "moderationAutomatedYes": "Content detected or flagged automatically; a person made the decision.",
+    "moderationAutomatedNo": "No automated detection; a person made the decision.",
+    "moderationRestoredAt": "Restriction lifted",
+    "moderationRedress": "If you disagree with the decision, write to us via the Help page and include decision number {reference}.",
+    "moderationLegalPlaceholder": "Legal information on how to challenge moderation decisions — to be completed by the site owner."
   },
   "common": {
     "appName": "Pracuj.be",
@@ -606,9 +622,11 @@
     "jobImportNotAListing": "We did not find a job ad here. Check the file or link.",
     "jobImportFailed": "We could not read the ad. Try again or fill in the form manually.",
     "savedSearchLimitReached": "You already have 20 saved searches. Delete one to add a new one.",
+    "moderationLocked": "This content is restricted by a moderation decision, so its status cannot be changed.",
     "guestApplyUnavailable": "Applying without an account is temporarily unavailable. Try again later or log in.",
     "emailNotVerified": "First confirm your account’s email address — click the link we sent when you registered.",
-    "claimExpired": "The link to link the application has expired (it was valid for 30 days)."
+    "claimExpired": "The link to link the application has expired (it was valid for 30 days).",
+    "jobImportSensitiveData": "The listing contains a personal or document identification number, so we did not import it. Please fill in the form manually."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -905,7 +923,15 @@
     "navSearches": "Saved searches",
     "employerApplicationGuestBadge": "No account",
     "employerApplicationGuestHint": "The candidate applied without a Pracuj.be account and confirmed their email address. Contact them by email or phone — on-site messages become available once they link the application to an account.",
-    "employerApplicationEmail": "Email"
+    "employerApplicationEmail": "Email",
+    "candidateEyebrow": "Your next step",
+    "candidateIntro": "Your applications, proposals and opportunities — in one place.",
+    "candidatePlaceEyebrow": "Your space",
+    "applicationStepSent": "Application sent",
+    "applicationStepReview": "Employer reviewing",
+    "applicationStepInterview": "Interview",
+    "applicationStepDecision": "Decision",
+    "employerPlaceEyebrow": "Your recruitment"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -1022,7 +1048,8 @@
     "stepAnnounce": "Step {current} of {total}: {title}",
     "agreeTermsLinks": "I accept the <terms>terms of use</terms> and the <privacy>privacy policy</privacy>.",
     "opensInNewTab": "(opens in a new tab)",
-    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list."
+    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list.",
+    "eyebrow": "WORK PASSPORT"
   },
   "filters": {
     "title": "Filters",
@@ -1102,7 +1129,10 @@
     "itemCompanyRejected": "Your company was not verified",
     "itemCompanySuspended": "Your company has been suspended",
     "itemTeamInvitation": "Invitation to a company team",
-    "itemSavedSearch": "New jobs for a saved search"
+    "itemSavedSearch": "New jobs for a saved search",
+    "itemModerationJobRemoved": "Job removed by a moderation decision",
+    "itemModerationCompanySuspended": "Company suspended by a moderation decision",
+    "itemModerationRestored": "The content restriction has been lifted"
   },
   "pricing": {
     "standard": "Standard",
@@ -1152,7 +1182,9 @@
     "screeningOptional": "(optional)",
     "screeningRequired": "Please answer this question.",
     "screeningYes": "Yes",
-    "screeningNo": "No"
+    "screeningNo": "No",
+    "sensitiveIdHint": "Your application does not need a NISS/BIS number or an identity document number — please leave them out.",
+    "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
   },
   "guestApply": {
     "subtitle": "Apply without creating an account, or log in to use your profile. No CV needed.",
@@ -1204,7 +1236,8 @@
       "emailInvalid": "Enter a valid email address, e.g. john@example.com.",
       "messageTooLong": "The message can have at most 500 characters.",
       "consentRequired": "You must accept the consent to send the application.",
-      "idempotencyKeyInvalid": "Refresh the page and send the form again."
+      "idempotencyKeyInvalid": "Refresh the page and send the form again.",
+      "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
     }
   },
   "legal": {
@@ -1421,7 +1454,8 @@
     "errorFileTooLarge": "The file is too large. The maximum size is 5 MB.",
     "errorFileType": "Only PNG, JPG and WebP images are supported.",
     "errorUrlMissing": "Paste a link to the ad.",
-    "errorNetwork": "Could not reach the server. Check your connection and try again."
+    "errorNetwork": "Could not reach the server. Check your connection and try again.",
+    "contactNote": "We do not copy email addresses, phone numbers or identification numbers into the form. Enter the contact email yourself in the last step."
   },
   "messages": {
     "title": "Messages",
@@ -1725,7 +1759,49 @@
     "caseEventStatus": "status: {status}",
     "reasonImpersonation": "Impersonation",
     "reasonIllegalConditions": "Unlawful working conditions",
-    "reasonDataMisuse": "Misuse of data"
+    "reasonDataMisuse": "Misuse of data",
+    "actionDecide": "Make a decision",
+    "actionRestore": "Lift restriction",
+    "decisionDialogTitle": "Decision on case {caseNumber}",
+    "decisionDialogHint": "The decision, its effect, the case status and the notifications are saved together. If any part fails, nothing changes and the case stays open.",
+    "decisionLabel": "Outcome",
+    "decisionNoAction": "No action — the content does not break the rules",
+    "decisionJobRemoved": "Remove the job from the website",
+    "decisionCompanySuspended": "Suspend the company and all its jobs",
+    "decisionFactsLabel": "Facts and circumstances",
+    "decisionFactsHint": "What was established in the case ({min} to {max} characters). If the content is restricted, its author receives this description.",
+    "decisionGroundLabel": "Ground for the restriction",
+    "decisionGroundTerms": "Terms of use",
+    "decisionGroundLaw": "Legal provision",
+    "decisionGroundReferenceLabel": "Provision reference",
+    "decisionGroundReferenceHint": "Number of the clause in the terms or of the legal provision ({min}–{max} characters).",
+    "decisionAutomatedLabel": "Content detected or flagged automatically",
+    "decisionAutomatedHint": "Information for the statement of reasons. A person always makes the decision.",
+    "decisionNotifyRestrict": "The author of the content receives the statement of reasons in their language; the reporter receives only the outcome.",
+    "decisionNotifyNoAction": "The content stays unchanged. The reporter receives the outcome in their language.",
+    "decisionConfirm": "Save decision",
+    "decisionSaved": "Decision saved, case closed.",
+    "decisionErrorRequired": "This field is required.",
+    "decisionErrorTooShort": "Enter at least {min} characters.",
+    "decisionErrorTooLong": "Enter at most {max} characters.",
+    "decisionErrorScope": "This outcome does not match what was reported.",
+    "decisionSummaryTitle": "Decision {reference}",
+    "decisionSummaryGround": "Ground: {ground} — {reference}",
+    "decisionSummaryAutomated": "Automated detection: yes",
+    "decisionSummaryManual": "Automated detection: no",
+    "decisionSummaryRestored": "Restriction lifted on {date}: {reason}",
+    "restoreDialogTitle": "Reverse decision {reference}",
+    "restoreDialogHint": "The content returns to its state before the decision, unless another decision restricts it. The author receives the reason. The case stays closed.",
+    "restoreReasonLabel": "Reason for reversal",
+    "restoreReasonHint": "{min} to {max} characters. Sent to the author of the content and recorded in the log.",
+    "restoreSaved": "Restriction lifted.",
+    "caseEventDecision": "moderation decision",
+    "caseEventRestored": "restriction lifted",
+    "caseEventFlagged": "flagged for review",
+    "casePriority": "Review priority: {priority}",
+    "caseFlag": "Automated signal: {flag}",
+    "auditActionModerationDecided": "Moderation decision",
+    "auditActionModerationRestored": "Restriction lifted"
   },
   "settings": {
     "title": "Notification preferences",
@@ -1818,7 +1894,8 @@
       "messageTooLong": "Your message is too long.",
       "phoneInvalid": "Enter a valid phone number.",
       "termsRequired": "You need to accept the consent to send your application.",
-      "idempotencyKeyInvalid": "The form couldn't be sent. Refresh the page and try again."
+      "idempotencyKeyInvalid": "The form couldn't be sent. Refresh the page and try again.",
+      "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
     }
   },
   "offer": {
@@ -1905,6 +1982,30 @@
     "blockedSuccess": "{company} has been blocked.",
     "manage": "Manage blocked companies"
   },
+  "profileVisibility": {
+    "sectionTitle": "Profile visibility for companies",
+    "sectionDescription": "You can let verified employers find your profile among candidates. Your profile is hidden by default, and you can change this setting at any time.",
+    "whoTitle": "Who will see your profile",
+    "whoText": "Only companies verified by Pracuj.be. Companies you block will never see it. A company can send you a job offer through the portal.",
+    "seenTitle": "What a company will see",
+    "seenText": "The professional details of your profile: headline and description, occupations and categories, skills, languages, certificates, experience, availability, city and travel distance, driving licence and car, contract types and expected pay.",
+    "notSeenTitle": "What a company will not see",
+    "notSeenText": "Your first and last name, email address, phone number or CV. Your name and account contact details are only visible to a company you apply to or that sends you a job offer.",
+    "offTitle": "After you turn it off",
+    "offText": "Your profile disappears from companies’ searches and matches immediately. Companies you have already applied to, or that have already sent you an offer, can still see your profile in that recruitment. To stop that, block the company in the “Blocked companies” section.",
+    "toggleLabel": "Let verified employers find my profile",
+    "stateOn": "Profile visible to verified companies",
+    "stateOff": "Profile hidden from company searches",
+    "changedAt": "Last changed: {date}",
+    "neverChanged": "This setting has not been changed yet.",
+    "requiresComplete": "To turn on visibility, finish your profile first.",
+    "completeProfile": "Complete your profile",
+    "saving": "Saving…",
+    "savedOn": "Your profile is now visible to verified companies.",
+    "savedOff": "Your profile is now hidden from company searches.",
+    "saveError": "We couldn’t save the change. The setting has not changed — please try again.",
+    "loadError": "We couldn’t load your profile visibility setting. Refresh the page in a moment."
+  },
   "team": {
     "title": "Team",
     "subtitle": "People with access to the {company} company panel.",
@@ -1990,9 +2091,11 @@
     "title": "Unsubscribe from emails",
     "confirmText": "Confirm that you no longer want to receive these emails: {category}.",
     "confirmButton": "Unsubscribe",
+    "allButton": "Unsubscribe from all email notifications",
     "pending": "Saving…",
     "doneTitle": "Unsubscribed",
     "doneText": "We will no longer send you these emails: {category}. Other messages and notifications on the site stay the same.",
+    "allDoneText": "We will no longer send you email notifications or the newsletter. We will still send messages needed for your account, such as a password reset.",
     "settingsHint": "You can change all notification settings after logging in.",
     "loginLink": "Log in",
     "invalidTitle": "The link is not valid",
@@ -2139,6 +2242,9 @@
       "caseNumberInvalid": "The case number has the format DSA-XXXX-XXXX-XXXX-XXXX.",
       "accessCodeRequired": "Enter the access code.",
       "accessCodeInvalid": "The access code has 24 characters: letters A–Z and digits 2–7."
-    }
+    },
+    "outcomeLabel": "Outcome",
+    "outcomeActionTaken": "We have taken action on the reported content.",
+    "outcomeNoAction": "After review, we took no action on the reported content."
   }
 }
