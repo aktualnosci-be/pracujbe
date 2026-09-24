@@ -39,6 +39,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'onboarding',
   'settings',
   'status',
+  'team',
 ] as const;
 
 export function pickClientMessages<T extends Record<string, unknown>>(messages: T): Partial<T> {

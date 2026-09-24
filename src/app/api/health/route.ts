@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 
 import { env, isAppReady, isProductionMode, readinessChecks } from '@/lib/env';
+import { isTurnstileEnabled } from '@/lib/turnstile/verify';
 
 /**
  * Readiness/health endpoint (SEC-19 + P1-18) — dla monitoringu/load-balancera.
@@ -12,6 +13,7 @@ import { env, isAppReady, isProductionMode, readinessChecks } from '@/lib/env';
  * usług (Stripe/Resend/Sentry…) ułatwiłaby rekonesans. Szczegółowy `checks`/`mode` jest widoczny
  * tylko dla monitoringu wewnętrznego: w trybie nieprodukcyjnym (lokalnie/staging) albo po podaniu
  * tokena `HEALTH_CHECK_SECRET` (nagłówek `x-health-token`). Nigdy nie ujawnia sekretów.
+ * `checks.turnstile` (#46) = czy ochrona formularzy jest włączona — sam boolean, bez kluczy.
  */
 
 export const runtime = 'nodejs';
@@ -36,7 +38,11 @@ export function GET(request: Request): Response {
   const detailed = !isProductionMode() || tokenMatches(request.headers.get('x-health-token'));
   if (detailed) {
     return Response.json(
-      { status: ready ? 'ok' : 'unconfigured', mode: env.appMode, checks: readinessChecks() },
+      {
+        status: ready ? 'ok' : 'unconfigured',
+        mode: env.appMode,
+        checks: { ...readinessChecks(), turnstile: isTurnstileEnabled() },
+      },
       { status: httpStatus, headers },
     );
   }

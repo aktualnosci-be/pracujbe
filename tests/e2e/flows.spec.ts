@@ -2,6 +2,9 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { expect, test } from '@playwright/test';
 
+import { localeNames } from '../../src/i18n/routing';
+import { messages, rejectOptionalCookies } from './fixtures/messages';
+
 /**
  * Testy e2e kluczowych przepływów (na danych DEMO, bez Supabase).
  *
@@ -28,31 +31,56 @@ for (const locale of ['pl', 'nl', 'fr', 'en']) {
   });
 }
 
-test('zmiana języka zachowuje aktywne filtry ofert', async ({ page }) => {
-  const query =
-    'keyword=spawacz&city=Bruksela&category=construction&contractType=permanent&salaryMin=20&salaryMax=35&accommodation=provided&immediate=1&noLang=1&date=7d&sort=salary&page=2';
-  await page.goto(`/pl/oferty-pracy?${query}#wyniki`);
-  await page.getByRole('button', { name: 'Tylko niezbędne' }).click();
+/**
+ * #376: etykieta przełącznika (`footer.langLabel`) i nazwy języków (`localeNames`) z tych samych
+ * źródeł co UI; przełącznik w stopce (`contentinfo`), nie „ostatni combobox” na stronie.
+ * Co najmniej jedna zmiana startuje z innego języka niż PL.
+ */
+const LOCALE_SWITCHES = [
+  { from: 'pl', to: 'nl' },
+  { from: 'fr', to: 'en' },
+] as const;
 
-  await page.getByRole('combobox', { name: 'Język' }).last().click();
-  await page.getByRole('option', { name: 'Nederlands' }).click();
+for (const { from, to } of LOCALE_SWITCHES) {
+  test(`zmiana języka zachowuje aktywne filtry ofert (${from} → ${to})`, async ({ page }) => {
+    const query =
+      'keyword=spawacz&city=Bruksela&category=construction&contractType=permanent&salaryMin=20&salaryMax=35&accommodation=provided&immediate=1&noLang=1&date=7d&sort=salary&page=2';
+    await page.goto(`/${from}/oferty-pracy?${query}#wyniki`);
+    await rejectOptionalCookies(page, from);
 
-  await expect(page).toHaveURL(new RegExp(`/nl/oferty-pracy\\?${query}#wyniki$`));
-});
+    await page
+      .getByRole('contentinfo')
+      .getByRole('combobox', { name: messages(from).footer.langLabel, exact: true })
+      .click();
+    await page.getByRole('option', { name: localeNames[to], exact: true }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/${to}/oferty-pracy\\?${query}#wyniki$`));
+    await expect(page.locator('html')).toHaveAttribute('lang', to);
+  });
+}
 
 test('szczegóły oferty otwierają się z listy i mają CTA aplikowania', async ({ page }) => {
+  const pl = messages('pl');
   await page.goto('/pl/oferty-pracy');
-  const firstJob = page.locator('a[href*="/oferty-pracy/"]').first();
-  await expect(firstJob).toBeVisible();
+  await rejectOptionalCookies(page, 'pl');
+
+  // #376: link z KARTY wyniku (nagłówek artykułu na liście w `main`), nie dowolny
+  // `a[href*="/oferty-pracy/"]` (breadcrumb, stopka).
+  const results = page.getByRole('main').getByRole('listitem').getByRole('article');
+  await expect(results).not.toHaveCount(0);
+  const firstJob = results.first().getByRole('heading', { level: 3 }).getByRole('link');
+  const title = (await firstJob.innerText()).trim();
+  expect(title).not.toBe('');
   await firstJob.click();
 
-  // Detal oferty: H1 z tytułem stanowiska.
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page).toHaveURL(/\/pl\/oferty-pracy\/.+/);
+  // Detal oferty: H1 = tytuł klikniętej oferty.
+  await expect(page).toHaveURL(/\/pl\/oferty-pracy\/[^/?#]+$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
 
-  // CTA aplikowania (przycisk otwierający modal/aplikację) — co najmniej jeden.
-  const applyCta = page.getByRole('button', { name: /aplikuj/i });
-  expect(await applyCta.count()).toBeGreaterThan(0);
+  // CTA aplikowania z `jobs.applyNow` (nazwa = etykieta + podpowiedź): dokładnie jeden
+  // widoczny przycisk (desktop — panel boczny; dolny pasek mobilny jest ukryty).
+  const applyName = new RegExp(`^${pl.jobs.applyNow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`);
+  await expect(page.getByRole('button', { name: applyName }).filter({ visible: true })).toHaveCount(1);
 });
 
 type PanelMessages = { dashboard: { greetingNoName: string; greetingEmployer: string }; admin: { title: string } };
