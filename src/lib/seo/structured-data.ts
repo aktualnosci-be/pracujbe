@@ -6,6 +6,7 @@
  */
 
 import type { ContractType, JobDetail } from '@/lib/jobs';
+import { normalizeSalary } from '@/lib/salary';
 
 /** Ścieżka obrazu udostępniania marki (1200×630, `public/og.png`). */
 export const SHARE_IMAGE_PATH = '/og.png';
@@ -111,16 +112,22 @@ export function buildJobPostingJsonLd(
   const expiresTs = job.expiresAt ? Date.parse(job.expiresAt) : Number.NaN;
   const validThrough = Number.isNaN(expiresTs) ? undefined : new Date(expiresTs).toISOString();
 
-  const unitText = job.salaryPeriod ? SALARY_UNIT[job.salaryPeriod] : undefined;
-  const hasSalary = job.salaryMin !== undefined || job.salaryMax !== undefined;
-  const baseSalary = hasSalary
+  // Te same widełki co w paszporcie oferty (#22): jedna granica → minValue albo maxValue,
+  // min = max → value, okres wyłącznie z danych.
+  const salary = normalizeSalary(job);
+  const unitText = salary?.period ? SALARY_UNIT[salary.period] : undefined;
+  const baseSalary = salary
     ? {
         '@type': 'MonetaryAmount',
-        currency: job.currency,
+        currency: salary.currency,
         value: {
           '@type': 'QuantitativeValue',
-          ...(job.salaryMin !== undefined ? { minValue: job.salaryMin } : {}),
-          ...(job.salaryMax !== undefined ? { maxValue: job.salaryMax } : {}),
+          ...(salary.min !== undefined && salary.min === salary.max
+            ? { value: salary.min }
+            : {
+                ...(salary.min !== undefined ? { minValue: salary.min } : {}),
+                ...(salary.max !== undefined ? { maxValue: salary.max } : {}),
+              }),
           ...(unitText ? { unitText } : {}),
         },
       }
