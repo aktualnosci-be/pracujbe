@@ -3,6 +3,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { routing } from './i18n/routing';
+import { resolveCitySlugAlias } from '@/lib/locations/city-aliases';
 import { env, isAppReady, isSupabaseConfigured } from '@/lib/env';
 import {
   SITE_ACCESS_COOKIE,
@@ -53,6 +54,26 @@ const handleIntl = createIntlMiddleware(routing);
  */
 const PRIVATE_CACHE_CONTROL = 'private, no-store';
 
+const CITY_LANDING_RE = /^\/([a-z]{2})\/praca\/miasto\/([^/]+)\/?$/;
+
+/**
+ * Nazwa miasta w dowolnym języku / inna wielkość liter → 308 na kanoniczny klucz (#219).
+ * Robimy to tutaj, a nie w stronie: landing jest ISR, a przekierowanie z renderu ISR
+ * wysyłało zdublowany nagłówek `Location` (#298).
+ */
+function cityAliasRedirect(request: NextRequest): NextResponse | null {
+  const match = CITY_LANDING_RE.exec(request.nextUrl.pathname);
+  if (!match) return null;
+  const [, locale, slug] = match;
+  const supported: readonly string[] = routing.locales;
+  if (!locale || !slug || !supported.includes(locale)) return null;
+  const key = resolveCitySlugAlias(slug);
+  if (!key || key === slug) return null;
+  const url = request.nextUrl.clone();
+  url.pathname = `/${locale}/praca/miasto/${key}`;
+  return NextResponse.redirect(url, 308);
+}
+
 /**
  * Bramka „w przygotowaniu” (`SITE_ACCESS_PASSWORD`): bez ważnego cookie każda strona zwraca
  * formularz hasła (503 + noindex). Sprawdzana przed wszystkim innym — także przed SEC-19.
@@ -96,6 +117,9 @@ export default async function middleware(request: NextRequest) {
       },
     });
   }
+
+  const cityRedirect = cityAliasRedirect(request);
+  if (cityRedirect) return cityRedirect;
 
   // 1) next-intl — bazowa odpowiedź (może być redirectem/rewrite z prefiksem locale).
   const response = handleIntl(request);

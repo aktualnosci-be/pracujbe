@@ -48,10 +48,6 @@ const nextConfig = {
     optimizePackageImports: ['lucide-react'],
     // Plik CV ma limit 5 MB; multipart potrzebuje dodatkowego miejsca.
     serverActions: { bodySizeLimit: '6mb' },
-    // ISR (#298): strony generowane na żądanie (szczegół oferty, także 404 dla nieznanego sluga)
-    // trzymamy tylko w ograniczonym cache w pamięci (LRU, domyślnie 50 MB). Zapis na dysk
-    // pozwalałby rozdmuchać dysk losowymi adresami. Prerender z builda czytany jest jak dotąd.
-    isrFlushToDisk: false,
   },
   // Uwaga: przekierowanie "/" → "/{locale}" obsługuje middleware next-intl
   // (z wykrywaniem Accept-Language i fallbackiem na 'pl'). Nie dubluj go tutaj.

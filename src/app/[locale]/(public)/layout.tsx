@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
+import { notFound } from 'next/navigation';
 import { setRequestLocale } from 'next-intl/server';
 
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { SkipLink } from '@/components/layout/SkipLink';
+import { routing } from '@/i18n/routing';
 
 /**
  * Layout stron publicznych (grupa `(public)`).
@@ -36,6 +38,10 @@ export default async function PublicLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  // Layouty renderują się równolegle: walidacja z layoutu [locale] nie zdąży przed chrome'em,
+  // a nieobsługiwany segment (np. `/brak-pliku.png`) wywołałby błąd Intl w stopce.
+  const supportedLocales: readonly string[] = routing.locales;
+  if (!supportedLocales.includes(locale)) notFound();
   setRequestLocale(locale);
 
   return (

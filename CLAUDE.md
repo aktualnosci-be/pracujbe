@@ -704,8 +704,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `locale` jawnie do Header/Footer/SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
   `DATABASE_APP_URL` build nie czyta bazy (`prerenderParamsAtBuild` → strony na pierwsze żądanie);
-  ISR tylko w pamięci (`isrFlushToDisk: false`). Middleware: bramka hasła i odświeżone cookies
-  sesji → `private, no-store`. Straże: `static-public-pages.test`, `check-next-build.mjs`
+  layout `(public)` odrzuca nieobsługiwany locale (`notFound`). Middleware: bramka hasła i
+  odświeżone cookies sesji → `private, no-store`; alias miasta → 308 w middleware (redirect z ISR
+  dublował `Location`). **Otwarte:** ISR zapisuje na dysk także 404 losowych slugów ofert
+  (`isrFlushToDisk: false` odpada — wyłącza cache obrazów); limit = własny `cacheHandler`. Straże: `static-public-pages.test`, `check-next-build.mjs`
   (prerender), E2E `public-cache-headers.spec`. Lista `/oferty-pracy` (filtry), auth, panele — per żądanie.
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)

@@ -100,9 +100,3 @@ describe('prerenderParamsAtBuild — build nie łączy się z bazą', () => {
     }
   });
 });
-
-describe('cache ISR na żądanie jest ograniczony', () => {
-  it('next.config: ISR bez zapisu na dysk (losowe adresy 404 nie zapełnią dysku)', () => {
-    expect(read('next.config.mjs')).toMatch(/isrFlushToDisk: false/);
-  });
-});
