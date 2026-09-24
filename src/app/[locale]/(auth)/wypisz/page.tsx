@@ -52,8 +52,11 @@ export default async function UnsubscribePage({ params, searchParams }: PageProp
     body = (
       <UnsubscribeForm
         token={token}
+        locale={locale}
         labels={{
           confirmButton: t('confirmButton'),
+          allButton: t('allButton'),
+          allDoneText: t('allDoneText'),
           pending: t('pending'),
           doneTitle: t('doneTitle'),
           doneText: t('doneText', { category }),
