@@ -109,3 +109,49 @@ for (const path of PER_REQUEST_PAGES) {
     expect(response.headers()["x-nextjs-cache"]).toBeUndefined();
   });
 }
+
+/**
+ * #99: lejek ofert liczy wyświetlenia osobnym żądaniem PO załadowaniu, więc strona oferty
+ * zostaje w cache ISR. Endpoint nie jest cache'owany, nie ustawia cookies, a zgłoszenie
+ * z cookies sesji/zgód nie zmienia HTML strony z cache.
+ */
+test("lejek ofert: endpoint no-store bez cookies, strona oferty nadal z cache", async ({ request, page }) => {
+  const list = await request.get("/pl/oferty-pracy");
+  const slug = /href="\/pl\/oferty-pracy\/([a-z0-9-]+)"/.exec(await list.text())?.[1];
+  expect(slug, "lista ofert linkuje do szczegółu").toBeTruthy();
+  const path = `/pl/oferty-pracy/${slug}`;
+  const before = await getCached(request, path);
+
+  const event = {
+    event: "detail_view",
+    nonce: "5b0f7a1e-2c3d-4e5f-8a9b-0c1d2e3f4a5b",
+    jobIds: ["3f1c7a52-6f7e-4d0b-9a55-1a2b3c4d5e6f"],
+  };
+  const beacon = await request.post("/api/job-funnel", {
+    data: event,
+    headers: { cookie: VISITOR_COOKIES, "sec-fetch-site": "same-origin" },
+  });
+  expect(beacon.status()).toBe(204);
+  expect(beacon.headers()["cache-control"]).toBe("private, no-store");
+  expect(beacon.headers()["set-cookie"]).toBeUndefined();
+  expect((await request.get("/api/job-funnel")).status()).toBe(405);
+  // Zdarzenie nie przyjmuje dodatkowych danych (np. tekstu wyszukiwania).
+  expect((await request.post("/api/job-funnel", { data: { ...event, keyword: "magazyn" } })).status()).toBe(400);
+
+  const after = await request.get(path, { maxRedirects: 0 });
+  expect(after.headers()["x-nextjs-cache"]).toBe("HIT");
+  expect(sMaxAge(after)).toBe(60);
+  expect(after.headers()["set-cookie"]).toBeUndefined();
+  expect(await after.text()).toBe(await before.text());
+
+  // Oferty demonstracyjne (dane E2E) nie są zliczane: przeglądarka nie wysyła zgłoszeń
+  // ani z listy, ani ze szczegółu, i nie dostaje żadnego cookie od lejka.
+  const funnelRequests: string[] = [];
+  page.on("request", (req) => {
+    if (req.url().includes("/api/job-funnel")) funnelRequests.push(req.url());
+  });
+  await page.goto("/pl/oferty-pracy");
+  await page.goto(path);
+  await page.waitForLoadState("networkidle");
+  expect(funnelRequests).toEqual([]);
+});
