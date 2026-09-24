@@ -3,16 +3,18 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { loadNotificationPreferences } from '@/lib/data/notification-preferences';
 import { loadMyCompanyBlocks } from '@/lib/data/company-blocks';
+import { loadProfileVisibility } from '@/lib/data/profile-visibility';
 import { AccountDataSettings } from '@/components/settings/AccountDataSettings';
 import { CompanyBlocksSettings } from '@/components/settings/CompanyBlocksSettings';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
+import { ProfileVisibilitySettings } from '@/components/settings/ProfileVisibilitySettings';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
 import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
- * Panel kandydata — Ustawienia (preferencje powiadomień, Etap 6; zablokowane firmy, #97;
- * pobranie danych i usunięcie konta, #486).
+ * Panel kandydata — Ustawienia (preferencje powiadomień, Etap 6; widoczność profilu, #494;
+ * zablokowane firmy, #97; pobranie danych i usunięcie konta, #486).
  *
  * Formularz przełączników preferencji (`notification_preferences`), dane pod sesją/RLS z
  * `@/lib/data/notification-preferences`; bez env — wartości domyślne. Błąd odczytu → stan
@@ -46,7 +48,12 @@ export default async function CandidateSettingsPage({
   const t = await getTranslations({ locale, namespace: 'settings' });
   const tBlocks = await getTranslations({ locale, namespace: 'companyBlocks' });
   const tDash = await getTranslations({ locale, namespace: 'dashboard' });
-  const [load, blocks] = await Promise.all([loadNotificationPreferences(), loadMyCompanyBlocks()]);
+  const tVisibility = await getTranslations({ locale, namespace: 'profileVisibility' });
+  const [load, blocks, visibility] = await Promise.all([
+    loadNotificationPreferences(),
+    loadMyCompanyBlocks(),
+    loadProfileVisibility(),
+  ]);
 
   return (
     <div className="min-w-0 max-w-3xl">
@@ -59,6 +66,19 @@ export default async function CandidateSettingsPage({
           <NotificationPreferencesLoadError />
         )}
       </section>
+
+      {visibility.status === 'ready' ? (
+        <ProfileVisibilitySettings initial={visibility} />
+      ) : (
+        <section aria-labelledby="profile-visibility-title" className={PAPER}>
+          <h2 id="profile-visibility-title" className={H2_EXTENDED}>
+            {tVisibility('sectionTitle')}
+          </h2>
+          <p role="alert" className="mt-2 text-sm text-error">
+            {tVisibility('loadError')}
+          </p>
+        </section>
+      )}
 
       {blocks.status === 'ready' ? (
         <CompanyBlocksSettings initialBlocks={blocks.blocks} />

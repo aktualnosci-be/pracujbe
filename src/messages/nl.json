@@ -625,7 +625,8 @@
     "moderationLocked": "Deze inhoud is beperkt door een moderatiebeslissing, dus de status kan niet worden gewijzigd.",
     "guestApplyUnavailable": "Solliciteren zonder account is tijdelijk niet beschikbaar. Probeer later opnieuw of log in.",
     "emailNotVerified": "Bevestig eerst het e-mailadres van je account — klik op de link die we bij de registratie stuurden.",
-    "claimExpired": "De koppellink is verlopen (hij was 30 dagen geldig)."
+    "claimExpired": "De koppellink is verlopen (hij was 30 dagen geldig).",
+    "jobImportSensitiveData": "De vacature bevat een identificatienummer van een persoon of document, daarom hebben we ze niet geïmporteerd. Vul het formulier handmatig in."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -1181,7 +1182,9 @@
     "screeningOptional": "(optioneel)",
     "screeningRequired": "Beantwoord deze vraag.",
     "screeningYes": "Ja",
-    "screeningNo": "Nee"
+    "screeningNo": "Nee",
+    "sensitiveIdHint": "Voor je sollicitatie is geen INSZ-/BIS-nummer of nummer van een identiteitsdocument nodig — vul die niet in.",
+    "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
   },
   "guestApply": {
     "subtitle": "Solliciteer zonder account of log in om je profiel te gebruiken. Een cv is niet nodig.",
@@ -1233,7 +1236,8 @@
       "emailInvalid": "Vul een geldig e-mailadres in, bv. jan@example.com.",
       "messageTooLong": "Het bericht mag maximaal 500 tekens hebben.",
       "consentRequired": "Je moet de toestemming aanvinken om te solliciteren.",
-      "idempotencyKeyInvalid": "Vernieuw de pagina en verstuur het formulier opnieuw."
+      "idempotencyKeyInvalid": "Vernieuw de pagina en verstuur het formulier opnieuw.",
+      "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
     }
   },
   "legal": {
@@ -1450,7 +1454,8 @@
     "errorFileTooLarge": "Het bestand is te groot. De maximale grootte is 5 MB.",
     "errorFileType": "Alleen PNG-, JPG- en WebP-afbeeldingen worden ondersteund.",
     "errorUrlMissing": "Plak een link naar de vacature.",
-    "errorNetwork": "Geen verbinding met de server. Controleer je verbinding en probeer het opnieuw."
+    "errorNetwork": "Geen verbinding met de server. Controleer je verbinding en probeer het opnieuw.",
+    "contactNote": "E-mailadressen, telefoonnummers en identificatienummers nemen we niet over in het formulier. Vul het contact-e-mailadres zelf in bij de laatste stap."
   },
   "messages": {
     "title": "Berichten",
@@ -1889,7 +1894,8 @@
       "messageTooLong": "Het bericht is te lang.",
       "phoneInvalid": "Vul een geldig telefoonnummer in.",
       "termsRequired": "Je moet de toestemming aanvaarden om je sollicitatie te versturen.",
-      "idempotencyKeyInvalid": "Het formulier kon niet worden verzonden. Vernieuw de pagina en probeer het opnieuw."
+      "idempotencyKeyInvalid": "Het formulier kon niet worden verzonden. Vernieuw de pagina en probeer het opnieuw.",
+      "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
     }
   },
   "offer": {
@@ -2001,6 +2007,30 @@
     "deleted": "Je account is verwijderd.",
     "deletedDemo": "Demomodus: er is niets verwijderd.",
     "homeLink": "Naar de startpagina"
+  },
+  "profileVisibility": {
+    "sectionTitle": "Zichtbaarheid van je profiel voor bedrijven",
+    "sectionDescription": "Je kunt geverifieerde werkgevers toestaan je profiel te vinden tussen de kandidaten. Standaard is je profiel verborgen. Je kunt deze instelling altijd wijzigen.",
+    "whoTitle": "Wie ziet je profiel",
+    "whoText": "Alleen bedrijven die door Pracuj.be geverifieerd zijn. Bedrijven die je blokkeert, zien het nooit. Een bedrijf kan je via het portaal een jobaanbod sturen.",
+    "seenTitle": "Wat een bedrijf ziet",
+    "seenText": "De professionele gegevens van je profiel: titel en beschrijving, beroepen en categorieën, vaardigheden, talen, certificaten, ervaring, beschikbaarheid, stad en reisafstand, rijbewijs en auto, soorten contract en gewenst loon.",
+    "notSeenTitle": "Wat een bedrijf niet ziet",
+    "notSeenText": "Je voor- en achternaam, e-mailadres, telefoonnummer en cv. Je naam en de contactgegevens van je account ziet alleen een bedrijf waar je solliciteert of dat je een jobaanbod stuurt.",
+    "offTitle": "Na het uitschakelen",
+    "offText": "Je profiel verdwijnt meteen uit de zoekresultaten en matches van bedrijven. Bedrijven waar je al gesolliciteerd hebt of die je al een aanbod stuurden, zien je profiel nog binnen die sollicitatie. Wil je dat stoppen, blokkeer het bedrijf dan in de sectie ‘Geblokkeerde bedrijven’.",
+    "toggleLabel": "Geverifieerde werkgevers mogen mijn profiel vinden",
+    "stateOn": "Profiel zichtbaar voor geverifieerde bedrijven",
+    "stateOff": "Profiel verborgen voor zoekopdrachten van bedrijven",
+    "changedAt": "Laatst gewijzigd: {date}",
+    "neverChanged": "Deze instelling is nog niet gewijzigd.",
+    "requiresComplete": "Werk eerst je profiel af om de zichtbaarheid in te schakelen.",
+    "completeProfile": "Profiel aanvullen",
+    "saving": "Opslaan…",
+    "savedOn": "Je profiel is nu zichtbaar voor geverifieerde bedrijven.",
+    "savedOff": "Je profiel is nu verborgen voor zoekopdrachten van bedrijven.",
+    "saveError": "De wijziging kon niet worden opgeslagen. De instelling is niet veranderd — probeer het opnieuw.",
+    "loadError": "De zichtbaarheid van je profiel kon niet worden geladen. Vernieuw de pagina zo meteen."
   },
   "team": {
     "title": "Team",

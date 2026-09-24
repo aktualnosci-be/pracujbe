@@ -4,33 +4,38 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <meta name="theme-color" content="#FFFFFF" />
+    <meta name="theme-color" content="#D92932" />
     <title>Brak połączenia · Pracuj.be</title>
     <style>
+      /* Wygląd = prototyp „Ludzie i praca” (#7): logo jak `.people .logo` (DM Sans 800,
+         światło −1,5 px / 29 px, kafelek .be z extended.css), przycisk jak `.pp-btn`,
+         opis w #666 jak tekst hero. Strona działa bez sieci, więc bez webfontu: DM Sans
+         z systemu, dalej Arial. */
       :root { color-scheme: light; }
       * { box-sizing: border-box; }
       body {
         margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        font-family: 'DM Sans', Arial, sans-serif;
         background: #FFFFFF; color: #151515; padding: 24px 16px;
       }
       main { max-width: 28rem; text-align: center; }
       .logo {
-        display: inline-flex; align-items: center; font-size: 28px; font-weight: 800;
-        white-space: nowrap; margin-bottom: 24px; color: #151515;
+        display: inline-block; font-size: 29px; font-weight: 800; letter-spacing: -1.5px;
+        line-height: normal; white-space: nowrap; margin-bottom: 24px; color: #151515;
       }
       .logo-be {
-        margin-left: 2px; padding: 4px 6px; border-radius: 8px; background: #D92932; color: #FFFFFF;
+        display: inline-block; margin-left: .09em; padding: .1em .17em .14em; border-radius: .22em;
+        background: #D92932; color: #FFFFFF; line-height: 1; letter-spacing: -.055em; vertical-align: baseline;
       }
       h1 { font-size: 1.25rem; line-height: 1.4; margin: 0 0 12px; }
       h1 span, p span { display: block; }
-      p { color: #5C5C5C; margin: 0 0 24px; line-height: 1.5; }
+      p { color: #666666; margin: 0 0 24px; line-height: 1.7; }
       button {
-        display: inline-flex; align-items: center; justify-content: center; min-height: 48px;
-        border: 0; border-radius: 8px; background: #D92932; color: #FFFFFF; padding: 12px 24px;
-        font: inherit; font-size: 0.95rem; font-weight: 600; line-height: 1.4; flex-wrap: wrap; cursor: pointer;
+        display: inline-flex; align-items: center; justify-content: center; min-height: 49px;
+        border: 1px solid #D92932; border-radius: 11px; background: #D92932; color: #FFFFFF; padding: 13px 21px;
+        font: inherit; font-size: 14px; font-weight: 650; line-height: 1.4; flex-wrap: wrap; cursor: pointer;
       }
-      button:hover { background: #B01E27; }
+      button:hover { background: #B51D26; border-color: #B51D26; }
       button:focus-visible { outline: 3px solid #151515; outline-offset: 3px; }
     </style>
   </head>

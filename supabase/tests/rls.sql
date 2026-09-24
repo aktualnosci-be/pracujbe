@@ -6319,6 +6319,231 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
 -- po tym pliku (psql -f, bo \ir ścieżki rollbacku nie działa przy wejściu ze stdin).
 
 -- ============================================================================
+-- VIS494. Widoczność profilu kandydata dla firm (#494, 0100): domyślnie wyłączona po
+-- ukończeniu onboardingu, świadome włączenie/wyłączenie przez set_candidate_searchable,
+-- znacznik czasu + historia tylko przy realnej zmianie, skutek natychmiastowy (także po
+-- znanym ID i dla dopasowań), relacja z aplikacji zostaje. Kontrole ujemne: stara
+-- polityka matches (0078) i stary guard (0029) dają czerwony wynik.
+-- ============================================================================
+\set VISC  'e4940000-0000-0000-0000-000000000001'
+\set VISO  'e4940000-0000-0000-0000-000000000002'
+\set VISE1 'e4940000-0000-0000-0000-000000000003'
+\set VISE2 'e4940000-0000-0000-0000-000000000004'
+\set VISEU 'e4940000-0000-0000-0000-000000000005'
+\set VISF1 'e4940000-0000-0000-0000-0000000000f1'
+\set VISF2 'e4940000-0000-0000-0000-0000000000f2'
+\set VISFU 'e4940000-0000-0000-0000-0000000000f3'
+\set VISJ1 'e4940000-0000-0000-0000-0000000000a1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'VISC','visc@test.be','Vis C','{"role":"candidate","first_name":"Vera","last_name":"Visible","locale":"pl"}'),
+  (:'VISO','viso@test.be','Vis O','{"role":"candidate","first_name":"Olaf","last_name":"Other","locale":"nl"}'),
+  (:'VISE1','vise1@test.be','Vis E1','{"role":"employer","first_name":"Rek","last_name":"V1","locale":"fr"}'),
+  (:'VISE2','vise2@test.be','Vis E2','{"role":"employer","first_name":"Rek","last_name":"V2","locale":"en"}'),
+  (:'VISEU','viseu@test.be','Vis EU','{"role":"employer","first_name":"Rek","last_name":"VU","locale":"nl"}');
+insert into public.companies(id,name,status) values
+  (:'VISF1','Firma Vis 1','verified'), (:'VISF2','Firma Vis 2','verified'), (:'VISFU','Firma Vis U','unverified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'VISF1',:'VISE1','owner',true), (:'VISF2',:'VISE2','owner',true), (:'VISFU',:'VISEU','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'VISJ1',:'VISF1','job-vis-1','Magazynier VIS','warehouse','permanent','Antwerpia','Flandria','active','pl');
+
+-- Kandydat bez profilu: pierwszy RPC tworzy profil (ensure_candidate_profile); dane jak po krokach 1–6.
+select set_config('app.current_uid', :'VISC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_candidate_searchable(false) is false, 'VIS1 wyłączenie działa zawsze (także przed ukończeniem)');
+select pg_temp.expect_error('select public.set_candidate_searchable(true)',
+  'VALIDATION_FAILED', 'VIS1b włączenie przed ukończeniem profilu odrzucone');
+reset role;
+update public.candidate_profiles
+  set occupations = array['magazynier'], categories = array['warehouse']::public.job_category[],
+      city = 'Antwerpia', availability = 'immediate', headline = 'Magazynier'
+  where profile_id = :'VISC';
+insert into public.candidate_skills(candidate_profile_id, skill_label)
+  select id, 'wózek widłowy' from public.candidate_profiles where profile_id = :'VISC';
+insert into public.matches(candidate_id, job_id, score) values (:'VISC', :'VISJ1', 90);
+
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(public.finish_onboarding() is true, 'VIS2 onboarding ukończony');
+select pg_temp.assert(
+  (select not is_searchable and profile_completed and searchable_changed_at is null
+   from public.candidate_profiles where profile_id = :'VISC'),
+  'VIS2b ukończony onboarding zostawia profil niewyszukiwalny, bez znacznika');
+select pg_temp.assert((select count(*) from public.candidate_visibility_events) = 0,
+  'VIS2c brak zdarzeń bez realnej zmiany (wyłączenie przy wyłączonym = no-op)');
+reset role;
+
+-- Przed opt-in: nikt poza właścicielem nie widzi profilu, relacji ani dopasowania.
+select set_config('app.current_uid', :'VISE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS3 zweryfikowana firma nie widzi profilu przed opt-in (znane ID)');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'VISC') = 0,
+  'VIS3b zweryfikowana firma nie widzi dopasowania przed opt-in');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS3c anon nie widzi profilu');
+reset role;
+
+-- Opt-in.
+select set_config('app.current_uid', :'VISC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_candidate_searchable(true) is true, 'VIS4 włączenie po ukończeniu');
+select pg_temp.assert(public.set_candidate_searchable(true) is true, 'VIS4b ponowienie włączenia');
+select pg_temp.assert(
+  (select is_searchable and searchable_changed_at is not null
+   from public.candidate_profiles where profile_id = :'VISC'),
+  'VIS4c flaga i znacznik czasu z bazy');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(searchable) from public.candidate_visibility_events where candidate_id = :'VISC'),
+  'VIS4d jedno zdarzenie historii (ponowienie bez duplikatu)');
+select pg_temp.expect_error(
+  format('update public.candidate_profiles set searchable_changed_at = now() - interval ''1 day'' where profile_id = %L::uuid', :'VISC'),
+  'PERMISSION_DENIED', 'VIS4e klient nie ustawia znacznika bezpośrednio');
+select pg_temp.expect_error(
+  format('insert into public.candidate_visibility_events(candidate_id, searchable) values (%L::uuid, false)', :'VISC'),
+  'permission denied', 'VIS4f klient nie dopisuje historii');
+select pg_temp.expect_error(
+  format('delete from public.candidate_visibility_events where candidate_id = %L::uuid', :'VISC'),
+  'permission denied', 'VIS4g klient nie kasuje historii');
+reset role;
+
+-- Po opt-in: zweryfikowana firma widzi minimalny zakres (profil zawodowy + relacje + dopasowanie),
+-- bez imienia/nazwiska/kontaktu.
+select set_config('app.current_uid', :'VISE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 1,
+  'VIS5 zweryfikowana firma widzi profil po opt-in');
+select pg_temp.assert((select count(*) from public.candidate_skills s join public.candidate_profiles cp
+    on cp.id = s.candidate_profile_id where cp.profile_id = :'VISC') = 1,
+  'VIS5b widzi umiejętności profilu');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'VISC') = 1,
+  'VIS5c widzi dopasowanie do własnej oferty');
+select pg_temp.assert((select count(*) from public.profiles where id = :'VISC') = 0,
+  'VIS5d nie widzi imienia/nazwiska/kontaktu bez relacji');
+select pg_temp.assert((select count(*) from public.candidate_visibility_events) = 0,
+  'VIS5e firma nie czyta historii widoczności');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS5j anon nie widzi profilu po opt-in');
+reset role;
+select set_config('app.current_uid', :'VISEU', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS5f niezweryfikowana firma nie widzi profilu po opt-in');
+reset role;
+select set_config('app.current_uid', :'VISO', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS5g inny kandydat nie widzi profilu');
+select pg_temp.assert((select count(*) from public.candidate_visibility_events) = 0,
+  'VIS5h inny kandydat nie widzi cudzej historii');
+reset role;
+select set_config('app.current_uid', :'VISE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.set_candidate_searchable(true)',
+  'PERMISSION_DENIED', 'VIS5i konto pracodawcy nie ustawia widoczności');
+reset role;
+
+-- Blokada firmy: VISF2 nie widzi mimo opt-in, VISF1 dalej widzi.
+select set_config('app.current_uid', :'VISC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.set_company_block(:'VISF2'::uuid, true);
+reset role;
+select set_config('app.current_uid', :'VISE2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS6 zablokowana firma nie widzi profilu mimo opt-in');
+reset role;
+
+-- Opt-out: skutek natychmiastowy, także po znanym ID i dla dopasowań.
+select set_config('app.current_uid', :'VISC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select searchable_changed_at as vis_on_at from public.candidate_profiles where profile_id = :'VISC' \gset
+select pg_temp.assert(public.set_candidate_searchable(false) is false, 'VIS7 wyłączenie');
+select pg_temp.assert(
+  (select not is_searchable and searchable_changed_at >= :'vis_on_at'::timestamptz
+   from public.candidate_profiles where profile_id = :'VISC'),
+  'VIS7b flaga wyłączona, znacznik zaktualizowany');
+select pg_temp.assert(
+  (select string_agg(searchable::text, ',' order by created_at, searchable desc)
+   from public.candidate_visibility_events where candidate_id = :'VISC') = 'true,false',
+  'VIS7c historia: włączenie, potem wyłączenie');
+reset role;
+select set_config('app.current_uid', :'VISE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS8 po wyłączeniu firma nie widzi profilu (znane ID)');
+select pg_temp.assert((select count(*) from public.candidate_skills s join public.candidate_profiles cp
+    on cp.id = s.candidate_profile_id where cp.profile_id = :'VISC') = 0,
+  'VIS8b po wyłączeniu nie widzi umiejętności');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'VISC') = 0,
+  'VIS8c po wyłączeniu nie widzi dopasowania (znane ID)');
+select pg_temp.assert((select count(*) from public.get_company_top_matches(:'VISF1'::uuid, 5)
+    where candidate_id = :'VISC') = 0,
+  'VIS8d po wyłączeniu kandydat znika z top dopasowań');
+reset role;
+
+-- Kontrola ujemna 1: polityka matches z 0078 (bez widoczności kandydata) przepuszcza wynik.
+begin;
+drop policy matches_select on public.matches;
+create policy matches_select on public.matches
+  for select to authenticated
+  using (
+    candidate_id = auth.uid()
+    or (public.is_job_manager(job_id)
+        and not public.candidate_blocked_job_company(candidate_id, job_id))
+  );
+set local role authenticated; set local app.current_uid = :'VISE1'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'VISC') = 1,
+  'VIS9 kontrola ujemna: bez 0100 firma czyta dopasowanie po wyłączeniu widoczności');
+rollback;
+
+-- Kontrola ujemna 2: guard z 0029 (bez znacznika) pozwala klientowi przestawić znacznik.
+begin;
+create or replace function public.guard_candidate_completeness()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if current_user in ('postgres', 'service_role', 'supabase_admin', 'supabase_auth_admin') then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    new.profile_completed := false; new.is_searchable := false; return new;
+  end if;
+  if new.profile_completed is distinct from old.profile_completed
+     or new.is_searchable is distinct from old.is_searchable then
+    raise exception 'PERMISSION_DENIED' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+set local role authenticated; set local app.current_uid = :'VISC'; select pg_temp.assert_client_role();
+update public.candidate_profiles set searchable_changed_at = now() - interval '1 day' where profile_id = :'VISC';
+select pg_temp.assert((select searchable_changed_at < now() - interval '1 hour'
+    from public.candidate_profiles where profile_id = :'VISC'),
+  'VIS9b kontrola ujemna: bez 0100 klient przestawia znacznik');
+rollback;
+
+-- Relacja z aplikacji zostaje: kandydat aplikuje do VISF1 — firma widzi profil i dopasowanie
+-- w tym procesie mimo wyłączonej widoczności (company_can_view_candidate, 0078).
+select set_config('app.current_uid', :'VISC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'VISJ1'::uuid, 'vis-app-1', null, 'immediate', null) as visapp \gset
+reset role;
+select set_config('app.current_uid', :'VISE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 1,
+  'VIS10 firma, do której kandydat aplikował, widzi profil mimo wyłączenia');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'VISC') = 1,
+  'VIS10b i dopasowanie do tej oferty');
+reset role;
+select set_config('app.current_uid', :'VISE2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'VISC') = 0,
+  'VIS10c inna firma nadal nie widzi profilu');
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- MOD42. Decyzja moderacyjna z uzasadnieniem i atomową egzekucją (0099, #42):
 -- decyzja + skutek + stan sprawy + historia + audyt + powiadomienia w jednej transakcji;
 -- sam status nie rozstrzyga sprawy DSA; blokada treści; awaria cofa całość; wyścig;
