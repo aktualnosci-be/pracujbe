@@ -19,6 +19,7 @@ import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isSupabaseConfigured } from '@/lib/env';
+import { effectiveJobStatus, isPastExpiry, notExpiredFilter } from '@/lib/job-expiry';
 import { captureError } from '@/lib/sentry';
 
 /* ---------------------------------------------------------------------------
@@ -36,8 +37,13 @@ export interface EmployerJob {
   id: string;
   title: string;
   city: string;
-  /** Surowy `job_status` (draft/active/paused/closed/expired) — mapowany w StatusPill. */
+  /**
+   * Status efektywny (draft/active/paused/closed/expired) — mapowany w StatusPill. Aktywna po
+   * `expires_at` jest pokazywana jako `expired`, zanim maintenance zmieni rekord (#72).
+   */
   status: string;
+  /** Data ważności minęła — wstrzymana po terminie proponuje ponowne otwarcie zamiast wznowienia. */
+  pastExpiry: boolean;
   /** Publiczny adres oferty (link „Zobacz ofertę" dla aktywnej, #325). */
   slug: string;
   newApplications: number;
@@ -104,11 +110,11 @@ export const DEMO_OVERVIEW_DELTAS = {
 } as const;
 
 const DEMO_JOBS: EmployerJob[] = [
-  { id: '12345', title: 'Operator wózka widłowego', city: 'Liège', status: 'active', slug: '', newApplications: 12, matched: 6, createdAt: '2026-09-18T09:00:00Z' },
-  { id: '12344', title: 'Pracownik magazynu', city: 'Antwerpia', status: 'active', slug: '', newApplications: 8, matched: 4, createdAt: '2026-09-15T09:00:00Z' },
-  { id: '12343', title: 'Elektryk przemysłowy', city: 'Charleroi', status: 'active', slug: '', newApplications: 5, matched: 3, createdAt: '2026-09-11T09:00:00Z' },
-  { id: '12342', title: 'Produkcja – operator maszyn', city: 'Genk', status: 'active', slug: '', newApplications: 7, matched: 4, createdAt: '2026-09-08T09:00:00Z' },
-  { id: '12341', title: 'Specjalista ds. logistyki', city: 'Bruksela', status: 'active', slug: '', newApplications: 3, matched: 2, createdAt: '2026-09-02T09:00:00Z' },
+  { id: '12345', title: 'Operator wózka widłowego', city: 'Liège', status: 'active', slug: '', pastExpiry: false, newApplications: 12, matched: 6, createdAt: '2026-09-18T09:00:00Z' },
+  { id: '12344', title: 'Pracownik magazynu', city: 'Antwerpia', status: 'active', slug: '', pastExpiry: false, newApplications: 8, matched: 4, createdAt: '2026-09-15T09:00:00Z' },
+  { id: '12343', title: 'Elektryk przemysłowy', city: 'Charleroi', status: 'active', slug: '', pastExpiry: false, newApplications: 5, matched: 3, createdAt: '2026-09-11T09:00:00Z' },
+  { id: '12342', title: 'Produkcja – operator maszyn', city: 'Genk', status: 'active', slug: '', pastExpiry: false, newApplications: 7, matched: 4, createdAt: '2026-09-08T09:00:00Z' },
+  { id: '12341', title: 'Specjalista ds. logistyki', city: 'Bruksela', status: 'active', slug: '', pastExpiry: false, newApplications: 3, matched: 2, createdAt: '2026-09-02T09:00:00Z' },
 ];
 
 const DEMO_APPLICATIONS: EmployerApplication[] = [
@@ -335,7 +341,9 @@ export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
         .select('id', { count: 'exact', head: true })
         .eq('company_id', companyId)
         .eq('status', 'active')
-        .is('deleted_at', null),
+        .is('deleted_at', null)
+        // #72: przeterminowana oferta nie jest aktywna także przed przebiegiem maintenance.
+        .or(notExpiredFilter()),
       supabase
         .from('applications')
         .select('id', { count: 'exact', head: true })
@@ -550,7 +558,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         'id, company_id, status, title, category, occupation, contract_type, working_hours, shifts, ' +
           'start_immediately, start_date, city, region, address, remote, salary_min, salary_max, ' +
           'currency, salary_period, min_experience_years, requires_driving_license, ' +
-          'no_language_required, accommodation, transport, contact_email, default_locale, slug, updated_at',
+          'no_language_required, accommodation, transport, contact_email, default_locale, slug, ' +
+          'expires_at, updated_at',
       )
       .eq('id', jobId)
       .eq('company_id', companyId)
@@ -560,7 +569,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
     const job = asRecord(jobRow);
     if (!asString(job['id'])) return { status: 'not-found' };
 
-    const jobStatus = asString(job['status']);
+    // #72: aktywna po terminie jest wygasła — najpierw ponowne otwarcie, jak dla `expired`.
+    const jobStatus = effectiveJobStatus(asString(job['status']), asString(job['expires_at']) || null);
     if (!isEditableJobStatus(jobStatus)) return { status: 'not-editable', jobStatus };
 
     const locale = asString(job['default_locale'], 'pl');
@@ -684,7 +694,7 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
 
     const { data: jobsData, error: jobsError } = await supabase
       .from('jobs')
-      .select('id, title, city, status, slug, created_at')
+      .select('id, title, city, status, slug, expires_at, created_at')
       .eq('company_id', companyId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
@@ -711,13 +721,16 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
     }));
     const countsByJob = new Map(counts.map((row) => [row.id, row]));
 
+    const now = new Date();
     return { status: 'ok', hasNext, jobs: jobs.map((r) => {
       const id = asString(r['id']);
+      const expiresAt = asString(r['expires_at']) || null;
       return {
         id,
         title: asString(r['title']),
         city: asString(r['city']),
-        status: asString(r['status'], 'draft'),
+        status: effectiveJobStatus(asString(r['status'], 'draft'), expiresAt, now),
+        pastExpiry: isPastExpiry(expiresAt, now),
         slug: asString(r['slug']),
         newApplications: countsByJob.get(id)?.newApplications ?? 0,
         matched: countsByJob.get(id)?.matched ?? 0,

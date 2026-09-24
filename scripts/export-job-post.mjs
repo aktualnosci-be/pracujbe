@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { formatSalaryRange } from "../src/lib/salary.ts";
 import { launchChromium } from "./lib/launch-chromium.mjs";
+import { captureStableScreenshot } from "./lib/stable-screenshot.mjs";
 import {
   LOCALES,
   SITE_ORIGIN,
@@ -344,7 +345,10 @@ export async function exportJobPost({ job, outputPrefix, browser }) {
       await page.setContent(
         `<style>html,body{margin:0;width:${SIZE}px;height:${SIZE}px;overflow:hidden}svg{display:block}</style>${svg}`,
       );
-      const png = await page.screenshot({ animations: "disabled", type: "png" });
+      const png = await captureStableScreenshot(page, {
+        animations: "disabled",
+        type: "png",
+      });
       await mkdir(dirname(outputPrefix), { recursive: true });
       await writeFile(`${outputPrefix}.svg`, svg);
       await writeFile(`${outputPrefix}.png`, png);

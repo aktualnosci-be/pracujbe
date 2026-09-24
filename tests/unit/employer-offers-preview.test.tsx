@@ -57,7 +57,7 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
           result={{
             status: 'ok',
             hasNext: false,
-            jobs: [{ id: 'job-1', title: 'Operator wózka', city: 'Liège', status: 'active', slug: 'operator-wozka', newApplications: 2, matched: 3, createdAt: null }],
+            jobs: [{ id: 'job-1', title: 'Operator wózka', city: 'Liège', status: 'active', slug: 'operator-wozka', pastExpiry: false, newApplications: 2, matched: 3, createdAt: null }],
           }}
           locale={locale}
           labels={labels}

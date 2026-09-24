@@ -1,5 +1,5 @@
 import createNextIntlPlugin from 'next-intl/plugin';
-import { createBuildMetadata } from './scripts/build-version.mjs';
+import { createReleaseAwareBuildMetadata } from './scripts/build-version.mjs';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
@@ -16,8 +16,10 @@ function supabaseHost() {
   }
 }
 const SUPABASE_HOST = supabaseHost();
-const BUILD = createBuildMetadata(
+// #103: wersja 1.0.0 tylko po jawnym PRACUJBE_RELEASE_VERSION=1.0.0; błędna wartość przerywa build.
+const BUILD = createReleaseAwareBuildMetadata(
   new Date(),
+  process.env.PRACUJBE_RELEASE_VERSION,
   process.env.RAILWAY_GIT_COMMIT_SHA,
   process.env.GITHUB_SHA,
 );
