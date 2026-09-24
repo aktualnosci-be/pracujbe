@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getJobs, getJobBySlug, getCategoryCounts, getCityCounts } from '@/lib/jobs';
+import { getJobs, getJobBySlug, getCategoryCounts, getCityCounts, getJobFilterFacets } from '@/lib/jobs';
 
 const adapters = vi.hoisted(() => ({
   list: vi.fn(),
@@ -36,7 +36,7 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
     adapters.list.mockResolvedValue({ rows: [{ id: 'id', slug: 'oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z', salary_min: 18.59, salary_period: 'hour' }], total: 17, page: 2, pageSize: 12 });
     const result = await getJobs({ locale: 'nl', page: 2, keyword: 'Elektryk' });
-    expect(adapters.list).toHaveBeenCalledWith(adapters.pool, { locale: 'nl', page: 2, keyword: 'Elektryk', pageSize: 12 });
+    expect(adapters.list).toHaveBeenCalledWith(adapters.pool, { locale: 'nl', page: 2, keyword: 'Elektryk', pageSize: 12 }, null);
     expect(result).toMatchObject({ total: 17, page: 2, jobs: [{ title: 'Elektryk', salaryMin: 18.59, salaryPeriod: 'hour', publishedAt: '2026-01-01T00:00:00Z' }] });
   });
   it.each([
@@ -52,6 +52,18 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
     const result = await getJobs({ locale: 'pl' });
 
     expect(result.jobs[0]).not.toHaveProperty('salaryPeriod');
+  });
+  it('lista i facety przekazują zweryfikowanego kandydata do bazy (#97)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    const candidateId = '11111111-1111-4111-8111-111111111111';
+    adapters.list.mockResolvedValue({ rows: [], total: 0, page: 1, pageSize: 12 });
+    adapters.filterFacets.mockResolvedValue({ total: 0, categories: {}, locations: [], contracts: {}, accommodation: { provided: 0, unavailable: 0 }, immediate: 0, noLanguage: 0 });
+
+    await getJobs({ locale: 'pl' }, { candidateId });
+    await getJobFilterFacets({ locale: 'pl' }, { candidateId });
+
+    expect(adapters.list).toHaveBeenCalledWith(adapters.pool, expect.objectContaining({ locale: 'pl' }), candidateId);
+    expect(adapters.filterFacets).toHaveBeenCalledWith(adapters.pool, { locale: 'pl' }, candidateId);
   });
   it('awaria skonfigurowanej bazy nie wraca do demo', async () => {
     vi.stubEnv('APP_MODE', 'demo');

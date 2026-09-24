@@ -8,6 +8,8 @@
  * Wartości NEXT_PUBLIC_* są wstrzykiwane do bundle'a klienta w czasie builda — nie umieszczaj
  * tam sekretów (service-role key czytany jest osobno, tylko po stronie serwera).
  */
+import { isBillingEnabled } from '@/lib/billing/flag';
+
 export const env = {
   /** Publiczny URL aplikacji (kanoniczne linki, e-maile). Fallback: localhost. */
   get siteUrl(): string {
@@ -117,7 +119,8 @@ export function readinessChecks(): Record<string, boolean> {
     supabase: isSupabaseConfigured(),
     serviceRole: hasServiceRoleKey(),
     httpsSiteUrl: hasPublicHttpsUrl(),
-    stripe: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
+    // #51: sprzedaż wyłączona flagą — sekrety Stripe bez `BILLING_ENABLED` nie liczą się.
+    stripe: isBillingEnabled() && Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
     resend: Boolean(process.env.RESEND_API_KEY),
     emailHook: Boolean(process.env.SEND_EMAIL_HOOK_SECRET),
     queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),

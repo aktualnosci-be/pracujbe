@@ -344,7 +344,50 @@ export interface JobWizardProps {
    * wymagany (#101). Nowa oferta: język strony (tak tworzy ją `createJobDraft`).
    */
   contentLocale?: string;
+  /**
+   * #465: krok „Zaimportuj z ogłoszenia" (panel importu AI) — renderowany nad krokami, tylko
+   * przy nowej ofercie na kroku 1. Brak = kreator bez zmian (flaga wyłączona / brak klucza).
+   */
+  importSlot?: React.ReactNode;
+  /** #465: pola wypełnione importem, które pracodawca musi sprawdzić (nazwy pól formularza). */
+  importReview?: { fields: readonly string[]; suspicious: boolean };
 }
+
+/** #465: pole formularza → krok i etykieta (lista „Do sprawdzenia" na kroku). */
+const IMPORT_REVIEW_FIELDS: Record<string, { step: WizardStep; label: string }> = {
+  title: { step: 1, label: 'titleLabel' },
+  category: { step: 1, label: 'categoryLabel' },
+  occupation: { step: 1, label: 'occupationLabel' },
+  contractType: { step: 2, label: 'contractTypeLabel' },
+  workingHours: { step: 2, label: 'workingHoursLabel' },
+  shifts: { step: 2, label: 'shiftsLabel' },
+  startImmediately: { step: 2, label: 'startImmediately' },
+  startDate: { step: 2, label: 'startDateLabel' },
+  city: { step: 3, label: 'cityLabel' },
+  region: { step: 3, label: 'regionLabel' },
+  address: { step: 3, label: 'addressLabel' },
+  remote: { step: 3, label: 'remote' },
+  salaryMin: { step: 4, label: 'salaryMinLabel' },
+  salaryMax: { step: 4, label: 'salaryMaxLabel' },
+  currency: { step: 4, label: 'currencyLabel' },
+  salaryPeriod: { step: 4, label: 'salaryPeriodLabel' },
+  description: { step: 5, label: 'descriptionLabel' },
+  responsibilities: { step: 5, label: 'responsibilitiesLabel' },
+  requirementsMandatory: { step: 6, label: 'requirementsMandatoryLabel' },
+  mandatorySkills: { step: 6, label: 'mandatorySkillsLabel' },
+  minExperienceYears: { step: 6, label: 'minExperienceLabel' },
+  requirementsOptional: { step: 7, label: 'requirementsOptionalLabel' },
+  skills: { step: 7, label: 'skillsLabel' },
+  languages: { step: 7, label: 'languagesLabel' },
+  requiredCertificates: { step: 7, label: 'certificatesLabel' },
+  requiresDrivingLicense: { step: 7, label: 'requiresDrivingLicense' },
+  conditions: { step: 8, label: 'conditionsLabel' },
+  benefits: { step: 8, label: 'benefitsLabel' },
+  accommodation: { step: 8, label: 'accommodation' },
+  transport: { step: 8, label: 'transport' },
+  companyDescription: { step: 9, label: 'companyDescriptionLabel' },
+  contactEmail: { step: 9, label: 'contactEmailLabel' },
+};
 
 /** Zawężenie surowych wartości z DB do unii formularza (nieznane wartości → domyślne/puste). */
 function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> {
@@ -384,8 +427,11 @@ export function JobWizard({
   initialValues,
   published,
   contentLocale: contentLocaleProp,
+  importSlot,
+  importReview,
 }: JobWizardProps = {}): React.JSX.Element {
   const t = useTranslations('jobWizard');
+  const tImport = useTranslations('jobImport');
   const tRoot = useTranslations();
   const tn = useTranslations('nav');
   const tCat = useTranslations('categories');
@@ -478,6 +524,12 @@ export function JobWizard({
   ];
 
   const busy = saveState === 'saving' || publishing;
+
+  // #465: pola z importu do sprawdzenia na bieżącym kroku (etykiety jak w formularzu).
+  const stepReviewLabels = (importReview?.fields ?? [])
+    .map((f) => IMPORT_REVIEW_FIELDS[f])
+    .filter((d): d is { step: WizardStep; label: string } => d !== undefined && d.step === step)
+    .map((d) => t(d.label));
 
   React.useEffect(() => {
     if (isFirstRenderRef.current) {
@@ -777,6 +829,8 @@ export function JobWizard({
         ) : null}
       </div>
 
+      {!isEdit && step === 1 && importSlot ? importSlot : null}
+
       {/* Stepper */}
       <Stepper
         steps={steps}
@@ -808,6 +862,19 @@ export function JobWizard({
           {stepAnnouncement}
         </p>
         <p className="mt-1 text-base leading-relaxed text-muted-foreground">{steps[step - 1]?.desc}</p>
+        {stepReviewLabels.length > 0 ? (
+          <div
+            role="note"
+            className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm text-foreground"
+          >
+            <p className="font-medium">{tImport('reviewStepTitle')}</p>
+            <ul className="mt-1 list-disc pl-5">
+              {stepReviewLabels.map((label) => (
+                <li key={label}>{label}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <form
           className="mt-6 [&_input]:min-h-12 [&_textarea]:text-base [&_[role=combobox]]:min-h-12"

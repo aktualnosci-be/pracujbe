@@ -11,13 +11,15 @@ import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import { AdminPageHeader } from '@/components/admin/AdminListControls';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
+import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
 
 /**
  * Panel administratora — szczegół firmy (#310).
  *
  * Decyzja o weryfikacji nie zapada „na ślepo”: dane rejestrowe (VAT, KBO, kontakt, adres),
  * uzasadnienie ostatniego odrzucenia/zawieszenia, członkowie firmy (rola, aktywny dostęp)
- * i najnowsze oferty. Akcje statusu te same co na liście (`CompanyStatusActions` → dialog
+ * i najnowsze oferty. Sekcja VIES (#92): ostatni wynik weryfikacji numeru VAT z datą i ręczne
+ * ponowienie — informacja pomocnicza, status firmy zmienia wyłącznie admin. Akcje statusu te same co na liście (`CompanyStatusActions` → dialog
  * z wymaganym uzasadnieniem dla odrzucenia/zawieszenia → RPC 0084: powiadomienie i e-mail
  * do właściciela w JEGO języku, wpis w dzienniku). Po decyzji fokus na nagłówku strony (#415).
  *
@@ -182,6 +184,9 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
           </dl>
         ) : null}
       </section>
+
+      {/* Weryfikacja VAT w VIES (#92) */}
+      <CompanyViesCheck companyId={company.id} initial={company.vies} />
 
       {/* Członkowie */}
       <section

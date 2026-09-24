@@ -3,9 +3,10 @@
 import type { ErrorCode } from '@/lib/errors';
 
 /**
- * Płatności są celowo wyłączone w bezpłatnym MVP. Akcje pozostają jako stabilna granica
- * serwera dla starszych klientów, ale zawsze odmawiają operacji — także gdy na Railway przez
- * pomyłkę nadal są ustawione sekrety Stripe.
+ * Płatności są wyłączone w bezpłatnym MVP (#51, flaga `BILLING_ENABLED`, domyślnie wyłączona —
+ * `src/lib/billing/flag.ts`). Akcje pozostają jako stabilna granica serwera dla starszych
+ * klientów i ZAWSZE odmawiają, niezależnie od flagi i sekretów Stripe: ta wersja nie zawiera
+ * przepływu checkoutu, a jego powrót to osobny projekt po decyzji właściciela.
  */
 
 export type CheckoutResult = { ok: false; error: ErrorCode };

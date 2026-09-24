@@ -29,6 +29,7 @@ import { brandShareImageUrl, buildJobPostingJsonLd, serializeJsonLd } from '@/li
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
+import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { loginHref } from '@/lib/auth/next-path';
 import { JobMatchCard } from '@/components/public/JobMatchCard';
 import { JobCompanyBlockControl } from '@/components/public/JobCompanyBlockControl';
@@ -299,6 +300,8 @@ export default async function JobDetailPage({ params }: PageProps) {
       </Link>
 
       {job.isDemo ? <DemoJobsNotice className="mb-6" /> : null}
+      {/* Lejek ofert (#99): zliczenie po załadowaniu, bez wpływu na cache ISR tej strony. */}
+      {job.isDemo ? null : <JobFunnelBeacon event="detail_view" jobIds={[job.id]} />}
 
       {/* Paszport oferty: nagłówek i stała metryka z rzeczywistych danych. */}
       <header
