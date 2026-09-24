@@ -12,6 +12,11 @@ describe('Konfiguracja ograniczonej puli', () => {
     expect(runtimePoolConfig('postgres://web:secret@localhost/app', 'domain').options)
       .toContain('-c role=pracujbe_app -c search_path=public');
   });
+  it('pula monitoringu (#47): rola pracujbe_ops i jedna sesja', () => {
+    const config = runtimePoolConfig('postgres://ops:secret@localhost/app', 'ops');
+    expect(config.options).toContain('-c role=pracujbe_ops -c search_path=public');
+    expect(config.max).toBe(1);
+  });
   it.each([
     '', 'not-a-url', 'https://user:secret@host/db', 'postgres://host/db',
     'postgres://user:secret@host/',
