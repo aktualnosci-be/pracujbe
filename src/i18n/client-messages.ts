@@ -17,6 +17,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'categories',
   'common',
   'company',
+  'companyBlocks',
   'contractTypes',
   'cookies',
   'dashboard',

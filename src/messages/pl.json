@@ -1531,5 +1531,24 @@
     "contactProposalsDesc": "Możesz wysłać kandydatowi propozycję pracy, którą on akceptuje albo odrzuca.",
     "finalTitle": "Chcesz dodać pierwszą ofertę?",
     "finalDesc": "Załóż konto pracodawcy. Ofertę opublikujesz po weryfikacji firmy."
+  },
+  "companyBlocks": {
+    "sectionTitle": "Zablokowane firmy",
+    "sectionDescription": "Zablokowana firma nie zobaczy Twojego profilu, nie znajdzie Cię wśród kandydatów, nie wyśle Ci propozycji ani nowej wiadomości, a jej oferty znikną z polecanych. Firma nie dostaje informacji o blokadzie. Twoje dotychczasowe aplikacje i rozmowy zostają.",
+    "empty": "Nie masz zablokowanych firm. Firmę możesz zablokować na stronie jej oferty.",
+    "blockedAt": "Zablokowano {date}",
+    "unblock": "Odblokuj",
+    "unblockNamed": "Odblokuj firmę {company}",
+    "unblocking": "Odblokowywanie…",
+    "unblockedSuccess": "Firma {company} została odblokowana.",
+    "loadError": "Nie udało się wczytać listy zablokowanych firm. Odśwież stronę za chwilę.",
+    "saveError": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "jobTitle": "Kontakt z tą firmą",
+    "jobDescription": "Jeśli nie chcesz, żeby {company} widziała Twój profil i kontaktowała się z Tobą, możesz ją zablokować. Firma nie dostanie o tym informacji.",
+    "jobBlockedDescription": "{company} jest zablokowana: nie widzi Twojego profilu i nie może wysłać Ci propozycji ani wiadomości. Jej oferty nie pojawiają się w polecanych.",
+    "block": "Zablokuj firmę",
+    "blocking": "Blokowanie…",
+    "blockedSuccess": "Firma {company} została zablokowana.",
+    "manage": "Zarządzaj zablokowanymi firmami"
   }
 }

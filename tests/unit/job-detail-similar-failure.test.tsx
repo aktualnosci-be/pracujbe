@@ -23,6 +23,7 @@ vi.mock('@/components/public/ApplyModal', () => ({
   ApplyModal: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button" data-testid="apply">{triggerLabel ?? 'apply'}</button>,
 }));
 vi.mock('@/components/public/JobMatchCard', () => ({ JobMatchCard: () => null }));
+vi.mock('@/components/public/JobCompanyBlockControl', () => ({ JobCompanyBlockControl: () => null }));
 vi.mock('@/components/public/PublicSavedJobs', () => ({
   PublicSavedJobsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PublicSaveJobButton: () => null,

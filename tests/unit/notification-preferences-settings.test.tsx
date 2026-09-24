@@ -33,6 +33,11 @@ vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
 vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+// Sekcja zablokowanych firm (#97) ma własne testy (company-blocks-action, E2E).
+vi.mock('@/lib/data/company-blocks', () => ({
+  loadMyCompanyBlocks: async () => ({ status: 'ready', blocks: [], demo: false }),
+}));
+vi.mock('@/components/settings/CompanyBlocksSettings', () => ({ CompanyBlocksSettings: () => null }));
 vi.mock('@/lib/actions/notification-preferences', () => ({
   updateNotificationPreferences: vi.fn(),
 }));
