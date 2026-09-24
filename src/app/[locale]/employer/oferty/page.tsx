@@ -3,12 +3,26 @@ import { ExternalLink, MapPin, Pencil, Plus } from "lucide-react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
-import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { JobLifecycleActions } from "@/components/employer/JobLifecycleActions";
 import { RecruiterOnlyNote } from "@/components/employer/RecruiterOnlyNote";
 import { getCompanyJobsLoad, getEmployerShellData } from "@/lib/data/employer";
 import { canRecruit } from "@/lib/team/permissions";
+import {
+  BTN_PRIMARY,
+  BTN_SECONDARY,
+  EYEBROW,
+  H1,
+  INFO_LABEL,
+  INTRO,
+  JOB_CARD,
+  JOB_CARD_TITLE,
+  PANEL,
+  PANEL_H2,
+  PANEL_P,
+  TAG,
+  TEXT_LINK,
+} from '@/components/dashboard/panel-styles';
 
 /**
  * Lista ofert firmy (`/employer/oferty`) — cel linku „Zobacz wszystkie oferty" i pozycji nawigacji
@@ -79,23 +93,21 @@ export default async function EmployerOffersPage({
     <div className="space-y-7">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+          <p className={EYEBROW}>
             {td("employerRole")}
           </p>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <h1 className={H1}>
             {td("navOffers")}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          <p className={INTRO}>
             {td("employerOffersIntro")}
           </p>
         </div>
         {canRecruitHere ? (
-          <Button asChild className="min-h-12 self-start rounded-xl sm:self-auto">
-            <Link href="/employer/oferty/nowa">
+          <Link className={BTN_PRIMARY} href="/employer/oferty/nowa">
               <Plus className="size-4" aria-hidden="true" />
               {td("addJob")}
             </Link>
-          </Button>
         ) : (
           <RecruiterOnlyNote locale={locale} />
         )}
@@ -104,66 +116,60 @@ export default async function EmployerOffersPage({
       {result.status === "error" ? (
         <section
           role="alert"
-          className="rounded-3xl border border-border bg-card p-6 sm:p-8"
+          className={PANEL}
         >
-          <h2 className="text-xl font-semibold text-foreground">
+          <h2 className={PANEL_H2}>
             {td("employerOffersLoadError")}
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className={`mt-2 ${PANEL_P}`}>
             {td("employerOffersLoadErrorHint")}
           </p>
           <a
             href={`/${locale}${pageHref(page)}`}
-            className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-border px-5 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className={`mt-5 ${BTN_SECONDARY}`}
           >
             {td("employerOffersRetry")}
           </a>
         </section>
       ) : result.jobs.length === 0 && page > 1 ? (
-        <section className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-          <h2 className="text-xl font-semibold text-foreground">
+        <section className={PANEL}>
+          <h2 className={PANEL_H2}>
             {td("employerOffersPageEmpty")}
           </h2>
           <Link
             href={pageHref(1)}
-            className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-border px-5 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className={`mt-5 ${BTN_SECONDARY}`}
           >
             {td("employerOffersFirstPage")}
           </Link>
         </section>
       ) : result.jobs.length === 0 ? (
-        <section className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-          <h2 className="text-xl font-semibold text-foreground">
+        <section className={PANEL}>
+          <h2 className={PANEL_H2}>
             {td("employerOffersEmptyTitle")}
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className={`mt-2 ${PANEL_P}`}>
             {td("employerOffersEmptyHint")}
           </p>
           {canRecruitHere ? (
-            <Button
-              asChild
-              variant="outline"
-              className="mt-5 min-h-12 rounded-xl"
-            >
-              <Link href="/employer/oferty/nowa">{td("addJob")}</Link>
-            </Button>
+            <Link className={`mt-5 ${BTN_SECONDARY}`} href="/employer/oferty/nowa">{td("addJob")}</Link>
           ) : null}
         </section>
       ) : (
         <>
           <ul
-            className="grid min-w-0 gap-4 xl:grid-cols-2"
+            className="grid min-w-0 gap-5 xl:grid-cols-2"
             aria-label={td("navOffers")}
           >
             {result.jobs.map((offer) => (
               <li key={offer.id} className="min-w-0">
-                <article className="flex h-full min-w-0 flex-col rounded-3xl border border-border bg-card p-5 sm:p-6">
+                <article className={JOB_CARD}>
                   <div
                     className="flex flex-wrap items-start justify-between gap-3"
                     data-job-id={offer.id}
                   >
                     {offer.createdAt && formatCreatedAt(offer.createdAt, locale) ? (
-                      <span className="max-w-full rounded-full bg-soft px-3 py-1 text-xs font-medium text-muted-foreground">
+                      <span className={TAG}>
                         {td("employerOffersCreatedLabel", {
                           date: formatCreatedAt(offer.createdAt, locale),
                         })}
@@ -171,64 +177,52 @@ export default async function EmployerOffersPage({
                     ) : null}
                     <StatusPill status={offer.status} className="ml-auto" />
                   </div>
-                  <h2 className="mt-5 min-w-0 break-words text-xl font-bold leading-tight tracking-tight text-foreground sm:text-2xl">
+                  <h2 className={`mt-[10px] ${JOB_CARD_TITLE}`}>
                     {offer.title}
                   </h2>
                   {offer.city ? (
-                    <p className="mt-3 flex min-w-0 items-center gap-2 break-words text-sm text-muted-foreground">
+                    <p className="mt-3 flex min-w-0 items-center gap-2 break-words text-[13px] leading-[1.4] text-muted-foreground">
                       <MapPin className="size-4 shrink-0" aria-hidden="true" />
                       {offer.city}
                     </p>
                   ) : null}
                   <dl className="mt-6 grid grid-cols-2 gap-4 border-y border-border py-5">
                     <div className="min-w-0">
-                      <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      <dt className={INFO_LABEL}>
                         {td("employerOffersApplicationsLabel")}
                       </dt>
-                      <dd className="mt-1 text-2xl font-semibold text-foreground">
+                      <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
                         {offer.newApplications}
                       </dd>
                     </div>
                     <div className="min-w-0 border-l border-border pl-4">
-                      <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      <dt className={INFO_LABEL}>
                         {td("colMatched")}
                       </dt>
-                      <dd className="mt-1 text-2xl font-semibold text-foreground">
+                      <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
                         {offer.matched}
                       </dd>
                     </div>
                   </dl>
-                  <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
+                  <div className="mt-auto flex flex-wrap items-center gap-[9px] pt-[14px]">
                     {offer.status === "draft" ? (
                       !canRecruitHere ? null : (
-                      <Button
-                        asChild
-                        variant="outline"
-                        className="min-h-12 rounded-xl"
-                      >
-                        <Link href={`/employer/oferty/${offer.id}/edycja`}>
+                      <Link className={BTN_SECONDARY} href={`/employer/oferty/${offer.id}/edycja`}>
                           {td("resumeDraft")}
                         </Link>
-                      </Button>
                       )
                     ) : (
                       <>
                         {/* #325: poprawka opublikowanej oferty bez zmiany statusu i zgłoszeń. */}
                         {canRecruitHere &&
                         (offer.status === "active" || offer.status === "paused") ? (
-                          <Button
-                            asChild
-                            variant="outline"
-                            className="min-h-12 rounded-xl"
-                          >
-                            <Link
+                          <Link className={BTN_SECONDARY}
                               href={`/employer/oferty/${offer.id}/edycja`}
                               aria-label={td("editJobLabel", { title: offer.title })}
                             >
                               <Pencil className="size-4" aria-hidden="true" />
                               {td("editJob")}
                             </Link>
-                          </Button>
                         ) : null}
                         {offer.status === "active" &&
                         offer.slug &&
@@ -236,7 +230,7 @@ export default async function EmployerOffersPage({
                           <Link
                             href={`/oferty-pracy/${offer.slug}`}
                             aria-label={td("viewJobLabel", { title: offer.title })}
-                            className="inline-flex min-h-12 items-center gap-2 rounded-xl px-3 text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            className={TEXT_LINK}
                           >
                             <ExternalLink className="size-4" aria-hidden="true" />
                             {td("viewJob")}
@@ -265,7 +259,7 @@ export default async function EmployerOffersPage({
                 <Link
                   href={pageHref(page - 1)}
                   rel="prev"
-                  className="inline-flex min-h-12 items-center rounded-xl border border-border px-5 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className={BTN_SECONDARY}
                 >
                   {td("employerOffersPrevious")}
                 </Link>
@@ -280,7 +274,7 @@ export default async function EmployerOffersPage({
                 <Link
                   href={pageHref(page + 1)}
                   rel="next"
-                  className="inline-flex min-h-12 items-center rounded-xl border border-border px-5 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className={BTN_SECONDARY}
                 >
                   {td("employerOffersNext")}
                 </Link>
