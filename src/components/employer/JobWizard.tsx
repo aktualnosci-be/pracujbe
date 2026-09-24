@@ -33,6 +33,7 @@ import {
   BTN_PRIMARY,
   BTN_RESET,
   BTN_SECONDARY,
+  BTN_SMALL,
   CHECK_ROW,
   CHECKBOX,
   EYEBROW,
@@ -86,6 +87,7 @@ import {
 } from '@/lib/actions/jobs';
 import { isLocale, routing, type Locale } from '@/i18n/routing';
 import { isScreeningQuestionType, type ScreeningQuestionDraft } from '@/lib/screening/questions';
+import type { ScreeningReviewNotice } from '@/lib/screening/review';
 import {
   ScreeningQuestionsEditor,
   screeningErrorFieldId,
@@ -505,6 +507,8 @@ export function JobWizard({
   const [badgeVisible, setBadgeVisible] = React.useState(false);
   const [publishing, setPublishing] = React.useState(false);
   const [publishError, setPublishError] = React.useState<ErrorCode | null>(null);
+  // #497: pytania, które blokują publikację (oczekują na przegląd / odrzucone) — z bazy.
+  const [screeningReviews, setScreeningReviews] = React.useState<ScreeningReviewNotice[]>([]);
   // #325: tryb edycji opublikowanej oferty.
   const isEdit = Boolean(published && initialJobId);
   const [editVersion, setEditVersion] = React.useState<string | null>(published?.updatedAt || null);
@@ -775,6 +779,7 @@ export function JobWizard({
 
   async function handlePublish(): Promise<void> {
     setPublishError(null);
+    setScreeningReviews([]);
     const ok = await persistStep(9, 'publish');
     if (!ok) return;
 
@@ -789,6 +794,7 @@ export function JobWizard({
       const res = await publishJob(id);
       if (!res.ok) {
         setPublishError(res.error);
+        setScreeningReviews(res.screening ?? []);
         return;
       }
       router.push('/employer');
@@ -1403,10 +1409,13 @@ export function JobWizard({
                 onChange={(next) => {
                   setValue('screeningQuestions', next, { shouldDirty: true });
                   if (Object.keys(screeningErrors).length > 0) setScreeningErrors({});
+                  // Zmieniona treść = nowy przegląd w bazie; stan z poprzedniej publikacji nieaktualny.
+                  if (screeningReviews.length > 0) setScreeningReviews([]);
                 }}
                 contentLocale={contentLocale}
                 readOnly={isEdit}
                 errors={screeningErrors}
+                reviews={screeningReviews}
               />
             </div>
           ) : null}
@@ -1578,6 +1587,34 @@ export function JobWizard({
                     </p>
                     {publishError === 'COMPANY_NOT_VERIFIED' ? (
                       <p className="mt-1.5 text-muted-foreground">{t('notVerifiedNote')}</p>
+                    ) : null}
+                    {publishError === 'SCREENING_REVIEW_REQUIRED' ||
+                    publishError === 'SCREENING_QUESTION_REJECTED' ? (
+                      <>
+                        {screeningReviews.length > 0 ? (
+                          <ul className="mt-1.5 list-inside list-disc space-y-1 text-muted-foreground">
+                            {screeningReviews.map((notice) => (
+                              <li key={notice.index} className="break-words">
+                                {notice.status === 'rejected'
+                                  ? t('screeningPublishRejected', { n: notice.index + 1 })
+                                  : t('screeningPublishPending', { n: notice.index + 1 })}
+                                {notice.reason
+                                  ? ` ${t('screeningReviewReason', { reason: notice.reason })}`
+                                  : ''}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={`${BTN_SMALL} ${BTN_RESET} mt-3`}
+                          onClick={() => setStep(7)}
+                        >
+                          {t('screeningGoToQuestions')}
+                        </Button>
+                      </>
                     ) : null}
                   </div>
                 </div>

@@ -29,6 +29,9 @@ export const QUEUED_EMAIL_TYPES = [
   'moderationJobRemoved', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
   'moderationCompanySuspended', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
   'moderationRestored', // admin_restore_moderation (0099)
+  'appealReceived', // submit_moderation_appeal / submit_report_appeal (0104) — do odwołującego się
+  'appealUpheld', // admin_decide_appeal (0104) → decyzja utrzymana
+  'appealReversed', // admin_decide_appeal (0104) → odwołanie uwzględnione
 ] as const satisfies readonly EmailType[];
 
 /**

@@ -453,7 +453,8 @@ export function EmailLayout({
   const lc = layoutCopy[locale];
   const year = new Date().getFullYear();
   const rights = interpolate(lc.rights, { year });
-  const helpHref = `${env.siteUrl}/${locale}`;
+  const helpHref = `${env.siteUrl}/${locale}/pomoc`;
+  const privacyHref = `${env.siteUrl}/${locale}/polityka-prywatnosci`;
 
   return (
     <Html lang={locale}>
@@ -475,7 +476,7 @@ export function EmailLayout({
                 {lc.help}
               </Link>
               {'  ·  '}
-              <Link href={helpHref} style={styles.footerLink}>
+              <Link href={privacyHref} style={styles.footerLink}>
                 {lc.privacy}
               </Link>
               {unsubscribeUrl ? (

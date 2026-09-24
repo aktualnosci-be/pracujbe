@@ -22,6 +22,11 @@ Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
 4. **Gdzie co jest:** patrz „Struktura katalogów".
 5. **Co dalej:** patrz „Roadmapa / status" — sekcja z checkboxami. Wybierz kolejny niezaznaczony punkt.
 6. **Zawsze uruchom przed commitem:** `npm run verify` (lint + typecheck + unit). E2E gdy dotykasz przepływów.
+7. **Praca wieloma sesjami:** prace idą równolegle w wielu sesjach Claude Code, a jedna
+   sesja-integrator scala PR-y, prowadzi kolejkę migracji i rutyny. Podręcznik (role,
+   stałe decyzje właściciela, procedura scalania, kolejka migracji, szablon sesji,
+   Railway): `.claude/skills/integration-loop/SKILL.md`. Sesja potomna: nie scalaj,
+   migracja na numerze tymczasowym, ostateczny nada integrator.
 
 ---
 
@@ -494,7 +499,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-12 (JSON-LD:
 > `validThrough` z `expires_at` + `unitText` z `salary_period` — wymaga rozszerzenia zwrotu
 > `get_public_job`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
-> (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR),
+> (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
+> techniczna dla kandydata zrobiona w #486, patrz Etap 7),
 > P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
 > P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
@@ -835,6 +841,29 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
   `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
   zgłoszeń (RLS gotowe).
+  Kontrola treści pytań przed publikacją (#497, migracja `0103`): detektor
+  deterministyczny (wzorce PL/NL/FR/EN, bez AI) w bazie (`screening_fold`,
+  `screening_risk_patterns`, `screening_question_risk`) sprawdza treść i KAŻDĄ opcję we
+  WSZYSTKICH językach; lustro `src/lib/screening/risk.ts` (podpowiedź w kreatorze, test
+  `screening-risk` porównuje wzorce 1:1 i pilnuje braku trafień na pytania o doświadczenie,
+  prawo jazdy, dostępność, języki, VCA). Kategorie: wiek, płeć, ciąża/plany rodzinne, stan
+  cywilny, religia, pochodzenie, zdrowie, orientacja, związki zawodowe, poglądy polityczne,
+  karalność. Trafienie ≠ ocena prawna: przy zapisie kroku pytanie trafia do
+  `screening_question_reviews` (jeden wiersz na ofertę × odcisk treści, audyt
+  `screening_question.review_requested`), strażnik `enforce_screening_review` blokuje KAŻDĄ
+  aktywację oferty (publikacja, wznowienie, ponowne otwarcie) do akceptacji bieżącej treści
+  (`SCREENING_REVIEW_REQUIRED`/`SCREENING_QUESTION_REJECTED: <pozycja>` → komunikat przy pytaniu
+  w kreatorze). Zmiana treści/tłumaczenia = nowy odcisk = nowa decyzja; akceptacja nie
+  publikuje. Admin: `/admin/pytania` (treść we wszystkich językach, `admin_decide_screening_review`
+  — odrzucenie z uzasadnieniem, STALE_STATE dla treści nieobecnej w ofercie, audyt
+  `screening_question.reviewed`, powiadomienie in-app dla zapisującego). Dowód: `rls.sql` sekcja
+  SR497 (kontrola ujemna: bez strażnika oferta się publikuje); unit `screening-risk`,
+  `screening-review`, `screening-review-editor`; E2E `admin-screening-review`,
+  `job-wizard-screening`. Teksty komunikatów do akceptacji właściciela. **Otwarte (#497):**
+  katalog dopuszczalnych wzorców i wyjątków art. 9/10 (właściciel + prawnik), wstrzymanie
+  zbierania odpowiedzi dla ofert JUŻ aktywnych z pytaniem odrzuconym po publikacji i los
+  zapisanych odpowiedzi, zgłoszenie pytania przez kandydata (dziś ogólne zgłoszenie oferty DSA
+  #41), e-mail o decyzji, informacja dla kandydata (#61), rejestr (#485), retencja (#486).
   Aplikacja bez konta (#98, migracja `0095`, `docs/GUEST_APPLY.md`): gość w ApplyModal
   (`GuestApplyForm`: imię i nazwisko, e-mail, zgoda; reszta opcjonalna) → Turnstile
   `guest_apply` + limity IP/adres → `submit_guest_application` (service_role, zgłoszenie
@@ -986,8 +1015,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
   `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
   (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
-- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy i decyzja z egzekucją
-  (#42) gotowe; odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
+- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy, decyzja z egzekucją
+  (#42) i odwołania z retencją i raportem (#43) gotowe; treść prawna i wartości terminów (#40) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
   → Zod → RPC `submit_content_report` (EXECUTE tylko service_role, `reporterId` z sesji). Sprawa
   = `reports.kind='dsa_notice'`: numer `DSA-XXXX-…` (64 bity), kod dostępu z przeglądarki (w bazie
@@ -1015,13 +1044,71 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   UI: dialog decyzji i cofnięcia w `/admin/zgloszenia` (`ModerationDecisionActions`),
   uzasadnienie w `/employer/firma` (`get_company_moderation_decisions`), wynik w
   `/zglos-tresc/sprawa`. Dowód: `rls.sql` sekcja MOD42; unit `moderation-decision*`; E2E
-  `admin-ux` (#42). **Otwarte:** procedura odwołań (#43); znacznik treści prawnej o środkach
-  odwoławczych w panelu firmy; UI kolejki według priorytetu (lista nadal po dacie).
+  `admin-ux` (#42). **Otwarte:** znacznik treści prawnej o środkach odwoławczych w panelu
+  firmy; UI kolejki według priorytetu (lista nadal po dacie).
+  Odwołania, terminy, retencja, raport (#43, migracja `0104`): tabela
+  `moderation_appeals` (jedno na decyzję, `APL-…`, niezmienne). Autor (owner/admin firmy)
+  odwołuje się od ograniczenia w `/employer/firma` (`submit_moderation_appeal` pod sesją),
+  zgłaszający od braku działań na `/zglos-tresc/sprawa` (numer + kod, `submit_report_appeal`
+  service_role za limiterem); cudza decyzja = `NOT_FOUND`, strony nie widzą swoich danych.
+  Termin liczony od POINFORMOWANIA (`moderation_informed_at`: wysłany e-mail o decyzji albo
+  odczyt powiadomienia; odbicie się nie liczy; bez poinformowania termin nie biegnie).
+  `admin_decide_appeal` w `/admin/odwolania`: autor decyzji nie rozpatruje, gdy jest inny admin
+  (`REVIEWER_CONFLICT`, inaczej `same_reviewer`); uwzględnienie odwołania autora cofa
+  ograniczenie (`moderation_restore_core`, wspólny z `admin_restore_moderation`), zgłaszającego
+  — nowa decyzja z `appeal_id` i egzekucją (sprawa dismissed → resolved tylko tą ścieżką);
+  historia, audyt, e-maile `appealReceived/Upheld/Reversed` w języku odbiorcy; awaria cofa
+  całość. Retencja: `dsa_retention_report()` (podgląd) i `dsa_retention_run(dry_run)`
+  (service_role, `dsa_retention_runs`) anonimizują sprawy dopiero po końcu drogi odwołania
+  i okresie retencji — wiersze i liczby zostają. Raport: `dsa_transparency_report` + eksport
+  `dsa_statements_export` (bez danych osobowych i faktów) w `/admin/raport-dsa` i
+  `GET /api/admin/dsa-report` (CSV/JSON). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
+  APL43 (kontrole ujemne: jedyny admin, naiwna retencja, flaga bez odwołania); unit
+  `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
+  `admin-a11y` (nowe trasy). **Do zatwierdzenia przez właściciela (#40):** okno odwołania
+  6 mies., termin rozpatrzenia 14 dni, retencja 12 mies., zakres publikacji i przekazywania do
+  bazy DSA, treść prawna o procedurze. **Otwarte:** harmonogram czyszczenia (po #40), odwołanie
+  zgłaszającego od cofnięcia ograniczenia, retencja `audit_logs` z uzasadnieniami.
+- [~] Mapa danych osobowych (#485/#488/#503/#504, część techniczna): `node scripts/privacy/data-map.mjs`
+  generuje `docs/legal-drafts/data-map.generated.md` z migracji produkcyjnych (parser
+  `scripts/privacy/schema.mjs`), klasyfikacji `src/lib/privacy/data-map.ts` (każda tabela, kategorie,
+  czynności) i usług `src/lib/privacy/processors.ts` (rola/region/transfer/DPA = „DO UZUPEŁNIENIA”);
+  sekcja e-maili = klucze payloadu z aktualnych funkcji SQL (`email-payloads.mjs`). Test
+  `privacy-data-map.test.ts`: tabela bez wpisu albo kolumna wyglądająca na PII (np. `email`) bez
+  klasyfikacji = czerwony, plik nieaktualny = czerwony, payload z CV/odpowiedziami/treścią wiadomości
+  = czerwony (kontrole ujemne). Szkice `docs/legal-drafts/rejestr-czynnosci.md` i
+  `dostawcy-i-transfery.md` — PROJEKT, nieopublikowany, nic w UI. **Do ustalenia (właściciel +
+  prawnik):** administrator, role portal/pracodawca, podstawy, retencja, DPA i transfery.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
   obiekt z linkiem; filtry typu obiektu, akcji, aktora, zakresu dat i `id` (skrót „Historia
   statusów” w wierszu firmy), stronicowanie kursorem.
+- [~] Retencja i prawa kandydata (#486, migracja `0105`, `docs/DATA_RETENTION.md`):
+  okresy jako dane (`retention_policies`, null = kategoria wyłączona; zmiana tylko
+  `admin_set_retention_policy` z audytem, rejestr usunięć ≥ 400 dni). `/api/maintenance` woła
+  `run_retention_purge` (partie, SKIP LOCKED, liczniki) i worker kolejki storage
+  (`src/lib/storage-deletion.ts`; `storage_deletion_queue` wypełnia trigger AFTER DELETE na `files`,
+  backoff, brak ścieżek w logach). Domyślnie włączone tylko sprzątanie danych już oznaczonych
+  (`deleted_file`, `deleted_profile` — 30 dni); reszta czeka na decyzję administratora danych.
+  `confirmed_guest_request` = tylko wartość do decyzji właściciela (bez zadania, ślad gościa zostaje
+  także przy `closed_application`); tokeny gościa czyści `purge_guest_application_requests` (#522).
+  Eksport JSON (`POST /api/account/export`, Origin tej witryny, `no-store` → `export_my_data`:
+  dane podane, proces, zapisane `matches`, rozmowy z `fromMe` bez tożsamości rekrutera, limit
+  10/dobę, ślad `data_rights_requests` + audyt). Usunięcie konta (`request_account_erasure`,
+  potwierdzenie adresem konta): jedna transakcja `erase_candidate_subject` — proces widoczny
+  dla firm, powiadomienia/e-maile o nim, pliki → kolejka, `auth.users` (kaskada), tombstone;
+  sprawy DSA zostają bez powiązania (`reports_guard`/`report_events_append_only` przepuszczają
+  tylko FK → null). Tombstone po restore: `scripts/db/export-erasure-tombstones.sh` +
+  `RESTORE_TOMBSTONES_FILE` w `restore-backup.sh` (`apply_erasure_tombstones`). UI: sekcja
+  „Twoje dane i konto” w `/candidate/ustawienia` (`AccountDataSettings`, klucze `accountData.*`
+  — tylko etykiety funkcji). Dowód: `rls.sql` sekcja DR486 (kontrole ujemne 5/5b/7f/9),
+  `npm run test:backup` (scenariusz #486), unit `account-data`, `storage-deletion`, E2E
+  `candidate-account-data`. Szkic dla prawnika (PROJEKT, nieopublikowany):
+  `docs/legal-drafts/retencja-i-prawa-kandydata.md`. **Otwarte:** zatwierdzone okresy i treść
+  dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13), aktualizacja
+  `last_seen_at`, sprostowanie/ograniczenie/sprzeciw, eksport i usunięcie konta pracodawcy,
+  potwierdzenie linkiem e-mail.
 - [x] Płatności — **WYŁĄCZONE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Stan aktywny:
   portal bez cennika, pakietów, CTA zakupu i limitów planu; billing niedostępny. Jedna jawna flaga
   `BILLING_ENABLED` (`src/lib/billing/flag.ts`), domyślnie wyłączona — włącza ją tylko dokładne
@@ -1043,6 +1130,16 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
   connect/img/font, GA/Meta/Supabase/Sentry). Wariant nonce/strict-dynamic = follow-up (E2E).
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
+- [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
+  funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
+  `src/`+`scripts/`, wywołanie modelu bez wpisu = czerwony test, kontrola ujemna; pliki
+  matchingu/statusu/screeningu nie mogą wołać modelu), log użycia AI bez treści/PII
+  (`src/lib/ai/usage-log.ts`, wpięty w import ogłoszeń), dokumentacja lejka `docs/JOB_FUNNEL.md`
+  i E2E `job-funnel-no-storage` (fixture: zero cookies/storage i żądanie bez `Cookie`).
+  Szkice NIEOPUBLIKOWANE: `docs/legal-drafts/ai-act-art22-dpia.md`, `eprivacy-lejek.md`.
+  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie, wariant zgody lejka
+  (dziś wysyłka niezależna od banera), twardy termin retencji `job_funnel_receipts`, wpis
+  tłumaczeń (#514) do logu użycia.
 - [x] Cloudflare Turnstile (#46) — logowanie/rejestracja/reset: siteverify w Server Actions
   (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.
@@ -1076,6 +1173,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
 - [x] `next/font/local` (offline Inter), PWA (ikony/manifest/service worker), storage signed URLs + upload CV (0018, Invariant #10).
+  Pliki CV na Railway (#26): upload, pobranie, usunięcie i kwarantanna przez prywatny bucket S3
+  Railway (`src/lib/files/*`, repozytorium `db/candidate-files.ts`, adapter `storage/railway-bucket.ts`),
+  bez Supabase Storage. Pobranie = krótki (60 s) link HMAC `/api/files/cv/<id>?t=…` wystawiany
+  przy kliknięciu; trasa ponownie sprawdza sesję Better Auth, własność i `scan_status`, strumieniuje
+  z bucketu (bez adresu S3). Env: preset „AWS SDK” bucketu (`AWS_ENDPOINT_URL`, `AWS_DEFAULT_REGION`,
+  `AWS_S3_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_URL_STYLE`) +
+  `FILE_DOWNLOAD_SECRET`; `/api/health` → `fileBucket`/`fileDownloadSecret`. Bez bucketu: demo =
+  `DEMO_UNAVAILABLE`, produkcja = błąd. Opis: `docs/railway/STORAGE_ADAPTER_CONTRACT.md`.
+  **Otwarte:** utworzenie bucketu (właściciel), GC sierot, AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
@@ -1185,7 +1291,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
   `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
-  `DATABASE_APP_URL` build nie czyta bazy (`prerenderParamsAtBuild` → strony na pierwsze żądanie);
+  `DATABASE_APP_URL` build nie czyta bazy: landingi przez `prerenderParamsAtBuild` (strony na pierwsze
+  żądanie), odczyty ofert w `next build` zwracają pusty wynik (`isBuildPhase`), a layout `[locale]`
+  ZAWSZE prerenderuje komplet języków — pusta lista dawała 500 DYNAMIC_SERVER_USAGE na logowaniu,
+  rejestracji i liście ofert (strażnik `static-public-pages.test`);
   layout `(public)` odrzuca nieobsługiwany locale (`notFound`). Middleware: bramka hasła i
   odświeżone cookies sesji → `private, no-store`; alias miasta → 308 w middleware (redirect z ISR
   dublował `Location`). **Otwarte:** ISR zapisuje na dysk także 404 losowych slugów ofert
