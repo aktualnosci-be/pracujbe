@@ -55,3 +55,8 @@ Pule runtime (`src/lib/db/pool.ts`) używają oddzielnych loginów i ról startu
 - Test braku wycieku puli oczekuje do 2 sekund na zamknięcie backendu PostgreSQL. Nadal wymaga zera obcych połączeń; usuwa wyścig między zamknięciem socketu i aktualizacją `pg_stat_activity`, wykryty w CI `35650817175`.
 
 Nie potwierdzono jeszcze utworzenia PostgreSQL/bucketu na Railway, DNS ani gotowości produkcyjnych przepływów po zmianie dostawcy. Samo scalenie stylu nie jest potwierdzeniem deployu. Historyczny plan Vercel/Supabase/Stripe nie wyznacza dalszych prac.
+
+## Cron caller i rozdział sekretów (#13) — 24 września 2026
+
+Caller `scripts/railway-cron-call.mjs` wysyła sekret wyłącznie pod `/api/email/process` albo `/api/maintenance` (bez query; HTTP tylko w `*.railway.internal`/`localhost`), czas `CRON_TIMEOUT_SECONDS` 1–600 (domyślnie 120), kody wyjścia 0/1/2. Endpointy używają wspólnego `src/lib/cron/secrets.ts`: sekret jednego zadania nie otwiera drugiego, wspólna wartość obu zmiennych nie otwiera żadnego, `CRON_SECRET` działa przejściowo dla obu (rollback = ponowne ustawienie zmiennej). `/api/health` raportuje `maintenanceSecret`, `cronSecretsSeparate`, `legacyCronSecret`. Harmonogram i kolejność usunięcia `CRON_SECRET`: README, sekcja „Cron”. Testy: `railway-cron`, `cron-secrets` (z kontrolą ujemną), `cron-docs`. Zmiennych Railway nie ustawiono; konfiguracja usług cron i ręczne wywołania pozostają do odbioru (#14, #16).
+

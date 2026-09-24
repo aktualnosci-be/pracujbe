@@ -9,6 +9,7 @@
  * tam sekretów (service-role key czytany jest osobno, tylko po stronie serwera).
  */
 import { isBillingEnabled } from '@/lib/billing/flag';
+import { cronSecretChecks } from '@/lib/cron/secrets';
 
 export const env = {
   /** Publiczny URL aplikacji (kanoniczne linki, e-maile). Fallback: localhost. */
@@ -173,6 +174,8 @@ export function readinessChecks(): Record<string, boolean> {
     resend: Boolean(process.env.RESEND_API_KEY),
     emailHook: Boolean(process.env.SEND_EMAIL_HOOK_SECRET),
     queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),
+    // #13: osobny sekret maintenance, rozdział sekretów cron, przejściowy CRON_SECRET.
+    ...cronSecretChecks(),
     sentry: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN),
     // #26: prywatny bucket Railway (endpoint/region/bucket/klucze) + sekret linków pobrania CV.
     fileBucket: fileBucketConfig() !== null,

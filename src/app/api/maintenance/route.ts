@@ -1,7 +1,6 @@
-import { timingSafeEqual } from 'node:crypto';
-
 import { NextResponse } from 'next/server';
 
+import { isCronAuthorized } from '@/lib/cron/auth';
 import { hasServiceRoleKey, isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 import {
@@ -31,7 +30,8 @@ import {
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
  *
- * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
+ * Chroniony `MAINTENANCE_SECRET` (`Authorization: Bearer`); przejściowo także `CRON_SECRET`
+ * (`src/lib/cron/secrets.ts` — sekret e-mail nie otwiera tego zadania).
  * Wymaga service-role (RPC są service_role-only). Nie ujawnia technikaliów ani danych ofert —
  * odpowiedź i log zawierają tylko liczniki; błąd któregokolwiek zadania → 503 (bez pozornego
  * sukcesu dla crona i monitoringu).
@@ -39,22 +39,6 @@ import {
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
-
-function authorized(request: Request): boolean {
-  const header = request.headers.get('authorization');
-  if (!header) return false;
-  const secrets = [process.env.MAINTENANCE_SECRET, process.env.CRON_SECRET].filter(
-    (s): s is string => Boolean(s),
-  );
-  return secrets.some((s) => safeEqual(header, `Bearer ${s}`));
-}
 
 /** Pliki CV leżą w prywatnym buckecie Railway (#26); bez jego konfiguracji — Supabase Storage. */
 async function objectDeleter(admin: Parameters<typeof supabaseDeleter>[0]): Promise<ObjectDeleter> {
@@ -76,7 +60,7 @@ function retentionCounters(value: unknown): Record<string, number> {
 }
 
 async function run(request: Request): Promise<Response> {
-  if (!authorized(request)) {
+  if (!isCronAuthorized(request, 'maintenance')) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   if (!hasServiceRoleKey()) {
