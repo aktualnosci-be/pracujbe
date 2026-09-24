@@ -2,13 +2,14 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { MailCheck } from 'lucide-react';
 
-import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConfirmEmailForm } from './ConfirmEmailForm';
 
 /**
- * Potwierdzenie e-maila — strona informacyjna po rejestracji ("sprawdź skrzynkę"). Sam link
- * z wiadomości prowadzi do `/potwierdz-email#token=…`, gdzie adres potwierdza przycisk
- * (server action `confirmEmail`). Strona nie tworzy sesji. Wyłączona z indeksowania (noindex).
+ * Potwierdzenie adresu z linku e-mail (`/{locale}/potwierdz-email#token=…`, język odbiorcy, #24).
+ * Token jest we fragmencie (nie trafia do serwera ani logów, #505); formularz kliencki przekazuje
+ * go do server action `confirmEmail` dopiero po kliknięciu przycisku — samo otwarcie linku (np.
+ * przez skaner poczty) niczego nie aktywuje. Strona wyłączona z indeksowania (noindex).
  */
 
 type PageProps = {
@@ -19,13 +20,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'auth' });
   return {
-    title: t('verifyTitle'),
-    description: t('verifySubtitle'),
+    title: t('confirmEmailTitle'),
+    description: t('confirmEmailIntro'),
     robots: { index: false, follow: false },
   };
 }
 
-export default async function ConfirmationPage({ params }: PageProps) {
+export default async function ConfirmEmailPage({ params }: PageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
 
@@ -42,16 +43,11 @@ export default async function ConfirmationPage({ params }: PageProps) {
             >
               <MailCheck className="h-7 w-7" />
             </span>
-            <CardTitle as="h1" className="text-2xl">{t('verifyTitle')}</CardTitle>
-            <CardDescription>{t('verifySubtitle')}</CardDescription>
+            <CardTitle as="h1" className="text-2xl">{t('confirmEmailTitle')}</CardTitle>
+            <CardDescription>{t('confirmEmailIntro')}</CardDescription>
           </CardHeader>
-          <CardContent className="text-center text-sm">
-            <Link
-              href="/logowanie"
-              className="font-medium text-primary underline-offset-4 hover:underline"
-            >
-              {t('backToLogin')}
-            </Link>
+          <CardContent className="space-y-6">
+            <ConfirmEmailForm />
           </CardContent>
         </Card>
       </div>

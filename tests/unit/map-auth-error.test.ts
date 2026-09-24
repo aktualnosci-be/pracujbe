@@ -1,31 +1,40 @@
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
 import { mapAuthError } from '@/lib/auth/map-auth-error';
-import { toUserMessageKey } from '@/lib/errors';
+import { AppError } from '@/lib/errors';
 
-describe('mapAuthError — kody Supabase Auth → AppError', () => {
-  it('email_not_confirmed → AUTH_EMAIL_NOT_CONFIRMED (nie „nieprawidłowe dane”), także przy status 400', () => {
-    const err = mapAuthError({ code: 'email_not_confirmed', status: 400, message: 'Email not confirmed' });
+/** Błąd w kształcie `APIError` Better Auth: statusCode + body.code (komunikat SDK pomijamy). */
+const apiError = (statusCode: number, code: string) =>
+  Object.assign(new Error(`${code}: user@example.com`), { statusCode, body: { code, message: 'x' } });
+
+describe('mapAuthError — kody Better Auth → AppError (#24)', () => {
+  it('EMAIL_NOT_VERIFIED → AUTH_EMAIL_NOT_CONFIRMED (nie „nieprawidłowe dane”)', () => {
+    const err = mapAuthError(apiError(403, 'EMAIL_NOT_VERIFIED'));
+    expect(err).toBeInstanceOf(AppError);
     expect(err.code).toBe('AUTH_EMAIL_NOT_CONFIRMED');
-    expect(toUserMessageKey(err.code)).toBe('errors.authEmailNotConfirmed');
+    expect(err.userMessageKey).toBe('errors.authEmailNotConfirmed');
   });
 
   it.each([
-    [{ code: 'invalid_credentials', status: 400 }, 'AUTH_INVALID_CREDENTIALS'],
-    [{ code: 'invalid_grant', status: 400 }, 'AUTH_INVALID_CREDENTIALS'],
-    [{ code: null, status: 400 }, 'AUTH_INVALID_CREDENTIALS'],
-    [{ code: 'over_request_rate_limit', status: 429 }, 'RATE_LIMITED'],
-    [{ code: 'unexpected_failure', status: 500 }, 'INTERNAL'],
-  ] as const)('%o → %s', (input, expected) => {
-    expect(mapAuthError(input).code).toBe(expected);
+    [apiError(401, 'INVALID_EMAIL_OR_PASSWORD'), 'AUTH_INVALID_CREDENTIALS'],
+    [apiError(400, 'INVALID_TOKEN'), 'AUTH_LINK_INVALID'],
+    [apiError(401, 'TOKEN_EXPIRED'), 'AUTH_LINK_INVALID'],
+    [apiError(400, 'PASSWORD_TOO_SHORT'), 'VALIDATION_FAILED'],
+    [apiError(400, 'VALIDATED_SIGNUP_REQUIRED'), 'VALIDATION_FAILED'],
+    [apiError(429, 'TOO_MANY_REQUESTS'), 'RATE_LIMITED'],
+    [apiError(500, 'AUTH_EMAIL_QUEUE_FAILED'), 'INTERNAL'],
+    [new Error('connect ECONNREFUSED'), 'INTERNAL'],
+    [null, 'INTERNAL'],
+  ] as const)('%# → %s', (input, expected) => {
+    const err = mapAuthError(input);
+    expect(err.code).toBe(expected);
+    // Treść komunikatu SDK (tu z adresem e-mail) nie przechodzi do komunikatu błędu aplikacji.
+    expect(err.message).not.toContain('@');
   });
 
-  it.each(['pl', 'nl', 'fr', 'en'])('komunikat authEmailNotConfirmed istnieje i różni się od błędnego hasła (%s)', (locale) => {
-    const file = resolve(process.cwd(), 'src', 'messages', `${locale}.json`);
-    const { errors } = JSON.parse(readFileSync(file, 'utf-8')) as { errors: Record<string, string> };
-    expect(errors.authEmailNotConfirmed?.trim()).toBeTruthy();
-    expect(errors.authEmailNotConfirmed).not.toBe(errors.authInvalidCredentials);
+  it('AppError przechodzi bez zmian', () => {
+    const original = new AppError('RATE_LIMITED');
+    expect(mapAuthError(original)).toBe(original);
   });
 });

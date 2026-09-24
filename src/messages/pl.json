@@ -577,7 +577,13 @@
     "botCheckRequired": "Dokończ weryfikację bezpieczeństwa nad przyciskiem, a potem wyślij formularz.",
     "botCheckExpired": "Weryfikacja wygasła. Potwierdź ją ponownie.",
     "botCheckLoadFailed": "Nie udało się załadować weryfikacji bezpieczeństwa. Sprawdź połączenie lub wyłącz blokowanie treści dla tej strony i spróbuj ponownie.",
-    "botCheckRetry": "Załaduj weryfikację ponownie"
+    "botCheckRetry": "Załaduj weryfikację ponownie",
+    "confirmEmailTitle": "Aktywuj konto",
+    "confirmEmailIntro": "Kliknij przycisk, aby potwierdzić adres e-mail i przejść do swojego konta.",
+    "confirmEmailSubmit": "Potwierdź adres e-mail",
+    "linkMissing": "Nie znaleźliśmy danych z linku. Otwórz link z wiadomości jeszcze raz albo poproś o nowy.",
+    "requestNewResetLink": "Poproś o nowy link do zmiany hasła",
+    "confirmEmailExpiredHint": "Link potwierdzający wygasł? Zaloguj się adresem e-mail i hasłem — wyślemy nowy link."
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Praca w Belgii bez CV",
@@ -588,6 +594,7 @@
   "errors": {
     "authInvalidCredentials": "Nieprawidłowy e-mail lub hasło.",
     "authEmailNotConfirmed": "Najpierw potwierdź adres e-mail — kliknij link, który wysłaliśmy na Twoją skrzynkę.",
+    "authLinkInvalid": "Link jest nieprawidłowy, wygasł albo został już użyty. Poproś o nowy.",
     "permissionDenied": "Nie masz uprawnień do tej operacji.",
     "validationFailed": "Sprawdź wprowadzone dane i spróbuj ponownie.",
     "jobNotActive": "Ta oferta nie jest już aktywna.",

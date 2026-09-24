@@ -577,7 +577,13 @@
     "botCheckRequired": "Complete the security check above the button, then submit the form.",
     "botCheckExpired": "The check has expired. Please confirm it again.",
     "botCheckLoadFailed": "The security check couldn't load. Check your connection or turn off content blocking for this site, then try again.",
-    "botCheckRetry": "Reload the security check"
+    "botCheckRetry": "Reload the security check",
+    "confirmEmailTitle": "Activate your account",
+    "confirmEmailIntro": "Click the button to confirm your email address and go to your account.",
+    "confirmEmailSubmit": "Confirm email address",
+    "linkMissing": "We could not find the details from the link. Open the link in the message again or request a new one.",
+    "requestNewResetLink": "Request a new password change link",
+    "confirmEmailExpiredHint": "Has the confirmation link expired? Log in with your email address and password — we will send you a new link."
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Work in Belgium without a CV",
@@ -588,6 +594,7 @@
   "errors": {
     "authInvalidCredentials": "Incorrect email or password.",
     "authEmailNotConfirmed": "Please confirm your email address first — click the link we sent to your inbox.",
+    "authLinkInvalid": "The link is invalid, has expired or has already been used. Please request a new one.",
     "permissionDenied": "You don't have permission for this action.",
     "validationFailed": "Please check your details and try again.",
     "jobNotActive": "This job is no longer active.",

@@ -15,11 +15,14 @@ import { cn } from '@/lib/utils';
 import { passwordSchema } from '@/lib/validation/auth';
 import type { ErrorCode } from '@/lib/errors';
 import { updatePassword } from '@/lib/actions/auth';
+import { useLinkToken } from '@/components/auth/use-link-token';
 
 /**
- * Formularz ustawienia nowego hasła (client). Dostępny po sesji recovery (użytkownik trafił
- * tu z linku resetu przez `/auth/callback`). Dwa pola hasła (RHF + Zod), wywołuje server action
- * `updatePassword`. Sukces DOPIERO po realnym zapisie → komunikat `auth.passwordUpdated`.
+ * Formularz ustawienia nowego hasła (client). Token resetu pochodzi z linku e-mail (fragment
+ * `#token=`, `useLinkToken`) — nie z sesji: zalogowanie na inne konto nie daje prawa do zmiany.
+ * Brak tokenu → komunikat i link do nowej prośby, bez formularza. Dwa pola hasła (RHF + Zod),
+ * wywołuje server action `updatePassword`. Sukces DOPIERO po realnym zapisie → `auth.passwordUpdated`.
+ * Wygasły/użyty token → `errors.authLinkInvalid` z linkiem do nowej prośby; wpisane hasła zostają.
  *
  * Realizuje Invariant #11: blokada przycisku podczas zapisu (brak podwójnego submitu),
  * zachowanie danych po błędzie, błędy przy polach, focus do pierwszego błędu (RHF),
@@ -49,6 +52,7 @@ export function NewPasswordForm(): React.JSX.Element {
   const t = useTranslations('auth');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
+  const token = useLinkToken();
 
   const [serverError, setServerError] = React.useState<ErrorCode | null>(null);
   const [success, setSuccess] = React.useState(false);
@@ -89,6 +93,7 @@ export function NewPasswordForm(): React.JSX.Element {
       result = await updatePassword({
         password: values.password,
         passwordConfirm: values.passwordConfirm,
+        token: token ?? '',
       });
     } catch {
       setServerError('INTERNAL');
@@ -127,6 +132,25 @@ export function NewPasswordForm(): React.JSX.Element {
     );
   }
 
+  if (token === null) {
+    return (
+      <div className="space-y-6">
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
+        >
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <p>{t('linkMissing')}</p>
+        </div>
+        <div className="text-center text-sm">
+          <Link href="/reset-hasla" className="font-medium text-primary underline-offset-4 hover:underline">
+            {t('requestNewResetLink')}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-4">
       {serverError ? (
@@ -137,7 +161,14 @@ export function NewPasswordForm(): React.JSX.Element {
           className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-          <p>{tRoot(errorMessageKey(serverError))}</p>
+          <div className="space-y-1">
+            <p>{tRoot(errorMessageKey(serverError))}</p>
+            {serverError === 'AUTH_LINK_INVALID' ? (
+              <Link href="/reset-hasla" className="font-medium underline underline-offset-4">
+                {t('requestNewResetLink')}
+              </Link>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -178,7 +209,7 @@ export function NewPasswordForm(): React.JSX.Element {
         ) : null}
       </div>
 
-      <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+      <Button type="submit" className="w-full" size="lg" disabled={isSubmitting || token === undefined}>
         {isSubmitting ? (
           <>
             <Loader2 className={cn('h-4 w-4 animate-spin')} aria-hidden="true" />

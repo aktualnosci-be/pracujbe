@@ -577,7 +577,13 @@
     "botCheckRequired": "Voltooi de beveiligingscontrole boven de knop en verstuur daarna het formulier.",
     "botCheckExpired": "De controle is verlopen. Bevestig ze opnieuw.",
     "botCheckLoadFailed": "De beveiligingscontrole kon niet worden geladen. Controleer je verbinding of schakel inhoudsblokkering voor deze site uit en probeer het opnieuw.",
-    "botCheckRetry": "Controle opnieuw laden"
+    "botCheckRetry": "Controle opnieuw laden",
+    "confirmEmailTitle": "Account activeren",
+    "confirmEmailIntro": "Klik op de knop om je e-mailadres te bevestigen en naar je account te gaan.",
+    "confirmEmailSubmit": "E-mailadres bevestigen",
+    "linkMissing": "We vonden geen gegevens uit de link. Open de link in het bericht opnieuw of vraag een nieuwe aan.",
+    "requestNewResetLink": "Nieuwe link voor een wachtwoordwijziging aanvragen",
+    "confirmEmailExpiredHint": "Is de bevestigingslink verlopen? Log in met je e-mailadres en wachtwoord — we sturen je een nieuwe link."
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Werken in België zonder cv",
@@ -588,6 +594,7 @@
   "errors": {
     "authInvalidCredentials": "Onjuist e-mailadres of wachtwoord.",
     "authEmailNotConfirmed": "Bevestig eerst je e-mailadres — klik op de link die we je hebben gestuurd.",
+    "authLinkInvalid": "De link is ongeldig, verlopen of al gebruikt. Vraag een nieuwe aan.",
     "permissionDenied": "Je hebt geen toestemming voor deze actie.",
     "validationFailed": "Controleer je gegevens en probeer opnieuw.",
     "jobNotActive": "Deze vacature is niet meer actief.",
