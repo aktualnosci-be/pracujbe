@@ -15,7 +15,7 @@ import {
 
 /**
  * Post 1080 × 1080 z prawdziwej, aktywnej oferty (#181). Dane pochodzą wyłącznie z
- * `get_public_job` (patrz `lib/job-post-source.mjs`); etykiety z `src/messages`, zapis stawki
+ * `get_campaign_job` (patrz `lib/job-post-source.mjs`); etykiety z `src/messages`, zapis stawki
  * z `src/lib/salary.ts`. Brak stawki = brak pola (miejsce zajmuje lokalizacja). Za długi tytuł
  * lub stawka = błąd przed zapisem plików; firma, miasto, region i warunki są skracane z „…”.
  * Skrypt niczego nie publikuje.
@@ -111,7 +111,7 @@ function validateJobUrl(rawUrl, locale) {
 export function buildPostContent(job) {
   if (!isTrustedJob(job)) {
     throw new Error(
-      "Dane oferty muszą pochodzić z publicznego odczytu portalu (get_public_job), nie z pliku ani ręcznie podanego obiektu.",
+      "Dane oferty muszą pochodzić z zaufanego odczytu portalu (get_campaign_job), nie z pliku ani ręcznie podanego obiektu.",
     );
   }
   const labels = labelsFor(job.locale);

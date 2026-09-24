@@ -1,16 +1,14 @@
 /**
  * Źródło danych posta 1080 × 1080 (#181, #186). Eksporter nie przyjmuje danych oferty od
- * operatora (pliku JSON, flag CLI): jedynym źródłem jest publiczny odczyt `get_public_job`
- * wykonany jak w portalu — ograniczony login aplikacji (`DATABASE_APP_URL`) i `SET LOCAL ROLE
- * anon`. RPC zwraca wiersz tylko dla oferty `active`, nieusuniętej, niewygasłej i firmy
- * `verified`; każdy inny przypadek daje ten sam błąd „oferta niedostępna”.
+ * operatora (pliku JSON, flag CLI): jedynym źródłem jest wąski odczyt `get_campaign_job`
+ * (migracja 0102) wykonany jak w portalu — ograniczony login aplikacji (`DATABASE_APP_URL`)
+ * i `SET LOCAL ROLE anon`. RPC zwraca wiersz tylko dla oferty `active`, nieusuniętej,
+ * niewygasłej, niedemonstracyjnej (`is_demo = false` oferty i firmy) i firmy `verified`;
+ * każdy inny przypadek daje ten sam błąd „oferta niedostępna”. Kolumny to wyłącznie pola
+ * grafiki (bez identyfikatorów, kontaktu i opisu).
  *
  * Obiekt oferty jest zamrożony i zarejestrowany w prywatnym `WeakSet`: renderer odmawia pracy
  * z obiektem zbudowanym ręcznie (np. `{ ...oferta, isDemo: false, status: "active" }`).
- *
- * Ograniczenie: żaden publiczny odczyt nie ujawnia `is_demo`, a runtime nie ma roli
- * uprzywilejowanej. Produkcja nie ładuje seeda demo (seed odmawia pracy na bazie z realnymi
- * firmami), ale pełna, zaufana kontrola `is_demo` wymaga wąskiego RPC z migracją (#186).
  */
 
 export const LOCALES = Object.freeze(["pl", "nl", "fr", "en"]);
@@ -23,7 +21,7 @@ const trustedJobs = new WeakSet();
 export class JobUnavailableError extends Error {
   constructor() {
     super(
-      "Oferta niedostępna do eksportu: nie istnieje, nie jest aktywna, wygasła albo firma nie jest zweryfikowana.",
+      "Oferta niedostępna do eksportu: nie istnieje, nie jest aktywna, wygasła, jest demonstracyjna albo firma nie jest zweryfikowana.",
     );
     this.name = "JobUnavailableError";
   }
@@ -62,21 +60,17 @@ const optionalNumber = (value) =>
 const optionalText = (value) => (typeof value === "string" ? value : null);
 
 /**
- * Wczytuje ofertę przez `query(slug, locale)` (zwraca wiersze `get_public_job`) i zwraca tylko
- * pola potrzebne grafice. Warunki RPC są sprawdzane drugi raz (obrona w głąb), a każdy brak
- * daje identyczny `JobUnavailableError`.
+ * Wczytuje ofertę przez `query(slug, locale)` (zwraca wiersze `get_campaign_job`) i zwraca
+ * tylko pola potrzebne grafice. Filtry (status, demo, wygaśnięcie, weryfikacja) egzekwuje baza
+ * — wiersz spoza RPC nie ma czym ich „potwierdzić”; każdy brak daje identyczny
+ * `JobUnavailableError`.
  */
-export async function loadExportableJob({ slug, locale, query, now = new Date() }) {
+export async function loadExportableJob({ slug, locale, query }) {
   validateSlug(slug);
   validateLocale(locale);
   const rows = await query(slug, locale);
   const row = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
-  if (
-    !row ||
-    row.slug !== slug ||
-    row.company_verified !== true ||
-    (row.expires_at != null && !(new Date(row.expires_at) > now))
-  ) {
+  if (!row || row.slug !== slug) {
     throw new JobUnavailableError();
   }
   const job = Object.freeze({
@@ -98,9 +92,9 @@ export async function loadExportableJob({ slug, locale, query, now = new Date() 
   return job;
 }
 
-const PUBLIC_JOB_SQL = `SELECT slug, title, company_name, company_verified, city, region,
-  contract_type, accommodation, salary_min, salary_max, currency, salary_period, expires_at
-  FROM public.get_public_job(p_slug => $1::text, p_locale => $2::text)`;
+const CAMPAIGN_JOB_SQL = `SELECT slug, title, company_name, city, region,
+  contract_type, accommodation, salary_min, salary_max, currency, salary_period
+  FROM public.get_campaign_job(p_slug => $1::text, p_locale => $2::text)`;
 
 /**
  * Odrzuca login migratora/superusera: `SET ROLE anon` nie odbiera mu uprawnień
@@ -125,7 +119,7 @@ export function createAnonJobQuery(client) {
     try {
       await client.query("SET LOCAL ROLE anon");
       await client.query("SELECT set_config('app.current_uid', '', true)");
-      const result = await client.query(PUBLIC_JOB_SQL, [slug, locale]);
+      const result = await client.query(CAMPAIGN_JOB_SQL, [slug, locale]);
       await client.query("COMMIT");
       return result.rows;
     } catch (error) {
