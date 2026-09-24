@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Settings,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -35,6 +36,7 @@ const HREF = {
   applications: '/employer/aplikacje',
   messages: '/employer/wiadomosci',
   company: '/employer/firma',
+  team: '/employer/zespol',
   settings: '/employer/ustawienia',
 } as const;
 
@@ -115,6 +117,7 @@ export function EmployerShell({
     { href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> },
     { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
     { href: HREF.company, label: td('navCompany'), icon: <Building2 /> },
+    { href: HREF.team, label: td('navTeam'), icon: <UserPlus /> },
     { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },
   ];
 

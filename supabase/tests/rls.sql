@@ -3447,6 +3447,479 @@ drop trigger ob142_fail on public.candidate_certificates;
 drop function public.ob142_inject_failure();
 
 -- ============================================================================
+-- EX72. Wygaszanie ofert (0085, #72): expire_due_jobs (granica, kontrole ujemne,
+--       dwa równoległe wywołania), publish/resume/reopen po terminie, filtry niezależne
+--       od crona (job_is_public/apply_to_job/get_job_match_profile).
+-- ============================================================================
+\set EXJ1  'e7200000-0000-0000-0000-000000000001'
+\set EXJ2  'e7200000-0000-0000-0000-000000000002'
+\set EXJ3  'e7200000-0000-0000-0000-000000000003'
+\set EXJ4  'e7200000-0000-0000-0000-000000000004'
+\set EXJ5  'e7200000-0000-0000-0000-000000000005'
+\set EXJ6  'e7200000-0000-0000-0000-000000000006'
+\set EXJ7  'e7200000-0000-0000-0000-000000000007'
+\set EXJ8  'e7200000-0000-0000-0000-000000000008'
+\set EXJ9  'e7200000-0000-0000-0000-000000000009'
+\set EXJ10 'e7200000-0000-0000-0000-000000000010'
+\set EXJ11 'e7200000-0000-0000-0000-000000000011'
+\set EXJ12 'e7200000-0000-0000-0000-000000000012'
+reset role; reset app.current_uid;
+
+-- Punkt zerowy: wcześniejsze sekcje mogły zostawić przeterminowane aktywne oferty.
+set role service_role; select public.expire_due_jobs(); reset role;
+
+-- EX72-1: granica `expires_at = now()` (ta sama transakcja → identyczne now()) wygasa,
+-- data przyszła nie (kontrola ujemna).
+begin;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,expires_at) values
+  (:'EXJ1',:'COMPA','ex72-1','Oferta EX1','warehouse','permanent','Antwerpia','Flandria','active','pl', now()),
+  (:'EXJ2',:'COMPA','ex72-2','Oferta EX2','warehouse','permanent','Antwerpia','Flandria','active','pl', now() + interval '1 day');
+set local role service_role;
+select public.expire_due_jobs() as ex_boundary \gset
+commit;
+reset role;
+select pg_temp.assert(:ex_boundary = 1, 'EX72-1 expire_due_jobs zwraca liczbę zmienionych (granica = now())');
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'EXJ1') = 'expired', 'EX72-1b expires_at = now() → expired');
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'EXJ2') = 'active', 'EX72-1c data przyszła bez zmian');
+
+-- Fixture'y (zatwierdzone): kontrole ujemne i dwie oferty do wywołań równoległych.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,expires_at) values
+  (:'EXJ3',:'COMPA','draft-ex72-3','Oferta EX3','warehouse','permanent','Antwerpia','Flandria','draft','pl', now() - interval '1 hour'),
+  (:'EXJ4',:'COMPA','ex72-4','Oferta EX4','warehouse','permanent','Antwerpia','Flandria','paused','pl', now() - interval '1 hour'),
+  (:'EXJ5',:'COMPA','ex72-5','Oferta EX5','warehouse','permanent','Antwerpia','Flandria','closed','pl', now() - interval '1 hour'),
+  (:'EXJ6',:'COMPA','ex72-6','Oferta EX6','warehouse','permanent','Antwerpia','Flandria','active','pl', null),
+  (:'EXJ7',:'COMPA','ex72-7','Oferta EX7','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '2 hours'),
+  (:'EXJ8',:'COMPA','ex72-8','Oferta EX8','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '3 hours');
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  (:'EXJ3', 'pl', 'Oferta EX3', 'Opis oferty magazynowej EX3.', array['Kompletacja']),
+  (:'EXJ4', 'pl', 'Oferta EX4', 'Opis oferty magazynowej EX4.', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'EXJ3', 'pl', 'mandatory', 0, 'Dyspozycyjność'),
+  (:'EXJ4', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+
+-- EX72-2: dwa równoległe wywołania. Sesja 1 zmienia i trzyma blokady (bez commit),
+-- sesja 2 w tym czasie kończy się bez błędu i bez zmian (SKIP LOCKED), a po commit
+-- ponowienie nie zmienia już niczego.
+select pg_temp.remote_connect('ex_s1');
+select pg_temp.remote_connect('ex_s2');
+select dbl.dblink_exec('ex_s1', 'begin');
+select dbl.dblink_exec('ex_s1', 'set local role service_role');
+select t.v as ex_s1 from dbl.dblink('ex_s1', 'select public.expire_due_jobs()::text') as t(v text) \gset
+select dbl.dblink_exec('ex_s2', 'begin');
+select dbl.dblink_exec('ex_s2', 'set local role service_role');
+select dbl.dblink_exec('ex_s2', 'set local lock_timeout = ''5s''');
+select t.v as ex_s2 from dbl.dblink('ex_s2', 'select public.expire_due_jobs()::text') as t(v text) \gset
+select dbl.dblink_exec('ex_s2', 'commit');
+select dbl.dblink_exec('ex_s1', 'commit');
+select dbl.dblink_disconnect('ex_s1');
+select dbl.dblink_disconnect('ex_s2');
+select pg_temp.assert(:'ex_s1' = '2', 'EX72-2 pierwsza sesja wygasza dokładnie dwie oferty');
+select pg_temp.assert(:'ex_s2' = '0', 'EX72-2b równoległa sesja bez błędu i bez podwójnej zmiany');
+set role service_role;
+select public.expire_due_jobs() as ex_retry \gset
+reset role;
+select pg_temp.assert(:ex_retry = 0, 'EX72-2c ponowione wywołanie idempotentne (0 zmian)');
+select pg_temp.assert(
+  (select count(*) from public.jobs where id in (:'EXJ7', :'EXJ8') and status = 'expired') = 2,
+  'EX72-2d obie przeterminowane aktywne oferty → expired');
+-- EX72-3: kontrole ujemne — szkic, wstrzymana, zamknięta, bez daty nie są zmieniane.
+select pg_temp.assert(
+  (select string_agg(status::text, ',' order by id) from public.jobs
+     where id in (:'EXJ3', :'EXJ4', :'EXJ5', :'EXJ6')) = 'draft,paused,closed,active',
+  'EX72-3 draft/paused/closed/bez daty bez zmian');
+select pg_temp.assert(
+  (select expires_at is not null from public.jobs where id = :'EXJ4'), 'EX72-3b data wstrzymanej bez zmian');
+
+-- EX72-4: tylko service_role woła operację (klient i anon — brak uprawnień).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.expire_due_jobs()', 'permission denied', 'EX72-4 authenticated bez expire_due_jobs');
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.expire_due_jobs()', 'permission denied', 'EX72-4b anon bez expire_due_jobs');
+reset role; reset app.current_uid;
+
+-- EX72-5: publikacja szkicu z datą w przeszłości → JOB_EXPIRED (nie „aktywna niewidoczna”).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.publish_job(''e7200000-0000-0000-0000-000000000003''::uuid, ''ex72-3'')',
+  'JOB_EXPIRED', 'EX72-5 publikacja szkicu po terminie odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'EXJ3') = 'draft', 'EX72-5b szkic pozostaje szkicem');
+-- EX72-5c: kontrola dodatnia — ta sama oferta z przyszłą datą publikuje się.
+update public.jobs set expires_at = now() + interval '7 days' where id = :'EXJ3';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.publish_job(:'EXJ3'::uuid, 'ex72-3');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'active' and expires_at > now() from public.jobs where id = :'EXJ3'),
+  'EX72-5c szkic z przyszłą datą → active, data zachowana');
+
+-- EX72-6: wznowienie wstrzymanej po terminie → JOB_EXPIRED, data NIE jest czyszczona po cichu.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.set_job_status(''e7200000-0000-0000-0000-000000000004''::uuid, ''resume'')',
+  'JOB_EXPIRED', 'EX72-6 resume po terminie odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'paused' and expires_at <= now() from public.jobs where id = :'EXJ4'),
+  'EX72-6b wstrzymana z przeszłą datą bez zmian');
+-- EX72-6c: ponowne otwarcie wstrzymanej po terminie → active, przeszła data usunięta.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(:'EXJ4'::uuid, 'reopen') = 'active', 'EX72-6c reopen wstrzymanej po terminie');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'active' and expires_at is null from public.jobs where id = :'EXJ4'),
+  'EX72-6d reopen usuwa przeszłą datę ważności');
+
+-- EX72-7: ponowne otwarcie wygasłej (expired) — istniejący kontrakt, data usunięta.
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'EXJ7', 'pl', 'Oferta EX7', 'Opis oferty magazynowej EX7.', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values (:'EXJ7', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(:'EXJ7'::uuid, 'reopen') = 'active', 'EX72-7 reopen expired');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'active' and expires_at is null from public.jobs where id = :'EXJ7'),
+  'EX72-7b reopen expired usuwa przeszłą datę');
+
+-- EX72-8: aktywna po terminie, zanim przeszedł cron — publicznie niedostępna, pauza
+-- odrzucona, ponowne otwarcie dozwolone (usuwa datę).
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,expires_at) values
+  (:'EXJ9',:'COMPA','ex72-9','Oferta EX9','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '1 minute');
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'EXJ9', 'pl', 'Oferta EX9', 'Opis oferty magazynowej EX9.', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values (:'EXJ9', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+select pg_temp.assert(not public.job_is_public(:'EXJ9'), 'EX72-8 aktywna po terminie niepubliczna bez crona');
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.apply_to_job(''e7200000-0000-0000-0000-000000000009''::uuid, ''ex72-apply'', null, ''immediate'', null)',
+  'JOB_NOT_ACTIVE', 'EX72-8b aplikowanie po terminie odrzucone bez crona');
+select pg_temp.assert(
+  (select count(*) from public.get_job_match_profile(:'EXJ9')) = 0,
+  'EX72-8c get_job_match_profile po terminie → brak wiersza');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.set_job_status(''e7200000-0000-0000-0000-000000000009''::uuid, ''pause'')',
+  'VALIDATION_FAILED', 'EX72-8d pauza aktywnej po terminie odrzucona');
+select pg_temp.assert(public.set_job_status(:'EXJ9'::uuid, 'reopen') = 'active', 'EX72-8e reopen aktywnej po terminie');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'active' and expires_at is null from public.jobs where id = :'EXJ9'),
+  'EX72-8f reopen usuwa przeszłą datę; oferta znowu publiczna');
+select pg_temp.assert(public.job_is_public(:'EXJ9'), 'EX72-8g po reopen oferta publiczna');
+
+-- EX72-9: get_job_match_profile — granica now() → brak; przyszła i brak daty → wiersz.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,expires_at) values
+  (:'EXJ10',:'COMPA','ex72-10','Oferta EX10','warehouse','permanent','Antwerpia','Flandria','active','pl', now() + interval '1 day'),
+  (:'EXJ11',:'COMPA','ex72-11','Oferta EX11','warehouse','permanent','Antwerpia','Flandria','active','pl', null),
+  (:'EXJ12',:'COMPA','ex72-12','Oferta EX12','warehouse','permanent','Antwerpia','Flandria','active','pl', now() + interval '1 day');
+begin;
+update public.jobs set expires_at = now() where id = :'EXJ12';
+set local role authenticated; set local app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_job_match_profile(:'EXJ12')) = 0, 'EX72-9 match profile: expires_at = now() → brak');
+select pg_temp.assert(
+  (select count(*) from public.get_job_match_profile(:'EXJ10')) = 1, 'EX72-9b match profile: data przyszła → wiersz');
+select pg_temp.assert(
+  (select count(*) from public.get_job_match_profile(:'EXJ11')) = 1, 'EX72-9c match profile: bez daty → wiersz');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- TM403. Zespół firmy i kolejna firma (0086, #403): zaproszenia po e-mailu,
+-- hierarchia ról, ostatni owner, izolacja firm, kolejna firma z limitem.
+-- ============================================================================
+\set TMO 'e8700000-0000-0000-0000-0000000000a1'
+\set TMR 'e8700000-0000-0000-0000-0000000000a2'
+\set TMM 'e8700000-0000-0000-0000-0000000000a3'
+\set TMB 'e8700000-0000-0000-0000-0000000000b1'
+\set TMX 'e8700000-0000-0000-0000-0000000000c1'
+\set TMCA 'e8700000-0000-0000-0000-0000000000f1'
+\set TMCB 'e8700000-0000-0000-0000-0000000000f2'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'TMO','tmo@test.be','Olga O','{"role":"employer","first_name":"Olga","last_name":"Owner","locale":"pl"}'),
+  (:'TMR','tmr@test.be','Rita R','{"role":"employer","first_name":"Rita","last_name":"Recruiter","locale":"fr"}'),
+  (:'TMM','tmm@test.be','Marc M','{"role":"employer","first_name":"Marc","last_name":"Member","locale":"nl"}'),
+  (:'TMB','tmb@test.be','Bert B','{"role":"employer","first_name":"Bert","last_name":"B","locale":"en"}'),
+  (:'TMX','tmx@test.be','Xena X','{"role":"candidate","first_name":"Xena","last_name":"X","locale":"pl"}');
+-- TMR na razie z NIEZWERYFIKOWANYM adresem (TM403-2); reszta zweryfikowana.
+update auth.users set email_verified = true where id in (:'TMO', :'TMM', :'TMB', :'TMX');
+insert into public.companies(id,name,status) values
+  (:'TMCA','Firma TM A','verified'), (:'TMCB','Firma TM B','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'TMCA',:'TMO','owner',true), (:'TMCB',:'TMB','owner',true);
+
+-- TM403-1: owner zaprasza rekrutera; e-mail w języku ODBIORCY (fr), nie nadawcy (pl).
+set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
+select invitation_id as tminv, created as tmcreated
+  from public.invite_company_member(:'TMCA', '  TMR@test.be ', 'recruiter') \gset
+select pg_temp.assert(:'tmcreated'::boolean, 'TM403-1 zaproszenie utworzone');
+-- Ponowienie: to samo zaproszenie, bez drugiego e-maila.
+select invitation_id as tminv2, created as tmcreated2
+  from public.invite_company_member(:'TMCA', 'tmr@test.be', 'recruiter') \gset
+select pg_temp.assert(:'tminv' = :'tminv2' and not :'tmcreated2'::boolean,
+  'TM403-1b ponowienie zwraca to samo zaproszenie');
+select pg_temp.assert((select count(*) from public.get_company_invitations(:'TMCA')) = 1,
+  'TM403-1c owner widzi jedno oczekujące zaproszenie');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where profile_id = :'TMR' and template = 'teamInvitation') = 1
+  and (select locale from public.email_deliveries
+     where profile_id = :'TMR' and template = 'teamInvitation') = 'fr',
+  'TM403-1d jeden e-mail teamInvitation w języku odbiorcy (fr)');
+select pg_temp.assert(
+  (select count(*) from public.notifications
+     where profile_id = :'TMR' and entity_type = 'company_invitation') = 1,
+  'TM403-1e powiadomienie in-app dla zapraszanego');
+
+-- TM403-2: niezweryfikowany adres nie widzi i nie przyjmie zaproszenia.
+set role authenticated; set app.current_uid = :'TMR'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_my_company_invitations()) = 0,
+  'TM403-2 niezweryfikowany e-mail nie widzi zaproszeń');
+select pg_temp.expect_error(
+  'select public.respond_to_company_invitation(''' || :'tminv' || ''', true)',
+  'NOT_FOUND', 'TM403-2b niezweryfikowany e-mail nie przyjmie zaproszenia');
+reset role; reset app.current_uid;
+update auth.users set email_verified = true where id = :'TMR';
+
+-- TM403-3: obca osoba (firma B) nie przyjmie cudzego zaproszenia.
+set role authenticated; set app.current_uid = :'TMB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.respond_to_company_invitation(''' || :'tminv' || ''', true)',
+  'NOT_FOUND', 'TM403-3 cudze zaproszenie → NOT_FOUND');
+reset role; reset app.current_uid;
+
+-- TM403-4: adresat przyjmuje → aktywny recruiter z prawami recruiter+.
+set role authenticated; set app.current_uid = :'TMR'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_my_company_invitations()) = 1,
+  'TM403-4 adresat widzi zaproszenie');
+select pg_temp.assert(public.respond_to_company_invitation(:'tminv', true) = :'TMCA'::uuid,
+  'TM403-4b przyjęcie zwraca firmę');
+select pg_temp.assert(public.respond_to_company_invitation(:'tminv', true) = :'TMCA'::uuid,
+  'TM403-4c ponowienie przyjęcia idempotentne');
+select pg_temp.assert(public.can_manage_jobs(:'TMCA'), 'TM403-4d recruiter zarządza ofertami');
+select pg_temp.assert(not public.is_company_admin(:'TMCA'), 'TM403-4e recruiter nie jest adminem');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select role::text from public.company_members where company_id = :'TMCA' and profile_id = :'TMR') = 'recruiter',
+  'TM403-4f członkostwo recruiter');
+
+-- TM403-5: member — dołącza, ale nie zarządza zespołem ani ofertami (KONTROLE UJEMNE).
+set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
+select invitation_id as tminvm from public.invite_company_member(:'TMCA', 'tmm@test.be', 'member') \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'TMM'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'tminvm', true);
+reset role; reset app.current_uid;
+select id as tmmid from public.company_members where company_id = :'TMCA' and profile_id = :'TMM' \gset
+select id as tmrid from public.company_members where company_id = :'TMCA' and profile_id = :'TMR' \gset
+select id as tmoid from public.company_members where company_id = :'TMCA' and profile_id = :'TMO' \gset
+
+set role authenticated; set app.current_uid = :'TMM'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.can_manage_jobs(:'TMCA'), 'TM403-5 member bez praw recruiter+');
+select pg_temp.expect_error(
+  'select public.set_company_member_role(''' || :'tmrid' || ''', ''member'')',
+  'NOT_FOUND', 'TM403-5b member nie zmienia ról (RPC)');
+select pg_temp.expect_error(
+  'select public.set_company_member_active(''' || :'tmrid' || ''', false)',
+  'NOT_FOUND', 'TM403-5c member nie dezaktywuje członków');
+select pg_temp.expect_error(
+  'select * from public.get_company_team(''' || :'TMCA' || ''')',
+  'PERMISSION_DENIED', 'TM403-5d member nie widzi listy zespołu (e-maile)');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''x@test.be'', ''member'')',
+  'PERMISSION_DENIED', 'TM403-5e member nie zaprasza');
+update public.company_members set role = 'owner' where id = :'tmmid';
+update public.company_members set role = 'member' where id = :'tmrid';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select role::text from public.company_members where id = :'tmmid') = 'member'
+  and (select role::text from public.company_members where id = :'tmrid') = 'recruiter',
+  'TM403-5f bezpośredni UPDATE members nie zmienia ról (RLS)');
+
+-- TM403-6: hierarchia — admin zarządza tylko recruiter/member.
+set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
+select public.set_company_member_role(:'tmrid', 'admin');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'TMR'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_company_team(:'TMCA')) = 3,
+  'TM403-6 admin widzi zespół');
+select public.set_company_member_role(:'tmmid', 'recruiter');
+select pg_temp.expect_error(
+  'select public.set_company_member_role(''' || :'tmmid' || ''', ''admin'')',
+  'PERMISSION_DENIED', 'TM403-6b admin nie nadaje roli admin');
+select pg_temp.expect_error(
+  'select public.set_company_member_role(''' || :'tmmid' || ''', ''owner'')',
+  'PERMISSION_DENIED', 'TM403-6c admin nie nadaje roli owner');
+select pg_temp.expect_error(
+  'select public.set_company_member_active(''' || :'tmoid' || ''', false)',
+  'PERMISSION_DENIED', 'TM403-6d admin nie dezaktywuje ownera (RPC)');
+select pg_temp.expect_error(
+  'update public.company_members set is_active = false where id = ''' || :'tmoid' || '''',
+  'PERMISSION_DENIED', 'TM403-6e admin nie dezaktywuje ownera (bezpośredni UPDATE)');
+select pg_temp.expect_error(
+  'delete from public.company_members where id = ''' || :'tmoid' || '''',
+  'PERMISSION_DENIED', 'TM403-6f admin nie usuwa ownera (bezpośredni DELETE)');
+select pg_temp.expect_error(
+  'select public.set_company_member_role(''' || :'tmrid' || ''', ''member'')',
+  'VALIDATION_FAILED', 'TM403-6g nikt nie zmienia własnej roli przez RPC');
+select pg_temp.expect_error(
+  'insert into public.company_members(company_id, profile_id, role) values ('''
+  || :'TMCA' || ''', ''' || :'TMX' || ''', ''member'')',
+  'permission denied', 'TM403-6h bezpośredni INSERT członkostwa odebrany (tylko zaproszenie)');
+reset role; reset app.current_uid;
+select pg_temp.assert((select role::text from public.company_members where id = :'tmmid') = 'recruiter',
+  'TM403-6i admin zmienił member → recruiter');
+
+-- TM403-7: ostatni owner nie do usunięcia/zdemotowania.
+set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.set_company_member_active(''' || :'tmoid' || ''', false)',
+  'VALIDATION_FAILED', 'TM403-7 owner nie dezaktywuje siebie przez RPC');
+select pg_temp.expect_error(
+  'update public.company_members set is_active = false where id = ''' || :'tmoid' || '''',
+  'VALIDATION_FAILED', 'TM403-7b ostatni owner — dezaktywacja odrzucona');
+select pg_temp.expect_error(
+  'update public.company_members set role = ''admin'' where id = ''' || :'tmoid' || '''',
+  'VALIDATION_FAILED', 'TM403-7c ostatni owner — degradacja odrzucona');
+select pg_temp.expect_error(
+  'delete from public.company_members where id = ''' || :'tmoid' || '''',
+  'VALIDATION_FAILED', 'TM403-7d ostatni owner — usunięcie odrzucone');
+-- Dezaktywacja i przywrócenie członka: dostęp znika i wraca.
+select public.set_company_member_active(:'tmmid', false);
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'TMM'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_company_member(:'TMCA'), 'TM403-7e dezaktywowany traci dostęp');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
+select public.set_company_member_active(:'tmmid', true);
+-- Transfer: owner awansuje admina do owner, nowy owner może zdegradować poprzedniego.
+select public.set_company_member_role(:'tmrid', 'owner');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'TMR'; select pg_temp.assert_client_role();
+select public.set_company_member_role(:'tmoid', 'admin');
+select public.set_company_member_role(:'tmoid', 'owner');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.company_members
+     where company_id = :'TMCA' and role = 'owner' and is_active) = 2,
+  'TM403-7f transfer własności działa przy zachowaniu inwariantu');
+
+-- TM403-8: firma B nie widzi i nie zmienia zespołu firmy A.
+set role authenticated; set app.current_uid = :'TMB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.get_company_team(''' || :'TMCA' || ''')',
+  'PERMISSION_DENIED', 'TM403-8 obca firma bez listy zespołu');
+select pg_temp.expect_error('select * from public.get_company_invitations(''' || :'TMCA' || ''')',
+  'PERMISSION_DENIED', 'TM403-8b obca firma bez zaproszeń');
+select pg_temp.expect_error(
+  'select public.set_company_member_role(''' || :'tmmid' || ''', ''member'')',
+  'NOT_FOUND', 'TM403-8c obca firma nie zmienia roli');
+select pg_temp.expect_error(
+  'select public.set_company_member_active(''' || :'tmmid' || ''', false)',
+  'NOT_FOUND', 'TM403-8d obca firma nie dezaktywuje');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''x@test.be'', ''member'')',
+  'PERMISSION_DENIED', 'TM403-8e obca firma nie zaprasza do A');
+select pg_temp.expect_error('select count(*) from public.company_invitations',
+  'permission denied', 'TM403-8f brak bezpośredniego odczytu zaproszeń');
+select pg_temp.assert(
+  (select count(*) from public.company_members where company_id = :'TMCA') = 0,
+  'TM403-8g obca firma nie widzi członkostw A (RLS)');
+reset role; reset app.current_uid;
+
+-- TM403-9: konto kandydata nie dołącza do firmy; e-maila do kandydata nie kolejkujemy.
+set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
+select invitation_id as tminvx from public.invite_company_member(:'TMCA', 'tmx@test.be', 'member') \gset
+select invitation_id as tminvn, created as tmcreatedn
+  from public.invite_company_member(:'TMCA', 'nikt@test.be', 'member') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'tmcreatedn'::boolean, 'TM403-9 zaproszenie adresu bez konta — ta sama odpowiedź');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id = :'TMX' and template = 'teamInvitation') = 0,
+  'TM403-9b brak e-maila zaproszenia do konta kandydata');
+set role authenticated; set app.current_uid = :'TMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.respond_to_company_invitation(''' || :'tminvx' || ''', true)',
+  'PERMISSION_DENIED', 'TM403-9c kandydat nie przyjmie zaproszenia');
+reset role; reset app.current_uid;
+
+-- TM403-10: cofnięte i wygasłe zaproszenie nie działa; role spoza listy odrzucone.
+set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
+select invitation_id as tminvb from public.invite_company_member(:'TMCA', 'tmb@test.be', 'member') \gset
+select public.revoke_company_invitation(:'tminvb');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''y@test.be'', ''owner'')',
+  'VALIDATION_FAILED', 'TM403-10 zaproszenie na ownera odrzucone');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''bez-malpy'', ''member'')',
+  'VALIDATION_FAILED', 'TM403-10b niepoprawny e-mail odrzucony');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''tmm@test.be'', ''member'')',
+  'MEMBER_ALREADY_EXISTS', 'TM403-10c aktywny członek nie jest zapraszany ponownie');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'TMB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.respond_to_company_invitation(''' || :'tminvb' || ''', true)',
+  'NOT_FOUND', 'TM403-10d cofnięte zaproszenie nie działa');
+reset role; reset app.current_uid;
+update public.company_invitations set expires_at = now() - interval '1 minute' where id = :'tminvn';
+update public.company_invitations set status = 'pending', expires_at = now() - interval '1 minute'
+  where id = :'tminvb';
+set role authenticated; set app.current_uid = :'TMB'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_my_company_invitations()) = 0,
+  'TM403-10e wygasłe zaproszenie niewidoczne');
+select pg_temp.expect_error(
+  'select public.respond_to_company_invitation(''' || :'tminvb' || ''', true)',
+  'NOT_FOUND', 'TM403-10f wygasłe zaproszenie nie działa');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.company_members where company_id = :'TMCA' and profile_id = :'TMB'),
+  'TM403-10g firma B nie dołączyła do A');
+
+-- TM403-11: kolejna firma — owner, idempotencja, limit 5, audyt; kandydat odrzucony.
+set role authenticated; set app.current_uid = :'TMB'; select pg_temp.assert_client_role();
+select company_id as tmnew, created as tmnewc
+  from public.create_additional_company('Druga TM', 'druga-tm-1', 'BE0123456789') \gset
+select pg_temp.assert(:'tmnewc'::boolean, 'TM403-11 kolejna firma utworzona');
+select pg_temp.assert(
+  (select company_id from public.create_additional_company('druga tm', 'druga-tm-2')) = :'tmnew'::uuid,
+  'TM403-11b podwójne kliknięcie → ta sama firma');
+select public.create_additional_company('TM 3', 'tm-3');
+select public.create_additional_company('TM 4', 'tm-4');
+select public.create_additional_company('TM 5', 'tm-5');
+select pg_temp.expect_error('select * from public.create_additional_company(''TM 6'', ''tm-6'')',
+  'COMPANY_LIMIT_REACHED', 'TM403-11c limit 5 firm z rolą owner');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'tmnew') = 'unverified'
+  and (select role::text from public.company_members where company_id = :'tmnew' and profile_id = :'TMB') = 'owner'
+  and exists (select 1 from public.audit_logs where action = 'company.created' and entity_id = :'tmnew'),
+  'TM403-11d firma unverified, owner, wpis audytu');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs where action = 'company.member_role_changed'
+            and entity_id = :'TMCA' and actor_id = :'TMR'),
+  'TM403-11e zmiany ról w audycie z aktorem');
+set role authenticated; set app.current_uid = :'TMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.create_additional_company(''Kand'', ''kand-1'')',
+  'PERMISSION_DENIED', 'TM403-11f kandydat nie zakłada firmy');
+reset role; reset app.current_uid;
+
+-- TM403-12: anon bez EXECUTE.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.get_my_company_invitations()',
+  'permission denied', 'TM403-12 anon bez EXECUTE na zaproszeniach');
+select pg_temp.expect_error('select * from public.create_additional_company(''A'', ''a'')',
+  'permission denied', 'TM403-12b anon bez EXECUTE na kolejnej firmie');
+reset role;
+
+-- ============================================================================
 -- UN45 (#45, 0087): wypisanie, ponowna kontrola zgody przy claimie, atomowy budżet.
 -- ============================================================================
 \set UNA 'e8700000-0000-0000-0000-0000000000a1'

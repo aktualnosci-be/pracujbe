@@ -493,7 +493,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P1-18 (moderacja zgłoszeń end-to-end), P1-19 (webhook Resend bounce/complaint = zewn.),
 > P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
-> P2-06/13 i P4-* (atomowy lease inboxa, zarządzanie zespołem, alerty/CWV); P2-04 (paginacja
+> P2-06 i P4-* (atomowy lease inboxa, alerty/CWV; P2-13 zarządzanie zespołem zamknięte w #403); P2-04 (paginacja
 > admina) zamknięte w #418.
 
 ### Etap 1 — fundament
@@ -646,7 +646,34 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   zwraca `demo`/`ok`/`error`; firma demonstracyjna tylko w trybie demo. Dowód: `rls.sql` sekcja MM.
   Powód odrzucenia/zawieszenia (#310, `0084`): `companies.status_reason` w banerze `/employer/firma`.
   **Otwarte:** strona kontaktu (#61), orientacyjny czas weryfikacji (decyzja produktowa).
+- [x] Wygaszanie ofert (#72, migracja `0085`): `expire_due_jobs()` (service_role, `SKIP LOCKED`,
+  zwraca liczbę) zmienia tylko `active` z `expires_at <= now()` na `expired`; woła je
+  `/api/maintenance` (cron Railway co godzinę, `docs/railway/README.md`). Panel nie czeka na cron:
+  licznik aktywnych filtruje datę, lista pokazuje aktywną po terminie jako `expired`
+  (`src/lib/job-expiry.ts`) z akcją „Otwórz ponownie”, kreator jej nie edytuje. `publish_job` z
+  minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
+  `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu
+- [x] Zespół firmy i kolejna firma (#403, migracja `0086`): `/employer/zespol` — lista członków
+  (owner/admin; RPC `get_company_team`), zmiana roli (`set_company_member_role`), odebranie/
+  przywrócenie dostępu (`set_company_member_active`, z potwierdzeniem), zaproszenie po e-mailu
+  (`invite_company_member`: rola admin/recruiter/member, ważne 14 dni, idempotentne, limit 50
+  oczekujących) i cofnięcie (`revoke_company_invitation`). Hierarchia (`can_manage_company_role`,
+  lustro UI `src/lib/team/permissions.ts`): owner zarządza każdym, admin tylko recruiter/member,
+  nikt własnym członkostwem przez RPC; ostatni aktywny owner nietykalny (jawnie w RPC + trigger
+  `enforce_owner_invariants` z tą samą hierarchią dla bezpośredniego DML). Bezpośredni INSERT do
+  `company_members` odebrany — dołączenie tylko przez przyjęcie zaproszenia
+  (`respond_to_company_invitation`: zweryfikowany e-mail sesji = adres zaproszenia, konto
+  pracodawcy; przyjęcie przełącza aktywną firmę). Istniejące konto pracodawcy dostaje powiadomienie
+  (`system`/`company_invitation` → `/employer/zespol`) i e-mail `teamInvitation` w języku odbiorcy;
+  odpowiedź RPC nie zależy od istnienia konta. Zaproszenia widać też w widoku zakładania firmy
+  (konto bez firmy). „Dodaj kolejną firmę” w przełączniku → `/employer/firma/nowa`
+  (`create_additional_company`: owner, `unverified`, limit 5 firm z rolą owner, idempotentne
+  ≤ 10 min, audyt). Rola `member`: zamiast „Dodaj ofertę”, edycji i cyklu życia ofert —
+  wyjaśnienie (`RecruiterOnlyNote`). Każda zmiana → `audit_logs`. Dowód: `rls.sql` sekcja TM403;
+  unit `team-actions`, `team-members-ui`; E2E `employer-team.spec`.
+  **Otwarte:** e-mail zaproszenia dla adresu BEZ konta (brak profilu = brak locale odbiorcy
+  wg Invariantu #1; wymaga wyboru języka zaproszenia i linku rejestracji z tokenem).
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
@@ -817,7 +844,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
   E2E noindex każdej strony paneli i auth z systemu plików (`panel-noindex`) i axe na wszystkich
   trasach publicznych, 4 języki, 320/1280 px, z banerem i po jego zamknięciu (`a11y-public-routes`).
-  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 23 trasach
+  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 25 trasach
   kandydata i pracodawcy (PL/EN 1280 px, 4 języki 320 px), z banerem, z otwartym menu statusu,
   centrum powiadomień i kompozytorem; kontrola ujemna (przycisk bez nazwy → czerwony). Admin: `admin-a11y`.
   Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),

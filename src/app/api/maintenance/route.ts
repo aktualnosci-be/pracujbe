@@ -6,13 +6,17 @@ import { hasServiceRoleKey, isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 
 /**
- * Zadania utrzymaniowe (P1-20) — wywoływane przez cron (harmonogram w `vercel.json`).
+ * Zadania utrzymaniowe (P1-20) — wywoływane przez cron Railway (`scripts/railway-cron-call.mjs`,
+ * POST co godzinę, `CRON_AUTH_SECRET` = `MAINTENANCE_SECRET`; patrz `docs/railway/README.md`).
  * Zwalnia porzucone rezerwacje kodów rabatowych (`release_stale_discount_reservations`) oraz
  * otwarte, nieukończone checkouty (`release_stale_checkout_intents`) — inaczej limit kodu i
- * blokada „jeden otwarty checkout na firmę" utknęłyby po porzuceniu płatności.
+ * blokada „jeden otwarty checkout na firmę" utknęłyby po porzuceniu płatności. #72: zmienia
+ * przeterminowane aktywne oferty na `expired` (`expire_due_jobs`, 0085; idempotentne).
  *
- * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (Vercel Cron: GET + `Authorization: Bearer`).
- * Wymaga service-role (RPC są service_role-only). Nie ujawnia technikaliów.
+ * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
+ * Wymaga service-role (RPC są service_role-only). Nie ujawnia technikaliów ani danych ofert —
+ * odpowiedź i log zawierają tylko liczniki; błąd któregokolwiek zadania → 503 (bez pozornego
+ * sukcesu dla crona i monitoringu).
  */
 
 export const dynamic = 'force-dynamic';
@@ -47,18 +51,24 @@ async function run(request: Request): Promise<Response> {
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
     const admin = createAdminClient();
-    const [discounts, checkouts] = await Promise.all([
+    const [discounts, checkouts, expiredJobs] = await Promise.all([
       admin.rpc('release_stale_discount_reservations', { p_older_than_hours: 24 }),
       admin.rpc('release_stale_checkout_intents', { p_older_than_minutes: 30 }),
+      admin.rpc('expire_due_jobs'),
     ]);
-    if (discounts.error || checkouts.error) {
-      captureError(discounts.error ?? checkouts.error, { area: 'maintenance.gc' });
+    if (discounts.error || checkouts.error || expiredJobs.error) {
+      const failed = discounts.error ? 'discounts' : checkouts.error ? 'checkouts' : 'jobExpiry';
+      captureError(discounts.error ?? checkouts.error ?? expiredJobs.error, {
+        area: 'maintenance.gc',
+        task: failed,
+      });
       return NextResponse.json({ error: 'gc failed' }, { status: 503 });
     }
     return NextResponse.json({
       ok: true,
       releasedDiscounts: discounts.data ?? 0,
       releasedCheckouts: checkouts.data ?? 0,
+      expiredJobs: typeof expiredJobs.data === 'number' ? expiredJobs.data : 0,
     });
   } catch (e) {
     captureError(e, { area: 'maintenance.gc' });

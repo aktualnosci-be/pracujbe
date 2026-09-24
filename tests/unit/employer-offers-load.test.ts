@@ -107,10 +107,26 @@ describe("employer offers read state", () => {
       { id: "job-2", title: "Offer 2", city: "Gent", status: "draft" },
     ]);
     const result = await getCompanyJobsLoad();
-    expect(query.select).toHaveBeenCalledWith("id, title, city, status, slug, created_at");
+    expect(query.select).toHaveBeenCalledWith("id, title, city, status, slug, expires_at, created_at");
     expect(result.status === "ok" && result.jobs.map((job) => job.createdAt)).toEqual([
       "2026-09-18T09:00:00Z",
       null,
+    ]);
+  });
+
+  it("shows an active job past expires_at as expired before maintenance runs (#72)", async () => {
+    client([
+      { id: "job-1", title: "Past", city: "Gent", status: "active", expires_at: "2020-01-01T00:00:00Z" },
+      { id: "job-2", title: "Future", city: "Gent", status: "active", expires_at: "2999-01-01T00:00:00Z" },
+      { id: "job-3", title: "Open-ended", city: "Gent", status: "active", expires_at: null },
+      { id: "job-4", title: "Paused past", city: "Gent", status: "paused", expires_at: "2020-01-01T00:00:00Z" },
+    ]);
+    const result = await getCompanyJobsLoad();
+    expect(result.status === "ok" && result.jobs.map((job) => [job.status, job.pastExpiry])).toEqual([
+      ["expired", true],
+      ["active", false],
+      ["active", false],
+      ["paused", true],
     ]);
   });
 

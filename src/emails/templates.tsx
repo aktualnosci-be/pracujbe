@@ -104,6 +104,12 @@ export interface EmailDataMap {
   /** `reason` = uzasadnienie admina, renderowane jako cytat (tekst, bez HTML). */
   companyRejected: { recipientName?: string; companyName: string; reason?: string | null; actionUrl: string };
   companySuspended: { recipientName?: string; companyName: string; reason?: string | null; actionUrl: string };
+  teamInvitation: {
+    recipientName?: string;
+    companyName: string;
+    inviterName?: string | null;
+    actionUrl: string;
+  };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
   invoice: { recipientName?: string; invoiceNumber: string; amount: string; downloadUrl: string };
@@ -125,6 +131,7 @@ const SUBJECT_FIELD: Partial<Record<EmailType, string>> = {
   statusChanged: 'status',
   companyRejected: 'reason',
   companySuspended: 'reason',
+  teamInvitation: 'inviterName',
 };
 
 /** Pusta wartość albo sam placeholder (myślniki/spacje), np. `'—'` z `coalesce(..., '—')` w RPC. */
@@ -543,6 +550,18 @@ export function CompanySuspendedEmail(props: EmailProps<'companySuspended'>): Re
   );
 }
 
+export function TeamInvitationEmail(props: EmailProps<'teamInvitation'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="teamInvitation"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
 export function JobExpiringEmail(props: EmailProps<'jobExpiring'>): ReactElement {
   return (
     <EmailShell
@@ -621,6 +640,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   companyVerified: CompanyVerifiedEmail,
   companyRejected: CompanyRejectedEmail,
   companySuspended: CompanySuspendedEmail,
+  teamInvitation: TeamInvitationEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,
   invoice: InvoiceEmail,
