@@ -171,6 +171,9 @@ function NoScriptFilterForm({
         <legend className="text-sm font-semibold text-foreground">
           {t('salary')}
         </legend>
+        <p className="text-xs text-muted-foreground">
+          {t('salaryPeriodNote')}
+        </p>
         <label className="block space-y-2 text-sm text-foreground">
           <span>{t('salaryMin')}</span>
           <input

@@ -516,6 +516,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 ### Etap 2 — strony publiczne
 - [x] Strona główna (hero + sekcje) SSR — redesign wg makiety 01
 - [x] Lista ofert + filtry (FilterSidebar/FilterSheet, chipy, sort, paginacja) — wg makiety 02; infinite scroll opcjonalnie później
+  Wynagrodzenie (#188, 0080): suwak = EUR brutto/mies.; filtr, sort „najwyższe wynagrodzenie”,
+  licznik i facety porównują ekwiwalent miesięczny (month bez zmian, year ÷ 12). Stawek
+  godzinowych nie przeliczamy (godziny pracy to wolny tekst) — jak oferty bez kwoty nie odpadają
+  z filtra i są na końcu sortowania; opis `filters.salaryPeriodNote` pod suwakiem. Lustro TS dla
+  demo: `src/lib/salary-compare.ts`. Dowód: `rls.sql` sekcja SAL, `salary-compare.test.ts`.
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner
