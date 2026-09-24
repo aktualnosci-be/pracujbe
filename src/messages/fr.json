@@ -629,7 +629,8 @@
     "moderationLocked": "Ce contenu est restreint par une décision de modération : son statut ne peut pas être modifié.",
     "guestApplyUnavailable": "La candidature sans compte est temporairement indisponible. Réessayez plus tard ou connectez-vous.",
     "emailNotVerified": "Confirmez d’abord l’adresse e-mail de votre compte — cliquez sur le lien envoyé lors de l’inscription.",
-    "claimExpired": "Le lien de rattachement a expiré (il était valable 30 jours)."
+    "claimExpired": "Le lien de rattachement a expiré (il était valable 30 jours).",
+    "jobImportSensitiveData": "L’annonce contient un numéro d’identification de personne ou de document ; nous ne l’avons donc pas importée. Remplissez le formulaire manuellement."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -1187,7 +1188,9 @@
     "screeningOptional": "(facultatif)",
     "screeningRequired": "Répondez à cette question.",
     "screeningYes": "Oui",
-    "screeningNo": "Non"
+    "screeningNo": "Non",
+    "sensitiveIdHint": "Votre candidature ne nécessite ni numéro NISS/BIS ni numéro de pièce d’identité — ne les indiquez pas.",
+    "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
   },
   "guestApply": {
     "subtitle": "Postulez sans créer de compte ou connectez-vous pour utiliser votre profil. Pas besoin de CV.",
@@ -1239,7 +1242,8 @@
       "emailInvalid": "Indiquez une adresse e-mail valide, par ex. jean@example.com.",
       "messageTooLong": "Le message peut comporter au maximum 500 caractères.",
       "privacyNoticeRequired": "Confirmez avoir pris connaissance des informations sur la vie privée pour envoyer la candidature.",
-      "idempotencyKeyInvalid": "Actualisez la page et renvoyez le formulaire."
+      "idempotencyKeyInvalid": "Actualisez la page et renvoyez le formulaire.",
+      "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
     }
   },
   "legal": {
@@ -1457,7 +1461,8 @@
     "errorFileTooLarge": "Le fichier est trop volumineux. La taille maximale est de 5 Mo.",
     "errorFileType": "Seules les images PNG, JPG et WebP sont acceptées.",
     "errorUrlMissing": "Collez un lien vers l’annonce.",
-    "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez."
+    "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
+    "contactNote": "Nous ne reprenons pas les adresses e-mail, numéros de téléphone et numéros d’identification dans le formulaire. Indiquez vous-même l’e-mail de contact à la dernière étape."
   },
   "messages": {
     "title": "Messages",
@@ -1896,7 +1901,8 @@
       "messageTooLong": "Le message est trop long.",
       "phoneInvalid": "Indiquez un numéro de téléphone valide.",
       "privacyNoticeRequired": "Confirmez avoir pris connaissance des informations sur la vie privée pour envoyer la candidature.",
-      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez."
+      "idempotencyKeyInvalid": "Le formulaire n'a pas pu être envoyé. Actualisez la page et réessayez.",
+      "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
     }
   },
   "offer": {
@@ -1983,6 +1989,30 @@
     "blockedSuccess": "L’entreprise {company} a été bloquée.",
     "manage": "Gérer les entreprises bloquées"
   },
+  "profileVisibility": {
+    "sectionTitle": "Visibilité du profil pour les entreprises",
+    "sectionDescription": "Vous pouvez autoriser les employeurs vérifiés à trouver votre profil parmi les candidats. Par défaut, votre profil est masqué. Vous pouvez modifier ce réglage à tout moment.",
+    "whoTitle": "Qui verra votre profil",
+    "whoText": "Uniquement les entreprises vérifiées par Pracuj.be. Les entreprises que vous bloquez ne le verront jamais. Une entreprise peut vous envoyer une proposition d’emploi via le portail.",
+    "seenTitle": "Ce que l’entreprise verra",
+    "seenText": "Les données professionnelles de votre profil : titre et description, métiers et catégories, compétences, langues, certificats, expérience, disponibilité, ville et distance de déplacement, permis de conduire et voiture, types de contrat et salaire souhaité.",
+    "notSeenTitle": "Ce que l’entreprise ne verra pas",
+    "notSeenText": "Vos nom et prénom, votre adresse e-mail, votre numéro de téléphone ni votre CV. Vos nom, prénom et coordonnées du compte ne sont visibles que pour une entreprise à laquelle vous postulez ou qui vous envoie une proposition d’emploi.",
+    "offTitle": "Après la désactivation",
+    "offText": "Votre profil disparaît immédiatement des recherches et des suggestions de compatibilité des entreprises. Les entreprises auxquelles vous avez déjà postulé ou qui vous ont déjà envoyé une proposition voient encore votre profil dans ce recrutement. Pour y mettre fin, bloquez l’entreprise dans la section « Entreprises bloquées ».",
+    "toggleLabel": "Autoriser les employeurs vérifiés à trouver mon profil",
+    "stateOn": "Profil visible pour les entreprises vérifiées",
+    "stateOff": "Profil masqué dans les recherches des entreprises",
+    "changedAt": "Dernière modification : {date}",
+    "neverChanged": "Ce réglage n’a encore jamais été modifié.",
+    "requiresComplete": "Pour activer la visibilité, terminez d’abord votre profil.",
+    "completeProfile": "Compléter le profil",
+    "saving": "Enregistrement…",
+    "savedOn": "Votre profil est maintenant visible pour les entreprises vérifiées.",
+    "savedOff": "Votre profil est maintenant masqué dans les recherches des entreprises.",
+    "saveError": "La modification n’a pas pu être enregistrée. Le réglage n’a pas changé — veuillez réessayer.",
+    "loadError": "Impossible de charger la visibilité de votre profil. Actualisez la page dans un instant."
+  },
   "team": {
     "title": "Équipe",
     "subtitle": "Personnes ayant accès à l’espace de l’entreprise {company}.",
@@ -2068,9 +2098,11 @@
     "title": "Désinscription des e-mails",
     "confirmText": "Confirmez que vous ne souhaitez plus recevoir ces e-mails : {category}.",
     "confirmButton": "Me désinscrire",
+    "allButton": "Me désinscrire de toutes les notifications par e-mail",
     "pending": "Enregistrement…",
     "doneTitle": "Désinscription effectuée",
     "doneText": "Nous ne vous enverrons plus ces e-mails : {category}. Les autres messages et notifications du site ne changent pas.",
+    "allDoneText": "Nous ne vous enverrons plus de notifications par e-mail ni de newsletter. Les messages nécessaires à votre compte, comme la réinitialisation du mot de passe, restent envoyés.",
     "settingsHint": "Vous pouvez modifier tous vos paramètres de notification après connexion.",
     "loginLink": "Se connecter",
     "invalidTitle": "Le lien n’est pas valide",

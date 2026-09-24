@@ -27,12 +27,15 @@ export function screeningFieldId(questionId: string): string {
   return `apply-q-${questionId}`;
 }
 
+/** Błąd pytania: brak odpowiedzi (`true`) albo numer identyfikacyjny w odpowiedzi (#495). */
+export type ScreeningAnswerError = true | 'sensitiveId';
+
 export interface ScreeningQuestionsFieldsProps {
   questions: ScreeningQuestion[];
   contentLocale?: string;
   companyName: string;
   values: Record<string, ScreeningAnswerValue>;
-  errors: Record<string, true>;
+  errors: Record<string, ScreeningAnswerError>;
   onChange: (questionId: string, value: ScreeningAnswerValue | undefined) => void;
 }
 
@@ -60,7 +63,7 @@ export function ScreeningQuestionsFields({
       {questions.map((question) => {
         const fieldId = screeningFieldId(question.id);
         const errorId = `${fieldId}-error`;
-        const invalid = errors[question.id] === true;
+        const invalid = errors[question.id] !== undefined;
         const prompt = localizedText(question.prompt, locale, contentLocale);
         const marker = question.required ? (
           <span className="text-error" aria-hidden="true">
@@ -71,7 +74,7 @@ export function ScreeningQuestionsFields({
         );
         const error = invalid ? (
           <p id={errorId} className="text-sm text-error">
-            {t('screeningRequired')}
+            {errors[question.id] === 'sensitiveId' ? t('sensitiveIdNotAllowed') : t('screeningRequired')}
           </p>
         ) : null;
         const value = values[question.id];

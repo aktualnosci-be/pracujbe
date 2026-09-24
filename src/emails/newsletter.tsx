@@ -1,19 +1,21 @@
-import type { CSSProperties, ReactElement } from "react";
+import type { ReactElement } from "react";
 import { render } from "@react-email/render";
-import { Link, Section, Text } from "@react-email/components";
 
 import {
   EmailButton,
   EmailHeading,
   EmailLayout,
+  EmailPassport,
+  type EmailPassportField,
   EmailRawLink,
   EmailText,
-  emailPalette,
+  EmailTextLink,
 } from "@/emails/_components";
 import { newsletterCopy } from "@/emails/newsletter-copy";
 import { interpolate, layoutCopy } from "@/emails/copy";
 import type { Locale } from "@/i18n/routing";
 import { env } from "@/lib/env";
+import type { EmailSenderIdentity } from "@/lib/email/sender";
 
 export interface NewsletterJob {
   /** Język treści oferty. Musi być zgodny z językiem całej wiadomości. */
@@ -30,15 +32,24 @@ export interface NewsletterJob {
 export interface NewsletterEmailProps {
   locale: Locale;
   jobs: readonly NewsletterJob[];
+  transport?: NewsletterTransport;
 }
 
 /**
- * Wynik służy wyłącznie do przeglądu/renderowania. Nie jest kontraktem transportu.
- * Issue #45 musi najpierw dodać ponowną kontrolę zgody tuż przed wysyłką,
- * one-click unsubscribe URL i nagłówki RFC 8058 oraz tożsamość/adres nadawcy.
+ * Dane transportu (#45) — przekazuje je wyłącznie worker kolejki: podpisany adres wypisania
+ * i tożsamość nadawcy z konfiguracji. Bez nich wynik jest tylko podglądem.
+ */
+export interface NewsletterTransport {
+  unsubscribeUrl: string;
+  sender: EmailSenderIdentity;
+}
+
+/**
+ * `transportReady: true` tylko z kompletem danych transportu (wypisanie + nadawca z adresem
+ * pocztowym). Worker odmawia wysyłki wyniku bez tej flagi.
  */
 export interface NewsletterRenderFoundation {
-  readonly transportReady: false;
+  readonly transportReady: boolean;
   readonly subject: string;
   readonly html: string;
   readonly text: string;
@@ -76,47 +87,7 @@ export function assertRenderableJobs(
   }
 }
 
-const styles = {
-  card: {
-    borderTop: `1px solid ${emailPalette.border}`,
-    padding: "20px 0 16px 0",
-  } satisfies CSSProperties,
-  eyebrow: {
-    color: emailPalette.primary,
-    fontSize: "11px",
-    fontWeight: 700,
-    letterSpacing: "1px",
-    lineHeight: "16px",
-    margin: "0 0 8px 0",
-    textTransform: "uppercase",
-  } satisfies CSSProperties,
-  title: {
-    color: emailPalette.foreground,
-    fontSize: "19px",
-    fontWeight: 700,
-    lineHeight: "26px",
-    margin: "0 0 12px 0",
-  } satisfies CSSProperties,
-  detail: {
-    color: emailPalette.muted,
-    fontSize: "13px",
-    lineHeight: "20px",
-    margin: "0 0 4px 0",
-  } satisfies CSSProperties,
-  value: {
-    color: emailPalette.foreground,
-    fontWeight: 600,
-  } satisfies CSSProperties,
-  link: {
-    color: emailPalette.primaryDark,
-    display: "inline-block",
-    fontSize: "14px",
-    fontWeight: 700,
-    lineHeight: "22px",
-    marginTop: "8px",
-  } satisfies CSSProperties,
-} as const;
-
+/** Karta oferty = `PASZPORT PRACY` z prototypowego newsletter.html (miejsce | stawka, link). */
 function NewsletterJobCard({
   locale,
   job,
@@ -127,29 +98,26 @@ function NewsletterJobCard({
   const copy = newsletterCopy[locale];
   const href = `${env.siteUrl}/${locale}/oferty-pracy/${job.slug}`;
   const salary = job.salary?.trim();
+  const fields: EmailPassportField[] = [{ label: copy.location, value: job.city }];
+  if (salary) {
+    fields.push({ label: copy.salary, value: salary, data: ["data-newsletter-field", "salary"] });
+  }
 
   return (
-    <Section style={styles.card} data-newsletter-job={job.slug}>
-      <Text style={styles.eyebrow}>{copy.passport}</Text>
-      <Text style={styles.title}>{job.title}</Text>
-      <Text style={styles.detail}>
-        {copy.location}: <span style={styles.value}>{job.city}</span>
-      </Text>
-      {salary ? (
-        <Text style={styles.detail} data-newsletter-field="salary">
-          {copy.salary}: <span style={styles.value}>{salary}</span>
-        </Text>
-      ) : null}
-      <Link href={href} style={styles.link}>
-        {copy.viewJob}
-      </Link>
-    </Section>
+    <EmailPassport
+      eyebrow={copy.passport}
+      title={job.title}
+      fields={fields}
+      link={{ href, label: copy.viewJob }}
+      sectionData={{ "data-newsletter-job": job.slug }}
+    />
   );
 }
 
 export function NewsletterEmail({
   locale,
   jobs,
+  transport,
 }: NewsletterEmailProps): ReactElement {
   assertRenderableJobs(jobs, locale);
   const copy = newsletterCopy[locale];
@@ -157,7 +125,12 @@ export function NewsletterEmail({
   const preferencesHref = `${env.siteUrl}/${locale}/candidate/ustawienia`;
 
   return (
-    <EmailLayout locale={locale} preview={copy.preview}>
+    <EmailLayout
+      locale={locale}
+      preview={copy.preview}
+      unsubscribeUrl={transport?.unsubscribeUrl}
+      sender={transport?.sender}
+    >
       <EmailHeading>{copy.heading}</EmailHeading>
       <EmailText>{copy.intro}</EmailText>
       {jobs.map((job) => (
@@ -165,15 +138,19 @@ export function NewsletterEmail({
       ))}
       <EmailButton href={jobsHref}>{copy.viewAll}</EmailButton>
       <EmailText muted>{copy.preferencesNote}</EmailText>
-      <Link href={preferencesHref} style={styles.link}>
-        {copy.preferences}
-      </Link>
+      <EmailText muted>
+        <EmailTextLink href={preferencesHref}>{copy.preferences}</EmailTextLink>
+      </EmailText>
       <EmailRawLink href={preferencesHref} />
     </EmailLayout>
   );
 }
 
-function renderNewsletterText(locale: Locale, jobs: readonly NewsletterJob[]): string {
+function renderNewsletterText(
+  locale: Locale,
+  jobs: readonly NewsletterJob[],
+  transport?: NewsletterTransport,
+): string {
   const copy = newsletterCopy[locale];
   const footer = layoutCopy[locale];
   const site = `${env.siteUrl}/${locale}`;
@@ -196,8 +173,15 @@ function renderNewsletterText(locale: Locale, jobs: readonly NewsletterJob[]): s
     "",
     footer.tagline,
     footer.footerNote,
-    interpolate(footer.rights, { year: new Date().getFullYear() }),
   );
+  if (transport) {
+    lines.push(
+      `${footer.unsubscribe}: ${transport.unsubscribeUrl}`,
+      `${footer.sender}: ${transport.sender.identity}`,
+      `${footer.postalAddress}: ${transport.sender.postalAddress}`,
+    );
+  }
+  lines.push(interpolate(footer.rights, { year: new Date().getFullYear() }));
 
   return `${lines.join("\n")}\n`;
 }
@@ -205,13 +189,19 @@ function renderNewsletterText(locale: Locale, jobs: readonly NewsletterJob[]): s
 export async function renderNewsletterEmail(
   locale: Locale,
   jobs: readonly NewsletterJob[],
+  transport?: NewsletterTransport,
 ): Promise<NewsletterRenderFoundation> {
   assertRenderableJobs(jobs, locale);
-  const html = await render(<NewsletterEmail locale={locale} jobs={jobs} />);
+  const ready = Boolean(
+    transport?.unsubscribeUrl && transport.sender?.identity && transport.sender.postalAddress,
+  );
+  const html = await render(
+    <NewsletterEmail locale={locale} jobs={jobs} transport={ready ? transport : undefined} />,
+  );
   return {
-    transportReady: false,
+    transportReady: ready,
     subject: newsletterCopy[locale].subject,
     html,
-    text: renderNewsletterText(locale, jobs),
+    text: renderNewsletterText(locale, jobs, ready ? transport : undefined),
   };
 }

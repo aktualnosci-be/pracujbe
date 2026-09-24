@@ -1,9 +1,12 @@
 import { z } from 'zod/v3';
 
 import { GUEST_EMAIL_MAX, GUEST_MESSAGE_MAX, GUEST_NAME_MAX } from '@/lib/guest-apply/limits';
-import { SCREENING_LIMITS } from '@/lib/screening/questions';
 import { localeSchema } from '@/lib/validation/auth';
-import { APPLICATION_AVAILABILITY_VALUES } from '@/lib/validation/application';
+import {
+  APPLICATION_AVAILABILITY_VALUES,
+  screeningAnswersSchema,
+  withoutPersonalIdentifier,
+} from '@/lib/validation/application';
 
 /**
  * Walidacja jednorazowej aplikacji bez konta (#98). Minimalne dane: imię i nazwisko, e-mail,
@@ -26,7 +29,11 @@ export const guestApplicationSchema = z.object({
     .max(GUEST_EMAIL_MAX, 'guestApply.error.emailInvalid')
     .transform((value) => value.toLowerCase()),
   availability: z.enum(APPLICATION_AVAILABILITY_VALUES).optional(),
-  message: z.string().trim().max(GUEST_MESSAGE_MAX, 'guestApply.error.messageTooLong').optional(),
+  // #495: bez NISS/BIS i numerów dokumentów (jak w zwykłej aplikacji).
+  message: withoutPersonalIdentifier(
+    z.string().trim().max(GUEST_MESSAGE_MAX, 'guestApply.error.messageTooLong').optional(),
+    'guestApply.error.sensitiveIdNotAllowed',
+  ),
   locale: localeSchema,
   agreeTerms: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.privacyNoticeRequired' }) }),
   idempotencyKey: z.string().uuid('guestApply.error.idempotencyKeyInvalid'),
@@ -34,10 +41,7 @@ export const guestApplicationSchema = z.object({
    * #101: odpowiedzi na pytania oferty — ten sam kształt co w zwykłej aplikacji. Wymagalność,
    * typ i opcje sprawdza baza (`record_screening_answers`) przy wysłaniu zgłoszenia.
    */
-  answers: z
-    .record(z.string().uuid(), z.union([z.boolean(), z.string().trim().max(SCREENING_LIMITS.answer)]))
-    .refine((value) => Object.keys(value).length <= SCREENING_LIMITS.questions)
-    .optional(),
+  answers: screeningAnswersSchema('guestApply.error.sensitiveIdNotAllowed'),
 });
 
 export type GuestApplicationInput = z.input<typeof guestApplicationSchema> & {

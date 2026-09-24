@@ -34,7 +34,11 @@ import {
   type ScreeningAnswerValue,
   type ScreeningQuestion,
 } from '@/lib/screening/questions';
-import { ScreeningQuestionsFields, screeningFieldId } from '@/components/public/ScreeningQuestionsFields';
+import {
+  ScreeningQuestionsFields,
+  screeningFieldId,
+  type ScreeningAnswerError,
+} from '@/components/public/ScreeningQuestionsFields';
 import {
   BTN_PRIMARY,
   BTN_RESET,
@@ -102,7 +106,7 @@ export function GuestApplyForm({
   const [message, setMessage] = React.useState('');
   const [consent, setConsent] = React.useState(false);
   const [answers, setAnswers] = React.useState<Record<string, ScreeningAnswerValue>>({});
-  const [answerErrors, setAnswerErrors] = React.useState<Record<string, true>>({});
+  const [answerErrors, setAnswerErrors] = React.useState<Record<string, ScreeningAnswerError>>({});
   const [errors, setErrors] = React.useState<FieldErrors>({});
   const [formError, setFormError] = React.useState<FormError | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -118,6 +122,7 @@ export function GuestApplyForm({
     fullName: React.useRef<HTMLInputElement>(null),
     email: React.useRef<HTMLInputElement>(null),
     phone: React.useRef<HTMLInputElement>(null),
+    message: React.useRef<HTMLTextAreaElement>(null),
     consent: React.useRef<HTMLButtonElement>(null),
   };
   const formErrorRef = React.useRef<HTMLDivElement>(null);
@@ -238,6 +243,13 @@ export function GuestApplyForm({
     if (res.field === 'phone') {
       setErrors({ phone: ta('phoneInvalid') });
       focusField('phone');
+    } else if (res.reason === 'sensitiveId' && res.questionId) {
+      // #495: numer NISS/BIS lub dokumentu w odpowiedzi — błąd przy pytaniu, dane zostają.
+      setAnswerErrors({ [res.questionId]: 'sensitiveId' });
+      focusQuestion(res.questionId);
+    } else if (res.reason === 'sensitiveId' && res.field === 'message') {
+      setErrors({ message: t('error.sensitiveIdNotAllowed') });
+      focusField('message');
     } else if (res.error === 'SCREENING_ANSWER_REQUIRED' && res.questionId) {
       setAnswerErrors({ [res.questionId]: true });
       focusQuestion(res.questionId);
@@ -367,17 +379,27 @@ export function GuestApplyForm({
       <div className={FORM_FIELD}>
         <Label htmlFor="guest-apply-message" className={FORM_LABEL_TEXT}>{ta('message')}</Label>
         <Textarea
-          className={FORM_INPUT}
+          ref={refs.message}
           id="guest-apply-message"
           value={message}
-          onChange={(event) => setMessage(event.target.value.slice(0, GUEST_MESSAGE_MAX))}
+          onChange={(event) => {
+            setMessage(event.target.value.slice(0, GUEST_MESSAGE_MAX));
+            if (errors.message) setErrors((current) => ({ ...current, message: undefined }));
+          }}
           placeholder={ta('messagePlaceholder')}
           maxLength={GUEST_MESSAGE_MAX}
           rows={3}
+          aria-invalid={errors.message ? true : undefined}
+          aria-describedby={[describedBy('message'), 'guest-apply-message-hint'].filter(Boolean).join(' ')}
+          className={cn(FORM_INPUT, errors.message ? 'border-error' : undefined)}
         />
         <p className="text-right text-xs tabular-nums text-muted-foreground">
           {message.length} / {GUEST_MESSAGE_MAX}
         </p>
+        <p id="guest-apply-message-hint" className="text-xs leading-[1.5] text-muted-foreground">
+          {ta('sensitiveIdHint')}
+        </p>
+        {fieldError('message')}
       </div>
 
       <ScreeningQuestionsFields

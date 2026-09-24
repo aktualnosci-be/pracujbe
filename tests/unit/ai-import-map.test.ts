@@ -48,6 +48,7 @@ function extraction(overrides: Record<string, unknown> = {}): Record<string, unk
     accommodation: 'unknown',
     transport: 'unknown',
     companyDescription: 'Entreprise logistique familiale installée à Liège depuis 1990.',
+    // Poza schematem od #500 — model nie jest o nie pytany, a serwer je odrzuca.
     contactEmail: 'jobs@example.be',
     ...overrides,
   };
@@ -82,12 +83,11 @@ describe('mapExtraction', () => {
 
   it('wartości niezgodne ze schematem kroku są czyszczone i oznaczane (krok zapisuje się bez nich)', () => {
     const m = mapExtraction(
-      extraction({ startDate: 'jutro', contactEmail: 'nie-email', salaryMin: '3000', salaryMax: '2000' }),
+      extraction({ startDate: 'jutro', salaryMin: '3000', salaryMax: '2000' }),
     );
     expect(m.values.startDate).toBeUndefined();
-    expect(m.values.contactEmail).toBeUndefined();
     expect(m.values.salaryMax).toBeUndefined();
-    expect(m.review).toEqual(expect.arrayContaining(['startDate', 'contactEmail', 'salaryMax']));
+    expect(m.review).toEqual(expect.arrayContaining(['startDate', 'salaryMax']));
     expect(m.validSteps.map((s) => s.step)).toEqual(expect.arrayContaining([2, 4, 9]));
   });
 
@@ -181,5 +181,48 @@ describe('buildImportDraftContent', () => {
 
   it('brak poprawnych kroków → brak zapisu', () => {
     expect(buildImportDraftContent([])).toBeNull();
+  });
+});
+
+describe('mapExtraction — dane osób w odpowiedzi modelu (#500, #495)', () => {
+  it('e-mail osoby kontaktowej z modelu nigdy nie trafia do formularza ani szkicu', () => {
+    const m = mapExtraction(extraction());
+    expect(m.values).not.toHaveProperty('contactEmail');
+    const step9 = m.validSteps.find((s) => s.step === 9);
+    expect(JSON.stringify(step9?.data ?? {})).not.toContain('jobs@example.be');
+  });
+
+  it('pole tekstowe z e-mailem/telefonem jest czyszczone i oznaczane, reszta zostaje', () => {
+    const m = mapExtraction(
+      extraction({
+        description: 'Contactez Marie Dupont : marie.dupont@example.be ou 0471 23 45 67.',
+        benefits: ['Chèques-repas', 'Infos : +32 4 123 45 67'],
+      }),
+    );
+    expect(m.values.description).toBeUndefined();
+    expect(m.values.benefits).toEqual(['Chèques-repas']);
+    expect(m.review).toEqual(expect.arrayContaining(['description', 'benefits']));
+    expect(m.sensitiveIdentifier).toBe(false);
+    expect(JSON.stringify(m)).not.toMatch(/marie\.dupont|0471|\+32 4/);
+  });
+
+  it('numer NISS w odpowiedzi → sensitiveIdentifier i brak zapisu kroków', () => {
+    const m = mapExtraction(extraction({ requirementsMandatory: ['Numéro national 85.07.30-033.28'] }));
+    expect(m.sensitiveIdentifier).toBe(true);
+    expect(m.validSteps).toEqual([]);
+    expect(JSON.stringify(m.values)).not.toContain('85.07.30');
+  });
+
+  it('kontrola ujemna: kwoty, godziny i daty nie są traktowane jak dane osób', () => {
+    const m = mapExtraction(
+      extraction({
+        description: 'Salaire 2.200,00 € brut par mois, 38 h/semaine, début le 01.10.2026.',
+        conditions: ['Contrat de 6 mois', 'Prime de 150 €'],
+      }),
+    );
+    expect(m.values.description).toContain('2.200,00');
+    expect(m.values.conditions).toEqual(['Contrat de 6 mois', 'Prime de 150 €']);
+    expect(m.sensitiveIdentifier).toBe(false);
+    expect(m.review).toEqual([]);
   });
 });
