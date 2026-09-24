@@ -24,6 +24,7 @@ import {
   normalizeAdminSearch,
   parseAuditAction,
   parseAuditEntity,
+  parseBreachFilter,
   parseEmailSuppressionFilter,
   parseReportFilter,
   parseReportKindFilter,
@@ -1089,6 +1090,9 @@ export async function listAuditLogs(
           entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
         } else if (entityType === 'email_suppression') {
           entityHref = { pathname: '/admin/poczta', query: { status: 'all' } };
+        } else if (entityType === 'breach_incident' && id) {
+          const uuid = parseUuid(id);
+          entityHref = uuid ? { pathname: `/admin/naruszenia/${uuid}` } : null;
         }
         return {
           id: asString(row['id']),
@@ -1495,6 +1499,281 @@ export async function listEmailSuppressions(
     );
   } catch (error) {
     captureError(error, { area: 'admin.listEmailSuppressions' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Rejestr incydentów i naruszeń danych osobowych (#490)
+ * ------------------------------------------------------------------------- */
+
+export interface AdminBreachRow {
+  id: string;
+  reference: string;
+  kind: string;
+  title: string;
+  status: string;
+  detectedAt: string | null;
+  riskLevel: string;
+  authorityDecision: string;
+  authorityNotifiedAt: string | null;
+  subjectsDecision: string;
+  createdAt: string | null;
+}
+
+export interface AdminBreachEvent {
+  id: string;
+  version: number;
+  /** created/updated/closed/reopened/subjects_notified/exported. */
+  eventType: string;
+  /** Zmienione pola (kolumny bazy) — przed/po. */
+  changes: Record<string, { from: unknown; to: unknown }>;
+  note: string;
+  actorName: string | null;
+  createdAt: string | null;
+}
+
+export interface AdminBreachNotice {
+  id: string;
+  recipientCount: number;
+  queuedCount: number;
+  locales: string[];
+  createdAt: string | null;
+}
+
+export interface AdminBreachDetail extends AdminBreachRow {
+  description: string;
+  occurredAt: string | null;
+  dataCategories: string[];
+  affectedCount: number | null;
+  affectedCountEstimated: boolean;
+  riskAssessment: string;
+  authorityDecisionReason: string;
+  authorityReference: string;
+  authorityDelayReason: string;
+  subjectsDecisionReason: string;
+  subjectsNotifiedAt: string | null;
+  actionsTaken: string;
+  closedAt: string | null;
+  closureSummary: string;
+  version: number;
+  events: AdminBreachEvent[];
+  notices: AdminBreachNotice[];
+}
+
+export type AdminBreachDetailResult =
+  | { status: 'ok'; incident: AdminBreachDetail }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+export interface AdminBreachesQuery extends AdminListQuery {
+  status?: string | null;
+}
+
+const DEMO_BREACH_DETAIL: AdminBreachDetail = {
+  id: 'demo-b1',
+  reference: 'NAR-2025-DEMO000001',
+  kind: 'personal_data_breach',
+  title: 'Przykładowy wpis: e-mail do niewłaściwego odbiorcy',
+  status: 'open',
+  detectedAt: '2025-02-10T08:15:00.000Z',
+  riskLevel: 'not_assessed',
+  authorityDecision: 'pending',
+  authorityNotifiedAt: null,
+  subjectsDecision: 'pending',
+  createdAt: '2025-02-10T08:30:00.000Z',
+  description: 'Wpis demonstracyjny — w trybie bez bazy zapis nie jest możliwy.',
+  occurredAt: null,
+  dataCategories: ['contact'],
+  affectedCount: 1,
+  affectedCountEstimated: false,
+  riskAssessment: '',
+  authorityDecisionReason: '',
+  authorityReference: '',
+  authorityDelayReason: '',
+  subjectsDecisionReason: '',
+  subjectsNotifiedAt: null,
+  actionsTaken: '',
+  closedAt: null,
+  closureSummary: '',
+  version: 1,
+  events: [
+    {
+      id: 'demo-e1',
+      version: 1,
+      eventType: 'created',
+      changes: {},
+      note: '',
+      actorName: null,
+      createdAt: '2025-02-10T08:30:00.000Z',
+    },
+  ],
+  notices: [],
+};
+
+function breachRowOf(row: Record<string, unknown>): AdminBreachRow {
+  return {
+    id: asString(row['id']),
+    reference: asString(row['reference']),
+    kind: asString(row['kind']),
+    title: asString(row['title']),
+    status: asString(row['status']),
+    detectedAt: asNullableString(row['detected_at']),
+    riskLevel: asString(row['risk_level']),
+    authorityDecision: asString(row['authority_decision']),
+    authorityNotifiedAt: asNullableString(row['authority_notified_at']),
+    subjectsDecision: asString(row['subjects_decision']),
+    createdAt: asNullableString(row['created_at']),
+  };
+}
+
+const BREACH_LIST_COLUMNS =
+  'id, reference, kind, title, status, detected_at, risk_level, authority_decision, authority_notified_at, subjects_decision, created_at';
+
+/** Lista rejestru (#490): filtr otwarte/zamknięte/wszystkie, wyszukiwanie po numerze i tytule. */
+export async function listBreachIncidents(
+  query: AdminBreachesQuery = {},
+): Promise<AdminListResult<AdminBreachRow>> {
+  const filter = parseBreachFilter(query.status);
+  const q = normalizeAdminSearch(query.q);
+  if (!isSupabaseConfigured()) {
+    return demoList(
+      [DEMO_BREACH_DETAIL].filter(
+        (row) =>
+          (filter === 'all' || row.status === filter) && matchesSearch([row.reference, row.title], q),
+      ),
+    );
+  }
+  await requireAdmin();
+
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const supabase = createAdminClient();
+    let builder = supabase.from('breach_incidents').select(BREACH_LIST_COLUMNS);
+    if (filter !== 'all') builder = builder.eq('status', filter);
+    const orFilter = combineOrFilters(
+      q ? searchOrFilter(['reference', 'title'], q) : null,
+      cursorFilterOf(query.cursor),
+    );
+    if (orFilter) builder = builder.or(orFilter);
+    const { data, error } = await builder
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(ADMIN_PAGE_SIZE + 1);
+    if (error) throw error;
+    return toPage(asRows(data).map(breachRowOf), (row) => row.createdAt);
+  } catch (error) {
+    captureError(error, { area: 'admin.listBreachIncidents' });
+    return { status: 'error' };
+  }
+}
+
+function asInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
+/** Szczegół wpisu z historią i zawiadomieniami (bez adresów odbiorców). */
+export async function getBreachIncident(id: string): Promise<AdminBreachDetailResult> {
+  if (!isSupabaseConfigured()) {
+    return id === DEMO_BREACH_DETAIL.id
+      ? { status: 'ok', incident: DEMO_BREACH_DETAIL }
+      : { status: 'not_found' };
+  }
+  await requireAdmin();
+  const uuid = parseUuid(id);
+  if (!uuid) return { status: 'not_found' };
+
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from('breach_incidents')
+      .select('*')
+      .eq('id', uuid)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { status: 'not_found' };
+    const row = asRecord(data);
+
+    const [eventsRes, noticesRes] = await Promise.all([
+      supabase
+        .from('breach_incident_events')
+        .select('id, version, event_type, actor_id, changes, note, created_at')
+        .eq('incident_id', uuid)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true }),
+      supabase
+        .from('breach_notices')
+        .select('id, recipient_count, queued_count, content, created_at')
+        .eq('incident_id', uuid)
+        .order('created_at', { ascending: false }),
+    ]);
+    if (eventsRes.error) throw eventsRes.error;
+    if (noticesRes.error) throw noticesRes.error;
+    const eventRows = asRows(eventsRes.data);
+
+    const actorIds = [
+      ...new Set(eventRows.map((e) => asString(e['actor_id'])).filter((v) => v.length > 0)),
+    ];
+    const nameById = new Map<string, string>();
+    if (actorIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .in('id', actorIds);
+      if (profilesError) throw profilesError;
+      for (const profile of asRows(profiles)) nameById.set(asString(profile['id']), fullName(profile));
+    }
+
+    const incident: AdminBreachDetail = {
+      ...breachRowOf(row),
+      description: asString(row['description']),
+      occurredAt: asNullableString(row['occurred_at']),
+      dataCategories: Array.isArray(row['data_categories'])
+        ? row['data_categories'].filter((c): c is string => typeof c === 'string')
+        : [],
+      affectedCount: asInteger(row['affected_count']),
+      affectedCountEstimated: row['affected_count_estimated'] !== false,
+      riskAssessment: asString(row['risk_assessment']),
+      authorityDecisionReason: asString(row['authority_decision_reason']),
+      authorityReference: asString(row['authority_reference']),
+      authorityDelayReason: asString(row['authority_delay_reason']),
+      subjectsDecisionReason: asString(row['subjects_decision_reason']),
+      subjectsNotifiedAt: asNullableString(row['subjects_notified_at']),
+      actionsTaken: asString(row['actions_taken']),
+      closedAt: asNullableString(row['closed_at']),
+      closureSummary: asString(row['closure_summary']),
+      version: asInteger(row['version']) ?? 1,
+      events: eventRows.map((e) => {
+        const actorId = asString(e['actor_id']);
+        const name = actorId ? (nameById.get(actorId) ?? '') : '';
+        const changes = asRecord(e['changes']);
+        return {
+          id: asString(e['id']),
+          version: asInteger(e['version']) ?? 0,
+          eventType: asString(e['event_type']),
+          changes: Object.fromEntries(
+            Object.entries(changes).map(([key, value]) => {
+              const pair = asRecord(value);
+              return [key, { from: pair['from'] ?? null, to: pair['to'] ?? null }];
+            }),
+          ),
+          note: asString(e['note']),
+          actorName: name.length > 0 ? name : null,
+          createdAt: asNullableString(e['created_at']),
+        };
+      }),
+      notices: asRows(noticesRes.data).map((n) => ({
+        id: asString(n['id']),
+        recipientCount: asInteger(n['recipient_count']) ?? 0,
+        queuedCount: asInteger(n['queued_count']) ?? 0,
+        locales: Object.keys(asRecord(n['content'])).sort(),
+        createdAt: asNullableString(n['created_at']),
+      })),
+    };
+    return { status: 'ok', incident };
+  } catch (error) {
+    captureError(error, { area: 'admin.getBreachIncident' });
     return { status: 'error' };
   }
 }

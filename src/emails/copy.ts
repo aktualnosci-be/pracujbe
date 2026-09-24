@@ -49,6 +49,7 @@ export const EMAIL_TYPES = [
   'moderationJobRemoved',
   'moderationCompanySuspended',
   'moderationRestored',
+  'breachNotice',
 ] as const;
 
 export type EmailType = (typeof EMAIL_TYPES)[number];
@@ -1526,6 +1527,44 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       body: 'We have reversed decision {decisionReference} concerning the company {companyName}. The content returns to its state before the decision, unless another decision applies to it.\n\nThe reason is shown below.',
       cta: 'Go to company details',
       highlight: '{decisionReference}',
+    },
+  },
+  /**
+   * Zawiadomienie osób o naruszeniu danych (#490) — szablon techniczny: temat i treść wpisuje
+   * administrator w języku odbiorcy (payload), szablon dodaje tylko identyfikator i link.
+   */
+  breachNotice: {
+    pl: {
+      subject: '{noticeSubject}',
+      preview: '{noticeSubject}',
+      heading: '{noticeSubject}',
+      body: '{noticeBody}',
+      cta: 'Przejdź do ustawień konta',
+      outro: 'Identyfikator zdarzenia: {incidentReference}. Podaj go, jeśli kontaktujesz się z nami w tej sprawie.',
+    },
+    nl: {
+      subject: '{noticeSubject}',
+      preview: '{noticeSubject}',
+      heading: '{noticeSubject}',
+      body: '{noticeBody}',
+      cta: 'Naar je accountinstellingen',
+      outro: 'Referentie van het incident: {incidentReference}. Vermeld deze als je hierover contact met ons opneemt.',
+    },
+    fr: {
+      subject: '{noticeSubject}',
+      preview: '{noticeSubject}',
+      heading: '{noticeSubject}',
+      body: '{noticeBody}',
+      cta: 'Accéder aux paramètres du compte',
+      outro: 'Référence de l’incident : {incidentReference}. Indiquez-la si vous nous contactez à ce sujet.',
+    },
+    en: {
+      subject: '{noticeSubject}',
+      preview: '{noticeSubject}',
+      heading: '{noticeSubject}',
+      body: '{noticeBody}',
+      cta: 'Go to account settings',
+      outro: 'Incident reference: {incidentReference}. Please quote it if you contact us about this.',
     },
   },
 };

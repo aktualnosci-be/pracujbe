@@ -154,6 +154,14 @@ export interface EmailDataMap {
     decisionReference: string;
     actionUrl: string;
   };
+  /** Zawiadomienie o naruszeniu danych (#490): temat i treść od administratora (tekst). */
+  breachNotice: {
+    recipientName?: string;
+    noticeSubject: string;
+    noticeBody: string;
+    incidentReference: string;
+    actionUrl: string;
+  };
 }
 
 /** Wspólne dane uzasadnienia decyzji moderacyjnej (#42). */
@@ -830,6 +838,18 @@ export function ModerationRestoredEmail(props: EmailProps<'moderationRestored'>)
   );
 }
 
+export function BreachNoticeEmail(props: EmailProps<'breachNotice'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="breachNotice"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Rejestr + renderEmail                                                      */
 /* -------------------------------------------------------------------------- */
@@ -871,6 +891,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   moderationJobRemoved: ModerationJobRemovedEmail,
   moderationCompanySuspended: ModerationCompanySuspendedEmail,
   moderationRestored: ModerationRestoredEmail,
+  breachNotice: BreachNoticeEmail,
 };
 
 /**
