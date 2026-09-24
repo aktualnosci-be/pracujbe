@@ -1,6 +1,5 @@
 'use server';
 
-import { createServerClient } from '@/lib/supabase/server';
 import { companyReasonError, companyStatusNeedsReason } from '@/lib/admin/company-review';
 import { emailLiftReasonError } from '@/lib/admin/email-suppression';
 import {
@@ -13,7 +12,9 @@ import {
   type ModerationField,
   type ModerationFieldError,
 } from '@/lib/admin/moderation';
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction, withServiceRole } from '@/lib/db/portal';
+import { queryOne, rpc, type RpcArgs } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
 import { checkBelgianVatInVies, type ViesCheckResult } from '@/lib/vies/client';
@@ -39,9 +40,10 @@ import { companyVatSource } from '@/lib/vies/state';
  * widziany przez admina z bieżącym (`p_expected_status`, `FOR UPDATE` → `STALE_STATE`, gdy
  * inny admin zmienił go w międzyczasie).
  *
- * Zapis idzie pod SESJĄ użytkownika (`createServerClient`), bo RPC są `SECURITY DEFINER`
- * i wewnętrznie sprawdzają `is_admin()` na `auth.uid()` — service-role NIE nadaje się tu
- * (nie ma tożsamości admina). Walidacja wartości statusów po stronie akcji (allow-lista),
+ * Zapis idzie pod SESJĄ użytkownika (`withPortalTransaction` z tożsamością z
+ * `getPortalIdentity()`, rola `authenticated`, `auth.uid()` = admin), bo RPC są
+ * `SECURITY DEFINER` i wewnętrznie sprawdzają `is_admin()` na `auth.uid()` — service-role NIE
+ * nadaje się tu (nie ma tożsamości admina). Błędy bazy to wyjątki pg (`message`, `code`). Walidacja wartości statusów po stronie akcji (allow-lista),
  * błędy Postgresa mapowane na stabilny `ErrorCode` (Invariant #8). Bez env → tryb DEMO
  * (`{ ok: true, demo: true }`), by build/UX działały bez backendu.
  */
@@ -72,6 +74,25 @@ function mapPgError(message: string | undefined): ErrorCode {
   return 'INTERNAL';
 }
 
+type AdminRpcCall = { status: 'ok' } | { status: 'unauthenticated' } | { status: 'db_error'; message: string };
+
+/**
+ * RPC `admin_*` pod sesją bieżącego użytkownika (RLS/`is_admin()` decyduje w bazie). Błąd bazy
+ * wraca jako komunikat do mapowania na kod użytkowy; wyjątek spoza bazy (sieć, konfiguracja)
+ * rzuca dalej — trafia do Sentry w akcji.
+ */
+async function callAdminRpc(fn: string, args: RpcArgs): Promise<AdminRpcCall> {
+  const me = await getPortalIdentity();
+  if (!me) return { status: 'unauthenticated' };
+  try {
+    await withPortalTransaction(me, (tx) => rpc(tx, fn, args));
+    return { status: 'ok' };
+  } catch (error) {
+    if (isDatabaseError(error)) return { status: 'db_error', message: databaseErrorMessage(error) };
+    throw error;
+  }
+}
+
 /**
  * Zmienia status weryfikacji firmy (tylko admin — egzekwowane przez RPC). Odrzucenie
  * i zawieszenie wymagają uzasadnienia (`reason`), które trafia do właściciela firmy
@@ -97,23 +118,18 @@ export async function setCompanyStatus(
     return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: reasonError };
   }
 
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
-
-    const { error } = await supabase.rpc('admin_set_company_status', {
+    const call = await callAdminRpc('admin_set_company_status', {
       p_company_id: companyId,
       p_status: status,
       p_expected_status: expectedStatus,
       p_reason: needsReason ? trimmedReason : null,
     });
-    if (error) {
-      const message = error.message ?? '';
+    if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
+    if (call.status === 'db_error') {
+      const message = call.message;
       if (message.includes('REASON_REQUIRED')) {
         return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'required' };
       }
@@ -144,21 +160,16 @@ export async function resolveReport(
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
 
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
-
-    const { error } = await supabase.rpc('admin_resolve_report', {
+    const call = await callAdminRpc('admin_resolve_report', {
       p_report_id: reportId,
       p_status: status,
       p_expected_status: expectedStatus,
     });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+    if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
+    if (call.status === 'db_error') return { ok: false, error: mapPgError(call.message) };
 
     return { ok: true };
   } catch (e) {
@@ -180,24 +191,19 @@ export async function liftEmailSuppression(
     return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: reasonError };
   }
   // Tryb DEMO: identyfikatory przykładowych blokad nie są UUID; nic nie zapisujemy.
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
   if (typeof suppressionId !== 'string' || !UUID_RE.test(suppressionId)) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
-
-    const { error } = await supabase.rpc('admin_lift_email_suppression', {
+    const call = await callAdminRpc('admin_lift_email_suppression', {
       p_id: suppressionId,
       p_reason: reason.trim(),
     });
-    if (error) {
-      const message = error.message ?? '';
+    if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
+    if (call.status === 'db_error') {
+      const message = call.message;
       if (message.includes('REASON_REQUIRED')) {
         return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'required' };
       }
@@ -245,17 +251,11 @@ export async function decideReport(
   const restricts = decisionRestricts(decision);
 
   // Tryb DEMO (identyfikatory `demo-*`) — bez zapisu; poza nim tylko UUID.
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
   if (!UUID_RE.test(reportId)) return { ok: false, error: 'VALIDATION_FAILED' };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
-
-    const { error } = await supabase.rpc('admin_decide_report', {
+    const call = await callAdminRpc('admin_decide_report', {
       p_report_id: reportId,
       p_expected_status: expectedStatus,
       p_decision: decision,
@@ -264,8 +264,9 @@ export async function decideReport(
       p_ground_reference: restricts ? (input.groundReference ?? '').trim() : null,
       p_automated_detection: input.automatedDetection === true,
     });
-    if (error) {
-      const message = error.message ?? '';
+    if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
+    if (call.status === 'db_error') {
+      const message = call.message;
       const field = message.includes('VALIDATION_FAILED') ? moderationFieldFromDbMessage(message) : null;
       if (field) return { ok: false, error: 'VALIDATION_FAILED', field: field.field, fieldError: field.error };
       return { ok: false, error: mapPgError(message) };
@@ -288,22 +289,17 @@ export async function restoreModeration(
     return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', fieldError: reasonError };
   }
 
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
   if (!UUID_RE.test(decisionId)) return { ok: false, error: 'VALIDATION_FAILED' };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
-
-    const { error } = await supabase.rpc('admin_restore_moderation', {
+    const call = await callAdminRpc('admin_restore_moderation', {
       p_decision_id: decisionId,
       p_reason: reason.trim(),
     });
-    if (error) {
-      const message = error.message ?? '';
+    if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
+    if (call.status === 'db_error') {
+      const message = call.message;
       const field = message.includes('VALIDATION_FAILED') ? moderationFieldFromDbMessage(message) : null;
       if (field) return { ok: false, error: 'VALIDATION_FAILED', field: field.field, fieldError: field.error };
       return { ok: false, error: mapPgError(message) };
@@ -329,7 +325,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /**
  * Ręczne sprawdzenie numeru VAT firmy w VIES (#92) — informacja dla admina.
  *
- * Kolejność: sesja + rola admina (zanim cokolwiek trafi do VIES) → numer firmy (service-role)
+ * Kolejność: sesja + rola admina (zanim cokolwiek trafi do VIES) → numer firmy (`withServiceRole`)
  * → adapter VIES (timeout, ponowienia) → zapis TYLKO wyniku rozstrzygającego (`valid` /
  * `invalid`) przez RPC pod sesją admina. Niedostępność i limit VIES wracają do admina jako
  * osobne stany i nie są zapisywane — nigdy nie nadpisują wcześniejszego wyniku i nigdy nie
@@ -338,41 +334,28 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 export async function checkCompanyVies(companyId: string): Promise<ViesActionResult> {
   // Tryb DEMO: VIES nie jest odpytywany (żadnych zapytań sieciowych bez backendu).
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
   if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (profileError) throw profileError;
-    if ((profile as { role?: unknown } | null)?.role !== 'admin') {
-      return { ok: false, error: 'PERMISSION_DENIED' };
-    }
+    // Rola z `getPortalIdentity()` (profil już sprawdzony w bazie) — zanim cokolwiek trafi do VIES.
+    const me = await getPortalIdentity();
+    if (!me || me.role !== 'admin') return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const { data: company, error: companyError } = await createAdminClient()
-      .from('companies')
-      .select('id, name, vat_number, registration_number')
-      .eq('id', companyId)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (companyError) throw companyError;
-    if (!company) return { ok: false, error: 'NOT_FOUND' };
-    const row = company as {
-      name?: string | null;
-      vat_number?: string | null;
-      registration_number?: string | null;
-    };
+    // Jedyny odczyt service_role w akcjach admina — dopiero po potwierdzeniu roli.
+    const row = await withServiceRole((tx) =>
+      queryOne<{ name: string | null; vat_number: string | null; registration_number: string | null }>(
+        tx,
+        'admin.vies-company',
+        `SELECT id, name, vat_number, registration_number
+           FROM public.companies
+          WHERE id = $1 AND deleted_at IS NULL`,
+        [companyId],
+      ),
+    );
+    if (!row) return { ok: false, error: 'NOT_FOUND' };
 
     const result = await checkBelgianVatInVies(
       companyVatSource(row.vat_number, row.registration_number),
@@ -386,15 +369,24 @@ export async function checkCompanyVies(companyId: string): Promise<ViesActionRes
         ? { ...result, nameMatch: compareCompanyNames(row.name, result.name) }
         : result;
 
-    const { error: saveError } = await supabase.rpc('admin_record_vies_check', {
-      p_company_id: companyId,
-      p_vat_number: result.vatNumber,
-      p_result: result.status,
-      p_vies_name: result.status === 'valid' ? result.name : null,
-      p_request_date: result.requestDate,
-    });
+    // Zapis w osobnej, krótkiej transakcji pod sesją admina (bez trzymania połączenia w trakcie
+    // zapytania do VIES). Błąd zapisu nie gubi wyniku: wraca do admina z `saved: false`.
+    let saveError: ErrorCode | null = null;
+    try {
+      const call = await callAdminRpc('admin_record_vies_check', {
+        p_company_id: companyId,
+        p_vat_number: result.vatNumber,
+        p_result: result.status,
+        p_vies_name: result.status === 'valid' ? result.name : null,
+        p_request_date: result.requestDate,
+      });
+      if (call.status === 'unauthenticated') saveError = 'PERMISSION_DENIED';
+      else if (call.status === 'db_error') saveError = mapPgError(call.message);
+    } catch {
+      saveError = 'INTERNAL';
+    }
     if (saveError) {
-      captureError(new Error(`admin_record_vies_check: ${mapPgError(saveError.message)}`), {
+      captureError(new Error(`admin_record_vies_check: ${saveError}`), {
         area: 'admin.checkCompanyVies.save',
       });
       return { ok: true, outcome, saved: false };
