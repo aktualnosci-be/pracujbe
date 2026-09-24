@@ -7,6 +7,8 @@ import { execFile } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
 
+import { decodePng } from "../helpers/png-pixels";
+
 const STORY_DIR = join(process.cwd(), "assets/brand/organic/pl");
 const README = join(process.cwd(), "assets/brand/organic/README.md");
 const SVG_NAME = "profile-story-1080x1920.svg";
@@ -80,7 +82,7 @@ describe("organiczne Story PL", () => {
     expect(contrastRatio("#FFFFFF", "#D92932")).toBeGreaterThanOrEqual(3);
   });
 
-  it("odtwarza identyczny PNG z repozytorium", async () => {
+  it("odtwarza PNG o pikselach identycznych z repozytorium", async () => {
     const directory = await mkdtemp(join(tmpdir(), "pracujbe-story-"));
     const generated = join(directory, PNG_NAME);
 
@@ -89,14 +91,19 @@ describe("organiczne Story PL", () => {
         join(process.cwd(), "scripts/generate-organic-story.mjs"),
         generated,
       ]);
-      // Porównanie bajt w bajt bez diffu bufora (ten trwał minuty); przy różnicy komunikat
-      // podaje rewizję Chromium — inna rewizja (np. PLAYWRIGHT_CHROMIUM_PATH) renderuje inaczej (#378).
-      const same = (await readFile(generated)).equals(
-        await readFile(join(STORY_DIR, PNG_NAME)),
-      );
+      // Porównanie pikseli, nie bajtów pliku: rewizje Chromium (np. preinstalowana przez
+      // PLAYWRIGHT_BROWSERS_PATH / PLAYWRIGHT_CHROMIUM_PATH) kodują ten sam obraz innym
+      // strumieniem IDAT (#378). Piksele muszą być identyczne co do wartości.
+      const generatedPng = decodePng(await readFile(generated));
+      const repositoryPng = decodePng(await readFile(join(STORY_DIR, PNG_NAME)));
       expect(
-        same,
-        `PNG różni się od pliku w repozytorium (${stdout.trim()}, PLAYWRIGHT_CHROMIUM_PATH=${
+        { width: generatedPng.width, height: generatedPng.height },
+      ).toEqual({ width: repositoryPng.width, height: repositoryPng.height });
+      // Bez diffu bufora w expect (ten trwał minuty); komunikat podaje rewizję Chromium.
+      expect(
+        generatedPng.channels === repositoryPng.channels &&
+          generatedPng.data.equals(repositoryPng.data),
+        `Piksele PNG różnią się od pliku w repozytorium (${stdout.trim()}, PLAYWRIGHT_CHROMIUM_PATH=${
           process.env.PLAYWRIGHT_CHROMIUM_PATH ?? "brak"
         }). Plik w repo powstaje w Chromium instalowanym przez \`npx playwright install\`.`,
       ).toBe(true);
