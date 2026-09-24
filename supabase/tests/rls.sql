@@ -6076,6 +6076,8 @@ update public.guest_application_requests
    set confirmed_at = now() - interval '8 days', created_at = now() - interval '8 days'
  where id = :'gadup';
 update public.guest_application_requests set created_at = now() - interval '30 days' where id = :'gafresh';
+update public.guest_application_requests set confirm_expires_at = now() - interval '1 minute'
+ where id = :'gaexp';
 set role service_role;
 select public.purge_guest_application_requests() as gapurged \gset
 reset role;
@@ -6087,8 +6089,20 @@ select pg_temp.assert(:'gapurged'::int = 2
   and exists (select 1 from public.guest_application_requests where id = :'gaacct')
   and exists (select 1 from public.guest_application_requests where id = :'gafresh')
   and (select claim_token_hash is null from public.guest_application_requests where id = :'gaexp')
+  and (select confirm_token_hash is null and confirm_nonce is null
+         from public.guest_application_requests where id = :'gaexp')
+  and (select application_id is not null and consent_accepted_at is not null
+         from public.guest_application_requests where id = :'gaexp')
+  and (select confirm_token_hash is not null and confirm_nonce is not null
+         from public.guest_application_requests where id = :'gareq')
   and (select claim_token_hash is not null from public.guest_application_requests where id = :'gareq'),
-  'GA98-12 retencja: stare niepotwierdzone usunięte z e-mailami, świeże i potwierdzone zostają');
+  'GA98-12 retencja: stare niepotwierdzone usunięte, wygasły link potwierdzenia wyzerowany');
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-ga-6'::bytea), 'hex'),
+     'nonce-claim-ga-00006', encode(sha256('claim-ga-6'::bytea), 'hex'))) = 'invalid',
+  'GA98-12b wygasły i wyczyszczony link nie potwierdza ponownie');
+reset role;
 
 -- GA98-13: pytania screeningowe (#101) także dla gościa — te same reguły co apply_to_job,
 -- odpowiedzi trafiają do application_screening_answers dopiero po potwierdzeniu.
