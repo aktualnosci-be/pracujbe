@@ -24,17 +24,22 @@ const TOAST_MS = 4000;
 
 export interface JobLifecycleActionsProps {
   jobId: string;
-  /** Surowy `job_status`: draft/active/paused/closed/expired. */
+  /** Status efektywny: draft/active/paused/closed/expired (aktywna po terminie = expired, #72). */
   status: string;
+  /**
+   * Data ważności minęła (#72). Wstrzymana po terminie nie jest wznawiana (RPC odrzuca
+   * `resume` — data nie znika po cichu); proponujemy ponowne otwarcie, które usuwa datę.
+   */
+  pastExpiry?: boolean;
 }
 
-/** Dozwolone przejścia per stan — odzwierciedla macierz z RPC (0056). */
-function allowedActions(status: string): JobLifecycleAction[] {
+/** Dozwolone przejścia per stan — odzwierciedla macierz z RPC (`set_job_status`, 0086). */
+export function allowedActions(status: string, pastExpiry = false): JobLifecycleAction[] {
   switch (status) {
     case 'active':
       return ['pause', 'close'];
     case 'paused':
-      return ['resume', 'close'];
+      return pastExpiry ? ['reopen', 'close'] : ['resume', 'close'];
     case 'closed':
     case 'expired':
       return ['reopen'];
@@ -46,6 +51,7 @@ function allowedActions(status: string): JobLifecycleAction[] {
 export function JobLifecycleActions({
   jobId,
   status,
+  pastExpiry = false,
 }: JobLifecycleActionsProps): React.JSX.Element | null {
   const t = useTranslations('dashboard');
   const tRoot = useTranslations();
@@ -62,7 +68,7 @@ export function JobLifecycleActions({
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const actions = allowedActions(status);
+  const actions = allowedActions(status, pastExpiry);
   if (actions.length === 0) return null;
 
   const LABEL: Record<JobLifecycleAction, string> = {

@@ -565,7 +565,8 @@
     "invalidTransition": "This status change is not possible at the current stage. Refresh the page and choose another option.",
     "staleState": "The status changed in the meantime (for example, another administrator changed it). The list has been refreshed — check the current state.",
     "jobNotEditable": "This job can't be edited right now. Only an active or paused job can be changed.",
-    "jobEditConflict": "Someone changed this job in the meantime. Open it again from the jobs list to see the current version."
+    "jobEditConflict": "Someone changed this job in the meantime. Open it again from the jobs list to see the current version.",
+    "jobExpired": "This job's expiry date has passed. Reopen it from the jobs list — reopening removes the past date."
   },
   "offerStatus": {
     "draft": "Draft",

@@ -113,6 +113,7 @@ function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   if (m.includes('JOB_EDIT_CONFLICT')) return 'JOB_EDIT_CONFLICT';
   if (m.includes('JOB_NOT_EDITABLE')) return 'JOB_NOT_EDITABLE';
+  if (m.includes('JOB_EXPIRED')) return 'JOB_EXPIRED';
   if (m.includes('JOB_NOT_DRAFT')) return 'JOB_NOT_DRAFT';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
   if (m.includes('ENTITLEMENT_LIMIT')) return 'ENTITLEMENT_LIMIT';

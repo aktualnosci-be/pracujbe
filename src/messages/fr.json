@@ -565,7 +565,8 @@
     "invalidTransition": "Ce changement de statut n’est pas possible à cette étape. Actualisez la page et choisissez une autre option.",
     "staleState": "Le statut a changé entre-temps (par exemple par un autre administrateur). La liste a été actualisée : vérifiez l’état actuel.",
     "jobNotEditable": "Cette offre ne peut pas être modifiée pour le moment. Seule une offre active ou suspendue peut être corrigée.",
-    "jobEditConflict": "Quelqu'un a modifié cette offre entre-temps. Rouvrez-la depuis la liste des offres pour voir la version actuelle."
+    "jobEditConflict": "Quelqu'un a modifié cette offre entre-temps. Rouvrez-la depuis la liste des offres pour voir la version actuelle.",
+    "jobExpired": "La date d'expiration de cette offre est dépassée. Rouvrez-la depuis la liste des offres — la réouverture supprime la date passée."
   },
   "offerStatus": {
     "draft": "Brouillon",

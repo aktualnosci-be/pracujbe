@@ -2901,4 +2901,187 @@ select pg_temp.assert(
                  and p.pronargs = 2),
   'ADM8c stare dwuargumentowe sygnatury usunięte (brak obejścia macierzy)');
 
+-- ============================================================================
+-- EX72. Wygaszanie ofert (0086, #72): expire_due_jobs (granica, kontrole ujemne,
+--       dwa równoległe wywołania), publish/resume/reopen po terminie, filtry niezależne
+--       od crona (job_is_public/apply_to_job/get_job_match_profile).
+-- ============================================================================
+\set EXJ1  'e7200000-0000-0000-0000-000000000001'
+\set EXJ2  'e7200000-0000-0000-0000-000000000002'
+\set EXJ3  'e7200000-0000-0000-0000-000000000003'
+\set EXJ4  'e7200000-0000-0000-0000-000000000004'
+\set EXJ5  'e7200000-0000-0000-0000-000000000005'
+\set EXJ6  'e7200000-0000-0000-0000-000000000006'
+\set EXJ7  'e7200000-0000-0000-0000-000000000007'
+\set EXJ8  'e7200000-0000-0000-0000-000000000008'
+\set EXJ9  'e7200000-0000-0000-0000-000000000009'
+\set EXJ10 'e7200000-0000-0000-0000-000000000010'
+\set EXJ11 'e7200000-0000-0000-0000-000000000011'
+\set EXJ12 'e7200000-0000-0000-0000-000000000012'
+reset role; reset app.current_uid;
+
+-- Punkt zerowy: wcześniejsze sekcje mogły zostawić przeterminowane aktywne oferty.
+set role service_role; select public.expire_due_jobs(); reset role;
+
+-- EX72-1: granica `expires_at = now()` (ta sama transakcja → identyczne now()) wygasa,
+-- data przyszła nie (kontrola ujemna).
+begin;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,expires_at) values
+  (:'EXJ1',:'COMPA','ex72-1','Oferta EX1','warehouse','permanent','Antwerpia','Flandria','active','pl', now()),
+  (:'EXJ2',:'COMPA','ex72-2','Oferta EX2','warehouse','permanent','Antwerpia','Flandria','active','pl', now() + interval '1 day');
+set local role service_role;
+select public.expire_due_jobs() as ex_boundary \gset
+commit;
+reset role;
+select pg_temp.assert(:ex_boundary = 1, 'EX72-1 expire_due_jobs zwraca liczbę zmienionych (granica = now())');
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'EXJ1') = 'expired', 'EX72-1b expires_at = now() → expired');
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'EXJ2') = 'active', 'EX72-1c data przyszła bez zmian');
+
+-- Fixture'y (zatwierdzone): kontrole ujemne i dwie oferty do wywołań równoległych.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,expires_at) values
+  (:'EXJ3',:'COMPA','draft-ex72-3','Oferta EX3','warehouse','permanent','Antwerpia','Flandria','draft','pl', now() - interval '1 hour'),
+  (:'EXJ4',:'COMPA','ex72-4','Oferta EX4','warehouse','permanent','Antwerpia','Flandria','paused','pl', now() - interval '1 hour'),
+  (:'EXJ5',:'COMPA','ex72-5','Oferta EX5','warehouse','permanent','Antwerpia','Flandria','closed','pl', now() - interval '1 hour'),
+  (:'EXJ6',:'COMPA','ex72-6','Oferta EX6','warehouse','permanent','Antwerpia','Flandria','active','pl', null),
+  (:'EXJ7',:'COMPA','ex72-7','Oferta EX7','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '2 hours'),
+  (:'EXJ8',:'COMPA','ex72-8','Oferta EX8','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '3 hours');
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  (:'EXJ3', 'pl', 'Oferta EX3', 'Opis oferty magazynowej EX3.', array['Kompletacja']),
+  (:'EXJ4', 'pl', 'Oferta EX4', 'Opis oferty magazynowej EX4.', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'EXJ3', 'pl', 'mandatory', 0, 'Dyspozycyjność'),
+  (:'EXJ4', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+
+-- EX72-2: dwa równoległe wywołania. Sesja 1 zmienia i trzyma blokady (bez commit),
+-- sesja 2 w tym czasie kończy się bez błędu i bez zmian (SKIP LOCKED), a po commit
+-- ponowienie nie zmienia już niczego.
+select pg_temp.remote_connect('ex_s1');
+select pg_temp.remote_connect('ex_s2');
+select dbl.dblink_exec('ex_s1', 'begin');
+select dbl.dblink_exec('ex_s1', 'set local role service_role');
+select t.v as ex_s1 from dbl.dblink('ex_s1', 'select public.expire_due_jobs()::text') as t(v text) \gset
+select dbl.dblink_exec('ex_s2', 'begin');
+select dbl.dblink_exec('ex_s2', 'set local role service_role');
+select dbl.dblink_exec('ex_s2', 'set local lock_timeout = ''5s''');
+select t.v as ex_s2 from dbl.dblink('ex_s2', 'select public.expire_due_jobs()::text') as t(v text) \gset
+select dbl.dblink_exec('ex_s2', 'commit');
+select dbl.dblink_exec('ex_s1', 'commit');
+select dbl.dblink_disconnect('ex_s1');
+select dbl.dblink_disconnect('ex_s2');
+select pg_temp.assert(:'ex_s1' = '2', 'EX72-2 pierwsza sesja wygasza dokładnie dwie oferty');
+select pg_temp.assert(:'ex_s2' = '0', 'EX72-2b równoległa sesja bez błędu i bez podwójnej zmiany');
+set role service_role;
+select public.expire_due_jobs() as ex_retry \gset
+reset role;
+select pg_temp.assert(:ex_retry = 0, 'EX72-2c ponowione wywołanie idempotentne (0 zmian)');
+select pg_temp.assert(
+  (select count(*) from public.jobs where id in (:'EXJ7', :'EXJ8') and status = 'expired') = 2,
+  'EX72-2d obie przeterminowane aktywne oferty → expired');
+-- EX72-3: kontrole ujemne — szkic, wstrzymana, zamknięta, bez daty nie są zmieniane.
+select pg_temp.assert(
+  (select string_agg(status::text, ',' order by id) from public.jobs
+     where id in (:'EXJ3', :'EXJ4', :'EXJ5', :'EXJ6')) = 'draft,paused,closed,active',
+  'EX72-3 draft/paused/closed/bez daty bez zmian');
+select pg_temp.assert(
+  (select expires_at is not null from public.jobs where id = :'EXJ4'), 'EX72-3b data wstrzymanej bez zmian');
+
+-- EX72-4: tylko service_role woła operację (klient i anon — brak uprawnień).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.expire_due_jobs()', 'permission denied', 'EX72-4 authenticated bez expire_due_jobs');
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.expire_due_jobs()', 'permission denied', 'EX72-4b anon bez expire_due_jobs');
+reset role; reset app.current_uid;
+
+-- EX72-5: publikacja szkicu z datą w przeszłości → JOB_EXPIRED (nie „aktywna niewidoczna”).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.publish_job(''e7200000-0000-0000-0000-000000000003''::uuid, ''ex72-3'')',
+  'JOB_EXPIRED', 'EX72-5 publikacja szkicu po terminie odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'EXJ3') = 'draft', 'EX72-5b szkic pozostaje szkicem');
+-- EX72-5c: kontrola dodatnia — ta sama oferta z przyszłą datą publikuje się.
+update public.jobs set expires_at = now() + interval '7 days' where id = :'EXJ3';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.publish_job(:'EXJ3'::uuid, 'ex72-3');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'active' and expires_at > now() from public.jobs where id = :'EXJ3'),
+  'EX72-5c szkic z przyszłą datą → active, data zachowana');
+
+-- EX72-6: wznowienie wstrzymanej po terminie → JOB_EXPIRED, data NIE jest czyszczona po cichu.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.set_job_status(''e7200000-0000-0000-0000-000000000004''::uuid, ''resume'')',
+  'JOB_EXPIRED', 'EX72-6 resume po terminie odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'paused' and expires_at <= now() from public.jobs where id = :'EXJ4'),
+  'EX72-6b wstrzymana z przeszłą datą bez zmian');
+-- EX72-6c: ponowne otwarcie wstrzymanej po terminie → active, przeszła data usunięta.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(:'EXJ4'::uuid, 'reopen') = 'active', 'EX72-6c reopen wstrzymanej po terminie');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'active' and expires_at is null from public.jobs where id = :'EXJ4'),
+  'EX72-6d reopen usuwa przeszłą datę ważności');
+
+-- EX72-7: ponowne otwarcie wygasłej (expired) — istniejący kontrakt, data usunięta.
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'EXJ7', 'pl', 'Oferta EX7', 'Opis oferty magazynowej EX7.', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values (:'EXJ7', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(:'EXJ7'::uuid, 'reopen') = 'active', 'EX72-7 reopen expired');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'active' and expires_at is null from public.jobs where id = :'EXJ7'),
+  'EX72-7b reopen expired usuwa przeszłą datę');
+
+-- EX72-8: aktywna po terminie, zanim przeszedł cron — publicznie niedostępna, pauza
+-- odrzucona, ponowne otwarcie dozwolone (usuwa datę).
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,expires_at) values
+  (:'EXJ9',:'COMPA','ex72-9','Oferta EX9','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '1 minute');
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'EXJ9', 'pl', 'Oferta EX9', 'Opis oferty magazynowej EX9.', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values (:'EXJ9', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+select pg_temp.assert(not public.job_is_public(:'EXJ9'), 'EX72-8 aktywna po terminie niepubliczna bez crona');
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.apply_to_job(''e7200000-0000-0000-0000-000000000009''::uuid, ''ex72-apply'', null, ''immediate'', null)',
+  'JOB_NOT_ACTIVE', 'EX72-8b aplikowanie po terminie odrzucone bez crona');
+select pg_temp.assert(
+  (select count(*) from public.get_job_match_profile(:'EXJ9')) = 0,
+  'EX72-8c get_job_match_profile po terminie → brak wiersza');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.set_job_status(''e7200000-0000-0000-0000-000000000009''::uuid, ''pause'')',
+  'VALIDATION_FAILED', 'EX72-8d pauza aktywnej po terminie odrzucona');
+select pg_temp.assert(public.set_job_status(:'EXJ9'::uuid, 'reopen') = 'active', 'EX72-8e reopen aktywnej po terminie');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'active' and expires_at is null from public.jobs where id = :'EXJ9'),
+  'EX72-8f reopen usuwa przeszłą datę; oferta znowu publiczna');
+select pg_temp.assert(public.job_is_public(:'EXJ9'), 'EX72-8g po reopen oferta publiczna');
+
+-- EX72-9: get_job_match_profile — granica now() → brak; przyszła i brak daty → wiersz.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,expires_at) values
+  (:'EXJ10',:'COMPA','ex72-10','Oferta EX10','warehouse','permanent','Antwerpia','Flandria','active','pl', now() + interval '1 day'),
+  (:'EXJ11',:'COMPA','ex72-11','Oferta EX11','warehouse','permanent','Antwerpia','Flandria','active','pl', null),
+  (:'EXJ12',:'COMPA','ex72-12','Oferta EX12','warehouse','permanent','Antwerpia','Flandria','active','pl', now() + interval '1 day');
+begin;
+update public.jobs set expires_at = now() where id = :'EXJ12';
+set local role authenticated; set local app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_job_match_profile(:'EXJ12')) = 0, 'EX72-9 match profile: expires_at = now() → brak');
+select pg_temp.assert(
+  (select count(*) from public.get_job_match_profile(:'EXJ10')) = 1, 'EX72-9b match profile: data przyszła → wiersz');
+select pg_temp.assert(
+  (select count(*) from public.get_job_match_profile(:'EXJ11')) = 1, 'EX72-9c match profile: bez daty → wiersz');
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
