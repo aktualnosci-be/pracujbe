@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 /**
  * Lejek ofert panelu pracodawcy (#99): pojawienia w wynikach → wyświetlenia → rozpoczęte
  * aplikowanie → wysłane aplikacje. Pokazuje zakres dat (dni Europe/Brussels), definicję każdej
- * metryki i rozbicie per oferta. Dane z serwerowego agregatu bez śledzenia osób (0089).
+ * metryki i rozbicie per oferta (karty zawijane przy 200% tekstu — bez poziomego przewijania, #318). Dane z serwerowego agregatu bez śledzenia osób (0089).
  */
 
 const METRICS = [
@@ -105,40 +105,23 @@ export function JobFunnelStats({
       {jobs.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('empty')}</p>
       ) : (
-        <div
-          role="region"
-          aria-label={t('tableRegion')}
-          tabIndex={0}
-          className="overflow-x-auto rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <table className="w-full min-w-[36rem] text-left text-sm">
-            <caption className="sr-only">{t('tableCaption')}</caption>
-            <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pr-3 font-medium">{t('offer')}</th>
+        <ul aria-label={t('tableCaption')} className="space-y-3">
+          {jobs.map((job) => (
+            <li key={job.jobId} className="min-w-0 rounded-lg border border-border bg-background p-3">
+              <h3 className="break-words text-sm font-semibold text-foreground">{job.title || t('untitled')}</h3>
+              <dl className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-x-4 gap-y-2">
                 {METRICS.map((metric) => (
-                  <th key={metric.key} scope="col" className="px-2 py-2 text-right font-medium">
-                    {t(metric.label)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job) => (
-                <tr key={job.jobId} className="border-b border-border last:border-0">
-                  <th scope="row" className="max-w-[16rem] break-words py-2 pr-3 font-medium text-foreground">
-                    {job.title || t('untitled')}
-                  </th>
-                  {METRICS.map((metric) => (
-                    <td key={metric.key} className="px-2 py-2 text-right tabular-nums text-foreground">
+                  <div key={metric.key} className="min-w-0">
+                    <dt className="break-words text-xs text-muted-foreground">{t(metric.label)}</dt>
+                    <dd className="text-base font-semibold tabular-nums text-foreground">
                       {format.number(job[metric.key])}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

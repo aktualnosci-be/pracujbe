@@ -1685,7 +1685,6 @@
     "privacyNote": "Zapisujemy tylko dzienne sumy dla oferty. Nie zapisujemy adresu IP, cookies, tekstu wyszukiwania ani danych osób. Nie liczymy robotów ani podglądów linków.",
     "empty": "Brak aktywnych ofert i danych w tym zakresie.",
     "tableCaption": "Lejek dla każdej oferty",
-    "tableRegion": "Tabela lejka ofert, przewijana w poziomie",
     "offer": "Oferta",
     "untitled": "Oferta bez tytułu",
     "denied": "Lejek ofert widzą właściciel, administrator i rekruterzy firmy.",

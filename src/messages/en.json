@@ -1685,7 +1685,6 @@
     "privacyNote": "We only store daily totals per job. We do not store IP addresses, cookies, search text or personal data. Robots and link previews are not counted.",
     "empty": "No active jobs and no data in this period.",
     "tableCaption": "Funnel per job",
-    "tableRegion": "Job funnel table, scrolls horizontally",
     "offer": "Job",
     "untitled": "Untitled job",
     "denied": "The job funnel is visible to the company owner, administrators and recruiters.",

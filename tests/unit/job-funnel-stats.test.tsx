@@ -30,7 +30,7 @@ const jobs = [
 
 describe('JobFunnelStats', () => {
   it.each([['pl', pl], ['nl', nl], ['fr', fr], ['en', en]] as const)(
-    '%s: shows the date range, every metric definition and the per-job table',
+    '%s: shows the date range, every metric definition and the per-job list',
     (locale, messages) => {
       render(
         <NextIntlClientProvider locale={locale} messages={messages}>
@@ -45,11 +45,13 @@ describe('JobFunnelStats', () => {
         'applicationsSubmittedDefinition', 'privacyNote'] as const) {
         expect(screen.getByText(t[key])).toBeInTheDocument();
       }
-      const table = screen.getByRole('table', { name: t.tableCaption });
-      expect(within(table).getByRole('rowheader', { name: 'Magazynier' })).toBeInTheDocument();
-      expect(within(table).getByRole('rowheader', { name: t.untitled })).toBeInTheDocument();
-      // Przewijany region tabeli jest dostępny z klawiatury.
-      expect(screen.getByRole('region', { name: t.tableRegion })).toHaveAttribute('tabindex', '0');
+      // Lista kart per oferta (zawija się przy 200% tekstu, bez poziomego przewijania).
+      const list = screen.getByRole('list', { name: t.tableCaption });
+      const items = within(list).getAllByRole('listitem');
+      expect(items).toHaveLength(2);
+      expect(within(items[0]!).getByRole('heading', { level: 3, name: 'Magazynier' })).toBeInTheDocument();
+      expect(within(items[0]!).getByText(new Intl.NumberFormat(locale).format(1200).replace(/\s+/g, ' '))).toBeInTheDocument();
+      expect(within(items[1]!).getByRole('heading', { level: 3, name: t.untitled })).toBeInTheDocument();
     },
   );
 
@@ -60,7 +62,7 @@ describe('JobFunnelStats', () => {
       </NextIntlClientProvider>,
     );
     expect(screen.getByText(en.jobFunnel.empty)).toBeInTheDocument();
-    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByRole('list', { name: en.jobFunnel.tableCaption })).toBeNull();
   });
 });
 

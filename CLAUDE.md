@@ -622,7 +622,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   po HMAC adresu). Deduplikacja: losowy nonce jednego załadowania widoku (`job_funnel_receipts`,
   sprzątane po 2 dniach) — retry nie dubluje, odświeżenie = nowe wyświetlenie. RPC zapisu tylko przez
   endpoint (bramka `pracujbe.funnel_writer`), tylko oferty publiczne firm `verified`. Panel
-  `/employer/statystyki?dni=7|30|90`: zakres dat, definicje metryk, tabela per oferta (recruiter+).
+  `/employer/statystyki?dni=7|30|90`: zakres dat, definicje metryk, karty per oferta zawijane przy 200% tekstu (recruiter+).
   Dowód: `rls.sql` sekcja FN99, unit `job-funnel*`, E2E `public-cache-headers` (cache nienaruszony)
   i `e2e-real` (licznik rośnie, bot pominięty, mutacja `funnel-no-dedup` = czerwony).
 - [x] Kreator oferty (9 kroków, autozapis draftu, publikacja z kontrolą `verified`) — `src/lib/actions/jobs.ts` + `JobWizard`
