@@ -8,7 +8,9 @@ import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { brandShareImageUrl } from '@/lib/seo/structured-data';
-import { getLatestJobs } from '@/lib/jobs';
+import { getLatestJobs, isShowingDemoJobs } from '@/lib/jobs';
+import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
+
 import { Benefits } from '@/components/public/Benefits';
 import { CategoryGrid } from '@/components/public/CategoryGrid';
 import { ForCompanies } from '@/components/public/ForCompanies';
@@ -162,6 +164,8 @@ export default async function HomePage({ params }: HomePageProps) {
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </div>
+
+        {isShowingDemoJobs() ? <DemoJobsNotice className="mt-6" /> : null}
 
         {latestJobs.length > 0 ? (
           <div className="mt-6 divide-y divide-border overflow-hidden rounded-lg border border-border">

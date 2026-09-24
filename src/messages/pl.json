@@ -301,7 +301,10 @@
     "saveUnavailable": "Zapisywanie wymaga konta kandydata i połączenia z serwisem",
     "saveLoading": "Wczytywanie zapisanych ofert",
     "saveRetry": "Nie udało się wczytać zapisanych ofert. Spróbuj ponownie",
-    "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie."
+    "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "demoNoticeTitle": "Dane przykładowe — te oferty nie są prawdziwe",
+    "demoNoticeBody": "Serwis działa w wersji demonstracyjnej. Oferty i firmy na tej stronie są fikcyjne, nie są weryfikowane i nie można na nie aplikować.",
+    "demoBadge": "Przykładowa oferta"
   },
   "job": {
     "apply": "Aplikuj na to stanowisko",
@@ -1067,7 +1070,9 @@
     "guestReturn": "Po zalogowaniu lub potwierdzeniu e-maila wrócisz do tej oferty.",
     "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź internet i spróbuj ponownie — wpisane dane zostały zachowane.",
     "viewApplications": "Zobacz swoje aplikacje",
-    "candidateOnly": "Aplikować można tylko z konta kandydata."
+    "candidateOnly": "Aplikować można tylko z konta kandydata.",
+    "demoJobTitle": "To jest przykładowa oferta",
+    "demoJobBody": "Ta oferta i firma są fikcyjne — służą wyłącznie do pokazania, jak działa serwis. Nie można na nią aplikować."
   },
   "legal": {
     "termsTitle": "Regulamin",

@@ -301,7 +301,10 @@
     "saveUnavailable": "Un compte candidat et un service connecté sont nécessaires",
     "saveLoading": "Chargement des offres enregistrées",
     "saveRetry": "Chargement impossible. Réessayer",
-    "saveFailed": "Modification non enregistrée. Réessayez."
+    "saveFailed": "Modification non enregistrée. Réessayez.",
+    "demoNoticeTitle": "Données d'exemple — ces offres ne sont pas réelles",
+    "demoNoticeBody": "Le site fonctionne en version de démonstration. Les offres et les entreprises de cette page sont fictives, ne sont pas vérifiées et il n'est pas possible d'y postuler.",
+    "demoBadge": "Offre d'exemple"
   },
   "job": {
     "apply": "Postuler à ce poste",
@@ -1067,7 +1070,9 @@
     "guestReturn": "Après la connexion ou la confirmation de votre e-mail, vous reviendrez à cette offre.",
     "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez — vos données saisies ont été conservées.",
     "viewApplications": "Voir vos candidatures",
-    "candidateOnly": "Seul un compte candidat peut postuler."
+    "candidateOnly": "Seul un compte candidat peut postuler.",
+    "demoJobTitle": "Ceci est une offre d'exemple",
+    "demoJobBody": "Cette offre et cette entreprise sont fictives et servent uniquement à montrer le fonctionnement du site. Il n'est pas possible d'y postuler."
   },
   "legal": {
     "termsTitle": "Conditions générales",

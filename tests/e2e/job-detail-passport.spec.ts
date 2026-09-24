@@ -16,7 +16,8 @@ type Messages = {
     saveUnavailable: string;
   };
   apply: {
-    title: string;
+    demoJobTitle: string;
+    demoJobBody: string;
     close: string;
   };
 };
@@ -127,10 +128,13 @@ for (const locale of locales) {
     await expect(apply).toBeVisible();
     await expect(apply).toBeEnabled();
     await apply.click();
+    // Oferta demo (#297): dialog mówi, że oferta jest przykładowa, zamiast formularza.
     const dialog = page.getByRole("dialog");
     await expect(
-      dialog.getByRole("heading", { name: t.apply.title }),
+      dialog.getByRole("heading", { name: t.apply.demoJobTitle }),
     ).toBeVisible();
+    await expect(dialog).toContainText(t.apply.demoJobBody);
+    await expect(dialog.locator("#apply-phone")).toHaveCount(0);
     await dialog.getByRole("button", { name: t.apply.close }).click();
     await expect(dialog).toBeHidden();
     await expectNoDocumentOverflow(page);

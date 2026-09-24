@@ -32,6 +32,7 @@ import { ApplyModal } from '@/components/public/ApplyModal';
 import { loginHref } from '@/lib/validation/auth';
 import { JobMatchCard } from '@/components/public/JobMatchCard';
 import { SimilarJobsError } from '@/components/public/SimilarJobsError';
+import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
 /**
  * Szczegóły oferty pracy (SSR) wg makiety 03-job-detail.
@@ -41,6 +42,9 @@ import { SimilarJobsError } from '@/components/public/SimilarJobsError';
  * + podobne oferty). Na mobile sekcje są akordeonami (`<details>`), a aplikowanie odbywa się
  * z przyklejonego dolnego paska. Zachowane pełne metadane SEO oraz dane strukturalne
  * JobPosting (JSON-LD).
+ *
+ * Oferta demonstracyjna (#297, `job.isDemo`): baner „dane przykładowe”, bez odznaki
+ * weryfikacji, bez JobPosting, noindex i modal z komunikatem zamiast formularza aplikacji.
  *
  * Uwaga na Invariant #8: nie fabrykujemy danych osobowych kontaktu ani ocen — kontakt jest
  * generyczny (przez platformę), a aplikowanie/zapis wymagają konta (logowanie).
@@ -136,6 +140,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: job.title,
     description,
+    // Fikcyjna oferta demo nie trafia do indeksu (#297).
+    ...(job.isDemo ? { robots: { index: false, follow: true } } : {}),
     alternates: version.fallback ? { canonical: url } : { canonical: url, languages },
     openGraph: {
       title: job.title,
@@ -190,7 +196,8 @@ export default async function JobDetailPage({ params }: PageProps) {
   const url = `${env.siteUrl}/${locale}${BASE_PATH}/${slug}`;
   const version = contentLanguage(job, locale);
   // JobPosting tylko na wersji kanonicznej — wersja bez tłumaczenia nie powiela danych (#301).
-  const jsonLd = version.fallback
+  // Fikcyjna oferta demo nie udaje ogłoszenia o pracę w danych strukturalnych (#297).
+  const jsonLd = version.fallback || job.isDemo
     ? null
     : buildJobPostingJsonLd(job, url, {
         responsibilities: t('responsibilities'),
@@ -279,6 +286,8 @@ export default async function JobDetailPage({ params }: PageProps) {
         {t('backToResults')}
       </Link>
 
+      {job.isDemo ? <DemoJobsNotice className="mb-6" /> : null}
+
       {/* Paszport oferty: nagłówek i stała metryka z rzeczywistych danych. */}
       <header
         data-testid="job-detail-passport"
@@ -300,7 +309,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               {companyLogo}
               <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
                 <span className="break-words">{job.companyName}</span>
-                {job.companyVerified ? (
+                {job.companyVerified && !job.isDemo ? (
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
                     <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
                     {t('verified')}
@@ -498,7 +507,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <div>
                   <p className="flex items-center gap-2 font-semibold text-foreground">
                     {job.companyName}
-                    {job.companyVerified ? (
+                    {job.companyVerified && !job.isDemo ? (
                       <BadgeCheck className="h-4 w-4 text-success" aria-hidden="true" />
                     ) : null}
                   </p>
@@ -532,6 +541,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               <ApplyModal
                 jobId={job.id}
                 companyName={job.companyName}
+                demo={job.isDemo}
                 triggerLabel={applyLabel}
                 triggerHint={applyHint}
                 triggerClassName="w-full"
@@ -554,13 +564,16 @@ export default async function JobDetailPage({ params }: PageProps) {
                   {t('languages')}: {job.languages.join(', ')}
                 </p>
               ) : null}
-              <Link
-                href={loginHref(`/${locale}${BASE_PATH}/${slug}`)}
-                className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 h-auto min-h-12 w-full whitespace-normal text-center')}
-              >
-                <MessageSquare className="h-4 w-4" aria-hidden="true" />
-                {t('sendMessage')}
-              </Link>
+              {/* Do fikcyjnej firmy demo nie da się napisać (#297). */}
+              {job.isDemo ? null : (
+                <Link
+                  href={loginHref(`/${locale}${BASE_PATH}/${slug}`)}
+                  className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 h-auto min-h-12 w-full whitespace-normal text-center')}
+                >
+                  <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                  {t('sendMessage')}
+                </Link>
+              )}
             </div>
 
             {/* Podobne oferty */}
@@ -632,6 +645,7 @@ export default async function JobDetailPage({ params }: PageProps) {
         <ApplyModal
           jobId={job.id}
           companyName={job.companyName}
+          demo={job.isDemo}
           triggerLabel={applyLabel}
           triggerSize="default"
           triggerClassName="min-w-0 flex-1"

@@ -301,7 +301,10 @@
     "saveUnavailable": "Saving is available for candidate accounts with a connected service",
     "saveLoading": "Loading saved jobs",
     "saveRetry": "Could not load saved jobs. Retry",
-    "saveFailed": "Could not save the change. Try again."
+    "saveFailed": "Could not save the change. Try again.",
+    "demoNoticeTitle": "Sample data — these job offers are not real",
+    "demoNoticeBody": "The site is running as a demo. The job offers and companies on this page are fictional, not verified, and you cannot apply to them.",
+    "demoBadge": "Sample offer"
   },
   "job": {
     "apply": "Apply for this job",
@@ -1067,7 +1070,9 @@
     "guestReturn": "After you log in or confirm your email, you will come back to this job.",
     "errorNetwork": "We couldn't reach the server. Check your connection and try again — what you entered has been kept.",
     "viewApplications": "View your applications",
-    "candidateOnly": "Only a candidate account can apply."
+    "candidateOnly": "Only a candidate account can apply.",
+    "demoJobTitle": "This is a sample job offer",
+    "demoJobBody": "This offer and company are fictional and only show how the site works. You cannot apply to it."
   },
   "legal": {
     "termsTitle": "Terms of Service",
