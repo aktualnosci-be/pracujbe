@@ -1,17 +1,19 @@
 /**
  * Warstwa danych profilu firmy pracodawcy — Pracuj.be (Etap 4).
  *
- * Strategia spójna z `@/lib/data/employer`: przy skonfigurowanym Supabase dane czytane są
- * pod SESJĄ zalogowanego użytkownika (RLS, NIGDY service-role) przez `createServerClient`.
- * Bez konfiguracji (build/preview bez env) zwracamy dane DEMO — firmę o statusie `verified`,
- * dzięki czemu ekran `/employer/firma` renderuje widok danych firmy (nie formularz zakładania).
+ * Strategia spójna z `@/lib/data/employer`: przy skonfigurowanym backendzie
+ * (`isPortalDataConfigured()`) dane czytane są pod SESJĄ zalogowanego użytkownika
+ * (`withPortalTransaction` — RLS, NIGDY service-role). Bez konfiguracji (build/preview bez env)
+ * zwracamy dane DEMO — firmę o statusie `verified`, dzięki czemu ekran `/employer/firma`
+ * renderuje widok danych firmy (nie formularz zakładania).
  *
- * „Aktywna firma" = pierwsze aktywne członkostwo (`company_members.is_active = true`), tak jak
- * w panelu pracodawcy. Klient Supabase importowany LENIWIE (moduł nie ciągnie `next/headers`
- * do bundla trybu DEMO).
+ * „Aktywna firma" = kontekst z `@/lib/company-context` (cookie zwalidowane względem aktywnych
+ * członkostw, FUN-07), czytany w tej samej transakcji.
  */
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { getActiveCompany } from '@/lib/company-context';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { queryOne, rpcRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
 
 /** Dane aktywnej firmy zalogowanego pracodawcy (kontrakt dla UI). */
@@ -46,7 +48,7 @@ const DEMO_COMPANY: MyCompany = {
 };
 
 /* ---------------------------------------------------------------------------
- * Pomocnicze parsowanie (klient Supabase jest nietypowany → dane `any`)
+ * Pomocnicze parsowanie (wiersze JSON z PostgreSQL → pola typowane)
  * ------------------------------------------------------------------------- */
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -70,12 +72,6 @@ function asRows(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.map(asRecord) : [];
 }
 
-/** Embed PostgREST bywa obiektem (to-one) lub tablicą — normalizujemy do pierwszego rekordu. */
-function asEmbeddedRecord(value: unknown): Record<string, unknown> {
-  if (Array.isArray(value)) return asRecord(value[0]);
-  return asRecord(value);
-}
-
 /* ---------------------------------------------------------------------------
  * Publiczne API
  * ------------------------------------------------------------------------- */
@@ -88,37 +84,29 @@ export type MyCompanyLoad =
   { status: 'ok'; company: MyCompany | null } | { status: 'error' };
 
 export async function getMyCompany(): Promise<MyCompanyLoad> {
-  if (!isSupabaseConfigured()) return { status: 'ok', company: DEMO_COMPANY };
+  if (!isPortalDataConfigured()) return { status: 'ok', company: DEMO_COMPANY };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'error' };
 
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData?.user) return { status: 'error' };
-    const user = authData.user;
+    const loaded = await withPortalTransaction(me, async (tx) => {
+      // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
+      const active = await getActiveCompany(tx, me.id);
+      if (!active.activeId) return { active, company: null };
+      // company_members_select + companies_select_member (RLS): tylko własne aktywne członkostwo.
+      const company = await queryOne<Record<string, unknown>>(tx, 'company.my-company',
+        `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at
+           FROM public.company_members m
+           JOIN public.companies c ON c.id = m.company_id
+          WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
+          LIMIT 1`, [me.id, active.activeId]);
+      return { active, company };
+    });
 
-    // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
-    const { getActiveCompany } = await import('@/lib/company-context');
-    const active = await getActiveCompany(supabase, user.id);
-    const activeId = active.activeId;
-    if (!activeId) return { status: 'ok', company: null };
-
-    const { data, error } = await supabase
-      .from('company_members')
-      .select(
-        'company_id, companies(id, name, slug, status, status_reason, vat_number, verified_at)',
-      )
-      .eq('profile_id', user.id)
-      .eq('company_id', activeId)
-      .eq('is_active', true)
-      .limit(1);
-    if (error) throw error;
-
-    const row = asRows(data)[0];
-    if (!row) return { status: 'error' };
-
-    const company = asEmbeddedRecord(row['companies']);
+    const { active } = loaded;
+    if (!active.activeId) return { status: 'ok', company: null };
+    const company = asRecord(loaded.company);
     const id = asString(company['id']);
     if (!id) return { status: 'error' };
 
@@ -170,14 +158,14 @@ export type CompanyModerationLoad =
  * tylko aktywny owner/admin firmy dostaje wiersze (inni — pusta lista). Bez env → brak decyzji.
  */
 export async function getCompanyModerationDecisions(companyId: string): Promise<CompanyModerationLoad> {
-  if (!isSupabaseConfigured()) return { status: 'ok', decisions: [] };
+  if (!isPortalDataConfigured()) return { status: 'ok', decisions: [] };
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('get_company_moderation_decisions', {
-      p_company_id: companyId,
-    });
-    if (error) throw error;
+    const me = await getPortalIdentity();
+    // Gość nie ma prawa wykonania RPC (tylko authenticated) — ten sam wynik bez połączenia.
+    if (!me) return { status: 'error' };
+    const data = await withPortalTransaction(me, (tx) =>
+      rpcRows(tx, 'get_company_moderation_decisions', { p_company_id: companyId }),
+    );
     return {
       status: 'ok',
       decisions: asRows(data).map((row) => ({

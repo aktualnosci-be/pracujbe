@@ -4,8 +4,10 @@ import { randomUUID } from 'node:crypto';
 
 import { revalidatePath } from 'next/cache';
 
-import { createServerClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured } from '@/lib/env';
+import { getActiveCompanyId } from '@/lib/company-context';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { execute, jsonArg, queryOne, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
@@ -34,7 +36,8 @@ import {
 /**
  * Server Actions kreatora oferty pracy — Pracuj.be (Etap 5).
  *
- * Cały zapis idzie pod SESJĄ zalogowanego użytkownika (RLS, NIGDY service-role):
+ * Cały zapis idzie pod SESJĄ zalogowanego użytkownika (`withPortalTransaction` — RLS jako
+ * użytkownik sesji, NIGDY service-role); każda akcja = jedna transakcja:
  *   - `createJobDraft`  — tworzy szkic oferty (`jobs.status = 'draft'`) dla aktywnej firmy
  *                          zalogowanego (created_by = auth.uid(), company_id z company_members).
  *   - `updateJobDraft`  — waliduje pojedynczy krok (schemat z `@/lib/validation/job`) i zapisuje
@@ -53,7 +56,8 @@ import {
  * per-użytkownik). Przekroczenie limitu → `RATE_LIMITED`. Błąd samego limitera nie blokuje
  * przepływu (fail-open, log do Sentry).
  *
- * TRYB DEMO (Invariant: panele działają bez env): gdy Supabase nie jest skonfigurowane,
+ * TRYB DEMO (Invariant: panele działają bez env): gdy backend nie jest skonfigurowany
+ * (`isPortalDataConfigured()`),
  * walidujemy dane, ale NIE zapisujemy — zwracamy `{ ok: true, demo: true }` (i syntetyczny
  * `id` przy tworzeniu szkicu). Dzięki temu build oraz UX działają bez backendu.
  *
@@ -98,15 +102,6 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
-}
-
-/** Wyciąga `message` z nieznanego błędu Postgresa/PostgREST (bez rzucania). */
-function errorMessage(error: unknown): string | undefined {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const m = (error as { message?: unknown }).message;
-    return typeof m === 'string' ? m : undefined;
-  }
-  return undefined;
 }
 
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
@@ -154,10 +149,12 @@ function slugify(input: string): string {
     .slice(0, 60);
 }
 
-/** Uruchamia zapis Supabase i mapuje ewentualny błąd na kod użytkowy (null = sukces). */
-async function write(op: PromiseLike<{ error: unknown }>): Promise<ErrorCode | null> {
-  const { error } = await op;
-  return error ? mapPgError(errorMessage(error)) : null;
+/**
+ * Wyjątek transakcji → kod użytkowy: błąd bazy (RLS, RAISE w RPC) wg komunikatu, każdy inny
+ * wyjątek (sieć, konfiguracja) → INTERNAL. Tekst bazy nigdy nie trafia do użytkownika.
+ */
+function failureCode(error: unknown): ErrorCode {
+  return isDatabaseError(error) ? mapPgError(databaseErrorMessage(error)) : 'INTERNAL';
 }
 
 /** Waliduje dane kroku właściwym `stepNSchema`; zwraca sparsowaną wartość albo null. */
@@ -191,52 +188,39 @@ function validateJobStep(step: number, data: unknown): unknown | null {
 export async function createJobDraft(locale?: string): Promise<CreateDraftResult> {
   const loc = normalizeLocale(locale);
 
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return { ok: true, id: DEMO_DRAFT_ID, demo: true };
   }
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
     const allowed = await checkRateLimit('job-draft', {
-      identifier: user.id,
+      identifier: me.id,
       max: DRAFT_RATE_MAX,
       windowSeconds: RATE_WINDOW_SECONDS,
     });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
-    // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
-    const { getActiveCompanyId } = await import('@/lib/company-context');
-    const companyId = await getActiveCompanyId(supabase, user.id);
-    if (!companyId) return { ok: false, error: 'PERMISSION_DENIED' };
-
-    const { data: inserted, error: insErr } = await supabase
-      .from('jobs')
-      .insert({
-        company_id: companyId,
-        created_by: user.id,
-        slug: `draft-${randomUUID()}`,
-        default_locale: loc,
-        title: '',
-        status: 'draft',
-        category: PLACEHOLDER_CATEGORY,
-        contract_type: PLACEHOLDER_CONTRACT,
-        city: '',
-        region: '',
-      })
-      .select('id')
-      .single();
-    if (insErr) return { ok: false, error: mapPgError(insErr.message) };
-
-    const id = asString(asRecord(inserted)['id']);
+    const id = await withPortalTransaction(me, async (tx) => {
+      // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
+      const companyId = await getActiveCompanyId(tx, me.id);
+      if (!companyId) return null;
+      // jobs_insert (RLS, recruiter+ aktywnej firmy); created_by = użytkownik sesji.
+      const { rows } = await execute(tx, 'jobs.create-draft',
+        `INSERT INTO public.jobs
+           (company_id, created_by, slug, default_locale, title, status, category, contract_type, city, region)
+         VALUES ($1, $2, $3, $4, '', 'draft', $5, $6, '', '')
+         RETURNING id`,
+        [companyId, me.id, `draft-${randomUUID()}`, loc, PLACEHOLDER_CATEGORY, PLACEHOLDER_CONTRACT]);
+      return asString(asRecord(rows[0])['id']);
+    });
+    if (id === null) return { ok: false, error: 'PERMISSION_DENIED' };
     if (!id) return { ok: false, error: 'INTERNAL' };
     return { ok: true, id };
-  } catch {
-    return { ok: false, error: 'INTERNAL' };
+  } catch (error) {
+    return { ok: false, error: failureCode(error) };
   }
 }
 
@@ -263,43 +247,34 @@ export async function updateJobDraft(
   const parsed = validateJobStep(step, data);
   if (parsed === null) return { ok: false, error: 'VALIDATION_FAILED' };
 
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    // Odczyt oferty (RLS jobs_select_member) — potwierdza własność i daje default_locale/tytuł.
-    const { data: jobData, error: jobErr } = await supabase
-      .from('jobs')
-      .select('id, status')
-      .eq('id', jobId)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (jobErr) return { ok: false, error: mapPgError(jobErr.message) };
+    const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
+      // Odczyt oferty (RLS jobs_select_member) — potwierdza własność i stan szkicu.
+      const job = await queryOne<Record<string, unknown>>(tx, 'jobs.draft-state',
+        'SELECT id, status FROM public.jobs WHERE id = $1 AND deleted_at IS NULL', [jobId]);
+      if (!asString(job?.['id'])) return 'NOT_FOUND';
 
-    const job = asRecord(jobData);
-    if (!asString(job['id'])) return { ok: false, error: 'NOT_FOUND' };
+      // P1-10: kreator edytuje WYŁĄCZNIE szkic. Aktywnej/wstrzymanej/zamkniętej oferty nie wolno
+      // modyfikować krok po kroku (publiczna oferta zawierałaby mieszankę starych i nowych danych,
+      // a nieudany replace-all mógłby ją opróżnić). Rewizję aktywnej oferty publikuje się atomowo.
+      if (asString(job?.['status']) !== 'draft') return 'JOB_NOT_DRAFT';
 
-    // P1-10: kreator edytuje WYŁĄCZNIE szkic. Aktywnej/wstrzymanej/zamkniętej oferty nie wolno
-    // modyfikować krok po kroku (publiczna oferta zawierałaby mieszankę starych i nowych danych,
-    // a nieudany replace-all mógłby ją opróżnić). Rewizję aktywnej oferty publikuje się atomowo.
-    if (asString(job['status']) !== 'draft') return { ok: false, error: 'JOB_NOT_DRAFT' };
-
-    // #192: cały krok (kolumny + tłumaczenie + relacje) w JEDNEJ transakcji — błąd w dowolnej
-    // części cofa krok w całości, szkic nie zostaje w stanie mieszanym.
-    const content = buildDraftStepContent(step, parsed);
-    if (!content) return { ok: false, error: 'VALIDATION_FAILED' };
-    const error = await write(
-      supabase.rpc('save_job_draft', { p_job_id: jobId, p_content: content }),
-    );
-    if (error) return { ok: false, error };
+      // #192: cały krok (kolumny + tłumaczenie + relacje) w JEDNYM RPC — błąd w dowolnej
+      // części cofa krok w całości, szkic nie zostaje w stanie mieszanym.
+      const content = buildDraftStepContent(step, parsed);
+      if (!content) return 'VALIDATION_FAILED';
+      await rpc(tx, 'save_job_draft', { p_job_id: jobId, p_content: jsonArg(content) });
+      return null;
+    });
+    if (outcome) return { ok: false, error: outcome };
     return { ok: true };
-  } catch {
-    return { ok: false, error: 'INTERNAL' };
+  } catch (error) {
+    return { ok: false, error: failureCode(error) };
   }
 }
 
@@ -373,7 +348,7 @@ export async function updatePublishedJob(
   expectedUpdatedAt: string | null,
 ): Promise<UpdatePublishedResult> {
   // Demo (brak env) edytuje oferty z listy demonstracyjnej o nie-UUID identyfikatorach.
-  const demo = !isSupabaseConfigured();
+  const demo = !isPortalDataConfigured();
   if (typeof jobId !== 'string' || (!UUID_RE.test(jobId) && !(demo && /^[\w-]{1,40}$/.test(jobId)))) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
@@ -396,25 +371,23 @@ export async function updatePublishedJob(
   if (demo) return { ok: true, demo: true };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
     const allowed = await checkRateLimit('job-edit', {
-      identifier: user.id,
+      identifier: me.id,
       max: EDIT_RATE_MAX,
       windowSeconds: RATE_WINDOW_SECONDS,
     });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
-    const { data, error } = await supabase.rpc('update_published_job', {
-      p_job_id: jobId,
-      p_content: content,
-      p_expected_updated_at: expectedUpdatedAt,
-    });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+    const data = await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'update_published_job', {
+        p_job_id: jobId,
+        p_content: jsonArg(content),
+        p_expected_updated_at: expectedUpdatedAt,
+      }),
+    );
 
     revalidatePath('/[locale]/employer/oferty', 'page');
     revalidatePath('/[locale]/oferty-pracy/[slug]', 'page');
@@ -424,8 +397,8 @@ export async function updatePublishedJob(
       slug: asString(saved['slug']) || undefined,
       updatedAt: asString(saved['updated_at']) || undefined,
     };
-  } catch {
-    return { ok: false, error: 'INTERNAL' };
+  } catch (error) {
+    return { ok: false, error: failureCode(error) };
   }
 }
 
@@ -439,44 +412,37 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
 
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
     const allowed = await checkRateLimit('job-publish', {
-      identifier: user.id,
+      identifier: me.id,
       max: PUBLISH_RATE_MAX,
       windowSeconds: RATE_WINDOW_SECONDS,
     });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
-    // Odczyt tytułu (do zbudowania slug-a); pełna walidacja/kompletność/aktywacja atomowo w RPC.
-    const { data: jobData, error: jobErr } = await supabase
-      .from('jobs')
-      .select('id, title')
-      .eq('id', jobId)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (jobErr) return { ok: false, error: mapPgError(jobErr.message) };
-    const job = asRecord(jobData);
-    if (!asString(job['id'])) return { ok: false, error: 'NOT_FOUND' };
+    const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
+      // Odczyt tytułu (do zbudowania slug-a); pełna walidacja/kompletność/aktywacja atomowo w RPC.
+      const job = await queryOne<Record<string, unknown>>(tx, 'jobs.publish-title',
+        'SELECT id, title FROM public.jobs WHERE id = $1 AND deleted_at IS NULL', [jobId]);
+      if (!asString(job?.['id'])) return 'NOT_FOUND';
 
-    // Kandydat na slug (RPC użyje go tylko, gdy bieżący slug jest techniczny: draft-…).
-    const slug = `${slugify(asString(job['title'])) || 'oferta'}-${randomUUID().slice(0, 8)}`;
+      // Kandydat na slug (RPC użyje go tylko, gdy bieżący slug jest techniczny: draft-…).
+      const slug = `${slugify(asString(job?.['title'])) || 'oferta'}-${randomUUID().slice(0, 8)}`;
 
-    // Transakcyjna publikacja: autoryzacja + firma verified + status=draft + KOMPLETNOŚĆ (FUN-01).
-    // Aktywacja poza tym RPC jest zablokowana triggerem (guard_job_publish).
-    const { error: pubErr } = await supabase.rpc('publish_job', { p_job_id: jobId, p_slug: slug });
-    if (pubErr) return { ok: false, error: mapPgError(pubErr.message) };
-
+      // Transakcyjna publikacja: autoryzacja + firma verified + status=draft + KOMPLETNOŚĆ (FUN-01).
+      // Aktywacja poza tym RPC jest zablokowana triggerem (guard_job_publish).
+      await rpc(tx, 'publish_job', { p_job_id: jobId, p_slug: slug });
+      return null;
+    });
+    if (outcome) return { ok: false, error: outcome };
     return { ok: true };
-  } catch {
-    return { ok: false, error: 'INTERNAL' };
+  } catch (error) {
+    return { ok: false, error: failureCode(error) };
   }
 }
 
@@ -513,33 +479,28 @@ export async function setJobStatus(
   }
   if (!LIFECYCLE_ACTIONS.has(action)) return { ok: false, error: 'VALIDATION_FAILED' };
 
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
     const allowed = await checkRateLimit('job-status', {
-      identifier: user.id,
+      identifier: me.id,
       max: PUBLISH_RATE_MAX,
       windowSeconds: RATE_WINDOW_SECONDS,
     });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
-    const { data, error } = await supabase.rpc('set_job_status', {
-      p_job_id: jobId,
-      p_action: action,
-    });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+    const data = await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'set_job_status', { p_job_id: jobId, p_action: action }),
+    );
 
     // Lista ofert firmy i publiczne widoki muszą pokazać nowy stan.
     revalidatePath('/employer/oferty');
     revalidatePath('/employer');
     return { ok: true, status: typeof data === 'string' ? data : undefined };
-  } catch {
-    return { ok: false, error: 'INTERNAL' };
+  } catch (error) {
+    return { ok: false, error: failureCode(error) };
   }
 }

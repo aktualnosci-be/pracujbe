@@ -14,7 +14,7 @@ import {
   step9Schema,
 } from "@/lib/validation/job";
 
-vi.mock("@/lib/env", () => ({ isSupabaseConfigured: () => false }));
+vi.mock("@/lib/db/portal", () => ({ isPortalDataConfigured: () => false }));
 
 function firstMessage(result: { success: boolean; error?: { issues: { message: string }[] } }) {
   return result.success ? null : result.error?.issues[0]?.message;

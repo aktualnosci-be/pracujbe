@@ -3,7 +3,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link, redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured } from '@/lib/db/portal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AuthForm } from '@/components/auth/AuthForm';
 
@@ -33,21 +33,12 @@ export default async function RegisterEmployerPage({ params }: PageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
 
-  if (isSupabaseConfigured()) {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle();
-      if ((profile as { role?: string } | null)?.role === 'employer') {
-        redirect({ href: '/employer', locale: locale as Locale });
-      }
+  if (isPortalDataConfigured()) {
+    // Rola z profilu w bazie (sesja zweryfikowana na serwerze, `readPortalIdentity`).
+    // Awaria odczytu sesji nie blokuje formularza rejestracji (jak wcześniej brak użytkownika).
+    const me = await getPortalIdentity().catch(() => null);
+    if (me?.role === 'employer') {
+      redirect({ href: '/employer', locale: locale as Locale });
     }
   }
 

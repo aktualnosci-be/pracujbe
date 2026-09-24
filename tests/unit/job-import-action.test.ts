@@ -6,7 +6,8 @@ import { isJobImportEnabled } from '@/lib/ai-import/config';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createJobDraft } from '@/lib/actions/jobs';
 import { getActiveCompany } from '@/lib/company-context';
-import { isProductionMode, isSupabaseConfigured } from '@/lib/env';
+import { isProductionMode } from '@/lib/env';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #465 — akcja importu: flaga i klucz, recruiter+ aktywnej firmy, limit per firma, walidacja
@@ -15,18 +16,15 @@ import { isProductionMode, isSupabaseConfigured } from '@/lib/env';
  */
 
 const extract = vi.fn();
-const rpc = vi.fn();
-const getUser = vi.fn();
+const USER = '33333333-3333-4333-8333-333333333333';
+let saveResult: () => unknown;
 
 vi.mock('@/lib/env', () => ({
-  isSupabaseConfigured: vi.fn(() => true),
   isProductionMode: vi.fn(() => true),
 }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: vi.fn(async () => ({ rpc, auth: { getUser } })),
-}));
 vi.mock('@/lib/company-context', () => ({ getActiveCompany: vi.fn() }));
 vi.mock('@/lib/actions/jobs', () => ({ createJobDraft: vi.fn() }));
 vi.mock('@/lib/ai-import/extract', async (importOriginal) => {
@@ -101,10 +99,11 @@ beforeEach(() => {
   process.env.AI_JOB_IMPORT_ENABLED = '1';
   process.env.ANTHROPIC_API_KEY = 'test-key-not-real';
   delete process.env.AI_JOB_IMPORT_PROVIDER;
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  resetFakeDb({ id: USER, role: 'employer' });
+  saveResult = () => null;
+  fakeDb.rpc('save_job_draft', () => saveResult());
   vi.mocked(isProductionMode).mockReturnValue(true);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
-  getUser.mockResolvedValue({ data: { user: { id: 'u-1' } } });
   vi.mocked(getActiveCompany).mockResolvedValue({
     activeId: COMPANY,
     activeRole: 'recruiter',
@@ -113,7 +112,6 @@ beforeEach(() => {
     companies: [],
   });
   vi.mocked(createJobDraft).mockResolvedValue({ ok: true, id: JOB });
-  rpc.mockResolvedValue({ data: null, error: null });
   extract.mockResolvedValue(GOOD);
 });
 
@@ -139,7 +137,7 @@ describe('flaga i dostawca', () => {
   });
 
   it('bez bazy (demo) płatny dostawca jest niedostępny — anonimowy ruch nie generuje kosztów', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(await importJobListing(imageForm())).toEqual({ ok: false, error: 'DEMO_UNAVAILABLE' });
     expect(extract).not.toHaveBeenCalled();
   });
@@ -147,7 +145,7 @@ describe('flaga i dostawca', () => {
 
 describe('autoryzacja i limity', () => {
   it('kontrola ujemna: brak sesji', async () => {
-    getUser.mockResolvedValue({ data: { user: null } });
+    fakeSession.identity = null;
     expect(await importJobListing(imageForm())).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
     expect(extract).not.toHaveBeenCalled();
   });
@@ -193,7 +191,8 @@ describe('walidacja źródła', () => {
       reason: 'type',
     });
     expect(await importJobListing(imageForm(PNG, 'image/gif'))).toMatchObject({ reason: 'type' });
-    expect(getUser).not.toHaveBeenCalled();
+    expect(getActiveCompany).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
     expect(extract).not.toHaveBeenCalled();
   });
 
@@ -233,10 +232,13 @@ describe('wynik i zapis szkicu', () => {
       values: { title: 'Heftruckchauffeur (m/v/x)', city: 'Gent' },
     });
     expect(createJobDraft).toHaveBeenCalledWith('nl');
-    expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledWith('save_job_draft', expect.objectContaining({ p_job_id: JOB }));
-    const rpcNames = rpc.mock.calls.map((c) => c[0]);
-    expect(rpcNames).not.toContain('publish_job');
+    const rpcCalls = fakeDb.calls.filter((c) => c.kind === 'rpc' || c.kind === 'rpcrows');
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]).toMatchObject({ name: 'save_job_draft', as: USER, args: { p_job_id: JOB } });
+    expect(JSON.parse(String(rpcCalls[0]!.args.p_content))).toMatchObject({ job: { title: 'Heftruckchauffeur (m/v/x)' } });
+    expect(rpcCalls.map((c) => c.name)).not.toContain('publish_job');
+    // Kontekst firmy czytany pod sesją użytkownika.
+    expect(vi.mocked(getActiveCompany).mock.calls[0]?.[1]).toBe(USER);
     // Krok 9 (bez opisu firmy) nie przeszedł — reszta tak.
     expect(res.ok && res.savedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
@@ -253,7 +255,7 @@ describe('wynik i zapis szkicu', () => {
     expect(res.ok && res.review).toEqual(expect.arrayContaining(['title', 'description', 'city']));
     expect(res.ok && Object.keys(res.values)).not.toContain('status');
     expect(createJobDraft).not.toHaveBeenCalled();
-    expect(rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('materiał niebędący ogłoszeniem i awaria AI → kody użytkowe', async () => {
@@ -264,7 +266,9 @@ describe('wynik i zapis szkicu', () => {
   });
 
   it('błąd zapisu szkicu nie gubi wyniku — kreator zapisze kroki przy „Dalej"', async () => {
-    rpc.mockResolvedValue({ data: null, error: { message: 'JOB_NOT_DRAFT' } });
+    saveResult = () => {
+      throw pgError('P0001', 'JOB_NOT_DRAFT');
+    };
     const res = await importJobListing(imageForm());
     expect(res).toMatchObject({ ok: true, jobId: JOB, savedSteps: [] });
   });
