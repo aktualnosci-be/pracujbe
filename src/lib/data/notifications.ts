@@ -86,7 +86,7 @@ const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {
   suspended: 'itemCompanySuspended',
 };
 
-/** Decyzja admina o pytaniu screeningowym (0104, #497): `system` + `data.kind = 'screening_review'`. */
+/** Decyzja admina o pytaniu screeningowym (0099, #497): `system` + `data.kind = 'screening_review'`. */
 const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
   approved: 'itemScreeningApproved',
   rejected: 'itemScreeningRejected',

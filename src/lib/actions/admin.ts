@@ -24,7 +24,7 @@ import { companyVatSource } from '@/lib/vies/state';
  *   - `liftEmailSuppression` — zdjęcie blokady adresu e-mail (#44) przez RPC
  *     `admin_lift_email_suppression` (0098, uzasadnienie wymagane, audyt).
  *   - `decideScreeningReview` — decyzja o pytaniu screeningowym oznaczonym przez detektor
- *     (#497) przez RPC `admin_decide_screening_review` (0104: tylko oczekujące, odrzucenie
+ *     (#497) przez RPC `admin_decide_screening_review` (0099: tylko oczekujące, odrzucenie
  *     z uzasadnieniem, audyt, powiadomienie firmy). Akceptacja nie publikuje oferty.
  *   - `checkCompanyVies` — ręczne sprawdzenie numeru VAT firmy w VIES (#92), zapis wyniku
  *     rozstrzygającego przez RPC `admin_record_vies_check` (0088).

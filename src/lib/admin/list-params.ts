@@ -157,7 +157,7 @@ export function parseEmailSuppressionFilter(raw: string | undefined | null): Ema
     : 'active';
 }
 
-/** Filtr kolejki przeglądu pytań screeningowych (#497, 0104). Domyślnie oczekujące. */
+/** Filtr kolejki przeglądu pytań screeningowych (#497, 0099). Domyślnie oczekujące. */
 export const SCREENING_REVIEW_FILTERS = ['pending', 'decided', 'all'] as const;
 export type ScreeningReviewFilter = (typeof SCREENING_REVIEW_FILTERS)[number];
 

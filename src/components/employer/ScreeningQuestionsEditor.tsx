@@ -56,7 +56,7 @@ import {
  *   'i.options.j[.lang]'— opcja
  *
  * #497: pod treścią pytania, które detektor (`screeningQuestionRisk` — ten sam zestaw wzorców
- * co baza, 0104) uznał za mogące dotyczyć danych chronionych, widać informację, że przed
+ * co baza, 0099) uznał za mogące dotyczyć danych chronionych, widać informację, że przed
  * publikacją sprawdzi je zespół portalu. Po próbie publikacji `reviews` niesie stan przeglądu
  * z bazy (oczekuje / odrzucone z uzasadnieniem). Informacja nie blokuje zapisu szkicu —
  * publikację blokuje baza.

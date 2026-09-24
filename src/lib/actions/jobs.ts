@@ -443,7 +443,7 @@ export async function updatePublishedJob(
 type ServerClient = Awaited<ReturnType<typeof createServerClient>>;
 
 /**
- * Stan przeglądu pytań oznaczonych przez detektor (#497, migracja 0104), odczyt pod RLS
+ * Stan przeglądu pytań oznaczonych przez detektor (#497, migracja 0099), odczyt pod RLS
  * (członek firmy oferty). Tylko pytania bez akceptacji bieżącej treści. Błąd odczytu → pusta
  * lista (kod błędu publikacji i tak trafia do kreatora).
  */

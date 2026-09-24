@@ -16,12 +16,12 @@ import {
 
 /**
  * #497 — detektor pytań screeningowych wymagających przeglądu przed publikacją.
- * Decyzja jest w bazie (migracja 0104); tu: zachowanie wzorców, brak fałszywych trafień
+ * Decyzja jest w bazie (migracja 0099); tu: zachowanie wzorców, brak fałszywych trafień
  * na typowe pytania o warunki pracy i zgodność TS ↔ SQL (te same wzorce i składanie znaków).
  */
 
 const MIGRATION = readFileSync(
-  join(process.cwd(), 'supabase/migrations/0104_screening_question_review.sql'),
+  join(process.cwd(), 'supabase/migrations/0099_screening_question_review.sql'),
   'utf8',
 );
 
@@ -233,7 +233,7 @@ describe('foldScreeningText', () => {
   });
 });
 
-describe('zgodność z migracją 0104', () => {
+describe('zgodność z migracją 0099', () => {
   it('te same znaki składania co screening_fold', () => {
     expect(MIGRATION).toContain(`'${SCREENING_FOLD_FROM}'`);
     expect(MIGRATION).toContain(`'${SCREENING_FOLD_TO}'`);

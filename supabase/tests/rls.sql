@@ -6316,7 +6316,7 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
   'ESCO93-8b ręczne zawody z 0010 nietknięte');
 
 -- ============================================================================
--- SR497. Kontrola treści pytań screeningowych przed publikacją (0104, #497): detektor w bazie
+-- SR497. Kontrola treści pytań screeningowych przed publikacją (0099, #497): detektor w bazie
 --        (treść + opcje + tłumaczenia), kolejka przeglądu przy zapisie, blokada aktywacji do
 --        decyzji admina, decyzja z audytem i powiadomieniem, zmiana treści = nowy przegląd.
 -- ============================================================================
@@ -6401,7 +6401,7 @@ select pg_temp.assert(
   and (select count(*) from public.screening_question_reviews where job_id = :'SRJOB' and status = 'pending') = 2,
   'SR497-4b oferta pozostaje szkicem, przeglądy nadal oczekują');
 
--- SR497-4c (kontrola ujemna): bez strażnika 0104 ta sama publikacja przechodzi (cofnięte).
+-- SR497-4c (kontrola ujemna): bez strażnika 0099 ta sama publikacja przechodzi (cofnięte).
 begin;
 alter table public.jobs disable trigger trg_enforce_screening_review;
 set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();

@@ -21,7 +21,7 @@ import { useAdminFeedback } from '@/components/admin/AdminFeedback';
  *
  * „Zaakceptuj” i „Odrzuć” otwierają dialog z treścią pytania i kategoriami; odrzucenie wymaga
  * uzasadnienia (firma widzi je w kreatorze; trafia do dziennika zdarzeń), przy akceptacji jest
- * opcjonalne. Te same limity w RPC `admin_decide_screening_review` (0104). Akceptacja nie
+ * opcjonalne. Te same limity w RPC `admin_decide_screening_review` (0099). Akceptacja nie
  * publikuje oferty — robi to firma. Fokus i komunikaty przez `AdminFeedbackProvider` (#415).
  */
 

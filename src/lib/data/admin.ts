@@ -1440,7 +1440,7 @@ export async function listEmailSuppressions(
 }
 
 /* ---------------------------------------------------------------------------
- * Przegląd pytań screeningowych (#497, 0104)
+ * Przegląd pytań screeningowych (#497, 0099)
  * ------------------------------------------------------------------------- */
 
 export interface AdminScreeningReviewRow {
