@@ -13,11 +13,17 @@ interface CandidateIdentityProps {
     emptyName: string;
     emptyIdentity: string;
     loadError: string;
+    /** Nazwa pola dla czytnika ekranu przed odznaką dostępności. */
+    availabilityLabel: string;
     availability: string | null;
   };
 }
 
-/** Wyróżnia wyłącznie informacje zapisane przez właściciela profilu. */
+/**
+ * Paszport tożsamości (#172, `profile-banner` z prototypu people-passport): wyłącznie
+ * informacje zapisane przez właściciela profilu. Bez zdjęcia i bez inicjałów — kafelek
+ * z neutralną ikoną; odznaka dostępności tylko dla znanej wartości i nigdy po błędzie odczytu.
+ */
 export function CandidateIdentity({
   profile,
   passport,
@@ -36,7 +42,7 @@ export function CandidateIdentity({
       aria-labelledby={loadFailed ? undefined : "candidate-identity-heading"}
       aria-label={loadFailed ? labels.eyebrow : undefined}
       data-testid="candidate-identity"
-      className="min-w-0 overflow-hidden rounded-[1.75rem] border border-border bg-card p-5 sm:p-7"
+      className="min-w-0 overflow-hidden rounded-[1.75rem] bg-soft p-5 sm:p-7"
     >
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-accent">
         {labels.eyebrow}
@@ -49,7 +55,7 @@ export function CandidateIdentity({
         <div className="mt-4 flex min-w-0 flex-wrap items-center gap-4 sm:gap-6">
           <span
             aria-hidden="true"
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.25rem] bg-soft text-foreground"
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.25rem] bg-foreground text-background"
           >
             <UserRound className="h-8 w-8" />
           </span>
@@ -88,7 +94,11 @@ export function CandidateIdentity({
             )}
           </div>
           {labels.availability ? (
-            <span className="max-w-full break-words rounded-full border border-border bg-soft px-4 py-2 text-sm font-semibold text-foreground">
+            <span
+              data-testid="candidate-identity-availability"
+              className="max-w-full break-words rounded-lg bg-success/10 px-3 py-2 text-sm font-semibold text-success-text"
+            >
+              <span className="sr-only">{labels.availabilityLabel} </span>
               {labels.availability}
             </span>
           ) : null}
