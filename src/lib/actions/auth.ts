@@ -32,6 +32,7 @@ import { env } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
+import { enforceTurnstile } from '@/lib/turnstile/verify';
 import { createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -216,11 +217,18 @@ async function discardUnconfirmedSignup(user: User): Promise<void> {
  * albo panel wg roli. `next` jest walidowany ponownie po stronie serwera (`safeNextPath`) —
  * wartość spoza serwisu jest ignorowana (brak open redirect).
  */
-export async function signIn(input: LoginInput, next?: string | null): Promise<AuthActionResult> {
+export async function signIn(
+  input: LoginInput,
+  next?: string | null,
+  botCheckToken?: string | null,
+): Promise<AuthActionResult> {
   // Rate limit per IP (10 prób / 5 min) — ochrona przed brute-force. Bez ujawniania detali.
   if (!(await checkRateLimit('signin', { max: 10, windowSeconds: 300 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
+  // Turnstile (#46): osobna warstwa obok limitu; awaria dostawcy przy logowaniu = fail-open.
+  const botCheck = await enforceTurnstile('login', botCheckToken);
+  if (botCheck) return { ok: false, error: botCheck };
 
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) {
@@ -272,11 +280,15 @@ export async function signIn(input: LoginInput, next?: string | null): Promise<A
 export async function registerCandidate(
   input: RegisterCandidateInput,
   next?: string | null,
+  botCheckToken?: string | null,
 ): Promise<AuthActionResult> {
   // Rate limit per IP (5 rejestracji / godz) — ochrona przed masowym zakładaniem kont.
   if (!(await checkRateLimit('register', { max: 5, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
+  // Turnstile (#46): awaria dostawcy przy rejestracji = fail-closed.
+  const botCheck = await enforceTurnstile('register', botCheckToken);
+  if (botCheck) return { ok: false, error: botCheck };
 
   const parsed = registerCandidateSchema.safeParse(input);
   if (!parsed.success) {
@@ -304,11 +316,17 @@ export async function registerCandidate(
 }
 
 /** Rejestracja pracodawcy. Sukces → strona potwierdzenia e-maila. */
-export async function registerEmployer(input: RegisterEmployerInput): Promise<AuthActionResult> {
+export async function registerEmployer(
+  input: RegisterEmployerInput,
+  botCheckToken?: string | null,
+): Promise<AuthActionResult> {
   // Rate limit per IP (5 rejestracji / godz) — ochrona przed masowym zakładaniem kont.
   if (!(await checkRateLimit('register', { max: 5, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
+  // Turnstile (#46): awaria dostawcy przy rejestracji = fail-closed.
+  const botCheck = await enforceTurnstile('register', botCheckToken);
+  if (botCheck) return { ok: false, error: botCheck };
 
   const parsed = registerEmployerSchema.safeParse(input);
   if (!parsed.success) {
@@ -339,11 +357,18 @@ export async function registerEmployer(input: RegisterEmployerInput): Promise<Au
  * Wysyła link resetu hasła. Odpowiedź jest ZAWSZE neutralna (nie ujawnia, czy e-mail
  * istnieje). Wyjątki: błąd walidacji oraz brak konfiguracji (INTERNAL) są sygnalizowane.
  */
-export async function requestPasswordReset(input: ResetInput): Promise<AuthActionResult> {
+export async function requestPasswordReset(
+  input: ResetInput,
+  botCheckToken?: string | null,
+): Promise<AuthActionResult> {
   // Rate limit per IP (5 prób / godz) — nie ujawnia istnienia konta (RATE_LIMITED jest neutralny).
   if (!(await checkRateLimit('password-reset', { max: 5, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
+  // Turnstile (#46): przed wysyłką e-maila; awaria dostawcy = fail-closed. Wynik nie zależy
+  // od istnienia konta, więc nie ujawnia go.
+  const botCheck = await enforceTurnstile('passwordReset', botCheckToken);
+  if (botCheck) return { ok: false, error: botCheck };
 
   const parsed = resetSchema.safeParse(input);
   if (!parsed.success) {

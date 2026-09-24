@@ -2,9 +2,13 @@ import 'server-only';
 
 import Stripe from 'stripe';
 
+import { isBillingEnabled } from '@/lib/billing/flag';
 import { PLANS, type BillingPlanId } from '@/lib/data/billing';
 
 /**
+ * #51: nieosiągalny, dopóki flaga `BILLING_ENABLED` jest wyłączona (domyślnie) — wtedy
+ * `getStripe()` zwraca null, a wykrywanie dostawcy daje false mimo ustawionych sekretów.
+ *
  * Klient Stripe (server-only) + mapowanie pakietów. PROVIDER-GATED: bez `STRIPE_SECRET_KEY`
  * `getStripe()` zwraca null (tryb demo — UI „w przygotowaniu"). Klucz nie jest `NEXT_PUBLIC_*`.
  *
@@ -17,7 +21,7 @@ import { PLANS, type BillingPlanId } from '@/lib/data/billing';
 let cached: Stripe | null = null;
 
 export function isStripeConfigured(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY);
+  return isBillingEnabled() && Boolean(process.env.STRIPE_SECRET_KEY);
 }
 
 /**
@@ -28,11 +32,11 @@ export function isStripeConfigured(): boolean {
  * „billing niedostępny" (nie inicjujemy checkoutu), zamiast cicho brać pieniądze bez rekordu.
  */
 export function isBillingProviderReady(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET);
+  return isBillingEnabled() && Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET);
 }
 
 export function getStripe(): Stripe | null {
-  if (!process.env.STRIPE_SECRET_KEY) return null;
+  if (!isBillingEnabled() || !process.env.STRIPE_SECRET_KEY) return null;
   if (!cached) {
     cached = new Stripe(process.env.STRIPE_SECRET_KEY, {
       // apiVersion pominięte świadomie → SDK używa wersji konta (brak ryzyka złego stringa).

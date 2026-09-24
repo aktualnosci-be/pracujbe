@@ -34,6 +34,12 @@ import {
   signIn,
   type AuthActionResult,
 } from '@/lib/actions/auth';
+import type { TurnstileFlow } from '@/lib/turnstile/policy';
+import {
+  isTurnstileWidgetEnabled,
+  TurnstileWidget,
+  type TurnstileHandle,
+} from './TurnstileWidget';
 
 /**
  * Współdzielony formularz uwierzytelniania (client). Obsługuje warianty: logowanie,
@@ -110,6 +116,14 @@ const SUBMIT_KEY: Record<AuthFormVariant, string> = {
   reset: 'resetSubmit',
 };
 
+/** Przepływ Turnstile (#46) — osobna akcja i polityka awarii dla każdego formularza. */
+const BOT_CHECK_FLOW: Record<AuthFormVariant, TurnstileFlow> = {
+  login: 'login',
+  registerCandidate: 'register',
+  registerEmployer: 'register',
+  reset: 'passwordReset',
+};
+
 const SHOW_TERMS: Record<AuthFormVariant, boolean> = {
   login: false,
   registerCandidate: true,
@@ -157,6 +171,15 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
   // Fokus na komunikat tylko po wysyłce (nie przy wejściu z `?error=`): przycisk jest `disabled`
   // w trakcie zapisu, więc przeglądarka zdejmuje z niego fokus — bez tego ląduje on na <body>.
   const focusAlertRef = React.useRef(false);
+  // Turnstile (#46): token jednorazowy; po każdej odpowiedzi serwera resetujemy widżet.
+  const botCheckEnabled = isTurnstileWidgetEnabled();
+  const botCheckRef = React.useRef<TurnstileHandle | null>(null);
+  const [botCheckToken, setBotCheckToken] = React.useState<string | null>(null);
+  const [botCheckMissing, setBotCheckMissing] = React.useState(false);
+  const handleBotCheckToken = React.useCallback((token: string | null) => {
+    setBotCheckToken(token);
+    if (token) setBotCheckMissing(false);
+  }, []);
 
   const resolver = React.useMemo(
     () => zodResolver(SCHEMAS[variant]) as Resolver<AuthFormValues>,
@@ -188,7 +211,14 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
+    // Bez tokenu nie wysyłamy (serwer i tak by odrzucił): komunikat przy widżecie, przycisk
+    // pozostaje aktywny.
+    if (botCheckEnabled && !botCheckToken) {
+      setBotCheckMissing(true);
+      return;
+    }
     focusAlertRef.current = true;
+    const token = botCheckToken;
 
     let result: AuthActionResult | undefined;
     try {
@@ -197,6 +227,7 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
           result = await signIn(
             { email: values.email ?? '', password: values.password ?? '' },
             next,
+            token,
           );
           break;
         case 'registerCandidate':
@@ -208,7 +239,7 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
             lastName: values.lastName ?? '',
             agreeTerms: true,
             locale: locale as Locale,
-          }, next);
+          }, next, token);
           break;
         case 'registerEmployer':
           result = await registerEmployer({
@@ -220,14 +251,15 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
             lastName: values.lastName ?? '',
             agreeTerms: true,
             locale: locale as Locale,
-          });
+          }, token);
           break;
         case 'reset':
-          result = await requestPasswordReset({ email: values.email ?? '' });
+          result = await requestPasswordReset({ email: values.email ?? '' }, token);
           break;
       }
     } catch {
       // Nieoczekiwany błąd po stronie serwera (przekierowania NIE trafiają tutaj).
+      botCheckRef.current?.reset();
       setServerError('INTERNAL');
       return;
     }
@@ -235,6 +267,8 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
     // Sukces logowania/rejestracji kończy się przekierowaniem po stronie serwera
     // (akcja nie zwraca wartości) — nic więcej nie robimy.
     if (result && !result.ok) {
+      // Token został zużyty przez siteverify — kolejna próba potrzebuje nowego.
+      botCheckRef.current?.reset();
       setServerError(result.error);
       return;
     }
@@ -345,6 +379,15 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
             </p>
           ) : null}
         </div>
+      ) : null}
+
+      {botCheckEnabled ? (
+        <TurnstileWidget
+          ref={botCheckRef}
+          flow={BOT_CHECK_FLOW[variant]}
+          onToken={handleBotCheckToken}
+          showRequired={botCheckMissing}
+        />
       ) : null}
 
       <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>

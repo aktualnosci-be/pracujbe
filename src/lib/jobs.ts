@@ -390,6 +390,7 @@ async function getJobsFromDb(
   params: GetJobsParams,
   page: number,
   pageSize: number,
+  viewerId: string | null,
 ): Promise<GetJobsResult> {
   const [{ getDomainPool }, { getPublicJobs }] = await Promise.all([
     import('@/lib/db/runtime'),
@@ -399,7 +400,7 @@ async function getJobsFromDb(
     ...params,
     page,
     pageSize,
-  });
+  }, viewerId);
   return {
     jobs: result.rows.map(rowToJobListItem),
     total: result.total,
@@ -451,7 +452,18 @@ async function readContentLocales(
  * Publiczne API (kontrakt @/lib/jobs)
  * ------------------------------------------------------------------------- */
 
-export async function getJobs(params: GetJobsParams): Promise<GetJobsResult> {
+/**
+ * Kontekst osoby przeglądającej listę. `candidateId` wyłącznie ze zweryfikowanej sesji
+ * serwera (`readCandidateViewerId`); brak = gość, wynik wspólny (ISR/statyczne strony).
+ */
+export interface JobsViewer {
+  candidateId: string | null;
+}
+
+export async function getJobs(
+  params: GetJobsParams,
+  viewer?: JobsViewer,
+): Promise<GetJobsResult> {
   const locale = toLocale(params.locale);
   const page = Math.max(1, Math.trunc(params.page ?? 1));
   const pageSize = Math.max(
@@ -461,7 +473,7 @@ export async function getJobs(params: GetJobsParams): Promise<GetJobsResult> {
 
   if (isDatabaseConfigured()) {
     try {
-      return await getJobsFromDb(params, page, pageSize);
+      return await getJobsFromDb(params, page, pageSize, viewer?.candidateId ?? null);
     } catch (error) {
       // Skonfigurowana baza NIE może po cichu degradować do danych demonstracyjnych
       // (fikcyjne oferty indeksowane jako realne). Loguj i propaguj kontrolowany błąd.
@@ -540,13 +552,17 @@ export async function getLatestJobs(
   return result.jobs;
 }
 
-export async function getJobFilterFacets(params: GetJobsParams) {
+export async function getJobFilterFacets(params: GetJobsParams, viewer?: JobsViewer) {
   if (!isDatabaseConfigured()) return null;
   try {
     const [{ getDomainPool }, { getPublicJobFilterFacets }] = await Promise.all(
       [import('@/lib/db/runtime'), import('@/lib/db/public-jobs')],
     );
-    return await getPublicJobFilterFacets(await getDomainPool(), params);
+    return await getPublicJobFilterFacets(
+      await getDomainPool(),
+      params,
+      viewer?.candidateId ?? null,
+    );
   } catch (error) {
     captureError(error, { area: 'jobs.getJobFilterFacets' });
     throw new AppError('INTERNAL');

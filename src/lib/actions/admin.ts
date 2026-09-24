@@ -5,6 +5,9 @@ import { companyReasonError, companyStatusNeedsReason } from '@/lib/admin/compan
 import { isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
+import { checkBelgianVatInVies, type ViesCheckResult } from '@/lib/vies/client';
+import { compareCompanyNames, type CompanyNameComparison } from '@/lib/vies/name-match';
+import { companyVatSource } from '@/lib/vies/state';
 
 /**
  * Server Actions panelu administratora — Pracuj.be (Etap 7g).
@@ -12,6 +15,8 @@ import { captureError } from '@/lib/sentry';
  *   - `setCompanyStatus` — zmienia status weryfikacji firmy przez RPC `admin_set_company_status`
  *     (odrzucenie/zawieszenie z wymaganym uzasadnieniem — 0084, #310).
  *   - `resolveReport`    — rozstrzyga zgłoszenie przez RPC `admin_resolve_report`.
+ *   - `checkCompanyVies` — ręczne sprawdzenie numeru VAT firmy w VIES (#92), zapis wyniku
+ *     rozstrzygającego przez RPC `admin_record_vies_check` (0088).
  *
  * Oba RPC (0081, #420) egzekwują macierz przejść (`INVALID_TRANSITION`) i porównują status
  * widziany przez admina z bieżącym (`p_expected_status`, `FOR UPDATE` → `STALE_STATE`, gdy
@@ -140,6 +145,97 @@ export async function resolveReport(
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'admin.resolveReport' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+export type ViesActionOutcome =
+  | Extract<ViesCheckResult, { status: 'format_invalid' | 'invalid' | 'rate_limited' | 'unavailable' }>
+  | (Extract<ViesCheckResult, { status: 'valid' }> & { nameMatch: CompanyNameComparison });
+
+export type ViesActionResult =
+  | { ok: true; demo: true }
+  | { ok: true; demo?: false; outcome: ViesActionOutcome; saved: boolean }
+  | { ok: false; error: ErrorCode };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Ręczne sprawdzenie numeru VAT firmy w VIES (#92) — informacja dla admina.
+ *
+ * Kolejność: sesja + rola admina (zanim cokolwiek trafi do VIES) → numer firmy (service-role)
+ * → adapter VIES (timeout, ponowienia) → zapis TYLKO wyniku rozstrzygającego (`valid` /
+ * `invalid`) przez RPC pod sesją admina. Niedostępność i limit VIES wracają do admina jako
+ * osobne stany i nie są zapisywane — nigdy nie nadpisują wcześniejszego wyniku i nigdy nie
+ * oznaczają numeru jako nieważnego. Status firmy się nie zmienia (bez automatycznego
+ * odrzucania). Logujemy wyłącznie obszar błędu — bez numeru, nazwy i odpowiedzi VIES.
+ */
+export async function checkCompanyVies(companyId: string): Promise<ViesActionResult> {
+  // Tryb DEMO: VIES nie jest odpytywany (żadnych zapytań sieciowych bez backendu).
+  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    if ((profile as { role?: unknown } | null)?.role !== 'admin') {
+      return { ok: false, error: 'PERMISSION_DENIED' };
+    }
+
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const { data: company, error: companyError } = await createAdminClient()
+      .from('companies')
+      .select('id, name, vat_number, registration_number')
+      .eq('id', companyId)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (companyError) throw companyError;
+    if (!company) return { ok: false, error: 'NOT_FOUND' };
+    const row = company as {
+      name?: string | null;
+      vat_number?: string | null;
+      registration_number?: string | null;
+    };
+
+    const result = await checkBelgianVatInVies(
+      companyVatSource(row.vat_number, row.registration_number),
+    );
+    if (result.status !== 'valid' && result.status !== 'invalid') {
+      return { ok: true, outcome: result, saved: false };
+    }
+
+    const outcome: ViesActionOutcome =
+      result.status === 'valid'
+        ? { ...result, nameMatch: compareCompanyNames(row.name, result.name) }
+        : result;
+
+    const { error: saveError } = await supabase.rpc('admin_record_vies_check', {
+      p_company_id: companyId,
+      p_vat_number: result.vatNumber,
+      p_result: result.status,
+      p_vies_name: result.status === 'valid' ? result.name : null,
+      p_request_date: result.requestDate,
+    });
+    if (saveError) {
+      captureError(new Error(`admin_record_vies_check: ${mapPgError(saveError.message)}`), {
+        area: 'admin.checkCompanyVies.save',
+      });
+      return { ok: true, outcome, saved: false };
+    }
+    return { ok: true, outcome, saved: true };
+  } catch (e) {
+    captureError(e, { area: 'admin.checkCompanyVies' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

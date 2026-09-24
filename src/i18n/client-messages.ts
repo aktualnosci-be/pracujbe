@@ -27,6 +27,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'footer',
   'home',
   'job',
+  'jobImport',
   'jobWizard',
   'jobs',
   'match',
@@ -38,6 +39,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'onboarding',
   'settings',
   'status',
+  'team',
 ] as const;
 
 export function pickClientMessages<T extends Record<string, unknown>>(messages: T): Partial<T> {

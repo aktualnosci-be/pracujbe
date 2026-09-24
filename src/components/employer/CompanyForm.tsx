@@ -11,15 +11,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useRouter } from '@/i18n/navigation';
-import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
+import { toUserMessageKey } from '@/lib/errors';
+import { teamErrorKey, type TeamError } from '@/lib/team/errors';
 import { companyFormSchema, type CompanyFormInput } from '@/lib/validation/company';
-import { createCompany, updateCompany } from '@/lib/actions/company';
+import { createAdditionalCompany, createCompany, updateCompany } from '@/lib/actions/company';
 
 /**
  * CompanyForm — formularz danych firmy pracodawcy (Etap 4). Dwa tryby:
  *   - `create` → zakłada firmę (`createCompany`), po sukcesie odświeża widok (formularz →
  *                dane firmy + baner statusu),
- *   - `edit`   → aktualizuje nazwę/VAT (`updateCompany`).
+ *   - `edit`   → aktualizuje nazwę/VAT (`updateCompany`),
+ *   - `add`    → zakłada KOLEJNĄ firmę (`createAdditionalCompany`, #403) i przechodzi do jej
+ *                profilu (panel przełącza się na nową firmę).
  *
  * Realizuje Invariant #11: blokada przycisku podczas zapisu, zachowanie danych po błędzie,
  * błędy przy polach (RHF + Zod, te same schematy co serwer), focus do pierwszego błędu,
@@ -27,7 +30,7 @@ import { createCompany, updateCompany } from '@/lib/actions/company';
  */
 
 export interface CompanyFormProps {
-  mode: 'create' | 'edit';
+  mode: 'create' | 'edit' | 'add';
   /** Wartości początkowe (tryb edycji). */
   defaultValues?: { name?: string; vatNumber?: string };
   /** Tryb edycji zweryfikowanej firmy: ostrzeżenie, że zmiana nazwy/VAT wraca do weryfikacji. */
@@ -38,11 +41,13 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
   const t = useTranslations('company');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
+  const tTeam = useTranslations('team');
   const router = useRouter();
 
-  const [serverError, setServerError] = React.useState<ErrorCode | null>(null);
+  const [serverError, setServerError] = React.useState<TeamError | null>(null);
   const [success, setSuccess] = React.useState(false);
   const [reverification, setReverification] = React.useState(false);
+  const [demo, setDemo] = React.useState(false);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
 
   const resolver = React.useMemo(
@@ -74,12 +79,16 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
     setServerError(null);
     setSuccess(false);
     setReverification(false);
+    setDemo(false);
 
     try {
+      const input = { name: values.name, vatNumber: values.vatNumber };
       const result =
         mode === 'create'
-          ? await createCompany({ name: values.name, vatNumber: values.vatNumber })
-          : await updateCompany({ name: values.name, vatNumber: values.vatNumber });
+          ? await createCompany(input)
+          : mode === 'add'
+            ? await createAdditionalCompany(input)
+            : await updateCompany(input);
 
       if (!result.ok) {
         setServerError(result.error);
@@ -87,7 +96,11 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
       }
 
       setReverification('reverificationRequired' in result && result.reverificationRequired === true);
+      setDemo('demo' in result && result.demo === true);
       setSuccess(true);
+      if (mode === 'add' && !('demo' in result && result.demo)) {
+        router.push('/employer/firma');
+      }
       // Tryb create: odśwież, by RSC przeładował widok firmy (baner + dane). Tryb edit: odśwież dane.
       router.refresh();
     } catch {
@@ -95,9 +108,13 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
     }
   });
 
-  const submitLabel = mode === 'create' ? t('submitCreate') : t('submitSave');
+  const submitLabel = mode === 'edit' ? t('submitSave') : t('submitCreate');
   const successMessage =
-    mode === 'create'
+    mode === 'add'
+      ? demo
+        ? tTeam('demoNotice')
+        : tTeam('addCompanyDone')
+      : mode === 'create'
       ? t('createdSuccess')
       : reverification
         ? t('savedReverification')
@@ -112,7 +129,7 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
           className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-          <p>{tRoot(toUserMessageKey(serverError))}</p>
+          <p>{tRoot(teamErrorKey(serverError, toUserMessageKey))}</p>
         </div>
       ) : null}
 

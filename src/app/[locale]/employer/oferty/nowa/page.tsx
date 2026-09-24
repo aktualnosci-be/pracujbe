@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { JobWizard } from '@/components/employer/JobWizard';
+import { NewJobWizard } from '@/components/employer/NewJobWizard';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { getEmployerShellData } from '@/lib/data/employer';
+import { isJobImportEnabled } from '@/lib/ai-import/config';
 
 /**
  * Kreator oferty pracy — nowa oferta (Etap 5, makieta panelu pracodawcy).
@@ -48,7 +49,8 @@ export default async function NewJobPage({
           className="mx-auto mb-5 max-w-5xl"
         />
       ) : null}
-      <JobWizard />
+      {/* #465: krok importu z ogłoszenia tylko przy włączonej fladze i skonfigurowanym dostawcy. */}
+      <NewJobWizard importEnabled={isJobImportEnabled()} />
     </>
   );
 }

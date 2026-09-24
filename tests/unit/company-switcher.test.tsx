@@ -11,6 +11,13 @@ const { refresh, setActiveCompany } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 vi.mock('@/lib/actions/company', () => ({ setActiveCompany }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
 
 afterEach(() => {
   cleanup();
@@ -93,5 +100,13 @@ describe('CompanySwitcher na jasnym sidebarze', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Firma Druga' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('switchCompanyError');
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it.each([1, 2])('link „Dodaj kolejną firmę” jest osiągalny przy liczbie firm: %s (#403)', (count) => {
+    const { container } = render(
+      <CompanySwitcher companies={companies.slice(0, count)} activeId="first" activeName="Firma Pierwsza" />,
+    );
+    if (count > 1) container.querySelector('details')!.open = true;
+    expect(screen.getByRole('link', { name: 'addCompany' })).toHaveAttribute('href', '/employer/firma/nowa');
   });
 });

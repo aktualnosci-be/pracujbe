@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { rejectOptionalCookies } from './fixtures/messages';
+
 /**
  * Pulpit kandydata w trybie demo (bez imienia, z propozycją i rozmowami):
  * #334 powitanie bez wiszącego przecinka, #324 baner prowadzi do karty propozycji,
@@ -18,10 +20,6 @@ function messages(locale: string): Messages {
   return JSON.parse(readFileSync(resolve('src/messages', `${locale}.json`), 'utf8')) as Messages;
 }
 
-async function dismissCookies(page: Page): Promise<void> {
-  const banner = page.locator('[aria-labelledby="cookie-banner-title"] button').first();
-  if (await banner.isVisible()) await banner.click();
-}
 
 async function horizontalOverflow(page: Page) {
   return page.evaluate(() => {
@@ -46,7 +44,7 @@ for (const locale of locales) {
   test(`baner propozycji prowadzi do karty propozycji: ${locale}`, async ({ page }) => {
     const m = messages(locale);
     await page.goto(`/${locale}/candidate`);
-    await dismissCookies(page);
+    await rejectOptionalCookies(page, locale);
     const link = page.getByRole('link', { name: m.dashboard.viewProposal });
     const href = await link.getAttribute('href');
     expect(href).toMatch(new RegExp(`^/${locale}/candidate/propozycje#offer-.+`));
@@ -60,7 +58,7 @@ for (const locale of locales) {
   test(`najnowsze wiadomości otwierają rozmowę: ${locale}`, async ({ page }) => {
     const m = messages(locale);
     await page.goto(`/${locale}/candidate`);
-    await dismissCookies(page);
+    await rejectOptionalCookies(page, locale);
     const section = page.locator('section').filter({ has: page.getByRole('heading', { name: m.dashboard.latestMessages }) });
     const links = section.getByRole('link').filter({ has: page.locator('[aria-hidden="true"]') });
     await expect(links.first()).toHaveAttribute('href', new RegExp(`^/${locale}/candidate/wiadomosci\\?c=`));
@@ -78,7 +76,7 @@ for (const locale of locales) {
     test(`tekst 200% bez poziomego przewijania: /${locale}/${path} @ 1280px`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto(`/${locale}/${path}`);
-      await dismissCookies(page);
+      await rejectOptionalCookies(page, locale);
       await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
       const report = await horizontalOverflow(page);
       expect(report.outside, JSON.stringify(report)).toEqual([]);

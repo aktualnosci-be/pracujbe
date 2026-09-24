@@ -83,6 +83,16 @@ describe('sitemap (produkcja)', () => {
     }
   });
 
+  it('#51: brak cennika, płatności, checkoutu i Stripe — bezpłatny MVP bez powierzchni sprzedaży', async () => {
+    const urls = (await sitemap()).map((entry) => entry.url);
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) {
+      expect(new URL(url).pathname, url).not.toMatch(
+        /cennik|pricing|tarif|prijs|platnosci|billing|checkout|stripe|pakiet|premium/i,
+      );
+    }
+  });
+
   it('brak duplikatów; każdy URL ma alternates dla 4 języków i x-default', async () => {
     const entries = await sitemap();
     const urls = entries.map((entry) => entry.url);

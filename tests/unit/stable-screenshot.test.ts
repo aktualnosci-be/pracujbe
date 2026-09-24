@@ -71,10 +71,14 @@ describe('stabilny zrzut w eksporcie grafik (main 514e917)', () => {
   });
 
   it('każdy skrypt z Chromium robi zrzut tylko przez captureStableScreenshot', () => {
+    // Skrypty z Chromium, które robią zrzuty (bramka perf-lab.mjs, #395, tylko mierzy).
     const scripts = readdirSync('scripts')
       .filter((name) => name.endsWith('.mjs'))
       .map((name) => join('scripts', name))
-      .filter((script) => readFileSync(script, 'utf8').includes('launchChromium'));
+      .filter((script) => {
+        const source = readFileSync(script, 'utf8');
+        return source.includes('launchChromium') && /screenshot/i.test(source);
+      });
     expect(scripts).toEqual(
       expect.arrayContaining([
         'scripts/export-campaign-banner.mjs',

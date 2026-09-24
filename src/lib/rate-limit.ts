@@ -27,6 +27,11 @@ export interface RateLimitOptions {
   windowSeconds?: number;
   /** Dodatkowy człon klucza (np. userId) zawężający limit poza samo IP. */
   identifier?: string;
+  /**
+   * Czy klucz zawiera IP klienta (domyślnie tak). `false` = limit wyłącznie per `identifier`
+   * (np. per firma przy imporcie AI #465 — zmiana IP nie daje nowej puli kosztownych wywołań).
+   */
+  perIp?: boolean;
 }
 
 const DEFAULT_MAX = 30;
@@ -38,7 +43,15 @@ const DEFAULT_WINDOW_SECONDS = 60;
  * do bruteforce logowania / spamu rejestracji / resetu hasła. Dla pozostałych akcji
  * zachowujemy fail-open (awaria limitera nie odcina zwykłego ruchu).
  */
-const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set(['signin', 'register', 'password-reset']);
+const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
+  'signin',
+  'register',
+  'password-reset',
+  // Import ogłoszenia przez AI (#465): każde wywołanie kosztuje — awaria limitera nie może
+  // otwierać nieograniczonych wywołań płatnego API.
+  'job-import',
+  'job-import-day',
+]);
 
 /**
  * Adres IP klienta. Głównym źródłem jest `x-real-ip` (ustawiane przez platformę/proxy,
@@ -84,7 +97,7 @@ export async function checkRateLimit(action: string, opts?: RateLimitOptions): P
   const windowSeconds = opts?.windowSeconds ?? DEFAULT_WINDOW_SECONDS;
 
   try {
-    const ip = await clientIp();
+    const ip = opts?.perIp === false ? undefined : await clientIp();
     const key = [action, ip, opts?.identifier].filter(Boolean).join(':');
 
     // Limiter woła się wyłącznie zaufanym klientem service_role (SEC-01): RPC `rate_limit_hit`
