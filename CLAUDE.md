@@ -605,6 +605,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   bez współrzędnych ten sam region = 10 bez etykiety „w promieniu”. **Do zrobienia (#194):**
   współrzędne dla miast spoza 10-elementowego słownika (kanoniczny model miast/geokodowanie).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
+  Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
+  `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
+  oznaczenie „Wygasł”); `scoreMatch(…, { today })` nie liczy certyfikatu z `expires_at` < dziś
+  (dzień w Europe/Brussels, `referenceDate`), wygasły wymagany → `expiredCertificates` z wyjaśnieniem.
+  Top dopasowani (#141, 0079): `get_company_top_matches` — najlepsze dopasowanie na kandydata
+  (DISTINCT ON) przed limitem 5, pod RLS (recruiter+, widoczność kandydata, firma verified).
+  Dowód: `rls.sql` sekcja MC.
   Odporność odczytu (#191/#197): `getSimilarJobs` i `getMyJobMatch` zwracają jawny wynik
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się

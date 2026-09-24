@@ -578,7 +578,7 @@ select pg_temp.assert(
     where cp.profile_id = :'CANDA' and cl.level = 'native') = 1,
   'M2 set_candidate_languages zapisuje języki z poziomem');
 -- Certyfikaty.
-select public.set_candidate_certificates(array['VCA','HACCP']);
+select public.set_candidate_certificates('["VCA","HACCP"]'::jsonb);  -- sygnatura jsonb od 0079
 select pg_temp.assert(
   (select count(*) from public.candidate_certificates cc
      join public.candidate_profiles cp on cp.id = cc.candidate_profile_id
@@ -2100,5 +2100,145 @@ select pg_temp.assert(:'pp8d' like 'ERROR:%propozycja wygasła%',
   'PP8d expires_at = now() to już po terminie (spójnie z expires_at > now())');
 select pg_temp.assert(not exists (select 1 from public.offers where idempotency_key = 'pp-exp-eq'),
   'PP8e próba na granicy wycofana razem z transakcją sesji');
+
+-- ============================================================================
+-- MC. Dopasowanie (0079): data ważności certyfikatów kandydata (#96) oraz pięciu RÓŻNYCH
+--     najlepiej dopasowanych kandydatów firmy przed limitem (#141). Identyfikatory e79….
+-- ============================================================================
+\set CANDMA 'e7900000-0000-0000-0000-0000000000ca'
+\set CANDMB 'e7900000-0000-0000-0000-0000000000cb'
+\set CANDMC 'e7900000-0000-0000-0000-0000000000cc'
+\set CANDMD 'e7900000-0000-0000-0000-0000000000cd'
+\set CANDME 'e7900000-0000-0000-0000-0000000000ce'
+\set CANDMF 'e7900000-0000-0000-0000-0000000000cf'
+\set CANDMH 'e7900000-0000-0000-0000-0000000000c8'
+\set CANDMG 'e7900000-0000-0000-0000-0000000000c9'
+\set OWNMC  'e7900000-0000-0000-0000-0000000000a1'
+\set MEMMC  'e7900000-0000-0000-0000-0000000000a2'
+\set OWNMY  'e7900000-0000-0000-0000-0000000000a3'
+\set COMPMC 'e7900000-0000-0000-0000-0000000000f1'
+\set COMPMY 'e7900000-0000-0000-0000-0000000000f2'
+\set JOBMY  'e7900000-0000-0000-0000-0000000999b1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data)
+  select c.id::uuid, 'mc-' || c.tag || '@test.be', 'MC ' || c.tag,
+         jsonb_build_object('role', c.role, 'first_name', 'MC', 'last_name', c.tag, 'locale', 'pl')
+  from (values (:'CANDMA','a','candidate'), (:'CANDMB','b','candidate'), (:'CANDMC','c','candidate'),
+               (:'CANDMD','d','candidate'), (:'CANDME','e','candidate'), (:'CANDMF','f','candidate'),
+               (:'CANDMH','h','candidate'), (:'CANDMG','g','candidate'),
+               (:'OWNMC','own','employer'), (:'MEMMC','mem','employer'), (:'OWNMY','owny','employer'))
+       as c(id, tag, role);
+insert into public.companies(id,name,status) values
+  (:'COMPMC','Firma MC','verified'), (:'COMPMY','Firma MY','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPMC',:'OWNMC','owner',true), (:'COMPMC',:'MEMMC','member',true), (:'COMPMY',:'OWNMY','owner',true);
+-- 24 oferty firmy MC (…01b1 … …24b1) i jedna oferta firmy MY.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale)
+  select format('e7900000-0000-0000-0000-000000%sb1', lpad(i::text, 4, '0'))::uuid, :'COMPMC',
+         'job-mc-' || i, 'Oferta MC ' || i, 'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl'
+  from generate_series(1, 24) i;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JOBMY',:'COMPMY','job-my','Oferta MY','warehouse','permanent','Gent','Flandria','active','pl');
+-- Wyszukiwalne kompletne profile (A–G); H niewyszukiwalny i bez relacji z firmą.
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed)
+  select id::uuid, true, true
+  from unnest(array[:'CANDMA',:'CANDMB',:'CANDMC',:'CANDMD',:'CANDME',:'CANDMF',:'CANDMG']) id;
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values (:'CANDMH', false, true);
+-- A: 100 do każdej z 24 ofert. B: 99 (oferta 2) i 50 (oferta 1). C: 98. D i E: remis 97. F: 90.
+-- H: 95 (niewidoczny). G: 100 tylko do oferty INNEJ firmy.
+insert into public.matches(candidate_id, job_id, score)
+  select :'CANDMA', j.id, 100 from public.jobs j where j.company_id = :'COMPMC';
+insert into public.matches(candidate_id, job_id, score) values
+  (:'CANDMB','e7900000-0000-0000-0000-0000000002b1'::uuid, 99),
+  (:'CANDMB','e7900000-0000-0000-0000-0000000001b1'::uuid, 50),
+  (:'CANDMC','e7900000-0000-0000-0000-0000000003b1'::uuid, 98),
+  (:'CANDMD','e7900000-0000-0000-0000-0000000004b1'::uuid, 97),
+  (:'CANDME','e7900000-0000-0000-0000-0000000005b1'::uuid, 97),
+  (:'CANDMF','e7900000-0000-0000-0000-0000000006b1'::uuid, 90),
+  (:'CANDMH','e7900000-0000-0000-0000-0000000007b1'::uuid, 95),
+  (:'CANDMG',:'JOBMY', 100);
+
+-- MC1 kontrola ujemna: dawny odczyt (24 najlepsze wiersze, dedup dopiero w aplikacji) = sam A.
+select pg_temp.assert(
+  (select count(distinct s.candidate_id) from (
+     select m.candidate_id from public.matches m join public.jobs j on j.id = m.job_id
+     where j.company_id = :'COMPMC' order by m.score desc limit 24) s) = 1,
+  'MC1 kontrola ujemna: limit 24 wierszy przed deduplikacją zostawiał jednego kandydata');
+
+select set_config('app.current_uid', :'OWNMC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select string_agg(candidate_id::text || '/' || job_id::text || '/' || score, ',' order by ord) as mc2
+  from public.get_company_top_matches(:'COMPMC'::uuid, 5) with ordinality as t(candidate_id, job_id, score, ord) \gset
+select count(*) as mc3 from public.get_company_top_matches(:'COMPMC'::uuid, 100) \gset
+select count(*) as mc3b from public.get_company_top_matches(:'COMPMC'::uuid, 2) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mc2' =
+  :'CANDMA' || '/e7900000-0000-0000-0000-0000000001b1/100,' ||
+  :'CANDMB' || '/e7900000-0000-0000-0000-0000000002b1/99,' ||
+  :'CANDMC' || '/e7900000-0000-0000-0000-0000000003b1/98,' ||
+  :'CANDMD' || '/e7900000-0000-0000-0000-0000000004b1/97,' ||
+  :'CANDME' || '/e7900000-0000-0000-0000-0000000005b1/97',
+  'MC2 pięciu różnych kandydatów, job_id = najwyższe dopasowanie (remis ofert → najmniejszy job_id, remis kandydatów → candidate_id)');
+select pg_temp.assert(:'mc3' = '6',
+  'MC3 bez limitu 5: A–F (bez H niewidocznego i G z innej firmy), każdy raz');
+select pg_temp.assert(:'mc3b' = '2', 'MC3b limit respektowany');
+
+-- MC4: izolacja — owner innej firmy i zwykły member nie dostają dopasowań firmy MC.
+select set_config('app.current_uid', :'OWNMY', false);
+set role authenticated; select pg_temp.assert_client_role();
+select count(*) as mc4 from public.get_company_top_matches(:'COMPMC'::uuid, 5) \gset
+select string_agg(candidate_id::text, ',') as mc4c from public.get_company_top_matches(:'COMPMY'::uuid, 5) \gset
+reset role;
+select set_config('app.current_uid', :'MEMMC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select count(*) as mc4b from public.get_company_top_matches(:'COMPMC'::uuid, 5) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mc4' = '0', 'MC4 firma B nie widzi dopasowań firmy A');
+select pg_temp.assert(:'mc4c' = :'CANDMG', 'MC4c firma B widzi tylko swoje dopasowania');
+select pg_temp.assert(:'mc4b' = '0', 'MC4b zwykły member bez dostępu do dopasowań (recruiter+)');
+
+-- MC5: bramka weryfikacji firmy — niezweryfikowana firma nie dostaje wyników.
+update public.companies set status = 'pending' where id = :'COMPMC';
+select set_config('app.current_uid', :'OWNMC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select count(*) as mc5 from public.get_company_top_matches(:'COMPMC'::uuid, 5) \gset
+reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'COMPMC';
+select pg_temp.assert(:'mc5' = '0', 'MC5 firma niezweryfikowana nie dostaje dopasowanych kandydatów');
+
+-- MC6: certyfikaty z datą ważności (#96) przez RPC; stara sygnatura text[] usunięta.
+select pg_temp.assert(to_regprocedure('public.set_candidate_certificates(text[])') is null,
+  'MC6 wersja text[] zastąpiona wersją jsonb');
+select set_config('app.current_uid', :'CANDMA', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.set_candidate_certificates(
+  '[{"label":" VCA ","expires_at":"2026-01-31"},"ADR",{"label":"VCA","expires_at":null},{"label":" "},{"label":"Heftruck","expires_at":""}]'::jsonb);
+select string_agg(certificate_label || '=' || coalesce(expires_at::text, '-'), ',' order by certificate_label) as mc6
+  from public.candidate_certificates cc
+  join public.candidate_profiles cp on cp.id = cc.candidate_profile_id
+  where cp.profile_id = :'CANDMA' \gset
+reset role;
+select pg_temp.assert(:'mc6' = 'ADR=-,Heftruck=-,VCA=2026-01-31',
+  'MC6b zapis dat ważności: pierwsze wystąpienie etykiety wygrywa, pusta data = bezterminowy');
+
+set role authenticated; select pg_temp.assert_client_role();
+-- Zgodność ze starszą aplikacją: tablica etykiet (replace-all).
+select public.set_candidate_certificates('["X","Y"]'::jsonb);
+select string_agg(certificate_label || '=' || coalesce(expires_at::text, '-'), ',' order by certificate_label) as mc7
+  from public.candidate_certificates cc
+  join public.candidate_profiles cp on cp.id = cc.candidate_profile_id
+  where cp.profile_id = :'CANDMA' \gset
+select pg_temp.expect_error($q$select public.set_candidate_certificates('[{"label":"VCA","expires_at":"jutro"}]'::jsonb)$q$,
+  'invalid input syntax for type date', 'MC7b niepoprawna data odrzucona');
+select pg_temp.expect_error($q$select public.set_candidate_certificates('{"label":"VCA"}'::jsonb)$q$,
+  'VALIDATION_FAILED', 'MC7c obiekt zamiast tablicy odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mc7' = 'X=-,Y=-', 'MC7 tablica etykiet (stary klient) zapisuje bezterminowe certyfikaty');
+-- Kontrola ujemna: pracodawca nie wywoła RPC kandydata (ensure_candidate_profile).
+select set_config('app.current_uid', :'OWNMC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$select public.set_candidate_certificates('["VCA"]'::jsonb)$q$,
+  '', 'MC7d pracodawca nie zapisze certyfikatów kandydata');
+reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
