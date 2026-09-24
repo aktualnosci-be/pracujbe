@@ -119,7 +119,12 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   await page.getByRole('button', { name: 'Zakończ i opublikuj' }).click();
   await expect(page).toHaveURL(/\/pl\/candidate$/);
   // #376: H1 pulpitu (powitanie z `dashboard.greeting`), a nie dowolny nagłówek — także strony błędu.
-  const greeting = messages('pl').dashboard.greeting.split('{name}')[0]!.trim();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(new RegExp(`^${greeting}`));
+  // #334: bez imienia w profilu pulpit wita `dashboard.greetingNoName` („Witaj!”), nie „Witaj,”.
+  const dashboard = messages('pl').dashboard;
+  const greeting = dashboard.greeting.split('{name}')[0]!.trim();
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    new RegExp(`^(${escape(greeting)}|${escape(dashboard.greetingNoName)}$)`),
+  );
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 });
