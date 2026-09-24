@@ -23,7 +23,9 @@ export type AiInputSubject =
   /** Treść oferty napisana przez pracodawcę. */
   | 'job_offer_text'
   /** Pola profilu kandydata napisane przez kandydata. */
-  | 'candidate_profile_text';
+  | 'candidate_profile_text'
+  /** Tekst CV kandydata wgrany przez kandydata, po lokalnej minimalizacji (#487, #498). */
+  | 'candidate_cv_text';
 
 export interface AiFeature {
   /** Stały identyfikator — trafia do logu użycia (`src/lib/ai/usage-log.ts`). */
@@ -51,7 +53,7 @@ export interface AiFeature {
   usageLogged: boolean;
 }
 
-export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation'] as const;
+export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'cv_profile_import'] as const;
 export type AiFeatureId = (typeof AI_FEATURE_IDS)[number];
 
 export const AI_FEATURES: readonly AiFeature[] = [
@@ -86,6 +88,22 @@ export const AI_FEATURES: readonly AiFeature[] = [
       'Walidacja automatyczna i korekta ręczna po fakcie (PR #514) — do potwierdzenia po scaleniu, czy tłumaczenie jest publikowane bez przeglądu.',
     decidesAboutPerson: false,
     usageLogged: false,
+  },
+  {
+    id: 'cv_profile_import',
+    issues: ['#487', '#498'],
+    status: 'behind_flag',
+    callSites: ['src/lib/cv-import/extract.ts'],
+    enableFlag: 'AI_CV_IMPORT_ENABLED',
+    provider: 'anthropic',
+    inputs: ['candidate_cv_text'],
+    output:
+      'Propozycje pól profilu (zawody, umiejętności, języki, certyfikaty, lata doświadczenia) ze źródłem i niepewnością; nic nie jest zapisywane bez zatwierdzenia.',
+    humanInTheLoop: true,
+    humanStep:
+      'Kandydat widzi tekst przed wysłaniem i zaznacza każdą propozycję osobno (CvImportPanel); zapis tylko zaznaczonych przez applyCvProposals → apply_candidate_cv_proposals.',
+    decidesAboutPerson: false,
+    usageLogged: true,
   },
 ];
 

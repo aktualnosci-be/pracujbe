@@ -24,6 +24,7 @@ AI albo adres jego API), który nie ma wpisu w inwentarzu. Test ma kontrolę uje
 |---|---|---|---|---|---|---|
 | A1 | Import ogłoszenia (#465, #469) | na `main`, za flagą `AI_JOB_IMPORT_ENABLED` (domyślnie wyłączona) | zrzut ekranu albo tekst strony ogłoszenia osoby trzeciej, dostarczony przez rekrutera | pola kreatora oferty + lista pól „do sprawdzenia” | tak: wynik trafia tylko do szkicu (`save_job_draft`); akcja nie woła `publish_job`; publikuje rekruter | brak: kod nie dotyka aplikacji, profili, dopasowań ani widoczności kandydatów (test) |
 | A2 | Tłumaczenie treści (#31, #32) | otwarty PR #514; na tej gałęzi brak pliku | pola oferty (pracodawca) i pola profilu kandydata (kandydat) | tłumaczenie tych pól na inne języki portalu, po walidacji faktów | do potwierdzenia po scaleniu #514 (w inwentarzu: `humanInTheLoop: false`, korekta ręczna po fakcie) | do potwierdzenia po scaleniu #514 |
+| A3 | Import CV do profilu (#487, #498) | za flagą `AI_CV_IMPORT_ENABLED` (domyślnie wyłączona) | tekst CV wgrany przez kandydata, po lokalnej minimalizacji (bez referentów, kontaktów, danych osobowych i kategorii szczególnych; NISS/BIS/dokument = odmowa); kandydat widzi tekst przed wysłaniem | propozycje pól profilu ze źródłem i niepewnością | tak: każda propozycja zatwierdzana osobno przez kandydata; bez zatwierdzenia brak zapisu (`apply_candidate_cv_proposals`) | brak: wynik nie trafia do firm, dopasowania, rankingu ani statusu aplikacji; szczegóły i pytania prawne: `docs/legal-drafts/cv-ai-osoby-trzecie.md` |
 
 Dostawca obu funkcji: Anthropic (Messages API). Model domyślny: `claude-opus-5`, nadpisywalny
 zmienną środowiskową. Model nie ma narzędzi; odpowiedź ogranicza schemat JSON.
@@ -31,7 +32,7 @@ zmienną środowiskową. Model nie ma narzędzi; odpowiedź ogranicza schemat JS
 Log użycia: od tej zmiany import ogłoszenia (A1) zapisuje jeden wiersz JSON na wywołanie
 modelu (`src/lib/ai/usage-log.ts`): `type`, `at`, `feature`, `outcome`, `inputKind`, `model`,
 `durationMs`. Bez treści, promptu, odpowiedzi, adresu URL, nazwy pliku, identyfikatora
-użytkownika i firmy (test z kontrolą ujemną). A2 nie ma jeszcze logu (`usageLogged: false`).
+użytkownika i firmy (test z kontrolą ujemną). A2 nie ma jeszcze logu (`usageLogged: false`). A3 zapisuje ten sam wiersz (`feature: cv_profile_import`, `inputKind: text`).
 
 ### 1.2. Funkcje dotyczące kandydatów, które NIE używają modelu
 

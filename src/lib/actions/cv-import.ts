@@ -7,7 +7,9 @@ import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
 import { createServerClient } from '@/lib/supabase/server';
-import { cvImportProvider } from '@/lib/cv-import/config';
+import { withAiUsageLog } from '@/lib/ai/usage-log';
+import { ExtractorError } from '@/lib/ai-import/extract';
+import { cvImportModel, cvImportProvider } from '@/lib/cv-import/config';
 import { AnthropicCvExtractor, FixtureCvExtractor } from '@/lib/cv-import/extract';
 import { isDisallowedProposalText } from '@/lib/cv-import/minimize';
 import { CV_PROPOSAL_LIMITS } from '@/lib/cv-import/proposals';
@@ -115,7 +117,24 @@ export async function proposeFromCvAction(text: unknown): Promise<ProposeFromCvR
         if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
       }
     }
-    const extractor = provider === 'fixture' ? new FixtureCvExtractor() : new AnthropicCvExtractor();
+    // Log użycia bez treści i PII (#489, src/lib/ai/usage-log.ts): wynik, rodzaj wejścia, model, czas.
+    const base = provider === 'fixture' ? new FixtureCvExtractor() : new AnthropicCvExtractor();
+    const model = provider === 'fixture' ? 'fixture' : cvImportModel();
+    const extractor = {
+      extract: (minimized: string) =>
+        withAiUsageLog(
+          { feature: 'cv_profile_import' as const, inputKind: 'text' as const, model },
+          () => base.extract(minimized),
+          (r) =>
+            r.ok
+              ? 'ok'
+              : r.error instanceof ExtractorError && r.error.reason === 'refused'
+                ? 'refused'
+                : r.error instanceof ExtractorError && r.error.reason === 'rateLimited'
+                  ? 'rate_limited'
+                  : 'failed',
+        ),
+    };
     const result = await proposeFromCv(text, extractor);
     if (!result.ok) return result;
     return { ...result, ...(gate.userId ? {} : { demo: true }) };

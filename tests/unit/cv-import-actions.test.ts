@@ -131,6 +131,17 @@ describe('podgląd i propozycje', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it('log użycia AI: jeden wiersz bez treści CV (#489)', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    await proposeFromCvAction(CV_WITH_REFEREES);
+    const lines = info.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('"ai_usage"'));
+    info.mockRestore();
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]!)).toMatchObject({ feature: 'cv_profile_import', outcome: 'ok', inputKind: 'text' });
+    for (const v of Object.values(REFEREES)) expect(lines[0]).not.toContain(v);
+    expect(lines[0]).not.toContain('Magazynier');
+  });
+
   it('propozycje nie zapisują niczego w profilu', async () => {
     const res = await proposeFromCvAction(CV_WITH_REFEREES);
     expect(res).toMatchObject({ ok: true });
