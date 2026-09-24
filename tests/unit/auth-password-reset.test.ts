@@ -93,7 +93,7 @@ describe('updatePassword', () => {
 describe('signOut', () => {
   it('unieważnia sesję przez SDK i przekierowuje do logowania', async () => {
     expect(await outcome(() => signOut())).toEqual({ redirect: '/pl/logowanie' });
-    expect(api.signOut).toHaveBeenCalledWith({ headers: expect.any(Headers) });
+    expect(api.signOut).toHaveBeenCalledWith({ headers: expect.any(Headers), returnHeaders: true });
   });
 
   it('awaria bazy: cookie tej przeglądarki i tak usunięte, przekierowanie do logowania', async () => {

@@ -45,7 +45,7 @@ describe('signIn — cel po zalogowaniu', () => {
     const target = await redirectTarget(() => signIn(credentials, '/pl/oferty-pracy/murarz-bruksela-1002'));
     expect(target).toBe('/pl/oferty-pracy/murarz-bruksela-1002');
     // SDK dostaje wyłącznie zwalidowane dane i nagłówki bieżącego żądania.
-    expect(api.signInEmail).toHaveBeenCalledWith({ body: credentials, headers: expect.any(Headers) });
+    expect(api.signInEmail).toHaveBeenCalledWith({ body: credentials, headers: expect.any(Headers), returnHeaders: true });
   });
 
   it('bez next przekierowuje do panelu wg roli', async () => {
