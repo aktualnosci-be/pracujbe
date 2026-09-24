@@ -683,6 +683,24 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['employer', 'admin'],
     columns: { reason: 'moderation', restored_by: 'reference' },
   },
+  'public.moderation_appeals': {
+    activities: ['dsa-moderation'],
+    subjects: ['employer', 'reporter', 'admin'],
+    columns: {
+      appellant_id: 'reference',
+      appellant_locale: 'preferences',
+      grounds: 'correspondence',
+      outcome_reasoning: 'moderation',
+      decided_by: 'reference',
+    },
+    note: 'Uzasadnienia odwołania i rozpatrzenia są anonimizowane przez dsa_retention_run po końcu drogi odwołania i okresie retencji (#43).',
+  },
+  'public.dsa_retention_runs': {
+    activities: ['dsa-moderation'],
+    subjects: [],
+    columns: {},
+    note: 'Wyłącznie liczniki przebiegów retencji (bez danych osobowych).',
+  },
 
   // --- Rejestr naruszeń (#490, 0105) --------------------------------------------------------
   'public.breach_incidents': {

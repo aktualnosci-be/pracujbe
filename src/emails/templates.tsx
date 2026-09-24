@@ -158,6 +158,10 @@ export interface EmailDataMap {
     decisionReference: string;
     actionUrl: string;
   };
+  /** Odwołanie od decyzji moderacyjnej (#43) — przyjęcie i wynik, bez danych drugiej strony. */
+  appealReceived: AppealEmailData;
+  appealUpheld: AppealEmailData & { reasoning: string };
+  appealReversed: AppealEmailData & { reasoning: string };
   /** Zawiadomienie o naruszeniu danych (#490): temat i treść od administratora (tekst). */
   breachNotice: {
     recipientName?: string;
@@ -166,6 +170,18 @@ export interface EmailDataMap {
     incidentReference: string;
     actionUrl: string;
   };
+}
+
+/**
+ * Dane e-maili odwołania (#43). `subjectRef` = numer decyzji (autor) albo numer sprawy
+ * (zgłaszający) — ustalany w szablonie z tego, co przekazało RPC.
+ */
+interface AppealEmailData {
+  recipientName?: string | null;
+  appealReference: string;
+  decisionReference?: string | null;
+  caseNumber?: string | null;
+  actionUrl: string;
 }
 
 /** Wspólne dane uzasadnienia decyzji moderacyjnej (#42). */
@@ -786,6 +802,48 @@ export function ModerationRestoredEmail(props: EmailProps<'moderationRestored'>)
   );
 }
 
+function appealVars(props: AppealEmailData): Record<string, unknown> {
+  return { ...props, subjectRef: props.decisionReference ?? props.caseNumber ?? props.appealReference };
+}
+
+export function AppealReceivedEmail(props: EmailProps<'appealReceived'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="appealReceived"
+      vars={appealVars(props)}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+    />
+  );
+}
+
+export function AppealUpheldEmail(props: EmailProps<'appealUpheld'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="appealUpheld"
+      vars={appealVars(props)}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+      quote={props.reasoning}
+    />
+  );
+}
+
+export function AppealReversedEmail(props: EmailProps<'appealReversed'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="appealReversed"
+      vars={appealVars(props)}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+      quote={props.reasoning}
+    />
+  );
+}
+
 export function BreachNoticeEmail(props: EmailProps<'breachNotice'>): ReactElement {
   return (
     <EmailShell
@@ -839,6 +897,9 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   moderationJobRemoved: ModerationJobRemovedEmail,
   moderationCompanySuspended: ModerationCompanySuspendedEmail,
   moderationRestored: ModerationRestoredEmail,
+  appealReceived: AppealReceivedEmail,
+  appealUpheld: AppealUpheldEmail,
+  appealReversed: AppealReversedEmail,
   breachNotice: BreachNoticeEmail,
 };
 

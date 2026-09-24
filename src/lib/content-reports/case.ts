@@ -1,3 +1,4 @@
+import { isAppealStatus, parseAppealState, type AppealState, type AppealStatus } from '@/lib/admin/appeals';
 import { REPORT_CATEGORIES, REPORT_TARGETS, type ReportCategory, type ReportTarget } from '@/lib/validation/content-report';
 
 /**
@@ -27,7 +28,39 @@ export interface ReportCaseView {
   dueAt: string | null;
   /** Wynik decyzji moderacyjnej albo null (sprawa w toku). */
   outcome: ReportOutcome | null;
+  /** Droga odwołania od braku działań (#43); null = odwołanie nie dotyczy tej sprawy. */
+  appealState: AppealState | null;
+  /** Koniec terminu odwołania; null = termin jeszcze nie biegnie. */
+  appealDeadline: string | null;
+  /** Odwołanie zgłaszającego (bez danych autora treści). */
+  appeal: ReportCaseAppeal | null;
   events: ReportCaseEvent[];
+}
+
+export interface ReportCaseAppeal {
+  reference: string;
+  status: AppealStatus;
+  submittedAt: string;
+  dueAt: string | null;
+  decidedAt: string | null;
+  reasoning: string | null;
+}
+
+function parseAppeal(raw: unknown): ReportCaseAppeal | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const a = raw as Record<string, unknown>;
+  if (typeof a['reference'] !== 'string' || !isAppealStatus(a['status']) || typeof a['submittedAt'] !== 'string') {
+    return null;
+  }
+  const str = (v: unknown) => (typeof v === 'string' ? v : null);
+  return {
+    reference: a['reference'],
+    status: a['status'],
+    submittedAt: a['submittedAt'],
+    dueAt: str(a['dueAt']),
+    decidedAt: str(a['decidedAt']),
+    reasoning: str(a['reasoning']),
+  };
 }
 
 function oneOf<T extends string>(list: readonly T[], value: unknown): T | null {
@@ -59,6 +92,9 @@ export function parseReportCase(data: unknown): ReportCaseView | null {
     createdAt: r['createdAt'],
     dueAt: typeof r['dueAt'] === 'string' ? r['dueAt'] : null,
     outcome: oneOf(REPORT_OUTCOMES, r['outcome']),
+    appealState: parseAppealState(r['appealState']),
+    appealDeadline: typeof r['appealDeadline'] === 'string' ? r['appealDeadline'] : null,
+    appeal: parseAppeal(r['appeal']),
     events,
   };
 }
@@ -82,9 +118,30 @@ export function fixtureReportCase(): ReportCaseView {
     createdAt: '2026-09-20T10:00:00.000Z',
     dueAt: '2026-09-27T10:00:00.000Z',
     outcome: null,
+    appealState: null,
+    appealDeadline: null,
+    appeal: null,
     events: [
       { type: 'submitted', toStatus: 'open', at: '2026-09-20T10:00:00.000Z' },
       { type: 'status_changed', toStatus: 'reviewing', at: '2026-09-21T09:30:00.000Z' },
+    ],
+  };
+}
+
+/** Sprawa fixture rozstrzygnięta bez działań — z otwartą drogą odwołania (#43, E2E). */
+export const FIXTURE_DISMISSED_CASE_NUMBER = 'DSA-0000-0000-0000-1E2E';
+
+export function fixtureDismissedReportCase(): ReportCaseView {
+  return {
+    ...fixtureReportCase(),
+    caseNumber: FIXTURE_DISMISSED_CASE_NUMBER,
+    status: 'dismissed',
+    outcome: 'no_action',
+    appealState: 'OK',
+    appealDeadline: '2027-03-22T10:00:00.000Z',
+    events: [
+      { type: 'submitted', toStatus: 'open', at: '2026-09-20T10:00:00.000Z' },
+      { type: 'status_changed', toStatus: 'dismissed', at: '2026-09-22T10:00:00.000Z' },
     ],
   };
 }
