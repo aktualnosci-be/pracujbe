@@ -86,6 +86,16 @@ const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {
   suspended: 'itemCompanySuspended',
 };
 
+/**
+ * Decyzja moderacyjna (0095, #42): `system` z `data.kind = 'moderation'` — tytuł wg
+ * `data.decision` (wycofanie oferty, zawieszenie firmy, cofnięcie ograniczenia).
+ */
+const MODERATION_TITLE_KEY: Record<string, string> = {
+  job_removed: 'itemModerationJobRemoved',
+  company_suspended: 'itemModerationCompanySuspended',
+  restored: 'itemModerationRestored',
+};
+
 /** Tytuły powiadomień typu `system` rozróżniane po `entity_type` (#403). */
 const SYSTEM_TITLE_KEY_BY_ENTITY: Record<string, string> = {
   company_invitation: 'itemTeamInvitation',
@@ -104,6 +114,10 @@ export function titleKeyForType(type: string, data?: unknown, entityType = ''): 
   const d = asRecord(data);
   if (d['kind'] === 'company_status') {
     const key = COMPANY_STATUS_TITLE_KEY[asStr(d['status'])];
+    if (key) return key;
+  }
+  if (d['kind'] === 'moderation') {
+    const key = MODERATION_TITLE_KEY[asStr(d['decision'])];
     if (key) return key;
   }
   return TITLE_KEY_BY_TYPE[type] ?? TITLE_KEY_BY_TYPE['system']!;

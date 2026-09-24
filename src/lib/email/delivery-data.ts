@@ -49,7 +49,14 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
     case 'companyVerified':
     case 'companyRejected':
     case 'companySuspended':
+    case 'moderationJobRemoved':
+    case 'moderationCompanySuspended':
+    case 'moderationRestored':
       return '/employer/firma';
+    case 'reportDecisionActioned':
+    case 'reportDecisionNoAction':
+      // #42: bez kodu dostępu (baza zna tylko jego skrót) — zgłaszający wpisuje go sam.
+      return '/zglos-tresc/sprawa';
     case 'teamInvitation':
       return '/employer/zespol';
     case 'jobMatch':

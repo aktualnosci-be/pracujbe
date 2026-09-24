@@ -2,6 +2,16 @@
 
 import { createServerClient } from '@/lib/supabase/server';
 import { companyReasonError, companyStatusNeedsReason } from '@/lib/admin/company-review';
+import {
+  decisionRestricts,
+  isModerationDecision,
+  moderationDecisionError,
+  moderationFieldFromDbMessage,
+  restoreReasonError,
+  type ModerationDecisionInput,
+  type ModerationField,
+  type ModerationFieldError,
+} from '@/lib/admin/moderation';
 import { isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
@@ -14,7 +24,11 @@ import { companyVatSource } from '@/lib/vies/state';
  *
  *   - `setCompanyStatus` — zmienia status weryfikacji firmy przez RPC `admin_set_company_status`
  *     (odrzucenie/zawieszenie z wymaganym uzasadnieniem — 0084, #310).
- *   - `resolveReport`    — rozstrzyga zgłoszenie przez RPC `admin_resolve_report`.
+ *   - `resolveReport`    — rozstrzyga zgłoszenie przez RPC `admin_resolve_report` (sprawę DSA
+ *     tylko bierze do analizy — rozstrzyga ją decyzja).
+ *   - `decideReport`     — decyzja moderacyjna w sprawie DSA (#42): RPC `admin_decide_report`
+ *     (decyzja + skutek + stan sprawy + audyt + powiadomienia w jednej transakcji, 0095).
+ *   - `restoreModeration` — cofnięcie ograniczenia treści (RPC `admin_restore_moderation`).
  *   - `checkCompanyVies` — ręczne sprawdzenie numeru VAT firmy w VIES (#92), zapis wyniku
  *     rozstrzygającego przez RPC `admin_record_vies_check` (0088).
  *
@@ -40,6 +54,7 @@ const REPORT_STATUSES = ['open', 'reviewing', 'resolved', 'dismissed'] as const;
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   if (m.includes('STALE_STATE')) return 'STALE_STATE';
+  if (m.includes('MODERATION_LOCKED')) return 'MODERATION_LOCKED';
   if (m.includes('INVALID_TRANSITION')) return 'INVALID_TRANSITION';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
   if (m.includes('VALIDATION_FAILED') || m.includes('invalid input value')) return 'VALIDATION_FAILED';
@@ -145,6 +160,108 @@ export async function resolveReport(
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'admin.resolveReport' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+export type ModerationActionResult =
+  | { ok: true; demo?: boolean }
+  | {
+      ok: false;
+      error: ErrorCode;
+      field?: ModerationField | 'reason';
+      fieldError?: ModerationFieldError;
+    };
+
+/**
+ * Decyzja moderacyjna w sprawie DSA (#42). Walidacja jak w bazie (`moderationDecisionError`),
+ * `expectedStatus` = status widziany przez admina (CAS → `STALE_STATE`). Całość wykonuje jedno
+ * RPC w jednej transakcji — akcja nie zapisuje niczego sama.
+ */
+export async function decideReport(
+  reportId: string,
+  expectedStatus: string,
+  targetType: string,
+  input: ModerationDecisionInput,
+): Promise<ModerationActionResult> {
+  if (typeof reportId !== 'string' || !(REPORT_STATUSES as readonly string[]).includes(expectedStatus)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  const invalid = moderationDecisionError(input, targetType);
+  if (invalid) {
+    return { ok: false, error: 'VALIDATION_FAILED', field: invalid.field, fieldError: invalid.error };
+  }
+  const decision = input.decision;
+  if (!isModerationDecision(decision)) return { ok: false, error: 'VALIDATION_FAILED' };
+  const restricts = decisionRestricts(decision);
+
+  // Tryb DEMO (identyfikatory `demo-*`) — bez zapisu; poza nim tylko UUID.
+  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!UUID_RE.test(reportId)) return { ok: false, error: 'VALIDATION_FAILED' };
+
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const { error } = await supabase.rpc('admin_decide_report', {
+      p_report_id: reportId,
+      p_expected_status: expectedStatus,
+      p_decision: decision,
+      p_facts: input.facts.trim(),
+      p_ground_type: restricts ? (input.groundType ?? null) : null,
+      p_ground_reference: restricts ? (input.groundReference ?? '').trim() : null,
+      p_automated_detection: input.automatedDetection === true,
+    });
+    if (error) {
+      const message = error.message ?? '';
+      const field = message.includes('VALIDATION_FAILED') ? moderationFieldFromDbMessage(message) : null;
+      if (field) return { ok: false, error: 'VALIDATION_FAILED', field: field.field, fieldError: field.error };
+      return { ok: false, error: mapPgError(message) };
+    }
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'admin.decideReport' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/** Cofnięcie ograniczenia treści (tylko admin, uzasadnienie wymagane — trafia do autora). */
+export async function restoreModeration(
+  decisionId: string,
+  reason: string,
+): Promise<ModerationActionResult> {
+  if (typeof decisionId !== 'string') return { ok: false, error: 'VALIDATION_FAILED' };
+  const reasonError = restoreReasonError(reason);
+  if (reasonError) {
+    return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', fieldError: reasonError };
+  }
+
+  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!UUID_RE.test(decisionId)) return { ok: false, error: 'VALIDATION_FAILED' };
+
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const { error } = await supabase.rpc('admin_restore_moderation', {
+      p_decision_id: decisionId,
+      p_reason: reason.trim(),
+    });
+    if (error) {
+      const message = error.message ?? '';
+      const field = message.includes('VALIDATION_FAILED') ? moderationFieldFromDbMessage(message) : null;
+      if (field) return { ok: false, error: 'VALIDATION_FAILED', field: field.field, fieldError: field.error };
+      return { ok: false, error: mapPgError(message) };
+    }
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'admin.restoreModeration' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

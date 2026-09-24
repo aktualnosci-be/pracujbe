@@ -155,7 +155,7 @@ formularza (`/zglos-tresc`, także bez konta) to wiersz `public.reports` z `kind
   `service_role` — retencja kolejki e-mail pozostaje osobnym zadaniem.
 
 Wartości tymczasowe do potwierdzenia w mapie obowiązków DSA (#40): katalog kategorii, termin
-`due_at` = 7 dni, opcjonalne imię. Decyzje moderacyjne i egzekucja — #42, odwołania — #43.
+`due_at` = 7 dni, opcjonalne imię. Decyzje moderacyjne i egzekucja — #42 (niżej), odwołania — #43.
 Dowód: `supabase/tests/rls.sql` sekcja DSA41 (m.in. wyścig przez dblink, kontrole ujemne).
 
 ### Rollback
@@ -194,3 +194,61 @@ grant select on public.reports to anon;
 ```
 
 Kolejność: trigger `reports_notice_immutable` musi zniknąć przed usunięciem wierszy DSA.
+
+## Decyzja moderacyjna i egzekucja w sprawie DSA
+
+Migracja `supabase/migrations/0095_dsa_moderation.sql` (#42). Sprawę `dsa_notice` rozstrzyga
+wyłącznie `admin_decide_report(report, expected_status, decision, facts, ground_type,
+ground_reference, automated_detection)`. W jednej transakcji zapisuje decyzję, wykonuje skutek,
+zamyka sprawę, dopisuje historię i audyt oraz kolejkuje powiadomienia. Błąd którejkolwiek
+części cofa całość, a sprawa zostaje otwarta.
+
+- **Decyzja (`moderation_decisions`, niezmienna).** Rodzaj: `no_action`, `job_removed`
+  (oferta) albo `company_suspended` (firma wraz z jej ofertami). Zapisuje fakty (20–1000
+  znaków), podstawę (`terms`/`law`) i wskazanie postanowienia (wymagane przy ograniczeniu),
+  udział automatyzacji (`automated_detection`; `automated_decision` zawsze `false`), autora
+  decyzji (`decided_by`), stan treści sprzed decyzji i numer `DEC-XXXX-XXXX-XXXX` do odwołań.
+  Jedna decyzja na sprawę. Tabela nie ma grantów dla klientów.
+- **Skutek i blokada.** `job_removed` → oferta `closed` + `jobs.moderation_decision_id`;
+  `company_suspended` → firma `suspended` + `companies.moderation_decision_id`. Póki blokada
+  trwa, statusu nie zmieni żadna rola (`MODERATION_LOCKED`): ani `set_job_status` pracodawcy,
+  ani `admin_set_company_status`, ani zapis bezpośredni. Blokadę ustawia i zdejmuje tylko
+  decyzja albo przywrócenie.
+- **Spójność przy COMMIT.** Odroczony constraint trigger `trg_moderation_effect_check`
+  odrzuca decyzję, dla której treść nie jest ograniczona albo sprawa nie jest zamknięta tą
+  decyzją (`MODERATION_EFFECT_MISSING`). Działa także przy zapisie z pominięciem RPC.
+- **Sam status nie wystarcza.** Trigger `reports_decision_guard`: sprawę DSA zamyka
+  (`resolved`/`dismissed`) tylko decyzja (`reports.decision_id`), zgodnie z jej rodzajem.
+  `admin_resolve_report` może jedynie wziąć sprawę do analizy. Rozstrzygniętej sprawy nie
+  otwiera się zmianą statusu (odwołania — #43).
+- **Równoległe decyzje.** Sprawa `FOR UPDATE` + `expected_status` (`STALE_STATE`), treść
+  `FOR UPDATE`. Druga decyzja o już ograniczonej treści nie zmienia blokady i dziedziczy stan
+  sprzed pierwszego ograniczenia.
+- **Powiadomienia (outbox, Invariant #1).** Aktywni właściciele firmy: in-app
+  (`data.kind = 'moderation'`) i e-mail `moderationJobRemoved`/`moderationCompanySuspended`
+  z uzasadnieniem w ich języku. Zgłaszający: `reportDecisionActioned`/`reportDecisionNoAction`
+  z samym wynikiem, bez faktów i danych autora (profil → `resolve_recipient_locale`, gość →
+  język zgłoszenia). `get_report_case` zwraca `outcome` bez uzasadnienia.
+- **Przywrócenie.** `admin_restore_moderation(decision, reason)`: niezmienny wpis
+  `moderation_restorations`, zdjęcie blokady albo przekazanie jej innej aktywnej decyzji
+  o tej samej treści, powrót do stanu sprzed decyzji (oferta `active`/`paused` tylko przed
+  terminem), historia, audyt `moderation.restored`, e-mail `moderationRestored`.
+- **Kolejka przeglądu.** `reports.review_priority` (0–3) i `review_flag` ustawia tylko
+  `flag_report_for_review` (`service_role`, np. automat). Flaga niczego nie rozstrzyga.
+- **Uzasadnienie dla autora.** `get_company_moderation_decisions(company)` — aktywny
+  owner/admin firmy (panel `/employer/firma`), bez tożsamości moderatora.
+
+Dowód: `supabase/tests/rls.sql` sekcja MOD42. Obejmuje regresję z kontrolą ujemną (bez
+strażnika sprawa „rozstrzygnięta”, a oferta publiczna), wstrzykniętą awarię egzekucji, wyścig
+dwóch decyzji przez dblink, blokadę dla każdej roli oraz przywrócenie z przekazaniem blokady.
+
+### Rollback
+
+Decyzje są dowodem — przed rollbackiem wyeksportuj `moderation_decisions` i
+`moderation_restorations`. Najpierw wycofaj kod aplikacji (dialog decyzji, sekcja w panelu
+firmy), następnie w nowej migracji zdejmij blokady (z wyłączonymi triggerami
+`trg_guard_job_moderation_lock`/`trg_guard_company_moderation_lock`), usuń funkcje
+`admin_decide_report`, `admin_restore_moderation`, `flag_report_for_review`,
+`get_company_moderation_decisions`, triggery i funkcje strażników, tabele
+`moderation_restorations` i `moderation_decisions`, nowe kolumny `jobs`/`companies`/`reports`/
+`report_events`. Na koniec przywróć check `report_events.event_type` i `get_report_case` z 0094.

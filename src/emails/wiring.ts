@@ -24,6 +24,11 @@ export const QUEUED_EMAIL_TYPES = [
   'teamInvitation', // invite_company_member (0086)
   'jobMatch', // process_saved_search_alerts (0092) — digest zapisanego wyszukiwania
   'reportReceived', // submit_content_report (0094) — enqueue_email_to_address
+  'reportDecisionActioned', // admin_decide_report (0095) → ograniczenie treści — do zgłaszającego
+  'reportDecisionNoAction', // admin_decide_report (0095) → brak działań — do zgłaszającego
+  'moderationJobRemoved', // admin_decide_report (0095) → uzasadnienie dla właściciela firmy
+  'moderationCompanySuspended', // admin_decide_report (0095) → uzasadnienie dla właściciela firmy
+  'moderationRestored', // admin_restore_moderation (0095)
 ] as const satisfies readonly EmailType[];
 
 /** E-maile konta — wysyłane przez warstwę Auth (`src/lib/email/auth-email.ts`). */

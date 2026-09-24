@@ -32,6 +32,7 @@ import {
 } from '@/components/admin/admin-styles';
 import { cn } from '@/lib/utils';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
+import { ModerationDecisionActions } from '@/components/admin/ModerationDecisionActions';
 import { ReportActions } from '@/components/admin/ReportActions';
 
 /**
@@ -41,7 +42,9 @@ import { ReportActions } from '@/components/admin/ReportActions';
  * celem zgłoszenia (nazwa/tytuł + link albo podgląd wiadomości; usunięty cel ma jawny stan),
  * powodem ze słownika i18n (bez surowych kodów — Invariant #2), stronicowaniem kursorem (#418)
  * i datami w Europe/Brussels (#421). Rozstrzygnięcie przez ReportActions (dialog potwierdzenia
- * #422 → RPC `admin_resolve_report` z macierzą przejść i audytem po stronie DB). Odczyt
+ * #422 → RPC `admin_resolve_report` z macierzą przejść i audytem po stronie DB). Sprawę DSA
+ * rozstrzyga decyzja moderacyjna z uzasadnieniem i skutkiem (ModerationDecisionActions → RPC
+ * `admin_decide_report`, #42); karta pokazuje decyzję, przywrócenie i priorytet przeglądu. Odczyt
  * service-rolem po potwierdzeniu roli admina. NOINDEX + `force-dynamic` (z layoutu).
  */
 
@@ -72,6 +75,27 @@ const KIND_LABEL: Record<string, string> = {
   all: 'filterKindAll',
   dsa_notice: 'kindDsa',
   quality: 'kindQuality',
+};
+
+/** Rozstrzygnięcie decyzji moderacyjnej (#42). */
+const DECISION_LABEL: Record<string, string> = {
+  no_action: 'decisionNoAction',
+  job_removed: 'decisionJobRemoved',
+  company_suspended: 'decisionCompanySuspended',
+};
+
+/** Podstawa ograniczenia (#42). */
+const GROUND_LABEL: Record<string, string> = {
+  terms: 'decisionGroundTerms',
+  law: 'decisionGroundLaw',
+};
+
+/** Zdarzenia historii sprawy poza zmianą statusu (#42). */
+const EVENT_LABEL: Record<string, string> = {
+  submitted: 'caseEventSubmitted',
+  decision: 'caseEventDecision',
+  restored: 'caseEventRestored',
+  flagged: 'caseEventFlagged',
 };
 
 /** Etykieta statusu w historii sprawy. */
@@ -287,17 +311,66 @@ export default async function AdminReportsPage({
                                   {report.dsa.events.map((event, index) => (
                                     <li key={`${event.at}-${index}`}>
                                       <time dateTime={event.at}>{formatDate(event.at)}</time>{' '}
-                                      {event.type === 'submitted'
-                                        ? t('caseEventSubmitted')
-                                        : t('caseEventStatus', {
+                                      {event.type === 'status_changed'
+                                        ? t('caseEventStatus', {
                                             status: t(STATUS_LABEL[event.toStatus ?? ''] ?? 'statusUnknown'),
-                                          })}
+                                          })
+                                        : t(EVENT_LABEL[event.type] ?? 'caseEventSubmitted')}
                                     </li>
                                   ))}
                                 </ol>
                               </div>
                             ) : null}
                           </div>
+                        ) : null}
+                        {report.dsa?.decision ? (
+                          <div className="space-y-1 rounded-[14px] border border-border bg-soft px-4 py-3 text-[13px]">
+                            <p className="font-medium text-foreground">
+                              {t('decisionSummaryTitle', { reference: report.dsa.decision.reference })}
+                              {': '}
+                              {t(DECISION_LABEL[report.dsa.decision.decision] ?? 'decisionNoAction')}
+                            </p>
+                            <p className="break-words text-foreground">{report.dsa.decision.facts}</p>
+                            {report.dsa.decision.groundType && report.dsa.decision.groundReference ? (
+                              <p className="break-words text-muted-foreground">
+                                {t('decisionSummaryGround', {
+                                  ground: t(GROUND_LABEL[report.dsa.decision.groundType] ?? 'decisionGroundTerms'),
+                                  reference: report.dsa.decision.groundReference,
+                                })}
+                              </p>
+                            ) : null}
+                            <p className="text-muted-foreground">
+                              {t(
+                                report.dsa.decision.automatedDetection
+                                  ? 'decisionSummaryAutomated'
+                                  : 'decisionSummaryManual',
+                              )}{' '}
+                              <span aria-hidden="true">·</span>{' '}
+                              <time dateTime={report.dsa.decision.decidedAt}>
+                                {formatDate(report.dsa.decision.decidedAt)}
+                              </time>
+                            </p>
+                            {report.dsa.decision.restoredAt ? (
+                              <p className="break-words text-muted-foreground">
+                                {t('decisionSummaryRestored', {
+                                  date: formatDate(report.dsa.decision.restoredAt),
+                                  reason: report.dsa.decision.restoreReason ?? '',
+                                })}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {report.dsa && (report.dsa.reviewPriority > 0 || report.dsa.reviewFlag) ? (
+                          <p className={ROW_META}>
+                            {t('casePriority', { priority: report.dsa.reviewPriority })}
+                            {report.dsa.reviewFlag ? (
+                              <>
+                                {' '}
+                                <span aria-hidden="true">·</span>{' '}
+                                {t('caseFlag', { flag: report.dsa.reviewFlag })}
+                              </>
+                            ) : null}
+                          </p>
                         ) : null}
                         {report.dsa ? (
                           <p className={ROW_META}>
@@ -335,13 +408,26 @@ export default async function AdminReportsPage({
                           ) : null}
                         </div>
                       </div>
-                      <ReportActions
-                        reportId={report.id}
-                        status={report.status}
-                        targetTypeLabel={typeLabel}
-                        targetLabel={targetText(report)}
-                        reasonLabel={reasonLabel}
-                      />
+                      {report.dsa ? (
+                        <ModerationDecisionActions
+                          reportId={report.id}
+                          status={report.status}
+                          caseNumber={report.dsa.caseNumber}
+                          targetType={report.targetType}
+                          targetTypeLabel={typeLabel}
+                          targetLabel={targetText(report)}
+                          reasonLabel={reasonLabel}
+                          decision={report.dsa.decision}
+                        />
+                      ) : (
+                        <ReportActions
+                          reportId={report.id}
+                          status={report.status}
+                          targetTypeLabel={typeLabel}
+                          targetLabel={targetText(report)}
+                          reasonLabel={reasonLabel}
+                        />
+                      )}
                     </div>
                   </li>
                 );

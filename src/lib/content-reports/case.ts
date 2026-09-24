@@ -14,6 +14,10 @@ export interface ReportCaseEvent {
   at: string;
 }
 
+/** Wynik rozstrzygniętej sprawy (#42) — bez uzasadnienia (zakres bezpieczny dla zgłaszającego). */
+export const REPORT_OUTCOMES = ['action_taken', 'no_action'] as const;
+export type ReportOutcome = (typeof REPORT_OUTCOMES)[number];
+
 export interface ReportCaseView {
   caseNumber: string;
   status: ReportStatus;
@@ -21,6 +25,8 @@ export interface ReportCaseView {
   category: ReportCategory;
   createdAt: string;
   dueAt: string | null;
+  /** Wynik decyzji moderacyjnej albo null (sprawa w toku). */
+  outcome: ReportOutcome | null;
   events: ReportCaseEvent[];
 }
 
@@ -52,6 +58,7 @@ export function parseReportCase(data: unknown): ReportCaseView | null {
     category,
     createdAt: r['createdAt'],
     dueAt: typeof r['dueAt'] === 'string' ? r['dueAt'] : null,
+    outcome: oneOf(REPORT_OUTCOMES, r['outcome']),
     events,
   };
 }
@@ -74,6 +81,7 @@ export function fixtureReportCase(): ReportCaseView {
     category: 'fraud',
     createdAt: '2026-09-20T10:00:00.000Z',
     dueAt: '2026-09-27T10:00:00.000Z',
+    outcome: null,
     events: [
       { type: 'submitted', toStatus: 'open', at: '2026-09-20T10:00:00.000Z' },
       { type: 'status_changed', toStatus: 'reviewing', at: '2026-09-21T09:30:00.000Z' },

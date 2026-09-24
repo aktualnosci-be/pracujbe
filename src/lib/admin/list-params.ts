@@ -203,6 +203,8 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'company.reverification_requested': 'auditActionCompanyReverification',
   'company.vies_checked': 'auditActionCompanyVies',
   'report.resolved': 'auditActionReportStatus',
+  'moderation.decided': 'auditActionModerationDecided',
+  'moderation.restored': 'auditActionModerationRestored',
   'application.status_changed': 'auditActionApplicationStatus',
   'offer.sent': 'auditActionOfferSent',
   'offer.status_changed': 'auditActionOfferStatus',
