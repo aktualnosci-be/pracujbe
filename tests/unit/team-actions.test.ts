@@ -181,7 +181,7 @@ describe('createAdditionalCompany (#403)', () => {
   });
 });
 
-describe('hierarchia ról w UI = hierarchia w bazie (0087)', () => {
+describe('hierarchia ról w UI = hierarchia w bazie (0086)', () => {
   it('owner zarządza wszystkimi, admin tylko recruiter/member, reszta niczym', () => {
     for (const target of ['owner', 'admin', 'recruiter', 'member']) {
       expect(canManageRole('owner', target)).toBe(true);
@@ -198,7 +198,7 @@ describe('hierarchia ról w UI = hierarchia w bazie (0087)', () => {
   });
 
   it('migracja definiuje tę samą regułę dla admina', () => {
-    const sql = readFileSync(resolve(process.cwd(), 'supabase/migrations/0087_company_team.sql'), 'utf8');
+    const sql = readFileSync(resolve(process.cwd(), 'supabase/migrations/0086_company_team.sql'), 'utf8');
     expect(sql).toMatch(/cm\.role = 'owner' or \(cm\.role = 'admin' and p_role in \('recruiter', 'member'\)\)/);
   });
 

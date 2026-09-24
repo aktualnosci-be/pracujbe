@@ -18,7 +18,7 @@ import {
 } from '@/lib/validation/team';
 
 /**
- * Server Actions zespołu firmy (#403). Zapis wyłącznie przez RPC z 0087 pod SESJĄ
+ * Server Actions zespołu firmy (#403). Zapis wyłącznie przez RPC z 0086 pod SESJĄ
  * użytkownika (RLS, nigdy service-role). Autoryzację i hierarchię ról egzekwuje baza;
  * akcje walidują wejście (Zod), dokładają limit per IP i mapują błędy na stabilne kody
  * (Invariant #8). Bez env → tryb demo (`{ ok: true, demo: true }`).

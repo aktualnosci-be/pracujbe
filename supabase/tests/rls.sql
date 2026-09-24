@@ -3138,7 +3138,7 @@ drop trigger ob142_fail on public.candidate_certificates;
 drop function public.ob142_inject_failure();
 
 -- ============================================================================
--- TM403. Zespół firmy i kolejna firma (0087, #403): zaproszenia po e-mailu,
+-- TM403. Zespół firmy i kolejna firma (0086, #403): zaproszenia po e-mailu,
 -- hierarchia ról, ostatni owner, izolacja firm, kolejna firma z limitem.
 -- ============================================================================
 \set TMO 'e8700000-0000-0000-0000-0000000000a1'

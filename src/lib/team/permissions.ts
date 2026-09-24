@@ -1,7 +1,7 @@
 import type { MemberRole } from '@/lib/validation/team';
 
 /**
- * Lustro hierarchii ról z bazy (0087 `can_manage_company_role`) — wyłącznie do UI
+ * Lustro hierarchii ról z bazy (0086 `can_manage_company_role`) — wyłącznie do UI
  * (ukrywanie niedostępnych akcji). Granicą zaufania pozostaje baza.
  *
  * owner zarządza każdą rolą; admin — tylko recruiter/member; pozostali — niczym.

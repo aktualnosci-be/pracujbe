@@ -5,7 +5,7 @@ import { z } from 'zod/v3';
  * Komunikaty to klucze i18n (`team.error.*`).
  *
  * Rola `owner` nie jest zapraszana — właścicielem zostaje się przez awans istniejącego
- * członka (transfer własności). Hierarchię uprawnień egzekwuje baza (0087).
+ * członka (transfer własności). Hierarchię uprawnień egzekwuje baza (0086).
  */
 
 export const INVITABLE_ROLES = ['admin', 'recruiter', 'member'] as const;

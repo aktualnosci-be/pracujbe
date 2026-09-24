@@ -7,7 +7,7 @@ import { captureError } from '@/lib/sentry';
 import { canManageTeam } from '@/lib/team/permissions';
 
 /**
- * Dane strony zespołu firmy (#403) — odczyt przez RPC z 0087 pod SESJĄ użytkownika.
+ * Dane strony zespołu firmy (#403) — odczyt przez RPC z 0086 pod SESJĄ użytkownika.
  *
  * Wynik jawny: `ok` (także tryb demo bez env, `demo: true`) albo `error` — UI nigdy nie
  * pokazuje pustego zespołu zamiast błędu. Lista członków i zaproszeń firmy tylko dla

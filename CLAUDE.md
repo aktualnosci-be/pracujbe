@@ -643,7 +643,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Otwarte:** powód odrzucenia i powiadomienie admina (#310), strona kontaktu (#61),
   orientacyjny czas weryfikacji (decyzja produktowa).
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu
-- [x] Zespół firmy i kolejna firma (#403, migracja `0087`): `/employer/zespol` — lista członków
+- [x] Zespół firmy i kolejna firma (#403, migracja `0086`): `/employer/zespol` — lista członków
   (owner/admin; RPC `get_company_team`), zmiana roli (`set_company_member_role`), odebranie/
   przywrócenie dostępu (`set_company_member_active`, z potwierdzeniem), zaproszenie po e-mailu
   (`invite_company_member`: rola admin/recruiter/member, ważne 14 dni, idempotentne, limit 50

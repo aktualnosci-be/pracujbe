@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0087 — zespół firmy i kolejna firma (#403).
+-- 0086 — zespół firmy i kolejna firma (#403).
 --
 -- 1. `company_invitations` — zaproszenia do zespołu firmy po adresie e-mail (rola
 --    admin/recruiter/member; owner nigdy przez zaproszenie). Tabela bez grantów dla

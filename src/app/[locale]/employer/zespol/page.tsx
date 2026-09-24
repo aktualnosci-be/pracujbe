@@ -12,7 +12,7 @@ import { roleDescKey, roleLabelKey } from '@/components/employer/team/role-keys'
  *
  * owner/admin: lista członków (zmiana roli, odebranie/przywrócenie dostępu), zaproszenie po
  * e-mailu, oczekujące zaproszenia. recruiter/member: opis ich roli i informacja, kto zarządza
- * zespołem. Każdy widzi zaproszenia skierowane do siebie. Hierarchię egzekwuje baza (0087).
+ * zespołem. Każdy widzi zaproszenia skierowane do siebie. Hierarchię egzekwuje baza (0086).
  *
  * NOINDEX (panel) + `force-dynamic` (dane z sesji). Błąd odczytu → komunikat z ponowieniem,
  * nigdy pusta lista zamiast danych. Bez env → dane demo z oznaczeniem.

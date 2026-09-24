@@ -31,7 +31,7 @@ import {
  *                        Statusu nie ustawia; zmiana nazwy/VAT zweryfikowanej firmy przywraca
  *                        w bazie status `pending` (trigger `protect_company_verification`, 0072).
  *   - `createAdditionalCompany` — KOLEJNA firma zalogowanego pracodawcy (#403) — RPC
- *                        `create_additional_company` (0087: owner, limit 5 firm, audyt,
+ *                        `create_additional_company` (0086: owner, limit 5 firm, audyt,
  *                        idempotentne dla podwójnego kliknięcia); nowa firma staje się aktywna.
  *   - `requestCompanyReverification` — odrzucona firma wraca do kolejki weryfikacji admina
  *                        (RPC `request_company_reverification`, 0072).
