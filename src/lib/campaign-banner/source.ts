@@ -12,7 +12,7 @@ import { cleanBannerText } from './text';
 import type { BannerJob, BannerTexts } from './render';
 
 /**
- * Dane baneru kampanii (#175) z zaufanego odczytu `get_managed_campaign_job` (0105) pod sesją
+ * Dane baneru kampanii (#175) z zaufanego odczytu `get_managed_campaign_job` (0099) pod sesją
  * wywołującego: baza zwraca wiersz tylko dla aktywnej, niewygasłej, niedemonstracyjnej oferty
  * zweryfikowanej firmy i tylko recruiter+ tej firmy albo administratorowi. Wszystkie inne
  * przypadki (także obca oferta) = `unavailable` — jednakowo, bez ujawniania powodu.

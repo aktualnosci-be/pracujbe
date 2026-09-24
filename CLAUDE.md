@@ -1045,10 +1045,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   superusera; `scripts/lib/job-post-source.mjs`), bez JSON od operatora; renderer przyjmuje tylko
   obiekt ze źródła. Stawka tylko gdy podana, tytuł 2×77/3×60 px albo błąd przed zapisem.
   Instrukcja: `docs/design/people-passport/JOB-POST-EXPORT.md`, test `job-post-export`.
-  Źródło danych (#186, migracja `0105`): `get_campaign_job` (anon) — tylko pola grafiki i tylko
+  Źródło danych (#186, migracja `0099`): `get_campaign_job` (anon) — tylko pola grafiki i tylko
   oferta `active`, nieusunięta, niewygasła, `is_demo = false` (oferta i firma), firma `verified`;
   inaczej jednakowy brak danych. Dowód: `rls.sql` sekcja CJ186 (każdy przypadek + kontrola ujemna
-  po zdjęciu każdego filtra), rollback `supabase/rollback/0105_…down.sql` (test w `test-rls.sh`).
+  po zdjęciu każdego filtra), rollback `supabase/rollback/0099_…down.sql` (test w `test-rls.sh`).
   Baner kampanii z oferty w panelu (#175): `/employer/oferty/[id]/baner` (noindex) + `GET
   /api/employer/jobs/[id]/banner` — formaty 1200×300, 300×250, 300×600, język PL/NL/FR/EN, SVG
   i PNG (kanwa w przeglądarce); dane z `get_managed_campaign_job` (recruiter+ firmy oferty albo

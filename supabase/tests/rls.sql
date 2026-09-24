@@ -6319,7 +6319,7 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
 -- po tym pliku (psql -f, bo \ir ścieżki rollbacku nie działa przy wejściu ze stdin).
 
 -- ============================================================================
--- CJ186. Zaufany odczyt oferty do materiałów kampanii (#186, #175, 0105): tylko aktywna,
+-- CJ186. Zaufany odczyt oferty do materiałów kampanii (#186, #175, 0099): tylko aktywna,
 -- niedemonstracyjna, niewygasła oferta zweryfikowanej firmy; wąskie pola bez PII; wejście
 -- panelu tylko dla recruiter+ firmy oferty lub admina; kontrola ujemna po zdjęciu filtra.
 -- ============================================================================
@@ -6397,7 +6397,7 @@ select pg_temp.expect_error('select * from public.campaign_job_source(null, ''cj
   'permission denied', 'CJ186-2e gość nie woła źródła bez filtrów uprawnień');
 select pg_temp.expect_error('select * from public.get_managed_campaign_job(''' || :'CJ1' || ''', ''pl'')',
   'permission denied', 'CJ186-2f gość nie woła wejścia panelu');
--- Dotychczasowe publiczne RPC pokazuje ofertę demo — to jest luka, którą zamyka 0105.
+-- Dotychczasowe publiczne RPC pokazuje ofertę demo — to jest luka, którą zamyka 0099.
 select pg_temp.assert((select count(*) from public.get_public_job('cj-demo', 'pl')) = 1,
   'CJ186-2g get_public_job nie filtruje is_demo (dlatego osobne źródło)');
 reset role;

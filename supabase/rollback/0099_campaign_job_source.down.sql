@@ -1,10 +1,10 @@
 -- =============================================================================
--- Rollback 0105 — zaufany odczyt oferty do materiałów kampanii (#186, #175).
+-- Rollback 0099 — zaufany odczyt oferty do materiałów kampanii (#186, #175).
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
 -- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
 -- (supabase/tests/campaign-job-rollback.sql wykonuje go w transakcji i cofa).
 --
--- Usuwa tylko funkcje 0105; tabele i dane bez zmian. Po wycofaniu eksportery
+-- Usuwa tylko funkcje 0099; tabele i dane bez zmian. Po wycofaniu eksportery
 -- (scripts/export-job-post.mjs, /api/employer/jobs/[id]/banner) zwracają „oferta niedostępna”,
 -- więc wycofanie należy połączyć z wycofaniem kodu z tego samego PR.
 -- =============================================================================
