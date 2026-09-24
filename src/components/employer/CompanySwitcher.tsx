@@ -40,6 +40,10 @@ function initialsOf(name: string): string {
   return letters || '•';
 }
 
+/** `.people .side-person strong` — 14 px / 700, margines 12/4 px; `span` — 12 px, muted. */
+const SIDE_PERSON_NAME = 'mb-1 mt-3 block break-words text-sm font-bold text-foreground';
+const SIDE_PERSON_ROLE = 'block break-words text-xs text-muted-foreground';
+
 export function CompanySwitcher({
   companies,
   activeId,
@@ -62,7 +66,7 @@ export function CompanySwitcher({
 
   const badge = (
     <span
-      className="flex size-9 shrink-0 items-center justify-center rounded-md bg-soft text-xs font-semibold text-foreground"
+      className="flex size-12 shrink-0 items-center justify-center rounded-[14px] border border-border bg-card text-[15px] font-extrabold tracking-[-0.04em] text-foreground"
       aria-hidden="true"
     >
       {initials}
@@ -73,21 +77,21 @@ export function CompanySwitcher({
   const addCompany = (
     <Link
       href="/employer/firma/nowa"
-      className="flex min-h-11 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex min-h-11 w-full items-center gap-2 rounded-[10px] px-2.5 py-2 text-left text-[13px] font-bold text-primary transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Plus className="size-4 shrink-0" aria-hidden="true" />
-      <span className="flex-1 truncate">{tt('addCompany')}</span>
+      <span className="min-w-0 flex-1 break-words">{tt('addCompany')}</span>
     </Link>
   );
 
   if (companies.length <= 1) {
     return (
       <div className="w-full">
-        <div className="flex w-full items-center gap-2.5 rounded-md p-1">
+        <div className="w-full">
           {badge}
-          <span className="min-w-0 flex-1 leading-tight">
-            <span className="block truncate text-sm font-semibold text-foreground">{name}</span>
-            <span className="block truncate text-xs text-muted-foreground">{td('employerRole')}</span>
+          <span className="block min-w-0">
+            <span className={SIDE_PERSON_NAME}>{name}</span>
+            <span className={SIDE_PERSON_ROLE}>{td('employerRole')}</span>
           </span>
         </div>
         <div className="mt-1">{addCompany}</div>
@@ -129,20 +133,20 @@ export function CompanySwitcher({
         <summary
           ref={summaryRef}
           aria-busy={pending || undefined}
-          className="flex w-full cursor-pointer list-none items-center gap-2.5 rounded-md p-1 text-left transition-colors hover:bg-soft [&::-webkit-details-marker]:hidden"
+          className="block w-full cursor-pointer list-none rounded-[10px] text-left transition-colors hover:bg-muted [&::-webkit-details-marker]:hidden"
         >
-          {badge}
-          <span className="min-w-0 flex-1 leading-tight">
-            <span className="sr-only">{td('switchCompany')}: </span>
-            <span className="block truncate text-sm font-semibold text-foreground">{name}</span>
-            <span className="block truncate text-xs text-muted-foreground">
-              {td('employerRole')}
-            </span>
+          <span className="flex items-start justify-between gap-2">
+            {badge}
+            <ChevronDown className="mt-4 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           </span>
-          <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="block min-w-0">
+            <span className="sr-only">{td('switchCompany')}: </span>
+            <span className={SIDE_PERSON_NAME}>{name}</span>
+            <span className={SIDE_PERSON_ROLE}>{td('employerRole')}</span>
+          </span>
         </summary>
 
-        <div className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-md border border-border bg-background py-1 shadow-lg">
+        <div className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-[14px] border border-border bg-card py-1 shadow-lg">
           {companies.map((c) => (
             <button
               key={c.id}
@@ -150,9 +154,9 @@ export function CompanySwitcher({
               disabled={pending}
               aria-current={c.id === activeId ? 'true' : undefined}
               onClick={() => choose(c.id)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-soft disabled:opacity-60"
+              className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-soft disabled:opacity-60"
             >
-              <span className="flex-1 truncate">{c.name}</span>
+              <span className="min-w-0 flex-1 break-words">{c.name}</span>
               {c.id === activeId ? (
                 <Check className="size-4 shrink-0 text-accent" aria-hidden="true" />
               ) : null}

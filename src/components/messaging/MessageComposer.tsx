@@ -9,6 +9,7 @@ import { sendMessage } from '@/lib/actions/messages';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import { MESSAGE_BODY_MAX_LENGTH } from '@/lib/validation/message';
+import { BTN_PRIMARY, FORM_CONTROL } from '@/components/dashboard/panel-styles';
 
 /**
  * MessageComposer — pole tworzenia wiadomości (Etap 6).
@@ -98,11 +99,11 @@ export function MessageComposer({
   const disabled = pending || value.trim().length === 0;
 
   return (
-    <div className="shrink-0 border-t border-border p-3">
+    <div className="shrink-0 border-t border-border px-7 py-5 max-[600px]:px-5">
       <label htmlFor={fieldId} className="sr-only">
         {t('composerLabel', { name: recipientName })}
       </label>
-      <div className="flex items-end gap-2">
+      <div className="flex min-w-0 flex-wrap items-end gap-3">
         <textarea
           ref={textareaRef}
           id={fieldId}
@@ -119,23 +120,20 @@ export function MessageComposer({
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${errorId} ${counterId}` : counterId}
           placeholder={t('composerPlaceholder')}
-          className="min-h-[2.75rem] flex-1 resize-y rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent read-only:opacity-60 aria-[invalid=true]:border-error"
+          className={cn(FORM_CONTROL, 'min-w-[12rem] flex-1 basis-60 resize-y read-only:opacity-60')}
         />
         <button
           type="button"
           onClick={submit}
           disabled={disabled}
-          className={cn(
-            'inline-flex h-12 shrink-0 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90',
-            'disabled:cursor-not-allowed disabled:opacity-60',
-          )}
+          className={cn(BTN_PRIMARY, 'shrink-0 disabled:opacity-60')}
         >
           <Send className="size-4" aria-hidden="true" />
           <span>{pending ? t('sending') : t('send')}</span>
         </button>
       </div>
       {error ? (
-        <p id={errorId} role="alert" className="mt-2 text-sm text-error">
+        <p id={errorId} role="alert" className="mt-2 text-[13px] text-error">
           {error}
         </p>
       ) : null}

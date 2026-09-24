@@ -44,7 +44,7 @@ describe('CompanySwitcher na jasnym sidebarze', () => {
 
     // Obie gałęzie muszą używać tekstu dla jasnej powierzchni sidebara.
     expect(content.getByText('Firma Pierwsza')).toHaveClass('text-foreground');
-    expect(content.getByText('FP')).toHaveClass('text-foreground', 'bg-soft');
+    expect(content.getByText('FP')).toHaveClass('text-foreground', 'bg-card');
     expect(content.getByText('employerRole')).toHaveClass('text-muted-foreground');
     if (count > 1) {
       expect(label?.querySelector('svg')).toHaveClass('text-muted-foreground');

@@ -1,6 +1,6 @@
 -- =============================================================================
--- 0101_candidate_visibility.sql — świadome włączenie i wyłączenie widoczności profilu
--- kandydata dla firm (#494). NUMER TYMCZASOWY — ostateczny poda koordynator kolejki migracji.
+-- 0100_candidate_visibility.sql — świadome włączenie i wyłączenie widoczności profilu
+-- kandydata dla firm (#494).
 --
 -- Budujemy na 0029 (`set_candidate_searchable`, guard flag) i 0078 (blokady firm), bez
 -- nowej ścieżki zapisu:

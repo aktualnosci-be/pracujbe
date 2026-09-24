@@ -2,7 +2,7 @@
  * Widoczność profilu kandydata dla firm (#494) — odczyt POD SESJĄ kandydata (własny wiersz
  * `candidate_profiles` pod RLS; nigdy service-role).
  *
- * Egzekwowanie żyje w bazie (0029/0078/0101): profil, relacje profilu i dopasowania widzi
+ * Egzekwowanie żyje w bazie (0029/0078/0100): profil, relacje profilu i dopasowania widzi
  * tylko zweryfikowana firma, gdy `is_searchable` i `profile_completed`, a kandydat jej nie
  * zablokował. Relacja z aplikacji/propozycji (`company_can_view_candidate`) zostaje po
  * wyłączeniu. Błąd odczytu = jawny `error` (bez udawania „ukryty"); technikalia do Sentry.

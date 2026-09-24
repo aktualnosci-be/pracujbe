@@ -9,6 +9,8 @@ import { setJobStatus, type JobLifecycleAction } from '@/lib/actions/jobs';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { Button } from '@/components/ui/button';
 import { Toast } from '@/components/ui/toast';
+import { BTN_SMALL } from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * JobLifecycleActions (P1-04) — zarządzanie cyklem życia opublikowanej oferty z listy ofert
@@ -110,7 +112,7 @@ export function JobLifecycleActions({
             type="button"
             size="sm"
             variant="outline"
-            className="min-h-12 whitespace-normal rounded-xl text-center"
+            className={cn(BTN_SMALL, 'h-auto border-border text-foreground hover:bg-soft')}
             disabled={pending}
             onClick={() => run(action)}
           >

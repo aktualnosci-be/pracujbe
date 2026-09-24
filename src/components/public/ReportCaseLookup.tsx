@@ -208,6 +208,14 @@ export function ReportCaseLookup(): React.JSX.Element {
                 <time dateTime={report.createdAt}>{formatDate(report.createdAt)}</time>
               </dd>
             </div>
+            {report.outcome ? (
+              <div className="sm:col-span-2">
+                <dt className="text-muted-foreground">{t('outcomeLabel')}</dt>
+                <dd className="font-medium text-foreground" data-testid="report-case-outcome">
+                  {t(report.outcome === 'action_taken' ? 'outcomeActionTaken' : 'outcomeNoAction')}
+                </dd>
+              </div>
+            ) : null}
             {report.dueAt ? (
               <div>
                 <dt className="text-muted-foreground">{t('dueAtLabel')}</dt>

@@ -10,7 +10,7 @@ import { loadProfileVisibility } from '@/lib/data/profile-visibility';
 /**
  * Server Action widoczności profilu kandydata dla firm (#494).
  *
- * Zapis wyłącznie przez RPC `set_candidate_searchable` (SECURITY DEFINER, 0029/0101): konto
+ * Zapis wyłącznie przez RPC `set_candidate_searchable` (SECURITY DEFINER, 0029/0100): konto
  * kandydata z sesji (właściciela nie przyjmujemy od klienta), `true` tylko dla ukończonego
  * profilu, `false` zawsze; znacznik czasu i historia zapisywane w bazie przy realnej zmianie.
  * Zwracany stan pochodzi z bazy (ponowny odczyt po zapisie), nie z wartości wysłanej przez

@@ -24,6 +24,7 @@ import {
   normalizeAdminSearch,
   parseAuditAction,
   parseAuditEntity,
+  parseEmailSuppressionFilter,
   parseReportFilter,
   parseReportKindFilter,
   parseUserRoleFilter,
@@ -122,11 +123,35 @@ export interface AdminReportTarget {
   deleted: boolean;
 }
 
-/** Zdarzenie historii sprawy DSA (`report_events`, 0094). */
+/** Zdarzenie historii sprawy DSA (`report_events`, 0094; decyzja/przywrócenie/flaga — 0099). */
 export interface AdminReportEvent {
-  type: 'submitted' | 'status_changed';
+  type: 'submitted' | 'status_changed' | 'decision' | 'restored' | 'flagged';
   toStatus: string | null;
   at: string;
+}
+
+const REPORT_EVENT_TYPES: readonly AdminReportEvent['type'][] = [
+  'submitted',
+  'status_changed',
+  'decision',
+  'restored',
+  'flagged',
+];
+
+/** Decyzja moderacyjna w sprawie DSA (#42, `moderation_decisions`) — uzasadnienie. */
+export interface AdminModerationDecision {
+  id: string;
+  reference: string;
+  /** `no_action` | `job_removed` | `company_suspended`. */
+  decision: string;
+  facts: string;
+  groundType: string | null;
+  groundReference: string | null;
+  automatedDetection: boolean;
+  decidedAt: string;
+  /** Cofnięcie ograniczenia (null = decyzja w mocy). */
+  restoredAt: string | null;
+  restoreReason: string | null;
 }
 
 /**
@@ -142,6 +167,10 @@ export interface AdminDsaCase {
   snapshotJobTitle: string | null;
   snapshotCompanyName: string | null;
   events: AdminReportEvent[];
+  /** Priorytet kolejki przeglądu 0–3 i flaga automatu (#42 — tylko podpowiedź, nie decyzja). */
+  reviewPriority: number;
+  reviewFlag: string | null;
+  decision: AdminModerationDecision | null;
 }
 
 export interface AdminReportRow {
@@ -223,6 +252,9 @@ const DEMO_REPORTS: AdminReportRow[] = [
       snapshotJobTitle: demoJobs[1]?.title ?? null,
       snapshotCompanyName: demoJobs[1]?.companyName ?? null,
       events: [{ type: 'submitted', toStatus: 'open', at: '2025-02-21T09:00:00.000Z' }],
+      reviewPriority: 0,
+      reviewFlag: null,
+      decision: null,
     },
     targetType: 'job',
     targetId: 'demo-job-2',
@@ -650,7 +682,7 @@ export async function listReports(
     let builder = supabase
       .from('reports')
       .select(
-        'id, reporter_id, target_type, target_id, reason, details, status, created_at, kind, case_number, due_at, content_url, reporter_name, reporter_email, target_snapshot',
+        'id, reporter_id, target_type, target_id, reason, details, status, created_at, kind, case_number, due_at, content_url, reporter_name, reporter_email, target_snapshot, decision_id, review_priority, review_flag',
       );
     if (statuses) builder = builder.in('status', statuses);
     if (kind !== 'all') builder = builder.eq('kind', kind);
@@ -692,8 +724,8 @@ export async function listReports(
         .order('id', { ascending: true });
       if (eventsError) throw eventsError;
       for (const event of asRows(events)) {
-        const type = asString(event['event_type']);
-        if (type !== 'submitted' && type !== 'status_changed') continue;
+        const type = REPORT_EVENT_TYPES.find((t) => t === asString(event['event_type']));
+        if (!type) continue;
         const list = eventsById.get(asString(event['report_id'])) ?? [];
         list.push({
           type,
@@ -701,6 +733,42 @@ export async function listReports(
           at: asString(event['created_at']),
         });
         eventsById.set(asString(event['report_id']), list);
+      }
+    }
+
+    // Decyzje moderacyjne (#42) i ich przywrócenia — jeden odczyt na stronę.
+    const decisionIds = rows.map((r) => asString(r['decision_id'])).filter((id) => id.length > 0);
+    const decisionById = new Map<string, AdminModerationDecision>();
+    if (decisionIds.length > 0) {
+      const [{ data: decisions, error: decisionsError }, { data: restorations, error: restorationsError }] =
+        await Promise.all([
+          supabase
+            .from('moderation_decisions')
+            .select('id, reference, decision, facts, ground_type, ground_reference, automated_detection, decided_at')
+            .in('id', decisionIds),
+          supabase
+            .from('moderation_restorations')
+            .select('decision_id, reason, restored_at')
+            .in('decision_id', decisionIds),
+        ]);
+      if (decisionsError) throw decisionsError;
+      if (restorationsError) throw restorationsError;
+      const restoredBy = new Map(asRows(restorations).map((r) => [asString(r['decision_id']), r]));
+      for (const d of asRows(decisions)) {
+        const id = asString(d['id']);
+        const restoration = restoredBy.get(id);
+        decisionById.set(id, {
+          id,
+          reference: asString(d['reference']),
+          decision: asString(d['decision']),
+          facts: asString(d['facts']),
+          groundType: asNullableString(d['ground_type']),
+          groundReference: asNullableString(d['ground_reference']),
+          automatedDetection: d['automated_detection'] === true,
+          decidedAt: asString(d['decided_at']),
+          restoredAt: restoration ? asNullableString(restoration['restored_at']) : null,
+          restoreReason: restoration ? asNullableString(restoration['reason']) : null,
+        });
       }
     }
 
@@ -731,6 +799,9 @@ export async function listReports(
                 snapshotJobTitle: asNullableString(snapshot?.job?.title),
                 snapshotCompanyName: asNullableString(snapshot?.company?.name),
                 events: eventsById.get(id) ?? [],
+                reviewPriority: Number(row['review_priority'] ?? 0) || 0,
+                reviewFlag: asNullableString(row['review_flag']),
+                decision: decisionById.get(asString(row['decision_id'])) ?? null,
               }
             : null,
           targetType,
@@ -1016,6 +1087,8 @@ export async function listAuditLogs(
           }
         } else if (entityType === 'report') {
           entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
+        } else if (entityType === 'email_suppression') {
+          entityHref = { pathname: '/admin/poczta', query: { status: 'all' } };
         }
         return {
           id: asString(row['id']),
@@ -1027,7 +1100,9 @@ export async function listAuditLogs(
           statusBefore: statusOf(row['before_data']),
           statusAfter: statusOf(row['after_data']),
           reason:
-            entityType === 'company'
+            entityType === 'company' ||
+            entityType === 'email_suppression' ||
+            asString(row['action']) === 'moderation.restored'
               ? asNullableString(asRecord(row['after_data'])['reason'])
               : null,
           actorId,
@@ -1292,6 +1367,134 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
     };
   } catch (error) {
     captureError(error, { area: 'admin.getCompanyDetail' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Blokady adresów e-mail (#44) — podgląd i zdjęcie blokady
+ * ------------------------------------------------------------------------- */
+
+export interface AdminEmailSuppressionRow {
+  id: string;
+  email: string;
+  /** `hard_bounce` / `complaint` — UI mapuje na etykietę i18n. */
+  reason: string;
+  createdAt: string | null;
+  liftedAt: string | null;
+  liftReason: string | null;
+  liftedByName: string | null;
+}
+
+export interface AdminEmailSuppressionsQuery extends AdminListQuery {
+  status?: string | null;
+}
+
+const DEMO_EMAIL_SUPPRESSIONS: AdminEmailSuppressionRow[] = [
+  {
+    id: 'demo-s1',
+    email: 'nieaktywny.adres@example.com',
+    reason: 'hard_bounce',
+    createdAt: '2025-02-10T08:15:00.000Z',
+    liftedAt: null,
+    liftReason: null,
+    liftedByName: null,
+  },
+  {
+    id: 'demo-s2',
+    email: 'skarga@example.com',
+    reason: 'complaint',
+    createdAt: '2025-02-08T17:40:00.000Z',
+    liftedAt: null,
+    liftReason: null,
+    liftedByName: null,
+  },
+  {
+    id: 'demo-s3',
+    email: 'poprawiony.adres@example.com',
+    reason: 'hard_bounce',
+    createdAt: '2025-01-20T11:05:00.000Z',
+    liftedAt: '2025-01-22T09:30:00.000Z',
+    liftReason: 'Użytkownik poprawił skrzynkę i potwierdził adres.',
+    liftedByName: 'Zespół Pracuj.be',
+  },
+];
+
+/**
+ * Lista blokad adresów (#44): filtr aktywne/zdjęte/wszystkie (domyślnie aktywne),
+ * wyszukiwanie po adresie, stronicowanie kursorem. Bez env → DEMO.
+ */
+export async function listEmailSuppressions(
+  query: AdminEmailSuppressionsQuery = {},
+): Promise<AdminListResult<AdminEmailSuppressionRow>> {
+  const filter = parseEmailSuppressionFilter(query.status);
+  const q = normalizeAdminSearch(query.q);
+  if (!isSupabaseConfigured()) {
+    return demoList(
+      DEMO_EMAIL_SUPPRESSIONS.filter(
+        (row) =>
+          (filter === 'all' || (filter === 'active') === (row.liftedAt === null)) &&
+          matchesSearch([row.email], q),
+      ),
+    );
+  }
+  await requireAdmin();
+
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const supabase = createAdminClient();
+
+    let builder = supabase
+      .from('email_suppressions')
+      .select('id, email, reason, created_at, lifted_at, lifted_by, lift_reason');
+    if (filter === 'active') builder = builder.is('lifted_at', null);
+    if (filter === 'lifted') builder = builder.not('lifted_at', 'is', null);
+    const orFilter = combineOrFilters(
+      q ? searchOrFilter(['email'], q) : null,
+      cursorFilterOf(query.cursor),
+    );
+    if (orFilter) builder = builder.or(orFilter);
+
+    const { data, error } = await builder
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(ADMIN_PAGE_SIZE + 1);
+    if (error) throw error;
+    const rows = asRows(data);
+
+    const adminIds = [
+      ...new Set(rows.map((r) => asString(r['lifted_by'])).filter((id) => id.length > 0)),
+    ];
+    const nameById = new Map<string, string>();
+    if (adminIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .in('id', adminIds);
+      if (profilesError) throw profilesError;
+      for (const profile of asRows(profiles)) {
+        nameById.set(asString(profile['id']), fullName(profile));
+      }
+    }
+
+    return toPage(
+      rows.map((row) => {
+        const liftedBy = asString(row['lifted_by']);
+        const name = liftedBy ? (nameById.get(liftedBy) ?? '') : '';
+        return {
+          id: asString(row['id']),
+          email: asString(row['email']),
+          reason: asString(row['reason']),
+          createdAt: asNullableString(row['created_at']),
+          liftedAt: asNullableString(row['lifted_at']),
+          liftReason: asNullableString(row['lift_reason']),
+          liftedByName: name.length > 0 ? name : null,
+        };
+      }),
+      (row) => row.createdAt,
+    );
+  } catch (error) {
+    captureError(error, { area: 'admin.listEmailSuppressions' });
     return { status: 'error' };
   }
 }

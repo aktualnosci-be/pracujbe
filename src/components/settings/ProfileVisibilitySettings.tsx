@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { AlertCircle, CheckCircle2, Eye, Loader2 } from 'lucide-react';
 
+import { PAPER } from '@/components/dashboard/panel-styles';
 import { Link } from '@/i18n/navigation';
 import { setProfileVisibilityAction } from '@/lib/actions/profile-visibility';
 import type { ProfileVisibility } from '@/lib/data/profile-visibility';
@@ -57,12 +58,15 @@ export function ProfileVisibilitySettings({ initial }: { initial: ProfileVisibil
   const validDate = date && !Number.isNaN(date.getTime()) ? date : null;
 
   return (
-    <section aria-labelledby="profile-visibility-title" className="rounded-lg border border-border bg-card p-5 sm:p-6">
-      <h2 id="profile-visibility-title" className="flex items-center gap-2 text-lg font-semibold text-foreground">
+    <section aria-labelledby="profile-visibility-title" className={PAPER}>
+      <h2
+        id="profile-visibility-title"
+        className="flex items-center gap-2 text-[23px] font-bold leading-[1.3] tracking-[-0.025em] text-foreground"
+      >
         <Eye className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
         {t('sectionTitle')}
       </h2>
-      <p className="mt-1 text-sm text-muted-foreground">{t('sectionDescription')}</p>
+      <p className="mt-1 text-[15px] leading-[1.7] text-muted-foreground">{t('sectionDescription')}</p>
 
       <dl id="profile-visibility-scope" className="mt-4 space-y-3 text-sm">
         <div>

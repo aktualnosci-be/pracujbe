@@ -31,7 +31,8 @@ export function Toast({ message, tone = 'success', onClose }: ToastProps): React
       role="status"
       aria-live="polite"
       className={cn(
-        'flex items-start gap-3 rounded-lg border bg-background p-4 shadow-sm',
+        // `.notice` z prototypu „04 Ludzie i praca” (promień 16 px, linia, 13–15 px) jako komunikat.
+        'flex items-start gap-3 rounded-[16px] border bg-card px-5 py-4 shadow-lg',
         isError ? 'border-error/30' : 'border-success/30',
       )}
     >
@@ -39,13 +40,13 @@ export function Toast({ message, tone = 'success', onClose }: ToastProps): React
         className={cn('mt-0.5 h-5 w-5 shrink-0', isError ? 'text-error' : 'text-success')}
         aria-hidden="true"
       />
-      <p className="min-w-0 flex-1 text-sm text-foreground">{message}</p>
+      <p className="min-w-0 flex-1 break-words text-[13px] font-[650] leading-[1.5] text-foreground">{message}</p>
       {onClose ? (
         <button
           type="button"
           onClick={onClose}
           aria-label={t('close')}
-          className="-m-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-soft hover:text-foreground"
+          className="-my-3 -mr-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-soft hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
