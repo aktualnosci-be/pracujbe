@@ -109,6 +109,50 @@ describe('Public saved jobs controls', () => {
       ).toBeEnabled(),
     );
   });
+  it('after a save, a fresh mount (page refresh) shows the state from the database', async () => {
+    // Serwer jest źródłem prawdy: zapis trafia do „bazy”, a nowy montaż czyta ją ponownie.
+    const db = new Set<string>();
+    vi.mocked(getPublicSavedJobs).mockImplementation(async () => ({
+      status: 'candidate',
+      savedIds: [...db],
+    }));
+    vi.mocked(toggleSavedJob).mockImplementation(async (jobId, desired) => {
+      if (desired) db.add(jobId);
+      else db.delete(jobId);
+      return { ok: true, saved: Boolean(desired) };
+    });
+    const first = show();
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: en.jobs.save }))[0]!,
+    );
+    // Akcja dostaje stan docelowy (idempotentny zapis), nie „przełącz”.
+    expect(toggleSavedJob).toHaveBeenCalledExactlyOnceWith(id, true);
+    await screen.findAllByRole('button', { name: en.jobs.saved });
+    first.unmount();
+    show();
+    expect(
+      await screen.findAllByRole('button', { name: en.jobs.saved }),
+    ).toHaveLength(2);
+    expect(getPublicSavedJobs).toHaveBeenCalledTimes(2);
+  });
+  it('negative control: a refresh does not keep a local-only save the database lacks', async () => {
+    vi.mocked(getPublicSavedJobs).mockResolvedValue({
+      status: 'candidate',
+      savedIds: [],
+    });
+    vi.mocked(toggleSavedJob).mockResolvedValue({ ok: true, saved: true });
+    const first = show();
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: en.jobs.save }))[0]!,
+    );
+    await screen.findAllByRole('button', { name: en.jobs.saved });
+    first.unmount();
+    show();
+    expect(
+      await screen.findAllByRole('button', { name: en.jobs.save }),
+    ).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: en.jobs.saved })).toBeNull();
+  });
   it('retries read failure without pretending unsaved', async () => {
     vi.mocked(getPublicSavedJobs)
       .mockResolvedValueOnce({ status: 'error' })
