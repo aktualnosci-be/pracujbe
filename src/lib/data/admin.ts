@@ -25,6 +25,7 @@ import {
   parseAuditAction,
   parseAuditEntity,
   parseReportFilter,
+  parseReportKindFilter,
   parseUserRoleFilter,
   parseUuid,
   parseYmd,
@@ -115,8 +116,32 @@ export interface AdminReportTarget {
   deleted: boolean;
 }
 
+/** Zdarzenie historii sprawy DSA (`report_events`, 0095). */
+export interface AdminReportEvent {
+  type: 'submitted' | 'status_changed';
+  toStatus: string | null;
+  at: string;
+}
+
+/**
+ * Sprawa z publicznego formularza zgłoszeń treści (#41, `reports.kind = 'dsa_notice'`).
+ * Dowód (`snapshot*`) to stan treści w chwili zgłoszenia — niezależny od późniejszej zmiany
+ * lub usunięcia oferty. Kontakt zgłaszającego widzi wyłącznie administrator.
+ */
+export interface AdminDsaCase {
+  caseNumber: string;
+  dueAt: string | null;
+  contentUrl: string | null;
+  reporterEmail: string | null;
+  snapshotJobTitle: string | null;
+  snapshotCompanyName: string | null;
+  events: AdminReportEvent[];
+}
+
 export interface AdminReportRow {
   id: string;
+  /** Sprawa DSA (#41) albo null dla zwykłego zgłoszenia. */
+  dsa: AdminDsaCase | null;
   /** `report_target_type`: job/company/user/message. */
   targetType: string;
   targetId: string;
@@ -144,6 +169,8 @@ export interface AdminUserRow {
 export interface AdminReportsQuery {
   /** Wartość z URL (`active` domyślnie = otwarte + w analizie). */
   status?: string | null;
+  /** Rodzaj zgłoszenia z URL (`all` domyślnie, `dsa_notice`, `quality`). */
+  kind?: string | null;
   cursor?: string | null;
 }
 
@@ -166,7 +193,7 @@ const DEMO_STATS: AdminStats = {
   companies: 12,
   pendingCompanies: 4,
   users: 148,
-  openReports: 2,
+  openReports: 3,
 };
 
 const DEMO_COMPANIES: AdminCompanyRow[] = [
@@ -181,7 +208,33 @@ const DEMO_COMPANIES: AdminCompanyRow[] = [
 
 const DEMO_REPORTS: AdminReportRow[] = [
   {
+    id: 'demo-r0',
+    dsa: {
+      caseNumber: 'DSA-7F3A-19C2-B4E0-5D11',
+      dueAt: '2025-02-28T09:00:00.000Z',
+      contentUrl: demoJobs[1] ? `https://pracuj.be/pl/oferty-pracy/${demoJobs[1].slug}` : null,
+      reporterEmail: 'zglaszajacy@example.com',
+      snapshotJobTitle: demoJobs[1]?.title ?? null,
+      snapshotCompanyName: demoJobs[1]?.companyName ?? null,
+      events: [{ type: 'submitted', toStatus: 'open', at: '2025-02-21T09:00:00.000Z' }],
+    },
+    targetType: 'job',
+    targetId: 'demo-job-2',
+    target: {
+      label: demoJobs[1]?.title ?? null,
+      href: demoJobs[1] ? { pathname: `/oferty-pracy/${demoJobs[1].slug}` } : null,
+      preview: null,
+      deleted: false,
+    },
+    reason: 'fraud',
+    details: 'Ogłoszenie wymaga wpłaty za „rezerwację miejsca pracy” przed rozmową.',
+    status: 'open',
+    reporterName: null,
+    createdAt: '2025-02-21T09:00:00.000Z',
+  },
+  {
     id: 'demo-r1',
+    dsa: null,
     targetType: 'job',
     targetId: 'demo-job-1',
     target: {
@@ -198,6 +251,7 @@ const DEMO_REPORTS: AdminReportRow[] = [
   },
   {
     id: 'demo-r2',
+    dsa: null,
     targetType: 'company',
     targetId: 'demo-c6',
     target: {
@@ -214,6 +268,7 @@ const DEMO_REPORTS: AdminReportRow[] = [
   },
   {
     id: 'demo-r3',
+    dsa: null,
     targetType: 'message',
     targetId: 'demo-msg-9',
     target: {
@@ -570,8 +625,15 @@ export async function listReports(
   query: AdminReportsQuery = {},
 ): Promise<AdminListResult<AdminReportRow>> {
   const statuses = reportStatusesFor(parseReportFilter(query.status));
+  const kind = parseReportKindFilter(query.kind);
   if (!isSupabaseConfigured()) {
-    return demoList(DEMO_REPORTS.filter((r) => !statuses || statuses.includes(r.status)));
+    return demoList(
+      DEMO_REPORTS.filter(
+        (r) =>
+          (!statuses || statuses.includes(r.status)) &&
+          (kind === 'all' || (kind === 'dsa_notice') === (r.dsa !== null)),
+      ),
+    );
   }
   await requireAdmin();
 
@@ -581,8 +643,11 @@ export async function listReports(
 
     let builder = supabase
       .from('reports')
-      .select('id, reporter_id, target_type, target_id, reason, details, status, created_at');
+      .select(
+        'id, reporter_id, target_type, target_id, reason, details, status, created_at, kind, case_number, due_at, content_url, reporter_name, reporter_email, target_snapshot',
+      );
     if (statuses) builder = builder.in('status', statuses);
+    if (kind !== 'all') builder = builder.eq('kind', kind);
     const orFilter = cursorFilterOf(query.cursor);
     if (orFilter) builder = builder.or(orFilter);
 
@@ -610,16 +675,58 @@ export async function listReports(
       }
     }
 
+    // Historia spraw DSA (#41) — jeden odczyt dla całej strony.
+    const dsaIds = rows.filter((r) => asString(r['kind']) === 'dsa_notice').map((r) => asString(r['id']));
+    const eventsById = new Map<string, AdminReportEvent[]>();
+    if (dsaIds.length > 0) {
+      const { data: events, error: eventsError } = await supabase
+        .from('report_events')
+        .select('report_id, event_type, to_status, created_at')
+        .in('report_id', dsaIds)
+        .order('id', { ascending: true });
+      if (eventsError) throw eventsError;
+      for (const event of asRows(events)) {
+        const type = asString(event['event_type']);
+        if (type !== 'submitted' && type !== 'status_changed') continue;
+        const list = eventsById.get(asString(event['report_id'])) ?? [];
+        list.push({
+          type,
+          toStatus: asNullableString(event['to_status']),
+          at: asString(event['created_at']),
+        });
+        eventsById.set(asString(event['report_id']), list);
+      }
+    }
+
     const targets = await loadReportTargets(supabase, rows);
 
     return toPage(
       rows.map((row) => {
+        const id = asString(row['id']);
         const reporterId = asString(row['reporter_id']);
-        const name = reporterId ? (nameById.get(reporterId) ?? '') : '';
+        const profileName = reporterId ? (nameById.get(reporterId) ?? '') : '';
+        const givenName = asNullableString(row['reporter_name']) ?? '';
+        const name = profileName.length > 0 ? profileName : givenName;
         const targetType = asString(row['target_type']);
         const targetId = asString(row['target_id']);
+        const isDsa = asString(row['kind']) === 'dsa_notice';
+        const snapshot = (row['target_snapshot'] ?? null) as {
+          job?: { title?: unknown };
+          company?: { name?: unknown };
+        } | null;
         return {
-          id: asString(row['id']),
+          id,
+          dsa: isDsa
+            ? {
+                caseNumber: asString(row['case_number']),
+                dueAt: asNullableString(row['due_at']),
+                contentUrl: asNullableString(row['content_url']),
+                reporterEmail: asNullableString(row['reporter_email']),
+                snapshotJobTitle: asNullableString(snapshot?.job?.title),
+                snapshotCompanyName: asNullableString(snapshot?.company?.name),
+                events: eventsById.get(id) ?? [],
+              }
+            : null,
           targetType,
           targetId,
           target: targets.get(`${targetType}:${targetId}`) ?? DELETED_TARGET,

@@ -114,6 +114,14 @@ export interface EmailDataMap {
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
   invoice: { recipientName?: string; invoiceNumber: string; amount: string; downloadUrl: string };
   supportContact: { name?: string; subject?: string; message?: string; actionUrl?: string };
+  /** Potwierdzenie zgłoszenia treści (#41) — także do osoby bez konta, w jej języku. */
+  reportReceived: {
+    recipientName?: string | null;
+    caseNumber: string;
+    accessCode: string;
+    targetType?: string;
+    actionUrl: string;
+  };
 }
 
 /** Propsy komponentu szablonu: język + dane danego typu. */
@@ -229,7 +237,7 @@ function EmailShell(props: {
   const greeting = `${greetings[locale]}${name ? ` ${name}` : ''},`;
 
   return (
-    <EmailLayout locale={locale} preview={preview}>
+    <EmailLayout locale={locale} preview={preview} footerNote={copy.footerNote}>
       <EmailHeading>{heading}</EmailHeading>
       <EmailText>{greeting}</EmailText>
       {paragraphs.map((paragraph, index) => (
@@ -610,6 +618,18 @@ export function SupportContactEmail(props: EmailProps<'supportContact'>): ReactE
   );
 }
 
+export function ReportReceivedEmail(props: EmailProps<'reportReceived'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="reportReceived"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+    />
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Rejestr + renderEmail                                                      */
 /* -------------------------------------------------------------------------- */
@@ -642,6 +662,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   payment: PaymentEmail,
   invoice: InvoiceEmail,
   supportContact: SupportContactEmail,
+  reportReceived: ReportReceivedEmail,
 };
 
 /**

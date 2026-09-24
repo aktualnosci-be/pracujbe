@@ -25,7 +25,8 @@ const AUTH_SOURCE = readFileSync(resolve(ROOT, 'src/lib/email/auth-email.ts'), '
 
 /** Czy w SQL jest wywołanie `enqueue_email(...)`, którego argumenty zawierają `'type'`. */
 function enqueuedIn(sql: string, type: string): boolean {
-  const calls = sql.match(/enqueue_email\([^;]*?\)\s*;/gs) ?? [];
+  // `enqueue_email_to_address` (0095) — ta sama kolejka, jawny adres odbiorcy bez konta.
+  const calls = sql.match(/enqueue_email(?:_to_address)?\([^;]*?\)\s*;/gs) ?? [];
   return calls.some((call) => call.includes(`'${type}'`));
 }
 
