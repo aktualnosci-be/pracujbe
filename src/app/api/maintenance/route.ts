@@ -24,7 +24,7 @@ import {
  * #98: retencja aplikacji bez konta (`purge_guest_application_requests`, 0095) — usuwa
  * niepotwierdzone zgłoszenia 7 dni po ostatnim linku i duplikaty 7 dni po potwierdzeniu (razem
  * z ich e-mailami) i zeruje tokeny przejęcia po wygaśnięciu 30-dniowego okna.
- * #486: retencja danych (`run_retention_purge`, 0104) — okresy jako dane w `retention_policies`
+ * #486: retencja danych (`run_retention_purge`, 0105) — okresy jako dane w `retention_policies`
  * (null = kategoria wyłączona), partie z limitem i SKIP LOCKED; potem kolejka usuwania obiektów
  * storage (`processStorageDeletions`) — także obiektów plików usuniętych w tym przebiegu.
  * Nieudane usunięcie obiektu to ponowienie w kolejnym przebiegu, nie błąd zadania.

@@ -2,7 +2,7 @@
 # =============================================================================
 # scripts/db/export-erasure-tombstones.sh — eksport rejestru usunięć (#486).
 #
-# Zapisuje UUID z public.erasure_tombstones (0104) do pliku, który restore-backup.sh
+# Zapisuje UUID z public.erasure_tombstones (0105) do pliku, który restore-backup.sh
 # przyjmuje jako RESTORE_TOMBSTONES_FILE: po odtworzeniu STARSZEJ kopii osoby usunięte po
 # jej wykonaniu są usuwane ponownie (public.apply_erasure_tombstones). Plik zawiera wyłącznie
 # identyfikatory (bez e-maili i innych danych), ale nadal są to dane pseudonimowe — prawa

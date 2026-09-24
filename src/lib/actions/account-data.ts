@@ -8,7 +8,7 @@ import { captureError } from '@/lib/sentry';
 /**
  * Usunięcie konta kandydata (#486).
  *
- * Jedno RPC `request_account_erasure` (SECURITY DEFINER, 0104): rola kandydata, potwierdzenie
+ * Jedno RPC `request_account_erasure` (SECURITY DEFINER, 0105): rola kandydata, potwierdzenie
  * adresem e-mail konta (porównanie w bazie, bez rozróżniania wielkości liter), w tej samej
  * transakcji usunięcie danych procesu, profilu i konta auth, tombstone i ślad wniosku. Obiekty
  * storage idą do kolejki (`storage_deletion_queue`), którą opróżnia `/api/maintenance`.

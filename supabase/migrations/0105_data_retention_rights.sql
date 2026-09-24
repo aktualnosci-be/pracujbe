@@ -1,9 +1,8 @@
 -- =============================================================================
--- 0104_data_retention_rights.sql — #486: retencja danych kandydata, prawo dostępu
+-- 0105_data_retention_rights.sql — #486: retencja danych kandydata, prawo dostępu
 -- (eksport JSON) i usunięcie konta, kolejka usuwania obiektów storage oraz rejestr
 -- usunięć („tombstone”) do ponownego zastosowania po odtworzeniu kopii.
 --
--- NUMER TYMCZASOWY: ostateczny numer migracji nadaje koordynator kolejki.
 --
 -- 1. retention_policies — okresy retencji jako DANE (klucz → interval; null = zadanie
 --    wyłączone). Wartości domyślne obejmują tylko sprzątanie techniczne (rekordy już
@@ -210,7 +209,8 @@ begin
     return old;
   end if;
   -- #486: jedyna dozwolona zmiana to actor_id → null (usunięcie konta autora zdarzenia).
-  if tg_op = 'UPDATE' and new.actor_id is null
+  -- Ten sam trigger chroni też dsa_retention_runs (0104) — tabela bez actor_id: wyjątek jej nie dotyczy.
+  if tg_op = 'UPDATE' and to_jsonb(old) ? 'actor_id' and to_jsonb(new)->>'actor_id' is null
      and (to_jsonb(new) - 'actor_id') = (to_jsonb(old) - 'actor_id') then
     return new;
   end if;
@@ -487,6 +487,12 @@ begin
                               'consentDocumentVersion', g.consent_document_version,
                               'consentAcceptedAt', g.consent_accepted_at) order by g.created_at), '[]')
                             from public.guest_application_requests g where g.claimed_by = v_uid),
+    'moderationAppeals', (select coalesce(jsonb_agg(jsonb_build_object(
+                              'reference', ap.reference, 'role', ap.appellant_role, 'status', ap.status,
+                              'grounds', ap.grounds, 'submittedAt', ap.submitted_at, 'dueAt', ap.due_at,
+                              'decidedAt', ap.decided_at, 'outcomeReasoning', ap.outcome_reasoning)
+                              order by ap.submitted_at), '[]')
+                            from public.moderation_appeals ap where ap.appellant_id = v_uid),
     'dataRightsRequests', (select coalesce(jsonb_agg(jsonb_build_object(
                                'id', r.id, 'kind', r.kind, 'requestedAt', r.requested_at, 'completedAt', r.completed_at)
                                order by r.requested_at), '[]')

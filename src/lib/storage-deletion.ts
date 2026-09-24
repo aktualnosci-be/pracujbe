@@ -3,7 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Worker kolejki usuwania obiektów storage (#486, `storage_deletion_queue`, 0104).
+ * Worker kolejki usuwania obiektów storage (#486, `storage_deletion_queue`, 0105).
  *
  * Wiersz kolejki powstaje triggerem po KAŻDYM usunięciu wiersza `files` (akcja kandydata,
  * usunięcie konta, retencja) — obiekt nie zostaje osierocony, nawet gdy natychmiastowe

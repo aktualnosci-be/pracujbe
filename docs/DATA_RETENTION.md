@@ -5,8 +5,7 @@ zatwierdza administrator danych; roboczy projekt dla prawnika jest w
 [legal-drafts/retencja-i-prawa-kandydata.md](legal-drafts/retencja-i-prawa-kandydata.md)
 (nieopublikowany). W interfejsie są tylko neutralne etykiety funkcji (`accountData.*`).
 
-Migracja: `supabase/migrations/0104_data_retention_rights.sql` (numer tymczasowy —
-ostateczny nadaje koordynator kolejki migracji).
+Migracja: `supabase/migrations/0105_data_retention_rights.sql`.
 
 ## 1. Okresy retencji jako dane
 
@@ -105,7 +104,7 @@ Dostęp online jest odcięty w tej samej transakcji (nie ma profilu ani sesji). 
 audytu bez IP/UA, aktywna blokada adresu w `email_suppressions` (po odbiciu/skardze).
 Kopie zrobione przez pracodawcę poza serwisem nie są objęte.
 
-Poprawki w 0104 wymagane przez usunięcie: `report_events_append_only` i `reports_guard`
+Poprawki w 0105 wymagane przez usunięcie: `report_events_append_only` i `reports_guard`
 przepuszczają wyłącznie odwołanie FK → `null` (wcześniej usunięcie autora zgłoszenia
 DSA się wywracało; kontrole ujemne DR486-5/5b).
 

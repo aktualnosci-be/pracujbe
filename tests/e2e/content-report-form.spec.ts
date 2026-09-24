@@ -118,3 +118,30 @@ test('gość zgłasza firmę: walidacja, awaria sieci, sukces, status sprawy', a
 
   expect(pageErrors.filter((m) => m.includes('Failed to fetch'))).toEqual([]);
 });
+
+test('zgłaszający odwołuje się od braku działań (#43): walidacja, sukces, bez danych autora', async ({ page }) => {
+  const dismissedCase = 'DSA-0000-0000-0000-1E2E';
+  await page.goto(`/pl/zglos-tresc/sprawa#nr=${dismissedCase}&kod=ABCDEFGHIJKLMNOPQRSTUVWX`);
+  await expect(page.getByTestId('report-case-outcome')).toHaveText(t.outcomeNoAction);
+  const form = page.getByTestId('report-case-appeal-form');
+  await expect(form.getByRole('heading', { name: t.appealTitle })).toBeVisible();
+  await expect(form.getByText(t.appealLegalPlaceholder)).toBeVisible();
+
+  await form.getByRole('button', { name: t.appealAction }).click();
+  const grounds = form.getByRole('textbox', { name: t.appealGroundsLabel });
+  await expect(grounds).toBeFocused();
+
+  // Puste uzasadnienie: błąd przy polu, fokus na polu, bez wysyłki.
+  await form.getByRole('button', { name: t.appealSubmit }).click();
+  await expect(grounds).toHaveAttribute('aria-invalid', 'true');
+  await expect(form.getByText(t.appealErrorRequired)).toBeVisible();
+  await expect(grounds).toBeFocused();
+  expect(await blockingViolations(page)).toEqual([]);
+
+  await grounds.fill('Oferta nadal wymaga opłaty od kandydatów przed rozmową.');
+  await form.getByRole('button', { name: t.appealSubmit }).click();
+  const sent = page.getByRole('status').filter({ hasText: 'APL-0000-0000-0E2E' });
+  await expect(sent).toHaveText(t.appealSent.replace('{reference}', 'APL-0000-0000-0E2E'));
+  await expect(sent).toBeFocused();
+  expect(await blockingViolations(page)).toEqual([]);
+});

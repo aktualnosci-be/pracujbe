@@ -8,7 +8,7 @@ import { captureError } from '@/lib/sentry';
  *
  * Tylko POST z formularza tej samej witryny: cookies sesji są `SameSite=Lax`, więc obca strona
  * nie wyśle żądania z sesją; dodatkowo `Origin` musi wskazywać ten serwis. Dane buduje RPC
- * `export_my_data` (0104) pod sesją kandydata — zakres, pominięcie danych innych osób, limit
+ * `export_my_data` (0105) pod sesją kandydata — zakres, pominięcie danych innych osób, limit
  * 10 eksportów na dobę i ślad wniosku żyją w bazie. Odpowiedź `no-store` (nie trafia do cache
  * przeglądarki ani pośredników); treść nie jest logowana. Błędy bez technikaliów (Invariant #8).
  *
