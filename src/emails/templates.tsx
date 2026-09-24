@@ -13,7 +13,7 @@
 
 import { createElement, type CSSProperties, type FunctionComponent, type ReactElement } from 'react';
 import { render } from '@react-email/render';
-import { Section, Text } from '@react-email/components';
+import { Link, Section, Text } from '@react-email/components';
 
 import type { Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
@@ -108,6 +108,17 @@ export interface EmailDataMap {
     recipientName?: string;
     companyName: string;
     inviterName?: string | null;
+    actionUrl: string;
+  };
+  /**
+   * Digest nowych ofert dla zapisanego wyszukiwania (#100). `jobs` = najnowsze (≤ 5) z
+   * gotowymi adresami w locale odbiorcy (worker, `delivery-data.ts`); `count` = wszystkie nowe.
+   */
+  jobMatch: {
+    recipientName?: string;
+    searchName: string;
+    count: number;
+    jobs?: Array<{ title: string; companyName?: string; city?: string; url: string }>;
     actionUrl: string;
   };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
@@ -570,6 +581,60 @@ export function TeamInvitationEmail(props: EmailProps<'teamInvitation'>): ReactE
   );
 }
 
+const jobListStyles = {
+  item: {
+    borderTop: '1px solid #DEDEDE',
+    padding: '12px 0',
+  } satisfies CSSProperties,
+  title: {
+    color: '#151515',
+    fontSize: '16px',
+    fontWeight: 700,
+    lineHeight: '22px',
+    textDecoration: 'underline',
+  } satisfies CSSProperties,
+  meta: {
+    color: '#616161',
+    fontSize: '14px',
+    lineHeight: '20px',
+    margin: '2px 0 0 0',
+  } satisfies CSSProperties,
+} as const;
+
+/** Lista nowych ofert w digeście — tytuł jako link do oferty, pod nim firma i miasto. */
+function JobMatchList({ jobs }: { jobs: EmailDataMap['jobMatch']['jobs'] }): ReactElement | null {
+  const items = (jobs ?? []).filter((job) => job.title.trim().length > 0 && job.url.length > 0);
+  if (items.length === 0) return null;
+  return (
+    <Section style={{ margin: '4px 0 18px 0' }} data-email-component="job-match-list">
+      {items.map((job, index) => {
+        const meta = [job.companyName, job.city].filter((v) => v && v.trim().length > 0).join(' · ');
+        return (
+          <Section key={index} style={jobListStyles.item}>
+            <Link href={job.url} style={jobListStyles.title}>
+              {job.title}
+            </Link>
+            {meta ? <Text style={jobListStyles.meta}>{meta}</Text> : null}
+          </Section>
+        );
+      })}
+    </Section>
+  );
+}
+
+export function JobMatchEmail(props: EmailProps<'jobMatch'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="jobMatch"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+      detail={<JobMatchList jobs={props.jobs} />}
+    />
+  );
+}
+
 export function JobExpiringEmail(props: EmailProps<'jobExpiring'>): ReactElement {
   return (
     <EmailShell
@@ -661,6 +726,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   companyRejected: CompanyRejectedEmail,
   companySuspended: CompanySuspendedEmail,
   teamInvitation: TeamInvitationEmail,
+  jobMatch: JobMatchEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,
   invoice: InvoiceEmail,

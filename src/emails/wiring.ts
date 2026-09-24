@@ -22,6 +22,7 @@ export const QUEUED_EMAIL_TYPES = [
   'companyRejected', // admin_set_company_status → rejected (0084)
   'companySuspended', // admin_set_company_status → suspended (0084)
   'teamInvitation', // invite_company_member (0086)
+  'jobMatch', // process_saved_search_alerts (0092) — digest zapisanego wyszukiwania
   'reportReceived', // submit_content_report (0095) — enqueue_email_to_address
 ] as const satisfies readonly EmailType[];
 

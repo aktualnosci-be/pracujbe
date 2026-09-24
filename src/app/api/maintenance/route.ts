@@ -12,6 +12,9 @@ import { captureError } from '@/lib/sentry';
  * otwarte, nieukończone checkouty (`release_stale_checkout_intents`) — inaczej limit kodu i
  * blokada „jeden otwarty checkout na firmę" utknęłyby po porzuceniu płatności. #72: zmienia
  * przeterminowane aktywne oferty na `expired` (`expire_due_jobs`, 0085; idempotentne).
+ * #100: alerty zapisanych wyszukiwań (`process_saved_search_alerts`, 0092) — digest nowych
+ * ofert per wyszukiwanie najwyżej raz na dobę/tydzień, bez ponownej wysyłki tej samej oferty;
+ * e-maile trafiają do outboxa (`enqueue_email`), wysyła je `/api/email/process`.
  *
  * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
  * Wymaga service-role (RPC są service_role-only). Nie ujawnia technikaliów ani danych ofert —
@@ -56,9 +59,19 @@ async function run(request: Request): Promise<Response> {
       admin.rpc('release_stale_checkout_intents', { p_older_than_minutes: 30 }),
       admin.rpc('expire_due_jobs'),
     ]);
-    if (discounts.error || checkouts.error || expiredJobs.error) {
-      const failed = discounts.error ? 'discounts' : checkouts.error ? 'checkouts' : 'jobExpiry';
-      captureError(discounts.error ?? checkouts.error ?? expiredJobs.error, {
+    // Po wygaszeniu ofert: alert nie może zgłosić oferty, która właśnie wygasła.
+    const searchAlerts = expiredJobs.error
+      ? { data: null, error: null }
+      : await admin.rpc('process_saved_search_alerts', { p_limit: 500 });
+    if (discounts.error || checkouts.error || expiredJobs.error || searchAlerts.error) {
+      const failed = discounts.error
+        ? 'discounts'
+        : checkouts.error
+          ? 'checkouts'
+          : expiredJobs.error
+            ? 'jobExpiry'
+            : 'savedSearchAlerts';
+      captureError(discounts.error ?? checkouts.error ?? expiredJobs.error ?? searchAlerts.error, {
         area: 'maintenance.gc',
         task: failed,
       });
@@ -69,6 +82,7 @@ async function run(request: Request): Promise<Response> {
       releasedDiscounts: discounts.data ?? 0,
       releasedCheckouts: checkouts.data ?? 0,
       expiredJobs: typeof expiredJobs.data === 'number' ? expiredJobs.data : 0,
+      savedSearchDigests: typeof searchAlerts.data === 'number' ? searchAlerts.data : 0,
     });
   } catch (e) {
     captureError(e, { area: 'maintenance.gc' });

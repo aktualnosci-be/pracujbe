@@ -52,6 +52,8 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
       return '/employer/firma';
     case 'teamInvitation':
       return '/employer/zespol';
+    case 'jobMatch':
+      return '/candidate/wyszukiwania';
     case 'reportReceived': {
       // #41: numer sprawy i kod dostępu w części `#` (nie trafia do serwera ani logów).
       const caseNumber = payload?.['caseNumber'];
@@ -94,6 +96,36 @@ export function deliverySalary(payload: Record<string, unknown>, locale: Locale)
   return formatSalaryRange(input, locale, salaryLabelsFor(locale)) ?? undefined;
 }
 
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,159}$/i;
+
+/**
+ * #100: oferty digestu `jobMatch` z payloadu → adresy szczegółu w locale ODBIORCY. Slug
+ * spoza wzorca (albo brak) → oferta pominięta; najwyżej 5 pozycji. Adres buduje worker —
+ * payload nie podaje gotowych URL-i.
+ */
+export function deliveryJobMatchJobs(
+  payload: Record<string, unknown>,
+  base: string,
+  locale: Locale,
+): Array<{ title: string; companyName?: string; city?: string; url: string }> {
+  const raw = Array.isArray(payload['jobs']) ? (payload['jobs'] as unknown[]) : [];
+  const out: Array<{ title: string; companyName?: string; city?: string; url: string }> = [];
+  for (const item of raw) {
+    if (out.length >= 5) break;
+    const r = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : {};
+    const slug = typeof r['slug'] === 'string' ? r['slug'] : '';
+    const title = typeof r['title'] === 'string' ? r['title'].trim() : '';
+    if (!SLUG_RE.test(slug) || !title) continue;
+    out.push({
+      title,
+      ...(typeof r['companyName'] === 'string' && r['companyName'] ? { companyName: r['companyName'] } : {}),
+      ...(typeof r['city'] === 'string' && r['city'] ? { city: r['city'] } : {}),
+      url: `${base}/${locale}/oferty-pracy/${slug}`,
+    });
+  }
+  return out;
+}
+
 /** Buduje dane do `renderEmail` dla wiersza kolejki. */
 export function buildDeliveryData(
   row: DeliveryInput,
@@ -102,7 +134,8 @@ export function buildDeliveryData(
 ): { locale: Locale; data: Record<string, unknown> } {
   const locale = deliveryLocale(row.locale);
   const payload = row.payload ?? {};
-  const url = `${site.replace(/\/+$/, '')}/${locale}${emailTargetPath(row.template, payload)}`;
+  const base = site.replace(/\/+$/, '');
+  const url = `${base}/${locale}${emailTargetPath(row.template, payload)}`;
   const firstName = recipientFirstName?.trim() || undefined;
   const salary = deliverySalary(payload, locale);
 
@@ -118,6 +151,7 @@ export function buildDeliveryData(
       messageUrl: url,
       jobUrl: url,
       salary,
+      ...(row.template === 'jobMatch' ? { jobs: deliveryJobMatchJobs(payload, base, locale) } : {}),
     },
   };
 }

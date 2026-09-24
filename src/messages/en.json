@@ -582,7 +582,8 @@
     "jobImportInvalidUrl": "We cannot fetch this address. Paste a public http(s) link to the ad.",
     "jobImportFetchFailed": "We could not download the page with the ad. Try later or upload a screenshot.",
     "jobImportNotAListing": "We did not find a job ad here. Check the file or link.",
-    "jobImportFailed": "We could not read the ad. Try again or fill in the form manually."
+    "jobImportFailed": "We could not read the ad. Try again or fill in the form manually.",
+    "savedSearchLimitReached": "You already have 20 saved searches. Delete one to add a new one."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -871,7 +872,8 @@
     "editJobLabel": "Edit job: {title}",
     "viewJob": "View job",
     "viewJobLabel": "View job: {title}",
-    "navTeam": "Team"
+    "navTeam": "Team",
+    "navSearches": "Saved searches"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -1067,7 +1069,8 @@
     "markedAllRead": "All notifications marked as read.",
     "itemCompanyRejected": "Your company was not verified",
     "itemCompanySuspended": "Your company has been suspended",
-    "itemTeamInvitation": "Invitation to a company team"
+    "itemTeamInvitation": "Invitation to a company team",
+    "itemSavedSearch": "New jobs for a saved search"
   },
   "pricing": {
     "standard": "Standard",
@@ -1890,6 +1893,36 @@
     "untitled": "Untitled job",
     "denied": "The job funnel is visible to the company owner, administrators and recruiters.",
     "loadError": "The job funnel could not be loaded. Please try again."
+  },
+  "savedSearches": {
+    "hint": "Save these filters and we will let you know on the site and by email about new jobs (at most once a day).",
+    "save": "Save search",
+    "saving": "Saving…",
+    "saved": "We saved the search. We will let you know about new jobs.",
+    "alreadySaved": "This search is already saved.",
+    "manage": "Manage searches",
+    "loginRequired": "To save the search, log in to your candidate account.",
+    "login": "Log in",
+    "errorNetwork": "No connection. Check your internet and try again.",
+    "defaultName": "My search",
+    "intro": "Searches saved from the job list. When new jobs match these filters, you get a notification and an email.",
+    "loadError": "We could not load your saved searches.",
+    "retry": "Try again",
+    "empty": "You have no saved searches yet. Set filters on the job list and click “Save search”.",
+    "demo": "The demo version does not save searches.",
+    "browse": "Browse jobs",
+    "lastAlert": "Last alert: {date}",
+    "noAlertYet": "No alert sent yet.",
+    "open": "Show jobs",
+    "alerts": "Notify me about new jobs",
+    "frequency": "How often",
+    "daily": "Once a day",
+    "weekly": "Once a week",
+    "delete": "Delete",
+    "deleteTitle": "Delete the search “{name}”?",
+    "deleteDescription": "You will stop receiving alerts about new jobs matching these filters.",
+    "deleted": "We deleted the search.",
+    "updated": "We saved your changes."
   },
   "contentReport": {
     "metaTitle": "Report content",
