@@ -78,6 +78,7 @@ describe('company read state', () => {
         status: 'pending',
         vatNumber: null,
         verifiedAt: null,
+        statusReason: null,
         canEdit: true,
       },
     });
