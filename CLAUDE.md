@@ -607,12 +607,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja CO28 (dblink, kontrola ujemna bez `FOR UPDATE` tworzy duplikat), `company-bootstrap-callback.test`.
 - [x] Panel pracodawcy — realne dane pod sesją (RLS) + akcje (zmiana statusu aplikacji, wysyłka propozycji), noindex; fallback demo bez env
   Lejek (#302): kohorta aplikacji z 30 dni (`submitted_at`) liczona zapytaniami `count` (head,
-  `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = „brak danych” (brak mechanizmu
-  zliczania `views_count`), bez fałszywej konwersji 0%. Kafelki/lejek/kolumny zawijają się przy
+  `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = suma `detail_views` z lejka ofert
+  (#99), „brak danych” tylko bez uprawnień rekrutera — bez fałszywej konwersji 0%. Kafelki/lejek/kolumny zawijają się przy
   200% tekstu (#318). Przełącznik firmy: nazwa w etykiecie, `aria-current`, komunikat błędu (#322).
   Pulpit: karty ofert w stylu paszportu (#171), jawny błąd najnowszych zgłoszeń z ponowieniem
   (#157), „Zobacz wszystkie” → `/employer/aplikacje` (#164); bramka axe 320/1280 px i 200% tekstu
   w 4 językach — `tests/e2e/employer-dashboard-a11y.spec.ts`.
+  Lejek ofert bez śledzenia (#99, migracja `0089`): `job_funnel_daily` = oferta × dzień (Europe/Brussels)
+  × `search_appearances`/`detail_views`/`apply_started`; brak IP, cookies, tekstu wyszukiwania,
+  identyfikatora osoby. `applications_submitted` liczy przy odczycie `get_company_job_funnel` ze stanu
+  `applications` (status ≠ draft) — deterministyczne. Strony ofert zostają ISR: wyspa
+  `JobFunnelBeacon` po załadowaniu (widoczna strona, `credentials: 'omit'`) woła `/api/job-funnel`
+  (`src/lib/job-funnel/*`: walidacja, reguła botów/prefetch `request-filter.ts`, limiter w pamięci
+  po HMAC adresu). Deduplikacja: losowy nonce jednego załadowania widoku (`job_funnel_receipts`,
+  sprzątane po 2 dniach) — retry nie dubluje, odświeżenie = nowe wyświetlenie. RPC zapisu tylko przez
+  endpoint (bramka `pracujbe.funnel_writer`), tylko oferty publiczne firm `verified`. Panel
+  `/employer/statystyki?dni=7|30|90`: zakres dat, definicje metryk, tabela per oferta (recruiter+).
+  Dowód: `rls.sql` sekcja FN99, unit `job-funnel*`, E2E `public-cache-headers` (cache nienaruszony)
+  i `e2e-real` (licznik rośnie, bot pominięty, mutacja `funnel-no-dedup` = czerwony).
 - [x] Kreator oferty (9 kroków, autozapis draftu, publikacja z kontrolą `verified`) — `src/lib/actions/jobs.ts` + `JobWizard`
   Krok 9: „Zapisz i wyjdź” zapisuje szkic bez zgody na publikację (`step9DraftSchema`, także
   w `updateJobDraft`); zgodę wymaga tylko „Opublikuj” (`step9Schema`) (#193). Pozycje list mają
@@ -794,7 +806,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   wiadomości w obie strony z licznikiem, `email_deliveries` fr/nl, obce konta bez dostępu.
   Przeglądarka widzi ofertę z bazy (`next dev` z `DATABASE_APP_URL`) i jej zniknięcie po
   zamknięciu. Kontrole ujemne: `E2E_REAL_MUTATION=rls-applications-off|finish-onboarding-noop|
-  step5-swallow-error|recipient-locale-en|retry-new-key` — każda daje czerwony test.
+  step5-swallow-error|recipient-locale-en|funnel-no-dedup|retry-new-key` — każda daje czerwony test.
   **Otwarte:** panele i Server Actions nadal używają klienta Supabase (PostgREST nie ustawia
   `app.current_uid`), więc kliknięć w panelach i `revalidatePath` ten test nie obejmuje — po
   #24/#25 dołożyć kroki UI w tym samym configu. Wpięcie w CI (job z usługą `postgres:16`) —

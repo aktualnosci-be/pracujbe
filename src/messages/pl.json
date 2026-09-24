@@ -1666,5 +1666,29 @@
     "blocking": "Blokowanie…",
     "blockedSuccess": "Firma {company} została zablokowana.",
     "manage": "Zarządzaj zablokowanymi firmami"
+  },
+  "jobFunnel": {
+    "title": "Lejek ofert",
+    "range": "Zakres: {from} – {to} (czas Brukseli)",
+    "rangeLabel": "Zakres dat lejka ofert",
+    "rangeDays": "{count, plural, one {# dzień} few {# dni} many {# dni} other {# dni}}",
+    "searchAppearances": "Pojawienia w wynikach",
+    "detailViews": "Wyświetlenia ofert",
+    "applyStarted": "Rozpoczęte aplikowanie",
+    "applicationsSubmitted": "Wysłane aplikacje",
+    "searchAppearancesDefinition": "Ile razy oferta pojawiła się na stronie wyników listy ofert. Jeden widok listy liczy ofertę raz.",
+    "detailViewsDefinition": "Ile razy otwarto stronę szczegółu oferty. Ponowne wysłanie tego samego zliczenia nie jest liczone drugi raz, a odświeżenie strony jest nowym wyświetleniem.",
+    "applyStartedDefinition": "Ile razy na stronie oferty otwarto formularz „Aplikuj” — najwyżej raz na jedno wyświetlenie.",
+    "applicationsSubmittedDefinition": "Aplikacje złożone w tym zakresie dat, według zapisu aplikacji w systemie (także te później wycofane).",
+    "definitionsTitle": "Jak liczymy te dane",
+    "privacyTitle": "Prywatność",
+    "privacyNote": "Zapisujemy tylko dzienne sumy dla oferty. Nie zapisujemy adresu IP, cookies, tekstu wyszukiwania ani danych osób. Nie liczymy robotów ani podglądów linków.",
+    "empty": "Brak aktywnych ofert i danych w tym zakresie.",
+    "tableCaption": "Lejek dla każdej oferty",
+    "tableRegion": "Tabela lejka ofert, przewijana w poziomie",
+    "offer": "Oferta",
+    "untitled": "Oferta bez tytułu",
+    "denied": "Lejek ofert widzą właściciel, administrator i rekruterzy firmy.",
+    "loadError": "Nie udało się wczytać lejka ofert. Spróbuj ponownie."
   }
 }

@@ -1666,5 +1666,29 @@
     "blocking": "Blocage…",
     "blockedSuccess": "L’entreprise {company} a été bloquée.",
     "manage": "Gérer les entreprises bloquées"
+  },
+  "jobFunnel": {
+    "title": "Entonnoir des offres",
+    "range": "Période : du {from} au {to} (heure de Bruxelles)",
+    "rangeLabel": "Période de l’entonnoir des offres",
+    "rangeDays": "{count, plural, one {# jour} other {# jours}}",
+    "searchAppearances": "Affichages dans les résultats",
+    "detailViews": "Vues des offres",
+    "applyStarted": "Candidatures commencées",
+    "applicationsSubmitted": "Candidatures envoyées",
+    "searchAppearancesDefinition": "Nombre de fois où l’offre est apparue sur une page de résultats de la liste des offres. Un affichage de la liste compte l’offre une fois.",
+    "detailViewsDefinition": "Nombre d’ouvertures de la page de détail de l’offre. Le renvoi du même comptage n’est pas compté deux fois ; actualiser la page est une nouvelle vue.",
+    "applyStartedDefinition": "Nombre d’ouvertures du formulaire « Postuler » sur la page de l’offre — au plus une fois par vue.",
+    "applicationsSubmittedDefinition": "Candidatures déposées pendant cette période, d’après les candidatures enregistrées (y compris celles retirées ensuite).",
+    "definitionsTitle": "Comment nous comptons ces données",
+    "privacyTitle": "Confidentialité",
+    "privacyNote": "Nous enregistrons uniquement des totaux journaliers par offre. Nous n’enregistrons ni adresse IP, ni cookies, ni texte de recherche, ni données personnelles. Les robots et les aperçus de liens ne sont pas comptés.",
+    "empty": "Aucune offre active ni donnée pour cette période.",
+    "tableCaption": "Entonnoir par offre",
+    "tableRegion": "Tableau de l’entonnoir des offres, défilement horizontal",
+    "offer": "Offre",
+    "untitled": "Offre sans titre",
+    "denied": "L’entonnoir des offres est visible par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
+    "loadError": "Impossible de charger l’entonnoir des offres. Veuillez réessayer."
   }
 }

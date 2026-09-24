@@ -1666,5 +1666,29 @@
     "blocking": "Blokkeren…",
     "blockedSuccess": "Bedrijf {company} is geblokkeerd.",
     "manage": "Geblokkeerde bedrijven beheren"
+  },
+  "jobFunnel": {
+    "title": "Vacaturetrechter",
+    "range": "Periode: {from} – {to} (tijd in Brussel)",
+    "rangeLabel": "Periode van de vacaturetrechter",
+    "rangeDays": "{count, plural, one {# dag} other {# dagen}}",
+    "searchAppearances": "Vertoningen in zoekresultaten",
+    "detailViews": "Weergaven van vacatures",
+    "applyStarted": "Gestarte sollicitaties",
+    "applicationsSubmitted": "Verzonden sollicitaties",
+    "searchAppearancesDefinition": "Hoe vaak de vacature op een resultatenpagina van de vacaturelijst verscheen. Eén weergave van de lijst telt de vacature één keer.",
+    "detailViewsDefinition": "Hoe vaak de detailpagina van de vacature werd geopend. Hetzelfde verzoek opnieuw versturen telt niet dubbel; de pagina vernieuwen is een nieuwe weergave.",
+    "applyStartedDefinition": "Hoe vaak het formulier „Solliciteren” op de vacaturepagina werd geopend — hoogstens één keer per weergave.",
+    "applicationsSubmittedDefinition": "Sollicitaties die in deze periode zijn ingediend, volgens de sollicitaties in het systeem (ook later ingetrokken sollicitaties).",
+    "definitionsTitle": "Hoe we deze cijfers tellen",
+    "privacyTitle": "Privacy",
+    "privacyNote": "We bewaren alleen dagtotalen per vacature. We bewaren geen IP-adres, cookies, zoektekst of persoonsgegevens. Robots en linkvoorbeelden tellen niet mee.",
+    "empty": "Geen actieve vacatures en geen gegevens in deze periode.",
+    "tableCaption": "Trechter per vacature",
+    "tableRegion": "Tabel van de vacaturetrechter, horizontaal scrollbaar",
+    "offer": "Vacature",
+    "untitled": "Vacature zonder titel",
+    "denied": "De vacaturetrechter is zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
+    "loadError": "De vacaturetrechter kon niet worden geladen. Probeer het opnieuw."
   }
 }

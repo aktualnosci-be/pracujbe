@@ -1666,5 +1666,29 @@
     "blocking": "Blocking…",
     "blockedSuccess": "{company} has been blocked.",
     "manage": "Manage blocked companies"
+  },
+  "jobFunnel": {
+    "title": "Job funnel",
+    "range": "Period: {from} – {to} (Brussels time)",
+    "rangeLabel": "Job funnel date range",
+    "rangeDays": "{count, plural, one {# day} other {# days}}",
+    "searchAppearances": "Search result appearances",
+    "detailViews": "Job views",
+    "applyStarted": "Applications started",
+    "applicationsSubmitted": "Applications submitted",
+    "searchAppearancesDefinition": "How many times the job appeared on a results page of the job list. One view of the list counts the job once.",
+    "detailViewsDefinition": "How many times the job detail page was opened. Resending the same count is not counted twice; refreshing the page is a new view.",
+    "applyStartedDefinition": "How many times the “Apply” form was opened on the job page — at most once per view.",
+    "applicationsSubmittedDefinition": "Applications submitted in this date range, based on the applications recorded in the system (including ones withdrawn later).",
+    "definitionsTitle": "How we count these figures",
+    "privacyTitle": "Privacy",
+    "privacyNote": "We only store daily totals per job. We do not store IP addresses, cookies, search text or personal data. Robots and link previews are not counted.",
+    "empty": "No active jobs and no data in this period.",
+    "tableCaption": "Funnel per job",
+    "tableRegion": "Job funnel table, scrolls horizontally",
+    "offer": "Job",
+    "untitled": "Untitled job",
+    "denied": "The job funnel is visible to the company owner, administrators and recruiters.",
+    "loadError": "The job funnel could not be loaded. Please try again."
   }
 }
