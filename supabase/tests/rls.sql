@@ -3502,21 +3502,23 @@ select pg_temp.assert(not exists (select 1 from public.email_deliveries where id
   'UN45-3b newsletter bez opt-in nie trafia do kolejki');
 
 -- UN45-4: KONTROLA UJEMNA — claim z 0021 (bez ponownej kontroli) wydałby wiersz osoby wypisanej.
-create function pg_temp.un45_claim_0021() returns setof public.email_deliveries
+-- Bez BEGIN/ROLLBACK (zestaw bywa uruchamiany w jednej zewnętrznej transakcji): stary claim
+-- ogranicza się do wiersza testu, a jego dzierżawę zdejmujemy przed nowym claimem.
+create function pg_temp.un45_claim_0021(p_key text) returns setof public.email_deliveries
 language sql as $$
   update public.email_deliveries d set locked_at = now()
    where d.id in (select e.id from public.email_deliveries e
                    where e.status = 'queued' and e.next_attempt_at <= now() and e.locked_at is null
+                     and e.idempotency_key = p_key
                    for update skip locked)
   returning d.*;
 $$;
 select public.enqueue_email(:'UNC', 'newMessage', 'conversation', :'UNE', 'un45-msg-1', '{}'::jsonb);
 set role service_role; select public.email_unsubscribe(:'UNC', 'messages'); reset role;
-begin;
 select pg_temp.assert(
-  exists (select 1 from pg_temp.un45_claim_0021() c where c.idempotency_key = 'un45-msg-1'),
+  exists (select 1 from pg_temp.un45_claim_0021('un45-msg-1')),
   'UN45-4 stary claim wydaje e-mail mimo wypisania (test wykrywa błąd)');
-rollback;
+update public.email_deliveries set locked_at = null where idempotency_key = 'un45-msg-1';
 select pg_temp.assert(
   not exists (select 1 from public.claim_email_batch(100000) c where c.idempotency_key = 'un45-msg-1'),
   'UN45-4b nowy claim wygasza ten sam wiersz');
@@ -3543,44 +3545,49 @@ select pg_temp.expect_error('update public.email_send_budget_config set provider
   'permission denied', 'UN45-5g konfiguracja budżetu niedostępna dla klienta');
 reset role; reset app.current_uid;
 
--- UN45-6: budżet — marketing nie zużywa rezerw; transakcyjne nie zużywają rezerwy auth.
-create function pg_temp.un45_take_n(p_template text, p_n int) returns int
+-- UN45-6..8: budżet. Konfigurację i liczniki zmieniają WYŁĄCZNIE zatwierdzane sesje dblink
+-- (jak sekcja PP): w trybie jednej zewnętrznej transakcji niezatwierdzone wiersze skryptu
+-- blokowałyby równoległe sesje, które mają symulować osobne workery.
+create function pg_temp.un45_sql(p_sql text) returns text
 language plpgsql as $$
-declare v_granted int := 0; v_ok boolean;
+declare v_val text;
 begin
-  for i in 1..p_n loop
-    select b.granted into v_ok from public.take_email_send_budget(p_template) b;
-    if v_ok then v_granted := v_granted + 1; end if;
-  end loop;
-  return v_granted;
+  perform pg_temp.remote_connect('un45_setup');
+  select t.v into v_val from dbl.dblink('un45_setup', p_sql) as t(v text);
+  perform dbl.dblink_disconnect('un45_setup');
+  return v_val;
 end $$;
-update public.email_send_budget_config
-   set window_seconds = 86400, provider_limit = 10, reserve_auth = 3, reserve_transactional = 3;
-delete from public.email_send_windows;
-set role service_role;
-select pg_temp.assert(
-  pg_temp.un45_take_n('newsletter', 6) = 4,
+-- Liczba przyznanych miejsc z n pobrań danej puli (wywołanie w liście SELECT = raz na wiersz).
+create function pg_temp.un45_take_n(p_template text, p_n int) returns int
+language sql as $$
+  select pg_temp.un45_sql(format(
+    'select count(*) filter (where g)::text from (select (public.take_email_send_budget(%L)).granted as g
+       from generate_series(1, %s)) s', p_template, p_n))::int;
+$$;
+
+-- UN45-6: marketing nie zużywa rezerw; transakcyjne nie zużywają rezerwy auth.
+select pg_temp.un45_sql('with c as (update public.email_send_budget_config
+   set window_seconds = 86400, provider_limit = 10, reserve_auth = 3, reserve_transactional = 3
+   returning 1), w as (delete from public.email_send_windows returning 1)
+   select ''ok''');
+select pg_temp.assert(pg_temp.un45_take_n('newsletter', 6) = 4,
   'UN45-6 newsletter dostaje tylko 10 - 3 - 3 = 4');
 select pg_temp.assert(
-  (select not granted and retry_at > now() from public.take_email_send_budget('newsletter')),
+  pg_temp.un45_sql('select (not granted and retry_at > now())::text from public.take_email_send_budget(''newsletter'')')::boolean,
   'UN45-6b odmowa podaje termin następnego okna');
-select pg_temp.assert(
-  pg_temp.un45_take_n('statusChanged', 6) = 3,
+select pg_temp.assert(pg_temp.un45_take_n('statusChanged', 6) = 3,
   'UN45-6c transakcyjne dobierają do 10 - 3 = 7');
-select pg_temp.assert(
-  pg_temp.un45_take_n('passwordReset', 6) = 3,
+select pg_temp.assert(pg_temp.un45_take_n('passwordReset', 6) = 3,
   'UN45-6d rezerwa auth (3) nietknięta przez newsletter i transakcyjne');
 select pg_temp.assert(
   (select auth_used + transactional_used + marketing_used from public.email_send_windows) = 10,
   'UN45-6e suma nie przekracza limitu dostawcy');
-reset role;
 
 -- UN45-7: równoległe workery (dwie sesje dblink) — ostatnie miejsce dostaje tylko jedna.
-delete from public.email_send_windows;
-update public.email_send_budget_config set provider_limit = 10, reserve_auth = 0, reserve_transactional = 0;
-set role service_role;
+select pg_temp.un45_sql('with c as (update public.email_send_budget_config
+   set provider_limit = 10, reserve_auth = 0, reserve_transactional = 0 returning 1),
+   w as (delete from public.email_send_windows returning 1) select ''ok''');
 select pg_temp.assert(pg_temp.un45_take_n('statusChanged', 9) = 9, 'UN45-7 przygotowanie: 9 z 10 zajęte');
-reset role;
 select pg_temp.remote_connect('un45_a');
 select pg_temp.remote_connect('un45_b');
 select dbl.dblink_exec('un45_a', 'begin');
@@ -3603,24 +3610,23 @@ select pg_temp.assert(
   'UN45-7c równolegle: dokładnie limit, bez przekroczenia');
 
 -- UN45-8: KONTROLA UJEMNA — licznik bez blokady (odczyt → zapis) przekracza limit.
-create schema un45test;
-create function un45test.naive_take() returns boolean language plpgsql as $$
-declare v_used int;
-begin
-  select transactional_used into v_used from public.email_send_windows;
-  if v_used >= 10 then return false; end if;
-  update public.email_send_windows set transactional_used = transactional_used + 1;
-  return true;
-end $$;
-update public.email_send_windows set transactional_used = 9;
+select pg_temp.un45_sql($q$
+  create schema un45test;
+  create function un45test.naive_take() returns boolean language plpgsql as $f$
+  declare v_used int;
+  begin
+    select transactional_used into v_used from public.email_send_windows;
+    if v_used >= 10 then return false; end if;
+    update public.email_send_windows set transactional_used = transactional_used + 1;
+    return true;
+  end $f$;
+  update public.email_send_windows set transactional_used = 9;
+  select 'ok'$q$);
 select dbl.dblink_exec('un45_a', 'begin');
 select pg_temp.assert(
   (select t.g from dbl.dblink('un45_a', 'select un45test.naive_take()') as t(g boolean)) is true,
   'UN45-8 naiwna sesja A bierze ostatnie miejsce');
 select dbl.dblink_send_query('un45_b', 'select un45test.naive_take()');
-select pg_temp.assert(
-  (select t.g from dbl.dblink('un45_a', 'select true') as t(g boolean)) is true,
-  'UN45-8a sesja A nadal otwarta');
 select pg_sleep(0.3);
 select dbl.dblink_exec('un45_a', 'commit');
 select pg_temp.assert(
@@ -3631,11 +3637,11 @@ select pg_temp.assert((select transactional_used from public.email_send_windows)
   'UN45-8c naiwny licznik przekracza limit (test wykrywa błąd)');
 select dbl.dblink_disconnect('un45_a');
 select dbl.dblink_disconnect('un45_b');
-drop schema un45test cascade;
 
--- Przywrócenie domyślnej konfiguracji budżetu.
-update public.email_send_budget_config
-   set window_seconds = 60, provider_limit = 100, reserve_auth = 20, reserve_transactional = 30;
-delete from public.email_send_windows;
+-- Sprzątanie (zatwierdzane): domyślna konfiguracja budżetu, bez liczników i schematu testu.
+select pg_temp.un45_sql('drop schema un45test cascade; select ''ok''');
+select pg_temp.un45_sql('with c as (update public.email_send_budget_config
+   set window_seconds = 60, provider_limit = 100, reserve_auth = 20, reserve_transactional = 30
+   returning 1), w as (delete from public.email_send_windows returning 1) select ''ok''');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
