@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { recordConsent } from '@/lib/actions/consent';
@@ -66,5 +69,31 @@ describe('recordConsent', () => {
     vi.mocked(isSupabaseConfigured).mockReturnValueOnce(false);
     expect(await recordConsent(CATEGORIES, 'footer')).toEqual({ ok: false });
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+/** Parametry najnowszej definicji `public.record_consent` w migracjach (kolejność wg prefiksu). */
+function recordConsentParams(): string[] {
+  const dir = join(process.cwd(), 'supabase', 'migrations');
+  let params: string[] | null = null;
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
+    const sql = readFileSync(join(dir, file), 'utf-8');
+    const re = /create\s+or\s+replace\s+function\s+public\.record_consent\s*\(([\s\S]*?)\)\s*returns/gi;
+    for (const match of sql.matchAll(re)) {
+      params = match[1]!
+        .split(',')
+        .map((p) => p.trim().split(/\s+/)[0]!)
+        .filter(Boolean);
+    }
+  }
+  if (!params) throw new Error('brak definicji record_consent w supabase/migrations');
+  return params;
+}
+
+describe('recordConsent ↔ RPC record_consent (kontrakt z migracją)', () => {
+  it('wysyła dokładnie parametry z najnowszej definicji funkcji w bazie', async () => {
+    await recordConsent(CATEGORIES, 'cookie_banner');
+    const sent = Object.keys(rpc.mock.calls[0]![1] as Record<string, unknown>).sort();
+    expect(sent).toEqual(recordConsentParams().sort());
   });
 });
