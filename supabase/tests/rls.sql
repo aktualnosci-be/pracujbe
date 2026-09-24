@@ -2902,6 +2902,110 @@ select pg_temp.assert(
   'ADM8c stare dwuargumentowe sygnatury usunięte (brak obejścia macierzy)');
 
 -- ============================================================================
+-- WZ192. Zapis kroku kreatora w jednej transakcji (0083, #192): save_job_draft — kolumny,
+--        tłumaczenie i relacje razem; błąd w części relacji = brak częściowego zapisu
+-- ============================================================================
+\set JOBWZ 'e8300000-0000-0000-0000-0000000000b1'
+reset role;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'JOBWZ', :'COMPA', :'EMPA', 'draft-wz192', '', 'logistics', 'permanent', '', '', 'draft', 'pl');
+
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+-- WZ192-1: krok 1 — kolumny oferty i tłumaczenie (tytuł) jednym wywołaniem.
+select public.save_job_draft(:'JOBWZ'::uuid,
+  '{"job": {"title": "Operator wózka", "category": "warehouse", "occupation": "Operator"}, "translation": {}}'::jsonb);
+-- WZ192-2: krok 5 i 7 — tłumaczenie (patch) oraz komplet relacji.
+select public.save_job_draft(:'JOBWZ'::uuid,
+  '{"translation": {"description": "Praca na magazynie w Antwerpii.", "responsibilities": ["Załadunek"]}}'::jsonb);
+select public.save_job_draft(:'JOBWZ'::uuid, $j${
+  "job": {"requires_driving_license": false, "no_language_required": false},
+  "requirements_optional": ["Wózek widłowy"], "skills_optional": ["Excel"],
+  "languages": [{"language": "Angielski", "level": "basic"}], "certificates": ["VCA"]
+}$j$::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title = 'Operator wózka' and category::text = 'warehouse' and occupation = 'Operator'
+          and status::text = 'draft' from public.jobs where id = :'JOBWZ')
+  and (select title = 'Operator wózka' and description = 'Praca na magazynie w Antwerpii.'
+              and responsibilities = array['Załadunek']
+         from public.job_translations where job_id = :'JOBWZ' and locale = 'pl'),
+  'WZ192-1 krok 1 i 5: kolumny i tłumaczenie zapisane, szkic zostaje szkicem');
+select pg_temp.assert(
+  (select array_agg(content) from public.job_requirements where job_id = :'JOBWZ' and kind = 'optional') = array['Wózek widłowy']
+  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBWZ') = array['Excel']
+  and (select array_agg(language_label) from public.job_languages where job_id = :'JOBWZ') = array['Angielski']
+  and (select array_agg(certificate_label) from public.job_certificates where job_id = :'JOBWZ') = array['VCA'],
+  'WZ192-2 krok 7: wszystkie relacje zapisane');
+
+-- WZ192-3 (kontrola ujemna): zmiana tytułu tłumaczenia nie nadpisuje opisu (patch).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBWZ'::uuid,
+  '{"job": {"title": "Operator wózka widłowego", "category": "warehouse", "occupation": "Operator"}, "translation": {}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title = 'Operator wózka widłowego' and description = 'Praca na magazynie w Antwerpii.'
+     from public.job_translations where job_id = :'JOBWZ' and locale = 'pl'),
+  'WZ192-3 krok bez pól tłumaczenia nie czyści opisu');
+
+-- WZ192-4 (kontrola ujemna atomowości): krok 7 z błędną relacją (nieznany poziom języka)
+-- — kolumny oferty, wymagania i umiejętności z tego samego kroku NIE zostają zapisane.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ', $j${
+    "job": {"requires_driving_license": true, "no_language_required": false},
+    "requirements_optional": ["Nowe wymaganie"], "skills_optional": ["Nowa umiejętność"],
+    "languages": [{"language": "Niemiecki", "level": "nie-ma-takiego"}], "certificates": ["Nowy certyfikat"]
+  }$j$),
+  'language_level', 'WZ192-4 błędna relacja odrzuca cały krok');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select requires_driving_license from public.jobs where id = :'JOBWZ') = false
+  and (select array_agg(content) from public.job_requirements where job_id = :'JOBWZ' and kind = 'optional') = array['Wózek widłowy']
+  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBWZ') = array['Excel']
+  and (select array_agg(language_label) from public.job_languages where job_id = :'JOBWZ') = array['Angielski']
+  and (select array_agg(certificate_label) from public.job_certificates where job_id = :'JOBWZ') = array['VCA'],
+  'WZ192-4b odrzucony krok nie zostawia częściowego zapisu (kolumny i relacje bez zmian)');
+
+-- WZ192-5 (kontrola ujemna): błąd kolumny (CHECK widełek) cofa też relacje tego wywołania.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ',
+    '{"job": {"salary_min": 20, "salary_max": 10}, "certificates": ["Inny"]}'),
+  'check constraint', 'WZ192-5 błędne widełki odrzucają cały zapis');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select array_agg(certificate_label) from public.job_certificates where job_id = :'JOBWZ') = array['VCA']
+  and (select salary_min is null from public.jobs where id = :'JOBWZ'),
+  'WZ192-5b relacje i kolumny bez zmian po błędzie kolumny');
+
+-- WZ192-6: granice — nieznane pole, nie-członek, oferta nie-szkic (edycję robi update_published_job).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ', '{"job": {"status": "active"}}'),
+  'VALIDATION_FAILED', 'WZ192-6 pole spoza listy (status) odrzucone');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ', '{"translation": {"title": "x"}}'),
+  'VALIDATION_FAILED', 'WZ192-6b pole tłumaczenia spoza listy odrzucone');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBE', '{"job": {"title": "Obejście"}}'),
+  'JOB_NOT_DRAFT', 'WZ192-6c opublikowanej oferty nie zapisuje ścieżka szkicu');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ', '{"job": {"title": "Cudzy"}}'),
+  'PERMISSION_DENIED', 'WZ192-6d nie-członek nie zapisze cudzego szkicu');
+reset role; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBWZ', '{"job": {"title": "Anon"}}'),
+  'permission denied', 'WZ192-6e anon nie woła save_job_draft');
+reset role;
+select pg_temp.assert(
+  (select title from public.jobs where id = :'JOBWZ') = 'Operator wózka widłowego'
+  and (select status::text <> 'draft' and title <> 'Obejście' from public.jobs where id = :'JOBE'),
+  'WZ192-6f odrzucone próby nic nie zmieniły');
+
+-- ============================================================================
 -- OB142. Onboarding kandydata: jeden krok = jedna transakcja (0082, #142)
 -- Wstrzyknięty błąd w DRUGIEJ części kroku (trigger na relacji) nie zostawia pierwszej.
 -- Kontrola ujemna: stara ścieżka (dwa osobne żądania) zostawia częściowy zapis.

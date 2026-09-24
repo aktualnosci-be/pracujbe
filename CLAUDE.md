@@ -618,6 +618,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Po „Dalej”/„Wstecz” fokus na nagłówku nowego kroku + ogłoszenie „Krok N z 9”, jeden region
   statusu zapisu (#402). Błąd zapisu pokazuje komunikat z kodu serwera (`toUserMessageKey`);
   `JOB_NOT_DRAFT` → link do listy ofert zamiast ponawiania (#363).
+  Zapis kroku (#192, migracja `0083`): `updateJobDraft` woła jedno RPC `save_job_draft`
+  (kolumny `jobs` z listy dozwolonych + tłumaczenie + relacje replace-all w jednej transakcji,
+  tylko szkic, recruiter+) — błąd w części kroku nie zostawia częściowego zapisu. Treść kroku
+  buduje `src/lib/job-draft-content.ts`. Dowód: `rls.sql` sekcja WZ192.
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
