@@ -49,6 +49,8 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
     case 'companyRejected':
     case 'companySuspended':
       return '/employer/firma';
+    case 'teamInvitation':
+      return '/employer/zespol';
     case 'newMessage': {
       const panel = payload?.['panel'] === 'employer' ? 'employer' : 'candidate';
       const conversationId = payload?.['conversationId'];

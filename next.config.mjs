@@ -1,5 +1,5 @@
 import createNextIntlPlugin from 'next-intl/plugin';
-import { createBuildMetadata } from './scripts/build-version.mjs';
+import { createReleaseAwareBuildMetadata } from './scripts/build-version.mjs';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
@@ -16,8 +16,10 @@ function supabaseHost() {
   }
 }
 const SUPABASE_HOST = supabaseHost();
-const BUILD = createBuildMetadata(
+// #103: wersja 1.0.0 tylko po jawnym PRACUJBE_RELEASE_VERSION=1.0.0; błędna wartość przerywa build.
+const BUILD = createReleaseAwareBuildMetadata(
   new Date(),
+  process.env.PRACUJBE_RELEASE_VERSION,
   process.env.RAILWAY_GIT_COMMIT_SHA,
   process.env.GITHUB_SHA,
 );
@@ -75,9 +77,9 @@ const nextConfig = {
       "object-src 'none'",
       "frame-ancestors 'none'",
       "form-action 'self'",
-      // Skrypty: własne + inline (JSON-LD, gtag/fbq po zgodzie) + hosty trackerów.
+      // Skrypty: własne + inline (JSON-LD, gtag/fbq po zgodzie) + hosty trackerów + Turnstile (#46).
       // Dev dokłada 'unsafe-eval' (React Refresh/HMR Next dev).
-      `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://www.googletagmanager.com https://connect.facebook.net`,
+      `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://www.googletagmanager.com https://connect.facebook.net https://challenges.cloudflare.com`,
       "style-src 'self' 'unsafe-inline'",
       // P3-02: obrazy z własnego origin, data:/blob:, host Supabase (assety) i piksele trackerów
       // (po zgodzie). Zamiast otwartego `https:`. Bez skonfigurowanego hosta Supabase — wildcard.
@@ -85,8 +87,8 @@ const nextConfig = {
       "font-src 'self' data:",
       // XHR/fetch/WS: API własne, Supabase (REST/Realtime), Sentry ingest, GA/Meta.
       `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://connect.facebook.net${isDev ? ' ws: http://localhost:*' : ''}`,
-      // Ramki: Meta Pixel (fallback), reszta zablokowana.
-      "frame-src 'self' https://www.facebook.com",
+      // Ramki: Meta Pixel (fallback) i Cloudflare Turnstile (#46, ochrona formularzy), reszta zablokowana.
+      "frame-src 'self' https://www.facebook.com https://challenges.cloudflare.com",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
     ];
