@@ -86,6 +86,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       releasedDiscounts: 0,
       releasedCheckouts: 0,
       expiredJobs: 3,
+      savedSearchDigests: 0,
     });
   });
 
