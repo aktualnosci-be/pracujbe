@@ -1,12 +1,28 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { ArrowRight, Building2, Clock, Flag, Users } from 'lucide-react';
+import { ArrowRight, Building2, Flag, History, Users } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
 import { AWAITING_FILTER, getAdminStats } from '@/lib/data/admin';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
-import { StatCard } from '@/components/ui/stat-card';
+import {
+  EYEBROW,
+  H1,
+  ICON_BOX,
+  INTRO,
+  PANEL,
+  PANEL_H2,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  SECTION_HEAD,
+  STAT,
+  STAT_LABEL,
+  STAT_VALUE,
+  STATS,
+} from '@/components/admin/admin-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * Panel administratora — Podsumowanie (Etap 7g).
@@ -33,9 +49,9 @@ export async function generateMetadata({
   };
 }
 
-/** Kafelek-link statystyki: zaokrąglenie zgodne z kartą, widoczny fokus (#5). */
+/** Kafelek-link statystyki: podświetlenie i fokus wewnątrz ramki `.stats`. */
 const STAT_LINK_CLASS =
-  'block min-w-0 rounded-lg transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
 
 interface QuickLink {
   href: string;
@@ -63,6 +79,12 @@ const QUICK_LINKS: QuickLink[] = [
     descKey: 'usersSubtitle',
     icon: <Users />,
   },
+  {
+    href: '/admin/dziennik',
+    labelKey: 'navAudit',
+    descKey: 'auditSubtitle',
+    icon: <History />,
+  },
 ];
 
 export default async function AdminDashboardPage({
@@ -77,89 +99,73 @@ export default async function AdminDashboardPage({
   const statsResult = await getAdminStats();
 
   return (
-    <div className="space-y-6">
-      <header className="min-w-0 rounded-3xl border border-border bg-card p-5 sm:p-8">
-        <p className="mb-2 break-words text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-          {t('navSummary')}
-        </p>
-        <h1 className="break-words text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          {t('title')}
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('subtitle')}</p>
+    <div className="min-w-0">
+      <header className="min-w-0">
+        <p className={EYEBROW}>{t('navSummary')}</p>
+        <h1 className={H1}>{t('title')}</h1>
+        <p className={INTRO}>{t('subtitle')}</p>
       </header>
 
-      {/* Statystyki */}
+      {/* Statystyki (`.stats`) */}
       {statsResult.status === 'error' ? (
         <AdminLoadError retryHref={`/${locale}/admin`} />
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
-          <StatCard
-            label={t('statCompanies')}
-            value={statsResult.stats.companies}
-            icon={<Building2 />}
-            tone="primary"
-          />
+        <div className={cn(STATS, 'grid-cols-4 max-[900px]:grid-cols-2')}>
+          <div className={STAT}>
+            <span className={STAT_LABEL}>{t('statCompanies')}</span>
+            <strong className={STAT_VALUE}>{statsResult.stats.companies}</strong>
+          </div>
           <Link
             href={{
               pathname: '/admin/firmy',
               query: { status: AWAITING_FILTER },
             }}
-            className={STAT_LINK_CLASS}
+            className={cn(STAT, STAT_LINK_CLASS)}
           >
-            <StatCard
-              label={t('statPending')}
-              value={statsResult.stats.pendingCompanies}
-              icon={<Clock />}
-              tone="warning"
-            />
+            <span className={STAT_LABEL}>{t('statPending')}</span>
+            <strong className={STAT_VALUE}>{statsResult.stats.pendingCompanies}</strong>
           </Link>
-          <StatCard
-            label={t('statUsers')}
-            value={statsResult.stats.users}
-            icon={<Users />}
-            tone="accent"
-          />
+          <div className={STAT}>
+            <span className={STAT_LABEL}>{t('statUsers')}</span>
+            <strong className={STAT_VALUE}>{statsResult.stats.users}</strong>
+          </div>
           {/* #416: kafelek prowadzi do listy z filtrem „Otwarte” — ta sama liczba co na kafelku. */}
           <Link
             href={{ pathname: '/admin/zgloszenia', query: { status: 'open' } }}
-            className={STAT_LINK_CLASS}
+            className={cn(STAT, STAT_LINK_CLASS)}
           >
-            <StatCard
-              label={t('statOpenReports')}
-              value={statsResult.stats.openReports}
-              icon={<Flag />}
-              tone="warning"
-            />
+            <span className={STAT_LABEL}>{t('statOpenReports')}</span>
+            <strong className={STAT_VALUE}>{statsResult.stats.openReports}</strong>
           </Link>
         </div>
       )}
 
-      {/* Szybkie przejścia */}
-      <section className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-4">
-        {QUICK_LINKS.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="group flex min-w-0 items-start gap-4 rounded-3xl border border-border bg-card p-5 transition-colors hover:border-primary/40 hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-6"
-          >
-            <span
-              className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary-dark [&_svg]:size-5"
-              aria-hidden="true"
-            >
-              {link.icon}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex flex-wrap items-center gap-1 break-words text-base font-bold text-foreground">
-                {t(link.labelKey)}
-                <ArrowRight
-                  className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                  aria-hidden="true"
-                />
+      {/* Szybkie przejścia (`.panel` z wierszami `.job`) */}
+      <section aria-labelledby="admin-quick-links" className={PANEL}>
+        <div className={SECTION_HEAD}>
+          <h2 id="admin-quick-links" className={PANEL_H2}>
+            {t('quickLinksTitle')}
+          </h2>
+        </div>
+        <ul>
+          {QUICK_LINKS.map((link) => (
+            <li key={link.href} className={ROW}>
+              <span className={ICON_BOX} aria-hidden="true">
+                {link.icon}
               </span>
-              <span className="mt-1 block text-sm text-muted-foreground">{t(link.descKey)}</span>
-            </span>
-          </Link>
-        ))}
+              <div className="min-w-0 flex-1">
+                <Link href={link.href} className={cn(ROW_TITLE, 'group inline-flex min-h-6 items-center gap-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2')}>
+                  {t(link.labelKey)}
+                  <ArrowRight
+                    className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                    aria-hidden="true"
+                  />
+                </Link>
+                <p className={ROW_META}>{t(link.descKey)}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
       </section>
     </div>
   );

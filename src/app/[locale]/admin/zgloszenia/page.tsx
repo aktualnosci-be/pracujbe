@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Flag } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
@@ -13,12 +14,21 @@ import { listReports, type AdminReportRow } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import {
-  ADMIN_CARD,
   AdminEmptyState,
   AdminPageHeader,
   AdminPager,
-  adminChipClass,
 } from '@/components/admin/AdminListControls';
+import {
+  chipClass,
+  ICON_BOX,
+  INLINE_LINK,
+  PANEL,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  TAG,
+} from '@/components/admin/admin-styles';
+import { cn } from '@/lib/utils';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { ReportActions } from '@/components/admin/ReportActions';
 
@@ -107,7 +117,7 @@ export default async function AdminReportsPage({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-[22px]">
       <AdminPageHeader
         eyebrow={t('brandTag')}
         title={t('reportsTitle')}
@@ -127,7 +137,7 @@ export default async function AdminReportsPage({
                   : { pathname: BASE_PATH, query: { status: value } }
               }
               aria-current={isActive ? 'true' : undefined}
-              className={adminChipClass(isActive)}
+              className={chipClass(isActive)}
             >
               {t(FILTER_LABEL[value] ?? 'filterAll')}
             </Link>
@@ -138,7 +148,7 @@ export default async function AdminReportsPage({
       {result.status === 'error' ? (
         <AdminLoadError retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`} />
       ) : (
-        <section className={ADMIN_CARD}>
+        <section className={PANEL}>
           {reports.length === 0 ? (
             <AdminEmptyState message={t('reportsEmpty')} />
           ) : (
@@ -149,24 +159,24 @@ export default async function AdminReportsPage({
                 const reasonLabel = t(reason.key);
                 const { target } = report;
                 return (
-                  <li key={report.id} className="min-w-0 space-y-3 p-5 sm:px-7">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1 basis-64 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center rounded-full bg-soft px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            {typeLabel}
-                          </span>
-                          <AdminStatusBadge kind="report" status={report.status} />
-                        </div>
+                  <li key={report.id} className={ROW}>
+                    <span className={ICON_BOX} aria-hidden="true">
+                      <Flag />
+                    </span>
+                    <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 basis-64 space-y-1.5">
                         <h2
                           tabIndex={-1}
                           data-admin-focus={reportFocusKey(report.id)}
-                          className="break-words text-lg font-bold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className={cn(
+                            ROW_TITLE,
+                            'mb-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          )}
                         >
                           {reasonLabel}
                         </h2>
                         {/* Czego dotyczy zgłoszenie (#416). */}
-                        <p className="break-words text-sm text-foreground">
+                        <p className="break-words text-[13px] text-foreground">
                           <span className="text-muted-foreground">{t('reportTarget')}: </span>
                           {target.deleted ? (
                             <span className="italic text-muted-foreground">
@@ -175,7 +185,7 @@ export default async function AdminReportsPage({
                           ) : target.href ? (
                             <Link
                               href={target.href}
-                              className="font-semibold text-foreground underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                              className={cn(INLINE_LINK, 'underline')}
                             >
                               {target.label ?? t('targetUnnamed')}
                             </Link>
@@ -187,21 +197,21 @@ export default async function AdminReportsPage({
                           )}
                         </p>
                         {target.preview ? (
-                          <blockquote className="break-words rounded-2xl border-l-4 border-primary/40 bg-soft px-4 py-3 text-sm text-foreground">
+                          <blockquote className="break-words rounded-[14px] border border-border bg-soft px-4 py-3 text-[13px] text-foreground">
                             {target.preview}
                           </blockquote>
                         ) : null}
                         {reason.freeText ? (
-                          <p className="break-words text-sm text-muted-foreground">
+                          <p className={ROW_META}>
                             {t('reasonFreeText', { text: reason.freeText })}
                           </p>
                         ) : null}
                         {report.details ? (
-                          <p className="break-words text-sm text-muted-foreground">
+                          <p className={ROW_META}>
                             {report.details}
                           </p>
                         ) : null}
-                        <p className="text-xs text-muted-foreground">
+                        <p className={ROW_META}>
                           {t('reportedBy', {
                             name: report.reporterName ?? t('reporterFallback'),
                           })}{' '}
@@ -210,6 +220,10 @@ export default async function AdminReportsPage({
                             {formatDate(report.createdAt)}
                           </time>
                         </p>
+                        <div className="flex flex-wrap items-center">
+                          <span className={cn(TAG, 'mr-[5px] mt-1.5')}>{typeLabel}</span>
+                          <AdminStatusBadge kind="report" status={report.status} className="mt-1.5" />
+                        </div>
                       </div>
                       <ReportActions
                         reportId={report.id}

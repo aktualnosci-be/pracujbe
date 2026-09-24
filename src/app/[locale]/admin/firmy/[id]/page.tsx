@@ -8,7 +8,24 @@ import { parseUuid } from '@/lib/admin/list-params';
 import { getCompanyDetail, type AdminCompanyDetail } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
-import { ADMIN_CARD, AdminPageHeader } from '@/components/admin/AdminListControls';
+import { AdminPageHeader } from '@/components/admin/AdminListControls';
+import {
+  EMPTY,
+  INLINE_LINK,
+  NOTICE,
+  NOTICE_TEXT,
+  NOTICE_TITLE,
+  PANEL,
+  PANEL_H2,
+  PANEL_P,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  SECTION_HEAD,
+  TAG,
+  TEXT_LINK,
+} from '@/components/admin/admin-styles';
+import { cn } from '@/lib/utils';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
 import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
@@ -58,21 +75,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 function BackLink({ label }: { label: string }) {
   return (
-    <Link
-      href="/admin/firmy"
-      className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-primary-dark underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-    >
+    <Link href="/admin/firmy" className={TEXT_LINK}>
       <ArrowLeft className="size-4" aria-hidden="true" />
       {label}
     </Link>
   );
 }
 
+/** Pole danych: etykieta jak `.stat span` (12 px muted), wartość jak `.job h3` (15 px / 600). */
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className="mt-1 whitespace-pre-line break-words text-base font-semibold text-foreground">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1.5 whitespace-pre-line break-words text-[15px] font-semibold tracking-[-0.03em] text-foreground">
         {value}
       </dd>
     </div>
@@ -95,7 +110,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
 
   if (result.status === 'error') {
     return (
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-[22px]">
         <BackLink label={t('backToCompanies')} />
         <AdminPageHeader
           eyebrow={t('targetCompany')}
@@ -109,15 +124,13 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
 
   if (result.status === 'not_found') {
     return (
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-[22px]">
         <BackLink label={t('backToCompanies')} />
-        <section className={`${ADMIN_CARD} p-5 sm:p-8`}>
-          <AdminPageHeader
-            eyebrow={t('targetCompany')}
-            title={t('companyNotFoundTitle')}
-            subtitle={t('companyNotFoundHint')}
-          />
-        </section>
+        <AdminPageHeader
+          eyebrow={t('targetCompany')}
+          title={t('companyNotFoundTitle')}
+          subtitle={t('companyNotFoundHint')}
+        />
       </div>
     );
   }
@@ -128,7 +141,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
   const historyId = parseUuid(company.id);
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-[22px]">
       <BackLink label={t('backToCompanies')} />
       <AdminPageHeader
         eyebrow={t('targetCompany')}
@@ -136,27 +149,26 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
         subtitle={t('companyDetailSubtitle')}
       />
 
+      {/* Uzasadnienie ostatniego odrzucenia/zawieszenia (`.notice`) */}
+      {company.statusReason ? (
+        <div className={cn(NOTICE, 'my-0')}>
+          <div className="min-w-0">
+            <p className={NOTICE_TITLE}>{t('statusReasonLabel')}</p>
+            <p className={cn(NOTICE_TEXT, 'whitespace-pre-line text-foreground')}>
+              {company.statusReason}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {/* Status i decyzja */}
-      <section
-        aria-labelledby="company-status-heading"
-        className={`${ADMIN_CARD} space-y-5 p-5 sm:p-7`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="company-status-heading" className="min-w-0 break-words text-xl font-bold text-foreground">
+      <section aria-labelledby="company-status-heading" className={PANEL}>
+        <div className={SECTION_HEAD}>
+          <h2 id="company-status-heading" className={PANEL_H2}>
             {t('sectionStatus')}
           </h2>
           <AdminStatusBadge kind="company" status={company.status} />
         </div>
-        {company.statusReason ? (
-          <div className="rounded-2xl bg-soft p-4 text-sm">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {t('statusReasonLabel')}
-            </p>
-            <p className="mt-1 whitespace-pre-line break-words text-foreground">
-              {company.statusReason}
-            </p>
-          </div>
-        ) : null}
         <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label={t('colCreated')} value={formatDate(company.createdAt)} />
           <Field
@@ -164,12 +176,12 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
             value={company.verifiedAt ? formatDate(company.verifiedAt) : dash}
           />
         </dl>
-        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
+        <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-border pt-5">
           <CompanyStatusActions company={company} createdLabel={formatDate(company.createdAt)} />
           {historyId ? (
             <Link
               href={{ pathname: '/admin/dziennik', query: { entity: 'company', id: historyId } }}
-              className="inline-flex min-h-11 items-center px-1 text-sm font-semibold text-primary-dark underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className={cn(TEXT_LINK, 'px-1 text-xs')}
             >
               {t('auditHistoryLink')}
             </Link>
@@ -178,14 +190,13 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       </section>
 
       {/* Dane firmy */}
-      <section
-        aria-labelledby="company-data-heading"
-        className={`${ADMIN_CARD} p-5 sm:p-7`}
-      >
-        <h2 id="company-data-heading" className="min-w-0 break-words text-xl font-bold text-foreground">
-          {t('sectionCompanyData')}
-        </h2>
-        <dl className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <section aria-labelledby="company-data-heading" className={PANEL}>
+        <div className={SECTION_HEAD}>
+          <h2 id="company-data-heading" className={PANEL_H2}>
+            {t('sectionCompanyData')}
+          </h2>
+        </div>
+        <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label={t('detailVat')} value={company.vatNumber ?? dash} />
           <Field label={t('detailRegistration')} value={company.registrationNumber ?? dash} />
           <Field label={t('detailEmail')} value={company.email ?? dash} />
@@ -206,100 +217,87 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       {/* Weryfikacja VAT w VIES (#92) */}
       <CompanyViesCheck companyId={company.id} initial={company.vies} />
 
-      {/* Członkowie */}
-      <section
-        aria-labelledby="company-members-heading"
-        className={ADMIN_CARD}
-      >
-        <h2
-          id="company-members-heading"
-          className="break-words p-5 text-xl font-bold text-foreground sm:px-7"
-        >
-          {t('sectionMembers')}
-        </h2>
-        {company.members.length === 0 ? (
-          <p className="px-5 pb-6 text-sm text-muted-foreground sm:px-7">{t('membersEmpty')}</p>
-        ) : (
-          <ul className="divide-y divide-border border-t border-border">
-            {company.members.map((member) => (
-              <li
-                key={member.id}
-                className="grid min-w-0 gap-2 p-5 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:px-7"
-              >
-                <div className="min-w-0">
-                  <p className="break-words font-semibold text-foreground">
-                    {member.name || t('nameFallback')}
-                  </p>
-                  <p className="break-words text-muted-foreground">{member.email ?? dash}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
-                  <span className="inline-flex items-center rounded-full bg-soft px-2.5 py-0.5 text-xs font-semibold text-foreground ring-1 ring-inset ring-border">
-                    {t(MEMBER_ROLE_KEY[member.role] ?? 'memberRoleMember')}
-                  </span>
-                  <span
-                    className={
-                      member.isActive
-                        ? 'font-medium text-success-text'
-                        : 'font-medium text-muted-foreground'
-                    }
-                  >
-                    {t(member.isActive ? 'memberActive' : 'memberInactive')}
-                  </span>
-                  <span>
-                    {t('colMemberSince')}: {formatDate(member.since)}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* Oferty */}
-      <section
-        aria-labelledby="company-jobs-heading"
-        className={ADMIN_CARD}
-      >
-        <div className="flex flex-wrap items-baseline justify-between gap-2 p-5 sm:px-7">
-          <h2 id="company-jobs-heading" className="min-w-0 break-words text-xl font-bold text-foreground">
-            {t('sectionJobs')}
-          </h2>
-          {company.jobsTotal > company.jobs.length ? (
-            <p className="text-xs text-muted-foreground">
-              {t('jobsShown', { shown: company.jobs.length, total: company.jobsTotal })}
-            </p>
-          ) : null}
-        </div>
-        {company.jobs.length === 0 ? (
-          <p className="px-5 pb-6 text-sm text-muted-foreground sm:px-7">{t('jobsEmpty')}</p>
-        ) : (
-          <ul className="divide-y divide-border border-t border-border">
-            {company.jobs.map((job) => (
-              <li
-                key={job.id}
-                className="grid min-w-0 gap-1 p-5 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4 sm:px-7"
-              >
-                <p className="min-w-0 break-words font-semibold text-foreground">
-                  {job.status === 'active' && job.slug ? (
-                    <Link
-                      href={`/oferty-pracy/${job.slug}`}
-                      className="underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      <div className="grid min-w-0 grid-cols-[1.4fr_1fr] gap-[19px] max-[1050px]:grid-cols-1">
+        {/* Członkowie (`.panel` z wierszami `.job`) */}
+        <section aria-labelledby="company-members-heading" className={PANEL}>
+          <div className={SECTION_HEAD}>
+            <h2 id="company-members-heading" className={PANEL_H2}>
+              {t('sectionMembers')}
+            </h2>
+          </div>
+          {company.members.length === 0 ? (
+            <p className={EMPTY}>{t('membersEmpty')}</p>
+          ) : (
+            <ul>
+              {company.members.map((member) => (
+                <li key={member.id} className={ROW}>
+                  <div className="min-w-0 flex-1">
+                    <p className={ROW_TITLE}>{member.name || t('nameFallback')}</p>
+                    <p className={ROW_META}>{member.email ?? dash}</p>
+                    <p className={ROW_META}>
+                      {t('colMemberSince')}: {formatDate(member.since)}
+                    </p>
+                    <span className={cn(TAG, 'mr-[5px] mt-1.5')}>
+                      {t(MEMBER_ROLE_KEY[member.role] ?? 'memberRoleMember')}
+                    </span>
+                    <span
+                      className={cn(
+                        TAG,
+                        'mt-1.5',
+                        member.isActive ? 'bg-success/10 text-success-text' : undefined,
+                      )}
                     >
-                      {job.title || t('targetUnnamed')}
-                    </Link>
-                  ) : (
-                    job.title || t('targetUnnamed')
-                  )}
-                </p>
-                <span className="justify-self-start rounded-full bg-soft px-2.5 py-0.5 text-xs font-semibold text-foreground ring-1 ring-inset ring-border">
-                  {t(JOB_STATUS_KEY[job.status] ?? 'statusUnknown')}
-                </span>
-                <span className="text-muted-foreground">{formatDate(job.createdAt)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                      {t(member.isActive ? 'memberActive' : 'memberInactive')}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Oferty */}
+        <section aria-labelledby="company-jobs-heading" className={PANEL}>
+          <div className={SECTION_HEAD}>
+            <h2 id="company-jobs-heading" className={PANEL_H2}>
+              {t('sectionJobs')}
+            </h2>
+            {company.jobsTotal > company.jobs.length ? (
+              <p className={PANEL_P}>
+                {t('jobsShown', { shown: company.jobs.length, total: company.jobsTotal })}
+              </p>
+            ) : null}
+          </div>
+          {company.jobs.length === 0 ? (
+            <p className={EMPTY}>{t('jobsEmpty')}</p>
+          ) : (
+            <ul>
+              {company.jobs.map((job) => (
+                <li key={job.id} className={ROW}>
+                  <div className="min-w-0 flex-1">
+                    <p className={ROW_TITLE}>
+                      {job.status === 'active' && job.slug ? (
+                        <Link
+                          href={`/oferty-pracy/${job.slug}`}
+                          className={cn(INLINE_LINK, 'underline')}
+                        >
+                          {job.title || t('targetUnnamed')}
+                        </Link>
+                      ) : (
+                        job.title || t('targetUnnamed')
+                      )}
+                    </p>
+                    <p className={ROW_META}>{formatDate(job.createdAt)}</p>
+                    <span className={cn(TAG, 'mt-1.5')}>
+                      {t(JOB_STATUS_KEY[job.status] ?? 'statusUnknown')}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -1362,6 +1362,7 @@
     "navUsers": "Users",
     "title": "Admin panel",
     "subtitle": "Manage companies, reports and user accounts.",
+    "quickLinksTitle": "Go to a section",
     "statCompanies": "Companies",
     "statPending": "Awaiting verification",
     "statUsers": "Users",

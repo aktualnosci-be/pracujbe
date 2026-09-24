@@ -1362,6 +1362,7 @@
     "navUsers": "Utilisateurs",
     "title": "Panneau d'administration",
     "subtitle": "Gérez les entreprises, les signalements et les comptes utilisateurs.",
+    "quickLinksTitle": "Accéder à une section",
     "statCompanies": "Entreprises",
     "statPending": "En attente de vérification",
     "statUsers": "Utilisateurs",

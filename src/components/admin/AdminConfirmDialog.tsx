@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
+import { BTN_SMALL, PANEL, PANEL_H2 } from '@/components/admin/admin-styles';
 
 /**
  * AdminConfirmDialog — dialog potwierdzenia decyzji admina (firmy #310, zgłoszenia #422).
@@ -26,14 +27,14 @@ export const ADMIN_ACTION_TONE_CLASS: Record<AdminActionTone, string> = {
 
 /** Przycisk potwierdzenia w dialogu (pełne tło; biały tekst na wariancie `-text`). */
 const CONFIRM_CLASS: Record<AdminActionTone, string> = {
-  success: 'bg-success-text text-accent-foreground hover:opacity-90',
-  error: 'bg-error-text text-accent-foreground hover:opacity-90',
-  warning: 'bg-warning-text text-accent-foreground hover:opacity-90',
-  neutral: 'bg-foreground text-background hover:opacity-90',
+  success: 'border-transparent bg-success-text text-accent-foreground hover:opacity-90',
+  error: 'border-transparent bg-error-text text-accent-foreground hover:opacity-90',
+  warning: 'border-transparent bg-warning-text text-accent-foreground hover:opacity-90',
+  neutral: 'border-transparent bg-foreground text-background hover:opacity-90',
 };
 
-export const ADMIN_BUTTON_BASE =
-  'inline-flex min-h-11 max-w-full items-center justify-center rounded-xl px-4 text-center text-sm font-semibold transition-colors [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+/** Przycisk akcji w wierszu = `.people .notice .btn` z prototypu (12 px / 650, 11/17 px, min. 44 px). */
+export const ADMIN_BUTTON_BASE = BTN_SMALL;
 
 export interface AdminConfirmDialogProps {
   title: string;
@@ -121,20 +122,20 @@ export function AdminConfirmDialog({
         aria-busy={pending || undefined}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="max-h-full w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-5 text-left shadow-lg focus:outline-none sm:p-7"
+        className={cn(PANEL, 'max-h-full w-full max-w-md overflow-y-auto text-left shadow-lg focus:outline-none')}
       >
-        <h2 id={titleId} className="break-words text-xl font-bold text-foreground">
+        <h2 id={titleId} className={PANEL_H2}>
           {title}
         </h2>
-        <p id={descId} className="mt-1 break-words text-sm text-muted-foreground">
+        <p id={descId} className="mt-1.5 break-words text-[13px] leading-[1.6] text-muted-foreground">
           {description}
         </p>
 
         {details.length > 0 ? (
-          <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-2 rounded-2xl bg-soft p-4 text-sm sm:grid-cols-[auto_1fr]">
+          <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-2 rounded-[14px] border border-border bg-soft p-4 text-[13px] sm:grid-cols-[auto_1fr]">
             {details.map((item) => (
               <React.Fragment key={item.key}>
-                <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{item.label}</dt>
+                <dt className="text-xs text-muted-foreground">{item.label}</dt>
                 <dd className="break-words font-semibold text-foreground">{item.value}</dd>
               </React.Fragment>
             ))}

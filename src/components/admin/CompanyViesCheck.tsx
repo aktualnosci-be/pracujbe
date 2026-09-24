@@ -8,6 +8,7 @@ import { checkCompanyVies, type ViesActionOutcome } from '@/lib/actions/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { cn } from '@/lib/utils';
+import { NOTICE, PANEL, PANEL_H2, PANEL_P, TAG } from '@/components/admin/admin-styles';
 import { formatBelgianVat } from '@/lib/vies/belgian-vat';
 import type { AdminViesState } from '@/lib/vies/state';
 import { ADMIN_ACTION_TONE_CLASS, ADMIN_BUTTON_BASE } from '@/components/admin/AdminConfirmDialog';
@@ -126,22 +127,19 @@ export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps):
   else if (notice?.kind === 'error') noticeText = tRoot(toUserMessageKey(notice.code));
 
   return (
-    <section
-      aria-labelledby="company-vies-heading"
-      className="min-w-0 space-y-4 rounded-3xl border border-border bg-card p-5 sm:p-7"
-    >
-      <div className="space-y-1">
-        <h2 id="company-vies-heading" className="break-words text-xl font-bold text-foreground">
+    <section aria-labelledby="company-vies-heading" className={cn(PANEL, 'space-y-4')}>
+      <div className="space-y-1.5">
+        <h2 id="company-vies-heading" className={PANEL_H2}>
           {t('viesHeading')}
         </h2>
-        <p className="text-sm text-muted-foreground">{t('viesIntro')}</p>
+        <p className={PANEL_P}>{t('viesIntro')}</p>
       </div>
 
-      <div className="space-y-2 text-sm" data-testid="vies-state" data-vies-state={shown.kind}>
+      <div className="space-y-2 text-[13px]" data-testid="vies-state" data-vies-state={shown.kind}>
         {shown.kind === 'valid' ? (
           <>
             <p>
-              <span className="inline-flex items-center rounded-full border border-success/40 bg-success/10 px-2.5 py-0.5 font-medium text-success-text">
+              <span className={cn(TAG, 'bg-success/10 font-medium text-success-text')}>
                 {t('viesStateValid')}
               </span>
             </p>
@@ -153,7 +151,7 @@ export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps):
               {t('viesOfficialName')}: {shown.viesName ?? t('viesNameUnknown')}
             </p>
             {shown.nameMatch === 'mismatch' ? (
-              <p className="rounded-2xl bg-soft p-4 text-foreground">{t('viesNameMismatch')}</p>
+              <p className={cn(NOTICE, 'my-0 text-foreground')}>{t('viesNameMismatch')}</p>
             ) : shown.nameMatch === 'match' ? (
               <p className="text-muted-foreground">{t('viesNameMatch')}</p>
             ) : null}
@@ -161,7 +159,7 @@ export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps):
         ) : shown.kind === 'invalid' ? (
           <>
             <p>
-              <span className="inline-flex items-center rounded-full border border-error/40 bg-error/10 px-2.5 py-0.5 font-medium text-error-text">
+              <span className={cn(TAG, 'bg-error/10 font-medium text-error-text')}>
                 {t('viesStateInvalid')}
               </span>
             </p>
@@ -184,14 +182,14 @@ export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps):
         )}
       </div>
 
-      <div role="status" aria-live="polite" className="text-sm">
+      <div role="status" aria-live="polite" className="text-[13px]">
         {noticeText ? (
           <p
             className={cn(
-              'rounded-2xl p-4',
+              'rounded-[16px] border px-[23px] py-5 max-[600px]:p-[18px]',
               notice?.kind === 'error' || notice?.kind === 'not_saved'
-                ? 'bg-error/10 text-error-text'
-                : 'bg-soft text-foreground',
+                ? 'border-error/30 bg-error/10 text-error-text'
+                : 'border-border bg-soft text-foreground',
             )}
           >
             {noticeText}
@@ -205,7 +203,7 @@ export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps):
           onClick={runCheck}
           disabled={pending}
           aria-busy={pending || undefined}
-          className={cn(ADMIN_BUTTON_BASE, 'border bg-card', ADMIN_ACTION_TONE_CLASS.neutral)}
+          className={cn(ADMIN_BUTTON_BASE, ADMIN_ACTION_TONE_CLASS.neutral)}
         >
           {pending ? t('viesChecking') : checkedBefore ? t('viesRecheckAction') : t('viesCheckAction')}
         </button>

@@ -10,13 +10,25 @@ import { listUsers } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import {
-  ADMIN_CARD,
-  ADMIN_FIELD,
   AdminEmptyState,
   AdminPageHeader,
   AdminPager,
   AdminSearchForm,
 } from '@/components/admin/AdminListControls';
+import {
+  FIELD,
+  FIELD_LABEL,
+  ICON_BOX,
+  PANEL,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  TABLE_WRAP,
+  TAG,
+  TD,
+  TD_WRAP,
+  TH,
+} from '@/components/admin/admin-styles';
 import { cn } from '@/lib/utils';
 
 /**
@@ -103,7 +115,7 @@ export default async function AdminUsersPage({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-[22px]">
       <AdminPageHeader
         eyebrow={t('brandTag')}
         title={t('usersTitle')}
@@ -117,15 +129,15 @@ export default async function AdminUsersPage({
         hint={t('searchUsersHint')}
         clearHref={{ pathname: BASE_PATH, query: role ? { role } : {} }}
       >
-        <div className="min-w-0 basis-40">
-          <label htmlFor="admin-role" className="block text-sm font-semibold text-foreground">
+        <div className="min-w-0 basis-40 p-1">
+          <label htmlFor="admin-role" className={FIELD_LABEL}>
             {t('colRole')}
           </label>
           <select
             id="admin-role"
             name="role"
             defaultValue={role ?? ''}
-            className={ADMIN_FIELD}
+            className={FIELD}
           >
             <option value="">{t('roleAll')}</option>
             {USER_ROLE_FILTERS.map((value) => (
@@ -140,60 +152,52 @@ export default async function AdminUsersPage({
       {result.status === 'error' ? (
         <AdminLoadError retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`} />
       ) : (
-        <section className={ADMIN_CARD}>
+        <section className={PANEL}>
           {users.length === 0 ? (
             <AdminEmptyState message={t('usersEmpty')} />
           ) : (
             <>
               {/* Desktop: tabela */}
-              <div className="hidden overflow-x-auto rounded-3xl md:block">
-                <table className="w-full text-sm">
-                  <thead className="bg-soft">
-                    <tr className="border-b border-border text-left">
-                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className={cn(TABLE_WRAP, 'hidden md:block')}>
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th scope="col" className={TH}>
                         {t('colUser')}
                       </th>
-                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <th scope="col" className={TH}>
                         {t('colEmail')}
                       </th>
-                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <th scope="col" className={TH}>
                         {t('colRole')}
                       </th>
-                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <th scope="col" className={TH}>
                         {t('colCreated')}
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody>
                     {users.map((user) => (
                       <tr key={user.id}>
-                        <td className="px-5 py-4 align-middle">
+                        <td className={TD_WRAP}>
                           <div className="flex items-center gap-3">
-                            <span
-                              className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-                              aria-hidden="true"
-                            >
+                            <span className={cn(ICON_BOX, 'size-9')} aria-hidden="true">
                               {initials(user.name || t('nameFallback'))}
                             </span>
-                            <span className="break-words font-semibold text-foreground">
+                            <span className="break-words font-semibold">
                               {user.name || t('nameFallback')}
                             </span>
                           </div>
                         </td>
-                        <td className="px-5 py-4 align-middle text-muted-foreground">
+                        <td className={TD}>
                           {user.email ?? '—'}
                         </td>
-                        <td className="px-5 py-4 align-middle">
-                          <span
-                            className={cn(
-                              'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                              ROLE_TONE[user.role] ?? 'bg-muted text-muted-foreground',
-                            )}
-                          >
+                        <td className={TD}>
+                          <span className={cn(TAG, ROLE_TONE[user.role])}>
                             {roleLabel(user.role)}
                           </span>
                         </td>
-                        <td className="px-5 py-4 align-middle text-muted-foreground">
+                        <td className={TD}>
                           {formatDate(user.createdAt)}
                         </td>
                       </tr>
@@ -203,37 +207,21 @@ export default async function AdminUsersPage({
               </div>
 
               {/* Mobile: karty */}
-              <ul className="divide-y divide-border md:hidden">
+              <ul className="md:hidden">
                 {users.map((user) => (
-                  <li key={user.id} className="flex min-w-0 items-start gap-3 p-5">
-                    <span
-                      className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-                      aria-hidden="true"
-                    >
+                  <li key={user.id} className={ROW}>
+                    <span className={ICON_BOX} aria-hidden="true">
                       {initials(user.name || t('nameFallback'))}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <p className="min-w-0 break-words font-semibold text-foreground">
-                          {user.name || t('nameFallback')}
-                        </p>
-                        <span
-                          className={cn(
-                            'max-w-full break-words rounded-full px-2 py-0.5 text-xs font-medium',
-                            ROLE_TONE[user.role] ?? 'bg-muted text-muted-foreground',
-                          )}
-                        >
-                          {roleLabel(user.role)}
-                        </span>
-                      </div>
+                      <p className={ROW_TITLE}>{user.name || t('nameFallback')}</p>
                       {user.email ? (
-                        <p className="mt-0.5 break-all text-sm text-muted-foreground">
-                          {user.email}
-                        </p>
+                        <p className={cn(ROW_META, 'break-all')}>{user.email}</p>
                       ) : null}
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {formatDate(user.createdAt)}
-                      </p>
+                      <p className={ROW_META}>{formatDate(user.createdAt)}</p>
+                      <span className={cn(TAG, 'mt-1.5', ROLE_TONE[user.role])}>
+                        {roleLabel(user.role)}
+                      </span>
                     </div>
                   </li>
                 ))}
