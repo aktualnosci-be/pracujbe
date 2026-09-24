@@ -148,7 +148,7 @@ describe('mobilny powrót z wątku wiadomości', () => {
       const inaccessible = await MessagesView({ locale, basePath, activeParam: 'conversation-1' });
       render(inaccessible);
       expect(screen.getByText(translations[locale].messages.threadUnavailable)).toBeVisible();
-      expect(getConversationThread).toHaveBeenCalledWith('conversation-1');
+      expect(getConversationThread).toHaveBeenCalledWith('conversation-1', locale);
       expect(screen.queryByText('message-composer')).not.toBeInTheDocument();
       expect(markConversationRead).not.toHaveBeenCalled();
     },
@@ -178,7 +178,7 @@ describe('mobilny powrót z wątku wiadomości', () => {
     getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1', unread: true, unreadCount: 2 }] });
     getConversationThread.mockResolvedValue({ status: 'ready', thread: { id: 'conversation-1', messages: [] } });
     markConversationRead.mockImplementation(async () => {
-      expect(getConversationThread).toHaveBeenCalledWith('conversation-1');
+      expect(getConversationThread).toHaveBeenCalledWith('conversation-1', 'pl');
       return ok ? { ok: true } : { ok: false, error: 'INTERNAL' };
     });
 

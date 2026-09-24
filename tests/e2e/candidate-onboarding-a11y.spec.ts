@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { rejectOptionalCookies } from './fixtures/messages';
+
 /**
  * Dostępność kreatora profilu kandydata (tryb demo, bez dowodu zapisu do DB):
  * - #323: po zmianie kroku fokus trafia na nagłówek nowego kroku, a krok jest ogłaszany,
@@ -11,7 +13,7 @@ const locales = ['pl', 'nl', 'fr', 'en'] as const;
 
 async function openWizard(page: Page, locale: string): Promise<void> {
   await page.goto(`/${locale}/candidate/onboarding`);
-  await page.locator('[aria-labelledby="cookie-banner-title"] button').first().click();
+  await rejectOptionalCookies(page, locale);
 }
 
 /** Przycisk „Dalej: <krok>” — jedyny przycisk kreatora ze strzałką w prawo (niezależnie od języka). */
@@ -79,7 +81,7 @@ test('#320: błędy są powiązane z polami, fokus na pierwszym błędnym polu',
   await nextButton(page).click();
   await expect(page.locator('#onb-firstName')).toBeFocused();
   await expect(page.locator('#onb-firstName')).toHaveAttribute('aria-invalid', 'true');
-  await expectDescribedBy(page, '#onb-firstName', 'onb-firstName-error', 'Imię jest za krótkie.');
+  await expectDescribedBy(page, '#onb-firstName', 'onb-firstName-error', 'Podaj imię.');
   await expectDescribedBy(page, '#onb-lastName', 'onb-lastName-error');
 
   // Krok 2: pole chipów i grupa branż wskazują swoje błędy.

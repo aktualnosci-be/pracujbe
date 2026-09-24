@@ -17,6 +17,7 @@ import {
 } from '@/lib/consent';
 import { OPEN_SETTINGS_EVENT, updateConsent } from '@/lib/consent-store';
 import { Analytics } from './Analytics';
+import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 
 /**
  * System zgód na cookies (RODO). Montowany globalnie w [locale]/layout.
@@ -309,94 +310,93 @@ export function CookieConsent() {
           )
         : null}
 
-      <Dialog.Root open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-          <Dialog.Content
-            onCloseAutoFocus={restoreFocus}
-            className="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-xl border border-border bg-background p-6 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <Dialog.Title className="text-lg font-semibold text-foreground">
-                  {t('settingsTitle')}
-                </Dialog.Title>
-                <Dialog.Description className="text-sm text-muted-foreground">
-                  {t('settingsDesc')}
-                </Dialog.Description>
-              </div>
-              <Dialog.Close
-                aria-label={tNav('close')}
-                className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'shrink-0')}
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </Dialog.Close>
+      <LightDialogRoot open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <LightDialogContent
+          open={settingsOpen}
+          overlayClassName="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+          onCloseAutoFocus={restoreFocus}
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-xl border border-border bg-background p-6 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Dialog.Title className="text-lg font-semibold text-foreground">
+                {t('settingsTitle')}
+              </Dialog.Title>
+              <Dialog.Description className="text-sm text-muted-foreground">
+                {t('settingsDesc')}
+              </Dialog.Description>
             </div>
-
-            <div className="-mx-1 flex-1 divide-y divide-border overflow-y-auto px-1">
-              {CATEGORY_META.map((category) => {
-                const labelId = `${rowIdBase}-${category.key}-label`;
-                const descId = `${rowIdBase}-${category.key}-desc`;
-                const checked = category.locked ? true : draft[category.key];
-                return (
-                  <div
-                    key={category.key}
-                    className="flex items-start justify-between gap-4 py-4 first:pt-1"
-                  >
-                    <div className="space-y-0.5">
-                      <p id={labelId} className="text-sm font-medium text-foreground">
-                        {t(category.nameKey)}
-                      </p>
-                      <p id={descId} className="text-sm text-muted-foreground">
-                        {t(category.descKey)}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center pt-0.5">
-                      {category.locked ? (
-                        <span className="whitespace-nowrap text-xs font-medium text-success-text">
-                          {t('alwaysOn')}
-                        </span>
-                      ) : (
-                        <ConsentSwitch
-                          checked={checked}
-                          onCheckedChange={(value) => toggleCategory(category.key, value)}
-                          labelledBy={labelId}
-                          describedBy={descId}
-                        />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <Link
-              href="/polityka-cookies"
-              className="text-sm font-medium text-accent underline-offset-4 hover:underline"
+            <Dialog.Close
+              aria-label={tNav('close')}
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'shrink-0')}
             >
-              {t('moreInfo')}
-            </Link>
+              <X className="h-5 w-5" aria-hidden="true" />
+            </Dialog.Close>
+          </div>
 
-            {/* Kolejność DOM: odrzuć · zapisz · akceptuj (desktop lewo→prawo).
-                Na mobile flex-col-reverse podnosi „Akceptuj wszystkie" na górę — wg makiety. */}
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                variant="outline"
-                onClick={handleRejectOptional}
-                className="w-full sm:w-auto"
-              >
-                {t('rejectOptional')}
-              </Button>
-              <Button variant="outline" onClick={handleSaveSelection} className="w-full sm:w-auto">
-                {t('save')}
-              </Button>
-              <Button onClick={handleAcceptAll} className="w-full sm:w-auto">
-                {t('acceptAll')}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+          <div className="-mx-1 flex-1 divide-y divide-border overflow-y-auto px-1">
+            {CATEGORY_META.map((category) => {
+              const labelId = `${rowIdBase}-${category.key}-label`;
+              const descId = `${rowIdBase}-${category.key}-desc`;
+              const checked = category.locked ? true : draft[category.key];
+              return (
+                <div
+                  key={category.key}
+                  className="flex items-start justify-between gap-4 py-4 first:pt-1"
+                >
+                  <div className="space-y-0.5">
+                    <p id={labelId} className="text-sm font-medium text-foreground">
+                      {t(category.nameKey)}
+                    </p>
+                    <p id={descId} className="text-sm text-muted-foreground">
+                      {t(category.descKey)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center pt-0.5">
+                    {category.locked ? (
+                      <span className="whitespace-nowrap text-xs font-medium text-success-text">
+                        {t('alwaysOn')}
+                      </span>
+                    ) : (
+                      <ConsentSwitch
+                        checked={checked}
+                        onCheckedChange={(value) => toggleCategory(category.key, value)}
+                        labelledBy={labelId}
+                        describedBy={descId}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <Link
+            href="/polityka-cookies"
+            className="text-sm font-medium text-accent underline-offset-4 hover:underline"
+          >
+            {t('moreInfo')}
+          </Link>
+
+          {/* Kolejność DOM: odrzuć · zapisz · akceptuj (desktop lewo→prawo).
+              Na mobile flex-col-reverse podnosi „Akceptuj wszystkie" na górę — wg makiety. */}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={handleRejectOptional}
+              className="w-full sm:w-auto"
+            >
+              {t('rejectOptional')}
+            </Button>
+            <Button variant="outline" onClick={handleSaveSelection} className="w-full sm:w-auto">
+              {t('save')}
+            </Button>
+            <Button onClick={handleAcceptAll} className="w-full sm:w-auto">
+              {t('acceptAll')}
+            </Button>
+          </div>
+        </LightDialogContent>
+      </LightDialogRoot>
     </>
   );
 }

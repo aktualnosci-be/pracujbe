@@ -1,10 +1,8 @@
-'use client';
-
 import { formatSalaryRange } from '@/lib/salary';
 
 import * as React from 'react';
 import { ArrowUpRight, BadgeCheck } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { getFormatter, getLocale, getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
@@ -12,7 +10,17 @@ import { MatchBar } from '@/components/ui/match-bar';
 import { PublicSaveJobButton } from './PublicSavedJobs';
 import type { JobListItem } from '@/lib/jobs';
 
-/** Paszport oferty: lokalizacja, opcjonalna stawka i warunki z rzeczywistych danych. */
+/**
+ * Paszport oferty: lokalizacja, opcjonalna stawka i warunki z rzeczywistych danych.
+ *
+ * Komponent serwerowy (#391): karta nie ma stanu ani handlerów, więc do przeglądarki nie
+ * trafia cały `JobListItem` (payload RSC), a jedyną wyspą kliencką jest przycisk zapisu,
+ * który dostaje samo `jobId`. Tłumaczenia z `next-intl/server`, nie z `next-intl`: import
+ * głównego pakietu w komponencie serwerowym rejestruje `NextIntlClientProvider` jako
+ * referencję kliencką strony, a Next łączy te referencje po ścieżce (z pominięciem grup
+ * tras), więc inne strony dociągałyby wtedy chunki strony głównej i listy. Względna data liczy się raz, na serwerze; pełna data jest
+ * w `title`, więc HTML z cache nie wprowadza w błąd.
+ */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -45,18 +53,20 @@ export interface JobCardProps {
   className?: string;
 }
 
-export function JobCard({
+export async function JobCard({
   job,
   showMatch,
   matchScore,
   className,
-}: JobCardProps): React.JSX.Element {
-  const locale = useLocale();
-  const t = useTranslations('jobs');
-  const tContract = useTranslations('contractTypes');
-  const tJob = useTranslations('job');
-  const tCategory = useTranslations('categories');
-
+}: JobCardProps): Promise<React.JSX.Element> {
+  const [locale, t, tContract, tJob, tCategory, format] = await Promise.all([
+    getLocale(),
+    getTranslations('jobs'),
+    getTranslations('contractTypes'),
+    getTranslations('job'),
+    getTranslations('categories'),
+    getFormatter(),
+  ]);
 
   const salary = formatSalaryRange(job, locale, {
     from: value => t('passport.salaryFrom', { value }),
@@ -147,7 +157,11 @@ export function JobCard({
       ) : null}
       <footer className="mt-5 flex flex-wrap items-center justify-between gap-3">
         {relative ? (
-          <time dateTime={job.publishedAt} suppressHydrationWarning className="text-xs text-muted-foreground">
+          <time
+            dateTime={job.publishedAt}
+            title={format.dateTime(new Date(job.publishedAt), { dateStyle: 'long', timeZone: 'Europe/Brussels' })}
+            className="text-xs text-muted-foreground"
+          >
             {relative}
           </time>
         ) : null}

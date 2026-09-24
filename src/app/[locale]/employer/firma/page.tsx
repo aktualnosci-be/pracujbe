@@ -5,14 +5,18 @@ import { getMyCompany } from '@/lib/data/company';
 import { CompanyForm } from '@/components/employer/CompanyForm';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { CompanyLoadError } from '@/components/employer/CompanyLoadError';
+import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
+import { CompanyReverifyButton } from '@/components/employer/CompanyReverifyButton';
 
 /**
  * Panel pracodawcy — Firma (Etap 4).
  *
- * Brak firmy → formularz zakładania (CompanyForm mode="create"). Firma istnieje → baner statusu
- * weryfikacji (CompanyStatusBanner) + dane read-only (identyfikator/status/data weryfikacji)
- * + edycja nazwy i VAT (CompanyForm mode="edit"). Publikacja ofert i wysyłka propozycji wymaga
- * statusu `verified` (nadaje administrator) — objaśnione w nocie.
+ * Brak firmy → formularz zakładania (CompanyOnboarding; layout pokazuje go też na innych
+ * podstronach). Firma istnieje → baner statusu weryfikacji (CompanyStatusBanner; odrzucona
+ * firma ma akcję ponownego zgłoszenia — #400) + dane read-only (identyfikator/status/data
+ * weryfikacji) + edycja nazwy i VAT (CompanyForm mode="edit"; zmiana tych danych zweryfikowanej
+ * firmy wraca do weryfikacji). Publikacja ofert i wysyłka propozycji wymaga statusu `verified`
+ * (nadaje administrator) — objaśnione w nocie.
  *
  * NOINDEX (panel) + `force-dynamic` (dane zależne od sesji/RLS). Guard członkostwa dziedziczony
  * z `employer/layout.tsx`; bez env → firma DEMO (widok danych).
@@ -53,6 +57,7 @@ export default async function EmployerCompanyPage({
   const t = await getTranslations({ locale, namespace: 'company' });
   const companyLoad = await getMyCompany();
   const company = companyLoad.status === 'ok' ? companyLoad.company : null;
+  if (companyLoad.status === 'ok' && !company) return <CompanyOnboarding />;
 
   const statusLabel =
     company && STATUS_KEY[company.status]
@@ -99,7 +104,12 @@ export default async function EmployerCompanyPage({
         <CompanyLoadError />
       ) : company ? (
         <>
-          <CompanyStatusBanner status={company.status} />
+          <CompanyStatusBanner
+            status={company.status}
+            action={
+              company.status === 'rejected' && company.canEdit ? <CompanyReverifyButton /> : null
+            }
+          />
 
           {/* Dane read-only (nieedytowalne przez pracodawcę: identyfikator, status, weryfikacja). */}
           <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
@@ -145,6 +155,7 @@ export default async function EmployerCompanyPage({
               <div className="mt-4">
                 <CompanyForm
                   mode="edit"
+                  verified={company.status === 'verified'}
                   defaultValues={{
                     name: company.name,
                     vatNumber: company.vatNumber ?? '',
@@ -162,19 +173,7 @@ export default async function EmployerCompanyPage({
             {t('verificationNote')}
           </p>
         </>
-      ) : (
-        <section className="rounded-3xl border border-border bg-card p-5 sm:p-7">
-          <h2 className="text-base font-semibold text-foreground">
-            {t('createTitle')}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t('verificationNote')}
-          </p>
-          <div className="mt-4">
-            <CompanyForm mode="create" />
-          </div>
-        </section>
-      )}
+      ) : null}
     </div>
   );
 }

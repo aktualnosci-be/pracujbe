@@ -72,7 +72,7 @@
     "detailsSubtitle": "Zarządzaj danymi swojej firmy i sprawdź status weryfikacji.",
     "editTitle": "Edytuj dane firmy",
     "name": "Nazwa firmy",
-    "namePlaceholder": "np. AGO Jobs & HR",
+    "namePlaceholder": "np. Nazwa Twojej firmy",
     "vatNumber": "Numer VAT / KBO (opcjonalnie)",
     "vatPlaceholder": "BE0123456789",
     "vatHint": "Belgijski numer przedsiębiorstwa (KBO/BCE) ułatwia weryfikację firmy.",
@@ -84,14 +84,14 @@
     "statusLabel": "Status weryfikacji",
     "verifiedAt": "Data weryfikacji",
     "verificationNote": "Publikacja ofert i wysyłka propozycji wymaga statusu „zweryfikowana”, który nadaje administrator.",
-    "bannerPendingTitle": "Firma oczekuje na weryfikację",
-    "bannerPendingDesc": "Sprawdzamy dane Twojej firmy. Publikacja ofert i wysyłka propozycji będą możliwe po zatwierdzeniu przez administratora.",
+    "bannerPendingTitle": "Firma czeka na weryfikację",
+    "bannerPendingDesc": "Dane firmy czekają w kolejce na sprawdzenie przez administratora Pracuj.be. Publikacja ofert i wysyłka propozycji będą możliwe po zatwierdzeniu.",
     "bannerVerifiedTitle": "Firma zweryfikowana",
     "bannerVerifiedDesc": "Możesz publikować oferty i wysyłać propozycje kandydatom.",
     "bannerRejectedTitle": "Weryfikacja odrzucona",
-    "bannerRejectedDesc": "Nie udało się zweryfikować firmy. Popraw dane lub skontaktuj się z nami.",
+    "bannerRejectedDesc": "Administrator nie zatwierdził danych firmy. Sprawdź nazwę i numer VAT/KBO, popraw je i wyślij firmę ponownie do weryfikacji.",
     "bannerSuspendedTitle": "Konto firmy zawieszone",
-    "bannerSuspendedDesc": "Konto firmy zostało zawieszone. Publikacja ofert jest wstrzymana.",
+    "bannerSuspendedDesc": "Konto firmy zostało zawieszone przez administratora. Publikacja ofert i wysyłka propozycji są wstrzymane.",
     "statusUnverified": "Niezweryfikowana",
     "statusPending": "Oczekuje na weryfikację",
     "statusVerified": "Zweryfikowana",
@@ -103,7 +103,21 @@
       "nameTooLong": "Nazwa firmy jest za długa.",
       "vatInvalid": "Niepoprawny numer VAT/KBO.",
       "vatTooLong": "Numer VAT/KBO jest za długi."
-    }
+    },
+    "bannerUnverifiedTitle": "Firma czeka na weryfikację",
+    "bannerUnverifiedDesc": "Zanim opublikujesz pierwszą ofertę, administrator Pracuj.be sprawdzi dane firmy. Nie musisz niczego wysyłać — firma jest już w kolejce.",
+    "bannerLink": "Przejdź do danych firmy",
+    "stepsTitle": "Pierwsze kroki",
+    "stepVat": "Uzupełnij numer VAT/KBO firmy — ułatwia sprawdzenie danych.",
+    "stepWait": "Poczekaj na weryfikację przez administratora — nie trzeba niczego klikać.",
+    "stepDraft": "Przygotuj szkic oferty — opublikujesz go po weryfikacji.",
+    "wizardNotice": "Możesz już przygotować i zapisać szkic oferty. Publikacja będzie możliwa po weryfikacji firmy.",
+    "reverifySubmit": "Wyślij ponownie do weryfikacji",
+    "reverifyHint": "Najpierw popraw i zapisz dane firmy, a potem wyślij ją ponownie do weryfikacji.",
+    "reverifySuccess": "Firma wróciła do kolejki weryfikacji.",
+    "editVerifiedHint": "Zmiana nazwy lub numeru VAT/KBO zweryfikowanej firmy wymaga ponownej weryfikacji. Do czasu zatwierdzenia oferty firmy nie będą widoczne publicznie, a publikacja i wysyłka propozycji zostaną wstrzymane.",
+    "savedReverification": "Dane firmy zostały zapisane. Firma wróciła do weryfikacji — administrator sprawdzi nowe dane.",
+    "onboardingEyebrow": "Konto pracodawcy"
   },
   "common": {
     "appName": "Pracuj.be",
@@ -824,7 +838,9 @@
     "employerApplicationMessage": "Napisz wiadomość",
     "employerApplicationMessageLabel": "Napisz wiadomość do: {name}",
     "employerApplicationView": "Zobacz zgłoszenie",
-    "employerApplicationViewLabel": "Zobacz zgłoszenie: {name}, {job}"
+    "employerApplicationViewLabel": "Zobacz zgłoszenie: {name}, {job}",
+    "companyFallback": "Twoja firma",
+    "employerShellLoadError": "Nie udało się wczytać danych konta firmy. Spróbuj ponownie."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -937,7 +953,8 @@
     "agreeTerms": "Akceptuję regulamin i politykę prywatności.",
     "stepAnnounce": "Krok {current} z {total}: {title}",
     "agreeTermsLinks": "Akceptuję <terms>regulamin</terms> i <privacy>politykę prywatności</privacy>.",
-    "opensInNewTab": "(otwiera się w nowej karcie)"
+    "opensInNewTab": "(otwiera się w nowej karcie)",
+    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy."
   },
   "filters": {
     "title": "Filtry",
@@ -991,9 +1008,6 @@
     "title": "Powiadomienia",
     "markAllRead": "Oznacz wszystkie jako przeczytane",
     "seeAll": "Zobacz wszystkie",
-    "sampleNewJob": "Nowa oferta pracy dopasowana do Twojego profilu",
-    "sampleAppViewed": "Twoja aplikacja została obejrzana",
-    "sampleMessage": "Masz nową wiadomość od pracodawcy",
     "itemApplicationReceived": "Otrzymano nową aplikację",
     "itemApplicationStatusChanged": "Status Twojej aplikacji uległ zmianie",
     "itemOfferReceived": "Otrzymałeś propozycję pracy",
@@ -1004,7 +1018,11 @@
     "itemSystem": "Powiadomienie systemowe",
     "empty": "Brak powiadomień",
     "loadError": "Nie udało się wczytać powiadomień. Spróbuj ponownie.",
-    "retry": "Spróbuj ponownie"
+    "retry": "Spróbuj ponownie",
+    "bellLabel": "{count, plural, =0 {Powiadomienia} one {Powiadomienia, 1 nieprzeczytane} few {Powiadomienia, # nieprzeczytane} many {Powiadomienia, # nieprzeczytanych} other {Powiadomienia, # nieprzeczytanych}}",
+    "unreadItem": "Nieprzeczytane",
+    "markingAllRead": "Zapisywanie…",
+    "markedAllRead": "Oznaczono wszystkie powiadomienia jako przeczytane."
   },
   "pricing": {
     "standard": "Standard",
@@ -1091,7 +1109,8 @@
       "bioTooLong": "Opis jest za długi.",
       "termsRequired": "Musisz zaakceptować regulamin i politykę prywatności.",
       "availabilityRequired": "Wybierz swoją dostępność.",
-      "invalid": "Nieprawidłowa wartość."
+      "invalid": "Nieprawidłowa wartość.",
+      "itemTooLong": "Jedna z pozycji listy jest za długa. Skróć ją."
     }
   },
   "jobWizard": {
@@ -1200,7 +1219,9 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Nie podano",
     "notVerifiedNote": "Wersja robocza została zapisana. Publikacja będzie możliwa po weryfikacji firmy.",
-    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy."
+    "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy.",
+    "stepAnnounce": "Krok {current} z {total}: {title}",
+    "goToOffers": "Przejdź do listy ofert"
   },
   "messages": {
     "title": "Wiadomości",
@@ -1233,7 +1254,9 @@
     "loadOlder": "Wczytaj starsze wiadomości",
     "loadingOlder": "Wczytuję starsze wiadomości…",
     "loadOlderError": "Nie udało się wczytać starszych wiadomości. Spróbuj ponownie.",
-    "threadStart": "To początek rozmowy."
+    "threadStart": "To początek rozmowy.",
+    "senderCompanyFallback": "Pracodawca",
+    "senderCandidateFallback": "Kandydat"
   },
   "files": {
     "cvTitle": "Twoje CV / dokumenty",
@@ -1352,7 +1375,10 @@
     "saving": "Zapisywanie...",
     "savedSuccess": "Preferencje powiadomień zostały zapisane.",
     "loadError": "Nie udało się wczytać Twoich preferencji powiadomień.",
-    "loadErrorHint": "Nie pokazujemy formularza, żeby zapis nie nadpisał Twoich wcześniejszych wyborów. Spróbuj ponownie za chwilę."
+    "loadErrorHint": "Nie pokazujemy formularza, żeby zapis nie nadpisał Twoich wcześniejszych wyborów. Spróbuj ponownie za chwilę.",
+    "employerEmailApplicationsDescription": "Nowe zgłoszenia kandydatów na Twoje oferty.",
+    "employerEmailOffersDescription": "Gdy kandydat przyjmie lub odrzuci Twoją propozycję pracy.",
+    "employerEmailMessagesDescription": "Nowe wiadomości od kandydatów w Twoich konwersacjach."
   },
   "guides": {
     "pageTitle": "Poradniki",

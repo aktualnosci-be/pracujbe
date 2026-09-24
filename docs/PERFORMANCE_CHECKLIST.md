@@ -36,6 +36,9 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 - [ ] LCP: element LCP na stronach ofert to tekst/obraz nad linią zgięcia — priorytetyzuj.
 - [ ] CLS: rezerwuj wymiary obrazów i kontenerów (brak przeskoków layoutu).
 - [ ] INP: minimalizuj JS wykonywany przy interakcji; wyspy klienckie tylko tam gdzie trzeba.
+- [x] INP dialogów: `src/components/ui/light-dialog.tsx` zamiast trybu `modal` Radix — bez
+      arkusza w `<head>` i `pointer-events` na `<body>` przy otwarciu (#393; pilnuje
+      `tests/e2e/dialog-open-cost.spec.ts`). Nowy dialog modalny buduj na `LightDialog*`.
 
 ## 3. Strategia renderowania (RSC / SSR / SSG / ISR)
 
@@ -86,6 +89,10 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 ## 8. Sieć / cache / dostarczanie
 
 - [ ] Statyczne assety z długim cache (immutable) — obsługuje Vercel/Next automatycznie.
+- [x] Obrazy i pliki `public/`: `images.minimumCacheTTL` 31 dni; `public/images/*`, ikony
+      i `og.png` — `max-age=86400, stale-while-revalidate=604800` (bez `immutable`, brak hasha
+      w nazwie); `sw.js` bez długiego cache (#394, `tests/e2e/static-asset-cache.spec.ts`).
+      Zmieniony obraz w `public/` = nowa nazwa pliku.
 - [ ] ISR / rewalidacja zamiast odpytywania DB na każde żądanie strony publicznej.
 - [ ] Zapytania do Supabase: selekcja tylko potrzebnych kolumn, użycie indeksów pod filtry
       ofert (już zdefiniowane: `idx_jobs_active_feed`, trigramy na tytułach itd.).

@@ -72,7 +72,7 @@
     "detailsSubtitle": "Manage your company details and check its verification status.",
     "editTitle": "Edit company details",
     "name": "Company name",
-    "namePlaceholder": "e.g. AGO Jobs & HR",
+    "namePlaceholder": "e.g. Your company name",
     "vatNumber": "VAT / KBO number (optional)",
     "vatPlaceholder": "BE0123456789",
     "vatHint": "The Belgian company number (KBO/BCE) makes verification easier.",
@@ -84,14 +84,14 @@
     "statusLabel": "Verification status",
     "verifiedAt": "Verification date",
     "verificationNote": "Posting jobs and sending offers requires the “verified” status, granted by an administrator.",
-    "bannerPendingTitle": "Company awaiting verification",
-    "bannerPendingDesc": "We're reviewing your company details. Posting jobs and sending offers will be available once an administrator approves the company.",
+    "bannerPendingTitle": "Your company is awaiting verification",
+    "bannerPendingDesc": "Your company details are in the queue to be checked by a Pracuj.be administrator. You can publish jobs and send offers once they are approved.",
     "bannerVerifiedTitle": "Company verified",
     "bannerVerifiedDesc": "You can post jobs and send offers to candidates.",
     "bannerRejectedTitle": "Verification rejected",
-    "bannerRejectedDesc": "We couldn't verify the company. Please correct the details or contact us.",
+    "bannerRejectedDesc": "An administrator did not approve your company details. Check the name and VAT/KBO number, correct them and send your company for verification again.",
     "bannerSuspendedTitle": "Company account suspended",
-    "bannerSuspendedDesc": "The company account has been suspended. Posting jobs is on hold.",
+    "bannerSuspendedDesc": "Your company account has been suspended by an administrator. Publishing jobs and sending offers are on hold.",
     "statusUnverified": "Unverified",
     "statusPending": "Awaiting verification",
     "statusVerified": "Verified",
@@ -103,7 +103,21 @@
       "nameTooLong": "The company name is too long.",
       "vatInvalid": "Invalid VAT/KBO number.",
       "vatTooLong": "The VAT/KBO number is too long."
-    }
+    },
+    "bannerUnverifiedTitle": "Your company is awaiting verification",
+    "bannerUnverifiedDesc": "Before you publish your first job, a Pracuj.be administrator will check your company details. You don’t need to send anything — your company is already in the queue.",
+    "bannerLink": "Go to company details",
+    "stepsTitle": "First steps",
+    "stepVat": "Add your company’s VAT/KBO number — it makes checking your details easier.",
+    "stepWait": "Wait for an administrator to verify your company — you don’t need to click anything.",
+    "stepDraft": "Prepare a draft job — you can publish it after verification.",
+    "wizardNotice": "You can already prepare and save a draft job. Publishing will be possible once your company is verified.",
+    "reverifySubmit": "Send for verification again",
+    "reverifyHint": "First correct and save your company details, then send your company for verification again.",
+    "reverifySuccess": "Your company is back in the verification queue.",
+    "editVerifiedHint": "Changing the name or VAT/KBO number of a verified company requires verification again. Until it is approved, your company’s jobs will not be publicly visible and publishing and sending offers will be on hold.",
+    "savedReverification": "Company details saved. Your company is back in verification — an administrator will check the new details.",
+    "onboardingEyebrow": "Employer account"
   },
   "common": {
     "appName": "Pracuj.be",
@@ -824,7 +838,9 @@
     "employerApplicationMessage": "Write a message",
     "employerApplicationMessageLabel": "Write a message to: {name}",
     "employerApplicationView": "View application",
-    "employerApplicationViewLabel": "View application: {name}, {job}"
+    "employerApplicationViewLabel": "View application: {name}, {job}",
+    "companyFallback": "Your company",
+    "employerShellLoadError": "We couldn’t load your company account details. Please try again."
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -937,7 +953,8 @@
     "agreeTerms": "I accept the terms of use and the privacy policy.",
     "stepAnnounce": "Step {current} of {total}: {title}",
     "agreeTermsLinks": "I accept the <terms>terms of use</terms> and the <privacy>privacy policy</privacy>.",
-    "opensInNewTab": "(opens in a new tab)"
+    "opensInNewTab": "(opens in a new tab)",
+    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list."
   },
   "filters": {
     "title": "Filters",
@@ -991,9 +1008,6 @@
     "title": "Notifications",
     "markAllRead": "Mark all as read",
     "seeAll": "See all",
-    "sampleNewJob": "New job matched to your profile",
-    "sampleAppViewed": "Your application was viewed",
-    "sampleMessage": "You have a new message from an employer",
     "itemApplicationReceived": "New application received",
     "itemApplicationStatusChanged": "Your application status has changed",
     "itemOfferReceived": "You received a job offer",
@@ -1004,7 +1018,11 @@
     "itemSystem": "System notification",
     "empty": "No notifications",
     "loadError": "We couldn't load your notifications. Please try again.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "bellLabel": "{count, plural, =0 {Notifications} one {Notifications, 1 unread} other {Notifications, # unread}}",
+    "unreadItem": "Unread",
+    "markingAllRead": "Saving…",
+    "markedAllRead": "All notifications marked as read."
   },
   "pricing": {
     "standard": "Standard",
@@ -1091,7 +1109,8 @@
       "bioTooLong": "The description is too long.",
       "termsRequired": "You must accept the terms and privacy policy.",
       "availabilityRequired": "Choose your availability.",
-      "invalid": "Invalid value."
+      "invalid": "Invalid value.",
+      "itemTooLong": "One of the list items is too long. Please shorten it."
     }
   },
   "jobWizard": {
@@ -1200,7 +1219,9 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Not provided",
     "notVerifiedNote": "The draft has been saved. Publishing will be available once the company is verified.",
-    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list."
+    "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list.",
+    "stepAnnounce": "Step {current} of {total}: {title}",
+    "goToOffers": "Go to your job list"
   },
   "messages": {
     "title": "Messages",
@@ -1233,7 +1254,9 @@
     "loadOlder": "Load older messages",
     "loadingOlder": "Loading older messages…",
     "loadOlderError": "Could not load older messages. Please try again.",
-    "threadStart": "This is the start of the conversation."
+    "threadStart": "This is the start of the conversation.",
+    "senderCompanyFallback": "Employer",
+    "senderCandidateFallback": "Candidate"
   },
   "files": {
     "cvTitle": "Your CV / documents",
@@ -1352,7 +1375,10 @@
     "saving": "Saving...",
     "savedSuccess": "Your notification preferences have been saved.",
     "loadError": "We couldn’t load your notification preferences.",
-    "loadErrorHint": "We are not showing the form so that saving cannot overwrite your earlier choices. Please try again in a moment."
+    "loadErrorHint": "We are not showing the form so that saving cannot overwrite your earlier choices. Please try again in a moment.",
+    "employerEmailApplicationsDescription": "New candidate applications to your job offers.",
+    "employerEmailOffersDescription": "When a candidate accepts or declines your job proposal.",
+    "employerEmailMessagesDescription": "New messages from candidates in your conversations."
   },
   "guides": {
     "pageTitle": "Guides",

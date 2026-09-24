@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
-import { EmployerShell } from '@/components/employer/EmployerShell';
+import { EmployerShell, type EmployerShellMode } from '@/components/employer/EmployerShell';
+import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
@@ -20,8 +21,11 @@ import type { CompanySwitcherCompany } from '@/components/employer/CompanySwitch
  *
  * GUARD: przy skonfigurowanym Supabase wymaga (1) zalogowanego użytkownika oraz
  * (2) aktywnego członkostwa w firmie (`company_members.is_active = true`). Brak sesji →
- * /logowanie; sesja bez firmy → /rejestracja-pracodawca (założenie firmy). Bez env →
- * tryb demo (przepuszczamy, panel na danych DEMO). `force-dynamic`, bo guard zależy od sesji.
+ * /logowanie. Konto pracodawcy bez firmy (np. nieudany bootstrap po rejestracji — #365) →
+ * zamiast strony formularz zakładania firmy (CompanyOnboarding), nie rejestracja nowego
+ * konta; inne role bez firmy → /rejestracja-pracodawca. Błąd odczytu członkostwa → chrome
+ * z komunikatem i ponowieniem (bez treści strony). Bez env → tryb demo (panel na danych
+ * DEMO). `force-dynamic`, bo guard zależy od sesji.
  *
  * Layout pozostaje serwerowy, aby wyeksportować NOINDEX dla całego poddrzewa panelu
  * (Invariant #9) — metadata dziedziczy się do stron.
@@ -49,6 +53,7 @@ export default async function EmployerLayout({
   let activeCompanyId: string | null | undefined;
   let activeCompanyName: string | undefined;
   let userName: string | undefined;
+  let mode: EmployerShellMode = 'demo';
 
   if (isSupabaseConfigured()) {
     const supabase = await createServerClient();
@@ -63,14 +68,31 @@ export default async function EmployerLayout({
     // Aktywne członkostwo w firmie jest wymagane, by wejść do panelu pracodawcy.
     // RLS pozwala czytać własny wiersz (profile_id = auth.uid()). Użytkownik może
     // należeć do wielu firm — limit(1) wystarcza do potwierdzenia dostępu.
-    const { data: memberships } = await supabase
+    const { data: memberships, error: membershipError } = await supabase
       .from('company_members')
       .select('id')
       .eq('profile_id', user.id)
       .eq('is_active', true)
       .limit(1);
-    if (!memberships || memberships.length === 0) {
-      redirect({ href: '/rejestracja-pracodawca', locale: locale as Locale });
+    if (membershipError || !Array.isArray(memberships)) {
+      return <EmployerShell mode="error">{null}</EmployerShell>;
+    }
+    if (memberships.length === 0) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profileError) return <EmployerShell mode="error">{null}</EmployerShell>;
+      if ((profile as { role?: string } | null)?.role !== 'employer') {
+        redirect({ href: '/rejestracja-pracodawca', locale: locale as Locale });
+      }
+      const rawName = (user.user_metadata as Record<string, unknown> | undefined)?.['company_name'];
+      return (
+        <EmployerShell mode="ok">
+          <CompanyOnboarding defaultName={typeof rawName === 'string' ? rawName.trim() : ''} />
+        </EmployerShell>
+      );
     }
 
     // Realne powiadomienia + licznik nieprzeczytanych konwersacji + kontekst firmy (FUN-07).
@@ -89,16 +111,26 @@ export default async function EmployerLayout({
     }));
     notifUnread = notif.status === 'ready' ? notif.unread : undefined;
     unreadMessages = unread;
-    if (shell) {
+    mode = shell.status === 'ok' ? 'ok' : 'error';
+    if (shell.status === 'ok') {
       companies = shell.companies;
       activeCompanyId = shell.activeId;
       activeCompanyName = shell.activeName;
       userName = shell.userName;
     }
+  } else {
+    // Tryb demo (#359): to samo źródło co realne powiadomienia — tytuły z i18n, czas przez
+    // `Intl.RelativeTimeFormat` w języku strony, cele linków wg roli panelu.
+    const notif = await getNotifications(locale, 'employer');
+    if (notif.status === 'ready') {
+      notifItems = notif.items;
+      notifUnread = notif.unread;
+    }
   }
 
   return (
     <EmployerShell
+      mode={mode}
       notifItems={notifItems}
       notifUnread={notifUnread}
       notificationError={notificationError}
