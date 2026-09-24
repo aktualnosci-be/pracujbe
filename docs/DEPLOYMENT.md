@@ -74,7 +74,30 @@ samą część liczbową i nadal da się go odróżnić po czasie.
 
 Automatyczne wersje mają zawsze major `0`. Upływ czasu, liczba wdrożeń ani
 ukończenie pojedynczego etapu nie mogą samodzielnie utworzyć `1.0.0`.
-Wersja `1.0.0` wymaga jawnej decyzji właściciela po odbiorze checklisty
-premiery; jej wprowadzenie będzie osobną zmianą w mechanizmie wersjonowania.
 Wartość `version` w `package.json` opisuje prywatny pakiet Node i nie jest
 numerem wdrożenia widocznym dla użytkownika.
+
+### Wersja wydania (1.0.0)
+
+Stopka zna dokładnie dwa tryby:
+
+| tryb | warunek | stopka |
+|---|---|---|
+| automatyczny (domyślny) | brak `PRACUJBE_RELEASE_VERSION` albo pusta wartość | `v0.YYYYMMDD.M+SHA · data` |
+| wydanie | `PRACUJBE_RELEASE_VERSION=1.0.0` w zmiennych builda Railway | `v1.0.0+SHA · data` |
+
+Decyzja: po premierze stopka pokazuje `1.0.0+SHA` — jeden identyfikator SemVer
+z metadanymi builda, bez osobnego pola na skrót commita. Data buildu nadal stoi
+obok. Dzięki temu kolejne buildy tej samej wersji dalej wskazują konkretny commit.
+
+Reguły (`scripts/build-version.mjs`, test `tests/unit/build-version.test.ts`):
+
+- dozwolona jest wyłącznie wartość z `APPROVED_RELEASE_VERSIONS` (dziś `1.0.0`),
+  porównywana dokładnie — `v1.0.0`, `1.0`, spacje ani inne wersje nie przechodzą;
+- każda inna niepusta wartość przerywa `next build` czytelnym błędem;
+- tryb wydania wymaga prawidłowego SHA (`RAILWAY_GIT_COMMIT_SHA` lub
+  `GITHUB_SHA`), inaczej build się nie kończy;
+- wersja nigdy nie pochodzi z `package.json`.
+
+Zmienną ustawia się dopiero w procedurze [`RELEASE_1_0.md`](./RELEASE_1_0.md).
+Usunięcie zmiennej przywraca tryb automatyczny przy następnym buildzie.
