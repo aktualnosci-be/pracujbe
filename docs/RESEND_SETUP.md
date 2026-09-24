@@ -55,6 +55,7 @@ EMAIL_FROM="Pracuj.be <no-reply@pracuj.be>"    # nadawca; domena musi być zwery
 EMAIL_REPLY_TO="kontakt@pracuj.be"             # adres odpowiedzi
 EMAIL_QUEUE_SECRET="…"                          # chroni endpoint przetwarzający kolejkę
 EMAIL_UNSUBSCRIBE_SECRET="…"                    # podpis HMAC linków wypisania (≥ 32 znaki)
+RESEND_WEBHOOK_SECRET="whsec_…"                 # signing secret webhooka doręczeń (§6)
 ```
 
 - `EMAIL_FROM` musi być na **zweryfikowanej** domenie z §2.
@@ -136,8 +137,9 @@ cron Railway → POST /api/email/process   (Authorization: Bearer EMAIL_QUEUE_SE
         │     sukces → status='sent',  provider_message_id, sent_at
         │     błąd   → status='failed', error_message, attempts++ (backoff)
         ▼
-(planowane, P1-19) Webhook Resend → bounced / complained
-           (match po provider_message_id — kolumna UNIQUE)
+Webhook Resend (#44) → POST /api/email/webhook/resend → record_email_event
+           delivered / bounced / complained (match po provider_message_id — kolumna UNIQUE);
+           trwałe odbicie / skarga → email_suppressions
 ```
 
 ### Uruchamianie workera (cron Railway)
@@ -188,13 +190,44 @@ jednocześnie harmonogramów Vercel i Railway.
   migrację lub service role). Odmowa odkłada wiersz do następnego okna bez zwiększania
   `attempts`. Hook e-maili Auth nie pobiera jeszcze budżetu — chroni go rezerwa.
 
-### Webhook Resend (planowany, P1-19 — endpoint jeszcze nie istnieje)
+### Webhook doręczeń Resend (#44, migracja `0098`)
 
-Docelowo: Resend → **Webhooks → Add Endpoint** → `https://pracuj.be/api/webhooks/resend`.
-Zdarzenia: `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`,
-`email.complained`. Zweryfikuj podpis (signing secret z panelu). Bounce/complaint →
-oznacz odbiorcę (rozważ wstrzymanie dalszych wysyłek marketingowych; transakcyjne
-zgodnie z zasadami).
+Endpoint: `POST /api/email/webhook/resend`. Kroki dla właściciela (jednorazowo):
+
+1. Resend → **Webhooks → Add Endpoint** → URL `https://<domena produkcyjna>/api/email/webhook/resend`.
+2. Zaznacz zdarzenia: `email.delivered`, `email.delivery_delayed`, `email.bounced`,
+   `email.complained` (inne są przyjmowane i pomijane — nie udają doręczenia).
+3. Skopiuj **Signing secret** (`whsec_…`) do zmiennej `RESEND_WEBHOOK_SECRET` usługi Railway
+   `production`. Endpoint potrzebuje też klucza service-role (jak worker kolejki).
+4. Resend → webhook → **Send test event** / ponowienie dostawy: odpowiedź `200`.
+
+Zachowanie:
+
+- Brak `RESEND_WEBHOOK_SECRET` (lub klucza service-role) → `503` bez czytania treści; Resend
+  ponawia dostawę, żadne zdarzenie nie jest przyjmowane bez podpisu.
+- Podpis Svix (`svix-id`, `svix-timestamp`, `svix-signature`; HMAC-SHA256, porównanie
+  stałoczasowe), znacznik czasu ±300 s, limit body 256 kB (`413`). Zły podpis → `401`.
+- Inbox `processed_webhooks` (`resend:<svix-id>`): powtórzone zdarzenie po `completed` jest
+  pomijane; błąd zapisu → `500` i ponowienie przez Resend (zapis jest idempotentny).
+- `record_email_event` aktualizuje `email_deliveries` po `provider_message_id`: status tylko
+  „w górę” (`sent` < `delivered` < `bounced` < `complained`), czasy `delivered_at`/
+  `bounced_at`/`complained_at`/`delayed_at`, `bounce_type`. `delivery_delayed` i odbicie
+  przejściowe nie zmieniają statusu.
+- **Trwałe odbicie** (`bounce.type = Permanent`) i **skarga** → blokada adresu w
+  `email_suppressions` (także dla wiadomości spoza kolejki). `enqueue_email` nie kolejkuje na
+  zablokowany adres, a `claim_email_batch` wygasza wiersze zakolejkowane wcześniej
+  (`status='failed'`, `suppressed_at`, `error_message='suppressed_address'`).
+- E-maile Auth (weryfikacja konta, reset hasła) są obowiązkowe i inicjowane przez użytkownika —
+  blokada ich nie zatrzymuje.
+- Zdjęcie blokady: panel admina **Blokady poczty** (`/admin/poczta`) → „Zdejmij blokadę” z
+  uzasadnieniem (RPC `admin_lift_email_suppression`, wpis w dzienniku zdarzeń). Zdejmuj tylko,
+  gdy odbiorca potwierdził, że adres działa i chce dostawać wiadomości. Kolejne trwałe odbicie
+  lub skarga zakłada nową blokadę; historia zostaje.
+- Logi zawierają tylko obszar i rodzaj zdarzenia — bez adresu, treści i sekretu.
+
+**Poza zakresem (#44, kolejne kroki):** alarmy wieku kolejki i wzrostu bounce/complaint,
+rozróżnienie stanów w `/api/health`, adapter innego dostawcy (EmailLabs/SES) — model zdarzeń
+w `src/lib/email/provider-events.ts` jest już niezależny od dostawcy.
 
 ---
 
@@ -206,6 +239,9 @@ zgodnie z zasadami).
 | e-maile w spamie | brak/niepoprawny DKIM lub DMARC → zweryfikuj rekordy, zaostrz DMARC stopniowo |
 | `email_deliveries` rośnie w `queued` | worker nie działa → sprawdź cron Railway (`CRON_TARGET_URL` = `…/api/email/process`) i `EMAIL_QUEUE_SECRET` |
 | dużo `failed` | sprawdź `error_message`; limit API? błędny `RESEND_API_KEY`? |
+| e-maile do adresu nie wychodzą (`suppressed_address`) | trwałe odbicie lub skarga → `/admin/poczta`; zdejmij blokadę tylko po potwierdzeniu adresu |
+| webhook Resend zwraca `503` | brak `RESEND_WEBHOOK_SECRET` lub klucza service-role w usłudze |
+| webhook Resend zwraca `401` | sekret nie pasuje do endpointu w Resend albo zegar serwera odbiega o > 300 s |
 | błędny język e-maila | sprawdź `email_deliveries.locale` i `preferred/account/signup_locale` odbiorcy |
 
 ---
