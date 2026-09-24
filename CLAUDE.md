@@ -515,6 +515,9 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 ### Etap 2 — strony publiczne
 - [x] Strona główna (hero + sekcje) SSR — redesign wg makiety 01
+  Hero (#166) wg `people.js`: teza w trzech wierszach, czerwona akcja „Przeglądaj oferty” +
+  link do `/rejestracja`, podpis „ilustracyjne” na zdjęciu; E2E `home-hero.spec` (4 języki,
+  320/1440 px, axe, kontrola ujemna).
 - [x] Lista ofert + filtry (FilterSidebar/FilterSheet, chipy, sort, paginacja) — wg makiety 02; infinite scroll opcjonalnie później
   Wynagrodzenie (#188, 0080): suwak = EUR brutto/mies.; filtr, sort „najwyższe wynagrodzenie”,
   licznik i facety porównują ekwiwalent miesięczny (month bez zmian, year ÷ 12). Stawek
