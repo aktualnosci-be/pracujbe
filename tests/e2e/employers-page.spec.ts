@@ -40,13 +40,17 @@ for (const locale of LOCALES) {
       'page',
     );
 
-    // Indeksowalna: brak noindex, własny canonical i komplet hreflang.
+    // Indeksowalna: brak noindex, własny canonical i komplet hreflang. Po nawigacji klienckiej
+    // Next przez chwilę trzyma w <head> także linki poprzedniej strony — czekamy, aż zostanie
+    // dokładnie jeden (asercja na element z listy dwóch padała w trybie strict, #375).
     await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0);
+    await expect(page.locator('link[rel="canonical"]')).toHaveCount(1);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
       'href',
       new RegExp(`/${locale}/dla-pracodawcow$`),
     );
     for (const lang of [...LOCALES, 'x-default']) {
+      await expect(page.locator(`link[rel="alternate"][hreflang="${lang}"]`)).toHaveCount(1);
       await expect(page.locator(`link[rel="alternate"][hreflang="${lang}"]`)).toHaveAttribute(
         'href',
         new RegExp(`/${lang === 'x-default' ? 'pl' : lang}/dla-pracodawcow$`),
