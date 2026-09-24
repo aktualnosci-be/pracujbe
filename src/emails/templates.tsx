@@ -104,6 +104,12 @@ export interface EmailDataMap {
   /** `reason` = uzasadnienie admina, renderowane jako cytat (tekst, bez HTML). */
   companyRejected: { recipientName?: string; companyName: string; reason?: string | null; actionUrl: string };
   companySuspended: { recipientName?: string; companyName: string; reason?: string | null; actionUrl: string };
+  teamInvitation: {
+    recipientName?: string;
+    companyName: string;
+    inviterName?: string | null;
+    actionUrl: string;
+  };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
   invoice: { recipientName?: string; invoiceNumber: string; amount: string; downloadUrl: string };
@@ -125,6 +131,7 @@ const SUBJECT_FIELD: Partial<Record<EmailType, string>> = {
   statusChanged: 'status',
   companyRejected: 'reason',
   companySuspended: 'reason',
+  teamInvitation: 'inviterName',
 };
 
 /** Pusta wartość albo sam placeholder (myślniki/spacje), np. `'—'` z `coalesce(..., '—')` w RPC. */
@@ -220,9 +227,12 @@ function EmailShell(props: {
   const outro = copy.outro ? interpolate(copy.outro, vars) : undefined;
   const name = greetingName?.trim();
   const greeting = `${greetings[locale]}${name ? ` ${name}` : ''},`;
+  // #45: adres wypisania przekazuje renderEmail (opcja workera), nie payload kolejki.
+  const unsubscribeUrl =
+    typeof props.vars.unsubscribeUrl === 'string' ? props.vars.unsubscribeUrl : undefined;
 
   return (
-    <EmailLayout locale={locale} preview={preview}>
+    <EmailLayout locale={locale} preview={preview} unsubscribeUrl={unsubscribeUrl}>
       <EmailHeading>{heading}</EmailHeading>
       <EmailText>{greeting}</EmailText>
       {paragraphs.map((paragraph, index) => (
@@ -540,6 +550,18 @@ export function CompanySuspendedEmail(props: EmailProps<'companySuspended'>): Re
   );
 }
 
+export function TeamInvitationEmail(props: EmailProps<'teamInvitation'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="teamInvitation"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
 export function JobExpiringEmail(props: EmailProps<'jobExpiring'>): ReactElement {
   return (
     <EmailShell
@@ -618,6 +640,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   companyVerified: CompanyVerifiedEmail,
   companyRejected: CompanyRejectedEmail,
   companySuspended: CompanySuspendedEmail,
+  teamInvitation: TeamInvitationEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,
   invoice: InvoiceEmail,
@@ -632,12 +655,18 @@ export async function renderEmail<T extends EmailType>(
   type: T,
   locale: Locale,
   data: EmailDataMap[T],
+  options: { unsubscribeUrl?: string } = {},
 ): Promise<{ subject: string; html: string }> {
   // Rejestr jest w pełni typowany; tu kasujemy generyk wyłącznie na potrzeby createElement
   // (TS nie potrafi skorelować EmailDataMap[T] z sygnaturą createElement).
   const Component = templates[type] as unknown as FunctionComponent<Record<string, unknown>>;
   // `locale` PO danych: klucz `locale` w payloadzie kolejki nie może nadpisać języka odbiorcy (#348).
-  const element = createElement(Component, { ...data, locale });
+  // `unsubscribeUrl` też PO danych: payload kolejki nie może podmienić adresu wypisania (#45).
+  const element = createElement(Component, {
+    ...data,
+    locale,
+    unsubscribeUrl: options.unsubscribeUrl,
+  });
   const html = await render(element);
   const vars = prepareVars(type, locale, data as Record<string, unknown>);
   const subject = interpolate(resolveCopy(type, locale, vars).subject, vars);

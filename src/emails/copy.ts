@@ -35,6 +35,7 @@ export const EMAIL_TYPES = [
   'companyVerified',
   'companyRejected',
   'companySuspended',
+  'teamInvitation',
   'jobExpiring',
   'payment',
   'invoice',
@@ -88,6 +89,8 @@ export interface LayoutCopy {
   help: string;
   /** Etykieta linku do polityki prywatności. */
   privacy: string;
+  /** Link wypisania z kategorii tej wiadomości (#45); tylko gdy mail ma kategorię preferencji. */
+  unsubscribe: string;
   /** Tekst wprowadzający surowy link (gdy przycisk nie działa). */
   buttonFallback: string;
 }
@@ -99,6 +102,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     rights: '© {year} Pracuj.be. Wszelkie prawa zastrzeżone.',
     help: 'Pomoc',
     privacy: 'Prywatność',
+    unsubscribe: 'Wypisz się z tych e-maili',
     buttonFallback: 'Jeśli przycisk nie działa, skopiuj i wklej ten adres do przeglądarki:',
   },
   nl: {
@@ -107,6 +111,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     rights: '© {year} Pracuj.be. Alle rechten voorbehouden.',
     help: 'Help',
     privacy: 'Privacy',
+    unsubscribe: 'Afmelden voor deze e-mails',
     buttonFallback: 'Werkt de knop niet? Kopieer en plak deze link in je browser:',
   },
   fr: {
@@ -115,6 +120,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     rights: '© {year} Pracuj.be. Tous droits réservés.',
     help: 'Aide',
     privacy: 'Confidentialité',
+    unsubscribe: 'Se désinscrire de ces e-mails',
     buttonFallback: 'Le bouton ne fonctionne pas ? Copiez-collez ce lien dans votre navigateur :',
   },
   en: {
@@ -123,6 +129,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     rights: '© {year} Pracuj.be. All rights reserved.',
     help: 'Help',
     privacy: 'Privacy',
+    unsubscribe: 'Unsubscribe from these emails',
     buttonFallback: 'If the button does not work, copy and paste this link into your browser:',
   },
 };
@@ -921,6 +928,61 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       highlight: '{companyName}',
       anonymous: {
         body: 'We have suspended {companyName}. Until the matter is resolved, you cannot publish new jobs.',
+      },
+    },
+  },
+
+  teamInvitation: {
+    pl: {
+      subject: 'Zaproszenie do zespołu firmy {companyName}',
+      preview: '{inviterName} zaprasza Cię do zespołu {companyName} w Pracuj.be.',
+      heading: 'Zaproszenie do zespołu',
+      body: '{inviterName} zaprasza Cię do zespołu firmy {companyName} w Pracuj.be. Zaloguj się na swoje konto pracodawcy i otwórz zakładkę „Zespół”, aby dołączyć albo odrzucić zaproszenie.',
+      cta: 'Zobacz zaproszenie',
+      highlight: '{companyName}',
+      outro: 'Zaproszenie jest ważne 14 dni. Jeśli nie znasz tej firmy, zignoruj tę wiadomość.',
+      anonymous: {
+        preview: 'Masz zaproszenie do zespołu {companyName} w Pracuj.be.',
+        body: 'Masz zaproszenie do zespołu firmy {companyName} w Pracuj.be. Zaloguj się na swoje konto pracodawcy i otwórz zakładkę „Zespół”, aby dołączyć albo odrzucić zaproszenie.',
+      },
+    },
+    nl: {
+      subject: 'Uitnodiging voor het team van {companyName}',
+      preview: '{inviterName} nodigt je uit voor het team van {companyName} op Pracuj.be.',
+      heading: 'Uitnodiging voor het team',
+      body: '{inviterName} nodigt je uit voor het team van {companyName} op Pracuj.be. Log in op je werkgeversaccount en open het tabblad ‘Team’ om deel te nemen of de uitnodiging te weigeren.',
+      cta: 'Uitnodiging bekijken',
+      highlight: '{companyName}',
+      outro: 'De uitnodiging is 14 dagen geldig. Ken je dit bedrijf niet? Negeer dan dit bericht.',
+      anonymous: {
+        preview: 'Je bent uitgenodigd voor het team van {companyName} op Pracuj.be.',
+        body: 'Je bent uitgenodigd voor het team van {companyName} op Pracuj.be. Log in op je werkgeversaccount en open het tabblad ‘Team’ om deel te nemen of de uitnodiging te weigeren.',
+      },
+    },
+    fr: {
+      subject: 'Invitation à rejoindre l’équipe de {companyName}',
+      preview: '{inviterName} vous invite à rejoindre l’équipe de {companyName} sur Pracuj.be.',
+      heading: 'Invitation à rejoindre une équipe',
+      body: '{inviterName} vous invite à rejoindre l’équipe de {companyName} sur Pracuj.be. Connectez-vous à votre compte employeur et ouvrez l’onglet « Équipe » pour accepter ou refuser l’invitation.',
+      cta: 'Voir l’invitation',
+      highlight: '{companyName}',
+      outro: 'L’invitation est valable 14 jours. Si vous ne connaissez pas cette entreprise, ignorez ce message.',
+      anonymous: {
+        preview: 'Vous êtes invité(e) à rejoindre l’équipe de {companyName} sur Pracuj.be.',
+        body: 'Vous êtes invité(e) à rejoindre l’équipe de {companyName} sur Pracuj.be. Connectez-vous à votre compte employeur et ouvrez l’onglet « Équipe » pour accepter ou refuser l’invitation.',
+      },
+    },
+    en: {
+      subject: 'Invitation to join the {companyName} team',
+      preview: '{inviterName} invites you to join the {companyName} team on Pracuj.be.',
+      heading: 'Team invitation',
+      body: '{inviterName} invites you to join the {companyName} team on Pracuj.be. Sign in to your employer account and open the “Team” tab to join or decline the invitation.',
+      cta: 'View invitation',
+      highlight: '{companyName}',
+      outro: 'The invitation is valid for 14 days. If you do not know this company, you can ignore this message.',
+      anonymous: {
+        preview: 'You have been invited to join the {companyName} team on Pracuj.be.',
+        body: 'You have been invited to join the {companyName} team on Pracuj.be. Sign in to your employer account and open the “Team” tab to join or decline the invitation.',
       },
     },
   },

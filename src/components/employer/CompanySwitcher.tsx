@@ -2,9 +2,10 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { Link } from '@/i18n/navigation';
 import { setActiveCompany } from '@/lib/actions/company';
 
 /**
@@ -17,6 +18,9 @@ import { setActiveCompany } from '@/lib/actions/company';
  * Dostępność (#322): nazwa dostępna przełącznika zawiera widoczną nazwę firmy (WCAG 2.5.3),
  * aktywna pozycja ma `aria-current`, w trakcie zmiany jest ogłaszany stan, a odrzucona zmiana
  * (`{ ok: false }`) daje komunikat błędu bez odświeżania. Fokus wraca na przełącznik.
+ *
+ * #403: link „Dodaj kolejną firmę” (`/employer/firma/nowa`) — pod znakiem firmy i na końcu
+ * listy firm; bez niego użytkownik z jedną firmą nigdy nie zobaczyłby przełącznika.
  */
 
 export interface CompanySwitcherCompany {
@@ -46,6 +50,7 @@ export function CompanySwitcher({
   activeName: string;
 }): React.JSX.Element {
   const td = useTranslations('dashboard');
+  const tt = useTranslations('team');
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -65,14 +70,27 @@ export function CompanySwitcher({
   );
 
   // Jedna firma (lub brak listy) → statyczny znak, bez przełącznika.
+  const addCompany = (
+    <Link
+      href="/employer/firma/nowa"
+      className="flex min-h-11 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Plus className="size-4 shrink-0" aria-hidden="true" />
+      <span className="flex-1 truncate">{tt('addCompany')}</span>
+    </Link>
+  );
+
   if (companies.length <= 1) {
     return (
-      <div className="flex w-full items-center gap-2.5 rounded-md p-1">
-        {badge}
-        <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate text-sm font-semibold text-foreground">{name}</span>
-          <span className="block truncate text-xs text-muted-foreground">{td('employerRole')}</span>
-        </span>
+      <div className="w-full">
+        <div className="flex w-full items-center gap-2.5 rounded-md p-1">
+          {badge}
+          <span className="min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-sm font-semibold text-foreground">{name}</span>
+            <span className="block truncate text-xs text-muted-foreground">{td('employerRole')}</span>
+          </span>
+        </div>
+        <div className="mt-1">{addCompany}</div>
       </div>
     );
   }
@@ -140,6 +158,7 @@ export function CompanySwitcher({
               ) : null}
             </button>
           ))}
+          <div className="mt-1 border-t border-border pt-1">{addCompany}</div>
         </div>
       </details>
       {/* Poza <details>: zamknięta lista ukrywa swoją treść, a komunikat musi być widoczny. */}

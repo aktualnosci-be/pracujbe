@@ -7,6 +7,10 @@ pojedynczych publikacji ofert. Interfejs nie pokazuje cennika ani zachęt do zak
 odrzuca próby rozpoczęcia checkoutu i zdarzenia sprzedażowego webhooka nawet wtedy, gdy w
 środowisku pozostały sekrety Stripe.
 
+Technicznie stan wyłączony wyznacza jedna jawna flaga `BILLING_ENABLED` (domyślnie wyłączona,
+`src/lib/billing/flag.ts`). Bez niej klient Stripe jest nieosiągalny, a webhook odpowiada 404.
+Samo jej ustawienie nie przywraca sprzedaży — ta wersja nie zawiera przepływu checkoutu.
+
 Tabele finansowe pozostają w bazie, aby wycofanie sprzedaży nie wymagało destrukcyjnej migracji.
 Ich obecność nie oznacza, że funkcja jest aktywna. Powrót do monetyzacji wymaga nowej, jawnej
 decyzji właściciela oraz osobnego wdrożenia i testów.
