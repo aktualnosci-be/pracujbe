@@ -590,7 +590,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `published_at` i zgłoszenia bez zmian; zamknięta/wygasła → najpierw „Otwórz ponownie”
   (`JOB_NOT_EDITABLE`). Baza blokuje bezpośredni zapis treści i relacji oferty innej niż szkic
   (strażniki + `set_job_*` tylko dla szkicu). „Zobacz ofertę” dla aktywnej. Dowód: `rls.sql`
-  sekcja QQ. **Otwarte:** powiadomienie kandydatów, którzy już aplikowali, o istotnej zmianie
+  sekcja RR. **Otwarte:** powiadomienie kandydatów, którzy już aplikowali, o istotnej zmianie
   warunków (decyzja produktowa).
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
@@ -677,6 +677,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)
 - [x] Panel administratora — `/admin/**` (guard role='admin'→notFound, noindex): dashboard, firmy
   (weryfikuj/odrzuć/zawieś), zgłoszenia (moderacja), użytkownicy; odczyt service-role, zapis przez RPC (0019)
+  Każdy odczyt service-role w `src/lib/data/admin.ts` sam potwierdza rolę admina sesji
+  (`requireAdmin` → `notFound()`), niezależnie od layoutu. `0076`: pola tożsamości i moderacji
+  zgłoszeń ustala baza (trigger `reports_guard`, limity długości), helpery ról bez EXECUTE dla
+  anon/PUBLIC (`is_job_company_member` zostaje — polityki anon). Dowód: `rls.sql` sekcja QQ.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
 - [x] Płatności / subskrypcje / faktury / kody rabatowe — REALNY Stripe (FUN-08), provider-gated:
   `startCheckout` tworzy sesję Stripe Checkout (subskrypcja, inline `price_data` z `PLANS`, kupon z

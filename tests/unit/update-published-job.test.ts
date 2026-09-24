@@ -7,7 +7,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 /**
  * #325 — akcja `updatePublishedJob`: poprawka aktywnej/wstrzymanej oferty. Egzekwowanie (stan
  * oferty, recruiter+, firma verified, kompletność, CAS) jest w RPC `update_published_job`
- * (rls.sql sekcja QQ); tu pilnujemy granicy: walidacja wszystkich kroków PRZED RPC, jedno
+ * (rls.sql sekcja RR); tu pilnujemy granicy: walidacja wszystkich kroków PRZED RPC, jedno
  * wywołanie z całą treścią, wersja do CAS bez zmian i kody użytkowe zamiast tekstu bazy.
  */
 

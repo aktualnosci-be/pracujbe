@@ -2111,20 +2111,110 @@ select pg_temp.assert(not exists (select 1 from public.offers where idempotency_
   'PP8e próba na granicy wycofana razem z transakcją sesji');
 
 -- ============================================================================
--- QQ. Edycja opublikowanej oferty (0077, #325): update_published_job — atomowa rewizja
+-- QQ. Panel administratora (0076): funkcje admina, zgłoszenia, granty funkcji ról
+-- ============================================================================
+-- QQ1: anon nie wywoła RPC admina (grant), a zalogowany nie-admin dostaje PERMISSION_DENIED
+--      także dla zgłoszeń (H3 pokrywa firmy).
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.admin_set_company_status(uuid, text)', 'execute')
+  and not has_function_privilege('anon', 'public.admin_resolve_report(uuid, text)', 'execute'),
+  'QQ1 anon bez EXECUTE na RPC admina');
+reset role; reset app.current_uid;
+insert into public.reports(id, reporter_id, target_type, target_id, reason)
+  values ('f7000000-0000-0000-0000-0000000000a1', :'CANDB', 'job', :'JOBA', 'spam');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_resolve_report(''f7000000-0000-0000-0000-0000000000a1''::uuid, ''dismissed'')',
+  'PERMISSION_DENIED', 'QQ1b nie-admin nie rozstrzyga zgłoszenia');
+reset role; reset app.current_uid;
+
+-- QQ2: zgłoszenie — tożsamość i stan moderacji ustala baza, nie klient.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+insert into public.reports(id, reporter_id, target_type, target_id, reason, status, resolved_by, resolved_at, created_at)
+  values ('f7000000-0000-0000-0000-0000000000a2', :'CANDA', 'job', :'JOBB', 'spam',
+          'resolved', :'ADMIN', now(), now() - interval '400 days');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'open' and resolved_by is null and resolved_at is null
+          and created_at > now() - interval '1 minute'
+     from public.reports where id = 'f7000000-0000-0000-0000-0000000000a2'),
+  'QQ2 klient nie ustawia statusu/rozstrzygnięcia/daty zgłoszenia');
+
+-- QQ2b: zgłoszenie w cudzym imieniu — zapisuje się jako zgłoszenie zalogowanego (albo odrzucone).
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+do $$ begin
+  insert into public.reports(id, reporter_id, target_type, target_id, reason)
+    values ('f7000000-0000-0000-0000-0000000000a3', '22222222-2222-2222-2222-222222222222',
+            'job', 'b1111111-1111-1111-1111-111111111111', 'spam');
+exception when insufficient_privilege then null; end $$;
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.reports
+    where id = 'f7000000-0000-0000-0000-0000000000a3' and reporter_id is distinct from :'CANDA'),
+  'QQ2b brak zgłoszenia przypisanego innemu użytkownikowi');
+
+-- QQ2c: klient nie zmienia ani nie usuwa zgłoszenia (także własnego).
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'update public.reports set status = ''dismissed'' where id = ''f7000000-0000-0000-0000-0000000000a2''',
+  'permission denied', 'QQ2c UPDATE zgłoszenia przez klienta odrzucony');
+select pg_temp.expect_error(
+  'delete from public.reports where id = ''f7000000-0000-0000-0000-0000000000a2''',
+  'permission denied', 'QQ2d DELETE zgłoszenia przez klienta odrzucony');
+-- QQ2e: twardy sufit długości treści zgłoszenia.
+select pg_temp.expect_error(
+  'insert into public.reports(reporter_id, target_type, target_id, reason, details) values (''11111111-1111-1111-1111-111111111111'', ''job'', ''b1111111-1111-1111-1111-111111111111'', ''spam'', repeat(''x'', 5001))',
+  'reports_details_length', 'QQ2e zbyt długi opis zgłoszenia odrzucony');
+select pg_temp.expect_error(
+  'insert into public.reports(reporter_id, target_type, target_id, reason) values (''11111111-1111-1111-1111-111111111111'', ''job'', ''b1111111-1111-1111-1111-111111111111'', repeat(''x'', 201))',
+  'reports_reason_length', 'QQ2f zbyt długi powód zgłoszenia odrzucony');
+reset role; reset app.current_uid;
+
+-- QQ2g: admin nadal rozstrzyga zgłoszenie przez RPC (audyt z aktorem admina).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report('f7000000-0000-0000-0000-0000000000a2'::uuid, 'dismissed');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'dismissed' and resolved_by = :'ADMIN'
+     from public.reports where id = 'f7000000-0000-0000-0000-0000000000a2'),
+  'QQ2g admin rozstrzyga zgłoszenie przez RPC');
+
+-- QQ3: funkcje pomocnicze ról nie są wywoływalne przez anon (ani PUBLIC). Wyjątek:
+--      is_job_company_member — używana w politykach SELECT dla anon (job_* tłumaczenia/relacje).
+select pg_temp.assert(
+  (select count(*) from unnest(array[
+     'public.is_admin()', 'public.is_company_member(uuid)', 'public.is_company_admin(uuid)',
+     'public.is_company_owner(uuid)', 'public.can_manage_jobs(uuid)', 'public.is_job_manager(uuid)',
+     'public.is_conversation_member(uuid)', 'public.can_access_application(uuid)',
+     'public.can_access_offer(uuid)', 'public.company_can_view_candidate(uuid)']) as f(sig)
+   where has_function_privilege('anon', f.sig, 'execute')
+      or has_function_privilege('public', f.sig, 'execute')) = 0,
+  'QQ3 anon/PUBLIC bez EXECUTE na funkcjach pomocniczych ról');
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.is_admin()', 'permission denied', 'QQ3b anon nie woła is_admin()');
+-- Polityki dla anon nadal działają (publiczne relacje ofert).
+select pg_temp.assert((select count(*) from public.job_translations) >= 0, 'QQ3c anon czyta job_translations');
+reset role;
+-- QQ3d: zalogowany nadal korzysta z helperów (polityki/UI) — is_admin() zwraca własny stan.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.assert((select public.is_admin()) = true, 'QQ3d authenticated: is_admin() działa');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- RR. Edycja opublikowanej oferty (0077, #325): update_published_job — atomowa rewizja
 --     aktywnej/wstrzymanej oferty z kompletnością jak publish_job; bezpośredni zapis zablokowany
 -- ============================================================================
 \set JOBE 'a2222222-2222-2222-2222-222222222222'
 -- Punkt wyjścia: JOBE aktywna (HH7), opublikowana przez EMPA (owner COMPA, verified).
 -- Zgłoszenie kandydata na ofertę — po edycji musi zostać nietknięte razem z historią.
 set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
-select public.apply_to_job(:'JOBE'::uuid, 'qq-edit-app-1', null, null, 'chętnie') as appqq \gset
+select public.apply_to_job(:'JOBE'::uuid, 'rr-edit-app-1', null, null, 'chętnie') as apprr \gset
 reset role; reset app.current_uid;
-select slug as qq_slug, published_at as qq_pub, updated_at as qq_upd from public.jobs where id = :'JOBE' \gset
-select count(*) as qq_hist from public.application_status_history where application_id = :'appqq' \gset
+select slug as rr_slug, published_at as rr_pub, updated_at as rr_upd from public.jobs where id = :'JOBE' \gset
+select count(*) as rr_hist from public.application_status_history where application_id = :'apprr' \gset
 
 -- Pełna, poprawna treść (kształt z akcji updatePublishedJob).
-select set_config('pb.qq_ok', $j${
+select set_config('pb.rr_ok', $j${
   "job": {"title": "Magazynier – zmiana nocna", "category": "warehouse", "occupation": "Magazynier",
           "contract_type": "temporary", "working_hours": "40 h", "shifts": "noc",
           "start_immediately": false, "start_date": "2026-10-15", "city": "Gandawa",
@@ -2142,24 +2232,24 @@ select set_config('pb.qq_ok', $j${
   "languages": [{"language": "Angielski", "level": "basic"}], "certificates": ["VCA"]
 }$j$, false);
 -- Ta sama treść z pustą listą wymagań obowiązkowych (niekompletna jak przy publish_job).
-select set_config('pb.qq_bad', (current_setting('pb.qq_ok')::jsonb
+select set_config('pb.rr_bad', (current_setting('pb.rr_ok')::jsonb
   || '{"requirements_mandatory": []}'::jsonb)::text, false);
 
 -- OO1: recruiter+ poprawia aktywną ofertę — status, slug, published_at i zgłoszenie bez zmian.
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
-select public.update_published_job(:'JOBE'::uuid, current_setting('pb.qq_ok')::jsonb, :'qq_upd'::timestamptz) as qq_res \gset
+select public.update_published_job(:'JOBE'::uuid, current_setting('pb.rr_ok')::jsonb, :'rr_upd'::timestamptz) as rr_res \gset
 reset role; reset app.current_uid;
 select pg_temp.assert(
-  (:'qq_res'::jsonb ->> 'slug') = :'qq_slug'
-  and (:'qq_res'::jsonb ->> 'updated_at')::timestamptz = (select updated_at from public.jobs where id = :'JOBE')
-  and (:'qq_res'::jsonb ->> 'updated_at')::timestamptz > :'qq_upd'::timestamptz,
-  'QQ1 update_published_job zwraca niezmieniony slug i nową wersję (updated_at)');
+  (:'rr_res'::jsonb ->> 'slug') = :'rr_slug'
+  and (:'rr_res'::jsonb ->> 'updated_at')::timestamptz = (select updated_at from public.jobs where id = :'JOBE')
+  and (:'rr_res'::jsonb ->> 'updated_at')::timestamptz > :'rr_upd'::timestamptz,
+  'RR1 update_published_job zwraca niezmieniony slug i nową wersję (updated_at)');
 select pg_temp.assert(
-  (select status::text = 'active' and slug = :'qq_slug' and published_at = :'qq_pub'::timestamptz
+  (select status::text = 'active' and slug = :'rr_slug' and published_at = :'rr_pub'::timestamptz
           and title = 'Magazynier – zmiana nocna' and salary_min = 16 and salary_period::text = 'hour'
           and start_date = '2026-10-15'::date and contract_type::text = 'temporary'
      from public.jobs where id = :'JOBE'),
-  'QQ1b nowa treść zapisana, status/slug/published_at bez zmian');
+  'RR1b nowa treść zapisana, status/slug/published_at bez zmian');
 select pg_temp.assert(
   (select description like 'Praca na magazynie%' and responsibilities = array['Kompletacja zamówień', 'Załadunek']
           and highlights = array['Dodatek nocny', 'Parking'] and title = 'Magazynier – zmiana nocna'
@@ -2169,87 +2259,87 @@ select pg_temp.assert(
   and (select count(*) from public.job_skills where job_id = :'JOBE') = 2
   and exists (select 1 from public.job_languages where job_id = :'JOBE' and language_label = 'Angielski')
   and exists (select 1 from public.job_certificates where job_id = :'JOBE' and certificate_label = 'VCA'),
-  'QQ1c tłumaczenie i relacje zastąpione nową treścią');
+  'RR1c tłumaczenie i relacje zastąpione nową treścią');
 select pg_temp.assert(
-  (select status::text from public.applications where id = :'appqq') = 'submitted'
-  and (select count(*) from public.application_status_history where application_id = :'appqq') = :'qq_hist'::int,
-  'QQ1d zgłoszenie i historia statusów nietknięte');
+  (select status::text from public.applications where id = :'apprr') = 'submitted'
+  and (select count(*) from public.application_status_history where application_id = :'apprr') = :'rr_hist'::int,
+  'RR1d zgłoszenie i historia statusów nietknięte');
 select pg_temp.assert(
-  (select count(*) from public.get_public_job(:'qq_slug', 'pl') where title = 'Magazynier – zmiana nocna') = 1,
-  'QQ1e zmiana widoczna publicznie pod tym samym adresem');
+  (select count(*) from public.get_public_job(:'rr_slug', 'pl') where title = 'Magazynier – zmiana nocna') = 1,
+  'RR1e zmiana widoczna publicznie pod tym samym adresem');
 select pg_temp.assert(
   exists (select 1 from public.audit_logs where action = 'job.update_published'
             and entity_id = :'JOBE'::uuid and actor_id = :'EMPA'::uuid
             and before_data->>'title' = 'Nowa oferta' and after_data->>'title' = 'Magazynier – zmiana nocna'),
-  'QQ1f wpis audytu z treścią przed/po');
+  'RR1f wpis audytu z treścią przed/po');
 
 -- OO2: CAS — nieaktualny updated_at (drugie okno edycji) nie nadpisuje po cichu.
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   format('select public.update_published_job(%L::uuid, %L::jsonb, %L::timestamptz)',
-         :'JOBE', current_setting('pb.qq_ok'), :'qq_upd'),
-  'JOB_EDIT_CONFLICT', 'QQ2 nieaktualna wersja → JOB_EDIT_CONFLICT');
+         :'JOBE', current_setting('pb.rr_ok'), :'rr_upd'),
+  'JOB_EDIT_CONFLICT', 'RR2 nieaktualna wersja → JOB_EDIT_CONFLICT');
 -- OO2b: kolejna poprawka z wersją zwróconą przez poprzedni zapis przechodzi.
 select pg_temp.assert(
-  (public.update_published_job(:'JOBE'::uuid, current_setting('pb.qq_ok')::jsonb,
-     (:'qq_res'::jsonb ->> 'updated_at')::timestamptz) ->> 'slug') = :'qq_slug',
-  'QQ2b kolejna poprawka z aktualną wersją przechodzi');
+  (public.update_published_job(:'JOBE'::uuid, current_setting('pb.rr_ok')::jsonb,
+     (:'rr_res'::jsonb ->> 'updated_at')::timestamptz) ->> 'slug') = :'rr_slug',
+  'RR2b kolejna poprawka z aktualną wersją przechodzi');
 
 -- OO3 (kontrola ujemna kompletności): brak wymagań obowiązkowych odrzucony, rewizja cofnięta w całości.
 select pg_temp.expect_error(
   format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE',
-         jsonb_set(current_setting('pb.qq_bad')::jsonb, '{job,title}', '"Tytuł, który nie może wejść"')::text),
-  'VALIDATION_FAILED', 'QQ3 niekompletna treść odrzucona (jak publish_job)');
+         jsonb_set(current_setting('pb.rr_bad')::jsonb, '{job,title}', '"Tytuł, który nie może wejść"')::text),
+  'VALIDATION_FAILED', 'RR3 niekompletna treść odrzucona (jak publish_job)');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select title from public.jobs where id = :'JOBE') = 'Magazynier – zmiana nocna'
   and (select count(*) from public.job_requirements where job_id = :'JOBE' and kind = 'mandatory') = 1,
-  'QQ3b odrzucona rewizja nie zostawia częściowych zmian (rollback)');
+  'RR3b odrzucona rewizja nie zostawia częściowych zmian (rollback)');
 
 -- OO4: pusty tytuł / placeholder odrzucony.
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE',
-         jsonb_set(current_setting('pb.qq_ok')::jsonb, '{job,title}', '"   "')::text),
-  'VALIDATION_FAILED', 'QQ4 pusty tytuł odrzucony');
+         jsonb_set(current_setting('pb.rr_ok')::jsonb, '{job,title}', '"   "')::text),
+  'VALIDATION_FAILED', 'RR4 pusty tytuł odrzucony');
 
 -- OO5: klient nie ominie RPC — bezpośredni UPDATE/relacje opublikowanej oferty zablokowane.
 select pg_temp.expect_error(
   format($$update public.jobs set title = '' where id = %L$$, :'JOBE'),
-  'JOB_NOT_DRAFT', 'QQ5 bezpośredni UPDATE treści aktywnej oferty zablokowany');
+  'JOB_NOT_DRAFT', 'RR5 bezpośredni UPDATE treści aktywnej oferty zablokowany');
 select pg_temp.expect_error(
   format($$delete from public.job_requirements where job_id = %L$$, :'JOBE'),
-  'JOB_NOT_DRAFT', 'QQ5b bezpośrednie usunięcie wymagań aktywnej oferty zablokowane');
+  'JOB_NOT_DRAFT', 'RR5b bezpośrednie usunięcie wymagań aktywnej oferty zablokowane');
 select pg_temp.expect_error(
   format($$update public.job_translations set description = '' where job_id = %L$$, :'JOBE'),
-  'JOB_NOT_DRAFT', 'QQ5c bezpośrednia zmiana tłumaczenia aktywnej oferty zablokowana');
+  'JOB_NOT_DRAFT', 'RR5c bezpośrednia zmiana tłumaczenia aktywnej oferty zablokowana');
 select pg_temp.expect_error(
   format($$select public.set_job_requirements(%L::uuid, 'pl', 'mandatory', array[]::text[])$$, :'JOBE'),
-  'JOB_NOT_DRAFT', 'QQ5d set_job_* (ścieżka szkicu) nie opróżni relacji aktywnej oferty');
+  'JOB_NOT_DRAFT', 'RR5d set_job_* (ścieżka szkicu) nie opróżni relacji aktywnej oferty');
 select pg_temp.expect_error(
   format($$select set_config('pracujbe.job_edit', %L, true), public.set_job_requirements(%L::uuid, 'pl', 'mandatory', array[]::text[])$$, '00000000-0000-0000-0000-000000000000', :'JOBE'),
-  'JOB_NOT_DRAFT', 'QQ5e znacznik innej oferty nie otwiera zapisu');
+  'JOB_NOT_DRAFT', 'RR5e znacznik innej oferty nie otwiera zapisu');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select count(*) from public.job_requirements where job_id = :'JOBE' and kind = 'mandatory') = 1,
-  'QQ5f wymagania aktywnej oferty nietknięte po próbach obejścia');
+  'RR5f wymagania aktywnej oferty nietknięte po próbach obejścia');
 
 -- OO6: wstrzymaną ofertę też można poprawić (status zostaje paused).
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_status(:'JOBE'::uuid, 'pause');
 select public.update_published_job(:'JOBE'::uuid,
-  jsonb_set(current_setting('pb.qq_ok')::jsonb, '{job,salary_min}', '17'));
+  jsonb_set(current_setting('pb.rr_ok')::jsonb, '{job,salary_min}', '17'));
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text = 'paused' and salary_min = 17 from public.jobs where id = :'JOBE'),
-  'QQ6 edycja wstrzymanej oferty zachowuje status paused');
+  'RR6 edycja wstrzymanej oferty zachowuje status paused');
 
 -- OO7: bez weryfikacji firmy nie ma edycji (nawet wstrzymanej).
 update public.companies set status = 'pending' where id = :'COMPA';
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
-  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.qq_ok')),
-  'COMPANY_NOT_VERIFIED', 'QQ7 niezweryfikowana firma nie edytuje opublikowanej oferty');
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.rr_ok')),
+  'COMPANY_NOT_VERIFIED', 'RR7 niezweryfikowana firma nie edytuje opublikowanej oferty');
 reset role; reset app.current_uid;
 update public.companies set status = 'verified' where id = :'COMPA';
 
@@ -2258,32 +2348,32 @@ insert into public.company_members(company_id, profile_id, role, is_active)
   values (:'COMPA', :'CANDB', 'member', true) on conflict do nothing;
 set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
-  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.qq_ok')),
-  'PERMISSION_DENIED', 'QQ8 zwykły member nie edytuje oferty (recruiter+)');
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.rr_ok')),
+  'PERMISSION_DENIED', 'RR8 zwykły member nie edytuje oferty (recruiter+)');
 reset role; reset app.current_uid;
 delete from public.company_members where company_id = :'COMPA' and profile_id = :'CANDB';
 set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
-  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.qq_ok')),
-  'PERMISSION_DENIED', 'QQ8b obca firma nie edytuje oferty');
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.rr_ok')),
+  'PERMISSION_DENIED', 'RR8b obca firma nie edytuje oferty');
 
 -- OO9: zamknięta oferta i szkic nie idą tą ścieżką.
 reset role; reset app.current_uid;
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_status(:'JOBE'::uuid, 'close');
 select pg_temp.expect_error(
-  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.qq_ok')),
-  'JOB_NOT_EDITABLE', 'QQ9 zamkniętej oferty nie edytuje się bez ponownego otwarcia');
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.rr_ok')),
+  'JOB_NOT_EDITABLE', 'RR9 zamkniętej oferty nie edytuje się bez ponownego otwarcia');
 select pg_temp.expect_error(
   format('select public.update_published_job(%L::uuid, %L::jsonb)',
-         'e2222222-2222-2222-2222-222222222222', current_setting('pb.qq_ok')),
-  'JOB_NOT_EDITABLE', 'QQ9b szkic edytuje się kreatorem, nie update_published_job');
+         'e2222222-2222-2222-2222-222222222222', current_setting('pb.rr_ok')),
+  'JOB_NOT_EDITABLE', 'RR9b szkic edytuje się kreatorem, nie update_published_job');
 -- Kontrola: szkic nadal zapisuje relacje ścieżką kreatora (set_job_*).
 select public.set_job_certificates('e2222222-2222-2222-2222-222222222222'::uuid, array['BHP']);
 reset role; reset app.current_uid;
 select pg_temp.assert(
   exists (select 1 from public.job_certificates
             where job_id = 'e2222222-2222-2222-2222-222222222222' and certificate_label = 'BHP'),
-  'QQ9c szkic dalej zapisuje relacje przez set_job_*');
+  'RR9c szkic dalej zapisuje relacje przez set_job_*');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
