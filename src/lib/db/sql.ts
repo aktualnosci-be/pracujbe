@@ -151,3 +151,28 @@ export async function rpcRows<T = Record<string, unknown>>(
   const rows = result.rows[0]?.['v'];
   return Array.isArray(rows) ? (rows as T[]) : [];
 }
+
+export type Attempt<T> = { ok: true; value: T } | { ok: false; error: unknown };
+
+let savepointSeq = 0;
+
+/**
+ * Niezależna sekcja odczytu w tej samej transakcji (SAVEPOINT): błąd sekcji jest zwracany
+ * jako `{ ok: false }` i NIE przerywa transakcji — kolejne sekcje nadal działają. Zastępuje
+ * osobne żądania PostgREST, z których każde mogło zawieść niezależnie (np. liczniki pulpitu).
+ *
+ * Tylko SEKWENCYJNIE (`await` jedna po drugiej) — nie w `Promise.all` na tej samej transakcji,
+ * bo savepointy równoległych sekcji przeplatałyby się na jednym połączeniu.
+ */
+export async function attempt<T>(tx: TransactionQuery, action: () => Promise<T>): Promise<Attempt<T>> {
+  const savepoint = `pb_section_${++savepointSeq}`;
+  await tx.query(`SAVEPOINT ${savepoint}`);
+  try {
+    const value = await action();
+    await tx.query(`RELEASE SAVEPOINT ${savepoint}`);
+    return { ok: true, value };
+  } catch (error) {
+    await tx.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+    return { ok: false, error };
+  }
+}

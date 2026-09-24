@@ -68,6 +68,8 @@ export function createFakeDb() {
   function txFor(as: string | null) {
     return {
       query: async (text: string, values: unknown[] = []) => {
+        // `attempt()` z sql.ts: savepointy atrapa przyjmuje bez efektu.
+        if (/^(SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) pb_section_\d+$/.test(text)) return { rows: [] };
         const { kind, name, args } = parse(text, values);
         calls.push({ kind, name, args, values, text, as });
         const handler = handlers.get(key(kind, name));

@@ -93,3 +93,17 @@ describe('pula service odrzuca login o zbyt szerokich uprawnieniach (#25)', () =
     await db.admin.query(`DROP ROLE ${login}`);
   });
 });
+
+describe('attempt: niezależne sekcje w jednej transakcji (#25)', () => {
+  it('błąd sekcji nie przerywa transakcji; kolejne sekcje i COMMIT działają', async () => {
+    const { attempt } = await import('../../src/lib/db/sql');
+    const result = await withUserTransaction(db.web, alice, async (tx) => {
+      const bad = await attempt(tx, () => queryRows(tx, 'it.bad', 'SELECT 1/0 AS x'));
+      const good = await attempt(tx, () => queryCount(tx, 'it.good', 'SELECT 1 FROM public.profiles WHERE id = $1', [alice]));
+      return { bad, good };
+    });
+    expect(result.bad.ok).toBe(false);
+    expect((result.bad as { error: { code?: string } }).error.code).toBe('22012');
+    expect(result.good).toEqual({ ok: true, value: 1 });
+  });
+});
