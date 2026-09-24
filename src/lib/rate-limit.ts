@@ -51,6 +51,9 @@ const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
   // otwierać nieograniczonych wywołań płatnego API.
   'job-import',
   'job-import-day',
+  // Import CV przez AI (#487): jak wyżej — każde wywołanie modelu kosztuje.
+  'cv-import',
+  'cv-import-day',
   // Aplikacja bez konta (#98): publiczny formularz wysyłający e-maile na podany adres.
   'guest-apply',
   'guest-apply-email',

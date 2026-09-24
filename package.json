@@ -54,6 +54,7 @@
     "stripe": "^22.3.2",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "unpdf": "1.8.1",
     "zod": "4.6.5"
   },
   "devDependencies": {

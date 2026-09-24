@@ -21,6 +21,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'contentReport',
   'contractTypes',
   'cookies',
+  'cvImport',
   'dashboard',
   'errors',
   'files',

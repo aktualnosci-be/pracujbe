@@ -38,6 +38,7 @@ const ROUTES = [
   'candidate/oferty-polecane',
   'candidate/onboarding',
   'candidate/profil',
+  'candidate/profil/import-cv',
   'candidate/propozycje',
   'candidate/ustawienia',
   'candidate/wiadomosci',
