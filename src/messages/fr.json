@@ -608,7 +608,9 @@
     "savedSearchLimitReached": "Vous avez déjà 20 recherches enregistrées. Supprimez-en une pour en ajouter une nouvelle.",
     "guestApplyUnavailable": "La candidature sans compte est temporairement indisponible. Réessayez plus tard ou connectez-vous.",
     "emailNotVerified": "Confirmez d’abord l’adresse e-mail de votre compte — cliquez sur le lien envoyé lors de l’inscription.",
-    "claimExpired": "Le lien de rattachement a expiré (il était valable 30 jours)."
+    "claimExpired": "Le lien de rattachement a expiré (il était valable 30 jours).",
+    "screeningReviewRequired": "L’offre contient une question que l’équipe du portail doit vérifier avant la publication. Vous pourrez la publier une fois la question acceptée ou après l’avoir modifiée.",
+    "screeningQuestionRejected": "Une des questions n’a pas été acceptée. Modifiez-la ou supprimez-la pour publier l’offre."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -1102,7 +1104,9 @@
     "itemCompanyRejected": "Votre entreprise n’a pas été vérifiée",
     "itemCompanySuspended": "Votre entreprise a été suspendue",
     "itemTeamInvitation": "Invitation à rejoindre une équipe",
-    "itemSavedSearch": "Nouvelles offres pour une recherche enregistrée"
+    "itemSavedSearch": "Nouvelles offres pour une recherche enregistrée",
+    "itemScreeningApproved": "Une question de votre offre a été acceptée",
+    "itemScreeningRejected": "Une question de votre offre n’a pas été acceptée"
   },
   "pricing": {
     "standard": "Standard",
@@ -1394,7 +1398,14 @@
     "screeningRemove": "Supprimer la question {n}",
     "screeningMoveUp": "Monter la question {n}",
     "screeningMoveDown": "Descendre la question {n}",
-    "screeningTranslations": "Traductions (facultatif)"
+    "screeningTranslations": "Traductions (facultatif)",
+    "screeningRiskHint": "Cette question peut porter sur des données protégées ({categories}). L’équipe du portail la vérifiera avant la publication de l’offre. Ne demandez que ce qui est nécessaire pour ce poste.",
+    "screeningReviewPending": "La question attend la vérification de l’équipe du portail ({categories}). L’offre ne sera publiée qu’après acceptation.",
+    "screeningReviewRejected": "La question n’a pas été acceptée ({categories}). Modifiez-la ou supprimez-la.",
+    "screeningReviewReason": "Motif : {reason}",
+    "screeningPublishPending": "La question {n} attend une vérification.",
+    "screeningPublishRejected": "La question {n} n’a pas été acceptée.",
+    "screeningGoToQuestions": "Aller aux questions"
   },
   "jobImport": {
     "title": "Importer depuis une annonce",
@@ -1725,7 +1736,44 @@
     "caseEventStatus": "statut : {status}",
     "reasonImpersonation": "Usurpation d’identité",
     "reasonIllegalConditions": "Conditions de travail illégales",
-    "reasonDataMisuse": "Utilisation abusive des données"
+    "reasonDataMisuse": "Utilisation abusive des données",
+    "navScreening": "Questions des offres",
+    "screeningTitle": "Questions de présélection à vérifier",
+    "screeningSubtitle": "Questions pouvant porter sur des données protégées. Une offre contenant une telle question n’est pas publiée sans acceptation. Le contrôle automatique est une aide et ne décide pas de la légalité d’une question.",
+    "screeningFilterLabel": "Statut de la vérification",
+    "screeningFilterPending": "En attente",
+    "screeningFilterDecided": "Tranchées",
+    "screeningEmpty": "Aucune question dans cette vue.",
+    "screeningStatusPending": "En attente",
+    "screeningStatusApproved": "Acceptée",
+    "screeningStatusRejected": "Refusée",
+    "screeningNotCurrent": "Plus présente dans l’offre",
+    "screeningCategories": "Catégories possibles : {categories}",
+    "screeningUnknownCompany": "Entreprise inconnue",
+    "screeningUnknownJob": "Offre sans titre",
+    "screeningTypeYesNo": "Oui / non",
+    "screeningTypeSingleChoice": "Choix unique",
+    "screeningTypeDate": "Date",
+    "screeningTypeShortText": "Réponse courte",
+    "screeningOptions": "Options de réponse",
+    "screeningRequestedBy": "Enregistrée par : {name}",
+    "screeningDecidedBy": "Décision : {name}",
+    "screeningDecisionReason": "Motif : {text}",
+    "screeningActionApprove": "Accepter",
+    "screeningActionReject": "Refuser",
+    "screeningApproveConfirmTitle": "Accepter cette question ?",
+    "screeningApproveConfirmHint": "L’entreprise pourra publier l’offre avec cette question. L’acceptation ne vaut que pour ce texte — toute modification de la question ou d’une traduction demande une nouvelle décision.",
+    "screeningRejectConfirmTitle": "Refuser cette question ?",
+    "screeningRejectConfirmHint": "L’entreprise verra le motif dans l’assistant de l’offre et pourra modifier ou supprimer la question.",
+    "screeningColQuestion": "Question",
+    "screeningColCategories": "Catégories possibles",
+    "screeningReasonOptionalLabel": "Motif (facultatif)",
+    "screeningReasonHint": "{max} caractères max. Enregistré dans le journal des événements et, en cas de refus, montré à l’entreprise.",
+    "screeningApproved": "La question a été acceptée.",
+    "screeningRejected": "La question a été refusée.",
+    "entityScreeningReview": "Question de présélection",
+    "auditActionScreeningRequested": "Question soumise à vérification",
+    "auditActionScreeningReviewed": "Décision sur une question de présélection"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -2140,5 +2188,18 @@
       "accessCodeRequired": "Indiquez le code d’accès.",
       "accessCodeInvalid": "Le code d’accès comporte 24 caractères : lettres A–Z et chiffres 2–7."
     }
+  },
+  "screeningReview": {
+    "categoryAge": "âge",
+    "categorySex": "sexe",
+    "categoryFamily": "grossesse ou projets familiaux",
+    "categoryMarital": "état civil",
+    "categoryReligion": "religion ou convictions",
+    "categoryOrigin": "origine ou nationalité",
+    "categoryHealth": "santé ou handicap",
+    "categoryOrientation": "orientation sexuelle ou identité de genre",
+    "categoryUnion": "affiliation syndicale",
+    "categoryPolitical": "opinions politiques",
+    "categoryCriminal": "antécédents judiciaires"
   }
 }

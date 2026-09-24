@@ -86,6 +86,12 @@ const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {
   suspended: 'itemCompanySuspended',
 };
 
+/** Decyzja admina o pytaniu screeningowym (0104, #497): `system` + `data.kind = 'screening_review'`. */
+const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
+  approved: 'itemScreeningApproved',
+  rejected: 'itemScreeningRejected',
+};
+
 /** Tytuły powiadomień typu `system` rozróżniane po `entity_type` (#403). */
 const SYSTEM_TITLE_KEY_BY_ENTITY: Record<string, string> = {
   company_invitation: 'itemTeamInvitation',
@@ -104,6 +110,10 @@ export function titleKeyForType(type: string, data?: unknown, entityType = ''): 
   const d = asRecord(data);
   if (d['kind'] === 'company_status') {
     const key = COMPANY_STATUS_TITLE_KEY[asStr(d['status'])];
+    if (key) return key;
+  }
+  if (d['kind'] === 'screening_review') {
+    const key = SCREENING_REVIEW_TITLE_KEY[asStr(d['status'])];
     if (key) return key;
   }
   return TITLE_KEY_BY_TYPE[type] ?? TITLE_KEY_BY_TYPE['system']!;

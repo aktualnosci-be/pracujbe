@@ -608,7 +608,9 @@
     "savedSearchLimitReached": "Masz już 20 zapisanych wyszukiwań. Usuń jedno z nich, aby dodać nowe.",
     "guestApplyUnavailable": "Aplikacja bez konta jest chwilowo niedostępna. Spróbuj później albo zaloguj się.",
     "emailNotVerified": "Najpierw potwierdź adres e-mail swojego konta — kliknij link, który wysłaliśmy przy rejestracji.",
-    "claimExpired": "Link do przypisania aplikacji wygasł (był ważny 30 dni)."
+    "claimExpired": "Link do przypisania aplikacji wygasł (był ważny 30 dni).",
+    "screeningReviewRequired": "Oferta ma pytanie, które przed publikacją musi sprawdzić zespół portalu. Opublikujesz ją po akceptacji pytania albo po jego zmianie.",
+    "screeningQuestionRejected": "Jedno z pytań nie zostało zaakceptowane. Zmień je albo usuń, aby opublikować ofertę."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -1102,7 +1104,9 @@
     "itemCompanyRejected": "Twoja firma nie przeszła weryfikacji",
     "itemCompanySuspended": "Twoja firma została zawieszona",
     "itemTeamInvitation": "Zaproszenie do zespołu firmy",
-    "itemSavedSearch": "Nowe oferty dla zapisanego wyszukiwania"
+    "itemSavedSearch": "Nowe oferty dla zapisanego wyszukiwania",
+    "itemScreeningApproved": "Pytanie w Twojej ofercie zostało zaakceptowane",
+    "itemScreeningRejected": "Pytanie w Twojej ofercie nie zostało zaakceptowane"
   },
   "pricing": {
     "standard": "Standard",
@@ -1394,7 +1398,14 @@
     "screeningRemove": "Usuń pytanie {n}",
     "screeningMoveUp": "Przesuń pytanie {n} wyżej",
     "screeningMoveDown": "Przesuń pytanie {n} niżej",
-    "screeningTranslations": "Tłumaczenia (opcjonalnie)"
+    "screeningTranslations": "Tłumaczenia (opcjonalnie)",
+    "screeningRiskHint": "To pytanie może dotyczyć danych chronionych ({categories}). Przed publikacją oferty sprawdzi je zespół portalu. Pytaj tylko o to, co jest potrzebne na tym stanowisku.",
+    "screeningReviewPending": "Pytanie czeka na sprawdzenie przez zespół portalu ({categories}). Oferta zostanie opublikowana dopiero po akceptacji.",
+    "screeningReviewRejected": "Pytanie nie zostało zaakceptowane ({categories}). Zmień je albo usuń.",
+    "screeningReviewReason": "Uzasadnienie: {reason}",
+    "screeningPublishPending": "Pytanie {n} czeka na sprawdzenie.",
+    "screeningPublishRejected": "Pytanie {n} nie zostało zaakceptowane.",
+    "screeningGoToQuestions": "Przejdź do pytań"
   },
   "jobImport": {
     "title": "Zaimportuj z ogłoszenia",
@@ -1725,7 +1736,44 @@
     "caseEventStatus": "status: {status}",
     "reasonImpersonation": "Podszywanie się",
     "reasonIllegalConditions": "Warunki pracy niezgodne z prawem",
-    "reasonDataMisuse": "Niewłaściwe wykorzystanie danych"
+    "reasonDataMisuse": "Niewłaściwe wykorzystanie danych",
+    "navScreening": "Pytania w ofertach",
+    "screeningTitle": "Pytania screeningowe do sprawdzenia",
+    "screeningSubtitle": "Pytania, które mogą dotyczyć danych chronionych. Oferta z takim pytaniem nie zostanie opublikowana bez akceptacji. Kontrola automatyczna jest pomocnicza i nie rozstrzyga o zgodności pytania z prawem.",
+    "screeningFilterLabel": "Status przeglądu",
+    "screeningFilterPending": "Oczekujące",
+    "screeningFilterDecided": "Rozstrzygnięte",
+    "screeningEmpty": "Brak pytań w tym widoku.",
+    "screeningStatusPending": "Oczekuje",
+    "screeningStatusApproved": "Zaakceptowane",
+    "screeningStatusRejected": "Odrzucone",
+    "screeningNotCurrent": "Treści nie ma już w ofercie",
+    "screeningCategories": "Możliwe kategorie: {categories}",
+    "screeningUnknownCompany": "Nieznana firma",
+    "screeningUnknownJob": "Oferta bez tytułu",
+    "screeningTypeYesNo": "Tak / nie",
+    "screeningTypeSingleChoice": "Wybór jednej odpowiedzi",
+    "screeningTypeDate": "Data",
+    "screeningTypeShortText": "Krótka odpowiedź",
+    "screeningOptions": "Opcje odpowiedzi",
+    "screeningRequestedBy": "Zapisane przez: {name}",
+    "screeningDecidedBy": "Decyzja: {name}",
+    "screeningDecisionReason": "Uzasadnienie: {text}",
+    "screeningActionApprove": "Zaakceptuj",
+    "screeningActionReject": "Odrzuć",
+    "screeningApproveConfirmTitle": "Zaakceptować to pytanie?",
+    "screeningApproveConfirmHint": "Firma będzie mogła opublikować ofertę z tym pytaniem. Akceptacja dotyczy tylko tej treści — każda zmiana pytania lub tłumaczenia wymaga nowej decyzji.",
+    "screeningRejectConfirmTitle": "Odrzucić to pytanie?",
+    "screeningRejectConfirmHint": "Firma zobaczy uzasadnienie w kreatorze oferty i będzie mogła zmienić albo usunąć pytanie.",
+    "screeningColQuestion": "Pytanie",
+    "screeningColCategories": "Możliwe kategorie",
+    "screeningReasonOptionalLabel": "Uzasadnienie (opcjonalnie)",
+    "screeningReasonHint": "Maks. {max} znaków. Trafia do dziennika zdarzeń, a przy odrzuceniu także do firmy.",
+    "screeningApproved": "Pytanie zostało zaakceptowane.",
+    "screeningRejected": "Pytanie zostało odrzucone.",
+    "entityScreeningReview": "Pytanie screeningowe",
+    "auditActionScreeningRequested": "Pytanie skierowane do przeglądu",
+    "auditActionScreeningReviewed": "Decyzja o pytaniu screeningowym"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -2140,5 +2188,18 @@
       "accessCodeRequired": "Podaj kod dostępu.",
       "accessCodeInvalid": "Kod dostępu ma 24 znaki: litery A–Z i cyfry 2–7."
     }
+  },
+  "screeningReview": {
+    "categoryAge": "wiek",
+    "categorySex": "płeć",
+    "categoryFamily": "ciąża lub plany rodzinne",
+    "categoryMarital": "stan cywilny",
+    "categoryReligion": "religia lub przekonania",
+    "categoryOrigin": "pochodzenie lub narodowość",
+    "categoryHealth": "zdrowie lub niepełnosprawność",
+    "categoryOrientation": "orientacja seksualna lub tożsamość płciowa",
+    "categoryUnion": "przynależność do związku zawodowego",
+    "categoryPolitical": "poglądy polityczne",
+    "categoryCriminal": "karalność"
   }
 }

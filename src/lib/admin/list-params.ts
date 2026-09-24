@@ -157,6 +157,16 @@ export function parseEmailSuppressionFilter(raw: string | undefined | null): Ema
     : 'active';
 }
 
+/** Filtr kolejki przeglądu pytań screeningowych (#497, 0104). Domyślnie oczekujące. */
+export const SCREENING_REVIEW_FILTERS = ['pending', 'decided', 'all'] as const;
+export type ScreeningReviewFilter = (typeof SCREENING_REVIEW_FILTERS)[number];
+
+export function parseScreeningReviewFilter(raw: string | undefined | null): ScreeningReviewFilter {
+  return raw && (SCREENING_REVIEW_FILTERS as readonly string[]).includes(raw)
+    ? (raw as ScreeningReviewFilter)
+    : 'pending';
+}
+
 /** Powód blokady (`email_suppressions.reason`, 0098) → klucz i18n (namespace `admin`). */
 export const EMAIL_SUPPRESSION_REASON_KEY: Record<string, string> = {
   hard_bounce: 'emailReasonHardBounce',
@@ -219,6 +229,7 @@ export const AUDIT_ENTITY_TYPES = [
   'application',
   'offer',
   'email_suppression',
+  'screening_question_review',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -234,6 +245,8 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'offer.status_changed': 'auditActionOfferStatus',
   'email.suppressed': 'auditActionEmailSuppressed',
   'email.suppression_lifted': 'auditActionEmailSuppressionLifted',
+  'screening_question.review_requested': 'auditActionScreeningRequested',
+  'screening_question.reviewed': 'auditActionScreeningReviewed',
 };
 
 export function parseAuditEntity(raw: string | undefined | null): AuditEntityType | null {

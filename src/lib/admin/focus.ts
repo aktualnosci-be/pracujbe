@@ -18,3 +18,7 @@ export function reportFocusKey(id: string): string {
 export function emailSuppressionFocusKey(id: string): string {
   return `email-suppression-${id}`;
 }
+
+export function screeningReviewFocusKey(id: string): string {
+  return `screening-review-${id}`;
+}

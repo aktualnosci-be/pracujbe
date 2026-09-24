@@ -608,7 +608,9 @@
     "savedSearchLimitReached": "Je hebt al 20 opgeslagen zoekopdrachten. Verwijder er een om een nieuwe toe te voegen.",
     "guestApplyUnavailable": "Solliciteren zonder account is tijdelijk niet beschikbaar. Probeer later opnieuw of log in.",
     "emailNotVerified": "Bevestig eerst het e-mailadres van je account — klik op de link die we bij de registratie stuurden.",
-    "claimExpired": "De koppellink is verlopen (hij was 30 dagen geldig)."
+    "claimExpired": "De koppellink is verlopen (hij was 30 dagen geldig).",
+    "screeningReviewRequired": "De vacature bevat een vraag die het team van het portaal vóór publicatie moet controleren. Je kunt ze publiceren zodra de vraag is goedgekeurd of nadat je ze hebt aangepast.",
+    "screeningQuestionRejected": "Een van de vragen is niet goedgekeurd. Pas ze aan of verwijder ze om de vacature te publiceren."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -1102,7 +1104,9 @@
     "itemCompanyRejected": "Je bedrijf is niet geverifieerd",
     "itemCompanySuspended": "Je bedrijf is opgeschort",
     "itemTeamInvitation": "Uitnodiging voor een bedrijfsteam",
-    "itemSavedSearch": "Nieuwe vacatures voor een opgeslagen zoekopdracht"
+    "itemSavedSearch": "Nieuwe vacatures voor een opgeslagen zoekopdracht",
+    "itemScreeningApproved": "Een vraag in je vacature is goedgekeurd",
+    "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd"
   },
   "pricing": {
     "standard": "Standaard",
@@ -1394,7 +1398,14 @@
     "screeningRemove": "Vraag {n} verwijderen",
     "screeningMoveUp": "Vraag {n} omhoog",
     "screeningMoveDown": "Vraag {n} omlaag",
-    "screeningTranslations": "Vertalingen (optioneel)"
+    "screeningTranslations": "Vertalingen (optioneel)",
+    "screeningRiskHint": "Deze vraag kan over beschermde gegevens gaan ({categories}). Het team van het portaal controleert ze vóór de publicatie. Vraag alleen wat nodig is voor deze functie.",
+    "screeningReviewPending": "De vraag wacht op controle door het team van het portaal ({categories}). De vacature wordt pas na goedkeuring gepubliceerd.",
+    "screeningReviewRejected": "De vraag is niet goedgekeurd ({categories}). Pas ze aan of verwijder ze.",
+    "screeningReviewReason": "Motivering: {reason}",
+    "screeningPublishPending": "Vraag {n} wacht op controle.",
+    "screeningPublishRejected": "Vraag {n} is niet goedgekeurd.",
+    "screeningGoToQuestions": "Naar de vragen"
   },
   "jobImport": {
     "title": "Importeren uit een vacature",
@@ -1725,7 +1736,44 @@
     "caseEventStatus": "status: {status}",
     "reasonImpersonation": "Zich uitgeven voor een ander",
     "reasonIllegalConditions": "Onwettige arbeidsvoorwaarden",
-    "reasonDataMisuse": "Misbruik van gegevens"
+    "reasonDataMisuse": "Misbruik van gegevens",
+    "navScreening": "Vragen in vacatures",
+    "screeningTitle": "Screeningvragen om te controleren",
+    "screeningSubtitle": "Vragen die over beschermde gegevens kunnen gaan. Een vacature met zo’n vraag wordt niet gepubliceerd zonder goedkeuring. De automatische controle is een hulpmiddel en beslist niet of een vraag wettelijk toegestaan is.",
+    "screeningFilterLabel": "Status van de controle",
+    "screeningFilterPending": "In afwachting",
+    "screeningFilterDecided": "Beslist",
+    "screeningEmpty": "Geen vragen in deze weergave.",
+    "screeningStatusPending": "In afwachting",
+    "screeningStatusApproved": "Goedgekeurd",
+    "screeningStatusRejected": "Afgewezen",
+    "screeningNotCurrent": "Niet meer in de vacature",
+    "screeningCategories": "Mogelijke categorieën: {categories}",
+    "screeningUnknownCompany": "Onbekend bedrijf",
+    "screeningUnknownJob": "Vacature zonder titel",
+    "screeningTypeYesNo": "Ja / nee",
+    "screeningTypeSingleChoice": "Eén antwoord kiezen",
+    "screeningTypeDate": "Datum",
+    "screeningTypeShortText": "Kort antwoord",
+    "screeningOptions": "Antwoordopties",
+    "screeningRequestedBy": "Opgeslagen door: {name}",
+    "screeningDecidedBy": "Beslissing: {name}",
+    "screeningDecisionReason": "Motivering: {text}",
+    "screeningActionApprove": "Goedkeuren",
+    "screeningActionReject": "Afwijzen",
+    "screeningApproveConfirmTitle": "Deze vraag goedkeuren?",
+    "screeningApproveConfirmHint": "Het bedrijf kan de vacature met deze vraag publiceren. De goedkeuring geldt alleen voor deze tekst — elke wijziging van de vraag of een vertaling vraagt een nieuwe beslissing.",
+    "screeningRejectConfirmTitle": "Deze vraag afwijzen?",
+    "screeningRejectConfirmHint": "Het bedrijf ziet de motivering in de vacaturewizard en kan de vraag aanpassen of verwijderen.",
+    "screeningColQuestion": "Vraag",
+    "screeningColCategories": "Mogelijke categorieën",
+    "screeningReasonOptionalLabel": "Motivering (optioneel)",
+    "screeningReasonHint": "Max. {max} tekens. Wordt opgeslagen in het gebeurtenissenlogboek en bij afwijzing ook aan het bedrijf getoond.",
+    "screeningApproved": "De vraag is goedgekeurd.",
+    "screeningRejected": "De vraag is afgewezen.",
+    "entityScreeningReview": "Screeningvraag",
+    "auditActionScreeningRequested": "Vraag ter controle voorgelegd",
+    "auditActionScreeningReviewed": "Beslissing over screeningvraag"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",
@@ -2140,5 +2188,18 @@
       "accessCodeRequired": "Vul de toegangscode in.",
       "accessCodeInvalid": "De toegangscode heeft 24 tekens: letters A–Z en cijfers 2–7."
     }
+  },
+  "screeningReview": {
+    "categoryAge": "leeftijd",
+    "categorySex": "geslacht",
+    "categoryFamily": "zwangerschap of gezinsplannen",
+    "categoryMarital": "burgerlijke staat",
+    "categoryReligion": "religie of overtuiging",
+    "categoryOrigin": "afkomst of nationaliteit",
+    "categoryHealth": "gezondheid of handicap",
+    "categoryOrientation": "seksuele geaardheid of genderidentiteit",
+    "categoryUnion": "lidmaatschap van een vakbond",
+    "categoryPolitical": "politieke overtuiging",
+    "categoryCriminal": "strafrechtelijk verleden"
   }
 }

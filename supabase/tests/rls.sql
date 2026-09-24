@@ -6315,6 +6315,221 @@ select pg_temp.assert(pg_temp.e93_fingerprint() = :'e93fp', 'ESCO93-8 import nie
 select pg_temp.assert((select count(*) from public.occupations where source = 'manual') = :e93manual,
   'ESCO93-8b ręczne zawody z 0010 nietknięte');
 
+-- ============================================================================
+-- SR497. Kontrola treści pytań screeningowych przed publikacją (0104, #497): detektor w bazie
+--        (treść + opcje + tłumaczenia), kolejka przeglądu przy zapisie, blokada aktywacji do
+--        decyzji admina, decyzja z audytem i powiadomieniem, zmiana treści = nowy przegląd.
+-- ============================================================================
+\set SRJOB  'f4970000-0000-0000-0000-0000000000a1'
+\set SRJOB2 'f4970000-0000-0000-0000-0000000000a2'
+reset role; reset app.current_uid;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'SRJOB', :'COMPA', :'EMPA', 'draft-sr497', 'Magazynier SR', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
+  (:'SRJOB2', :'COMPA', :'EMPA', 'draft-sr497-2', 'Kierowca SR', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  (:'SRJOB', 'pl', 'Magazynier SR', 'Praca w magazynie w Gandawie.', array['Kompletacja zamówień']),
+  (:'SRJOB2', 'pl', 'Kierowca SR', 'Transport międzynarodowy.', array['Dostawy']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'SRJOB', 'pl', 'mandatory', 0, 'Dyspozycyjność'),
+  (:'SRJOB2', 'pl', 'mandatory', 0, 'Prawo jazdy C+E');
+
+-- SR497-1: detektor w bazie — kategorie w 4 językach, opcje i tłumaczenia; typowe pytania bez trafień.
+select pg_temp.assert(
+  public.screening_question_risk('{"pl": "Czy jesteś w ciąży?"}', '[]') = array['family']
+  and public.screening_question_risk('{"nl": "Wat is je geboortedatum?"}', '[]') = array['age']
+  and public.screening_question_risk('{"fr": "Quelle est votre religion ?"}', '[]') = array['religion']
+  and public.screening_question_risk('{"en": "Do you have a criminal record?"}', '[]') = array['criminal']
+  and public.screening_question_risk('{"pl": "Wybierz"}', '[{"id": "o1", "label": {"pl": "Tak", "en": "I am a trade union member"}}]') = array['union']
+  and public.screening_question_risk('{"pl": "Czy możesz zacząć od zaraz?", "fr": "Quelle est votre nationalité ?"}', '[]') = array['origin'],
+  'SR497-1 detektor: kategorie w PL/NL/FR/EN, także w opcjach i tłumaczeniach');
+select pg_temp.assert(
+  public.screening_question_risk('{"pl": "Czy masz prawo jazdy kat. C+E?", "en": "Do you have health and safety training?"}', '[]') = '{}'
+  and public.screening_question_risk('{"pl": "Ile lat doświadczenia masz?", "nl": "Wanneer kun je beginnen?"}', '[]') = '{}'
+  and public.screening_question_risk('{"pl": "Czy masz certyfikat VCA?", "fr": "Parlez-vous néerlandais ?"}', '[]') = '{}'
+  and public.screening_question_risk('{"pl": "Czy masz dobrą orientację w terenie?"}', '[]') = '{}'
+  and public.screening_question_risk('{"fr": "Avez-vous une formation en santé et sécurité ?"}', '[]') = '{}',
+  'SR497-1b kontrola ujemna: pytania o prawo jazdy, doświadczenie, dostępność, języki, VCA bez trafień');
+
+-- SR497-2: zapis kroku z pytaniem neutralnym, pytaniem z ryzykowną opcją (tłumaczenie NL)
+-- i pytaniem z ryzykownym tłumaczeniem treści (FR) → dwa przeglądy pending + audyt.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'SRJOB'::uuid, $j${
+  "screening_questions": [
+    {"type": "yes_no", "required": true, "prompt": {"pl": "Czy masz certyfikat VCA?"}},
+    {"type": "single_choice", "prompt": {"pl": "Twoja sytuacja"},
+     "options": [{"label": {"pl": "Mogę od zaraz"}}, {"label": {"pl": "Za miesiąc", "nl": "Ik ben zwanger"}}]},
+    {"type": "date", "prompt": {"pl": "Od kiedy możesz zacząć?", "fr": "Votre date de naissance ?"}}
+  ]
+}$j$::jsonb);
+select count(*) = 2 as ok from public.screening_question_reviews where job_id = :'SRJOB' and status = 'pending' \gset sr2_
+select pg_temp.assert(:'sr2_ok'::boolean, 'SR497-2 członek firmy widzi 2 oczekujące przeglądy swojej oferty');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select risk_categories from public.job_screening_questions where job_id = :'SRJOB' and position = 0) = '{}'
+  and (select risk_categories from public.job_screening_questions where job_id = :'SRJOB' and position = 1) = array['family']
+  and (select risk_categories from public.job_screening_questions where job_id = :'SRJOB' and position = 2) = array['age']
+  and (select requested_by from public.screening_question_reviews where job_id = :'SRJOB' and risk_categories = array['age']) = :'EMPA'::uuid,
+  'SR497-2b kategorie liczone przez bazę, zgłaszający zapisany');
+select count(*) as sr2audit from public.audit_logs
+  where action = 'screening_question.review_requested' and after_data->>'job_id' = :'SRJOB' \gset
+select pg_temp.assert(:sr2audit = 2, 'SR497-2c audyt dwóch zgłoszeń do przeglądu');
+
+-- SR497-3: autozapis tej samej treści nie tworzy nowych zgłoszeń ani wpisów audytu.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'SRJOB'::uuid, $j${
+  "screening_questions": [
+    {"type": "yes_no", "required": true, "prompt": {"pl": "Czy masz certyfikat VCA?"}},
+    {"type": "single_choice", "prompt": {"pl": "Twoja sytuacja"},
+     "options": [{"label": {"pl": "Mogę od zaraz"}}, {"label": {"pl": "Za miesiąc", "nl": "Ik ben zwanger"}}]},
+    {"type": "date", "prompt": {"pl": "Od kiedy możesz zacząć?", "fr": "Votre date de naissance ?"}}
+  ]
+}$j$::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.screening_question_reviews where job_id = :'SRJOB') = 2
+  and (select count(*) from public.audit_logs where action = 'screening_question.review_requested'
+         and after_data->>'job_id' = :'SRJOB') = 2,
+  'SR497-3 ponowny zapis tej samej treści bez nowych zgłoszeń i wpisów audytu');
+
+-- SR497-4: publikacja zablokowana do decyzji; zgłoszenia zostają po odrzuconej publikacji.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', :'SRJOB', 'sr497'),
+  'SCREENING_REVIEW_REQUIRED: 1', 'SR497-4 publikacja z nieprzejrzanym pytaniem odrzucona (pozycja pytania)');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'SRJOB') = 'draft'
+  and (select count(*) from public.screening_question_reviews where job_id = :'SRJOB' and status = 'pending') = 2,
+  'SR497-4b oferta pozostaje szkicem, przeglądy nadal oczekują');
+
+-- SR497-4c (kontrola ujemna): bez strażnika 0104 ta sama publikacja przechodzi (cofnięte).
+begin;
+alter table public.jobs disable trigger trg_enforce_screening_review;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.publish_job(:'SRJOB'::uuid, 'sr497-bez-strażnika') is not null as ok \gset sr4c_
+rollback;
+select pg_temp.assert(:'sr4c_ok'::boolean, 'SR497-4c kontrola ujemna: bez strażnika oferta z ryzykownym pytaniem byłaby publiczna');
+select pg_temp.assert((select status::text from public.jobs where id = :'SRJOB') = 'draft', 'SR497-4d kontrola ujemna cofnięta');
+
+-- SR497-5 (kontrola ujemna): inna firma nie widzi przeglądów; klient nie zmienia ich ani kategorii.
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select count(*) = 0 as ok from public.screening_question_reviews where job_id = :'SRJOB' \gset sr5_
+select pg_temp.assert(:'sr5_ok'::boolean, 'SR497-5 inna firma nie czyta przeglądów');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.screening_question_reviews set status = %L where job_id = %L', 'approved', :'SRJOB'),
+  'permission denied', 'SR497-5b firma nie zatwierdza własnego pytania bezpośrednim UPDATE');
+select pg_temp.expect_error(
+  format('insert into public.screening_question_reviews(job_id, content_fingerprint, risk_categories, question_type, prompt, status) values (%L, %L, %L, %L, %L, %L)',
+         :'SRJOB', 'x', '{age}', 'yes_no', '{"pl": "x"}', 'approved'),
+  'permission denied', 'SR497-5c firma nie wstawia zatwierdzonego przeglądu');
+select pg_temp.expect_error(
+  format('update public.job_screening_questions set risk_categories = %L where job_id = %L', '{}', :'SRJOB'),
+  'permission denied', 'SR497-5d firma nie zeruje kategorii pytania');
+select pg_temp.expect_error(
+  format('select public.admin_decide_screening_review(id, %L, null) from public.screening_question_reviews where job_id = %L limit 1', 'approved', :'SRJOB'),
+  'PERMISSION_DENIED', 'SR497-5e decyzja wyłącznie dla admina');
+reset role; reset app.current_uid;
+
+-- SR497-6: admin odrzuca (uzasadnienie wymagane) → audyt, powiadomienie, publikacja z REJECTED.
+select id as sr_fam from public.screening_question_reviews where job_id = :'SRJOB' and risk_categories = array['family'] \gset
+select id as sr_age from public.screening_question_reviews where job_id = :'SRJOB' and risk_categories = array['age'] \gset
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_decide_screening_review(%L::uuid, %L, %L)', :'sr_fam', 'rejected', '  '),
+  'REASON_REQUIRED', 'SR497-6 odrzucenie bez uzasadnienia odrzucone');
+select pg_temp.expect_error(format('select public.admin_decide_screening_review(%L::uuid, %L, null)', :'sr_fam', 'maybe'),
+  'VALIDATION_FAILED', 'SR497-6b nieznana decyzja odrzucona');
+select public.admin_decide_screening_review(:'sr_fam'::uuid, 'rejected', 'Opcja dotyczy ciąży — usuń ją.');
+select pg_temp.expect_error(format('select public.admin_decide_screening_review(%L::uuid, %L, null)', :'sr_fam', 'approved'),
+  'STALE_STATE', 'SR497-6c druga decyzja o tym samym przeglądzie odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'rejected' and decided_by = :'ADMIN'::uuid and decision_reason = 'Opcja dotyczy ciąży — usuń ją.'
+     from public.screening_question_reviews where id = :'sr_fam')
+  and exists (select 1 from public.audit_logs where action = 'screening_question.reviewed'
+                and entity_id = :'sr_fam'::uuid and actor_id = :'ADMIN'::uuid
+                and after_data->>'status' = 'rejected' and after_data->>'reason' is not null)
+  and exists (select 1 from public.notifications where profile_id = :'EMPA'::uuid and entity_id = :'SRJOB'::uuid
+                and data->>'kind' = 'screening_review' and data->>'status' = 'rejected'),
+  'SR497-6d decyzja zapisana, audyt z uzasadnieniem, powiadomienie dla zgłaszającego');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', :'SRJOB', 'sr497'),
+  'SCREENING_QUESTION_REJECTED: 1', 'SR497-6e publikacja z odrzuconym pytaniem odrzucona');
+reset role; reset app.current_uid;
+
+-- SR497-7: akceptacja nie publikuje automatycznie; poprawione pytanie wymaga nowej decyzji.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_screening_review(:'sr_age'::uuid, 'approved', null);
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.jobs where id = :'SRJOB') = 'draft',
+  'SR497-7 akceptacja nie publikuje oferty');
+-- Firma poprawia odrzuconą opcję, ale tłumaczenie zaakceptowanego pytania zmienia na inne ryzykowne.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'SRJOB'::uuid, $j${
+  "screening_questions": [
+    {"type": "yes_no", "required": true, "prompt": {"pl": "Czy masz certyfikat VCA?"}},
+    {"type": "single_choice", "prompt": {"pl": "Twoja sytuacja"},
+     "options": [{"label": {"pl": "Mogę od zaraz"}}, {"label": {"pl": "Za miesiąc", "nl": "Over een maand"}}]},
+    {"type": "date", "prompt": {"pl": "Od kiedy możesz zacząć?", "fr": "Quelle est votre nationalité ?"}}
+  ]
+}$j$::jsonb);
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', :'SRJOB', 'sr497'),
+  'SCREENING_REVIEW_REQUIRED: 2', 'SR497-7b zmiana tłumaczenia po akceptacji nie omija kontroli');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select risk_categories from public.job_screening_questions where job_id = :'SRJOB' and position = 1) = '{}'
+  and (select count(*) from public.screening_question_reviews where job_id = :'SRJOB' and status = 'pending'
+         and risk_categories = array['origin']) = 1,
+  'SR497-7c poprawiona opcja bez przeglądu, nowa treść w kolejce');
+-- Decyzja o treści, której już nie ma w ofercie (zaakceptowana data urodzenia), jest nieaktualna.
+select id as sr_orig from public.screening_question_reviews where job_id = :'SRJOB' and risk_categories = array['origin'] \gset
+insert into public.screening_question_reviews(job_id, content_fingerprint, risk_categories, question_type, prompt)
+  values (:'SRJOB', 'nieobecna-tresc', array['age'], 'yes_no', '{"pl": "Ile masz lat?"}')
+  returning id as sr_gone \gset
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.admin_decide_screening_review(%L::uuid, %L, null)', :'sr_gone', 'approved'),
+  'STALE_STATE', 'SR497-7d decyzja o treści nieobecnej w ofercie odrzucona');
+select public.admin_decide_screening_review(:'sr_orig'::uuid, 'approved', 'Pytanie zaakceptowane do testu.');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.publish_job(:'SRJOB'::uuid, 'sr497-ok') is not null, 'SR497-7e po akceptacji bieżącej treści firma publikuje');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.jobs where id = :'SRJOB') = 'active', 'SR497-7f oferta aktywna');
+
+-- SR497-8 (kontrola ujemna fałszywych trafień): typowe pytania nie trafiają do kolejki i nie blokują.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'SRJOB2'::uuid, $j${
+  "screening_questions": [
+    {"type": "yes_no", "required": true, "prompt": {"pl": "Masz prawo jazdy C+E?", "fr": "Avez-vous le permis C+E ?"}},
+    {"type": "single_choice", "prompt": {"pl": "Jak dojedziesz?"},
+     "options": [{"label": {"pl": "Własny samochód", "nl": "Eigen auto"}}, {"label": {"pl": "Komunikacja"}}]},
+    {"type": "date", "prompt": {"pl": "Od kiedy możesz zacząć?", "en": "When can you start?"}},
+    {"type": "short_text", "prompt": {"pl": "Ile lat doświadczenia z tachografem?", "nl": "Welke talen spreek je?"}}
+  ]
+}$j$::jsonb);
+select pg_temp.assert(public.publish_job(:'SRJOB2'::uuid, 'sr497-2') is not null, 'SR497-8 oferta z typowymi pytaniami publikuje się bez przeglądu');
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.screening_question_reviews where job_id = :'SRJOB2'),
+  'SR497-8b brak zgłoszeń dla typowych pytań');
+
+-- SR497-9: wznowienie wstrzymanej oferty też sprawdza pytania (strażnik na każdej aktywacji).
+reset role;
+alter table public.job_screening_questions disable trigger trg_guard_screening_questions_draft;
+update public.job_screening_questions set prompt = '{"pl": "Czy należysz do związku zawodowego?"}'
+  where job_id = :'SRJOB2' and position = 3;
+alter table public.job_screening_questions enable trigger trg_guard_screening_questions_draft;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'SRJOB2'::uuid, 'pause');
+select pg_temp.expect_error(format('select public.set_job_status(%L::uuid, %L)', :'SRJOB2', 'resume'),
+  'SCREENING_REVIEW_REQUIRED: 3', 'SR497-9 wznowienie z nieprzejrzanym pytaniem odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'SRJOB2') = 'paused'
+  and exists (select 1 from public.screening_question_reviews where job_id = :'SRJOB2' and status = 'pending'
+                and risk_categories = array['union']),
+  'SR497-9b oferta wstrzymana, pytanie w kolejce');
+
 -- ESCO93-R (rollback 0097): supabase/tests/esco93-rollback.sql, uruchamiany przez test-rls.sh
 -- po tym pliku (psql -f, bo \ir ścieżki rollbacku nie działa przy wejściu ze stdin).
 

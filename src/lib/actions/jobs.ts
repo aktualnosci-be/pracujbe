@@ -9,6 +9,10 @@ import { isSupabaseConfigured } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
+import {
+  buildScreeningReviewNotices,
+  type ScreeningReviewNotice,
+} from '@/lib/screening/review';
 import { routing } from '@/i18n/routing';
 import {
   step1Schema,
@@ -68,7 +72,9 @@ export type CreateDraftResult =
   | { ok: true; id: string; demo?: boolean }
   | { ok: false; error: ErrorCode };
 export type SaveDraftResult = { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
-export type PublishResult = { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
+export type PublishResult =
+  | { ok: true; demo?: boolean }
+  | { ok: false; error: ErrorCode; screening?: ScreeningReviewNotice[] };
 export type UpdatePublishedResult =
   | { ok: true; demo?: boolean; slug?: string; updatedAt?: string }
   | { ok: false; error: ErrorCode };
@@ -116,6 +122,8 @@ function mapPgError(message: string | undefined): ErrorCode {
   if (m.includes('JOB_NOT_EDITABLE')) return 'JOB_NOT_EDITABLE';
   if (m.includes('JOB_EXPIRED')) return 'JOB_EXPIRED';
   if (m.includes('JOB_NOT_DRAFT')) return 'JOB_NOT_DRAFT';
+  if (m.includes('SCREENING_QUESTION_REJECTED')) return 'SCREENING_QUESTION_REJECTED';
+  if (m.includes('SCREENING_REVIEW_REQUIRED')) return 'SCREENING_REVIEW_REQUIRED';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
   if (m.includes('ENTITLEMENT_LIMIT')) return 'ENTITLEMENT_LIMIT';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
@@ -432,6 +440,35 @@ export async function updatePublishedJob(
  * publishJob
  * ------------------------------------------------------------------------- */
 
+type ServerClient = Awaited<ReturnType<typeof createServerClient>>;
+
+/**
+ * Stan przeglądu pytań oznaczonych przez detektor (#497, migracja 0104), odczyt pod RLS
+ * (członek firmy oferty). Tylko pytania bez akceptacji bieżącej treści. Błąd odczytu → pusta
+ * lista (kod błędu publikacji i tak trafia do kreatora).
+ */
+async function loadScreeningReviewNotices(
+  supabase: ServerClient,
+  jobId: string,
+): Promise<ScreeningReviewNotice[]> {
+  try {
+    const [questions, reviews] = await Promise.all([
+      supabase
+        .from('job_screening_questions')
+        .select('position, content_fingerprint, risk_categories')
+        .eq('job_id', jobId),
+      supabase
+        .from('screening_question_reviews')
+        .select('content_fingerprint, status, decision_reason')
+        .eq('job_id', jobId),
+    ]);
+    if (questions.error || reviews.error) return [];
+    return buildScreeningReviewNotices(questions.data, reviews.data);
+  } catch {
+    return [];
+  }
+}
+
 /** Publikuje ofertę (status='active', published_at=now()). Wymaga firmy `verified`. */
 export async function publishJob(jobId: string): Promise<PublishResult> {
   if (typeof jobId !== 'string' || (!UUID_RE.test(jobId) && jobId !== DEMO_DRAFT_ID)) {
@@ -471,7 +508,15 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     // Transakcyjna publikacja: autoryzacja + firma verified + status=draft + KOMPLETNOŚĆ (FUN-01).
     // Aktywacja poza tym RPC jest zablokowana triggerem (guard_job_publish).
     const { error: pubErr } = await supabase.rpc('publish_job', { p_job_id: jobId, p_slug: slug });
-    if (pubErr) return { ok: false, error: mapPgError(pubErr.message) };
+    if (pubErr) {
+      const code = mapPgError(pubErr.message);
+      // #497: pytanie screeningowe czeka na przegląd albo zostało odrzucone — kreator pokazuje,
+      // których pytań to dotyczy (i uzasadnienie odrzucenia), żeby firma mogła je poprawić.
+      if (code === 'SCREENING_REVIEW_REQUIRED' || code === 'SCREENING_QUESTION_REJECTED') {
+        return { ok: false, error: code, screening: await loadScreeningReviewNotices(supabase, jobId) };
+      }
+      return { ok: false, error: code };
+    }
 
     return { ok: true };
   } catch {
