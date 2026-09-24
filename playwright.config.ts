@@ -90,6 +90,7 @@ export default defineConfig({
     '**/offer-message-login.spec.ts',
     // Pełny formularz zgłoszenia treści (#41) — oferta fikcyjna bez flagi demo.
     '**/content-report-form.spec.ts',
+    '**/job-funnel-no-storage.spec.ts',
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
