@@ -18,6 +18,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'common',
   'company',
   'companyBlocks',
+  'contentReport',
   'contractTypes',
   'cookies',
   'dashboard',

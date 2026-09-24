@@ -1,5 +1,6 @@
 import { isLocale, type Locale } from '@/i18n/routing';
 import { formatSalaryRange, type SalaryInput } from '@/lib/salary';
+import { ACCESS_CODE_RE, CASE_NUMBER_RE } from '@/lib/validation/content-report';
 import { salaryLabelsFor } from '@/lib/salary-labels';
 
 /**
@@ -53,6 +54,19 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
       return '/employer/zespol';
     case 'jobMatch':
       return '/candidate/wyszukiwania';
+    case 'reportReceived': {
+      // #41: numer sprawy i kod dostępu w części `#` (nie trafia do serwera ani logów).
+      const caseNumber = payload?.['caseNumber'];
+      const accessCode = payload?.['accessCode'];
+      const fragment =
+        typeof caseNumber === 'string' &&
+        CASE_NUMBER_RE.test(caseNumber) &&
+        typeof accessCode === 'string' &&
+        ACCESS_CODE_RE.test(accessCode)
+          ? `#nr=${caseNumber}&kod=${accessCode}`
+          : '';
+      return `/zglos-tresc/sprawa${fragment}`;
+    }
     case 'newMessage': {
       const panel = payload?.['panel'] === 'employer' ? 'employer' : 'candidate';
       const conversationId = payload?.['conversationId'];

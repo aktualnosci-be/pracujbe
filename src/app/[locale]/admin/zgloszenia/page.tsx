@@ -6,8 +6,10 @@ import { Link } from '@/i18n/navigation';
 import { reportFocusKey } from '@/lib/admin/focus';
 import {
   parseReportFilter,
+  parseReportKindFilter,
   REPORT_ACTIVE_FILTER,
   REPORT_FILTERS,
+  REPORT_KIND_FILTERS,
   reportReasonView,
 } from '@/lib/admin/list-params';
 import { listReports, type AdminReportRow } from '@/lib/data/admin';
@@ -65,6 +67,21 @@ const FILTER_LABEL: Record<string, string> = {
   all: 'filterAll',
 };
 
+/** Etykieta chipa filtra rodzaju zgłoszenia (#41). */
+const KIND_LABEL: Record<string, string> = {
+  all: 'filterKindAll',
+  dsa_notice: 'kindDsa',
+  quality: 'kindQuality',
+};
+
+/** Etykieta statusu w historii sprawy. */
+const STATUS_LABEL: Record<string, string> = {
+  open: 'statusOpen',
+  reviewing: 'statusReviewing',
+  resolved: 'statusResolved',
+  dismissed: 'statusDismissed',
+};
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function firstValue(value: string | string[] | undefined): string | undefined {
@@ -97,15 +114,19 @@ export default async function AdminReportsPage({
   const t = await getTranslations({ locale, namespace: 'admin' });
   const sp = await searchParams;
   const filter = parseReportFilter(firstValue(sp['status']));
+  const kind = parseReportKindFilter(firstValue(sp['kind']));
   const cursor = firstValue(sp['cursor']) ?? null;
   const statusQuery = filter === REPORT_ACTIVE_FILTER ? null : filter;
+  const kindQuery = kind === 'all' ? null : kind;
 
-  const result = await listReports({ status: filter, cursor });
+  const result = await listReports({ status: filter, kind, cursor });
+  // Termin sprawy liczony w chwili renderu (strona force-dynamic).
+  const now = Date.now();
   const reports = result.status === 'ok' ? result.rows : [];
   const formatDate = createAppDateFormatter(locale, { withTime: true });
 
   const retryParams = new URLSearchParams(
-    Object.entries({ status: statusQuery, cursor }).filter((e): e is [string, string] =>
+    Object.entries({ status: statusQuery, kind: kindQuery, cursor }).filter((e): e is [string, string] =>
       Boolean(e[1]),
     ),
   ).toString();
@@ -131,15 +152,40 @@ export default async function AdminReportsPage({
           return (
             <Link
               key={value}
-              href={
-                value === REPORT_ACTIVE_FILTER
-                  ? { pathname: BASE_PATH }
-                  : { pathname: BASE_PATH, query: { status: value } }
-              }
+              href={{
+                pathname: BASE_PATH,
+                query: {
+                  ...(value === REPORT_ACTIVE_FILTER ? {} : { status: value }),
+                  ...(kindQuery ? { kind: kindQuery } : {}),
+                },
+              }}
               aria-current={isActive ? 'true' : undefined}
               className={chipClass(isActive)}
             >
               {t(FILTER_LABEL[value] ?? 'filterAll')}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Rodzaj zgłoszenia (#41): sprawy DSA to osobna kolejka. */}
+      <nav aria-label={t('filterKindLabel')} className="flex flex-wrap gap-2">
+        {REPORT_KIND_FILTERS.map((value) => {
+          const isActive = value === kind;
+          return (
+            <Link
+              key={value}
+              href={{
+                pathname: BASE_PATH,
+                query: {
+                  ...(statusQuery ? { status: statusQuery } : {}),
+                  ...(value === 'all' ? {} : { kind: value }),
+                },
+              }}
+              aria-current={isActive ? 'true' : undefined}
+              className={chipClass(isActive)}
+            >
+              {t(KIND_LABEL[value] ?? 'filterKindAll')}
             </Link>
           );
         })}
@@ -211,6 +257,65 @@ export default async function AdminReportsPage({
                             {report.details}
                           </p>
                         ) : null}
+                        {report.dsa ? (
+                          <div className="space-y-1 rounded-[14px] border border-border px-4 py-3 text-[13px]">
+                            <p className="font-medium text-foreground">{t('caseSnapshotTitle')}</p>
+                            {report.dsa.snapshotJobTitle ? (
+                              <p className="break-words text-foreground">
+                                {t('caseSnapshotJob', { title: report.dsa.snapshotJobTitle })}
+                              </p>
+                            ) : null}
+                            {report.dsa.snapshotCompanyName ? (
+                              <p className="break-words text-foreground">
+                                {t('caseSnapshotCompany', { name: report.dsa.snapshotCompanyName })}
+                              </p>
+                            ) : null}
+                            {report.dsa.contentUrl ? (
+                              <p className="break-all text-muted-foreground">
+                                {t('caseContentUrl', { url: report.dsa.contentUrl })}
+                              </p>
+                            ) : null}
+                            {report.dsa.reporterEmail ? (
+                              <p className="break-all text-muted-foreground">
+                                {t('caseReporterContact', { email: report.dsa.reporterEmail })}
+                              </p>
+                            ) : null}
+                            {report.dsa.events.length > 0 ? (
+                              <div>
+                                <p className="font-medium text-foreground">{t('caseHistoryTitle')}</p>
+                                <ol className="text-muted-foreground">
+                                  {report.dsa.events.map((event, index) => (
+                                    <li key={`${event.at}-${index}`}>
+                                      <time dateTime={event.at}>{formatDate(event.at)}</time>{' '}
+                                      {event.type === 'submitted'
+                                        ? t('caseEventSubmitted')
+                                        : t('caseEventStatus', {
+                                            status: t(STATUS_LABEL[event.toStatus ?? ''] ?? 'statusUnknown'),
+                                          })}
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {report.dsa ? (
+                          <p className={ROW_META}>
+                            {t('caseNumber')}:{' '}
+                            <span className="font-mono font-medium text-foreground">{report.dsa.caseNumber}</span>
+                            {report.dsa.dueAt ? (
+                              <>
+                                {' '}
+                                <span aria-hidden="true">·</span>{' '}
+                                {t('caseDue', { date: formatDate(report.dsa.dueAt) })}
+                                {['open', 'reviewing'].includes(report.status) &&
+                                new Date(report.dsa.dueAt).getTime() < now ? (
+                                  <span className="ml-1 font-medium text-error">{t('caseOverdue')}</span>
+                                ) : null}
+                              </>
+                            ) : null}
+                          </p>
+                        ) : null}
                         <p className={ROW_META}>
                           {t('reportedBy', {
                             name: report.reporterName ?? t('reporterFallback'),
@@ -223,6 +328,11 @@ export default async function AdminReportsPage({
                         <div className="flex flex-wrap items-center">
                           <span className={cn(TAG, 'mr-[5px] mt-1.5')}>{typeLabel}</span>
                           <AdminStatusBadge kind="report" status={report.status} className="mt-1.5" />
+                          {report.dsa ? (
+                            <span className={cn(TAG, 'ml-[5px] mt-1.5 font-medium text-foreground')}>
+                              {t('kindDsa')}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       <ReportActions
@@ -243,7 +353,7 @@ export default async function AdminReportsPage({
       {result.status === 'ok' ? (
         <AdminPager
           pathname={BASE_PATH}
-          query={{ status: statusQuery }}
+          query={{ status: statusQuery, kind: kindQuery }}
           nextCursor={result.nextCursor}
           hasCursor={Boolean(cursor)}
           count={reports.length}

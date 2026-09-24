@@ -23,6 +23,7 @@ export const QUEUED_EMAIL_TYPES = [
   'companySuspended', // admin_set_company_status → suspended (0084)
   'teamInvitation', // invite_company_member (0086)
   'jobMatch', // process_saved_search_alerts (0092) — digest zapisanego wyszukiwania
+  'reportReceived', // submit_content_report (0094) — enqueue_email_to_address
 ] as const satisfies readonly EmailType[];
 
 /** E-maile konta — wysyłane przez warstwę Auth (`src/lib/email/auth-email.ts`). */

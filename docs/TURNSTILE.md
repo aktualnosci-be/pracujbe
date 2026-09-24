@@ -51,7 +51,7 @@ błędny sekret) oraz braku konfiguracji w produkcji:
 | rejestracja (kandydat, pracodawca) | `register` | **fail-closed** (`BOT_CHECK_UNAVAILABLE`) | masowe zakładanie kont |
 | reset hasła | `password_reset` | **fail-closed** | wysyłka e-maili do cudzych skrzynek |
 | kontakt | `contact` | **fail-closed** | polityka gotowa; publicznego formularza kontaktu jeszcze nie ma |
-| zgłoszenia | `report` | **fail-closed** | polityka gotowa; publicznego formularza zgłoszeń jeszcze nie ma |
+| zgłoszenia | `report` | **fail-closed** | publiczny formularz zgłoszenia treści `/zglos-tresc` (#41, `submitContentReport`) |
 | aplikowanie | — | nie dotyczy | wymaga zalogowanego kandydata (logowanie i rejestracja chronione) + limit `apply` + idempotencja w bazie |
 
 Fail-open przy logowaniu obejmuje awarię **serwerowej** weryfikacji. Jeśli skrypt Turnstile nie
