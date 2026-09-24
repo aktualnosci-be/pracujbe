@@ -3,7 +3,7 @@ import 'server-only';
 import { cache } from 'react';
 
 import type { PortalIdentity } from '@/lib/auth/session';
-import { isAuthRuntimeConfigured, isDatabaseConfigured } from '@/lib/env';
+import { isAuthRuntimeConfigured, isDatabaseConfigured, isServiceDatabaseConfigured } from '@/lib/env';
 import { withServiceTransaction } from './service';
 import { withUserTransaction, type TransactionQuery } from './transaction';
 
@@ -67,6 +67,4 @@ export async function withServiceRole<T>(action: (tx: TransactionQuery) => Promi
 }
 
 /** Czy pula zadań serwerowych jest skonfigurowana (worker, webhooki, cron, admin). */
-export function isServiceDatabaseConfigured(): boolean {
-  return Boolean(process.env.DATABASE_SERVICE_URL);
-}
+export { isServiceDatabaseConfigured };

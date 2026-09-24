@@ -108,16 +108,23 @@ export function hasPublicHttpsUrl(): boolean {
   }
 }
 
+/** Login zadań serwerowych PostgreSQL (#25): worker poczty, webhooki, cron, odczyty admina. */
+export function isServiceDatabaseConfigured(): boolean {
+  return Boolean(process.env.DATABASE_SERVICE_URL);
+}
+
 /**
- * Zależności KRYTYCZNE dla gotowości (P1-18). W produkcji aplikacja nie może obsługiwać ruchu
- * bez rdzenia: Supabase (URL+anon), klucz service-role (operacje serwerowe) oraz realny https URL.
- * Dostawcy opcjonalni (Stripe/Resend/webhooki) NIE blokują gotowości — ich stan raportuje
- * /api/health jako `checks` (obserwowalność bez twardego 503 na starcie bez płatności/e-maili).
+ * Zależności KRYTYCZNE dla gotowości (P1-18, #25). W produkcji aplikacja nie może obsługiwać ruchu
+ * bez rdzenia: PostgreSQL (login WWW `DATABASE_APP_URL` + login zadań serwerowych
+ * `DATABASE_SERVICE_URL`), sesje Better Auth oraz realny https URL. Dostawcy opcjonalni
+ * (Stripe/Resend/webhooki) NIE blokują gotowości — ich stan raportuje /api/health jako `checks`.
+ * Klucze Supabase nie są już częścią rdzenia: warstwa danych paneli działa bez PostgREST.
  */
 export function readinessChecks(): Record<string, boolean> {
   return {
-    supabase: isSupabaseConfigured(),
-    serviceRole: hasServiceRoleKey(),
+    database: isDatabaseConfigured(),
+    serviceDatabase: isServiceDatabaseConfigured(),
+    authRuntime: isAuthRuntimeConfigured(),
     httpsSiteUrl: hasPublicHttpsUrl(),
     // #51: sprzedaż wyłączona flagą — sekrety Stripe bez `BILLING_ENABLED` nie liczą się.
     stripe: isBillingEnabled() && Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
@@ -130,10 +137,12 @@ export function readinessChecks(): Record<string, boolean> {
 
 /**
  * Gotowość do obsługi ruchu (SEC-19 + P1-18). Tryb demo: zawsze gotowe (lokalnie/staging/E2E).
- * Tryb produkcyjny: wymaga rdzenia (Supabase + service-role + realny https URL) — brak =
- * „nieskonfigurowany" (fail-closed: 503/maintenance, nie fikcyjne demo). Nie ujawnia sekretów.
+ * Tryb produkcyjny: wymaga rdzenia (PostgreSQL WWW + zadań serwerowych, Better Auth, realny
+ * https URL) — brak = „nieskonfigurowany" (fail-closed: 503/maintenance, nie fikcyjne demo).
+ * Nie ujawnia sekretów.
  */
 export function isAppReady(): boolean {
   if (!isProductionMode()) return true;
-  return isSupabaseConfigured() && hasServiceRoleKey() && hasPublicHttpsUrl();
+  return isDatabaseConfigured() && isServiceDatabaseConfigured() && isAuthRuntimeConfigured() &&
+    hasPublicHttpsUrl();
 }
