@@ -1170,6 +1170,7 @@
     "confirmIntro": "Click the button to confirm your email address and send the application to the employer.",
     "confirmButton": "Confirm and send application",
     "confirming": "Sending…",
+    "openingLink": "Opening secure link…",
     "confirmedTitle": "Application sent",
     "confirmedBody": "The employer has received your application. We also emailed you a link to link the application to a candidate account on Pracuj.be.",
     "alreadyConfirmedTitle": "Application already confirmed",

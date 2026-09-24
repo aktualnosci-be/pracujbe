@@ -16,6 +16,7 @@ import {
   isGuestTokenFormat,
   issueGuestToken,
 } from '@/lib/guest-apply/token';
+import { clearGuestLinkToken, readGuestLinkToken } from '@/lib/guest-apply/link-cookie';
 import { applicationPhoneSchema } from '@/lib/validation/application';
 import {
   guestApplicationSchema,
@@ -182,10 +183,11 @@ export async function submitGuestApplication(
 }
 
 /** Potwierdzenie adresu e-mail tokenem z linku — dopiero teraz aplikacja trafia do firmy. */
-export async function confirmGuestApplication(token: string): Promise<GuestConfirmResult> {
+export async function confirmGuestApplication(locale: string): Promise<GuestConfirmResult> {
   if (!(await checkRateLimit('guest-apply-confirm', { max: 30, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
+  const token = await readGuestLinkToken('confirm');
   if (!isGuestTokenFormat(token)) return { ok: true, outcome: 'invalid' };
   if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
   if (!hasServiceRoleKey() || !isGuestTokenConfigured()) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
@@ -212,6 +214,11 @@ export async function confirmGuestApplication(token: string): Promise<GuestConfi
       return { ok: false, error: 'INTERNAL' };
     }
     const slug = typeof row?.job_slug === 'string' && SLUG_RE.test(row.job_slug) ? row.job_slug : undefined;
+    try {
+      await clearGuestLinkToken(locale, 'confirm');
+    } catch (e) {
+      captureError(e, { area: 'guestApply.confirm.clearCookie' });
+    }
     return { ok: true, outcome: outcome as GuestConfirmOutcome, ...(slug ? { jobSlug: slug } : {}) };
   } catch (e) {
     captureError(e, { area: 'guestApply.confirm' });
@@ -220,10 +227,11 @@ export async function confirmGuestApplication(token: string): Promise<GuestConfi
 }
 
 /** Zalogowany kandydat przejmuje aplikację gościa (ten sam, zweryfikowany adres e-mail). */
-export async function claimGuestApplication(token: string): Promise<GuestClaimResult> {
+export async function claimGuestApplication(locale: string): Promise<GuestClaimResult> {
   if (!(await checkRateLimit('guest-apply-claim', { max: 20, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
+  const token = await readGuestLinkToken('claim');
   if (!isGuestTokenFormat(token)) return { ok: false, error: 'NOT_FOUND' };
   if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
@@ -242,6 +250,11 @@ export async function claimGuestApplication(token: string): Promise<GuestClaimRe
       if (message.includes('NOT_FOUND')) return { ok: false, error: 'NOT_FOUND' };
       captureError(error, { area: 'guestApply.claim' });
       return { ok: false, error: 'INTERNAL' };
+    }
+    try {
+      await clearGuestLinkToken(locale, 'claim');
+    } catch (e) {
+      captureError(e, { area: 'guestApply.claim.clearCookie' });
     }
     return { ok: true, applicationId: String(data) };
   } catch (e) {
