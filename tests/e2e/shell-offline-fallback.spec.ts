@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 
 /**
  * Fallback service workera przy braku sieci (public/offline.html). Sprawdzamy to, co widzi
@@ -23,6 +23,11 @@ test("bez sieci nawigacja pokazuje wielojęzyczny ekran offline w nowej identyfi
     .poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
     .toBe(true);
 
+  // Sama emulacja `setOffline` nie obejmuje pewnie service workera: jego fetch czasem
+  // przechodził i zamiast fallbacku ładowała się prawdziwa strona (flaky, #375). Brak sieci
+  // wymuszamy więc też trasą, która zrywa każde żądanie jak odłączony internet.
+  const offline = (route: Route) => route.abort("internetdisconnected");
+  await context.route("**/*", offline);
   await context.setOffline(true);
   await page.goto("/nl/oferty-pracy").catch(() => undefined);
 
@@ -50,6 +55,7 @@ test("bez sieci nawigacja pokazuje wielojęzyczny ekran offline w nowej identyfi
 
   // Po powrocie sieci ponowienie ładuje ŻĄDANY adres, a nie stronę główną.
   await context.setOffline(false);
+  await context.unroute("**/*", offline);
   await retry.click();
   await expect(page).toHaveURL(/\/nl\/oferty-pracy$/);
   await expect(page.locator("html")).toHaveAttribute("lang", "nl");
