@@ -6,7 +6,12 @@ import { describe, expect, it } from 'vitest';
 import type { Locale } from '@/i18n/routing';
 import { EMAIL_TYPES } from '@/emails/copy';
 import { renderEmail } from '@/emails/templates';
-import { AUTH_EMAIL_TYPES, QUEUED_EMAIL_TYPES, UNWIRED_EMAIL_TYPES } from '@/emails/wiring';
+import {
+  AUTH_EMAIL_TYPES,
+  GUEST_EMAIL_TYPES,
+  QUEUED_EMAIL_TYPES,
+  UNWIRED_EMAIL_TYPES,
+} from '@/emails/wiring';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
 
 /**
@@ -25,7 +30,14 @@ const AUTH_SOURCE = readFileSync(resolve(ROOT, 'src/lib/email/auth-email.ts'), '
 
 /** Czy w SQL jest wywołanie `enqueue_email(...)`, którego argumenty zawierają `'type'`. */
 function enqueuedIn(sql: string, type: string): boolean {
-  const calls = sql.match(/enqueue_email\([^;]*?\)\s*;/gs) ?? [];
+  // `enqueue_email_to_address` (0094) — ta sama kolejka, jawny adres odbiorcy bez konta.
+  const calls = sql.match(/enqueue_email(?:_to_address)?\([^;]*?\)\s*;/gs) ?? [];
+  return calls.some((call) => call.includes(`'${type}'`));
+}
+
+/** #98: e-maile do gościa bez profilu idą przez `enqueue_guest_email(...)`. */
+function guestEnqueuedIn(sql: string, type: string): boolean {
+  const calls = sql.match(/enqueue_guest_email\([^;]*?\)\s*;/gs) ?? [];
   return calls.some((call) => call.includes(`'${type}'`));
 }
 
@@ -34,7 +46,7 @@ const LOCALES: readonly Locale[] = ['pl', 'nl', 'fr', 'en'];
 
 describe('#295: pokrycie szablonów e-mail zdarzeniami', () => {
   it('każdy typ należy do dokładnie jednej grupy', () => {
-    const all = [...QUEUED_EMAIL_TYPES, ...AUTH_EMAIL_TYPES, ...UNWIRED];
+    const all = [...QUEUED_EMAIL_TYPES, ...GUEST_EMAIL_TYPES, ...AUTH_EMAIL_TYPES, ...UNWIRED];
     expect(new Set(all).size).toBe(all.length);
     expect([...all].sort()).toEqual([...EMAIL_TYPES].sort());
   });
@@ -43,8 +55,15 @@ describe('#295: pokrycie szablonów e-mail zdarzeniami', () => {
     expect(enqueuedIn(SQL, type)).toBe(true);
   });
 
+  it.each(GUEST_EMAIL_TYPES)('%s jest kolejkowany na adres gościa (0095)', (type) => {
+    expect(guestEnqueuedIn(SQL, type)).toBe(true);
+    // Nie przez enqueue_email: gość nie ma profilu, z którego enqueue_email bierze adres.
+    expect(enqueuedIn(SQL, type)).toBe(false);
+  });
+
   it.each(UNWIRED)('%s nie jest nigdzie kolejkowany (świadomie nieużywany)', (type) => {
     expect(enqueuedIn(SQL, type)).toBe(false);
+    expect(guestEnqueuedIn(SQL, type)).toBe(false);
     expect(AUTH_SOURCE.includes(`'${type}'`)).toBe(false);
   });
 

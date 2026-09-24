@@ -37,10 +37,13 @@ export const EMAIL_TYPES = [
   'companySuspended',
   'teamInvitation',
   'jobMatch',
+  'guestApplicationConfirm',
+  'guestApplicationSent',
   'jobExpiring',
   'payment',
   'invoice',
   'supportContact',
+  'reportReceived',
 ] as const;
 
 export type EmailType = (typeof EMAIL_TYPES)[number];
@@ -68,6 +71,11 @@ export interface EmailCopy {
    * Pusty `highlight` ukrywa wyróżniony boks.
    */
   anonymous?: Partial<Pick<EmailCopy, 'subject' | 'preview' | 'heading' | 'body' | 'highlight'>>;
+  /**
+   * Nadpisanie noty w stopce („masz konto…”) — dla odbiorców, którzy mogą nie mieć konta
+   * (np. potwierdzenie zgłoszenia treści wysłanego bez logowania, #41).
+   */
+  footerNote?: string;
 }
 
 /** Powitanie (bez imienia) w każdym języku — imię dołączane jest w szablonie. */
@@ -988,6 +996,84 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
     },
   },
 
+  guestApplicationConfirm: {
+    pl: {
+      subject: 'Potwierdź aplikację: {jobTitle}',
+      preview: 'Potwierdź adres e-mail, aby wysłać aplikację do {companyName}.',
+      heading: 'Potwierdź adres e-mail',
+      body: 'Otrzymaliśmy Twoją aplikację na ofertę {jobTitle} w firmie {companyName}. Przekażemy ją pracodawcy dopiero po potwierdzeniu, że ten adres e-mail należy do Ciebie.',
+      cta: 'Potwierdź i wyślij aplikację',
+      highlight: '{jobTitle}',
+      outro: 'Link jest ważny 48 godzin. Jeśli to nie Ty wysłałeś(-aś) aplikację, zignoruj tę wiadomość — aplikacja nie trafi do pracodawcy.',
+    },
+    nl: {
+      subject: 'Bevestig je sollicitatie: {jobTitle}',
+      preview: 'Bevestig je e-mailadres om je sollicitatie naar {companyName} te sturen.',
+      heading: 'Bevestig je e-mailadres',
+      body: 'We hebben je sollicitatie voor de vacature {jobTitle} bij {companyName} ontvangen. We sturen ze pas door naar de werkgever nadat je hebt bevestigd dat dit e-mailadres van jou is.',
+      cta: 'Bevestigen en sollicitatie versturen',
+      highlight: '{jobTitle}',
+      outro: 'De link is 48 uur geldig. Heb jij niet gesolliciteerd? Negeer dan dit bericht — de sollicitatie gaat niet naar de werkgever.',
+    },
+    fr: {
+      subject: 'Confirmez votre candidature : {jobTitle}',
+      preview: 'Confirmez votre adresse e-mail pour envoyer votre candidature à {companyName}.',
+      heading: 'Confirmez votre adresse e-mail',
+      body: 'Nous avons reçu votre candidature pour l’offre {jobTitle} chez {companyName}. Nous la transmettrons à l’employeur uniquement après la confirmation que cette adresse e-mail vous appartient.',
+      cta: 'Confirmer et envoyer la candidature',
+      highlight: '{jobTitle}',
+      outro: 'Le lien est valable 48 heures. Si vous n’avez pas postulé, ignorez ce message — la candidature ne sera pas transmise à l’employeur.',
+    },
+    en: {
+      subject: 'Confirm your application: {jobTitle}',
+      preview: 'Confirm your email address to send your application to {companyName}.',
+      heading: 'Confirm your email address',
+      body: 'We received your application for the {jobTitle} job at {companyName}. We will pass it on to the employer only after you confirm that this email address belongs to you.',
+      cta: 'Confirm and send application',
+      highlight: '{jobTitle}',
+      outro: 'The link is valid for 48 hours. If you did not apply, ignore this message — the application will not be sent to the employer.',
+    },
+  },
+
+  guestApplicationSent: {
+    pl: {
+      subject: 'Aplikacja wysłana: {jobTitle}',
+      preview: 'Twoja aplikacja trafiła do firmy {companyName}.',
+      heading: 'Aplikacja wysłana',
+      body: 'Twoja aplikacja na ofertę {jobTitle} trafiła do firmy {companyName}. Pracodawca może skontaktować się z Tobą podanym adresem e-mail lub telefonem.\n\nChcesz śledzić status aplikacji? Załóż konto kandydata w Pracuj.be na ten sam adres e-mail (albo zaloguj się) i przypisz do niego tę aplikację.',
+      cta: 'Przypisz aplikację do konta',
+      highlight: '{jobTitle}',
+      outro: 'Link do przypisania aplikacji jest ważny 30 dni i działa dla jednego konta z tym adresem e-mail.',
+    },
+    nl: {
+      subject: 'Sollicitatie verstuurd: {jobTitle}',
+      preview: 'Je sollicitatie is bij {companyName} aangekomen.',
+      heading: 'Sollicitatie verstuurd',
+      body: 'Je sollicitatie voor de vacature {jobTitle} is bij {companyName} aangekomen. De werkgever kan contact met je opnemen via het opgegeven e-mailadres of telefoonnummer.\n\nWil je de status van je sollicitatie volgen? Maak een kandidaat-account aan op Pracuj.be met hetzelfde e-mailadres (of log in) en koppel deze sollicitatie eraan.',
+      cta: 'Sollicitatie aan account koppelen',
+      highlight: '{jobTitle}',
+      outro: 'De koppellink is 30 dagen geldig en werkt voor één account met dit e-mailadres.',
+    },
+    fr: {
+      subject: 'Candidature envoyée : {jobTitle}',
+      preview: 'Votre candidature est parvenue à {companyName}.',
+      heading: 'Candidature envoyée',
+      body: 'Votre candidature pour l’offre {jobTitle} est parvenue à {companyName}. L’employeur peut vous contacter à l’adresse e-mail ou au numéro de téléphone indiqués.\n\nVous voulez suivre le statut de votre candidature ? Créez un compte candidat sur Pracuj.be avec la même adresse e-mail (ou connectez-vous) et rattachez-y cette candidature.',
+      cta: 'Rattacher la candidature à mon compte',
+      highlight: '{jobTitle}',
+      outro: 'Le lien de rattachement est valable 30 jours et fonctionne pour un seul compte avec cette adresse e-mail.',
+    },
+    en: {
+      subject: 'Application sent: {jobTitle}',
+      preview: 'Your application has reached {companyName}.',
+      heading: 'Application sent',
+      body: 'Your application for the {jobTitle} job has reached {companyName}. The employer can contact you using the email address or phone number you provided.\n\nWant to follow the status of your application? Create a candidate account on Pracuj.be with the same email address (or log in) and link this application to it.',
+      cta: 'Link application to my account',
+      highlight: '{jobTitle}',
+      outro: 'The link is valid for 30 days and works for one account with this email address.',
+    },
+  },
+
   jobMatch: {
     pl: {
       subject: 'Nowe oferty dla wyszukiwania: {searchName}',
@@ -1160,6 +1246,49 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       body: 'We have received your message and will get back to you soon. A copy of your request is below.',
       cta: 'Go to help center',
       outro: 'We usually reply within one business day.',
+    },
+  },
+
+  reportReceived: {
+    pl: {
+      subject: 'Przyjęliśmy Twoje zgłoszenie {caseNumber}',
+      preview: 'Numer sprawy: {caseNumber}.',
+      heading: 'Zgłoszenie przyjęte',
+      body: 'Przyjęliśmy Twoje zgłoszenie treści w serwisie Pracuj.be i nadaliśmy mu numer sprawy podany poniżej.\n\nStatus sprawy sprawdzisz przyciskiem poniżej albo na stronie „Status zgłoszenia”, podając numer sprawy i kod dostępu: {accessCode}.',
+      cta: 'Sprawdź status sprawy',
+      highlight: '{caseNumber}',
+      outro: 'Nie przekazujemy Twoich danych autorowi zgłoszonej treści. Nie udostępniaj kodu dostępu innym osobom.',
+      footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be wysłano zgłoszenie z tym adresem e-mail.',
+    },
+    nl: {
+      subject: 'We hebben je melding {caseNumber} ontvangen',
+      preview: 'Dossiernummer: {caseNumber}.',
+      heading: 'Melding ontvangen',
+      body: 'We hebben je melding over inhoud op Pracuj.be ontvangen en er het dossiernummer hieronder aan gegeven.\n\nDe status van je dossier bekijk je via de knop hieronder of op de pagina ‘Status van je melding’, met het dossiernummer en de toegangscode: {accessCode}.',
+      cta: 'Status van je dossier bekijken',
+      highlight: '{caseNumber}',
+      outro: 'We geven je gegevens niet door aan de auteur van de gemelde inhoud. Deel je toegangscode met niemand.',
+      footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een melding met dit e-mailadres is verstuurd.',
+    },
+    fr: {
+      subject: 'Nous avons bien reçu votre signalement {caseNumber}',
+      preview: 'Numéro de dossier : {caseNumber}.',
+      heading: 'Signalement reçu',
+      body: 'Nous avons bien reçu votre signalement de contenu sur Pracuj.be et lui avons attribué le numéro de dossier ci-dessous.\n\nVous pouvez suivre votre dossier avec le bouton ci-dessous ou sur la page « Statut du signalement », à l’aide du numéro de dossier et du code d’accès : {accessCode}.',
+      cta: 'Voir le statut du dossier',
+      highlight: '{caseNumber}',
+      outro: 'Nous ne transmettons pas vos données à l’auteur du contenu signalé. Ne communiquez votre code d’accès à personne.',
+      footerNote: 'Vous recevez ce message car un signalement a été envoyé sur Pracuj.be avec cette adresse e-mail.',
+    },
+    en: {
+      subject: 'We have received your report {caseNumber}',
+      preview: 'Case number: {caseNumber}.',
+      heading: 'Report received',
+      body: 'We have received your report about content on Pracuj.be and given it the case number shown below.\n\nYou can check the status of your case with the button below or on the “Report status” page, using the case number and access code: {accessCode}.',
+      cta: 'Check case status',
+      highlight: '{caseNumber}',
+      outro: 'We do not share your details with the author of the reported content. Do not share your access code with anyone.',
+      footerNote: 'You are receiving this email because a report was sent on Pracuj.be with this email address.',
     },
   },
 };

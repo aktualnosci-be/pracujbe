@@ -55,10 +55,10 @@ export function PrimaryNav({
 /**
  * Mobilny panel nawigacji (client component) — wg makiety 01-home.
  *
- * Wyzwalacz to hamburger widoczny tylko poniżej breakpointu md (na makiecie po lewej
- * stronie paska). Wysuwany panel na `LightDialog*` (focus-trap, Esc, blokada scrolla bez
+ * Wyzwalacz to hamburger po prawej stronie paska, widoczny ≤ 850 px (`.pp-menu` w globals.css —
+ * próg prototypu, przy którym znikają linki nawigacji). Wysuwany panel na `LightDialog*` (focus-trap, Esc, blokada scrolla bez
  * przeliczania stylów całej strony — #393) zawiera nawigację gościa, przyciski
- * logowania/dodania oferty (granat) oraz przełącznik języka. Zamyka się po wyborze linku.
+ * logowania/dodania oferty (czarny, jak w nagłówku) oraz przełącznik języka. Zamyka się po wyborze linku.
  * Teksty z i18n (namespace `nav`); przyciski ikonowe mają dostępne etykiety.
  */
 export function MobileNav() {
@@ -71,7 +71,7 @@ export function MobileNav() {
     <LightDialogRoot open={open} onOpenChange={setOpen}>
       <Dialog.Trigger
         aria-label={t('menu')}
-        className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), HEADER_ICON_BUTTON_FIXED, '-ml-[8px] md:hidden')}
+        className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), HEADER_ICON_BUTTON_FIXED, '-mr-[6px]')}
       >
         <Menu className="h-5 w-5" aria-hidden="true" />
       </Dialog.Trigger>
@@ -112,7 +112,7 @@ export function MobileNav() {
           <Link
             href="/rejestracja-pracodawca"
             onClick={close}
-            className={cn(buttonVariants(), 'w-full')}
+            className={cn(buttonVariants({ variant: 'ink' }), 'w-full')}
           >
             {t('postJob')}
           </Link>

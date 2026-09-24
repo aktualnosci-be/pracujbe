@@ -85,7 +85,8 @@ for (const locale of LOCALES) {
       'href',
       new RegExp(`/${locale}/admin/firmy\\?q=TransEuro`),
     );
-    await expect(main.locator('a[href*="/oferty-pracy/"]')).toHaveCount(1);
+    // Dwie oferty w demo: zwykłe zgłoszenie i sprawa DSA (#41).
+    await expect(main.locator('a[href*="/oferty-pracy/"]')).toHaveCount(2);
     await expect(main.getByText('Odpowiedz od razu albo zapomnij o tej pracy.')).toBeVisible();
 
     // Filtr domyślny „do rozpatrzenia” zaznaczony; filtr „Rozwiązane” nie pokazuje otwartych.

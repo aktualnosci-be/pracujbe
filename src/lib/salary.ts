@@ -76,8 +76,15 @@ export function normalizeSalary(salary: SalaryInput): NormalizedSalary | null {
 const hasCents = (value: number | undefined): boolean =>
   value !== undefined && Math.round(value * 100) % 100 !== 0;
 
-/** Wspólny zapis widełek i okresu na liście, szczegółach, w podobnych ofertach i e-mailach. */
-export function formatSalaryRange(salary: SalaryInput, locale: string, labels: SalaryLabels): string | null {
+/**
+ * Kwota i okres osobno (karta-paszport pokazuje okres drobniej, pod kwotą — `.passport-data
+ * small` z prototypu). Te same reguły co `formatSalaryRange`, który z nich składa napis.
+ */
+export function formatSalaryParts(
+  salary: SalaryInput,
+  locale: string,
+  labels: SalaryLabels,
+): { amount: string; period: string | null } | null {
   const normalized = normalizeSalary(salary);
   if (normalized === null) return null;
   const { min, max, currency, period } = normalized;
@@ -92,5 +99,12 @@ export function formatSalaryRange(salary: SalaryInput, locale: string, labels: S
     amount = min === max ? format.format(min) : `${format.format(min)} – ${format.format(max)}`;
   } else if (min !== undefined) amount = labels.from(format.format(min));
   else amount = labels.to(format.format(max!));
-  return period ? `${amount} ${labels.period(period)}` : amount;
+  return { amount, period: period ? labels.period(period) : null };
+}
+
+/** Wspólny zapis widełek i okresu na liście, szczegółach, w podobnych ofertach i e-mailach. */
+export function formatSalaryRange(salary: SalaryInput, locale: string, labels: SalaryLabels): string | null {
+  const parts = formatSalaryParts(salary, locale, labels);
+  if (parts === null) return null;
+  return parts.period ? `${parts.amount} ${parts.period}` : parts.amount;
 }

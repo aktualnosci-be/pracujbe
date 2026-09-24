@@ -246,12 +246,15 @@ export function EmailLayout({
   preview,
   children,
   unsubscribeUrl,
+  footerNote,
 }: {
   locale: Locale;
   preview: string;
   children: ReactNode;
   /** Strona wypisania z kategorii tej wiadomości (#45). Brak = mail bez linku wypisania. */
   unsubscribeUrl?: string;
+  /** Nadpisanie noty „masz konto…” (odbiorca bez konta, #41). */
+  footerNote?: string;
 }): ReactNode {
   const lc = layoutCopy[locale];
   const year = new Date().getFullYear();
@@ -274,7 +277,7 @@ export function EmailLayout({
 
           <Section style={styles.footer}>
             <Text style={styles.footerText}>{lc.tagline}</Text>
-            <Text style={styles.footerText}>{lc.footerNote}</Text>
+            <Text style={styles.footerText}>{footerNote ?? lc.footerNote}</Text>
             <Text style={styles.footerText}>
               <Link href={helpHref} style={styles.footerLink}>
                 {lc.help}
