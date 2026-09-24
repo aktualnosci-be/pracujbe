@@ -1,12 +1,12 @@
 -- =============================================================================
--- Rollback 0098 — taksonomia ESCO (#93). Uruchamiać ręcznie jako migrator, w jednej
+-- Rollback 0097 — taksonomia ESCO (#93). Uruchamiać ręcznie jako migrator, w jednej
 -- transakcji (psql -1 -f …), i dopiero wtedy usunąć wpis z app_migrations.history.
 -- Plik celowo BEZ BEGIN/COMMIT (supabase/tests/esco93-rollback.sql wykonuje go w transakcji i cofa).
 --
 -- Usuwa: wiersze ESCO z occupations/skills (FK candidate_skills/job_skills.skill_id
 -- mają ON DELETE SET NULL — etykieta skill_label w profilu/ofercie zostaje), etykiety,
--- relacje, metadane snapshotu, funkcje i kolumny 0098. Wiersze ręczne zostają.
--- Granty occupations/skills zostają zawężone do SELECT dla klienta — 0098 tylko
+-- relacje, metadane snapshotu, funkcje i kolumny 0097. Wiersze ręczne zostają.
+-- Granty occupations/skills zostają zawężone do SELECT dla klienta — 0097 tylko
 -- odebrał zapis, którego polityki RLS i tak nie dopuszczały; przywracanie go jest zbędne.
 -- =============================================================================
 

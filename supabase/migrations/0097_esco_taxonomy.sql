@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0098 — taksonomia ESCO v1.2.1 w słownikach occupations/skills (#93).
+-- 0097 — taksonomia ESCO v1.2.1 w słownikach occupations/skills (#93).
 --
 -- Wspólna, wielojęzyczna taksonomia zawodów i umiejętności z przypiętego snapshotu
 -- ESCO v1.2.1, tylko w językach portalu (PL/NL/FR/EN — supported_locales). Portal
@@ -29,7 +29,7 @@
 -- Słowniki: odczyt publiczny (anon/authenticated), zapis wyłącznie service_role.
 -- Import nie zmienia profili, ofert, aplikacji ani dopasowań (dowód: rls.sql ESCO93).
 --
--- Rollback: supabase/rollback/0098_esco_taxonomy.down.sql (usuwa dane ESCO, tabele,
+-- Rollback: supabase/rollback/0097_esco_taxonomy.down.sql (usuwa dane ESCO, tabele,
 -- funkcje i kolumny; wiersze ręczne zostają). Dowód rollbacku: supabase/tests/esco93-rollback.sql (ESCO93-R, w test-rls.sh).
 -- =============================================================================
 

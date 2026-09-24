@@ -1,7 +1,7 @@
 -- =============================================================================
--- ESCO93-R — rollback migracji 0098 (#93). Uruchamiany przez scripts/test-rls.sh
+-- ESCO93-R — rollback migracji 0097 (#93). Uruchamiany przez scripts/test-rls.sh
 -- po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany,
--- więc baza po teście ma nadal schemat 0098.
+-- więc baza po teście ma nadal schemat 0097.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -16,7 +16,7 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'e
   'ESCO93-R0 przed rollbackiem są wiersze ESCO (z rls.sql)');
 
 begin;
-\ir ../rollback/0098_esco_taxonomy.down.sql
+\ir ../rollback/0097_esco_taxonomy.down.sql
 select pg_temp.assert(to_regclass('public.esco_snapshots') is null
   and to_regclass('public.occupation_labels') is null
   and to_regclass('public.occupation_skills') is null

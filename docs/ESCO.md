@@ -12,7 +12,7 @@ w innym języku (FK do `supported_locales`). Dodanie języka wymaga nowej migrac
 UI i automatyczny matching na tej taksonomii są poza zakresem (osobne issues).
 Import nie zmienia profili, ofert, aplikacji ani dopasowań (dowód: `rls.sql` ESCO93-8).
 
-## Model danych (migracja `0098_esco_taxonomy.sql`)
+## Model danych (migracja `0097_esco_taxonomy.sql`)
 
 | obiekt | zawartość |
 |---|---|
@@ -92,7 +92,7 @@ więc nie da się go zautomatyzować z CI ani z sesji bez skrzynki pocztowej.
    ESCO_IMPORT_DATABASE_URL=… npm run esco:import -- import --dir .esco/v1.2.1 --report esco-import.json
    ```
    `ESCO_IMPORT_DATABASE_URL` to login uprzywilejowany z prawem `SET ROLE service_role`
-   (np. login migratora). Nie używaj loginów runtime z `db:logins`. Migracja `0098`
+   (np. login migratora). Nie używaj loginów runtime z `db:logins`. Migracja `0097`
    musi być już zastosowana.
 6. Jeśli import zgłosi `ESCO_MANUAL_CONFLICT`, zdecyduj: `--manual=skip` albo `--manual=overwrite`.
 
@@ -157,11 +157,11 @@ Testy:
 
 ## Rollback
 
-`supabase/rollback/0098_esco_taxonomy.down.sql` uruchamia się ręcznie jako migrator
+`supabase/rollback/0097_esco_taxonomy.down.sql` uruchamia się ręcznie jako migrator
 w jednej transakcji (`psql -1 -f …`). Usuwa wiersze ESCO, etykiety, relacje,
-metadane, funkcje i kolumny 0098. Wiersze ręczne zostają. W profilach i ofertach
+metadane, funkcje i kolumny 0097. Wiersze ręczne zostają. W profilach i ofertach
 zostają etykiety tekstowe (`skill_label`), a `skill_id` przechodzi na `NULL` (FK
-`ON DELETE SET NULL`). Po rollbacku usuń wpis `0098_esco_taxonomy.sql` z
+`ON DELETE SET NULL`). Po rollbacku usuń wpis `0097_esco_taxonomy.sql` z
 `app_migrations.history`. Dowód działania: `supabase/tests/esco93-rollback.sql` (ESCO93-R, uruchamiany
 przez `scripts/test-rls.sh` po `rls.sql`), gdzie rollback wykonuje się w transakcji
 i jest cofany.

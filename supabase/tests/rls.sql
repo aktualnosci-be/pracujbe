@@ -5943,7 +5943,7 @@ select pg_temp.assert(
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- ESCO93. Taksonomia ESCO v1.2.1 (#93, 0098): słowniki czytelne publicznie, zapis
+-- ESCO93. Taksonomia ESCO v1.2.1 (#93, 0097): słowniki czytelne publicznie, zapis
 -- i import wyłącznie service_role; przypięcie manifestu, idempotencja, dane ręczne,
 -- fallback etykiet, brak wpływu na profile/oferty/dopasowania, rollback.
 -- ============================================================================
@@ -6112,7 +6112,7 @@ select pg_temp.assert(pg_temp.e93_fingerprint() = :'e93fp', 'ESCO93-8 import nie
 select pg_temp.assert((select count(*) from public.occupations where source = 'manual') = :e93manual,
   'ESCO93-8b ręczne zawody z 0010 nietknięte');
 
--- ESCO93-R (rollback 0098): supabase/tests/esco93-rollback.sql, uruchamiany przez test-rls.sh
+-- ESCO93-R (rollback 0097): supabase/tests/esco93-rollback.sql, uruchamiany przez test-rls.sh
 -- po tym pliku (psql -f, bo \ir ścieżki rollbacku nie działa przy wejściu ze stdin).
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

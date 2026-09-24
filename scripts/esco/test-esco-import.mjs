@@ -1,6 +1,6 @@
 /**
  * Integracyjny test importu ESCO (#93) na PostgreSQL 16 — pełny pipeline CLI
- * (sumy → parser → RPC 0098) na jawnie oznaczonym fragmencie testowym.
+ * (sumy → parser → RPC 0097) na jawnie oznaczonym fragmencie testowym.
  *
  * Wymaga pustej, jednorazowej bazy o nazwie pracujbe_esco_test (nigdy produkcji):
  *   sudo -u postgres createdb pracujbe_esco_test

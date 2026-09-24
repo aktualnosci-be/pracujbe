@@ -47,7 +47,7 @@ echo ">> model ról i kontrole ujemne"
 echo ">> asercje RLS/triggery"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/rls.sql"
 
-echo ">> rollback 0098 (ESCO, w transakcji cofanej)"
+echo ">> rollback 0097 (ESCO, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/esco93-rollback.sql"
 
 echo ">> sprzątanie"

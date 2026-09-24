@@ -59,7 +59,7 @@ export function safeMessage(error) {
   const message = String(error?.message ?? '');
   if (/^ESCO_[A-Z_]+$/.test(message)) return message + (error.detail ? ` — ${error.detail}` : '');
   if (error?.code === undefined && message) return message;
-  return 'Import nie powiódł się. Sprawdź połączenie, uprawnienia (SET ROLE service_role) i migrację 0098.';
+  return 'Import nie powiódł się. Sprawdź połączenie, uprawnienia (SET ROLE service_role) i migrację 0097.';
 }
 
 export async function main(argv = process.argv.slice(2), env = process.env) {

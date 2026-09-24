@@ -104,7 +104,7 @@ pracujbe/
 │  └─ LAUNCH_CHECKLIST.md
 ├─ supabase/
 │  ├─ migrations/                 # *.sql wersjonowane (kolejność wg prefiksu)
-│  ├─ rollback/                   # ręczne skrypty wycofania (np. 0098 ESCO)
+│  ├─ rollback/                   # ręczne skrypty wycofania (np. 0097 ESCO)
 │  └─ seed.sql                    # dane demonstracyjne (oznaczone is_demo=true)
 ├─ src/
 │  ├─ app/
@@ -752,7 +752,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się
   policzyć” z ponowieniem, nigdy procent z niepełnych danych.
-- [~] Taksonomia ESCO v1.2.1 (#93, migracja `0098`, `docs/ESCO.md`): zawody/umiejętności z
+- [~] Taksonomia ESCO v1.2.1 (#93, migracja `0097`, `docs/ESCO.md`): zawody/umiejętności z
   przypiętego snapshotu tylko w PL/NL/FR/EN (RO/UK z issue pominięte — decyzja właściciela).
   `esco_uri` = klucz, `occupation_labels`/`skill_labels` (preferred/alternative, FK do
   `supported_locales`), `occupation_skills` (essential/optional), `esco_snapshots` (pliki +
