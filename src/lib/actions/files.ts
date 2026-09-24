@@ -139,7 +139,7 @@ export async function deleteCandidateFile(fileId: string): Promise<SimpleResult>
     const { captureError } = await import('@/lib/sentry');
     captureError(new Error('storage remove failed after db delete'), {
       area: 'files.deleteCandidateFile',
-      path: String(row.path),
+      fileId,
     });
   }
   return { ok: true };

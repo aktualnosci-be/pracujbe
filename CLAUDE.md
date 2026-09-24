@@ -964,6 +964,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
   cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
   `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
+- [x] Telemetria bez danych kandydata (#502, część kodowa): jedno źródło reguł redakcji
+  `src/lib/privacy/redact.ts` (e-mail, telefon, NISS/BIS, IBAN, tokeny/JWT, query i fragment URL,
+  nazwy plików dokumentów, wiersze błędów Postgresa; pola wrażliwe po nazwie) użyte w Sentry
+  (`sentryPrivacyOptions` w `src/lib/privacy/sentry-scrub.ts`: `beforeSend`/`beforeSendTransaction`/
+  `beforeSendSpan`/`beforeBreadcrumb`, nagłówek kopert, bez `user`/nagłówków/body, bez propagacji
+  trace do usług zewnętrznych) we wszystkich trzech configach, w `onRequestError` (ścieżka bez
+  query, bez nagłówków) i w `captureError` (allowlist `SAFE_CONTEXT_KEYS` — klucz spoza listy =
+  `[Filtered]`), oraz w logach serwera (`installConsoleRedaction()` w `register()`, poza `next dev`).
+  Dowód: `privacy-redaction`, `privacy-sentry-sdk` (payload z SDK) + kontrola ujemna
+  `privacy-sentry-sdk-control`. Opis kanałów: `docs/TELEMETRY_PRIVACY.md`. **Otwarte
+  (właściciel):** region/retencja/DPA/dostęp Sentry i logów Railway, rejestr (#485), usuwanie
+  danych już wysłanych (#486); do tego czasu Sentry bez DSN. Sentry w przeglądarce nie jest
+  wpięte (brak `instrumentation-client`) — wpinając, użyj `sentryPrivacyOptions`.
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
