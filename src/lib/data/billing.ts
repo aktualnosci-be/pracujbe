@@ -22,6 +22,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { isBillingEnabled } from '@/lib/billing/flag';
 import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 import { getSignedFileUrl } from '@/lib/storage';
@@ -122,7 +123,7 @@ export const PLAN_IDS: ReadonlySet<string> = new Set(PLANS.map((plan) => plan.id
  * `STRIPE_SECRET_KEY` nie jest `NEXT_PUBLIC_*` — czytany wyłącznie po stronie serwera.
  */
 export function isBillingProviderConfigured(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY);
+  return isBillingEnabled() && Boolean(process.env.STRIPE_SECRET_KEY);
 }
 
 /* ---------------------------------------------------------------------------

@@ -148,17 +148,12 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 - [ ] **Firma pracodawcy:** rejestracja pracodawcy → `/employer/firma` (utworzenie firmy,
       status `unverified`) → admin weryfikuje → dopiero `verified` pozwala publikować oferty
       i wysyłać propozycje (egzekwowane w DB). Przejdź ten łańcuch end-to-end na produkcji.
-- [ ] **Płatności (Stripe):** integracja jest wdrożona i provider-gated. Bez `STRIPE_SECRET_KEY`
-      panel `/employer/platnosci` działa w trybie DEMO. Aby włączyć:
-      1. ustaw `STRIPE_SECRET_KEY` (sk_live_...) jako sekret serwera;
-      2. dodaj webhook w Stripe → endpoint `https://pracuj.be/api/stripe/webhook`, zdarzenia:
-         `checkout.session.completed`, `customer.subscription.created/updated/deleted`,
-         `invoice.paid`, `invoice.payment_failed`; skopiuj sekret do `STRIPE_WEBHOOK_SECRET`;
-      3. checkout używa inline `price_data` z `PLANS` (bez ręcznego zakładania Price);
-      4. webhook jest ŹRÓDŁEM PRAWDY (zapis `subscriptions/invoices/payments` service-rolem);
-         klient nie pisze tych tabel. Billing wymaga roli owner/admin.
-      5. przetestuj checkout (test mode) → subskrypcja `active` w DB → anulowanie
-         (`cancel_at_period_end`) → webhook aktualizuje stan.
+- [ ] **Płatności — wyłączone (bezpłatny MVP, #51):** w Railway NIE ustawiaj `BILLING_ENABLED`
+      (brak = wyłączone) ani `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`; jeśli zostały, usuń je.
+      Sprawdź na produkcji: brak cennika/pakietów/CTA zakupu w PL/NL/FR/EN,
+      `POST /api/stripe/webhook` → 404, `/pl/employer/platnosci` → przekierowanie na `/pl/employer`.
+      Publikacja ofert nie zależy od subskrypcji. Tabele finansowe zostają bez użycia (cleanup
+      osobno). Monetyzacja = nowa decyzja właściciela i osobny projekt.
 - [ ] **audit_logs:** przejrzyj wpisy po testowych operacjach (status aplikacji/oferty,
       utworzenie/weryfikacja firmy) — obecne z poprawnym `actor_id`.
 

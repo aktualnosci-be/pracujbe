@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { rejectOptionalCookies } from './fixtures/messages';
+
 /**
  * Baner cookies a dostępność (#203, #206).
  *
@@ -137,8 +139,8 @@ test('po zamknięciu banera strona nie zostawia dodatkowego odstępu', async ({ 
     .poll(() => page.evaluate(() => parseFloat(getComputedStyle(document.body).paddingBottom)))
     .toBeGreaterThan(0);
 
-  await page.locator(`${BANNER} button`).first().click();
-  await expect(page.locator(BANNER)).toHaveCount(0);
+  // #376: przycisk po nazwie (`cookies.rejectOptional`), nie pierwszy w kolejności.
+  await rejectOptionalCookies(page, 'pl');
   expect(
     await page.evaluate(() => ({
       padding: parseFloat(getComputedStyle(document.body).paddingBottom),

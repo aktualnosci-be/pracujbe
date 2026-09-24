@@ -245,10 +245,13 @@ export function EmailLayout({
   locale,
   preview,
   children,
+  unsubscribeUrl,
 }: {
   locale: Locale;
   preview: string;
   children: ReactNode;
+  /** Strona wypisania z kategorii tej wiadomości (#45). Brak = mail bez linku wypisania. */
+  unsubscribeUrl?: string;
 }): ReactNode {
   const lc = layoutCopy[locale];
   const year = new Date().getFullYear();
@@ -280,6 +283,14 @@ export function EmailLayout({
               <Link href={helpHref} style={styles.footerLink}>
                 {lc.privacy}
               </Link>
+              {unsubscribeUrl ? (
+                <>
+                  {'  ·  '}
+                  <Link href={unsubscribeUrl} style={styles.footerLink} data-email-unsubscribe="">
+                    {lc.unsubscribe}
+                  </Link>
+                </>
+              ) : null}
             </Text>
             <Text style={styles.footerText}>{rights}</Text>
           </Section>
