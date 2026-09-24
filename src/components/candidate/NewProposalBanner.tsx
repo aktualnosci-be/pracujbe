@@ -32,7 +32,7 @@ export function NewProposalBanner({
   if (!open || !isNewProposalStatus(status)) return null;
 
   return (
-    <div className={cn(NOTICE, 'relative pr-14 max-[600px]:pr-14')}>
+    <div className={cn(NOTICE, 'relative pr-16 max-[600px]:pr-16')}>
       <div className="min-w-0">
         <p className={NOTICE_TITLE}>{t('newOfferBanner')}</p>
       </div>
@@ -47,7 +47,7 @@ export function NewProposalBanner({
         type="button"
         onClick={() => setOpen(false)}
         aria-label={tn('close')}
-        className="absolute right-1.5 top-1.5 flex min-h-11 min-w-11 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-soft hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="absolute right-1 top-1 flex min-h-12 min-w-12 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-soft hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <X className="size-4" aria-hidden="true" />
       </button>
