@@ -946,6 +946,7 @@
     "certificatesPlaceholder": "e.g. VCA, qualification certificate",
     "availabilityLabel": "Availability",
     "availImmediate": "Immediately",
+    "availWithinTwoWeeks": "Within 2 weeks",
     "availWithinMonth": "Within a month",
     "availWithinThreeMonths": "Within 3 months",
     "availFlexible": "Flexible",
@@ -1425,7 +1426,15 @@
       "remoteJob": "Remote work — location does not matter",
       "withinCommuteRadius": "Workplace within your commute radius"
     },
-    "loadError": "Your match could not be calculated right now. This is not an assessment of your profile — please try again."
+    "loadError": "Your match could not be calculated right now. This is not an assessment of your profile — please try again.",
+    "languageLevelBelow": "{language}: required level {required}, your level {actual}",
+    "languageLevelUnknown": "{language}: required level {required} — add your level to your profile",
+    "levels": {
+      "basic": "basic",
+      "intermediate": "intermediate",
+      "fluent": "fluent",
+      "native": "native"
+    }
   },
   "application": {
     "error": {

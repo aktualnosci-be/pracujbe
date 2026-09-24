@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  distanceKm,
+  languageShare,
   scoreMatch,
   type MatchCandidate,
   type MatchJob,
@@ -225,14 +227,152 @@ describe('scoreMatch', () => {
     expect(remoteResult.score).toBeGreaterThan(onsiteResult.score);
   });
 
-  it('duży promień dojazdu daje pełne punkty przy dopasowaniu regionu (FUN-06)', () => {
+  it('bez współrzędnych ten sam region nie udaje „w promieniu dojazdu" (#194)', () => {
     const j = job({ city: 'Liege', region: 'Liège Province' });
-    const near = scoreMatch(candidate({ city: 'Seraing', region: 'Liège Province', radiusKm: 60 }), j);
-    const local = scoreMatch(candidate({ city: 'Seraing', region: 'Liège Province', radiusKm: 10 }), j);
+    const wide = scoreMatch(candidate({ city: 'Seraing', region: 'Liège Province', radiusKm: 60 }), j);
+    const small = scoreMatch(candidate({ city: 'Seraing', region: 'Liège Province', radiusKm: 10 }), j);
 
-    // Ten sam region: promień >=50 => pełne punkty + atut; mały promień => tylko częściowe.
-    expect(near.strengths).toContain('withinCommuteRadius');
-    expect(near.score).toBeGreaterThan(local.score);
+    // Odległość nieznana: region = 10/15 niezależnie od promienia, bez etykiety „w promieniu".
+    expect(wide.strengths).not.toContain('withinCommuteRadius');
+    expect(wide.score).toBe(small.score);
+    expect(wide.score).toBe(95);
+  });
+
+  describe('lokalizacja z odległości i promienia (#194)', () => {
+    const BRUSSELS = { lat: 50.8503, lng: 4.3517 };
+    const MECHELEN = { lat: 51.0281, lng: 4.4776 }; // ~21 km od Brukseli, inny region
+    const BRUGES = { lat: 51.2097, lng: 3.2247 }; // ~87 km od Mechelen, ten sam region
+    const KORTRIJK = { lat: 50.8282, lng: 3.2649 };
+
+    it('odległość haversine jest poprawna i symetryczna', () => {
+      const d = distanceKm(BRUSSELS, MECHELEN);
+      expect(d).toBeGreaterThan(20);
+      expect(d).toBeLessThan(23);
+      expect(distanceKm(MECHELEN, BRUSSELS)).toBeCloseTo(d, 10);
+      expect(distanceKm(BRUSSELS, BRUSSELS)).toBe(0);
+    });
+
+    it('bliskie miasta w różnych regionach: w promieniu → 15 pkt i „w promieniu"', () => {
+      const r = scoreMatch(
+        candidate({ city: 'Brussels', region: 'Brussels-Capital', radiusKm: 30, coordinates: BRUSSELS }),
+        job({ city: 'Mechelen', region: 'Flanders', coordinates: MECHELEN }),
+      );
+      expect(r.strengths).toContain('withinCommuteRadius');
+      expect(r.missing).not.toContain('location');
+      expect(r.score).toBe(100);
+    });
+
+    it('dalekie miasta w tym samym regionie: poza promieniem → 0 pkt (kontrola ujemna)', () => {
+      const r = scoreMatch(
+        candidate({ city: 'Bruges', region: 'Flanders', radiusKm: 50, coordinates: BRUGES }),
+        job({ city: 'Mechelen', region: 'Flanders', coordinates: MECHELEN }),
+      );
+      expect(r.strengths).not.toContain('withinCommuteRadius');
+      expect(r.missing).toContain('location');
+      expect(r.score).toBe(85);
+    });
+
+    it('granica promienia: odległość równa promieniowi mieści się, o włos mniejszy promień nie', () => {
+      const d = distanceKm(BRUGES, KORTRIJK);
+      const j = job({ city: 'Kortrijk', region: 'Flanders', coordinates: KORTRIJK });
+      const at = scoreMatch(candidate({ city: 'Bruges', radiusKm: d, coordinates: BRUGES }), j);
+      const below = scoreMatch(candidate({ city: 'Bruges', radiusKm: d - 0.01, coordinates: BRUGES }), j);
+      expect(at.strengths).toContain('withinCommuteRadius');
+      expect(below.missing).toContain('location');
+    });
+
+    it('brak promienia przy znanych współrzędnych innego miasta → brak punktów', () => {
+      const r = scoreMatch(
+        candidate({ city: 'Brussels', region: 'Flanders', coordinates: BRUSSELS }),
+        job({ city: 'Mechelen', region: 'Flanders', coordinates: MECHELEN }),
+      );
+      expect(r.missing).toContain('location');
+    });
+
+    it('brak współrzędnych jednej strony → reguła nazw, bez szacowania odległości', () => {
+      const r = scoreMatch(
+        candidate({ city: 'Brussels', region: 'Flanders', radiusKm: 100, coordinates: BRUSSELS }),
+        job({ city: 'Aalst', region: 'Flanders' }),
+      );
+      expect(r.strengths).not.toContain('withinCommuteRadius');
+      expect(r.score).toBe(95);
+    });
+
+    it('oferta zdalna ignoruje odległość', () => {
+      const r = scoreMatch(
+        candidate({ city: 'Bruges', radiusKm: 5, coordinates: BRUGES }),
+        job({ remote: true, city: 'Mechelen', coordinates: MECHELEN }),
+      );
+      expect(r.strengths).toContain('remoteJob');
+      expect(r.score).toBe(100);
+    });
+  });
+
+  describe('poziom języka (#195)', () => {
+    const nl = (level: string | null) => ({ label: 'Niderlandzki', level });
+
+    it('reguła udziału: równy/wyższy = 1, o poziom niżej = 0,5, niżej = 0, nieznany = 0', () => {
+      expect(languageShare('fluent', 'fluent')).toBe(1);
+      expect(languageShare('fluent', 'native')).toBe(1);
+      expect(languageShare('fluent', 'intermediate')).toBe(0.5);
+      expect(languageShare('fluent', 'basic')).toBe(0);
+      expect(languageShare('fluent', null)).toBe(0);
+      expect(languageShare(null, null)).toBe(1);
+      expect(languageShare(null, undefined)).toBe(0);
+    });
+
+    it('niższy poziom nie daje pełnych 10 pkt ani oznaczenia spełnienia (kontrola ujemna)', () => {
+      const j = job({ requiredLanguages: [nl('fluent')] });
+      const basic = scoreMatch(candidate({ languages: [nl('basic')] }), j);
+      expect(basic.score).toBe(90);
+      expect(basic.matched).not.toContain('Niderlandzki');
+      expect(basic.missing).not.toContain('Niderlandzki');
+      expect(basic.languageGaps).toEqual([{ language: 'Niderlandzki', required: 'fluent', actual: 'basic' }]);
+
+      const oneBelow = scoreMatch(candidate({ languages: [nl('intermediate')] }), j);
+      expect(oneBelow.score).toBe(95);
+      expect(oneBelow.matched).not.toContain('Niderlandzki');
+    });
+
+    it('równy lub wyższy poziom daje pełne punkty i oznaczenie spełnienia', () => {
+      const j = job({ requiredLanguages: [nl('fluent')] });
+      for (const level of ['fluent', 'native']) {
+        const r = scoreMatch(candidate({ languages: [nl(level)] }), j);
+        expect(r.score).toBe(100);
+        expect(r.matched).toContain('Niderlandzki');
+        expect(r.languageGaps).toEqual([]);
+      }
+    });
+
+    it('nieznany poziom kandydata przy wymaganym poziomie → 0 pkt i luka z actual=null', () => {
+      const r = scoreMatch(
+        candidate({ languages: ['Niderlandzki'] }),
+        job({ requiredLanguages: [nl('intermediate')] }),
+      );
+      expect(r.score).toBe(90);
+      expect(r.languageGaps).toEqual([{ language: 'Niderlandzki', required: 'intermediate', actual: null }]);
+    });
+
+    it('oferta bez poziomu: każdy deklarowany poziom spełnia wymóg', () => {
+      const r = scoreMatch(candidate({ languages: [nl('basic')] }), job({ requiredLanguages: ['niderlandzki'] }));
+      expect(r.score).toBe(100);
+    });
+
+    it('kilka wymaganych języków liczy się osobno', () => {
+      const r = scoreMatch(
+        candidate({
+          languages: [nl('native'), { label: 'Francuski', level: 'basic' }],
+        }),
+        job({
+          requiredLanguages: [nl('fluent'), { label: 'Francuski', level: 'fluent' }, { label: 'Angielski', level: 'basic' }],
+        }),
+      );
+      // NL 1 + FR 0 + EN brak 0 → 10/3 ≈ 3 pkt.
+      expect(r.score).toBe(93);
+      expect(r.matched).toContain('Niderlandzki');
+      expect(r.missing).toContain('Angielski');
+      expect(r.languageGaps).toEqual([{ language: 'Francuski', required: 'fluent', actual: 'basic' }]);
+    });
   });
 
   it('niespełnione wymaganie obowiązkowe blokuje wynik "good" (FUN-06, próg)', () => {
