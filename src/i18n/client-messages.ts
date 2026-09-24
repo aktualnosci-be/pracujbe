@@ -42,6 +42,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'onboarding',
   'profileVisibility',
   'savedSearches',
+  'screeningReview',
   'settings',
   'status',
   'team',

@@ -6,7 +6,6 @@ import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server
 import { pickClientMessages } from '@/i18n/client-messages';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { prerenderParamsAtBuild } from '@/lib/static-rendering';
 import { CookieConsent } from '@/components/cookies/CookieConsent';
 import { SkipLink } from '@/components/layout/SkipLink';
 import { consentBootScript, NOSCRIPT_HIDE_BANNER } from '@/lib/consent-boot';
@@ -35,13 +34,14 @@ type LocaleLayoutProps = {
 };
 
 /**
- * Języki do prerenderu w buildzie. Przy skonfigurowanej bazie lista jest pusta (#298): strony
- * z ofertami nie mogą czytać bazy w buildzie, a strona główna dziedziczy parametry z tego layoutu.
- * Strony wtedy powstają przy pierwszym żądaniu i trafiają do cache ISR; strony treściowe z własnym
- * `generateStaticParams` (poradniki, „Dla pracodawców”) nadal prerenderują się w buildzie.
+ * Języki do prerenderu w buildzie — zawsze komplet. Pusta lista (dawniej przy skonfigurowanej
+ * bazie) sprawiała, że build nie renderował stron pod `[locale]` i nie wykrywał tych, które czytają
+ * cookies/nagłówki (logowanie, rejestracja, lista ofert): Next uznawał je za statyczne, a żądanie
+ * kończyło się błędem DYNAMIC_SERVER_USAGE (500). Build nadal nie czyta bazy — odczyty ofert
+ * w buildzie zwracają pusty wynik (`isBuildPhase`), a ISR odświeża strony po starcie.
  */
 export function generateStaticParams(): Array<{ locale: string }> {
-  return prerenderParamsAtBuild(routing.locales.map((locale) => ({ locale })));
+  return routing.locales.map((locale) => ({ locale }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {

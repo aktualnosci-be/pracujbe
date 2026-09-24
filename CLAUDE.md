@@ -845,6 +845,29 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
   `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
   zgłoszeń (RLS gotowe).
+  Kontrola treści pytań przed publikacją (#497, migracja `0103`): detektor
+  deterministyczny (wzorce PL/NL/FR/EN, bez AI) w bazie (`screening_fold`,
+  `screening_risk_patterns`, `screening_question_risk`) sprawdza treść i KAŻDĄ opcję we
+  WSZYSTKICH językach; lustro `src/lib/screening/risk.ts` (podpowiedź w kreatorze, test
+  `screening-risk` porównuje wzorce 1:1 i pilnuje braku trafień na pytania o doświadczenie,
+  prawo jazdy, dostępność, języki, VCA). Kategorie: wiek, płeć, ciąża/plany rodzinne, stan
+  cywilny, religia, pochodzenie, zdrowie, orientacja, związki zawodowe, poglądy polityczne,
+  karalność. Trafienie ≠ ocena prawna: przy zapisie kroku pytanie trafia do
+  `screening_question_reviews` (jeden wiersz na ofertę × odcisk treści, audyt
+  `screening_question.review_requested`), strażnik `enforce_screening_review` blokuje KAŻDĄ
+  aktywację oferty (publikacja, wznowienie, ponowne otwarcie) do akceptacji bieżącej treści
+  (`SCREENING_REVIEW_REQUIRED`/`SCREENING_QUESTION_REJECTED: <pozycja>` → komunikat przy pytaniu
+  w kreatorze). Zmiana treści/tłumaczenia = nowy odcisk = nowa decyzja; akceptacja nie
+  publikuje. Admin: `/admin/pytania` (treść we wszystkich językach, `admin_decide_screening_review`
+  — odrzucenie z uzasadnieniem, STALE_STATE dla treści nieobecnej w ofercie, audyt
+  `screening_question.reviewed`, powiadomienie in-app dla zapisującego). Dowód: `rls.sql` sekcja
+  SR497 (kontrola ujemna: bez strażnika oferta się publikuje); unit `screening-risk`,
+  `screening-review`, `screening-review-editor`; E2E `admin-screening-review`,
+  `job-wizard-screening`. Teksty komunikatów do akceptacji właściciela. **Otwarte (#497):**
+  katalog dopuszczalnych wzorców i wyjątków art. 9/10 (właściciel + prawnik), wstrzymanie
+  zbierania odpowiedzi dla ofert JUŻ aktywnych z pytaniem odrzuconym po publikacji i los
+  zapisanych odpowiedzi, zgłoszenie pytania przez kandydata (dziś ogólne zgłoszenie oferty DSA
+  #41), e-mail o decyzji, informacja dla kandydata (#61), rejestr (#485), retencja (#486).
   Aplikacja bez konta (#98, migracja `0095`, `docs/GUEST_APPLY.md`): gość w ApplyModal
   (`GuestApplyForm`: imię i nazwisko, e-mail, zgoda; reszta opcjonalna) → Turnstile
   `guest_apply` + limity IP/adres → `submit_guest_application` (service_role, zgłoszenie
@@ -996,8 +1019,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
   `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
   (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
-- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy i decyzja z egzekucją
-  (#42) gotowe; odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
+- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy, decyzja z egzekucją
+  (#42) i odwołania z retencją i raportem (#43) gotowe; treść prawna i wartości terminów (#40) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
   → Zod → RPC `submit_content_report` (EXECUTE tylko service_role, `reporterId` z sesji). Sprawa
   = `reports.kind='dsa_notice'`: numer `DSA-XXXX-…` (64 bity), kod dostępu z przeglądarki (w bazie
@@ -1025,8 +1048,31 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   UI: dialog decyzji i cofnięcia w `/admin/zgloszenia` (`ModerationDecisionActions`),
   uzasadnienie w `/employer/firma` (`get_company_moderation_decisions`), wynik w
   `/zglos-tresc/sprawa`. Dowód: `rls.sql` sekcja MOD42; unit `moderation-decision*`; E2E
-  `admin-ux` (#42). **Otwarte:** procedura odwołań (#43); znacznik treści prawnej o środkach
-  odwoławczych w panelu firmy; UI kolejki według priorytetu (lista nadal po dacie).
+  `admin-ux` (#42). **Otwarte:** znacznik treści prawnej o środkach odwoławczych w panelu
+  firmy; UI kolejki według priorytetu (lista nadal po dacie).
+  Odwołania, terminy, retencja, raport (#43, migracja `0104`): tabela
+  `moderation_appeals` (jedno na decyzję, `APL-…`, niezmienne). Autor (owner/admin firmy)
+  odwołuje się od ograniczenia w `/employer/firma` (`submit_moderation_appeal` pod sesją),
+  zgłaszający od braku działań na `/zglos-tresc/sprawa` (numer + kod, `submit_report_appeal`
+  service_role za limiterem); cudza decyzja = `NOT_FOUND`, strony nie widzą swoich danych.
+  Termin liczony od POINFORMOWANIA (`moderation_informed_at`: wysłany e-mail o decyzji albo
+  odczyt powiadomienia; odbicie się nie liczy; bez poinformowania termin nie biegnie).
+  `admin_decide_appeal` w `/admin/odwolania`: autor decyzji nie rozpatruje, gdy jest inny admin
+  (`REVIEWER_CONFLICT`, inaczej `same_reviewer`); uwzględnienie odwołania autora cofa
+  ograniczenie (`moderation_restore_core`, wspólny z `admin_restore_moderation`), zgłaszającego
+  — nowa decyzja z `appeal_id` i egzekucją (sprawa dismissed → resolved tylko tą ścieżką);
+  historia, audyt, e-maile `appealReceived/Upheld/Reversed` w języku odbiorcy; awaria cofa
+  całość. Retencja: `dsa_retention_report()` (podgląd) i `dsa_retention_run(dry_run)`
+  (service_role, `dsa_retention_runs`) anonimizują sprawy dopiero po końcu drogi odwołania
+  i okresie retencji — wiersze i liczby zostają. Raport: `dsa_transparency_report` + eksport
+  `dsa_statements_export` (bez danych osobowych i faktów) w `/admin/raport-dsa` i
+  `GET /api/admin/dsa-report` (CSV/JSON). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
+  APL43 (kontrole ujemne: jedyny admin, naiwna retencja, flaga bez odwołania); unit
+  `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
+  `admin-a11y` (nowe trasy). **Do zatwierdzenia przez właściciela (#40):** okno odwołania
+  6 mies., termin rozpatrzenia 14 dni, retencja 12 mies., zakres publikacji i przekazywania do
+  bazy DSA, treść prawna o procedurze. **Otwarte:** harmonogram czyszczenia (po #40), odwołanie
+  zgłaszającego od cofnięcia ograniczenia, retencja `audit_logs` z uzasadnieniami.
 - [~] Mapa danych osobowych (#485/#488/#503/#504, część techniczna): `node scripts/privacy/data-map.mjs`
   generuje `docs/legal-drafts/data-map.generated.md` z migracji produkcyjnych (parser
   `scripts/privacy/schema.mjs`), klasyfikacji `src/lib/privacy/data-map.ts` (każda tabela, kategorie,
@@ -1224,7 +1270,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
   `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
-  `DATABASE_APP_URL` build nie czyta bazy (`prerenderParamsAtBuild` → strony na pierwsze żądanie);
+  `DATABASE_APP_URL` build nie czyta bazy: landingi przez `prerenderParamsAtBuild` (strony na pierwsze
+  żądanie), odczyty ofert w `next build` zwracają pusty wynik (`isBuildPhase`), a layout `[locale]`
+  ZAWSZE prerenderuje komplet języków — pusta lista dawała 500 DYNAMIC_SERVER_USAGE na logowaniu,
+  rejestracji i liście ofert (strażnik `static-public-pages.test`);
   layout `(public)` odrzuca nieobsługiwany locale (`notFound`). Middleware: bramka hasła i
   odświeżone cookies sesji → `private, no-store`; alias miasta → 308 w middleware (redirect z ISR
   dublował `Location`). **Otwarte:** ISR zapisuje na dysk także 404 losowych slugów ofert

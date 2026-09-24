@@ -683,6 +683,24 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['employer', 'admin'],
     columns: { reason: 'moderation', restored_by: 'reference' },
   },
+  'public.moderation_appeals': {
+    activities: ['dsa-moderation'],
+    subjects: ['employer', 'reporter', 'admin'],
+    columns: {
+      appellant_id: 'reference',
+      appellant_locale: 'preferences',
+      grounds: 'correspondence',
+      outcome_reasoning: 'moderation',
+      decided_by: 'reference',
+    },
+    note: 'Uzasadnienia odwołania i rozpatrzenia są anonimizowane przez dsa_retention_run po końcu drogi odwołania i okresie retencji (#43).',
+  },
+  'public.dsa_retention_runs': {
+    activities: ['dsa-moderation'],
+    subjects: [],
+    columns: {},
+    note: 'Wyłącznie liczniki przebiegów retencji (bez danych osobowych).',
+  },
 
   // --- Bezpieczeństwo i audyt ----------------------------------------------------------------
   'public.audit_logs': {
@@ -746,6 +764,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: [],
     columns: {},
     note: 'Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers.',
+  },
+  'public.screening_question_reviews': {
+    activities: ['companies'],
+    subjects: ['employer', 'admin'],
+    columns: { requested_by: 'reference', decided_by: 'reference', decision_reason: 'moderation' },
+    note:
+      'Przegląd pytania oznaczonego przez detektor (#497, 0103): kopia treści pytania firmy, kto zapisał pytanie i kto zdecydował, uzasadnienie admina. Bez odpowiedzi kandydatów.',
   },
 
   // --- Płatności (wyłączone, #51) --------------------------------------------------------------

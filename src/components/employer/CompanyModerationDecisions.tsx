@@ -1,14 +1,22 @@
 import { getTranslations } from 'next-intl/server';
 
+import { AppealForm } from '@/components/moderation/AppealForm';
 import type { CompanyModerationDecision } from '@/lib/data/company';
 import { createAppDateFormatter } from '@/lib/datetime';
 
 /**
  * Decyzje moderacyjne wobec firmy i jej ofert (#42) — uzasadnienie dla autora treści:
  * rodzaj i zasięg ograniczenia, fakty, podstawa, udział automatyzacji, numer decyzji
- * (do odwołania) i ewentualne cofnięcie. Droga odwołania: kontakt przez stronę Pomoc z numerem
- * decyzji; pełną procedurę uzupełnia właściciel serwisu (jawny znacznik, bez treści prawnej).
+ * (do odwołania) i ewentualne cofnięcie. Odwołanie (#43): formularz przy decyzji, dopóki biegnie
+ * termin liczony od poinformowania (`appealState = OK`), potem stan odwołania z wynikiem
+ * i uzasadnieniem. Treść prawną o procedurze uzupełnia właściciel serwisu (jawny znacznik).
  */
+
+const APPEAL_STATUS_KEY: Record<string, string> = {
+  pending: 'appealStatusPending',
+  upheld: 'appealStatusUpheld',
+  reversed: 'appealStatusReversed',
+};
 
 const DECISION_KEY: Record<string, string> = {
   job_removed: 'moderationJobRemoved',
@@ -87,10 +95,39 @@ export async function CompanyModerationDecisions({
                   </>
                 ) : null}
               </dl>
-              {!d.restoredAt ? (
-                <p className="mt-3 text-muted-foreground">
-                  {t('moderationRedress', { reference: d.reference })}
-                </p>
+              {d.appeal ? (
+                <div className="mt-3 rounded-xl bg-soft p-3" data-testid="moderation-appeal-status">
+                  <p className="font-medium text-foreground">
+                    {t('appealStatusLabel', { reference: d.appeal.reference })}
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    {t(APPEAL_STATUS_KEY[d.appeal.status] ?? 'appealStatusPending', {
+                      date: formatDate(
+                        d.appeal.status === 'pending'
+                          ? (d.appeal.dueAt ?? d.appeal.submittedAt)
+                          : (d.appeal.decidedAt ?? d.appeal.submittedAt),
+                      ),
+                    })}
+                  </p>
+                  {d.appeal.reasoning ? (
+                    <p className="mt-2 break-words text-foreground">
+                      <span className="text-xs text-muted-foreground">{t('appealReasoning')}: </span>
+                      {d.appeal.reasoning}
+                    </p>
+                  ) : null}
+                </div>
+              ) : d.appealState === 'OK' ? (
+                <div className="mt-3 space-y-3">
+                  <p className="text-muted-foreground">
+                    {t('moderationRedress', { reference: d.reference })}{' '}
+                    {d.appealDeadline
+                      ? t('appealDeadline', { date: formatDate(d.appealDeadline) })
+                      : t('appealDeadlineNotStarted')}
+                  </p>
+                  <AppealForm target={{ kind: 'decision', decisionId: d.id }} messages="company" />
+                </div>
+              ) : d.appealState === 'APPEAL_WINDOW_CLOSED' ? (
+                <p className="mt-3 text-muted-foreground">{t('appealWindowClosed')}</p>
               ) : null}
             </li>
           ))}

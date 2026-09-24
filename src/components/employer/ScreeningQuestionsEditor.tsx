@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 
 import { localeNames, routing, type Locale } from '@/i18n/routing';
 import {
@@ -13,6 +13,8 @@ import {
   type ScreeningQuestionDraft,
   type ScreeningQuestionType,
 } from '@/lib/screening/questions';
+import { screeningQuestionRisk, type ScreeningRiskCategory } from '@/lib/screening/risk';
+import { SCREENING_RISK_CATEGORY_KEY, type ScreeningReviewNotice } from '@/lib/screening/review';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -52,6 +54,12 @@ import {
  *   'i.prompt[.lang]'   — treść pytania
  *   'i.options'         — liczba opcji
  *   'i.options.j[.lang]'— opcja
+ *
+ * #497: pod treścią pytania, które detektor (`screeningQuestionRisk` — ten sam zestaw wzorców
+ * co baza, 0103) uznał za mogące dotyczyć danych chronionych, widać informację, że przed
+ * publikacją sprawdzi je zespół portalu. Po próbie publikacji `reviews` niesie stan przeglądu
+ * z bazy (oczekuje / odrzucone z uzasadnieniem). Informacja nie blokuje zapisu szkicu —
+ * publikację blokuje baza.
  */
 
 const TYPE_LABEL_KEYS: Record<ScreeningQuestionType, string> = {
@@ -106,6 +114,8 @@ export interface ScreeningQuestionsEditorProps {
   contentLocale: Locale;
   readOnly: boolean;
   errors: Record<string, string>;
+  /** Stan przeglądu pytań z ostatniej próby publikacji (#497); brak = tylko podpowiedź detektora. */
+  reviews?: readonly ScreeningReviewNotice[];
 }
 
 export function ScreeningQuestionsEditor({
@@ -114,9 +124,13 @@ export function ScreeningQuestionsEditor({
   contentLocale,
   readOnly,
   errors,
+  reviews = [],
 }: ScreeningQuestionsEditorProps): React.JSX.Element {
   const t = useTranslations('jobWizard');
   const tRoot = useTranslations();
+  const tReview = useTranslations('screeningReview');
+  const categoryList = (categories: readonly ScreeningRiskCategory[]) =>
+    categories.map((category) => tReview(SCREENING_RISK_CATEGORY_KEY[category])).join(', ');
   const others = routing.locales.filter((locale) => locale !== contentLocale);
   const [openTranslations, setOpenTranslations] = React.useState<Record<number, boolean>>({});
 
@@ -202,6 +216,13 @@ export function ScreeningQuestionsEditor({
             const typeError = errorFor(String(index));
             const countError = errorFor(`${index}.options`);
             const promptId = fieldPromptId(index, contentLocale, contentLocale);
+            const review = reviews.find((notice) => notice.index === index);
+            const risk = review ? review.categories : screeningQuestionRisk(question);
+            const riskId = `job-sq-${index}-risk`;
+            const promptDescribedBy =
+              [promptError ? `${promptId}-error` : null, risk.length > 0 ? riskId : null]
+                .filter(Boolean)
+                .join(' ') || undefined;
             return (
               <fieldset
                 key={index}
@@ -278,12 +299,35 @@ export function ScreeningQuestionsEditor({
                       update(index, { prompt: { ...question.prompt, [contentLocale]: event.target.value } })
                     }
                     aria-invalid={promptError ? true : undefined}
-                    aria-describedby={promptError ? `${promptId}-error` : undefined}
+                    aria-describedby={promptDescribedBy}
                   />
                   {promptError ? (
                     <p id={`${promptId}-error`} className={FORM_ERROR}>
                       {promptError.text}
                     </p>
+                  ) : null}
+                  {risk.length > 0 ? (
+                    <div
+                      id={riskId}
+                      data-testid={`screening-question-${number}-review`}
+                      className="flex min-w-0 items-start gap-2 rounded-[12px] border border-warning/40 bg-warning/5 px-3 py-2.5 text-[13px] leading-[1.6] text-foreground"
+                    >
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+                      <div className="min-w-0 space-y-1 break-words">
+                        <p>
+                          {review?.status === 'rejected'
+                            ? t('screeningReviewRejected', { categories: categoryList(risk) })
+                            : review
+                              ? t('screeningReviewPending', { categories: categoryList(risk) })
+                              : t('screeningRiskHint', { categories: categoryList(risk) })}
+                        </p>
+                        {review?.reason ? (
+                          <p className="text-muted-foreground">
+                            {t('screeningReviewReason', { reason: review.reason })}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
                   ) : null}
                 </div>
 
