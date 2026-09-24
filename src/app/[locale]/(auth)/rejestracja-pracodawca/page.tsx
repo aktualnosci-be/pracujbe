@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Link } from '@/i18n/navigation';
+import { Link, redirect } from '@/i18n/navigation';
+import type { Locale } from '@/i18n/routing';
+import { isSupabaseConfigured } from '@/lib/env';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AuthForm } from '@/components/auth/AuthForm';
 
@@ -9,6 +11,9 @@ import { AuthForm } from '@/components/auth/AuthForm';
  * Rejestracja pracodawcy. Formularz kliencki (AuthForm) wywołuje server action
  * `registerEmployer` (rola = employer, nazwa firmy w metadanych do dalszego onboardingu),
  * zapisuje `preferred_locale` = bieżące locale i przekierowuje do potwierdzenia e-maila.
+ *
+ * Zalogowany pracodawca nie widzi formularza nowego konta (#365): trafia do panelu, który
+ * sam pokaże zakładanie firmy, jeśli jeszcze jej nie ma.
  */
 
 type PageProps = {
@@ -27,6 +32,24 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function RegisterEmployerPage({ params }: PageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
+
+  if (isSupabaseConfigured()) {
+    const { createServerClient } = await import('@/lib/supabase/server');
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      if ((profile as { role?: string } | null)?.role === 'employer') {
+        redirect({ href: '/employer', locale: locale as Locale });
+      }
+    }
+  }
 
   const t = await getTranslations('auth');
 
