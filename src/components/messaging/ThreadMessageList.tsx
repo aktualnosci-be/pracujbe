@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 export interface ThreadMessageListProps {
   locale: string;
   conversationId: string;
-  /** Nazwa rozmówcy (lub tematu) — etykieta listy i nadawca, gdy profil jest niewidoczny pod RLS. */
+  /** Nazwa rozmówcy (lub tematu) — etykieta listy wiadomości. */
   displayName: string;
   initialMessages: ThreadMessageView[];
   initialOlderCursor: ThreadCursor | null;
@@ -100,6 +100,16 @@ export function ThreadMessageList({
     });
   }
 
+  // #355: nadawca zawsze podpisany — profil niewidoczny pod RLS → nazwa firmy z danych albo
+  // neutralna etykieta strony (bez imienia rekrutera); nigdy wiszący separator „ · ".
+  function senderLine(message: ThreadMessageView): string {
+    const sender = message.mine
+      ? t('you')
+      : message.senderName ||
+        t(message.senderSide === 'company' ? 'senderCompanyFallback' : 'senderCandidateFallback');
+    return [sender, message.timeLabel].filter(Boolean).join(' · ');
+  }
+
   if (messages.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-center">
@@ -155,9 +165,7 @@ export function ThreadMessageList({
             >
               {/* Nadawca i czas PRZED treścią w DOM (czytnik), wizualnie pod dymkiem. */}
               <span className="order-last mt-1 px-1 text-[11px] text-muted-foreground">
-                {message.mine ? t('you') : message.senderName || displayName}
-                {' · '}
-                {message.timeLabel}
+                {senderLine(message)}
               </span>
               <div
                 className={cn(

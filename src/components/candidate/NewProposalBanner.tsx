@@ -36,7 +36,7 @@ export function NewProposalBanner({
           href={href}
           className="inline-flex items-center gap-1 font-medium text-accent-dark hover:underline"
         >
-          {t('viewOffer')}
+          {t('viewProposal')}
           <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
       </p>

@@ -3,10 +3,10 @@ import { expect, test } from '@playwright/test';
 import { messages, rejectOptionalCookies } from './fixtures/messages';
 
 const localizedWizard = [
-  { locale: 'pl', title: 'Twój profil kandydata', firstName: 'Imię', lastName: 'Nazwisko', error: 'Nazwisko jest za krótkie.', next: 'Dalej: Preferencje pracy' },
-  { locale: 'nl', title: 'Je kandidaatprofiel', firstName: 'Voornaam', lastName: 'Achternaam', error: 'Achternaam is te kort.', next: 'Volgende: Werkvoorkeuren' },
-  { locale: 'fr', title: 'Votre profil de candidat', firstName: 'Prénom', lastName: 'Nom', error: 'Le nom est trop court.', next: "Suivant: Préférences d'emploi" },
-  { locale: 'en', title: 'Your candidate profile', firstName: 'First name', lastName: 'Last name', error: 'Last name is too short.', next: 'Next: Job preferences' },
+  { locale: 'pl', title: 'Twój profil kandydata', firstName: 'Imię', lastName: 'Nazwisko', error: 'Podaj nazwisko.', next: 'Dalej: Preferencje pracy' },
+  { locale: 'nl', title: 'Je kandidaatprofiel', firstName: 'Voornaam', lastName: 'Achternaam', error: 'Vul je achternaam in.', next: 'Volgende: Werkvoorkeuren' },
+  { locale: 'fr', title: 'Votre profil de candidat', firstName: 'Prénom', lastName: 'Nom', error: 'Indiquez votre nom.', next: "Suivant: Préférences d'emploi" },
+  { locale: 'en', title: 'Your candidate profile', firstName: 'First name', lastName: 'Last name', error: 'Enter your last name.', next: 'Next: Job preferences' },
 ] as const;
 
 for (const { locale, title, firstName, lastName, error, next } of localizedWizard) {
@@ -63,7 +63,7 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   // Krok 1: błąd walidacji nie czyści poprawnie wpisanego imienia.
   await page.getByLabel('Imię').fill('Anna');
   await page.getByRole('button', { name: /Dalej: Preferencje pracy/ }).click();
-  await expect(page.getByText('Nazwisko jest za krótkie.')).toBeVisible();
+  await expect(page.getByText('Podaj nazwisko.')).toBeVisible();
   await expect(page.getByLabel('Imię')).toHaveValue('Anna');
 
   await page.getByLabel('Nazwisko').fill('Kowalska');
@@ -119,7 +119,12 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   await page.getByRole('button', { name: 'Zakończ i opublikuj' }).click();
   await expect(page).toHaveURL(/\/pl\/candidate$/);
   // #376: H1 pulpitu (powitanie z `dashboard.greeting`), a nie dowolny nagłówek — także strony błędu.
-  const greeting = messages('pl').dashboard.greeting.split('{name}')[0]!.trim();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(new RegExp(`^${greeting}`));
+  // #334: bez imienia w profilu pulpit wita `dashboard.greetingNoName` („Witaj!”), nie „Witaj,”.
+  const dashboard = messages('pl').dashboard;
+  const greeting = dashboard.greeting.split('{name}')[0]!.trim();
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    new RegExp(`^(${escape(greeting)}|${escape(dashboard.greetingNoName)}$)`),
+  );
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 });

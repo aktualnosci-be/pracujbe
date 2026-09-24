@@ -12,9 +12,11 @@ vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const readError = { code: 'read-failed' };
 
-function client(failedTable?: string, empty = false) {
-  const profile = { first_name: 'Anna', last_name: 'Kowalska', avatar_url: null };
-  const candidate = { id: 'candidate-profile-1', experience_years: 3, occupations: ['Magazynier'], categories: [], city: 'Gent' };
+const PARTIAL_CANDIDATE = { id: 'candidate-profile-1', experience_years: 3, occupations: ['Magazynier'], categories: [], city: 'Gent', availability: null };
+const COMPLETE_CANDIDATE = { ...PARTIAL_CANDIDATE, categories: ['logistics'], availability: 'immediate' };
+
+function client(failedTable?: string, empty = false, candidate: Record<string, unknown> = PARTIAL_CANDIDATE, counts: Record<string, number> = {}) {
+  const profile = { first_name: 'Anna', last_name: 'Kowalska' };
   const single = (table: string) => {
     const query = {
       select: vi.fn(() => query), eq: vi.fn(() => query),
@@ -25,7 +27,7 @@ function client(failedTable?: string, empty = false) {
   const count = (table: string) => {
     const query = {
       select: vi.fn(() => query),
-      eq: vi.fn(async () => ({ count: table === 'candidate_skills' ? 2 : 0, error: failedTable === table ? readError : null })),
+      eq: vi.fn(async () => ({ count: counts[table] ?? 0, error: failedTable === table ? readError : null })),
     };
     return query;
   };
@@ -61,9 +63,24 @@ describe('podsumowanie profilu kandydata', () => {
   it('liczy ukończenie z rzeczywiście odczytanych pól i relacji', async () => {
     client();
     await expect(getCandidateProfileSummary()).resolves.toMatchObject({
-      loadFailed: false, firstName: 'Anna', completionPct: 67,
-      checklist: { basicInfo: true, experience: true, education: true, skills: true, languages: false, photo: false },
+      loadFailed: false, firstName: 'Anna', completionPct: 50,
+      checklist: { basicInfo: true, preferences: false, experience: true, location: true, languages: false, availability: false },
     });
+  });
+
+  it('profil z uzupełnionymi wszystkimi krokami kreatora ma 100% (#315)', async () => {
+    client(undefined, false, COMPLETE_CANDIDATE, { candidate_languages: 1 });
+    await expect(getCandidateProfileSummary()).resolves.toMatchObject({
+      completionPct: 100,
+      checklist: { basicInfo: true, preferences: true, experience: true, location: true, languages: true, availability: true },
+    });
+  });
+
+  it('krok 5 liczy się także z samym certyfikatem, jak w kreatorze', async () => {
+    client(undefined, false, COMPLETE_CANDIDATE, { candidate_certificates: 1 });
+    const result = await getCandidateProfileSummary();
+    expect(result.checklist.languages).toBe(true);
+    expect(result.completionPct).toBe(100);
   });
 
   it('rozróżnia prawdziwie pusty profil od awarii', async () => {
@@ -72,11 +89,11 @@ describe('podsumowanie profilu kandydata', () => {
     expect(result.loadFailed).toBe(false);
     expect(result.completionPct).toBe(0);
     expect(Object.values(result.checklist)).toEqual([false, false, false, false, false, false]);
-    expect(supabase.from).not.toHaveBeenCalledWith('candidate_skills');
+    expect(supabase.from).not.toHaveBeenCalledWith('candidate_languages');
     expect(captureError).not.toHaveBeenCalled();
   });
 
-  it.each(['profiles', 'candidate_profiles', 'candidate_skills', 'candidate_languages'])(
+  it.each(['profiles', 'candidate_profiles', 'candidate_languages', 'candidate_certificates'])(
     'nie pokazuje zera jako wyniku po błędzie %s', async (table) => {
       client(table);
       await expect(getCandidateProfileSummary()).resolves.toMatchObject({ loadFailed: true });

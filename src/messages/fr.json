@@ -72,7 +72,7 @@
     "detailsSubtitle": "Gérez les informations de votre entreprise et vérifiez son statut de vérification.",
     "editTitle": "Modifier les informations de l'entreprise",
     "name": "Nom de l'entreprise",
-    "namePlaceholder": "ex. AGO Jobs & HR",
+    "namePlaceholder": "ex. Nom de votre entreprise",
     "vatNumber": "Numéro de TVA / BCE (facultatif)",
     "vatPlaceholder": "BE0123456789",
     "vatHint": "Le numéro d'entreprise belge (BCE/KBO) facilite la vérification.",
@@ -84,14 +84,14 @@
     "statusLabel": "Statut de vérification",
     "verifiedAt": "Date de vérification",
     "verificationNote": "La publication d'offres et l'envoi de propositions nécessitent le statut « vérifiée », attribué par un administrateur.",
-    "bannerPendingTitle": "L'entreprise est en attente de vérification",
-    "bannerPendingDesc": "Nous vérifions les informations de votre entreprise. La publication d'offres et l'envoi de propositions seront possibles après validation par un administrateur.",
+    "bannerPendingTitle": "Votre entreprise attend sa vérification",
+    "bannerPendingDesc": "Les données de l’entreprise attendent d’être contrôlées par un administrateur de Pracuj.be. Vous pourrez publier des offres et envoyer des propositions après validation.",
     "bannerVerifiedTitle": "Entreprise vérifiée",
     "bannerVerifiedDesc": "Vous pouvez publier des offres et envoyer des propositions aux candidats.",
     "bannerRejectedTitle": "Vérification refusée",
-    "bannerRejectedDesc": "Nous n'avons pas pu vérifier l'entreprise. Corrigez les informations ou contactez-nous.",
+    "bannerRejectedDesc": "Un administrateur n’a pas validé les données de l’entreprise. Vérifiez le nom et le numéro de TVA/BCE, corrigez-les et renvoyez l’entreprise en vérification.",
     "bannerSuspendedTitle": "Compte entreprise suspendu",
-    "bannerSuspendedDesc": "Le compte de l'entreprise a été suspendu. La publication d'offres est interrompue.",
+    "bannerSuspendedDesc": "Le compte de l’entreprise a été suspendu par un administrateur. La publication d’offres et l’envoi de propositions sont interrompus.",
     "statusUnverified": "Non vérifiée",
     "statusPending": "En attente de vérification",
     "statusVerified": "Vérifiée",
@@ -103,7 +103,21 @@
       "nameTooLong": "Le nom de l'entreprise est trop long.",
       "vatInvalid": "Numéro de TVA/BCE invalide.",
       "vatTooLong": "Le numéro de TVA/BCE est trop long."
-    }
+    },
+    "bannerUnverifiedTitle": "Votre entreprise attend sa vérification",
+    "bannerUnverifiedDesc": "Avant la publication de votre première offre, un administrateur de Pracuj.be vérifiera les données de l’entreprise. Vous n’avez rien à envoyer : votre entreprise est déjà dans la file d’attente.",
+    "bannerLink": "Voir les données de l’entreprise",
+    "stepsTitle": "Premières étapes",
+    "stepVat": "Ajoutez le numéro de TVA/BCE de l’entreprise : il facilite la vérification.",
+    "stepWait": "Attendez la vérification par un administrateur : vous n’avez rien à cliquer.",
+    "stepDraft": "Préparez un brouillon d’offre : vous le publierez après la vérification.",
+    "wizardNotice": "Vous pouvez déjà préparer et enregistrer un brouillon d’offre. La publication sera possible après la vérification de l’entreprise.",
+    "reverifySubmit": "Renvoyer en vérification",
+    "reverifyHint": "Corrigez et enregistrez d’abord les données de l’entreprise, puis renvoyez-la en vérification.",
+    "reverifySuccess": "Votre entreprise est de nouveau dans la file de vérification.",
+    "editVerifiedHint": "Modifier le nom ou le numéro de TVA/BCE d’une entreprise vérifiée nécessite une nouvelle vérification. En attendant la validation, les offres de l’entreprise ne seront pas visibles publiquement et la publication ainsi que l’envoi de propositions seront interrompus.",
+    "savedReverification": "Données enregistrées. Votre entreprise repasse en vérification : un administrateur contrôlera les nouvelles données.",
+    "onboardingEyebrow": "Compte employeur"
   },
   "common": {
     "appName": "Pracuj.be",
@@ -824,7 +838,12 @@
     "employerApplicationMessage": "Écrire un message",
     "employerApplicationMessageLabel": "Écrire un message à : {name}",
     "employerApplicationView": "Voir la candidature",
-    "employerApplicationViewLabel": "Voir la candidature : {name}, {job}"
+    "employerApplicationViewLabel": "Voir la candidature : {name}, {job}",
+    "greetingNoName": "Bonjour !",
+    "viewProposal": "Voir la proposition",
+    "rowActionsFor": "Actions : {title}",
+    "companyFallback": "Votre entreprise",
+    "employerShellLoadError": "Impossible de charger les données du compte de l’entreprise. Veuillez réessayer."
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -936,7 +955,8 @@
     "agreeTerms": "J'accepte les conditions d'utilisation et la politique de confidentialité.",
     "stepAnnounce": "Étape {current} sur {total} : {title}",
     "agreeTermsLinks": "J'accepte les <terms>conditions d'utilisation</terms> et la <privacy>politique de confidentialité</privacy>.",
-    "opensInNewTab": "(s’ouvre dans un nouvel onglet)"
+    "opensInNewTab": "(s’ouvre dans un nouvel onglet)",
+    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste."
   },
   "filters": {
     "title": "Filtres",
@@ -990,9 +1010,6 @@
     "title": "Notifications",
     "markAllRead": "Tout marquer comme lu",
     "seeAll": "Voir tout",
-    "sampleNewJob": "Nouvelle offre adaptée à votre profil",
-    "sampleAppViewed": "Votre candidature a été consultée",
-    "sampleMessage": "Vous avez un nouveau message d'un employeur",
     "itemApplicationReceived": "Nouvelle candidature reçue",
     "itemApplicationStatusChanged": "Le statut de votre candidature a changé",
     "itemOfferReceived": "Vous avez reçu une proposition d'emploi",
@@ -1003,7 +1020,11 @@
     "itemSystem": "Notification système",
     "empty": "Aucune notification",
     "loadError": "Impossible de charger les notifications. Réessayez.",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "bellLabel": "{count, plural, =0 {Notifications} one {Notifications, 1 non lue} other {Notifications, # non lues}}",
+    "unreadItem": "Non lue",
+    "markingAllRead": "Enregistrement…",
+    "markedAllRead": "Toutes les notifications ont été marquées comme lues."
   },
   "pricing": {
     "standard": "Standard",
@@ -1090,7 +1111,8 @@
       "bioTooLong": "La description est trop longue.",
       "termsRequired": "Vous devez accepter les conditions et la politique de confidentialité.",
       "availabilityRequired": "Choisissez votre disponibilité.",
-      "invalid": "Valeur invalide."
+      "invalid": "Valeur invalide.",
+      "itemTooLong": "Un des éléments de la liste est trop long. Raccourcissez-le."
     }
   },
   "jobWizard": {
@@ -1199,7 +1221,9 @@
     "previewNothing": "—",
     "previewSalaryNotProvided": "Non précisé",
     "notVerifiedNote": "Le brouillon est enregistré. La publication sera possible une fois l'entreprise vérifiée.",
-    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste."
+    "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste.",
+    "stepAnnounce": "Étape {current} sur {total} : {title}",
+    "goToOffers": "Voir la liste des offres"
   },
   "messages": {
     "title": "Messages",
@@ -1233,7 +1257,9 @@
     "loadOlder": "Charger les messages plus anciens",
     "loadingOlder": "Chargement des messages plus anciens…",
     "loadOlderError": "Impossible de charger les messages plus anciens. Réessayez.",
-    "threadStart": "C'est le début de la conversation."
+    "threadStart": "C'est le début de la conversation.",
+    "senderCompanyFallback": "Employeur",
+    "senderCandidateFallback": "Candidat"
   },
   "files": {
     "cvTitle": "Votre CV / documents",
@@ -1352,7 +1378,10 @@
     "saving": "Enregistrement...",
     "savedSuccess": "Vos préférences de notification ont été enregistrées.",
     "loadError": "Impossible de charger vos préférences de notification.",
-    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant."
+    "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant.",
+    "employerEmailApplicationsDescription": "Nouvelles candidatures à vos offres d’emploi.",
+    "employerEmailOffersDescription": "Lorsqu’un candidat accepte ou refuse votre proposition d’emploi.",
+    "employerEmailMessagesDescription": "Nouveaux messages de candidats dans vos conversations."
   },
   "guides": {
     "pageTitle": "Guides",
@@ -1435,5 +1464,43 @@
     "heading": "Pas de connexion internet",
     "body": "Vérifiez votre connexion. Une fois rétablie, allez à la page d’accueil ou rouvrez la page recherchée.",
     "goHome": "Aller à la page d’accueil"
+  },
+  "employers": {
+    "metaTitle": "Pour les employeurs — offres d'emploi en Belgique | Pracuj.be",
+    "metaDescription": "Comment publier une offre d'emploi en Belgique sur Pracuj.be : compte entreprise, vérification, assistant d'offre et contact avec les candidats. Sans frais à ce stade.",
+    "pageTitle": "Pour les employeurs",
+    "title": "Recrutez en Belgique plus simplement",
+    "intro": "Pracuj.be met les entreprises en relation avec des personnes qui cherchent un emploi en Belgique, y compris celles qui n'ont pas de CV classique. Voici comment publier une offre et comment se déroule le contact avec les candidats.",
+    "ctaRegister": "Créer un compte employeur",
+    "ctaLogin": "Déjà un compte ? Se connecter",
+    "photoCaption": "Recruter, c'est d'abord des personnes.",
+    "photoDisclaimer": "Photo d'illustration — ne représente aucun employeur en particulier.",
+    "stepsTitle": "Comment ça marche",
+    "step1Title": "Créez un compte",
+    "step1Desc": "Indiquez vos coordonnées et le nom de l'entreprise, puis confirmez votre adresse e-mail.",
+    "step2Title": "Vérification de l'entreprise",
+    "step2Desc": "Notre équipe vérifie l'entreprise. Seules les entreprises vérifiées peuvent publier des offres.",
+    "step3Title": "Préparez l'offre",
+    "step3Desc": "L'assistant vous guide étape par étape : poste, lieu, conditions et exigences. Vous pouvez préparer un brouillon avant la vérification.",
+    "step4Title": "Menez le recrutement",
+    "step4Desc": "Les candidatures arrivent dans l'espace entreprise. Vous y changez leur statut, écrivez aux candidats et envoyez des propositions d'emploi.",
+    "freeTitle": "Sans frais à ce stade",
+    "freeDesc": "À ce stade de développement, Pracuj.be ne facture ni le compte entreprise ni la publication d'offres. Nous ne vendons ni forfaits ni abonnements.",
+    "candidatesTitle": "Qui vous trouverez",
+    "candidatesProfileTitle": "Un profil au lieu d'un CV",
+    "candidatesProfileDesc": "Les candidats remplissent un profil professionnel simple : métiers, compétences, langues, certificats, expérience et disponibilité. Ils peuvent joindre un CV, sans obligation.",
+    "candidatesLanguagesTitle": "Quatre langues",
+    "candidatesLanguagesDesc": "Le portail fonctionne en polonais, néerlandais, français et anglais. Chaque e-mail parvient au destinataire dans sa langue.",
+    "candidatesMatchTitle": "Une compatibilité lisible",
+    "candidatesMatchDesc": "Pour chaque candidature, vous voyez quelles exigences de l'offre le candidat remplit et lesquelles manquent.",
+    "contactTitle": "Contact avec les candidats",
+    "contactApplicationsTitle": "Candidatures",
+    "contactApplicationsDesc": "Le candidat postule avec son profil : une candidature par offre. Vous changez le statut dans l'espace entreprise et le candidat reçoit une notification.",
+    "contactMessagesTitle": "Messages",
+    "contactMessagesDesc": "Vous échangez avec le candidat par messages dans l'espace entreprise.",
+    "contactProposalsTitle": "Propositions d'emploi",
+    "contactProposalsDesc": "Vous pouvez envoyer au candidat une proposition d'emploi qu'il accepte ou refuse.",
+    "finalTitle": "Vous voulez publier votre première offre ?",
+    "finalDesc": "Créez un compte employeur. Vous publierez l'offre après la vérification de l'entreprise."
   }
 }

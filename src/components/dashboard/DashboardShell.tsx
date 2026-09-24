@@ -9,6 +9,7 @@ import { Link } from '@/i18n/navigation';
 import { Logo } from '@/components/brand/Logo';
 import { signOut } from '@/lib/actions/auth';
 import { markNotificationsRead } from '@/lib/actions/notifications';
+import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
 import { NotificationsDropdown, type NotificationItem } from './NotificationsDropdown';
@@ -43,7 +44,7 @@ export interface DashboardShellProps {
   /** Licznik nieprzeczytanych powiadomień (badge na dzwonku). */
   notifications?: number;
   notificationError?: boolean;
-  /** Pozycje powiadomień do dropdownu. Gdy pominięte — fallback DEMO. */
+  /** Pozycje powiadomień do dropdownu (demo też z `getNotifications`, #359). Brak = pusta lista. */
   notifItems?: NotificationItem[];
   /** Liczba konwersacji z nieprzeczytanymi — badge pozycji „Wiadomości" w nawigacji. */
   unreadMessages?: number;
@@ -67,12 +68,19 @@ export function DashboardShell({
   const td = useTranslations('dashboard');
   const tnav = useTranslations('nav');
   const tn = useTranslations('notifications');
+  const tRoot = useTranslations();
   const router = useRouter();
 
   const [notifOpen, setNotifOpen] = React.useState(false);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [, startMarkTransition] = React.useTransition();
+  // #354: stan zapisu „oznacz wszystkie" — ref blokuje wielokrotne wywołanie przed re-renderem.
+  const [markAllPending, startMarkAllTransition] = React.useTransition();
+  const markAllInFlight = React.useRef(false);
+  const [markAllDone, setMarkAllDone] = React.useState(false);
+  const [markAllError, setMarkAllError] = React.useState<ErrorCode | null>(null);
   const notifRef = React.useRef<HTMLDivElement>(null);
+  const bellRef = React.useRef<HTMLButtonElement>(null);
   const drawerRef = React.useRef<HTMLDivElement>(null);
   const drawerCloseRef = React.useRef<HTMLButtonElement>(null);
   // Element, na który wraca fokus po zamknięciu szuflady (przycisk, który ją otworzył).
@@ -83,13 +91,9 @@ export function DashboardShell({
     setDrawerOpen(true);
   }
 
-  // Powiadomienia realne (`notifItems`), a bez nich — fallback DEMO (tryb bez backendu).
-  const demoNotifItems: NotificationItem[] = [
-    { title: tn('sampleNewJob'), meta: '10 min', unread: true },
-    { title: tn('sampleAppViewed'), meta: '1 h', unread: true },
-    { title: tn('sampleMessage'), meta: '3 h', unread: false },
-  ];
-  const items = notifItems ?? demoNotifItems;
+  // Pozycje zawsze z warstwy danych (`getNotifications` — także demo, z czasem przez
+  // `Intl.RelativeTimeFormat` w języku strony, #359); bez nich pusta lista, nie literały.
+  const items = notifItems ?? [];
 
   // Trasa „Wiadomości" (jeśli w nawigacji) — nośnik badge nieprzeczytanych rozmów.
   const messagesHref = nav.find((item) => item.href.endsWith('/wiadomosci'))?.href;
@@ -104,11 +108,41 @@ export function DashboardShell({
             : item,
         );
 
+  function toggleNotifications(): void {
+    if (!notifOpen) {
+      // Nowe otwarcie panelu = świeży stan komunikatów zapisu.
+      setMarkAllDone(false);
+      setMarkAllError(null);
+    }
+    setNotifOpen(!notifOpen);
+  }
+
+  function closeNotifications(returnFocus: boolean): void {
+    setNotifOpen(false);
+    if (returnFocus) bellRef.current?.focus();
+  }
+
+  // #354: wynik akcji decyduje o komunikacie — błąd zostawia licznik i pokazuje alert (bez
+  // refresh, który mógłby go ukryć); sukces = status + refresh licznika.
   function handleMarkAllRead(): void {
-    startMarkTransition(async () => {
-      if (notificationError) return;
-      await markNotificationsRead();
-      router.refresh();
+    if (notificationError || markAllInFlight.current) return;
+    markAllInFlight.current = true;
+    setMarkAllDone(false);
+    setMarkAllError(null);
+    startMarkAllTransition(async () => {
+      try {
+        const res = await markNotificationsRead();
+        if (!res.ok) {
+          setMarkAllError(res.error);
+          return;
+        }
+        setMarkAllDone(true);
+        router.refresh();
+      } catch {
+        setMarkAllError('INTERNAL');
+      } finally {
+        markAllInFlight.current = false;
+      }
     });
   }
 
@@ -125,7 +159,8 @@ export function DashboardShell({
     });
   }
 
-  // Zamknięcie dropdownu powiadomień: klik poza obszarem + Escape.
+  // Zamknięcie dropdownu powiadomień: klik poza obszarem; Escape (#353) zamyka i przywraca
+  // fokus na dzwonek, niezależnie od tego, gdzie był fokus (panel jest odmontowywany).
   React.useEffect(() => {
     if (!notifOpen) return;
     function onPointerDown(event: MouseEvent): void {
@@ -133,17 +168,30 @@ export function DashboardShell({
         setNotifOpen(false);
       }
     }
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') closeNotifications(true);
+    }
     document.addEventListener('mousedown', onPointerDown);
-    return () => document.removeEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, [notifOpen]);
 
-  // Escape zamyka szufladę i dropdown; blokada scrolla body przy otwartej szufladzie.
+  // #353: wyjście fokusem (Tab/Shift+Tab) poza dzwonek i panel zamyka panel. `relatedTarget`
+  // null (np. klik w niefokusowalny tekst panelu) zostawia decyzję obsłudze `mousedown`.
+  function handleNotifBlur(event: React.FocusEvent<HTMLDivElement>): void {
+    const next = event.relatedTarget;
+    if (notifOpen && next instanceof Node && !event.currentTarget.contains(next)) {
+      setNotifOpen(false);
+    }
+  }
+
+  // Escape zamyka szufladę; blokada scrolla body przy otwartej szufladzie.
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        setNotifOpen(false);
-        setDrawerOpen(false);
-      }
+      if (event.key === 'Escape') setDrawerOpen(false);
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -244,11 +292,15 @@ export function DashboardShell({
           <div className="hidden flex-1 lg:block" />
 
           {/* Dzwonek + dropdown */}
-          <div ref={notifRef} className="relative">
+          <div ref={notifRef} className="relative" onBlur={handleNotifBlur}>
             <button
+              ref={bellRef}
               type="button"
-              onClick={() => setNotifOpen((open) => !open)}
-              aria-label={notificationError ? tn('loadError') : tn('title')}
+              onClick={toggleNotifications}
+              // #353: nazwa dostępna niesie liczbę nieprzeczytanych (plakietka jest aria-hidden).
+              aria-label={
+                notificationError ? tn('loadError') : tn('bellLabel', { count: notifications ?? 0 })
+              }
               aria-haspopup="true"
               aria-expanded={notifOpen}
               className="relative inline-flex size-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-soft"
@@ -262,7 +314,9 @@ export function DashboardShell({
                   !
                 </span>
               ) : notifications && notifications > 0 ? (
-                <span className="absolute right-1.5 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-foreground">
+                <span
+                  aria-hidden="true"
+                  className="absolute right-1.5 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-foreground">
                   {notifications}
                 </span>
               ) : null}
@@ -276,6 +330,9 @@ export function DashboardShell({
                   onRetry={() => router.refresh()}
                   onMarkAllRead={handleMarkAllRead}
                   onItemOpen={handleItemOpen}
+                  markAllPending={markAllPending}
+                  markAllDone={markAllDone}
+                  markAllError={markAllError ? tRoot(toUserMessageKey(markAllError)) : null}
                 />
               </div>
             ) : null}

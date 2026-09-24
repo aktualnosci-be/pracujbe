@@ -126,7 +126,7 @@ enqueueEmail({ template, recipientProfileId, entityType, entityId,
         ▼
 [ kolejka w DB ]
         │
-        ▼  cron/worker: POST /api/email/dispatch  (chroniony EMAIL_QUEUE_SECRET)
+        ▼  cron Railway: POST /api/email/process  (chroniony EMAIL_QUEUE_SECRET)
         │
         ├─ SELECT ... WHERE status IN ('queued','failed')
         │            AND attempts < MAX  ORDER BY queued_at  LIMIT N   (FOR UPDATE SKIP LOCKED)
@@ -135,7 +135,7 @@ enqueueEmail({ template, recipientProfileId, entityType, entityId,
         │     ├─ sukces → status='sent', provider_message_id, sent_at
         │     └─ błąd   → status='failed', error_message, attempts++ (retry z backoffem)
         ▼
-Webhook Resend  →  POST /api/webhooks/resend
+(planowane, P1-19) Webhook Resend  →  POST /api/webhooks/resend
         └─ aktualizacja status: delivered / opened / clicked / bounced / complained
            (dopasowanie po provider_message_id — kolumna z UNIQUE indeksem)
 ```

@@ -44,7 +44,7 @@ const HREF = {
 
 export interface CandidateShellProps {
   children: React.ReactNode;
-  /** Realne powiadomienia (z sesji/RLS). Bez nich DashboardShell użyje fallbacku DEMO. */
+  /** Powiadomienia z `getNotifications` (sesja/RLS albo demo w języku strony, #359). */
   notifItems?: NotificationItem[];
   /** Liczba nieprzeczytanych powiadomień (badge na dzwonku). */
   notifUnread?: number;

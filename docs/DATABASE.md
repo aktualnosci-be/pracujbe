@@ -96,7 +96,7 @@ Warstwa odczytu (`expires_at > now()`) i UI (`canRespondToProposal`) uznają pro
 aktywną tylko ściśle przed terminem, więc chwila `expires_at` jest już po terminie wszędzie.
 Równoległe accept/decline serializuje blokada wiersza (`for update`) i compare-and-swap:
 wygrywa pierwsza transakcja, druga dostaje `VALIDATION_FAILED`, a historia, powiadomienie
-i e-mail powstają raz. Dowód: `supabase/tests/rls.sql` sekcja MM (dwie sesje przez dblink).
+i e-mail powstają raz. Dowód: `supabase/tests/rls.sql` sekcja OO (dwie sesje przez dblink).
 
 Migracja (oba kontrakty): `supabase/migrations/0075_idempotent_message_offer_expiry.sql`.
 

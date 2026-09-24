@@ -911,6 +911,12 @@ reset role; reset app.current_uid;
 select pg_temp.assert(
   (select name from public.companies where id = :'COMPA') = 'Firma A (edit)',
   'W2 owner/admin edytuje dane firmy (P1-03)');
+-- 0072: zmiana nazwy zweryfikowanej firmy cofa ją do kolejki weryfikacji (sekcja MM);
+-- tu przywracamy weryfikację, bo kolejne sekcje zakładają zweryfikowaną Firmę A.
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPA') = 'pending',
+  'W2b zmiana nazwy zweryfikowanej firmy → pending (0072)');
+update public.companies set status = 'verified', verified_at = now() where id = :'COMPA';
 
 -- P1-04: konto pracodawcy nie aplikuje ani nie zakłada profilu kandydata (EMPB role=employer).
 set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
@@ -1534,25 +1540,243 @@ select pg_temp.assert(
   'LL5 helper odbiorców nie jest wywoływalny przez role klienta');
 
 -- ============================================================================
--- MM. Idempotentna wysyłka wiadomości (0075, #147) oraz wyścig i granica wygaśnięcia
+-- MM. Weryfikacja firmy po stronie pracodawcy (0072): ponowne zgłoszenie odrzuconej
+--     firmy, zmiana nazwy/VAT zweryfikowanej firmy → kolejka admina, pierwsza firma
+--     z panelu atomowo z VAT i idempotentnie
+-- ============================================================================
+\set OWNM  'e1000000-0000-0000-0000-0000000000a1'
+\set MEMM  'e1000000-0000-0000-0000-0000000000a2'
+\set OWNN  'e1000000-0000-0000-0000-0000000000a3'
+\set NOCO  'e1000000-0000-0000-0000-0000000000a4'
+\set EXM   'e1000000-0000-0000-0000-0000000000a5'
+\set NOCO2 'e1000000-0000-0000-0000-0000000000a6'
+\set CANDM 'e1000000-0000-0000-0000-00000000000c'
+\set COMPM 'e1000000-0000-0000-0000-0000000000f1'
+\set COMPN 'e1000000-0000-0000-0000-0000000000f2'
+\set COMPS 'e1000000-0000-0000-0000-0000000000f3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'OWNM','ownm@test.be','Otto M','{"role":"employer","first_name":"Otto","last_name":"M","locale":"nl"}'),
+  (:'MEMM','memm@test.be','Mila M','{"role":"employer","first_name":"Mila","last_name":"M","locale":"pl"}'),
+  (:'OWNN','ownn@test.be','Nora N','{"role":"employer","first_name":"Nora","last_name":"N","locale":"fr"}'),
+  (:'NOCO','noco@test.be','Nico C','{"role":"employer","first_name":"Nico","last_name":"C","locale":"en"}'),
+  (:'EXM','exm@test.be','Ex M','{"role":"employer","first_name":"Ex","last_name":"M","locale":"pl"}'),
+  (:'NOCO2','noco2@test.be','Nina C','{"role":"employer","first_name":"Nina","last_name":"C","locale":"pl"}'),
+  (:'CANDM','candm@test.be','Cleo M','{"role":"candidate","first_name":"Cleo","last_name":"M","locale":"pl"}');
+insert into public.companies(id,name,status,vat_number,verified_at) values
+  (:'COMPM','Firma M','rejected',null,null),
+  (:'COMPN','Firma N','verified','BE0111111111',now()),
+  (:'COMPS','Firma S','suspended',null,null);
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPM',:'OWNM','owner',true),
+  (:'COMPM',:'MEMM','member',true),
+  (:'COMPM',:'EXM','recruiter',false),
+  (:'COMPN',:'OWNN','owner',true),
+  (:'COMPS',:'OWNN','owner',true);
+
+-- MM1: ponowne zgłoszenie — kontrola ujemna (member, obca firma, stany inne niż rejected).
+set role authenticated; set app.current_uid = :'MEMM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.request_company_reverification(''e1000000-0000-0000-0000-0000000000f1''::uuid)',
+  'PERMISSION_DENIED', 'MM1 zwykły member nie zgłasza firmy ponownie');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'OWNN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.request_company_reverification(''e1000000-0000-0000-0000-0000000000f1''::uuid)',
+  'PERMISSION_DENIED', 'MM1b owner innej firmy nie zgłasza obcej firmy');
+select pg_temp.expect_error(
+  'select public.request_company_reverification(''e1000000-0000-0000-0000-0000000000f2''::uuid)',
+  'COMPANY_STATUS_INVALID', 'MM1c firma verified nie wraca do kolejki przez RPC');
+select pg_temp.expect_error(
+  'select public.request_company_reverification(''e1000000-0000-0000-0000-0000000000f3''::uuid)',
+  'COMPANY_STATUS_INVALID', 'MM1d zawieszenie zdejmuje tylko admin');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPM') = 'rejected'
+  and (select status::text from public.companies where id = :'COMPS') = 'suspended',
+  'MM1e nieudane zgłoszenia nie zmieniają statusu');
+
+-- MM2: owner nie ustawi statusu bezpośrednio — także ze znacznikiem transakcji ustawionym ręcznie.
+set role authenticated; set app.current_uid = :'OWNM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'update public.companies set status=''pending'' where id=''e1000000-0000-0000-0000-0000000000f1''',
+  'PERMISSION_DENIED', 'MM2 bezpośredni UPDATE rejected→pending zablokowany');
+select pg_temp.expect_error(
+  'select set_config(''pracujbe.company_reverify'', ''e1000000-0000-0000-0000-0000000000f1'', false); '
+  || 'update public.companies set status=''verified'' where id=''e1000000-0000-0000-0000-0000000000f1''',
+  'PERMISSION_DENIED', 'MM2b znacznik nie pozwala na samodzielną weryfikację');
+select set_config('pracujbe.company_reverify', '', false);
+
+-- MM3: owner odrzuconej firmy zgłasza ją ponownie → pending (kolejka awaiting), audyt.
+select public.request_company_reverification(:'COMPM'::uuid);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPM') = 'pending',
+  'MM3 rejected → pending po ponownym zgłoszeniu');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs where entity_id = :'COMPM'
+            and action = 'company.reverification_requested' and actor_id = :'OWNM')
+  and exists (select 1 from public.audit_logs where entity_id = :'COMPM'
+            and action = 'company.status_changed' and after_data->>'status' = 'pending'),
+  'MM3b audyt ponownego zgłoszenia i zmiany statusu');
+select pg_temp.assert(
+  coalesce(current_setting('pracujbe.company_reverify', true), '') = '',
+  'MM3c znacznik RPC nie zostaje w sesji');
+set role authenticated; set app.current_uid = :'OWNM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.request_company_reverification(''e1000000-0000-0000-0000-0000000000f1''::uuid)',
+  'COMPANY_STATUS_INVALID', 'MM3d drugie zgłoszenie bez ponownego odrzucenia odrzucone');
+reset role; reset app.current_uid;
+
+-- MM4: zmiana nazwy/VAT zweryfikowanej firmy przez ownera → pending, bez daty weryfikacji.
+set role authenticated; set app.current_uid = :'OWNN'; select pg_temp.assert_client_role();
+update public.companies set name = 'Firma N' where id = :'COMPN';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPN') = 'verified',
+  'MM4 zapis bez zmiany nazwy/VAT nie cofa weryfikacji');
+set role authenticated; set app.current_uid = :'OWNN'; select pg_temp.assert_client_role();
+update public.companies set name = 'Firma N Nowa' where id = :'COMPN';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'pending' and verified_at is null and verified_by is null
+     from public.companies where id = :'COMPN'),
+  'MM4b zmiana nazwy zweryfikowanej firmy → pending');
+update public.companies set status = 'verified', verified_at = now() where id = :'COMPN';
+set role authenticated; set app.current_uid = :'OWNN'; select pg_temp.assert_client_role();
+update public.companies set vat_number = 'BE0222222222' where id = :'COMPN';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPN') = 'pending',
+  'MM4c zmiana VAT zweryfikowanej firmy → pending');
+-- Admin ponownie weryfikuje firmę z kolejki.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_company_status(:'COMPN'::uuid, 'verified');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.companies where id = :'COMPN') = 'verified',
+  'MM4d admin ponownie weryfikuje firmę z kolejki');
+
+-- MM5: pierwsza firma z panelu — atomowo z VAT, idempotentnie, tylko pracodawca.
+set role authenticated; set app.current_uid = :'NOCO'; select pg_temp.assert_client_role();
+select company_id as nocomp, created as nocreated
+  from public.create_first_company('Firma Nowa', 'firma-nowa-mm5', ' BE0333333333 ') \gset
+select company_id as nocomp2, created as nocreated2
+  from public.create_first_company('Firma Nowa', 'firma-nowa-mm5-b', 'BE0333333333') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'nocreated'::boolean and not :'nocreated2'::boolean and :'nocomp' = :'nocomp2',
+  'MM5 ponowne wywołanie zwraca tę samą firmę (bez duplikatu)');
+select pg_temp.assert(
+  (select status::text = 'unverified' and vat_number = 'BE0333333333' and name = 'Firma Nowa'
+     from public.companies where id = :'nocomp'),
+  'MM5b firma unverified z zapisanym VAT w jednej transakcji');
+select pg_temp.assert(
+  (select count(*) from public.company_members where profile_id = :'NOCO') = 1
+  and (select role::text from public.company_members where profile_id = :'NOCO') = 'owner',
+  'MM5c jedno członkowstwo ownera');
+set role authenticated; set app.current_uid = :'CANDM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma K'', ''firma-k-mm5'', null)',
+  'PERMISSION_DENIED', 'MM5d kandydat nie zakłada firmy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EXM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma X'', ''firma-x-mm5'', null)',
+  'PERMISSION_DENIED', 'MM5e odebrany dostęp nie tworzy firmy zastępczej');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'NOCO2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.create_first_company(''Firma Y'', ''firma-y-mm5'', repeat(''9'', 65))',
+  'companies_vat_len', 'MM5f za długi VAT odrzuca całą operację');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.company_members where profile_id = :'NOCO2') = 0
+  and not exists (select 1 from public.companies where slug = 'firma-y-mm5'),
+  'MM5g błąd VAT nie zostawia firmy bez numeru');
+
+-- ============================================================================
+-- NN. Kolejka e-mail (0073): klucz per przejście statusu (#292), applicationViewed
+--     i jobPublished (#295); język = język ODBIORCY (Invariant #1)
+-- ============================================================================
+-- Fixture z LL: appl2 (CANDL, locale fr) w stanie submitted; OWNL = aktywny owner COMPL.
+select set_config('app.current_uid', :'OWNL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'appl2'::uuid, 'viewed');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = :'appl2' and profile_id = :'CANDL' and template = 'applicationViewed' and locale = 'fr') = 1
+  and (select count(*) from public.email_deliveries
+     where entity_id = :'appl2' and template = 'statusChanged') = 0,
+  'NN1 viewed → dedykowany applicationViewed w języku kandydata (fr), bez statusChanged');
+
+-- Cykl interview → shortlisted → interview: każde przejście = jeden e-mail.
+select set_config('app.current_uid', :'OWNL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'appl2'::uuid, 'interview');
+select public.transition_application(:'appl2'::uuid, 'shortlisted');
+select public.transition_application(:'appl2'::uuid, 'interview');
+-- Ponowienie tego samego żądania (status bez zmian) nie tworzy przejścia ani e-maila.
+select public.transition_application(:'appl2'::uuid, 'interview');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = :'appl2' and template = 'statusChanged' and payload->>'status' = 'interview') = 2,
+  'NN2 powrót do interview wysyła drugi e-mail (#292)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where entity_id = :'appl2' and template = 'statusChanged') = 3
+  and (select count(*) from public.application_status_history where application_id = :'appl2') = 4,
+  'NN2b retry bez zmiany statusu nie dodaje e-maila ani historii (idempotencja)');
+select pg_temp.assert(
+  (select count(distinct idempotency_key) from public.email_deliveries where entity_id = :'appl2')
+    = (select count(*) from public.email_deliveries where entity_id = :'appl2'),
+  'NN2c klucze idempotencji unikalne per przejście');
+
+-- Kontrola ujemna: opt-out email_applications wyłącza oba szablony statusu; in-app zostaje.
+insert into public.notification_preferences (profile_id, email_applications) values (:'CANDL', false)
+  on conflict (profile_id) do update set email_applications = false;
+select set_config('app.current_uid', :'OWNL', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'appl2'::uuid, 'shortlisted');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where entity_id = :'appl2' and profile_id = :'CANDL') = 4
+  and (select count(*) from public.notifications
+         where entity_id = :'appl2' and profile_id = :'CANDL' and type = 'application_status_changed') = 5,
+  'NN3 opt-out: brak e-maila, powiadomienie in-app powstaje');
+
+-- jobPublished: GG3 opublikował szkic (EMPA, locale nl); GG4 (odrzucona ponowna publikacja) bez maila.
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where entity_id = 'a2222222-2222-2222-2222-222222222222' and template = 'jobPublished') = 1
+  and (select profile_id::text || '/' || locale from public.email_deliveries
+     where entity_id = 'a2222222-2222-2222-2222-222222222222' and template = 'jobPublished') = :'EMPA' || '/nl',
+  'NN4 publikacja → jeden jobPublished do publikującego w jego języku');
+select pg_temp.assert(
+  (select payload->>'jobTitle' from public.email_deliveries
+     where entity_id = 'a2222222-2222-2222-2222-222222222222' and template = 'jobPublished') = 'Nowa oferta',
+  'NN4b payload jobPublished zawiera tytuł oferty');
+
+-- ============================================================================
+-- OO. Idempotentna wysyłka wiadomości (0075, #147) oraz wyścig i granica wygaśnięcia
 --     odpowiedzi na propozycję (0075, #88). Równoległość: dwie osobne sesje przez dblink.
 --
 -- Zestaw bywa uruchamiany w jednej zewnętrznej transakcji (tests/integration/rate-limit.test.ts:
 -- BEGIN … ROLLBACK), której niezatwierdzonych danych inne sesje nie widzą. Dlatego fixture'y
--- tej sekcji zakłada i ZATWIERDZA osobna sesja (mm_setup), a testy wymagające własnej
+-- tej sekcji zakłada i ZATWIERDZA osobna sesja (oo_setup), a testy wymagające własnej
 -- transakcji (granica expires_at = now()) też idą przez osobną sesję — bez BEGIN/ROLLBACK
--- w tym skrypcie. Identyfikatory fixture'ów są stałe i unikalne dla sekcji MM.
+-- w tym skrypcie. Identyfikatory fixture'ów są stałe i unikalne dla sekcji OO.
 -- ============================================================================
-\set CANDM 'e1000000-0000-0000-0000-00000000000c'
-\set OWNM  'e1000000-0000-0000-0000-0000000000a1'
-\set COMPM 'e1000000-0000-0000-0000-0000000000f1'
-\set JOBM1 'e1000000-0000-0000-0000-0000000000b1'
-\set JOBM2 'e1000000-0000-0000-0000-0000000000b2'
-\set JOBM3 'e1000000-0000-0000-0000-0000000000b3'
-\set JOBM4 'e1000000-0000-0000-0000-0000000000b4'
-\set KEY1  'e1000000-0000-0000-0000-0000000000d1'
-\set KEY2  'e1000000-0000-0000-0000-0000000000d2'
-\set KEY3  'e1000000-0000-0000-0000-0000000000d3'
+\set CANDO 'e2000000-0000-0000-0000-00000000000c'
+\set OWNO  'e2000000-0000-0000-0000-0000000000a1'
+\set COMPO 'e2000000-0000-0000-0000-0000000000f1'
+\set JOBO1 'e2000000-0000-0000-0000-0000000000b1'
+\set JOBO2 'e2000000-0000-0000-0000-0000000000b2'
+\set JOBO3 'e2000000-0000-0000-0000-0000000000b3'
+\set JOBO4 'e2000000-0000-0000-0000-0000000000b4'
+\set KEYO1  'e2000000-0000-0000-0000-0000000000d1'
+\set KEYO2  'e2000000-0000-0000-0000-0000000000d2'
+\set KEYO3  'e2000000-0000-0000-0000-0000000000d3'
 reset role; reset app.current_uid;
 
 -- Sesje równoległe: dblink tylko w bazie testowej, poza schematem public.
@@ -1595,10 +1819,10 @@ create function pg_temp.remote_commit_call(p_uid uuid, p_sql text) returns text
 language plpgsql as $$
 declare v_val text;
 begin
-  perform pg_temp.remote_begin('mm_setup', p_uid);
-  select t.v into v_val from dbl.dblink('mm_setup', p_sql) as t(v text);
-  perform dbl.dblink_exec('mm_setup', 'commit');
-  perform dbl.dblink_disconnect('mm_setup');
+  perform pg_temp.remote_begin('oo_setup', p_uid);
+  select t.v into v_val from dbl.dblink('oo_setup', p_sql) as t(v text);
+  perform dbl.dblink_exec('oo_setup', 'commit');
+  perform dbl.dblink_disconnect('oo_setup');
   return v_val;
 end $$;
 
@@ -1628,190 +1852,190 @@ begin
 end $$;
 
 -- Fixture'y (zatwierdzone w osobnej sesji jako superuser).
-select pg_temp.remote_connect('mm_setup');
-select dbl.dblink_exec('mm_setup', $fx$
+select pg_temp.remote_connect('oo_setup');
+select dbl.dblink_exec('oo_setup', $fx$
   insert into auth.users(id,email,name,raw_user_meta_data) values
-    ('e1000000-0000-0000-0000-00000000000c','candm@test.be','Maja M',
+    ('e2000000-0000-0000-0000-00000000000c','cando@test.be','Maja M',
      '{"role":"candidate","first_name":"Maja","last_name":"Mertens","locale":"pl"}'),
-    ('e1000000-0000-0000-0000-0000000000a1','ownm@test.be','Otto M',
+    ('e2000000-0000-0000-0000-0000000000a1','owno@test.be','Otto M',
      '{"role":"employer","first_name":"Otto","last_name":"Maes","locale":"nl"}');
-  insert into public.companies(id,name,status) values ('e1000000-0000-0000-0000-0000000000f1','Firma M','verified');
+  insert into public.companies(id,name,status) values ('e2000000-0000-0000-0000-0000000000f1','Firma O','verified');
   insert into public.company_members(company_id,profile_id,role,is_active) values
-    ('e1000000-0000-0000-0000-0000000000f1','e1000000-0000-0000-0000-0000000000a1','owner',true);
+    ('e2000000-0000-0000-0000-0000000000f1','e2000000-0000-0000-0000-0000000000a1','owner',true);
   insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
-    ('e1000000-0000-0000-0000-0000000000b1','e1000000-0000-0000-0000-0000000000f1','job-m1','Operator M1','warehouse','permanent','Leuven','Flandria','active','pl'),
-    ('e1000000-0000-0000-0000-0000000000b2','e1000000-0000-0000-0000-0000000000f1','job-m2','Operator M2','warehouse','permanent','Leuven','Flandria','active','pl'),
-    ('e1000000-0000-0000-0000-0000000000b3','e1000000-0000-0000-0000-0000000000f1','job-m3','Operator M3','warehouse','permanent','Leuven','Flandria','active','pl'),
-    ('e1000000-0000-0000-0000-0000000000b4','e1000000-0000-0000-0000-0000000000f1','job-m4','Operator M4','warehouse','permanent','Leuven','Flandria','active','pl');
-  insert into public.candidate_profiles(profile_id, is_searchable) values ('e1000000-0000-0000-0000-00000000000c', false);
+    ('e2000000-0000-0000-0000-0000000000b1','e2000000-0000-0000-0000-0000000000f1','job-o1','Operator O1','warehouse','permanent','Leuven','Flandria','active','pl'),
+    ('e2000000-0000-0000-0000-0000000000b2','e2000000-0000-0000-0000-0000000000f1','job-o2','Operator O2','warehouse','permanent','Leuven','Flandria','active','pl'),
+    ('e2000000-0000-0000-0000-0000000000b3','e2000000-0000-0000-0000-0000000000f1','job-o3','Operator O3','warehouse','permanent','Leuven','Flandria','active','pl'),
+    ('e2000000-0000-0000-0000-0000000000b4','e2000000-0000-0000-0000-0000000000f1','job-o4','Operator O4','warehouse','permanent','Leuven','Flandria','active','pl');
+  insert into public.candidate_profiles(profile_id, is_searchable) values ('e2000000-0000-0000-0000-00000000000c', false);
 $fx$);
-select dbl.dblink_disconnect('mm_setup');
+select dbl.dblink_disconnect('oo_setup');
 
-select pg_temp.remote_commit_call(:'CANDM',
-  'select public.apply_to_job(''' || :'JOBM1' || '''::uuid, ''mm-app-1'', null, null, null)::text') as appm \gset
-select pg_temp.remote_commit_call(:'OWNM',
-  'select public.get_or_create_conversation(''' || :'appm' || '''::uuid, null)::text') as convm \gset
-select pg_temp.remote_commit_call(:'OWNM',
-  'select public.send_offer(''' || :'JOBM1' || '''::uuid, ''' || :'CANDM' || '''::uuid, ''mm-off-1'', ''Zapraszamy'', null)::text')
-  as offm \gset
-select count(*) as mm_notif0 from public.notifications
-  where entity_id = :'convm' and type = 'message_received' and profile_id = :'OWNM' \gset
--- MM1: „commit wykonany, odpowiedź utracona" — pierwsza transakcja zatwierdzona, ponowienie
+select pg_temp.remote_commit_call(:'CANDO',
+  'select public.apply_to_job(''' || :'JOBO1' || '''::uuid, ''oo-app-1'', null, null, null)::text') as appo \gset
+select pg_temp.remote_commit_call(:'OWNO',
+  'select public.get_or_create_conversation(''' || :'appo' || '''::uuid, null)::text') as convo \gset
+select pg_temp.remote_commit_call(:'OWNO',
+  'select public.send_offer(''' || :'JOBO1' || '''::uuid, ''' || :'CANDO' || '''::uuid, ''oo-off-1'', ''Zapraszamy'', null)::text')
+  as offo \gset
+select count(*) as oo_notif0 from public.notifications
+  where entity_id = :'convo' and type = 'message_received' and profile_id = :'OWNO' \gset
+-- OO1: „commit wykonany, odpowiedź utracona" — pierwsza transakcja zatwierdzona, ponowienie
 -- w nowej transakcji z tym samym kluczem = ta sama wiadomość. (Zapisy wiadomości idą przez
--- osobne sesje: blokada wiersza rozmowy w zewnętrznej transakcji zakleszczyłaby MM5/MM6.)
-select pg_temp.remote_commit_call(:'CANDM',
-  'select public.send_message(''' || :'convm' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || :'KEY1' || '''::uuid)::text') as mm1a \gset
-select pg_temp.remote_commit_call(:'CANDM',
-  'select public.send_message(''' || :'convm' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || :'KEY1' || '''::uuid)::text') as mm1b \gset
-select pg_temp.assert(:'mm1a' = :'mm1b', 'MM1 ponowienie z tym samym kluczem zwraca to samo messages.id');
-select pg_temp.assert((select count(*) from public.messages where client_message_id = :'KEY1') = 1,
-  'MM1b jedna wiadomość dla klucza');
+-- osobne sesje: blokada wiersza rozmowy w zewnętrznej transakcji zakleszczyłaby OO5/OO6.)
+select pg_temp.remote_commit_call(:'CANDO',
+  'select public.send_message(''' || :'convo' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || :'KEYO1' || '''::uuid)::text') as oo1a \gset
+select pg_temp.remote_commit_call(:'CANDO',
+  'select public.send_message(''' || :'convo' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || :'KEYO1' || '''::uuid)::text') as oo1b \gset
+select pg_temp.assert(:'oo1a' = :'oo1b', 'OO1 ponowienie z tym samym kluczem zwraca to samo messages.id');
+select pg_temp.assert((select count(*) from public.messages where client_message_id = :'KEYO1') = 1,
+  'OO1b jedna wiadomość dla klucza');
 select pg_temp.assert(
   (select count(*) from public.notifications
-     where entity_id = :'convm' and type = 'message_received' and profile_id = :'OWNM') = :mm_notif0 + 1,
-  'MM1c jedno powiadomienie dla odbiorcy mimo ponowienia');
+     where entity_id = :'convo' and type = 'message_received' and profile_id = :'OWNO') = :oo_notif0 + 1,
+  'OO1c jedno powiadomienie dla odbiorcy mimo ponowienia');
 select pg_temp.assert(
-  (select count(*) from public.email_deliveries where entity_id = :'mm1a' and profile_id = :'OWNM') = 1,
-  'MM1d jeden wpis e-mail dla odbiorcy mimo ponowienia');
+  (select count(*) from public.email_deliveries where entity_id = :'oo1a' and profile_id = :'OWNO') = 1,
+  'OO1d jeden wpis e-mail dla odbiorcy mimo ponowienia');
 
--- MM2: kontrola ujemna — inny klucz z identyczną treścią to nowa, zasadna wiadomość.
-select pg_temp.remote_commit_call(:'CANDM',
-  'select public.send_message(''' || :'convm' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || gen_random_uuid()::text || '''::uuid)::text') as mm2 \gset
-select pg_temp.assert(:'mm2' <> :'mm1a'
+-- OO2: kontrola ujemna — inny klucz z identyczną treścią to nowa, zasadna wiadomość.
+select pg_temp.remote_commit_call(:'CANDO',
+  'select public.send_message(''' || :'convo' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || gen_random_uuid()::text || '''::uuid)::text') as oo2 \gset
+select pg_temp.assert(:'oo2' <> :'oo1a'
   and (select count(*) from public.messages
-         where conversation_id = :'convm' and body = 'Czy mogę zacząć w poniedziałek?') = 2,
-  'MM2 różne klucze z tą samą treścią tworzą dwie wiadomości (brak deduplikacji po treści)');
+         where conversation_id = :'convo' and body = 'Czy mogę zacząć w poniedziałek?') = 2,
+  'OO2 różne klucze z tą samą treścią tworzą dwie wiadomości (brak deduplikacji po treści)');
 
--- MM3: klucz jest per nadawca — druga strona z tym samym UUID pisze własną wiadomość.
-select pg_temp.remote_commit_call(:'OWNM',
-  'select public.send_message(''' || :'convm' || '''::uuid, ''Tak, zapraszamy'', ''' || :'KEY1' || '''::uuid)::text') as mm3 \gset
-select pg_temp.assert(:'mm3' <> :'mm1a'
-  and (select sender_id::text from public.messages where id = :'mm3') = :'OWNM',
-  'MM3 ten sam klucz innego nadawcy nie zwraca cudzej wiadomości');
+-- OO3: klucz jest per nadawca — druga strona z tym samym UUID pisze własną wiadomość.
+select pg_temp.remote_commit_call(:'OWNO',
+  'select public.send_message(''' || :'convo' || '''::uuid, ''Tak, zapraszamy'', ''' || :'KEYO1' || '''::uuid)::text') as oo3 \gset
+select pg_temp.assert(:'oo3' <> :'oo1a'
+  and (select sender_id::text from public.messages where id = :'oo3') = :'OWNO',
+  'OO3 ten sam klucz innego nadawcy nie zwraca cudzej wiadomości');
 
--- MM4: ponowienie nie omija kontroli członkostwa; brak klucza i stary podpis odrzucone.
+-- OO4: ponowienie nie omija kontroli członkostwa; brak klucza i stary podpis odrzucone.
 set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
-  'select public.send_message(''' || :'convm' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || :'KEY1' || '''::uuid)',
-  'PERMISSION_DENIED', 'MM4 obcy z cudzym kluczem nie odczyta ani nie wyśle wiadomości');
+  'select public.send_message(''' || :'convo' || '''::uuid, ''Czy mogę zacząć w poniedziałek?'', ''' || :'KEYO1' || '''::uuid)',
+  'PERMISSION_DENIED', 'OO4 obcy z cudzym kluczem nie odczyta ani nie wyśle wiadomości');
 reset role; reset app.current_uid;
-set role authenticated; set app.current_uid = :'CANDM'; select pg_temp.assert_client_role();
+set role authenticated; set app.current_uid = :'CANDO'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
-  'select public.send_message(''' || :'convm' || '''::uuid, ''bez klucza'', null)',
-  'VALIDATION_FAILED', 'MM4b wysyłka bez identyfikatora operacji odrzucona');
+  'select public.send_message(''' || :'convo' || '''::uuid, ''bez klucza'', null)',
+  'VALIDATION_FAILED', 'OO4b wysyłka bez identyfikatora operacji odrzucona');
 select pg_temp.expect_error(
-  'select public.send_message(''' || :'convm' || '''::uuid, ''stary podpis'')',
-  'does not exist', 'MM4c nie ma już ścieżki send_message bez klucza');
+  'select public.send_message(''' || :'convo' || '''::uuid, ''stary podpis'')',
+  'does not exist', 'OO4c nie ma już ścieżki send_message bez klucza');
 reset role; reset app.current_uid;
 
--- MM5: dwie RÓWNOLEGŁE próby z tym samym kluczem — druga czeka na commit pierwszej
+-- OO5: dwie RÓWNOLEGŁE próby z tym samym kluczem — druga czeka na commit pierwszej
 -- i zwraca to samo id; efekty uboczne powstają raz.
-select pg_temp.remote_begin('mm_a', :'CANDM') as pid_a \gset
-select pg_temp.remote_begin('mm_b', :'CANDM') as pid_b \gset
-select t.v as mm5a from dbl.dblink('mm_a',
-  'select public.send_message(''' || :'convm' || '''::uuid, ''Równolegle'', ''' || :'KEY2' || '''::uuid)::text')
+select pg_temp.remote_begin('oo_a', :'CANDO') as pid_a \gset
+select pg_temp.remote_begin('oo_b', :'CANDO') as pid_b \gset
+select t.v as oo5a from dbl.dblink('oo_a',
+  'select public.send_message(''' || :'convo' || '''::uuid, ''Równolegle'', ''' || :'KEYO2' || '''::uuid)::text')
   as t(v text) \gset
-select dbl.dblink_send_query('mm_b',
-  'select public.send_message(''' || :'convm' || '''::uuid, ''Równolegle'', ''' || :'KEY2' || '''::uuid)::text');
-select pg_temp.wait_blocked(:pid_b, 'MM5');
-select dbl.dblink_exec('mm_a', 'commit');
-select pg_temp.remote_result('mm_b') as mm5b \gset
-select dbl.dblink_exec('mm_b', 'commit');
-select dbl.dblink_disconnect('mm_a'); select dbl.dblink_disconnect('mm_b');
-select pg_temp.assert(:'mm5a' = :'mm5b', 'MM5 równoległa próba z tym samym kluczem zwraca to samo messages.id');
-select pg_temp.assert((select count(*) from public.messages where client_message_id = :'KEY2') = 1,
-  'MM5b jedna wiadomość po równoległych próbach');
+select dbl.dblink_send_query('oo_b',
+  'select public.send_message(''' || :'convo' || '''::uuid, ''Równolegle'', ''' || :'KEYO2' || '''::uuid)::text');
+select pg_temp.wait_blocked(:pid_b, 'OO5');
+select dbl.dblink_exec('oo_a', 'commit');
+select pg_temp.remote_result('oo_b') as oo5b \gset
+select dbl.dblink_exec('oo_b', 'commit');
+select dbl.dblink_disconnect('oo_a'); select dbl.dblink_disconnect('oo_b');
+select pg_temp.assert(:'oo5a' = :'oo5b', 'OO5 równoległa próba z tym samym kluczem zwraca to samo messages.id');
+select pg_temp.assert((select count(*) from public.messages where client_message_id = :'KEYO2') = 1,
+  'OO5b jedna wiadomość po równoległych próbach');
 select pg_temp.assert(
   (select count(*) from public.notifications
-     where entity_id = :'convm' and type = 'message_received' and profile_id = :'OWNM') = :mm_notif0 + 3,
-  'MM5c równoległe próby dodały jedno powiadomienie (łącznie MM1+MM2+MM5)');
+     where entity_id = :'convo' and type = 'message_received' and profile_id = :'OWNO') = :oo_notif0 + 3,
+  'OO5c równoległe próby dodały jedno powiadomienie (łącznie OO1+OO2+OO5)');
 select pg_temp.assert(
-  (select count(*) from public.email_deliveries where entity_id = :'mm5a' and profile_id = :'OWNM') = 1,
-  'MM5d jeden wpis e-mail po równoległych próbach');
+  (select count(*) from public.email_deliveries where entity_id = :'oo5a' and profile_id = :'OWNO') = 1,
+  'OO5d jeden wpis e-mail po równoległych próbach');
 
--- MM6: atomowość — pierwsza próba wycofana (rollback) nie zostawia efektów; równoległe
+-- OO6: atomowość — pierwsza próba wycofana (rollback) nie zostawia efektów; równoległe
 -- ponowienie z tym samym kluczem tworzy wiadomość i jej alerty dokładnie raz.
-select pg_temp.remote_begin('mm_a', :'CANDM') as pid_a \gset
-select pg_temp.remote_begin('mm_b', :'CANDM') as pid_b \gset
-select t.v as mm6a from dbl.dblink('mm_a',
-  'select public.send_message(''' || :'convm' || '''::uuid, ''Po awarii'', ''' || :'KEY3' || '''::uuid)::text')
+select pg_temp.remote_begin('oo_a', :'CANDO') as pid_a \gset
+select pg_temp.remote_begin('oo_b', :'CANDO') as pid_b \gset
+select t.v as oo6a from dbl.dblink('oo_a',
+  'select public.send_message(''' || :'convo' || '''::uuid, ''Po awarii'', ''' || :'KEYO3' || '''::uuid)::text')
   as t(v text) \gset
-select dbl.dblink_send_query('mm_b',
-  'select public.send_message(''' || :'convm' || '''::uuid, ''Po awarii'', ''' || :'KEY3' || '''::uuid)::text');
-select pg_temp.wait_blocked(:pid_b, 'MM6');
-select dbl.dblink_exec('mm_a', 'rollback');
-select pg_temp.remote_result('mm_b') as mm6b \gset
-select dbl.dblink_exec('mm_b', 'commit');
-select dbl.dblink_disconnect('mm_a'); select dbl.dblink_disconnect('mm_b');
-select pg_temp.assert(:'mm6b' <> :'mm6a' and :'mm6b' not like 'ERROR:%',
-  'MM6 po wycofaniu pierwszej próby ponowienie zapisuje wiadomość');
+select dbl.dblink_send_query('oo_b',
+  'select public.send_message(''' || :'convo' || '''::uuid, ''Po awarii'', ''' || :'KEYO3' || '''::uuid)::text');
+select pg_temp.wait_blocked(:pid_b, 'OO6');
+select dbl.dblink_exec('oo_a', 'rollback');
+select pg_temp.remote_result('oo_b') as oo6b \gset
+select dbl.dblink_exec('oo_b', 'commit');
+select dbl.dblink_disconnect('oo_a'); select dbl.dblink_disconnect('oo_b');
+select pg_temp.assert(:'oo6b' <> :'oo6a' and :'oo6b' not like 'ERROR:%',
+  'OO6 po wycofaniu pierwszej próby ponowienie zapisuje wiadomość');
 select pg_temp.assert(
-  (select count(*) from public.messages where client_message_id = :'KEY3') = 1
-  and (select count(*) from public.email_deliveries where entity_id = :'mm6a') = 0
-  and (select count(*) from public.email_deliveries where entity_id = :'mm6b' and profile_id = :'OWNM') = 1,
-  'MM6b wycofana próba nie zostawia wiadomości ani e-maila; ponowienie ma je raz');
+  (select count(*) from public.messages where client_message_id = :'KEYO3') = 1
+  and (select count(*) from public.email_deliveries where entity_id = :'oo6a') = 0
+  and (select count(*) from public.email_deliveries where entity_id = :'oo6b' and profile_id = :'OWNO') = 1,
+  'OO6b wycofana próba nie zostawia wiadomości ani e-maila; ponowienie ma je raz');
 
--- MM7: wyścig accept/decline w dwóch sesjach — decline czeka na blokadę wiersza,
+-- OO7: wyścig accept/decline w dwóch sesjach — decline czeka na blokadę wiersza,
 -- po commicie accept dostaje kontrolowany błąd; stan, historia i alerty pojedyncze.
-select pg_temp.remote_begin('mm_a', :'CANDM') as pid_a \gset
-select pg_temp.remote_begin('mm_b', :'CANDM') as pid_b \gset
-select t.v as mm7a from dbl.dblink('mm_a',
-  'select public.respond_to_offer(''' || :'offm' || '''::uuid, true)::text') as t(v text) \gset
-select dbl.dblink_send_query('mm_b',
-  'select public.respond_to_offer(''' || :'offm' || '''::uuid, false)::text');
-select pg_temp.wait_blocked(:pid_b, 'MM7');
-select dbl.dblink_exec('mm_a', 'commit');
-select pg_temp.remote_result('mm_b') as mm7b \gset
-select dbl.dblink_exec('mm_b', 'rollback');
-select dbl.dblink_disconnect('mm_a'); select dbl.dblink_disconnect('mm_b');
-select pg_temp.assert(:'mm7b' like 'ERROR:%VALIDATION_FAILED%',
-  'MM7 druga równoległa odpowiedź kończy się kontrolowanym błędem');
-select pg_temp.assert((select status::text from public.offers where id = :'offm') = 'accepted',
-  'MM7b stan końcowy = odpowiedź, która pierwsza zdobyła blokadę');
+select pg_temp.remote_begin('oo_a', :'CANDO') as pid_a \gset
+select pg_temp.remote_begin('oo_b', :'CANDO') as pid_b \gset
+select t.v as oo7a from dbl.dblink('oo_a',
+  'select public.respond_to_offer(''' || :'offo' || '''::uuid, true)::text') as t(v text) \gset
+select dbl.dblink_send_query('oo_b',
+  'select public.respond_to_offer(''' || :'offo' || '''::uuid, false)::text');
+select pg_temp.wait_blocked(:pid_b, 'OO7');
+select dbl.dblink_exec('oo_a', 'commit');
+select pg_temp.remote_result('oo_b') as oo7b \gset
+select dbl.dblink_exec('oo_b', 'rollback');
+select dbl.dblink_disconnect('oo_a'); select dbl.dblink_disconnect('oo_b');
+select pg_temp.assert(:'oo7b' like 'ERROR:%VALIDATION_FAILED%',
+  'OO7 druga równoległa odpowiedź kończy się kontrolowanym błędem');
+select pg_temp.assert((select status::text from public.offers where id = :'offo') = 'accepted',
+  'OO7b stan końcowy = odpowiedź, która pierwsza zdobyła blokadę');
 select pg_temp.assert(
   (select count(*) from public.offer_status_history
-     where offer_id = :'offm' and to_status in ('accepted', 'declined')) = 1,
-  'MM7c jeden wpis historii odpowiedzi');
+     where offer_id = :'offo' and to_status in ('accepted', 'declined')) = 1,
+  'OO7c jeden wpis historii odpowiedzi');
 select pg_temp.assert(
-  (select count(*) from public.notifications where entity_id = :'offm' and type = 'offer_status_changed') = 1
-  and (select count(*) from public.email_deliveries where entity_id = :'offm' and template = 'offerAccepted') = 1
-  and (select count(*) from public.email_deliveries where entity_id = :'offm' and template = 'offerDeclined') = 0,
-  'MM7d jedno powiadomienie i jeden e-mail — tylko dla zwycięskiej odpowiedzi');
+  (select count(*) from public.notifications where entity_id = :'offo' and type = 'offer_status_changed') = 1
+  and (select count(*) from public.email_deliveries where entity_id = :'offo' and template = 'offerAccepted') = 1
+  and (select count(*) from public.email_deliveries where entity_id = :'offo' and template = 'offerDeclined') = 0,
+  'OO7d jedno powiadomienie i jeden e-mail — tylko dla zwycięskiej odpowiedzi');
 
--- MM8: granica wygaśnięcia — propozycja aktywna tylko ściśle przed expires_at
+-- OO8: granica wygaśnięcia — propozycja aktywna tylko ściśle przed expires_at
 -- (jak warstwa odczytu i UI). Przeszła i RÓWNA chwili odniesienia odrzucone, przyszła przyjęta.
 insert into public.offers(job_id,candidate_id,company_id,sender_id,status,message,locale,idempotency_key,sent_at,expires_at)
-  values (:'JOBM2',:'CANDM',:'COMPM',:'OWNM','sent','Przeszła','pl','mm-exp-past', now() - interval '2 days', now() - interval '1 second')
-  returning id as offpast \gset
+  values (:'JOBO2',:'CANDO',:'COMPO',:'OWNO','sent','Przeszła','pl','oo-exp-past', now() - interval '2 days', now() - interval '1 second')
+  returning id as offopast \gset
 insert into public.offers(job_id,candidate_id,company_id,sender_id,status,message,locale,idempotency_key,sent_at,expires_at)
-  values (:'JOBM4',:'CANDM',:'COMPM',:'OWNM','sent','Przyszła','pl','mm-exp-future', now(), now() + interval '1 hour')
-  returning id as offfut \gset
-set role authenticated; set app.current_uid = :'CANDM'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.respond_to_offer(''' || :'offpast' || '''::uuid, true)',
-  'propozycja wygasła', 'MM8 propozycja po terminie odrzucona');
-select public.respond_to_offer(:'offfut'::uuid, true);
+  values (:'JOBO4',:'CANDO',:'COMPO',:'OWNO','sent','Przyszła','pl','oo-exp-future', now(), now() + interval '1 hour')
+  returning id as offofut \gset
+set role authenticated; set app.current_uid = :'CANDO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.respond_to_offer(''' || :'offopast' || '''::uuid, true)',
+  'propozycja wygasła', 'OO8 propozycja po terminie odrzucona');
+select public.respond_to_offer(:'offofut'::uuid, true);
 reset role; reset app.current_uid;
-select pg_temp.assert((select status::text from public.offers where id = :'offfut') = 'accepted',
-  'MM8b propozycja przed terminem przyjęta');
-select pg_temp.assert((select status::text from public.offers where id = :'offpast') = 'sent',
-  'MM8c odrzucona próba nie zmienia stanu wygasłej propozycji');
+select pg_temp.assert((select status::text from public.offers where id = :'offofut') = 'accepted',
+  'OO8b propozycja przed terminem przyjęta');
+select pg_temp.assert((select status::text from public.offers where id = :'offopast') = 'sent',
+  'OO8c odrzucona próba nie zmienia stanu wygasłej propozycji');
 
 -- Równość: now() jest stałe w transakcji, więc expires_at = now() to dokładnie granica.
 -- Własna transakcja w osobnej sesji: wstawienie propozycji i odpowiedź w tej samej chwili now().
-select pg_temp.remote_connect('mm_eq');
-select dbl.dblink_exec('mm_eq', 'begin');
-select dbl.dblink_exec('mm_eq',
+select pg_temp.remote_connect('oo_eq');
+select dbl.dblink_exec('oo_eq', 'begin');
+select dbl.dblink_exec('oo_eq',
   'insert into public.offers(job_id,candidate_id,company_id,sender_id,status,message,locale,idempotency_key,sent_at,expires_at)
-   values (''' || :'JOBM3' || ''',''' || :'CANDM' || ''',''' || :'COMPM' || ''',''' || :'OWNM' || ''',''sent'',''Na granicy'',''pl'',''mm-exp-eq'', now() - interval ''1 day'', now())');
-select pg_temp.remote_as('mm_eq', :'CANDM') as pid_eq \gset
-select dbl.dblink_send_query('mm_eq',
-  'select public.respond_to_offer(o.id, false)::text from public.offers o where o.idempotency_key = ''mm-exp-eq''');
-select pg_temp.remote_result('mm_eq') as mm8d \gset
-select dbl.dblink_exec('mm_eq', 'rollback');
-select dbl.dblink_disconnect('mm_eq');
-select pg_temp.assert(:'mm8d' like 'ERROR:%propozycja wygasła%',
-  'MM8d expires_at = now() to już po terminie (spójnie z expires_at > now())');
-select pg_temp.assert(not exists (select 1 from public.offers where idempotency_key = 'mm-exp-eq'),
-  'MM8e próba na granicy wycofana razem z transakcją sesji');
+   values (''' || :'JOBO3' || ''',''' || :'CANDO' || ''',''' || :'COMPO' || ''',''' || :'OWNO' || ''',''sent'',''Na granicy'',''pl'',''oo-exp-eq'', now() - interval ''1 day'', now())');
+select pg_temp.remote_as('oo_eq', :'CANDO') as pid_eq \gset
+select dbl.dblink_send_query('oo_eq',
+  'select public.respond_to_offer(o.id, false)::text from public.offers o where o.idempotency_key = ''oo-exp-eq''');
+select pg_temp.remote_result('oo_eq') as oo8d \gset
+select dbl.dblink_exec('oo_eq', 'rollback');
+select dbl.dblink_disconnect('oo_eq');
+select pg_temp.assert(:'oo8d' like 'ERROR:%propozycja wygasła%',
+  'OO8d expires_at = now() to już po terminie (spójnie z expires_at > now())');
+select pg_temp.assert(not exists (select 1 from public.offers where idempotency_key = 'oo-exp-eq'),
+  'OO8e próba na granicy wycofana razem z transakcją sesji');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

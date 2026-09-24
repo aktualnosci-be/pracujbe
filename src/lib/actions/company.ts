@@ -23,10 +23,14 @@ import {
 /**
  * Server Actions profilu firmy pracodawcy — Pracuj.be (Etap 4).
  *
- *   - `createCompany` — tworzy firmę (status wymuszony `unverified`) + właściciela atomowo
- *                        przez RPC `create_company_with_owner`; opcjonalnie dopisuje VAT/KBO.
+ *   - `createCompany` — zakłada PIERWSZĄ firmę pracodawcy (status wymuszony `unverified`) razem
+ *                        z VAT/KBO i właścicielem w jednej transakcji — RPC `create_first_company`
+ *                        (0072; idempotentne: ponowne kliknięcie zwraca tę samą firmę).
  *   - `updateCompany` — aktualizuje dane firmy aktywnego członkostwa (RLS `companies_update_member`).
- *                        NIGDY nie tyka statusu/weryfikacji (chroni trigger `protect_company_verification`).
+ *                        Statusu nie ustawia; zmiana nazwy/VAT zweryfikowanej firmy przywraca
+ *                        w bazie status `pending` (trigger `protect_company_verification`, 0072).
+ *   - `requestCompanyReverification` — odrzucona firma wraca do kolejki weryfikacji admina
+ *                        (RPC `request_company_reverification`, 0072).
  *
  * Zapis idzie pod SESJĄ użytkownika (RLS, NIGDY service-role). Walidacja Zod (te same schematy
  * co formularz). Błędy mapowane na stabilny `ErrorCode` — bez technikaliów (Invariant #8).
@@ -37,6 +41,9 @@ import {
 export type CreateCompanyResult =
   { ok: true; id: string; demo?: boolean } | { ok: false; error: ErrorCode };
 export type UpdateCompanyResult =
+  | { ok: true; demo?: boolean; reverificationRequired?: boolean }
+  | { ok: false; error: ErrorCode };
+export type ReverificationResult =
   { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
 
 /** Syntetyczny identyfikator firmy w trybie DEMO (brak env). */
@@ -45,6 +52,7 @@ const DEMO_COMPANY_ID = 'demo-company';
 /** Limity (okno 1 h) — ochrona przed masowym zakładaniem/edycją firm. */
 const CREATE_RATE_MAX = 10;
 const UPDATE_RATE_MAX = 60;
+const REVERIFY_RATE_MAX = 10;
 const RATE_WINDOW_SECONDS = 3600;
 
 /* ---------------------------------------------------------------------------
@@ -65,6 +73,7 @@ function asString(value: unknown, fallback = ''): string {
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
+  if (m.includes('COMPANY_STATUS_INVALID')) return 'INVALID_TRANSITION';
   if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (
     m.includes('PERMISSION_DENIED') ||
@@ -145,8 +154,9 @@ export async function setActiveCompany(
  * ------------------------------------------------------------------------- */
 
 /**
- * Tworzy firmę zalogowanego użytkownika (status `unverified`) i zwraca jej `id`.
- * Opcjonalny numer VAT/KBO dopisywany jest po utworzeniu (RLS: członek firmy).
+ * Zakłada pierwszą firmę zalogowanego pracodawcy (status `unverified`) i zwraca jej `id`.
+ * Numer VAT/KBO zapisuje się w tej samej transakcji co firma (#368) — błąd zapisu
+ * nie daje „czystego" sukcesu. Ponowne wywołanie zwraca już istniejącą firmę (#365).
  */
 export async function createCompany(
   input: CompanyFormInput,
@@ -176,25 +186,16 @@ export async function createCompany(
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const { data, error } = await supabase.rpc('create_company_with_owner', {
+    const { data, error } = await supabase.rpc('create_first_company', {
       p_name: v.name,
       p_slug: companySlug(v.name),
+      p_vat_number: nullIfEmpty(v.vatNumber),
     });
     if (error) return { ok: false, error: mapPgError(error.message) };
 
-    const id = asString(data);
+    const row = asRecord(Array.isArray(data) ? data[0] : data);
+    const id = asString(row['company_id']);
     if (!id) return { ok: false, error: 'INTERNAL' };
-
-    // Numer VAT/KBO nie jest częścią RPC — dopisujemy osobno (best-effort, nie blokuje sukcesu).
-    const vat = nullIfEmpty(v.vatNumber);
-    if (vat) {
-      const { error: vatErr } = await supabase
-        .from('companies')
-        .update({ vat_number: vat })
-        .eq('id', id);
-      if (vatErr)
-        captureError(vatErr, { area: 'company.createCompany.vat', id });
-    }
 
     return { ok: true, id };
   } catch (e) {
@@ -208,8 +209,10 @@ export async function createCompany(
  * ------------------------------------------------------------------------- */
 
 /**
- * Aktualizuje dane aktywnej firmy zalogowanego (nazwa i/lub VAT). NIE zmienia statusu ani
+ * Aktualizuje dane aktywnej firmy zalogowanego (nazwa i/lub VAT). Nie ustawia statusu ani
  * sluga (stabilny w publicznych URL). Puste pola pomija; pusty VAT czyści wartość.
+ * Zmiana nazwy/VAT zweryfikowanej firmy wraca do weryfikacji (baza, 0072) — wynik niesie
+ * wtedy `reverificationRequired`, by formularz powiedział o tym wprost.
  */
 export async function updateCompany(
   input: CompanyUpdateInput,
@@ -255,7 +258,7 @@ export async function updateCompany(
       .from('companies')
       .update(patch)
       .eq('id', companyId)
-      .select('id');
+      .select('id, status');
     if (error) return { ok: false, error: mapPgError(error.message) };
     if (
       !Array.isArray(data) ||
@@ -265,9 +268,60 @@ export async function updateCompany(
       return { ok: false, error: 'PERMISSION_DENIED' };
     }
 
+    const newStatus = asString(asRecord(data[0])['status']);
+    if (active.activeStatus === 'verified' && newStatus === 'pending') {
+      return { ok: true, reverificationRequired: true };
+    }
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'company.updateCompany' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * requestCompanyReverification
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Ponownie zgłasza ODRZUCONĄ aktywną firmę do weryfikacji (#400): `rejected → pending`,
+ * firma wraca do kolejki admina. Tylko owner/admin firmy; inne stany → `INVALID_TRANSITION`
+ * (zawieszenie zdejmuje wyłącznie administrator). Autoryzację i przejście egzekwuje RPC.
+ */
+export async function requestCompanyReverification(): Promise<ReverificationResult> {
+  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+
+  if (
+    !(await checkRateLimit('company-reverify', {
+      max: REVERIFY_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    }))
+  ) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const active = await getActiveCompany(supabase, user.id);
+    if (!active.activeId) return { ok: false, error: 'NOT_FOUND' };
+    if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
+      return { ok: false, error: 'PERMISSION_DENIED' };
+    }
+
+    const { error } = await supabase.rpc('request_company_reverification', {
+      p_company_id: active.activeId,
+    });
+    if (error) return { ok: false, error: mapPgError(error.message) };
+
+    revalidatePath('/employer', 'layout');
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'company.requestCompanyReverification' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

@@ -16,6 +16,7 @@ import { CandidateApplicationsPreview } from '@/components/candidate/CandidateAp
 import { CandidateMessagesPreview } from '@/components/candidate/CandidateMessagesPreview';
 import { CandidateSectionError } from '@/components/candidate/CandidateSectionError';
 import { getProfileLevelTitle } from '@/lib/profile-completeness';
+import { proposalAnchorHref } from '@/lib/candidate-offers';
 import {
   getCandidateOverview,
   getCandidateProfileSummary,
@@ -67,6 +68,7 @@ export default async function CandidateDashboardPage({
   const tp = await getTranslations({ locale, namespace: 'candidatePassport' });
   const tc = await getTranslations({ locale, namespace: 'common' });
   const to = await getTranslations({ locale, namespace: 'onboarding' });
+  const tm = await getTranslations({ locale, namespace: 'messages' });
 
   const [overview, profile, recommended, applications, messages, files, newProposal] = await Promise.all([
     getCandidateOverview(),
@@ -83,14 +85,14 @@ export default async function CandidateDashboardPage({
     overview.activeApplicationsCount === null ||
     overview.unreadMessagesCount === null;
 
-  const checklist = profileChecklistItems(profile.checklist, td, to('none'));
+  const checklist = profileChecklistItems(profile.checklist, td('add'), to);
 
   return (
     <div className="min-w-0 space-y-6">
       {/* Powitanie */}
       <header className="min-w-0 rounded-[1.75rem] border border-border bg-card p-5 sm:p-8">
         <h1 className="break-words text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          {td('greeting', { name: profile.firstName ?? '' })}
+          {profile.firstName ? td('greeting', { name: profile.firstName }) : td('greetingNoName')}
         </h1>
       </header>
 
@@ -98,11 +100,7 @@ export default async function CandidateDashboardPage({
       {newProposal ? (
         <NewProposalBanner
           status={newProposal.status}
-          href={
-            newProposal.slug
-              ? `/oferty-pracy/${newProposal.slug}`
-              : '/candidate/propozycje'
-          }
+          href={proposalAnchorHref(newProposal.id)}
         />
       ) : null}
 
@@ -247,6 +245,7 @@ export default async function CandidateDashboardPage({
               loadError: td('candidateMessagesLoadError'),
               retry: td('candidateListRetry'),
               seeAll: td('seeAllMessages'),
+              unread: tm('unreadBadge'),
             }}
           />
         </div>

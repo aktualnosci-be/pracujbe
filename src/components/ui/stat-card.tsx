@@ -58,8 +58,8 @@ export function StatCard({
 
   return (
     <div className="min-w-0 rounded-lg border border-border bg-card p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 break-words text-sm font-medium text-muted-foreground">{label}</p>
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <p className="min-w-0 break-words text-sm font-medium text-muted-foreground [overflow-wrap:anywhere]">{label}</p>
         {icon ? (
           <span
             className={cn(

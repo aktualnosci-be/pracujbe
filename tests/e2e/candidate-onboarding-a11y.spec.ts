@@ -81,7 +81,7 @@ test('#320: błędy są powiązane z polami, fokus na pierwszym błędnym polu',
   await nextButton(page).click();
   await expect(page.locator('#onb-firstName')).toBeFocused();
   await expect(page.locator('#onb-firstName')).toHaveAttribute('aria-invalid', 'true');
-  await expectDescribedBy(page, '#onb-firstName', 'onb-firstName-error', 'Imię jest za krótkie.');
+  await expectDescribedBy(page, '#onb-firstName', 'onb-firstName-error', 'Podaj imię.');
   await expectDescribedBy(page, '#onb-lastName', 'onb-lastName-error');
 
   // Krok 2: pole chipów i grupa branż wskazują swoje błędy.
