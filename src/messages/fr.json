@@ -839,6 +839,9 @@
     "employerApplicationMessageLabel": "Écrire un message à : {name}",
     "employerApplicationView": "Voir la candidature",
     "employerApplicationViewLabel": "Voir la candidature : {name}, {job}",
+    "greetingNoName": "Bonjour !",
+    "viewProposal": "Voir la proposition",
+    "rowActionsFor": "Actions : {title}",
     "companyFallback": "Votre entreprise",
     "employerShellLoadError": "Impossible de charger les données du compte de l’entreprise. Veuillez réessayer."
   },

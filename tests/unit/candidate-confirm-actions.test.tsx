@@ -34,8 +34,13 @@ function renderActions(locale: keyof typeof messages = 'pl', jobTitle?: string) 
   );
 }
 
-function openWithdraw(m: (typeof messages)['pl']) {
-  fireEvent.click(screen.getByRole('button', { name: m.dashboard.rowActions }));
+/** Nazwa przycisku „…”: z tytułem oferty, gdy jest znany (#341). */
+function rowActionsName(m: (typeof messages)['pl'], jobTitle?: string) {
+  return jobTitle ? m.dashboard.rowActionsFor.replace('{title}', jobTitle) : m.dashboard.rowActions;
+}
+
+function openWithdraw(m: (typeof messages)['pl'], jobTitle?: string) {
+  fireEvent.click(screen.getByRole('button', { name: rowActionsName(m, jobTitle) }));
   fireEvent.click(screen.getByRole('menuitem', { name: m.dashboard.withdrawApplication }));
 }
 
@@ -45,7 +50,7 @@ describe('wycofanie aplikacji wymaga potwierdzenia (#328)', () => {
     async (locale) => {
       const m = messages[locale];
       renderActions(locale, 'Magazynier');
-      openWithdraw(m);
+      openWithdraw(m, 'Magazynier');
 
       const dialog = screen.getByRole('alertdialog', { name: m.dashboard.withdrawConfirmTitle });
       expect(dialog).toHaveTextContent('Magazynier');
@@ -55,7 +60,7 @@ describe('wycofanie aplikacji wymaga potwierdzenia (#328)', () => {
       await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
       expect(withdrawApplication).not.toHaveBeenCalled();
       await waitFor(() =>
-        expect(screen.getByRole('button', { name: m.dashboard.rowActions })).toHaveFocus(),
+        expect(screen.getByRole('button', { name: rowActionsName(m, 'Magazynier') })).toHaveFocus(),
       );
     },
   );
@@ -90,6 +95,51 @@ describe('wycofanie aplikacji wymaga potwierdzenia (#328)', () => {
   });
 });
 
+describe('menu „…” przy aplikacji — wzorzec ARIA menu (#341)', () => {
+  it.each(['pl', 'nl', 'fr', 'en'] as const)('nazwa przycisku zawiera tytuł oferty: %s', (locale) => {
+    const m = messages[locale];
+    renderActions(locale, 'Magazynier – Antwerpia');
+    const trigger = screen.getByRole('button', { name: rowActionsName(m, 'Magazynier – Antwerpia') });
+    expect(trigger).toHaveAccessibleName(expect.stringContaining('Magazynier – Antwerpia'));
+    expect(trigger.className).toMatch(/min-h-11/);
+    expect(trigger.className).toMatch(/min-w-11/);
+  });
+
+  it('otwarcie przenosi fokus do menu, strzałki/Home/End krążą, Escape wraca do „…”', async () => {
+    renderActions('pl', 'Magazynier');
+    const trigger = screen.getByRole('button', { name: rowActionsName(pl, 'Magazynier') });
+    fireEvent.click(trigger);
+    const view = screen.getByRole('menuitem', { name: pl.dashboard.actionView });
+    const withdraw = screen.getByRole('menuitem', { name: pl.dashboard.withdrawApplication });
+    await waitFor(() => expect(view).toHaveFocus());
+
+    const menu = screen.getByRole('menu');
+    expect(trigger).toHaveAttribute('aria-controls', menu.id);
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(withdraw).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(view).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'ArrowUp' });
+    expect(withdraw).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'Home' });
+    expect(view).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'End' });
+    expect(withdraw).toHaveFocus();
+
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('strzałka w dół na zamkniętym przycisku otwiera menu', async () => {
+    renderActions('pl');
+    fireEvent.keyDown(screen.getByRole('button', { name: pl.dashboard.rowActions }), { key: 'ArrowDown' });
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: pl.dashboard.actionView })).toHaveFocus(),
+    );
+  });
+});
+
 describe('checklista kompletności (#317)', () => {
   it('„Dodaj” z celem jest prawdziwym linkiem z nazwą sekcji', () => {
     render(
@@ -121,25 +171,20 @@ describe('checklista kompletności (#317)', () => {
   });
 });
 
-describe('pozycje checklisty pulpitu i profilu (#317)', () => {
-  it('nieuzupełnione sekcje prowadzą do właściwych kroków, zdjęcie nie udaje linku', () => {
-    const t = (key: string) => (pl.dashboard as Record<string, string>)[key]!;
+describe('pozycje checklisty pulpitu i profilu (#315, #317)', () => {
+  it('pozycje to kroki kreatora: etykieta = tytuł kroku, „Dodaj” prowadzi do tego kroku', () => {
+    const o = pl.onboarding as Record<string, string>;
     const items = profileChecklistItems(
-      { basicInfo: false, experience: false, education: false, skills: true, languages: false, photo: false },
-      t,
-      pl.onboarding.none,
+      { basicInfo: false, preferences: false, experience: false, location: true, languages: false, availability: false },
+      pl.dashboard.add,
+      (key) => o[key]!,
     );
-    expect(items.map((i) => i.href)).toEqual([
-      '/candidate/onboarding?step=1',
-      '/candidate/onboarding?step=3',
-      '/candidate/onboarding?step=2',
-      '/candidate/onboarding?step=3',
-      '/candidate/onboarding?step=5',
-      undefined,
-    ]);
+    expect(items.map((i) => i.label)).toEqual([1, 2, 3, 4, 5, 6].map((n) => o[`step${n}Title`]));
+    expect(items.map((i) => i.href)).toEqual([1, 2, 3, 4, 5, 6].map((n) => `/candidate/onboarding?step=${n}`));
     render(<ProfileChecklist items={items} />);
-    expect(screen.getAllByRole('link')).toHaveLength(4);
-    expect(screen.queryByRole('link', { name: new RegExp(pl.dashboard.checkPhoto) })).not.toBeInTheDocument();
-    expect(screen.getByText(pl.onboarding.none)).toBeVisible();
+    // Uzupełniona „Lokalizacja” nie ma akcji; pozostałych pięć da się uzupełnić w kreatorze.
+    expect(screen.getAllByRole('link')).toHaveLength(5);
+    expect(screen.queryByText(pl.dashboard.checkPhoto)).not.toBeInTheDocument();
+    expect(screen.queryByText(pl.dashboard.checkEducation)).not.toBeInTheDocument();
   });
 });

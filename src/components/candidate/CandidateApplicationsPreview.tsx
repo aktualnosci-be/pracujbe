@@ -82,6 +82,7 @@ export function CandidateApplicationsPreview({
                   applicationId={app.id}
                   status={app.status}
                   slug={app.slug}
+                  jobTitle={app.jobTitle || undefined}
                 />
               </li>
             );

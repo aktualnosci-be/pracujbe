@@ -839,6 +839,9 @@
     "employerApplicationMessageLabel": "Napisz wiadomość do: {name}",
     "employerApplicationView": "Zobacz zgłoszenie",
     "employerApplicationViewLabel": "Zobacz zgłoszenie: {name}, {job}",
+    "greetingNoName": "Witaj!",
+    "viewProposal": "Zobacz propozycję",
+    "rowActionsFor": "Działania: {title}",
     "companyFallback": "Twoja firma",
     "employerShellLoadError": "Nie udało się wczytać danych konta firmy. Spróbuj ponownie."
   },

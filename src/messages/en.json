@@ -839,6 +839,9 @@
     "employerApplicationMessageLabel": "Write a message to: {name}",
     "employerApplicationView": "View application",
     "employerApplicationViewLabel": "View application: {name}, {job}",
+    "greetingNoName": "Welcome!",
+    "viewProposal": "View proposal",
+    "rowActionsFor": "Actions: {title}",
     "companyFallback": "Your company",
     "employerShellLoadError": "We couldn’t load your company account details. Please try again."
   },

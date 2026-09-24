@@ -64,7 +64,7 @@ export default async function CandidateProfilePage({
     loadCandidateFiles(),
   ]);
 
-  const checklist = profileChecklistItems(profile.checklist, t, to('none'));
+  const checklist = profileChecklistItems(profile.checklist, t('add'), to);
   const availabilityKey = passport.availability && passport.availability in availabilityLabels
     ? availabilityLabels[passport.availability as keyof typeof availabilityLabels]
     : null;

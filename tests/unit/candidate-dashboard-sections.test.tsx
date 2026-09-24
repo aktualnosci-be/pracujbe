@@ -30,7 +30,7 @@ describe.each([['pl', pl], ['nl', nl], ['fr', fr], ['en', en]] as const)('sekcje
   };
   const messageLabels = {
     title: t.latestMessages, empty: t.noMessages, loadError: t.candidateMessagesLoadError,
-    retry: t.candidateListRetry, seeAll: t.seeAllMessages,
+    retry: t.candidateListRetry, seeAll: t.seeAllMessages, unread: messages.messages.unreadBadge,
   };
 
   it('błąd odczytu zgłoszeń pokazuje komunikat z ponowieniem, nie „brak zgłoszeń”', () => {
@@ -72,5 +72,24 @@ describe.each([['pl', pl], ['nl', nl], ['fr', fr], ['en', en]] as const)('sekcje
     render(<CandidateMessagesPreview result={{ status: 'ok', items: [] }} locale={locale} labels={messageLabels} />);
     expect(screen.getByText(messageLabels.empty)).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('każda najnowsza rozmowa otwiera swój wątek, a nieprzeczytana ma tekstowy odpowiednik kropki (#340)', () => {
+    render(
+      <CandidateMessagesPreview
+        result={{ status: 'ok', items: [
+          { id: 'conv-1', title: 'Antwerp Logistics NV', preview: 'Dzień dobry', time: '2026-09-20T09:00:00Z', unread: true },
+          { id: 'conv-2', title: 'Gent Bouw', preview: 'Dziękujemy', time: '2026-09-19T09:00:00Z', unread: false },
+        ] }}
+        locale={locale}
+        labels={messageLabels}
+      />,
+    );
+    const first = screen.getByRole('link', { name: /Antwerp Logistics NV/ });
+    expect(first).toHaveAttribute('href', '/candidate/wiadomosci?c=conv-1');
+    expect(first).toHaveTextContent(messageLabels.unread);
+    const second = screen.getByRole('link', { name: /Gent Bouw/ });
+    expect(second).toHaveAttribute('href', '/candidate/wiadomosci?c=conv-2');
+    expect(second).not.toHaveTextContent(messageLabels.unread);
   });
 });

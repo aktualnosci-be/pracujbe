@@ -25,6 +25,12 @@ import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 import { findLatestActiveProposal } from '@/lib/candidate-offers';
 import { customOfferMessage } from '@/lib/offers/default-message';
+import {
+  EMPTY_PROFILE_CHECKLIST,
+  completionPctOf,
+  computeProfileChecklist,
+  type ProfileChecklistState,
+} from '@/lib/profile-completeness';
 
 /* ---------------------------------------------------------------------------
  * Kontrakt danych panelu kandydata
@@ -115,14 +121,8 @@ export interface CandidateProfileSummary {
   loadFailed: boolean;
   firstName: string | null;
   completionPct: number;
-  checklist: {
-    basicInfo: boolean;
-    experience: boolean;
-    education: boolean;
-    skills: boolean;
-    languages: boolean;
-    photo: boolean;
-  };
+  /** Sekcje = kroki kreatora (`PROFILE_SECTIONS`, #315). */
+  checklist: ProfileChecklistState;
 }
 
 /** Pola zawodowe widoczne dla właściciela profilu, odczytywane pod jego sesją. */
@@ -357,10 +357,10 @@ const computeProfileSummary = cache(async (
   userId: string,
 ): Promise<CandidateProfileSummary> => {
   const [profileResult, candidateResult] = await Promise.all([
-    supabase.from('profiles').select('first_name, last_name, avatar_url').eq('id', userId).maybeSingle(),
+    supabase.from('profiles').select('first_name, last_name').eq('id', userId).maybeSingle(),
     supabase
       .from('candidate_profiles')
-      .select('id, experience_years, occupations, categories, city')
+      .select('id, experience_years, occupations, categories, city, availability')
       .eq('profile_id', userId)
       .maybeSingle(),
   ]);
@@ -371,37 +371,39 @@ const computeProfileSummary = cache(async (
   const cp = asRecord(candidateResult.data);
   const candidateProfileId = asStr(cp['id']);
 
-  let skillsCount = 0;
   let languagesCount = 0;
+  let certificatesCount = 0;
   if (candidateProfileId) {
-    const [skillsResult, languagesResult] = await Promise.all([
-      supabase
-        .from('candidate_skills')
-        .select('id', { count: 'exact', head: true })
-        .eq('candidate_profile_id', candidateProfileId),
+    const [languagesResult, certificatesResult] = await Promise.all([
       supabase
         .from('candidate_languages')
         .select('id', { count: 'exact', head: true })
         .eq('candidate_profile_id', candidateProfileId),
+      supabase
+        .from('candidate_certificates')
+        .select('id', { count: 'exact', head: true })
+        .eq('candidate_profile_id', candidateProfileId),
     ]);
-    if (skillsResult.error) throw skillsResult.error;
     if (languagesResult.error) throw languagesResult.error;
-    skillsCount = skillsResult.count ?? 0;
+    if (certificatesResult.error) throw certificatesResult.error;
     languagesCount = languagesResult.count ?? 0;
+    certificatesCount = certificatesResult.count ?? 0;
   }
 
-  const checklist = {
-    basicInfo: Boolean(asStr(profile['first_name']) && asStr(profile['last_name'])),
-    experience: typeof cp['experience_years'] === 'number',
-    // Brak dedykowanej kolumny „wykształcenie" — proxy: uzupełnione preferencje zawodowe (krok 2).
-    education: asStrArrLen(cp['occupations']) > 0 || asStrArrLen(cp['categories']) > 0,
-    skills: skillsCount > 0,
-    languages: languagesCount > 0,
-    photo: Boolean(asStr(profile['avatar_url'])),
-  };
+  // Kryteria = kroki kreatora; ta sama definicja co na profilu i w linkach „Dodaj" (#315).
+  const checklist = computeProfileChecklist({
+    firstName: asStr(profile['first_name']) || null,
+    lastName: asStr(profile['last_name']) || null,
+    occupationsCount: asStrArrLen(cp['occupations']),
+    categoriesCount: asStrArrLen(cp['categories']),
+    experienceYears: cp['experience_years'],
+    city: asStr(cp['city']) || null,
+    languagesCount,
+    certificatesCount,
+    availability: asStr(cp['availability']) || null,
+  });
 
-  const doneCount = Object.values(checklist).filter(Boolean).length;
-  const completionPct = Math.round((doneCount / 6) * 100);
+  const completionPct = completionPctOf(checklist);
   const firstName = asStr(profile['first_name']) || null;
 
   return { loadFailed: false, firstName, completionPct, checklist };
@@ -502,9 +504,10 @@ function latestDemoOffer(locale: Locale): MyOffer | null {
 function demoMessages(locale: Locale): LatestMessage[] {
   const jobs = resolveDemoJobs(locale);
   const previews = [jobs[0]?.title ?? '', jobs[2]?.title ?? '', jobs[4]?.title ?? ''];
-  return demoCompanies.slice(0, 3).map((company, index) => ({
-    id: `demo-msg-${index}`,
-    title: company.name,
+  // Te same identyfikatory i firmy co demo rozmów (`lib/data/messages`), aby link otwierał wątek (#340).
+  return [0, 2, 6].map((companyIdx, index) => ({
+    id: `demo-conv-${index}`,
+    title: demoCompanies[companyIdx]?.name ?? '',
     preview: previews[index] ?? '',
     time: new Date(Date.now() - index * 86_400_000).toISOString(),
     unread: index === 0,
@@ -522,14 +525,7 @@ const DEMO_PROFILE_SUMMARY: CandidateProfileSummary = {
   loadFailed: false,
   firstName: null,
   completionPct: 0,
-  checklist: {
-    basicInfo: false,
-    experience: false,
-    education: false,
-    skills: false,
-    languages: false,
-    photo: false,
-  },
+  checklist: EMPTY_PROFILE_CHECKLIST,
 };
 
 const FAILED_PROFILE_SUMMARY: CandidateProfileSummary = {

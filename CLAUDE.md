@@ -546,6 +546,12 @@ Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilny
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
 już wczytanych kart. Jest to część etapu wyglądu #5, nie dowód ukończenia całego etapu.
 
+Kompletność profilu (pulpit + profil) = 6 kroków kreatora onboardingu, jedno źródło
+`src/lib/profile-completeness.ts` (`PROFILE_SECTIONS`/`computeProfileChecklist`); kompletny
+kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma własne kryteria.
+Baner nowej propozycji prowadzi do `/candidate/propozycje#offer-{id}` (#324); „Najnowsze
+wiadomości” linkują do `?c={id}` (#340); menu „…” aplikacji ma pełny wzorzec ARIA menu (#341).
+
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
 

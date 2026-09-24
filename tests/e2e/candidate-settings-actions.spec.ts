@@ -8,7 +8,6 @@ type Messages = {
   common: { cancel: string };
   dashboard: {
     add: string;
-    checkSkills: string;
     rowActions: string;
     withdrawApplication: string;
     withdrawConfirmTitle: string;
@@ -38,7 +37,8 @@ for (const locale of LOCALES) {
       await page.goto(`/${locale}/candidate${path ? `/${path}` : ''}`);
       await dismissCookies(page, locale);
 
-      const add = page.getByRole('link', { name: `${m.dashboard.add}: ${m.dashboard.checkSkills}` });
+      // Pozycje checklisty = kroki kreatora (#315); „Doświadczenie i umiejętności” to krok 3.
+      const add = page.getByRole('link', { name: `${m.dashboard.add}: ${m.onboarding.step3Title}` });
       await add.focus();
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(new RegExp(`/${locale}/candidate/onboarding\\?step=3$`));

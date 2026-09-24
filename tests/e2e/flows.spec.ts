@@ -55,13 +55,14 @@ test('szczegóły oferty otwierają się z listy i mają CTA aplikowania', async
   expect(await applyCta.count()).toBeGreaterThan(0);
 });
 
-type PanelMessages = { dashboard: { greeting: string; greetingEmployer: string }; admin: { title: string } };
+type PanelMessages = { dashboard: { greetingNoName: string; greetingEmployer: string }; admin: { title: string } };
 
 /** Nagłówek H1 panelu w danym języku (kandydat w demo nie ma imienia → sam prefiks powitania). */
 function panelHeading(locale: string, panel: 'candidate' | 'employer' | 'admin'): string {
   const file = resolve(process.cwd(), 'src', 'messages', `${locale}.json`);
   const messages = JSON.parse(readFileSync(file, 'utf-8')) as PanelMessages;
-  if (panel === 'candidate') return messages.dashboard.greeting.replace('{name}', '').trim();
+  // Demo nie zna imienia kandydata, więc pulpit wita neutralnie, bez wiszącego przecinka (#334).
+  if (panel === 'candidate') return messages.dashboard.greetingNoName;
   if (panel === 'employer') return messages.dashboard.greetingEmployer;
   return messages.admin.title;
 }

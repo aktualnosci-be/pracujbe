@@ -1,26 +1,26 @@
 import type { ProfileChecklistItem } from '@/components/candidate/ProfileChecklist';
-import type { CandidateProfileSummary } from '@/lib/data/candidate';
+import { PROFILE_SECTIONS, profileSectionStep, type ProfileChecklistState } from '@/lib/profile-completeness';
+
+type StepTitleKey = 'step1Title' | 'step2Title' | 'step3Title' | 'step4Title' | 'step5Title' | 'step6Title';
 
 /**
  * Pozycje checklisty kompletności profilu — wspólne dla pulpitu i profilu kandydata.
  *
- * „Dodaj" prowadzi do kroku kreatora, który uzupełnia sekcję (#317). Zdjęcia kreator nie
- * obsługuje, więc ta pozycja ma neutralny opis zamiast imitacji linku. Teksty przekazuje
- * ekran (namespace `dashboard` + `none` z `onboarding`).
+ * Każda pozycja to krok kreatora (#315): etykieta = tytuł kroku (`onboarding.stepNTitle`),
+ * „Dodaj" prowadzi do tego kroku (#317). Teksty przekazuje ekran.
  */
 export function profileChecklistItems(
-  checklist: CandidateProfileSummary['checklist'],
-  t: (key: 'checkBasicInfo' | 'checkExperience' | 'checkEducation' | 'checkSkills' | 'checkLanguages' | 'checkPhoto' | 'add') => string,
-  none: string,
+  checklist: ProfileChecklistState,
+  add: string,
+  stepTitle: (key: StepTitleKey) => string,
 ): ProfileChecklistItem[] {
-  const add = t('add');
-  const step = (n: number) => `/candidate/onboarding?step=${n}`;
-  return [
-    { label: t('checkBasicInfo'), done: checklist.basicInfo, action: add, href: step(1) },
-    { label: t('checkExperience'), done: checklist.experience, action: add, href: step(3) },
-    { label: t('checkEducation'), done: checklist.education, action: add, href: step(2) },
-    { label: t('checkSkills'), done: checklist.skills, action: add, href: step(3) },
-    { label: t('checkLanguages'), done: checklist.languages, action: add, href: step(5) },
-    { label: t('checkPhoto'), done: checklist.photo, hint: none },
-  ];
+  return PROFILE_SECTIONS.map((section) => {
+    const step = profileSectionStep(section);
+    return {
+      label: stepTitle(`step${step}Title` as StepTitleKey),
+      done: checklist[section],
+      action: add,
+      href: `/candidate/onboarding?step=${step}`,
+    };
+  });
 }

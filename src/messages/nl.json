@@ -839,6 +839,9 @@
     "employerApplicationMessageLabel": "Bericht sturen naar: {name}",
     "employerApplicationView": "Sollicitatie bekijken",
     "employerApplicationViewLabel": "Sollicitatie bekijken: {name}, {job}",
+    "greetingNoName": "Welkom!",
+    "viewProposal": "Bekijk het voorstel",
+    "rowActionsFor": "Acties: {title}",
     "companyFallback": "Je bedrijf",
     "employerShellLoadError": "We konden de gegevens van je bedrijfsaccount niet laden. Probeer het opnieuw."
   },
