@@ -129,12 +129,12 @@ for (const locale of locales) {
 /**
  * #7 — nagłówek listy = kalka `.p-list-header` + `.people .search` prototypu „Ludzie i praca”:
  * nadtytuł w kolorze marki, H1 40 px (≤ 600 px: 32 px), jeden kontener wyszukiwarki z promieniem
- * 17 px, pola bez własnych ramek (fokus = obrys komórki), czerwony przycisk 58 px (≤ 850 px:
+ * 17 px (≤ 600 px: 16 px), pola bez własnych ramek (fokus = obrys komórki), czerwony przycisk 58 px (≤ 850 px:
  * pełna szerokość w kolumnie, ≤ 600 px: 48 px — cel dotyku nadal ≥ 48 px).
  */
-for (const { width, h1, button, columns } of [
-  { width: 1280, h1: 40, button: 58, columns: 3 },
-  { width: 390, h1: 32, button: 48, columns: 1 },
+for (const { width, h1, button, columns, radius } of [
+  { width: 1280, h1: 40, button: 58, columns: 3, radius: 17 },
+  { width: 390, h1: 32, button: 48, columns: 1, radius: 16 },
 ]) {
   test(`nagłówek i wyszukiwarka listy w stylu prototypu (${width} px)`, async ({ page }) => {
     const t = messages("pl");
@@ -151,7 +151,7 @@ for (const { width, h1, button, columns } of [
     await expect(heading).toHaveCSS("font-weight", "700");
 
     const search = page.getByRole("search");
-    await expect(search).toHaveCSS("border-top-left-radius", "17px");
+    await expect(search).toHaveCSS("border-top-left-radius", `${radius}px`);
     const keyword = search.getByLabel(t.jobs.keyword, { exact: true });
     await expect(keyword).toHaveCSS("border-top-width", "0px");
     const columnCount = await search.evaluate(
