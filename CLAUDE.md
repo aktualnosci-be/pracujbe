@@ -754,6 +754,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   weryfikacja = `company_verified`) i e-mail `companyVerified`/`companyRejected`/`companySuspended`
   przez `enqueue_email` (język właściciela, Invariant #1). Dowód: `rls.sql` sekcja AV310;
   unit `admin-company-review`; E2E `admin-company-review.spec`.
+  Weryfikacja VAT w VIES (#92, `0088`): sekcja w `/admin/firmy/[id]` — lokalny pre-check
+  numeru BE (`src/lib/vies/belgian-vat.ts`: normalizacja, 10 cyfr, suma mod 97; zły zapis nie
+  trafia do VIES), adapter REST VIES (`src/lib/vies/client.ts`: timeout 4 s na próbę, 3 próby
+  z backoffem i jitterem). Stany: `valid`, `invalid`, `unavailable`, `rate_limited` —
+  `invalid` TYLKO przy jawnym `valid:false` w poprawnej odpowiedzi; 429/5xx/timeout/sieć/
+  `actionSucceed:false`/kody concurrent-unavailable = brak możliwości weryfikacji, osobne
+  teksty. Zapis wyłącznie wyników rozstrzygających (`company_vies_checks`, RPC
+  `admin_record_vies_check`, audyt `company.vies_checked` z samym wynikiem); awaria nie
+  nadpisuje wcześniejszego wyniku. Porównanie nazwy (`name-match.ts`) = sygnał do ręcznego
+  sprawdzenia. Status firmy zmienia tylko admin. Dowód: `rls.sql` sekcja VI92, unit
+  `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
+  `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
+  (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,

@@ -3446,4 +3446,93 @@ drop trigger ob142_fail on public.candidate_skills;
 drop trigger ob142_fail on public.candidate_certificates;
 drop function public.ob142_inject_failure();
 
+-- ============================================================================
+-- VI92. Weryfikacja VAT w VIES jako informacja dla admina (0088, #92)
+-- Zapis tylko wyników rozstrzygających (valid/invalid); awaria/limit VIES nigdy nie
+-- staje się „nieważny” i nie nadpisuje poprzedniego wyniku. Status firmy bez zmian.
+-- ============================================================================
+select status as vi92_status_before from public.companies where id = :'COMPA' \gset
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+-- VI92-1: admin zapisuje wynik ważny z nazwą z rejestru.
+select public.admin_record_vies_check(:'COMPA', '0417497106', 'valid', '  NV FIRMA A  ', date '2026-09-24');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select result = 'valid' and vies_name = 'NV FIRMA A' and vat_number = '0417497106'
+          and checked_by = :'ADMIN'::uuid and request_date = date '2026-09-24'
+     from public.company_vies_checks where company_id = :'COMPA'),
+  'VI92-1 wynik ważny zapisany z nazwą, datą i adminem');
+select pg_temp.assert(
+  (select status from public.companies where id = :'COMPA') = :'vi92_status_before',
+  'VI92-1b zapis wyniku nie zmienia statusu firmy');
+select pg_temp.assert(
+  (select after_data = '{"result":"valid"}'::jsonb and actor_id = :'ADMIN'::uuid
+     from public.audit_logs
+    where entity_id = :'COMPA' and action = 'company.vies_checked'
+    order by created_at desc limit 1),
+  'VI92-1c audyt company.vies_checked tylko z wynikiem (bez nazwy i numeru)');
+
+-- VI92-2: KONTROLA UJEMNA — stany nierozstrzygające są odrzucane i nie nadpisują wyniku.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''unavailable'')',
+  'RESULT_NOT_PERSISTABLE', 'VI92-2 niedostępność VIES nie jest zapisywana');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''rate_limited'')',
+  'RESULT_NOT_PERSISTABLE', 'VI92-2b limit VIES nie jest zapisywany');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', null)',
+  'RESULT_NOT_PERSISTABLE', 'VI92-2c brak wyniku nie jest zapisywany');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select result from public.company_vies_checks where company_id = :'COMPA') = 'valid',
+  'VI92-2d po awarii poprzedni wynik ważny zostaje (brak negatywnego cache)');
+select pg_temp.expect_error(
+  'insert into public.company_vies_checks(company_id, vat_number, result) values (''bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'', ''0417497106'', ''unavailable'')',
+  'company_vies_checks_result', 'VI92-2e CHECK tabeli odrzuca stan awarii nawet z pominięciem RPC');
+
+-- VI92-3: wynik nieważny zastępuje ważny, bez nazwy; firma NIE jest odrzucana automatycznie.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_record_vies_check(:'COMPA', '0417497106', 'invalid', 'ignorowana', null);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select result = 'invalid' and vies_name is null
+     from public.company_vies_checks where company_id = :'COMPA'),
+  'VI92-3 wynik nieważny zapisany bez nazwy');
+select pg_temp.assert(
+  (select status from public.companies where id = :'COMPA') = :'vi92_status_before',
+  'VI92-3b nieważny numer nie zmienia statusu firmy (bez automatycznego odrzucania)');
+select pg_temp.assert(
+  (select count(*) from public.company_vies_checks where company_id = :'COMPA') = 1,
+  'VI92-3c jeden wiersz na firmę');
+
+-- VI92-4: walidacja numeru i firmy.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0123456789'', ''valid'')',
+  'VAT_FORMAT', 'VI92-4 zła suma kontrolna odrzucona');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''BE0417497106'', ''valid'')',
+  'VAT_FORMAT', 'VI92-4b numer z prefiksem (nieznormalizowany) odrzucony');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''00000000-0000-0000-0000-00000000092f'', ''0417497106'', ''valid'')',
+  'NOT_FOUND', 'VI92-4c nieistniejąca firma → NOT_FOUND');
+reset role; reset app.current_uid;
+
+-- VI92-5: pracodawca i anon bez dostępu do zapisu i odczytu.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''valid'')',
+  'PERMISSION_DENIED', 'VI92-5 pracodawca nie zapisze wyniku VIES własnej firmy');
+select pg_temp.expect_error('select * from public.company_vies_checks',
+  'permission denied', 'VI92-5b pracodawca nie czyta tabeli wyników VIES');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''valid'')',
+  'permission denied', 'VI92-5c anon bez EXECUTE');
+select pg_temp.expect_error('select * from public.company_vies_checks',
+  'permission denied', 'VI92-5d anon nie czyta tabeli wyników VIES');
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
