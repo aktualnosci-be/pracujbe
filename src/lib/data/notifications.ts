@@ -76,7 +76,15 @@ const TITLE_KEY_BY_TYPE: Record<string, string> = {
   system: 'itemSystem',
 };
 
-function titleKeyForType(type: string): string {
+/** Tytuły powiadomień typu `system` rozróżniane po `entity_type` (#403). */
+const SYSTEM_TITLE_KEY_BY_ENTITY: Record<string, string> = {
+  company_invitation: 'itemTeamInvitation',
+};
+
+function titleKeyForType(type: string, entityType = ''): string {
+  if (type === 'system' && SYSTEM_TITLE_KEY_BY_ENTITY[entityType]) {
+    return SYSTEM_TITLE_KEY_BY_ENTITY[entityType]!;
+  }
   return TITLE_KEY_BY_TYPE[type] ?? TITLE_KEY_BY_TYPE['system']!;
 }
 
@@ -129,6 +137,9 @@ export function resolveHref(entityType: string, role: string, entityId = ''): st
       return employer ? '/employer/oferty' : '/candidate/oferty-polecane';
     case 'company':
       return employer ? '/employer/firma' : '/candidate';
+    case 'company_invitation':
+      // #403: zaproszenie do zespołu — przyjęcie/odrzucenie na stronie zespołu.
+      return employer ? '/employer/zespol' : '/candidate';
     default:
       return employer ? '/employer' : '/candidate';
   }
@@ -236,7 +247,7 @@ export async function getNotifications(
       const type = asStr(r['type'], 'system');
       return {
         id: asStr(r['id']),
-        title: t(titleKeyForType(type)),
+        title: t(titleKeyForType(type, asStr(r['entity_type']))),
         meta: formatRelativeTime(asStr(r['created_at']), resolvedLocale),
         unread: r['read_at'] == null,
         href: resolveHref(asStr(r['entity_type']), role, asStr(r['entity_id'])),

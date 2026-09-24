@@ -18,6 +18,7 @@ export const QUEUED_EMAIL_TYPES = [
   'offerDeclined', // respond_to_offer
   'newMessage', // send_message
   'jobPublished', // publish_job
+  'teamInvitation', // invite_company_member (0087)
 ] as const satisfies readonly EmailType[];
 
 /** E-maile konta — wysyłane przez warstwę Auth (`src/lib/email/auth-email.ts`). */

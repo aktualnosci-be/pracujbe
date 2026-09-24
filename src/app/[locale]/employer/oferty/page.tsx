@@ -6,7 +6,9 @@ import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { JobLifecycleActions } from "@/components/employer/JobLifecycleActions";
-import { getCompanyJobsLoad } from "@/lib/data/employer";
+import { RecruiterOnlyNote } from "@/components/employer/RecruiterOnlyNote";
+import { getCompanyJobsLoad, getEmployerShellData } from "@/lib/data/employer";
+import { canRecruit } from "@/lib/team/permissions";
 
 /**
  * Lista ofert firmy (`/employer/oferty`) — cel linku „Zobacz wszystkie oferty" i pozycji nawigacji
@@ -64,7 +66,12 @@ export default async function EmployerOffersPage({
       : 1;
   setRequestLocale(locale);
   const td = await getTranslations("dashboard");
-  const result = await getCompanyJobsLoad(page);
+  const [result, shell] = await Promise.all([
+    getCompanyJobsLoad(page),
+    getEmployerShellData(),
+  ]);
+  // #403: rola member przegląda oferty; tworzenie/edycja/cykl życia wymagają recruiter+.
+  const canRecruitHere = shell.status !== "ok" || canRecruit(shell.activeRole);
   const pageHref = (target: number) =>
     target === 1 ? "/employer/oferty" : `/employer/oferty?page=${target}`;
 
@@ -82,12 +89,16 @@ export default async function EmployerOffersPage({
             {td("employerOffersIntro")}
           </p>
         </div>
-        <Button asChild className="min-h-12 self-start rounded-xl sm:self-auto">
-          <Link href="/employer/oferty/nowa">
-            <Plus className="size-4" aria-hidden="true" />
-            {td("addJob")}
-          </Link>
-        </Button>
+        {canRecruitHere ? (
+          <Button asChild className="min-h-12 self-start rounded-xl sm:self-auto">
+            <Link href="/employer/oferty/nowa">
+              <Plus className="size-4" aria-hidden="true" />
+              {td("addJob")}
+            </Link>
+          </Button>
+        ) : (
+          <RecruiterOnlyNote locale={locale} />
+        )}
       </header>
 
       {result.status === "error" ? (
@@ -128,13 +139,15 @@ export default async function EmployerOffersPage({
           <p className="mt-2 text-sm text-muted-foreground">
             {td("employerOffersEmptyHint")}
           </p>
-          <Button
-            asChild
-            variant="outline"
-            className="mt-5 min-h-12 rounded-xl"
-          >
-            <Link href="/employer/oferty/nowa">{td("addJob")}</Link>
-          </Button>
+          {canRecruitHere ? (
+            <Button
+              asChild
+              variant="outline"
+              className="mt-5 min-h-12 rounded-xl"
+            >
+              <Link href="/employer/oferty/nowa">{td("addJob")}</Link>
+            </Button>
+          ) : null}
         </section>
       ) : (
         <>
@@ -187,6 +200,7 @@ export default async function EmployerOffersPage({
                   </dl>
                   <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
                     {offer.status === "draft" ? (
+                      !canRecruitHere ? null : (
                       <Button
                         asChild
                         variant="outline"
@@ -196,10 +210,12 @@ export default async function EmployerOffersPage({
                           {td("resumeDraft")}
                         </Link>
                       </Button>
+                      )
                     ) : (
                       <>
                         {/* #325: poprawka opublikowanej oferty bez zmiany statusu i zgłoszeń. */}
-                        {offer.status === "active" || offer.status === "paused" ? (
+                        {canRecruitHere &&
+                        (offer.status === "active" || offer.status === "paused") ? (
                           <Button
                             asChild
                             variant="outline"
@@ -226,10 +242,12 @@ export default async function EmployerOffersPage({
                             {td("viewJob")}
                           </Link>
                         ) : null}
-                        <JobLifecycleActions
-                          jobId={offer.id}
-                          status={offer.status}
-                        />
+                        {canRecruitHere ? (
+                          <JobLifecycleActions
+                            jobId={offer.id}
+                            status={offer.status}
+                          />
+                        ) : null}
                       </>
                     )}
                   </div>

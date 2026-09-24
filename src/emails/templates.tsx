@@ -99,6 +99,12 @@ export interface EmailDataMap {
     applicationUrl: string;
   };
   jobPublished: { recipientName?: string; jobTitle: string; jobUrl: string };
+  teamInvitation: {
+    recipientName?: string;
+    companyName: string;
+    inviterName?: string | null;
+    actionUrl: string;
+  };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
   invoice: { recipientName?: string; invoiceNumber: string; amount: string; downloadUrl: string };
@@ -118,6 +124,7 @@ const SUBJECT_FIELD: Partial<Record<EmailType, string>> = {
   offerDeclined: 'candidateName',
   newMessage: 'senderName',
   statusChanged: 'status',
+  teamInvitation: 'inviterName',
 };
 
 /** Pusta wartość albo sam placeholder (myślniki/spacje), np. `'—'` z `coalesce(..., '—')` w RPC. */
@@ -495,6 +502,18 @@ export function JobPublishedEmail(props: EmailProps<'jobPublished'>): ReactEleme
   );
 }
 
+export function TeamInvitationEmail(props: EmailProps<'teamInvitation'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="teamInvitation"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
 export function JobExpiringEmail(props: EmailProps<'jobExpiring'>): ReactElement {
   return (
     <EmailShell
@@ -570,6 +589,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   offerDeclined: OfferDeclinedEmail,
   statusChanged: StatusChangedEmail,
   jobPublished: JobPublishedEmail,
+  teamInvitation: TeamInvitationEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,
   invoice: InvoiceEmail,
