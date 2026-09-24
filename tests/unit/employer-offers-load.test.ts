@@ -107,7 +107,7 @@ describe("employer offers read state", () => {
       { id: "job-2", title: "Offer 2", city: "Gent", status: "draft" },
     ]);
     const result = await getCompanyJobsLoad();
-    expect(query.select).toHaveBeenCalledWith("id, title, city, status, created_at");
+    expect(query.select).toHaveBeenCalledWith("id, title, city, status, slug, created_at");
     expect(result.status === "ok" && result.jobs.map((job) => job.createdAt)).toEqual([
       "2026-09-18T09:00:00Z",
       null,

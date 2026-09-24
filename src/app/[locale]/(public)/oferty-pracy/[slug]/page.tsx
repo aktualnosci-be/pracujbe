@@ -31,6 +31,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
 import { loginHref } from '@/lib/validation/auth';
 import { JobMatchCard } from '@/components/public/JobMatchCard';
+import { JobCompanyBlockControl } from '@/components/public/JobCompanyBlockControl';
 import { SimilarJobsError } from '@/components/public/SimilarJobsError';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
@@ -110,6 +111,17 @@ function contentLanguage(job: JobDetail, locale: string): {
     canonicalLocale: contentLocale ?? locale,
     alternates: available,
   };
+}
+
+/**
+ * ISR (#298): szczegół oferty powstaje przy pierwszym żądaniu (pusta lista parametrów — build
+ * nie czyta ofert z bazy) i jest odświeżany co 60 s, więc zamknięta oferta znika najpóźniej
+ * po minucie. Strona nie czyta sesji: dopasowanie, zapisywanie i aplikowanie to wyspy klienckie.
+ */
+export const revalidate = 60;
+
+export function generateStaticParams(): Array<{ locale: string; slug: string }> {
+  return [];
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -524,6 +536,8 @@ export default async function JobDetailPage({ params }: PageProps) {
                 {t('learnMoreCompany')}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
+              {/* Blokada firmy (tylko zalogowany kandydat; wyspa kliencka, #97). Demo — brak. */}
+              {job.isDemo ? null : <JobCompanyBlockControl jobId={job.id} />}
             </div>
           </Section>
         </div>

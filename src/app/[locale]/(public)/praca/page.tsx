@@ -29,6 +29,7 @@ import {
 } from '@/lib/jobs';
 import { buildHubFacet } from '@/lib/jobs-hub';
 import { LandingHubGrid, type LandingHubItem } from '@/components/public/LandingHubGrid';
+import { prerenderParamsAtBuild } from '@/lib/static-rendering';
 
 /**
  * Hub landing-page'y `/praca` (SSR/SSG, INDEKSOWALNY).
@@ -88,8 +89,11 @@ type PageProps = {
   params: Promise<{ locale: string }>;
 };
 
+/** ISR (#298): oferty zmieniają się w ciągu dnia — HTML z cache, odświeżany co 60 s. */
+export const revalidate = 60;
+
 export function generateStaticParams(): Array<{ locale: string }> {
-  return routing.locales.map((locale) => ({ locale }));
+  return prerenderParamsAtBuild(routing.locales.map((locale) => ({ locale })));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {

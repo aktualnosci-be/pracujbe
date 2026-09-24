@@ -38,6 +38,8 @@ describe("Zapis oferty przy błędzie transportu", () => {
       await waitFor(() =>
         expect(button).toHaveAttribute("aria-pressed", String(!initialSaved)),
       );
+      // Stan docelowy, nie toggle: ponowienie po błędzie transportu nie odwraca zapisu.
+      expect(toggleSavedJob).toHaveBeenLastCalledWith("job-1", !initialSaved);
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     },
   );

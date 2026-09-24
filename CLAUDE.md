@@ -562,6 +562,16 @@ kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma w
 Baner nowej propozycji prowadzi do `/candidate/propozycje#offer-{id}` (#324); „Najnowsze
 wiadomości” linkują do `?c={id}` (#340); menu „…” aplikacji ma pełny wzorzec ARIA menu (#341).
 
+Blokada firmy przez kandydata (#97, migracja `0078`): tabela `candidate_company_blocks`
+(RPC-only `set_company_block`, odczyt `get_my_company_blocks`/`get_job_company_block`, firma nie
+ma ścieżki odczytu). Egzekwowanie w bazie: `company_can_view_candidate` (profil/PII),
+wyszukiwanie (`candidate_profiles_select_employer`, `candidate_profile_is_searchable`), `matches`,
+triggery BEFORE INSERT na `offers`/`conversations`/`messages` (neutralny błąd jak brak relacji),
+polecane (`get_public_jobs_by_ids` pod sesją). Historia aplikacji/rozmów zostaje. UI: sekcja
+„Zablokowane firmy” w `/candidate/ustawienia` + kontrolka na szczególe oferty. Dowód: `rls.sql`
+sekcja BL. **Do zrobienia:** publiczna lista `/oferty-pracy` celowo działa jako gość (anon),
+więc oferty zablokowanej firmy nadal są w wynikach listy — personalizacja wymaga osobnej decyzji.
+
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
 
@@ -584,6 +594,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Po „Dalej”/„Wstecz” fokus na nagłówku nowego kroku + ogłoszenie „Krok N z 9”, jeden region
   statusu zapisu (#402). Błąd zapisu pokazuje komunikat z kodu serwera (`toUserMessageKey`);
   `JOB_NOT_DRAFT` → link do listy ofert zamiast ponawiania (#363).
+- [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
+  aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
+  zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
+  kompletność jak `publish_job`, CAS po `updated_at` → `JOB_EDIT_CONFLICT`, audyt). Status, slug,
+  `published_at` i zgłoszenia bez zmian; zamknięta/wygasła → najpierw „Otwórz ponownie”
+  (`JOB_NOT_EDITABLE`). Baza blokuje bezpośredni zapis treści i relacji oferty innej niż szkic
+  (strażniki + `set_job_*` tylko dla szkicu). „Zobacz ofertę” dla aktywnej. Dowód: `rls.sql`
+  sekcja RR. **Otwarte:** powiadomienie kandydatów, którzy już aplikowali, o istotnej zmianie
+  warunków (decyzja produktowa).
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
   weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”
@@ -720,8 +739,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   E2E noindex każdej strony paneli i auth z systemu plików (`panel-noindex`) i axe na wszystkich
   trasach publicznych, 4 języki, 320/1280 px, z banerem i po jego zamknięciu (`a11y-public-routes`).
   Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),
-  bez `.first()`/`.nth()` na przyciskach o znaczeniu. **Do zrobienia:** asercje
-  `email_deliveries.locale` w `rls.sql` (#348, SQL), E2E kategorii zgód (#349), raport flaków (#375).
+  bez `.first()`/`.nth()` na przyciskach o znaczeniu. Invariant #1 na ścieżce enqueue → worker →
+  render (#348, `email-recipient-locale-e2e`): kontrakt najnowszych `resolve_recipient_locale`/
+  `enqueue_email` z migracji (kolejność preferred → account → signup → `en`, locale z
+  `p_profile_id`), zgodność z TS, nadawca i odbiorca w różnych językach, kontrola ujemna.
+  **Do zrobienia:** asercje `email_deliveries.locale` na żywej bazie w `rls.sql` (#348, SQL),
+  E2E kategorii zgód (#349), raport flaków (#375).
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
@@ -731,6 +754,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
   obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
   na decyzję o workflow.
+  Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
+  `locale` jawnie do Header/Footer/SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
+  Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
+  `DATABASE_APP_URL` build nie czyta bazy (`prerenderParamsAtBuild` → strony na pierwsze żądanie);
+  layout `(public)` odrzuca nieobsługiwany locale (`notFound`). Middleware: bramka hasła i
+  odświeżone cookies sesji → `private, no-store`; alias miasta → 308 w middleware (redirect z ISR
+  dublował `Location`). **Otwarte:** ISR zapisuje na dysk także 404 losowych slugów ofert
+  (`isrFlushToDisk: false` odpada — wyłącza cache obrazów); limit = własny `cacheHandler`. Straże: `static-public-pages.test`, `check-next-build.mjs`
+  (prerender), E2E `public-cache-headers.spec`. Lista `/oferty-pracy` (filtry), auth, panele — per żądanie.
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 

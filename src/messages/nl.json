@@ -554,7 +554,7 @@
     "rateLimited": "Te veel pogingen. Wacht even en probeer opnieuw.",
     "companyNotVerified": "Je bedrijf is nog niet geverifieerd.",
     "onboardingIncomplete": "Vul alle vereiste profielvelden in om de configuratie te voltooien.",
-    "jobNotDraft": "Deze vacature kan alleen als concept worden bewerkt.",
+    "jobNotDraft": "Deze vacature is al geplaatst. Pas ze aan met „Bewerken” in de vacaturelijst.",
     "billingUnavailable": "Betalingen zijn tijdelijk niet beschikbaar. Probeer het later opnieuw.",
     "checkoutInProgress": "Je hebt al een betaling gestart. Rond die af of probeer het zo opnieuw.",
     "entitlementLimit": "Je hebt de limiet van actieve vacatures in je plan bereikt. Upgrade om er meer te plaatsen.",
@@ -563,7 +563,9 @@
     "generic": "Er ging iets mis. Probeer opnieuw.",
     "demoUnavailable": "Deze functie werkt niet in de demoversie van de website.",
     "invalidTransition": "Deze statuswijziging is in de huidige fase niet mogelijk. Vernieuw de pagina en kies een andere optie.",
-    "staleState": "De status is intussen gewijzigd (bijvoorbeeld door een andere beheerder). De lijst is vernieuwd — controleer de huidige status."
+    "staleState": "De status is intussen gewijzigd (bijvoorbeeld door een andere beheerder). De lijst is vernieuwd — controleer de huidige status.",
+    "jobNotEditable": "Deze vacature kan nu niet worden bewerkt. Alleen een actieve of gepauzeerde vacature kan worden aangepast.",
+    "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -679,8 +681,6 @@
     "jobReopen": "Opnieuw openen",
     "jobStatusUpdated": "Status van de vacature bijgewerkt.",
     "resumeDraft": "Concept afmaken",
-    "jobNotDraftTitle": "Deze vacature is geen concept meer",
-    "jobNotDraftHint": "Een geplaatste vacature beheer je via de vacaturelijst: pauzeren, sluiten of opnieuw openen.",
     "activeOffers": "Actieve vacatures",
     "newApplications": "Nieuwe sollicitaties",
     "matchedCandidates": "Gematchte kandidaten",
@@ -847,7 +847,13 @@
     "viewProposal": "Bekijk het voorstel",
     "rowActionsFor": "Acties: {title}",
     "companyFallback": "Je bedrijf",
-    "employerShellLoadError": "We konden de gegevens van je bedrijfsaccount niet laden. Probeer het opnieuw."
+    "employerShellLoadError": "We konden de gegevens van je bedrijfsaccount niet laden. Probeer het opnieuw.",
+    "jobNotEditableTitle": "Deze vacature kan nu niet worden bewerkt",
+    "jobNotEditableHint": "Open een gesloten of verlopen vacature eerst opnieuw via de vacaturelijst en pas ze daarna aan.",
+    "editJob": "Bewerken",
+    "editJobLabel": "Vacature bewerken: {title}",
+    "viewJob": "Vacature bekijken",
+    "viewJobLabel": "Vacature bekijken: {title}"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -1230,7 +1236,16 @@
     "notVerifiedNote": "Het concept is opgeslagen. Publiceren kan zodra het bedrijf is geverifieerd.",
     "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen.",
     "stepAnnounce": "Stap {current} van {total}: {title}",
-    "goToOffers": "Naar je vacatures"
+    "goToOffers": "Naar je vacatures",
+    "editTitle": "Vacature bewerken",
+    "editSubtitleActive": "De vacature is geplaatst. Sla je wijzigingen op met „Wijzigingen opslaan”; kandidaten zien ze meteen. De status en sollicitaties blijven ongewijzigd.",
+    "editSubtitlePaused": "De vacature is gepauzeerd. Sla je wijzigingen op met „Wijzigingen opslaan”; kandidaten zien ze zodra je de vacature hervat. Sollicitaties blijven ongewijzigd.",
+    "viewOffer": "Geplaatste vacature bekijken",
+    "saveChanges": "Wijzigingen opslaan",
+    "editSaveHint": "De wijzigingen zijn nog niet opgeslagen. Sla ze op met „Wijzigingen opslaan”.",
+    "editSaved": "Wijzigingen opgeslagen",
+    "editSavedDemo": "Wijzigingen opgeslagen (demomodus)",
+    "editFixStep": "De wijzigingen zijn niet opgeslagen. Corrigeer de gemarkeerde velden in stap {step}: {title}."
   },
   "messages": {
     "title": "Berichten",
@@ -1583,5 +1598,24 @@
     "contactProposalsDesc": "Je kunt de kandidaat een jobvoorstel sturen dat de kandidaat aanvaardt of weigert.",
     "finalTitle": "Wil je je eerste vacature plaatsen?",
     "finalDesc": "Maak een werkgeversaccount aan. Je publiceert de vacature na de verificatie van het bedrijf."
+  },
+  "companyBlocks": {
+    "sectionTitle": "Geblokkeerde bedrijven",
+    "sectionDescription": "Een geblokkeerd bedrijf ziet je profiel niet, vindt je niet tussen de kandidaten, kan je geen voorstel of nieuw bericht sturen en zijn vacatures verdwijnen uit je aanbevelingen. Het bedrijf krijgt geen melding van de blokkering. Je bestaande sollicitaties en gesprekken blijven bewaard.",
+    "empty": "Je hebt geen geblokkeerde bedrijven. Je kunt een bedrijf blokkeren op de pagina van zijn vacature.",
+    "blockedAt": "Geblokkeerd op {date}",
+    "unblock": "Deblokkeren",
+    "unblockNamed": "Bedrijf {company} deblokkeren",
+    "unblocking": "Deblokkeren…",
+    "unblockedSuccess": "Bedrijf {company} is gedeblokkeerd.",
+    "loadError": "De lijst met geblokkeerde bedrijven kon niet worden geladen. Vernieuw de pagina straks.",
+    "saveError": "De wijziging kon niet worden opgeslagen. Probeer het opnieuw.",
+    "jobTitle": "Contact met dit bedrijf",
+    "jobDescription": "Wil je niet dat {company} je profiel ziet en contact met je opneemt, dan kun je het bedrijf blokkeren. Het bedrijf krijgt hier geen melding van.",
+    "jobBlockedDescription": "{company} is geblokkeerd: het ziet je profiel niet en kan je geen voorstel of bericht sturen. Zijn vacatures verschijnen niet in je aanbevelingen.",
+    "block": "Bedrijf blokkeren",
+    "blocking": "Blokkeren…",
+    "blockedSuccess": "Bedrijf {company} is geblokkeerd.",
+    "manage": "Geblokkeerde bedrijven beheren"
   }
 }

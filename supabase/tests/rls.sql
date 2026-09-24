@@ -636,10 +636,11 @@ reset role; reset app.current_uid;
 -- ============================================================================
 -- O. Języki/certyfikaty oferty 0030 (FUN-03) — persystencja + detal + matching
 -- ============================================================================
--- EMPA (członek COMPA, właściciel JOBA) dodaje wymagania językowe/certyfikatowe (jak kreator).
-set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+-- Wymagania językowe/certyfikatowe aktywnej JOBA (fixture superusera — od 0077 klient nie zmienia
+-- relacji opublikowanej oferty bezpośrednio; ścieżka edycji = update_published_job, sekcja OO).
 insert into public.job_languages(job_id, language_label, level) values (:'JOBA', 'Niderlandzki', 'intermediate');
 insert into public.job_certificates(job_id, certificate_label) values (:'JOBA', 'VCA');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select 'Niderlandzki' = any(languages) from public.get_public_job('job-a', 'pl')),
   'O1 get_public_job zwraca języki oferty (koniec pustej listy, FUN-03)');
@@ -1073,6 +1074,9 @@ reset role;
 -- BB. Audyt produkcyjny 0047 (P1-09) — atomowe RPC replace relacji oferty (recruiter+)
 -- ============================================================================
 -- EMPA (recruiter+ COMPA, właściciel JOBA) zastępuje języki atomowo (JOBA miało 'Niderlandzki').
+-- set_job_* to ścieżka kreatora SZKICU (0077) — na czas sekcji JOBA jest szkicem.
+reset role;
+update public.jobs set status = 'draft' where id = :'JOBA';
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_languages(:'JOBA'::uuid, '[{"language":"Francuski","level":"basic"}]'::jsonb);
 reset role; reset app.current_uid;
@@ -1087,6 +1091,7 @@ select pg_temp.expect_error(
   'select public.set_job_skills('''|| :'JOBA' ||'''::uuid, true, array[''x''])',
   'PERMISSION_DENIED', 'BB2 zwykły member nie zapisuje relacji oferty (recruiter+)');
 reset role; reset app.current_uid;
+update public.jobs set status = 'active' where id = :'JOBA';
 
 -- ============================================================================
 -- CC. AUDIT_REPORT 0048 (P1-11) — wygasłe oferty znikają publicznie i blokują apply
@@ -1158,7 +1163,10 @@ reset role;
 -- ============================================================================
 -- EE. AUDIT_REPORT 0051 (P1-08) — umiejętność realnie przechodzi mandatory↔optional
 -- ============================================================================
--- Punkt wyjścia: EMPA (recruiter+ w COMPA, właściciel JOBA) ustawia zakresy jak kreator.
+-- Punkt wyjścia: EMPA (recruiter+ w COMPA, właściciel JOBA) ustawia zakresy jak kreator
+-- (ścieżka szkicu — na czas sekcji JOBA jest szkicem, 0077).
+reset role;
+update public.jobs set status = 'draft' where id = :'JOBA';
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_skills(:'JOBA'::uuid, false, array['Java', 'Python']); -- optional
 select public.set_job_skills(:'JOBA'::uuid, true,  array['SQL']);            -- mandatory
@@ -1180,6 +1188,7 @@ select pg_temp.assert(
 select pg_temp.assert(
   (select is_mandatory from public.job_skills where job_id = :'JOBA' and skill_label = 'Python') = false,
   'EE4 Python nietknięty (nadal optional)');
+update public.jobs set status = 'active' where id = :'JOBA';
 
 -- ============================================================================
 -- FF. AUDIT_REPORT 0054 (P1-16) — niezmienny receipt akceptacji regulaminu/polityki
@@ -2190,6 +2199,374 @@ reset role;
 set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select pg_temp.assert((select public.is_admin()) = true, 'QQ3d authenticated: is_admin() działa');
 reset role; reset app.current_uid;
+
+-- ============================================================================
+-- RR. Edycja opublikowanej oferty (0077, #325): update_published_job — atomowa rewizja
+--     aktywnej/wstrzymanej oferty z kompletnością jak publish_job; bezpośredni zapis zablokowany
+-- ============================================================================
+\set JOBE 'a2222222-2222-2222-2222-222222222222'
+-- Punkt wyjścia: JOBE aktywna (HH7), opublikowana przez EMPA (owner COMPA, verified).
+-- Zgłoszenie kandydata na ofertę — po edycji musi zostać nietknięte razem z historią.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JOBE'::uuid, 'rr-edit-app-1', null, null, 'chętnie') as apprr \gset
+reset role; reset app.current_uid;
+select slug as rr_slug, published_at as rr_pub, updated_at as rr_upd from public.jobs where id = :'JOBE' \gset
+select count(*) as rr_hist from public.application_status_history where application_id = :'apprr' \gset
+
+-- Pełna, poprawna treść (kształt z akcji updatePublishedJob).
+select set_config('pb.rr_ok', $j${
+  "job": {"title": "Magazynier – zmiana nocna", "category": "warehouse", "occupation": "Magazynier",
+          "contract_type": "temporary", "working_hours": "40 h", "shifts": "noc",
+          "start_immediately": false, "start_date": "2026-10-15", "city": "Gandawa",
+          "region": "Flandria", "address": null, "remote": false, "salary_min": 16,
+          "salary_max": 18, "currency": "EUR", "salary_period": "hour",
+          "min_experience_years": 1, "requires_driving_license": false,
+          "no_language_required": true, "accommodation": true, "transport": false,
+          "contact_email": "hr@firma-a.be"},
+  "translation": {"description": "Praca na magazynie w Gandawie, zmiana nocna, stała ekipa.",
+                  "responsibilities": ["Kompletacja zamówień", "Załadunek"],
+                  "conditions": ["Umowa przez agencję"], "benefits": ["Dodatek nocny", "Parking"],
+                  "company_description": "Firma A — logistyka."},
+  "requirements_mandatory": ["Praca w nocy"], "requirements_optional": ["Wózek widłowy"],
+  "skills_mandatory": ["Skaner"], "skills_optional": ["Excel"],
+  "languages": [{"language": "Angielski", "level": "basic"}], "certificates": ["VCA"]
+}$j$, false);
+-- Ta sama treść z pustą listą wymagań obowiązkowych (niekompletna jak przy publish_job).
+select set_config('pb.rr_bad', (current_setting('pb.rr_ok')::jsonb
+  || '{"requirements_mandatory": []}'::jsonb)::text, false);
+
+-- OO1: recruiter+ poprawia aktywną ofertę — status, slug, published_at i zgłoszenie bez zmian.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JOBE'::uuid, current_setting('pb.rr_ok')::jsonb, :'rr_upd'::timestamptz) as rr_res \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (:'rr_res'::jsonb ->> 'slug') = :'rr_slug'
+  and (:'rr_res'::jsonb ->> 'updated_at')::timestamptz = (select updated_at from public.jobs where id = :'JOBE')
+  and (:'rr_res'::jsonb ->> 'updated_at')::timestamptz > :'rr_upd'::timestamptz,
+  'RR1 update_published_job zwraca niezmieniony slug i nową wersję (updated_at)');
+select pg_temp.assert(
+  (select status::text = 'active' and slug = :'rr_slug' and published_at = :'rr_pub'::timestamptz
+          and title = 'Magazynier – zmiana nocna' and salary_min = 16 and salary_period::text = 'hour'
+          and start_date = '2026-10-15'::date and contract_type::text = 'temporary'
+     from public.jobs where id = :'JOBE'),
+  'RR1b nowa treść zapisana, status/slug/published_at bez zmian');
+select pg_temp.assert(
+  (select description like 'Praca na magazynie%' and responsibilities = array['Kompletacja zamówień', 'Załadunek']
+          and highlights = array['Dodatek nocny', 'Parking'] and title = 'Magazynier – zmiana nocna'
+     from public.job_translations where job_id = :'JOBE' and locale = 'pl')
+  and (select array_agg(content order by position) from public.job_requirements
+         where job_id = :'JOBE' and kind = 'mandatory') = array['Praca w nocy']
+  and (select count(*) from public.job_skills where job_id = :'JOBE') = 2
+  and exists (select 1 from public.job_languages where job_id = :'JOBE' and language_label = 'Angielski')
+  and exists (select 1 from public.job_certificates where job_id = :'JOBE' and certificate_label = 'VCA'),
+  'RR1c tłumaczenie i relacje zastąpione nową treścią');
+select pg_temp.assert(
+  (select status::text from public.applications where id = :'apprr') = 'submitted'
+  and (select count(*) from public.application_status_history where application_id = :'apprr') = :'rr_hist'::int,
+  'RR1d zgłoszenie i historia statusów nietknięte');
+select pg_temp.assert(
+  (select count(*) from public.get_public_job(:'rr_slug', 'pl') where title = 'Magazynier – zmiana nocna') = 1,
+  'RR1e zmiana widoczna publicznie pod tym samym adresem');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs where action = 'job.update_published'
+            and entity_id = :'JOBE'::uuid and actor_id = :'EMPA'::uuid
+            and before_data->>'title' = 'Nowa oferta' and after_data->>'title' = 'Magazynier – zmiana nocna'),
+  'RR1f wpis audytu z treścią przed/po');
+
+-- OO2: CAS — nieaktualny updated_at (drugie okno edycji) nie nadpisuje po cichu.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb, %L::timestamptz)',
+         :'JOBE', current_setting('pb.rr_ok'), :'rr_upd'),
+  'JOB_EDIT_CONFLICT', 'RR2 nieaktualna wersja → JOB_EDIT_CONFLICT');
+-- OO2b: kolejna poprawka z wersją zwróconą przez poprzedni zapis przechodzi.
+select pg_temp.assert(
+  (public.update_published_job(:'JOBE'::uuid, current_setting('pb.rr_ok')::jsonb,
+     (:'rr_res'::jsonb ->> 'updated_at')::timestamptz) ->> 'slug') = :'rr_slug',
+  'RR2b kolejna poprawka z aktualną wersją przechodzi');
+
+-- OO3 (kontrola ujemna kompletności): brak wymagań obowiązkowych odrzucony, rewizja cofnięta w całości.
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE',
+         jsonb_set(current_setting('pb.rr_bad')::jsonb, '{job,title}', '"Tytuł, który nie może wejść"')::text),
+  'VALIDATION_FAILED', 'RR3 niekompletna treść odrzucona (jak publish_job)');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title from public.jobs where id = :'JOBE') = 'Magazynier – zmiana nocna'
+  and (select count(*) from public.job_requirements where job_id = :'JOBE' and kind = 'mandatory') = 1,
+  'RR3b odrzucona rewizja nie zostawia częściowych zmian (rollback)');
+
+-- OO4: pusty tytuł / placeholder odrzucony.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE',
+         jsonb_set(current_setting('pb.rr_ok')::jsonb, '{job,title}', '"   "')::text),
+  'VALIDATION_FAILED', 'RR4 pusty tytuł odrzucony');
+
+-- OO5: klient nie ominie RPC — bezpośredni UPDATE/relacje opublikowanej oferty zablokowane.
+select pg_temp.expect_error(
+  format($$update public.jobs set title = '' where id = %L$$, :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5 bezpośredni UPDATE treści aktywnej oferty zablokowany');
+select pg_temp.expect_error(
+  format($$delete from public.job_requirements where job_id = %L$$, :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5b bezpośrednie usunięcie wymagań aktywnej oferty zablokowane');
+select pg_temp.expect_error(
+  format($$update public.job_translations set description = '' where job_id = %L$$, :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5c bezpośrednia zmiana tłumaczenia aktywnej oferty zablokowana');
+select pg_temp.expect_error(
+  format($$select public.set_job_requirements(%L::uuid, 'pl', 'mandatory', array[]::text[])$$, :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5d set_job_* (ścieżka szkicu) nie opróżni relacji aktywnej oferty');
+select pg_temp.expect_error(
+  format($$select set_config('pracujbe.job_edit', %L, true), public.set_job_requirements(%L::uuid, 'pl', 'mandatory', array[]::text[])$$, '00000000-0000-0000-0000-000000000000', :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5e znacznik innej oferty nie otwiera zapisu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.job_requirements where job_id = :'JOBE' and kind = 'mandatory') = 1,
+  'RR5f wymagania aktywnej oferty nietknięte po próbach obejścia');
+
+-- OO6: wstrzymaną ofertę też można poprawić (status zostaje paused).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'JOBE'::uuid, 'pause');
+select public.update_published_job(:'JOBE'::uuid,
+  jsonb_set(current_setting('pb.rr_ok')::jsonb, '{job,salary_min}', '17'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'paused' and salary_min = 17 from public.jobs where id = :'JOBE'),
+  'RR6 edycja wstrzymanej oferty zachowuje status paused');
+
+-- OO7: bez weryfikacji firmy nie ma edycji (nawet wstrzymanej).
+update public.companies set status = 'pending' where id = :'COMPA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.rr_ok')),
+  'COMPANY_NOT_VERIFIED', 'RR7 niezweryfikowana firma nie edytuje opublikowanej oferty');
+reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'COMPA';
+
+-- OO8: zwykły member i obca firma bez prawa edycji.
+insert into public.company_members(company_id, profile_id, role, is_active)
+  values (:'COMPA', :'CANDB', 'member', true) on conflict do nothing;
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.rr_ok')),
+  'PERMISSION_DENIED', 'RR8 zwykły member nie edytuje oferty (recruiter+)');
+reset role; reset app.current_uid;
+delete from public.company_members where company_id = :'COMPA' and profile_id = :'CANDB';
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.rr_ok')),
+  'PERMISSION_DENIED', 'RR8b obca firma nie edytuje oferty');
+
+-- OO9: zamknięta oferta i szkic nie idą tą ścieżką.
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'JOBE'::uuid, 'close');
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.rr_ok')),
+  'JOB_NOT_EDITABLE', 'RR9 zamkniętej oferty nie edytuje się bez ponownego otwarcia');
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)',
+         'e2222222-2222-2222-2222-222222222222', current_setting('pb.rr_ok')),
+  'JOB_NOT_EDITABLE', 'RR9b szkic edytuje się kreatorem, nie update_published_job');
+-- Kontrola: szkic nadal zapisuje relacje ścieżką kreatora (set_job_*).
+select public.set_job_certificates('e2222222-2222-2222-2222-222222222222'::uuid, array['BHP']);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.job_certificates
+            where job_id = 'e2222222-2222-2222-2222-222222222222' and certificate_label = 'BHP'),
+  'RR9c szkic dalej zapisuje relacje przez set_job_*');
+
+-- ============================================================================
+-- BL. Kandydat blokuje firmę (0078, #97): dwie firmy × dwóch kandydatów.
+--     Firma zablokowana traci wgląd w profil/PII, wyszukiwanie, dopasowania, nie wyśle
+--     propozycji ani wiadomości; druga firma i drugi kandydat bez zmian (kontrole ujemne).
+-- ============================================================================
+\set BLC1 'e7800000-0000-0000-0000-0000000000c1'
+\set BLC2 'e7800000-0000-0000-0000-0000000000c2'
+\set BLE1 'e7800000-0000-0000-0000-0000000000e1'
+\set BLE2 'e7800000-0000-0000-0000-0000000000e2'
+\set BLF1 'e7800000-0000-0000-0000-0000000000f1'
+\set BLF2 'e7800000-0000-0000-0000-0000000000f2'
+\set BLJ1 'e7800000-0000-0000-0000-0000000000b1'
+\set BLJ2 'e7800000-0000-0000-0000-0000000000b2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'BLC1','blc1@test.be','Bl C1','{"role":"candidate","first_name":"Bloker","last_name":"Jeden","locale":"pl"}'),
+  (:'BLC2','blc2@test.be','Bl C2','{"role":"candidate","first_name":"Kontrola","last_name":"Dwa","locale":"nl"}'),
+  (:'BLE1','ble1@test.be','Bl E1','{"role":"employer","first_name":"Rek","last_name":"Jeden","locale":"pl"}'),
+  (:'BLE2','ble2@test.be','Bl E2','{"role":"employer","first_name":"Rek","last_name":"Dwa","locale":"pl"}');
+insert into public.companies(id,name,status) values
+  (:'BLF1','Firma Blok 1','verified'), (:'BLF2','Firma Blok 2','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'BLF1',:'BLE1','owner',true), (:'BLF2',:'BLE2','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'BLJ1',:'BLF1','job-bl-1','Magazynier BL1','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'BLJ2',:'BLF2','job-bl-2','Magazynier BL2','warehouse','permanent','Antwerpia','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values
+  (:'BLC1', true, true), (:'BLC2', true, true);
+insert into public.matches(candidate_id, job_id, score) values
+  (:'BLC1',:'BLJ1',80), (:'BLC2',:'BLJ1',70), (:'BLC1',:'BLJ2',60);
+
+-- Obaj kandydaci aplikują do BLJ1; BLC1 także do BLJ2.
+select set_config('app.current_uid', :'BLC1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'BLJ1'::uuid, 'bl-app-11', null, 'immediate', null) as blapp11 \gset
+select public.apply_to_job(:'BLJ2'::uuid, 'bl-app-12', null, 'immediate', null) as blapp12 \gset
+reset role;
+select set_config('app.current_uid', :'BLC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'BLJ1'::uuid, 'bl-app-21', null, 'immediate', null) as blapp21 \gset
+reset role;
+
+-- Przed blokadą BLE1 widzi PII BLC1 (punkt odniesienia).
+select set_config('app.current_uid', :'BLE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.profiles where id = :'BLC1') = 1,
+  'BL0 przed blokadą firma z relacją widzi profil kandydata');
+reset role;
+
+-- BL1: kandydat blokuje firmę BLF1 (idempotentnie), widzi blokadę na liście.
+select set_config('app.current_uid', :'BLC1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_company_block(:'BLF1'::uuid, true), 'BL1 blokada zwraca true');
+select public.set_company_block(:'BLF1'::uuid, true);
+select pg_temp.assert(
+  (select count(*) from public.candidate_company_blocks) = 1
+  and (select company_name from public.get_my_company_blocks()) = 'Firma Blok 1',
+  'BL1b jedna blokada (idempotencja), lista z nazwą firmy');
+select pg_temp.assert(
+  (select blocked from public.get_job_company_block(:'BLJ1'::uuid))
+  and not (select blocked from public.get_job_company_block(:'BLJ2'::uuid)),
+  'BL1c stan blokady na szczególe oferty');
+-- Polecane: oferty firmy zablokowanej znikają tylko dla blokującego.
+select pg_temp.assert(
+  (select array_agg(id) from public.get_public_jobs_by_ids(array[:'BLJ1', :'BLJ2']::uuid[], 'pl'))
+    = array[:'BLJ2']::uuid[],
+  'BL1d polecane pomijają ofertę firmy zablokowanej');
+-- Historia zostaje: własne aplikacje (także do firmy zablokowanej) nadal widoczne.
+select pg_temp.assert(
+  (select count(*) from public.applications where candidate_id = :'BLC1') = 2,
+  'BL1e historia aplikacji kandydata nietknięta');
+-- Bezpośredni zapis do tabeli blokad odrzucony (RPC-only).
+select pg_temp.expect_error(
+  format('insert into public.candidate_company_blocks(candidate_id, company_id) values (%L, %L)',
+         :'BLC1', :'BLF2'),
+  'permission denied', 'BL1f bezpośredni INSERT blokady odrzucony');
+reset role;
+select set_config('app.current_uid', :'BLC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs_by_ids(array[:'BLJ1', :'BLJ2']::uuid[], 'pl')) = 2
+  and (select count(*) from public.candidate_company_blocks) = 0,
+  'BL1g kontrola ujemna: drugi kandydat widzi obie oferty i nie widzi cudzych blokad');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs_by_ids(array[:'BLJ1', :'BLJ2']::uuid[], 'pl')) = 2,
+  'BL1h gość widzi obie oferty (publiczny URL/lista bez zmian)');
+reset role;
+
+-- BL2: firma zablokowana — brak PII, wyszukiwania, dopasowań; firma nie widzi blokad.
+select set_config('app.current_uid', :'BLE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.profiles where id = :'BLC1') = 0
+  and (select count(*) from public.candidate_profiles where profile_id = :'BLC1') = 0
+  and not public.company_can_view_candidate(:'BLC1'::uuid),
+  'BL2 firma zablokowana nie widzi profilu/PII kandydata (także po ID)');
+select pg_temp.assert(
+  (select count(*) from public.profiles where id = :'BLC2') = 1
+  and (select count(*) from public.candidate_profiles where profile_id = :'BLC2') = 1,
+  'BL2b kontrola ujemna: ta sama firma widzi drugiego kandydata');
+select pg_temp.assert(
+  (select array_agg(candidate_id) from public.matches where job_id = :'BLJ1') = array[:'BLC2']::uuid[],
+  'BL2c dopasowania firmy zablokowanej bez blokującego kandydata');
+select pg_temp.assert(
+  (select count(*) from public.applications where candidate_id = :'BLC1' and company_id = :'BLF1') = 1,
+  'BL2d historyczna aplikacja pozostaje w firmie');
+select pg_temp.assert(
+  (select count(*) from public.candidate_company_blocks) = 0
+  and (select count(*) from public.get_job_company_block(:'BLJ1'::uuid)) = 0
+  and (select count(*) from public.get_my_company_blocks()) = 0,
+  'BL2e firma nie odczyta blokad (brak informacji o blokadzie)');
+select pg_temp.expect_error(
+  format('select public.candidate_blocked_company(%L::uuid, %L::uuid)', :'BLC1', :'BLF1'),
+  'permission denied', 'BL2f helper blokad niedostępny dla klienta');
+select pg_temp.expect_error(
+  format('select public.set_company_block(%L::uuid, true)', :'BLF2'),
+  'PERMISSION_DENIED', 'BL2g pracodawca nie blokuje firm');
+
+-- BL3: propozycja do blokującego = ten sam neutralny błąd co brak relacji; do drugiego OK.
+select pg_temp.expect_error(
+  format('select public.send_offer(%L::uuid, %L::uuid, %L)', :'BLJ1', :'BLC1', 'bl-offer-11'),
+  'brak relacji firma–kandydat', 'BL3 propozycja do kandydata, który zablokował firmę, odrzucona');
+select public.send_offer(:'BLJ1'::uuid, :'BLC2'::uuid, 'bl-offer-21') as bloffer21 \gset
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.offers where candidate_id = :'BLC1' and company_id = :'BLF1') = 0
+  and (select count(*) from public.offers where id = :'bloffer21') = 1,
+  'BL3b brak propozycji dla blokującego; kontrola ujemna: drugi kandydat dostał propozycję');
+
+-- BL4: nowa rozmowa od strony firmy zablokowanej odrzucona; kandydat może ją założyć.
+select set_config('app.current_uid', :'BLE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.get_or_create_conversation(%L::uuid, null)', :'blapp11'),
+  'PERMISSION_DENIED', 'BL4 firma zablokowana nie otwiera nowej rozmowy');
+select public.get_or_create_conversation(:'blapp21'::uuid, null) as blconv21 \gset
+reset role;
+select set_config('app.current_uid', :'BLC1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'blapp11'::uuid, null) as blconv11 \gset
+reset role;
+
+-- BL5: wiadomość (trigger niezależny od sygnatury send_message): firma zablokowana → odmowa,
+-- kandydat pisze; firma pisze do drugiego kandydata (kontrola ujemna).
+reset app.current_uid;
+select pg_temp.expect_error(
+  format('insert into public.messages(conversation_id, sender_id, body) values (%L, %L, %L)',
+         :'blconv11', :'BLE1', 'Od firmy'),
+  'PERMISSION_DENIED', 'BL5 wiadomość firmy zablokowanej odrzucona');
+insert into public.messages(conversation_id, sender_id, body) values (:'blconv11', :'BLC1', 'Od kandydata');
+insert into public.messages(conversation_id, sender_id, body) values (:'blconv21', :'BLE1', 'Do kandydata 2');
+select pg_temp.assert(
+  (select count(*) from public.messages where conversation_id = :'blconv11') = 1
+  and (select count(*) from public.messages where conversation_id = :'blconv21') = 1,
+  'BL5b wiadomość kandydata i wiadomość do drugiego kandydata zapisane');
+
+-- BL6: druga firma bez zmian (izolacja firm): widzi PII, dopasowanie, wysyła propozycję.
+select set_config('app.current_uid', :'BLE2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.profiles where id = :'BLC1') = 1
+  and (select count(*) from public.candidate_profiles where profile_id = :'BLC1') = 1
+  and (select count(*) from public.matches where candidate_id = :'BLC1' and job_id = :'BLJ2') = 1,
+  'BL6 firma niezablokowana widzi profil i dopasowanie kandydata');
+select public.send_offer(:'BLJ2'::uuid, :'BLC1'::uuid, 'bl-offer-12') as bloffer12 \gset
+reset role;
+select pg_temp.assert((select count(*) from public.offers where id = :'bloffer12') = 1,
+  'BL6b propozycja firmy niezablokowanej zapisana');
+
+-- BL7: odblokowanie przywraca dostęp (profil, dopasowanie, propozycja).
+select set_config('app.current_uid', :'BLC1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.set_company_block(:'BLF1'::uuid, false), 'BL7 odblokowanie zwraca false');
+select public.set_company_block(:'BLF1'::uuid, false);
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs_by_ids(array[:'BLJ1']::uuid[], 'pl')) = 1,
+  'BL7b po odblokowaniu oferta wraca do polecanych');
+reset role;
+select set_config('app.current_uid', :'BLE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.profiles where id = :'BLC1') = 1
+  and (select count(*) from public.matches where candidate_id = :'BLC1' and job_id = :'BLJ1') = 1,
+  'BL7c po odblokowaniu firma znów widzi profil i dopasowanie');
+select public.send_offer(:'BLJ1'::uuid, :'BLC1'::uuid, 'bl-offer-11b') as bloffer11 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.offers where id = :'bloffer11') = 1,
+  'BL7d po odblokowaniu propozycja przechodzi');
 
 -- ============================================================================
 -- ADM. RPC admina (0081, #420): macierz przejść, STALE_STATE, deleted_at, reopen

@@ -554,7 +554,7 @@
     "rateLimited": "Zbyt wiele prób. Odczekaj chwilę i spróbuj ponownie.",
     "companyNotVerified": "Twoja firma nie została jeszcze zweryfikowana.",
     "onboardingIncomplete": "Uzupełnij wszystkie wymagane pola profilu, aby zakończyć konfigurację.",
-    "jobNotDraft": "Tę ofertę można edytować tylko w wersji roboczej.",
+    "jobNotDraft": "Ta oferta jest już opublikowana. Popraw ją przyciskiem „Edytuj” na liście ofert.",
     "billingUnavailable": "Płatności są chwilowo niedostępne. Spróbuj ponownie później.",
     "checkoutInProgress": "Masz już rozpoczętą płatność. Dokończ ją lub spróbuj ponownie za chwilę.",
     "entitlementLimit": "Osiągnięto limit aktywnych ofert w Twoim planie. Zmień plan, aby opublikować więcej.",
@@ -563,7 +563,9 @@
     "generic": "Coś poszło nie tak. Spróbuj ponownie.",
     "demoUnavailable": "Ta funkcja nie działa w wersji demonstracyjnej serwisu.",
     "invalidTransition": "Tej zmiany statusu nie można wykonać na obecnym etapie. Odśwież stronę i wybierz inną opcję.",
-    "staleState": "Status zmienił się w międzyczasie (np. zmienił go inny administrator). Lista została odświeżona — sprawdź aktualny stan."
+    "staleState": "Status zmienił się w międzyczasie (np. zmienił go inny administrator). Lista została odświeżona — sprawdź aktualny stan.",
+    "jobNotEditable": "Tej oferty nie można teraz edytować. Poprawić można ofertę aktywną lub wstrzymaną.",
+    "jobEditConflict": "Ktoś zmienił tę ofertę w międzyczasie. Otwórz ją ponownie z listy ofert, aby zobaczyć aktualną wersję."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -679,8 +681,6 @@
     "jobReopen": "Otwórz ponownie",
     "jobStatusUpdated": "Status oferty zaktualizowany.",
     "resumeDraft": "Dokończ szkic",
-    "jobNotDraftTitle": "Ta oferta nie jest już szkicem",
-    "jobNotDraftHint": "Opublikowaną ofertą zarządzasz z listy ofert: możesz ją wstrzymać, zamknąć lub otworzyć ponownie.",
     "activeOffers": "Aktywne oferty",
     "newApplications": "Nowe aplikacje",
     "matchedCandidates": "Dopasowani kandydaci",
@@ -847,7 +847,13 @@
     "viewProposal": "Zobacz propozycję",
     "rowActionsFor": "Działania: {title}",
     "companyFallback": "Twoja firma",
-    "employerShellLoadError": "Nie udało się wczytać danych konta firmy. Spróbuj ponownie."
+    "employerShellLoadError": "Nie udało się wczytać danych konta firmy. Spróbuj ponownie.",
+    "jobNotEditableTitle": "Tej oferty nie można teraz edytować",
+    "jobNotEditableHint": "Zamkniętą lub wygasłą ofertę najpierw otwórz ponownie z listy ofert, a potem ją popraw.",
+    "editJob": "Edytuj",
+    "editJobLabel": "Edytuj ofertę: {title}",
+    "viewJob": "Zobacz ofertę",
+    "viewJobLabel": "Zobacz ofertę: {title}"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1230,7 +1236,16 @@
     "notVerifiedNote": "Wersja robocza została zapisana. Publikacja będzie możliwa po weryfikacji firmy.",
     "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy.",
     "stepAnnounce": "Krok {current} z {total}: {title}",
-    "goToOffers": "Przejdź do listy ofert"
+    "goToOffers": "Przejdź do listy ofert",
+    "editTitle": "Edytuj ofertę",
+    "editSubtitleActive": "Oferta jest opublikowana. Zmiany zapiszesz przyciskiem „Zapisz zmiany” i od razu zobaczą je kandydaci. Status oferty i zgłoszenia zostają bez zmian.",
+    "editSubtitlePaused": "Oferta jest wstrzymana. Zmiany zapiszesz przyciskiem „Zapisz zmiany”; kandydaci zobaczą je po wznowieniu oferty. Zgłoszenia zostają bez zmian.",
+    "viewOffer": "Zobacz opublikowaną ofertę",
+    "saveChanges": "Zapisz zmiany",
+    "editSaveHint": "Zmiany nie są jeszcze zapisane. Zapiszesz je przyciskiem „Zapisz zmiany”.",
+    "editSaved": "Zmiany zapisane",
+    "editSavedDemo": "Zmiany zapisane (tryb demo)",
+    "editFixStep": "Nie zapisaliśmy zmian. Popraw zaznaczone pola w kroku {step}: {title}."
   },
   "messages": {
     "title": "Wiadomości",
@@ -1583,5 +1598,24 @@
     "contactProposalsDesc": "Możesz wysłać kandydatowi propozycję pracy, którą on akceptuje albo odrzuca.",
     "finalTitle": "Chcesz dodać pierwszą ofertę?",
     "finalDesc": "Załóż konto pracodawcy. Ofertę opublikujesz po weryfikacji firmy."
+  },
+  "companyBlocks": {
+    "sectionTitle": "Zablokowane firmy",
+    "sectionDescription": "Zablokowana firma nie zobaczy Twojego profilu, nie znajdzie Cię wśród kandydatów, nie wyśle Ci propozycji ani nowej wiadomości, a jej oferty znikną z polecanych. Firma nie dostaje informacji o blokadzie. Twoje dotychczasowe aplikacje i rozmowy zostają.",
+    "empty": "Nie masz zablokowanych firm. Firmę możesz zablokować na stronie jej oferty.",
+    "blockedAt": "Zablokowano {date}",
+    "unblock": "Odblokuj",
+    "unblockNamed": "Odblokuj firmę {company}",
+    "unblocking": "Odblokowywanie…",
+    "unblockedSuccess": "Firma {company} została odblokowana.",
+    "loadError": "Nie udało się wczytać listy zablokowanych firm. Odśwież stronę za chwilę.",
+    "saveError": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "jobTitle": "Kontakt z tą firmą",
+    "jobDescription": "Jeśli nie chcesz, żeby {company} widziała Twój profil i kontaktowała się z Tobą, możesz ją zablokować. Firma nie dostanie o tym informacji.",
+    "jobBlockedDescription": "{company} jest zablokowana: nie widzi Twojego profilu i nie może wysłać Ci propozycji ani wiadomości. Jej oferty nie pojawiają się w polecanych.",
+    "block": "Zablokuj firmę",
+    "blocking": "Blokowanie…",
+    "blockedSuccess": "Firma {company} została zablokowana.",
+    "manage": "Zarządzaj zablokowanymi firmami"
   }
 }

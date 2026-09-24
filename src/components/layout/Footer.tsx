@@ -1,16 +1,19 @@
 import { Logo } from '@/components/brand/Logo';
-import { getLocale, getTranslations } from 'next-intl/server';
+import { getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
 import { LocaleSwitcher } from './LocaleSwitcher';
 import { CookieSettingsButton } from './CookieSettingsButton';
 
-/** Jasna stopka nowej identyfikacji. Linki i zgody zachowują dotychczasowe działanie. */
-export async function Footer() {
+/**
+ * Jasna stopka nowej identyfikacji. Linki i zgody zachowują dotychczasowe działanie.
+ * `locale` jawnie z layoutu (#298) — odczyt locale z żądania wymusza renderowanie dynamiczne.
+ */
+export async function Footer({ locale }: { locale: string }) {
   const [t, tCommon, tNav] = await Promise.all([
-    getTranslations('footer'),
-    getTranslations('common'),
-    getTranslations('nav'),
+    getTranslations({ locale, namespace: 'footer' }),
+    getTranslations({ locale, namespace: 'common' }),
+    getTranslations({ locale, namespace: 'nav' }),
   ]);
 
   const columns = [
@@ -42,7 +45,6 @@ export async function Footer() {
     'text-sm text-muted-foreground transition-colors hover:text-foreground';
   const headingClass = 'text-sm font-semibold text-foreground';
   const year = new Date().getFullYear();
-  const locale = await getLocale();
   const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME;
   const version = process.env.NEXT_PUBLIC_APP_VERSION;
 
