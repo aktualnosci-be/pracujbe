@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
+import { BTN_SMALL, PANEL, PANEL_H2 } from '@/components/admin/admin-styles';
 
 /**
  * AdminConfirmDialog — dialog potwierdzenia decyzji admina (firmy #310, zgłoszenia #422).
@@ -21,19 +22,19 @@ export const ADMIN_ACTION_TONE_CLASS: Record<AdminActionTone, string> = {
   success: 'border-success/40 text-success-text hover:bg-success/10',
   error: 'border-error/40 text-error-text hover:bg-error/10',
   warning: 'border-warning/40 text-warning-text hover:bg-warning/10',
-  neutral: 'border-border text-foreground hover:bg-soft',
+  neutral: 'border-input text-foreground hover:bg-soft',
 };
 
 /** Przycisk potwierdzenia w dialogu (pełne tło; biały tekst na wariancie `-text`). */
 const CONFIRM_CLASS: Record<AdminActionTone, string> = {
-  success: 'bg-success-text text-accent-foreground hover:opacity-90',
-  error: 'bg-error-text text-accent-foreground hover:opacity-90',
-  warning: 'bg-warning-text text-accent-foreground hover:opacity-90',
-  neutral: 'bg-foreground text-background hover:opacity-90',
+  success: 'border-transparent bg-success-text text-accent-foreground hover:opacity-90',
+  error: 'border-transparent bg-error-text text-accent-foreground hover:opacity-90',
+  warning: 'border-transparent bg-warning-text text-accent-foreground hover:opacity-90',
+  neutral: 'border-transparent bg-foreground text-background hover:opacity-90',
 };
 
-export const ADMIN_BUTTON_BASE =
-  'inline-flex min-h-11 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+/** Przycisk akcji w wierszu = `.people .notice .btn` z prototypu (12 px / 650, 11/17 px, min. 44 px). */
+export const ADMIN_BUTTON_BASE = BTN_SMALL;
 
 export interface AdminConfirmDialogProps {
   title: string;
@@ -111,7 +112,7 @@ export function AdminConfirmDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-foreground/40 p-4 sm:items-center">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center overflow-y-auto bg-foreground/40 p-4 sm:items-center">
       <div
         ref={dialogRef}
         role="alertdialog"
@@ -121,21 +122,21 @@ export function AdminConfirmDialog({
         aria-busy={pending || undefined}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="w-full max-w-md rounded-lg border border-border bg-card p-5 text-left shadow-lg focus:outline-none sm:p-6"
+        className={cn(PANEL, 'max-h-full w-full max-w-md overflow-y-auto text-left shadow-lg focus:outline-none')}
       >
-        <h2 id={titleId} className="text-lg font-semibold text-foreground">
+        <h2 id={titleId} className={PANEL_H2}>
           {title}
         </h2>
-        <p id={descId} className="mt-1 break-words text-sm text-muted-foreground">
+        <p id={descId} className="mt-1.5 break-words text-[13px] leading-[1.6] text-muted-foreground">
           {description}
         </p>
 
         {details.length > 0 ? (
-          <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-2 rounded-md bg-soft p-4 text-sm sm:grid-cols-[auto_1fr]">
+          <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-2 rounded-[14px] border border-border bg-soft p-4 text-[13px] sm:grid-cols-[auto_1fr]">
             {details.map((item) => (
               <React.Fragment key={item.key}>
-                <dt className="font-medium text-muted-foreground">{item.label}</dt>
-                <dd className="break-words text-foreground">{item.value}</dd>
+                <dt className="text-xs text-muted-foreground">{item.label}</dt>
+                <dd className="break-words font-semibold text-foreground">{item.value}</dd>
               </React.Fragment>
             ))}
           </dl>
@@ -149,7 +150,7 @@ export function AdminConfirmDialog({
             type="button"
             disabled={pending}
             onClick={onCancel}
-            className={cn(ADMIN_BUTTON_BASE, 'border border-border bg-card text-foreground hover:bg-soft')}
+            className={cn(ADMIN_BUTTON_BASE, 'border border-input bg-card text-foreground hover:bg-soft')}
           >
             {t('confirmCancel')}
           </button>

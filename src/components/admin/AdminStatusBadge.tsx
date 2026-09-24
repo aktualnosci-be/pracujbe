@@ -79,7 +79,8 @@ export function AdminStatusBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+        // Kształt `.tag` z prototypu (#5); kolor semantyczny statusu zostaje (tokeny `-text`, AA).
+        'inline-block max-w-full break-words rounded-[6px] px-2 py-[5px] text-[11px] font-medium max-[600px]:text-[10px]',
         TONE_CLASS[tone],
         className,
       )}

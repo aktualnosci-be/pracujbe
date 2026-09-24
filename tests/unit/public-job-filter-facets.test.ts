@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { getPublicJobFilterFacets } from '@/lib/db/public-jobs';
+import { getPublicJobFilterFacets, getPublicJobs } from '@/lib/db/public-jobs';
 import type { TransactionClient, TransactionPool } from '@/lib/db/transaction';
 
 describe('dokładne facety publicznych ofert', () => {
@@ -47,5 +47,40 @@ describe('dokładne facety publicznych ofert', () => {
     expect(
       query.mock.calls.filter(([sql]) => sql === 'SET LOCAL ROLE anon'),
     ).toHaveLength(1);
+  });
+});
+
+describe('jednostka wynagrodzenia w publicznych RPC (#188, 0091)', () => {
+  const run = async (
+    params: Parameters<typeof getPublicJobs>[1],
+  ): Promise<Array<[string, unknown[]]>> => {
+    const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+      if (sql.includes('get_public_jobs_count')) return { rows: [{ total: 0 }] };
+      return { rows: [] };
+    });
+    const client: TransactionClient = { query, release: vi.fn() };
+    const pool: TransactionPool = { connect: vi.fn(async () => client) };
+    await getPublicJobs(pool, params);
+    return query.mock.calls
+      .filter(([sql]) => String(sql).includes('get_public_jobs'))
+      .map(([sql, values]) => [String(sql), (values ?? []) as unknown[]]);
+  };
+
+  it('lista i licznik dostają tę samą jednostkę; sortowanie i stronicowanie po niej', async () => {
+    const calls = await run({ locale: 'pl', salaryMin: 18, salaryUnit: 'hour', sort: 'salary' });
+    expect(calls).toHaveLength(2);
+    for (const [sql, values] of calls) {
+      expect(sql).toContain('p_salary_unit => $13::text');
+      expect(values[6]).toBe(18);
+      expect(values[12]).toBe('hour');
+    }
+    const [listSql, listValues] = calls.find(([sql]) => sql.includes('p_sort'))!;
+    expect(listSql).toContain('p_sort => $14::text');
+    expect(listValues.slice(13)).toEqual(['salary', 12, 0]);
+  });
+
+  it('bez jednostki = month (zachowanie 0080)', async () => {
+    const calls = await run({ locale: 'pl' });
+    for (const [, values] of calls) expect(values[12]).toBe('month');
   });
 });

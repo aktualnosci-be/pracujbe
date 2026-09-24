@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0094 — pytania screeningowe w ofercie (#101).
+-- 0093 — pytania screeningowe w ofercie (#101).
 --
 -- Firma (recruiter+) dodaje w kreatorze krótką listę pytań o realne warunki pracy (prawo
 -- jazdy, VCA, transport, dostępność). Kandydat odpowiada w formularzu aplikowania, a

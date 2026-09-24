@@ -27,7 +27,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const MIGRATION = readFileSync(
-  join(process.cwd(), 'supabase/migrations/0094_screening_questions.sql'),
+  join(process.cwd(), 'supabase/migrations/0093_screening_questions.sql'),
   'utf8',
 );
 
@@ -55,7 +55,7 @@ beforeEach(() => {
   rpc.mockResolvedValue({ data: 'application-1', error: null });
 });
 
-describe('limity pytań = limity migracji 0094', () => {
+describe('limity pytań = limity migracji 0093', () => {
   it('liczba pytań, długość treści, opcji i odpowiedzi', () => {
     expect(MIGRATION).toContain(`jsonb_array_length(p_questions) > ${SCREENING_LIMITS.questions}`);
     expect(MIGRATION).toContain(`position between 0 and ${SCREENING_LIMITS.questions - 1}`);

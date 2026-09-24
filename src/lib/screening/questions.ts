@@ -6,7 +6,7 @@ import { isLocale, routing, type Locale } from '@/i18n/routing';
  * Moduł bez Zoda (trafia do bundla formularza aplikowania); schematy walidacji są
  * w `@/lib/validation/screening` (kreator) i `@/lib/validation/application` (odpowiedzi).
  * Limity = te same wartości co w RPC `set_job_screening_questions` / `record_screening_answers`
- * (migracja 0094) — test `screening-questions.test.ts` porównuje je z migracją.
+ * (migracja 0093) — test `screening-questions.test.ts` porównuje je z migracją.
  *
  * Odpowiedzi nie wpływają na dopasowanie ani status zgłoszenia: firma czyta je w szczególe
  * zgłoszenia (brak reguł dyskwalifikujących i brak modelu językowego).

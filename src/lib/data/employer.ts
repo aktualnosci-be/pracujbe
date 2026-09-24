@@ -603,7 +603,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
       supabase.from('job_skills').select('skill_label, is_mandatory').eq('job_id', jobId),
       supabase.from('job_languages').select('language_label, level').eq('job_id', jobId),
       supabase.from('job_certificates').select('certificate_label').eq('job_id', jobId),
-      // job_screening_questions_select (0094): członek firmy oferty.
+      // job_screening_questions_select (0093): członek firmy oferty.
       supabase
         .from('job_screening_questions')
         .select('id, position, type, required, prompt, options')
@@ -1297,7 +1297,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         .is('deleted_at', null)
         .maybeSingle(),
       supabase.from('matches').select('score').eq('candidate_id', candidateId).eq('job_id', jobId).maybeSingle(),
-      // application_screening_answers_select (0094): kandydat albo recruiter+ firmy oferty.
+      // application_screening_answers_select (0093): kandydat albo recruiter+ firmy oferty.
       supabase
         .from('application_screening_answers')
         .select('position, type, required, prompt, options, answer_boolean, answer_date, answer_text')

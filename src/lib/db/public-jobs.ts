@@ -32,7 +32,8 @@ const FILTER_ARGUMENTS = `
   p_accommodation => $9::boolean,
   p_immediate => $10::boolean,
   p_no_language => $11::boolean,
-  p_since => $12::timestamptz`;
+  p_since => $12::timestamptz,
+  p_salary_unit => $13::text`;
 
 function locale(value: string): string {
   return isLocale(value) ? value : routing.defaultLocale;
@@ -58,6 +59,7 @@ function filterValues(params: GetJobsParams): unknown[] {
     params.immediate ?? null,
     params.noLanguageRequired ?? null,
     params.since ?? null,
+    params.salaryUnit ?? 'month',
   ];
 }
 
@@ -107,7 +109,7 @@ export async function getPublicJobs(
     const result = (await transaction.query(
       `SELECT to_jsonb(job) AS job
       FROM public.get_public_jobs(${FILTER_ARGUMENTS},
-        p_sort => $13::text, p_limit => $14::integer, p_offset => $15::integer) AS job`,
+        p_sort => $14::text, p_limit => $15::integer, p_offset => $16::integer) AS job`,
       [
         ...values,
         params.sort ?? 'newest',
@@ -289,7 +291,7 @@ export async function getPublicJobTranslations(
 
 /**
  * Pytania screeningowe publicznej oferty (#101) — RPC `get_public_job_screening_questions`
- * (0094) pod rolą anon zwraca wiersze tylko dla oferty publicznej (`job_is_public`).
+ * (0093) pod rolą anon zwraca wiersze tylko dla oferty publicznej (`job_is_public`).
  */
 export async function getPublicJobScreeningQuestions(
   pool: TransactionPool,

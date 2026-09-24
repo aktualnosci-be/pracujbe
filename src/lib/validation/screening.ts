@@ -5,7 +5,7 @@ import { SCREENING_LIMITS, SCREENING_QUESTION_TYPES } from '@/lib/screening/ques
 
 /**
  * Walidacja pytań screeningowych w kreatorze oferty (#101). Te same reguły co RPC
- * `set_job_screening_questions` (0094): maks. 10 pytań, typ z listy, treść ≤ 300 znaków,
+ * `set_job_screening_questions` (0093): maks. 10 pytań, typ z listy, treść ≤ 300 znaków,
  * pytanie wyboru 2–10 opcji ≤ 120 znaków, tekst w języku treści oferty wymagany. Baza sprawdza
  * to samo — walidacja tu daje komunikat przy polu zamiast ogólnego błędu zapisu.
  *

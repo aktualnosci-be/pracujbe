@@ -6,6 +6,17 @@ import { Link } from '@/i18n/navigation';
 import { ADMIN_PAGE_HEADING_FOCUS } from '@/lib/admin/focus';
 import { ADMIN_SEARCH_MAX } from '@/lib/admin/list-params';
 import { cn } from '@/lib/utils';
+import {
+  BTN_PRIMARY,
+  BTN_SECONDARY,
+  EMPTY,
+  EYEBROW,
+  FIELD,
+  FIELD_LABEL,
+  H1,
+  INTRO,
+  SEARCH_BOX,
+} from '@/components/admin/admin-styles';
 
 /**
  * Wspólne elementy list panelu admina (#418, #415) — komponenty serwerowe.
@@ -13,6 +24,7 @@ import { cn } from '@/lib/utils';
  *   - `AdminPageHeader` — nagłówek strony, cel fokusu po akcji, gdy pozycja zniknęła z listy.
  *   - `AdminSearchForm` — wyszukiwanie po stronie serwera (GET, parametry w URL, `<label>`).
  *   - `AdminPager`      — licznik wyników (`role="status"`) + stronicowanie kursorem.
+ *   - `AdminEmptyState` — pusty stan. Klasy wizualne: `admin-styles.ts` (kalka prototypu, #5).
  */
 
 type Query = Record<string, string>;
@@ -29,22 +41,34 @@ function compact(query: Record<string, string | null | undefined>): Query {
 export function AdminPageHeader({
   title,
   subtitle,
+  eyebrow,
 }: {
   title: string;
   subtitle: string;
+  /** `.eyebrow` nad tytułem (jak w panelach prototypu). */
+  eyebrow?: string;
 }): React.JSX.Element {
   return (
-    <header>
+    <header className="min-w-0">
+      {eyebrow ? <p className={EYEBROW}>{eyebrow}</p> : null}
       <h1
         tabIndex={-1}
         data-admin-focus={ADMIN_PAGE_HEADING_FOCUS}
-        className="text-2xl font-bold tracking-tight text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className={cn(
+          H1,
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        )}
       >
         {title}
       </h1>
-      <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+      <p className={INTRO}>{subtitle}</p>
     </header>
   );
+}
+
+/** Pusty stan listy (`.empty`) — tylko po udanym odczycie bez wyników. */
+export function AdminEmptyState({ message }: { message: string }): React.JSX.Element {
+  return <p className={EMPTY}>{message}</p>;
 }
 
 export interface AdminSearchFormProps {
@@ -81,16 +105,16 @@ export function AdminSearchForm({
       action={action}
       role="search"
       aria-label={label}
-      className="flex flex-wrap items-end gap-3"
+      className={SEARCH_BOX}
     >
       {Object.entries(compact(keep)).map(([key, value]) => (
         <input key={key} type="hidden" name={key} value={value} />
       ))}
-      <div className="min-w-0 flex-1 basis-60">
-        <label htmlFor={id} className="block text-sm font-medium text-foreground">
+      <div className="min-w-0 flex-1 basis-60 p-1">
+        <label htmlFor={id} className={FIELD_LABEL}>
           {label}
         </label>
-        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+        <p id={`${id}-hint`} className="text-[11px] text-muted-foreground">
           {hint}
         </p>
         <input
@@ -100,22 +124,22 @@ export function AdminSearchForm({
           defaultValue={q ?? ''}
           maxLength={ADMIN_SEARCH_MAX}
           aria-describedby={`${id}-hint`}
-          className="mt-1 block min-h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={FIELD}
         />
       </div>
       {children}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex min-w-0 max-w-full flex-wrap gap-2">
         <button
           type="submit"
-          className="inline-flex min-h-11 items-center gap-2 rounded-md bg-foreground px-4 text-sm font-semibold text-background hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className={BTN_PRIMARY}
         >
-          <Search className="size-4" aria-hidden="true" />
+          <Search className="size-4 shrink-0" aria-hidden="true" />
           {t('searchSubmit')}
         </button>
         {q ? (
           <Link
             href={clearHref}
-            className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-medium text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className={BTN_SECONDARY}
           >
             {t('searchClear')}
           </Link>
@@ -150,12 +174,11 @@ export function AdminPager({
 }: AdminPagerProps): React.JSX.Element {
   const t = useTranslations('admin');
   const base = compact(query);
-  const linkClass =
-    'inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-medium text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  const linkClass = BTN_SECONDARY;
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       {/* Wynik ogłaszany czytnikom ekranu po zmianie filtra/strony (#418). */}
-      <p role="status" className="text-sm text-muted-foreground">
+      <p role="status" className="text-[13px] text-muted-foreground">
         {q ? t('resultsForQuery', { count, q }) : t('resultsOnPage', { count })}
       </p>
       {hasCursor || nextCursor ? (

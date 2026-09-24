@@ -14,8 +14,26 @@ import {
 import { AUDIT_ACTOR_SYSTEM, listAuditLogs, type AdminAuditRow } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
-import { AdminPageHeader, AdminPager } from '@/components/admin/AdminListControls';
+import {
+  AdminEmptyState,
+  AdminPageHeader,
+  AdminPager,
+} from '@/components/admin/AdminListControls';
 import { COMPANY_STATUS_KEY, REPORT_STATUS_KEY } from '@/components/admin/AdminStatusBadge';
+import {
+  BTN_PRIMARY,
+  FIELD,
+  FIELD_LABEL,
+  INLINE_LINK,
+  PANEL,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  SEARCH_BOX,
+  TAG,
+  TEXT_LINK,
+} from '@/components/admin/admin-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * Panel administratora — Dziennik zdarzeń (#417). Tylko odczyt `audit_logs` service-rolem po
@@ -111,17 +129,20 @@ export default async function AdminAuditPage({
   const actorText = (row: AdminAuditRow): string =>
     row.actorId ? (row.actorName ?? t('auditActorUnknown')) : t('auditActorSystem');
 
-  const fieldClass =
-    'mt-1 block min-h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  const fieldClass = FIELD;
 
   return (
-    <div className="space-y-6">
-      <AdminPageHeader title={t('auditTitle')} subtitle={t('auditSubtitle')} />
+    <div className="min-w-0 space-y-[22px]">
+      <AdminPageHeader
+        eyebrow={t('brandTag')}
+        title={t('auditTitle')}
+        subtitle={t('auditSubtitle')}
+      />
 
       {entityId ? (
-        <p className="text-sm text-foreground">
+        <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-foreground">
           {t('auditObjectHistory')}{' '}
-          <Link href={{ pathname: BASE_PATH }} className="font-medium underline underline-offset-2">
+          <Link href={{ pathname: BASE_PATH }} className={TEXT_LINK}>
             {t('auditFilterReset')}
           </Link>
         </p>
@@ -131,11 +152,14 @@ export default async function AdminAuditPage({
         method="get"
         action={`/${locale}${BASE_PATH}`}
         aria-label={t('auditFiltersLabel')}
-        className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,11rem),1fr))] items-end gap-3"
+        className={cn(
+          SEARCH_BOX,
+          'grid grid-cols-[repeat(auto-fit,minmax(min(100%,11rem),1fr))] [&>div]:p-1',
+        )}
       >
         {entityId ? <input type="hidden" name="id" value={entityId} /> : null}
         <div>
-          <label htmlFor="audit-entity" className="block text-sm font-medium text-foreground">
+          <label htmlFor="audit-entity" className={FIELD_LABEL}>
             {t('auditFilterEntity')}
           </label>
           <select id="audit-entity" name="entity" defaultValue={entity ?? ''} className={fieldClass}>
@@ -148,7 +172,7 @@ export default async function AdminAuditPage({
           </select>
         </div>
         <div>
-          <label htmlFor="audit-action" className="block text-sm font-medium text-foreground">
+          <label htmlFor="audit-action" className={FIELD_LABEL}>
             {t('auditFilterAction')}
           </label>
           <select id="audit-action" name="action" defaultValue={action ?? ''} className={fieldClass}>
@@ -161,7 +185,7 @@ export default async function AdminAuditPage({
           </select>
         </div>
         <div>
-          <label htmlFor="audit-actor" className="block text-sm font-medium text-foreground">
+          <label htmlFor="audit-actor" className={FIELD_LABEL}>
             {t('auditFilterActor')}
           </label>
           <input
@@ -173,27 +197,24 @@ export default async function AdminAuditPage({
             aria-describedby="audit-actor-hint"
             className={fieldClass}
           />
-          <p id="audit-actor-hint" className="mt-1 text-xs text-muted-foreground">
+          <p id="audit-actor-hint" className="mt-1 text-[11px] text-muted-foreground">
             {t('auditFilterActorHint', { system: AUDIT_ACTOR_SYSTEM })}
           </p>
         </div>
         <div>
-          <label htmlFor="audit-from" className="block text-sm font-medium text-foreground">
+          <label htmlFor="audit-from" className={FIELD_LABEL}>
             {t('auditFilterFrom')}
           </label>
           <input id="audit-from" type="date" name="from" defaultValue={from ?? ''} className={fieldClass} />
         </div>
         <div>
-          <label htmlFor="audit-to" className="block text-sm font-medium text-foreground">
+          <label htmlFor="audit-to" className={FIELD_LABEL}>
             {t('auditFilterTo')}
           </label>
           <input id="audit-to" type="date" name="to" defaultValue={to ?? ''} className={fieldClass} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="submit"
-            className="inline-flex min-h-11 items-center rounded-md bg-foreground px-4 text-sm font-semibold text-background hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
+          <button type="submit" className={BTN_PRIMARY}>
             {t('auditFilterApply')}
           </button>
         </div>
@@ -202,9 +223,9 @@ export default async function AdminAuditPage({
       {result.status === 'error' ? (
         <AdminLoadError retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`} />
       ) : (
-        <section className="rounded-lg border border-border bg-card">
+        <section className={PANEL}>
           {rows.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">{t('auditEmpty')}</p>
+            <AdminEmptyState message={t('auditEmpty')} />
           ) : (
             <ul className="divide-y divide-border">
               {rows.map((row) => {
@@ -213,21 +234,24 @@ export default async function AdminAuditPage({
                   ? t(ENTITY_LABEL[row.entityType] ?? 'targetUnknown')
                   : t('targetUnknown');
                 return (
-                  <li key={row.id} className="grid gap-1 p-4 sm:grid-cols-[12rem_1fr] sm:gap-4 sm:px-5">
-                    <p className="text-sm text-muted-foreground">
+                  <li
+                    key={row.id}
+                    className={cn(ROW, 'grid gap-1 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-[18px]')}
+                  >
+                    <p className={cn(ROW_META, 'tabular-nums')}>
                       <time dateTime={row.createdAt ?? undefined}>{formatDate(row.createdAt)}</time>
                     </p>
                     <div className="min-w-0 space-y-1">
-                      <p className="break-words text-sm font-semibold text-foreground">
+                      <p className={cn(ROW_TITLE, 'mb-0')}>
                         {t(actionKey)}
                         <span className="font-normal text-muted-foreground"> · {changeText(row)}</span>
                       </p>
-                      <p className="break-words text-sm text-foreground">
+                      <p className="break-words text-[13px] text-foreground">
                         <span className="text-muted-foreground">{typeLabel}: </span>
                         {row.entityHref ? (
                           <Link
                             href={row.entityHref}
-                            className="font-medium underline underline-offset-2 hover:no-underline"
+                            className={cn(INLINE_LINK, 'underline')}
                           >
                             {row.entityLabel ?? typeLabel}
                           </Link>
@@ -238,13 +262,13 @@ export default async function AdminAuditPage({
                         )}
                       </p>
                       {row.reason ? (
-                        <p className="break-words text-sm text-foreground">
+                        <p className="break-words text-[13px] text-foreground">
                           {t('auditReason', { reason: row.reason })}
                         </p>
                       ) : null}
-                      <p className="text-xs text-muted-foreground">
+                      <span className={cn(TAG, 'mt-1.5')}>
                         {t('auditActor', { name: actorText(row) })}
-                      </p>
+                      </span>
                     </div>
                   </li>
                 );
