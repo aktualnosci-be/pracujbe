@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { isPortalDataConfigured } from '@/lib/db/portal';
 import {
   getEmployerOverview,
   getFunnelStats,
@@ -59,7 +59,7 @@ export default async function EmployerStatsPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tc = await getTranslations({ locale, namespace: 'common' });
 
-  const configured = isSupabaseConfigured();
+  const configured = isPortalDataConfigured();
   const tf = await getTranslations({ locale, namespace: 'jobFunnel' });
   const [overview, funnel, jobFunnel] = await Promise.all([
     getEmployerOverview(),
