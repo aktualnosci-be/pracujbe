@@ -713,7 +713,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     note: 'Wyłącznie liczniki przebiegów retencji (bez danych osobowych).',
   },
 
-  // --- Rejestr naruszeń (#490, 0105) --------------------------------------------------------
+  // --- Rejestr naruszeń (#490, 0106) --------------------------------------------------------
   'public.breach_incidents': {
     activities: ['security-audit'],
     subjects: ['admin'],

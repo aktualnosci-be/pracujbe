@@ -8309,7 +8309,7 @@ select pg_temp.assert(pg_temp.cj_public(s) = 0, 'CJ186-4g po cofnięciu filtry w
 from unnest(array['cj-demo', 'cj-demo-company', 'cj-paused', 'cj-expired', 'cj-unverified', 'cj-deleted']) s;
 
 -- ============================================================================
--- BR490 (#490, 0105): rejestr incydentów i naruszeń danych osobowych — tylko admin,
+-- BR490 (#490, 0106): rejestr incydentów i naruszeń danych osobowych — tylko admin,
 -- niezmienna historia, CAS wersji, reguły art. 33/34, eksport, zawiadomienie osób przez
 -- outbox w języku ODBIORCY. Kontrole ujemne (w transakcjach cofanych): grant SELECT bez
 -- RLS, wyłączony trigger historii, treść w języku nadawcy — każda daje wykrywalny błąd.
@@ -8581,5 +8581,24 @@ select pg_temp.assert((select count(*) = 2 from public.breach_incidents)
   and (select count(*) = 1 from public.breach_notices),
   'BR490-11 service_role czyta wpisy, historię i zawiadomienia');
 reset role;
+
+-- BR490-12: usunięcie konta admina (FK `on delete set null`) zeruje autora w historii,
+-- wpisie i zawiadomieniu; każda inna zmiana tych wierszy nadal odrzucana.
+begin;
+select pg_temp.assert((select count(*) > 0 from public.breach_incident_events where actor_id = :'ADMIN'),
+  'BR490-12 przygotowanie: admin jest autorem wpisów historii');
+update public.breach_incident_events set actor_id = null where actor_id = :'ADMIN';
+update public.breach_incidents set created_by = null where created_by = :'ADMIN';
+update public.breach_notices set created_by = null where created_by = :'ADMIN';
+select pg_temp.assert((select count(*) = 0 from public.breach_incident_events where actor_id is not null)
+  and (select count(*) = 0 from public.breach_incidents where created_by is not null),
+  'BR490-12 autor wyzerowany jak przy usunięciu konta');
+select pg_temp.expect_error(format('update public.breach_incident_events set note = %L where incident_id = %L', 'x', :'br1'),
+  'BREACH_HISTORY_IMMUTABLE', 'BR490-12b inna zmiana historii nadal odrzucana');
+select pg_temp.expect_error(format('update public.breach_incidents set created_by = %L where id = %L', :'ADMIN', :'br1'),
+  'BREACH_REGISTER_IMMUTABLE_FIELD', 'BR490-12c autora nie da się podmienić');
+select pg_temp.expect_error(format('update public.breach_notices set queued_count = 0 where incident_id = %L', :'br1'),
+  'BREACH_HISTORY_IMMUTABLE', 'BR490-12d zawiadomienie nadal niezmienne');
+rollback;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

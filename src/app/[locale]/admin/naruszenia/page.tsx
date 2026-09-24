@@ -39,7 +39,7 @@ import {
  * Każdy incydent bezpieczeństwa i każde naruszenie danych osobowych (także niezgłaszane do
  * organu) ma tu wpis: rodzaj, czas stwierdzenia, stan terminu 72 h, ocena ryzyka. Filtr
  * otwarte/zamknięte/wszystkie, wyszukiwanie po numerze i tytule, stronicowanie kursorem.
- * Odczyt service-rolem po potwierdzeniu roli admina; zapis przez RPC z audytem (0105).
+ * Odczyt service-rolem po potwierdzeniu roli admina; zapis przez RPC z audytem (0106).
  * NOINDEX + `force-dynamic` (z layoutu).
  */
 

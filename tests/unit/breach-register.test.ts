@@ -29,7 +29,7 @@ import { isSupabaseConfigured } from '@/lib/env';
 import { createServerClient } from '@/lib/supabase/server';
 
 /**
- * #490 — rejestr incydentów i naruszeń danych osobowych: kontrakt z migracją 0105, reguły
+ * #490 — rejestr incydentów i naruszeń danych osobowych: kontrakt z migracją 0106, reguły
  * formularza (lustro `breach_incident_validate`), termin 72 h od stwierdzenia, eksport CSV,
  * Server Actions (walidacja przed RPC, błędy pól z bazy) i szablon zawiadomienia w języku
  * odbiorcy.
@@ -42,7 +42,7 @@ vi.mock('@/lib/env', async (importOriginal) => ({
 vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
-const MIGRATION = readFileSync(resolve(process.cwd(), 'supabase/migrations/0105_breach_register.sql'), 'utf8');
+const MIGRATION = readFileSync(resolve(process.cwd(), 'supabase/migrations/0106_breach_register.sql'), 'utf8');
 const NOW = Date.parse('2026-09-24T12:00:00.000Z');
 const KEY = '5a0e8f4c-2b1d-4c3e-9f7a-1d2e3f4a5b6c';
 const ID = '6b1f9a5d-3c2e-4d4f-8a8b-2e3f4a5b6c7d';
@@ -76,7 +76,7 @@ beforeEach(() => {
   vi.mocked(createServerClient).mockReset();
 });
 
-describe('#490 kontrakt z migracją 0105', () => {
+describe('#490 kontrakt z migracją 0106', () => {
   it('listy wartości w TS = CHECK-i w bazie', () => {
     expect(listFromCheck('breach_kind').sort()).toEqual([...BREACH_KINDS].sort());
     expect(listFromCheck('breach_categories').sort()).toEqual([...BREACH_DATA_CATEGORIES].sort());

@@ -1,7 +1,7 @@
 /**
  * Rejestr incydentów i naruszeń danych osobowych (#490) — reguły wspólne dla formularza
  * (przeglądarka), Server Actions i eksportu. Te same limity i zasady egzekwuje baza
- * (`breach_incident_validate`, CHECK-i `breach_incidents`, migracja 0105) — test
+ * (`breach_incident_validate`, CHECK-i `breach_incidents`, migracja 0106) — test
  * `tests/unit/breach-register.test.ts` porównuje listy wartości z migracją.
  *
  * Moduł jest czystą logiką (bez I/O i bez env).

@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0105_breach_register.sql — #490: rejestr incydentów bezpieczeństwa i naruszeń ochrony
+-- 0106_breach_register.sql — #490: rejestr incydentów bezpieczeństwa i naruszeń ochrony
 -- danych osobowych (RODO art. 33 ust. 5) w panelu administratora.
 --
 -- Numer migracji tymczasowy — ostateczny nada koordynator.
@@ -144,9 +144,19 @@ alter table public.breach_incident_events enable row level security;
 alter table public.breach_incident_events force row level security;
 revoke all on public.breach_incident_events from public, anon, authenticated;
 
+-- Jedyny dozwolony UPDATE: wyzerowanie autora przez FK `on delete set null` po usunięciu
+-- konta (reszta wiersza bez zmian) — inaczej usunięcie konta admina byłoby niemożliwe.
 create or replace function public.breach_event_immutable()
 returns trigger language plpgsql set search_path = public, pg_temp as $$
+declare
+  v_col text := case tg_table_name when 'breach_incident_events' then 'actor_id' else 'created_by' end;
 begin
+  if tg_op = 'UPDATE'
+     and (to_jsonb(old) ->> v_col) is not null
+     and (to_jsonb(new) ->> v_col) is null
+     and (to_jsonb(new) - v_col) = (to_jsonb(old) - v_col) then
+    return new;
+  end if;
   raise exception 'BREACH_HISTORY_IMMUTABLE' using errcode = '42501';
 end $$;
 revoke all on function public.breach_event_immutable() from public;
@@ -160,7 +170,8 @@ create trigger trg_breach_events_no_truncate
   before truncate on public.breach_incident_events
   for each statement execute function public.breach_event_immutable();
 
--- Wpis rejestru: bez usuwania; numer, klucz, autor i data utworzenia bez zmian.
+-- Wpis rejestru: bez usuwania; numer, klucz, autor i data utworzenia bez zmian
+-- (autor może tylko zniknąć — FK `on delete set null` przy usunięciu konta).
 create or replace function public.breach_incident_protect()
 returns trigger language plpgsql set search_path = public, pg_temp as $$
 begin
@@ -169,7 +180,7 @@ begin
   end if;
   if new.reference is distinct from old.reference
      or new.client_key is distinct from old.client_key
-     or new.created_by is distinct from old.created_by
+     or (new.created_by is distinct from old.created_by and new.created_by is not null)
      or new.created_at is distinct from old.created_at then
     raise exception 'BREACH_REGISTER_IMMUTABLE_FIELD' using errcode = '42501';
   end if;

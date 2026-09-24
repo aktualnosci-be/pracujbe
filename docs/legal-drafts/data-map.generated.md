@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
+Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -316,54 +316,54 @@ Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
 
 ### `public.breach_incident_events`
 
-- **Migracja:** `supabase/migrations/0105_breach_register.sql`
+- **Migracja:** `supabase/migrations/0106_breach_register.sql`
 - **Czynności:** Bezpieczeństwo, audyt i limity
 - **Osoby:** Administratorzy portalu
 - **Uwaga:** Niezmienna historia zmian wpisu (pole: przed/po).
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `actor_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0105_breach_register.sql` |
-| `changes` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0105_breach_register.sql` |
-| `note` | Korespondencja i treści swobodne | `supabase/migrations/0105_breach_register.sql` |
+| `actor_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0106_breach_register.sql` |
+| `changes` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0106_breach_register.sql` |
+| `note` | Korespondencja i treści swobodne | `supabase/migrations/0106_breach_register.sql` |
 
 ### `public.breach_incidents`
 
-- **Migracja:** `supabase/migrations/0105_breach_register.sql`
+- **Migracja:** `supabase/migrations/0106_breach_register.sql`
 - **Czynności:** Bezpieczeństwo, audyt i limity
 - **Osoby:** Administratorzy portalu
 - **Uwaga:** Opis zdarzenia i skali bez kopii danych osób (interfejs prosi o opis zakresu). Dostęp tylko admin (RPC, odczyt service-role).
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0105_breach_register.sql` |
-| `description` | Korespondencja i treści swobodne | `supabase/migrations/0105_breach_register.sql` |
-| `actions_taken` | Korespondencja i treści swobodne | `supabase/migrations/0105_breach_register.sql` |
+| `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0106_breach_register.sql` |
+| `description` | Korespondencja i treści swobodne | `supabase/migrations/0106_breach_register.sql` |
+| `actions_taken` | Korespondencja i treści swobodne | `supabase/migrations/0106_breach_register.sql` |
 
 ### `public.breach_notice_recipients`
 
-- **Migracja:** `supabase/migrations/0105_breach_register.sql`
+- **Migracja:** `supabase/migrations/0106_breach_register.sql`
 - **Czynności:** Bezpieczeństwo, audyt i limity, E-maile i powiadomienia
 - **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
 - **Uwaga:** Kto dostał zawiadomienie o naruszeniu (konto + język), bez adresu e-mail.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0105_breach_register.sql` |
-| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0105_breach_register.sql` |
-| `queued` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0105_breach_register.sql` |
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0106_breach_register.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0106_breach_register.sql` |
+| `queued` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0106_breach_register.sql` |
 
 ### `public.breach_notices`
 
-- **Migracja:** `supabase/migrations/0105_breach_register.sql`
+- **Migracja:** `supabase/migrations/0106_breach_register.sql`
 - **Czynności:** Bezpieczeństwo, audyt i limity, E-maile i powiadomienia
 - **Osoby:** Administratorzy portalu
 - **Uwaga:** Treść zawiadomienia wpisana przez administratora (per język), bez listy adresów.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0105_breach_register.sql` |
-| `content` | Korespondencja i treści swobodne | `supabase/migrations/0105_breach_register.sql` |
+| `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0106_breach_register.sql` |
+| `content` | Korespondencja i treści swobodne | `supabase/migrations/0106_breach_register.sql` |
 
 ### `public.candidate_certificates`
 

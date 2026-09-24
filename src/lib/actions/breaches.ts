@@ -21,7 +21,7 @@ import { createServerClient } from '@/lib/supabase/server';
  * Server Actions rejestru incydentów i naruszeń danych osobowych (#490) — panel admina.
  *
  * Każdy zapis to jedno RPC pod SESJĄ administratora (SECURITY DEFINER, `is_admin()`, audyt,
- * niezmienna historia — migracja 0105). Walidacja pól jak w bazie (`breachFormErrors`);
+ * niezmienna historia — migracja 0106). Walidacja pól jak w bazie (`breachFormErrors`);
  * błąd pola z bazy (`VALIDATION_FAILED: <pole>:<kod>`) wraca do formularza przy polu.
  * Klucz idempotencji (`clientKey`) tworzy przeglądarka raz na operację — podwójne kliknięcie
  * i ponowienie po błędzie sieci nie tworzą drugiego wpisu ani drugiej wysyłki.
