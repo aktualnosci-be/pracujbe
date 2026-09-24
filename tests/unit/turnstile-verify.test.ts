@@ -159,7 +159,7 @@ describe('weryfikacja siteverify', () => {
 
   it('timeout: przerwane zapytanie = niedostępny dostawca wg polityki przepływu', async () => {
     const fetchImpl = vi.fn(
-      (_url: string, init?: RequestInit) =>
+      (_url: RequestInfo | URL, init?: RequestInit) =>
         new Promise<Response>((_resolve, reject) => {
           init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
         }),

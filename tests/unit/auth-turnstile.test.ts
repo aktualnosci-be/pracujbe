@@ -67,7 +67,7 @@ const candidate = {
   passwordConfirm: 'Haslo1234',
   firstName: 'Jan',
   lastName: 'Kowalski',
-  agreeTerms: true,
+  agreeTerms: true as const,
   locale: 'pl' as const,
 };
 
