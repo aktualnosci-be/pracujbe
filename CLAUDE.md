@@ -741,7 +741,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
   logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny). **Do zrobienia:**
   Core Web Vitals / audyt wydajności (Lighthouse w CI).
-  Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391), dialogi
+  Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391; jedyna
+  wyspa = przycisk zapisu z `jobId`; względna data na serwerze po dniu kalendarzowym w
+  Brukseli — `src/lib/relative-date.ts`, zmienia się tylko o północy, zgodna z ISR), dialogi
   na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu (#393), długi cache
   obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
   na decyzję o workflow. Font Inter jako podzbiór łaciński ~73 KB (#388, przepis

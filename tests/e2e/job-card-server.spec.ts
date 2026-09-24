@@ -29,6 +29,12 @@ for (const path of ["/pl", "/pl/oferty-pracy"]) {
     for (const key of ['"companyVerified":', '"highlights":', '"salaryPeriod":', '"isNew":']) {
       expect(flight, key).not.toContain(key);
     }
+    // Kryterium #391: jedyna wyspa kliencka karty (przycisk zapisu) dostaje ≤ 100 B propsów.
+    const cards = (html.match(/<article/g) ?? []).length;
+    const saveProps = [...flight.matchAll(/\{"jobId":"[^"]*"[^{}]*\}/g)].map((match) => match[0]);
+    expect(cards).toBeGreaterThan(0);
+    expect(saveProps.length).toBeGreaterThanOrEqual(cards);
+    for (const props of saveProps) expect(props.length, props).toBeLessThanOrEqual(100);
   });
 }
 

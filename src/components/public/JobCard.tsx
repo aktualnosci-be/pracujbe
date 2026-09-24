@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { MatchBar } from '@/components/ui/match-bar';
 import { PublicSaveJobButton } from './PublicSavedJobs';
 import type { JobListItem } from '@/lib/jobs';
+import { formatPublishedRelative, PUBLISHED_DATE_TIME_ZONE } from '@/lib/relative-date';
 
 /**
  * Paszport oferty: lokalizacja, opcjonalna stawka i warunki z rzeczywistych danych.
@@ -18,33 +19,13 @@ import type { JobListItem } from '@/lib/jobs';
  * który dostaje samo `jobId`. Tłumaczenia z `next-intl/server`, nie z `next-intl`: import
  * głównego pakietu w komponencie serwerowym rejestruje `NextIntlClientProvider` jako
  * referencję kliencką strony, a Next łączy te referencje po ścieżce (z pominięciem grup
- * tras), więc inne strony dociągałyby wtedy chunki strony głównej i listy. Względna data liczy się raz, na serwerze; pełna data jest
- * w `title`, więc HTML z cache nie wprowadza w błąd.
+ * tras), więc inne strony dociągałyby wtedy chunki strony głównej i listy. Względna data liczy
+ * się raz, na serwerze, z dokładnością do dnia kalendarzowego (`formatPublishedRelative`,
+ * zgodne z ISR); pełna data jest w `title`, więc HTML z cache nie wprowadza w błąd.
  */
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-const HOUR_MS = 60 * 60 * 1000;
 
 /** Ścieżka szczegółów oferty (prefiks języka dokłada next-intl Link). */
 const JOB_DETAIL_BASE = '/oferty-pracy';
-
-function formatRelative(iso: string, locale: string): string {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return '';
-  const diffMs = then - Date.now();
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
-
-  const days = Math.round(diffMs / DAY_MS);
-  if (Math.abs(days) < 1) {
-    const hours = Math.round(diffMs / HOUR_MS);
-    return Math.abs(hours) < 1 ? rtf.format(0, 'day') : rtf.format(hours, 'hour');
-  }
-  if (Math.abs(days) < 7) return rtf.format(days, 'day');
-  const weeks = Math.round(days / 7);
-  if (Math.abs(weeks) < 5) return rtf.format(weeks, 'week');
-  return rtf.format(Math.round(days / 30), 'month');
-}
-
 
 export interface JobCardProps {
   job: JobListItem;
@@ -74,7 +55,7 @@ export async function JobCard({
     period: period => t(`passport.salaryPeriods.${period}`),
   });
   const highlights = job.highlights.slice(0, 2);
-  const relative = formatRelative(job.publishedAt, locale);
+  const relative = formatPublishedRelative(job.publishedAt, locale);
   const withMatch = showMatch === true && typeof matchScore === 'number';
   const showRegion = job.region.length > 0 && job.region !== job.city;
 
@@ -165,7 +146,7 @@ export async function JobCard({
         {relative ? (
           <time
             dateTime={job.publishedAt}
-            title={format.dateTime(new Date(job.publishedAt), { dateStyle: 'long', timeZone: 'Europe/Brussels' })}
+            title={format.dateTime(new Date(job.publishedAt), { dateStyle: 'long', timeZone: PUBLISHED_DATE_TIME_ZONE })}
             className="text-xs text-muted-foreground"
           >
             {relative}
