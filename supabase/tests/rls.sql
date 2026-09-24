@@ -3920,6 +3920,293 @@ select pg_temp.expect_error('select * from public.create_additional_company(''A'
 reset role;
 
 -- ============================================================================
+-- UN45 (#45, 0087): wypisanie, ponowna kontrola zgody przy claimie, atomowy budżet.
+-- ============================================================================
+\set UNA 'e0450000-0000-0000-0000-0000000000a1'
+\set UNB 'e0450000-0000-0000-0000-0000000000a2'
+\set UNC 'e0450000-0000-0000-0000-0000000000a3'
+\set UNE 'e0450000-0000-0000-0000-0000000000e1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'UNA','una@test.be','Un A','{"role":"candidate","first_name":"Un","last_name":"A","locale":"fr"}'),
+  (:'UNB','unb@test.be','Un B','{"role":"candidate","first_name":"Un","last_name":"B","locale":"nl"}'),
+  (:'UNC','unc@test.be','Un C','{"role":"candidate","first_name":"Un","last_name":"C","locale":"en"}');
+
+-- UN45-1: enqueue → wypisanie → claim NIE zwraca wiersza; wiersz wygaszony, nie usunięty.
+select public.enqueue_email(:'UNA', 'statusChanged', 'application', :'UNE', 'un45-status-1',
+                            '{"jobTitle":"X","companyName":"Y","status":"viewed"}'::jsonb);
+select pg_temp.assert(
+  (select locale from public.email_deliveries where idempotency_key = 'un45-status-1') = 'fr',
+  'UN45-1 e-mail zakolejkowany w języku odbiorcy');
+set role service_role;
+select pg_temp.assert(public.email_unsubscribe(:'UNA', 'applications') is true,
+  'UN45-1b pierwsze wypisanie zmienia preferencję');
+select pg_temp.assert(public.email_unsubscribe(:'UNA', 'applications') is false,
+  'UN45-1c ponowne wypisanie jest idempotentne (bez zmiany)');
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c where c.idempotency_key = 'un45-status-1'),
+  'UN45-1d claim nie zwraca e-maila odbiorcy, który się wypisał');
+select pg_temp.assert(
+  (select status::text = 'failed' and suppressed_at is not null and error_message = 'suppressed_opt_out'
+          and locked_at is null
+     from public.email_deliveries where idempotency_key = 'un45-status-1'),
+  'UN45-1e wiersz wygaszony (suppressed_at), ślad zostaje');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action = 'email.unsubscribed' and entity_id = :'UNA') = 1,
+  'UN45-1f jeden wpis audytu mimo dwóch wywołań');
+
+-- UN45-2: po wypisaniu enqueue tej kategorii nic nie kolejkuje; inna kategoria wychodzi.
+select public.enqueue_email(:'UNA', 'applicationViewed', 'application', :'UNE', 'un45-status-2', '{}'::jsonb);
+select pg_temp.assert(not exists (select 1 from public.email_deliveries where idempotency_key = 'un45-status-2'),
+  'UN45-2 enqueue po wypisaniu nie tworzy wiersza');
+select public.enqueue_email(:'UNA', 'jobOffer', 'offer', :'UNE', 'un45-offer-1', '{}'::jsonb);
+select pg_temp.assert(
+  exists (select 1 from public.claim_email_batch(100000) c where c.idempotency_key = 'un45-offer-1'),
+  'UN45-2b inna kategoria (propozycje) nadal wychodzi');
+
+-- UN45-3: marketing tylko po opt-in — brak wiersza preferencji = brak newslettera.
+select pg_temp.assert(public.email_allowed(:'UNB', 'newsletter') is false
+    and public.email_allowed(:'UNB', 'statusChanged') is true
+    and public.email_allowed(:'UNB', 'jobPublished') is true,
+  'UN45-3 domyślne zgody: marketing wyłączony, transakcyjne włączone');
+select public.enqueue_email(:'UNB', 'newsletter', null, null, 'un45-news-1', '{}'::jsonb);
+select pg_temp.assert(not exists (select 1 from public.email_deliveries where idempotency_key = 'un45-news-1'),
+  'UN45-3b newsletter bez opt-in nie trafia do kolejki');
+
+-- UN45-4: KONTROLA UJEMNA — claim z 0021 (bez ponownej kontroli) wydałby wiersz osoby wypisanej.
+-- Bez BEGIN/ROLLBACK (zestaw bywa uruchamiany w jednej zewnętrznej transakcji): stary claim
+-- ogranicza się do wiersza testu, a jego dzierżawę zdejmujemy przed nowym claimem.
+create function pg_temp.un45_claim_0021(p_key text) returns setof public.email_deliveries
+language sql as $$
+  update public.email_deliveries d set locked_at = now()
+   where d.id in (select e.id from public.email_deliveries e
+                   where e.status = 'queued' and e.next_attempt_at <= now() and e.locked_at is null
+                     and e.idempotency_key = p_key
+                   for update skip locked)
+  returning d.*;
+$$;
+select public.enqueue_email(:'UNC', 'newMessage', 'conversation', :'UNE', 'un45-msg-1', '{}'::jsonb);
+set role service_role; select public.email_unsubscribe(:'UNC', 'messages'); reset role;
+select pg_temp.assert(
+  exists (select 1 from pg_temp.un45_claim_0021('un45-msg-1')),
+  'UN45-4 stary claim wydaje e-mail mimo wypisania (test wykrywa błąd)');
+update public.email_deliveries set locked_at = null where idempotency_key = 'un45-msg-1';
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c where c.idempotency_key = 'un45-msg-1'),
+  'UN45-4b nowy claim wygasza ten sam wiersz');
+
+-- UN45-5: walidacja i uprawnienia.
+set role service_role;
+select pg_temp.expect_error('select public.email_unsubscribe(''e0450000-0000-0000-0000-0000000000a1'', ''all'')',
+  'VALIDATION_FAILED', 'UN45-5 nieznana kategoria odrzucona');
+select pg_temp.assert(public.email_unsubscribe('e0450000-0000-0000-0000-00000000ffff', 'offers') is false,
+  'UN45-5b nieistniejący profil: neutralne false, bez błędu');
+reset role;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.email_unsubscribe(''e0450000-0000-0000-0000-0000000000a2'', ''offers'')',
+  'permission denied', 'UN45-5c anon nie wypisze nikogo bezpośrednio');
+select pg_temp.expect_error('select * from public.take_email_send_budget(''newsletter'')',
+  'permission denied', 'UN45-5d anon nie pobiera budżetu');
+reset role;
+set role authenticated; set app.current_uid = :'UNB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.email_unsubscribe(''e0450000-0000-0000-0000-0000000000a1'', ''offers'')',
+  'permission denied', 'UN45-5e zalogowany nie wypisze innej osoby RPC');
+select pg_temp.expect_error('select count(*) from public.email_send_windows',
+  'permission denied', 'UN45-5f liczniki budżetu niedostępne dla klienta');
+select pg_temp.expect_error('update public.email_send_budget_config set provider_limit = 100000',
+  'permission denied', 'UN45-5g konfiguracja budżetu niedostępna dla klienta');
+reset role; reset app.current_uid;
+
+-- UN45-6..8: budżet. Konfigurację i liczniki zmieniają WYŁĄCZNIE zatwierdzane sesje dblink
+-- (jak sekcja PP): w trybie jednej zewnętrznej transakcji niezatwierdzone wiersze skryptu
+-- blokowałyby równoległe sesje, które mają symulować osobne workery.
+create function pg_temp.un45_sql(p_sql text) returns text
+language plpgsql as $$
+declare v_val text;
+begin
+  perform pg_temp.remote_connect('un45_setup');
+  select t.v into v_val from dbl.dblink('un45_setup', p_sql) as t(v text);
+  perform dbl.dblink_disconnect('un45_setup');
+  return v_val;
+end $$;
+-- Liczba przyznanych miejsc z n pobrań danej puli (wywołanie w liście SELECT = raz na wiersz).
+create function pg_temp.un45_take_n(p_template text, p_n int) returns int
+language sql as $$
+  select pg_temp.un45_sql(format(
+    'select count(*) filter (where g)::text from (select (public.take_email_send_budget(%L)).granted as g
+       from generate_series(1, %s)) s', p_template, p_n))::int;
+$$;
+
+-- UN45-6: marketing nie zużywa rezerw; transakcyjne nie zużywają rezerwy auth.
+select pg_temp.un45_sql('with c as (update public.email_send_budget_config
+   set window_seconds = 86400, provider_limit = 10, reserve_auth = 3, reserve_transactional = 3
+   returning 1), w as (delete from public.email_send_windows returning 1)
+   select ''ok''');
+select pg_temp.assert(pg_temp.un45_take_n('newsletter', 6) = 4,
+  'UN45-6 newsletter dostaje tylko 10 - 3 - 3 = 4');
+select pg_temp.assert(
+  pg_temp.un45_sql('select (not granted and retry_at > now())::text from public.take_email_send_budget(''newsletter'')')::boolean,
+  'UN45-6b odmowa podaje termin następnego okna');
+select pg_temp.assert(pg_temp.un45_take_n('statusChanged', 6) = 3,
+  'UN45-6c transakcyjne dobierają do 10 - 3 = 7');
+select pg_temp.assert(pg_temp.un45_take_n('passwordReset', 6) = 3,
+  'UN45-6d rezerwa auth (3) nietknięta przez newsletter i transakcyjne');
+select pg_temp.assert(
+  (select auth_used + transactional_used + marketing_used from public.email_send_windows) = 10,
+  'UN45-6e suma nie przekracza limitu dostawcy');
+
+-- UN45-7: równoległe workery (dwie sesje dblink) — ostatnie miejsce dostaje tylko jedna.
+select pg_temp.un45_sql('with c as (update public.email_send_budget_config
+   set provider_limit = 10, reserve_auth = 0, reserve_transactional = 0 returning 1),
+   w as (delete from public.email_send_windows returning 1) select ''ok''');
+select pg_temp.assert(pg_temp.un45_take_n('statusChanged', 9) = 9, 'UN45-7 przygotowanie: 9 z 10 zajęte');
+select pg_temp.remote_connect('un45_a');
+select pg_temp.remote_connect('un45_b');
+select dbl.dblink_exec('un45_a', 'begin');
+select pg_temp.assert(
+  (select t.g from dbl.dblink('un45_a', 'select granted from public.take_email_send_budget(''statusChanged'')')
+     as t(g boolean)) is true,
+  'UN45-7 sesja A bierze ostatnie miejsce (transakcja otwarta)');
+select dbl.dblink_send_query('un45_b', 'select granted from public.take_email_send_budget(''statusChanged'')');
+select pg_sleep(0.3);
+select pg_temp.assert(
+  exists (select 1 from pg_stat_activity where wait_event_type = 'Lock' and query like '%take_email_send_budget%'),
+  'UN45-7a sesja B czeka na blokadę okna sesji A');
+select dbl.dblink_exec('un45_a', 'commit');
+select pg_temp.assert(
+  (select t.g from dbl.dblink_get_result('un45_b') as t(g boolean)) is false,
+  'UN45-7b sesja B czeka na blokadę i dostaje odmowę');
+select * from dbl.dblink_get_result('un45_b') as t(g boolean);
+select pg_temp.assert(
+  (select transactional_used from public.email_send_windows) = 10,
+  'UN45-7c równolegle: dokładnie limit, bez przekroczenia');
+
+-- UN45-8: KONTROLA UJEMNA — licznik bez blokady (odczyt → zapis) przekracza limit.
+select pg_temp.un45_sql($q$
+  create schema un45test;
+  create function un45test.naive_take() returns boolean language plpgsql as $f$
+  declare v_used int;
+  begin
+    select transactional_used into v_used from public.email_send_windows;
+    if v_used >= 10 then return false; end if;
+    update public.email_send_windows set transactional_used = transactional_used + 1;
+    return true;
+  end $f$;
+  update public.email_send_windows set transactional_used = 9;
+  select 'ok'$q$);
+select dbl.dblink_exec('un45_a', 'begin');
+select pg_temp.assert(
+  (select t.g from dbl.dblink('un45_a', 'select un45test.naive_take()') as t(g boolean)) is true,
+  'UN45-8 naiwna sesja A bierze ostatnie miejsce');
+select dbl.dblink_send_query('un45_b', 'select un45test.naive_take()');
+select pg_sleep(0.3);
+select dbl.dblink_exec('un45_a', 'commit');
+select pg_temp.assert(
+  (select t.g from dbl.dblink_get_result('un45_b') as t(g boolean)) is true,
+  'UN45-8b naiwna sesja B też dostaje zgodę');
+select * from dbl.dblink_get_result('un45_b') as t(g boolean);
+select pg_temp.assert((select transactional_used from public.email_send_windows) = 11,
+  'UN45-8c naiwny licznik przekracza limit (test wykrywa błąd)');
+select dbl.dblink_disconnect('un45_a');
+select dbl.dblink_disconnect('un45_b');
+
+-- Sprzątanie (zatwierdzane): domyślna konfiguracja budżetu, bez liczników i schematu testu.
+select pg_temp.un45_sql('drop schema un45test cascade; select ''ok''');
+select pg_temp.un45_sql('with c as (update public.email_send_budget_config
+   set window_seconds = 60, provider_limit = 100, reserve_auth = 20, reserve_transactional = 30
+   returning 1), w as (delete from public.email_send_windows returning 1) select ''ok''');
+
+-- ============================================================================
+-- VI92. Weryfikacja VAT w VIES jako informacja dla admina (0088, #92)
+-- Zapis tylko wyników rozstrzygających (valid/invalid); awaria/limit VIES nigdy nie
+-- staje się „nieważny” i nie nadpisuje poprzedniego wyniku. Status firmy bez zmian.
+-- ============================================================================
+select status as vi92_status_before from public.companies where id = :'COMPA' \gset
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+-- VI92-1: admin zapisuje wynik ważny z nazwą z rejestru.
+select public.admin_record_vies_check(:'COMPA', '0417497106', 'valid', '  NV FIRMA A  ', date '2026-09-24');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select result = 'valid' and vies_name = 'NV FIRMA A' and vat_number = '0417497106'
+          and checked_by = :'ADMIN'::uuid and request_date = date '2026-09-24'
+     from public.company_vies_checks where company_id = :'COMPA'),
+  'VI92-1 wynik ważny zapisany z nazwą, datą i adminem');
+select pg_temp.assert(
+  (select status from public.companies where id = :'COMPA') = :'vi92_status_before',
+  'VI92-1b zapis wyniku nie zmienia statusu firmy');
+select pg_temp.assert(
+  (select after_data = '{"result":"valid"}'::jsonb and actor_id = :'ADMIN'::uuid
+     from public.audit_logs
+    where entity_id = :'COMPA' and action = 'company.vies_checked'
+    order by created_at desc limit 1),
+  'VI92-1c audyt company.vies_checked tylko z wynikiem (bez nazwy i numeru)');
+
+-- VI92-2: KONTROLA UJEMNA — stany nierozstrzygające są odrzucane i nie nadpisują wyniku.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''unavailable'')',
+  'RESULT_NOT_PERSISTABLE', 'VI92-2 niedostępność VIES nie jest zapisywana');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''rate_limited'')',
+  'RESULT_NOT_PERSISTABLE', 'VI92-2b limit VIES nie jest zapisywany');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', null)',
+  'RESULT_NOT_PERSISTABLE', 'VI92-2c brak wyniku nie jest zapisywany');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select result from public.company_vies_checks where company_id = :'COMPA') = 'valid',
+  'VI92-2d po awarii poprzedni wynik ważny zostaje (brak negatywnego cache)');
+select pg_temp.expect_error(
+  'insert into public.company_vies_checks(company_id, vat_number, result) values (''bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'', ''0417497106'', ''unavailable'')',
+  'company_vies_checks_result', 'VI92-2e CHECK tabeli odrzuca stan awarii nawet z pominięciem RPC');
+
+-- VI92-3: wynik nieważny zastępuje ważny, bez nazwy; firma NIE jest odrzucana automatycznie.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_record_vies_check(:'COMPA', '0417497106', 'invalid', 'ignorowana', null);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select result = 'invalid' and vies_name is null
+     from public.company_vies_checks where company_id = :'COMPA'),
+  'VI92-3 wynik nieważny zapisany bez nazwy');
+select pg_temp.assert(
+  (select status from public.companies where id = :'COMPA') = :'vi92_status_before',
+  'VI92-3b nieważny numer nie zmienia statusu firmy (bez automatycznego odrzucania)');
+select pg_temp.assert(
+  (select count(*) from public.company_vies_checks where company_id = :'COMPA') = 1,
+  'VI92-3c jeden wiersz na firmę');
+
+-- VI92-4: walidacja numeru i firmy.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0123456789'', ''valid'')',
+  'VAT_FORMAT', 'VI92-4 zła suma kontrolna odrzucona');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''BE0417497106'', ''valid'')',
+  'VAT_FORMAT', 'VI92-4b numer z prefiksem (nieznormalizowany) odrzucony');
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''00000000-0000-0000-0000-00000000092f'', ''0417497106'', ''valid'')',
+  'NOT_FOUND', 'VI92-4c nieistniejąca firma → NOT_FOUND');
+reset role; reset app.current_uid;
+
+-- VI92-5: pracodawca i anon bez dostępu do zapisu i odczytu.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''valid'')',
+  'PERMISSION_DENIED', 'VI92-5 pracodawca nie zapisze wyniku VIES własnej firmy');
+select pg_temp.expect_error('select * from public.company_vies_checks',
+  'permission denied', 'VI92-5b pracodawca nie czyta tabeli wyników VIES');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.admin_record_vies_check(''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''0417497106'', ''valid'')',
+  'permission denied', 'VI92-5c anon bez EXECUTE');
+select pg_temp.expect_error('select * from public.company_vies_checks',
+  'permission denied', 'VI92-5d anon nie czyta tabeli wyników VIES');
+reset role;
+
+-- ============================================================================
 -- ESCO93. Taksonomia ESCO v1.2.1 (#93, 0098): słowniki czytelne publicznie, zapis
 -- i import wyłącznie service_role; przypięcie manifestu, idempotencja, dane ręczne,
 -- fallback etykiet, brak wpływu na profile/oferty/dopasowania, rollback.
