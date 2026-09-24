@@ -846,16 +846,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
-  logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny). **Do zrobienia:**
-  Core Web Vitals / audyt wydajności (Lighthouse w CI).
+  logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny).
+  Bramka wydajności w CI (#395): kroki „Performance budget (static)” w `build` (JS gzip
+  kluczowych tras = layouty + strona, fonty woff2; `scripts/perf-budget-static.mjs`) i
+  „Performance budget (lab CWV)” w `e2e` (LCP/CLS/TBT, mediana 3 prób, CPU 4×, 1,6 Mb/s,
+  pierwsza wizyta i ze zgodą; `scripts/perf-lab.mjs`, ten sam build i Chromium). Budżety i
+  progi w `perf-budgets.json`, opis w `docs/PERFORMANCE_CHECKLIST.md` §10; strażnik kroków
+  w `check-ci-workflows.mjs`. **Do zrobienia:** INP-proxy w bramce, dane polowe CWV.
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391; jedyna
   wyspa = przycisk zapisu z `jobId`; względna data na serwerze po dniu kalendarzowym w
   Brukseli — `src/lib/relative-date.ts`, zmienia się tylko o północy, zgodna z ISR), dialogi
   na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu, z treścią montowaną
   w osobnym zadaniu po ramce z nakładką (#393; INP otwarcia < 100 ms przy CPU 4×,
   `dialog-open-inp.spec`), długi cache
-  obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
-  na decyzję o workflow. Font Inter jako podzbiór łaciński ~73 KB (#388, przepis
+  obrazów z optymalizatora i plików `public/` (#394). Font Inter jako podzbiór łaciński ~73 KB (#388, przepis
   `scripts/subset-font.py`, fonty zastępcze z metrykami w `globals.css`) i baner zgód
   w HTML z serwera, ukrywany przed malowaniem przy zapisanej zgodzie (`consent-boot.ts`, #389);
   „Przejdź do treści” renderuje `[locale]/layout` przed banerem, każdy układ ma `#main-content`.

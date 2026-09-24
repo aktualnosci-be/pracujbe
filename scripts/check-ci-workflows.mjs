@@ -89,6 +89,23 @@ assert.match(e2e, /uses: actions\/cache\/restore@v4[\s\S]*restore-keys: next-bui
 assert.match(e2e, /^        id: next-build\s*$/m, 'e2e: krok weryfikacji builda');
 assert.match(e2e, /if: steps\.next-build\.outcome != 'success'/, 'e2e: fallback build przy braku/niekompletności');
 
+// Bramka wydajności (#395): kroki w istniejących jobach, bez nowego joba, builda ani przeglądarki.
+const stepIndex = (body, name) => body.indexOf(`- name: ${name}`);
+assert.match(build, /- name: Performance budget \(static\)\s*\r?\n\s*run: node scripts\/perf-budget-static\.mjs/, 'build: krok budżetu statycznego');
+assert.ok(
+  stepIndex(build, 'Verify build output') < stepIndex(build, 'Performance budget (static)') &&
+    stepIndex(build, 'Performance budget (static)') < stepIndex(build, 'Save build for E2E'),
+  'build: budżet statyczny po weryfikacji builda, przed zapisem cache',
+);
+assert.match(e2e, /- name: Performance budget \(lab CWV\)\s*\r?\n\s*run: node scripts\/perf-lab\.mjs\s*$/m, 'e2e: krok lab CWV');
+assert.ok(stepIndex(e2e, 'Run E2E') < stepIndex(e2e, 'Performance budget (lab CWV)'), 'e2e: lab CWV po testach E2E');
+assert.ok(
+  stepIndex(e2e, 'Performance budget (lab CWV)') < e2e.indexOf('uses: actions/upload-artifact@v4'),
+  'e2e: lab CWV przed wysłaniem raportu (JSON wyników w playwright-report/)',
+);
+assert.equal((ci.match(/npx playwright install/g) ?? []).length, 2, 'ci.yml: Chromium instalują tylko unit i e2e');
+assert.equal((ci.match(/npm run build/g) ?? []).length, 2, 'ci.yml: jeden build + fallback e2e, bez builda dla bramki');
+
 const cleanup = sources.get('delete-old-runs.yml');
 assert.match(cleanup, /^    runs-on: ubuntu-latest\s*$/m);
 assert.match(cleanup, /^    timeout-minutes: \d+\s*$/m);
