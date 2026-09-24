@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import {
-  SALARY_MAX_BOUND,
   buildDemoFacets,
-  isSalaryNarrowed,
   parseSidebarFilters,
+  salaryQueryParams,
   toFacetItem,
 } from '@/components/public/job-filters';
 import { routing, type Locale } from '@/i18n/routing';
@@ -26,7 +25,6 @@ export async function GET(request: Request): Promise<NextResponse> {
     { city: raw['city']?.slice(0, 100) || undefined, locations: filters.locations },
     locale,
   );
-  const narrowed = isSalaryNarrowed(filters);
   const days =
     filters.date === '24h'
       ? 1
@@ -42,10 +40,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     categories: filters.categories,
     locations: cityFilters.queryLocations,
     contractTypes: filters.contractTypes,
-    ...(narrowed ? { salaryMin: filters.salaryMin } : {}),
-    ...(narrowed && filters.salaryMax < SALARY_MAX_BOUND
-      ? { salaryMax: filters.salaryMax }
-      : {}),
+    ...salaryQueryParams(filters),
     ...(filters.accommodation.length === 1
       ? { accommodation: filters.accommodation.includes('provided') }
       : {}),
