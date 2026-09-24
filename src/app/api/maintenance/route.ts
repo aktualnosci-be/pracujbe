@@ -15,7 +15,7 @@ import { captureError } from '@/lib/sentry';
  * #100: alerty zapisanych wyszukiwań (`process_saved_search_alerts`, 0092) — digest nowych
  * ofert per wyszukiwanie najwyżej raz na dobę/tydzień, bez ponownej wysyłki tej samej oferty;
  * e-maile trafiają do outboxa (`enqueue_email`), wysyła je `/api/email/process`.
- * #98: retencja aplikacji bez konta (`purge_guest_application_requests`, 0096) — usuwa
+ * #98: retencja aplikacji bez konta (`purge_guest_application_requests`, 0095) — usuwa
  * niepotwierdzone zgłoszenia 7 dni po ostatnim linku i duplikaty 7 dni po potwierdzeniu (razem
  * z ich e-mailami) i zeruje tokeny przejęcia po wygaśnięciu 30-dniowego okna.
  *

@@ -76,7 +76,7 @@ export interface EmployerApplication {
 
 /** Imię kandydata z profilu, a dla aplikacji bez konta (#98) — ze snapshotu `guest_name`. */
 function applicationCandidate(row: Record<string, unknown>): { candidateName: string; isGuest?: true } {
-  // CHECK 0096: candidate_id NULL ⇒ jest snapshot gościa (guest_name, guest_email).
+  // CHECK 0095: candidate_id NULL ⇒ jest snapshot gościa (guest_name, guest_email).
   const guestName = asString(row['guest_name']).trim();
   const isGuest = !asString(row['candidate_id']) && guestName.length > 0;
   const profile = asEmbeddedRecord(row['profiles']);

@@ -24,6 +24,8 @@ export default defineConfig({
         '**/guest-apply.spec.ts',
         '**/job-posting-fixture.spec.ts',
         '**/offer-message-login.spec.ts',
+        // Formularz zgłoszenia treści (#41).
+        '**/content-report-form.spec.ts',
       ],
   workers: 1,
   // next dev kompiluje trasę przy pierwszym żądaniu; na zimnym starcie trwa to ponad 30 s.

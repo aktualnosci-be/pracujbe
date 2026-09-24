@@ -51,7 +51,7 @@ błędny sekret) oraz braku konfiguracji w produkcji:
 | rejestracja (kandydat, pracodawca) | `register` | **fail-closed** (`BOT_CHECK_UNAVAILABLE`) | masowe zakładanie kont |
 | reset hasła | `password_reset` | **fail-closed** | wysyłka e-maili do cudzych skrzynek |
 | kontakt | `contact` | **fail-closed** | polityka gotowa; publicznego formularza kontaktu jeszcze nie ma |
-| zgłoszenia | `report` | **fail-closed** | polityka gotowa; publicznego formularza zgłoszeń jeszcze nie ma |
+| zgłoszenia | `report` | **fail-closed** | publiczny formularz zgłoszenia treści `/zglos-tresc` (#41, `submitContentReport`) |
 | aplikacja bez konta (#98) | `guest_apply` | **fail-closed** | publiczny formularz wysyłający e-mail z linkiem na podany adres; do tego limity `guest-apply` (IP) i `guest-apply-email` (adres) — [`GUEST_APPLY.md`](./GUEST_APPLY.md) |
 | aplikowanie z konta | — | nie dotyczy | wymaga zalogowanego kandydata (logowanie i rejestracja chronione) + limit `apply` + idempotencja w bazie |
 

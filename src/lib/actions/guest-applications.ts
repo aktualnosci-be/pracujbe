@@ -23,7 +23,7 @@ import {
 } from '@/lib/validation/guest-application';
 
 /**
- * Jednorazowa aplikacja bez konta (#98) — cienka warstwa nad RPC z migracji 0096.
+ * Jednorazowa aplikacja bez konta (#98) — cienka warstwa nad RPC z migracji 0095.
  *
  * 1. `submitGuestApplication` — rate limit (IP i adres), Turnstile, walidacja, zapis
  *    zgłoszenia i e-mail z linkiem potwierdzenia. Odpowiedź zawsze neutralna („sprawdź

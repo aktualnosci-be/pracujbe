@@ -37,8 +37,8 @@ export type ProviderFailurePolicy = 'open' | 'closed';
  *   ogranicza limiter `signin` (fail-safe) i Supabase Auth.
  * - register / password_reset: `closed` — masowe zakładanie kont i wysyłka e-maili resetu
  *   to główny cel botów; chwilowa niedostępność jest mniejszym kosztem.
- * - contact / report: `closed` — formularze bez konta (spam do moderacji). Obecnie nie ma
- *   publicznego formularza kontaktu ani zgłoszeń; polityka obowiązuje, gdy powstanie.
+ * - contact / report: `closed` — formularze bez konta (spam do moderacji). `report` chroni
+ *   publiczny formularz zgłoszenia treści (#41); formularza kontaktu jeszcze nie ma.
  *
  * - guest_apply: `closed` — aplikacja bez konta (#98) wysyła e-mail na podany adres.
  *

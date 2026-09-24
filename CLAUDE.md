@@ -771,7 +771,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
   `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
   zgłoszeń (RLS gotowe).
-  Aplikacja bez konta (#98, migracja `0096`, `docs/GUEST_APPLY.md`): gość w ApplyModal
+  Aplikacja bez konta (#98, migracja `0095`, `docs/GUEST_APPLY.md`): gość w ApplyModal
   (`GuestApplyForm`: imię i nazwisko, e-mail, zgoda; reszta opcjonalna) → Turnstile
   `guest_apply` + limity IP/adres → `submit_guest_application` (service_role, zgłoszenie
   `pending` ze snapshotem zgody, e-mail `guestApplicationConfirm` w języku formularza) →
@@ -890,6 +890,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
   `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
   (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
+- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy gotowe; decyzje i egzekucja
+  (#42) oraz odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
+  (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
+  → Zod → RPC `submit_content_report` (EXECUTE tylko service_role, `reporterId` z sesji). Sprawa
+  = `reports.kind='dsa_notice'`: numer `DSA-XXXX-…` (64 bity), kod dostępu z przeglądarki (w bazie
+  SHA-256), idempotencja także przy wyścigu, tylko treść publiczna (prywatna = `NOT_FOUND`),
+  dowód `target_snapshot` z bazy, niezmienność (trigger dla każdej roli), historia
+  `report_events` (także ze zmian w `admin_resolve_report`), limit 5/adres/24 h + jedna otwarta
+  sprawa na treść, e-mail `reportReceived` przez outbox w języku zgłaszającego. Status:
+  `/zglos-tresc/sprawa` (numer + kod, z linku przez fragment `#`). Panel `/admin/zgloszenia`:
+  filtr rodzaju, numer, termin, dowód, kontakt, historia. Dowód: `rls.sql` sekcja DSA41; unit
+  `content-report-actions`, `report-received-email`; E2E `content-report`, `content-report-form`
+  (fixture). **Do uzupełnienia przez właściciela:** treść prawna (znacznik na stronie
+  formularza), katalog kategorii, termin 7 dni i wymagane pola — wg mapy DSA (#40).
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
@@ -920,8 +934,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.
   Bez kluczy poza produkcją = wyłączony; w produkcji brak kluczy = fail-closed rejestracji/resetu.
-  CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. **Do zrobienia:**
-  formularze kontaktu i zgłoszeń (polityki `contact`/`report` gotowe, formularzy brak).
+  CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. Polityka `report`
+  chroni formularz zgłoszenia treści (#41). **Do zrobienia:** formularz kontaktu (`contact`).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).

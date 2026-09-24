@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0096 — jednorazowa aplikacja bez pełnego konta (#98).
+-- 0095 — jednorazowa aplikacja bez pełnego konta (#98).
 --
 -- Przepływ:
 --   1. `submit_guest_application` (service_role, woła je Server Action po Turnstile i rate

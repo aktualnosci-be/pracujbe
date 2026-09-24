@@ -124,4 +124,85 @@ grantów ani polityk — tylko RPC `submit_guest_application` / `confirm_guest_a
 (service_role) i `claim_guest_application` (authenticated). Tokeny są przechowywane
 wyłącznie jako hash SHA-256. Zmianę `candidate_id` (NULL → `auth.uid()`) trigger
 `enforce_application_integrity` dopuszcza tylko wewnątrz `claim_guest_application`.
-Szczegóły, retencja i rollback: [`GUEST_APPLY.md`](./GUEST_APPLY.md). Migracja: `0096`.
+Szczegóły, retencja i rollback: [`GUEST_APPLY.md`](./GUEST_APPLY.md). Migracja: `0095`.
+
+## Publiczne zgłoszenia treści (DSA) i trwały model sprawy
+
+Migracja `supabase/migrations/0094_dsa_notices.sql` (#41). Zgłoszenie z publicznego
+formularza (`/zglos-tresc`, także bez konta) to wiersz `public.reports` z `kind = 'dsa_notice'`
+— osobna kolejka od dotychczasowych zgłoszeń (`kind = 'quality'`).
+
+- **Zapis tylko przez RPC.** `submit_content_report(...)` i `get_report_case(text, text)` mają
+  `EXECUTE` wyłącznie dla `service_role`; woła je Server Action
+  (`src/lib/actions/content-reports.ts`) po limiterze i Turnstile (polityka `report`,
+  fail-closed). Klient nie ma `INSERT/UPDATE/DELETE` na `reports` (polityka `reports_insert_own`
+  usunięta), `anon` nie ma żadnych praw do `reports` ani `report_events`.
+- **Tylko treść publiczna.** Cel wskazuje publiczna oferta (`job_is_public`): zgłaszana jest
+  ta oferta albo firma, która ją opublikowała. Nieistniejący i prywatny identyfikator dają ten
+  sam `NOT_FOUND`.
+- **Idempotencja.** Klucz (`idempotency_key`, unikalny) + blokada doradcza: ponowienie i wyścig
+  dwóch żądań zwracają tę samą sprawę (`created = false`), bez drugiego e-maila. Klucz użyty
+  z innym kodem dostępu → `VALIDATION_FAILED` (cudzej sprawy nie da się tak odczytać).
+- **Numer i dostęp.** `case_number` `DSA-XXXX-XXXX-XXXX-XXXX` (64 bity losowe). Kod dostępu
+  (24 znaki base32) generuje przeglądarka zgłaszającego; w `reports` jest tylko jego SHA-256.
+  `get_report_case` zwraca wyłącznie stan sprawy (status, rodzaj, kategoria, daty, historia
+  bez aktorów); zły kod i obcy numer dają `null`.
+- **Niezmienny zapis i dowód.** `target_snapshot` (oferta z tłumaczeniami i wymaganiami, firma)
+  buduje baza w chwili zgłoszenia. Trigger `reports_notice_immutable` blokuje — dla każdej roli,
+  także `service_role` — zmianę pól zgłoszenia DSA i jego usunięcie; zmienia się tylko stan
+  sprawy (`status`, `resolved_*`), a `reporter_id` może jedynie przejść na `null` (FK przy
+  usunięciu konta). Zmiana lub usunięcie oferty nie zmienia dowodu.
+- **Historia.** `report_events` (tylko dopisywanie): `submitted` przy utworzeniu,
+  `status_changed` przy każdej zmianie statusu — także przez istniejące `admin_resolve_report`.
+  Zgłaszający widzi historię swoich spraw (RLS), bez kolumny `actor_id`.
+- **Prywatność zgłaszającego.** Kontakt (`reporter_email`, `reporter_name`) czyta tylko
+  administrator (service_role w panelu). Autor treści (firma) nie ma ścieżki odczytu `reports`.
+- **Limit w bazie.** 5 spraw na adres e-mail w 24 h i jedna otwarta sprawa na (adres, treść) →
+  `RATE_LIMITED`; niezależnie od limitera aplikacji.
+- **Potwierdzenie e-mail.** `enqueue_email_to_address` (bez EXECUTE dla klienta) wstawia
+  `reportReceived` do `email_deliveries` w języku zgłaszającego: zalogowany —
+  `resolve_recipient_locale` (Invariant #1), gość — język formularza, który wybrał. Awaria
+  poczty nie zmienia sprawy (outbox ponawia). Payload e-maila zawiera numer sprawy i kod
+  dostępu (link do statusu niesie je we fragmencie `#`); `email_deliveries` czyta tylko
+  `service_role` — retencja kolejki e-mail pozostaje osobnym zadaniem.
+
+Wartości tymczasowe do potwierdzenia w mapie obowiązków DSA (#40): katalog kategorii, termin
+`due_at` = 7 dni, opcjonalne imię. Decyzje moderacyjne i egzekucja — #42, odwołania — #43.
+Dowód: `supabase/tests/rls.sql` sekcja DSA41 (m.in. wyścig przez dblink, kontrole ujemne).
+
+### Rollback
+
+Sprawy `dsa_notice` są dowodem — przed rollbackiem wyeksportuj je razem z `report_events`.
+Najpierw wycofaj kod aplikacji (formularz, strona statusu, panel), następnie w nowej migracji:
+
+```sql
+drop trigger if exists trg_report_events_log on public.reports;
+drop trigger if exists trg_reports_notice_immutable on public.reports;
+drop function if exists public.submit_content_report(uuid, uuid, text, text, uuid, text, text, text, text, text, text, boolean);
+drop function if exists public.get_report_case(text, text);
+drop function if exists public.enqueue_email_to_address(text, text, uuid, text, text, uuid, text, jsonb);
+drop function if exists public.report_events_log();
+drop function if exists public.reports_notice_immutable();
+drop table if exists public.report_events;
+drop function if exists public.report_events_append_only();
+-- po eksporcie: delete from public.reports where kind = 'dsa_notice';
+alter table public.reports
+  drop constraint if exists reports_dsa_notice_complete,
+  drop constraint if exists reports_kind_chk,
+  drop constraint if exists reports_category_chk,
+  drop constraint if exists reports_content_url_length,
+  drop constraint if exists reports_reporter_name_length,
+  drop constraint if exists reports_reporter_email_length,
+  drop column if exists kind, drop column if exists case_number,
+  drop column if exists access_code_hash, drop column if exists idempotency_key,
+  drop column if exists category, drop column if exists content_url,
+  drop column if exists reporter_name, drop column if exists reporter_email,
+  drop column if exists reporter_locale, drop column if exists good_faith_at,
+  drop column if exists target_snapshot, drop column if exists due_at;
+create policy reports_insert_own on public.reports
+  for insert to authenticated with check (reporter_id = auth.uid());
+grant insert on public.reports to authenticated;
+grant select on public.reports to anon;
+```
+
+Kolejność: trigger `reports_notice_immutable` musi zniknąć przed usunięciem wierszy DSA.

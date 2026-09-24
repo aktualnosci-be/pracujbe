@@ -23,10 +23,11 @@ export const QUEUED_EMAIL_TYPES = [
   'companySuspended', // admin_set_company_status → suspended (0084)
   'teamInvitation', // invite_company_member (0086)
   'jobMatch', // process_saved_search_alerts (0092) — digest zapisanego wyszukiwania
+  'reportReceived', // submit_content_report (0094) — enqueue_email_to_address
 ] as const satisfies readonly EmailType[];
 
 /**
- * Aplikacja bez konta (#98) — kolejkowane przez `enqueue_guest_email` (0096) na adres gościa
+ * Aplikacja bez konta (#98) — kolejkowane przez `enqueue_guest_email` (0095) na adres gościa
  * bez profilu; link z tokenem dokłada worker (`src/lib/email/guest-delivery.ts`).
  */
 export const GUEST_EMAIL_TYPES = [

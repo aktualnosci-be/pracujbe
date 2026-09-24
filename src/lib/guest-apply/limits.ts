@@ -1,6 +1,6 @@
 /**
  * Limity pól jednorazowej aplikacji gościa (#98) — wspólne dla formularza (klient, bez Zoda)
- * i walidacji serwera (`@/lib/validation/guest-application`). Wartości = CHECK-i z migracji 0096.
+ * i walidacji serwera (`@/lib/validation/guest-application`). Wartości = CHECK-i z migracji 0095.
  */
 export const GUEST_NAME_MAX = 160;
 export const GUEST_EMAIL_MAX = 254;

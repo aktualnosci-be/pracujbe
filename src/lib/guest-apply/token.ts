@@ -5,7 +5,7 @@ import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { isProductionMode } from '@/lib/env';
 
 /**
- * Tokeny jednorazowej aplikacji gościa (#98, migracja 0096).
+ * Tokeny jednorazowej aplikacji gościa (#98, migracja 0095).
  *
  * Baza przechowuje WYŁĄCZNIE `sha256(token)` (hex) i losowy `nonce`. Token nie jest nigdzie
  * zapisywany: to `HMAC-SHA256(GUEST_APPLY_SECRET, "<cel>:<nonce>")` w base64url, liczony

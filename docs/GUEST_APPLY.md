@@ -4,7 +4,7 @@ Gość może raz zaaplikować na ofertę bez zakładania konta. Aplikacja trafia
 dopiero po potwierdzeniu adresu e-mail. Później gość może przypisać ją do konta kandydata
 założonego na ten sam adres.
 
-Migracja: `supabase/migrations/0096_guest_applications.sql`. Dowód: `supabase/tests/rls.sql`,
+Migracja: `supabase/migrations/0095_guest_applications.sql`. Dowód: `supabase/tests/rls.sql`,
 sekcja GA98 (z kontrolami ujemnymi).
 
 ## Przepływ
