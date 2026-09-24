@@ -55,7 +55,9 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 **Paleta:** tokeny w `src/app/globals.css`, mapowane przez Tailwind. Kolor marki: czerwień około `#D92932`, tekst około `#151515`, tło `#FFFFFF`. Kolory semantyczne sukcesu, ostrzeżeń i błędów zachowują swoje znaczenie. Nie wpisuj hexów w komponentach. Kontrast WCAG 2.2 AA obowiązkowy.
 
-**Typografia:** obecnie lokalny Inter z polskimi znakami. Zmiana fontu wymaga sprawdzenia czytelności i wpływu na układ.
+**Typografia:** lokalny DM Sans jak w prototypie (`next/font/local`, podzbiór ~42 KB z polskimi znakami, osie wght 400–800 i opsz; sekcje `.pp-*` mają `font-optical-sizing: none` = opsz 9, czyli plik, który prototyp dostaje z Google Fonts; SIL OFL 1.1 — `assets/fonts/DMSans-OFL.txt`, przepis `scripts/subset-font.py`). Zmiana fontu wymaga sprawdzenia czytelności, budżetu fontów i CLS (`perf-budget-static.mjs`, `perf-lab.mjs`).
+
+**Kalka prototypu (#5/#7, decyzja właściciela 2026-09-24: „kalka jeden do jednego”):** nagłówek, hero, wyszukiwarka, „Najnowsze oferty”, karta-paszport, „W czym jesteś dobry?” i dolny pasek stopki mają reguły przepisane dosłownie z `docs/design/people-passport/prototype` (style.css → directions.css → people.css → conditions.css → extended.css) jako klasy `.pp-*` w `src/app/globals.css`; kolory tylko jako tokeny `--pp-*` w `:root`. Progi `@container` prototypu (1050/950/850/760/600/500 px) są media queries. Siatka ofert = to, co prototyp renderuje: 2 kolumny, 1 ≤ 950 px (conditions.css nadpisuje 3 kolumny z people.css); lista z filtrami 1 kolumna. Odstępstwa (tylko wymogi repo): #777 → #767676 (AA), fokus widoczny, stany demo i statusy karty w wierszu firmy, przycisk menu ≤ 850 px, sekcje aplikacji spoza prototypu pod „W czym jesteś dobry?”. Zmieniając te widoki, porównuj zrzuty 1280/390 px z prototypem (nakładka); nie owijaj kart ramką `divide-y` (podwójne krawędzie).
 
 **Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Zasoby favicon/PWA/OG wymagają spójnej aktualizacji w etapie #7.
 
@@ -774,6 +776,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
   `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
   zgłoszeń (RLS gotowe).
+  Aplikacja bez konta (#98, migracja `0095`, `docs/GUEST_APPLY.md`): gość w ApplyModal
+  (`GuestApplyForm`: imię i nazwisko, e-mail, zgoda; reszta opcjonalna) → Turnstile
+  `guest_apply` + limity IP/adres → `submit_guest_application` (service_role, zgłoszenie
+  `pending` ze snapshotem zgody, e-mail `guestApplicationConfirm` w języku formularza) →
+  `/aplikacja/potwierdz` (przycisk, nie GET) → `confirm_guest_application` tworzy aplikację
+  z `candidate_id NULL` i snapshotem, powiadamia firmę jak `apply_to_job`, wysyła
+  `guestApplicationSent` z linkiem przejęcia → `/aplikacja/przejmij` →
+  `claim_guest_application` (kandydat ze zweryfikowanym, tym samym e-mailem; token działa
+  raz, ponowienie tego samego konta idempotentne). W bazie tylko hash tokenu; token =
+  HMAC(`GUEST_APPLY_SECRET`, cel:nonce), link składa worker. Pracodawca widzi aplikację
+  z oznaczeniem „Bez konta” (e-mail, telefon, status); rozmowa i propozycja dopiero po
+  przejęciu. Pytania screeningowe (#101) obowiązują także gościa: `record_screening_answers`
+  w trybie bez aplikacji waliduje odpowiedzi przy wysłaniu, potwierdzenie zapisuje je do
+  `application_screening_answers` (GA98-13). Retencja w `/api/maintenance`: niepotwierdzone 7 dni po ostatnim linku,
+  duplikaty 7 dni po potwierdzeniu (z e-mailami), token przejęcia zerowany po 30 dniach.
+  Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture). **Otwarte:** powiadomienie gościa
+  o zmianie statusu (brak profilu odbiorcy); okres retencji do potwierdzenia w polityce
+  prywatności (#40).
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
@@ -875,6 +895,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
   `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
   (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
+- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy gotowe; decyzje i egzekucja
+  (#42) oraz odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
+  (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
+  → Zod → RPC `submit_content_report` (EXECUTE tylko service_role, `reporterId` z sesji). Sprawa
+  = `reports.kind='dsa_notice'`: numer `DSA-XXXX-…` (64 bity), kod dostępu z przeglądarki (w bazie
+  SHA-256), idempotencja także przy wyścigu, tylko treść publiczna (prywatna = `NOT_FOUND`),
+  dowód `target_snapshot` z bazy, niezmienność (trigger dla każdej roli), historia
+  `report_events` (także ze zmian w `admin_resolve_report`), limit 5/adres/24 h + jedna otwarta
+  sprawa na treść, e-mail `reportReceived` przez outbox w języku zgłaszającego. Status:
+  `/zglos-tresc/sprawa` (numer + kod, z linku przez fragment `#`). Panel `/admin/zgloszenia`:
+  filtr rodzaju, numer, termin, dowód, kontakt, historia. Dowód: `rls.sql` sekcja DSA41; unit
+  `content-report-actions`, `report-received-email`; E2E `content-report`, `content-report-form`
+  (fixture). **Do uzupełnienia przez właściciela:** treść prawna (znacznik na stronie
+  formularza), katalog kategorii, termin 7 dni i wymagane pola — wg mapy DSA (#40).
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
@@ -905,8 +939,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.
   Bez kluczy poza produkcją = wyłączony; w produkcji brak kluczy = fail-closed rejestracji/resetu.
-  CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. **Do zrobienia:**
-  formularze kontaktu i zgłoszeń (polityki `contact`/`report` gotowe, formularzy brak).
+  CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. Polityka `report`
+  chroni formularz zgłoszenia treści (#41). **Do zrobienia:** formularz kontaktu (`contact`).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).

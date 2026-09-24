@@ -121,10 +121,21 @@ export interface EmailDataMap {
     jobs?: Array<{ title: string; companyName?: string; city?: string; url: string }>;
     actionUrl: string;
   };
+  /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
+  guestApplicationConfirm: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
+  guestApplicationSent: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
   invoice: { recipientName?: string; invoiceNumber: string; amount: string; downloadUrl: string };
   supportContact: { name?: string; subject?: string; message?: string; actionUrl?: string };
+  /** Potwierdzenie zgłoszenia treści (#41) — także do osoby bez konta, w jej języku. */
+  reportReceived: {
+    recipientName?: string | null;
+    caseNumber: string;
+    accessCode: string;
+    targetType?: string;
+    actionUrl: string;
+  };
 }
 
 /** Propsy komponentu szablonu: język + dane danego typu. */
@@ -243,7 +254,7 @@ function EmailShell(props: {
     typeof props.vars.unsubscribeUrl === 'string' ? props.vars.unsubscribeUrl : undefined;
 
   return (
-    <EmailLayout locale={locale} preview={preview} unsubscribeUrl={unsubscribeUrl}>
+    <EmailLayout locale={locale} preview={preview} unsubscribeUrl={unsubscribeUrl} footerNote={copy.footerNote}>
       <EmailHeading>{heading}</EmailHeading>
       <EmailText>{greeting}</EmailText>
       {paragraphs.map((paragraph, index) => (
@@ -573,6 +584,30 @@ export function TeamInvitationEmail(props: EmailProps<'teamInvitation'>): ReactE
   );
 }
 
+export function GuestApplicationConfirmEmail(props: EmailProps<'guestApplicationConfirm'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="guestApplicationConfirm"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
+export function GuestApplicationSentEmail(props: EmailProps<'guestApplicationSent'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="guestApplicationSent"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
 const jobListStyles = {
   item: {
     borderTop: '1px solid #DEDEDE',
@@ -678,6 +713,18 @@ export function SupportContactEmail(props: EmailProps<'supportContact'>): ReactE
   );
 }
 
+export function ReportReceivedEmail(props: EmailProps<'reportReceived'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="reportReceived"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+    />
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Rejestr + renderEmail                                                      */
 /* -------------------------------------------------------------------------- */
@@ -707,10 +754,13 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   companySuspended: CompanySuspendedEmail,
   teamInvitation: TeamInvitationEmail,
   jobMatch: JobMatchEmail,
+  guestApplicationConfirm: GuestApplicationConfirmEmail,
+  guestApplicationSent: GuestApplicationSentEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,
   invoice: InvoiceEmail,
   supportContact: SupportContactEmail,
+  reportReceived: ReportReceivedEmail,
 };
 
 /**

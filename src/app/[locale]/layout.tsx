@@ -11,7 +11,7 @@ import { CookieConsent } from '@/components/cookies/CookieConsent';
 import { SkipLink } from '@/components/layout/SkipLink';
 import { consentBootScript, NOSCRIPT_HIDE_BANNER } from '@/lib/consent-boot';
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
-import { inter } from '../fonts';
+import { dmSans } from '../fonts';
 
 /**
  * Layout dla segmentu językowego. To TUTAJ renderowane są <html>/<body> — z lang={locale}
@@ -100,7 +100,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   const messages = pickClientMessages(await getMessages());
 
   return (
-    <html lang={locale} className={inter.variable} suppressHydrationWarning>
+    <html lang={locale} className={dmSans.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: consentBootScript() }} />
         {/* Bez JS przyciski banera nie działają, a bez JS nie ładuje się też żaden tracker

@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
@@ -93,6 +94,9 @@ export default async function EmployerApplicationsPage({
                       <div className="min-w-0 flex-1">
                         <p className={INFO_LABEL}>{t('employerApplicationsCandidateLabel')}</p>
                         <h2 className={`mt-1 ${JOB_CARD_TITLE}`}>{name}</h2>
+                        {application.isGuest ? (
+                          <p className={cn(TAG, "mt-2 font-semibold text-foreground")}>{t('employerApplicationGuestBadge')}</p>
+                        ) : null}
                       </div>
                     </div>
                     <dl className="mt-6 border-y border-border py-5">

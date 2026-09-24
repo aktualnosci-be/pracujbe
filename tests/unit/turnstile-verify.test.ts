@@ -198,6 +198,7 @@ describe('polityka przepływów', () => {
       passwordReset: 'closed',
       contact: 'closed',
       report: 'closed',
+      guestApply: 'closed',
     });
   });
 

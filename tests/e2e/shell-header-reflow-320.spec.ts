@@ -70,17 +70,15 @@ for (const locale of locales) {
       };
     });
 
-    // Parametry sprzed poprawki, niezależne od renderowania fontu na danej maszynie:
-    // text-2xl (24 px), kafelek 4/6 px z promieniem 14 px (--radius), leading-none, więc
-    // wysokość = 24 + 2 × 4 = 32 px; przyciski-ikony 44 × 44 px.
-    expect(logo.fontSize).toBe("24px");
-    expect(logo.tilePadding).toBe("4px 6px");
-    expect(logo.tileRadius).toBe("14px");
-    expect(logo.logo?.height).toBeCloseTo(32, 0);
-    expect(logo.tile?.height).toBeCloseTo(32, 0);
-    expect(logo.iconButtons).toEqual([
-      { width: 44, height: 44 },
-      { width: 44, height: 44 },
-    ]);
+    // Wygląd = kalka `.people .nav` z prototypu „Ludzie i praca” przy ≤ 600 px (#5/#7),
+    // niezależnie od renderowania fontu na danej maszynie: logo 26 px, kafelek „.be”
+    // z dopełnieniem .1/.17/.14 em i promieniem .22 em (`.people .logo .suffix`), leading-none,
+    // więc wysokość = 26 × (1 + .1 + .14) ≈ 32,2 px; przycisk menu 38 × 38 px (= „pigułka” konta).
+    expect(logo.fontSize).toBe("26px");
+    expect(logo.tilePadding).toBe("2.6px 4.42px 3.64px");
+    expect(logo.tileRadius).toBe("5.72px");
+    expect(logo.logo?.height).toBeCloseTo(32.24, 0);
+    expect(logo.tile?.height).toBeCloseTo(32.24, 0);
+    expect(logo.iconButtons).toEqual([{ width: 38, height: 38 }]);
   });
 }

@@ -40,6 +40,7 @@ import {
   ROW_TITLE,
   SECTION_HEAD,
   STATUS_GOOD,
+  TAG,
   TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
@@ -212,6 +213,11 @@ export default async function EmployerDashboardPage({
                         {application.candidateName || td('candidateFallback')}
                       </p>
                       <p className={ROW_META}>{application.jobTitle}</p>
+                      {application.isGuest ? (
+                        <p className={cn(TAG, 'mt-1.5 font-semibold text-foreground')}>
+                          {td('employerApplicationGuestBadge')}
+                        </p>
+                      ) : null}
                       <div className="mt-1.5">
                         <StatusPill status={application.status} />
                       </div>

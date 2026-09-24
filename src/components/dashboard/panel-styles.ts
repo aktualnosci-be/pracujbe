@@ -5,10 +5,11 @@
  *
  * Wartości (rozmiary, wagi, odstępy, promienie, breakpoint 600 px) przepisane 1:1 z
  * `style.css` + `people.css`, zmierzone w przeglądarce przy 1280 i 390 px. Odstępstwa:
- *   - kolory wyłącznie tokenami z `globals.css` (najbliższy token zamiast hexa prototypu;
+ *   - kolory wyłącznie tokenami z `globals.css`: linie i notki = tokeny prototypu `--pp-*` (#484),
+ *     reszta najbliższym tokenem motywu zamiast hexa prototypu;
  *     szarości tekstu `#686868`/`#777` → `muted-foreground`, bo `#777` na bieli ma < 4,5:1);
  *   - obramowanie pól formularza `border-input` (WCAG 1.4.11), cele dotyku ≥ 44 px;
- *   - font: Inter z `main` (DM Sans nie jest jeszcze wdrożony), waga 750 → 700 (oś 400–700).
+ *   - font: DM Sans z `main` (#484, oś wagi 400–800), więc wagi 650/750 prototypu są dosłowne.
  * Breakpoint prototypu to `@container (max-width: 600px)` → tu `max-[600px]:`.
  */
 
@@ -18,14 +19,14 @@ export const EYEBROW =
 
 /** `.dash-content h1` — 34 px / 750, interlinia 1.08, −0.05em, margines 8 px; ≤ 600 px: 30 px. */
 export const H1 =
-  'my-2 break-words text-[34px] font-bold leading-[1.08] tracking-[-0.05em] text-foreground max-[600px]:text-[30px]';
+  'my-2 break-words text-[34px] font-[750] leading-[1.08] tracking-[-0.05em] text-foreground max-[600px]:text-[30px]';
 
 /** `.dash-intro` — 14 px, interlinia 1.7, margines górny 6 px. */
 export const INTRO = 'mt-1.5 max-w-2xl text-sm leading-[1.7] text-muted-foreground';
 
 /** `.stats` — siatka kafelków w jednej ramce, promień 16 px (≤ 600 px: 15 px), margines 22/28 px. */
 export const STATS =
-  'mb-7 mt-[22px] grid min-w-0 gap-px overflow-hidden rounded-[16px] border border-border bg-border max-[600px]:rounded-[15px]';
+  'mb-7 mt-[22px] grid min-w-0 gap-px overflow-hidden rounded-[16px] border border-[color:var(--pp-line)] bg-[color:var(--pp-line)] max-[600px]:rounded-[15px]';
 
 /** `.stat` — padding 21 px (≤ 600 px: 15/10 px); separator = 1 px tła siatki. */
 export const STAT = 'block min-w-0 bg-card p-[21px] max-[600px]:px-[10px] max-[600px]:py-[15px]';
@@ -43,7 +44,7 @@ export const STAT_SMALL = 'break-words text-[11px] text-muted-foreground max-[60
 
 /** `.panel` — ramka, promień 17 px, padding 23 px (≤ 600 px: 19 px). */
 export const PANEL =
-  'min-w-0 rounded-[17px] border border-border bg-card p-[23px] max-[600px]:p-[19px]';
+  'min-w-0 rounded-[17px] border border-[color:var(--pp-line)] bg-card p-[23px] max-[600px]:p-[19px]';
 
 /** `.panel h2` — 22 px / 700, −0.035em (≤ 600 px: 21 px). */
 export const PANEL_H2 =
@@ -59,13 +60,13 @@ export const SECTION_HEAD =
 /** `.table-wrap` + `th` — 11 px / 500, padding 17/12/17/0, linia dolna. */
 export const TABLE_WRAP = 'overflow-x-auto';
 export const TH =
-  'whitespace-nowrap border-b border-border py-[17px] pr-3 text-left text-[11px] font-medium text-muted-foreground';
+  'whitespace-nowrap border-b border-[color:var(--pp-line)] py-[17px] pr-3 text-left text-[11px] font-medium text-muted-foreground';
 /** `td` — 13 px, padding 17/12/17/0, linia dolna, bez zawijania (nazwy: patrz `TD_WRAP`). */
 export const TD =
-  'whitespace-nowrap border-b border-border py-[17px] pr-3 align-middle text-[13px] text-foreground';
+  'whitespace-nowrap border-b border-[color:var(--pp-line)] py-[17px] pr-3 align-middle text-[13px] text-foreground';
 /** Kolumna nazwy może się zawijać (długie nazwy firm/osób) — odstępstwo dla czytelności. */
 export const TD_WRAP =
-  'border-b border-border py-[17px] pr-3 align-middle text-[13px] text-foreground';
+  'border-b border-[color:var(--pp-line)] py-[17px] pr-3 align-middle text-[13px] text-foreground';
 
 /** `.tag` — 11 px, padding 5/8 px, promień 6 px, tło szarości (≤ 600 px: 10 px). */
 export const TAG =
@@ -73,11 +74,11 @@ export const TAG =
 
 /** `.job` w panelu — wiersz listy: odstęp 18 px, padding 25 px 0, linia górna; ≤ 600 px: 22 px, 12 px. */
 export const ROW =
-  'flex min-w-0 gap-[18px] border-t border-border py-[25px] first:border-t-0 first:pt-0 max-[600px]:gap-3 max-[600px]:py-[22px]';
+  'flex min-w-0 gap-[18px] border-t border-[color:var(--pp-line)] py-[25px] first:border-t-0 first:pt-0 max-[600px]:gap-3 max-[600px]:py-[22px]';
 
 /** `.company-icon` — 48 px, promień 14 px, tło soft, linia; ≤ 600 px: 42 px. */
 export const ICON_BOX =
-  'grid size-12 shrink-0 place-items-center rounded-[14px] border border-border bg-soft text-xs font-semibold tracking-[-0.04em] text-muted-foreground max-[600px]:size-[42px] [&_svg]:size-5';
+  'grid size-12 shrink-0 place-items-center rounded-[14px] border border-[color:var(--pp-line)] bg-soft text-xs font-semibold tracking-[-0.04em] text-muted-foreground max-[600px]:size-[42px] [&_svg]:size-5';
 
 /** `.job h3` — 15 px / 600, −0.03em, margines dolny 7 px. */
 export const ROW_TITLE =
@@ -88,7 +89,7 @@ export const ROW_META = 'break-words text-xs leading-[18px] text-muted-foregroun
 
 /** `.notice` — padding 20/23 px, promień 16 px, czerwona ramka na jasnym tle; ≤ 600 px: kolumna, 18 px. */
 export const NOTICE =
-  'my-[25px] flex min-w-0 items-center justify-between gap-5 rounded-[16px] border border-primary/25 bg-primary/5 px-[23px] py-5 text-sm max-[600px]:flex-col max-[600px]:items-start max-[600px]:p-[18px]';
+  'my-[25px] flex min-w-0 items-center justify-between gap-5 rounded-[16px] border border-[color:var(--pp-line-notice)] bg-[color:var(--pp-note-bg)] px-[23px] py-5 text-sm max-[600px]:flex-col max-[600px]:items-start max-[600px]:p-[18px]';
 /** `.notice strong` — 15 px / 650 (≤ 600 px: 14 px). */
 export const NOTICE_TITLE =
   'block break-words text-[15px] font-[650] text-foreground max-[600px]:text-sm';
@@ -103,7 +104,7 @@ const BTN_BASE =
 export const BTN_PRIMARY = `${BTN_BASE} min-h-[49px] rounded-[11px] border border-primary bg-primary px-[19px] py-3 text-sm font-[650] text-primary-foreground hover:bg-primary-dark`;
 
 /** `.btn.secondary` — białe tło, linia, tekst ink. */
-export const BTN_SECONDARY = `${BTN_BASE} min-h-[49px] rounded-[11px] border border-border bg-card px-[19px] py-3 text-sm font-[650] text-foreground hover:bg-soft`;
+export const BTN_SECONDARY = `${BTN_BASE} min-h-[49px] rounded-[11px] border border-[color:var(--pp-line)] bg-card px-[19px] py-3 text-sm font-[650] text-foreground hover:bg-soft`;
 
 /** `.people .notice .btn` — mniejszy przycisk akcji w wierszu: 12 px, padding 11/17 px, min. 44 px. */
 export const BTN_SMALL = `${BTN_BASE} min-h-11 rounded-[11px] border bg-card px-[17px] py-[11px] text-xs font-[650]`;
@@ -118,7 +119,7 @@ export const INLINE_LINK =
 
 /** `.search` — pole wyszukiwania: białe tło, padding 10 px, linia, promień 14 px, odstęp 12 px. */
 export const SEARCH_BOX =
-  'flex min-w-0 flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-2.5';
+  'flex min-w-0 flex-wrap items-end gap-3 rounded-lg border border-[color:var(--pp-line)] bg-card p-2.5';
 
 /** Pole formularza (`.filters select`: 13 px, padding 12/9 px) z obramowaniem `border-input`. */
 export const FIELD =
@@ -136,7 +137,7 @@ export function chipClass(isActive: boolean): string {
     'inline-flex min-h-11 max-w-full items-center break-words rounded-full border px-4 py-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
     isActive
       ? 'border-transparent bg-primary/10 font-[650] text-primary-dark'
-      : 'border-border bg-card font-medium text-foreground hover:bg-soft',
+      : 'border-[color:var(--pp-line)] bg-card font-medium text-foreground hover:bg-soft',
   ].join(' ');
 }
 
@@ -151,7 +152,7 @@ export const EMPTY = 'px-[15px] py-[45px] text-center text-sm text-muted-foregro
 
 /** `.people .extended h1` — 40 px, −0.045em, interlinia 1.15, margines 12/16 px; ≤ 600 px: 30 px. */
 export const H1_EXTENDED =
-  'mb-4 mt-3 break-words text-[40px] font-bold leading-[1.15] tracking-[-0.045em] text-foreground max-[600px]:text-[30px]';
+  'mb-4 mt-3 break-words text-[40px] font-[750] leading-[1.15] tracking-[-0.045em] text-foreground max-[600px]:text-[30px]';
 
 /** `.people .extended h2` — 23 px, −0.025em, interlinia 1.3. */
 export const H2_EXTENDED =
@@ -165,11 +166,11 @@ export const P_EXTENDED = 'text-[15px] leading-[1.7] text-muted-foreground';
 
 /** `.demo-note` — 12 px, interlinia 1.6, padding 12 px 0, linia dolna, margines 24 px. */
 export const DEMO_NOTE =
-  'mb-6 border-b border-border py-3 text-xs leading-[1.6] text-muted-foreground';
+  'mb-6 border-b border-[color:var(--pp-line)] py-3 text-xs leading-[1.6] text-muted-foreground';
 
 /** `.paper` — białe tło, linia, promień 22 px, padding 28 px, margines 20 px 0; ≤ 600 px: 20 px / 18 px. */
 export const PAPER =
-  'my-5 min-w-0 rounded-[22px] border border-border bg-card p-7 max-[600px]:rounded-[18px] max-[600px]:p-5';
+  'my-5 min-w-0 rounded-[22px] border border-[color:var(--pp-line)] bg-card p-7 max-[600px]:rounded-[18px] max-[600px]:p-5';
 
 /** `.form-grid` — dwie kolumny, odstęp 20 px, margines 22/28 px; ≤ 600 px: jedna kolumna. */
 export const FORM_GRID =
@@ -216,7 +217,7 @@ export const PROFILE_AVATAR =
   'flex size-16 shrink-0 items-center justify-center rounded-[20px] bg-foreground text-[22px] font-bold text-background';
 
 /** `.progress` — 6 px, tło linii, promień 4 px, margines 18 px 0; wypełnienie kolorem marki. */
-export const PROGRESS = 'my-[18px] h-1.5 overflow-hidden rounded-[4px] bg-border';
+export const PROGRESS = 'my-[18px] h-1.5 overflow-hidden rounded-[4px] bg-[color:var(--pp-line)]';
 export const PROGRESS_FILL = 'block h-full rounded-[4px] bg-primary';
 
 /** `.action-row` — wiersz akcji: odstęp 13 px, margines 23 px; ≤ 600 px: kolumna. */
@@ -258,7 +259,7 @@ export const BTN_RESET = 'h-auto whitespace-normal';
  * 20 px, padding 23/23/19 px, hover ciemniejsza linia; ≤ 600 px: promień 18 px, padding 21 px.
  */
 export const JOB_CARD =
-  'flex h-full min-w-0 flex-col rounded-[20px] border border-border bg-card px-[23px] pb-[19px] pt-[23px] transition-colors hover:border-input max-[600px]:rounded-[18px] max-[600px]:p-[21px]';
+  'flex h-full min-w-0 flex-col rounded-[20px] border border-[color:var(--pp-line)] bg-card px-[23px] pb-[19px] pt-[23px] transition-colors hover:border-input max-[600px]:rounded-[18px] max-[600px]:p-[21px]';
 
 /** `.people .p-job h3` — 19 px / 700, −0.018em, interlinia 1.35. */
 export const JOB_CARD_TITLE =
@@ -266,4 +267,4 @@ export const JOB_CARD_TITLE =
 
 /** `.p-card-bottom` — linia górna, padding 14 px, akcje na dole karty. */
 export const JOB_CARD_BOTTOM =
-  'mt-auto flex min-w-0 flex-wrap items-center gap-[9px] border-t border-border pt-[14px]';
+  'mt-auto flex min-w-0 flex-wrap items-center gap-[9px] border-t border-[color:var(--pp-line)] pt-[14px]';

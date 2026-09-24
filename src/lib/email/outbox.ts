@@ -5,6 +5,7 @@ import { Resend } from 'resend';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { renderEmail } from '@/emails/templates';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
+import { guestDeliveryToken } from '@/lib/email/guest-delivery';
 import { emailPreferenceCategory, emailSendPool } from '@/lib/email/categories';
 import {
   createUnsubscribeToken,
@@ -160,13 +161,6 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   }
 
   for (const row of queue) {
-    // #290: CTA do właściwej sekcji panelu, w locale odbiorcy (kolumna `locale`).
-    const { locale, data } = buildDeliveryData(
-      row,
-      site,
-      row.profile_id ? firstNames.get(row.profile_id) : undefined,
-    );
-
     const pool = emailSendPool(row.template);
     const waitUntil = exhausted.get(pool);
     if (waitUntil) {
@@ -175,6 +169,15 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     }
 
     try {
+      // #290: CTA do właściwej sekcji panelu, w locale odbiorcy (kolumna `locale`).
+      // #98: e-mail do gościa dostaje link z tokenem liczonym tutaj (w bazie tylko hash);
+      // brak tokenu = błąd tego wiersza (ponowienie), nie przerwanie paczki.
+      const { locale, data } = buildDeliveryData(
+        row,
+        site,
+        row.profile_id ? firstNames.get(row.profile_id) : undefined,
+        guestDeliveryToken(row.template, row.payload),
+      );
       const unsubscribe = unsubscribeLinksFor(row, locale, site, unsubscribeSecret);
       if (!unsubscribe && pool === 'marketing') {
         // Marketing nigdy nie wychodzi bez działającego wypisania (#45).

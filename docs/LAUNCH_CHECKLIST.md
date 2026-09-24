@@ -32,6 +32,8 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 - [ ] Turnstile (#46): `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (dostępny przy buildzie) i sekret
       `TURNSTILE_SECRET_KEY`. Bez nich w produkcji rejestracja i reset hasła są odrzucane —
       patrz [`TURNSTILE.md`](./TURNSTILE.md).
+- [ ] Aplikacja bez konta (#98): sekret `GUEST_APPLY_SECRET` (≥ 32 znaki). Bez niego w
+      produkcji formularz gościa zwraca „chwilowo niedostępne” — patrz [`GUEST_APPLY.md`](./GUEST_APPLY.md).
 - [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` zgodny z aktualną polityką.
 
 ## 3. Baza danych (Supabase produkcja)

@@ -134,10 +134,17 @@ export default async function EmployerApplicationDetailPage({
         {isDemo ? (
           <p className={`mt-3 ${TAG}`}>{t('employerApplicationsDemo')}</p>
         ) : null}
+        {application.isGuest ? (
+          <div className="mt-3 space-y-2">
+            <p className="inline-flex rounded-full bg-soft px-3 py-1 text-xs font-semibold text-foreground">{t('employerApplicationGuestBadge')}</p>
+            <p className="text-sm text-muted-foreground">{t('employerApplicationGuestHint')}</p>
+          </div>
+        ) : null}
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <StatusPill status={application.status} />
           <ApplicationStatusMenu applicationId={application.id} status={application.status} candidateName={name} jobTitle={application.jobTitle} />
-          <MessageCandidateButton applicationId={application.id} candidateName={name} />
+          {/* #98: rozmowa wymaga konta kandydata — gość dostaje kontakt e-mailowy niżej. */}
+          {application.isGuest ? null : <MessageCandidateButton applicationId={application.id} candidateName={name} />}
         </div>
       </header>
 
@@ -148,6 +155,9 @@ export default async function EmployerApplicationDetailPage({
           {field(t('employerApplicationPhone'), application.phone ? (
             <a href={`tel:${application.phone.replace(/[^\d+]/g, '')}`} className="underline-offset-4 hover:underline">{application.phone}</a>
           ) : notProvided)}
+          {application.isGuest ? field(t('employerApplicationEmail'), application.guestEmail ? (
+            <a href={`mailto:${application.guestEmail}`} className="underline-offset-4 hover:underline">{application.guestEmail}</a>
+          ) : notProvided) : null}
           {field(t('employerApplicationAvailability'), availabilityKey ? to(availabilityKey) : notProvided)}
           {field(t('employerApplicationMatch'), application.matchScore === null ? notProvided : t('employerApplicationMatchValue', { score: application.matchScore }))}
         </dl>

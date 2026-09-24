@@ -70,6 +70,18 @@ export interface EmployerApplication {
   jobTitle: string;
   /** Surowy `application_status` — mapowany w StatusPill. */
   status: string;
+  /** #98: aplikacja bez konta (candidate_id NULL, snapshot imienia i e-maila). */
+  isGuest?: boolean;
+}
+
+/** Imię kandydata z profilu, a dla aplikacji bez konta (#98) — ze snapshotu `guest_name`. */
+function applicationCandidate(row: Record<string, unknown>): { candidateName: string; isGuest?: true } {
+  // CHECK 0095: candidate_id NULL ⇒ jest snapshot gościa (guest_name, guest_email).
+  const guestName = asString(row['guest_name']).trim();
+  const isGuest = !asString(row['candidate_id']) && guestName.length > 0;
+  const profile = asEmbeddedRecord(row['profiles']);
+  const name = fullName(profile['first_name'], profile['last_name']);
+  return { candidateName: name || (isGuest ? guestName : ''), ...(isGuest ? { isGuest: true as const } : {}) };
 }
 
 export interface EmployerMatchedCandidate {
@@ -792,7 +804,7 @@ export async function getRecentApplications(): Promise<RecentApplicationsLoad> {
     // przepuszcza odczyt profiles(imię/nazwisko) oraz jobs(tytuł) powiązanych z aplikacją.
     const { data, error } = await supabase
       .from('applications')
-      .select('id, status, profiles(first_name, last_name), jobs(title)')
+      .select('id, status, candidate_id, guest_name, profiles(first_name, last_name), jobs(title)')
       .eq('company_id', companyId)
       .is('deleted_at', null)
       .order('submitted_at', { ascending: false })
@@ -800,11 +812,10 @@ export async function getRecentApplications(): Promise<RecentApplicationsLoad> {
     if (error) throw error;
 
     const applications = asRows(data).map((r) => {
-      const profile = asEmbeddedRecord(r['profiles']);
       const job = asEmbeddedRecord(r['jobs']);
       return {
         id: asString(r['id']),
-        candidateName: fullName(profile['first_name'], profile['last_name']),
+        ...applicationCandidate(r),
         jobTitle: asString(job['title']),
         status: asString(r['status'], 'submitted'),
       };
@@ -837,7 +848,7 @@ export async function getEmployerApplicationsPage(page: number): Promise<Employe
     const start = (page - 1) * EMPLOYER_APPLICATIONS_PAGE_SIZE;
     const { data, error } = await supabase
       .from('applications')
-      .select('id, status, profiles(first_name, last_name), jobs(title)')
+      .select('id, status, candidate_id, guest_name, profiles(first_name, last_name), jobs(title)')
       .eq('company_id', companyId)
       .is('deleted_at', null)
       .order('submitted_at', { ascending: false })
@@ -851,11 +862,10 @@ export async function getEmployerApplicationsPage(page: number): Promise<Employe
       isDemo: false,
       hasMore: rows.length > EMPLOYER_APPLICATIONS_PAGE_SIZE,
       applications: rows.slice(0, EMPLOYER_APPLICATIONS_PAGE_SIZE).map((row) => {
-        const profile = asEmbeddedRecord(row['profiles']);
         const job = asEmbeddedRecord(row['jobs']);
         return {
           id: asString(row['id']),
-          candidateName: fullName(profile['first_name'], profile['last_name']),
+          ...applicationCandidate(row),
           jobTitle: asString(job['title']),
           status: asString(row['status'], 'submitted'),
         };
@@ -1180,6 +1190,9 @@ export interface EmployerApplicationDetail {
   /** Treść wpisana przez kandydata w formularzu aplikowania (pusta = brak). */
   message: string;
   phone: string;
+  /** #98: aplikacja bez konta — kontakt e-mailowy ze snapshotu (pusty dla aplikacji z konta). */
+  isGuest: boolean;
+  guestEmail: string;
   /** Surowy `availability_status` (immediate/within_month/…); pusty = brak. */
   availability: string;
   submittedAt: string | null;
@@ -1212,7 +1225,7 @@ export type EmployerApplicationDetailLoad =
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const DEMO_APPLICATION_DETAILS: Record<string, Omit<EmployerApplicationDetail, 'id' | 'candidateName' | 'jobTitle' | 'status' | 'screeningAnswers'> & { screeningAnswers?: ScreeningAnswer[] }> = {
+const DEMO_APPLICATION_DETAILS: Record<string, Omit<EmployerApplicationDetail, 'id' | 'candidateName' | 'jobTitle' | 'status' | 'isGuest' | 'guestEmail' | 'screeningAnswers'> & { screeningAnswers?: ScreeningAnswer[] }> = {
   'demo-app-1': {
     candidateId: 'demo-c-1', jobId: '12343', message: 'Mam 6 lat doświadczenia w utrzymaniu ruchu i uprawnienia SEP. Mogę zacząć od zaraz.',
     phone: '+32 470 12 34 56', availability: 'immediate', submittedAt: '2026-09-20T08:30:00Z', matchScore: 92,
@@ -1250,7 +1263,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
     const base = DEMO_APPLICATIONS.find((application) => application.id === id);
     const extra = DEMO_APPLICATION_DETAILS[id];
     if (!base || !extra) return { status: 'not_found' };
-    return { status: 'ok', isDemo: true, application: { ...base, ...extra, screeningAnswers: extra.screeningAnswers ?? [] } };
+    return { status: 'ok', isDemo: true, application: { ...base, ...extra, isGuest: false, guestEmail: '', screeningAnswers: extra.screeningAnswers ?? [] } };
   }
 
   if (!UUID_RE.test(id)) return { status: 'not_found' };
@@ -1263,7 +1276,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
     // RLS (0039): tylko kandydat lub recruiter+ oferty; dodatkowo zawężamy do AKTYWNEJ firmy.
     const { data, error } = await supabase
       .from('applications')
-      .select('id, status, candidate_id, job_id, message, phone, availability, submitted_at, match_score, profiles(first_name, last_name), jobs(title)')
+      .select('id, status, candidate_id, guest_name, guest_email, job_id, message, phone, availability, submitted_at, match_score, profiles(first_name, last_name), jobs(title)')
       .eq('id', id)
       .eq('company_id', companyId)
       .is('deleted_at', null)
@@ -1274,8 +1287,10 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
     const row = asRecord(data);
     const candidateId = asString(row['candidate_id']);
     const jobId = asString(row['job_id']);
-    const person = asEmbeddedRecord(row['profiles']);
     const job = asEmbeddedRecord(row['jobs']);
+    const candidate = applicationCandidate(row);
+    // #98: aplikacja bez konta nie ma profilu ani dopasowania — nie pytamy o nie bazy.
+    const none = Promise.resolve({ data: null, error: null });
 
     const [
       { data: historyData, error: historyError },
@@ -1290,13 +1305,17 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         .order('created_at', { ascending: true })
         .limit(50),
       // candidate_profiles_select_company (0009 + company_can_view_candidate recruiter+, 0033).
-      supabase
-        .from('candidate_profiles')
-        .select('id, headline, city, experience_years, has_driving_license')
-        .eq('profile_id', candidateId)
-        .is('deleted_at', null)
-        .maybeSingle(),
-      supabase.from('matches').select('score').eq('candidate_id', candidateId).eq('job_id', jobId).maybeSingle(),
+      candidate.isGuest
+        ? none
+        : supabase
+            .from('candidate_profiles')
+            .select('id, headline, city, experience_years, has_driving_license')
+            .eq('profile_id', candidateId)
+            .is('deleted_at', null)
+            .maybeSingle(),
+      candidate.isGuest
+        ? none
+        : supabase.from('matches').select('score').eq('candidate_id', candidateId).eq('job_id', jobId).maybeSingle(),
       // application_screening_answers_select (0093): kandydat albo recruiter+ firmy oferty.
       supabase
         .from('application_screening_answers')
@@ -1350,7 +1369,9 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         id: asString(row['id']),
         status: asString(row['status'], 'submitted'),
         candidateId,
-        candidateName: fullName(person['first_name'], person['last_name']),
+        candidateName: candidate.candidateName,
+        isGuest: candidate.isGuest === true,
+        guestEmail: candidate.isGuest ? asString(row['guest_email']).trim() : '',
         jobId,
         jobTitle: asString(job['title']),
         message: asString(row['message']).trim(),
