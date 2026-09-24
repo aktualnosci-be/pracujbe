@@ -608,7 +608,7 @@ export default async function JobsListPage({
               event="search_appearance"
               jobIds={pageItems.filter((job) => !job.isDemo).map((job) => job.id)}
             />
-            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+            <ul className="pp-job-grid pp-job-grid-single">
               {pageItems.map((job) => (
                 <li key={job.id}>
                   <JobCard job={job} />

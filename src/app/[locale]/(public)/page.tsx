@@ -15,6 +15,7 @@ import { Benefits } from '@/components/public/Benefits';
 import { CategoryGrid } from '@/components/public/CategoryGrid';
 import { ForCompanies } from '@/components/public/ForCompanies';
 import { HeroSearch } from '@/components/public/HeroSearch';
+import { HomeEntryPoints } from '@/components/public/HomeEntryPoints';
 import { HowItWorks } from '@/components/public/HowItWorks';
 import { JobCard } from '@/components/public/JobCard';
 import { LocationGrid } from '@/components/public/LocationGrid';
@@ -22,10 +23,12 @@ import { LocationGrid } from '@/components/public/LocationGrid';
 /**
  * Strona główna Pracuj.be — hero według `docs/design/people-passport`.
  *
- * Lekka, mobile-first, w większości serwerowa (RSC). Sekcje w kolejności z makiety:
- * Hero (nagłówek + fotografia zespołu + wyszukiwarka + linki-akcje) → pasek zaufania →
- * najnowsze oferty (lista-tabela) → popularne kategorie + lokalizacje (2 kolumny) →
- * „Jak to działa?" obok karty „Jesteś pracodawcą?". Stopka jest w layoucie `(public)`.
+ * Lekka, mobile-first, w większości serwerowa (RSC). Wygląd i kolejność sekcji to kalka
+ * prototypu „Ludzie i praca” (`people.js` + `conditions.css`, klasy `.pp-*` w globals.css):
+ * hero (teza + fotografia) → wyszukiwarka → najnowsze oferty w siatce paszportów → „W czym
+ * jesteś dobry?” (dwie branże + „Profil zamiast CV”). Niżej sekcje aplikacji, których
+ * prototyp nie ma (wejścia, pasek zaufania, kategorie, lokalizacje, „Jak to działa?”,
+ * karta pracodawcy) — funkcje i linki bez zmian. Stopka jest w layoucie `(public)`.
  *
  * Renderuje się BEZ zmiennych środowiskowych — `getLatestJobs` korzysta z danych
  * demonstracyjnych, gdy Supabase nie jest skonfigurowane.
@@ -35,8 +38,14 @@ type HomePageProps = {
   params: Promise<{ locale: string }>;
 };
 
-const LATEST_JOBS_LIMIT = 4;
+const LATEST_JOBS_LIMIT = 6;
 const JOBS_PATH = '/oferty-pracy';
+
+/** Dwie branże z prototypu (`.p-sector`), zdjęcia z `docs/design/people-passport/prototype/assets`. */
+const SECTORS = [
+  { category: 'logistics', label: 'fieldsLogistics', image: '/images/people/warehouse.webp', height: 1200, className: 'pp-sector-logistics' },
+  { category: 'production', label: 'fieldsTechnical', image: '/images/people/workshop.webp', height: 1422, className: 'pp-sector-technical' },
+] as const;
 
 /** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). */
 const OG_LOCALE: Record<string, string> = {
@@ -95,101 +104,129 @@ export default async function HomePage({ params }: HomePageProps) {
     // Bez własnego <main> — layout (public) już dostarcza landmark <main> (unikamy duplikatu, a11y).
     <PublicSavedJobsProvider key={JSON.stringify(latestJobs.map(job => job.id))} jobIds={latestJobs.map(job => job.id)}>
       {/*
-        Hero wg `people.js` (#166): trzywierszowa teza, opis, czerwona akcja główna + link do
-        rejestracji kandydata, fotografia na wysokość kolumny tekstu z podpisem na zdjęciu.
-        Fotografia jest ilustracyjna, nie przedstawia konkretnej oferty ani pracodawcy.
-        Zdjęcie leży pod podpisem (absolute), a wysokość figury wyznacza min-h + podpis w
-        przepływie — przy powiększeniu tekstu figura rośnie zamiast ucinać podpis, a stała
-        minimalna wysokość chroni CLS i LCP (zdjęcie z priority, bez zmiany rozmiaru po załadowaniu).
+        Hero — kalka `.p-hero` z `people.js` (klasy .pp-* w globals.css): trzywierszowa teza,
+        opis, czerwona akcja + link tekstowy, fotografia z podpisem na zdjęciu. Fotografia jest
+        ilustracyjna (podpis mówi to wprost). Podpis w przepływie figury (min-height + padding
+        = wcięcie z prototypu): przy powiększeniu figura rośnie zamiast ucinać podpis, a stała
+        minimalna wysokość chroni CLS i LCP (zdjęcie z priority).
       */}
-      <section className="border-b border-border bg-background">
-        <div className="container py-8 md:py-12">
-          <div className="grid gap-8 md:grid-cols-[1.16fr_1fr] md:items-stretch lg:gap-12">
-            <div className="flex min-w-0 flex-col justify-center">
-              <p className="mb-5 text-xs font-bold uppercase tracking-[0.12em] text-accent-dark">
-                {t('heroEyebrow')}
-              </p>
-              <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.5rem] xl:text-[4rem]">
-                <span className="block">{t('heroTitleLine1')}</span>{' '}
-                <span className="block">{t('heroTitleLine2')}</span>{' '}
-                <span className="block text-accent-dark">{t('heroTitleLine3')}</span>
-              </h1>
-              <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                {t('heroSubtitle')}
-              </p>
-              <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-4">
-                <Link
-                  href={JOBS_PATH}
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  {t('heroBrowseJobs')}
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
-                <Link
-                  href="/rejestracja"
-                  className="inline-flex min-h-12 items-center gap-1 font-semibold text-foreground underline decoration-accent underline-offset-4 hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  {t('heroCreateProfile')}
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
-              </div>
-            </div>
-            <figure className="relative flex min-h-64 min-w-0 flex-col justify-end overflow-hidden rounded-3xl rounded-tl-[3.5rem] bg-soft p-3 sm:min-h-80 sm:p-4 md:min-h-[22rem] md:rounded-tl-[5rem] lg:rounded-tl-[6.25rem] lg:p-5">
-              <Image
-                src="/images/people/team.webp"
-                alt=""
-                fill
-                priority
-                sizes="(min-width: 1280px) 560px, (min-width: 768px) 45vw, 100vw"
-                className="object-cover"
-              />
-              <figcaption className="relative flex items-center gap-3 rounded-xl bg-background px-4 py-3 text-sm leading-snug text-foreground shadow-lg sm:gap-4 sm:px-5 sm:py-4">
-                <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent font-bold text-accent-foreground sm:flex md:hidden lg:flex" aria-hidden="true">.be</span>
-                <span className="min-w-0"><strong className="block">{t('heroPhotoCaption')}</strong><span className="mt-0.5 block text-muted-foreground">{t('heroPhotoDisclaimer')}</span></span>
-              </figcaption>
-            </figure>
-          </div>
-          <div className="mt-8">
-            <HeroSearch />
+      <section className="pp-hero">
+        <div className="pp-hero-copy min-w-0">
+          <span className="pp-eyebrow">{t('heroEyebrow')}</span>
+          <h1>
+            <span className="block">{t('heroTitleLine1')}</span>{' '}
+            <span className="block">{t('heroTitleLine2')}</span>{' '}
+            <span className="pp-accent block">{t('heroTitleLine3')}</span>
+          </h1>
+          <p>{t('heroSubtitle')}</p>
+          <div className="pp-hero-links">
+            <Link href={JOBS_PATH} className="pp-btn">
+              {t('heroBrowseJobs')}
+            </Link>
+            <Link href="/rejestracja" className="pp-text-link rounded-sm">
+              {t('heroCreateProfile')}
+            </Link>
           </div>
         </div>
+        <figure className="pp-hero-photo min-w-0">
+          <Image
+            src="/images/people/team.webp"
+            alt=""
+            fill
+            priority
+            sizes="(min-width: 1360px) 580px, (min-width: 601px) 45vw, 100vw"
+            className="object-cover object-center"
+          />
+          <figcaption>
+            <span className="pp-caption-icon" aria-hidden="true">.be</span>
+            <span className="min-w-0">
+              <strong>{t('heroPhotoCaption')}</strong>
+              <small>{t('heroPhotoDisclaimer')}</small>
+            </span>
+          </figcaption>
+        </figure>
       </section>
 
-      {/* Pasek zaufania */}
-      <Benefits />
+      <section className="pp-search-section" aria-label={t('searchSectionLabel')}>
+        <HeroSearch />
+      </section>
 
-      {/* Najnowsze oferty pracy */}
-      <section className="container py-12 md:py-16">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            {t('latestJobsTitle')}
-          </h2>
-          <Link
-            href={JOBS_PATH}
-            className="inline-flex items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline"
-          >
-            {t('latestJobsSeeAll')}
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      {/* Najnowsze oferty — `.p-offers`: szare tło z liniami, siatka paszportów (2 kolumny,
+          1 ≤ 950 px — tak renderuje prototyp: conditions.css nadpisuje 3 kolumny z people.css). */}
+      <section className="pp-offers">
+        <div className="pp-section-head">
+          <div className="min-w-0">
+            <h2>{t('latestJobsTitle')}</h2>
+            <p>{t('latestJobsSubtitle')}</p>
+          </div>
+          <Link href={JOBS_PATH} className="pp-btn pp-btn-ink shrink-0">
+            {/* Jeden element tekstowy jak w prototypie („… oferty →”), bez odstępu flex przed strzałką. */}
+            <span>
+              {t('latestJobsSeeAll')} <span aria-hidden="true">→</span>
+            </span>
           </Link>
         </div>
 
-        {isShowingDemoJobs() ? <DemoJobsNotice className="mt-6" /> : null}
+        {isShowingDemoJobs() ? <DemoJobsNotice className="pp-notice" /> : null}
 
         {latestJobs.length > 0 ? (
-          <div className="mt-6 divide-y divide-border overflow-hidden rounded-lg border border-border">
+          <ul className="pp-job-grid">
             {latestJobs.map((job) => (
-              <JobCard key={job.id} job={job} />
+              <li key={job.id}>
+                <JobCard job={job} />
+              </li>
             ))}
-          </div>
+          </ul>
         ) : (
-          <p className="mt-6 rounded-lg border border-dashed border-border bg-soft p-8 text-center text-sm text-muted-foreground">
+          <p className="rounded-[20px] border border-dashed border-border bg-background p-8 text-center text-sm text-muted-foreground">
             {tJobs('empty')}
           </p>
         )}
       </section>
 
-      {/* Popularne kategorie + lokalizacje (2 kolumny) */}
-      <section className="border-t border-border bg-soft">
+      {/* „W czym jesteś dobry?” — `.p-fields`: dwie branże ze zdjęciem + „Profil zamiast CV”. */}
+      <section className="pp-fields">
+        <div className="pp-section-head">
+          <div className="min-w-0">
+            <h2>{t('fieldsTitle')}</h2>
+            <p>{t('fieldsSubtitle')}</p>
+          </div>
+        </div>
+        <div className="pp-sector-grid">
+          {SECTORS.map((sector) => (
+            <Link
+              key={sector.category}
+              href={{ pathname: JOBS_PATH, query: { category: sector.category } }}
+              className={`pp-sector ${sector.className}`}
+            >
+              <Image src={sector.image} alt="" width={800} height={sector.height} sizes="(min-width: 761px) 30vw, (min-width: 601px) 50vw, 100vw" />
+              <span>
+                <strong>{t(sector.label)}</strong>
+                <ArrowRight aria-hidden="true" strokeWidth={1.5} />
+              </span>
+            </Link>
+          ))}
+          <aside className="pp-profile-note" aria-labelledby="profile-note-title">
+            <span className="pp-eyebrow">{t('profileNoteEyebrow')}</span>
+            <h2 id="profile-note-title">
+              {t.rich('profileNoteTitle', { br: () => <br className="max-[760px]:hidden" /> })}
+            </h2>
+            <p>{t('profileNoteBody')}</p>
+            <Link href="/rejestracja" className="pp-btn">
+              {t('profileNoteCta')}
+            </Link>
+          </aside>
+        </div>
+      </section>
+
+      {/* Poniżej: sekcje aplikacji spoza prototypu (wejścia, pasek zaufania, kategorie,
+          lokalizacje, „Jak to działa?” + karta pracodawcy) — funkcje i linki bez zmian. */}
+      <section className="container space-y-6 border-t border-border py-10 md:py-12">
+        <HomeEntryPoints />
+        <Benefits />
+      </section>
+
+      <section className="border-y border-border bg-soft">
         <div className="container py-12 md:py-16">
           <div className="grid gap-10 lg:grid-cols-2 lg:gap-12">
             <CategoryGrid />
@@ -198,7 +235,6 @@ export default async function HomePage({ params }: HomePageProps) {
         </div>
       </section>
 
-      {/* Jak to działa? + Jesteś pracodawcą? */}
       <section className="container py-12 md:py-16">
         <div className="grid gap-8 lg:grid-cols-[1.8fr_1fr] lg:items-start lg:gap-10">
           <HowItWorks />

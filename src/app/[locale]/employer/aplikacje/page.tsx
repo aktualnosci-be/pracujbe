@@ -78,6 +78,9 @@ export default async function EmployerApplicationsPage({
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('employerApplicationsCandidateLabel')}</p>
                         <h2 className="mt-1 break-words text-xl font-bold leading-tight text-foreground">{name}</h2>
+                        {application.isGuest ? (
+                          <p className="mt-2 inline-flex rounded-full bg-soft px-3 py-1 text-xs font-semibold text-foreground">{t('employerApplicationGuestBadge')}</p>
+                        ) : null}
                       </div>
                     </div>
                     <dl className="mt-6 border-y border-border py-5">

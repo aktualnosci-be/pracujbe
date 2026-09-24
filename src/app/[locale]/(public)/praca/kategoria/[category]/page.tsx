@@ -208,7 +208,7 @@ export default async function CategoryLandingPage({ params }: PageProps) {
           </div>
         ) : (
           <>
-            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+            <ul className="pp-job-grid">
               {result.jobs.map((job) => (
                 <li key={job.id}>
                   <JobCard job={job} />
