@@ -27,7 +27,7 @@ import { companyVatSource } from '@/lib/vies/state';
  *   - `resolveReport`    — rozstrzyga zgłoszenie przez RPC `admin_resolve_report` (sprawę DSA
  *     tylko bierze do analizy — rozstrzyga ją decyzja).
  *   - `decideReport`     — decyzja moderacyjna w sprawie DSA (#42): RPC `admin_decide_report`
- *     (decyzja + skutek + stan sprawy + audyt + powiadomienia w jednej transakcji, 0095).
+ *     (decyzja + skutek + stan sprawy + audyt + powiadomienia w jednej transakcji, 0099).
  *   - `restoreModeration` — cofnięcie ograniczenia treści (RPC `admin_restore_moderation`).
  *   - `checkCompanyVies` — ręczne sprawdzenie numeru VAT firmy w VIES (#92), zapis wyniku
  *     rozstrzygającego przez RPC `admin_record_vies_check` (0088).

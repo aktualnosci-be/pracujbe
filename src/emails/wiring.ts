@@ -24,11 +24,20 @@ export const QUEUED_EMAIL_TYPES = [
   'teamInvitation', // invite_company_member (0086)
   'jobMatch', // process_saved_search_alerts (0092) — digest zapisanego wyszukiwania
   'reportReceived', // submit_content_report (0094) — enqueue_email_to_address
-  'reportDecisionActioned', // admin_decide_report (0095) → ograniczenie treści — do zgłaszającego
-  'reportDecisionNoAction', // admin_decide_report (0095) → brak działań — do zgłaszającego
-  'moderationJobRemoved', // admin_decide_report (0095) → uzasadnienie dla właściciela firmy
-  'moderationCompanySuspended', // admin_decide_report (0095) → uzasadnienie dla właściciela firmy
-  'moderationRestored', // admin_restore_moderation (0095)
+  'reportDecisionActioned', // admin_decide_report (0099) → ograniczenie treści — do zgłaszającego
+  'reportDecisionNoAction', // admin_decide_report (0099) → brak działań — do zgłaszającego
+  'moderationJobRemoved', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
+  'moderationCompanySuspended', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
+  'moderationRestored', // admin_restore_moderation (0099)
+] as const satisfies readonly EmailType[];
+
+/**
+ * Aplikacja bez konta (#98) — kolejkowane przez `enqueue_guest_email` (0095) na adres gościa
+ * bez profilu; link z tokenem dokłada worker (`src/lib/email/guest-delivery.ts`).
+ */
+export const GUEST_EMAIL_TYPES = [
+  'guestApplicationConfirm', // submit_guest_application
+  'guestApplicationSent', // confirm_guest_application
 ] as const satisfies readonly EmailType[];
 
 /** E-maile konta — wysyłane przez warstwę Auth (`src/lib/email/auth-email.ts`). */

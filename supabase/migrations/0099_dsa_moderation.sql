@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0095 — decyzja moderacyjna z uzasadnieniem i atomową egzekucją (#42).
+-- 0099 — decyzja moderacyjna z uzasadnieniem i atomową egzekucją (#42).
 --
 -- Buduje na sprawie `dsa_notice` z 0094 (#41). Sprawę DSA rozstrzyga WYŁĄCZNIE nazwana akcja
 -- domenowa `admin_decide_report`: decyzja + skutek wobec treści + stan sprawy + historia +

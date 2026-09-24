@@ -121,6 +121,9 @@ export interface EmailDataMap {
     jobs?: Array<{ title: string; companyName?: string; city?: string; url: string }>;
     actionUrl: string;
   };
+  /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
+  guestApplicationConfirm: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
+  guestApplicationSent: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
   invoice: { recipientName?: string; invoiceNumber: string; amount: string; downloadUrl: string };
@@ -611,6 +614,30 @@ export function TeamInvitationEmail(props: EmailProps<'teamInvitation'>): ReactE
   );
 }
 
+export function GuestApplicationConfirmEmail(props: EmailProps<'guestApplicationConfirm'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="guestApplicationConfirm"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
+export function GuestApplicationSentEmail(props: EmailProps<'guestApplicationSent'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="guestApplicationSent"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
 const jobListStyles = {
   item: {
     borderTop: '1px solid #DEDEDE',
@@ -832,6 +859,8 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   companySuspended: CompanySuspendedEmail,
   teamInvitation: TeamInvitationEmail,
   jobMatch: JobMatchEmail,
+  guestApplicationConfirm: GuestApplicationConfirmEmail,
+  guestApplicationSent: GuestApplicationSentEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,
   invoice: InvoiceEmail,

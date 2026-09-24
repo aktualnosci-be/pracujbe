@@ -1,7 +1,7 @@
 /**
  * Reguły decyzji moderacyjnej w sprawie DSA (#42) — wspólne dla dialogu (przeglądarka)
  * i Server Action. Te same limity i zasady egzekwuje baza (RPC `admin_decide_report` /
- * `admin_restore_moderation`, CHECK-i `moderation_decisions`, migracja 0095).
+ * `admin_restore_moderation`, CHECK-i `moderation_decisions`, migracja 0099).
  */
 
 /** Rodzaje decyzji: brak działań albo ograniczenie treści (zasięg: oferta / firma). */

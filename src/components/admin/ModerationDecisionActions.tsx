@@ -37,7 +37,7 @@ import { useAdminFeedback } from '@/components/admin/AdminFeedback';
  * krokiem, a „Podejmij decyzję” otwiera dialog z uzasadnieniem — rozstrzygnięcie (brak działań /
  * wycofanie oferty / zawieszenie firmy), fakty, podstawa (regulamin albo prawo + wskazanie
  * postanowienia) i udział automatyzacji. Zapis = jedno RPC `admin_decide_report`: decyzja,
- * skutek, stan sprawy, historia, audyt i powiadomienia razem albo wcale (0095). Ograniczenie w
+ * skutek, stan sprawy, historia, audyt i powiadomienia razem albo wcale (0099). Ograniczenie w
  * mocy można cofnąć („Cofnij ograniczenie”, wymagane uzasadnienie).
  *
  * Błędy przy polach (`aria-invalid` + `aria-describedby`, fokus na pierwszym błędzie), blokada

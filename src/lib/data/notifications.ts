@@ -87,7 +87,7 @@ const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {
 };
 
 /**
- * Decyzja moderacyjna (0095, #42): `system` z `data.kind = 'moderation'` — tytuł wg
+ * Decyzja moderacyjna (0099, #42): `system` z `data.kind = 'moderation'` — tytuł wg
  * `data.decision` (wycofanie oferty, zawieszenie firmy, cofnięcie ograniczenia).
  */
 const MODERATION_TITLE_KEY: Record<string, string> = {

@@ -166,7 +166,7 @@ export type CompanyModerationLoad =
   | { status: 'error' };
 
 /**
- * Decyzje moderacyjne wobec firmy i jej ofert (RPC `get_company_moderation_decisions`, 0095):
+ * Decyzje moderacyjne wobec firmy i jej ofert (RPC `get_company_moderation_decisions`, 0099):
  * tylko aktywny owner/admin firmy dostaje wiersze (inni — pusta lista). Bez env → brak decyzji.
  */
 export async function getCompanyModerationDecisions(companyId: string): Promise<CompanyModerationLoad> {

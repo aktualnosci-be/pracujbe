@@ -122,7 +122,7 @@ export interface AdminReportTarget {
   deleted: boolean;
 }
 
-/** Zdarzenie historii sprawy DSA (`report_events`, 0094; decyzja/przywrócenie/flaga — 0095). */
+/** Zdarzenie historii sprawy DSA (`report_events`, 0094; decyzja/przywrócenie/flaga — 0099). */
 export interface AdminReportEvent {
   type: 'submitted' | 'status_changed' | 'decision' | 'restored' | 'flagged';
   toStatus: string | null;

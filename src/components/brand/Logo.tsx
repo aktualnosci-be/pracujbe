@@ -1,17 +1,20 @@
-﻿import * as React from 'react';
+import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 /**
  * Znak „Ludzie i praca”: słowo pracuj i biały sufiks na czerwonym kafelku.
- * Kafelek jest wymiarowany w `em` (przy domyślnym text-2xl: padding 4/6 px, promień 14 px
- * = --radius), więc skaluje się z fontem logo. Nadpisanie rozmiaru przez `className`
- * (np. stały rozmiar w wąskim nagłówku) zachowuje proporcje znaku.
+ * Geometria dosłownie z prototypu (`.people .logo` + `.people .logo .suffix`, extended.css):
+ * światło −1,5 px przy 29 px (≈ −0,052 em), kafelek z odstępem .09 em, dopełnieniem
+ * .1/.17/.14 em i promieniem .22 em. Waga 800 z prototypu tylko w nagłówku publicznym
+ * (`className="font-extrabold"`); w panelach zostaje 700, żeby wąski pasek przy 320 px i
+ * tekście 200% się mieścił. Wszystko w `em`, więc znak skaluje się z rozmiarem
+ * fontu (nadpisanie przez `className`, np. 29 px w nagłówku, zachowuje proporcje).
  */
 export function Logo({ className }: { className?: string }): React.JSX.Element {
   return (
-    <span className={cn('inline-flex items-center whitespace-nowrap text-2xl text-foreground', className)} role="img" aria-label="Pracuj.be">
-      <span aria-hidden="true" className="inline-flex items-baseline gap-[calc(1em/12)] font-bold leading-none tracking-tighter">
-        pracuj<span className="rounded-[calc(7em/12)] bg-primary px-[0.25em] py-[calc(1em/6)] text-primary-foreground">.be</span>
+    <span className={cn('inline-flex items-center whitespace-nowrap text-2xl font-bold text-foreground', className)} role="img" aria-label="Pracuj.be">
+      <span aria-hidden="true" className="inline-flex items-baseline leading-none tracking-[-0.052em]">
+        pracuj<span className="ml-[0.09em] inline-block rounded-[0.22em] bg-primary px-[0.17em] pb-[0.14em] pt-[0.1em] leading-none tracking-[-0.055em] text-primary-foreground">.be</span>
       </span>
     </span>
   );
