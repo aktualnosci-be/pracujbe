@@ -11,7 +11,7 @@ import { expect, test, type Page } from '@playwright/test';
  * - wysłanie: przycisk zablokowany, potem neutralny komunikat „sprawdź skrzynkę” z adresem,
  * - dialog bez naruszeń axe critical/serious (320 i 1280 px),
  * - strony linków z e-maili: noindex, bez Referer, GET niczego nie zmienia (przycisk),
- *   nieprawidłowy token → komunikat; przejęcie bez sesji → logowanie z powrotem (z tokenem).
+ *   nieprawidłowy token → komunikat; przejęcie bez sesji → logowanie z powrotem bez tokenu w URL.
  * - pytania screeningowe (#101, oferta 1003): wymagane bez odpowiedzi blokują wysyłkę gościa
  *   przy pytaniu, po odpowiedzi zgłoszenie wychodzi.
  * Kontrola ujemna (lokalnie): bez `GuestApplyForm` w ApplyModal test „formularz gościa” pada.
@@ -140,28 +140,50 @@ for (const width of [320, 1280]) {
   });
 }
 
-test('link potwierdzenia: noindex, bez Referer, GET nic nie potwierdza, zły token → komunikat', async ({ page }) => {
+test('link potwierdzenia: prywatne nagłówki, bez tokenu w URL, zły token → komunikat', async ({ page }) => {
   const t = msgs('pl');
   const token = 'x'.repeat(10);
   const response = await page.goto(`/pl/aplikacja/potwierdz?token=${token}`);
   expect(response?.status()).toBe(200);
+  expect(response?.headers()['cache-control']).toContain('no-store');
+  expect(response?.headers()['referrer-policy']).toBe('no-referrer');
+  expect(page.url()).not.toContain('token');
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
   await expect(page.locator('meta[name="referrer"]')).toHaveAttribute('content', 'no-referrer');
   await expect(page.getByRole('heading', { level: 1, name: t.guestApply.confirmTitle })).toBeVisible();
-  await expect(page.getByRole('heading', { name: t.guestApply.invalidTitle })).toHaveCount(0);
-
-  await page.getByRole('button', { name: t.guestApply.confirmButton }).click();
-  await expect(page.getByRole('heading', { name: t.guestApply.invalidTitle })).toBeFocused();
+  await expect(page.getByRole('heading', { name: t.guestApply.invalidTitle })).toBeVisible();
+  await expect(page.getByRole('button', { name: t.guestApply.confirmButton })).toHaveCount(0);
 });
 
-test('link przejęcia bez sesji: logowanie wraca na tę stronę z tokenem', async ({ page }) => {
+test('stary link przejęcia bez sesji: logowanie wraca na czystą stronę', async ({ page }) => {
   const t = msgs('en');
   const token = 'A'.repeat(43);
-  await page.goto(`/en/aplikacja/przejmij?token=${token}`);
+  const response = await page.goto(`/en/aplikacja/przejmij?token=${token}`);
+  expect(response?.headers()['cache-control']).toContain('no-store');
+  expect(response?.headers()['referrer-policy']).toBe('no-referrer');
+  expect(page.url()).not.toContain(token);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
   await expect(page.getByRole('heading', { level: 1, name: t.guestApply.claimTitle })).toBeVisible();
   const login = page.getByRole('link', { name: t.guestApply.claimLogin });
   const href = new URL((await login.getAttribute('href')) ?? '', 'http://localhost');
   expect(href.pathname).toBe('/en/logowanie');
-  expect(href.searchParams.get('next')).toBe(`/en/aplikacja/przejmij?token=${token}`);
+  expect(href.searchParams.get('next')).toBe('/en/aplikacja/przejmij');
+  expect(href.href).not.toContain(token);
+});
+
+test('nowy link przejęcia: fragment znika z historii, token zostaje w cookie HttpOnly', async ({ page }) => {
+  const token = 'B'.repeat(43);
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+
+  await page.goto(`/en/aplikacja/przejmij#token=${token}`);
+  await expect(page.getByRole('link', { name: msgs('en').guestApply.claimLogin })).toBeVisible();
+
+  expect(page.url()).toBe('http://127.0.0.1:4319/en/aplikacja/przejmij');
+  expect(requests.every((url) => !url.includes(token))).toBe(true);
+  const cookies = await page.context().cookies();
+  const staged = cookies.find((cookie) => cookie.name === 'pb_guest_claim');
+  expect(staged?.value).toBe(token);
+  expect(staged?.httpOnly).toBe(true);
+  expect(staged?.path).toBe('/en/aplikacja/przejmij');
 });
