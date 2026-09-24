@@ -11,9 +11,14 @@ import {
 } from '@/lib/admin/list-params';
 import { listReports, type AdminReportRow } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
-import { cn } from '@/lib/utils';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
-import { AdminPageHeader, AdminPager } from '@/components/admin/AdminListControls';
+import {
+  ADMIN_CARD,
+  AdminEmptyState,
+  AdminPageHeader,
+  AdminPager,
+  adminChipClass,
+} from '@/components/admin/AdminListControls';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { ReportActions } from '@/components/admin/ReportActions';
 
@@ -103,7 +108,11 @@ export default async function AdminReportsPage({
 
   return (
     <div className="space-y-6">
-      <AdminPageHeader title={t('reportsTitle')} subtitle={t('reportsSubtitle')} />
+      <AdminPageHeader
+        eyebrow={t('brandTag')}
+        title={t('reportsTitle')}
+        subtitle={t('reportsSubtitle')}
+      />
 
       {/* Filtry statusu */}
       <nav aria-label={t('filterReportsLabel')} className="flex flex-wrap gap-2">
@@ -118,12 +127,7 @@ export default async function AdminReportsPage({
                   : { pathname: BASE_PATH, query: { status: value } }
               }
               aria-current={isActive ? 'true' : undefined}
-              className={cn(
-                'inline-flex min-h-11 items-center rounded-full border px-3 text-sm font-medium transition-colors',
-                isActive
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border text-muted-foreground hover:bg-soft hover:text-foreground',
-              )}
+              className={adminChipClass(isActive)}
             >
               {t(FILTER_LABEL[value] ?? 'filterAll')}
             </Link>
@@ -134,9 +138,9 @@ export default async function AdminReportsPage({
       {result.status === 'error' ? (
         <AdminLoadError retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`} />
       ) : (
-        <section className="rounded-lg border border-border bg-card">
+        <section className={ADMIN_CARD}>
           {reports.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">{t('reportsEmpty')}</p>
+            <AdminEmptyState message={t('reportsEmpty')} />
           ) : (
             <ul className="divide-y divide-border">
               {reports.map((report) => {
@@ -145,11 +149,11 @@ export default async function AdminReportsPage({
                 const reasonLabel = t(reason.key);
                 const { target } = report;
                 return (
-                  <li key={report.id} className="space-y-3 p-4 sm:px-5">
+                  <li key={report.id} className="min-w-0 space-y-3 p-5 sm:px-7">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1 space-y-1">
+                      <div className="min-w-0 flex-1 basis-64 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center rounded-md bg-soft px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                          <span className="inline-flex items-center rounded-full bg-soft px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             {typeLabel}
                           </span>
                           <AdminStatusBadge kind="report" status={report.status} />
@@ -157,7 +161,7 @@ export default async function AdminReportsPage({
                         <h2
                           tabIndex={-1}
                           data-admin-focus={reportFocusKey(report.id)}
-                          className="break-words text-sm font-semibold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="break-words text-lg font-bold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           {reasonLabel}
                         </h2>
@@ -171,7 +175,7 @@ export default async function AdminReportsPage({
                           ) : target.href ? (
                             <Link
                               href={target.href}
-                              className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                              className="font-semibold text-foreground underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                             >
                               {target.label ?? t('targetUnnamed')}
                             </Link>
@@ -183,7 +187,7 @@ export default async function AdminReportsPage({
                           )}
                         </p>
                         {target.preview ? (
-                          <blockquote className="break-words rounded-md border-l-2 border-border bg-soft px-3 py-2 text-sm text-foreground">
+                          <blockquote className="break-words rounded-2xl border-l-4 border-primary/40 bg-soft px-4 py-3 text-sm text-foreground">
                             {target.preview}
                           </blockquote>
                         ) : null}

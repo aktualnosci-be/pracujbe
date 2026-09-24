@@ -33,6 +33,10 @@ export async function generateMetadata({
   };
 }
 
+/** Kafelek-link statystyki: zaokrąglenie zgodne z kartą, widoczny fokus (#5). */
+const STAT_LINK_CLASS =
+  'block min-w-0 rounded-lg transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+
 interface QuickLink {
   href: string;
   labelKey: string;
@@ -74,9 +78,14 @@ export default async function AdminDashboardPage({
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
+      <header className="min-w-0 rounded-3xl border border-border bg-card p-5 sm:p-8">
+        <p className="mb-2 break-words text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+          {t('navSummary')}
+        </p>
+        <h1 className="break-words text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          {t('title')}
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('subtitle')}</p>
       </header>
 
       {/* Statystyki */}
@@ -95,7 +104,7 @@ export default async function AdminDashboardPage({
               pathname: '/admin/firmy',
               query: { status: AWAITING_FILTER },
             }}
-            className="block rounded-lg transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className={STAT_LINK_CLASS}
           >
             <StatCard
               label={t('statPending')}
@@ -113,7 +122,7 @@ export default async function AdminDashboardPage({
           {/* #416: kafelek prowadzi do listy z filtrem „Otwarte” — ta sama liczba co na kafelku. */}
           <Link
             href={{ pathname: '/admin/zgloszenia', query: { status: 'open' } }}
-            className="block rounded-lg transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className={STAT_LINK_CLASS}
           >
             <StatCard
               label={t('statOpenReports')}
@@ -131,16 +140,16 @@ export default async function AdminDashboardPage({
           <Link
             key={link.href}
             href={link.href}
-            className="group flex items-start gap-3 rounded-lg border border-border bg-card p-5 transition-colors hover:border-accent/40 hover:bg-soft"
+            className="group flex min-w-0 items-start gap-4 rounded-3xl border border-border bg-card p-5 transition-colors hover:border-primary/40 hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-6"
           >
             <span
-              className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary [&_svg]:size-5"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary-dark [&_svg]:size-5"
               aria-hidden="true"
             >
               {link.icon}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="flex flex-wrap items-center gap-1 break-words text-sm font-semibold text-foreground">
+              <span className="flex flex-wrap items-center gap-1 break-words text-base font-bold text-foreground">
                 {t(link.labelKey)}
                 <ArrowRight
                   className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5"

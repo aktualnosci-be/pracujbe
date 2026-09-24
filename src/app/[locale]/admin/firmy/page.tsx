@@ -8,13 +8,15 @@ import { AWAITING_FILTER, listCompanies } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import {
+  ADMIN_CARD,
+  AdminEmptyState,
   AdminPageHeader,
   AdminPager,
   AdminSearchForm,
+  adminChipClass,
 } from '@/components/admin/AdminListControls';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
-import { cn } from '@/lib/utils';
 
 /**
  * Panel administratora — Firmy (Etap 7g).
@@ -71,7 +73,7 @@ function CompanyDetailLink({ id, name }: { id: string; name: string }) {
   return (
     <Link
       href={`/admin/firmy/${encodeURIComponent(id)}`}
-      className="underline underline-offset-2 hover:no-underline"
+      className="break-words font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       {name}
     </Link>
@@ -85,7 +87,7 @@ function CompanyHistoryLink({ id, label }: { id: string; label: string }) {
   return (
     <Link
       href={{ pathname: '/admin/dziennik', query: { entity: 'company', id: uuid } }}
-      className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-foreground underline underline-offset-2 hover:no-underline"
+      className="inline-flex min-h-11 items-center px-1 text-sm font-semibold text-primary-dark underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       {label}
     </Link>
@@ -129,7 +131,11 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
 
   return (
     <div className="space-y-6">
-      <AdminPageHeader title={t('companiesTitle')} subtitle={t('companiesSubtitle')} />
+      <AdminPageHeader
+        eyebrow={t('brandTag')}
+        title={t('companiesTitle')}
+        subtitle={t('companiesSubtitle')}
+      />
 
       <AdminSearchForm
         action={`/${locale}${BASE_PATH}`}
@@ -155,12 +161,7 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
                 },
               }}
               aria-current={isActive ? 'true' : undefined}
-              className={cn(
-                'inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium transition-colors',
-                isActive
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border text-muted-foreground hover:bg-soft hover:text-foreground',
-              )}
+              className={adminChipClass(isActive)}
             >
               {t(FILTER_LABEL[value] ?? 'filterAll')}
             </Link>
@@ -173,28 +174,28 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
           retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`}
         />
       ) : (
-        <section className="rounded-lg border border-border bg-card">
+        <section className={ADMIN_CARD}>
           {companies.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">{t('companiesEmpty')}</p>
+            <AdminEmptyState message={t('companiesEmpty')} />
           ) : (
             <>
               {/* Desktop: tabela */}
-              <div className="hidden overflow-x-auto md:block">
+              <div className="hidden overflow-x-auto rounded-3xl md:block">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="bg-soft">
                     <tr className="border-b border-border text-left">
-                      <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {t('colName')}
                       </th>
-                      <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {t('colStatus')}
                       </th>
-                      <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {t('colCreated')}
                       </th>
                       <th
                         scope="col"
-                        className="px-4 py-3 text-right font-medium text-muted-foreground"
+                        className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                       >
                         {t('colActions')}
                       </th>
@@ -207,17 +208,17 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
                           scope="row"
                           tabIndex={-1}
                           data-admin-focus={companyFocusKey(company.id)}
-                          className="px-4 py-3 text-left align-middle font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                          className="px-5 py-4 text-left align-middle font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                         >
                           <CompanyDetailLink id={company.id} name={company.name} />
                         </th>
-                        <td className="px-4 py-3 align-middle">
+                        <td className="px-5 py-4 align-middle">
                           <AdminStatusBadge kind="company" status={company.status} />
                         </td>
-                        <td className="px-4 py-3 align-middle text-muted-foreground">
+                        <td className="px-5 py-4 align-middle text-muted-foreground">
                           {formatDate(company.createdAt)}
                         </td>
-                        <td className="px-4 py-3 text-right align-middle">
+                        <td className="px-5 py-4 text-right align-middle">
                           <div className="flex flex-wrap items-center justify-end gap-2">
                             <CompanyHistoryLink id={company.id} label={t('auditHistoryLink')} />
                             <CompanyStatusActions
@@ -236,7 +237,7 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
               {/* Mobile: karty */}
               <ul className="divide-y divide-border md:hidden">
                 {companies.map((company) => (
-                  <li key={company.id} className="space-y-3 p-4">
+                  <li key={company.id} className="min-w-0 space-y-3 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h2

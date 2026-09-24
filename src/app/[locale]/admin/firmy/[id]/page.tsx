@@ -8,7 +8,7 @@ import { parseUuid } from '@/lib/admin/list-params';
 import { getCompanyDetail, type AdminCompanyDetail } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
-import { AdminPageHeader } from '@/components/admin/AdminListControls';
+import { ADMIN_CARD, AdminPageHeader } from '@/components/admin/AdminListControls';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
 import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
@@ -60,7 +60,7 @@ function BackLink({ label }: { label: string }) {
   return (
     <Link
       href="/admin/firmy"
-      className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-foreground underline underline-offset-2 hover:no-underline"
+      className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-primary-dark underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <ArrowLeft className="size-4" aria-hidden="true" />
       {label}
@@ -71,8 +71,10 @@ function BackLink({ label }: { label: string }) {
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-1 whitespace-pre-line break-words text-sm text-foreground">{value}</dd>
+      <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className="mt-1 whitespace-pre-line break-words text-base font-semibold text-foreground">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -95,7 +97,11 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
     return (
       <div className="space-y-6">
         <BackLink label={t('backToCompanies')} />
-        <AdminPageHeader title={t('companiesTitle')} subtitle={t('companyDetailSubtitle')} />
+        <AdminPageHeader
+          eyebrow={t('targetCompany')}
+          title={t('companiesTitle')}
+          subtitle={t('companyDetailSubtitle')}
+        />
         <AdminLoadError retryHref={`/${locale}/admin/firmy/${encodeURIComponent(id)}`} />
       </div>
     );
@@ -105,7 +111,13 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
     return (
       <div className="space-y-6">
         <BackLink label={t('backToCompanies')} />
-        <AdminPageHeader title={t('companyNotFoundTitle')} subtitle={t('companyNotFoundHint')} />
+        <section className={`${ADMIN_CARD} p-5 sm:p-8`}>
+          <AdminPageHeader
+            eyebrow={t('targetCompany')}
+            title={t('companyNotFoundTitle')}
+            subtitle={t('companyNotFoundHint')}
+          />
+        </section>
       </div>
     );
   }
@@ -118,40 +130,46 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <BackLink label={t('backToCompanies')} />
-      <AdminPageHeader title={company.name || t('nameFallback')} subtitle={t('companyDetailSubtitle')} />
+      <AdminPageHeader
+        eyebrow={t('targetCompany')}
+        title={company.name || t('nameFallback')}
+        subtitle={t('companyDetailSubtitle')}
+      />
 
       {/* Status i decyzja */}
       <section
         aria-labelledby="company-status-heading"
-        className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5"
+        className={`${ADMIN_CARD} space-y-5 p-5 sm:p-7`}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="company-status-heading" className="text-base font-semibold text-foreground">
+          <h2 id="company-status-heading" className="min-w-0 break-words text-xl font-bold text-foreground">
             {t('sectionStatus')}
           </h2>
           <AdminStatusBadge kind="company" status={company.status} />
         </div>
         {company.statusReason ? (
-          <div className="rounded-md bg-soft p-3 text-sm">
-            <p className="font-medium text-muted-foreground">{t('statusReasonLabel')}</p>
+          <div className="rounded-2xl bg-soft p-4 text-sm">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {t('statusReasonLabel')}
+            </p>
             <p className="mt-1 whitespace-pre-line break-words text-foreground">
               {company.statusReason}
             </p>
           </div>
         ) : null}
-        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label={t('colCreated')} value={formatDate(company.createdAt)} />
           <Field
             label={t('detailVerifiedAt')}
             value={company.verifiedAt ? formatDate(company.verifiedAt) : dash}
           />
         </dl>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
           <CompanyStatusActions company={company} createdLabel={formatDate(company.createdAt)} />
           {historyId ? (
             <Link
               href={{ pathname: '/admin/dziennik', query: { entity: 'company', id: historyId } }}
-              className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-foreground underline underline-offset-2 hover:no-underline"
+              className="inline-flex min-h-11 items-center px-1 text-sm font-semibold text-primary-dark underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {t('auditHistoryLink')}
             </Link>
@@ -162,12 +180,12 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       {/* Dane firmy */}
       <section
         aria-labelledby="company-data-heading"
-        className="rounded-lg border border-border bg-card p-4 sm:p-5"
+        className={`${ADMIN_CARD} p-5 sm:p-7`}
       >
-        <h2 id="company-data-heading" className="text-base font-semibold text-foreground">
+        <h2 id="company-data-heading" className="min-w-0 break-words text-xl font-bold text-foreground">
           {t('sectionCompanyData')}
         </h2>
-        <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <dl className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label={t('detailVat')} value={company.vatNumber ?? dash} />
           <Field label={t('detailRegistration')} value={company.registrationNumber ?? dash} />
           <Field label={t('detailEmail')} value={company.email ?? dash} />
@@ -179,7 +197,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
           <Field label={t('detailIndustry')} value={company.industry ?? dash} />
         </dl>
         {company.description ? (
-          <dl className="mt-4">
+          <dl className="mt-6 border-t border-border pt-5">
             <Field label={t('detailDescription')} value={company.description} />
           </dl>
         ) : null}
@@ -191,34 +209,42 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       {/* Członkowie */}
       <section
         aria-labelledby="company-members-heading"
-        className="rounded-lg border border-border bg-card"
+        className={ADMIN_CARD}
       >
         <h2
           id="company-members-heading"
-          className="p-4 text-base font-semibold text-foreground sm:px-5"
+          className="break-words p-5 text-xl font-bold text-foreground sm:px-7"
         >
           {t('sectionMembers')}
         </h2>
         {company.members.length === 0 ? (
-          <p className="px-4 pb-4 text-sm text-muted-foreground sm:px-5">{t('membersEmpty')}</p>
+          <p className="px-5 pb-6 text-sm text-muted-foreground sm:px-7">{t('membersEmpty')}</p>
         ) : (
           <ul className="divide-y divide-border border-t border-border">
             {company.members.map((member) => (
               <li
                 key={member.id}
-                className="grid gap-1 p-4 text-sm sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4 sm:px-5"
+                className="grid min-w-0 gap-2 p-5 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:px-7"
               >
                 <div className="min-w-0">
-                  <p className="break-words font-medium text-foreground">
+                  <p className="break-words font-semibold text-foreground">
                     {member.name || t('nameFallback')}
                   </p>
                   <p className="break-words text-muted-foreground">{member.email ?? dash}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
-                  <span className="font-medium text-foreground">
+                  <span className="inline-flex items-center rounded-full bg-soft px-2.5 py-0.5 text-xs font-semibold text-foreground ring-1 ring-inset ring-border">
                     {t(MEMBER_ROLE_KEY[member.role] ?? 'memberRoleMember')}
                   </span>
-                  <span>{t(member.isActive ? 'memberActive' : 'memberInactive')}</span>
+                  <span
+                    className={
+                      member.isActive
+                        ? 'font-medium text-success-text'
+                        : 'font-medium text-muted-foreground'
+                    }
+                  >
+                    {t(member.isActive ? 'memberActive' : 'memberInactive')}
+                  </span>
                   <span>
                     {t('colMemberSince')}: {formatDate(member.since)}
                   </span>
@@ -232,10 +258,10 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       {/* Oferty */}
       <section
         aria-labelledby="company-jobs-heading"
-        className="rounded-lg border border-border bg-card"
+        className={ADMIN_CARD}
       >
-        <div className="flex flex-wrap items-baseline justify-between gap-2 p-4 sm:px-5">
-          <h2 id="company-jobs-heading" className="text-base font-semibold text-foreground">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 p-5 sm:px-7">
+          <h2 id="company-jobs-heading" className="min-w-0 break-words text-xl font-bold text-foreground">
             {t('sectionJobs')}
           </h2>
           {company.jobsTotal > company.jobs.length ? (
@@ -245,19 +271,19 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
           ) : null}
         </div>
         {company.jobs.length === 0 ? (
-          <p className="px-4 pb-4 text-sm text-muted-foreground sm:px-5">{t('jobsEmpty')}</p>
+          <p className="px-5 pb-6 text-sm text-muted-foreground sm:px-7">{t('jobsEmpty')}</p>
         ) : (
           <ul className="divide-y divide-border border-t border-border">
             {company.jobs.map((job) => (
               <li
                 key={job.id}
-                className="grid gap-1 p-4 text-sm sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-4 sm:px-5"
+                className="grid min-w-0 gap-1 p-5 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4 sm:px-7"
               >
-                <p className="min-w-0 break-words font-medium text-foreground">
+                <p className="min-w-0 break-words font-semibold text-foreground">
                   {job.status === 'active' && job.slug ? (
                     <Link
                       href={`/oferty-pracy/${job.slug}`}
-                      className="underline underline-offset-2 hover:no-underline"
+                      className="underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       {job.title || t('targetUnnamed')}
                     </Link>
@@ -265,7 +291,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
                     job.title || t('targetUnnamed')
                   )}
                 </p>
-                <span className="text-muted-foreground">
+                <span className="justify-self-start rounded-full bg-soft px-2.5 py-0.5 text-xs font-semibold text-foreground ring-1 ring-inset ring-border">
                   {t(JOB_STATUS_KEY[job.status] ?? 'statusUnknown')}
                 </span>
                 <span className="text-muted-foreground">{formatDate(job.createdAt)}</span>

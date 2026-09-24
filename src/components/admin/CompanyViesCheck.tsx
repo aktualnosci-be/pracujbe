@@ -128,10 +128,10 @@ export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps):
   return (
     <section
       aria-labelledby="company-vies-heading"
-      className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5"
+      className="min-w-0 space-y-4 rounded-3xl border border-border bg-card p-5 sm:p-7"
     >
       <div className="space-y-1">
-        <h2 id="company-vies-heading" className="text-base font-semibold text-foreground">
+        <h2 id="company-vies-heading" className="break-words text-xl font-bold text-foreground">
           {t('viesHeading')}
         </h2>
         <p className="text-sm text-muted-foreground">{t('viesIntro')}</p>
@@ -153,7 +153,7 @@ export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps):
               {t('viesOfficialName')}: {shown.viesName ?? t('viesNameUnknown')}
             </p>
             {shown.nameMatch === 'mismatch' ? (
-              <p className="rounded-md bg-soft p-3 text-foreground">{t('viesNameMismatch')}</p>
+              <p className="rounded-2xl bg-soft p-4 text-foreground">{t('viesNameMismatch')}</p>
             ) : shown.nameMatch === 'match' ? (
               <p className="text-muted-foreground">{t('viesNameMatch')}</p>
             ) : null}
@@ -188,7 +188,7 @@ export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps):
         {noticeText ? (
           <p
             className={cn(
-              'rounded-md p-3',
+              'rounded-2xl p-4',
               notice?.kind === 'error' || notice?.kind === 'not_saved'
                 ? 'bg-error/10 text-error-text'
                 : 'bg-soft text-foreground',
@@ -205,7 +205,7 @@ export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps):
           onClick={runCheck}
           disabled={pending}
           aria-busy={pending || undefined}
-          className={cn(ADMIN_BUTTON_BASE, 'border', ADMIN_ACTION_TONE_CLASS.neutral)}
+          className={cn(ADMIN_BUTTON_BASE, 'border bg-card', ADMIN_ACTION_TONE_CLASS.neutral)}
         >
           {pending ? t('viesChecking') : checkedBefore ? t('viesRecheckAction') : t('viesCheckAction')}
         </button>

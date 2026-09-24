@@ -10,6 +10,9 @@ import { listUsers } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import {
+  ADMIN_CARD,
+  ADMIN_FIELD,
+  AdminEmptyState,
   AdminPageHeader,
   AdminPager,
   AdminSearchForm,
@@ -101,7 +104,11 @@ export default async function AdminUsersPage({
 
   return (
     <div className="space-y-6">
-      <AdminPageHeader title={t('usersTitle')} subtitle={t('usersSubtitle')} />
+      <AdminPageHeader
+        eyebrow={t('brandTag')}
+        title={t('usersTitle')}
+        subtitle={t('usersSubtitle')}
+      />
 
       <AdminSearchForm
         action={`/${locale}${BASE_PATH}`}
@@ -110,15 +117,15 @@ export default async function AdminUsersPage({
         hint={t('searchUsersHint')}
         clearHref={{ pathname: BASE_PATH, query: role ? { role } : {} }}
       >
-        <div>
-          <label htmlFor="admin-role" className="block text-sm font-medium text-foreground">
+        <div className="min-w-0 basis-40">
+          <label htmlFor="admin-role" className="block text-sm font-semibold text-foreground">
             {t('colRole')}
           </label>
           <select
             id="admin-role"
             name="role"
             defaultValue={role ?? ''}
-            className="mt-1 block min-h-11 rounded-md border border-border bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={ADMIN_FIELD}
           >
             <option value="">{t('roleAll')}</option>
             {USER_ROLE_FILTERS.map((value) => (
@@ -133,26 +140,26 @@ export default async function AdminUsersPage({
       {result.status === 'error' ? (
         <AdminLoadError retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`} />
       ) : (
-        <section className="rounded-lg border border-border bg-card">
+        <section className={ADMIN_CARD}>
           {users.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">{t('usersEmpty')}</p>
+            <AdminEmptyState message={t('usersEmpty')} />
           ) : (
             <>
               {/* Desktop: tabela */}
-              <div className="hidden overflow-x-auto md:block">
+              <div className="hidden overflow-x-auto rounded-3xl md:block">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="bg-soft">
                     <tr className="border-b border-border text-left">
-                      <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {t('colUser')}
                       </th>
-                      <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {t('colEmail')}
                       </th>
-                      <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {t('colRole')}
                       </th>
-                      <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+                      <th scope="col" className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {t('colCreated')}
                       </th>
                     </tr>
@@ -160,23 +167,23 @@ export default async function AdminUsersPage({
                   <tbody className="divide-y divide-border">
                     {users.map((user) => (
                       <tr key={user.id}>
-                        <td className="px-4 py-3 align-middle">
+                        <td className="px-5 py-4 align-middle">
                           <div className="flex items-center gap-3">
                             <span
-                              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
+                              className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-soft text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border"
                               aria-hidden="true"
                             >
                               {initials(user.name || t('nameFallback'))}
                             </span>
-                            <span className="font-medium text-foreground">
+                            <span className="break-words font-semibold text-foreground">
                               {user.name || t('nameFallback')}
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 align-middle text-muted-foreground">
+                        <td className="px-5 py-4 align-middle text-muted-foreground">
                           {user.email ?? '—'}
                         </td>
-                        <td className="px-4 py-3 align-middle">
+                        <td className="px-5 py-4 align-middle">
                           <span
                             className={cn(
                               'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
@@ -186,7 +193,7 @@ export default async function AdminUsersPage({
                             {roleLabel(user.role)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 align-middle text-muted-foreground">
+                        <td className="px-5 py-4 align-middle text-muted-foreground">
                           {formatDate(user.createdAt)}
                         </td>
                       </tr>
@@ -198,16 +205,16 @@ export default async function AdminUsersPage({
               {/* Mobile: karty */}
               <ul className="divide-y divide-border md:hidden">
                 {users.map((user) => (
-                  <li key={user.id} className="flex items-start gap-3 p-4">
+                  <li key={user.id} className="flex min-w-0 items-start gap-3 p-5">
                     <span
-                      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
+                      className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
                       aria-hidden="true"
                     >
                       {initials(user.name || t('nameFallback'))}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <p className="min-w-0 break-words font-medium text-foreground">
+                        <p className="min-w-0 break-words font-semibold text-foreground">
                           {user.name || t('nameFallback')}
                         </p>
                         <span
