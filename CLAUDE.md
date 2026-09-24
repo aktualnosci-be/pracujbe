@@ -55,7 +55,9 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 **Paleta:** tokeny w `src/app/globals.css`, mapowane przez Tailwind. Kolor marki: czerwień około `#D92932`, tekst około `#151515`, tło `#FFFFFF`. Kolory semantyczne sukcesu, ostrzeżeń i błędów zachowują swoje znaczenie. Nie wpisuj hexów w komponentach. Kontrast WCAG 2.2 AA obowiązkowy.
 
-**Typografia:** obecnie lokalny Inter z polskimi znakami. Zmiana fontu wymaga sprawdzenia czytelności i wpływu na układ.
+**Typografia:** lokalny DM Sans (jak prototyp; `next/font/local`, podzbiór ~42 KB z polskimi znakami, osie wght 400–800 i opsz, SIL OFL 1.1 — `assets/fonts/DMSans-OFL.txt`, przepis `scripts/subset-font.py`). Zmiana fontu wymaga sprawdzenia czytelności, budżetu fontów i CLS (`perf-budget-static.mjs`, `perf-lab.mjs`).
+
+**Wierność prototypowi (#5/#7):** nagłówek z pogrubionymi czarnymi linkami, kodem języka i czarnym przyciskiem (`buttonVariants({ variant: 'ink' })`); hero z czerwienią `--primary`; wyszukiwarka w jednym kontenerze z etykietami nad polami bez ramek; oferty na stronie głównej i w landingach w siatce 2 kolumn od `lg` (lista z filtrami — 1 kolumna, jak `conditions.css`); karta-paszport z promieniem 20 px, jedną ramką i stopką „logo · Poznaj ofertę →”. Listy kart to `<ul className="grid gap-…">` — nie owijaj kart ramką `divide-y` (podwójne krawędzie).
 
 **Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Zasoby favicon/PWA/OG wymagają spójnej aktualizacji w etapie #7.
 

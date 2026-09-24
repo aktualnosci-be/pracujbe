@@ -220,10 +220,10 @@ export default async function CityLandingPage({ params }: PageProps) {
           </div>
         ) : (
           <>
-            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+            <ul className="grid gap-4 lg:grid-cols-2 lg:gap-5">
               {result.jobs.map((job) => (
-                <li key={job.id}>
-                  <JobCard job={job} />
+                <li key={job.id} className="flex min-w-0">
+                  <JobCard job={job} className="w-full" />
                 </li>
               ))}
             </ul>

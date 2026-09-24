@@ -182,6 +182,7 @@
     "trustEverywhereSub": "Vacatures uit elke regio",
     "latestJobsTitle": "Nieuwste vacatures",
     "latestJobsSeeAll": "Alle vacatures bekijken",
+    "latestJobsSubtitle": "Bekijk wie werkgevers zoeken.",
     "offersCount": "{count, plural, one {# vacature} other {# vacatures}}",
     "categoriesTitle": "Populaire categorieën",
     "locationsTitle": "Populaire locaties",

@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/navigation';
 import { routing, localeNames } from '@/i18n/routing';
 import { relocalizeNextParam } from '@/lib/auth/next-path';
+import { cn } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -21,7 +22,7 @@ import {
  * na przełącznik albo — gdy panel mobilny się zamknął — na przycisk „Menu”.
  */
 const FOCUS_STORAGE_KEY = 'pracujbe:locale-switch-focus';
-type FocusOrigin = 'switcher' | 'menu';
+type FocusOrigin = 'switcher' | 'header' | 'menu';
 
 function rememberFocusOrigin(origin: FocusOrigin): void {
   try {
@@ -31,11 +32,18 @@ function rememberFocusOrigin(origin: FocusOrigin): void {
   }
 }
 
-function consumeFocusOrigin(): FocusOrigin | null {
+/**
+ * Odczytuje zapamiętane źródło zmiany i usuwa je tylko wtedy, gdy należy do tej instancji
+ * (`accepts`): przełącznik w nagłówku i w stopce montują się razem, więc pierwszy z nich
+ * nie może „zabrać” fokusu przeznaczonego dla drugiego.
+ */
+function consumeFocusOrigin(accepts: readonly FocusOrigin[]): FocusOrigin | null {
   try {
     const value = window.sessionStorage.getItem(FOCUS_STORAGE_KEY);
+    const origin = value === 'switcher' || value === 'header' || value === 'menu' ? value : null;
+    if (origin === null || !accepts.includes(origin)) return null;
     window.sessionStorage.removeItem(FOCUS_STORAGE_KEY);
-    return value === 'switcher' || value === 'menu' ? value : null;
+    return origin;
   } catch {
     return null;
   }
@@ -51,11 +59,17 @@ function isVisible(element: HTMLElement | null): element is HTMLElement {
  * Bez pełnego przeładowania — nawigacja w tranzycji. Etykieta z i18n (footer.langLabel).
  * Parametr powrotu `?next=` (logowanie) przechodzi na nowy język razem ze stroną.
  *
+ * `variant="compact"` (nagłówek stron publicznych, wg prototypu „Ludzie i praca”) pokazuje
+ * sam kod języka („PL”) bez obramowania; nazwa dostępna = etykieta + kod (WCAG 2.5.3).
+ *
  * `side="top"` otwiera listę nad przyciskiem — dla miejsc przy dolnej krawędzi ekranu
  * (panel menu mobilnego), gdzie lista otwierana w dół wychodziłaby poza viewport i nie
  * dałoby się wybrać języka dotykiem.
  */
-export function LocaleSwitcher({ side = 'bottom' }: { side?: 'top' | 'bottom' } = {}) {
+export function LocaleSwitcher({
+  side = 'bottom',
+  variant = 'default',
+}: { side?: 'top' | 'bottom'; variant?: 'default' | 'compact' } = {}) {
   const t = useTranslations('footer');
   const locale = useLocale();
   const pathname = usePathname();
@@ -68,7 +82,7 @@ export function LocaleSwitcher({ side = 'bottom' }: { side?: 'top' | 'bottom' } 
     // Panel menu mobilnego montuje własny przełącznik dopiero po otwarciu — przywracanie
     // fokusu obsługuje instancja poza dialogiem (stopka), zawsze obecna na stronie.
     if (!trigger || trigger.closest('[role="dialog"]')) return;
-    const origin = consumeFocusOrigin();
+    const origin = consumeFocusOrigin(variant === 'compact' ? ['header'] : ['switcher', 'menu']);
     if (origin === null) return;
     const menuButton = document.querySelector<HTMLElement>(
       'header button[aria-haspopup="dialog"]',
@@ -78,12 +92,18 @@ export function LocaleSwitcher({ side = 'bottom' }: { side?: 'top' | 'bottom' } 
     } else {
       trigger.focus();
     }
-  }, []);
+  }, [variant]);
 
   function handleChange(next: string) {
     const target = routing.locales.find((loc) => loc === next);
     if (!target || target === locale) return;
-    rememberFocusOrigin(triggerRef.current?.closest('[role="dialog"]') ? 'menu' : 'switcher');
+    rememberFocusOrigin(
+      triggerRef.current?.closest('[role="dialog"]')
+        ? 'menu'
+        : variant === 'compact'
+          ? 'header'
+          : 'switcher',
+    );
     startTransition(() => {
       const search = relocalizeNextParam(window.location.search, target);
       router.replace(`${pathname}${search}${window.location.hash}`, {
@@ -94,17 +114,31 @@ export function LocaleSwitcher({ side = 'bottom' }: { side?: 'top' | 'bottom' } 
 
   return (
     <Select value={locale} onValueChange={handleChange}>
-      <SelectTrigger
-        ref={triggerRef}
-        className="h-11 w-auto gap-2"
-        aria-label={t('langLabel')}
-        aria-busy={isPending || undefined}
-      >
-        <Languages className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <SelectValue />
-      </SelectTrigger>
+      {variant === 'compact' ? (
+        <SelectTrigger
+          ref={triggerRef}
+          className="h-11 w-auto gap-1 border-transparent px-2 text-sm font-medium uppercase shadow-none hover:bg-soft"
+          aria-label={`${t('langLabel')} ${locale.toUpperCase()}`}
+          aria-busy={isPending || undefined}
+        >
+          <span aria-hidden="true">{locale.toUpperCase()}</span>
+        </SelectTrigger>
+      ) : (
+        <SelectTrigger
+          ref={triggerRef}
+          className="h-11 w-auto gap-2"
+          aria-label={t('langLabel')}
+          aria-busy={isPending || undefined}
+        >
+          <Languages className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <SelectValue />
+        </SelectTrigger>
+      )}
       <SelectContent
-        className={side === 'top' ? 'bottom-[calc(100%+0.25rem)] top-auto' : undefined}
+        className={cn(
+          side === 'top' && 'bottom-[calc(100%+0.25rem)] top-auto',
+          variant === 'compact' && 'left-auto right-0',
+        )}
       >
         {routing.locales.map((loc) => (
           <SelectItem key={loc} value={loc}>

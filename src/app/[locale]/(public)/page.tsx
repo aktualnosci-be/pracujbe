@@ -15,6 +15,7 @@ import { Benefits } from '@/components/public/Benefits';
 import { CategoryGrid } from '@/components/public/CategoryGrid';
 import { ForCompanies } from '@/components/public/ForCompanies';
 import { HeroSearch } from '@/components/public/HeroSearch';
+import { HomeEntryPoints } from '@/components/public/HomeEntryPoints';
 import { HowItWorks } from '@/components/public/HowItWorks';
 import { JobCard } from '@/components/public/JobCard';
 import { LocationGrid } from '@/components/public/LocationGrid';
@@ -22,10 +23,12 @@ import { LocationGrid } from '@/components/public/LocationGrid';
 /**
  * Strona główna Pracuj.be — hero według `docs/design/people-passport`.
  *
- * Lekka, mobile-first, w większości serwerowa (RSC). Sekcje w kolejności z makiety:
- * Hero (nagłówek + fotografia zespołu + wyszukiwarka + linki-akcje) → pasek zaufania →
- * najnowsze oferty (lista-tabela) → popularne kategorie + lokalizacje (2 kolumny) →
- * „Jak to działa?" obok karty „Jesteś pracodawcą?". Stopka jest w layoucie `(public)`.
+ * Lekka, mobile-first, w większości serwerowa (RSC). Kolejność wg prototypu „Ludzie i praca”
+ * (`people.js` + `conditions.css`): hero (teza + fotografia) → wyszukiwarka w jednym
+ * kontenerze → najnowsze oferty na szarym tle w siatce paszportów (2 kolumny od `lg`, 1 niżej)
+ * → wejścia „Utwórz profil / Dodaj ofertę” + pasek zaufania (prototyp nie ma ich w hero) →
+ * popularne kategorie + lokalizacje → „Jak to działa?" obok karty „Jesteś pracodawcą?".
+ * Stopka jest w layoucie `(public)`.
  *
  * Renderuje się BEZ zmiennych środowiskowych — `getLatestJobs` korzysta z danych
  * demonstracyjnych, gdy Supabase nie jest skonfigurowane.
@@ -102,39 +105,45 @@ export default async function HomePage({ params }: HomePageProps) {
         przepływie — przy powiększeniu tekstu figura rośnie zamiast ucinać podpis, a stała
         minimalna wysokość chroni CLS i LCP (zdjęcie z priority, bez zmiany rozmiaru po załadowaniu).
       */}
-      <section className="border-b border-border bg-background">
-        <div className="container py-8 md:py-12">
+      <section className="bg-background">
+        <div className="container pb-8 pt-8 md:pb-9 md:pt-10">
           <div className="grid gap-8 md:grid-cols-[1.16fr_1fr] md:items-stretch lg:gap-12">
             <div className="flex min-w-0 flex-col justify-center">
-              <p className="mb-5 text-xs font-bold uppercase tracking-[0.12em] text-accent-dark">
+              <p className="mb-5 text-xs font-bold uppercase tracking-[0.06em] text-primary">
                 {t('heroEyebrow')}
               </p>
-              <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.5rem] xl:text-[4rem]">
+              {/* Trzeci wiersz w czerwieni marki (--primary ≈ #D92932): kontrast z bielą 4,9:1,
+                  czyli AA także dla zwykłego tekstu, a nagłówek to tekst duży (≥ 3:1). */}
+              <h1 className="text-[2.3125rem] font-[750] leading-[1.08] tracking-[-0.03em] text-foreground sm:text-5xl lg:text-[3.5rem] xl:text-[4.0625rem]">
                 <span className="block">{t('heroTitleLine1')}</span>{' '}
                 <span className="block">{t('heroTitleLine2')}</span>{' '}
-                <span className="block text-accent-dark">{t('heroTitleLine3')}</span>
+                <span className="block text-primary">{t('heroTitleLine3')}</span>
               </h1>
-              <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
+              <p className="mt-6 max-w-[29rem] text-base leading-relaxed text-muted-foreground sm:text-[1.0625rem] sm:leading-[1.65]">
                 {t('heroSubtitle')}
               </p>
-              <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-4">
+              <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
                 <Link
                   href={JOBS_PATH}
                   className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   {t('heroBrowseJobs')}
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
+                {/* Drugi wybór jako zwykły link tekstowy (`.text-link` z prototypu) — bez
+                    podkreślenia i strzałki; podkreślenie tylko przy najechaniu. Obok przycisku,
+                    więc rozpoznawalny po położeniu i wadze fontu (WCAG 1.4.1 nie dotyczy
+                    linków poza blokiem tekstu). */}
                 <Link
                   href="/rejestracja"
-                  className="inline-flex min-h-12 items-center gap-1 font-semibold text-foreground underline decoration-accent underline-offset-4 hover:text-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="inline-flex min-h-11 items-center rounded-sm text-sm font-semibold text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   {t('heroCreateProfile')}
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
               </div>
             </div>
-            <figure className="relative flex min-h-64 min-w-0 flex-col justify-end overflow-hidden rounded-3xl rounded-tl-[3.5rem] bg-soft p-3 sm:min-h-80 sm:p-4 md:min-h-[22rem] md:rounded-tl-[5rem] lg:rounded-tl-[6.25rem] lg:p-5">
+            {/* Zaokrąglenie jak `.p-hero-photo`: 100 px w lewym górnym rogu, 22 px w pozostałych
+                (55 px na telefonie, 75 px przy średnich szerokościach). */}
+            <figure className="relative flex min-h-64 min-w-0 flex-col justify-end overflow-hidden rounded-[1.125rem] rounded-tl-[3.4375rem] bg-soft p-3 sm:min-h-80 sm:p-4 md:min-h-[22rem] md:rounded-[1.375rem] md:rounded-tl-[4.6875rem] lg:rounded-tl-[6.25rem] lg:p-5">
               <Image
                 src="/images/people/team.webp"
                 alt=""
@@ -149,47 +158,57 @@ export default async function HomePage({ params }: HomePageProps) {
               </figcaption>
             </figure>
           </div>
-          <div className="mt-8">
+          <div className="mt-8 md:mt-9">
             <HeroSearch />
           </div>
         </div>
       </section>
 
-      {/* Pasek zaufania */}
-      <Benefits />
-
-      {/* Najnowsze oferty pracy */}
-      <section className="container py-12 md:py-16">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            {t('latestJobsTitle')}
-          </h2>
-          <Link
-            href={JOBS_PATH}
-            className="inline-flex items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline"
-          >
-            {t('latestJobsSeeAll')}
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
-        </div>
-
-        {isShowingDemoJobs() ? <DemoJobsNotice className="mt-6" /> : null}
-
-        {latestJobs.length > 0 ? (
-          <div className="mt-6 divide-y divide-border overflow-hidden rounded-lg border border-border">
-            {latestJobs.map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
+      {/* Najnowsze oferty pracy — `.p-offers`: szare tło z liniami góra/dół, siatka paszportów. */}
+      <section className="border-y border-border bg-soft">
+        <div className="container py-7 md:py-9 lg:pb-11">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-[1.625rem] font-[750] leading-tight tracking-[-0.035em] text-foreground sm:text-3xl">
+                {t('latestJobsTitle')}
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground sm:text-base">{t('latestJobsSubtitle')}</p>
+            </div>
+            <Link
+              href={JOBS_PATH}
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 self-start rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition-colors hover:bg-foreground/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:self-auto"
+            >
+              {t('latestJobsSeeAll')}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
           </div>
-        ) : (
-          <p className="mt-6 rounded-lg border border-dashed border-border bg-soft p-8 text-center text-sm text-muted-foreground">
-            {tJobs('empty')}
-          </p>
-        )}
+
+          {isShowingDemoJobs() ? <DemoJobsNotice className="mt-6" /> : null}
+
+          {latestJobs.length > 0 ? (
+            <ul className="mt-6 grid gap-4 md:mt-7 lg:grid-cols-2 lg:gap-5">
+              {latestJobs.map((job) => (
+                <li key={job.id} className="flex min-w-0">
+                  <JobCard job={job} className="w-full" />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-6 rounded-2xl border border-dashed border-border bg-background p-8 text-center text-sm text-muted-foreground">
+              {tJobs('empty')}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* Wejścia dla kandydata i pracodawcy + pasek zaufania (dawniej w hero). */}
+      <section className="container space-y-6 py-10 md:py-12">
+        <HomeEntryPoints />
+        <Benefits />
       </section>
 
       {/* Popularne kategorie + lokalizacje (2 kolumny) */}
-      <section className="border-t border-border bg-soft">
+      <section className="border-y border-border bg-soft">
         <div className="container py-12 md:py-16">
           <div className="grid gap-10 lg:grid-cols-2 lg:gap-12">
             <CategoryGrid />

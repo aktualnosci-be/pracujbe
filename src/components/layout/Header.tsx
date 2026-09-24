@@ -6,18 +6,20 @@ import { Logo } from '@/components/brand/Logo';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { HEADER_ICON_BUTTON_FIXED } from './header-sizing';
+import { LocaleSwitcher } from './LocaleSwitcher';
 import { MobileNav, PrimaryNav } from './MobileNav';
 
 /**
  * Górny pasek nawigacji (server component) — wg makiety 01-home.
  *
- * Desktop: [logo + nawigacja gościa] ............ [Zaloguj się (ghost) · Dodaj ofertę (granat)].
+ * Desktop (prototyp „Ludzie i praca”, `.people .nav`): [logo + pogrubione czarne linki] ......
+ * [język · Zaloguj się · Dodaj ofertę (czarny przycisk)].
  * Strefy mogą się zawijać: przy powiększonym tekście (WCAG 1.4.4) na szerokościach md–lg
  * pasek przechodzi do dwóch wierszy zamiast wypychać akcje poza ekran.
  * Mobile: [hamburger] [logo wyśrodkowane] [ikona konta]. Struktura oparta na
  * `justify-between` z trzema bezpośrednimi dziećmi — środkowe (logo mobilne) trafia na
- * środek, gdy skrajne są wąskie. Selektor języka celowo NIE jest w headerze (jest w stopce
- * i w panelu mobilnym — zgodnie z makietą). Teksty wyłącznie z i18n (namespace `nav`).
+ * środek, gdy skrajne są wąskie. Na desktopie kompaktowy przełącznik języka („PL”) jak w
+ * prototypie; na mobile język jest w panelu menu i w stopce. Teksty wyłącznie z i18n (`nav`).
  *
  * `locale` przychodzi jawnie z layoutu (#298): bez niego next-intl sięga po `headers()`,
  * co przełącza całe drzewo stron publicznych na renderowanie dynamiczne.
@@ -36,7 +38,7 @@ export async function Header({ locale }: { locale: string }) {
           </Link>
           <PrimaryNav
             className="hidden items-center gap-6 md:flex"
-            linkClassName="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:text-foreground"
+            linkClassName="text-sm font-semibold text-foreground underline-offset-4 transition-colors hover:text-primary aria-[current=page]:underline aria-[current=page]:decoration-primary aria-[current=page]:decoration-2"
           />
         </div>
 
@@ -47,16 +49,19 @@ export async function Header({ locale }: { locale: string }) {
         </Link>
 
         {/* Prawa strefa: akcje (desktop) + ikona konta (mobile). */}
-        <div className="flex items-center gap-2 md:flex-wrap">
+        <div className="flex items-center gap-2 md:flex-wrap lg:gap-4">
+          <div className="hidden md:block">
+            <LocaleSwitcher variant="compact" />
+          </div>
           <Link
             href="/logowanie"
-            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'hidden md:inline-flex')}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'hidden font-semibold md:inline-flex')}
           >
             {t('login')}
           </Link>
           <Link
             href="/rejestracja-pracodawca"
-            className={cn(buttonVariants({ size: 'sm' }), 'hidden md:inline-flex')}
+            className={cn(buttonVariants({ variant: 'ink', size: 'sm' }), 'hidden h-11 rounded-xl px-5 font-semibold md:inline-flex')}
           >
             {t('postJob')}
           </Link>

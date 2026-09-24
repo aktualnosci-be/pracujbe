@@ -21,6 +21,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary-dark',
+        /** Czarny przycisk drugiej rangi z prototypu „Ludzie i praca” (nagłówek, „Zobacz wszystkie”). */
+        ink: 'bg-foreground text-background hover:bg-foreground/85',
         secondary: 'bg-secondary text-secondary-foreground hover:opacity-90',
         outline: 'border border-input bg-background text-foreground hover:bg-soft',
         ghost: 'text-foreground hover:bg-soft',

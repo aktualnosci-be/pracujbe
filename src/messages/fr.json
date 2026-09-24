@@ -182,6 +182,7 @@
     "trustEverywhereSub": "Des offres dans chaque région",
     "latestJobsTitle": "Dernières offres d'emploi",
     "latestJobsSeeAll": "Voir toutes les offres",
+    "latestJobsSubtitle": "Découvrez qui les employeurs recherchent.",
     "offersCount": "{count, plural, one {# offre} other {# offres}}",
     "categoriesTitle": "Catégories populaires",
     "locationsTitle": "Lieux populaires",

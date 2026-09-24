@@ -58,7 +58,7 @@ export function PrimaryNav({
  * Wyzwalacz to hamburger widoczny tylko poniżej breakpointu md (na makiecie po lewej
  * stronie paska). Wysuwany panel na `LightDialog*` (focus-trap, Esc, blokada scrolla bez
  * przeliczania stylów całej strony — #393) zawiera nawigację gościa, przyciski
- * logowania/dodania oferty (granat) oraz przełącznik języka. Zamyka się po wyborze linku.
+ * logowania/dodania oferty (czarny, jak w nagłówku) oraz przełącznik języka. Zamyka się po wyborze linku.
  * Teksty z i18n (namespace `nav`); przyciski ikonowe mają dostępne etykiety.
  */
 export function MobileNav() {
@@ -112,7 +112,7 @@ export function MobileNav() {
           <Link
             href="/rejestracja-pracodawca"
             onClick={close}
-            className={cn(buttonVariants(), 'w-full')}
+            className={cn(buttonVariants({ variant: 'ink' }), 'w-full')}
           >
             {t('postJob')}
           </Link>

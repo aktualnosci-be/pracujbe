@@ -5,16 +5,16 @@ import { brotliDecompressSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 /**
- * #388 — font Inter jako podzbiór łaciński (strażnik rozmiaru i pokrycia znaków).
+ * #388 — font DM Sans (od #5/#7; wcześniej Inter) jako podzbiór łaciński (strażnik rozmiaru i pokrycia znaków).
  *
- * Plik powstaje skryptem `scripts/subset-font.py` z `assets/fonts/InterVariable-4.001.woff2`.
+ * Plik powstaje skryptem `scripts/subset-font.py` z `assets/fonts/DMSans-4.004[opsz,wght].ttf`.
  * Test czyta WOFF2 bez zależności: nagłówek, katalog tabel, strumień Brotli, a z niego
  * tabele `cmap` (obsługiwane znaki) i `fvar` (zakres osi wagi).
  */
 
 const ROOT = process.cwd();
-const FONT = join(ROOT, 'src', 'app', 'fonts', 'InterVariable-latin.woff2');
-const MAX_BYTES = 90 * 1024;
+const FONT = join(ROOT, 'src', 'app', 'fonts', 'DMSans-latin.woff2');
+const MAX_BYTES = 60 * 1024;
 
 /** Kolejność znanych tagów WOFF2 (spec, tabela „Known Table Tags”) — potrzebne cmap i fvar. */
 const KNOWN_TAGS: Record<number, string> = { 0: 'cmap', 10: 'glyf', 11: 'loca', 47: 'fvar' };
@@ -103,11 +103,11 @@ function fvarAxes(fvar: Buffer): Record<string, { min: number; max: number }> {
   return axes;
 }
 
-describe('font Inter — podzbiór łaciński (#388)', () => {
+describe('font DM Sans — podzbiór łaciński (#388)', () => {
   const file = readFileSync(FONT);
   const tables = woff2Tables(file);
 
-  it(`waży ≤ ${MAX_BYTES} B (było 352 240 B)`, () => {
+  it(`waży ≤ ${MAX_BYTES} B (oryginał TTF 240 164 B)`, () => {
     expect(file.length).toBeLessThanOrEqual(MAX_BYTES);
   });
 
@@ -141,16 +141,20 @@ describe('font Inter — podzbiór łaciński (#388)', () => {
     expect(codepoints.has(0x1ea0)).toBe(false); // Ạ
   });
 
-  it('ma oś wagi 400–700 (font-normal … font-bold)', () => {
+  it('ma oś wagi 400–800 (font-normal … 800 logo) i oś opsz', () => {
     const axes = fvarAxes(tables.get('fvar')!);
-    expect(axes.wght).toEqual({ min: 400, max: 700 });
+    expect(axes.wght).toEqual({ min: 400, max: 800 });
+    expect(axes.opsz).toEqual({ min: 9, max: 40 });
   });
 
   it('fonts.ts wskazuje podzbiór, a przepis i oryginał są w repo', () => {
     const source = readFileSync(join(ROOT, 'src', 'app', 'fonts.ts'), 'utf-8');
-    expect(source).toContain("src: './fonts/InterVariable-latin.woff2'");
-    expect(source).toContain("weight: '400 700'");
+    expect(source).toContain("src: './fonts/DMSans-latin.woff2'");
+    expect(source).toContain("weight: '400 800'");
     expect(existsSync(join(ROOT, 'scripts', 'subset-font.py'))).toBe(true);
-    expect(existsSync(join(ROOT, 'assets', 'fonts', 'InterVariable-4.001.woff2'))).toBe(true);
+    expect(existsSync(join(ROOT, 'assets', 'fonts', 'DMSans-4.004[opsz,wght].ttf'))).toBe(true);
+    expect(readFileSync(join(ROOT, 'assets', 'fonts', 'DMSans-OFL.txt'), 'utf-8')).toContain(
+      'SIL OPEN FONT LICENSE Version 1.1',
+    );
   });
 });

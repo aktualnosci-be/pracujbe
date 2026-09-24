@@ -2,36 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Fonty zastępcze Intera (#388) z metrykami dopasowanymi do Intera (wght 400, opsz 14):
+/* Fonty zastępcze DM Sans (#388) z metrykami dopasowanymi do DM Sans (wght 400, opsz 14):
    tekst malowany przed dociągnięciem fontu ma tę samą wysokość linii i prawie tę samą
    szerokość, więc podmiana (font-display: swap) nie przesuwa układu. Wartości generuje
    scripts/font-fallback-metrics.py; kolejność w stosie ustala src/app/fonts.ts. */
 @font-face {
-  font-family: 'Inter Fallback Arial';
+  font-family: 'DM Sans Fallback Arial';
   src: local('Arial'), local('ArialMT'), local('Helvetica'), local('Liberation Sans'),
     local('LiberationSans'), local('Arimo');
-  ascent-override: 90.48%;
-  descent-override: 22.53%;
+  ascent-override: 95.15%;
+  descent-override: 29.73%;
   line-gap-override: 0%;
-  size-adjust: 107.07%;
+  size-adjust: 104.26%;
 }
 
 @font-face {
-  font-family: 'Inter Fallback Roboto';
+  font-family: 'DM Sans Fallback Roboto';
   src: local('Roboto'), local('Roboto-Regular'), local('Roboto Regular');
-  ascent-override: 90.28%;
-  descent-override: 22.48%;
+  ascent-override: 94.91%;
+  descent-override: 29.66%;
   line-gap-override: 0%;
-  size-adjust: 107.31%;
+  size-adjust: 104.52%;
 }
 
 @font-face {
-  font-family: 'Inter Fallback DejaVu';
+  font-family: 'DM Sans Fallback DejaVu';
   src: local('DejaVu Sans'), local('DejaVuSans');
-  ascent-override: 102.86%;
-  descent-override: 25.61%;
+  ascent-override: 108.32%;
+  descent-override: 33.85%;
   line-gap-override: 0%;
-  size-adjust: 94.19%;
+  size-adjust: 91.58%;
 }
 
 
@@ -57,10 +57,10 @@
     --secondary-foreground: 0 0% 8%;
 
     /* Marka — zatwierdzony paszport pracy: biel, czerwień i czerń. */
-    --primary: 357 68% 51%;
+    --primary: 357 69.8% 50.6%; /* = #D92932 — kontrast 4,9:1 z bielą i 4,55:1 z --soft (AA dla zwykłego tekstu) */
     --primary-dark: 357 72% 41%;
     --primary-foreground: 0 0% 100%;
-    --accent: 357 68% 51%;
+    --accent: 357 69.8% 50.6%;
     --accent-dark: 357 72% 39%;
     --accent-foreground: 0 0% 100%;
     --accent-on-dark: 0 0% 100%;
@@ -83,7 +83,7 @@
        #757575 daje ≈ 4,6:1 na bieli i ≈ 4,3:1 na --soft/--muted (#218).
        --border zostaje jasny: to obrys dekoracyjny kart i separatorów. */
     --input: 0 0% 46%;
-    --ring: 357 68% 51%;
+    --ring: 357 69.8% 50.6%;
 
     /* Promień zaokrągleń */
     --radius: 0.875rem;

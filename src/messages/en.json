@@ -182,6 +182,7 @@
     "trustEverywhereSub": "Jobs from every region",
     "latestJobsTitle": "Latest jobs",
     "latestJobsSeeAll": "See all jobs",
+    "latestJobsSubtitle": "See who employers are looking for.",
     "offersCount": "{count, plural, one {# job} other {# jobs}}",
     "categoriesTitle": "Popular categories",
     "locationsTitle": "Popular locations",

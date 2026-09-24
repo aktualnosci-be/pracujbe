@@ -113,10 +113,13 @@ export function PublicSaveJobButton({
   jobId,
   className,
   iconOnly = false,
+  plain = false,
 }: {
   jobId: string;
   className?: string;
   iconOnly?: boolean;
+  /** Bez obramowania (karta-paszport) — tylko z `iconOnly`. */
+  plain?: boolean;
 }) {
   const context = React.useContext(SavedContext);
   const t = useTranslations('jobs');
@@ -138,9 +141,16 @@ export function PublicSaveJobButton({
             : saved
               ? t('saved')
               : t('save');
+  // Wariant `plain` (karta-paszport) jak `.p-save` z prototypu: sama zakładka bez obramowania,
+  // zapisana na jasnoczerwonym tle; cel dotykowy zostaje 44 px (WCAG 2.5.8).
+  const flat = iconOnly && plain;
   const style = cn(
-    'relative z-10 inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 text-sm transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
+    'relative z-10 inline-flex shrink-0 items-center justify-center gap-2 rounded-xl text-sm transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
+    flat
+      ? 'min-h-11 min-w-11 bg-transparent'
+      : 'min-h-12 min-w-12 border border-border bg-background px-3',
     saved ? 'text-accent' : 'text-muted-foreground',
+    saved && flat && 'bg-primary/10 hover:bg-primary/15',
   );
   const Icon = saved ? BookmarkCheck : Bookmark;
   const content = (
