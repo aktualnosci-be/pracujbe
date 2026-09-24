@@ -2959,33 +2959,42 @@ select pg_temp.assert(
 
 -- CO28-2: kontrola ujemna — ta sama funkcja z usuniętą blokadą profilu (kopia ciała
 -- z katalogu, jedyna różnica to brak FOR UPDATE) tworzy duplikat w tym samym scenariuszu.
+-- Kopię zakłada i usuwa osobna, zatwierdzana sesja: zestaw bywa uruchamiany w BEGIN …
+-- ROLLBACK (tests/integration/rate-limit.test.ts), a sesje dblink widzą tylko commit.
 do $$
 declare v_def text; v_nolock text;
 begin
   v_def := pg_get_functiondef('public.create_first_company(text,text,text)'::regprocedure);
-  v_nolock := replace(replace(v_def, 'public.create_first_company(', 'dbl.co28_nolock('),
+  v_nolock := replace(replace(v_def, 'public.create_first_company(', 'co28_neg.create_first_company_nolock('),
                       'where p.id = v_uid for update;', 'where p.id = v_uid;');
-  if v_nolock = v_def or v_nolock like '%for update;%' or v_nolock not like '%dbl.co28_nolock(%' then
+  if v_nolock = v_def or v_nolock like '%for update;%'
+     or v_nolock not like '%co28_neg.create_first_company_nolock(%' then
     raise exception 'ASSERT FAILED: CO28-2 nie udało się usunąć blokady z kopii funkcji';
   end if;
-  execute v_nolock;
+  perform pg_temp.remote_connect('co_setup');
+  perform dbl.dblink_exec('co_setup', 'create schema co28_neg');
+  perform dbl.dblink_exec('co_setup', v_nolock);
+  perform dbl.dblink_exec('co_setup', 'grant usage on schema co28_neg to authenticated');
+  perform dbl.dblink_exec('co_setup',
+    'grant execute on function co28_neg.create_first_company_nolock(text, text, text) to authenticated');
+  perform dbl.dblink_disconnect('co_setup');
 end $$;
-grant usage on schema dbl to authenticated;
-grant execute on function dbl.co28_nolock(text, text, text) to authenticated;
 select pg_temp.remote_begin('co_a', :'CO28B') as pid_a \gset
 select pg_temp.remote_begin('co_b', :'CO28B') as pid_b \gset
 select t.v as co2a from dbl.dblink('co_a',
-  'select company_id::text from dbl.co28_nolock(''Firma B'', ''co28-b-1'', null)') as t(v text) \gset
+  'select company_id::text from co28_neg.create_first_company_nolock(''Firma B'', ''co28-b-1'', null)')
+  as t(v text) \gset
 select t.v as co2b from dbl.dblink('co_b',
-  'select company_id::text from dbl.co28_nolock(''Firma B'', ''co28-b-2'', null)') as t(v text) \gset
+  'select company_id::text from co28_neg.create_first_company_nolock(''Firma B'', ''co28-b-2'', null)')
+  as t(v text) \gset
 select dbl.dblink_exec('co_a', 'commit'); select dbl.dblink_exec('co_b', 'commit');
 select dbl.dblink_disconnect('co_a'); select dbl.dblink_disconnect('co_b');
+select pg_temp.remote_connect('co_setup');
+select dbl.dblink_exec('co_setup', 'drop schema co28_neg cascade');
+select dbl.dblink_disconnect('co_setup');
 select pg_temp.assert(:'co2a' <> :'co2b'
   and (select count(*) from public.company_members where profile_id = :'CO28B' and role = 'owner') = 2,
   'CO28-2 bez blokady profilu równoczesny bootstrap tworzy DWIE firmy (test wykrywa wyścig)');
-revoke execute on function dbl.co28_nolock(text, text, text) from authenticated;
-revoke usage on schema dbl from authenticated;
-drop function dbl.co28_nolock(text, text, text);
 
 -- CO28-3: pierwsza próba wycofana (awaria w trakcie) nie zostawia firmy ani członkostwa;
 -- czekające ponowienie tworzy dokładnie jedną firmę.
