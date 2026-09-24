@@ -556,6 +556,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   umiejętności 120, certyfikaty 160 = `CANDIDATE_ITEM_LIMITS`, zgodne z `left()` w 0028) —
   za długa nie trafia na listę (#364). Kod błędu serwera w komunikacie; `ONBOARDING_INCOMPLETE`
   przenosi do pierwszego brakującego kroku (#363).
+  Jeden krok = jedno żądanie = jedna transakcja (#142, 0082): krok 3 (doświadczenie +
+  umiejętności) i krok 5 (języki + certyfikaty) przez `save_candidate_onboarding_step3/5`
+  (wewnątrz te same `set_candidate_*` — limity, dedup, replace-all). Błąd dowolnej części cofa
+  cały krok. Krok 6 z „Zakończ”: dane kroku zapisane jednym upsertem, `finish_onboarding` tylko
+  sprawdza kompletność, receipt best-effort. Dowód: `rls.sql` sekcja OB142 (wstrzyknięty błąd
+  drugiej części + kontrola ujemna starej ścieżki).
 - [x] Panel kandydata — realne dane pod sesją (RLS) + akcje (zapis oferty, wycofanie aplikacji, odpowiedź na propozycję), noindex; fallback demo bez env
 
 Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilnym kursorem

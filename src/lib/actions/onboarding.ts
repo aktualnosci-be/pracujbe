@@ -22,18 +22,22 @@ import {
  * Server Actions onboardingu kandydata — realny zapis kroków profilu do bazy.
  *
  * Każdy krok jest walidowany odpowiednim `stepNSchema` (to samo źródło prawdy, co po stronie
- * klienta) i zapisywany atomowo dla danego kroku:
+ * klienta) i zapisywany JEDNYM żądaniem do bazy — jedno żądanie = jedna transakcja, więc błąd
+ * nie zostawia części kroku (#142):
  *   - krok 1 → `profiles` (first_name / last_name / phone; dane tożsamości są w profiles),
- *   - krok 3 → `candidate_profiles` (doświadczenie) + `candidate_skills` przez RPC (0028),
- *   - krok 5 → `candidate_languages` (z poziomem) + `candidate_certificates` przez RPC (0028),
+ *   - krok 3 → RPC `save_candidate_onboarding_step3` (0082): doświadczenie + umiejętności,
+ *   - krok 5 → RPC `save_candidate_onboarding_step5` (0082): języki (z poziomem) + certyfikaty,
  *   - kroki 2, 4, 6 → `candidate_profiles` (UPSERT po unikalnym `profile_id`),
  *   - krok 6 z `finish: true` („Zakończ”) wymaga zgody, woła `finish_onboarding` i zapisuje
  *     receipt akceptacji regulaminu/polityki (`record_document_acceptance`, 0054); bez `finish`
  *     („Zapisz i wyjdź”, #337) zapisuje dane kroku bez zgody i bez kończenia onboardingu.
+ *     Atomowy jest tu sam zapis danych kroku; `finish_onboarding` to osobne żądanie, które tylko
+ *     sprawdza kompletność — dane kroku 6 zostają zapisane także przy `ONBOARDING_INCOMPLETE`
+ *     (jak przy „Zapisz i wyjdź”), a receipt jest best-effort.
  *
- * Relacje (skills/languages/certificates) zapisujemy transakcyjnie przez SECURITY DEFINER RPC
- * `set_candidate_*` (replace-all) — koniec cichej utraty danych z FUN-04. Bezpośredni DML na
- * tych tabelach jest odebrany klientowi (0028), więc RPC to jedyna ścieżka zapisu.
+ * Relacje (skills/languages/certificates) zapisują SECURITY DEFINER RPC (replace-all, limity
+ * i normalizacja z `set_candidate_*`, 0028/0079) — koniec cichej utraty danych z FUN-04.
+ * Bezpośredni DML na tych tabelach jest odebrany klientowi (0028), więc RPC to jedyna ścieżka zapisu.
  *
  * TRYB DEMO (Invariant: panele działają bez env): gdy Supabase nie jest skonfigurowane,
  * walidujemy dane, ale NIE zapisujemy — zwracamy `{ ok: true, demo: true }`. Dzięki temu
@@ -51,6 +55,7 @@ export type SaveOnboardingResult =
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
+  if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (
     m.includes('PERMISSION_DENIED') ||
     m.includes('UNAUTHENTICATED') ||
@@ -114,32 +119,29 @@ export async function saveOnboardingStep(
     }
 
     if (step === 3) {
-      // Doświadczenie → candidate_profiles; umiejętności → relacja przez transakcyjne RPC (0028).
+      // Doświadczenie + umiejętności w jednej transakcji (0082) — błąd umiejętności cofa też
+      // doświadczenie, więc komunikat błędu odpowiada stanowi bazy (#142).
       const v = parsed.value as import('@/lib/validation/candidate').CandidateStep3;
-      const { error: ue } = await supabase
-        .from('candidate_profiles')
-        .upsert({ profile_id: user.id, experience_years: v.experienceYears }, { onConflict: 'profile_id' });
-      if (ue) return { ok: false, error: mapPgError(ue.message) };
-      const { error: se } = await supabase.rpc('set_candidate_skills', { p_skills: v.skills });
-      if (se) return { ok: false, error: mapPgError(se.message) };
+      const { error } = await supabase.rpc('save_candidate_onboarding_step3', {
+        p_experience_years: v.experienceYears,
+        p_skills: v.skills,
+      });
+      if (error) return { ok: false, error: mapPgError(error.message) };
       return { ok: true };
     }
 
     if (step === 5) {
-      // Krok 5: języki (z poziomem) + certyfikaty → relacje przez transakcyjne RPC (0028).
-      // Wcześniej dane były walidowane, ale NIE zapisywane (FUN-04, cicha utrata danych).
+      // Języki (z poziomem) + certyfikaty w jednej transakcji (0082, #142).
       const v = parsed.value as import('@/lib/validation/candidate').CandidateStep5;
-      const langs = v.languages.map((l) => ({ language: l.language, level: l.level }));
-      const { error: le } = await supabase.rpc('set_candidate_languages', { p_languages: langs });
-      if (le) return { ok: false, error: mapPgError(le.message) };
-      // Certyfikat z datą ważności (#96) — matching pomija wygasłe; brak daty = bezterminowy.
-      const { error: ce } = await supabase.rpc('set_candidate_certificates', {
+      const { error } = await supabase.rpc('save_candidate_onboarding_step5', {
+        p_languages: v.languages.map((l) => ({ language: l.language, level: l.level })),
+        // Certyfikat z datą ważności (#96) — matching pomija wygasłe; brak daty = bezterminowy.
         p_certificates: v.certificates.map((label) => ({
           label,
           expires_at: v.certificateExpiry[label] ?? null,
         })),
       });
-      if (ce) return { ok: false, error: mapPgError(ce.message) };
+      if (error) return { ok: false, error: mapPgError(error.message) };
       return { ok: true };
     }
 
