@@ -2140,5 +2140,27 @@
       "accessCodeRequired": "Indiquez le code d’accès.",
       "accessCodeInvalid": "Le code d’accès comporte 24 caractères : lettres A–Z et chiffres 2–7."
     }
+  },
+  "campaignBanner": {
+    "eyebrow": "Offre d’emploi en Belgique",
+    "cta": "Postuler maintenant",
+    "accessibleName": "Pracuj.be — offre d’emploi : {title}",
+    "pageTitle": "Bannière de campagne",
+    "intro": "Visuels prêts à l’emploi de cette offre pour vos campagnes et réseaux sociaux. Ils ne contiennent que les données visibles dans l’offre publique. Rien n’est publié automatiquement — vérifiez l’aperçu avant utilisation.",
+    "languageLabel": "Langue de la bannière",
+    "formatHeading": "{width} × {height} px",
+    "previewAlt": "Aperçu de la bannière {width} × {height} px : {title}",
+    "downloadSvg": "Télécharger le SVG",
+    "downloadPng": "Télécharger le PNG",
+    "downloadPngPending": "Préparation du PNG…",
+    "downloadPngError": "Impossible de préparer le PNG. Réessayez ou téléchargez le SVG.",
+    "linkNote": "Dans le fichier SVG, le bouton mène à l’offre. Pour un PNG, indiquez cette adresse à l’endroit de publication : {url}",
+    "unavailableTitle": "Bannière indisponible",
+    "unavailableHint": "Une bannière ne peut être préparée que pour une offre active et non expirée d’une entreprise vérifiée, avec les droits de recruteur de cette entreprise.",
+    "backToOffers": "Retour aux offres",
+    "openBanner": "Bannière de campagne",
+    "openBannerLabel": "Bannière de campagne : {title}",
+    "loadError": "Impossible de charger l’offre",
+    "loadErrorHint": "Réessayez dans un instant. Si le problème persiste, revenez à la liste des offres."
   }
 }
