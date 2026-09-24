@@ -48,3 +48,23 @@ export function getOpsPool() {
   }
   return ops;
 }
+
+let service: ReturnType<typeof createRuntimePool> | undefined;
+
+/**
+ * Leniwa pula zadań uprzywilejowanych (#25): osobny login z jedynym członkostwem
+ * service_role (`DATABASE_SERVICE_URL`). Używają jej wyłącznie worker poczty, webhooki,
+ * cron maintenance, limiter i odczyty panelu admina po `requireAdmin` — nigdy loadery
+ * paneli kandydata/pracodawcy.
+ */
+export function getServicePool() {
+  if (!service) {
+    const url = process.env.DATABASE_SERVICE_URL;
+    if (!url) throw new Error('Brak konfiguracji połączenia zadań serwerowych.');
+    service = createRuntimePool(url, 'service').catch(error => {
+      service = undefined;
+      throw error;
+    });
+  }
+  return service;
+}

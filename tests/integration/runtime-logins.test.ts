@@ -45,10 +45,12 @@ function environment() {
     AUTH_DATABASE_PASSWORD: initialPassword,
     RATE_LIMIT_DATABASE_PASSWORD: initialPassword,
     AUTH_MAIL_DATABASE_PASSWORD: initialPassword,
+    SERVICE_DATABASE_PASSWORD: initialPassword,
     DATABASE_APP_NEW_PASSWORD: rotatedPassword,
     AUTH_DATABASE_NEW_PASSWORD: rotatedPassword,
     RATE_LIMIT_DATABASE_NEW_PASSWORD: rotatedPassword,
     AUTH_MAIL_DATABASE_NEW_PASSWORD: rotatedPassword,
+    SERVICE_DATABASE_NEW_PASSWORD: rotatedPassword,
   };
 }
 
@@ -140,7 +142,7 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
     });
     expect(preview).toEqual({
       changed: 0,
-      pending: ["web", "auth", "limiter", "auth-mail"],
+      pending: ["web", "auth", "limiter", "auth-mail", "service"],
     });
     expect(
       (
@@ -205,7 +207,7 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
       REVOKE service_role FROM pracujbe_limiter;
       GRANT pracujbe_rate_limit TO pracujbe_limiter WITH INHERIT FALSE, SET TRUE`);
     expect((await provisionRuntimeLogins(admin!, environment())).changed).toBe(
-      3,
+      4,
     );
   });
 
@@ -296,10 +298,10 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
     await inspectRuntimeLogins(admin!, environment(), { requireAll: true });
   });
 
-  it("rotuje cztery hasła atomowo i może zostać bezpiecznie ponowione", async () => {
+  it("rotuje wszystkie hasła atomowo i może zostać bezpiecznie ponowione", async () => {
     expect(
       (await rotateRuntimeLoginPasswords(admin!, environment())).changed,
-    ).toBe(4);
+    ).toBe(5);
     for (const spec of LOGIN_SPECS) {
       await expect(
         loginState(spec.login, initialPassword, spec.role),
@@ -310,7 +312,7 @@ describe("operator ograniczonych loginów PostgreSQL", () => {
     }
     expect(
       (await rotateRuntimeLoginPasswords(admin!, environment())).changed,
-    ).toBe(4);
+    ).toBe(5);
     await inspectRuntimeLogins(admin!, environment(), { requireAll: true });
   });
 });

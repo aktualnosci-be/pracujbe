@@ -17,6 +17,11 @@ describe('Konfiguracja ograniczonej puli', () => {
     expect(config.options).toContain('-c role=pracujbe_ops -c search_path=public');
     expect(config.max).toBe(1);
   });
+  it('pula zadań serwerowych (#25): rola service_role, schemat public, 3 połączenia', () => {
+    const config = runtimePoolConfig('postgres://svc:secret@localhost/app', 'service');
+    expect(config.options).toContain('-c role=service_role -c search_path=public');
+    expect(config.max).toBe(3);
+  });
   it.each([
     '', 'not-a-url', 'https://user:secret@host/db', 'postgres://host/db',
     'postgres://user:secret@host/',
