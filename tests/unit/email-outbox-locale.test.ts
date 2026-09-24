@@ -35,6 +35,14 @@ function row(id: string, template: EmailType, locale: string, payload: Record<st
   return { id, profile_id: null, to_email: `${id}@example.test`, template, locale, payload, attempts: 0 };
 }
 
+
+/** #45: claim zwraca wiersze, budżet wysyłki (0087) zawsze przyznany w tych testach. */
+function mockClaim(result: { data: unknown; error: unknown }) {
+  adminRpc.mockImplementation(async (name: string) =>
+    name === 'take_email_send_budget' ? { data: [{ granted: true, retry_at: null }], error: null } : result,
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.RESEND_API_KEY = 're_test';
@@ -56,7 +64,7 @@ const CASES: Array<{ template: EmailType; locale: Locale; path: string; payload:
 
 describe('processEmailQueue — język odbiorcy z email_deliveries.locale', () => {
   it.each(CASES)('$template w $locale: temat, treść i link w języku wiersza', async ({ template, locale, path, payload }) => {
-    adminRpc.mockResolvedValue({ data: [row('d1', template, locale, payload)], error: null });
+    mockClaim({ data: [row('d1', template, locale, payload)], error: null });
 
     const result = await processEmailQueue();
     expect(result).toMatchObject({ processed: 1, sent: 1, failed: 0, ok: true });
@@ -75,7 +83,7 @@ describe('processEmailQueue — język odbiorcy z email_deliveries.locale', () =
   });
 
   it('paczka z odbiorcami w różnych językach: każdy e-mail w języku swojego wiersza', async () => {
-    adminRpc.mockResolvedValue({
+    mockClaim({
       data: [
         row('a', 'jobOffer', 'fr', { companyName: 'Acme', jobTitle: 'Cariste' }),
         row('b', 'jobOffer', 'en', { companyName: 'Acme', jobTitle: 'Driver' }),
@@ -89,7 +97,7 @@ describe('processEmailQueue — język odbiorcy z email_deliveries.locale', () =
   });
 
   it('nieobsługiwany język w wierszu → fallback en (nie pl serwera)', async () => {
-    adminRpc.mockResolvedValue({ data: [row('d1', 'jobOffer', 'de', { companyName: 'Acme', jobTitle: 'Fahrer' })], error: null });
+    mockClaim({ data: [row('d1', 'jobOffer', 'de', { companyName: 'Acme', jobTitle: 'Fahrer' })], error: null });
     await processEmailQueue();
     expect(send.mock.calls[0]![0].html).toContain(`${SITE}/en/candidate/propozycje`);
   });

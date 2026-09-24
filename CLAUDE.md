@@ -385,8 +385,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > bazie z realnymi (nie-demo) firmami/ofertami (ochrona przed przypadkowym seedem znanych kont
 > na staging/produkcji); czysta/lokalna/CI baza przechodzi. Test negatywny w `test-seed.sh`.
 > **P1 możliwe autonomicznie — ZAMKNIĘTE** (SEC-01/03/04/05/06/07/08/09/10/17/19, FUN-01/03/04/
-> 05/06(część)/07). **FUN-08 (billing) — ZROBIONE:** realny Stripe (checkout/webhook/cancel,
-> webhook = źródło prawdy, provider-gated). **P1 wymagające infra/treści (otwarte):** CI-01/02/07
+> 05/06(część)/07). **FUN-08 (billing) — HISTORYCZNE, WYŁĄCZONE (#51):** dawny Stripe
+> checkout/webhook nie działa w bezpłatnym MVP (patrz Etap 7, „Płatności”). **P1 wymagające infra/treści (otwarte):** CI-01/02/07
 > (separacja runnerów + twarda bramka RLS/Storage — infra), FUN-09 (realna treść prawna — noindex
 > safe default zrobiony). **P2/P3 — ZROBIONE:** SEC-16 (0035, in_app opt-out trigger),
 > SEC-15 (outbox: sprawdzanie błędów zapisu po wysyłce + log do reconciliacji), SEC-14 (0036,
@@ -624,12 +624,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja CO28 (dblink, kontrola ujemna bez `FOR UPDATE` tworzy duplikat), `company-bootstrap-callback.test`.
 - [x] Panel pracodawcy — realne dane pod sesją (RLS) + akcje (zmiana statusu aplikacji, wysyłka propozycji), noindex; fallback demo bez env
   Lejek (#302): kohorta aplikacji z 30 dni (`submitted_at`) liczona zapytaniami `count` (head,
-  `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = „brak danych” (brak mechanizmu
-  zliczania `views_count`), bez fałszywej konwersji 0%. Kafelki/lejek/kolumny zawijają się przy
+  `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = suma `detail_views` z lejka ofert
+  (#99), „brak danych” tylko bez uprawnień rekrutera — bez fałszywej konwersji 0%. Kafelki/lejek/kolumny zawijają się przy
   200% tekstu (#318). Przełącznik firmy: nazwa w etykiecie, `aria-current`, komunikat błędu (#322).
   Pulpit: karty ofert w stylu paszportu (#171), jawny błąd najnowszych zgłoszeń z ponowieniem
   (#157), „Zobacz wszystkie” → `/employer/aplikacje` (#164); bramka axe 320/1280 px i 200% tekstu
   w 4 językach — `tests/e2e/employer-dashboard-a11y.spec.ts`.
+  Lejek ofert bez śledzenia (#99, migracja `0089`): `job_funnel_daily` = oferta × dzień (Europe/Brussels)
+  × `search_appearances`/`detail_views`/`apply_started`; brak IP, cookies, tekstu wyszukiwania,
+  identyfikatora osoby. `applications_submitted` liczy przy odczycie `get_company_job_funnel` ze stanu
+  `applications` (status ≠ draft) — deterministyczne. Strony ofert zostają ISR: wyspa
+  `JobFunnelBeacon` po załadowaniu (widoczna strona, `credentials: 'omit'`) woła `/api/job-funnel`
+  (`src/lib/job-funnel/*`: walidacja, reguła botów/prefetch `request-filter.ts`, limiter w pamięci
+  po HMAC adresu). Deduplikacja: losowy nonce jednego załadowania widoku (`job_funnel_receipts`,
+  sprzątane po 2 dniach) — retry nie dubluje, odświeżenie = nowe wyświetlenie. RPC zapisu tylko przez
+  endpoint (bramka `pracujbe.funnel_writer`), tylko oferty publiczne firm `verified`. Panel
+  `/employer/statystyki?dni=7|30|90`: zakres dat, definicje metryk, karty per oferta zawijane przy 200% tekstu (recruiter+).
+  Dowód: `rls.sql` sekcja FN99, unit `job-funnel*`, E2E `public-cache-headers` (cache nienaruszony)
+  i `e2e-real` (licznik rośnie, bot pominięty, mutacja `funnel-no-dedup` = czerwony).
 - [x] Kreator oferty (9 kroków, autozapis draftu, publikacja z kontrolą `verified`) — `src/lib/actions/jobs.ts` + `JobWizard`
   Krok 9: „Zapisz i wyjdź” zapisuje szkic bez zgody na publikację (`step9DraftSchema`, także
   w `updateJobDraft`); zgodę wymaga tylko „Opublikuj” (`step9Schema`) (#193). Pozycje list mają
@@ -663,6 +675,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   zwraca `demo`/`ok`/`error`; firma demonstracyjna tylko w trybie demo. Dowód: `rls.sql` sekcja MM.
   Powód odrzucenia/zawieszenia (#310, `0084`): `companies.status_reason` w banerze `/employer/firma`.
   **Otwarte:** strona kontaktu (#61), orientacyjny czas weryfikacji (decyzja produktowa).
+- [x] Import ogłoszenia przez AI (#465, za flagą, domyślnie wyłączony): krok „Zaimportuj
+  z ogłoszenia” nad kreatorem nowej oferty — zrzut ekranu (PNG/JPG/WebP ≤ 5 MB, magic bytes)
+  albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Claude
+  (`claude-opus-5`, structured output, `src/lib/ai-import/extract.ts`) → mapowanie tymi samymi
+  schematami kroków (`map.ts`), pola niepewne na liście „do sprawdzenia” w kroku; poprawne kroki
+  do szkicu jednym `save_job_draft`, nigdy publikacja. Akcja `importJobListing`: recruiter+
+  aktywnej firmy, limit per firma 10/h i 30/dobę (fail-closed). Podejrzenie prompt injection =
+  wszystko do sprawdzenia, bez zapisu. Env: `AI_JOB_IMPORT_ENABLED`, `ANTHROPIC_API_KEY`,
+  opcjonalnie `AI_JOB_IMPORT_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
+  produkcją (E2E `job-import.spec`). Research, koszty, prywatność: `docs/AI_JOB_IMPORT.md`.
+  **Otwarte:** globalny budżet i raport kosztów (#36), DPA/retencja dostawcy (decyzja właściciela).
 - [x] Wygaszanie ofert (#72, migracja `0085`): `expire_due_jobs()` (service_role, `SKIP LOCKED`,
   zwraca liczbę) zmienia tylko `active` z `expires_at <= now()` na `expired`; woła je
   `/api/maintenance` (cron Railway co godzinę, `docs/railway/README.md`). Panel nie czeka na cron:
@@ -745,6 +768,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] Wybór języka odbiorcy (fallback) — util + test + `resolve_recipient_locale()` w DB (INVARIANT #1 egzekwowany przy kolejkowaniu)
 - [~] Kolejka e-mail + worker + ponawianie — outbox (`email_deliveries`: attempts/next_attempt_at/payload), worker `src/lib/email/outbox.ts` + route `/api/email/process` (sekret) gotowe; realna wysyłka wymaga `RESEND_API_KEY`
   Harmonogram: cron Railway (`scripts/railway-cron-call.mjs` → `/api/email/process`), opis w `docs/RESEND_SETUP.md` §6 (#296).
+  Wypisanie i budżety (#45, etap 1, migracja `0087`): token HMAC (`src/lib/email/unsubscribe-token.ts`,
+  `EMAIL_UNSUBSCRIBE_SECRET`; UUID konta + kategoria + 180 dni, bez e-maila w URL), link w stopce
+  → `/{locale}/wypisz` (noindex, zapis dopiero po kliknięciu), nagłówki `List-Unsubscribe` +
+  `List-Unsubscribe-Post` → `POST /api/email/unsubscribe` (RFC 8058, idempotentne RPC
+  `email_unsubscribe`, tylko service_role; GET = 303 bez zmian). Kategorie: `src/lib/email/categories.ts`
+  = `email_preference_category`; marketing domyślnie wyłączony (`email_allowed`). `claim_email_batch`
+  ponownie sprawdza zgodę i wygasza wiersz (`suppressed_at`). Atomowy budżet okna
+  (`take_email_send_budget`, rezerwy auth/transakcyjna; odmowa = odłożenie bez `attempts`).
+  Dowód: `rls.sql` sekcja UN45 (dblink, kontrole ujemne), `email-unsubscribe.test.ts`, E2E
+  `email-unsubscribe.spec`. **Do zrobienia (#45):** wersjonowany dowód zgody marketingowej,
+  centrum preferencji dla wszystkich kategorii, `text/plain`, tożsamość i adres pocztowy nadawcy
+  w stopce marketingu, budżet w hooku e-maili Auth, rezerwacja kampania+odbiorca, decyzja o
+  trackingu na odebranym `.eml`.
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
@@ -799,16 +835,40 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   weryfikacja = `company_verified`) i e-mail `companyVerified`/`companyRejected`/`companySuspended`
   przez `enqueue_email` (język właściciela, Invariant #1). Dowód: `rls.sql` sekcja AV310;
   unit `admin-company-review`; E2E `admin-company-review.spec`.
+  Weryfikacja VAT w VIES (#92, `0088`): sekcja w `/admin/firmy/[id]` — lokalny pre-check
+  numeru BE (`src/lib/vies/belgian-vat.ts`: normalizacja, 10 cyfr, suma mod 97; zły zapis nie
+  trafia do VIES), adapter REST VIES (`src/lib/vies/client.ts`: timeout 4 s na próbę, 3 próby
+  z backoffem i jitterem). Stany: `valid`, `invalid`, `unavailable`, `rate_limited` —
+  `invalid` TYLKO przy jawnym `valid:false` w poprawnej odpowiedzi; 429/5xx/timeout/sieć/
+  `actionSucceed:false`/kody concurrent-unavailable = brak możliwości weryfikacji, osobne
+  teksty. Zapis wyłącznie wyników rozstrzygających (`company_vies_checks`, RPC
+  `admin_record_vies_check`, audyt `company.vies_checked` z samym wynikiem); awaria nie
+  nadpisuje wcześniejszego wyniku. Porównanie nazwy (`name-match.ts`) = sygnał do ręcznego
+  sprawdzenia. Status firmy zmienia tylko admin. Dowód: `rls.sql` sekcja VI92, unit
+  `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
+  `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
+  (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
   obiekt z linkiem; filtry typu obiektu, akcji, aktora, zakresu dat i `id` (skrót „Historia
   statusów” w wierszu firmy), stronicowanie kursorem.
-- [x] Płatności / subskrypcje / faktury / kody rabatowe — REALNY Stripe (FUN-08), provider-gated:
-  `startCheckout` tworzy sesję Stripe Checkout (subskrypcja, inline `price_data` z `PLANS`, kupon z
-  kodu rabatowego), `cancelSubscription` = `cancel_at_period_end`, webhook `/api/stripe/webhook`
-  (weryfikacja podpisu) = ŹRÓDŁO PRAWDY: synchronizuje `subscriptions/invoices/payments` service-rolem
-  (klient nie pisze tych tabel). Billing = rola owner/admin. Bez `STRIPE_SECRET_KEY` = tryb demo.
+- [x] Płatności — **WYŁĄCZONE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Stan aktywny:
+  portal bez cennika, pakietów, CTA zakupu i limitów planu; billing niedostępny. Jedna jawna flaga
+  `BILLING_ENABLED` (`src/lib/billing/flag.ts`), domyślnie wyłączona — włącza ją tylko dokładne
+  `true`. Bez flagi: `getStripe()` = null, `isStripeConfigured`/`isBillingProviderReady`/
+  `isBillingProviderConfigured`/`readinessChecks().stripe` = false mimo sekretów, webhook
+  `/api/stripe/webhook` = 404 bez czytania treści. Niezależnie od flagi: akcje `startCheckout`/
+  `applyDiscount`/`cancelSubscription` zawsze zwracają `BILLING_UNAVAILABLE` (komunikat
+  `errors.billingDisabled` — portal jest bezpłatny), webhook z flagą = 410, `/employer/platnosci`
+  → przekierowanie na `/employer`, brak trasy cennika (404), brak linków w nawigacji/stopce/sitemap.
+  `ENTITLEMENT_LIMIT` → `errors.activeJobLimit` (bez wzmianki o planie). Dawne klucze sprzedaży
+  (`billing.*`, `pricing.*`, `dashboard.*Package`, `footer.pricing`) zostały w `src/messages` bez
+  użycia. Tabele finansowe (`subscriptions/payments/invoices/discount_codes/checkout_intents`) =
+  martwy schemat do cleanupu po migracji Railway, nie wdrożona funkcja. Powrót monetyzacji =
+  nowa decyzja właściciela + osobny projekt (sama flaga nie uruchamia sprzedaży). Dowód:
+  `billing-disabled.test` (z kontrolą ujemną: flaga + sekrety + bezpośrednie wywołanie checkoutu),
+  `free-mvp-ui.test`, `sitemap-robots.test`, E2E `free-mvp-no-sales.spec` (4 języki).
 
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
@@ -845,7 +905,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   wiadomości w obie strony z licznikiem, `email_deliveries` fr/nl, obce konta bez dostępu.
   Przeglądarka widzi ofertę z bazy (`next dev` z `DATABASE_APP_URL`) i jej zniknięcie po
   zamknięciu. Kontrole ujemne: `E2E_REAL_MUTATION=rls-applications-off|finish-onboarding-noop|
-  step5-swallow-error|recipient-locale-en|retry-new-key` — każda daje czerwony test.
+  step5-swallow-error|recipient-locale-en|funnel-no-dedup|retry-new-key` — każda daje czerwony test.
   **Otwarte:** panele i Server Actions nadal używają klienta Supabase (PostgREST nie ustawia
   `app.current_uid`), więc kliknięć w panelach i `revalidatePath` ten test nie obejmuje — po
   #24/#25 dołożyć kroki UI w tym samym configu. Wpięcie w CI (job z usługą `postgres:16`) —
@@ -890,16 +950,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
-  logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny). **Do zrobienia:**
-  Core Web Vitals / audyt wydajności (Lighthouse w CI).
+  logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny).
+  Bramka wydajności w CI (#395): kroki „Performance budget (static)” w `build` (JS gzip
+  kluczowych tras = layouty + strona, fonty woff2; `scripts/perf-budget-static.mjs`) i
+  „Performance budget (lab CWV)” w `e2e` (LCP/CLS/TBT, mediana 3 prób, CPU 4×, 1,6 Mb/s,
+  pierwsza wizyta i ze zgodą; `scripts/perf-lab.mjs`, ten sam build i Chromium). Budżety i
+  progi w `perf-budgets.json`, opis w `docs/PERFORMANCE_CHECKLIST.md` §10; strażnik kroków
+  w `check-ci-workflows.mjs`. **Do zrobienia:** INP-proxy w bramce, dane polowe CWV.
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391; jedyna
   wyspa = przycisk zapisu z `jobId`; względna data na serwerze po dniu kalendarzowym w
   Brukseli — `src/lib/relative-date.ts`, zmienia się tylko o północy, zgodna z ISR), dialogi
   na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu, z treścią montowaną
   w osobnym zadaniu po ramce z nakładką (#393; INP otwarcia < 100 ms przy CPU 4×,
   `dialog-open-inp.spec`), długi cache
-  obrazów z optymalizatora i plików `public/` (#394). Bramka wydajności w CI (#395) czeka
-  na decyzję o workflow. Font Inter jako podzbiór łaciński ~73 KB (#388, przepis
+  obrazów z optymalizatora i plików `public/` (#394). Font Inter jako podzbiór łaciński ~73 KB (#388, przepis
   `scripts/subset-font.py`, fonty zastępcze z metrykami w `globals.css`) i baner zgód
   w HTML z serwera, ukrywany przed malowaniem przy zapisanej zgodzie (`consent-boot.ts`, #389);
   „Przejdź do treści” renderuje `[locale]/layout` przed banerem, każdy układ ma `#main-content`.

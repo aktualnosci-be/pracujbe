@@ -10,6 +10,7 @@ import { Link } from '@/i18n/navigation';
 import { applyToJob } from '@/lib/actions/applications';
 import { cn } from '@/lib/utils';
 import { loginHref, registerHref } from '@/lib/auth/next-path';
+import { reportApplyStarted } from '@/lib/job-funnel/client';
 import { usePublicViewerStatus } from '@/components/public/PublicSavedJobs';
 import {
   APPLY_AVAILABILITY_OPTIONS,
@@ -169,6 +170,8 @@ export function ApplyModal({
     if (next) {
       reset();
       setFormReady(false);
+      // Lejek ofert (#99): rozpoczęcie aplikowania, raz na wyświetlenie oferty.
+      if (!demo) reportApplyStarted(jobId);
     }
     setOpen(next);
   };

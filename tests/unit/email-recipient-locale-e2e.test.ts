@@ -271,6 +271,14 @@ async function assertRecipientLanguage(
   expect(mail.html).toContain(`${SITE}/${recipientLocale}${targetPath}`);
 }
 
+
+/** #45: claim zwraca wiersze, budżet wysyłki (0087) zawsze przyznany w tych testach. */
+function mockClaim(result: { data: unknown; error: unknown }) {
+  adminRpc.mockImplementation(async (name: string) =>
+    name === 'take_email_send_budget' ? { data: [{ granted: true, retry_at: null }], error: null } : result,
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.RESEND_API_KEY = "re_test";
@@ -295,7 +303,7 @@ beforeEach(() => {
 async function runWorker(
   rows: ReturnType<typeof enqueue>[],
 ): Promise<SentMail[]> {
-  adminRpc.mockResolvedValue({ data: rows, error: null });
+  mockClaim({ data: rows, error: null });
   const result = await processEmailQueue();
   expect(result).toMatchObject({
     processed: rows.length,

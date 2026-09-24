@@ -54,11 +54,15 @@ RESEND_API_KEY="re_…"                          # SEKRET, tylko serwer
 EMAIL_FROM="Pracuj.be <no-reply@pracuj.be>"    # nadawca; domena musi być zweryfikowana
 EMAIL_REPLY_TO="kontakt@pracuj.be"             # adres odpowiedzi
 EMAIL_QUEUE_SECRET="…"                          # chroni endpoint przetwarzający kolejkę
+EMAIL_UNSUBSCRIBE_SECRET="…"                    # podpis HMAC linków wypisania (≥ 32 znaki)
 ```
 
 - `EMAIL_FROM` musi być na **zweryfikowanej** domenie z §2.
 - `EMAIL_QUEUE_SECRET` — silny losowy sekret; chroni `/api/email/process` przed
   wywołaniem z zewnątrz (patrz §6).
+- `EMAIL_UNSUBSCRIBE_SECRET` — silny losowy sekret (np. `openssl rand -base64 48`). Bez niego
+  e-maile transakcyjne wychodzą bez linku wypisania, a marketingowe nie wychodzą wcale.
+  Zmiana sekretu unieważnia linki w wysłanych wiadomościach (strona kieruje wtedy do ustawień).
 
 ---
 
@@ -167,6 +171,22 @@ jednocześnie harmonogramów Vercel i Railway.
   powrót do wcześniejszego statusu (np. interview → shortlisted → interview) wysyła
   kolejny e-mail, a ponowienie tego samego żądania — nie. Publikacja: `jobpub-<job_id>`.
 - **Deduplikacja webhooków:** `provider_message_id` UNIQUE.
+
+### Wypisanie i budżety wysyłki (#45, migracja `0087`)
+
+- Każdy mail z kategorią preferencji (zgłoszenia, propozycje, wiadomości, dopasowania,
+  marketing) ma w stopce link `/{locale}/wypisz?t=…` oraz nagłówki `List-Unsubscribe`
+  (`/api/email/unsubscribe?t=…`) i `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
+  (RFC 8058). Token: HMAC-SHA256, UUID konta + kategoria + termin (180 dni), bez adresu e-mail.
+- `POST /api/email/unsubscribe` wypisuje bez logowania, idempotentnie. `GET` nigdy nie zmienia
+  preferencji (skanery linków) — przekierowuje na stronę z przyciskiem potwierdzenia.
+- `claim_email_batch` ponownie sprawdza zgodę: wiersz osoby wypisanej po zakolejkowaniu
+  dostaje `status='failed'`, `suppressed_at`, `error_message='suppressed_opt_out'` i nie wychodzi.
+- Budżet: `email_send_budget_config` (domyślnie okno 60 s, limit 100, rezerwa auth 20,
+  rezerwa transakcyjna 30). Marketing kończy się przy 50 w oknie, transakcyjne przy 80,
+  auth może użyć całego limitu. Dopasuj limit do planu Resend (zmiana wiersza przez
+  migrację lub service role). Odmowa odkłada wiersz do następnego okna bez zwiększania
+  `attempts`. Hook e-maili Auth nie pobiera jeszcze budżetu — chroni go rezerwa.
 
 ### Webhook Resend (planowany, P1-19 — endpoint jeszcze nie istnieje)
 
