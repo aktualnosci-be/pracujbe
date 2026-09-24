@@ -524,6 +524,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   godzinowych nie przeliczamy (godziny pracy to wolny tekst) — jak oferty bez kwoty nie odpadają
   z filtra i są na końcu sortowania; opis `filters.salaryPeriodNote` pod suwakiem. Lustro TS dla
   demo: `src/lib/salary-compare.ts`. Dowód: `rls.sql` sekcja SAL, `salary-compare.test.ts`.
+  Jednostka filtra (0091): przełącznik „Miesięcznie / Za godzinę” (URL `salaryUnit=hour`,
+  RPC `p_salary_unit`, widełki 10–40 EUR/godz.). Godzinowo porównujemy tylko stawki godzinowe;
+  miesięcznych/rocznych nie przeliczamy na godziny (nieporównywalne → nie odpadają, sort na
+  końcu). Jednostka steruje też sortem po wynagrodzeniu; zmiana jednostki zeruje widełki.
+  Dowód: `rls.sql` sekcja SP188.
   Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
   dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
   w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
@@ -593,8 +598,31 @@ wyszukiwanie (`candidate_profiles_select_employer`, `candidate_profile_is_search
 triggery BEFORE INSERT na `offers`/`conversations`/`messages` (neutralny błąd jak brak relacji),
 polecane (`get_public_jobs_by_ids` pod sesją). Historia aplikacji/rozmów zostaje. UI: sekcja
 „Zablokowane firmy” w `/candidate/ustawienia` + kontrolka na szczególe oferty. Dowód: `rls.sql`
-sekcja BL. **Do zrobienia:** publiczna lista `/oferty-pracy` celowo działa jako gość (anon),
-więc oferty zablokowanej firmy nadal są w wynikach listy — personalizacja wymaga osobnej decyzji.
+sekcja BL. Lista wyników (`0090`): `get_public_jobs`/`_count`/`get_public_job_filter_facets`
+pomijają oferty firm zablokowanych przez wywołującego (gość/pracodawca bez zmian, więc strony
+ISR zostają wspólne); `/oferty-pracy` przekazuje UUID kandydata ze zweryfikowanej sesji
+(`src/lib/auth/candidate-viewer.ts` → `readPortalIdentity`), publiczny URL oferty bez zmian.
+Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0090` pada BL97-1). **Otwarte:** działa,
+gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zostaje listą gościa.
+Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
+kasuje tytułu propozycji bez aplikacji (BL97-6).
+
+Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
+`/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja
+`saveSearchAction`) zapisuje KANONICZNE filtry v1 = dokładnie argumenty `get_public_jobs`
+wysłane przez listę (`src/lib/job-list-query.ts`, jedno źródło z listą; aliasy miast
+rozwinięte, bez `date`). RPC-only: `save_saved_search` (kandydat, identyczne filtry → ten sam
+wiersz, limit 20), `set_saved_search_alerts` (włączenie przesuwa `alerts_since`/watermark —
+bez zaległych ofert), `delete_saved_search`; odczyt własnych pod RLS. Worker
+`process_saved_search_alerts` (service_role, `/api/maintenance` co godzinę, `SKIP LOCKED`)
+woła `get_public_jobs` z filtrami i `p_since` = watermark − 1 h, pomija firmy zablokowane,
+rejestruje parę w `saved_search_alerts` (PK = brak ponownej wysyłki), tworzy jedno in-app
+(`job_match`, `entity_type='saved_search'`) i jeden e-mail `jobMatch` (digest ≤ 5 ofert,
+język odbiorcy, opt-out `email_job_matches`); digest najwyżej raz na dobę/tydzień. Panel:
+`/candidate/wyszukiwania` (alert, częstotliwość, usunięcie). Dowód: `rls.sql` sekcja SS100;
+unit `saved-search-alerts`; E2E `saved-search.spec`. **Otwarte:** zmiana nazwy wyszukiwania;
+link wypisania i ponowna kontrola zgody tuż przed wysyłką przychodzą z #466 (tam `jobMatch` →
+kategoria `job_matches`); na przebieg najwyżej 100 najnowszych pasujących ofert.
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
@@ -730,6 +758,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i ponowienie tym samym kluczem (#360); `UNAUTHENTICATED` (link logowania) odróżniony od
   `PERMISSION_DENIED` (konto nie-kandydata), własne komunikaty `RATE_LIMITED`/`JOB_NOT_ACTIVE`.
   Dowód: `rls.sql` B3b/B3c, J7d–J7f.
+  Pytania screeningowe (#101, migracja `0093`): recruiter+ ustala w kroku 7 kreatora do 10 pytań
+  (`yes_no`/`single_choice`/`date`/`short_text`, „wymagane”, kolejność, treść w języku oferty +
+  opcjonalne tłumaczenia) — zapis w tej samej transakcji co krok (`save_job_draft` →
+  `set_job_screening_questions`, replace-all), WYŁĄCZNIE w szkicu (RPC + strażnik na tabeli; w
+  edycji opublikowanej oferty tylko podgląd). Kandydat odpowiada w ApplyModal (widzi, że odpowiedzi
+  idą do firmy i nie zmieniają dopasowania ani statusu); `apply_to_job(…, p_answers)` waliduje je
+  w bazie (`SCREENING_ANSWER_REQUIRED: <id>` → błąd przy pytaniu) i zapisuje niezmienny snapshot
+  pytania i odpowiedzi (`application_screening_answers`) w tej samej transakcji; retry z tym samym
+  kluczem nie nadpisuje odpowiedzi. Odczyt odpowiedzi: kandydat i recruiter+ firmy oferty; widok
+  w szczególe zgłoszenia. Bez reguł dyskwalifikujących i bez LLM (osobny etap). Dowód: `rls.sql`
+  sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
+  `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
+  zgłoszeń (RLS gotowe).
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
@@ -779,7 +820,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
-  0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
+  0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084), jobMatch
+  (`process_saved_search_alerts`, 0092, #100); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
   zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
   (#51), supportContact. Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
   statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja NN.
@@ -842,6 +884,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
   `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
   (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
+- [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy gotowe; decyzje i egzekucja
+  (#42) oraz odwołania (#43) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
+  (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
+  → Zod → RPC `submit_content_report` (EXECUTE tylko service_role, `reporterId` z sesji). Sprawa
+  = `reports.kind='dsa_notice'`: numer `DSA-XXXX-…` (64 bity), kod dostępu z przeglądarki (w bazie
+  SHA-256), idempotencja także przy wyścigu, tylko treść publiczna (prywatna = `NOT_FOUND`),
+  dowód `target_snapshot` z bazy, niezmienność (trigger dla każdej roli), historia
+  `report_events` (także ze zmian w `admin_resolve_report`), limit 5/adres/24 h + jedna otwarta
+  sprawa na treść, e-mail `reportReceived` przez outbox w języku zgłaszającego. Status:
+  `/zglos-tresc/sprawa` (numer + kod, z linku przez fragment `#`). Panel `/admin/zgloszenia`:
+  filtr rodzaju, numer, termin, dowód, kontakt, historia. Dowód: `rls.sql` sekcja DSA41; unit
+  `content-report-actions`, `report-received-email`; E2E `content-report`, `content-report-form`
+  (fixture). **Do uzupełnienia przez właściciela:** treść prawna (znacznik na stronie
+  formularza), katalog kategorii, termin 7 dni i wymagane pola — wg mapy DSA (#40).
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
@@ -872,8 +928,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.
   Bez kluczy poza produkcją = wyłączony; w produkcji brak kluczy = fail-closed rejestracji/resetu.
-  CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. **Do zrobienia:**
-  formularze kontaktu i zgłoszeń (polityki `contact`/`report` gotowe, formularzy brak).
+  CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. Polityka `report`
+  chroni formularz zgłoszenia treści (#41). **Do zrobienia:** formularz kontaktu (`contact`).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
@@ -900,6 +956,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Przeglądarka widzi ofertę z bazy (`next dev` z `DATABASE_APP_URL`) i jej zniknięcie po
   zamknięciu. Kontrole ujemne: `E2E_REAL_MUTATION=rls-applications-off|finish-onboarding-noop|
   step5-swallow-error|recipient-locale-en|funnel-no-dedup|retry-new-key` — każda daje czerwony test.
+  Onboarding (#66, `tests/e2e-real/candidate-onboarding.spec.ts`): kroki 1–6 osobno z odczytem
+  po każdym (`support/onboarding.ts` = kontrakt `saveOnboardingStep` ze schematami kroków
+  z produkcji + loader kreatora z relacjami), wznowienie („Dalej” z danymi z bazy nie gubi
+  skills/languages/certificates, edycja usuwa pozycję), walidacja pól i odrzucenia w bazie bez
+  zmiany stanu, równoległe zapisy kroków 3/5 i „Zakończ” bez duplikatów, `finish_onboarding`
+  (niekompletny → `ONBOARDING_INCOMPLETE`), wyszukiwalność tylko po ukończeniu i opt-in
+  (widok pracodawcy pod RLS). Mutacje: `searchable-without-complete|skills-append|
+  completeness-guard-off|relations-dml-open`. Zestaw real-flow nie jest w CI (uruchamiany ręcznie).
   **Otwarte:** panele i Server Actions nadal używają klienta Supabase (PostgREST nie ustawia
   `app.current_uid`), więc kliknięć w panelach i `revalidatePath` ten test nie obejmuje — po
   #24/#25 dołożyć kroki UI w tym samym configu. Wpięcie w CI (job z usługą `postgres:16`) —
@@ -909,7 +973,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
   E2E noindex każdej strony paneli i auth z systemu plików (`panel-noindex`) i axe na wszystkich
   trasach publicznych, 4 języki, 320/1280 px, z banerem i po jego zamknięciu (`a11y-public-routes`).
-  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 25 trasach
+  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 26 trasach
   kandydata i pracodawcy (PL/EN 1280 px, 4 języki 320 px), z banerem, z otwartym menu statusu,
   centrum powiadomień i kompozytorem; kontrola ujemna (przycisk bez nazwy → czerwony). Admin: `admin-a11y`.
   Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),

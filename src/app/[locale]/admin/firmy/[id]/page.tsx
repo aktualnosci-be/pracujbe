@@ -9,6 +9,23 @@ import { getCompanyDetail, type AdminCompanyDetail } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import { AdminPageHeader } from '@/components/admin/AdminListControls';
+import {
+  EMPTY,
+  INLINE_LINK,
+  NOTICE,
+  NOTICE_TEXT,
+  NOTICE_TITLE,
+  PANEL,
+  PANEL_H2,
+  PANEL_P,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  SECTION_HEAD,
+  TAG,
+  TEXT_LINK,
+} from '@/components/admin/admin-styles';
+import { cn } from '@/lib/utils';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
 import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
@@ -58,21 +75,21 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 function BackLink({ label }: { label: string }) {
   return (
-    <Link
-      href="/admin/firmy"
-      className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-foreground underline underline-offset-2 hover:no-underline"
-    >
+    <Link href="/admin/firmy" className={TEXT_LINK}>
       <ArrowLeft className="size-4" aria-hidden="true" />
       {label}
     </Link>
   );
 }
 
+/** Pole danych: etykieta jak `.stat span` (12 px muted), wartość jak `.job h3` (15 px / 600). */
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-1 whitespace-pre-line break-words text-sm text-foreground">{value}</dd>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1.5 whitespace-pre-line break-words text-[15px] font-semibold tracking-[-0.03em] text-foreground">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -93,9 +110,13 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
 
   if (result.status === 'error') {
     return (
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-[22px]">
         <BackLink label={t('backToCompanies')} />
-        <AdminPageHeader title={t('companiesTitle')} subtitle={t('companyDetailSubtitle')} />
+        <AdminPageHeader
+          eyebrow={t('targetCompany')}
+          title={t('companiesTitle')}
+          subtitle={t('companyDetailSubtitle')}
+        />
         <AdminLoadError retryHref={`/${locale}/admin/firmy/${encodeURIComponent(id)}`} />
       </div>
     );
@@ -103,9 +124,13 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
 
   if (result.status === 'not_found') {
     return (
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-[22px]">
         <BackLink label={t('backToCompanies')} />
-        <AdminPageHeader title={t('companyNotFoundTitle')} subtitle={t('companyNotFoundHint')} />
+        <AdminPageHeader
+          eyebrow={t('targetCompany')}
+          title={t('companyNotFoundTitle')}
+          subtitle={t('companyNotFoundHint')}
+        />
       </div>
     );
   }
@@ -116,42 +141,47 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
   const historyId = parseUuid(company.id);
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-[22px]">
       <BackLink label={t('backToCompanies')} />
-      <AdminPageHeader title={company.name || t('nameFallback')} subtitle={t('companyDetailSubtitle')} />
+      <AdminPageHeader
+        eyebrow={t('targetCompany')}
+        title={company.name || t('nameFallback')}
+        subtitle={t('companyDetailSubtitle')}
+      />
+
+      {/* Uzasadnienie ostatniego odrzucenia/zawieszenia (`.notice`) */}
+      {company.statusReason ? (
+        <div className={cn(NOTICE, 'my-0')}>
+          <div className="min-w-0">
+            <p className={NOTICE_TITLE}>{t('statusReasonLabel')}</p>
+            <p className={cn(NOTICE_TEXT, 'whitespace-pre-line text-foreground')}>
+              {company.statusReason}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Status i decyzja */}
-      <section
-        aria-labelledby="company-status-heading"
-        className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="company-status-heading" className="text-base font-semibold text-foreground">
+      <section aria-labelledby="company-status-heading" className={PANEL}>
+        <div className={SECTION_HEAD}>
+          <h2 id="company-status-heading" className={PANEL_H2}>
             {t('sectionStatus')}
           </h2>
           <AdminStatusBadge kind="company" status={company.status} />
         </div>
-        {company.statusReason ? (
-          <div className="rounded-md bg-soft p-3 text-sm">
-            <p className="font-medium text-muted-foreground">{t('statusReasonLabel')}</p>
-            <p className="mt-1 whitespace-pre-line break-words text-foreground">
-              {company.statusReason}
-            </p>
-          </div>
-        ) : null}
-        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label={t('colCreated')} value={formatDate(company.createdAt)} />
           <Field
             label={t('detailVerifiedAt')}
             value={company.verifiedAt ? formatDate(company.verifiedAt) : dash}
           />
         </dl>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-border pt-5">
           <CompanyStatusActions company={company} createdLabel={formatDate(company.createdAt)} />
           {historyId ? (
             <Link
               href={{ pathname: '/admin/dziennik', query: { entity: 'company', id: historyId } }}
-              className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-foreground underline underline-offset-2 hover:no-underline"
+              className={cn(TEXT_LINK, 'px-1 text-xs')}
             >
               {t('auditHistoryLink')}
             </Link>
@@ -160,14 +190,13 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       </section>
 
       {/* Dane firmy */}
-      <section
-        aria-labelledby="company-data-heading"
-        className="rounded-lg border border-border bg-card p-4 sm:p-5"
-      >
-        <h2 id="company-data-heading" className="text-base font-semibold text-foreground">
-          {t('sectionCompanyData')}
-        </h2>
-        <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <section aria-labelledby="company-data-heading" className={PANEL}>
+        <div className={SECTION_HEAD}>
+          <h2 id="company-data-heading" className={PANEL_H2}>
+            {t('sectionCompanyData')}
+          </h2>
+        </div>
+        <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label={t('detailVat')} value={company.vatNumber ?? dash} />
           <Field label={t('detailRegistration')} value={company.registrationNumber ?? dash} />
           <Field label={t('detailEmail')} value={company.email ?? dash} />
@@ -179,7 +208,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
           <Field label={t('detailIndustry')} value={company.industry ?? dash} />
         </dl>
         {company.description ? (
-          <dl className="mt-4">
+          <dl className="mt-6 border-t border-border pt-5">
             <Field label={t('detailDescription')} value={company.description} />
           </dl>
         ) : null}
@@ -188,92 +217,87 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       {/* Weryfikacja VAT w VIES (#92) */}
       <CompanyViesCheck companyId={company.id} initial={company.vies} />
 
-      {/* Członkowie */}
-      <section
-        aria-labelledby="company-members-heading"
-        className="rounded-lg border border-border bg-card"
-      >
-        <h2
-          id="company-members-heading"
-          className="p-4 text-base font-semibold text-foreground sm:px-5"
-        >
-          {t('sectionMembers')}
-        </h2>
-        {company.members.length === 0 ? (
-          <p className="px-4 pb-4 text-sm text-muted-foreground sm:px-5">{t('membersEmpty')}</p>
-        ) : (
-          <ul className="divide-y divide-border border-t border-border">
-            {company.members.map((member) => (
-              <li
-                key={member.id}
-                className="grid gap-1 p-4 text-sm sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4 sm:px-5"
-              >
-                <div className="min-w-0">
-                  <p className="break-words font-medium text-foreground">
-                    {member.name || t('nameFallback')}
-                  </p>
-                  <p className="break-words text-muted-foreground">{member.email ?? dash}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {t(MEMBER_ROLE_KEY[member.role] ?? 'memberRoleMember')}
-                  </span>
-                  <span>{t(member.isActive ? 'memberActive' : 'memberInactive')}</span>
-                  <span>
-                    {t('colMemberSince')}: {formatDate(member.since)}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* Oferty */}
-      <section
-        aria-labelledby="company-jobs-heading"
-        className="rounded-lg border border-border bg-card"
-      >
-        <div className="flex flex-wrap items-baseline justify-between gap-2 p-4 sm:px-5">
-          <h2 id="company-jobs-heading" className="text-base font-semibold text-foreground">
-            {t('sectionJobs')}
-          </h2>
-          {company.jobsTotal > company.jobs.length ? (
-            <p className="text-xs text-muted-foreground">
-              {t('jobsShown', { shown: company.jobs.length, total: company.jobsTotal })}
-            </p>
-          ) : null}
-        </div>
-        {company.jobs.length === 0 ? (
-          <p className="px-4 pb-4 text-sm text-muted-foreground sm:px-5">{t('jobsEmpty')}</p>
-        ) : (
-          <ul className="divide-y divide-border border-t border-border">
-            {company.jobs.map((job) => (
-              <li
-                key={job.id}
-                className="grid gap-1 p-4 text-sm sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-4 sm:px-5"
-              >
-                <p className="min-w-0 break-words font-medium text-foreground">
-                  {job.status === 'active' && job.slug ? (
-                    <Link
-                      href={`/oferty-pracy/${job.slug}`}
-                      className="underline underline-offset-2 hover:no-underline"
+      <div className="grid min-w-0 grid-cols-[1.4fr_1fr] gap-[19px] max-[1050px]:grid-cols-1">
+        {/* Członkowie (`.panel` z wierszami `.job`) */}
+        <section aria-labelledby="company-members-heading" className={PANEL}>
+          <div className={SECTION_HEAD}>
+            <h2 id="company-members-heading" className={PANEL_H2}>
+              {t('sectionMembers')}
+            </h2>
+          </div>
+          {company.members.length === 0 ? (
+            <p className={EMPTY}>{t('membersEmpty')}</p>
+          ) : (
+            <ul>
+              {company.members.map((member) => (
+                <li key={member.id} className={ROW}>
+                  <div className="min-w-0 flex-1">
+                    <p className={ROW_TITLE}>{member.name || t('nameFallback')}</p>
+                    <p className={ROW_META}>{member.email ?? dash}</p>
+                    <p className={ROW_META}>
+                      {t('colMemberSince')}: {formatDate(member.since)}
+                    </p>
+                    <span className={cn(TAG, 'mr-[5px] mt-1.5')}>
+                      {t(MEMBER_ROLE_KEY[member.role] ?? 'memberRoleMember')}
+                    </span>
+                    <span
+                      className={cn(
+                        TAG,
+                        'mt-1.5',
+                        member.isActive ? 'bg-success/10 text-success-text' : undefined,
+                      )}
                     >
-                      {job.title || t('targetUnnamed')}
-                    </Link>
-                  ) : (
-                    job.title || t('targetUnnamed')
-                  )}
-                </p>
-                <span className="text-muted-foreground">
-                  {t(JOB_STATUS_KEY[job.status] ?? 'statusUnknown')}
-                </span>
-                <span className="text-muted-foreground">{formatDate(job.createdAt)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                      {t(member.isActive ? 'memberActive' : 'memberInactive')}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Oferty */}
+        <section aria-labelledby="company-jobs-heading" className={PANEL}>
+          <div className={SECTION_HEAD}>
+            <h2 id="company-jobs-heading" className={PANEL_H2}>
+              {t('sectionJobs')}
+            </h2>
+            {company.jobsTotal > company.jobs.length ? (
+              <p className={PANEL_P}>
+                {t('jobsShown', { shown: company.jobs.length, total: company.jobsTotal })}
+              </p>
+            ) : null}
+          </div>
+          {company.jobs.length === 0 ? (
+            <p className={EMPTY}>{t('jobsEmpty')}</p>
+          ) : (
+            <ul>
+              {company.jobs.map((job) => (
+                <li key={job.id} className={ROW}>
+                  <div className="min-w-0 flex-1">
+                    <p className={ROW_TITLE}>
+                      {job.status === 'active' && job.slug ? (
+                        <Link
+                          href={`/oferty-pracy/${job.slug}`}
+                          className={cn(INLINE_LINK, 'underline')}
+                        >
+                          {job.title || t('targetUnnamed')}
+                        </Link>
+                      ) : (
+                        job.title || t('targetUnnamed')
+                      )}
+                    </p>
+                    <p className={ROW_META}>{formatDate(job.createdAt)}</p>
+                    <span className={cn(TAG, 'mt-1.5')}>
+                      {t(JOB_STATUS_KEY[job.status] ?? 'statusUnknown')}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

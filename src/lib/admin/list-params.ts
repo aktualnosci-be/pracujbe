@@ -120,6 +120,19 @@ export function reportStatusesFor(filter: ReportFilter): string[] | null {
   return [filter];
 }
 
+/**
+ * Rodzaj zgłoszenia (#41): `dsa_notice` — sprawa z publicznego formularza zgłoszeń treści
+ * (osobna kolejka), `quality` — pozostałe zgłoszenia. `all` = bez filtra (domyślnie).
+ */
+export const REPORT_KIND_FILTERS = ['all', 'dsa_notice', 'quality'] as const;
+export type ReportKindFilter = (typeof REPORT_KIND_FILTERS)[number];
+
+export function parseReportKindFilter(raw: string | undefined | null): ReportKindFilter {
+  return raw && (REPORT_KIND_FILTERS as readonly string[]).includes(raw)
+    ? (raw as ReportKindFilter)
+    : 'all';
+}
+
 /** Role, które aplikacja faktycznie nadaje (bez `moderator` — nic go nie obsługuje, #418). */
 export const USER_ROLE_FILTERS = ['candidate', 'employer', 'admin'] as const;
 export type UserRoleFilter = (typeof USER_ROLE_FILTERS)[number];
@@ -164,6 +177,9 @@ export const REPORT_REASON_KEY: Record<string, string> = {
   discrimination: 'reasonDiscrimination',
   inappropriate: 'reasonInappropriate',
   offensive: 'reasonInappropriate',
+  impersonation: 'reasonImpersonation',
+  illegal_conditions: 'reasonIllegalConditions',
+  data_misuse: 'reasonDataMisuse',
   duplicate: 'reasonDuplicate',
   outdated: 'reasonOutdated',
   expired: 'reasonOutdated',

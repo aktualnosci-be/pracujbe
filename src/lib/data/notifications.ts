@@ -91,10 +91,16 @@ const SYSTEM_TITLE_KEY_BY_ENTITY: Record<string, string> = {
   company_invitation: 'itemTeamInvitation',
 };
 
+/** Tytuły wg `entity_type` niezależnie od typu powiadomienia (#100: alert wyszukiwania). */
+const TITLE_KEY_BY_ENTITY: Record<string, string> = {
+  saved_search: 'itemSavedSearch',
+};
+
 export function titleKeyForType(type: string, data?: unknown, entityType = ''): string {
   if (type === 'system' && SYSTEM_TITLE_KEY_BY_ENTITY[entityType]) {
     return SYSTEM_TITLE_KEY_BY_ENTITY[entityType]!;
   }
+  if (TITLE_KEY_BY_ENTITY[entityType]) return TITLE_KEY_BY_ENTITY[entityType]!;
   const d = asRecord(data);
   if (d['kind'] === 'company_status') {
     const key = COMPANY_STATUS_TITLE_KEY[asStr(d['status'])];
@@ -152,6 +158,9 @@ export function resolveHref(entityType: string, role: string, entityId = ''): st
       return employer ? '/employer/oferty' : '/candidate/oferty-polecane';
     case 'company':
       return employer ? '/employer/firma' : '/candidate';
+    case 'saved_search':
+      // #100: nowe oferty dla zapisanego wyszukiwania — zarządzanie i otwarcie listy.
+      return employer ? '/employer' : '/candidate/wyszukiwania';
     case 'company_invitation':
       // #403: zaproszenie do zespołu — przyjęcie/odrzucenie na stronie zespołu.
       return employer ? '/employer/zespol' : '/candidate';

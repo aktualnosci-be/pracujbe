@@ -109,7 +109,35 @@ describe('updateJobDraft — jeden zapis transakcyjny na krok (#192)', () => {
       skills_optional: ['Excel'],
       languages: [{ language: 'Angielski', level: 'basic' }],
       certificates: ['VCA'],
+      screening_questions: [],
     });
+  });
+
+  it('krok 7 niesie pytania screeningowe w tej samej treści (#101)', () => {
+    const content = buildDraftStepContent(7, {
+      ...(STEPS[7] as object),
+      screeningQuestions: [
+        { type: 'yes_no', required: true, prompt: { pl: ' Prawo jazdy C? ', en: ' ' }, options: [] },
+        {
+          type: 'single_choice',
+          required: false,
+          prompt: { pl: 'Dojazd' },
+          options: [{ label: { pl: 'Auto', nl: 'Auto NL' } }, { label: { pl: 'Autobus' } }],
+        },
+        { type: 'short_text', required: false, prompt: { pl: 'Doświadczenie' }, options: [{ label: { pl: 'x' } }] },
+      ],
+    });
+    expect(content?.screening_questions).toEqual([
+      { type: 'yes_no', required: true, prompt: { pl: 'Prawo jazdy C?' }, options: [] },
+      {
+        type: 'single_choice',
+        required: false,
+        prompt: { pl: 'Dojazd' },
+        options: [{ label: { pl: 'Auto', nl: 'Auto NL' } }, { label: { pl: 'Autobus' } }],
+      },
+      // Opcje tylko dla pytania wyboru — inaczej baza odrzuciłaby krok.
+      { type: 'short_text', required: false, prompt: { pl: 'Doświadczenie' }, options: [] },
+    ]);
   });
 
   it('klucze treści każdego kroku mieszczą się w liście dozwolonych pól migracji', () => {

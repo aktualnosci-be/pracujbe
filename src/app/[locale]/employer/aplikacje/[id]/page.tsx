@@ -7,6 +7,7 @@ import { getEmployerApplicationDetail } from '@/lib/data/employer';
 import { StatusPill, toCamel } from '@/components/ui/status-pill';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import { MessageCandidateButton } from '@/components/employer/MessageCandidateButton';
+import { localizedText, type ScreeningAnswer } from '@/lib/screening/questions';
 
 /**
  * Szczegół zgłoszenia w panelu pracodawcy (#300). Odczyt pod sesją i RLS (recruiter+ firmy —
@@ -85,6 +86,22 @@ export default async function EmployerApplicationDetailPage({
   const availabilityKey = AVAILABILITY_KEYS[application.availability];
   const profile = application.profile;
 
+  // #101: odpowiedź ze snapshotu (treść opcji z chwili aplikowania, nie z bieżącej oferty).
+  const screeningAnswerText = (answer: ScreeningAnswer): string => {
+    if (answer.type === 'yes_no' && answer.answerBoolean !== null) {
+      return answer.answerBoolean ? t('employerApplicationYes') : t('employerApplicationNo');
+    }
+    if (answer.type === 'date' && answer.answerDate) {
+      return format.dateTime(new Date(`${answer.answerDate}T12:00:00Z`), { dateStyle: 'long', timeZone: 'UTC' });
+    }
+    if (answer.type === 'single_choice' && answer.answerText) {
+      const option = answer.options.find((o) => o.id === answer.answerText);
+      return option ? localizedText(option.label, locale) : answer.answerText;
+    }
+    if (answer.type === 'short_text' && answer.answerText) return answer.answerText;
+    return t('employerApplicationScreeningNoAnswer');
+  };
+
   const field = (label: string, value: React.ReactNode) => (
     <div className="min-w-0">
       <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</dt>
@@ -131,6 +148,26 @@ export default async function EmployerApplicationDetailPage({
           )}
         </div>
       </section>
+
+      {application.screeningAnswers.length > 0 ? (
+        <section aria-labelledby="application-screening" className="rounded-3xl border border-border bg-card p-5 sm:p-6">
+          <h2 id="application-screening" className="text-xl font-bold text-foreground">{t('employerApplicationScreening')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('employerApplicationScreeningHint')}</p>
+          <dl className="mt-5 grid gap-5">
+            {application.screeningAnswers.map((answer) => (
+              <div key={answer.position} className="min-w-0">
+                <dt className="break-words text-sm font-medium text-muted-foreground">
+                  {localizedText(answer.prompt, locale)}
+                  {answer.required ? ` (${t('employerApplicationScreeningRequired')})` : ''}
+                </dt>
+                <dd className="mt-1 break-words text-base font-semibold text-foreground">
+                  {screeningAnswerText(answer)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ) : null}
 
       <section aria-labelledby="application-profile" className="rounded-3xl border border-border bg-card p-5 sm:p-6">
         <h2 id="application-profile" className="text-xl font-bold text-foreground">{t('employerApplicationProfile')}</h2>
