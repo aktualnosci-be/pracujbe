@@ -713,8 +713,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   E2E noindex każdej strony paneli i auth z systemu plików (`panel-noindex`) i axe na wszystkich
   trasach publicznych, 4 języki, 320/1280 px, z banerem i po jego zamknięciu (`a11y-public-routes`).
   Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),
-  bez `.first()`/`.nth()` na przyciskach o znaczeniu. **Do zrobienia:** asercje
-  `email_deliveries.locale` w `rls.sql` (#348, SQL), E2E kategorii zgód (#349), raport flaków (#375).
+  bez `.first()`/`.nth()` na przyciskach o znaczeniu. Invariant #1 na ścieżce enqueue → worker →
+  render (#348, `email-recipient-locale-e2e`): kontrakt najnowszych `resolve_recipient_locale`/
+  `enqueue_email` z migracji (kolejność preferred → account → signup → `en`, locale z
+  `p_profile_id`), zgodność z TS, nadawca i odbiorca w różnych językach, kontrola ujemna.
+  **Do zrobienia:** asercje `email_deliveries.locale` na żywej bazie w `rls.sql` (#348, SQL),
+  E2E kategorii zgód (#349), raport flaków (#375).
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
