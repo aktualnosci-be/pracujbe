@@ -1,0 +1,37 @@
+conceptType,conceptUri,skillType,reuseLevel,preferredLabel,altLabels,hiddenLabels,status,modifiedDate,scopeNote,definition,inScheme,description
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/01fec851-b5f4-419b-940a-3b4c835adfa8,skill/competence,cross-sector,zajmować się maszynami do pakowania,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/02e235f4-a30a-412a-a06e-1c471ad28678,skill/competence,sector-specific,przeprowadzać procedury kontroli substancji zagrażających zdrowiu,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/055ff233-6569-43db-9f95-a4b03dca97da,skill/competence,sector-specific,obsługiwać systemy rejestrowania towarów w magazynach,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/059b2748-e1df-43d2-8a08-0331fb8d0ddf,knowledge,sector-specific,rodzaje ładunku,"klasy ładunków
+formy ładunku
+klasyfikacje ładunków
+rodzaje ładunków
+kategorie ładunków
+formy frachtu",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/078861f5-b901-48a5-951e-a3ad0a4fa0bd,skill/competence,cross-sector,obsługiwać maszyny magazynowe,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/082967d4-b94c-4305-aa13-35a6aa8c5c7c,skill/competence,cross-sector,współpracować z innymi pracownikami,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/0da516ee-e70e-4384-be13-f5ff80be8127,skill/competence,cross-sector,komunikować się z klientami,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/0ff99f51-40d9-42f1-a1ec-377b2bb5e15f,skill/competence,cross-sector,być w zgodzie z przepisami prawa z zakresu zdrowia bezpieczeństwa higieny i innych obszarów dotyczących żywności,"utrzymywać standardy bezpieczeństwa żywności w kuchni
+być w zgodzie z przepisami prawa żywnościowego
+zachowywać standardy bezpieczeństwa żywności w kuchni",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/110d7aa3-e44e-4cce-a927-8d4de615f3d9,skill/competence,cross-sector,sortować odpady,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/1316577b-31f7-437f-97ce-27c408b87a55,skill/competence,sector-specific,przygotowywać produkty mleczarskie do użycia w daniach,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/13d96098-2ff0-46b8-b326-b7c0e18cc1f1,knowledge,sector-specific,żywienie,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/13e1c0a2-b90d-46f4-be51-11730360b38d,skill/competence,sector-specific,kłaść cegły,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/143d889d-3128-45af-805b-a2d5a1d501c7,skill/competence,cross-sector,zarządzać składowanymi materiałami przedsiębiorstwa,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/144318ce-d147-49fb-ae0b-3c5a9a677c14,skill/competence,sector-specific,kontrolować sprawność pojazdu,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/156f8c5b-894a-4ccc-a70e-37a2726f3f00,skill/competence,cross-sector,wykonywać pracę w ergonomiczny sposób,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/16801a68-549b-4eaf-9531-f2d516a9380c,skill/competence,cross-sector,stosować membrany impregnacyjne,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/1a16f557-01fc-4d64-b25e-a51279a45992,knowledge,sector-specific,procedury związane z myciem samochodów,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/20b9852f-a445-4097-8273-4a18fa6bfff0,skill/competence,sector-specific,stosować techniki renowacyjne,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/210827e3-3129-45a2-8683-70399f3f561f,skill/competence,cross-sector,zamawiać dostawę,"wybierać dostawę
+wybierać dostawę od dostawców
+selekcjonować dostawę do zamówienia
+zamawiać dostawę od dostawców",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/29b326ea-a9c8-4963-b35a-8541d0cdff77,skill/competence,cross-sector,przechowywać świeżą żywność,"przechowywanie świeżych produktów spożywczych
+przechowywanie produktów świeżych
+przechowywanie surowców spożywczych
+przechowywać produkty świeże
+przechowywać żywność świeżą",,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/3172f001-a4dd-4e7e-9f74-9707b2e7c6e1,skill/competence,cross-sector,odczytywać mapy,,,released,,,,,
+KnowledgeSkillCompetence,http://data.europa.eu/esco/skill/8215bbba-2f6d-4530-bf41-904d871eaf72,skill/competence,cross-sector,manewrować pojazdami ciężarowymi,,,released,,,,,

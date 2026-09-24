@@ -45,3 +45,6 @@ yarn-error.log*
 # supabase local
 /supabase/.branches
 /supabase/.temp
+
+# pobrane paczki ESCO (#93) — pełne pliki nie trafiają do repozytorium
+/.esco/

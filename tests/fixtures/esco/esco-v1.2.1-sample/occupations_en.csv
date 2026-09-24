@@ -1,0 +1,69 @@
+conceptType,conceptUri,iscoGroup,preferredLabel,altLabels,hiddenLabels,status,modifiedDate,regulatedProfessionNote,scopeNote,definition,inScheme,description,code
+Occupation,http://data.europa.eu/esco/occupation/05f321f8-055b-407d-bf19-e0ddabda56b7,7112,bricklayer,"industrial oven brickmason
+trowel occupation worker
+brick laying labourer
+specialist brick layer
+brick laying worker
+brick layer",,released,,,,,,,7112.1
+Occupation,http://data.europa.eu/esco/occupation/45037d43-a8f5-4f46-b332-b2935bc305f4,8332,cargo vehicle driver,"truckie
+freight driver
+van driver
+lorry driver
+heavy goods vehicle driver
+package delivery driver
+driver of cargo vehicles
+teamster
+courier
+truck driver
+trucker
+HGV driver
+delivery driver
+courier delivery driver",,released,,,,,,,8332.2
+Occupation,http://data.europa.eu/esco/occupation/7cb71c5f-c310-481c-b46b-d0044328758c,9122,vehicle cleaner,"automotive valeter
+van cleaner
+motor vehicle valeter
+vehicle body cleaner
+automotive cleaner
+truck cleaner
+vehicle body valeter
+new vehicle clearer
+van valeter
+truck valeter
+rental fleet vehicle cleaner
+motor vehicle cleaner
+used vehicle cleaner
+car valeter
+car cleaner",,released,,,,,,,9122.1
+Occupation,http://data.europa.eu/esco/occupation/90f75f67-495d-49fa-ab57-2f320e251d7e,5120,cook,"food keeper
+roast cook
+kitchen chef
+culinary operative
+fish cook
+under chief of the kitchen
+entrée preparer
+communard
+deputy kitchen chef
+junior cook
+senior chef
+chief of the group
+fry cook
+vegetable cook
+pantry supervisor
+grill cook
+soup cook
+food cook
+second kitchen chef
+chief of the kitchen
+apprentice
+saucemaker
+sauté cook",,released,,,,,,,5120.1
+Occupation,http://data.europa.eu/esco/occupation/bea705fe-06ac-4147-b8e0-6e8ac1208d8f,9333,warehouse worker,"order picker
+warehouse operative
+packer
+order clerk
+warehouse picker
+packer and shipper
+warehouse operator
+warehouse packager
+packager
+warehouse packer",,released,,,,,,,9333.8
