@@ -293,7 +293,7 @@ describe('saveOnboardingStep', () => {
     certificates: ['VCA', 'ADR'],
     certificateExpiry: { VCA: '2027-01-31' },
   };
-  const STEP6 = { availability: 'immediate', preferredContractTypes: ['permanent'], agreeTerms: true };
+  const STEP6 = { availability: 'immediate', preferredContractTypes: ['permanent'], agreeTerms: true, privacyNoticeAck: true };
 
   it('krok 3: doświadczenie i umiejętności jednym RPC (jedna transakcja, #142)', async () => {
     expect(await saveOnboardingStep(3, STEP3)).toEqual({ ok: true });
@@ -320,13 +320,19 @@ describe('saveOnboardingStep', () => {
     expect(upsert).not.toHaveBeenCalled();
   });
 
-  it('krok 6 z finish: finish_onboarding i receipt zgody', async () => {
+  it('krok 6 z finish: finish_onboarding i osobne receipty bez zgód na inne cele (#493)', async () => {
     rpc.mockResolvedValue({ data: true, error: null });
     expect(await saveOnboardingStep(6, STEP6, { finish: true })).toEqual({ ok: true });
     expect(rpc).toHaveBeenCalledWith('finish_onboarding');
     expect(adminRpc).toHaveBeenCalledWith(
-      'record_document_acceptance',
-      expect.objectContaining({ p_profile_id: USER, p_documents: ['terms', 'privacy'] }),
+      'record_signup_consents',
+      expect.objectContaining({
+        p_profile_id: USER,
+        p_terms_accepted: true,
+        p_privacy_notice_ack: true,
+        p_optional: {},
+        p_source: 'onboarding',
+      }),
     );
   });
 
@@ -382,6 +388,10 @@ describe('saveOnboardingStep', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
+    // #493: sam regulamin bez potwierdzenia informacji o prywatności nie kończy onboardingu.
+    expect(
+      await saveOnboardingStep(6, { ...STEP6, privacyNoticeAck: undefined }, { finish: true }),
+    ).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
     expect(getUser).not.toHaveBeenCalled();
   });
 });

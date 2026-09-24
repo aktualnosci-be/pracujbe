@@ -28,7 +28,7 @@ export const guestApplicationSchema = z.object({
   availability: z.enum(APPLICATION_AVAILABILITY_VALUES).optional(),
   message: z.string().trim().max(GUEST_MESSAGE_MAX, 'guestApply.error.messageTooLong').optional(),
   locale: localeSchema,
-  agreeTerms: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.consentRequired' }) }),
+  agreeTerms: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.privacyNoticeRequired' }) }),
   idempotencyKey: z.string().uuid('guestApply.error.idempotencyKeyInvalid'),
   /**
    * #101: odpowiedzi na pytania oferty — ten sam kształt co w zwykłej aplikacji. Wymagalność,

@@ -80,7 +80,7 @@ export const applicationSchema = z
     availability: applicationAvailabilitySchema.optional(),
     locale: localeSchema.optional(),
     agreeTerms: z.literal(true, {
-      errorMap: () => ({ message: 'application.error.termsRequired' }),
+      errorMap: () => ({ message: 'application.error.privacyNoticeRequired' }),
     }),
     idempotencyKey: z.string().uuid('application.error.idempotencyKeyInvalid').optional(),
     /**

@@ -69,7 +69,7 @@ afterAll(async () => {
 
 async function signup(instance = auth, locale = 'fr') {
   const input = { email: `${randomUUID()}@example.invalid`, firstName: 'Anna', lastName: 'Nowak', locale,
-    password: 'SignupPassword123', passwordConfirm: 'SignupPassword123', agreeTerms: true };
+    password: 'SignupPassword123', passwordConfirm: 'SignupPassword123', agreeTerms: true, privacyNoticeAck: true };
   return withCandidateSignup(input, 'en', body => instance.api.signUpEmail({ body }));
 }
 

@@ -2,8 +2,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Zgoda na regulamin przy rejestracji jest sprawdzana na SERWERZE: żądanie bez zgody
- * nie tworzy konta, a konto bez zapisanego receiptu akceptacji nie zostaje.
+ * Akceptacja regulaminu i potwierdzenie informacji o prywatności (#493: osobne pola) są
+ * sprawdzane na SERWERZE: żądanie bez nich nie tworzy konta, a konto bez zapisanych
+ * receiptów nie zostaje. Zgoda na marketing jest opcjonalna i zapisywana osobno.
  */
 
 const mocks = vi.hoisted(() => {
@@ -83,6 +84,10 @@ describe('rejestracja bez zgody na regulamin', () => {
     ['false', { agreeTerms: false }],
     ['napis "true"', { agreeTerms: 'true' }],
     ['1', { agreeTerms: 1 }],
+    // #493: informacja o prywatności to osobne, wymagane pole — sam regulamin nie wystarcza.
+    ['regulamin bez informacji o prywatności', { agreeTerms: true }],
+    ['informacja o prywatności bez regulaminu', { privacyNoticeAck: true }],
+    ['informacja o prywatności "true"', { agreeTerms: true, privacyNoticeAck: 'true' }],
   ];
 
   it.each(withoutConsent)('kandydat (%s) — odrzucone, konto nie powstaje', async (_label, extra) => {
@@ -102,21 +107,54 @@ describe('rejestracja bez zgody na regulamin', () => {
 });
 
 describe('rejestracja ze zgodą — receipt akceptacji jest obowiązkowy', () => {
-  it('zapisuje receipt regulaminu i polityki prywatności, potem przekierowuje', async () => {
+  it('zapisuje osobne receipty: regulamin, informacja o prywatności, odmowa marketingu', async () => {
     const { registerCandidate } = await import('@/lib/actions/auth');
-    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
+    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, privacyNoticeAck: true }));
     expect(result).toEqual({ redirect: '/pl/potwierdzenie' });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
     expect(mocks.rpc).toHaveBeenCalledWith(
-      'record_document_acceptance',
-      expect.objectContaining({ p_profile_id: USER_ID, p_documents: ['terms', 'privacy'], p_locale: 'pl' }),
+      'record_signup_consents',
+      expect.objectContaining({
+        p_profile_id: USER_ID,
+        p_terms_accepted: true,
+        p_privacy_notice_ack: true,
+        p_optional: { email_marketing: false },
+        p_source: 'signup',
+        p_locale: 'pl',
+        p_wording_versions: {
+          terms: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+          privacy: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+          email_marketing: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        },
+      }),
     );
     expect(mocks.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it('zgoda na marketing zaznaczona — trafia jako osobny wybór', async () => {
+    const { registerEmployer } = await import('@/lib/actions/auth');
+    const result = await outcome(() =>
+      registerEmployer({ ...employer, agreeTerms: true, privacyNoticeAck: true, marketingOptIn: true }),
+    );
+    expect(result).toEqual({ redirect: '/pl/potwierdzenie' });
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      'record_signup_consents',
+      expect.objectContaining({ p_optional: { email_marketing: true } }),
+    );
+  });
+
+  it('wersje treści różnią się między elementami (osobne etykiety)', async () => {
+    const { registerCandidate } = await import('@/lib/actions/auth');
+    await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, privacyNoticeAck: true }));
+    const versions = (mocks.rpc.mock.calls[0]?.[1] as { p_wording_versions: Record<string, string> })
+      .p_wording_versions;
+    expect(new Set(Object.values(versions)).size).toBe(3);
   });
 
   it('błąd zapisu receiptu — rejestracja nieudana, niepotwierdzone konto cofnięte', async () => {
     mocks.rpc.mockResolvedValue({ data: null, error: { message: 'db down' } });
     const { registerEmployer } = await import('@/lib/actions/auth');
-    const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true }));
+    const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true, privacyNoticeAck: true }));
     expect(result).toEqual({ ok: false, error: 'INTERNAL' });
     expect(mocks.deleteUser).toHaveBeenCalledWith(USER_ID);
   });
@@ -127,7 +165,7 @@ describe('rejestracja ze zgodą — receipt akceptacji jest obowiązkowy', () =>
       error: null,
     });
     const { registerCandidate } = await import('@/lib/actions/auth');
-    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
+    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, privacyNoticeAck: true }));
     expect(result).toEqual({ redirect: '/pl/potwierdzenie' });
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.deleteUser).not.toHaveBeenCalled();
@@ -140,7 +178,7 @@ describe('rejestracja ze zgodą — receipt akceptacji jest obowiązkowy', () =>
     });
     mocks.rpc.mockResolvedValue({ data: null, error: { message: 'db down' } });
     const { registerCandidate } = await import('@/lib/actions/auth');
-    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
+    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, privacyNoticeAck: true }));
     expect(result).toEqual({ ok: false, error: 'INTERNAL' });
     expect(mocks.deleteUser).not.toHaveBeenCalled();
   });

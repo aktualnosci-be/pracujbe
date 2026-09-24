@@ -33,6 +33,11 @@ import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
+import {
+  consentWordingVersions,
+  OPTIONAL_CONSENT_PURPOSES,
+  signupOptionalConsents,
+} from '@/lib/signup-consents';
 import { createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -112,21 +117,29 @@ interface SignUpArgs {
   lastName: string;
   companyName?: string;
   locale: Locale;
-  /** Zgoda na regulamin i politykę prywatności z walidowanego wejścia akcji. */
+  /** Akceptacja regulaminu z walidowanego wejścia akcji (#493: tylko regulamin). */
   agreeTerms: boolean;
+  /** Potwierdzenie zapoznania się z informacją o prywatności — osobne pole, nie zgoda. */
+  privacyNoticeAck: boolean;
+  /** Zgoda opcjonalna na e-maile marketingowe; brak nie blokuje konta. */
+  marketingOptIn?: boolean;
   /** Zwalidowany cel po potwierdzeniu e-maila (np. oferta); brak → panel wg roli. */
   next?: string | null;
 }
 
 /**
  * Tworzy konto Auth (signUp) z metadanymi dla triggera i linkiem potwierdzenia do
- * `/auth/callback`. Wymaga zgody na regulamin; receipt akceptacji jest obowiązkowy (jego
+ * `/auth/callback`. Wymaga akceptacji regulaminu i potwierdzenia informacji o prywatności;
+ * receipty (osobno dla każdego elementu, #493) są obowiązkowe (ich
  * brak cofa niepotwierdzone konto). `preferred_locale` dopisuje best-effort (service-role).
  */
 async function signUpUser(args: SignUpArgs): Promise<void> {
   // Zgoda sprawdzana na serwerze niezależnie od formularza: bez niej nie tworzymy konta.
   if (args.agreeTerms !== true) {
     throw new AppError('VALIDATION_FAILED', { context: { reason: 'terms_not_accepted' } });
+  }
+  if (args.privacyNoticeAck !== true) {
+    throw new AppError('VALIDATION_FAILED', { context: { reason: 'privacy_notice_not_acknowledged' } });
   }
   const supabase = await createServerClient();
 
@@ -160,8 +173,8 @@ async function signUpUser(args: SignUpArgs): Promise<void> {
   const user = data.user;
   if (!user?.identities?.length) return;
 
-  // Receipt akceptacji regulaminu i polityki prywatności jest WARUNKIEM konta: bez niego
-  // rejestracja się nie kończy. Kluczujemy po userId — auth.uid() jest jeszcze null (konto
+  // Receipty regulaminu, informacji o prywatności i zgód opcjonalnych są WARUNKIEM konta: bez
+  // nich rejestracja się nie kończy. Kluczujemy po userId — auth.uid() jest jeszcze null (konto
   // czeka na potwierdzenie e-mail), więc zapis idzie service-rolem.
   let admin: ReturnType<typeof createAdminClient>;
   try {
@@ -171,10 +184,15 @@ async function signUpUser(args: SignUpArgs): Promise<void> {
       store.get('x-real-ip')?.trim() ||
       store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
       null;
-    const { error: rcErr } = await admin.rpc('record_document_acceptance', {
+    // #493: regulamin, informacja o prywatności i każda zgoda opcjonalna jako osobne receipty.
+    const { error: rcErr } = await admin.rpc('record_signup_consents', {
       p_profile_id: user.id,
-      p_documents: ['terms', 'privacy'],
+      p_terms_accepted: true,
+      p_privacy_notice_ack: true,
+      p_optional: signupOptionalConsents(args),
+      p_source: 'signup',
       p_locale: args.locale,
+      p_wording_versions: consentWordingVersions('signup', args.locale, OPTIONAL_CONSENT_PURPOSES),
       p_ip: ip,
       p_user_agent: store.get('user-agent'),
     });
@@ -306,6 +324,8 @@ export async function registerCandidate(
       lastName: parsed.data.lastName,
       locale,
       agreeTerms: parsed.data.agreeTerms,
+      privacyNoticeAck: parsed.data.privacyNoticeAck,
+      marketingOptIn: parsed.data.marketingOptIn,
       next: safeNextPath(next),
     });
   } catch (e) {
@@ -345,6 +365,8 @@ export async function registerEmployer(
       companyName: parsed.data.companyName,
       locale,
       agreeTerms: parsed.data.agreeTerms,
+      privacyNoticeAck: parsed.data.privacyNoticeAck,
+      marketingOptIn: parsed.data.marketingOptIn,
     });
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };

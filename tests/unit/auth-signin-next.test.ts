@@ -147,6 +147,7 @@ describe('registerCandidate — next w linku potwierdzenia e-mail', () => {
     firstName: 'Jan',
     lastName: 'Kowalski',
     agreeTerms: true as const,
+    privacyNoticeAck: true as const,
     locale: 'pl' as const,
   };
 

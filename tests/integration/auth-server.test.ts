@@ -87,7 +87,7 @@ function post(path: string, body: object, cookie?: string, origin = baseURL) {
 const cookieFrom = (response: Response) => response.headers.getSetCookie().map(value => value.split(';')[0]).join('; ');
 const readSession = async (cookie: string) => (await auth.handler(new Request(`${baseURL}/api/auth/get-session`, { headers: { cookie } }))).json();
 function form(email: string, locale: typeof locales[number] = 'pl') {
-  return { email, locale, password: signupPassword, passwordConfirm: signupPassword, firstName: 'Anna', lastName: 'Nowak', agreeTerms: true, companyName: 'Firma ' + locale };
+  return { email, locale, password: signupPassword, passwordConfirm: signupPassword, firstName: 'Anna', lastName: 'Nowak', agreeTerms: true, privacyNoticeAck: true, companyName: 'Firma ' + locale };
 }
 async function snapshot() {
   return (await admin.query(`SELECT (SELECT count(*)::int FROM auth.users) AS users,

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LegalDocLink } from '@/components/legal/LegalDocLink';
 import {
   Select,
   SelectContent,
@@ -164,7 +165,7 @@ export function GuestApplyForm({
     if (!name) next.fullName = t('error.nameRequired');
     if (!address) next.email = t('error.emailRequired');
     else if (!looksLikeEmail(address)) next.email = t('error.emailInvalid');
-    if (!consent) next.consent = t('error.consentRequired');
+    if (!consent) next.consent = t('error.privacyNoticeRequired');
     const missing = screeningQuestions.filter(
       (question) => question.required && isScreeningAnswerMissing(answers[question.id]),
     );
@@ -415,7 +416,13 @@ export function GuestApplyForm({
             className={errors.consent ? 'border-error' : undefined}
           />
           <Label htmlFor="guest-apply-consent" className="cursor-pointer text-[13px] font-normal leading-[1.5] text-foreground">
-            {ta('consent')}
+            {ta.rich('privacyNoticeAck', {
+              privacy: (chunks) => (
+                <LegalDocLink href="/polityka-prywatnosci" newTabHint={ta('opensInNewTab')}>
+                  {chunks}
+                </LegalDocLink>
+              ),
+            })}
           </Label>
         </div>
         {fieldError('consent')}

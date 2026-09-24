@@ -4,6 +4,7 @@ import * as React from 'react';
 import {
   Controller,
   useForm,
+  type Control,
   type DefaultValues,
   type FieldValues,
   type Resolver,
@@ -77,6 +78,8 @@ interface AuthFormValues extends FieldValues {
   lastName?: string;
   companyName?: string;
   agreeTerms?: boolean;
+  privacyNoticeAck?: boolean;
+  marketingOptIn?: boolean;
 }
 
 const FIELDS: Record<AuthFormVariant, readonly FieldConfig[]> = {
@@ -142,10 +145,66 @@ function buildDefaults(variant: AuthFormVariant): DefaultValues<AuthFormValues> 
   for (const field of FIELDS[variant]) {
     values[field.name] = '';
   }
+  // #493: każde pole osobno i NIGDY domyślnie zaznaczone.
   if (SHOW_TERMS[variant]) {
     values.agreeTerms = false;
+    values.privacyNoticeAck = false;
+    values.marketingOptIn = false;
   }
   return values as DefaultValues<AuthFormValues>;
+}
+
+type ConsentFieldName = 'agreeTerms' | 'privacyNoticeAck' | 'marketingOptIn';
+
+/**
+ * Jedno pole zgody/akceptacji (#493): osobny checkbox, niezaznaczony domyślnie. Pola
+ * wymagane mają `aria-required`, opcjonalne — nie.
+ */
+function ConsentCheckbox({
+  name,
+  control,
+  required = false,
+  error,
+  children,
+}: {
+  name: ConsentFieldName;
+  control: Control<AuthFormValues>;
+  required?: boolean;
+  error: string | null;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  const errorId = `${name}-error`;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-start gap-2.5">
+        <Controller
+          name={name}
+          control={control}
+          render={({ field }) => (
+            <Checkbox
+              id={name}
+              ref={field.ref}
+              checked={field.value === true}
+              onCheckedChange={(checked) => field.onChange(checked === true)}
+              onBlur={field.onBlur}
+              aria-required={required ? true : undefined}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? errorId : undefined}
+              className="mt-0.5"
+            />
+          )}
+        />
+        <Label htmlFor={name} className="text-sm font-normal leading-snug text-muted-foreground">
+          {children}
+        </Label>
+      </div>
+      {error ? (
+        <p id={errorId} className="text-sm text-error">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 export interface AuthFormProps {
@@ -238,6 +297,8 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
             firstName: values.firstName ?? '',
             lastName: values.lastName ?? '',
             agreeTerms: true,
+            privacyNoticeAck: true,
+            marketingOptIn: values.marketingOptIn === true,
             locale: locale as Locale,
           }, next, token);
           break;
@@ -250,6 +311,8 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
             firstName: values.firstName ?? '',
             lastName: values.lastName ?? '',
             agreeTerms: true,
+            privacyNoticeAck: true,
+            marketingOptIn: values.marketingOptIn === true,
             locale: locale as Locale,
           }, token);
           break;
@@ -340,44 +403,43 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
       })}
 
       {SHOW_TERMS[variant] ? (
-        <div className="space-y-1.5">
-          <div className="flex items-start gap-2.5">
-            <Controller
-              name="agreeTerms"
-              control={control}
-              render={({ field }) => (
-                <Checkbox
-                  id="agreeTerms"
-                  ref={field.ref}
-                  checked={field.value === true}
-                  onCheckedChange={(checked) => field.onChange(checked === true)}
-                  onBlur={field.onBlur}
-                  aria-invalid={errors.agreeTerms ? true : undefined}
-                  aria-describedby={errors.agreeTerms ? 'agreeTerms-error' : undefined}
-                  className="mt-0.5"
-                />
-              )}
-            />
-            <Label htmlFor="agreeTerms" className="text-sm font-normal leading-snug text-muted-foreground">
-              {t.rich('agreeTermsLinks', {
-                terms: (chunks) => (
-                  <TermsLink href="/regulamin" newTabHint={t('opensInNewTab')}>
-                    {chunks}
-                  </TermsLink>
-                ),
-                privacy: (chunks) => (
-                  <TermsLink href="/polityka-prywatnosci" newTabHint={t('opensInNewTab')}>
-                    {chunks}
-                  </TermsLink>
-                ),
-              })}
-            </Label>
-          </div>
-          {errors.agreeTerms?.message ? (
-            <p id="agreeTerms-error" className="text-sm text-error">
-              {tRoot(String(errors.agreeTerms.message))}
-            </p>
-          ) : null}
+        <div className="space-y-4">
+          <ConsentCheckbox
+            name="agreeTerms"
+            control={control}
+            required
+            error={errors.agreeTerms?.message ? tRoot(String(errors.agreeTerms.message)) : null}
+          >
+            {t.rich('termsAcceptLinks', {
+              terms: (chunks) => (
+                <TermsLink href="/regulamin" newTabHint={t('opensInNewTab')}>
+                  {chunks}
+                </TermsLink>
+              ),
+            })}
+          </ConsentCheckbox>
+          <ConsentCheckbox
+            name="privacyNoticeAck"
+            control={control}
+            required
+            error={
+              errors.privacyNoticeAck?.message ? tRoot(String(errors.privacyNoticeAck.message)) : null
+            }
+          >
+            {t.rich('privacyNoticeAckLinks', {
+              privacy: (chunks) => (
+                <TermsLink href="/polityka-prywatnosci" newTabHint={t('opensInNewTab')}>
+                  {chunks}
+                </TermsLink>
+              ),
+            })}
+          </ConsentCheckbox>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-foreground">{t('optionalConsentsLegend')}</legend>
+            <ConsentCheckbox name="marketingOptIn" control={control} error={null}>
+              {t('marketingOptIn')}
+            </ConsentCheckbox>
+          </fieldset>
         </div>
       ) : null}
 

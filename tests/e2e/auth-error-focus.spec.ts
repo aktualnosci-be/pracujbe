@@ -33,6 +33,7 @@ const forms: ReadonlyArray<{ path: string; fill: (page: Page) => Promise<void> }
       await page.locator('#password').fill('Haslo1234');
       await page.locator('#passwordConfirm').fill('Haslo1234');
       await page.locator('#agreeTerms').press('Space');
+      await page.locator('#privacyNoticeAck').press('Space');
     },
   },
   {
@@ -45,6 +46,7 @@ const forms: ReadonlyArray<{ path: string; fill: (page: Page) => Promise<void> }
       await page.locator('#password').fill('Haslo1234');
       await page.locator('#passwordConfirm').fill('Haslo1234');
       await page.locator('#agreeTerms').press('Space');
+      await page.locator('#privacyNoticeAck').press('Space');
     },
   },
   {
