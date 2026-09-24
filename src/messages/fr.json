@@ -1500,6 +1500,9 @@
     "cvHint": "PDF, DOC ou DOCX, max. 5 Mo. Les fichiers sont privés.",
     "empty": "Aucun document téléversé.",
     "delete": "Supprimer",
+    "download": "Télécharger",
+    "downloadError": "Impossible de télécharger le fichier. Réessayez.",
+    "quarantined": "Le fichier est en cours de vérification de sécurité — le téléchargement sera disponible plus tard.",
     "uploadError": "Échec du téléversement. Vérifiez le format et la taille.",
     "deleteError": "Échec de la suppression.",
     "loadError": "Impossible de charger les documents. Vos fichiers n’ont pas été supprimés.",
@@ -2246,5 +2249,27 @@
     "outcomeLabel": "Résultat",
     "outcomeActionTaken": "Nous avons pris des mesures concernant le contenu signalé.",
     "outcomeNoAction": "Après examen, nous n’avons pris aucune mesure concernant le contenu signalé."
+  },
+  "campaignBanner": {
+    "eyebrow": "Offre d’emploi en Belgique",
+    "cta": "Postuler maintenant",
+    "accessibleName": "Pracuj.be — offre d’emploi : {title}",
+    "pageTitle": "Bannière de campagne",
+    "intro": "Visuels prêts à l’emploi de cette offre pour vos campagnes et réseaux sociaux. Ils ne contiennent que les données visibles dans l’offre publique. Rien n’est publié automatiquement — vérifiez l’aperçu avant utilisation.",
+    "languageLabel": "Langue de la bannière",
+    "formatHeading": "{width} × {height} px",
+    "previewAlt": "Aperçu de la bannière {width} × {height} px : {title}",
+    "downloadSvg": "Télécharger le SVG",
+    "downloadPng": "Télécharger le PNG",
+    "downloadPngPending": "Préparation du PNG…",
+    "downloadPngError": "Impossible de préparer le PNG. Réessayez ou téléchargez le SVG.",
+    "linkNote": "Dans le fichier SVG, le bouton mène à l’offre. Pour un PNG, indiquez cette adresse à l’endroit de publication : {url}",
+    "unavailableTitle": "Bannière indisponible",
+    "unavailableHint": "Une bannière ne peut être préparée que pour une offre active et non expirée d’une entreprise vérifiée, avec les droits de recruteur de cette entreprise.",
+    "backToOffers": "Retour aux offres",
+    "openBanner": "Bannière de campagne",
+    "openBannerLabel": "Bannière de campagne : {title}",
+    "loadError": "Impossible de charger l’offre",
+    "loadErrorHint": "Réessayez dans un instant. Si le problème persiste, revenez à la liste des offres."
   }
 }

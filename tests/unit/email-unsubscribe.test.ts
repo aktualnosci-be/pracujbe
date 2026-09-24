@@ -181,7 +181,9 @@ describe('POST/GET /api/email/unsubscribe', () => {
     expect(response.status).toBe(303);
     const location = new URL(response.headers.get('location')!);
     expect(location.pathname).toBe('/fr/wypisz');
-    expect(location.searchParams.get('t')).toBe(t);
+    expect(location.search).toBe('');
+    expect(location.hash).toBe(`#t=${encodeURIComponent(t)}`);
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
     expect(fakeDb.calls).toHaveLength(0);
   });
 
@@ -233,7 +235,7 @@ describe('worker outboxa: wypisanie i budżet', () => {
     const verified = verifyUnsubscribeToken(oneClick.searchParams.get('t'), SECRET);
     expect(verified).toMatchObject({ ok: true, profileId: PROFILE, category: 'offers' });
     expect(header).not.toContain('d1@example.test');
-    expect(message.html).toContain(`${SITE}/nl/wypisz?t=`);
+    expect(message.html).toContain(`${SITE}/nl/wypisz#t=`);
     expect(message.html).toContain('Afmelden voor deze e-mails');
   });
 
@@ -243,7 +245,7 @@ describe('worker outboxa: wypisanie i budżet', () => {
     await processEmailQueue();
     for (const [message] of send.mock.calls) {
       expect(message.headers).toBeUndefined();
-      expect(message.html).not.toContain('/wypisz?t=');
+      expect(message.html).not.toContain('/wypisz#t=');
     }
   });
 

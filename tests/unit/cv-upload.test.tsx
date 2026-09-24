@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CvUpload } from '@/components/candidate/CvUpload';
-import { deleteCandidateFile, uploadCandidateCv } from '@/lib/actions/files';
+import { deleteCandidateFile, prepareCvDownload, uploadCandidateCv } from '@/lib/actions/files';
 import pl from '@/messages/pl.json';
 import nl from '@/messages/nl.json';
 import fr from '@/messages/fr.json';
@@ -13,6 +13,7 @@ import en from '@/messages/en.json';
 vi.mock('@/lib/actions/files', () => ({
   uploadCandidateCv: vi.fn(),
   deleteCandidateFile: vi.fn(),
+  prepareCvDownload: vi.fn(),
 }));
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
@@ -31,7 +32,7 @@ const removeLabels = {
 } as const;
 const fileName = 'candidate-cv.pdf';
 
-function renderCv(locale: keyof typeof messages, items = [{ id: 'fixture-cv', fileName, url: null }]) {
+function renderCv(locale: keyof typeof messages, items = [{ id: 'fixture-cv', fileName, downloadable: true }]) {
   return render(
     <NextIntlClientProvider locale={locale} messages={messages[locale]}>
       <CvUpload items={items} />
@@ -102,6 +103,37 @@ describe('Lista CV', () => {
       cleanup();
     },
   );
+
+  it('pobranie wystawia link dopiero przy kliknięciu i przechodzi pod niego (#26)', async () => {
+    const assign = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, assign } });
+    try {
+      vi.mocked(prepareCvDownload).mockResolvedValue({ ok: true, url: '/api/files/cv/fixture-cv?t=signed' });
+      renderCv('pl');
+      expect(prepareCvDownload).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: `${pl.files.download}: ${fileName}` }));
+      await waitFor(() => expect(assign).toHaveBeenCalledExactlyOnceWith('/api/files/cv/fixture-cv?t=signed'));
+      expect(prepareCvDownload).toHaveBeenCalledExactlyOnceWith('fixture-cv');
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original });
+    }
+  });
+
+  it.each(['pl', 'nl', 'fr', 'en'] as const)('błąd wystawienia linku daje komunikat: %s', async (locale) => {
+    vi.mocked(prepareCvDownload).mockResolvedValue({ ok: false, error: 'NOT_FOUND' });
+    renderCv(locale);
+    fireEvent.click(screen.getByRole('button', { name: `${messages[locale].files.download}: ${fileName}` }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(messages[locale].files.downloadError);
+  });
+
+  it.each(['pl', 'nl', 'fr', 'en'] as const)('plik w kwarantannie nie ma akcji pobrania: %s', (locale) => {
+    renderCv(locale, [{ id: 'fixture-cv', fileName, downloadable: false }]);
+    expect(screen.getByText(messages[locale].files.quarantined)).toBeVisible();
+    expect(screen.queryByRole('button', { name: new RegExp(`^${messages[locale].files.download}:`) })).not.toBeInTheDocument();
+    // Właściciel może usunąć także plik w kwarantannie.
+    expect(screen.getByRole('button', { name: `${removeLabels[locale]}: ${fileName}` })).toBeEnabled();
+  });
 
   it('dla pustej listy nie renderuje akcji usuwania', () => {
     renderCv('pl', []);

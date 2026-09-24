@@ -6,7 +6,8 @@ import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
-import { jobImportProvider } from '@/lib/ai-import/config';
+import { jobImportModel, jobImportProvider } from '@/lib/ai-import/config';
+import { withJobImportUsageLog } from '@/lib/ai/job-import-usage';
 import { AnthropicJobExtractor, FixtureJobExtractor } from '@/lib/ai-import/extract';
 import { IMPORT_IMAGE_MAX_BYTES, type ImportImageProblem } from '@/lib/ai-import/image';
 import { buildImportDraftContent, type ImportedWizardValues } from '@/lib/ai-import/map';
@@ -105,7 +106,11 @@ export async function importJobListing(formData: FormData, locale?: string): Pro
       }
     }
 
-    const extractor = provider === 'fixture' ? new FixtureJobExtractor() : new AnthropicJobExtractor();
+    // Log użycia bez treści i PII (#489, src/lib/ai/usage-log.ts).
+    const extractor = withJobImportUsageLog(
+      provider === 'fixture' ? new FixtureJobExtractor() : new AnthropicJobExtractor(),
+      provider === 'fixture' ? 'fixture' : jobImportModel(),
+    );
     const result = await runJobImport(source, { extractor });
     if (!result.ok) return result;
     const { mapped } = result;

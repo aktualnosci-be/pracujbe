@@ -81,7 +81,7 @@ const PREFS = {
 
 beforeAll(async () => {
   realSession.db = await startPortalDb();
-  // 0102 (#25): claim_email_batch wykonywalne przez service_role — bez grantu w teście.
+  // 0103 (#25): claim_email_batch wykonywalne przez service_role — bez grantu w teście.
   alice = await db().createUser('candidate', 'nl');
   bob = await db().createUser('candidate', 'fr');
   companyId = (await db().admin.query(

@@ -22,6 +22,11 @@ Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
 4. **Gdzie co jest:** patrz „Struktura katalogów".
 5. **Co dalej:** patrz „Roadmapa / status" — sekcja z checkboxami. Wybierz kolejny niezaznaczony punkt.
 6. **Zawsze uruchom przed commitem:** `npm run verify` (lint + typecheck + unit). E2E gdy dotykasz przepływów.
+7. **Praca wieloma sesjami:** prace idą równolegle w wielu sesjach Claude Code, a jedna
+   sesja-integrator scala PR-y, prowadzi kolejkę migracji i rutyny. Podręcznik (role,
+   stałe decyzje właściciela, procedura scalania, kolejka migracji, szablon sesji,
+   Railway): `.claude/skills/integration-loop/SKILL.md`. Sesja potomna: nie scalaj,
+   migracja na numerze tymczasowym, ostateczny nada integrator.
 
 ---
 
@@ -1008,6 +1013,16 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `/zglos-tresc/sprawa`. Dowód: `rls.sql` sekcja MOD42; unit `moderation-decision*`; E2E
   `admin-ux` (#42). **Otwarte:** procedura odwołań (#43); znacznik treści prawnej o środkach
   odwoławczych w panelu firmy; UI kolejki według priorytetu (lista nadal po dacie).
+- [~] Mapa danych osobowych (#485/#488/#503/#504, część techniczna): `node scripts/privacy/data-map.mjs`
+  generuje `docs/legal-drafts/data-map.generated.md` z migracji produkcyjnych (parser
+  `scripts/privacy/schema.mjs`), klasyfikacji `src/lib/privacy/data-map.ts` (każda tabela, kategorie,
+  czynności) i usług `src/lib/privacy/processors.ts` (rola/region/transfer/DPA = „DO UZUPEŁNIENIA”);
+  sekcja e-maili = klucze payloadu z aktualnych funkcji SQL (`email-payloads.mjs`). Test
+  `privacy-data-map.test.ts`: tabela bez wpisu albo kolumna wyglądająca na PII (np. `email`) bez
+  klasyfikacji = czerwony, plik nieaktualny = czerwony, payload z CV/odpowiedziami/treścią wiadomości
+  = czerwony (kontrole ujemne). Szkice `docs/legal-drafts/rejestr-czynnosci.md` i
+  `dostawcy-i-transfery.md` — PROJEKT, nieopublikowany, nic w UI. **Do ustalenia (właściciel +
+  prawnik):** administrator, role portal/pracodawca, podstawy, retencja, DPA i transfery.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
@@ -1034,6 +1049,16 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
   connect/img/font, GA/Meta/Supabase/Sentry). Wariant nonce/strict-dynamic = follow-up (E2E).
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
+- [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
+  funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
+  `src/`+`scripts/`, wywołanie modelu bez wpisu = czerwony test, kontrola ujemna; pliki
+  matchingu/statusu/screeningu nie mogą wołać modelu), log użycia AI bez treści/PII
+  (`src/lib/ai/usage-log.ts`, wpięty w import ogłoszeń), dokumentacja lejka `docs/JOB_FUNNEL.md`
+  i E2E `job-funnel-no-storage` (fixture: zero cookies/storage i żądanie bez `Cookie`).
+  Szkice NIEOPUBLIKOWANE: `docs/legal-drafts/ai-act-art22-dpia.md`, `eprivacy-lejek.md`.
+  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie, wariant zgody lejka
+  (dziś wysyłka niezależna od banera), twardy termin retencji `job_funnel_receipts`, wpis
+  tłumaczeń (#514) do logu użycia.
 - [x] Cloudflare Turnstile (#46) — logowanie/rejestracja/reset: siteverify w Server Actions
   (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.
@@ -1065,7 +1090,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   jest wpięte (brak `instrumentation-client`).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
-  `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0102`
+  `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0103`
   (`claim_email_batch` dla `service_role`). Dowód: `tests/integration/portal-*.test.ts` (PG16). **Otwarte:** nazwa
   firmy z rejestracji w formularzu firmy (metadane konta), nazwa firmy w wiadomościach kandydata (od 0014);
   spięcie z trasami sesji (#24) i usunięcie SDK (#27).
@@ -1073,6 +1098,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
 - [x] `next/font/local` (offline Inter), PWA (ikony/manifest/service worker), storage signed URLs + upload CV (0018, Invariant #10).
+  Pliki CV na Railway (#26): upload, pobranie, usunięcie i kwarantanna przez prywatny bucket S3
+  Railway (`src/lib/files/*`, repozytorium `db/candidate-files.ts`, adapter `storage/railway-bucket.ts`),
+  bez Supabase Storage. Pobranie = krótki (60 s) link HMAC `/api/files/cv/<id>?t=…` wystawiany
+  przy kliknięciu; trasa ponownie sprawdza sesję Better Auth, własność i `scan_status`, strumieniuje
+  z bucketu (bez adresu S3). Env: preset „AWS SDK” bucketu (`AWS_ENDPOINT_URL`, `AWS_DEFAULT_REGION`,
+  `AWS_S3_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_URL_STYLE`) +
+  `FILE_DOWNLOAD_SECRET`; `/api/health` → `fileBucket`/`fileDownloadSecret`. Bez bucketu: demo =
+  `DEMO_UNAVAILABLE`, produkcja = błąd. Opis: `docs/railway/STORAGE_ADAPTER_CONTRACT.md`.
+  **Otwarte:** utworzenie bucketu (właściciel), GC sierot, AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
@@ -1135,7 +1169,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   superusera; `scripts/lib/job-post-source.mjs`), bez JSON od operatora; renderer przyjmuje tylko
   obiekt ze źródła. Stawka tylko gdy podana, tytuł 2×77/3×60 px albo błąd przed zapisem.
   Instrukcja: `docs/design/people-passport/JOB-POST-EXPORT.md`, test `job-post-export`.
-  **Otwarte (#186):** zaufana kontrola `is_demo` wymaga wąskiego RPC z migracją.
+  Źródło danych (#186, migracja `0102`): `get_campaign_job` (anon) — tylko pola grafiki i tylko
+  oferta `active`, nieusunięta, niewygasła, `is_demo = false` (oferta i firma), firma `verified`;
+  inaczej jednakowy brak danych. Dowód: `rls.sql` sekcja CJ186 (każdy przypadek + kontrola ujemna
+  po zdjęciu każdego filtra), rollback `supabase/rollback/0102_…down.sql` (test w `test-rls.sh`).
+  Baner kampanii z oferty w panelu (#175): `/employer/oferty/[id]/baner` (noindex) + `GET
+  /api/employer/jobs/[id]/banner` — formaty 1200×300, 300×250, 300×600, język PL/NL/FR/EN, SVG
+  i PNG (kanwa w przeglądarce); dane z `get_managed_campaign_job` (recruiter+ firmy oferty albo
+  admin, te same filtry), limit 60/h na konto, `private, no-store`, CSP `sandbox`, demo = 404.
+  Znak jak `Logo.tsx`, tokeny `--pp-*`, osadzony DM Sans, pomiar tekstu tablicą szerokości
+  (`src/lib/campaign-banner/`). Opis: `docs/design/people-passport/BANNER-EXPORT.md`. Testy:
+  `campaign-banner*.test.ts` (Chromium: pomiar przeglądarki ≤ serwera), E2E `campaign-banner`.
+  **Otwarte:** link do baneru w panelu admina (admin ma dostęp tylko przez adres endpointu).
   Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami

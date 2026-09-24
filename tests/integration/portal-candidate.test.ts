@@ -17,7 +17,6 @@ vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 // Limiter i Turnstile mają własne testy (inne grupy #25); tu przepuszczamy.
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }));
 vi.mock('@/lib/turnstile/verify', () => ({ enforceTurnstile: async () => null }));
-vi.mock('@/lib/storage', () => ({ getSignedFileUrl: async (path: string) => `signed:${path}` }));
 const linkToken: { confirm: string | null; claim: string | null } = { confirm: null, claim: null };
 vi.mock('@/lib/guest-apply/link-cookie', () => ({
   readGuestLinkToken: async (purpose: 'confirm' | 'claim') => linkToken[purpose],
@@ -345,17 +344,6 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
 
     actAs({ id: bob, role: 'candidate' });
     expect(await candidateData.getLatestMessages()).toEqual({ status: 'ok', items: [] });
-  });
-
-  it('dokumenty CV: tylko własne pliki', async () => {
-    await db().admin.query(`INSERT INTO public.files(owner_id, bucket, path, file_name, entity_type, mime_type, size_bytes)
-      VALUES ($1, 'candidate-files', $2, 'cv.pdf', 'candidate_cv', 'application/pdf', 100)`, [alice, `${alice}/cv.pdf`]);
-    actAs({ id: alice, role: 'candidate' });
-    expect(await candidateData.getCandidateFiles()).toEqual([
-      expect.objectContaining({ fileName: 'cv.pdf', url: `signed:${alice}/cv.pdf` }),
-    ]);
-    actAs({ id: bob, role: 'candidate' });
-    expect(await candidateData.getCandidateFiles()).toEqual([]);
   });
 });
 

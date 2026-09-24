@@ -1500,6 +1500,9 @@
     "cvHint": "PDF, DOC lub DOCX, maks. 5 MB. Pliki są prywatne.",
     "empty": "Brak wgranych dokumentów.",
     "delete": "Usuń",
+    "download": "Pobierz",
+    "downloadError": "Nie udało się pobrać pliku. Spróbuj ponownie.",
+    "quarantined": "Plik czeka na sprawdzenie bezpieczeństwa — pobieranie będzie dostępne później.",
     "uploadError": "Nie udało się wgrać pliku. Sprawdź format i rozmiar.",
     "deleteError": "Nie udało się usunąć pliku.",
     "loadError": "Nie udało się wczytać dokumentów. Twoje pliki nie zostały usunięte.",
@@ -2246,5 +2249,27 @@
     "outcomeLabel": "Wynik",
     "outcomeActionTaken": "Podjęliśmy działania wobec zgłoszonej treści.",
     "outcomeNoAction": "Po analizie nie podjęliśmy działań wobec zgłoszonej treści."
+  },
+  "campaignBanner": {
+    "eyebrow": "Oferta pracy w Belgii",
+    "cta": "Aplikuj teraz",
+    "accessibleName": "Pracuj.be — oferta pracy: {title}",
+    "pageTitle": "Baner kampanii",
+    "intro": "Gotowe grafiki tej oferty do kampanii i mediów społecznościowych. Zawierają tylko dane widoczne w publicznej ofercie. Nic nie jest publikowane automatycznie — sprawdź podgląd przed użyciem.",
+    "languageLabel": "Język baneru",
+    "formatHeading": "{width} × {height} px",
+    "previewAlt": "Podgląd baneru {width} × {height} px: {title}",
+    "downloadSvg": "Pobierz SVG",
+    "downloadPng": "Pobierz PNG",
+    "downloadPngPending": "Przygotowywanie PNG…",
+    "downloadPngError": "Nie udało się przygotować PNG. Spróbuj ponownie albo pobierz SVG.",
+    "linkNote": "W pliku SVG przycisk prowadzi do oferty. Przy PNG ustaw ten adres w miejscu publikacji: {url}",
+    "unavailableTitle": "Baner niedostępny",
+    "unavailableHint": "Baner można przygotować tylko dla aktywnej, niewygasłej oferty zweryfikowanej firmy, z uprawnieniami rekrutera tej firmy.",
+    "backToOffers": "Wróć do ofert",
+    "openBanner": "Baner kampanii",
+    "openBannerLabel": "Baner kampanii: {title}",
+    "loadError": "Nie udało się wczytać oferty",
+    "loadErrorHint": "Spróbuj ponownie za chwilę. Jeśli problem się powtarza, wróć do listy ofert."
   }
 }

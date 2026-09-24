@@ -1500,6 +1500,9 @@
     "cvHint": "PDF, DOC or DOCX, max 5 MB. Files are private.",
     "empty": "No documents uploaded yet.",
     "delete": "Delete",
+    "download": "Download",
+    "downloadError": "The file could not be downloaded. Please try again.",
+    "quarantined": "The file is waiting for a security check — you can download it later.",
     "uploadError": "Upload failed. Check the format and size.",
     "deleteError": "Delete failed.",
     "loadError": "We couldn’t load your documents. Your files have not been deleted.",
@@ -2246,5 +2249,27 @@
     "outcomeLabel": "Outcome",
     "outcomeActionTaken": "We have taken action on the reported content.",
     "outcomeNoAction": "After review, we took no action on the reported content."
+  },
+  "campaignBanner": {
+    "eyebrow": "Job in Belgium",
+    "cta": "Apply now",
+    "accessibleName": "Pracuj.be — job offer: {title}",
+    "pageTitle": "Campaign banner",
+    "intro": "Ready-made graphics of this job for campaigns and social media. They contain only data shown in the public job listing. Nothing is published automatically — check the preview before use.",
+    "languageLabel": "Banner language",
+    "formatHeading": "{width} × {height} px",
+    "previewAlt": "Banner preview {width} × {height} px: {title}",
+    "downloadSvg": "Download SVG",
+    "downloadPng": "Download PNG",
+    "downloadPngPending": "Preparing PNG…",
+    "downloadPngError": "The PNG could not be prepared. Try again or download the SVG.",
+    "linkNote": "In the SVG file the button links to the job. For a PNG, set this address where you publish it: {url}",
+    "unavailableTitle": "Banner unavailable",
+    "unavailableHint": "A banner can only be prepared for an active, unexpired job of a verified company, with recruiter rights for that company.",
+    "backToOffers": "Back to jobs",
+    "openBanner": "Campaign banner",
+    "openBannerLabel": "Campaign banner: {title}",
+    "loadError": "The job could not be loaded",
+    "loadErrorHint": "Try again in a moment. If the problem persists, go back to the list of jobs."
   }
 }
