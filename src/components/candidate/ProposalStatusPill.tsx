@@ -31,7 +31,8 @@ export function ProposalStatusPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-3 py-1 text-sm font-medium",
+        /* `.status` z prototypu: promień 8 px, padding 8/12 px, 12 px. */
+        "inline-block max-w-full break-words rounded-[8px] px-3 py-2 text-xs font-medium",
         known ? STATUS_TONE[status] : "bg-muted text-muted-foreground",
         className,
       )}

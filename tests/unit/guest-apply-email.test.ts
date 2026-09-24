@@ -33,10 +33,10 @@ describe('guest emails', () => {
 
     const built = buildDeliveryData({ template, locale, payload }, SITE, undefined, token);
     expect(built.data).not.toHaveProperty('nonce');
-    expect(built.data['actionUrl']).toBe(`${SITE}/${locale}${path}?token=${token}`);
+    expect(built.data['actionUrl']).toBe(`${SITE}/${locale}${path}#token=${token}`);
 
     const { html, subject } = await renderEmail(template, built.locale, built.data as never);
-    expect(html).toContain(`${SITE}/${locale}${path}?token=${token}`);
+    expect(html).toContain(`${SITE}/${locale}${path}#token=${token}`);
     expect(html).toContain('Magazynier');
     expect(html).toContain('Acme');
     expect(html).not.toContain(issued.nonce);

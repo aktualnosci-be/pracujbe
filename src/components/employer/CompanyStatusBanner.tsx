@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
+import { INLINE_LINK, NOTICE, NOTICE_TEXT, NOTICE_TITLE } from '@/components/dashboard/panel-styles';
 
 /**
  * CompanyStatusBanner — baner statusu weryfikacji firmy (panel pracodawcy, Etap 4).
@@ -41,14 +42,15 @@ const STATUS_CONFIG: Record<string, BannerConfig> = {
   suspended: { tone: 'error', titleKey: 'bannerSuspendedTitle', descKey: 'bannerSuspendedDesc' },
 };
 
+/** Ton na bazie `.notice` prototypu (czerwona ramka na jasnym tle); sukces/błąd — kolory semantyczne. */
 const TONE_CLASS: Record<Tone, string> = {
-  info: 'border-accent/30 bg-accent/10 text-foreground',
+  info: 'text-foreground',
   success: 'border-success/30 bg-success/10 text-foreground',
   error: 'border-error/30 bg-error/10 text-foreground',
 };
 
 const ICON_CLASS: Record<Tone, string> = {
-  info: 'text-accent',
+  info: 'text-primary',
   success: 'text-success',
   error: 'text-error',
 };
@@ -91,21 +93,26 @@ export function CompanyStatusBanner({
     <div
       role="status"
       data-company-status={status}
-      className={cn('flex items-start gap-3 rounded-md border p-4 text-sm', TONE_CLASS[config.tone], className)}
+      className={cn(
+        NOTICE,
+        'my-0 items-start justify-start gap-3 max-[600px]:flex-row max-[600px]:gap-3',
+        TONE_CLASS[config.tone],
+        className,
+      )}
     >
       <ToneIcon tone={config.tone} />
       <div className="min-w-0 space-y-2">
-        <div className="space-y-0.5">
-          <p className="font-semibold">{t(config.titleKey)}</p>
-          <p className="text-muted-foreground">
+        <div>
+          <p className={NOTICE_TITLE}>{t(config.titleKey)}</p>
+          <p className={cn(NOTICE_TEXT, 'mb-0')}>
             {variant === 'wizard' ? t('wizardNotice') : t(config.descKey)}
           </p>
         </div>
 
         {variant === 'dashboard' && awaiting ? (
           <div>
-            <p className="font-medium">{t('stepsTitle')}</p>
-            <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-muted-foreground">
+            <p className="text-[13px] font-semibold text-foreground">{t('stepsTitle')}</p>
+            <ol className={cn(NOTICE_TEXT, 'mb-0 list-decimal space-y-0.5 pl-5')}>
               <li>{t('stepVat')}</li>
               <li>{t('stepWait')}</li>
               <li>{t('stepDraft')}</li>
@@ -116,7 +123,7 @@ export function CompanyStatusBanner({
         {variant !== 'company' ? (
           <Link
             href="/employer/firma"
-            className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4 hover:text-primary"
+            className={cn(INLINE_LINK, 'inline-flex min-h-11 items-center gap-1 text-[13px] underline')}
           >
             {t('bannerLink')}
             <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -125,8 +132,8 @@ export function CompanyStatusBanner({
 
         {variant === 'company' && reason && (status === 'rejected' || status === 'suspended') ? (
           <div>
-            <p className="font-medium">{t('bannerReasonLabel')}</p>
-            <p className="whitespace-pre-line break-words text-foreground">{reason}</p>
+            <p className="text-[13px] font-semibold text-foreground">{t('bannerReasonLabel')}</p>
+            <p className="whitespace-pre-line break-words text-[13px] text-foreground">{reason}</p>
           </div>
         ) : null}
 

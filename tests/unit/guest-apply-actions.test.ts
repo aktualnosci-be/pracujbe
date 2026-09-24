@@ -7,6 +7,7 @@ import {
 } from '@/lib/actions/guest-applications';
 import { hasServiceRoleKey, isProductionMode, isSupabaseConfigured } from '@/lib/env';
 import { guestTokenFromNonce, hashGuestToken } from '@/lib/guest-apply/token';
+import { clearGuestLinkToken, readGuestLinkToken } from '@/lib/guest-apply/link-cookie';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 
@@ -23,6 +24,10 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(async () => new Headers({ 'x-real-ip': '203.0.113.9', 'user-agent': 'UA' })),
 }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
+vi.mock('@/lib/guest-apply/link-cookie', () => ({
+  readGuestLinkToken: vi.fn(async () => null),
+  clearGuestLinkToken: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/turnstile/verify', () => ({ enforceTurnstile: vi.fn(async () => null) }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/env', () => ({
@@ -49,6 +54,7 @@ beforeEach(() => {
   vi.mocked(hasServiceRoleKey).mockReturnValue(true);
   vi.mocked(isProductionMode).mockReturnValue(false);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
+  vi.mocked(readGuestLinkToken).mockResolvedValue(null);
   vi.mocked(enforceTurnstile).mockResolvedValue(null);
   adminRpc.mockResolvedValue({ data: 'request-1', error: null });
 });
@@ -135,24 +141,27 @@ describe('confirmGuestApplication', () => {
   const token = guestTokenFromNonce('confirm', 'n'.repeat(32))!;
 
   it('sends the token hash and a fresh claim hash; returns the outcome and a safe slug', async () => {
+    vi.mocked(readGuestLinkToken).mockResolvedValue(token);
     adminRpc.mockResolvedValueOnce({ data: [{ outcome: 'confirmed', locale: 'nl', job_slug: 'magazynier-1' }], error: null });
-    expect(await confirmGuestApplication(token)).toEqual({ ok: true, outcome: 'confirmed', jobSlug: 'magazynier-1' });
+    expect(await confirmGuestApplication('pl')).toEqual({ ok: true, outcome: 'confirmed', jobSlug: 'magazynier-1' });
     const [name, args] = adminRpc.mock.calls[0]!;
     expect(name).toBe('confirm_guest_application');
     expect(args.p_token_hash).toBe(hashGuestToken(token));
     expect(args.p_claim_token_hash).toBe(hashGuestToken(guestTokenFromNonce('claim', args.p_claim_nonce)!));
+    expect(clearGuestLinkToken).toHaveBeenCalledWith('pl', 'confirm');
   });
 
   it('malformed token → invalid without touching the database', async () => {
-    expect(await confirmGuestApplication('../../etc')).toEqual({ ok: true, outcome: 'invalid' });
+    expect(await confirmGuestApplication('pl')).toEqual({ ok: true, outcome: 'invalid' });
     expect(adminRpc).not.toHaveBeenCalled();
   });
 
   it('unknown outcome or unsafe slug is not passed through', async () => {
+    vi.mocked(readGuestLinkToken).mockResolvedValue(token);
     adminRpc.mockResolvedValueOnce({ data: [{ outcome: 'hacked' }], error: null });
-    expect(await confirmGuestApplication(token)).toEqual({ ok: false, error: 'INTERNAL' });
+    expect(await confirmGuestApplication('pl')).toEqual({ ok: false, error: 'INTERNAL' });
     adminRpc.mockResolvedValueOnce({ data: [{ outcome: 'expired', job_slug: 'javascript:alert(1)' }], error: null });
-    expect(await confirmGuestApplication(token)).toEqual({ ok: true, outcome: 'expired' });
+    expect(await confirmGuestApplication('pl')).toEqual({ ok: true, outcome: 'expired' });
   });
 });
 
@@ -160,10 +169,12 @@ describe('claimGuestApplication', () => {
   const token = guestTokenFromNonce('claim', 'c'.repeat(32))!;
 
   it('runs under the user session with the token hash', async () => {
+    vi.mocked(readGuestLinkToken).mockResolvedValue(token);
     userRpc.mockResolvedValueOnce({ data: 'app-1', error: null });
-    expect(await claimGuestApplication(token)).toEqual({ ok: true, applicationId: 'app-1' });
+    expect(await claimGuestApplication('pl')).toEqual({ ok: true, applicationId: 'app-1' });
     expect(userRpc).toHaveBeenCalledWith('claim_guest_application', { p_claim_token_hash: hashGuestToken(token) });
     expect(adminRpc).not.toHaveBeenCalled();
+    expect(clearGuestLinkToken).toHaveBeenCalledWith('pl', 'claim');
   });
 
   it.each([
@@ -175,12 +186,13 @@ describe('claimGuestApplication', () => {
     ['NOT_FOUND', 'NOT_FOUND'],
     ['connection reset', 'INTERNAL'],
   ])('%s → %s', async (message, code) => {
+    vi.mocked(readGuestLinkToken).mockResolvedValue(token);
     userRpc.mockResolvedValueOnce({ data: null, error: { message } });
-    expect(await claimGuestApplication(token)).toEqual({ ok: false, error: code });
+    expect(await claimGuestApplication('pl')).toEqual({ ok: false, error: code });
   });
 
   it('malformed token → NOT_FOUND without a database call', async () => {
-    expect(await claimGuestApplication('x')).toEqual({ ok: false, error: 'NOT_FOUND' });
+    expect(await claimGuestApplication('pl')).toEqual({ ok: false, error: 'NOT_FOUND' });
     expect(userRpc).not.toHaveBeenCalled();
   });
 });

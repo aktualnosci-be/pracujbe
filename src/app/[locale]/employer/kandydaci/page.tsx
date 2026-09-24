@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
@@ -5,6 +6,21 @@ import { Link } from "@/i18n/navigation";
 import { getTopMatchedCandidates } from "@/lib/data/employer";
 import { MatchBar } from "@/components/ui/match-bar";
 import { SendOfferButton } from "@/components/employer/SendOfferButton";
+import {
+  EYEBROW,
+  H1,
+  INFO_VALUE,
+  INTRO,
+  H2_EXTENDED,
+  INFO_LABEL,
+  INFO_PAIRS,
+  P_EXTENDED,
+  PAPER,
+  PANEL,
+  PANEL_H2,
+  PANEL_P,
+  PROFILE_AVATAR,
+} from '@/components/dashboard/panel-styles';
 
 /**
  * Panel pracodawcy — Kandydaci (makieta 05, kolumna „Top dopasowani"), na REALNYCH danych.
@@ -55,15 +71,15 @@ export default async function EmployerCandidatesPage({
   }
 
   return (
-    <div className="space-y-7">
-      <div className="space-y-2">
-        <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+    <div className="min-w-0">
+      <div className="mb-[22px] min-w-0">
+        <p className={EYEBROW}>
           {td("topMatched")}
         </p>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+        <h1 className={H1}>
           {td("navCandidates")}
         </h1>
-        <p className="max-w-2xl text-base text-muted-foreground">
+        <p className={INTRO}>
           {td("candidatesIntro")}
         </p>
       </div>
@@ -72,75 +88,75 @@ export default async function EmployerCandidatesPage({
         {readFailed ? (
           <div
             role="alert"
-            className="rounded-2xl border border-border bg-card p-6 sm:p-8"
+            className={PANEL}
           >
-            <h2 className="text-xl font-semibold text-foreground">
+            <h2 className={PANEL_H2}>
               {td("candidatesReadErrorTitle")}
             </h2>
-            <p className="mt-2 text-base text-muted-foreground">
+            <p className={`mt-2 ${PANEL_P}`}>
               {td("candidatesReadErrorBody")}
             </p>
           </div>
         ) : candidates.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
-            <h2 className="text-xl font-semibold text-foreground">
+          <div className={PANEL}>
+            <h2 className={PANEL_H2}>
               {td("candidatesEmptyTitle")}
             </h2>
-            <p className="mt-2 text-base text-muted-foreground">
+            <p className={`mt-2 ${PANEL_P}`}>
               {td("candidatesEmptyBody")}
             </p>
           </div>
         ) : (
-          <ul className="grid gap-4 xl:grid-cols-2">
+          <ul className="grid min-w-0 gap-5 xl:grid-cols-2">
             {candidates.map((candidate) => (
               <li
                 key={candidate.candidateId}
-                className="min-w-0 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"
+                className={cn(PAPER, "my-0 flex flex-col")}
               >
-                <div className="flex min-w-0 items-start gap-4">
+                <div className="min-w-0">
                   <span
-                    className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-soft text-lg font-bold text-foreground ring-1 ring-inset ring-border"
+                    className={PROFILE_AVATAR}
                     aria-hidden="true"
                   >
                     {initials(candidate.name || td("candidateFallback"))}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="break-words text-lg font-bold text-foreground">
+                  <div className="mt-3 min-w-0">
+                    <h2 className={H2_EXTENDED}>
                       {candidate.name || td("candidateFallback")}
                     </h2>
                     {candidate.role ? (
-                      <p className="break-words text-base text-muted-foreground">
+                      <p className={`mt-3 break-words ${P_EXTENDED}`}>
                         {candidate.role}
                       </p>
                     ) : null}
                   </div>
                 </div>
-                <dl className="mt-5 grid gap-4 border-t border-border pt-5 sm:grid-cols-2">
+                <dl className={INFO_PAIRS}>
                   <div className="min-w-0">
-                    <dt className="text-sm text-muted-foreground">
+                    <dt className={INFO_LABEL}>
                       {td("colLocation")}
                     </dt>
-                    <dd className="mt-1 break-words text-base font-medium text-foreground">
+                    <dd className={INFO_VALUE}>
                       {candidate.city || td("candidatesLocationUnknown")}
                     </dd>
                   </div>
                   <div className="min-w-0">
-                    <dt className="text-sm text-muted-foreground">
+                    <dt className={INFO_LABEL}>
                       {td("matchedCandidates")}
                     </dt>
-                    <dd className="mt-2">
+                    <dd>
                       <MatchBar value={candidate.match} showLabel />
                     </dd>
                   </div>
-                  <div className="min-w-0 sm:col-span-2">
-                    <dt className="text-sm text-muted-foreground">
+                  <div className="col-span-2 min-w-0">
+                    <dt className={INFO_LABEL}>
                       {td("offerMatchedJob")}
                     </dt>
-                    <dd className="mt-1 break-words text-base font-medium text-foreground">
+                    <dd className={INFO_VALUE}>
                       {candidate.jobSlug ? (
                         <Link
                           href={`/oferty-pracy/${candidate.jobSlug}`}
-                          className="text-primary hover:underline"
+                          className="text-primary underline-offset-4 hover:underline"
                         >
                           {candidate.jobTitle || td("applicationUnknownJob")}
                         </Link>
@@ -157,7 +173,7 @@ export default async function EmployerCandidatesPage({
                   jobTitle={candidate.jobTitle}
                   jobSlug={candidate.jobSlug}
                   offerSentAt={candidate.offerSentAt}
-                  className="mt-5 min-h-11 w-full sm:w-auto"
+                  className="mt-auto min-h-11 w-full sm:w-auto sm:self-start"
                 />
               </li>
             ))}

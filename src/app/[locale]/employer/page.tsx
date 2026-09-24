@@ -1,12 +1,5 @@
 import type { Metadata } from 'next';
-import {
-  ArrowRight,
-  Briefcase,
-  ClipboardList,
-  MessageSquare,
-  Plus,
-  Star,
-} from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
@@ -22,8 +15,6 @@ import {
 } from '@/lib/data/employer';
 import { RecruiterOnlyNote } from '@/components/employer/RecruiterOnlyNote';
 import { canRecruit } from '@/lib/team/permissions';
-import { Button } from '@/components/ui/button';
-import { StatCard } from '@/components/ui/stat-card';
 import { StatusPill } from '@/components/ui/status-pill';
 import { RecruitmentFunnel } from '@/components/employer/RecruitmentFunnel';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
@@ -31,14 +22,36 @@ import { SendOfferButton } from '@/components/employer/SendOfferButton';
 import { RecentApplicationsError } from '@/components/employer/RecentApplicationsError';
 import { EmployerStatsError } from '@/components/employer/EmployerStatsError';
 import { EmployerOffersPreview } from '@/components/employer/EmployerOffersPreview';
+import { PanelStats } from '@/components/dashboard/PanelStats';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
+import {
+  BTN_PRIMARY,
+  BTN_SECONDARY,
+  BTN_SMALL,
+  EMPTY,
+  EYEBROW,
+  H1,
+  ICON_BOX,
+  INTRO,
+  PANEL,
+  PANEL_H2,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  SECTION_HEAD,
+  STATUS_GOOD,
+  TAG,
+  TEXT_LINK,
+} from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * Panel pracodawcy — Podsumowanie (makieta 05), na REALNYCH danych.
  *
- * Dane ładowane przez `@/lib/data/employer` pod sesją użytkownika (RLS); bez env — te same
+ * Wygląd: kalka panelu z prototypu „04 Ludzie i praca” (`#people/employer`, klasy z
+ * `panel-styles.ts`). Dane ładowane przez `@/lib/data/employer` pod sesją użytkownika (RLS); bez env — te same
  * struktury z danymi DEMO (build/preview bez konfiguracji). Układ zgodny z makietą: rząd
- * kafelków statystyk (StatCard), karty ofert firmy, sekcja najnowszych aplikacji (menu zmiany
+ * kafelków statystyk (`.stats`), karty ofert firmy, sekcja najnowszych aplikacji (menu zmiany
  * statusu → `transitionApplication`), lejek rekrutacyjny, top dopasowani kandydaci (wysyłka
  * propozycji → `sendOffer`). NOINDEX (panel, dziedziczone z layoutu).
  */
@@ -88,14 +101,15 @@ export default async function EmployerDashboardPage({
   const canAddJobs = shell.status !== 'ok' || canRecruit(shell.activeRole);
 
   return (
-    <div className="space-y-6">
-      {/* Nagłówek + CTA */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0 break-words">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {td('greetingEmployer')}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+    <div className="min-w-0">
+      {/* Nagłówek + CTA (`.section-head` z `.eyebrow`, `.dash-content h1`, `.dash-intro`) */}
+      <div className={SECTION_HEAD}>
+        <div className="min-w-0">
+          {shell.status === 'ok' && shell.activeName ? (
+            <p className={EYEBROW}>{shell.activeName}</p>
+          ) : null}
+          <h1 className={H1}>{td('greetingEmployer')}</h1>
+          <p className={INTRO}>
             {firstName
               ? td('employerGreetingSub', { name: firstName })
               : td('employerGreetingSubGeneric')}
@@ -103,12 +117,10 @@ export default async function EmployerDashboardPage({
         </div>
         {/* Kreator oferty (Etap 5) — 9 kroków z autozapisem szkicu. Rola member → wyjaśnienie (#403). */}
         {canAddJobs ? (
-          <Button asChild className="max-w-full gap-2 whitespace-normal text-center">
-            <Link href="/employer/oferty/nowa">
-              <Plus className="size-4" aria-hidden="true" />
-              {td('addJob')}
-            </Link>
-          </Button>
+          <Link href="/employer/oferty/nowa" className={BTN_PRIMARY}>
+            <Plus className="size-4 shrink-0" aria-hidden="true" />
+            {td('addJob')}
+          </Link>
         ) : (
           <RecruiterOnlyNote locale={locale} />
         )}
@@ -119,72 +131,68 @@ export default async function EmployerDashboardPage({
         <CompanyStatusBanner status={shell.activeStatus} variant="dashboard" />
       ) : null}
 
-      {/* Statystyki */}
+      {/* Statystyki (`.stats` / `.stat`) */}
       {overview.status === 'error' ? (
-        <EmployerStatsError message={td('employerOverviewLoadError')} retryLabel={tc('retry')} />
+        <EmployerStatsError
+          className="mb-7 mt-[22px]"
+          message={td('employerOverviewLoadError')}
+          retryLabel={tc('retry')}
+        />
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
-          <StatCard
-            label={td('activeOffers')}
-            value={overview.overview.activeOffersCount}
-            sub={configured ? undefined : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.activeOffers })}
-            icon={<Briefcase />}
-            tone="primary"
-          />
-          <StatCard
-            label={td('newApplications')}
-            value={overview.overview.newApplicationsCount}
-            sub={
-              configured ? undefined : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.newApplications })
-            }
-            icon={<ClipboardList />}
-            tone="success"
-          />
-          <StatCard
-            label={td('matchedCandidates')}
-            value={overview.overview.matchedCandidatesCount}
-            sub={configured ? undefined : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.matched })}
-            icon={<Star />}
-            tone="warning"
-          />
-          <StatCard
-            label={td('messagesToAnswer')}
-            value={overview.overview.messagesToAnswerCount}
-            sub={configured ? undefined : td('urgent', { count: DEMO_OVERVIEW_DELTAS.urgent })}
-            icon={<MessageSquare />}
-            tone="error"
-          />
-        </div>
+        <PanelStats
+          items={[
+            {
+              label: td('activeOffers'),
+              value: overview.overview.activeOffersCount,
+              sub: configured ? undefined : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.activeOffers }),
+            },
+            {
+              label: td('newApplications'),
+              value: overview.overview.newApplicationsCount,
+              sub: configured
+                ? undefined
+                : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.newApplications }),
+            },
+            {
+              label: td('matchedCandidates'),
+              value: overview.overview.matchedCandidatesCount,
+              sub: configured ? undefined : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.matched }),
+            },
+            {
+              label: td('messagesToAnswer'),
+              value: overview.overview.messagesToAnswerCount,
+              sub: configured ? undefined : td('urgent', { count: DEMO_OVERVIEW_DELTAS.urgent }),
+            },
+          ]}
+        />
       )}
 
-      {/* Główna siatka: lewa (~2/3) + prawa (~1/3). Bazy w rem zamiast `lg:grid-cols-3`: przy
-          200% tekstu (#318) kolumna boczna przechodzi pod główną zamiast wystawać poza ekran. */}
-      <div className="flex flex-wrap gap-6">
-        <div className="min-w-0 flex-[2_1_36rem] space-y-6">
-          {/* Twoje aktywne oferty */}
-          <EmployerOffersPreview
-            result={jobsLoad}
-            locale={locale}
-            labels={{
-              title: td('yourActiveOffers'),
-              seeAll: td('seeAllOffers'),
-              empty: td('emptyState'),
-              loadError: td('employerOffersLoadError'),
-              loadErrorHint: td('employerOffersLoadErrorHint'),
-              retry: td('employerOffersRetry'),
-              newApplications: td('employerOffersApplicationsLabel'),
-              matched: td('colMatched'),
-            }}
-          />
+      {/* Twoje aktywne oferty (`.panel`) */}
+      <EmployerOffersPreview
+        result={jobsLoad}
+        locale={locale}
+        labels={{
+          title: td('yourActiveOffers'),
+          seeAll: td('seeAllOffers'),
+          empty: td('emptyState'),
+          loadError: td('employerOffersLoadError'),
+          loadErrorHint: td('employerOffersLoadErrorHint'),
+          retry: td('employerOffersRetry'),
+          newApplications: td('employerOffersApplicationsLabel'),
+          matched: td('colMatched'),
+        }}
+      />
 
-          {/* Najnowsze aplikacje — zmiana statusu (transitionApplication) */}
-          <section className="rounded-lg border border-border bg-card">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
-              <h2 className="text-base font-semibold text-foreground">{td('recentApplications')}</h2>
-              <Link
-                href="/employer/aplikacje"
-                className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-accent hover:underline"
-              >
+      {/* `.dash-grid` — 1.4fr / 1fr, odstęp 19 px, margines 24 px; ≤ 1050 px jedna kolumna.
+          Bazy w rem zamiast stałych kolumn: przy 200% tekstu (#318) kolumna boczna przechodzi
+          pod główną zamiast wystawać poza ekran. */}
+      <div className="mt-6 flex min-w-0 flex-wrap gap-[19px]">
+        <div className="flex min-w-0 flex-[1.4_1_36rem] flex-col gap-[19px]">
+          {/* Najnowsze aplikacje — zmiana statusu (transitionApplication); wiersze `.job` */}
+          <section className={PANEL}>
+            <div className={SECTION_HEAD}>
+              <h2 className={PANEL_H2}>{td('recentApplications')}</h2>
+              <Link href="/employer/aplikacje" className={TEXT_LINK}>
                 {td('seeAll')}
                 <ArrowRight className="size-3.5" aria-hidden="true" />
               </Link>
@@ -192,53 +200,53 @@ export default async function EmployerDashboardPage({
             {recentApplications.status === 'error' ? (
               <RecentApplicationsError message={td('recentApplicationsError')} retryLabel={tc('retry')} />
             ) : recentApplications.applications.length === 0 ? (
-              <p className="p-6 text-center text-sm text-muted-foreground">{td('emptyState')}</p>
+              <p className={EMPTY}>{td('emptyState')}</p>
             ) : (
-              <ul className="divide-y divide-border">
+              <ul>
                 {recentApplications.applications.map((application) => (
-                  <li
-                    key={application.id}
-                    className="flex flex-wrap items-center gap-3 p-4 sm:px-5"
-                  >
-                    <span
-                      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-                      aria-hidden="true"
-                    >
+                  <li key={application.id} className={cn(ROW, 'flex-wrap items-center')}>
+                    <span className={ICON_BOX} aria-hidden="true">
                       {initials(application.candidateName || td('candidateFallback'))}
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-foreground">
+                    <div className="min-w-0 flex-1 basis-40">
+                      <p className={ROW_TITLE}>
                         {application.candidateName || td('candidateFallback')}
                       </p>
-                      <p className="truncate text-sm text-muted-foreground">{application.jobTitle}</p>
+                      <p className={ROW_META}>{application.jobTitle}</p>
                       {application.isGuest ? (
-                        <p className="mt-1 inline-flex rounded-full bg-soft px-2 py-0.5 text-xs font-semibold text-foreground">{td('employerApplicationGuestBadge')}</p>
+                        <p className={cn(TAG, 'mt-1.5 font-semibold text-foreground')}>
+                          {td('employerApplicationGuestBadge')}
+                        </p>
                       ) : null}
+                      <div className="mt-1.5">
+                        <StatusPill status={application.status} />
+                      </div>
                     </div>
-                    <StatusPill status={application.status} />
-                    <Link
-                      href={`/employer/aplikacje/${encodeURIComponent(application.id)}`}
-                      aria-label={td('employerApplicationViewLabel', {
-                        name: application.candidateName || td('candidateFallback'),
-                        job: application.jobTitle || td('applicationUnknownJob'),
-                      })}
-                      className="inline-flex min-h-11 items-center rounded-lg border border-border px-3 text-sm font-medium text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    >
-                      {td('employerApplicationView')}
-                    </Link>
-                    <ApplicationStatusMenu
-                      applicationId={application.id}
-                      status={application.status}
-                      candidateName={application.candidateName || td('candidateFallback')}
-                      jobTitle={application.jobTitle}
-                    />
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <Link
+                        href={`/employer/aplikacje/${encodeURIComponent(application.id)}`}
+                        aria-label={td('employerApplicationViewLabel', {
+                          name: application.candidateName || td('candidateFallback'),
+                          job: application.jobTitle || td('applicationUnknownJob'),
+                        })}
+                        className={cn(BTN_SMALL, 'border-border text-foreground hover:bg-soft')}
+                      >
+                        {td('employerApplicationView')}
+                      </Link>
+                      <ApplicationStatusMenu
+                        applicationId={application.id}
+                        status={application.status}
+                        candidateName={application.candidateName || td('candidateFallback')}
+                        jobTitle={application.jobTitle}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
           </section>
 
-          {/* Lejek rekrutacyjny */}
+          {/* Lejek rekrutacyjny („Rekrutacja w liczbach”) */}
           {funnel.status === 'error' ? (
             <EmployerStatsError
               title={td('funnelTitle')}
@@ -256,50 +264,36 @@ export default async function EmployerDashboardPage({
         </div>
 
         {/* Kolumna boczna */}
-        <div className="min-w-0 flex-[1_1_18rem] space-y-6">
+        <div className="flex min-w-0 flex-[1_1_18rem] flex-col gap-[19px]">
           {/* Top dopasowani kandydaci — wysyłka propozycji (sendOffer) */}
-          <section className="rounded-lg border border-border bg-card">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
-              <h2 className="text-base font-semibold text-foreground">{td('topMatched')}</h2>
-              <Link
-                href="/employer/kandydaci"
-                className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-accent hover:underline"
-              >
+          <section className={PANEL}>
+            <div className={SECTION_HEAD}>
+              <h2 className={PANEL_H2}>{td('topMatched')}</h2>
+              <Link href="/employer/kandydaci" className={TEXT_LINK}>
                 {td('seeAllCandidates')}
                 <ArrowRight className="size-3.5" aria-hidden="true" />
               </Link>
             </div>
             {candidates.length === 0 ? (
-              <p className="p-6 text-center text-sm text-muted-foreground">{td('emptyState')}</p>
+              <p className={EMPTY}>{td('emptyState')}</p>
             ) : (
-              <ul className="divide-y divide-border">
+              <ul>
                 {candidates.map((candidate) => (
-                  <li key={candidate.candidateId} className="flex flex-wrap items-center gap-3 p-4 sm:px-5">
-                    <span
-                      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-soft text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-                      aria-hidden="true"
-                    >
+                  <li key={candidate.candidateId} className={cn(ROW, 'flex-wrap items-center')}>
+                    <span className={ICON_BOX} aria-hidden="true">
                       {initials(candidate.name || td('candidateFallback'))}
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {candidate.name || td('candidateFallback')}
-                      </p>
-                      {candidate.role ? (
-                        <p className="truncate text-sm text-muted-foreground">{candidate.role}</p>
-                      ) : null}
-                      {candidate.city ? (
-                        <p className="truncate text-xs text-muted-foreground">{candidate.city}</p>
-                      ) : null}
+                    <div className="min-w-0 flex-1 basis-32">
+                      <p className={ROW_TITLE}>{candidate.name || td('candidateFallback')}</p>
+                      {candidate.role ? <p className={ROW_META}>{candidate.role}</p> : null}
+                      {candidate.city ? <p className={ROW_META}>{candidate.city}</p> : null}
                       {candidate.jobTitle ? (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {td('offerForJob', { job: candidate.jobTitle })}
-                        </p>
+                        <p className={ROW_META}>{td('offerForJob', { job: candidate.jobTitle })}</p>
                       ) : null}
+                      <span className={cn(STATUS_GOOD, 'mt-1.5 font-semibold tabular-nums')}>
+                        {candidate.match}%
+                      </span>
                     </div>
-                    <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-success-text">
-                      {candidate.match}%
-                    </span>
                     <SendOfferButton
                       jobId={candidate.jobId}
                       candidateId={candidate.candidateId}
@@ -313,10 +307,10 @@ export default async function EmployerDashboardPage({
                 ))}
               </ul>
             )}
-            <div className="border-t border-border p-3">
-              <Button asChild variant="outline" className="w-full">
-                <Link href="/employer/kandydaci">{td('goToCandidates')}</Link>
-              </Button>
+            <div className="border-t border-border pt-[19px]">
+              <Link href="/employer/kandydaci" className={cn(BTN_SECONDARY, 'w-full')}>
+                {td('goToCandidates')}
+              </Link>
             </div>
           </section>
         </div>

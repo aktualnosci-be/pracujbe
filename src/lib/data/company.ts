@@ -144,3 +144,58 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
     return { status: 'error' };
   }
 }
+
+/** Decyzja moderacyjna dotycząca firmy lub jej oferty (#42) — uzasadnienie dla autora. */
+export interface CompanyModerationDecision {
+  id: string;
+  reference: string;
+  /** `job_removed` | `company_suspended`. */
+  decision: string;
+  jobTitle: string | null;
+  facts: string;
+  groundType: string | null;
+  groundReference: string | null;
+  automatedDetection: boolean;
+  decidedAt: string;
+  restoredAt: string | null;
+  restoreReason: string | null;
+}
+
+export type CompanyModerationLoad =
+  | { status: 'ok'; decisions: CompanyModerationDecision[] }
+  | { status: 'error' };
+
+/**
+ * Decyzje moderacyjne wobec firmy i jej ofert (RPC `get_company_moderation_decisions`, 0099):
+ * tylko aktywny owner/admin firmy dostaje wiersze (inni — pusta lista). Bez env → brak decyzji.
+ */
+export async function getCompanyModerationDecisions(companyId: string): Promise<CompanyModerationLoad> {
+  if (!isSupabaseConfigured()) return { status: 'ok', decisions: [] };
+  try {
+    const { createServerClient } = await import('@/lib/supabase/server');
+    const supabase = await createServerClient();
+    const { data, error } = await supabase.rpc('get_company_moderation_decisions', {
+      p_company_id: companyId,
+    });
+    if (error) throw error;
+    return {
+      status: 'ok',
+      decisions: asRows(data).map((row) => ({
+        id: asString(row['id']),
+        reference: asString(row['reference']),
+        decision: asString(row['decision']),
+        jobTitle: asNullableString(row['job_title']),
+        facts: asString(row['facts']),
+        groundType: asNullableString(row['ground_type']),
+        groundReference: asNullableString(row['ground_reference']),
+        automatedDetection: row['automated_detection'] === true,
+        decidedAt: asString(row['decided_at']),
+        restoredAt: asNullableString(row['restored_at']),
+        restoreReason: asNullableString(row['restore_reason']),
+      })),
+    };
+  } catch (error) {
+    captureError(error, { area: 'company.getCompanyModerationDecisions' });
+    return { status: 'error' };
+  }
+}

@@ -10,6 +10,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import {
+  BTN_PRIMARY,
+  FORM_CONTROL,
+  FORM_GRID,
+  FORM_LABEL,
+  NOTICE,
+  PANEL_P,
+} from '@/components/dashboard/panel-styles';
 import { useRouter } from '@/i18n/navigation';
 import { toUserMessageKey } from '@/lib/errors';
 import { teamErrorKey, type TeamError } from '@/lib/team/errors';
@@ -121,12 +129,12 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
         : t('savedSuccess');
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-4">
+    <form onSubmit={onSubmit} noValidate className="min-w-0 space-y-5">
       {serverError ? (
         <div
           ref={alertRef}
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
+          className={cn(NOTICE, 'my-0 items-start justify-start gap-3 border-error/30 bg-error/10 text-error-text max-[600px]:flex-row')}
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{tRoot(teamErrorKey(serverError, toUserMessageKey))}</p>
@@ -137,16 +145,18 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
         <div
           ref={alertRef}
           role="status"
-          className="flex items-start gap-3 rounded-md border border-success/30 bg-success/10 p-3 text-sm text-foreground"
+          className={cn(NOTICE, 'my-0 items-start justify-start gap-3 border-success/30 bg-success/10 text-foreground max-[600px]:flex-row')}
         >
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
           <p>{successMessage}</p>
         </div>
       ) : null}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="company-name">{t('name')}</Label>
+      <div className={cn(FORM_GRID, 'my-0')}>
+      <div className="flex min-w-0 flex-col gap-[9px]">
+        <Label htmlFor="company-name" className={FORM_LABEL}>{t('name')}</Label>
         <Input
+          className={FORM_CONTROL}
           id="company-name"
           type="text"
           autoComplete="organization"
@@ -156,15 +166,16 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
           {...register('name')}
         />
         {errors.name?.message ? (
-          <p id="company-name-error" className="text-sm text-error">
+          <p id="company-name-error" className="text-[13px] text-error-text">
             {tRoot(String(errors.name.message))}
           </p>
         ) : null}
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="company-vat">{t('vatNumber')}</Label>
+      <div className="flex min-w-0 flex-col gap-[9px]">
+        <Label htmlFor="company-vat" className={FORM_LABEL}>{t('vatNumber')}</Label>
         <Input
+          className={FORM_CONTROL}
           id="company-vat"
           type="text"
           autoComplete="off"
@@ -181,17 +192,23 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
           {t('vatHint')}
         </p>
         {errors.vatNumber?.message ? (
-          <p id="company-vat-error" className="text-sm text-error">
+          <p id="company-vat-error" className="text-[13px] text-error-text">
             {tRoot(String(errors.vatNumber.message))}
           </p>
         ) : null}
       </div>
+      </div>
 
       {mode === 'edit' && verified ? (
-        <p className="text-sm text-muted-foreground">{t('editVerifiedHint')}</p>
+        <p className={PANEL_P}>{t('editVerifiedHint')}</p>
       ) : null}
 
-      <Button type="submit" size="lg" disabled={isSubmitting} className="w-full sm:w-auto">
+      <Button
+        type="submit"
+        size="lg"
+        disabled={isSubmitting}
+        className={cn(BTN_PRIMARY, 'h-auto w-full whitespace-normal sm:w-auto')}
+      >
         {isSubmitting ? (
           <>
             <Loader2 className={cn('h-4 w-4 animate-spin')} aria-hidden="true" />

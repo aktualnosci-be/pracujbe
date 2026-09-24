@@ -12,6 +12,17 @@ import { setTeamMemberActive, setTeamMemberRole } from '@/lib/actions/team';
 import { teamErrorKey, type TeamError } from '@/lib/team/errors';
 import { assignableRoles, canManageRole } from '@/lib/team/permissions';
 import { roleLabelKey } from './role-keys';
+import {
+  BTN_SMALL,
+  FORM_CONTROL,
+  ICON_BOX,
+  NOTICE,
+  ROW,
+  ROW_META,
+  ROW_TITLE,
+  TAG,
+} from '@/components/dashboard/panel-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * Lista członków zespołu (#403): rola, status dostępu, zmiana roli i odebranie/przywrócenie
@@ -34,8 +45,7 @@ export interface TeamMemberView {
 
 type Feedback = { kind: 'ok' | 'error'; text: string } | null;
 
-const controlClass =
-  'min-h-12 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:w-auto';
+const controlClass = cn(FORM_CONTROL, 'min-h-11 py-2.5 sm:w-auto');
 
 export function TeamMembers({
   members,
@@ -87,43 +97,51 @@ export function TeamMembers({
 
   return (
     <div className="space-y-4">
-      <p ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className={feedback?.kind === 'ok' ? 'rounded-md border border-success/30 bg-success/10 p-3 text-sm text-foreground' : 'sr-only'}>
+      <p ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className={feedback?.kind === 'ok' ? cn(NOTICE, 'my-0 border-success/30 bg-success/10 text-foreground') : 'sr-only'}>
         {feedback?.kind === 'ok' ? feedback.text : ''}
       </p>
       {feedback?.kind === 'error' ? (
-        <p role="alert" className="rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text">
+        <p role="alert" className={cn(NOTICE, 'my-0 border-error/30 bg-error/10 text-error-text')}>
           {feedback.text}
         </p>
       ) : null}
 
-      <ul className="divide-y divide-border rounded-2xl border border-border" aria-label={t('membersTitle')}>
+      <ul aria-label={t('membersTitle')}>
         {members.map((m) => {
           const name = displayName(m);
           const manageable = !m.isSelf && canManageRole(actorRole, m.role);
           const busy = pendingId !== null;
           const selectId = `team-role-${m.id}`;
           return (
-            <li key={m.id} className="flex flex-col gap-3 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+            <li
+              key={m.id}
+              className={cn(ROW, 'flex-col lg:flex-row lg:items-center lg:justify-between')}
+            >
+              <div className="flex min-w-0 gap-[18px] max-[600px]:gap-3">
+              <span className={ICON_BOX} aria-hidden="true">
+                {name.trim().charAt(0).toLocaleUpperCase() || '•'}
+              </span>
               <div className="min-w-0">
-                <p className="break-words font-semibold text-foreground">
+                <p className={cn(ROW_TITLE, 'mb-0')}>
                   {name}
                   {m.isSelf ? (
-                    <span className="ml-2 rounded-full bg-soft px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    <span className={cn(TAG, 'ml-2 align-middle')}>
                       {t('you')}
                     </span>
                   ) : null}
                 </p>
                 {m.email && m.email !== name ? (
-                  <p className="break-all text-sm text-muted-foreground">{m.email}</p>
+                  <p className={cn(ROW_META, 'break-all')}>{m.email}</p>
                 ) : null}
-                <p className="mt-1 text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">{t(roleLabelKey(m.role))}</span>
+                <p className={cn(ROW_META, 'mt-1')}>
+                  <span className="font-semibold text-foreground">{t(roleLabelKey(m.role))}</span>
                   {' · '}
                   <span className={m.isActive ? 'text-success-text' : 'text-error-text'}>
                     {m.isActive ? t('statusActive') : t('statusInactive')}
                   </span>
                   {m.sinceLabel ? ` · ${m.sinceLabel}` : ''}
                 </p>
+              </div>
               </div>
 
               {manageable ? (
@@ -149,7 +167,7 @@ export function TeamMembers({
                       <Button
                         type="button"
                         variant="outline"
-                        className="min-h-12"
+                        className={cn(BTN_SMALL, 'h-auto whitespace-normal border-border text-foreground hover:bg-soft')}
                         disabled={busy || (roles[m.id] ?? m.role) === m.role}
                         aria-label={t('saveRoleLabel', { name })}
                         onClick={() =>
@@ -162,7 +180,7 @@ export function TeamMembers({
                       <Button
                         type="button"
                         variant="outline"
-                        className="min-h-12"
+                        className={cn(BTN_SMALL, 'h-auto whitespace-normal border-border text-foreground hover:bg-soft')}
                         disabled={busy}
                         aria-label={t('deactivateLabel', { name })}
                         onClick={() => setConfirm(m)}
@@ -174,7 +192,7 @@ export function TeamMembers({
                     <Button
                       type="button"
                       variant="outline"
-                      className="min-h-12"
+                      className={cn(BTN_SMALL, 'h-auto whitespace-normal border-border text-foreground hover:bg-soft')}
                       disabled={busy}
                       aria-label={t('reactivateLabel', { name })}
                       onClick={() => void run(m.id, () => setTeamMemberActive(m.id, true), t('reactivated'))}
@@ -185,7 +203,7 @@ export function TeamMembers({
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground lg:max-w-xs lg:text-right">
+                <p className={cn(ROW_META, 'lg:max-w-xs lg:text-right')}>
                   {m.isSelf ? t('selfNote') : t('higherNote')}
                 </p>
               )}

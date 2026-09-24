@@ -17,6 +17,7 @@ import { ConversationList } from './ConversationList';
 import { MessageThread } from './MessageThread';
 import { MessageComposer } from './MessageComposer';
 import { ThreadRetryButton } from './ThreadRetryButton';
+import { BTN_SECONDARY, EYEBROW, H1_EXTENDED, P_EXTENDED, TEXT_LINK } from '@/components/dashboard/panel-styles';
 
 /**
  * MessagesView — współdzielony widok wątku wiadomości panelu (kandydat/pracodawca).
@@ -46,6 +47,11 @@ export async function MessagesView({
   activeParam,
 }: MessagesViewProps) {
   const t = await getTranslations({ locale, namespace: 'messages' });
+  const td = await getTranslations({ locale, namespace: 'dashboard' });
+  // `.eyebrow` ekranu jak w `shell()` prototypu: „Twoje miejsce” / „Twoja rekrutacja”.
+  const eyebrow = basePath.startsWith('/employer')
+    ? td('employerPlaceEyebrow')
+    : td('candidatePlaceEyebrow');
 
   const result = await getConversationsResult(locale);
   const conversations = result.items;
@@ -81,13 +87,15 @@ export async function MessagesView({
   );
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('title')}</h1>
-        <p className="mt-1 text-base text-muted-foreground">{t('subtitle')}</p>
+    <div className="min-w-0">
+      {/* `messagesScreen()` z prototypu: `.eyebrow`, `.extended h1`, `.dash-intro`, `.paper.conversation`. */}
+      <div className="mb-[25px] min-w-0">
+        <p className={EYEBROW}>{eyebrow}</p>
+        <h1 className={H1_EXTENDED}>{t('title')}</h1>
+        <p className={P_EXTENDED}>{t('subtitle')}</p>
       </div>
 
-      <div className="grid min-h-[28rem] grid-cols-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm lg:h-[calc(100vh-14rem)] lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
+      <div className="grid min-h-[28rem] grid-cols-1 overflow-hidden rounded-[22px] border border-border bg-card max-[600px]:rounded-[18px] lg:h-[calc(100vh-14rem)] lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
         {/* Lista konwersacji — nazwany region (nie drugi nienazwany `complementary`, #358);
             na mobile ukryta, gdy otwarty wątek */}
         <section
@@ -102,9 +110,9 @@ export async function MessagesView({
           </h2>
           {result.status === 'error' ? (
             <div role="alert" className="p-6 text-center">
-              <p className="text-base font-semibold text-foreground">{t('loadError')}</p>
+              <p className="text-[15px] font-semibold text-foreground">{t('loadError')}</p>
               <p className="mt-2 text-sm text-muted-foreground">{t('loadErrorHint')}</p>
-              <Link href={basePath} className="mt-4 inline-flex min-h-12 items-center rounded-xl border border-border px-4 font-semibold text-foreground hover:bg-soft">
+              <Link href={basePath} className={cn(BTN_SECONDARY, 'mt-4')}>
                 {t('retry')}
               </Link>
             </div>
@@ -128,7 +136,7 @@ export async function MessagesView({
               <div className="shrink-0 border-b border-border p-2 lg:hidden">
                 <Link
                   href={basePath}
-                  className="inline-flex min-h-12 max-w-full items-center gap-1.5 rounded-md px-3 py-2 text-base font-medium whitespace-normal text-accent hover:underline"
+                  className={cn(TEXT_LINK, 'min-h-12 max-w-full px-3 whitespace-normal')}
                 >
                   <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
                   <span className="min-w-0 break-words">{t('back')}</span>
