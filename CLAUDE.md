@@ -613,6 +613,21 @@ gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zos
 Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
 kasuje tytułu propozycji bez aplikacji (BL97-6).
 
+Widoczność profilu dla firm (#494, migracja `0100`): przełącznik
+„Pozwól zweryfikowanym pracodawcom znaleźć mój profil” w `/candidate/ustawienia`
+(`ProfileVisibilitySettings`, akcja `setProfileVisibilityAction` → `set_candidate_searchable`
+pod sesją; stan UI = ponowny odczyt z bazy, bez optymistycznej zmiany). Domyślnie wyłączone
+(także po `finish_onboarding`); włączenie tylko dla ukończonego profilu, wyłączenie zawsze.
+Znacznik `candidate_profiles.searchable_changed_at` + historia `candidate_visibility_events`
+(tylko przy realnej zmianie, RPC-only, odczyt własny). Po włączeniu zweryfikowana firma widzi
+dane zawodowe profilu i relacje; imię/kontakt (`profiles`) i CV — nie. Wyłączenie działa od razu
+dla wyszukiwania i `matches` (polityka wymaga widoczności kandydata, także po znanym ID);
+relacja z aplikacji/propozycji (`company_can_view_candidate`) zostaje — zatrzymuje ją blokada
+firmy. Dowód: `rls.sql` sekcja VIS494 (kontrole ujemne: polityka `matches` z 0078, guard z 0029);
+unit `profile-visibility`; E2E `candidate-profile-visibility.spec`. **Otwarte:** propozycja
+od firmy odsłania jej imię i kontakt z konta (`company_can_view_candidate` po `offers`) —
+decyzja produktowo-prawna (#485/#34).
+
 Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
 `/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja
 `saveSearchAction`) zapisuje KANONICZNE filtry v1 = dokładnie argumenty `get_public_jobs`
