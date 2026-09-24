@@ -90,13 +90,13 @@ describe('log użycia AI', () => {
     const inner: JobExtractor = { extract: vi.fn(async () => ({ title: SECRET_TEXT })) };
     const logged = withJobImportUsageLog(inner, 'claude-opus-5', sink);
 
-    const result = await logged.extract({ kind: 'text', text: SECRET_TEXT, sourceUrl: 'https://jobs.example/secret-path' });
+    const result = await logged.extract({ kind: 'text', text: SECRET_TEXT, source: 'jobs.example' });
     expect(result).toEqual({ title: SECRET_TEXT });
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({ feature: 'job_listing_import', outcome: 'ok', inputKind: 'text', model: 'claude-opus-5' });
     const serialized = JSON.stringify(lines);
     expect(serialized).not.toContain('Kowalski');
-    expect(serialized).not.toContain('secret-path');
+    expect(serialized).not.toContain('jobs.example');
   });
 
   it.each([

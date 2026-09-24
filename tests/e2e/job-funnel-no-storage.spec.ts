@@ -19,6 +19,12 @@ const JOB_PATH = '/pl/oferty-pracy/warehouse-worker-antwerp-1001';
 const LIST_PATH = '/pl/oferty-pracy';
 const PROBE_COOKIE = { name: 'e2e_probe', value: 'must-not-reach-funnel' };
 
+/**
+ * Cookies samego `next dev` (serwer fixture), ustawiane asynchronicznie przez klienta HMR —
+ * nie istnieją w buildzie produkcyjnym i nie mają związku z lejkiem.
+ */
+const DEV_SERVER_COOKIES = new Set(['__next_hmr_refresh_hash__']);
+
 interface DeviceState {
   cookies: string[];
   local: Record<string, string>;
@@ -27,7 +33,10 @@ interface DeviceState {
 }
 
 async function deviceState(page: Page, context: BrowserContext): Promise<DeviceState> {
-  const cookies = (await context.cookies()).map((c) => `${c.name}=${c.value}`).sort();
+  const cookies = (await context.cookies())
+    .filter((c) => !DEV_SERVER_COOKIES.has(c.name))
+    .map((c) => `${c.name}=${c.value}`)
+    .sort();
   const storage = await page.evaluate(async () => {
     const dump = (s: Storage) => Object.fromEntries(Object.keys(s).sort().map((k) => [k, s.getItem(k) ?? '']));
     const dbs = typeof indexedDB.databases === 'function' ? await indexedDB.databases() : [];

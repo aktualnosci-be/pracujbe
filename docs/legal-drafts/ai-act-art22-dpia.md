@@ -92,9 +92,12 @@ Test `ai-inventory.test.ts` sprawdza, że pliki D1, D4–D6 nie wołają modelu.
 1. Czy dla A1, A2 lub D1–D3 przesłanki z art. 35 ust. 3 lub z belgijskiej listy APD wymagają
    DPIA przed uruchomieniem? Które kryteria są spełnione (ocena/scoring, dane na dużą skalę,
    nowe technologie, osoby w słabszej pozycji — np. osoby szukające pracy)?
-2. A1: zrzut ogłoszenia może zawierać dane kontaktowe osób trzecich (np. imię rekrutera,
-   telefon) — trafiają one do dostawcy modelu. Czy wymaga to osobnej oceny lub minimalizacji
-   przed wysłaniem (por. PR #512)?
+2. A1: materiał ogłoszenia może zawierać dane kontaktowe osób trzecich. Fakt (#495/#500,
+   `src/lib/ai-import/minimize.ts`): z tekstu strony przed wysłaniem usuwane są e-maile,
+   telefony, NISS/BIS, PESEL i numery dokumentów, a do promptu trafia tylko nazwa hosta
+   źródła; zrzutu ekranu nie da się tak zredagować (brak lokalnego OCR) — działa walidacja
+   wyjścia i odmowa importu przy numerze identyfikacyjnym. Czy to wystarcza, czy zrzut
+   ekranu wymaga osobnej oceny?
 3. A1/A2: przekazanie do dostawcy modelu. Jakie dokumenty są potrzebne przed włączeniem flagi
    w produkcji (umowa powierzenia, region, retencja po stronie dostawcy, transfer poza EOG)?
    Stan: `docs/AI_JOB_IMPORT.md` §„Prywatność” wymienia to jako warunek przed włączeniem.
