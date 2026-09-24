@@ -955,6 +955,16 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `/zglos-tresc/sprawa`. Dowód: `rls.sql` sekcja MOD42; unit `moderation-decision*`; E2E
   `admin-ux` (#42). **Otwarte:** procedura odwołań (#43); znacznik treści prawnej o środkach
   odwoławczych w panelu firmy; UI kolejki według priorytetu (lista nadal po dacie).
+- [~] Mapa danych osobowych (#485/#488/#503/#504, część techniczna): `node scripts/privacy/data-map.mjs`
+  generuje `docs/legal-drafts/data-map.generated.md` z migracji produkcyjnych (parser
+  `scripts/privacy/schema.mjs`), klasyfikacji `src/lib/privacy/data-map.ts` (każda tabela, kategorie,
+  czynności) i usług `src/lib/privacy/processors.ts` (rola/region/transfer/DPA = „DO UZUPEŁNIENIA”);
+  sekcja e-maili = klucze payloadu z aktualnych funkcji SQL (`email-payloads.mjs`). Test
+  `privacy-data-map.test.ts`: tabela bez wpisu albo kolumna wyglądająca na PII (np. `email`) bez
+  klasyfikacji = czerwony, plik nieaktualny = czerwony, payload z CV/odpowiedziami/treścią wiadomości
+  = czerwony (kontrole ujemne). Szkice `docs/legal-drafts/rejestr-czynnosci.md` i
+  `dostawcy-i-transfery.md` — PROJEKT, nieopublikowany, nic w UI. **Do ustalenia (właściciel +
+  prawnik):** administrator, role portal/pracodawca, podstawy, retencja, DPA i transfery.
 - [x] Audit logs — triggery AFTER (0017) na applications/offers/companies + `write_audit`; actor=auth.uid()
   Podgląd w panelu (#417): `/admin/dziennik` (tylko odczyt, `listAuditLogs` → `requireAdmin`) —
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
