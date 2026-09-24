@@ -104,6 +104,7 @@ pracujbe/
 │  └─ LAUNCH_CHECKLIST.md
 ├─ supabase/
 │  ├─ migrations/                 # *.sql wersjonowane (kolejność wg prefiksu)
+│  ├─ rollback/                   # ręczne skrypty wycofania (np. 0097 ESCO)
 │  └─ seed.sql                    # dane demonstracyjne (oznaczone is_demo=true)
 ├─ src/
 │  ├─ app/
@@ -757,6 +758,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się
   policzyć” z ponowieniem, nigdy procent z niepełnych danych.
+- [~] Taksonomia ESCO v1.2.1 (#93, migracja `0097`, `docs/ESCO.md`): zawody/umiejętności z
+  przypiętego snapshotu tylko w PL/NL/FR/EN (RO/UK z issue pominięte — decyzja właściciela).
+  `esco_uri` = klucz, `occupation_labels`/`skill_labels` (preferred/alternative, FK do
+  `supported_locales`), `occupation_skills` (essential/optional), `esco_snapshots` (pliki +
+  SHA-256, atrybucja, raport). Import `npm run esco:import` (`scripts/esco/`): jedna transakcja
+  jako service_role, upsert po URI, ponowny import = zero zmian, inne pliki tej wersji →
+  `ESCO_CHECKSUM_MISMATCH`, wiersz ręczny z tym samym URI → `ESCO_MANUAL_CONFLICT` (skip/overwrite
+  tylko jawnie). Fallback `occupation_label`/`skill_label`: język → en → name. Słowniki czytelne
+  publicznie, zapis tylko service_role. Dowód: `rls.sql` ESCO93, unit `esco-snapshot`,
+  `npm run test:esco`. Fragment testowy (API ESCO, `is_demo`) w `tests/fixtures/esco/`.
+  **Do zrobienia (właściciel):** pobranie oficjalnych paczek CSV (formularz z linkiem e-mail),
+  zatwierdzenie `data/esco/esco-v1.2.1.manifest.json`, pełny import; atrybucja w UI i matching
+  na ESCO = osobne issues.
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -944,6 +958,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Bez kluczy poza produkcją = wyłączony; w produkcji brak kluczy = fail-closed rejestracji/resetu.
   CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. Polityka `report`
   chroni formularz zgłoszenia treści (#41). **Do zrobienia:** formularz kontaktu (`contact`).
+- [~] Operacje #47 (część kodowa, migracja `0096`): czujki `GET /api/health/ops` — tylko z
+  `HEALTH_CHECK_SECRET` (inaczej 404), same liczby z `ops_metrics()` (rola `pracujbe_ops` bez praw
+  do tabel; login `DATABASE_OPS_URL`, pula `ops` w `pool.ts`, fallback service-role), progi w
+  `src/lib/ops/sensors.ts` (wiek kolejek e-mail/auth, porzucone dzierżawy, zawieszone webhooki,
+  opóźnienie maintenance, 80% połączeń) → 503 `alert` / 200 = recovery. Kopia zaszyfrowana `age`
+  z manifestem i retencją (`scripts/db/backup.sh`) + odtworzenie z porównaniem sum
+  (`restore-backup.sh`), test `npm run test:backup` (PG16, 8 kontroli ujemnych; nie w CI).
+  `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
+  sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
+  `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
+  cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
+  `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).

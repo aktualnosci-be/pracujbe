@@ -1,0 +1,32 @@
+conceptType,conceptUri,iscoGroup,preferredLabel,altLabels,hiddenLabels,status,modifiedDate,regulatedProfessionNote,scopeNote,definition,inScheme,description,code
+Occupation,http://data.europa.eu/esco/occupation/05f321f8-055b-407d-bf19-e0ddabda56b7,7112,maçon/maçonne,"maçonne
+briqueteuse
+maçon-briqueteur
+briqueteur
+maçon
+maçonne-briqueteuse",,released,,,,,,,7112.1
+Occupation,http://data.europa.eu/esco/occupation/45037d43-a8f5-4f46-b332-b2935bc305f4,8332,conducteur de poids lourd/conductrice de poids lourd,"conducteur routier de transport de marchandises/conductrice routière de transport de marchandises
+camionneur
+routier/routière
+camionneur/camionneuse
+conducteur routier
+conductrice de poids lourd
+chauffeur routier/chauffeuse routière
+conductrice routière de transport de marchandises
+chauffeur de poids lourd/chauffeuse de poids lourd
+routier
+conducteur de poids lourd
+conducteur routier/conductrice routière
+conducteur routier de transport de marchandises
+routière
+conductrice routière
+chauffeuse de poids lourd
+chauffeur de poids lourd
+camionneuse",,released,,,,,,,8332.2
+Occupation,http://data.europa.eu/esco/occupation/7cb71c5f-c310-481c-b46b-d0044328758c,9122,laveur de véhicules/laveuse de véhicules,"laveur de véhicules
+laveuse de véhicules",,released,,,,,,,9122.1
+Occupation,http://data.europa.eu/esco/occupation/90f75f67-495d-49fa-ab57-2f320e251d7e,5120,cuisinier/cuisinière,"cuisinière
+cuisinier
+chef de partie",,released,,,,,,,5120.1
+Occupation,http://data.europa.eu/esco/occupation/bea705fe-06ac-4147-b8e0-6e8ac1208d8f,9333,magasinier/magasinière,"magasinière
+magasinier",,released,,,,,,,9333.8

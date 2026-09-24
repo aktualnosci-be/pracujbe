@@ -4607,6 +4607,90 @@ set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select * from public.get_offered_jobs_display(''pl'')',
   'permission denied', 'BL97-6d gość bez EXECUTE');
 reset role; reset app.current_uid;
+-- =============================================================================
+-- OPS47 — czujki operacyjne (0096): ops_metrics tylko dla pracujbe_ops/service_role,
+-- same liczby (bez PII), poprawne zaległości/dzierżawy/webhooki/maintenance,
+-- indeks trigramowy miasta używany przez filtr `city ilike`.
+-- =============================================================================
+\echo '--- OPS47 ops_metrics ---'
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_metrics()', 'permission denied', 'OPS47-1 anon bez EXECUTE');
+reset role;
+set role authenticated; set app.current_uid = :'TMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_metrics()', 'permission denied', 'OPS47-1b authenticated bez EXECUTE');
+reset role; reset app.current_uid;
+
+select pg_temp.assert(
+  (select not rolcanlogin and not rolinherit and not rolsuper and not rolbypassrls
+     from pg_roles where rolname = 'pracujbe_ops')
+  and not exists (select 1 from pg_auth_members where member = 'pracujbe_ops'::regrole),
+  'OPS47-2 rola pracujbe_ops bez atrybutów i członkostw');
+
+set role pracujbe_ops;
+select pg_temp.expect_error('select count(*) from public.email_deliveries', 'permission denied',
+  'OPS47-2b pracujbe_ops nie czyta tabel');
+select pg_temp.expect_error('select count(*) from public.jobs', 'permission denied',
+  'OPS47-2c pracujbe_ops nie czyta ofert');
+select pg_temp.expect_error('select public.expire_due_jobs()', 'permission denied',
+  'OPS47-2d pracujbe_ops nie wykonuje zadań maintenance');
+select pg_temp.assert(
+  (select public.ops_metrics() ?& array['email', 'authEmail', 'webhooks', 'maintenance', 'connections']),
+  'OPS47-2e pracujbe_ops czyta metryki');
+reset role;
+
+select public.ops_metrics() as ops_base \gset
+begin;
+insert into public.email_deliveries(to_email, template, status, next_attempt_at, locked_at, updated_at) values
+  ('ops47-ready@test.invalid', 'newMessage', 'queued', now() - interval '20 minutes', null, now()),
+  ('ops47-lease@test.invalid', 'newMessage', 'queued', now() - interval '1 minute', now() - interval '10 minutes', now()),
+  ('ops47-future@test.invalid', 'newMessage', 'queued', now() + interval '1 hour', null, now()),
+  ('ops47-failed@test.invalid', 'newMessage', 'failed', now(), null, now());
+insert into public.processed_webhooks(id, source, status, seen_at, updated_at) values
+  ('ops47-stuck', 'stripe', 'processing', now() - interval '1 hour', now() - interval '1 hour'),
+  ('ops47-fresh', 'stripe', 'processing', now(), now());
+set local session_replication_role = replica;
+update public.jobs set status = 'active', expires_at = now() - interval '3 hours'
+  where id = (select id from public.jobs where deleted_at is null order by id limit 1);
+set local session_replication_role = origin;
+set local role pracujbe_ops;
+select public.ops_metrics() as ops_now \gset
+reset role;
+select pg_temp.assert(
+  ((:'ops_now')::jsonb #>> '{email,ready}')::int = ((:'ops_base')::jsonb #>> '{email,ready}')::int + 2
+  and ((:'ops_now')::jsonb #>> '{email,oldestReadyAgeSeconds}')::int >= 1200
+  and ((:'ops_now')::jsonb #>> '{email,abandonedLeases}')::int = ((:'ops_base')::jsonb #>> '{email,abandonedLeases}')::int + 1
+  and ((:'ops_now')::jsonb #>> '{email,failedLast24h}')::int = ((:'ops_base')::jsonb #>> '{email,failedLast24h}')::int + 1,
+  'OPS47-3 kolejka e-mail: gotowe, wiek najstarszego, porzucona dzierżawa, nieudane (przyszłe pomijane)');
+select pg_temp.assert(
+  ((:'ops_now')::jsonb #>> '{webhooks,stuckProcessing}')::int = ((:'ops_base')::jsonb #>> '{webhooks,stuckProcessing}')::int + 1,
+  'OPS47-4 webhook zawieszony > 15 min liczony, świeży nie');
+select pg_temp.assert(
+  ((:'ops_now')::jsonb #>> '{maintenance,overdueActiveJobs}')::int >= 1,
+  'OPS47-5 aktywna oferta > 2 h po terminie = opóźnienie maintenance');
+select pg_temp.assert(
+  ((:'ops_now')::jsonb #>> '{connections,used}')::int >= 1
+  and ((:'ops_now')::jsonb #>> '{connections,max}')::int > 0
+  and ((:'ops_now')::jsonb ? 'authEmail') and jsonb_typeof((:'ops_now')::jsonb -> 'authEmail') = 'object',
+  'OPS47-6 połączenia i kolejka auth (0061) raportowane');
+select pg_temp.assert(
+  position('ops47' in (:'ops_now')) = 0 and position('@' in (:'ops_now')) = 0,
+  'OPS47-7 metryki bez adresów i identyfikatorów');
+rollback;
+
+-- Kontrola ujemna: bez GRANT dla pracujbe_ops wywołanie jest odrzucane (grant jest jedyną ścieżką).
+begin;
+revoke execute on function public.ops_metrics() from pracujbe_ops;
+set local role pracujbe_ops;
+select pg_temp.expect_error('select public.ops_metrics()', 'permission denied',
+  'OPS47-8 kontrola ujemna: bez GRANT odmowa');
+rollback;
+
+-- Użycie indeksu przy realnej liczbie ofert mierzy scripts/db/search-benchmark.sh (EXPLAIN
+-- przed/po); tu — definicja zgodna z predykatem get_public_jobs (status/deleted_at, trigram).
+select pg_temp.assert(
+  (select pg_get_indexdef('public.idx_jobs_city_trgm'::regclass))
+    like '%USING gin (city gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))%',
+  'OPS47-9 idx_jobs_city_trgm: GIN trigram na city, częściowy jak predykat listy ofert');
 
 -- ============================================================================
 -- SS100. Zapisane wyszukiwania i alerty o nowych ofertach (0092, #100): kanoniczne
@@ -5857,5 +5941,178 @@ select pg_temp.assert(
   (select count(*) from public.application_screening_answers where application_id = :'gasqapp') = 2,
   'GA98-13f firma czyta odpowiedzi gościa pod RLS');
 reset role; reset app.current_uid;
+
+-- ============================================================================
+-- ESCO93. Taksonomia ESCO v1.2.1 (#93, 0097): słowniki czytelne publicznie, zapis
+-- i import wyłącznie service_role; przypięcie manifestu, idempotencja, dane ręczne,
+-- fallback etykiet, brak wpływu na profile/oferty/dopasowania, rollback.
+-- ============================================================================
+\set E93O1 'http://data.europa.eu/esco/occupation/bea705fe-06ac-4147-b8e0-6e8ac1208d8f'
+\set E93O2 'http://data.europa.eu/esco/occupation/90f75f67-495d-49fa-ab57-2f320e251d7e'
+\set E93S1 'http://data.europa.eu/esco/skill/01fec851-b5f4-419b-940a-3b4c835adfa8'
+\set E93S2 'http://data.europa.eu/esco/skill/055ff233-6569-43db-9f95-a4b03dca97da'
+\set E93FILES '{"occupations_en.csv":{"sha256":"1111111111111111111111111111111111111111111111111111111111111111","bytes":10}}'
+\set E93SAMPLE '{"snapshot":"esco93-sample","escoVersion":"v1.2.1","sample":true,"locales":["pl","nl","fr","en"],"files":' :E93FILES '}'
+\set E93REAL '{"snapshot":"esco93-v1.2.1","escoVersion":"v1.2.1","sample":false,"locales":["pl","nl","fr","en"],"files":' :E93FILES '}'
+\set E93DIG 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+\set E93OCC '[{"uri":"' :E93O1 '","code":"9333.1","iscoGroup":"9333","active":true,"name":"warehouse worker","labels":{"en":{"preferred":"warehouse worker","alternative":["warehouse operative"]},"pl":{"preferred":"magazynier","alternative":["pracownik magazynu"]}}},{"uri":"' :E93O2 '","code":"5120.1","iscoGroup":"5120","active":true,"name":"cook","labels":{"en":{"preferred":"cook","alternative":[]}}}]'
+\set E93SK '[{"uri":"' :E93S1 '","skillType":"skill/competence","reuseLevel":"cross-sector","active":true,"name":"tend packaging machines","labels":{"en":{"preferred":"tend packaging machines","alternative":[]},"fr":{"preferred":"surveiller des machines d''emballage","alternative":[]}}},{"uri":"' :E93S2 '","skillType":"knowledge","reuseLevel":"sector-specific","active":true,"name":"warehouse systems","labels":{"en":{"preferred":"warehouse systems","alternative":[]}}}]'
+\set E93REL '[{"occupationUri":"' :E93O1 '","skillUri":"' :E93S1 '","relationType":"essential"},{"occupationUri":"' :E93O1 '","skillUri":"' :E93S2 '","relationType":"optional"},{"occupationUri":"' :E93O2 '","skillUri":"' :E93S2 '","relationType":"optional"}]'
+
+-- Odcisk danych procesowych: import nie może ich zmienić (kryterium odbioru #93).
+create function pg_temp.e93_fingerprint() returns text language sql as $$
+  select md5(concat_ws('|',
+    (select string_agg(t::text, ',' order by t.id) from public.candidate_profiles t),
+    (select string_agg(t::text, ',' order by t.id) from public.candidate_skills t),
+    (select string_agg(t::text, ',' order by t.id) from public.jobs t),
+    (select string_agg(t::text, ',' order by t.id) from public.job_skills t),
+    (select string_agg(t::text, ',' order by t.id) from public.applications t),
+    (select string_agg(t::text, ',' order by t.id) from public.matches t)));
+$$;
+select pg_temp.e93_fingerprint() as e93fp \gset
+select count(*) as e93manual from public.occupations where source = 'manual' \gset
+
+-- ESCO93-1: klient bez zapisu i bez RPC importu.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.esco_begin_snapshot(''{}''::jsonb, ''x'')',
+  'permission denied', 'ESCO93-1 anon nie rozpoczyna importu');
+select pg_temp.expect_error('insert into public.esco_snapshots (id, esco_version, is_sample, locales, files, manifest_sha256) values (''x-sample'', ''v1.2.1'', true, ''{}'', ''{}'', repeat(''a'', 64))',
+  'permission denied', 'ESCO93-1b anon nie pisze metadanych');
+reset role;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.esco_upsert_occupations(''esco93-sample'', ''[]''::jsonb, ''fail'')',
+  'permission denied', 'ESCO93-1c zalogowany nie woła upsertu');
+select pg_temp.expect_error('insert into public.occupations (slug, name) values (''e93-x'', ''x'')',
+  'permission denied', 'ESCO93-1d zalogowany nie dodaje zawodu');
+select pg_temp.expect_error('update public.skills set name = name',
+  'permission denied', 'ESCO93-1e zalogowany nie zmienia umiejętności');
+select pg_temp.expect_error('delete from public.occupation_skills',
+  'permission denied', 'ESCO93-1f zalogowany nie usuwa relacji');
+select pg_temp.expect_error('insert into public.skill_labels (skill_id, locale, kind, label) select id, ''pl'', ''alternative'', ''x'' from public.skills limit 1',
+  'permission denied', 'ESCO93-1g zalogowany nie dodaje etykiety');
+reset role; reset app.current_uid;
+
+-- ESCO93-2: manifest — wersja przypięta, języki = supported_locales.
+set role service_role;
+select pg_temp.expect_error(
+  'select public.esco_begin_snapshot(''' || replace(:'E93SAMPLE', 'v1.2.1', 'v1.2.0') || '''::jsonb, ''' || :'E93DIG' || ''')',
+  'ESCO_VERSION_NOT_PINNED', 'ESCO93-2 inna wersja ESCO odrzucona');
+select pg_temp.expect_error(
+  'select public.esco_begin_snapshot(''' || replace(:'E93SAMPLE', '"en"]', '"en","ro"]') || '''::jsonb, ''' || :'E93DIG' || ''')',
+  'ESCO_INVALID_MANIFEST', 'ESCO93-2b język spoza portalu odrzucony');
+
+-- ESCO93-3: ręczny wiersz z tym samym URI — bez decyzji odmowa, skip nie dotyka.
+insert into public.occupations (slug, name, source, esco_uri) values ('e93-kucharz', 'Kucharz ręczny', 'manual', :'E93O2');
+select pg_temp.assert(public.esco_begin_snapshot(:'E93SAMPLE'::jsonb, :'E93DIG') = 'new', 'ESCO93-3 fragment rozpoczęty');
+select pg_temp.expect_error(
+  'select public.esco_upsert_occupations(''esco93-sample'', ''' || replace(:'E93OCC', '''', '''''') || '''::jsonb, ''fail'')',
+  'ESCO_MANUAL_CONFLICT', 'ESCO93-3b konflikt z danymi ręcznymi bez decyzji = błąd');
+select pg_temp.assert(
+  (public.esco_upsert_occupations('esco93-sample', :'E93OCC'::jsonb, 'skip')->>'manualSkipped')::int = 1,
+  'ESCO93-3c skip pomija wiersz ręczny');
+select pg_temp.assert(
+  (select name = 'Kucharz ręczny' and source = 'manual' and not exists (
+     select 1 from public.occupation_labels l where l.occupation_id = o.id)
+   from public.occupations o where esco_uri = :'E93O2'),
+  'ESCO93-3d wiersz ręczny i jego etykiety nietknięte');
+select (public.esco_upsert_skills('esco93-sample', :'E93SK'::jsonb, 'skip')->>'inserted')::int as e93sk \gset
+select pg_temp.assert(:e93sk = 2, 'ESCO93-3e umiejętności dodane');
+select pg_temp.assert(
+  (public.esco_upsert_relations('esco93-sample', :'E93REL'::jsonb)->>'manualSkipped')::int = 1,
+  'ESCO93-3f relacja ręcznego zawodu pominięta');
+select pg_temp.assert(public.esco_finish_snapshot('esco93-sample', '{}'::jsonb) is not null, 'ESCO93-3g zakończenie');
+
+-- ESCO93-4: odczyt publiczny, relacje essential/optional, fallback etykiet, is_demo.
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select string_agg(os.relation_type || ':' || s.skill_type, ',' order by os.relation_type)
+   from public.occupation_skills os
+   join public.occupations o on o.id = os.occupation_id
+   join public.skills s on s.id = os.skill_id
+   where o.esco_uri = :'E93O1') = 'essential:skill/competence,optional:knowledge',
+  'ESCO93-4 anon czyta relacje: podstawowa i opcjonalna rozróżnione');
+select pg_temp.assert(
+  (select public.occupation_label(id, 'pl') = 'magazynier'
+      and public.occupation_label(id, 'nl') = 'warehouse worker'
+      and public.occupation_label(id, 'xx') = 'warehouse worker'
+      and public.occupation_label(id, null) = 'warehouse worker'
+   from public.occupations where esco_uri = :'E93O1'),
+  'ESCO93-4b fallback: język → en (także dla nieznanego/NULL)');
+select pg_temp.assert(
+  (select public.skill_label(id, 'fr') = 'surveiller des machines d''emballage'
+      and public.skill_label(id, 'pl') = 'tend packaging machines'
+   from public.skills where esco_uri = :'E93S1'),
+  'ESCO93-4c fallback umiejętności');
+select pg_temp.assert(
+  (select public.occupation_label(id, 'pl') from public.occupations where esco_uri = :'E93O2') = 'Kucharz ręczny',
+  'ESCO93-4d brak etykiet → name');
+select pg_temp.assert(
+  (select bool_and(is_demo) from public.occupations where source = 'esco')
+  and (select count(*) from public.occupation_labels l join public.occupations o on o.id = l.occupation_id
+       where o.esco_uri = :'E93O1') = 4,
+  'ESCO93-4e fragment oznaczony is_demo, etykiety pref+alt w PL/EN');
+select pg_temp.assert((select count(*) from public.esco_snapshots where id = 'esco93-sample') = 1,
+  'ESCO93-4f metadane (atrybucja, sumy) czytelne publicznie');
+reset role;
+
+-- ESCO93-5: ponowny import tego samego snapshotu — bez duplikatów i bez zmian.
+set role service_role;
+select count(*) as e93labels from public.occupation_labels \gset
+select pg_temp.assert(public.esco_begin_snapshot(:'E93SAMPLE'::jsonb, :'E93DIG') = 'repeat', 'ESCO93-5 ten sam manifest = repeat');
+select public.esco_upsert_occupations('esco93-sample', :'E93OCC'::jsonb, 'skip') as e93r \gset
+select pg_temp.assert(:'e93r'::jsonb = '{"inserted":0,"updated":0,"manualSkipped":1,"labelsAdded":0,"labelsRemoved":0}'::jsonb,
+  'ESCO93-5b powtórka: zero zmian');
+select pg_temp.assert(public.esco_upsert_skills('esco93-sample', :'E93SK'::jsonb, 'skip')->>'inserted' = '0'
+  and public.esco_upsert_relations('esco93-sample', :'E93REL'::jsonb)->>'inserted' = '0',
+  'ESCO93-5c powtórka umiejętności i relacji: zero nowych');
+select pg_temp.assert((select count(*) from public.occupation_labels) = :e93labels
+  and (select count(*) from public.occupations where esco_uri in (:'E93O1', :'E93O2')) = 2,
+  'ESCO93-5d brak duplikatów');
+
+-- ESCO93-6: ta sama wersja z innymi plikami — odmowa; pól przypięcia nie da się zmienić.
+select pg_temp.expect_error(
+  'select public.esco_begin_snapshot(''' || replace(:'E93SAMPLE', '1111', '2222') || '''::jsonb, ''' || :'E93DIG' || ''')',
+  'ESCO_CHECKSUM_MISMATCH', 'ESCO93-6 zmieniony plik przy tym samym snapshocie odrzucony');
+select pg_temp.expect_error(
+  'update public.esco_snapshots set files = ''{}''::jsonb where id = ''esco93-sample''',
+  'ESCO_CHECKSUM_MISMATCH', 'ESCO93-6b przypięcie niezmienne');
+select pg_temp.expect_error(
+  'insert into public.occupation_labels (occupation_id, locale, kind, label) select id, ''ro'', ''preferred'', ''x'' from public.occupations where esco_uri = ''' || :'E93O1' || '''',
+  'foreign key', 'ESCO93-6c etykieta w języku spoza portalu odrzucona');
+
+-- ESCO93-7: realny snapshot po fragmencie — przejmuje wiersze (is_demo=false),
+-- koncepcje spoza snapshotu wyłączone, ich relacje usunięte; overwrite przejmuje ręczny.
+select pg_temp.assert(public.esco_begin_snapshot(:'E93REAL'::jsonb, :'E93DIG') = 'new', 'ESCO93-7 realny snapshot');
+select pg_temp.assert(
+  (public.esco_upsert_occupations('esco93-v1.2.1', :'E93OCC'::jsonb, 'overwrite')->>'updated')::int = 2,
+  'ESCO93-7b overwrite (jawna decyzja) przejmuje ręczny wiersz');
+select public.esco_upsert_skills('esco93-v1.2.1',
+  (select jsonb_agg(e) from jsonb_array_elements(:'E93SK'::jsonb) e where e->>'uri' = :'E93S1'), 'fail');
+select public.esco_upsert_relations('esco93-v1.2.1',
+  (select jsonb_agg(e) from jsonb_array_elements(:'E93REL'::jsonb) e where e->>'skillUri' = :'E93S1'));
+select public.esco_finish_snapshot('esco93-v1.2.1', '{}'::jsonb) as e93fin \gset
+select pg_temp.assert(:'e93fin'::jsonb = '{"deactivatedOccupations":0,"deactivatedSkills":1,"removedRelations":1}'::jsonb,
+  'ESCO93-7c umiejętność spoza snapshotu wyłączona, jej relacje usunięte');
+select pg_temp.assert(
+  (select not is_active from public.skills where esco_uri = :'E93S2')
+  and (select source = 'esco' and name = 'cook' from public.occupations where esco_uri = :'E93O2')
+  and not (select bool_or(is_demo) from public.occupations where source = 'esco'),
+  'ESCO93-7d stan po realnym imporcie');
+select pg_temp.expect_error(
+  'select public.esco_begin_snapshot(''' || replace(:'E93REAL', 'esco93-v1.2.1', 'esco93-other') || '''::jsonb, ''' || :'E93DIG' || ''')',
+  'ESCO_CHECKSUM_MISMATCH', 'ESCO93-7e drugi realny snapshot tej samej wersji odrzucony');
+select pg_temp.expect_error(
+  'select public.esco_begin_snapshot(''' || replace(:'E93SAMPLE', 'esco93-sample', 'esco93-late-sample') || '''::jsonb, ''' || :'E93DIG' || ''')',
+  'ESCO_SAMPLE_AFTER_REAL', 'ESCO93-7f fragment testowy po realnym imporcie odrzucony');
+reset role;
+
+-- ESCO93-8: profile, oferty, aplikacje i dopasowania bez zmian; ręczne słowniki zostają.
+select pg_temp.assert(pg_temp.e93_fingerprint() = :'e93fp', 'ESCO93-8 import nie zmienia danych procesowych');
+select pg_temp.assert((select count(*) from public.occupations where source = 'manual') = :e93manual,
+  'ESCO93-8b ręczne zawody z 0010 nietknięte');
+
+-- ESCO93-R (rollback 0097): supabase/tests/esco93-rollback.sql, uruchamiany przez test-rls.sh
+-- po tym pliku (psql -f, bo \ir ścieżki rollbacku nie działa przy wejściu ze stdin).
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -373,11 +373,12 @@ export function DashboardShell({
         </header>
 
         {/* Treść */}
-        {/* `.people .dash-content` — białe tło, padding 32 px; ≤ 600 px: 26 px 6%. */}
+        {/* `.people .dash-content` — białe tło, padding 32 px; ≤ 600 px: 26 px 6%. Dół: 96 px pod `lg`,
+            bo dolny pasek zakładek (fixed, 64 px) zasłaniałby ostatni element treści. */}
         <main
           id="main-content"
           tabIndex={-1}
-          className="min-w-0 flex-1 bg-background px-[6%] py-[26px] pb-24 outline-none min-[601px]:p-8 lg:pb-8"
+          className="min-w-0 flex-1 bg-background px-[6%] pb-24 pt-[26px] outline-none min-[601px]:px-8 min-[601px]:pt-8 lg:pb-8"
         >
           {children}
         </main>

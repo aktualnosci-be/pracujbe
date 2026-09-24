@@ -1,0 +1,53 @@
+{
+  "snapshot": "esco-v1.2.1-sample",
+  "escoVersion": "v1.2.1",
+  "sample": true,
+  "locales": [
+    "pl",
+    "nl",
+    "fr",
+    "en"
+  ],
+  "files": {
+    "occupations_pl.csv": {
+      "sha256": "d8db98cb6d8dfa37569e7772b4634ac975c0f198923893c4e7dd7aec0e14a725",
+      "bytes": 973
+    },
+    "skills_pl.csv": {
+      "sha256": "92b263180a9772b81bb936b2cd7af2ada8bdb4c5c25a71023fb74bf12e7c48c2",
+      "bytes": 4692
+    },
+    "occupations_nl.csv": {
+      "sha256": "ae55b07b9450a02dd51c8b4c65e971268b4ccd1a91c27d9b50d68eade2e30a32",
+      "bytes": 1779
+    },
+    "skills_nl.csv": {
+      "sha256": "6ad857914871738a96b3594437680225ed70624c7734e6085d2a7926b9c10d7e",
+      "bytes": 4626
+    },
+    "occupations_fr.csv": {
+      "sha256": "5b41cd2c03a94dfc0e90ec9d471058e66a8366264bbe0a8a667605ca5fd261e1",
+      "bytes": 1638
+    },
+    "skills_fr.csv": {
+      "sha256": "02d8f937663d83e1cfccb30bc84f07463227bca70334f895e07b350f6868ff65",
+      "bytes": 4793
+    },
+    "occupations_en.csv": {
+      "sha256": "94729670156814bcebe65265c5f5555152513e889bba381fb2b8fac8d23adc0f",
+      "bytes": 1905
+    },
+    "skills_en.csv": {
+      "sha256": "3da36ad8627d586647f122c6232dc68b90b6cca7af2830ea5eac6718e61a8c60",
+      "bytes": 8214
+    },
+    "occupationSkillRelations_en.csv": {
+      "sha256": "e8aa794f0191f8f22bbcd64f6647b3516dafd7a76886c13e7111c88d0ec12d86",
+      "bytes": 5100
+    },
+    "occupationSkillRelations_pl.csv": {
+      "sha256": "4cf6d7a955bf181bdea6bb0588d156eee2f8eaa4f49774b92adec182c4430baa",
+      "bytes": 5638
+    }
+  }
+}

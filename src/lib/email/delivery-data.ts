@@ -153,9 +153,11 @@ export function buildDeliveryData(
   const { nonce: _nonce, ...payload } = row.payload ?? {};
   const isGuest = GUEST_TOKEN_TEMPLATES.has(row.template);
   if (isGuest && !guestToken) throw new Error('guest_token_unavailable');
-  const query = isGuest ? `?token=${encodeURIComponent(guestToken ?? '')}` : '';
+  // Fragment stays out of HTTP request targets and proxy logs. The landing page clears it
+  // before exchanging the token for a short-lived HttpOnly cookie via POST.
+  const fragment = isGuest ? `#token=${encodeURIComponent(guestToken ?? '')}` : '';
   const base = site.replace(/\/+$/, '');
-  const url = `${base}/${locale}${emailTargetPath(row.template, payload)}${query}`;
+  const url = `${base}/${locale}${emailTargetPath(row.template, payload)}${fragment}`;
   const firstName = recipientFirstName?.trim() || undefined;
   const salary = deliverySalary(payload, locale);
 
