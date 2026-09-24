@@ -7,7 +7,7 @@ import { BannerPngButton } from '@/components/employer/BannerPngButton';
 import {
   BTN_SECONDARY,
   EYEBROW,
-  H1,
+  H1_EXTENDED,
   INTRO,
   PANEL,
   PANEL_H2,
@@ -68,7 +68,7 @@ export default async function CampaignBannerPage({
   const header = (
     <header>
       <p className={EYEBROW}>{td('employerRole')}</p>
-      <h1 className={H1}>{t('pageTitle')}</h1>
+      <h1 className={H1_EXTENDED}>{t('pageTitle')}</h1>
       <p className={INTRO}>{t('intro')}</p>
     </header>
   );
