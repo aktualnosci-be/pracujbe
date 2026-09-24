@@ -70,8 +70,19 @@ describe('stabilny zrzut w eksporcie grafik (main 514e917)', () => {
     expect(log).not.toHaveBeenCalled();
   });
 
-  it('skrypty eksportu robią zrzut tylko przez captureStableScreenshot', () => {
-    for (const script of ['scripts/export-campaign-banner.mjs', 'scripts/generate-organic-story.mjs']) {
+  it('każdy skrypt z Chromium robi zrzut tylko przez captureStableScreenshot', () => {
+    const scripts = readdirSync('scripts')
+      .filter((name) => name.endsWith('.mjs'))
+      .map((name) => join('scripts', name))
+      .filter((script) => readFileSync(script, 'utf8').includes('launchChromium'));
+    expect(scripts).toEqual(
+      expect.arrayContaining([
+        'scripts/export-campaign-banner.mjs',
+        'scripts/export-job-post.mjs',
+        'scripts/generate-organic-story.mjs',
+      ]),
+    );
+    for (const script of scripts) {
       const source = readFileSync(script, 'utf8');
       expect(source, script).toContain('captureStableScreenshot(page');
       expect(source, script).not.toMatch(/page\.screenshot\(/);
