@@ -18,6 +18,8 @@ import { captureError } from '@/lib/sentry';
  * #98: retencja aplikacji bez konta (`purge_guest_application_requests`, 0095) — usuwa
  * niepotwierdzone zgłoszenia 7 dni po ostatnim linku i duplikaty 7 dni po potwierdzeniu (razem
  * z ich e-mailami) i zeruje tokeny przejęcia po wygaśnięciu 30-dniowego okna.
+ * #45: kampanie e-mail (`process_email_campaigns`, 0102) — rezerwacja „rewizja + odbiorca”
+ * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
  *
  * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
  * Wymaga service-role (RPC są service_role-only). Nie ujawnia technikaliów ani danych ofert —
@@ -67,7 +69,16 @@ async function run(request: Request): Promise<Response> {
     const searchAlerts = expiredJobs.error
       ? { data: null, error: null }
       : await admin.rpc('process_saved_search_alerts', { p_limit: 500 });
-    if (discounts.error || checkouts.error || expiredJobs.error || guestRequests.error || searchAlerts.error) {
+    // #45: rezerwacja i kolejkowanie paczki odbiorców aktywnych rewizji kampanii (0102).
+    const campaigns = await admin.rpc('process_email_campaigns', { p_limit: 500 });
+    if (
+      discounts.error ||
+      checkouts.error ||
+      expiredJobs.error ||
+      guestRequests.error ||
+      searchAlerts.error ||
+      campaigns.error
+    ) {
       const failed = discounts.error
         ? 'discounts'
         : checkouts.error
@@ -76,9 +87,16 @@ async function run(request: Request): Promise<Response> {
             ? 'jobExpiry'
             : guestRequests.error
               ? 'guestRequests'
-              : 'savedSearchAlerts';
+              : searchAlerts.error
+                ? 'savedSearchAlerts'
+                : 'emailCampaigns';
       captureError(
-        discounts.error ?? checkouts.error ?? expiredJobs.error ?? guestRequests.error ?? searchAlerts.error,
+        discounts.error ??
+          checkouts.error ??
+          expiredJobs.error ??
+          guestRequests.error ??
+          searchAlerts.error ??
+          campaigns.error,
         {
         area: 'maintenance.gc',
         task: failed,
@@ -92,6 +110,7 @@ async function run(request: Request): Promise<Response> {
       expiredJobs: typeof expiredJobs.data === 'number' ? expiredJobs.data : 0,
       purgedGuestRequests: typeof guestRequests.data === 'number' ? guestRequests.data : 0,
       savedSearchDigests: typeof searchAlerts.data === 'number' ? searchAlerts.data : 0,
+      campaignEmailsQueued: typeof campaigns.data === 'number' ? campaigns.data : 0,
     });
   } catch (e) {
     captureError(e, { area: 'maintenance.gc' });

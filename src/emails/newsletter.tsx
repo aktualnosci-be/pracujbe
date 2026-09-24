@@ -14,6 +14,7 @@ import { newsletterCopy } from "@/emails/newsletter-copy";
 import { interpolate, layoutCopy } from "@/emails/copy";
 import type { Locale } from "@/i18n/routing";
 import { env } from "@/lib/env";
+import type { EmailSenderIdentity } from "@/lib/email/sender";
 
 export interface NewsletterJob {
   /** Język treści oferty. Musi być zgodny z językiem całej wiadomości. */
@@ -30,15 +31,24 @@ export interface NewsletterJob {
 export interface NewsletterEmailProps {
   locale: Locale;
   jobs: readonly NewsletterJob[];
+  transport?: NewsletterTransport;
 }
 
 /**
- * Wynik służy wyłącznie do przeglądu/renderowania. Nie jest kontraktem transportu.
- * Issue #45 musi najpierw dodać ponowną kontrolę zgody tuż przed wysyłką,
- * one-click unsubscribe URL i nagłówki RFC 8058 oraz tożsamość/adres nadawcy.
+ * Dane transportu (#45) — przekazuje je wyłącznie worker kolejki: podpisany adres wypisania
+ * i tożsamość nadawcy z konfiguracji. Bez nich wynik jest tylko podglądem.
+ */
+export interface NewsletterTransport {
+  unsubscribeUrl: string;
+  sender: EmailSenderIdentity;
+}
+
+/**
+ * `transportReady: true` tylko z kompletem danych transportu (wypisanie + nadawca z adresem
+ * pocztowym). Worker odmawia wysyłki wyniku bez tej flagi.
  */
 export interface NewsletterRenderFoundation {
-  readonly transportReady: false;
+  readonly transportReady: boolean;
   readonly subject: string;
   readonly html: string;
   readonly text: string;
@@ -150,6 +160,7 @@ function NewsletterJobCard({
 export function NewsletterEmail({
   locale,
   jobs,
+  transport,
 }: NewsletterEmailProps): ReactElement {
   assertRenderableJobs(jobs, locale);
   const copy = newsletterCopy[locale];
@@ -157,7 +168,12 @@ export function NewsletterEmail({
   const preferencesHref = `${env.siteUrl}/${locale}/candidate/ustawienia`;
 
   return (
-    <EmailLayout locale={locale} preview={copy.preview}>
+    <EmailLayout
+      locale={locale}
+      preview={copy.preview}
+      unsubscribeUrl={transport?.unsubscribeUrl}
+      sender={transport?.sender}
+    >
       <EmailHeading>{copy.heading}</EmailHeading>
       <EmailText>{copy.intro}</EmailText>
       {jobs.map((job) => (
@@ -173,7 +189,11 @@ export function NewsletterEmail({
   );
 }
 
-function renderNewsletterText(locale: Locale, jobs: readonly NewsletterJob[]): string {
+function renderNewsletterText(
+  locale: Locale,
+  jobs: readonly NewsletterJob[],
+  transport?: NewsletterTransport,
+): string {
   const copy = newsletterCopy[locale];
   const footer = layoutCopy[locale];
   const site = `${env.siteUrl}/${locale}`;
@@ -196,8 +216,15 @@ function renderNewsletterText(locale: Locale, jobs: readonly NewsletterJob[]): s
     "",
     footer.tagline,
     footer.footerNote,
-    interpolate(footer.rights, { year: new Date().getFullYear() }),
   );
+  if (transport) {
+    lines.push(
+      `${footer.unsubscribe}: ${transport.unsubscribeUrl}`,
+      `${footer.sender}: ${transport.sender.identity}`,
+      `${footer.postalAddress}: ${transport.sender.postalAddress}`,
+    );
+  }
+  lines.push(interpolate(footer.rights, { year: new Date().getFullYear() }));
 
   return `${lines.join("\n")}\n`;
 }
@@ -205,13 +232,19 @@ function renderNewsletterText(locale: Locale, jobs: readonly NewsletterJob[]): s
 export async function renderNewsletterEmail(
   locale: Locale,
   jobs: readonly NewsletterJob[],
+  transport?: NewsletterTransport,
 ): Promise<NewsletterRenderFoundation> {
   assertRenderableJobs(jobs, locale);
-  const html = await render(<NewsletterEmail locale={locale} jobs={jobs} />);
+  const ready = Boolean(
+    transport?.unsubscribeUrl && transport.sender?.identity && transport.sender.postalAddress,
+  );
+  const html = await render(
+    <NewsletterEmail locale={locale} jobs={jobs} transport={ready ? transport : undefined} />,
+  );
   return {
-    transportReady: false,
+    transportReady: ready,
     subject: newsletterCopy[locale].subject,
     html,
-    text: renderNewsletterText(locale, jobs),
+    text: renderNewsletterText(locale, jobs, ready ? transport : undefined),
   };
 }

@@ -835,10 +835,30 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   ponownie sprawdza zgodę i wygasza wiersz (`suppressed_at`). Atomowy budżet okna
   (`take_email_send_budget`, rezerwy auth/transakcyjna; odmowa = odłożenie bez `attempts`).
   Dowód: `rls.sql` sekcja UN45 (dblink, kontrole ujemne), `email-unsubscribe.test.ts`, E2E
-  `email-unsubscribe.spec`. **Do zrobienia (#45):** wersjonowany dowód zgody marketingowej,
-  centrum preferencji dla wszystkich kategorii, `text/plain`, tożsamość i adres pocztowy nadawcy
-  w stopce marketingu, budżet w hooku e-maili Auth, rezerwacja kampania+odbiorca, decyzja o
-  trackingu na odebranym `.eml`.
+  `email-unsubscribe.spec`.
+  Etap 2 (#45, migracja `0102` — numer tymczasowy, po `0098`): niezmienny dowód zgody
+  `email_consent_events` (trigger na `notification_preferences` — każda ścieżka zapisu; źródło
+  `settings`/`unsubscribe_page`/`one_click`/`direct`, język, wersja treści `sha256:` z etykiet
+  formularza — `src/lib/email/consent-wording.ts`); ustawienia przez RPC
+  `set_notification_preferences`, `/wypisz` także „ze wszystkich” (`email_unsubscribe_all`).
+  Budżet na odbiorcę przy kolejkowaniu (`email_recipient_budget_config` `pool:`/`template:`,
+  domyślnie newsletter 1/dobę, marketing 10/dobę; `INSERT … ON CONFLICT DO UPDATE WHERE used <
+  limit`; ponad limit = ślad `suppressed_recipient_budget`; wygaszony list oddaje miejsce).
+  `enqueue_email` → `enqueue_email_outcome` (wynik kolejkowania). Kampanie: `email_campaigns`
+  (slug + rewizja, treść w każdym języku serwisu) + `email_campaign_recipients` (PK rewizja +
+  odbiorca, status reserved/queued/accepted/delivered/skipped_consent/failed/cancelled, bez treści
+  i adresu), `enqueue_campaign_batch`/`process_email_campaigns` (cron `/api/maintenance`),
+  aktywacja nowej rewizji wygasza niewysłane listy starej, stara nie wraca (`STALE_STATE`),
+  claim wygasza listy nieaktywnej rewizji. Worker: newsletter z payloadu kampanii
+  (`newsletter-delivery.ts`), `text/plain` w każdym mailu (także hook Auth), marketing tylko z
+  jawnym `EMAIL_FROM` + `EMAIL_SENDER_IDENTITY` + `EMAIL_SENDER_POSTAL_ADDRESS`
+  (`src/lib/email/sender.ts`, stopka). Hook Auth pobiera budżet puli `auth` (odmowa → 503 +
+  `Retry-After`, przed claimem inboxu; błąd bazy = fail-open). Tracking wyłączony; kontrola
+  odebranej wiadomości `scripts/check-received-eml.mjs` (`docs/RESEND_SETUP.md`). Dowód:
+  `rls.sql` sekcja CM45 (dblink, kontrole ujemne), unit `email-consent-campaigns`.
+  **Do zrobienia (właściciel):** wartości `EMAIL_SENDER_*`, wyłączenie trackingu w Resend i
+  kontrola odebranego `.eml` na produkcji; treść prawna zgody marketingowej (#40). **Otwarte:**
+  panel admina kampanii (dziś RPC service_role), rejestracja z opt-in marketingu.
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń

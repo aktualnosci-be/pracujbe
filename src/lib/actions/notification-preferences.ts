@@ -4,15 +4,17 @@ import { z } from 'zod/v3';
 
 import { createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/env';
+import { routing } from '@/i18n/routing';
+import { emailConsentWordingVersion } from '@/lib/email/consent-wording';
 import type { ErrorCode } from '@/lib/errors';
 
 /**
- * Server Action preferencji powiadomień — zapis POD SESJĄ użytkownika (RLS, nie service-role).
+ * Server Action preferencji powiadomień — zapis POD SESJĄ użytkownika (nie service-role).
  *
- * `updateNotificationPreferences` waliduje wejście schematem Zod (bool per pole) i robi UPSERT
- * do `notification_preferences` po unikalnym `profile_id = auth.uid()`. RLS
- * (`notification_preferences_insert_own` / `_update_own`) gwarantuje, że użytkownik zapisuje
- * wyłącznie własny wiersz.
+ * `updateNotificationPreferences` waliduje wejście schematem Zod (bool per pole, język strony,
+ * rola formularza) i woła RPC `set_notification_preferences` (0102), które zapisuje własny
+ * wiersz (`auth.uid()`) i dowód każdej zmiany zgody e-mail: źródło `settings`, język strony
+ * i wersję pokazanej treści (`emailConsentWordingVersion`, #45).
  *
  * TRYB DEMO (Invariant: panele działają bez env): gdy Supabase nie jest skonfigurowane,
  * walidujemy dane, ale NIE zapisujemy — zwracamy `{ ok: true, demo: true }`. Błędy mapujemy na
@@ -27,6 +29,8 @@ const preferencesSchema = z.object({
   emailMarketing: z.boolean(),
   pushEnabled: z.boolean(),
   inAppEnabled: z.boolean(),
+  locale: z.enum(routing.locales),
+  role: z.enum(['candidate', 'employer']).default('candidate'),
 });
 
 export type UpdateNotificationPreferencesResult =
@@ -50,7 +54,7 @@ function mapPgError(message: string | undefined): ErrorCode {
 /**
  * Zapisuje (UPSERT) preferencje powiadomień zalogowanego użytkownika.
  *
- * @param input surowe dane (walidowane `preferencesSchema` — 7 pól bool)
+ * @param input surowe dane (walidowane `preferencesSchema` — 7 pól bool + język i rola)
  */
 export async function updateNotificationPreferences(
   input: unknown,
@@ -71,10 +75,9 @@ export async function updateNotificationPreferences(
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    // 4) UPSERT po unikalnym profile_id (RLS: właściciel insert/update własnego wiersza).
-    const { error } = await supabase.from('notification_preferences').upsert(
-      {
-        profile_id: user.id,
+    // 4) RPC: upsert własnego wiersza + dowód zmiany zgody (0102).
+    const { error } = await supabase.rpc('set_notification_preferences', {
+      p_prefs: {
         email_applications: prefs.emailApplications,
         email_offers: prefs.emailOffers,
         email_messages: prefs.emailMessages,
@@ -83,8 +86,9 @@ export async function updateNotificationPreferences(
         push_enabled: prefs.pushEnabled,
         in_app_enabled: prefs.inAppEnabled,
       },
-      { onConflict: 'profile_id' },
-    );
+      p_locale: prefs.locale,
+      p_wording_version: emailConsentWordingVersion(prefs.locale, prefs.role),
+    });
     if (error) return { ok: false, error: mapPgError(error.message) };
     return { ok: true };
   } catch {

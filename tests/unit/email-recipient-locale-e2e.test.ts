@@ -172,7 +172,16 @@ describe("resolve_recipient_locale (SQL) — kontrakt Invariantu #1", () => {
 });
 
 describe("enqueue_email (SQL) — locale z profilu odbiorcy", () => {
-  const { body } = latestFunctionBody("enqueue_email");
+  // #45 (0102): enqueue_email deleguje do enqueue_email_outcome z tym samym odbiorcą —
+  // kontrakt locale sprawdzamy na ciele, które faktycznie wstawia wiersz.
+  const wrapper = latestFunctionBody("enqueue_email").body;
+  const delegates = /public\.enqueue_email_outcome\(\s*p_profile_id\b/i.test(wrapper);
+  const { body } = delegates ? latestFunctionBody("enqueue_email_outcome") : { body: wrapper };
+
+  it("wrapper przekazuje odbiorcę bez zmian (bez własnego locale)", () => {
+    if (!delegates) return;
+    expect(wrapper).not.toMatch(/resolve_recipient_locale|auth\.uid\(\)/i);
+  });
 
   it("wylicza locale z p_profile_id (odbiorca) i zapisuje je w wierszu", () => {
     expect(body).toMatch(

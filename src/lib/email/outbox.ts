@@ -4,6 +4,7 @@ import { Resend } from 'resend';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { renderEmail } from '@/emails/templates';
+import { renderNewsletterEmail } from '@/emails/newsletter';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
 import { guestDeliveryToken } from '@/lib/email/guest-delivery';
 import { emailPreferenceCategory, emailSendPool } from '@/lib/email/categories';
@@ -13,6 +14,13 @@ import {
   unsubscribePageUrl,
   unsubscribeSecretFromEnv,
 } from '@/lib/email/unsubscribe-token';
+import { newsletterJobsFromPayload } from '@/lib/email/newsletter-delivery';
+import {
+  emailFromEnv,
+  marketingSenderFromEnv,
+  senderIdentityFromEnv,
+  type EmailSenderIdentity,
+} from '@/lib/email/sender';
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
 import { captureError } from '@/lib/sentry';
@@ -38,6 +46,13 @@ import { isProductionMode } from '@/lib/env';
  * dostaje link wypisania w stopce oraz nagłówki `List-Unsubscribe` + `List-Unsubscribe-Post`
  * (RFC 8058). Przed wysyłką worker pobiera atomowy budżet puli (`take_email_send_budget`);
  * odmowa odkłada wiersz do następnego okna BEZ zwiększania `attempts` (to nie błąd dostawcy).
+ *
+ * #45, etap 2: każdy mail ma wersję `text/plain` (multipart/alternative). Mail kategorii
+ * `marketing` (newsletter z rewizji kampanii, 0102) wychodzi tylko z jawnym `EMAIL_FROM`,
+ * tożsamością i adresem pocztowym nadawcy (`EMAIL_SENDER_*`) w stopce oraz działającym
+ * wypisaniem — brak którejkolwiek części = błąd wiersza (ponowienie, alarm), nie wysyłka.
+ * Tracking otwarć/kliknięć jest wyłączony: nie dodajemy pikseli ani przekierowań, a
+ * odebraną wiadomość sprawdza `scripts/check-received-eml.mjs` (docs/RESEND_SETUP.md).
  */
 
 const MAX_ATTEMPTS = 5;
@@ -48,8 +63,51 @@ const renderAny = renderEmail as (
   type: EmailType,
   locale: Locale,
   data: Record<string, unknown>,
-  options?: { unsubscribeUrl?: string },
-) => Promise<{ subject: string; html: string }>;
+  options?: { unsubscribeUrl?: string; sender?: EmailSenderIdentity },
+) => Promise<{ subject: string; html: string; text: string }>;
+
+export interface RenderedDelivery {
+  from: string;
+  subject: string;
+  html: string;
+  text: string;
+}
+
+/**
+ * Treść i nadawca wiersza kolejki (bez I/O dostawcy). Marketing bez kompletnej tożsamości
+ * nadawcy albo bez wypisania rzuca błąd — wiersz wraca do ponowienia, nic nie wychodzi.
+ */
+export async function renderDelivery(
+  row: { template: string; payload: Record<string, unknown> | null },
+  locale: Locale,
+  data: Record<string, unknown>,
+  unsubscribeUrl: string | undefined,
+  env: Record<string, string | undefined> = process.env,
+): Promise<RenderedDelivery> {
+  const isMarketing = emailPreferenceCategory(row.template) === 'marketing';
+  if (isMarketing) {
+    const marketing = marketingSenderFromEnv(env);
+    if (!marketing) throw new Error('marketing email without configured sender identity');
+    if (!unsubscribeUrl) throw new Error('marketing email without unsubscribe link');
+    const sender = { identity: marketing.identity, postalAddress: marketing.postalAddress };
+    if (row.template !== 'newsletter') {
+      const rendered = await renderAny(row.template as EmailType, locale, data, { unsubscribeUrl, sender });
+      return { from: marketing.from, ...rendered };
+    }
+    const newsletter = await renderNewsletterEmail(
+      locale,
+      newsletterJobsFromPayload(row.payload, locale),
+      { unsubscribeUrl, sender },
+    );
+    if (!newsletter.transportReady) throw new Error('newsletter not transport ready');
+    return { from: marketing.from, subject: newsletter.subject, html: newsletter.html, text: newsletter.text };
+  }
+  const rendered = await renderAny(row.template as EmailType, locale, data, {
+    unsubscribeUrl,
+    sender: senderIdentityFromEnv(env) ?? undefined,
+  });
+  return { from: emailFromEnv(env), ...rendered };
+}
 
 /** Linki wypisania dla wiersza; `null` = mail bez kategorii preferencji albo bez sekretu. */
 export function unsubscribeLinksFor(
@@ -98,7 +156,6 @@ export interface ProcessResult {
 
 export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'Pracuj.be <no-reply@pracuj.be>';
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
   if (!apiKey) {
@@ -183,9 +240,12 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         // Marketing nigdy nie wychodzi bez działającego wypisania (#45).
         throw new Error('marketing email without unsubscribe link');
       }
-      const { subject, html } = await renderAny(row.template as EmailType, locale, data, {
-        unsubscribeUrl: unsubscribe?.pageUrl,
-      });
+      const { from, subject, html, text } = await renderDelivery(
+        row,
+        locale,
+        data,
+        unsubscribe?.pageUrl,
+      );
 
       // #45: atomowy budżet puli tuż przed wysyłką (równoległe workery nie przekroczą limitu).
       const { data: budget, error: budgetErr } = await admin.rpc('take_email_send_budget', {
@@ -211,6 +271,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
           to: row.to_email,
           subject,
           html,
+          text,
           ...(unsubscribe ? { headers: unsubscribe.headers } : {}),
         },
         { idempotencyKey: row.id },

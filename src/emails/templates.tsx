@@ -29,6 +29,7 @@ import {
 import type { EmailCopy, EmailType } from '@/emails/copy';
 import { emailCopy, greetings, interpolate, jobOfferPassportCopy, layoutCopy } from '@/emails/copy';
 import { applicationStatusLabel } from '@/emails/status-labels';
+import type { EmailSenderIdentity } from '@/lib/email/sender';
 
 /**
  * Dane wejściowe każdego typu maila. Nazwy pól odpowiadają tokenom `{...}` w `copy.ts`.
@@ -211,6 +212,14 @@ function formatEmailDate(value: unknown, locale: Locale): string | undefined {
   }).format(ts);
 }
 
+function asEmailSender(value: unknown): EmailSenderIdentity | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { identity, postalAddress } = value as Record<string, unknown>;
+  return typeof identity === 'string' && typeof postalAddress === 'string'
+    ? { identity, postalAddress }
+    : undefined;
+}
+
 /**
  * Wspólny „szkielet” treści maila: nagłówek, powitanie, akapity, opcjonalne wyróżnienie
  * i cytat, przycisk CTA (z surowym linkiem fallback) oraz opcjonalny tekst końcowy.
@@ -252,9 +261,17 @@ function EmailShell(props: {
   // #45: adres wypisania przekazuje renderEmail (opcja workera), nie payload kolejki.
   const unsubscribeUrl =
     typeof props.vars.unsubscribeUrl === 'string' ? props.vars.unsubscribeUrl : undefined;
+  // #45: tożsamość nadawcy też z opcji workera (po danych), nigdy z payloadu kolejki.
+  const sender = asEmailSender(props.vars.emailSender);
 
   return (
-    <EmailLayout locale={locale} preview={preview} unsubscribeUrl={unsubscribeUrl} footerNote={copy.footerNote}>
+    <EmailLayout
+      locale={locale}
+      preview={preview}
+      unsubscribeUrl={unsubscribeUrl}
+      footerNote={copy.footerNote}
+      sender={sender}
+    >
       <EmailHeading>{heading}</EmailHeading>
       <EmailText>{greeting}</EmailText>
       {paragraphs.map((paragraph, index) => (
@@ -771,8 +788,8 @@ export async function renderEmail<T extends EmailType>(
   type: T,
   locale: Locale,
   data: EmailDataMap[T],
-  options: { unsubscribeUrl?: string } = {},
-): Promise<{ subject: string; html: string }> {
+  options: { unsubscribeUrl?: string; sender?: EmailSenderIdentity } = {},
+): Promise<{ subject: string; html: string; text: string }> {
   // Rejestr jest w pełni typowany; tu kasujemy generyk wyłącznie na potrzeby createElement
   // (TS nie potrafi skorelować EmailDataMap[T] z sygnaturą createElement).
   const Component = templates[type] as unknown as FunctionComponent<Record<string, unknown>>;
@@ -782,9 +799,12 @@ export async function renderEmail<T extends EmailType>(
     ...data,
     locale,
     unsubscribeUrl: options.unsubscribeUrl,
+    emailSender: options.sender,
   });
   const html = await render(element);
+  // #45: wersja text/plain z tego samego drzewa (multipart/alternative u dostawcy).
+  const text = await render(element, { plainText: true });
   const vars = prepareVars(type, locale, data as Record<string, unknown>);
   const subject = interpolate(resolveCopy(type, locale, vars).subject, vars);
-  return { subject, html };
+  return { subject, html, text };
 }
