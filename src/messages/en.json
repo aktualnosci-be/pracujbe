@@ -1623,5 +1623,29 @@
     "blocking": "Blocking…",
     "blockedSuccess": "{company} has been blocked.",
     "manage": "Manage blocked companies"
+  },
+  "emailUnsubscribe": {
+    "metaTitle": "Unsubscribe from emails",
+    "title": "Unsubscribe from emails",
+    "confirmText": "Confirm that you no longer want to receive these emails: {category}.",
+    "confirmButton": "Unsubscribe",
+    "pending": "Saving…",
+    "doneTitle": "Unsubscribed",
+    "doneText": "We will no longer send you these emails: {category}. Other messages and notifications on the site stay the same.",
+    "settingsHint": "You can change all notification settings after logging in.",
+    "loginLink": "Log in",
+    "invalidTitle": "The link is not valid",
+    "invalidText": "This unsubscribe link is incomplete or has been changed. Use the link from the latest email or change your settings after logging in.",
+    "expiredTitle": "The link has expired",
+    "expiredText": "This unsubscribe link is no longer valid. Use the link from the latest email or change your settings after logging in.",
+    "unavailableText": "Unsubscribing is temporarily unavailable. Try again later or change your settings after logging in.",
+    "errorText": "The change was not saved. Please try again.",
+    "category": {
+      "applications": "about applications and their status",
+      "offers": "about job proposals",
+      "messages": "about new messages",
+      "job_matches": "with matching jobs",
+      "marketing": "with the newsletter and marketing information"
+    }
   }
 }
