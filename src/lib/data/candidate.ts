@@ -318,6 +318,20 @@ const fetchAppliedJobsMap = cache(async (
 });
 
 /**
+ * Mapa job_id → dane oferty dla WŁASNYCH propozycji kandydata (RPC `get_offered_jobs_display`,
+ * 0090). Jak `fetchAppliedJobsMap`: niezależnie od statusu oferty, top-N listy i blokad firm (#97)
+ * — historia propozycji zachowuje tytuł i firmę. `cache()` per-request.
+ */
+const fetchOfferedJobsMap = cache(async (
+  supabase: SupabaseClient,
+  locale: Locale,
+): Promise<Map<string, PublicJobLite>> => {
+  const { data, error } = await supabase.rpc('get_offered_jobs_display', { p_locale: locale });
+  if (error) throw error;
+  return toAppliedJobsMap(data);
+});
+
+/**
  * Metadane ofert tylko dla `job_id` jednej strony historii zgłoszeń (#184). Filtr `in`
  * zawęża wynik RPC po stronie bazy, więc „Pokaż więcej” nie przesyła danych całej historii.
  * RPC zwraca wyłącznie oferty własnych aplikacji (auth.uid()), dlatego cudze lub
@@ -949,8 +963,8 @@ export async function getSavedJobs(locale: string = routing.defaultLocale): Prom
  * (`created_at` + UUID), aby cała historia była osiągalna bez sztucznego limitu (#245).
  * Odczyt pod sesją (RLS `offers_select`: kandydat widzi wyłącznie własne propozycje). Tytuł/firmę
  * rozwiązujemy z RPC `get_applied_jobs_display` (własne aplikacje, niezależnie od statusu oferty),
- * a jako uzupełnienie z `get_public_jobs` (propozycja może dotyczyć oferty, do której kandydat nie
- * aplikował) — kandydat nie czyta tabel bazowych wprost (P1-01). Błąd odczytu jest rzucany dalej,
+ * a jako uzupełnienie z `get_offered_jobs_display` (oferty własnych propozycji, także bez aplikacji
+ * i od firm zablokowanych, #97) — kandydat nie czyta tabel bazowych wprost (P1-01). Błąd odczytu jest rzucany dalej,
  * nigdy nie udaje pustej strony.
  */
 export async function getMyOffersPage(
@@ -996,15 +1010,15 @@ export async function getMyOffersPage(
       ? { createdAt: asStr(last['created_at']), id: asStr(last['id']) }
       : null;
 
-    const [appliedMap, publicMap] = await Promise.all([
+    const [appliedMap, offeredMap] = await Promise.all([
       fetchAppliedJobsMap(supabase, resolvedLocale),
-      fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT),
+      fetchOfferedJobsMap(supabase, resolvedLocale),
     ]);
 
     const items = visibleRows.map((row): MyOffer => {
       const r = asRecord(row);
       const jobId = asStr(r['job_id']);
-      const job = appliedMap.get(jobId) ?? publicMap.get(jobId);
+      const job = appliedMap.get(jobId) ?? offeredMap.get(jobId);
       const sentAt = asStr(r['sent_at']);
       return {
         id: asStr(r['id']),
@@ -1082,11 +1096,11 @@ export async function getLatestActiveOffer(
 
     const row = asRecord(data);
     const jobId = asStr(row['job_id']);
-    const [appliedMap, publicMap] = await Promise.all([
+    const [appliedMap, offeredMap] = await Promise.all([
       fetchAppliedJobsMap(supabase, resolvedLocale),
-      fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT),
+      fetchOfferedJobsMap(supabase, resolvedLocale),
     ]);
-    const job = appliedMap.get(jobId) ?? publicMap.get(jobId);
+    const job = appliedMap.get(jobId) ?? offeredMap.get(jobId);
 
     return {
       id: asStr(row['id']),
