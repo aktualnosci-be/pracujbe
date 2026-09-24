@@ -25,13 +25,24 @@ import {
  */
 export type ApplyResult =
   | { ok: true; id: string }
-  | { ok: false; error: ErrorCode | 'UNAUTHENTICATED'; field?: 'phone' };
+  | {
+      ok: false;
+      error: ErrorCode | 'UNAUTHENTICATED';
+      field?: 'phone';
+      /** #101: pytanie wymagane bez odpowiedzi (walidacja w bazie) — komunikat przy pytaniu. */
+      questionId?: string;
+    };
+
+const SCREENING_REQUIRED_RE =
+  /SCREENING_ANSWER_REQUIRED: ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
 export type TransitionResult = { ok: true } | { ok: false; error: ErrorCode };
 
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
+  // apply_to_job (0093): brak odpowiedzi na pytanie wymagane.
+  if (m.includes('SCREENING_ANSWER_REQUIRED')) return 'SCREENING_ANSWER_REQUIRED';
   // apply_to_job (0071): nowa próba na ofertę, na którą kandydat już aplikował (inny klucz).
   if (m.includes('APPLICATION_ALREADY_EXISTS')) return 'APPLICATION_ALREADY_EXISTS';
   if (m.includes('JOB_NOT_ACTIVE')) return 'JOB_NOT_ACTIVE';
@@ -80,6 +91,8 @@ export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> 
     p_phone: v.phone ? v.phone : null,
     p_availability: v.availability ?? null,
     p_message: v.message ?? null,
+    // #101: odpowiedzi zapisywane w tej samej transakcji co aplikacja (walidacja w bazie).
+    p_answers: v.answers && Object.keys(v.answers).length > 0 ? v.answers : null,
   });
 
   if (error) {
@@ -87,7 +100,9 @@ export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> 
     if ((error.message ?? '').startsWith('UNAUTHENTICATED')) {
       return { ok: false, error: 'UNAUTHENTICATED' };
     }
-    return { ok: false, error: mapPgError(error.message) };
+    const code = mapPgError(error.message);
+    const questionId = SCREENING_REQUIRED_RE.exec(error.message ?? '')?.[1];
+    return questionId ? { ok: false, error: code, questionId } : { ok: false, error: code };
   }
   return { ok: true, id: String(data) };
 }

@@ -559,6 +559,8 @@ export default async function JobDetailPage({ params }: PageProps) {
                 jobId={job.id}
                 companyName={job.companyName}
                 demo={job.isDemo}
+                screeningQuestions={job.screeningQuestions}
+                contentLocale={job.contentLocale}
                 triggerLabel={applyLabel}
                 triggerHint={applyHint}
                 triggerClassName="w-full"
@@ -663,6 +665,8 @@ export default async function JobDetailPage({ params }: PageProps) {
           jobId={job.id}
           companyName={job.companyName}
           demo={job.isDemo}
+          screeningQuestions={job.screeningQuestions}
+          contentLocale={job.contentLocale}
           triggerLabel={applyLabel}
           triggerSize="default"
           triggerClassName="min-w-0 flex-1"

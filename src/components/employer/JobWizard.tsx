@@ -55,6 +55,13 @@ import {
   updateJobDraft,
   updatePublishedJob,
 } from '@/lib/actions/jobs';
+import { isLocale, routing, type Locale } from '@/i18n/routing';
+import { isScreeningQuestionType, type ScreeningQuestionDraft } from '@/lib/screening/questions';
+import {
+  ScreeningQuestionsEditor,
+  screeningErrorFieldId,
+  screeningErrorKey,
+} from '@/components/employer/ScreeningQuestionsEditor';
 
 /**
  * JobWizard — kreator oferty pracy (Etap 5), 9 kroków z REALNYM zapisem wersji roboczej.
@@ -123,6 +130,8 @@ interface FormValues {
   requiredCertificates: string[];
   requiresDrivingLicense: boolean;
   noLanguageRequired: boolean;
+  // #101: pytania screeningowe (zapis razem z krokiem 7, tylko w szkicu)
+  screeningQuestions: ScreeningQuestionDraft[];
   // krok 8 — warunki i benefity
   conditions: string[];
   benefits: string[];
@@ -164,6 +173,7 @@ const DEFAULT_VALUES: FormValues = {
   requiredCertificates: [],
   requiresDrivingLicense: false,
   noLanguageRequired: false,
+  screeningQuestions: [],
   conditions: [],
   benefits: [],
   accommodation: false,
@@ -181,7 +191,7 @@ const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
   4: ['salaryMin', 'salaryMax', 'currency', 'salaryPeriod'],
   5: ['description', 'responsibilities'],
   6: ['requirementsMandatory', 'mandatorySkills', 'minExperienceYears'],
-  7: ['requirementsOptional', 'skills', 'languages', 'requiredCertificates'],
+  7: ['requirementsOptional', 'skills', 'languages', 'requiredCertificates', 'screeningQuestions'],
   8: ['conditions', 'benefits'],
   9: ['companyDescription', 'contactEmail', 'agreePublish'],
 };
@@ -234,7 +244,7 @@ function toOptionalText(value: string): string | undefined {
 }
 
 /** Buduje obiekt danych kroku zgodny z odpowiednim `stepNSchema`. */
-function buildStepData(step: WizardStep, v: FormValues): unknown {
+function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): unknown {
   switch (step) {
     case 1:
       return { title: v.title, category: v.category, occupation: v.occupation };
@@ -271,6 +281,8 @@ function buildStepData(step: WizardStep, v: FormValues): unknown {
         requiredCertificates: v.requiredCertificates,
         requiresDrivingLicense: v.requiresDrivingLicense,
         noLanguageRequired: v.noLanguageRequired,
+        screeningQuestions: v.screeningQuestions,
+        screeningLocale: contentLocale,
       };
     case 8:
       return {
@@ -305,13 +317,14 @@ function toErrorKey(field: string, message: string): string {
 export interface JobWizardInitialValues
   extends Omit<
     Partial<FormValues>,
-    'category' | 'contractType' | 'currency' | 'salaryPeriod' | 'languages'
+    'category' | 'contractType' | 'currency' | 'salaryPeriod' | 'languages' | 'screeningQuestions'
   > {
   category?: string;
   contractType?: string;
   currency?: string;
   salaryPeriod?: string;
   languages?: { language: string; level: string }[];
+  screeningQuestions?: { type: string; required: boolean; prompt: ScreeningQuestionDraft['prompt']; options: ScreeningQuestionDraft['options'] }[];
 }
 
 export interface JobWizardProps {
@@ -326,6 +339,11 @@ export interface JobWizardProps {
    * = wczytana wersja (ochrona przed cichym nadpisaniem równoległej poprawki).
    */
   published?: { status: 'active' | 'paused'; slug: string; updatedAt: string };
+  /**
+   * Język treści oferty (`jobs.default_locale`) — tekst pytań screeningowych w tym języku jest
+   * wymagany (#101). Nowa oferta: język strony (tak tworzy ją `createJobDraft`).
+   */
+  contentLocale?: string;
   /**
    * #465: krok „Zaimportuj z ogłoszenia" (panel importu AI) — renderowany nad krokami, tylko
    * przy nowej ofercie na kroku 1. Brak = kreator bez zmian (flaga wyłączona / brak klucza).
@@ -374,7 +392,7 @@ const IMPORT_REVIEW_FIELDS: Record<string, { step: WizardStep; label: string }> 
 /** Zawężenie surowych wartości z DB do unii formularza (nieznane wartości → domyślne/puste). */
 function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> {
   if (!raw) return {};
-  const { category, contractType, currency, salaryPeriod, languages, ...rest } = raw;
+  const { category, contractType, currency, salaryPeriod, languages, screeningQuestions, ...rest } = raw;
   const narrowed: Partial<FormValues> = { ...rest };
   if (category && (CATEGORY_KEYS as readonly string[]).includes(category)) {
     narrowed.category = category as CategoryKey;
@@ -396,6 +414,11 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
           : 'basic') as LanguageLevel,
       }));
   }
+  if (screeningQuestions) {
+    narrowed.screeningQuestions = screeningQuestions
+      .filter((q) => isScreeningQuestionType(q.type))
+      .map((q) => ({ ...q, type: q.type as ScreeningQuestionDraft['type'] }));
+  }
   return narrowed;
 }
 
@@ -403,6 +426,7 @@ export function JobWizard({
   initialJobId,
   initialValues,
   published,
+  contentLocale: contentLocaleProp,
   importSlot,
   importReview,
 }: JobWizardProps = {}): React.JSX.Element {
@@ -414,6 +438,13 @@ export function JobWizard({
   const tContract = useTranslations('contractTypes');
   const locale = useLocale();
   const router = useRouter();
+  const contentLocale: Locale = isLocale(contentLocaleProp)
+    ? contentLocaleProp
+    : isLocale(locale)
+      ? locale
+      : routing.defaultLocale;
+  // #101: błędy pytań screeningowych (ścieżka → klucz i18n) — pola zagnieżdżone poza RHF.
+  const [screeningErrors, setScreeningErrors] = React.useState<Record<string, string>>({});
 
   const {
     register,
@@ -452,6 +483,7 @@ export function JobWizard({
   // Krok z błędami wykryty przy „Zapisz zmiany" (komunikat nad formularzem).
   const [editInvalidStep, setEditInvalidStep] = React.useState<WizardStep | null>(null);
   const pendingErrorsRef = React.useRef<Set<string> | null>(null);
+  const firstScreeningErrorRef = React.useRef<string | null>(null);
   // Tryb edycji: po zapisie każda kolejna zmiana pola znów jest niezapisana — komunikat
   // „Zmiany zapisane" nie może wisieć nad nową, niewysłaną treścią.
   React.useEffect(() => {
@@ -519,6 +551,19 @@ export function JobWizard({
   function scrollToFirstError(current: WizardStep, erroredFields: Set<string>): void {
     const first = STEP_FIELDS[current].find((f) => erroredFields.has(f));
     if (!first) return;
+    if (first === 'screeningQuestions' && firstScreeningErrorRef.current !== null) {
+      // Pole pytania może być w zwiniętych tłumaczeniach — fokus po ich otwarciu (następna ramka).
+      const id = screeningErrorFieldId(firstScreeningErrorRef.current, contentLocale);
+      window.requestAnimationFrame(() => {
+        const target = document.getElementById(id);
+        const el = target?.matches('input, button, [role="combobox"]')
+          ? target
+          : target?.querySelector<HTMLElement>('input, button, [role="combobox"]');
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el?.focus();
+      });
+      return;
+    }
     const container = document.getElementById(domId(first));
     const el = container?.matches('input, textarea, button, [role="combobox"], [role="checkbox"]')
       ? container
@@ -545,13 +590,26 @@ export function JobWizard({
     intent: 'draft' | 'publish',
   ): { ok: true; data: unknown } | { ok: false; erroredFields: Set<string> } {
     clearErrors(STEP_FIELDS[current]);
-    const data = buildStepData(current, getValues());
+    if (current === 7) {
+      setScreeningErrors({});
+      firstScreeningErrorRef.current = null;
+    }
+    const data = buildStepData(current, getValues(), contentLocale);
     const schema = current === 9 && intent === 'draft' ? step9DraftSchema : SCHEMAS[current];
     const result = schema.safeParse(data);
 
     if (!result.success) {
       const erroredFields = new Set<string>();
+      const nextScreening: Record<string, string> = {};
       for (const issue of result.error.issues) {
+        if (issue.path[0] === 'screeningQuestions') {
+          // Każdy błąd pytania przy własnym polu; pierwszy (kolejność formularza) dostaje fokus.
+          const key = screeningErrorKey(issue.path.slice(1));
+          if (!(key in nextScreening)) {
+            nextScreening[key] = issue.message.startsWith('job.error.') ? issue.message : 'job.error.invalid';
+          }
+          firstScreeningErrorRef.current ??= key;
+        }
         const field = String(issue.path[0] ?? '');
         // Zod zgłasza wszystkie niespełnione reguły pola (np. „wymagane" i „za krótkie" dla ''),
         // a pierwsza jest najtrafniejsza — kolejne nie mogą jej nadpisać (#367).
@@ -564,6 +622,7 @@ export function JobWizard({
           });
         }
       }
+      if (Object.keys(nextScreening).length > 0) setScreeningErrors(nextScreening);
       return { ok: false, erroredFields };
     }
     return { ok: true, data };
@@ -1298,6 +1357,17 @@ export function JobWizard({
                   onChange={(c) => setValue('noLanguageRequired', c, { shouldDirty: true })}
                 />
               </div>
+
+              <ScreeningQuestionsEditor
+                value={values.screeningQuestions}
+                onChange={(next) => {
+                  setValue('screeningQuestions', next, { shouldDirty: true });
+                  if (Object.keys(screeningErrors).length > 0) setScreeningErrors({});
+                }}
+                contentLocale={contentLocale}
+                readOnly={isEdit}
+                errors={screeningErrors}
+              />
             </div>
           ) : null}
 

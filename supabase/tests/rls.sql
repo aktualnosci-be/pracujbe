@@ -4882,5 +4882,288 @@ select pg_temp.assert(
   exists (select 1 from public.saved_search_alerts
             where saved_search_id = :'ss10m' and job_id = 'e9300000-0000-0000-0000-0000000000e2'),
   'SS100-10d kontrola ujemna: bez jednostki stawka godzinowa nie jest porównywana (50/godz. przechodzi)');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- SQ101. Pytania screeningowe (0093, #101): zapis w szkicu (recruiter+, atomowo z krokiem),
+--        odpowiedzi walidowane w bazie razem z aplikacją, niezmienny snapshot, RLS odczytu.
+-- ============================================================================
+\set SQJOB  'f1010000-0000-0000-0000-0000000000a1'
+\set SQJOB2 'f1010000-0000-0000-0000-0000000000a2'
+\set SQMEM  'f1010000-0000-0000-0000-0000000000c1'
+\set SQCAND 'f1010000-0000-0000-0000-0000000000c2'
+\set SQCAND2 'f1010000-0000-0000-0000-0000000000c3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SQMEM','sqmem@test.be','Sq Mem','{"role":"employer","first_name":"Sq","last_name":"Mem","locale":"pl"}'),
+  (:'SQCAND','sqcand@test.be','Sq Cand','{"role":"candidate","first_name":"Sq","last_name":"Cand","locale":"fr"}'),
+  (:'SQCAND2','sqcand2@test.be','Sq Cand2','{"role":"candidate","first_name":"Sq","last_name":"Cand2","locale":"nl"}');
+insert into public.company_members(company_id, profile_id, role, is_active) values (:'COMPA', :'SQMEM', 'member', true);
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'SQJOB', :'COMPA', :'EMPA', 'draft-sq101', 'Kierowca C+E', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
+  (:'SQJOB2', :'COMPA', :'EMPA', 'draft-sq101-2', 'Magazynier', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+
+-- SQ101-1: recruiter+ zapisuje pytania krokiem kreatora (razem z inną relacją kroku).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'SQJOB'::uuid, $j${
+  "certificates": ["VCA"],
+  "screening_questions": [
+    {"type": "yes_no", "required": true, "prompt": {"pl": "  Masz prawo jazdy C+E? ", "fr": "Permis C+E ?", "en": ""}},
+    {"type": "single_choice", "required": true, "prompt": {"pl": "Jak dojedziesz?"},
+     "options": [{"label": {"pl": "Własny samochód", "nl": "Eigen auto"}}, {"label": {"pl": "Komunikacja"}}]},
+    {"type": "date", "required": false, "prompt": {"pl": "Od kiedy możesz zacząć?"}},
+    {"type": "short_text", "prompt": {"pl": "Doświadczenie z tachografem?"}}
+  ]
+}$j$::jsonb);
+select count(*) = 4 as ok from public.job_screening_questions where job_id = :'SQJOB' \gset sq1_
+select pg_temp.assert(:'sq1_ok'::boolean, 'SQ101-1 członek recruiter+ czyta 4 zapisane pytania');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select prompt = '{"pl": "Masz prawo jazdy C+E?", "fr": "Permis C+E ?"}'::jsonb and required and type = 'yes_no'
+     from public.job_screening_questions where job_id = :'SQJOB' and position = 0)
+  and (select options = '[{"id": "o1", "label": {"pl": "Własny samochód", "nl": "Eigen auto"}},
+                          {"id": "o2", "label": {"pl": "Komunikacja"}}]'::jsonb
+         from public.job_screening_questions where job_id = :'SQJOB' and position = 1)
+  and (select not required from public.job_screening_questions where job_id = :'SQJOB' and position = 3)
+  and (select array_agg(certificate_label) from public.job_certificates where job_id = :'SQJOB') = array['VCA'],
+  'SQ101-1b treść przycięta, pusty język pominięty, id opcji nadane przez bazę, krok zapisany w całości');
+
+-- SQ101-2 (kontrola ujemna): member bez recruiter+ i inna firma nie zapisują pytań.
+set role authenticated; set app.current_uid = :'SQMEM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB', '[]'),
+  'PERMISSION_DENIED', 'SQ101-2 member nie ustala pytań');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'SQJOB', '{"screening_questions": []}'),
+  'PERMISSION_DENIED', 'SQ101-2b member nie zapisuje pytań krokiem kreatora');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB', '[]'),
+  'PERMISSION_DENIED', 'SQ101-2c inna firma nie ustala pytań');
+select count(*) = 0 as ok from public.job_screening_questions where job_id = :'SQJOB' \gset sq2_
+select pg_temp.assert(:'sq2_ok'::boolean, 'SQ101-2d inna firma nie czyta pytań szkicu');
+reset role; reset app.current_uid;
+
+-- SQ101-3 (kontrola ujemna): walidacja w bazie — limity, typy, język oferty; błąd cofa cały krok.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    (select jsonb_agg(jsonb_build_object('type', 'yes_no', 'prompt', jsonb_build_object('pl', 'P' || g)))
+       from generate_series(1, 11) g)),
+  'VALIDATION_FAILED', 'SQ101-3 więcej niż 10 pytań odrzucone');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    '[{"type": "single_choice", "prompt": {"pl": "X"}, "options": [{"label": {"pl": "Jedna"}}]}]'),
+  'VALIDATION_FAILED', 'SQ101-3b wybór z jedną opcją odrzucony');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    '[{"type": "yes_no", "prompt": {"fr": "Seulement FR"}}]'),
+  'VALIDATION_FAILED', 'SQ101-3c brak treści w języku oferty odrzucony');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    '[{"type": "yes_no", "prompt": {"pl": "X", "xx": "Y"}}]'),
+  'VALIDATION_FAILED', 'SQ101-3d nieobsługiwany język odrzucony');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    jsonb_build_array(jsonb_build_object('type', 'short_text', 'prompt', jsonb_build_object('pl', repeat('x', 301))))),
+  'VALIDATION_FAILED', 'SQ101-3e za długa treść odrzucona (bez cichego obcinania)');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    '[{"type": "yes_no", "prompt": {"pl": "X"}, "options": [{"label": {"pl": "A"}}]}]'),
+  'VALIDATION_FAILED', 'SQ101-3f opcje przy pytaniu tak/nie odrzucone');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB',
+    '[{"type": "number", "prompt": {"pl": "X"}}]'),
+  'VALIDATION_FAILED', 'SQ101-3g nieznany typ odrzucony');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'SQJOB',
+    '{"certificates": ["Inny"], "screening_questions": [{"type": "yes_no", "prompt": {}}]}'),
+  'VALIDATION_FAILED', 'SQ101-3h błędne pytanie odrzuca cały krok');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.job_screening_questions where job_id = :'SQJOB') = 4
+  and (select array_agg(certificate_label) from public.job_certificates where job_id = :'SQJOB') = array['VCA'],
+  'SQ101-3i odrzucone zapisy nie zmieniły pytań ani relacji kroku');
+
+-- SQ101-4 (kontrola ujemna): bezpośredni DML na pytaniach odebrany klientom.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('insert into public.job_screening_questions(job_id, position, type, prompt) values (%L, 5, %L, %L)',
+         :'SQJOB', 'yes_no', '{"pl": "Obejście"}'),
+  'permission denied', 'SQ101-4 bezpośredni INSERT pytań odrzucony');
+select pg_temp.expect_error(
+  format('update public.job_screening_questions set required = false where job_id = %L', :'SQJOB'),
+  'permission denied', 'SQ101-4b bezpośredni UPDATE pytań odrzucony');
+select pg_temp.expect_error(
+  format('delete from public.job_screening_questions where job_id = %L', :'SQJOB'),
+  'permission denied', 'SQ101-4c bezpośredni DELETE pytań odrzucony');
+reset role; reset app.current_uid;
+
+-- SQ101-5: szkic nie jest publiczny — anon nie widzi jego pytań; tabela bez dostępu dla anon.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select count(*) = 0 as ok from public.get_public_job_screening_questions(:'SQJOB') \gset sq5_
+select pg_temp.assert(:'sq5_ok'::boolean, 'SQ101-5 pytania szkicu niepubliczne');
+select pg_temp.expect_error('select count(*) from public.job_screening_questions',
+  'permission denied', 'SQ101-5b anon bez dostępu do tabeli pytań');
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB', '[]'),
+  'permission denied', 'SQ101-5c anon nie woła set_job_screening_questions');
+reset role;
+
+-- Publikacja (superuser — kompletność publish_job testują sekcje P/Y).
+update public.jobs set status = 'active', published_at = now(), slug = 'sq101-kierowca' where id = :'SQJOB';
+select id as sq_yes from public.job_screening_questions where job_id = :'SQJOB' and position = 0 \gset
+select id as sq_choice from public.job_screening_questions where job_id = :'SQJOB' and position = 1 \gset
+select id as sq_date from public.job_screening_questions where job_id = :'SQJOB' and position = 2 \gset
+select id as sq_text from public.job_screening_questions where job_id = :'SQJOB' and position = 3 \gset
+
+-- SQ101-6 (kontrola ujemna): po publikacji pytań nie zmienia żadna ścieżka.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_job_screening_questions(%L::uuid, %L::jsonb)', :'SQJOB', '[]'),
+  'JOB_NOT_DRAFT', 'SQ101-6 opublikowana oferta: pytań nie zmienia RPC');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'SQJOB', '{"screening_questions": []}'),
+  'JOB_NOT_DRAFT', 'SQ101-6b opublikowana oferta: pytań nie zmienia krok kreatora');
+reset role; reset app.current_uid;
+select pg_temp.expect_error(
+  format('update public.job_screening_questions set required = false where id = %L', :'sq_yes'),
+  'JOB_NOT_DRAFT', 'SQ101-6c strażnik blokuje zmianę pytań opublikowanej oferty także poza RPC');
+select pg_temp.expect_error(
+  format('insert into public.job_screening_questions(job_id, position, type, prompt) values (%L, 7, %L, %L)',
+         :'SQJOB', 'yes_no', '{"pl": "Nowe"}'),
+  'JOB_NOT_DRAFT', 'SQ101-6d strażnik blokuje dodanie pytania do opublikowanej oferty');
+
+-- SQ101-7: oferta publiczna — gość widzi pytania w kolejności.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select (array_agg(type order by position) = array['yes_no', 'single_choice', 'date', 'short_text']) as ok
+  from public.get_public_job_screening_questions(:'SQJOB') \gset sq7_
+select pg_temp.assert(:'sq7_ok'::boolean, 'SQ101-7 pytania publicznej oferty w kolejności');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L)', :'SQJOB', 'sq-anon'),
+  'permission denied', 'SQ101-7b anon nie aplikuje');
+reset role;
+
+-- SQ101-8 (kontrola ujemna): brak odpowiedzi na pytanie wymagane → błąd w bazie, brak aplikacji.
+set role authenticated; set app.current_uid = :'SQCAND'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, null)', :'SQJOB', 'sq-k0'),
+  'SCREENING_ANSWER_REQUIRED', 'SQ101-8 brak odpowiedzi na wymagane pytania');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', '  ')),
+  'SCREENING_ANSWER_REQUIRED: ' || :'sq_choice', 'SQ101-8b pusty tekst = brak odpowiedzi (id pytania w błędzie)');
+-- Złe typy/wartości → VALIDATION_FAILED.
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', 'tak', :'sq_choice', 'o1')),
+  'VALIDATION_FAILED', 'SQ101-8c tak/nie jako tekst odrzucone');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o9')),
+  'VALIDATION_FAILED', 'SQ101-8d nieznana opcja odrzucona');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o1', :'sq_date', '2026-02-30')),
+  'VALIDATION_FAILED', 'SQ101-8e nieistniejąca data odrzucona');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o1', :'sq_text', repeat('x', 501))),
+  'VALIDATION_FAILED', 'SQ101-8f za długa odpowiedź odrzucona');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k0',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o1', 'f1010000-0000-0000-0000-00000000dead', true)),
+  'VALIDATION_FAILED', 'SQ101-8g odpowiedź na pytanie spoza oferty odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.applications where job_id = :'SQJOB')
+  and not exists (select 1 from public.email_deliveries e join public.applications a on a.id = e.entity_id where a.job_id = :'SQJOB'),
+  'SQ101-8h odrzucone próby nie zostawiły aplikacji ani e-maili');
+
+-- SQ101-9: poprawna aplikacja zapisuje snapshot odpowiedzi; retry = ta sama aplikacja bez zmian.
+set role authenticated; set app.current_uid = :'SQCAND'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SQJOB'::uuid, 'sq-k1', null, 'immediate', null,
+  jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o2', :'sq_date', '2026-10-01')) as sqapp \gset
+select public.apply_to_job(:'SQJOB'::uuid, 'sq-k1', null, 'immediate', null,
+  jsonb_build_object(:'sq_yes', false, :'sq_choice', 'o1', :'sq_text', 'Inna odpowiedź')) = :'sqapp'::uuid as ok \gset sq9_
+select pg_temp.assert(:'sq9_ok'::boolean, 'SQ101-9 retry z tym samym kluczem = ta sama aplikacja');
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB', 'sq-k2',
+         jsonb_build_object(:'sq_yes', true, :'sq_choice', 'o1')),
+  'APPLICATION_ALREADY_EXISTS', 'SQ101-9b inny klucz = istniejąca aplikacja');
+select (count(*) = 4
+        and bool_and(case position
+              when 0 then answer_boolean is true and prompt->>'pl' = 'Masz prawo jazdy C+E?'
+              when 1 then answer_text = 'o2' and options->1->'label'->>'pl' = 'Komunikacja'
+              when 2 then answer_date = date '2026-10-01'
+              else answer_text is null and answer_boolean is null and not required end)) as ok
+  from public.application_screening_answers where application_id = :'sqapp' \gset sq9c_
+select pg_temp.assert(:'sq9c_ok'::boolean,
+  'SQ101-9c kandydat widzi własne odpowiedzi; retry ich nie nadpisał; pytanie opcjonalne bez odpowiedzi zachowane');
+-- SQ101-10 (kontrola ujemna): odpowiedzi niezmienne i bez DML dla klienta.
+select pg_temp.expect_error(
+  format('update public.application_screening_answers set answer_boolean = false where application_id = %L', :'sqapp'),
+  'permission denied', 'SQ101-10 kandydat nie zmienia odpowiedzi');
+select pg_temp.expect_error(
+  format('insert into public.application_screening_answers(application_id, position, type, required, prompt) values (%L, 9, %L, false, %L)',
+         :'sqapp', 'short_text', '{"pl": "x"}'),
+  'permission denied', 'SQ101-10b kandydat nie dopisuje odpowiedzi');
+select pg_temp.expect_error(
+  format('delete from public.application_screening_answers where application_id = %L', :'sqapp'),
+  'permission denied', 'SQ101-10c kandydat nie usuwa odpowiedzi');
+reset role; reset app.current_uid;
+select pg_temp.expect_error(
+  format('update public.application_screening_answers set answer_boolean = false where application_id = %L', :'sqapp'),
+  'niezmienne', 'SQ101-10d odpowiedzi niezmienne także poza rolą klienta');
+select pg_temp.expect_error(
+  format('insert into public.application_screening_answers(application_id, position, type, required, prompt) values (%L, 9, %L, true, %L)',
+         :'sqapp', 'yes_no', '{"pl": "x"}'),
+  'application_screening_answers_required', 'SQ101-10e wymagane pytanie bez odpowiedzi odrzuca CHECK w bazie');
+
+-- SQ101-11: odczyt — recruiter+ firmy oferty tak; member, inna firma i inny kandydat nie.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) = 4 as ok from public.application_screening_answers where application_id = :'sqapp' \gset sq11_
+select pg_temp.assert(:'sq11_ok'::boolean, 'SQ101-11 recruiter+ firmy oferty czyta odpowiedzi');
+select pg_temp.expect_error(
+  format('update public.application_screening_answers set answer_text = %L where application_id = %L', 'x', :'sqapp'),
+  'permission denied', 'SQ101-11b pracodawca nie zmienia odpowiedzi');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SQMEM'; select pg_temp.assert_client_role();
+select count(*) = 0 as ok from public.application_screening_answers where application_id = :'sqapp' \gset sq11c_
+select pg_temp.assert(:'sq11c_ok'::boolean, 'SQ101-11c member bez recruiter+ nie czyta odpowiedzi');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select count(*) = 0 as ok from public.application_screening_answers \gset sq11d_
+select pg_temp.assert(:'sq11d_ok'::boolean, 'SQ101-11d inna firma nie czyta odpowiedzi');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SQCAND2'; select pg_temp.assert_client_role();
+select count(*) = 0 as ok from public.application_screening_answers \gset sq11e_
+select pg_temp.assert(:'sq11e_ok'::boolean, 'SQ101-11e inny kandydat nie czyta cudzych odpowiedzi');
+reset role; reset app.current_uid;
+
+-- SQ101-12: zmiana pytania po złożeniu aplikacji (ręczna, z pominięciem strażnika) nie zmienia
+-- historycznej treści w zgłoszeniu — snapshot jest niezależny od pytania.
+set session_replication_role = replica;
+update public.job_screening_questions set prompt = '{"pl": "Zmienione pytanie"}', required = false where id = :'sq_yes';
+delete from public.job_screening_questions where id = :'sq_choice';
+set session_replication_role = origin;
+select pg_temp.assert(
+  (select prompt->>'pl' = 'Masz prawo jazdy C+E?' and required and question_id = :'sq_yes'::uuid
+     from public.application_screening_answers where application_id = :'sqapp' and position = 0)
+  and (select answer_text = 'o2' and jsonb_array_length(options) = 2 and prompt->>'pl' = 'Jak dojedziesz?'
+         from public.application_screening_answers where application_id = :'sqapp' and position = 1),
+  'SQ101-12 snapshot zachowuje treść pytania i opcje po zmianie/usunięciu pytania');
+
+-- SQ101-13: oferta bez pytań — aplikacja bez odpowiedzi jak dotąd; odpowiedź do nieistniejącego pytania odrzucona.
+update public.jobs set status = 'active', published_at = now(), slug = 'sq101-magazynier' where id = :'SQJOB2';
+set role authenticated; set app.current_uid = :'SQCAND2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'SQJOB2', 'sq2-k0',
+         jsonb_build_object(:'sq_date', '2026-10-01')),
+  'VALIDATION_FAILED', 'SQ101-13 odpowiedź na pytanie innej oferty odrzucona');
+select public.apply_to_job(:'SQJOB2'::uuid, 'sq2-k1', null, null, null) is not null as ok \gset sq13_
+select pg_temp.assert(:'sq13_ok'::boolean, 'SQ101-13b oferta bez pytań: aplikacja jak dotąd');
+reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

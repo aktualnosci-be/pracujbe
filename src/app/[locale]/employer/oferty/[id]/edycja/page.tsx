@@ -80,6 +80,7 @@ export default async function EditJobPage({
         initialJobId={draft.jobId}
         initialValues={draft.values}
         published={{ status: draft.jobStatus, slug: draft.slug, updatedAt: draft.updatedAt }}
+        contentLocale={draft.contentLocale}
       />
     );
   }
@@ -95,7 +96,7 @@ export default async function EditJobPage({
           className="mx-auto mb-5 max-w-5xl"
         />
       ) : null}
-      <JobWizard initialJobId={draft.jobId} initialValues={draft.values} />
+      <JobWizard initialJobId={draft.jobId} initialValues={draft.values} contentLocale={draft.contentLocale} />
     </>
   );
 }
