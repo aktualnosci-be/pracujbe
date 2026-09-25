@@ -109,7 +109,7 @@ export async function withEmployerSignup<T>(
 }
 
 /**
- * Pracodawca z linku zaproszenia do zespołu (0124): bez nazwy firmy w metadanych, więc
+ * Pracodawca z linku zaproszenia do zespołu (0121): bez nazwy firmy w metadanych, więc
  * potwierdzenie adresu nie zakłada firmy — zaproszenie czeka w panelu.
  */
 export async function withInvitedEmployerSignup<T>(

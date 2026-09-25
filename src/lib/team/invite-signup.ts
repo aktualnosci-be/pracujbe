@@ -6,7 +6,7 @@ import { INVITABLE_ROLES, type InvitableRole } from '@/lib/validation/team';
 import { hashTeamInviteToken, isTeamInviteTokenFormat } from './invite-token';
 
 /**
- * Link rejestracji z zaproszenia do zespołu (0124). Token z fragmentu `#token=` trafia na
+ * Link rejestracji z zaproszenia do zespołu (0121). Token z fragmentu `#token=` trafia na
  * serwer wyłącznie w Server Action; do bazy idzie jego hash (`service_role`, bo osoba nie ma
  * jeszcze konta). Nieważny, wygasły, rozstrzygnięty i nieznany token dają ten sam wynik.
  */

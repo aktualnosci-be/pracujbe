@@ -110,7 +110,7 @@ test('„Dodaj kolejną firmę” z przełącznika otwiera formularz nowej firmy
 });
 
 for (const locale of LOCALES) {
-  test(`język zaproszenia domyślnie = język strony, tylko PL/NL/FR/EN (0124, ${locale})`, async ({ page }) => {
+  test(`język zaproszenia domyślnie = język strony, tylko PL/NL/FR/EN (0121, ${locale})`, async ({ page }) => {
     const t = messages[locale].team;
     await page.goto(`/${locale}/employer/zespol`);
     const main = page.getByRole('main');
@@ -121,7 +121,7 @@ for (const locale of LOCALES) {
   });
 }
 
-test('link rejestracji z nieważnym tokenem: token znika z adresu, komunikat, zwykła rejestracja (0124)', async ({ page }) => {
+test('link rejestracji z nieważnym tokenem: token znika z adresu, komunikat, zwykła rejestracja (0121)', async ({ page }) => {
   const t = messages.pl.team;
   await page.goto('/pl/rejestracja-pracodawca#token=' + 'x'.repeat(43));
   const main = page.getByRole('main');

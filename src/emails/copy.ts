@@ -1052,7 +1052,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
     },
   },
 
-  // 0124: adres BEZ konta — język zaproszenia wybrany przez zapraszającego (Invariant #1:
+  // 0121: adres BEZ konta — język zaproszenia wybrany przez zapraszającego (Invariant #1:
   // odbiorca nie ma profilu), link rejestracji pracodawcy z jednorazowym tokenem.
   teamInvitationSignup: {
     pl: {

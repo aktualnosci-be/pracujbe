@@ -110,7 +110,7 @@ const FIELDS: Record<AuthFormVariant, readonly FieldConfig[]> = {
     { name: 'password', type: 'password', autoComplete: 'new-password', hint: true },
     { name: 'passwordConfirm', type: 'password', autoComplete: 'new-password' },
   ],
-  // 0124: z linku zaproszenia do zespołu — bez nazwy firmy, adres z zaproszenia (tylko odczyt).
+  // 0121: z linku zaproszenia do zespołu — bez nazwy firmy, adres z zaproszenia (tylko odczyt).
   registerInvitedEmployer: [
     { name: 'firstName', type: 'text', autoComplete: 'given-name' },
     { name: 'lastName', type: 'text', autoComplete: 'family-name' },

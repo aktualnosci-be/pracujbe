@@ -25,7 +25,7 @@ export const teamInviteSchema = z.object({
     .email('team.error.emailInvalid'),
   role: z.enum(INVITABLE_ROLES, { errorMap: () => ({ message: 'team.error.roleRequired' }) }),
   /**
-   * Język zaproszenia (0124). Adres bez konta nie ma profilu, więc to jedyny znany język
+   * Język zaproszenia (0121). Adres bez konta nie ma profilu, więc to jedyny znany język
    * odbiorcy (Invariant #1); konto z profilem i tak dostaje e-mail w języku z profilu.
    * Formularz podstawia domyślnie język strony zapraszającego.
    */

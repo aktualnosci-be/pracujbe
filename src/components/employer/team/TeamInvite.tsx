@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils';
  * błędy przy polach, fokus na pierwszym błędzie, dane zostają po błędzie, jasny sukces).
  * Odpowiedź po wysłaniu jest taka sama bez względu na to, czy adres ma konto.
  *
- * Język zaproszenia (0124): domyślnie język strony zapraszającego. Decyduje o języku e-maila
+ * Język zaproszenia (0121): domyślnie język strony zapraszającego. Decyduje o języku e-maila
  * tylko dla adresu bez konta (brak profilu odbiorcy, Invariant #1); konto z profilem dostaje
  * e-mail w swoim języku.
  */
