@@ -57,7 +57,7 @@ po restore) zostawia zadanie usunięcia obiektu. Worker: `claim_storage_deletion
 inaczej Supabase Storage) → `complete_storage_deletion`. Brak obiektu =
 sukces. Ścieżka, która znów ma wiersz `files`, wypada z kolejki bez usuwania.
 
-### 3a. GC bucketu CV (#17, migracja 0108)
+### 3a. GC bucketu CV (#17, migracja 0109)
 
 `/api/maintenance` przed workerem kolejki woła `runStorageGc` (`src/lib/storage-gc.ts`),
 gdy prywatny bucket Railway jest skonfigurowany. Przebieg porównuje listę bucketu

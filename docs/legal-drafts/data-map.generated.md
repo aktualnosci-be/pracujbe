@@ -975,14 +975,14 @@ Tabele w migracjach: 92; z danymi osobowymi: 59; bez danych osobowych: 33.
 
 ### `public.storage_gc_sweeps`
 
-- **Migracja:** `supabase/migrations/0108_storage_gc.sql`
+- **Migracja:** `supabase/migrations/0109_storage_gc.sql`
 - **Czynności:** Pliki CV
 - **Osoby:** Kandydaci (konto)
 - **Uwaga:** Przebieg GC bucketu CV (#17): same liczniki; kursor = ostatni sprawdzony klucz (UUID właściciela), czyszczony po zakończeniu przebiegu, historia 90 dni.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `cursor_key` | Pliki (CV) i ich metadane | `supabase/migrations/0108_storage_gc.sql` |
+| `cursor_key` | Pliki (CV) i ich metadane | `supabase/migrations/0109_storage_gc.sql` |
 | `bucket` | nie dotyczy: Nazwa bucketa. | — |
 | `dry_run` | nie dotyczy: Tryb przebiegu GC. | — |
 | `locked_until` | nie dotyczy: Dzierżawa przebiegu. | — |
