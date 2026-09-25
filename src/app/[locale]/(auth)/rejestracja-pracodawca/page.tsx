@@ -4,7 +4,12 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link, redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { getPortalIdentity, isPortalDataConfigured } from '@/lib/db/portal';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AuthPage,
+  AuthPageHeader,
+  AuthPageTitle,
+  AuthPaper,
+} from '@/components/auth/auth-page';
 import { AuthForm } from '@/components/auth/AuthForm';
 
 /**
@@ -45,35 +50,31 @@ export default async function RegisterEmployerPage({ params }: PageProps) {
   const t = await getTranslations('auth');
 
   return (
-    <div className="container flex min-h-[calc(100vh-8rem)] items-center justify-center py-12">
-      <div className="w-full max-w-md">
-        <Card>
-          <CardHeader className="space-y-2 text-center">
-            <CardTitle as="h1" className="text-2xl">{t('registerEmployerTitle')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <AuthForm variant="registerEmployer" />
+    <AuthPage>
+      <AuthPageHeader>
+        <AuthPageTitle>{t('registerEmployerTitle')}</AuthPageTitle>
+      </AuthPageHeader>
+      <AuthPaper>
+        <AuthForm variant="registerEmployer" />
 
-            <div className="space-y-3 text-center text-sm">
-              <Link
-                href="/rejestracja"
-                className="font-medium text-primary underline-offset-4 hover:underline"
-              >
-                {t('registerAsCandidate')}
-              </Link>
-              <p className="text-muted-foreground">
-                {t('haveAccount')}{' '}
-                <Link
-                  href="/logowanie"
-                  className="font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  {t('submitLogin')}
-                </Link>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+        <div className="space-y-3 text-sm">
+          <Link
+            href="/rejestracja"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {t('registerAsCandidate')}
+          </Link>
+          <p className="text-muted-foreground">
+            {t('haveAccount')}{' '}
+            <Link
+              href="/logowanie"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {t('submitLogin')}
+            </Link>
+          </p>
+        </div>
+      </AuthPaper>
+    </AuthPage>
   );
 }

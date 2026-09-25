@@ -198,7 +198,8 @@ test('stary link przejęcia z ?token= jest odrzucany: czysty URL, bez cookie, ko
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
   await expect(page.getByRole('heading', { level: 1, name: t.guestApply.claimTitle })).toBeVisible();
   await expect(page.getByRole('heading', { name: t.guestApply.invalidTitle })).toBeVisible();
-  await expect(page.getByRole('link', { name: t.guestApply.claimLogin })).toHaveCount(0);
+  // Link w treści strony — nagłówek witryny (#7 Z4) ma własny „Zaloguj się”.
+  await expect(page.getByRole('main').getByRole('link', { name: t.guestApply.claimLogin })).toHaveCount(0);
   const cookies = await page.context().cookies();
   expect(cookies.find((cookie) => cookie.name === 'pb_guest_claim')).toBeUndefined();
   // Tylko pierwsze żądanie (to z e-maila) niesie token; przekierowanie i dalsze już nie.
@@ -211,7 +212,7 @@ test('nowy link przejęcia: fragment znika z historii, token zostaje w cookie Ht
   page.on('request', (request) => requests.push(request.url()));
 
   await page.goto(`/en/aplikacja/przejmij#token=${token}`);
-  await expect(page.getByRole('link', { name: msgs('en').guestApply.claimLogin })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('link', { name: msgs('en').guestApply.claimLogin })).toBeVisible();
 
   expect(page.url()).toBe('http://127.0.0.1:4319/en/aplikacja/przejmij');
   expect(requests.every((url) => !url.includes(token))).toBe(true);

@@ -8742,6 +8742,140 @@ begin; select pg_temp.cj_drop_filter('j.deleted_at is null');
 select pg_temp.assert(pg_temp.cj_public('cj-deleted') = 1, 'CJ186-4f bez filtra usunięcia wycieka'); rollback;
 select pg_temp.assert(pg_temp.cj_public(s) = 0, 'CJ186-4g po cofnięciu filtry wróciły: ' || s)
 from unnest(array['cj-demo', 'cj-demo-company', 'cj-paused', 'cj-expired', 'cj-unverified', 'cj-deleted']) s;
+-- CV487. Import CV przez AI (#487, #498, 0115): do profilu trafiają WYŁĄCZNIE pozycje
+-- zatwierdzone przez kandydata, dopisane (nie replace-all) w jednej transakcji. Brak
+-- zatwierdzenia = brak zapisu; za długa pozycja cofa całe wywołanie; tylko własny profil
+-- konta kandydata. Kontrola ujemna: wersja replace-all kasuje ręcznie wpisane pozycje.
+-- ============================================================================
+\set CVC  'e4870000-0000-0000-0000-000000000001'
+\set CVO  'e4870000-0000-0000-0000-000000000002'
+\set CVE  'e4870000-0000-0000-0000-000000000003'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CVC','cvc@test.be','Cv C','{"role":"candidate","first_name":"Celina","last_name":"Cv","locale":"pl"}'),
+  (:'CVO','cvo@test.be','Cv O','{"role":"candidate","first_name":"Otto","last_name":"Cv","locale":"nl"}'),
+  (:'CVE','cve@test.be','Cv E','{"role":"employer","first_name":"Rek","last_name":"Cv","locale":"fr"}');
+
+-- Stan wyjściowy wpisany ręcznie (onboarding): zawód, umiejętność, język z poziomem, certyfikat z datą.
+select set_config('app.current_uid', :'CVC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.save_candidate_onboarding_step3(4, array['Wózek widłowy']);
+select public.save_candidate_onboarding_step5(
+  '[{"language":"Polski","level":"native"}]'::jsonb,
+  '[{"label":"VCA","expires_at":"2030-01-01"}]'::jsonb);
+reset role;
+update public.candidate_profiles set occupations = array['Magazynier'] where profile_id = :'CVC';
+select id as cv_cp from public.candidate_profiles where profile_id = :'CVC' \gset
+
+set role authenticated; select pg_temp.assert_client_role();
+-- CV1: brak zatwierdzonych pozycji → odmowa, stan bez zmian.
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(''{}'', ''{}'', ''[]''::jsonb, ''{}'', null)',
+  'VALIDATION_FAILED', 'CV1 brak zatwierdzenia = brak zapisu');
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(null, null, null, null, null)',
+  'VALIDATION_FAILED', 'CV1b same NULL-e = brak zapisu');
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp') = 1
+  and (select experience_years from public.candidate_profiles where id = :'cv_cp') = 4,
+  'CV1c po odmowie profil bez zmian');
+
+-- CV2: za długa umiejętność cofa CAŁE wywołanie (także poprawny zawód w tym samym żądaniu).
+select pg_temp.expect_error(
+  format('select public.apply_candidate_cv_proposals(array[''Kierowca''], array[%L], null, null, 9)', repeat('x', 121)),
+  'VALIDATION_FAILED', 'CV2 za długa pozycja odrzucona bez obcinania');
+select pg_temp.assert(
+  (select occupations = array['Magazynier'] and experience_years = 4
+   from public.candidate_profiles where id = :'cv_cp'),
+  'CV2b odrzucone wywołanie nie zapisało żadnej części');
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(null, null, ''[{"language":"Nederlands","level":"expert"}]''::jsonb, null, null)',
+  'VALIDATION_FAILED', 'CV2c poziom języka spoza słownika odrzucony');
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(null, null, null, null, 61)',
+  'VALIDATION_FAILED', 'CV2d doświadczenie poza zakresem odrzucone');
+
+-- CV3: zatwierdzone pozycje są DOPISANE; duplikaty (bez względu na wielkość liter) pominięte,
+-- ręcznie wpisany poziom języka i data certyfikatu zostają.
+select pg_temp.assert(
+  public.apply_candidate_cv_proposals(
+    array['Kierowca', 'magazynier'],
+    array['wózek WIDŁOWY', 'Skaner ręczny', 'Skaner ręczny'],
+    '[{"language":"polski","level":"basic"},{"language":"Nederlands","level":"intermediate"}]'::jsonb,
+    array['vca', 'Prawo jazdy C'],
+    null)
+  = '{"occupations":1,"skills":1,"languages":1,"certificates":1,"experienceYears":false}'::jsonb,
+  'CV3 wynik liczy tylko dopisane pozycje');
+select pg_temp.assert(
+  (select occupations = array['Magazynier', 'Kierowca'] and experience_years = 4
+   from public.candidate_profiles where id = :'cv_cp'),
+  'CV3b zawód dopisany, doświadczenie bez zmian (niezatwierdzone)');
+select pg_temp.assert(
+  (select array_agg(skill_label order by skill_label) from public.candidate_skills
+   where candidate_profile_id = :'cv_cp') = array['Skaner ręczny', 'Wózek widłowy'],
+  'CV3c umiejętność dopisana, istniejąca zachowana, bez duplikatu');
+select pg_temp.assert(
+  (select level::text from public.candidate_languages
+   where candidate_profile_id = :'cv_cp' and language_label = 'Polski') = 'native'
+  and (select count(*) from public.candidate_languages where candidate_profile_id = :'cv_cp') = 2,
+  'CV3d poziom ręcznie wpisanego języka zostaje');
+select pg_temp.assert(
+  (select expires_at from public.candidate_certificates
+   where candidate_profile_id = :'cv_cp' and certificate_label = 'VCA') = '2030-01-01'::date
+  and (select count(*) from public.candidate_certificates where candidate_profile_id = :'cv_cp') = 2,
+  'CV3e data ważności certyfikatu zostaje, nowy certyfikat dopisany');
+-- CV3f: samo doświadczenie zatwierdzone → ustawione.
+select public.apply_candidate_cv_proposals(null, null, null, null, 7);
+select pg_temp.assert((select experience_years from public.candidate_profiles where id = :'cv_cp') = 7,
+  'CV3f zatwierdzone doświadczenie zapisane');
+-- CV4: przekroczenie limitu zawodów (10) → odmowa.
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(array[''a1'',''a2'',''a3'',''a4'',''a5'',''a6'',''a7'',''a8'',''a9''], null, null, null, null)',
+  'VALIDATION_FAILED', 'CV4 limit zawodów');
+select pg_temp.expect_error(
+  'insert into public.candidate_skills(candidate_profile_id, skill_label) select id, ''x'' from public.candidate_profiles where profile_id = auth.uid()',
+  'permission denied', 'CV4b bezpośredni DML relacji dalej odebrany');
+reset role;
+
+-- CV5: inny kandydat nie zmienia cudzego profilu (brak parametru właściciela) — zapis trafia do jego własnego.
+select set_config('app.current_uid', :'CVO', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_candidate_cv_proposals(null, array['Lassen'], null, null, null);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp') = 2
+  and (select count(*) from public.candidate_skills s join public.candidate_profiles cp on cp.id = s.candidate_profile_id
+       where cp.profile_id = :'CVO' and s.skill_label = 'Lassen') = 1,
+  'CV5 zapis tylko we własnym profilu');
+
+-- CV6: konto pracodawcy i anon — odmowa.
+select set_config('app.current_uid', :'CVE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.apply_candidate_cv_proposals(null, array[''x''], null, null, null)',
+  'PERMISSION_DENIED', 'CV6 pracodawca nie ma profilu kandydata');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.apply_candidate_cv_proposals(null, array[''x''], null, null, null)',
+  'permission denied', 'CV6b anon bez EXECUTE');
+reset role;
+
+-- Kontrola ujemna: wersja replace-all (jak kroki onboardingu) kasuje ręcznie wpisane pozycje.
+begin;
+create or replace function public.apply_candidate_cv_proposals(
+  p_occupations text[], p_skills text[], p_languages jsonb, p_certificates text[], p_experience_years integer)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  perform public.set_candidate_skills(p_skills);
+  return '{}'::jsonb;
+end $$;
+set local role authenticated; set local app.current_uid = :'CVC'; select pg_temp.assert_client_role();
+select public.apply_candidate_cv_proposals(null, array['Nowa'], null, null, null);
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp' and skill_label = 'Wózek widłowy') = 0,
+  'CV7 kontrola ujemna: replace-all gubi ręcznie wpisaną umiejętność');
+rollback;
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp') = 2,
+  'CV7b po kontroli ujemnej stan przywrócony');
 
 -- ============================================================================
 -- BR490 (#490, 0106): rejestr incydentów i naruszeń danych osobowych — tylko admin,
@@ -9446,6 +9580,232 @@ select pg_temp.assert((select count(*) > 0 from public.reports where id = :'mr_r
   'MR13 kontrola ujemna: stara polityka odsłania dowód');
 rollback;
 
+-- ============================================================================
+-- OL112. Linki firmy w publicznym detalu oferty (0114): get_public_job zwraca
+--        company_website / company_logo_url tylko dla firmy verified i tylko jako
+--        bezwzględny https (public_https_url). Kontrole ujemne w transakcjach cofanych:
+--        bez walidacji zły URL wycieka, bez bramki weryfikacji wycieka link firmy
+--        niezweryfikowanej (po zdjęciu filtra wierszy).
+-- ============================================================================
+\set OLV 'c1080000-0000-0000-0000-0000000000a1'
+\set OLB 'c1080000-0000-0000-0000-0000000000a2'
+\set OLU 'c1080000-0000-0000-0000-0000000000a3'
+\set OLN 'c1080000-0000-0000-0000-0000000000a4'
+\echo '--- OL112 company links in get_public_job ---'
+reset role; reset app.current_uid;
+insert into public.companies(id,name,status,is_demo,website,logo_url) values
+  (:'OLV','Linki Sp','verified',false,' https://www.linki.example/o-nas?x=1 ','https://cdn.linki.example/logo.png'),
+  (:'OLB','Złe Linki Sp','verified',false,'http://zle.example','javascript:alert(1)'),
+  (:'OLU','Bez Weryfikacji Sp','unverified',false,'https://bez.example','https://bez.example/logo.png'),
+  (:'OLN','Bez Linków Sp','verified',false,null,'');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('c1080000-0000-0000-0000-0000000000b1',:'OLV','ol-ok','Magazynier linki','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b2',:'OLB','ol-bad','Magazynier złe linki','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b3',:'OLU','ol-unverified','Magazynier bez weryfikacji','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b4',:'OLN','ol-none','Magazynier bez linków','warehouse','permanent','Gent','Flandria','active','pl');
+
+-- OL112-1: walidator — tylko bezwzględny https z hostem; reszta null.
+select pg_temp.assert(public.public_https_url(u) is null, 'OL112-1 odrzucony adres: ' || coalesce(u, '<null>'))
+from unnest(array[null, '', '   ', 'http://a.example', 'javascript:alert(1)', '//a.example',
+                  'https://localhost', 'https://a.example/x y', 'https://a.example/"><script>',
+                  'https://user:pw@a.example', 'https://a.example/' || repeat('x', 2048),
+                  'HTTPS://A.EXAMPLE', 'data:text/html,x', 'https://-a.example']) u;
+select pg_temp.assert(public.public_https_url(' https://a.example/logo.png?v=2#x ') = 'https://a.example/logo.png?v=2#x',
+  'OL112-1b poprawny https (obcięte spacje)');
+select pg_temp.assert(public.public_https_url('https://a.example:8443') = 'https://a.example:8443',
+  'OL112-1c https z portem');
+
+-- OL112-2: gość — poprawne linki firmy verified; złe i puste → null; firma niezweryfikowana → brak wiersza.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select company_website = 'https://www.linki.example/o-nas?x=1'
+      and company_logo_url = 'https://cdn.linki.example/logo.png'
+   from public.get_public_job('ol-ok', 'pl')),
+  'OL112-2 firma verified: website i logo');
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-bad', 'pl')),
+  'OL112-2b http / javascript: → brak pól');
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-none', 'pl')),
+  'OL112-2c brak / pusty adres → brak pól');
+select pg_temp.assert((select count(*) from public.get_public_job('ol-unverified', 'pl')) = 0,
+  'OL112-2d firma niezweryfikowana → brak oferty (i linków)');
+reset role;
+
+-- OL112-3: kontrole ujemne (zmiana definicji w transakcji cofanej).
+create function pg_temp.ol_patch(p_from text, p_to text) returns void language plpgsql as $$
+declare
+  v_def text := pg_get_functiondef('public.get_public_job(text, text)'::regprocedure);
+begin
+  if position(p_from in v_def) = 0 then
+    raise exception 'ASSERT FAILED: OL112-3 fragment „%” nie występuje w get_public_job', p_from;
+  end if;
+  execute replace(v_def, p_from, p_to);
+end $$;
+-- Bez walidacji adresu zły URL trafia do wyniku (więc OL112-2b wykrywa regresję).
+begin; select pg_temp.ol_patch('public.public_https_url(c.website)', 'c.website');
+select pg_temp.assert((select company_website from public.get_public_job('ol-bad', 'pl')) = 'http://zle.example',
+  'OL112-3 bez walidacji wycieka http'); rollback;
+-- Po zdjęciu filtra wierszy bramka kolumny nadal ukrywa link firmy niezweryfikowanej…
+begin; select pg_temp.ol_patch(E'and c.status = ''verified''\n', '');
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-unverified', 'pl')),
+  'OL112-3b bramka kolumny: niezweryfikowana firma bez linków');
+-- …a bez niej link wycieka (asercja OL112-3b wykrywa regresję).
+select pg_temp.ol_patch('case when c.status = ''verified'' then public.public_https_url(c.website)',
+                        'case when true then public.public_https_url(c.website)');
+select pg_temp.assert((select company_website from public.get_public_job('ol-unverified', 'pl')) = 'https://bez.example',
+  'OL112-3c bez bramki weryfikacji wycieka link'); rollback;
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-bad', 'pl'))
+  and (select count(*) from public.get_public_job('ol-unverified', 'pl')) = 0,
+  'OL112-3d po cofnięciu definicja wróciła');
+
+-- ============================================================================
+-- PL109. Payloady e-maili i odczyt historii (0113; #293, #22, #290, #184):
+--   send_offer → expiresAt + kwoty oferty (bez treści wiadomości rekrutera, #503),
+--   send_message → conversationId, get_applied_jobs_display(p_locale, p_job_ids).
+--   Kontrole ujemne (transakcje cofane): definicja bez nowego klucza → asercja pada.
+-- ============================================================================
+\set PLC  'e1080000-0000-0000-0000-00000000000c'
+\set PLC2 'e1080000-0000-0000-0000-00000000000d'
+\set PLE  'e1080000-0000-0000-0000-0000000000a1'
+\set PLCO 'e1080000-0000-0000-0000-0000000000f1'
+\set PLJ1 'e1080000-0000-0000-0000-0000000000b1'
+\set PLJ2 'e1080000-0000-0000-0000-0000000000b2'
+\set PLJ3 'e1080000-0000-0000-0000-0000000000b3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'PLC','plc@test.be','Noor V','{"role":"candidate","first_name":"Noor","last_name":"Vermeulen","locale":"nl"}'),
+  (:'PLC2','plc2@test.be','Luc D','{"role":"candidate","first_name":"Luc","last_name":"Dubois","locale":"fr"}'),
+  (:'PLE','ple@test.be','Piotr R','{"role":"employer","first_name":"Piotr","last_name":"Rekruter","locale":"pl"}');
+insert into public.companies(id,name,status) values (:'PLCO','Firma PL109','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'PLCO',:'PLE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,currency,salary_period,expires_at) values
+  (:'PLJ1',:'PLCO','job-pl109-1','Magazynier PL109','warehouse','permanent','Gent','Flandria','active','pl',
+   2500,3100,'EUR','month', now() + interval '10 days'),
+  (:'PLJ2',:'PLCO','job-pl109-2','Kierowca PL109','warehouse','permanent','Gent','Flandria','active','pl',
+   null,null,'EUR','hour', null),
+  (:'PLJ3',:'PLCO','job-pl109-3','Pomocnik PL109','warehouse','permanent','Gent','Flandria','active','pl',
+   null,null,'EUR','month', null);
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'PLC', false), (:'PLC2', false);
+
+select set_config('app.current_uid', :'PLC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'PLJ1'::uuid, 'pl109-app-1', null, null, null) as plapp1 \gset
+select public.apply_to_job(:'PLJ2'::uuid, 'pl109-app-2', null, null, null) as plapp2 \gset
+reset role;
+select set_config('app.current_uid', :'PLC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'PLJ3'::uuid, 'pl109-app-3', null, null, null) as plapp3 \gset
+reset role;
+select set_config('app.current_uid', :'PLE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'PLJ1'::uuid, :'PLC'::uuid, 'pl109-off-1', 'Bel me op 0470 12 34 56', null) as ploff1 \gset
+select public.send_offer(:'PLJ2'::uuid, :'PLC'::uuid, 'pl109-off-2', null, null) as ploff2 \gset
+select public.get_or_create_conversation(:'plapp1'::uuid, null) as plconv \gset
+select public.send_message(:'plconv'::uuid, 'Dzień dobry', gen_random_uuid()) as plmsg \gset
+reset role; reset app.current_uid;
+
+-- PL109-1: termin = offers.expires_at (ten, który sprawdza respond_to_offer) jako ISO.
+select pg_temp.assert(
+  (select (d.payload->>'expiresAt')::timestamptz = o.expires_at
+     from public.email_deliveries d join public.offers o on o.id = d.entity_id
+    where d.entity_id = :'ploff1' and d.template = 'jobOffer'),
+  'PL109-1 jobOffer.expiresAt = offers.expires_at');
+-- PL109-2: kwoty jako liczby + okres i waluta (tekst składa worker w locale odbiorcy).
+select pg_temp.assert(
+  (select payload->'salaryMin' = '2500'::jsonb and payload->'salaryMax' = '3100'::jsonb
+      and payload->>'salaryPeriod' = 'month' and payload->>'currency' = 'EUR'
+      and not payload ? 'salary'
+     from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
+  'PL109-2 jobOffer niesie kwoty oferty, bez gotowego tekstu wynagrodzenia');
+-- PL109-3: oferta bez kwot → null (worker pomija pole), okres z danych.
+select pg_temp.assert(
+  (select payload ? 'salaryMin' and payload->'salaryMin' = 'null'::jsonb
+      and payload->'salaryMax' = 'null'::jsonb and payload->>'salaryPeriod' = 'hour'
+      and payload->>'expiresAt' is not null
+     from public.email_deliveries where entity_id = :'ploff2' and template = 'jobOffer'),
+  'PL109-3 oferta bez kwot: null w payloadzie, termin domyślny (+30 dni) obecny');
+-- PL109-4: treść wiadomości rekrutera zostaje w offers, NIE trafia do payloadu (#503).
+select pg_temp.assert(
+  (select o.message from public.offers o where o.id = :'ploff1') = 'Bel me op 0470 12 34 56'
+  and (select not payload ? 'message' and payload::text not like '%0470%'
+         from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
+  'PL109-4 payload jobOffer bez treści wiadomości rekrutera');
+-- PL109-5: język e-maila = język ODBIORCY (nl), nie nadawcy (pl) — Invariant #1.
+select pg_temp.assert(
+  (select locale from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer') = 'nl',
+  'PL109-5 jobOffer w języku kandydata');
+-- PL109-6: newMessage niesie identyfikator rozmowy (CTA do wątku).
+select pg_temp.assert(
+  (select payload->>'conversationId' = :'plconv' and locale = 'nl'
+     from public.email_deliveries where entity_id = :'plmsg' and profile_id = :'PLC'),
+  'PL109-6 newMessage.conversationId = rozmowa wiadomości');
+
+-- PL109-7: get_applied_jobs_display — filtr p_job_ids wewnątrz RPC, tylko własne aplikacje.
+set role authenticated; set app.current_uid = :'PLC'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_applied_jobs_display('pl')) = 2,
+  'PL109-7 bez filtra: cała historia własnych aplikacji (zgodność wstecz)');
+select pg_temp.assert(
+  (select array_agg(job_id::text) from public.get_applied_jobs_display(p_locale => 'pl',
+     p_job_ids => array[:'PLJ1'::uuid])) = array[:'PLJ1'::text],
+  'PL109-7b filtr zwraca tylko wskazaną ofertę');
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display(p_locale => 'pl',
+     p_job_ids => array[:'PLJ3'::uuid, gen_random_uuid()])) = 0,
+  'PL109-7c cudza aplikacja (PLC2) i nieznany job_id w filtrze → brak wierszy');
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display(p_locale => 'pl', p_job_ids => array[]::uuid[])) = 0,
+  'PL109-7d pusta lista → brak wierszy');
+select pg_temp.expect_error(
+  'select count(*) from public.get_applied_jobs_display(''pl'', array(select gen_random_uuid() from generate_series(1, 101)))',
+  'VALIDATION_FAILED', 'PL109-7e ponad 100 identyfikatorów odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  to_regprocedure('public.get_applied_jobs_display(text)') is null
+  and has_function_privilege('authenticated', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE'),
+  'PL109-7f stary podpis usunięty; EXECUTE tylko authenticated');
+
+-- KONTROLA UJEMNA 1: send_offer bez expiresAt → asercja PL109-1 wykrywa brak.
+begin;
+do $pl$ begin
+  execute regexp_replace(pg_get_functiondef('public.send_offer(uuid, uuid, text, text, timestamptz)'::regprocedure),
+    '''expiresAt'', v_expires,', '', 'g');
+end $pl$;
+select pg_temp.assert(pg_get_functiondef('public.send_offer(uuid, uuid, text, text, timestamptz)'::regprocedure)
+  not like '%expiresAt%', 'PL109-N1 mutacja usunęła klucz expiresAt');
+select set_config('app.current_uid', :'PLE', false);
+set local role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'PLJ3'::uuid, :'PLC2'::uuid, 'pl109-off-neg', null, null) as ploffneg \gset
+reset role;
+select pg_temp.assert(
+  not coalesce((select (payload->>'expiresAt')::timestamptz is not null
+     from public.email_deliveries where entity_id = :'ploffneg' and template = 'jobOffer'), false),
+  'PL109-N1b bez klucza predykat PL109-1 jest fałszywy (test wykrywa regresję)');
+rollback;
+reset role; reset app.current_uid;
+
+-- KONTROLA UJEMNA 2: send_message bez conversationId → asercja PL109-6 wykrywa brak.
+begin;
+do $pl$ begin
+  execute regexp_replace(pg_get_functiondef('public.send_message(uuid, text, uuid)'::regprocedure),
+    ',\s*''conversationId'', p_conversation_id', '', 'g');
+end $pl$;
+select pg_temp.assert(pg_get_functiondef('public.send_message(uuid, text, uuid)'::regprocedure)
+  not like '%''conversationId''%', 'PL109-N2 mutacja usunęła klucz conversationId');
+select set_config('app.current_uid', :'PLE', false);
+set local role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'plconv'::uuid, 'Druga', gen_random_uuid()) as plmsgneg \gset
+reset role;
+select pg_temp.assert(
+  not coalesce((select payload->>'conversationId' = :'plconv'
+     from public.email_deliveries where entity_id = :'plmsgneg' and profile_id = :'PLC'), false),
+  'PL109-N2b bez klucza predykat PL109-6 jest fałszywy (test wykrywa regresję)');
+rollback;
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- LOC194. Słownik miejscowości z aliasami (#194, 0112): gminy Belgii + lista kanoniczna,
