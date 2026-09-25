@@ -10,6 +10,7 @@ import pl from '@/messages/pl.json';
 
 const { loadOlderMessages } = vi.hoisted(() => ({ loadOlderMessages: vi.fn() }));
 vi.mock('@/lib/actions/messages', () => ({ loadOlderMessages }));
+vi.mock('@/lib/actions/message-reports', () => ({ reportConversationContent: vi.fn() }));
 
 import { ThreadMessageList } from '@/components/messaging/ThreadMessageList';
 import type { ThreadMessageView } from '@/lib/messaging/thread-view';
@@ -64,7 +65,8 @@ describe('ThreadMessageList (#146, #358)', () => {
   it('nadawca i czas są przed treścią w DOM', () => {
     renderList();
     const [first, second] = screen.getAllByRole('listitem');
-    expect(first!.textContent).toBe('Anna Nowak · 10:52treść 52');
+    // Wiadomość drugiej strony kończy przycisk zgłoszenia (0116) — po treści w DOM.
+    expect(first!.textContent).toBe(`Anna Nowak · 10:52treść 52${pl.messages.reportMessage}`);
     expect(second!.textContent).toBe(`${pl.messages.you} · 10:53treść 53`);
   });
 
@@ -77,7 +79,7 @@ describe('ThreadMessageList (#146, #358)', () => {
 
     expect(loadOlderMessages).toHaveBeenCalledWith('pl', '00000000-0000-4000-8000-000000000001', CURSOR);
     const items = within(screen.getByRole('list')).getAllByRole('listitem');
-    expect(items.map((item) => item.textContent?.split('treść ')[1])).toEqual(['50', '51', '52', '53']);
+    expect(items.map((item) => item.textContent?.match(/treść (\d+)/)?.[1])).toEqual(['50', '51', '52', '53']);
     expect(screen.queryByRole('button', { name: pl.messages.loadOlder })).not.toBeInTheDocument();
     expect(screen.getByText(pl.messages.threadStart)).toHaveFocus();
   });
@@ -119,7 +121,7 @@ describe('ThreadMessageList (#146, #358)', () => {
         />
       </NextIntlClientProvider>,
     );
-    const items = screen.getAllByRole('listitem').map((item) => item.textContent?.split('treść ')[1]);
+    const items = screen.getAllByRole('listitem').map((item) => item.textContent?.match(/treść (\d+)/)?.[1]);
     expect(items).toEqual(['51', '52', '53', '54']);
     // Kursor zostaje przy najstarszej wczytanej wiadomości.
     await act(async () => {
@@ -130,6 +132,21 @@ describe('ThreadMessageList (#146, #358)', () => {
 
   it('bez kursora nie pokazuje przycisku starszych', () => {
     renderList({ initialOlderCursor: null });
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: pl.messages.loadOlder })).not.toBeInTheDocument();
+  });
+
+  it('zgłoszenie (0116): przycisk tylko przy wiadomości drugiej strony, z nazwą nadawcy i czasu', () => {
+    renderList({ initialOlderCursor: null });
+    const buttons = screen.getAllByRole('button', { name: /Zgłoś wiadomość/ });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAccessibleName('Zgłoś wiadomość: Anna Nowak · 10:52');
+    const [, mine] = screen.getAllByRole('listitem');
+    expect(within(mine!).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('zgłoszona wiadomość (stan z bazy) pokazuje „Zgłoszono” zamiast przycisku', () => {
+    renderList({ initialOlderCursor: null, reportedMessageIds: [view(52).id] });
+    expect(screen.queryByRole('button', { name: /Zgłoś wiadomość/ })).not.toBeInTheDocument();
+    expect(screen.getByText(pl.messages.reportedBadge)).toBeInTheDocument();
   });
 });

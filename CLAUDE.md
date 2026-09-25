@@ -683,6 +683,24 @@ unit `saved-search-alerts`; E2E `saved-search.spec`. **Otwarte:** zmiana nazwy w
 link wypisania i ponowna kontrola zgody tuż przed wysyłką przychodzą z #466 (tam `jobMatch` →
 kategoria `job_matches`); na przebieg najwyżej 100 najnowszych pasujących ofert.
 
+Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
+wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
+profilu tylko z flagą). PDF/DOCX → tekst lokalnie (`src/lib/cv-import/text.ts`: pdf.js 5 bez
+`eval`, DOCX tylko `word/document.xml` z limitem dekompresji) → minimalizacja
+(`minimize.ts`: NISS/BIS/dokument → odmowa; sekcje referencji i danych osobowych, linie o
+osobach trzecich, dane osobowe, kategorie art. 9/10, kontakty i linki usunięte; kontakt poza
+nagłówkiem dokumentu → bezpieczne zatrzymanie) → PODGLĄD tekstu dla kandydata → po
+potwierdzeniu ponowna redakcja na serwerze i Claude (structured output, tylko zawody/
+umiejętności/języki/certyfikaty/lata) → PROPOZYCJE ze źródłem i niepewnością, domyślnie
+niezaznaczone → zapis wyłącznie zaznaczonych RPC `apply_candidate_cv_proposals` (dopisanie,
+`FOR UPDATE`, limity kreatora, brak zatwierdzenia = `VALIDATION_FAILED`). Pliku, tekstu ani
+propozycji nie zapisujemy; CV nie trafia do firm, wynik nie wpływa na `scoreMatch`. Limit 5/h
+i 10/dobę na konto (fail-closed). Dowód: `rls.sql` sekcja CV487 (kontrola ujemna replace-all);
+unit `cv-import-*` (payload modelu bez referentów + kontrola ujemna bez minimalizacji); E2E
+`cv-import.spec` (atrapa). Opis: `docs/AI_CV_IMPORT.md`. **Otwarte:** decyzje prawne w szkicu
+`docs/legal-drafts/cv-ai-osoby-trzecie.md` (#485/#486/#488/#61) przed włączeniem, AV i izolacja
+parsera, edycja wartości propozycji.
+
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
 
@@ -949,7 +967,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
   i alerty pojedyncze (`rls.sql` PP7–PP8).
-- [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** załączniki, zgłoszenia
+- [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** załączniki
+  Zgłoszenia (migracja `0116`): strona rozmowy zgłasza wiadomość drugiej
+  strony („Zgłoś” pod dymkiem) albo całą rozmowę (nagłówek wątku) — `ReportContentButton`
+  (powód ze słownika `MESSAGE_REPORT_CATEGORIES`, opis ≤ 1000, znacznik treści prawnej „do
+  uzupełnienia”) → `reportConversationContent` (limiter 10/h na konto) → RPC pod sesją
+  `report_conversation_content`: `reports.kind='message_report'` (cel `message` albo nowy
+  `conversation`, `conversation_id`), dostęp jak `is_conversation_member` (obca rozmowa i
+  wiadomość spoza niej = `NOT_FOUND`, własna strona = `VALIDATION_FAILED`), dowód budowany w
+  bazie z treścią WYŁĄCZNIE zgłoszonej wiadomości (rozmowa: same metadane), widoczny tylko dla
+  admina (`reports_select_own` pomija ten rodzaj; stan własnych zgłoszeń bez dowodu —
+  `get_my_message_reports`), idempotencja po kluczu (`duplicate`), jedna otwarta sprawa na
+  wiadomość i na rozmowę × zgłaszającego (`already_open`, indeksy częściowe + blokada), limit
+  20/dobę w bazie, niezmienność każdej roli (`reports_message_report_immutable`). Admin:
+  `/admin/zgloszenia?kind=message_report` (dowód, strony, data), rozstrzyga `admin_resolve_report`.
+  Dowód: `rls.sql` sekcja MR (kontrole ujemne: obca rozmowa, powtórka, stara polityka),
+  unit `message-reports`, `thread-message-list`, E2E `message-report.spec`. **Otwarte:**
+  treść prawna i retencja dowodu (#40/#486 — dowód zostaje po usunięciu konta nadawcy),
+  powiadomienie zgłaszającego o wyniku, zgłoszenie jako sprawa DSA.
   Wysyłka idempotentna (0075, #147): `send_message(conversation, body, client_message_id)` —
   `MessageComposer` trzyma jeden UUID na operację danej treści (`useRef`), ponowienie po
   zerwanym połączeniu = ta sama wiadomość bez drugiego powiadomienia/e-maila. Dowód: `rls.sql`

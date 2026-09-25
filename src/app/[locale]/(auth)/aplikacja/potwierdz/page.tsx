@@ -1,7 +1,12 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AuthPage,
+  AuthPageHeader,
+  AuthPageTitle,
+  AuthPaper,
+} from '@/components/auth/auth-page';
 import { GuestConfirmPanel } from '@/components/public/GuestConfirmPanel';
 import { GuestLinkIntake } from '@/components/public/GuestLinkIntake';
 import { readGuestLinkToken } from '@/lib/guest-apply/link-cookie';
@@ -28,15 +33,15 @@ export default async function GuestConfirmPage({ params }: PageProps) {
   const t = await getTranslations('guestApply');
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle as="h1" className="text-2xl">{t('confirmTitle')}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <AuthPage>
+      <AuthPageHeader>
+        <AuthPageTitle>{t('confirmTitle')}</AuthPageTitle>
+      </AuthPageHeader>
+      <AuthPaper>
         <GuestLinkIntake locale={locale} purpose="confirm" hasToken={hasToken}>
           <GuestConfirmPanel />
         </GuestLinkIntake>
-      </CardContent>
-    </Card>
+      </AuthPaper>
+    </AuthPage>
   );
 }

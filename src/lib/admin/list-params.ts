@@ -113,7 +113,7 @@ export function reportStatusesFor(filter: ReportFilter): string[] | null {
  * Rodzaj zgłoszenia (#41): `dsa_notice` — sprawa z publicznego formularza zgłoszeń treści
  * (osobna kolejka), `quality` — pozostałe zgłoszenia. `all` = bez filtra (domyślnie).
  */
-export const REPORT_KIND_FILTERS = ['all', 'dsa_notice', 'quality'] as const;
+export const REPORT_KIND_FILTERS = ['all', 'dsa_notice', 'message_report', 'quality'] as const;
 export type ReportKindFilter = (typeof REPORT_KIND_FILTERS)[number];
 
 export function parseReportKindFilter(raw: string | undefined | null): ReportKindFilter {
