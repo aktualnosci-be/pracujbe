@@ -43,7 +43,7 @@ export const QUEUED_EMAIL_TYPES = [
 export const GUEST_EMAIL_TYPES = [
   'guestApplicationConfirm', // submit_guest_application
   'guestApplicationSent', // confirm_guest_application
-  'guestStatusChanged', // transition_application → enqueue_guest_status_email (0121)
+  'guestStatusChanged', // transition_application → enqueue_guest_status_email (0122)
   'teamInvitationSignup', // invite_company_member (0121) — adres bez konta, język zaproszenia
 ] as const satisfies readonly EmailType[];
 

@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0121_guest_status_notify.sql — #98 („Otwarte”): e-mail do gościa o zmianie statusu.
+-- 0122_guest_status_notify.sql — #98 („Otwarte”): e-mail do gościa o zmianie statusu.
 --
 -- Aplikacja bez konta (0095) ma `candidate_id = NULL`, więc transition_application nie
 -- miało komu wysłać powiadomienia. Od teraz gość dostaje e-mail `guestStatusChanged`.
