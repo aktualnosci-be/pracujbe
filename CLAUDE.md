@@ -575,8 +575,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `hiringOrganization.sameAs`/`logo` (migracja `0114`): `get_public_job` zwraca `company_website`/
   `company_logo_url` tylko dla firmy `verified` i tylko jako bezwzględny https (`public_https_url`),
   JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL112 (kontrole ujemne:
-  bez walidacji / bez bramki weryfikacji link wycieka). **Otwarte:** edycja strony i logo firmy
-  w panelu pracodawcy (dziś pola tylko w schemacie).
+  bez walidacji / bez bramki weryfikacji link wycieka).
+  Edycja strony i logo firmy (#112, migracja `0162`): `/employer/firma` ma osobny formularz
+  (`CompanyLinksForm` + akcja `updateCompanyLinks`) — owner/admin firmy (jak nazwa/VAT, 0040)
+  ustawia i czyści oba adresy; CHECK na `companies.website`/`logo_url` (`companies_website_https`/
+  `companies_logo_url_https`, ta sama reguła co `public_https_url`) waliduje w bazie niezależnie
+  od Zod (lustro `src/lib/company-links.ts`). W przeciwieństwie do nazwy/VAT zmiana NIE cofa
+  weryfikacji (`protect_company_verification` reaguje tylko na `name`/`vat_number`); audyt
+  `company.links_changed`. Podgląd logo przez `next/image` tylko gdy adres wskazuje na własny
+  host (jedyny dozwolony w `images.remotePatterns`/CSP `img-src`) — inaczej sam link, bez
+  rozszerzania CSP. Dowód: `rls.sql` sekcja CL162 (member/recruiter bez dostępu, http:// i adres
+  nad limitem długości odrzucone, zmiana linków nie cofa `verified`, zmiana nazwy nadal cofa).
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,
@@ -1556,7 +1565,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Znak jak `Logo.tsx`, tokeny `--pp-*`, osadzony DM Sans, pomiar tekstu tablicą szerokości
   (`src/lib/campaign-banner/`). Opis: `docs/design/people-passport/BANNER-EXPORT.md`. Testy:
   `campaign-banner*.test.ts` (Chromium: pomiar przeglądarki ≤ serwera), E2E `campaign-banner`.
-  **Otwarte:** link do baneru w panelu admina (admin ma dostęp tylko przez adres endpointu).
+  Link do baneru w panelu admina: `/admin/firmy/[id]` przy każdej AKTYWNEJ ofercie firmy linkuje
+  do `GET /api/employer/jobs/[id]/banner` (endpoint dopuszcza admina, `/employer/oferty/[id]/baner`
+  jest zablokowana layoutem panelu pracodawcy dla konta bez firmy) — otwiera się w nowej karcie.
   Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami
