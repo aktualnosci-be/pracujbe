@@ -35,7 +35,7 @@ export const guestApplicationSchema = z.object({
     'guestApply.error.sensitiveIdNotAllowed',
   ),
   locale: localeSchema,
-  agreeTerms: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.consentRequired' }) }),
+  agreeTerms: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.privacyNoticeRequired' }) }),
   idempotencyKey: z.string().uuid('guestApply.error.idempotencyKeyInvalid'),
   /**
    * #101: odpowiedzi na pytania oferty — ten sam kształt co w zwykłej aplikacji. Wymagalność,

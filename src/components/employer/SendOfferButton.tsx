@@ -92,20 +92,31 @@ export function SendOfferButton({
 
   const job = jobTitle || td('applicationUnknownJob');
 
+  // Toast renderujemy także w stanie „wysłano”: sukces od razu przełącza przycisk na ten stan,
+  // więc bez tego komunikat o wysłaniu nigdy by się nie pojawił.
+  const toastNode = toast ? (
+    <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">
+      <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
+    </div>
+  ) : null;
+
   if (sentAt !== null) {
     const date = sentAt ? new Date(sentAt) : null;
     return (
-      <p
-        className={cn(
-          'inline-flex min-h-11 items-center gap-2 text-sm font-medium text-success-text',
-          className,
-        )}
-      >
-        <Check className="size-4 shrink-0" aria-hidden="true" />
-        {date && !Number.isNaN(date.getTime())
-          ? td('offerSentOn', { date: format.dateTime(date, { dateStyle: 'medium' }) })
-          : ts('offerSent')}
-      </p>
+      <>
+        <p
+          className={cn(
+            'inline-flex min-h-11 items-center gap-2 text-sm font-medium text-success-text',
+            className,
+          )}
+        >
+          <Check className="size-4 shrink-0" aria-hidden="true" />
+          {date && !Number.isNaN(date.getTime())
+            ? td('offerSentOn', { date: format.dateTime(date, { dateStyle: 'medium' }) })
+            : ts('offerSent')}
+        </p>
+        {toastNode}
+      </>
     );
   }
 
@@ -253,11 +264,7 @@ export function SendOfferButton({
         </LightDialogContent>
       </LightDialogRoot>
 
-      {toast ? (
-        <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">
-          <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
-        </div>
-      ) : null}
+      {toastNode}
     </>
   );
 }

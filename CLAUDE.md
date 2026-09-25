@@ -582,6 +582,19 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 ### Etap 3 — kandydat
 - [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. **Otwarte:** IP/user-agent w receipcie akceptacji, budżet wysyłki puli `auth` w workerze PostgreSQL, domyślna nazwa firmy w formularzu po nieudanym bootstrapie.
+  Rozdzielenie zgód (#493, migracja `0108`): rejestracja kandydata/pracodawcy
+  i krok 6 onboardingu mają osobne, niezaznaczone pola — akceptacja regulaminu (wymagana),
+  potwierdzenie zapoznania się z informacją o prywatności (wymagane, NIE zgoda) i zgoda
+  opcjonalna na e-maile marketingowe (tylko rejestracja; odmowa nie blokuje konta, wycofanie
+  w ustawieniach powiadomień). `record_signup_consents` (service_role; Better Auth: marker v2
+  w `auth.record_signup_receipts`) zapisuje każdy element osobno: `document_acceptances.kind`
+  (`terms_acceptance`/`privacy_notice_ack`, dawne wiersze = `legacy_combined`, nie zgoda),
+  zgoda na marketing jako zdarzenie dziennika #513 `email_consent_events` (źródło `signup`,
+  język, wersja treści `sha256:` z `src/lib/signup-consents.ts`; odmowa = brak zdarzenia). Receipty niezmienne (trigger; usuwa je tylko kaskada usunięcia konta).
+  Aplikowanie: pole „zapoznałem się z informacją o prywatności” zamiast „zgody”. Dowód:
+  `rls.sql` sekcja CS493 (z kontrolą ujemną), `signup-consents.test`, E2E `consent-separation`.
+  Szkic brzmień: `docs/legal-drafts/zgody-i-akceptacje.md` (PROJEKT, nieopublikowany).
+  **Otwarte:** treść prawna (#61), podstawy (#485/#487).
 - [x] Onboarding kandydata (6 kroków) — UI + realny zapis per krok do DB (`saveOnboardingStep`, RHF + stan zapisu)
   Pusta nazwa/imię/nazwisko → „wymagane” (także formularz firmy, #367); pozycje list (zawody 80,
   umiejętności 120, certyfikaty 160 = `CANDIDATE_ITEM_LIMITS`, zgodne z `left()` w 0028) —
@@ -799,8 +812,22 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `locations` z bazy, potem kanoniczna lista ~46 belgijskich miast w kodzie z aliasami
   PL/NL/FR/EN (`src/lib/matching/belgian-cities.ts`, 10 miast = wartości z `0010`, strażnik
   w `matching-locations.test.ts`); miasto spoza obu → ten sam region = 10 bez etykiety
-  „w promieniu”. **Do zrobienia:** współrzędne w bazie dla pozostałych miast (migracja
-  `locations`), geokodowanie miejscowości spoza listy.
+  „w promieniu”.
+  Słownik w bazie (#194, migracja `0112`): 602 miejscowości = lista
+  kanoniczna z kodu (jej współrzędne i aliasy mają pierwszeństwo) + wszystkie gminy Belgii
+  i gminy zniesione przy fuzjach 2019/2025 z migawki Wikidata (CC0 1.0,
+  `data/locations/`, bez API w runtime), `is_demo = false`. Kolumny `locations.kind`
+  (`municipality`/`former_municipality`/`locality`) i `refnis` (kod NIS). Tabela
+  `location_aliases` (nazwy PL/NL/FR/EN, `alias_key` = `cityKey`, unikalny; własna nazwa gminy
+  wygrywa z egzonimem — „Saint-Nicolas” to gmina w prowincji Liège, nie Sint-Niklaas),
+  odczyt publiczny, zapis service_role. Loader `getMyJobMatch` pyta tylko o klucze miasta
+  kandydata i oferty. Migracja jest GENEROWANA (`node scripts/locations/build-migration.mjs`;
+  odświeżenie migawki `node scripts/locations/fetch-wikidata.mjs`); test porównuje plik
+  z generatorem, lustro TS z bazą (z kontrolą ujemną) i klucze z `cityKey`. Dowód: `rls.sql`
+  sekcja LOC194 (kontrola ujemna bez polityki RLS), rollback `supabase/rollback/0112_…down.sql`,
+  integracja `portal-candidate` (Puurs–Bornem tylko z bazy; mutacja bez słownika = czerwony).
+  **Do zrobienia:** części gmin (deelgemeenten), geokodowanie miejscowości spoza słownika;
+  zmiana listy w kodzie po wdrożeniu 0112 = nowa migracja (test wskazuje plik 0112).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
   Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
   `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
@@ -907,7 +934,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
   i alerty pojedyncze (`rls.sql` PP7–PP8).
 - [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** zgłoszenia
-  Załączniki (migracja `0108`, numer tymczasowy): PDF/DOC/DOCX/JPG/PNG ≤ 5 MB, najwyżej 3 na
+  Załączniki (migracja `0113`, numer tymczasowy): PDF/DOC/DOCX/JPG/PNG ≤ 5 MB, najwyżej 3 na
   wiadomość (`src/lib/validation/message-attachment.ts` — przeglądarka i akcja; magic bytes
   i OOXML w `src/lib/files/message-attachments.ts`). „Dołącz plik” wgrywa plik od razu
   (`uploadMessageAttachment`: `can_attach_in_conversation` → PUT do prywatnego bucketu pod
@@ -938,7 +965,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 
 ### Etap 6 — komunikacja
 - [x] Wybór języka odbiorcy (fallback) — util + test + `resolve_recipient_locale()` w DB (INVARIANT #1 egzekwowany przy kolejkowaniu)
-- [~] Kolejka e-mail + worker + ponawianie — outbox (`email_deliveries`: attempts/next_attempt_at/payload), worker `src/lib/email/outbox.ts` + route `/api/email/process` (sekret) gotowe; realna wysyłka wymaga `RESEND_API_KEY`
+- [~] Kolejka e-mail + worker + ponawianie — outbox (`email_deliveries`: attempts/next_attempt_at/payload), worker `src/lib/email/outbox.ts` + route `/api/email/process` (sekret) gotowe; realna wysyłka wymaga kluczy dostawcy
+  Dostawca poczty (decyzja właściciela 25.09): **EmailLabs** domyślnie, Resend jako alternatywa —
+  wspólny transport `src/lib/email/transport/` (wybór `EMAIL_PROVIDER=emaillabs|resend`; pusty =
+  EmailLabs przy komplecie `EMAILLABS_APP_KEY`/`_SECRET_KEY`/`_SMTP_ACCOUNT`, inaczej Resend;
+  jawny bez kluczy albo nieznana wartość = brak wysyłki, bez cichego przełączenia) w obu
+  workerach (`email_deliveries` i `auth.email_outbox`). EmailLabs REST v2.1: `messageId` =
+  UUID wiersza + domena nadawcy (= `provider_message_id`), deduplikacja ponowień przez
+  `GET /v2.1/email?messageId` przed każdą wysyłką (brak Idempotency-Key u dostawcy), ACK tylko
+  z tym identyfikatorem w odpowiedzi, `X-TRACKING-OFF: 1`, nagłówki wypisania bez zmian, kody
+  `EMAIL_PROVIDER_*` zamiast komunikatu dostawcy. Webhook `POST /api/email/webhook/emaillabs`
+  (SHA1 sekret|data|Request-Id + opcjonalny Basic auth, inbox `emaillabs:<Request-Id>`,
+  hardbounce → blokada, softbounce/spambounce bez blokady, deferred → opóźnienie, ok →
+  delivered). `/api/health`: `emailProvider`, `checks.emailProviderReady`/`emaillabsWebhook`.
+  Opis i kroki panelu:
+  `docs/EMAILLABS_SETUP.md`. Testy: `emaillabs-transport`, `emaillabs-webhook` (atrapa HTTP,
+  kontrola ujemna deduplikacji). **Do zrobienia (właściciel):** domena/DKIM/SPF/DMARC, konto
+  SMTP z wyłączonym open trackingiem, własnym wypisem i stopką, klucze API z prawem odczytu
+  statusów, webhook, włączenie statusów „OK” u wsparcia, zmienne w Railway.
   Harmonogram: cron Railway (`scripts/railway-cron-call.mjs` → `/api/email/process`), opis w `docs/RESEND_SETUP.md` §6 (#296).
   Wypisanie i budżety (#45, etap 1, migracja `0087`): token HMAC (`src/lib/email/unsubscribe-token.ts`,
   `EMAIL_UNSUBSCRIBE_SECRET`; UUID konta + kategoria + 180 dni, bez e-maila w URL), link w stopce
@@ -972,7 +1016,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `rls.sql` sekcja CM45 (dblink, kontrole ujemne), unit `email-consent-campaigns`.
   **Do zrobienia (właściciel):** wartości `EMAIL_SENDER_*`, wyłączenie trackingu w Resend i
   kontrola odebranego `.eml` na produkcji; treść prawna zgody marketingowej (#40). **Otwarte:**
-  panel admina kampanii (dziś RPC service_role), rejestracja z opt-in marketingu.
+  tworzenie rewizji kampanii z panelu (dziś `create_email_campaign_revision`, service_role),
+  prawdziwa pauza z wznowieniem (wymaga zmiany `claim_email_batch`), rejestracja z opt-in marketingu.
+  Panel kampanii (#45, migracja `0111`): `/admin/kampanie` — rewizje
+  (filtr statusu, slug, kursor) z liczbami odbiorców według statusu (bez adresów),
+  `/admin/kampanie/[id]` — podgląd treści w każdym języku (walidacja jak worker,
+  `src/lib/admin/campaigns.ts`), rewizje sluga, „Aktywuj rewizję”/„Zatrzymaj wysyłkę” z dialogiem
+  (`admin_activate_email_campaign`/`admin_cancel_email_campaign`: is_admin, CAS
+  `p_expected_status` → `STALE_STATE`, `INVALID_TRANSITION`, skutek = RPC z 0101, audyt
+  `email_campaign.*` bez treści i odbiorców). Bez `EMAIL_FROM` + `EMAIL_SENDER_*` +
+  `EMAIL_UNSUBSCRIBE_SECRET` (`campaignSendingReady`): jawny komunikat, akcja aktywacji odmawia
+  przed bazą, `/api/maintenance` nie woła `process_email_campaigns`. Dowód: `rls.sql` sekcja
+  AC45 (kontrola ujemna bez CAS), unit `admin-email-campaigns` (kontrole ujemne bramki nadawcy),
+  E2E `admin-email-campaigns`, `admin-a11y`.
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
@@ -1104,8 +1160,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
   `admin-a11y` (nowe trasy). **Do zatwierdzenia przez właściciela (#40):** okno odwołania
   6 mies., termin rozpatrzenia 14 dni, retencja 12 mies., zakres publikacji i przekazywania do
-  bazy DSA, treść prawna o procedurze. **Otwarte:** harmonogram czyszczenia (po #40), odwołanie
-  zgłaszającego od cofnięcia ograniczenia, retencja `audit_logs` z uzasadnieniami.
+  bazy DSA, treść prawna o procedurze. Harmonogram czyszczenia: `/api/maintenance` woła
+  `dsa_retention_run` tylko za flagą `DSA_RETENTION_MODE` (`dry-run`/`apply`, domyślnie
+  wyłączone, liczniki w odpowiedzi; `src/lib/admin/dsa-retention-mode.ts`). Odwołanie
+  zgłaszającego od cofnięcia ograniczenia (migracja `0109`): ręczne cofnięcie
+  wysyła `reportRestored` w języku zgłaszającego, termin od wysłania, formularz na
+  `/zglos-tresc/sprawa` (znacznik treści prawnej), `submit_report_restoration_appeal`,
+  rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
+  autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
+  retencja `audit_logs` z uzasadnieniami.
 - [~] Rejestr naruszeń RODO (#490, migracja `0106`): `/admin/naruszenia`
   (tylko admin). Wpis = incydent bezpieczeństwa albo naruszenie danych osobowych: czas
   stwierdzenia (termin 72 h liczony od niego — `breachDeadline` w `src/lib/admin/breach.ts`),
@@ -1209,8 +1272,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
-  cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
-  `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
+  cron kopii/odtworzenia), blokada HTTP w testach, odmiana i aliasy miast w SQL.
+  Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
+  wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
+  `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
+  jak w `0091`. Demo: lustro `src/lib/search-fold.ts`. Pomiar przed/po: `docs/railway/OPERATIONS.md` §3.
+  Dowód: `rls.sql` sekcja SU47 (kontrola ujemna: stary ILIKE). Raporty CSP: `report-uri`/`report-to`
+  → `POST /api/csp-report` (tylko log: dyrektywa, origin zasobu, ścieżka bez query/ID; 16 KB, 20/min
+  z adresu, 300 wpisów/min na proces; `src/lib/security/csp-report.ts`), `Referrer-Policy:
+  strict-origin-when-cross-origin` globalnie — test `csp-report`.
   Cutover i rollback (#16/#18): runbook `docs/railway/CUTOVER_ROLLBACK.md` (kolejność: bazy →
   Better Auth → Resend/cron → `APP_MODE` na decyzję właściciela; rollback = wyzerowanie zmiennych
   w odwrotnej kolejności albo redeploy ostatniego dobrego wdrożenia, baza tylko do przodu;
@@ -1284,10 +1354,21 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (niekompletny → `ONBOARDING_INCOMPLETE`), wyszukiwalność tylko po ukończeniu i opt-in
   (widok pracodawcy pod RLS). Mutacje: `searchable-without-complete|skills-append|
   completeness-guard-off|relations-dml-open`. Zestaw real-flow nie jest w CI (uruchamiany ręcznie).
-  **Otwarte:** panele i Server Actions nadal używają klienta Supabase (PostgREST nie ustawia
-  `app.current_uid`), więc kliknięć w panelach i `revalidatePath` ten test nie obejmuje — po
-  #24/#25 dołożyć kroki UI w tym samym configu. Wpięcie w CI (job z usługą `postgres:16`) —
-  gotowy fragment `ci.yml` w opisie PR tej zmiany.
+  Kroki UI w przeglądarce (`tests/e2e-real/ui-flow.spec.ts`, helpery `support/ui.ts`): serwer
+  `next dev` z Better Auth na ograniczonym loginie auth (`DATABASE_AUTH_URL`, origin jak w stosie
+  testu). Rejestracja pracodawcy (nl) i kandydata (fr) formularzami → link potwierdzenia z
+  `auth.email_outbox` (język odbiorcy) → przycisk „Potwierdź” → panel wg roli; logowanie
+  formularzem (złe hasło bez sesji), panel bez sesji → logowanie. Kreator onboardingu 1–6
+  (błąd pola, „Zakończ” → `profile_completed` w bazie), przełącznik widoczności profilu,
+  ApplyModal (podwójne kliknięcie, ponowne wysłanie → „już aplikowałeś”), menu statusu w
+  szczególe zgłoszenia, propozycja z `/employer/kandydaci`, akceptacja w
+  `/candidate/propozycje`, wiadomości w obu panelach, obca firma → 404 szczegółu. Wyjątki bez
+  ścieżki UI: weryfikacja firmy przez RPC admina, oferta przez RPC kreatora pod sesją
+  z przeglądarki, wiersz `matches` wstawia operator (pipeline P1-03). Mutacje UI:
+  `respond-offer-noop|transition-noop` (czerwone są też `finish-onboarding-noop` i
+  `recipient-locale-en`; `rls-applications-off` łapie tylko critical-flow — panel sam filtruje
+  po aktywnej firmie). **Otwarte:** wpięcie w CI (job z usługą `postgres:16`) — gotowy
+  fragment `ci.yml` w opisie PR; kreator oferty (9 kroków) w tym przebiegu.
   Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
   worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);

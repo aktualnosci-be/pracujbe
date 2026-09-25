@@ -31,7 +31,7 @@ import { BTN_PRIMARY, BTN_SMALL, FORM_CONTROL } from '@/components/dashboard/pan
  * Klucz idempotencji (#147): jeden UUID na operację wysyłki danej treści; ponowienie tej
  * samej treści po błędzie używa tego samego klucza (retry po utracie odpowiedzi nie dubluje
  * wiadomości), sukces lub zmiana treści zaczyna nową operację.
- * Załączniki (0108): „Dołącz plik” wgrywa każdy plik osobno od razu po wyborze (reguły
+ * Załączniki (0113): „Dołącz plik” wgrywa każdy plik osobno od razu po wyborze (reguły
  * `checkAttachmentFile` przed wysyłką, każdy upload ma własny stały klucz — ponowienie nie
  * dubluje pliku), a „Wyślij” łączy gotowe pliki z wiadomością w jednej transakcji. W trakcie
  * wgrywania albo przy nieudanym pliku wysyłka jest zablokowana; plik można usunąć lub ponowić.
@@ -139,7 +139,7 @@ export function MessageComposer({
   function removeDraft(draft: DraftAttachment): void {
     setDrafts((current) => current.filter((item) => item.key !== draft.key));
     setAttachNotice(null);
-    // Najlepsza próba: niewysłany plik i tak sprząta zadanie konserwacji (0108).
+    // Najlepsza próba: niewysłany plik i tak sprząta zadanie konserwacji (0113).
     if (draft.attachmentId) void discardMessageAttachment(draft.attachmentId).catch(() => undefined);
     textareaRef.current?.focus();
   }

@@ -22,7 +22,7 @@ export async function getCvServiceDeps(): Promise<CvServiceDeps | null> {
   return { pool, store, downloadSecret: secret };
 }
 
-/** Te same zasoby dla załączników wiadomości (0108): jeden prywatny bucket i sekret linków. */
+/** Te same zasoby dla załączników wiadomości (0113): jeden prywatny bucket i sekret linków. */
 export async function getAttachmentServiceDeps(): Promise<
   import('./message-attachments').AttachmentServiceDeps | null
 > {

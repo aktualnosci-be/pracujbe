@@ -112,3 +112,66 @@ describe('maintenance: kolejka storage bez bucketu (#27)', () => {
     expect(fakeDb.callsTo('complete_storage_deletion')[0]?.args).toEqual({ p_id: 'q1', p_ok: false, p_error: 'STORAGE_UNCONFIGURED' });
   });
 });
+
+describe('maintenance: czyszczenie spraw DSA za jawną flagą (#43)', () => {
+  const env = process.env.DSA_RETENTION_MODE;
+  const summary = { eligibleCases: 3, redactedCases: 2, policy: { retentionDays: 365 }, runId: 'r1', dryRun: false };
+  const restore = () => {
+    if (env === undefined) delete process.env.DSA_RETENTION_MODE;
+    else process.env.DSA_RETENTION_MODE = env;
+  };
+
+  it('domyślnie wyłączone: bez zmiennej i przy nieznanej wartości baza nie jest wołana', async () => {
+    try {
+      for (const value of [undefined, '', 'true', 'APPLY', 'dryrun', ' apply']) {
+        if (value === undefined) delete process.env.DSA_RETENTION_MODE;
+        else process.env.DSA_RETENTION_MODE = value;
+        resetFakeDb(null);
+        for (const fn of MAINTENANCE_RPCS) fakeDb.rpc(fn, 0);
+        const res = await POST(request());
+        expect(res.status).toBe(200);
+        expect(fakeDb.callsTo('dsa_retention_run')).toHaveLength(0);
+        expect(await res.json()).toMatchObject({ dsaRetention: { mode: 'off' } });
+      }
+    } finally {
+      restore();
+    }
+  });
+
+  it('dry-run: podgląd z licznikami, bez anonimizacji', async () => {
+    try {
+      process.env.DSA_RETENTION_MODE = 'dry-run';
+      fakeDb.rpc('dsa_retention_run', { ...summary, redactedCases: undefined, dryRun: true });
+      const res = await POST(request());
+      expect(res.status).toBe(200);
+      expect(fakeDb.callsTo('dsa_retention_run')[0]).toMatchObject({ args: { p_dry_run: true }, as: 'service' });
+      expect((await res.json()).dsaRetention).toEqual({ mode: 'dry-run', eligibleCases: 3 });
+    } finally {
+      restore();
+    }
+  });
+
+  it('apply: anonimizacja, odpowiedź tylko z liczbami (bez runId i polityki)', async () => {
+    try {
+      process.env.DSA_RETENTION_MODE = 'apply';
+      fakeDb.rpc('dsa_retention_run', summary);
+      const res = await POST(request());
+      expect(fakeDb.callsTo('dsa_retention_run')[0]).toMatchObject({ args: { p_dry_run: false }, as: 'service' });
+      expect((await res.json()).dsaRetention).toEqual({ mode: 'apply', eligibleCases: 3, redactedCases: 2 });
+    } finally {
+      restore();
+    }
+  });
+
+  it('błąd przebiegu → 503 (bez pozornego sukcesu)', async () => {
+    try {
+      process.env.DSA_RETENTION_MODE = 'apply';
+      fakeDb.rpc('dsa_retention_run', () => { throw pgError('XX000', 'x'); });
+      const res = await POST(request());
+      expect(res.status).toBe(503);
+      expect(captureError).toHaveBeenCalledWith(expect.anything(), { area: 'maintenance.gc', task: 'dsaRetention' });
+    } finally {
+      restore();
+    }
+  });
+});

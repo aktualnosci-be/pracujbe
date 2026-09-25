@@ -72,6 +72,11 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     fakeDb.rpc('claim_storage_deletions', []);
     process.env.MAINTENANCE_SECRET = 'maintenance-secret';
     delete process.env.CRON_SECRET;
+    // Kampanie (#45) kolejkują się tylko z kompletem nadawcy marketingu i sekretem wypisania.
+    vi.stubEnv('EMAIL_FROM', 'Pracuj.be <news@example.test>');
+    vi.stubEnv('EMAIL_SENDER_IDENTITY', 'Operator testowy');
+    vi.stubEnv('EMAIL_SENDER_POSTAL_ADDRESS', 'Rue de Test 1, 1000 Bruxelles');
+    vi.stubEnv('EMAIL_UNSUBSCRIBE_SECRET', 'x'.repeat(40));
     vi.mocked(isProductionMode).mockReturnValue(true);
   });
 
@@ -98,6 +103,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       campaignEmailsQueued: 0,
       retention: {},
       purgedMessageAttachments: 0,
+      // #43: czyszczenie spraw DSA wyłączone bez jawnej flagi — bez wywołania bazy.
+      dsaRetention: { mode: 'off' },
       storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
     });
   });

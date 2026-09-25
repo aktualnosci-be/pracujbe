@@ -2,8 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Zgoda na regulamin przy rejestracji jest sprawdzana na SERWERZE: żądanie bez zgody nie
- * dociera do SDK. Receipty akceptacji zapisuje trigger 0059 w tej samej transakcji co konto
+ * Akceptacja regulaminu i potwierdzenie informacji o prywatności (#493: osobne pola) są
+ * sprawdzane na SERWERZE: żądanie bez nich nie dociera do SDK. Zgoda na marketing jest
+ * opcjonalna i trafia do markera v2 jako osobny wybór. Receipty akceptacji zapisuje trigger 0059 w tej samej transakcji co konto
  * (dowód na PostgreSQL: tests/integration/auth-email-outbox.test.ts) — tutaj sprawdzamy, że
  * akcja wywołuje SDK wyłącznie w walidowanym kontekście z rolą wynikającą z akcji, a błąd
  * zapisu (np. triggera receiptów) kończy rejestrację błędem bez przekierowania.
@@ -54,6 +55,10 @@ describe('rejestracja bez zgody na regulamin', () => {
     ['false', { agreeTerms: false }],
     ['napis "true"', { agreeTerms: 'true' }],
     ['1', { agreeTerms: 1 }],
+    // #493: informacja o prywatności to osobne, wymagane pole — sam regulamin nie wystarcza.
+    ['regulamin bez informacji o prywatności', { agreeTerms: true }],
+    ['informacja o prywatności bez regulaminu', { privacyNoticeAck: true }],
+    ['informacja o prywatności "true"', { agreeTerms: true, privacyNoticeAck: 'true' }],
   ];
 
   it.each(withoutConsent)('kandydat (%s) — odrzucone, konto nie powstaje', async (_label, extra) => {
@@ -71,39 +76,52 @@ describe('rejestracja bez zgody na regulamin', () => {
 
 describe('rejestracja ze zgodą', () => {
   it('kandydat: kontekst z rolą candidate, zgodą i językiem formularza → strona potwierdzenia', async () => {
-    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
+    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, privacyNoticeAck: true }));
     expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
-    expect(captured).toMatchObject({ role: 'candidate', agree_terms: true, locale: 'nl', signup_receipt_version: 1 });
+    expect(captured).toMatchObject({
+      role: 'candidate', agree_terms: true, locale: 'nl', signup_receipt_version: 2,
+      // #493: osobne elementy; niezaznaczona zgoda opcjonalna = odmowa.
+      privacy_notice_ack: true, optional_consents: { email_marketing: false },
+    });
+    expect(new Set(Object.values(captured?.consent_wording ?? {})).size).toBe(3);
     expect(captured).not.toHaveProperty('company_name');
   });
 
   it('pracodawca: rola employer i nazwa firmy do bootstrapu po potwierdzeniu', async () => {
-    const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true }));
+    const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true, privacyNoticeAck: true }));
     expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
     expect(captured).toMatchObject({ role: 'employer', agree_terms: true, company_name: 'Firma Testowa' });
   });
 
+  it('zgoda na marketing zaznaczona — trafia do markera jako osobny wybór (#493)', async () => {
+    const result = await outcome(() =>
+      registerEmployer({ ...employer, agreeTerms: true, privacyNoticeAck: true, marketingOptIn: true }),
+    );
+    expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
+    expect(captured?.optional_consents).toEqual({ email_marketing: true });
+  });
+
   it('pole role=admin z formularza jest ignorowane (rolę wybiera akcja)', async () => {
-    await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, role: 'admin' } as never));
+    await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, privacyNoticeAck: true, role: 'admin' } as never));
     expect(captured?.role).toBe('candidate');
   });
 
   it('błąd zapisu konta/receiptu w SDK — rejestracja nieudana, bez przekierowania i technikaliów', async () => {
     api.signUpEmail.mockRejectedValue(new Error('insert or update on table "document_acceptances" violates'));
-    const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true }));
+    const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true, privacyNoticeAck: true }));
     expect(result).toEqual({ ok: false, error: 'INTERNAL' });
     expect(JSON.stringify(result)).not.toContain('document_acceptances');
   });
 
   it('istniejący adres (neutralny sukces SDK) — to samo przekierowanie co nowe konto', async () => {
     api.signUpEmail.mockResolvedValue({ token: null, user: { id: 'syntetyczny' } });
-    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
+    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, privacyNoticeAck: true }));
     expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
   });
 
   it('odrzucone przez SDK hasło → VALIDATION_FAILED', async () => {
     api.signUpEmail.mockRejectedValue(authApiError(400, 'PASSWORD_TOO_LONG'));
-    expect(await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }))).toEqual({
+    expect(await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, privacyNoticeAck: true }))).toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
     });

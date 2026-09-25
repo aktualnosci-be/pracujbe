@@ -4,7 +4,7 @@ import { AppError } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
 
 /**
- * Pobranie załącznika wiadomości (0108, Invariant #10). Link wystawia akcja
+ * Pobranie załącznika wiadomości (0113, Invariant #10). Link wystawia akcja
  * `prepareMessageAttachmentDownload` (podpis HMAC, 60 s, związany z załącznikiem i
  * użytkownikiem). Trasa ponownie sprawdza bieżącą sesję, podpis, dostęp do rozmowy (baza:
  * członkostwo, blokada firmy) i stan skanu, a bajty strumieniuje z prywatnego bucketu — bez

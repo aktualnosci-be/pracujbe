@@ -34,7 +34,7 @@ export interface ConversationListItem {
   counterpartyName: string;
   /** Treść ostatniej wiadomości (skrót). */
   lastPreview: string;
-  /** Ostatnia wiadomość istnieje, ale ma tylko załączniki (pusta treść, 0108) → UI: etykieta. */
+  /** Ostatnia wiadomość istnieje, ale ma tylko załączniki (pusta treść, 0113) → UI: etykieta. */
   lastIsAttachmentOnly?: boolean;
   /** Czas ostatniej wiadomości (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
   lastMessageAt: string;
@@ -58,7 +58,7 @@ export interface ThreadMessage {
   /** Strona nadawcy: firma (rekruter/zespół) albo kandydat — wybór etykiety zastępczej w UI. */
   senderSide: 'company' | 'candidate';
   isSystem: boolean;
-  /** Załączniki wysłane z wiadomością (0108), widoczne dla bieżącego uczestnika. */
+  /** Załączniki wysłane z wiadomością (0113), widoczne dla bieżącego uczestnika. */
   attachments?: ThreadAttachment[];
 }
 
@@ -217,7 +217,7 @@ async function fetchMessagePage(
 }
 
 /**
- * Załączniki strony wątku (0108): RPC sprawdza bieżący dostęp do rozmowy i blokadę firmy
+ * Załączniki strony wątku (0113): RPC sprawdza bieżący dostęp do rozmowy i blokadę firmy
  * (#97) — pliki kandydata, który zablokował firmę, nie trafiają do strony firmowej.
  */
 async function fetchAttachments(

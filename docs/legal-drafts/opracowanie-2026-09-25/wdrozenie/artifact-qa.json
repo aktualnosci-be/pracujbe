@@ -1,0 +1,31 @@
+{
+  "date": "2026-09-25",
+  "type": "artifact_structure_validation_only",
+  "production_tested": false,
+  "owner_approved": false,
+  "public_files": 28,
+  "languages": [
+    "pl",
+    "nl",
+    "fr",
+    "en"
+  ],
+  "texts_per_language": 7,
+  "original_files_preserved_byte_for_byte": 16,
+  "json_parsed": true,
+  "retention_core_values_validated": true,
+  "template_tokens_registered": 136,
+  "static_tokens_intentionally_unresolved": 59,
+  "application_runtime_tokens": 5,
+  "incident_runtime_tokens": 72,
+  "known_remaining_requirements": [
+    "owner_facts",
+    "owner_approvals",
+    "contracts_and_configuration_evidence",
+    "technical_implementation_and_acceptance",
+    "publication"
+  ],
+  "docx_pages_rendered": 8,
+  "docx_visual_review": true,
+  "docx_included": true
+}

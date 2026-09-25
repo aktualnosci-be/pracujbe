@@ -21,8 +21,8 @@ import {
  * pracodawca czyta z własnego widoku, tak jak panel.
  *
  * Przeglądarka: strony publiczne oferty czytają z tej samej bazy (DATABASE_APP_URL).
- * Panele i Server Actions nadal używają klienta Supabase — ich wpięcie w ten test czeka na
- * #24/#25 (opis w PR); do tego czasu „widok” panelu = zapytanie pod sesją i RLS.
+ * Tu „widok” panelu = zapytanie pod sesją i RLS (reguły bazy, kontrole ujemne, wyścigi);
+ * te same kroki klikane w panelach i Server Actions — ui-flow.spec.ts.
  */
 
 /** Kontrola ujemna po stronie klienta: ponowienie z NOWYM kluczem (regresja useRef w ApplyModal). */

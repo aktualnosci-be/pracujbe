@@ -10,7 +10,7 @@ import { captureError } from '@/lib/sentry';
 import { checkAttachmentFile, type AttachmentFileProblem } from '@/lib/validation/message-attachment';
 
 /**
- * Załączniki wiadomości (0108) — granica Server Actions. Autor = użytkownik potwierdzonej
+ * Załączniki wiadomości (0113) — granica Server Actions. Autor = użytkownik potwierdzonej
  * sesji serwera; klient podaje wyłącznie rozmowę, klucz operacji uploadu i plik albo ID
  * załącznika. Logika w `src/lib/files/message-attachments.ts`, dostęp rozstrzyga baza.
  *

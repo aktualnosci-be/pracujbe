@@ -88,7 +88,7 @@ export async function openConversation(input: {
 const clientMessageIdSchema = z.string().uuid();
 const attachmentIdsSchema = z.array(z.string().uuid()).max(MESSAGE_ATTACHMENTS_MAX)
   .refine((ids) => new Set(ids).size === ids.length);
-/** Treść może być pusta tylko z co najmniej jednym załącznikiem (jak `send_message`, 0108). */
+/** Treść może być pusta tylko z co najmniej jednym załącznikiem (jak `send_message`, 0113). */
 const sendInputSchema = z.object({
   body: z.string().trim().max(MESSAGE_BODY_MAX_LENGTH),
   attachmentIds: attachmentIdsSchema,
@@ -99,7 +99,7 @@ const sendInputSchema = z.object({
  * `clientMessageId` = stały UUID jednej operacji wysyłki (#147): ponowienie po utracie
  * odpowiedzi z tym samym kluczem zwraca istniejącą wiadomość bez duplikatu i alertów.
  * `attachmentIds` = własne, przygotowane w tej rozmowie pliki (`uploadMessageAttachment`);
- * baza łączy je z wiadomością w tej samej transakcji (0108) — brak któregokolwiek cofa wysyłkę.
+ * baza łączy je z wiadomością w tej samej transakcji (0113) — brak któregokolwiek cofa wysyłkę.
  */
 export async function sendMessage(
   conversationId: string,

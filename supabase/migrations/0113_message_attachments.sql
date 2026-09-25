@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0108_message_attachments.sql — załączniki w rozmowach (Etap 5, „Wiadomości").
+-- 0113_message_attachments.sql — załączniki w rozmowach (Etap 5, „Wiadomości").
 -- NUMER TYMCZASOWY — ostateczny nada integrator (kolejka migracji).
 --
 -- Model:
