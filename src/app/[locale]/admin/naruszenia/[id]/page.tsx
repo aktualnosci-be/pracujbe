@@ -23,7 +23,7 @@ import { BreachIncidentForm } from '@/components/admin/BreachIncidentForm';
 import { BreachNoticeForm } from '@/components/admin/BreachNoticeForm';
 import { BreachStatusActions } from '@/components/admin/BreachStatusActions';
 import {
-  BTN_SMALL,
+  BTN_SECONDARY,
   PANEL,
   PANEL_H2,
   PANEL_P,
@@ -152,14 +152,14 @@ export default async function AdminBreachDetailPage({ params }: PageProps) {
             <>
               <a
                 href={`/api/admin/breaches/${exportId}/export?format=json`}
-                className={cn(BTN_SMALL, 'border-[color:var(--pp-line)] text-foreground hover:bg-soft')}
+                className={BTN_SECONDARY}
               >
                 <Download className="size-4" aria-hidden="true" />
                 {t('breachExportJson')}
               </a>
               <a
                 href={`/api/admin/breaches/${exportId}/export?format=csv`}
-                className={cn(BTN_SMALL, 'border-[color:var(--pp-line)] text-foreground hover:bg-soft')}
+                className={BTN_SECONDARY}
               >
                 <Download className="size-4" aria-hidden="true" />
                 {t('breachExportCsv')}

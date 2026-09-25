@@ -103,8 +103,22 @@ const BTN_BASE =
 /** `.people .btn` — 14 px / 650, padding 12/19 px, promień 11 px, min. 49 px, tło marki. */
 export const BTN_PRIMARY = `${BTN_BASE} min-h-[49px] rounded-[11px] border border-primary bg-primary px-[19px] py-3 text-sm font-[650] text-primary-foreground hover:bg-primary-dark`;
 
-/** `.btn.secondary` — białe tło, linia, tekst ink. */
-export const BTN_SECONDARY = `${BTN_BASE} min-h-[49px] rounded-[11px] border border-[color:var(--pp-line)] bg-card px-[19px] py-3 text-sm font-[650] text-foreground hover:bg-soft`;
+/** `.btn.secondary` — białe tło, linia #ddd (`--pp-line-btn`), tekst ink. */
+export const BTN_SECONDARY = `${BTN_BASE} min-h-[49px] rounded-[11px] border border-[color:var(--pp-line-btn)] bg-card px-[19px] py-3 text-sm font-[650] text-foreground hover:bg-soft`;
+
+/**
+ * Geometria `.people .btn` bez kolorów (14 px / 650, padding 13/21 px, promień 11 px, min. 49 px) —
+ * przyciski akcji w wierszach tabel panelu admina (#7, Z6); kolor nadaje wariant tonu.
+ */
+export const BTN_ACTION = `${BTN_BASE} min-h-[49px] rounded-[11px] border px-[21px] py-[13px] text-sm font-[650]`;
+
+/**
+ * Filtr listy (np. status w panelu admina) jako przycisk prototypu (#7, Z6): aktywny = `.btn`,
+ * pozostałe = `.btn.secondary`. Prototyp nie ma pigułek — dawny `rounded-full` odpada.
+ */
+export function filterTabClass(isActive: boolean): string {
+  return isActive ? BTN_PRIMARY : BTN_SECONDARY;
+}
 
 /** `.people .notice .btn` — mniejszy przycisk akcji w wierszu: 12 px, padding 11/17 px, min. 44 px. */
 export const BTN_SMALL = `${BTN_BASE} min-h-11 rounded-[11px] border bg-card px-[17px] py-[11px] text-xs font-[650]`;
