@@ -195,7 +195,7 @@ test('krok 6: „Zapisz i wyjdź” zapisuje bez zgody, „Zakończ” → finis
   expect(await flags(candidate)).toEqual({ profile_completed: false, is_searchable: false });
 
   // „Zakończ” klikane dwa razy naraz — oba żądania kończą się sukcesem, stan jeden.
-  const finish = { ...STEP6, agreeTerms: true };
+  const finish = { ...STEP6, agreeTerms: true, privacyNoticeAck: true };
   expect(await Promise.all([saveStep(candidate, 6, finish, { finish: true }), saveStep(candidate, 6, finish, { finish: true })]))
     .toEqual([{ ok: true }, { ok: true }]);
   // Ukończenie nie włącza wyszukiwalności samo — to świadomy opt-in.
@@ -220,7 +220,7 @@ test('niekompletny profil: „Zakończ” → ONBOARDING_INCOMPLETE, dane kroku 
   expect(await saveStep(incomplete, 1, { firstName: 'Tom', lastName: 'Evans' })).toEqual({ ok: true });
   expect(await saveStep(incomplete, 2, { occupations: ['Cleaner'], categories: ['cleaning'] })).toEqual({ ok: true });
   // Krok 4 (miasto) pominięty — kompletność liczy baza, nie klient.
-  expect(await saveStep(incomplete, 6, { availability: 'immediate', agreeTerms: true }, { finish: true }))
+  expect(await saveStep(incomplete, 6, { availability: 'immediate', agreeTerms: true, privacyNoticeAck: true }, { finish: true }))
     .toEqual({ ok: false, error: 'ONBOARDING_INCOMPLETE' });
   expect(await loadWizard(incomplete)).toMatchObject({ occupations: ['Cleaner'], availability: 'immediate' });
   expect(await flags(incomplete)).toEqual({ profile_completed: false, is_searchable: false });
@@ -229,7 +229,7 @@ test('niekompletny profil: „Zakończ” → ONBOARDING_INCOMPLETE, dane kroku 
 
   // Uzupełnienie brakującego kroku i ponowne „Zakończ” — teraz ukończony.
   expect(await saveStep(incomplete, 4, { city: 'Brussel', radiusKm: 10 })).toEqual({ ok: true });
-  expect(await saveStep(incomplete, 6, { availability: 'immediate', agreeTerms: true }, { finish: true }))
+  expect(await saveStep(incomplete, 6, { availability: 'immediate', agreeTerms: true, privacyNoticeAck: true }, { finish: true }))
     .toEqual({ ok: true });
   expect(await flags(incomplete)).toEqual({ profile_completed: true, is_searchable: false });
 });

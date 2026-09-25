@@ -2,7 +2,14 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { MailCheck } from 'lucide-react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AuthPage,
+  AuthPageHeader,
+  AuthPageIcon,
+  AuthPageIntro,
+  AuthPageTitle,
+  AuthPaper,
+} from '@/components/auth/auth-page';
 import { ConfirmEmailForm } from './ConfirmEmailForm';
 
 /**
@@ -33,24 +40,17 @@ export default async function ConfirmEmailPage({ params }: PageProps) {
   const t = await getTranslations('auth');
 
   return (
-    <div className="container flex min-h-[calc(100vh-8rem)] items-center justify-center py-12">
-      <div className="w-full max-w-md">
-        <Card>
-          <CardHeader className="items-center space-y-3 text-center">
-            <span
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary"
-              aria-hidden="true"
-            >
-              <MailCheck className="h-7 w-7" />
-            </span>
-            <CardTitle as="h1" className="text-2xl">{t('confirmEmailTitle')}</CardTitle>
-            <CardDescription>{t('confirmEmailIntro')}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <ConfirmEmailForm />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <AuthPage>
+      <AuthPageHeader>
+        <AuthPageIcon>
+          <MailCheck />
+        </AuthPageIcon>
+        <AuthPageTitle>{t('confirmEmailTitle')}</AuthPageTitle>
+        <AuthPageIntro>{t('confirmEmailIntro')}</AuthPageIntro>
+      </AuthPageHeader>
+      <AuthPaper>
+        <ConfirmEmailForm />
+      </AuthPaper>
+    </AuthPage>
   );
 }

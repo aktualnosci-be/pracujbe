@@ -2,7 +2,13 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AuthPage,
+  AuthPageHeader,
+  AuthPageIntro,
+  AuthPageTitle,
+  AuthPaper,
+} from '@/components/auth/auth-page';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { ErrorCodes, type ErrorCode } from '@/lib/errors';
 import { safeNextPath } from '@/lib/auth/next-path';
@@ -52,44 +58,40 @@ export default async function LoginPage({ params, searchParams }: PageProps) {
   const t = await getTranslations('auth');
 
   return (
-    <div className="container flex min-h-[calc(100vh-8rem)] items-center justify-center py-12">
-      <div className="w-full max-w-md">
-        <Card>
-          <CardHeader className="space-y-2 text-center">
-            <CardTitle as="h1" className="text-2xl">{t('loginTitle')}</CardTitle>
-            <CardDescription>{t('loginSubtitle')}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <AuthForm variant="login" initialError={initialError} next={next} />
+    <AuthPage>
+      <AuthPageHeader>
+        <AuthPageTitle>{t('loginTitle')}</AuthPageTitle>
+        <AuthPageIntro>{t('loginSubtitle')}</AuthPageIntro>
+      </AuthPageHeader>
+      <AuthPaper>
+        <AuthForm variant="login" initialError={initialError} next={next} />
 
-            <div className="space-y-3 text-center text-sm">
-              <Link
-                href="/reset-hasla"
-                className="font-medium text-primary underline-offset-4 hover:underline"
-              >
-                {t('forgotPassword')}
-              </Link>
-              <p className="text-muted-foreground">
-                {t('noAccount')}{' '}
-                <Link
-                  href={next ? { pathname: '/rejestracja', query: { next } } : '/rejestracja'}
-                  className="font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  {t('submitRegister')}
-                </Link>
-              </p>
-              <p>
-                <Link
-                  href="/rejestracja-pracodawca"
-                  className="font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  {t('registerAsEmployer')}
-                </Link>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+        <div className="space-y-3 text-sm">
+          <Link
+            href="/reset-hasla"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {t('forgotPassword')}
+          </Link>
+          <p className="text-muted-foreground">
+            {t('noAccount')}{' '}
+            <Link
+              href={next ? { pathname: '/rejestracja', query: { next } } : '/rejestracja'}
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {t('submitRegister')}
+            </Link>
+          </p>
+          <p>
+            <Link
+              href="/rejestracja-pracodawca"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {t('registerAsEmployer')}
+            </Link>
+          </p>
+        </div>
+      </AuthPaper>
+    </AuthPage>
   );
 }

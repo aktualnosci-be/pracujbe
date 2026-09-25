@@ -10,6 +10,7 @@ import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AUTH_INPUT, AUTH_LABEL } from '@/components/auth/auth-page';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { passwordSchema } from '@/lib/validation/auth';
@@ -173,8 +174,9 @@ export function NewPasswordForm(): React.JSX.Element {
       ) : null}
 
       <div className="space-y-1.5">
-        <Label htmlFor="password">{t('newPassword')}</Label>
+        <Label htmlFor="password" className={AUTH_LABEL}>{t('newPassword')}</Label>
         <Input
+          className={AUTH_INPUT}
           id="password"
           type="password"
           autoComplete="new-password"
@@ -193,8 +195,9 @@ export function NewPasswordForm(): React.JSX.Element {
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="passwordConfirm">{t('newPasswordConfirm')}</Label>
+        <Label htmlFor="passwordConfirm" className={AUTH_LABEL}>{t('newPasswordConfirm')}</Label>
         <Input
+          className={AUTH_INPUT}
           id="passwordConfirm"
           type="password"
           autoComplete="new-password"
@@ -209,7 +212,7 @@ export function NewPasswordForm(): React.JSX.Element {
         ) : null}
       </div>
 
-      <Button type="submit" className="w-full" size="lg" disabled={isSubmitting || token === undefined}>
+      <Button type="submit" className="w-full" size="passport" disabled={isSubmitting || token === undefined}>
         {isSubmitting ? (
           <>
             <Loader2 className={cn('h-4 w-4 animate-spin')} aria-hidden="true" />

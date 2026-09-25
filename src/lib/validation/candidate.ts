@@ -182,13 +182,17 @@ export const step6Schema = z.object({
   agreeTerms: z.literal(true, {
     errorMap: () => ({ message: 'candidate.error.termsRequired' }),
   }),
+  /** #493: osobne potwierdzenie zapoznania się z informacją o prywatności (nie zgoda). */
+  privacyNoticeAck: z.literal(true, {
+    errorMap: () => ({ message: 'candidate.error.privacyNoticeRequired' }),
+  }),
 });
 
 /**
  * Krok 6 zapisywany bez zakończenia („Zapisz i wyjdź”, #337) — te same pola bez zgody. Zgoda
  * jest wymagana dopiero przy „Zakończ”, więc nie blokuje zapisu wpisanych danych.
  */
-export const step6DraftSchema = step6Schema.omit({ agreeTerms: true });
+export const step6DraftSchema = step6Schema.omit({ agreeTerms: true, privacyNoticeAck: true });
 
 /** Pełny profil kandydata — złączenie wszystkich kroków. */
 export const candidateProfileSchema = step1Schema
