@@ -30,6 +30,8 @@ Skrypt kończy się kodem0 przy sukcesie,1 przy błędzie żądania/HTTP,2 przy 
 
 ## Operacje (#47)
 
+Lista kontrolna konfiguracji usługi production (ustawienia, zmienne wymagane przy `APP_MODE=production`, crony — same nazwy, bez wartości): [KONFIGURACJA_PRODUKCJI.md](KONFIGURACJA_PRODUKCJI.md).
+
 Czujki `/api/health/ops`, kopie zaszyfrowane z retencją, okresowe odtworzenie i pomiar wyszukiwania opisuje [OPERATIONS.md](OPERATIONS.md). Kroki infrastruktury (sekret, login monitoringu, uptime, cron kopii) są w sekcji 5 tego dokumentu i nie zostały wykonane.
 
 ## Stan przejściowy kodu
