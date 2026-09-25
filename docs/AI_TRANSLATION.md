@@ -5,7 +5,7 @@ wpięta w oferty ani profile** — to kroki #33 (oferty) i #34 (profile). Domyś
 Języki: tylko pl/nl/fr/en (decyzja właściciela; bez ro/uk z #29/#38). Plan całości:
 `docs/AI_MULTILINGUAL_PLAN.md`.
 
-## Kolejka i rewizje (migracja 0127)
+## Kolejka i rewizje (migracja 0129)
 
 | Tabela | Rola |
 |---|---|
