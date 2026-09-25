@@ -256,10 +256,19 @@ async function fetchPublicJobsMap(
  * Mapa job_id → bezpieczne dane oferty dla WŁASNYCH aplikacji kandydata (RPC
  * `get_applied_jobs_display`, 0023). W odróżnieniu od `fetchPublicJobsMap` zwraca też
  * oferty nieaktywne/wygasłe/spoza top-N — kandydat ma prawo widzieć ofertę, do której
- * aplikował.
+ * aplikował. `jobIds` (#184) zawęża wynik w bazie do ofert, których dotyczy odczyt.
  */
-async function fetchAppliedJobsMap(tx: TransactionQuery, locale: Locale): Promise<Map<string, PublicJobLite>> {
-  return toPublicJobsMap(await rpcRows(tx, 'get_applied_jobs_display', { p_locale: locale }), 'job_id');
+async function fetchAppliedJobsMap(
+  tx: TransactionQuery,
+  locale: Locale,
+  jobIds: string[],
+): Promise<Map<string, PublicJobLite>> {
+  const ids = [...new Set(jobIds.filter((id) => id.length > 0))];
+  if (ids.length === 0) return new Map();
+  return toPublicJobsMap(
+    await rpcRows(tx, 'get_applied_jobs_display', { p_locale: locale, p_job_ids: ids }),
+    'job_id',
+  );
 }
 
 /**
@@ -272,10 +281,10 @@ async function fetchOfferedJobsMap(tx: TransactionQuery, locale: Locale): Promis
 }
 
 /**
- * Metadane ofert tylko dla `job_id` jednej strony historii zgłoszeń (#184). Filtr `ANY`
- * zawęża wynik RPC po stronie bazy, więc „Pokaż więcej” nie przesyła danych całej historii.
- * RPC zwraca wyłącznie oferty własnych aplikacji (auth.uid()), dlatego cudze lub
- * niepowiązane `job_id` w filtrze nie dają żadnego wiersza.
+ * Metadane ofert tylko dla `job_id` jednej strony historii zgłoszeń (#184). Parametr
+ * `p_job_ids` zawęża wynik WEWNĄTRZ RPC (0108), więc baza nie liczy całej historii, a „Pokaż
+ * więcej” nie przesyła jej danych. RPC zwraca wyłącznie oferty własnych aplikacji
+ * (auth.uid()), dlatego cudze lub niepowiązane `job_id` nie dają żadnego wiersza.
  */
 async function fetchAppliedJobsForPage(
   tx: TransactionQuery,
@@ -286,8 +295,7 @@ async function fetchAppliedJobsForPage(
   if (ids.length === 0) return new Map();
   const rows = await queryRows(tx, 'candidate.applied-jobs-page',
     `SELECT d.job_id, d.slug, d.title, d.company_name, d.city
-       FROM public.get_applied_jobs_display(p_locale => $1) d
-      WHERE d.job_id = ANY($2::uuid[])`, [locale, ids]);
+       FROM public.get_applied_jobs_display(p_locale => $1, p_job_ids => $2::uuid[]) d`, [locale, ids]);
   return toPublicJobsMap(rows, 'job_id');
 }
 
@@ -855,7 +863,11 @@ export async function getMyOffersPage(
         ? { createdAt: asStr(last['created_at']), id: asStr(last['id']) }
         : null;
 
-      const appliedMap = await fetchAppliedJobsMap(tx, resolvedLocale);
+      const appliedMap = await fetchAppliedJobsMap(
+        tx,
+        resolvedLocale,
+        visibleRows.map((row) => asStr(asRecord(row)['job_id'])),
+      );
       const offeredMap = await fetchOfferedJobsMap(tx, resolvedLocale);
 
       const items = visibleRows.map((row): MyOffer => {
@@ -937,7 +949,7 @@ export async function getLatestActiveOffer(
 
       const row = asRecord(data);
       const jobId = asStr(row['job_id']);
-      const appliedMap = await fetchAppliedJobsMap(tx, resolvedLocale);
+      const appliedMap = await fetchAppliedJobsMap(tx, resolvedLocale, [jobId]);
       const job = appliedMap.get(jobId) ?? (await fetchOfferedJobsMap(tx, resolvedLocale)).get(jobId);
 
       return {
