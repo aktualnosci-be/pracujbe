@@ -582,6 +582,19 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 ### Etap 3 — kandydat
 - [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. **Otwarte:** IP/user-agent w receipcie akceptacji, budżet wysyłki puli `auth` w workerze PostgreSQL, domyślna nazwa firmy w formularzu po nieudanym bootstrapie.
+  Rozdzielenie zgód (#493, migracja `0108`): rejestracja kandydata/pracodawcy
+  i krok 6 onboardingu mają osobne, niezaznaczone pola — akceptacja regulaminu (wymagana),
+  potwierdzenie zapoznania się z informacją o prywatności (wymagane, NIE zgoda) i zgoda
+  opcjonalna na e-maile marketingowe (tylko rejestracja; odmowa nie blokuje konta, wycofanie
+  w ustawieniach powiadomień). `record_signup_consents` (service_role; Better Auth: marker v2
+  w `auth.record_signup_receipts`) zapisuje każdy element osobno: `document_acceptances.kind`
+  (`terms_acceptance`/`privacy_notice_ack`, dawne wiersze = `legacy_combined`, nie zgoda),
+  zgoda na marketing jako zdarzenie dziennika #513 `email_consent_events` (źródło `signup`,
+  język, wersja treści `sha256:` z `src/lib/signup-consents.ts`; odmowa = brak zdarzenia). Receipty niezmienne (trigger; usuwa je tylko kaskada usunięcia konta).
+  Aplikowanie: pole „zapoznałem się z informacją o prywatności” zamiast „zgody”. Dowód:
+  `rls.sql` sekcja CS493 (z kontrolą ujemną), `signup-consents.test`, E2E `consent-separation`.
+  Szkic brzmień: `docs/legal-drafts/zgody-i-akceptacje.md` (PROJEKT, nieopublikowany).
+  **Otwarte:** treść prawna (#61), podstawy (#485/#487).
 - [x] Onboarding kandydata (6 kroków) — UI + realny zapis per krok do DB (`saveOnboardingStep`, RHF + stan zapisu)
   Pusta nazwa/imię/nazwisko → „wymagane” (także formularz firmy, #367); pozycje list (zawody 80,
   umiejętności 120, certyfikaty 160 = `CANDIDATE_ITEM_LIMITS`, zgodne z `left()` w 0028) —

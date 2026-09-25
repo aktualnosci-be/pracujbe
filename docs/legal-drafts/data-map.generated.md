@@ -555,6 +555,8 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
 | `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0054_document_acceptances.sql` |
+| `kind` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0108_consent_separation.sql` |
+| `source` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0108_consent_separation.sql` |
 | `document_version` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0054_document_acceptances.sql` |
 | `accepted_at` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0054_document_acceptances.sql` |
 | `ip_address` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0054_document_acceptances.sql` |
