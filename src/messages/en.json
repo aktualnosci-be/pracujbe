@@ -2444,7 +2444,8 @@
     "lead": "The website is not open to the public yet. If you have an access password, enter it below.",
     "passwordLabel": "Access password",
     "submit": "Enter",
-    "error": "Incorrect password. Please try again."
+    "error": "Incorrect password. Please try again.",
+    "rateLimited": "Too many attempts. Please try again in a few minutes."
   },
   "offline": {
     "title": "No connection",
