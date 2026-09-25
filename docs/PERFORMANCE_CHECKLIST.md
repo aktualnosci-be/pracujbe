@@ -54,6 +54,9 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
       przy zmianie oferty.
 - [ ] Panele (candidate/employer/admin): SSR + wyspy klienckie (dane per-użytkownik, noindex).
 - [ ] Unikaj `dynamic = 'force-dynamic'` tam, gdzie wystarczy ISR.
+- [x] Cache ISR z limitem (#298): własny `cacheHandler` (`src/lib/cache/isr-cache-handler.mjs`) —
+      LRU w pamięci, 404 losowych slugów tylko krótko w pamięci (nigdy na dysku), wpisy runtime
+      w `.next/cache/isr-handler` z limitem wpisów i bajtów. Limity: `DEFAULT_LIMITS` w pliku handlera.
 
 ## 4. Ograniczenie JavaScriptu
 

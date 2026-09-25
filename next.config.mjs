@@ -1,4 +1,6 @@
 import createNextIntlPlugin from 'next-intl/plugin';
+import { fileURLToPath } from 'node:url';
+
 import { createReleaseAwareBuildMetadata } from './scripts/build-version.mjs';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
@@ -32,6 +34,9 @@ const nextConfig = {
     NEXT_PUBLIC_BUILD_TIME: BUILD.buildTime,
   },
   reactStrictMode: true,
+  // #298: własny cache ISR — LRU w pamięci, limit dysku, 404 losowych slugów tylko krótko
+  // w pamięci. Cache obrazów działa bez zmian (isrFlushToDisk zostaje domyślny).
+  cacheHandler: fileURLToPath(new URL('./src/lib/cache/isr-cache-handler.mjs', import.meta.url)),
   poweredByHeader: false,
   images: {
     // WebP/AVIF automatycznie; ogranicz rozmiary do sensownych breakpointów (wydajność).
