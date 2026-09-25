@@ -9,7 +9,7 @@ import type { GUEST_EMAIL_TYPES, QUEUED_EMAIL_TYPES } from '@/emails/wiring';
  * - treść korespondencji: `preview` (podgląd wiadomości) i `message` (wiadomość do propozycji)
  *   — e-mail prowadzi do panelu, gdzie odbiorca czyta ją po zalogowaniu;
  * - pola, których szablon nie pokazuje (np. `query` zapisanego wyszukiwania, `reason` przy
- *   weryfikacji firmy, `companyName` w odwołaniu, `jobTitle` przy zawieszeniu firmy).
+ *   weryfikacji firmy, `companyName` i `appealTarget` w odwołaniu, `jobTitle` przy zawieszeniu firmy).
  * CV, odpowiedzi screeningowe, telefon i dane kontaktowe osób trzecich nie mają tu miejsca —
  * pilnuje tego `tests/unit/email-payload-minimization.test.ts` (z kontrolą ujemną).
  *
@@ -35,6 +35,7 @@ export const EMAIL_PAYLOAD_FIELDS = {
   reportReceived: ['recipientName', 'caseNumber', 'accessCode', 'targetType'],
   reportDecisionActioned: ['recipientName', 'caseNumber', 'targetType'],
   reportDecisionNoAction: ['recipientName', 'caseNumber', 'targetType'],
+  reportRestored: ['recipientName', 'caseNumber'],
   moderationJobRemoved: [
     'companyName',
     'jobTitle',

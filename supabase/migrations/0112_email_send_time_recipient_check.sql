@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0109_email_send_time_recipient_check.sql — #503: uprawnienie odbiorcy firmowego
+-- 0112_email_send_time_recipient_check.sql — #503: uprawnienie odbiorcy firmowego
 -- sprawdzane także w chwili wysyłki (numer tymczasowy — ostateczny nada integrator).
 --
 -- E-maile z danymi kandydata do członków firmy (newApplication, offerAccepted,

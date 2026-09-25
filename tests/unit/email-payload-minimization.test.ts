@@ -36,9 +36,9 @@ const FORBIDDEN = /cv|resume|file|answer|screening|body|preview|^message$|phone|
 
 /** Pola kolejkowane przez SQL, których worker świadomie NIE przekazuje do szablonu. */
 const DROPPED: Partial<Record<EmailType, readonly string[]>> = {
-  appealReceived: ['companyName'],
-  appealUpheld: ['companyName'],
-  appealReversed: ['companyName'],
+  appealReceived: ['appealTarget', 'companyName'],
+  appealUpheld: ['appealTarget', 'companyName'],
+  appealReversed: ['appealTarget', 'companyName'],
   companyVerified: ['reason'],
   guestApplicationConfirm: ['jobSlug', 'nonce'],
   guestApplicationSent: ['nonce'],

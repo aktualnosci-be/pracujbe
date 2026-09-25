@@ -7,10 +7,12 @@
 # i dla zestawu zapytań wypisuje: liczbę wyników `get_public_jobs_count`, czas
 # i węzeł planu dla tabeli jobs z wywołania `get_public_jobs` (auto_explain z
 # zagnieżdżonymi instrukcjami — plan ciała funkcji, nie kopii SQL). Pomiar wykonuje
-# dwa razy: BEZ indeksu `idx_jobs_city_trgm` (stan sprzed 0096) i Z nim.
+# dwa razy: na migracjach do BENCH_BASELINE włącznie (domyślnie 0108 — przed
+# wyszukiwaniem bez diakrytyków 0110) i po zastosowaniu pozostałych migracji.
 #
 # Użycie jak test-rls.sh (peer auth: sudo -u postgres bash …, albo PGHOST/PGUSER/…).
 #   BENCH_JOBS — liczba ofert (domyślnie 20000). Baza jest usuwana na końcu.
+#   BENCH_BASELINE — ostatnia migracja stanu „przed” (domyślnie 0108).
 # Skrypt niczego nie asertuje (to pomiar, nie test) — kończy się kodem 0, gdy pomiar
 # się wykonał. Wyniki: docs/railway/OPERATIONS.md („Wyszukiwanie").
 # =============================================================================
@@ -19,6 +21,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DB=pracujbe_search_bench
 JOBS="${BENCH_JOBS:-20000}"
+BASELINE="${BENCH_BASELINE:-0108}"
+[[ "$BASELINE" =~ ^[0-9]{4}$ ]] || { echo 'BENCH_BASELINE musi mieć postać NNNN.'; exit 2; }
 [[ "$JOBS" =~ ^[0-9]+$ ]] && [ "$JOBS" -ge 100 ] || { echo 'BENCH_JOBS musi być liczbą >= 100.'; exit 2; }
 
 psql_base=(psql -v ON_ERROR_STOP=1 -X -q)
@@ -29,14 +33,24 @@ psql_base=(psql -v ON_ERROR_STOP=1 -X -q)
 cleanup() { "${psql_base[@]}" -d postgres -c "drop database if exists $DB;" >/dev/null 2>&1 || true; }
 [ -n "${BENCH_KEEP:-}" ] || trap cleanup EXIT
 
-echo ">> baza: bootstrap + migracje"
+# Pliki migracji w kolejności migratora; $1 = before|after względem BASELINE.
+migration_files() {
+  for f in "$ROOT"/supabase/migrations/0*.sql "$ROOT"/database/auth/0*.sql; do
+    printf '%s\t%s\n' "$(basename "$f")" "$f"
+  done | LC_ALL=C sort | while IFS=$'\t' read -r name file; do
+    local after=0
+    [[ "$file" == */supabase/migrations/* && "${name:0:4}" > "$BASELINE" ]] && after=1
+    if [ "$1" = before ] && [ "$after" = 0 ]; then echo "$file"; fi
+    if [ "$1" = after ] && [ "$after" = 1 ]; then echo "$file"; fi
+  done
+}
+
+echo ">> baza: bootstrap + migracje do $BASELINE"
 "${psql_base[@]}" -d postgres -c "drop database if exists $DB;" -c "create database $DB;" >/dev/null
 "${psql_base[@]}" -d "$DB" -1 -f "$ROOT/database/bootstrap/0001_roles_and_identity.sql" >/dev/null 2>&1
 while IFS= read -r file; do
   "${psql_base[@]}" -d "$DB" -1 -f "$file" >/dev/null 2>&1
-done < <(for f in "$ROOT"/supabase/migrations/0*.sql "$ROOT"/database/auth/0*.sql; do
-  printf '%s\t%s\n' "$(basename "$f")" "$f"
-done | LC_ALL=C sort | cut -f2)
+done < <(migration_files before)
 
 echo ">> dane: $JOBS ofert (syntetyczne, is_demo=true)"
 "${psql_base[@]}" -d "$DB" -v jobs="$JOBS" <<'SQL' >/dev/null
@@ -114,6 +128,9 @@ SQL
 sprzątanie|
 sprzątania|
 sprzatania|
+SPRZATANIA|
+50%|
+_|
 Șofer|
 sofer|
 Водій|
@@ -132,9 +149,14 @@ Kierowca|Gent
 Q
 }
 
-"${psql_base[@]}" -d "$DB" -c 'drop index public.idx_jobs_city_trgm; analyze public.jobs;' >/dev/null
-run_queries 'PRZED 0096 (bez idx_jobs_city_trgm)'
-"${psql_base[@]}" -d "$DB" -c "create index idx_jobs_city_trgm on public.jobs using gin (city gin_trgm_ops) where status = 'active' and deleted_at is null; analyze public.jobs;" >/dev/null
-run_queries 'PO 0096 (idx_jobs_city_trgm)'
+run_queries "PRZED (migracje do $BASELINE)"
+echo
+echo ">> migracje po $BASELINE"
+while IFS= read -r file; do
+  echo "   $(basename "$file")"
+  "${psql_base[@]}" -d "$DB" -1 -f "$file" >/dev/null
+done < <(migration_files after)
+"${psql_base[@]}" -d "$DB" -c 'analyze;' >/dev/null
+run_queries "PO (wszystkie migracje)"
 echo
 echo "Search benchmark: DONE ($JOBS ofert, PostgreSQL $("${psql_base[@]}" -d "$DB" -At -c 'show server_version'))"
