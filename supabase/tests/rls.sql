@@ -9317,6 +9317,227 @@ select pg_temp.assert(
   'OL112-3d po cofnięciu definicja wróciła');
 
 -- ============================================================================
+-- PL109. Payloady e-maili i odczyt historii (0113; #293, #22, #290, #184):
+--   send_offer → expiresAt + kwoty oferty (bez treści wiadomości rekrutera, #503),
+--   send_message → conversationId, get_applied_jobs_display(p_locale, p_job_ids).
+--   Kontrole ujemne (transakcje cofane): definicja bez nowego klucza → asercja pada.
+-- ============================================================================
+\set PLC  'e1080000-0000-0000-0000-00000000000c'
+\set PLC2 'e1080000-0000-0000-0000-00000000000d'
+\set PLE  'e1080000-0000-0000-0000-0000000000a1'
+\set PLCO 'e1080000-0000-0000-0000-0000000000f1'
+\set PLJ1 'e1080000-0000-0000-0000-0000000000b1'
+\set PLJ2 'e1080000-0000-0000-0000-0000000000b2'
+\set PLJ3 'e1080000-0000-0000-0000-0000000000b3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'PLC','plc@test.be','Noor V','{"role":"candidate","first_name":"Noor","last_name":"Vermeulen","locale":"nl"}'),
+  (:'PLC2','plc2@test.be','Luc D','{"role":"candidate","first_name":"Luc","last_name":"Dubois","locale":"fr"}'),
+  (:'PLE','ple@test.be','Piotr R','{"role":"employer","first_name":"Piotr","last_name":"Rekruter","locale":"pl"}');
+insert into public.companies(id,name,status) values (:'PLCO','Firma PL109','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'PLCO',:'PLE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,currency,salary_period,expires_at) values
+  (:'PLJ1',:'PLCO','job-pl109-1','Magazynier PL109','warehouse','permanent','Gent','Flandria','active','pl',
+   2500,3100,'EUR','month', now() + interval '10 days'),
+  (:'PLJ2',:'PLCO','job-pl109-2','Kierowca PL109','warehouse','permanent','Gent','Flandria','active','pl',
+   null,null,'EUR','hour', null),
+  (:'PLJ3',:'PLCO','job-pl109-3','Pomocnik PL109','warehouse','permanent','Gent','Flandria','active','pl',
+   null,null,'EUR','month', null);
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'PLC', false), (:'PLC2', false);
+
+select set_config('app.current_uid', :'PLC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'PLJ1'::uuid, 'pl109-app-1', null, null, null) as plapp1 \gset
+select public.apply_to_job(:'PLJ2'::uuid, 'pl109-app-2', null, null, null) as plapp2 \gset
+reset role;
+select set_config('app.current_uid', :'PLC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'PLJ3'::uuid, 'pl109-app-3', null, null, null) as plapp3 \gset
+reset role;
+select set_config('app.current_uid', :'PLE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'PLJ1'::uuid, :'PLC'::uuid, 'pl109-off-1', 'Bel me op 0470 12 34 56', null) as ploff1 \gset
+select public.send_offer(:'PLJ2'::uuid, :'PLC'::uuid, 'pl109-off-2', null, null) as ploff2 \gset
+select public.get_or_create_conversation(:'plapp1'::uuid, null) as plconv \gset
+select public.send_message(:'plconv'::uuid, 'Dzień dobry', gen_random_uuid()) as plmsg \gset
+reset role; reset app.current_uid;
+
+-- PL109-1: termin = offers.expires_at (ten, który sprawdza respond_to_offer) jako ISO.
+select pg_temp.assert(
+  (select (d.payload->>'expiresAt')::timestamptz = o.expires_at
+     from public.email_deliveries d join public.offers o on o.id = d.entity_id
+    where d.entity_id = :'ploff1' and d.template = 'jobOffer'),
+  'PL109-1 jobOffer.expiresAt = offers.expires_at');
+-- PL109-2: kwoty jako liczby + okres i waluta (tekst składa worker w locale odbiorcy).
+select pg_temp.assert(
+  (select payload->'salaryMin' = '2500'::jsonb and payload->'salaryMax' = '3100'::jsonb
+      and payload->>'salaryPeriod' = 'month' and payload->>'currency' = 'EUR'
+      and not payload ? 'salary'
+     from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
+  'PL109-2 jobOffer niesie kwoty oferty, bez gotowego tekstu wynagrodzenia');
+-- PL109-3: oferta bez kwot → null (worker pomija pole), okres z danych.
+select pg_temp.assert(
+  (select payload ? 'salaryMin' and payload->'salaryMin' = 'null'::jsonb
+      and payload->'salaryMax' = 'null'::jsonb and payload->>'salaryPeriod' = 'hour'
+      and payload->>'expiresAt' is not null
+     from public.email_deliveries where entity_id = :'ploff2' and template = 'jobOffer'),
+  'PL109-3 oferta bez kwot: null w payloadzie, termin domyślny (+30 dni) obecny');
+-- PL109-4: treść wiadomości rekrutera zostaje w offers, NIE trafia do payloadu (#503).
+select pg_temp.assert(
+  (select o.message from public.offers o where o.id = :'ploff1') = 'Bel me op 0470 12 34 56'
+  and (select not payload ? 'message' and payload::text not like '%0470%'
+         from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
+  'PL109-4 payload jobOffer bez treści wiadomości rekrutera');
+-- PL109-5: język e-maila = język ODBIORCY (nl), nie nadawcy (pl) — Invariant #1.
+select pg_temp.assert(
+  (select locale from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer') = 'nl',
+  'PL109-5 jobOffer w języku kandydata');
+-- PL109-6: newMessage niesie identyfikator rozmowy (CTA do wątku).
+select pg_temp.assert(
+  (select payload->>'conversationId' = :'plconv' and locale = 'nl'
+     from public.email_deliveries where entity_id = :'plmsg' and profile_id = :'PLC'),
+  'PL109-6 newMessage.conversationId = rozmowa wiadomości');
+
+-- PL109-7: get_applied_jobs_display — filtr p_job_ids wewnątrz RPC, tylko własne aplikacje.
+set role authenticated; set app.current_uid = :'PLC'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_applied_jobs_display('pl')) = 2,
+  'PL109-7 bez filtra: cała historia własnych aplikacji (zgodność wstecz)');
+select pg_temp.assert(
+  (select array_agg(job_id::text) from public.get_applied_jobs_display(p_locale => 'pl',
+     p_job_ids => array[:'PLJ1'::uuid])) = array[:'PLJ1'::text],
+  'PL109-7b filtr zwraca tylko wskazaną ofertę');
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display(p_locale => 'pl',
+     p_job_ids => array[:'PLJ3'::uuid, gen_random_uuid()])) = 0,
+  'PL109-7c cudza aplikacja (PLC2) i nieznany job_id w filtrze → brak wierszy');
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display(p_locale => 'pl', p_job_ids => array[]::uuid[])) = 0,
+  'PL109-7d pusta lista → brak wierszy');
+select pg_temp.expect_error(
+  'select count(*) from public.get_applied_jobs_display(''pl'', array(select gen_random_uuid() from generate_series(1, 101)))',
+  'VALIDATION_FAILED', 'PL109-7e ponad 100 identyfikatorów odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  to_regprocedure('public.get_applied_jobs_display(text)') is null
+  and has_function_privilege('authenticated', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE'),
+  'PL109-7f stary podpis usunięty; EXECUTE tylko authenticated');
+
+-- KONTROLA UJEMNA 1: send_offer bez expiresAt → asercja PL109-1 wykrywa brak.
+begin;
+do $pl$ begin
+  execute regexp_replace(pg_get_functiondef('public.send_offer(uuid, uuid, text, text, timestamptz)'::regprocedure),
+    '''expiresAt'', v_expires,', '', 'g');
+end $pl$;
+select pg_temp.assert(pg_get_functiondef('public.send_offer(uuid, uuid, text, text, timestamptz)'::regprocedure)
+  not like '%expiresAt%', 'PL109-N1 mutacja usunęła klucz expiresAt');
+select set_config('app.current_uid', :'PLE', false);
+set local role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'PLJ3'::uuid, :'PLC2'::uuid, 'pl109-off-neg', null, null) as ploffneg \gset
+reset role;
+select pg_temp.assert(
+  not coalesce((select (payload->>'expiresAt')::timestamptz is not null
+     from public.email_deliveries where entity_id = :'ploffneg' and template = 'jobOffer'), false),
+  'PL109-N1b bez klucza predykat PL109-1 jest fałszywy (test wykrywa regresję)');
+rollback;
+reset role; reset app.current_uid;
+
+-- KONTROLA UJEMNA 2: send_message bez conversationId → asercja PL109-6 wykrywa brak.
+begin;
+do $pl$ begin
+  execute regexp_replace(pg_get_functiondef('public.send_message(uuid, text, uuid)'::regprocedure),
+    ',\s*''conversationId'', p_conversation_id', '', 'g');
+end $pl$;
+select pg_temp.assert(pg_get_functiondef('public.send_message(uuid, text, uuid)'::regprocedure)
+  not like '%''conversationId''%', 'PL109-N2 mutacja usunęła klucz conversationId');
+select set_config('app.current_uid', :'PLE', false);
+set local role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'plconv'::uuid, 'Druga', gen_random_uuid()) as plmsgneg \gset
+reset role;
+select pg_temp.assert(
+  not coalesce((select payload->>'conversationId' = :'plconv'
+     from public.email_deliveries where entity_id = :'plmsgneg' and profile_id = :'PLC'), false),
+  'PL109-N2b bez klucza predykat PL109-6 jest fałszywy (test wykrywa regresję)');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- LOC194. Słownik miejscowości z aliasami (#194, 0112): gminy Belgii + lista kanoniczna,
+--         aliasy PL/NL/FR/EN po kluczu cityKey, odczyt publiczny, zapis tylko serwisowy.
+-- ============================================================================
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.locations where kind = 'municipality' and is_demo = false) >= 560
+  and (select count(*) from public.locations where kind = 'former_municipality') >= 20,
+  'LOC194-1 gminy obecne i zniesione przy fuzjach w słowniku');
+select pg_temp.assert(not exists (
+    select 1 from public.locations l
+     where l.country = 'BE' and l.latitude is not null
+       and not exists (select 1 from public.location_aliases a where a.location_id = l.id)),
+  'LOC194-2 każda miejscowość ma alias');
+select pg_temp.assert(
+  (select (name, latitude, longitude, sort_order) = ('Brussels', 50.850300, 4.351700, 10)
+     from public.locations where slug = 'brussels')
+  and (select (name, latitude, longitude, sort_order) = ('Liège', 50.632600, 5.579700, 70)
+     from public.locations where slug = 'liege'),
+  'LOC194-3 wiersze 0010 bez zmian');
+
+-- Zapytanie loadera (src/lib/data/matching.ts) pod rolą klienta i RLS.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select array_agg(format('%s:%s,%s', a.alias_key, l.latitude, l.longitude) order by a.alias_key)
+     from public.location_aliases a join public.locations l on l.id = a.location_id
+    where l.is_active = true and a.alias_key = any(array['antwerpia', 'luik', 'atlantyda']))
+  = array['antwerpia:51.219400,4.402500', 'luik:50.632600,5.579700'],
+  'LOC194-4 alias PL/NL → współrzędne, nieznane miasto bez wiersza');
+select pg_temp.assert(
+  (select location_id from public.location_aliases where alias_key = 'elsene')
+  = (select location_id from public.location_aliases where alias_key = 'ixelles'),
+  'LOC194-5 nazwy NL/FR gminy spoza listy w kodzie wskazują ten sam wiersz');
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''X'', ''x-loc194'' from public.locations limit 1',
+  'permission denied', 'LOC194-6 zalogowany nie dodaje aliasu');
+select pg_temp.expect_error('update public.location_aliases set alias = alias',
+  'permission denied', 'LOC194-6b zalogowany nie zmienia aliasu');
+select pg_temp.expect_error('update public.locations set latitude = 0',
+  'permission denied', 'LOC194-6c zalogowany nie zmienia współrzędnych');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.location_aliases where alias_key = 'bruksela') = 1,
+  'LOC194-7 anon czyta aliasy');
+select pg_temp.expect_error('delete from public.location_aliases',
+  'permission denied', 'LOC194-7b anon nie usuwa aliasów');
+reset role;
+
+-- Integralność: jeden klucz = jedna miejscowość, klucz w postaci cityKey, NIS unikalny.
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''Antwerpia'', ''antwerpia'' from public.locations where slug = ''ghent''',
+  'duplicate key', 'LOC194-8 alias nie wskazuje dwóch miejscowości');
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''Sint-X'', ''Sint-X'' from public.locations where slug = ''ghent''',
+  'location_aliases_key_format', 'LOC194-8b klucz nie w postaci cityKey');
+select pg_temp.expect_error(
+  'update public.locations set refnis = (select refnis from public.locations where slug = ''antwerp'') where slug = ''ghent''',
+  'duplicate key', 'LOC194-8c kod NIS unikalny');
+
+-- Usunięcie miejscowości usuwa jej aliasy (kaskada), bez sierot.
+begin;
+delete from public.locations where slug = 'namur';
+select pg_temp.assert(not exists (select 1 from public.location_aliases where alias_key in ('namur', 'namen')),
+  'LOC194-9 aliasy usuwane kaskadowo');
+rollback;
+
+-- Kontrola ujemna: bez polityki odczytu klient nie widzi aliasów (RLS włączone, deny).
+begin;
+drop policy location_aliases_public_read on public.location_aliases;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.location_aliases) = 0,
+  'LOC194-10 kontrola ujemna: bez polityki RLS brak odczytu');
+reset role;
+rollback;
+
+-- ============================================================================
 -- AC45. Panel admina kampanii e-mail (#45, 0111): admin_activate/cancel_email_campaign —
 --       tylko admin (is_admin), CAS statusu (STALE_STATE), macierz przejść
 --       (INVALID_TRANSITION), skutek = istniejące RPC z 0101, audyt bez treści i odbiorców.

@@ -61,6 +61,8 @@ describe('historia propozycji kandydata (#245)', () => {
     expect(calls[0]!.text).toContain('(created_at, id) < ($2::timestamptz, $3::uuid)');
     expect(calls[0]!.text).toContain('ORDER BY created_at DESC, id DESC');
     expect(calls[1]!.values).toEqual([ownerId, createdAt, records[9]!.id, 11]);
+    // #184: metadane z własnych aplikacji tylko dla ofert bieżącej strony.
+    expect(fakeDb.callsTo('get_applied_jobs_display')[0]!.args).toEqual({ p_locale: 'pl', p_job_ids: [jobId] });
   });
 
   it('stosuje datę przed UUID, gdy starsze propozycje mają większe identyfikatory', async () => {
