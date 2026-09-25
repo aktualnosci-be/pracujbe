@@ -106,7 +106,7 @@ export function GuestClaimPanel({
           {message(error)}
         </div>
       ) : null}
-      <Button type="button" className="min-h-12 w-full" onClick={claim} disabled={pending} aria-busy={pending || undefined}>
+      <Button type="button" className="w-full" size="passport" onClick={claim} disabled={pending} aria-busy={pending || undefined}>
         {pending ? t('claiming') : t('claimButton')}
       </Button>
     </div>

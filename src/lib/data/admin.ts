@@ -196,11 +196,29 @@ export interface AdminDsaCase {
   decision: AdminModerationDecision | null;
 }
 
+/**
+ * Zgłoszenie wiadomości albo rozmowy przez jej stronę (0116, `kind = 'message_report'`).
+ * Dane z dowodu zbudowanego w bazie w chwili zgłoszenia (treść wyłącznie zgłoszonej
+ * wiadomości; dla rozmowy same metadane) — niezależne od późniejszej zmiany rozmowy.
+ */
+export interface AdminMessageReport {
+  scope: 'message' | 'conversation';
+  /** Strona nadawcy zgłoszonej wiadomości (null przy zgłoszeniu rozmowy). */
+  senderSide: 'company' | 'candidate' | null;
+  reporterSide: 'company' | 'candidate' | null;
+  companyName: string | null;
+  jobTitle: string | null;
+  messageCount: number | null;
+  capturedAt: string | null;
+}
+
 export interface AdminReportRow {
   id: string;
   /** Sprawa DSA (#41) albo null dla zwykłego zgłoszenia. */
   dsa: AdminDsaCase | null;
-  /** `report_target_type`: job/company/user/message. */
+  /** Zgłoszenie wiadomości/rozmowy (0116); brak/null dla innych rodzajów. */
+  messageReport?: AdminMessageReport | null;
+  /** `report_target_type`: job/company/user/message/conversation. */
   targetType: string;
   targetId: string;
   target: AdminReportTarget;
@@ -330,6 +348,15 @@ const DEMO_REPORTS: AdminReportRow[] = [
   {
     id: 'demo-r3',
     dsa: null,
+    messageReport: {
+      scope: 'message',
+      senderSide: 'company',
+      reporterSide: 'candidate',
+      companyName: demoJobs[2]?.companyName ?? null,
+      jobTitle: demoJobs[2]?.title ?? null,
+      messageCount: 4,
+      capturedAt: '2025-02-08T07:45:00.000Z',
+    },
     targetType: 'message',
     targetId: 'demo-msg-9',
     target: {
@@ -692,6 +719,41 @@ async function loadReportTargets(
   );
 }
 
+/** Strona rozmowy zapisana w dowodzie (0116). */
+function sideOf(value: unknown): 'company' | 'candidate' | null {
+  return value === 'company' || value === 'candidate' ? value : null;
+}
+
+/** Dowód zgłoszenia wiadomości (0116) → widok panelu i cel karty. */
+function toMessageReport(
+  snapshot: unknown,
+): { view: AdminMessageReport; target: AdminReportTarget } {
+  const root = asRecord(snapshot);
+  const conversation = asRecord(root['conversation']);
+  const message = root['message'] === undefined ? null : asRecord(root['message']);
+  const count = Number(conversation['messageCount']);
+  const companyName = asNullableString(conversation['companyName']);
+  const jobTitle = asNullableString(conversation['jobTitle']);
+  const label = [companyName, jobTitle].filter(Boolean).join(' · ');
+  return {
+    view: {
+      scope: message ? 'message' : 'conversation',
+      senderSide: message ? sideOf(message['senderSide']) : null,
+      reporterSide: sideOf(conversation['reporterSide']),
+      companyName,
+      jobTitle,
+      messageCount: Number.isFinite(count) ? count : null,
+      capturedAt: asNullableString(root['capturedAt']),
+    },
+    target: {
+      label: label.length > 0 ? label : null,
+      href: null,
+      preview: message ? asNullableString(message['body']) : null,
+      deleted: false,
+    },
+  };
+}
+
 interface ReportPageData {
   rows: Record<string, unknown>[];
   nameById: Map<string, string>;
@@ -803,7 +865,10 @@ export async function listReports(
       DEMO_REPORTS.filter(
         (r) =>
           (!statuses || statuses.includes(r.status)) &&
-          (kind === 'all' || (kind === 'dsa_notice') === (r.dsa !== null)),
+          (kind === 'all' ||
+            (kind === 'dsa_notice' && r.dsa !== null) ||
+            (kind === 'message_report' && Boolean(r.messageReport)) ||
+            (kind === 'quality' && r.dsa === null && !r.messageReport)),
       ),
     );
   }
@@ -824,6 +889,8 @@ export async function listReports(
         const targetType = asString(row['target_type']);
         const targetId = asString(row['target_id']);
         const isDsa = asString(row['kind']) === 'dsa_notice';
+        const messageReport =
+          asString(row['kind']) === 'message_report' ? toMessageReport(row['target_snapshot']) : null;
         const snapshot = (row['target_snapshot'] ?? null) as {
           job?: { title?: unknown };
           company?: { name?: unknown };
@@ -844,9 +911,11 @@ export async function listReports(
                 decision: decisionById.get(asString(row['decision_id'])) ?? null,
               }
             : null,
+          messageReport: messageReport?.view ?? null,
           targetType,
           targetId,
-          target: targets.get(`${targetType}:${targetId}`) ?? DELETED_TARGET,
+          // Zgłoszenie wiadomości: cel z dowodu (stan w chwili zgłoszenia), nie z bieżącej rozmowy.
+          target: messageReport?.target ?? targets.get(`${targetType}:${targetId}`) ?? DELETED_TARGET,
           reason: asString(row['reason']),
           details: asNullableString(row['details']),
           status: asString(row['status'], 'open'),
@@ -1520,7 +1589,7 @@ export async function listEmailSuppressions(
 }
 
 /* ---------------------------------------------------------------------------
- * Wiadomości z formularza kontaktu (#61, 0115)
+ * Wiadomości z formularza kontaktu (#61, 0125)
  * ------------------------------------------------------------------------- */
 
 export interface AdminContactMessageRow {

@@ -45,6 +45,9 @@ const TRACKER_ENV = {
 const JOB_IMPORT_ENV = {
   AI_JOB_IMPORT_ENABLED: '1',
   AI_JOB_IMPORT_PROVIDER: 'fixture',
+  // Import CV (#487) — osobna flaga, ta sama zasada atrapy (bez sieci, nie w produkcji).
+  AI_CV_IMPORT_ENABLED: '1',
+  AI_CV_IMPORT_PROVIDER: 'fixture',
 };
 
 /** Asystent redagowania oferty (#37) — ta sama zasada: atrapa w runtime, nigdy w produkcji. */

@@ -77,14 +77,15 @@ export function UnsubscribeForm({
           {failure}
         </div>
       ) : null}
-      <Button type="submit" name="scope" value="category" className="w-full" disabled={pending}>
+      <Button type="submit" name="scope" value="category" className="w-full" size="passport" disabled={pending}>
         {pending ? labels.pending : labels.confirmButton}
       </Button>
       <Button
         type="submit"
         name="scope"
         value="all"
-        variant="outline"
+        variant="passportSecondary"
+        size="passport"
         className="w-full"
         disabled={pending}
       >

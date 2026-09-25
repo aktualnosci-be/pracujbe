@@ -62,6 +62,9 @@ const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
   // Asystent redagowania oferty (#37) — płatne API, jak import.
   'job-assist',
   'job-assist-day',
+  // Import CV przez AI (#487): jak wyżej — każde wywołanie modelu kosztuje.
+  'cv-import',
+  'cv-import-day',
   // Aplikacja bez konta (#98): publiczny formularz wysyłający e-maile na podany adres.
   'guest-apply',
   'guest-apply-email',
