@@ -4,24 +4,32 @@ import { useEffect, useState } from 'react';
 import Script from 'next/script';
 import { usePathname } from 'next/navigation';
 import { getConsent, type ConsentRecord } from '@/lib/consent';
-import { subscribeConsent, syncTrackers } from '@/lib/consent-store';
+import { subscribeConsent } from '@/lib/consent-store';
 import { allowsTrackingOnPath } from '@/lib/analytics/route-policy';
 
 /**
- * Ładowanie skryptów analityki/marketingu — WYŁĄCZNIE po świadomej zgodzie.
+ * Ładowanie skryptu analityki — WYŁĄCZNIE po świadomej zgodzie (#570: Cloudflare Web Analytics
+ * zamiast Google Analytics i Meta Pixel — decyzja właściciela 2026-09-25).
  *
- * ZERO trackingu przed zgodą: dopóki użytkownik nie zaakceptuje danej kategorii, żaden
- * <Script> nie jest renderowany, więc GA / Meta Pixel się nie ładują. Komponent czyta
- * bieżącą zgodę przy montażu i reaguje na jej zmiany przez consent-store (bez reloadu).
+ * ZERO trackingu przed zgodą: dopóki użytkownik nie zaakceptuje kategorii `analytics`, beacon
+ * się nie renderuje. Komponent czyta bieżącą zgodę przy montażu i reaguje na jej zmiany przez
+ * consent-store (bez reloadu) — wycofanie zgody zatrzymuje KOLEJNE wstawienia beaconu od razu
+ * i gwarantuje brak beaconu po odświeżeniu (`getConsent()` znów zwróci `null`/`analytics:false`).
  *
- * - kategoria `analytics`  → Google Analytics (gtag), z anonimizacją IP,
- * - kategoria `marketing`  → Meta Pixel.
+ * Cloudflare Web Analytics jest bezcookie'owe (beacon nie ustawia żadnych cookies) i nie ma
+ * API do „odwołania" zgody w locie jak `ga-disable`/`fbq('consent','revoke')`; `next/script`
+ * wstawia znacznik `<script>` bezpośrednio do DOM i nie usuwa go przy odmontowaniu komponentu —
+ * dlatego, tak jak zapowiada Invariant #7, gwarancją jest brak ładowania PRZED zgodą i PO
+ * odświeżeniu strony, a nie natychmiastowe zniknięcie już wstawionego znacznika w tej samej sesji.
  *
- * Identyfikatory pochodzą z env NEXT_PUBLIC_*; brak identyfikatora = nic się nie ładuje.
+ * Kategoria `marketing` obecnie nie ładuje żadnego trackera (Meta Pixel usunięty); zostaje
+ * w centrum zgód bez zmian, bo jej usunięcie wymagałoby zmiany treści/wersji polityki cookies —
+ * patrz opis w PR #570 (decyzja dla właściciela).
+ *
+ * Token pochodzi z env `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN`; brak tokenu = nic się nie ładuje.
  */
 
-const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
-const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+const CF_ANALYTICS_TOKEN = process.env.NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN;
 
 export function Analytics() {
   const [record, setRecord] = useState<ConsentRecord | null>(null);
@@ -35,34 +43,15 @@ export function Analytics() {
   }, []);
 
   const analyticsGranted = routeAllowed && record?.categories.analytics === true;
-  const marketingGranted = routeAllowed && record?.categories.marketing === true;
 
-  // Egzekwuj stan trackerów przy każdej zmianie zgody: skuteczne WYCOFANIE (ga-disable / fbq
-  // revoke + czyszczenie cookies), a przy ponownej zgodzie zdjęcie blokady. Uzupełnia (nie
-  // zastępuje) warunkowego renderowania <Script> — Invariant #7 (zero trackingu przed zgodą).
-  useEffect(() => {
-    syncTrackers({ analytics: analyticsGranted, marketing: marketingGranted });
-  }, [analyticsGranted, marketingGranted]);
+  if (!analyticsGranted || !CF_ANALYTICS_TOKEN) return null;
 
   return (
-    <>
-      {analyticsGranted && GA_ID ? (
-        <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
-            strategy="afterInteractive"
-          />
-          <Script id="ga-init" strategy="afterInteractive">
-            {`window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', '${GA_ID}', { anonymize_ip: true });`}
-          </Script>
-        </>
-      ) : null}
-
-      {marketingGranted && META_PIXEL_ID ? (
-        <Script id="meta-pixel" strategy="afterInteractive">
-          {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${META_PIXEL_ID}');fbq('track','PageView');`}
-        </Script>
-      ) : null}
-    </>
+    <Script
+      id="cf-web-analytics"
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon={JSON.stringify({ token: CF_ANALYTICS_TOKEN })}
+      strategy="afterInteractive"
+    />
   );
 }

@@ -74,15 +74,14 @@ for (const name of ['unit', 'e2e']) {
 }
 
 // e2e używa builda z jobu build (#127): ten sam klucz cache, weryfikacja kompletności,
-// fallback na własny build. Oba buildy z testowymi ID trackerów (#234).
+// fallback na własny build. Oba buildy z testowym tokenem Cloudflare Web Analytics (#234).
 const buildKey = 'key: next-build-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}';
 const build = jobs.get('build');
 const e2e = jobs.get('e2e');
 for (const [name, body] of [['build', build], ['e2e', e2e]]) {
   assert.ok(body.includes(buildKey), `${name}: klucz cache builda musi zawierać SHA, run_id i run_attempt`);
   assert.match(body, /^            !\.next\/cache\s*$/m, `${name}: nie zapisuj .next/cache`);
-  assert.match(body, /NEXT_PUBLIC_GA_MEASUREMENT_ID: G-TEST000000/, `${name}: build z testowym ID GA`);
-  assert.match(body, /NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'/, `${name}: build z testowym ID Meta Pixel`);
+  assert.match(body, /NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: e2e-cf-analytics-token-00000000/, `${name}: build z testowym tokenem Cloudflare Web Analytics`);
   assert.match(body, /node scripts\/check-next-build\.mjs/, `${name}: zweryfikuj kompletność .next`);
 }
 assert.match(build, /uses: actions\/cache\/save@v4/, 'build: zapisz .next w cache Actions');

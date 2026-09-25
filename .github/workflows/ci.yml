@@ -179,13 +179,12 @@ jobs:
       - name: Install dependencies (cache miss)
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
-      # Ten sam build służy jobowi e2e (#127) — dlatego z testowymi ID trackerów
-      # (tests/e2e/fixtures/trackers.ts), inaczej playwright.config.ts przebuduje go (#234).
+      # Ten sam build służy jobowi e2e (#127) — dlatego z testowym tokenem Cloudflare Web
+      # Analytics (tests/e2e/fixtures/trackers.ts), inaczej playwright.config.ts przebuduje go (#234).
       # Artefakt nie trafia na produkcję: Railway buduje sam ze źródeł i własnych zmiennych.
       - name: Build application
         env:
-          NEXT_PUBLIC_GA_MEASUREMENT_ID: G-TEST000000
-          NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'
+          NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: e2e-cf-analytics-token-00000000
         run: npm run build
       - name: Verify build output
         run: node scripts/check-next-build.mjs
@@ -373,14 +372,13 @@ jobs:
         id: next-build
         continue-on-error: true
         run: node scripts/check-next-build.mjs
-      # Fallback: brak lub niekompletny build → budujemy tutaj. Testowe ID trackerów
-      # muszą trafić do builda, inaczej playwright.config.ts przebuduje aplikację (#234).
+      # Fallback: brak lub niekompletny build → budujemy tutaj. Testowy token Cloudflare
+      # Web Analytics musi trafić do builda, inaczej playwright.config.ts przebuduje aplikację (#234).
       - name: Build application for E2E (fallback)
         if: steps.next-build.outcome != 'success'
         timeout-minutes: 15
         env:
-          NEXT_PUBLIC_GA_MEASUREMENT_ID: G-TEST000000
-          NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'
+          NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: e2e-cf-analytics-token-00000000
         run: rm -rf .next && npm run build
       - name: Run E2E
         env:

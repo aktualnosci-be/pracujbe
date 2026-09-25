@@ -93,7 +93,7 @@ Zanotuj rzeczywiste wyniki (liczby testów, ostrzeżenia, rozmiary bundli z outp
 - Walidacja Zod po stronie serwera (nie tylko w formularzu).
 
 ### F. RODO / cookies / zgody
-- **Żadnego trackingu przed zgodą** (GA/Meta Pixel/remarketing). Prześledź `src/components/cookies/*` i miejsce ładowania skryptów — czy naprawdę warunkowane zgodą?
+- **Żadnego trackingu przed zgodą** (Cloudflare Web Analytics/remarketing). Prześledź `src/components/cookies/*` i miejsce ładowania skryptów — czy naprawdę warunkowane zgodą?
 - Baner: „Zaakceptuj wszystkie" i „Odrzuć opcjonalne" równorzędne. Kategorie: niezbędne/preferencje/analityczne/marketingowe. Centrum ustawień + wycofanie zgody.
 - Zapis zgody: id, data, wersja polityki, kategorie, źródło. Zgodność z tabelą `consents`.
 

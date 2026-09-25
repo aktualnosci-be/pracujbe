@@ -1,12 +1,13 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * #349 — Invariant #7 (zero trackingu przed zgodą) na poziomie logiki zgód: wycofanie zgody
- * (`syncTrackers`), unieważnienie starej wersji polityki i uszkodzonego cookie (`getConsent`)
- * oraz rozgłaszanie zmiany (`updateConsent`).
+ * #349/#570 — Invariant #7 (zero trackingu przed zgodą) na poziomie logiki zgód: rozgłaszanie
+ * zmiany zgody (`updateConsent`), unieważnienie starej wersji polityki i uszkodzonego cookie
+ * (`getConsent`). Cloudflare Web Analytics (beacon bezcookie'owy) zastąpił GA/Meta Pixel — nie
+ * ma już cookies trackerów do czyszczenia; wycofanie egzekwuje samo (nie)renderowanie skryptu
+ * w <Analytics/>, testowane przez E2E (`cookie-consent-categories.spec.ts`).
  */
 
-const GA_ID = 'G-UNIT000000';
 const { recordConsent } = vi.hoisted(() => ({ recordConsent: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/actions/consent', () => ({ recordConsent }));
 
@@ -14,8 +15,6 @@ let consent: typeof import('@/lib/consent');
 let store: typeof import('@/lib/consent-store');
 
 beforeAll(async () => {
-  // GA_ID i wersja polityki są czytane przy imporcie modułu (jak w bundlu klienta).
-  vi.stubEnv('NEXT_PUBLIC_GA_MEASUREMENT_ID', GA_ID);
   vi.stubEnv('NEXT_PUBLIC_CONSENT_POLICY_VERSION', '2.0');
   consent = await import('@/lib/consent');
   store = await import('@/lib/consent-store');
@@ -34,72 +33,13 @@ function setConsentCookie(value: unknown) {
   document.cookie = `pracujbe_consent=${encodeURIComponent(raw)}; Path=/`;
 }
 
-const w = window as unknown as Record<string, unknown> & { fbq?: unknown };
-
 beforeEach(() => {
   clearAllCookies();
-  delete w[`ga-disable-${GA_ID}`];
-  delete w.fbq;
   recordConsent.mockClear();
 });
 
 afterEach(() => {
   clearAllCookies();
-});
-
-describe('syncTrackers — wycofanie zgody', () => {
-  it('brak zgody: usuwa cookies GA i Meta, blokuje GA i odwołuje zgodę Pixela', () => {
-    for (const name of ['_ga', '_ga_XYZ123', '_gid', '_gat_UA', '_fbp', '_fbc', 'pracujbe_visitor']) {
-      document.cookie = `${name}=1; Path=/`;
-    }
-    const fbq = vi.fn();
-    w.fbq = fbq;
-
-    store.syncTrackers({ analytics: false, marketing: false });
-
-    expect(cookieNames().sort()).toEqual(['pracujbe_visitor']);
-    expect(w[`ga-disable-${GA_ID}`]).toBe(true);
-    expect(fbq).toHaveBeenCalledWith('consent', 'revoke');
-  });
-
-  it('tylko analityka: cookies GA zostają, Meta czyszczona; flaga GA zdjęta', () => {
-    w[`ga-disable-${GA_ID}`] = true;
-    for (const name of ['_ga', '_fbp']) document.cookie = `${name}=1; Path=/`;
-    const fbq = vi.fn();
-    w.fbq = fbq;
-
-    store.syncTrackers({ analytics: true, marketing: false });
-
-    expect(cookieNames()).toEqual(['_ga']);
-    expect(w[`ga-disable-${GA_ID}`]).toBe(false);
-    expect(fbq).toHaveBeenCalledWith('consent', 'revoke');
-  });
-
-  it('tylko marketing: cookies Meta zostają, GA czyszczona i zablokowana, Pixel nieodwołany', () => {
-    for (const name of ['_ga', '_fbp']) document.cookie = `${name}=1; Path=/`;
-    const fbq = vi.fn();
-    w.fbq = fbq;
-
-    store.syncTrackers({ analytics: false, marketing: true });
-
-    expect(cookieNames()).toEqual(['_fbp']);
-    expect(w[`ga-disable-${GA_ID}`]).toBe(true);
-    expect(fbq).not.toHaveBeenCalledWith('consent', 'revoke');
-  });
-
-  it('ponowna zgoda na marketing po wycofaniu przywraca Pixel (grant), a GA odblokowuje', () => {
-    const fbq = vi.fn();
-    w.fbq = fbq;
-
-    store.syncTrackers({ analytics: false, marketing: false });
-    store.syncTrackers({ analytics: true, marketing: true });
-
-    expect(fbq.mock.calls).toEqual([
-      ['consent', 'revoke'],
-      ['consent', 'grant'],
-    ]);
-    expect(w[`ga-disable-${GA_ID}`]).toBe(false);
-  });
 });
 
 describe('getConsent — tylko ważna zgoda w bieżącej wersji polityki', () => {
@@ -171,8 +111,7 @@ describe('saveConsent / updateConsent', () => {
     expect(consent.getConsent()?.categories.marketing).toBe(true);
   });
 
-  it('updateConsent: powiadamia subskrybentów, emituje zdarzenie DOM i od razu wycofuje trackery', () => {
-    document.cookie = '_ga=1; Path=/';
+  it('updateConsent: powiadamia subskrybentów i emituje zdarzenie DOM (bez reloadu)', () => {
     const listener = vi.fn();
     const unsubscribe = store.subscribeConsent(listener);
     const onEvent = vi.fn();
@@ -183,8 +122,7 @@ describe('saveConsent / updateConsent', () => {
     expect(listener).toHaveBeenCalledWith(record);
     expect(onEvent).toHaveBeenCalledTimes(1);
     expect((onEvent.mock.calls[0]![0] as CustomEvent).detail).toEqual(record);
-    expect(cookieNames()).not.toContain('_ga');
-    expect(w[`ga-disable-${GA_ID}`]).toBe(true);
+    expect(record.categories.analytics).toBe(false);
 
     unsubscribe();
     window.removeEventListener(store.CONSENT_CHANGE_EVENT, onEvent);
