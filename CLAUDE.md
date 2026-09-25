@@ -580,6 +580,22 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   w języku odbiorcy, bezpłatny etap z `docs/PRODUCT_DECISIONS.md`); bez cen i liczb (strażnik
   `tests/unit/employers-page.test.ts`). „Dla pracodawców” w nawigacji i stopce prowadzi tutaj;
   „Dodaj ofertę” i CTA strony — do `/rejestracja-pracodawca`. W bramce a11y (#221).
+- [x] Pomoc i Kontakt (#61, część techniczna, migracja `0108`): `/pomoc` = pytania i odpowiedzi
+  wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
+  `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść
+  20–5000, imię opcjonalne, e-mail. Akcja `submitContactMessage`: limiter `contact` (fail-safe) →
+  Turnstile `contact` (fail-closed) → Zod (`src/lib/validation/contact.ts`; NISS/PESEL/numer
+  dokumentu → błąd przy polu, #495) → RPC `submit_contact_message` (tylko service_role:
+  idempotencja, 3 wiadomości/adres/24 h, numer `KON-XXXX-XXXX`). W tej samej transakcji
+  potwierdzenie `supportContact` do nadawcy w języku formularza i `contactMessageAdmin` do
+  każdego aktywnego admina w JEGO języku (Invariant #1); w kolejce tylko numer i temat — treść
+  i adres czyta admin w `/admin/kontakt` (filtr nowe/obsłużone, `admin_set_contact_message_status`
+  z CAS i audytem). Obie strony indeksowalne (canonical, hreflang, sitemap), stopka „Pytania
+  i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
+  `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
+  **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
+  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486), linki Pomoc/Prywatność
+  w stopce e-maili (#6), `/faq` (atrapa, poza nawigacją).
 
 ### Etap 3 — kandydat
 - [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. **Otwarte:** IP/user-agent w receipcie akceptacji, budżet wysyłki puli `auth` w workerze PostgreSQL, domyślna nazwa firmy w formularzu po nieudanym bootstrapie.
@@ -730,7 +746,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `/rejestracja-pracodawca` z sesją pracodawcy → panel. Chrome panelu: `getEmployerShellData`
   zwraca `demo`/`ok`/`error`; firma demonstracyjna tylko w trybie demo. Dowód: `rls.sql` sekcja MM.
   Powód odrzucenia/zawieszenia (#310, `0084`): `companies.status_reason` w banerze `/employer/firma`.
-  **Otwarte:** strona kontaktu (#61), orientacyjny czas weryfikacji (decyzja produktowa).
+  **Otwarte:** orientacyjny czas weryfikacji (decyzja produktowa).
 - [x] Import ogłoszenia przez AI (#465, za flagą, domyślnie wyłączony): krok „Zaimportuj
   z ogłoszenia” nad kreatorem nowej oferty — zrzut ekranu (PNG/JPG/WebP ≤ 5 MB, magic bytes)
   albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Claude
@@ -952,9 +968,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
   0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084), jobMatch
-  (`process_saved_search_alerts`, 0092, #100); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
+  (`process_saved_search_alerts`, 0092, #100), supportContact/contactMessageAdmin (`submit_contact_message`,
+  0108, #61); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
   zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
-  (#51), supportContact. Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
+  (#51). Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
   statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja NN.
   Status aplikacji w mailu = etykieta `status.*` z `src/messages` (nie enum); neutralne warianty
   treści przy braku nazwy nadawcy (`EmailCopy.anonymous`); CTA do sekcji panelu w locale odbiorcy
@@ -1161,7 +1178,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.
   Bez kluczy poza produkcją = wyłączony; w produkcji brak kluczy = fail-closed rejestracji/resetu.
   CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. Polityka `report`
-  chroni formularz zgłoszenia treści (#41). **Do zrobienia:** formularz kontaktu (`contact`).
+  chroni formularz zgłoszenia treści (#41), polityka `contact` — formularz kontaktu (#61).
 - [~] Operacje #47 (część kodowa, migracja `0096`): czujki `GET /api/health/ops` — tylko z
   `HEALTH_CHECK_SECRET` (inaczej 404), same liczby z `ops_metrics()` (rola `pracujbe_ops` bez praw
   do tabel; login `DATABASE_OPS_URL`, pula `ops` w `pool.ts`, fallback service-role), progi w

@@ -43,6 +43,7 @@ export const EMAIL_TYPES = [
   'payment',
   'invoice',
   'supportContact',
+  'contactMessageAdmin',
   'reportReceived',
   'reportDecisionActioned',
   'reportDecisionNoAction',
@@ -214,6 +215,45 @@ export function interpolate(template: string, vars: Record<string, unknown>): st
  * Etykiety uzasadnienia decyzji moderacyjnej (#42) w języku odbiorcy: podstawa ograniczenia
  * i udział automatyzacji. Podstawiane jako `{groundLabel}` / `{automationLabel}`.
  */
+/** Etykiety tematów formularza kontaktu (#61) w języku ODBIORCY e-maila (admina). */
+export const contactTopicLabels: Record<
+  Locale,
+  Record<'candidate_account' | 'employer_account' | 'job_listing' | 'technical' | 'privacy' | 'other', string>
+> = {
+  pl: {
+    candidate_account: 'Konto kandydata',
+    employer_account: 'Konto pracodawcy lub firma',
+    job_listing: 'Oferta pracy',
+    technical: 'Problem techniczny',
+    privacy: 'Moje dane osobowe',
+    other: 'Inna sprawa',
+  },
+  nl: {
+    candidate_account: 'Kandidatenaccount',
+    employer_account: 'Werkgeversaccount of bedrijf',
+    job_listing: 'Vacature',
+    technical: 'Technisch probleem',
+    privacy: 'Mijn persoonsgegevens',
+    other: 'Iets anders',
+  },
+  fr: {
+    candidate_account: 'Compte candidat',
+    employer_account: 'Compte employeur ou entreprise',
+    job_listing: 'Offre d’emploi',
+    technical: 'Problème technique',
+    privacy: 'Mes données personnelles',
+    other: 'Autre demande',
+  },
+  en: {
+    candidate_account: 'Candidate account',
+    employer_account: 'Employer account or company',
+    job_listing: 'Job listing',
+    technical: 'Technical problem',
+    privacy: 'My personal data',
+    other: 'Something else',
+  },
+};
+
 export const moderationLabels: Record<
   Locale,
   { terms: string; law: string; automatedYes: string; automatedNo: string }
@@ -1270,36 +1310,75 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
 
   supportContact: {
     pl: {
-      subject: 'Otrzymaliśmy Twoją wiadomość',
-      preview: 'Dziękujemy za kontakt z Pracuj.be.',
-      heading: 'Dziękujemy za kontakt',
-      body: 'Otrzymaliśmy Twoją wiadomość i wkrótce się z Tobą skontaktujemy. Poniżej znajduje się kopia Twojego zgłoszenia.',
-      cta: 'Przejdź do centrum pomocy',
-      outro: 'Zwykle odpowiadamy w ciągu jednego dnia roboczego.',
+      subject: 'Otrzymaliśmy Twoją wiadomość {reference}',
+      preview: 'Numer wiadomości: {reference}.',
+      heading: 'Dziękujemy za wiadomość',
+      body: 'Otrzymaliśmy Twoją wiadomość wysłaną przez formularz kontaktu w serwisie Pracuj.be i nadaliśmy jej numer podany poniżej.\n\nOdpowiemy na adres e-mail podany w formularzu. W odpowiedzi na tę wiadomość podaj numer, jeśli chcesz coś dodać.',
+      cta: 'Przejdź do strony Pomoc',
+      highlight: '{reference}',
+      footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be wysłano formularz kontaktu z tym adresem e-mail.',
     },
     nl: {
-      subject: 'We hebben je bericht ontvangen',
-      preview: 'Bedankt voor je bericht aan Pracuj.be.',
+      subject: 'We hebben je bericht {reference} ontvangen',
+      preview: 'Berichtnummer: {reference}.',
       heading: 'Bedankt voor je bericht',
-      body: 'We hebben je bericht ontvangen en nemen binnenkort contact met je op. Hieronder vind je een kopie van je bericht.',
-      cta: 'Naar het helpcentrum',
-      outro: 'Meestal reageren we binnen één werkdag.',
+      body: 'We hebben je bericht via het contactformulier op Pracuj.be ontvangen en er het nummer hieronder aan gegeven.\n\nWe antwoorden op het e-mailadres dat je in het formulier hebt ingevuld. Vermeld het nummer als je later iets wilt toevoegen.',
+      cta: 'Naar de hulppagina',
+      highlight: '{reference}',
+      footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een contactformulier met dit e-mailadres is verstuurd.',
     },
     fr: {
-      subject: 'Nous avons bien reçu votre message',
-      preview: 'Merci d’avoir contacté Pracuj.be.',
-      heading: 'Merci de nous avoir contactés',
-      body: 'Nous avons bien reçu votre message et reviendrons vers vous rapidement. Vous trouverez ci-dessous une copie de votre demande.',
-      cta: 'Accéder au centre d’aide',
-      outro: 'Nous répondons généralement sous un jour ouvrable.',
+      subject: 'Nous avons bien reçu votre message {reference}',
+      preview: 'Numéro du message : {reference}.',
+      heading: 'Merci pour votre message',
+      body: 'Nous avons bien reçu votre message envoyé via le formulaire de contact de Pracuj.be et lui avons attribué le numéro ci-dessous.\n\nNous répondrons à l’adresse e-mail indiquée dans le formulaire. Mentionnez ce numéro si vous souhaitez ajouter quelque chose.',
+      cta: 'Accéder à la page d’aide',
+      highlight: '{reference}',
+      footerNote: 'Vous recevez ce message car un formulaire de contact a été envoyé sur Pracuj.be avec cette adresse e-mail.',
     },
     en: {
-      subject: 'We have received your message',
-      preview: 'Thanks for contacting Pracuj.be.',
-      heading: 'Thanks for reaching out',
-      body: 'We have received your message and will get back to you soon. A copy of your request is below.',
-      cta: 'Go to help center',
-      outro: 'We usually reply within one business day.',
+      subject: 'We have received your message {reference}',
+      preview: 'Message number: {reference}.',
+      heading: 'Thanks for your message',
+      body: 'We have received the message you sent through the contact form on Pracuj.be and given it the number shown below.\n\nWe will reply to the email address you entered in the form. Mention this number if you want to add something later.',
+      cta: 'Go to the help page',
+      highlight: '{reference}',
+      footerNote: 'You are receiving this email because a contact form was sent on Pracuj.be with this email address.',
+    },
+  },
+
+  contactMessageAdmin: {
+    pl: {
+      subject: 'Nowa wiadomość z formularza kontaktu {reference}',
+      preview: 'Temat: {topicLabel}.',
+      heading: 'Nowa wiadomość z formularza kontaktu',
+      body: 'W serwisie Pracuj.be wysłano nową wiadomość przez formularz kontaktu. Temat: {topicLabel}.\n\nTreść i adres nadawcy znajdziesz w panelu administratora.',
+      cta: 'Otwórz wiadomości',
+      highlight: '{reference}',
+    },
+    nl: {
+      subject: 'Nieuw bericht via het contactformulier {reference}',
+      preview: 'Onderwerp: {topicLabel}.',
+      heading: 'Nieuw bericht via het contactformulier',
+      body: 'Op Pracuj.be is een nieuw bericht via het contactformulier verstuurd. Onderwerp: {topicLabel}.\n\nDe inhoud en het adres van de afzender vind je in het beheerpaneel.',
+      cta: 'Berichten openen',
+      highlight: '{reference}',
+    },
+    fr: {
+      subject: 'Nouveau message via le formulaire de contact {reference}',
+      preview: 'Sujet : {topicLabel}.',
+      heading: 'Nouveau message via le formulaire de contact',
+      body: 'Un nouveau message a été envoyé via le formulaire de contact de Pracuj.be. Sujet : {topicLabel}.\n\nLe contenu et l’adresse de l’expéditeur se trouvent dans le panneau d’administration.',
+      cta: 'Ouvrir les messages',
+      highlight: '{reference}',
+    },
+    en: {
+      subject: 'New message from the contact form {reference}',
+      preview: 'Topic: {topicLabel}.',
+      heading: 'New message from the contact form',
+      body: 'A new message was sent through the contact form on Pracuj.be. Topic: {topicLabel}.\n\nYou will find the content and the sender’s address in the admin panel.',
+      cta: 'Open messages',
+      highlight: '{reference}',
     },
   },
 

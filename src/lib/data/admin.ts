@@ -27,6 +27,7 @@ import {
   parseAuditAction,
   parseAuditEntity,
   parseBreachFilter,
+  parseContactMessageFilter,
   parseEmailSuppressionFilter,
   parseReportFilter,
   parseReportKindFilter,
@@ -1511,6 +1512,121 @@ export async function listEmailSuppressions(
     );
   } catch (error) {
     captureError(error, { area: 'admin.listEmailSuppressions' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Wiadomości z formularza kontaktu (#61, 0108)
+ * ------------------------------------------------------------------------- */
+
+export interface AdminContactMessageRow {
+  id: string;
+  reference: string;
+  /** Temat ze słownika (`CONTACT_TOPICS`) — UI mapuje na etykietę i18n. */
+  topic: string;
+  message: string;
+  senderName: string | null;
+  senderEmail: string;
+  /** Język formularza (w nim nadawca dostał potwierdzenie). */
+  locale: string;
+  status: 'new' | 'handled';
+  createdAt: string | null;
+  handledAt: string | null;
+  handledByName: string | null;
+}
+
+export interface AdminContactMessagesQuery extends AdminListQuery {
+  status?: string | null;
+}
+
+const DEMO_CONTACT_MESSAGES: AdminContactMessageRow[] = [
+  {
+    id: 'demo-cm1',
+    reference: 'KON-0DE0-0001',
+    topic: 'candidate_account',
+    message: 'Przykładowa wiadomość: nie widzę zapisanych umiejętności po powrocie do kreatora profilu.',
+    senderName: 'Przykładowy nadawca',
+    senderEmail: 'nadawca@example.com',
+    locale: 'pl',
+    status: 'new',
+    createdAt: '2025-02-11T09:20:00.000Z',
+    handledAt: null,
+    handledByName: null,
+  },
+];
+
+/**
+ * Lista wiadomości z formularza kontaktu (#61): filtr nowe/obsłużone/wszystkie (domyślnie
+ * nowe), wyszukiwanie po numerze, adresie i imieniu, stronicowanie kursorem. Odczyt
+ * service-rolem po potwierdzeniu roli admina. Bez env → DEMO.
+ */
+export async function listContactMessages(
+  query: AdminContactMessagesQuery = {},
+): Promise<AdminListResult<AdminContactMessageRow>> {
+  const filter = parseContactMessageFilter(query.status);
+  const q = normalizeAdminSearch(query.q);
+  if (!isPortalDataConfigured()) {
+    return demoList(
+      DEMO_CONTACT_MESSAGES.filter(
+        (row) =>
+          (filter === 'all' || row.status === filter) &&
+          matchesSearch([row.reference, row.senderEmail, row.senderName ?? ''], q),
+      ),
+    );
+  }
+  await requireAdmin();
+
+  try {
+    const params = new SqlParams();
+    const where = whereOf([
+      filter === 'new' && "status = 'new'",
+      filter === 'handled' && "status = 'handled'",
+      q && searchCondition(params, ['reference', 'sender_email', 'sender_name'], q),
+      cursorCondition(params, query.cursor),
+    ]);
+    const limit = params.add(ADMIN_PAGE_SIZE + 1);
+    const { rows, profiles } = await withServiceRole(async (tx) => {
+      const page = asRows(
+        await queryRows(tx, 'admin.contact-messages',
+          `SELECT id, reference, topic, message, sender_name, sender_email, locale, status,
+                  created_at, handled_at, handled_by
+             FROM public.contact_messages
+             ${where}
+            ORDER BY created_at DESC, id DESC
+            LIMIT ${limit}`, params.values),
+      );
+      const adminIds = uniqueIds(page.map((r) => asString(r['handled_by'])));
+      return { rows: page, profiles: asRows(await readProfileNames(tx, 'admin.contact-message-admins', adminIds)) };
+    });
+
+    const nameById = new Map<string, string>();
+    for (const profile of profiles) {
+      nameById.set(asString(profile['id']), fullName(profile));
+    }
+
+    return toPage(
+      rows.map((row) => {
+        const handledBy = asString(row['handled_by']);
+        const name = handledBy ? (nameById.get(handledBy) ?? '') : '';
+        return {
+          id: asString(row['id']),
+          reference: asString(row['reference']),
+          topic: asString(row['topic']),
+          message: asString(row['message']),
+          senderName: asNullableString(row['sender_name']),
+          senderEmail: asString(row['sender_email']),
+          locale: asString(row['locale']),
+          status: asString(row['status']) === 'handled' ? ('handled' as const) : ('new' as const),
+          createdAt: asNullableString(row['created_at']),
+          handledAt: asNullableString(row['handled_at']),
+          handledByName: name.length > 0 ? name : null,
+        };
+      }),
+      (row) => row.createdAt,
+    );
+  } catch (error) {
+    captureError(error, { area: 'admin.listContactMessages' });
     return { status: 'error' };
   }
 }

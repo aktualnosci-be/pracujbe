@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
+Tabele w migracjach: 92; z danymi osobowymi: 59; bez danych osobowych: 33.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -23,6 +23,7 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 | E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Supabase, Resend | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Supabase, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
+| Formularz kontaktu (`support-contact`) | Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt. | `public.contact_messages` | Railway, Supabase, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Supabase, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Supabase, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway, Supabase | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
@@ -526,6 +527,23 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 | `ip_address` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
 | `user_agent` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
 
+### `public.contact_messages`
+
+- **Migracja:** `supabase/migrations/0108_contact_messages.sql`
+- **Czynności:** Formularz kontaktu
+- **Osoby:** Odwiedzający (bez konta), Kandydaci (konto), Pracodawcy i członkowie firm, Administratorzy portalu
+- **Uwaga:** Wiadomości z formularza kontaktu (0108). Retencja i powiązanie z eksportem/usunięciem konta — do decyzji właściciela (#486).
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `sender_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0108_contact_messages.sql` |
+| `sender_name` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0108_contact_messages.sql` |
+| `sender_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0108_contact_messages.sql` |
+| `topic` | Korespondencja i treści swobodne | `supabase/migrations/0108_contact_messages.sql` |
+| `message` | Korespondencja i treści swobodne | `supabase/migrations/0108_contact_messages.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0108_contact_messages.sql` |
+| `handled_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0108_contact_messages.sql` |
+
 ### `public.conversation_members`
 
 - **Migracja:** `supabase/migrations/0006_messaging.sql`
@@ -1014,6 +1032,7 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `companyRejected` | `companyName`, `reason` | `admin_set_company_status` |
 | `companySuspended` | `companyName`, `reason` | `admin_set_company_status` |
 | `companyVerified` | `companyName`, `reason` | `admin_set_company_status` |
+| `contactMessageAdmin` | `reference`, `topic` | `submit_contact_message` |
 | `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `submit_guest_application` |
 | `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `confirm_guest_application` |
 | `jobMatch` | `count`, `jobs`, `query`, `searchName` | `process_saved_search_alerts` |
@@ -1030,6 +1049,7 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `reportDecisionNoAction` | `caseNumber`, `recipientName`, `targetType` | `admin_decide_report` |
 | `reportReceived` | `accessCode`, `caseNumber`, `recipientName`, `targetType` | `submit_content_report` |
 | `statusChanged` | `companyName`, `jobTitle`, `status` | `transition_application` |
+| `supportContact` | `recipientName`, `reference`, `topic` | `submit_contact_message` |
 | `teamInvitation` | `companyName`, `inviterName`, `panel` | `invite_company_member` |
 
 ## 5. Tabele bez danych osobowych

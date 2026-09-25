@@ -2127,7 +2127,25 @@
     "breachNoticeRecipientsRequired": "Enter at least one recipient.",
     "breachNoticeRecipientsMalformed": "Invalid address or ID: {list}.",
     "breachNoticeContentRequired": "Enter a subject and text in at least one language.",
-    "breachNoticeNotAllowed": "A notice can be sent for an open personal data breach with the saved decision “we notify the people affected”."
+    "breachNoticeNotAllowed": "A notice can be sent for an open personal data breach with the saved decision “we notify the people affected”.",
+    "navContact": "Contact",
+    "contactTitle": "Contact form messages",
+    "contactSubtitle": "Messages sent through the contact form. Reply from your own mailbox to the sender’s address, then mark the message as handled.",
+    "contactFilterLabel": "Message filter",
+    "contactFilterNew": "New",
+    "contactFilterHandled": "Handled",
+    "contactStatusNew": "New",
+    "contactStatusHandled": "Handled",
+    "contactSearchLabel": "Search messages",
+    "contactSearchHint": "Message number, email address or sender’s first name.",
+    "contactEmpty": "No messages.",
+    "contactReceivedAt": "Received:",
+    "contactFormLocale": "Form language: {locale}",
+    "contactHandledBy": "Handled by: {name}",
+    "contactActionHandle": "Mark as handled",
+    "contactActionReopen": "Move back to new",
+    "contactMarkedHandled": "Message marked as handled.",
+    "contactReopened": "Message moved back to new."
   },
   "settings": {
     "title": "Notification preferences",
@@ -2654,5 +2672,123 @@
     "categoryUnion": "trade union membership",
     "categoryPolitical": "political opinions",
     "categoryCriminal": "criminal record"
+  },
+  "help": {
+    "metaTitle": "Help — questions and answers",
+    "metaDescription": "How Pracuj.be works: a profile without a CV, applying, job matching, employer accounts, company verification and emails in your language.",
+    "title": "Help",
+    "intro": "Answers to the most common questions about how Pracuj.be works. If you can’t find an answer here, write to us through the contact form.",
+    "groups": {
+      "candidates": "For candidates",
+      "employers": "For employers",
+      "account": "Account, emails and safety"
+    },
+    "faq": {
+      "noCv": {
+        "q": "Do I need a CV to look for work?",
+        "a": "No. After you <register>sign up</register>, you create a simple professional profile in six short steps — including occupations, skills, languages and availability. You can add a CV file (PDF, DOC or DOCX up to 5 MB), but it is not required."
+      },
+      "guestApply": {
+        "q": "Can I apply without creating an account?",
+        "a": "Yes. In the application form you enter your full name and email address, then confirm the application with the link in the email. Later you can create an account with the same address and take over the application."
+      },
+      "match": {
+        "q": "How is the match with a job calculated?",
+        "a": "The match percentage is based on fixed criteria: occupation and category, skills, location, experience, availability, languages, certificates, driving licence and contract terms. The result is not decided by artificial intelligence, and the job page shows what you meet and what is missing."
+      },
+      "visibility": {
+        "q": "Can employers see my profile?",
+        "a": "Verified companies can only find your profile if you turn on “Let verified employers find my profile” in your settings — it is off by default. A company you apply to sees your application. You can block specific companies in the “Blocked companies” section."
+      },
+      "alerts": {
+        "q": "How do I get alerts about new jobs?",
+        "a": "On the <jobs>job list</jobs>, set your filters and choose “Save search”. In the candidate panel you turn on email alerts for it — daily or weekly."
+      },
+      "data": {
+        "q": "How do I download my data or delete my account?",
+        "a": "In the candidate panel settings, in the “Your data and account” section, you can download your data as a JSON file or delete your account."
+      },
+      "free": {
+        "q": "How much does it cost to publish jobs?",
+        "a": "At this stage Pracuj.be is free for employers. The portal does not sell packages or paid job postings."
+      },
+      "verification": {
+        "q": "Why does my company need to be verified?",
+        "a": "Only companies verified by a portal administrator can publish jobs. You see the verification status in the employer panel. If the company is rejected, you see the reason and can choose “Send for verification again”."
+      },
+      "drafts": {
+        "q": "Can I prepare a job before verification?",
+        "a": "Yes. The job wizard saves a draft after each step. You publish it once your company is verified."
+      },
+      "team": {
+        "q": "How do I add colleagues?",
+        "a": "The company owner or admin invites team members by email address in the employer panel and gives them a role."
+      },
+      "applications": {
+        "q": "How do I contact candidates?",
+        "a": "You handle applications, messages and job offers in the employer panel. Read more on the <employer>For employers</employer> page."
+      },
+      "languages": {
+        "q": "Which languages is the site available in?",
+        "a": "The site is available in Polish, Dutch, French and English. You can change the language in the header or the footer."
+      },
+      "emailLanguage": {
+        "q": "In which language will I receive emails?",
+        "a": "Emails about your account are sent in the language set on your account — even when the message comes from an employer who uses a different language."
+      },
+      "noEmail": {
+        "q": "I am not receiving emails from the site. What should I do?",
+        "a": "Check your spam folder and that your email address is correct. If the message still doesn’t arrive, write to us through the contact form."
+      },
+      "suspicious": {
+        "q": "A job looks suspicious. What should I do?",
+        "a": "On the job page, choose “Report this job” or “Report this company”. You can send a report without an account and you get a case number to check its status."
+      }
+    },
+    "contactTitle": "Didn’t find an answer?",
+    "contactDesc": "Write to us through the contact form. We will reply to the email address you enter in the form.",
+    "contactCta": "Go to the contact form"
+  },
+  "contact": {
+    "metaTitle": "Contact",
+    "metaDescription": "Write to the Pracuj.be team through the contact form — about your candidate account, employer account, job listings or technical problems.",
+    "title": "Contact",
+    "intro": "Have a question about your account, a job or how the site works? Write to us through the form — we will reply to the email address you enter.",
+    "formTitle": "Contact form",
+    "topicLabel": "Topic",
+    "topicPlaceholder": "Choose a topic",
+    "topicCandidateAccount": "Candidate account",
+    "topicEmployerAccount": "Employer account or company",
+    "topicJobListing": "Job listing",
+    "topicTechnical": "Technical problem",
+    "topicPrivacy": "My personal data",
+    "topicOther": "Something else",
+    "messageLabel": "Message",
+    "messageHint": "Describe your request (at least {min} characters). Do not include a national register number, PESEL or document numbers.",
+    "nameLabel": "First name (optional)",
+    "emailLabel": "Email address",
+    "emailHint": "We will send the confirmation and our reply to this address.",
+    "submit": "Send message",
+    "networkError": "We couldn’t reach the server. Your message is still in the form — please try again.",
+    "successTitle": "Message sent",
+    "successBody": "Thank you. We have sent a confirmation with the message number to the address you entered.",
+    "successDuplicate": "This message had already been sent — we did not send it a second time.",
+    "referenceLabel": "Message number",
+    "referenceHint": "Mention this number if you want to add something later.",
+    "backToHelp": "Back to the help page",
+    "beforeTitle": "Before you write",
+    "beforeHelp": "You will find answers to the most common questions on the <help>Help</help> page.",
+    "beforeReport": "Report a suspicious job directly on its page (“Report this job”) — you will find it on the <jobs>job list</jobs>.",
+    "beforeNoIds": "Do not send document numbers or passwords in your message.",
+    "error": {
+      "topicRequired": "Choose a topic.",
+      "messageRequired": "Enter your message.",
+      "messageTooShort": "Your message is too short — please describe your request in a bit more detail.",
+      "messageTooLong": "Your message is too long.",
+      "nameTooLong": "The first name is too long.",
+      "emailRequired": "Enter your email address.",
+      "emailInvalid": "Enter a valid email address.",
+      "sensitiveId": "Remove the national register number, PESEL or document number — it is not needed to reply to your message."
+    }
   }
 }

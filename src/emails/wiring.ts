@@ -33,6 +33,8 @@ export const QUEUED_EMAIL_TYPES = [
   'appealUpheld', // admin_decide_appeal (0104) → decyzja utrzymana
   'appealReversed', // admin_decide_appeal (0104) → odwołanie uwzględnione
   'breachNotice', // admin_notify_breach_subjects (0106) — treść od administratora
+  'supportContact', // submit_contact_message (0108) — potwierdzenie do nadawcy, enqueue_email_to_address
+  'contactMessageAdmin', // submit_contact_message (0108) — powiadomienie każdego admina
 ] as const satisfies readonly EmailType[];
 
 /**
@@ -64,5 +66,4 @@ export const UNWIRED_EMAIL_TYPES = {
   jobExpiring: 'Kreator nie ustawia jobs.expires_at i nie ma zadania wygaszania ofert.',
   payment: 'Płatności wyłączone w bezpłatnym MVP (#51).',
   invoice: 'Płatności wyłączone w bezpłatnym MVP (#51).',
-  supportContact: 'Strona kontaktu nie ma formularza; brak zgłoszeń do obsłużenia.',
 } as const satisfies Partial<Record<EmailType, string>>;

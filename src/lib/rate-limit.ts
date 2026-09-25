@@ -62,6 +62,8 @@ const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
   // Aplikacja bez konta (#98): publiczny formularz wysyłający e-maile na podany adres.
   'guest-apply',
   'guest-apply-email',
+  // Formularz kontaktu (#61): publiczny formularz wysyłający potwierdzenie na podany adres.
+  'contact',
 ]);
 
 /**

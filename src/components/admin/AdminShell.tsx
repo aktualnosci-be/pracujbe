@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { BarChart3, Building2, Flag, History, LayoutDashboard, ListChecks, MailX, Scale, ShieldAlert, Users } from 'lucide-react';
+import { BarChart3, Building2, Flag, History, Inbox, LayoutDashboard, ListChecks, MailX, Scale, ShieldAlert, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
@@ -32,6 +32,7 @@ const HREF = {
   email: '/admin/poczta',
   screening: '/admin/pytania',
   breaches: '/admin/naruszenia',
+  contact: '/admin/kontakt',
 } as const;
 
 /** Inicjały z nazwy (maks. 2 znaki). */
@@ -58,6 +59,7 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
     { href: HREF.dsaReport, label: t('navDsaReport'), icon: <BarChart3 /> },
     { href: HREF.screening, label: t('navScreening'), icon: <ListChecks /> },
     { href: HREF.users, label: t('navUsers'), icon: <Users /> },
+    { href: HREF.contact, label: t('navContact'), icon: <Inbox /> },
     { href: HREF.email, label: t('navEmail'), icon: <MailX /> },
     { href: HREF.breaches, label: t('navBreaches'), icon: <ShieldAlert /> },
     { href: HREF.audit, label: t('navAudit'), icon: <History /> },
