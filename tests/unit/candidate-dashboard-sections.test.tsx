@@ -50,7 +50,7 @@ describe.each([['pl', pl], ['nl', nl], ['fr', fr], ['en', en]] as const)('sekcje
   it('udany odczyt zgłoszeń pokazuje prawdziwe dane', () => {
     render(
       <CandidateApplicationsPreview
-        result={{ status: 'ok', items: [{ id: 'a1', jobTitle: 'Magazynier', companyName: 'Firma', slug: 'magazynier', date: '2026-09-20T09:00:00Z', status: 'submitted' }] }}
+        result={{ status: 'ok', items: [{ id: 'a1', jobTitle: 'Magazynier', companyName: 'Firma', slug: 'magazynier', date: '2026-09-20T09:00:00Z', status: 'submitted', screeningCount: 0 }] }}
         locale={locale}
         labels={applicationLabels}
       />,

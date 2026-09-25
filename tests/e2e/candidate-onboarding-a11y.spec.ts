@@ -113,8 +113,18 @@ test('#320: w kroku 6 fokus trafia do grupy z błędem (dostępność), a potem 
     page,
     '#onb-agreeTerms-box',
     'onb-agreeTerms-error',
-    'Musisz zaakceptować regulamin i politykę prywatności.',
+    'Zaakceptuj regulamin.',
   );
+  // #493: informacja o prywatności to osobne pole z własnym błędem.
+  await expectDescribedBy(
+    page,
+    '#onb-privacyNoticeAck-box',
+    'onb-privacyNoticeAck-error',
+    'Potwierdź, że zapoznałeś(-aś) się z informacją o prywatności.',
+  );
+  await page.locator('#onb-agreeTerms-box').check();
+  await page.getByRole('button', { name: 'Zakończ i opublikuj' }).click();
+  await expect(page.locator('#onb-privacyNoticeAck-box')).toBeFocused();
   await expect(page).toHaveURL(/\/pl\/candidate\/onboarding$/);
 });
 
@@ -124,21 +134,28 @@ test('#337: „Zapisz i wyjdź” w kroku 6 nie wymaga zgody', async ({ page }) 
   await page.locator('#onb-availability-trigger').click();
   await page.getByRole('option', { name: 'Od zaraz' }).click();
   await expect(page.locator('#onb-agreeTerms-box')).not.toBeChecked();
+  await expect(page.locator('#onb-privacyNoticeAck-box')).not.toBeChecked();
 
   await page.getByRole('button', { name: 'Zapisz i wyjdź' }).click();
   await expect(page).toHaveURL(/\/pl\/candidate$/);
 });
 
 for (const locale of locales) {
-  test(`#337 /${locale}: zgoda w kroku 6 linkuje do regulaminu i polityki prywatności`, async ({ page }) => {
+  test(`#337/#493 /${locale}: krok 6 — osobne pola regulaminu i informacji o prywatności z linkami`, async ({ page }) => {
     await openWizard(page, locale);
     await goToStep6(page);
-    const consent = page.locator('label[for="onb-agreeTerms-box"]');
-    for (const path of ['regulamin', 'polityka-prywatnosci']) {
-      const link = consent.locator(`a[href="/${locale}/${path}"]`);
+    const pairs = [
+      ['onb-agreeTerms-box', 'regulamin', 'polityka-prywatnosci'],
+      ['onb-privacyNoticeAck-box', 'polityka-prywatnosci', 'regulamin'],
+    ] as const;
+    for (const [id, own, other] of pairs) {
+      await expect(page.locator(`#${id}`)).not.toBeChecked();
+      const label = page.locator(`label[for="${id}"]`);
+      const link = label.locator(`a[href="/${locale}/${own}"]`);
       await expect(link).toHaveCount(1);
       await expect(link).toHaveAttribute('target', '_blank');
       await expect(link).toHaveAttribute('rel', /noopener/);
+      await expect(label.locator(`a[href="/${locale}/${other}"]`)).toHaveCount(0);
     }
   });
 }
