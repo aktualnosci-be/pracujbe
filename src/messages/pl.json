@@ -513,8 +513,6 @@
     "preferencesDesc": "Zapamiętują Twoje wybory, np. język i ustawienia.",
     "analyticsName": "Analityczne",
     "analyticsDesc": "Pomagają nam zrozumieć, jak korzystasz z serwisu.",
-    "marketingName": "Marketingowe",
-    "marketingDesc": "Pozwalają pokazywać Ci trafniejsze reklamy.",
     "alwaysOn": "Zawsze włączone",
     "cookieSettings": "Ustawienia cookie"
   },

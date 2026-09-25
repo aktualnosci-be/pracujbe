@@ -513,8 +513,6 @@
     "preferencesDesc": "Remember your choices, such as language and settings.",
     "analyticsName": "Analytics",
     "analyticsDesc": "Help us understand how you use the platform.",
-    "marketingName": "Marketing",
-    "marketingDesc": "Allow us to show you more relevant ads.",
     "alwaysOn": "Always on",
     "cookieSettings": "Cookie settings"
   },

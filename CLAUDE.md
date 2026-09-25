@@ -1256,8 +1256,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   domyślna `CONSENT_POLICY_VERSION` = `2.0`, więc cookie sprzed zmiany (1.0, z marketingiem)
   jest nieaktualne i baner pyta ponownie. Log zgód: migracja `0130` (numer tymczasowy)
   — `record_consent` zapisuje 3 kategorie, akcja `recordConsent` odrzuca klucze spoza listy;
-  wartość `marketing` zostaje w enumie dla historycznych wierszy. Klucze `cookies.marketing*`
-  w `src/messages` bez użycia. Dowód: E2E `cookie-consent-categories.spec`, `smoke.spec`,
+  wartość `marketing` zostaje w enumie dla historycznych wierszy. Nieużywane klucze
+  `cookies.marketingName`/`marketingDesc` usunięte z `src/messages`. Dowód: E2E `cookie-consent-categories.spec`, `smoke.spec`,
   `one-time-link-tracking.spec`, `public-cache-headers.spec`; unit `consent-store.test`,
   `consent-action.test` (kategorie RPC = banera, kontrola ujemna 0043), `csp-report.test`
   (CSP z tokenem i bez), `privacy-data-map.test`; `rls.sql` Y2.
@@ -1454,7 +1454,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
   connect/img/font, Cloudflare Web Analytics od #570 (zamiast GA/Meta, usunięte); bez Sentry od #571).
-  Wariant nonce/strict-dynamic = follow-up (E2E).
+  Wariant nonce/strict-dynamic = follow-up (E2E). Analiza (#585, bez zmiany polityki):
+  `docs/CSP_NONCE_ANALYSIS.md` — inwentarz inline skryptów/stylów z buildu (pomiar Report-Only
+  `scripts/security/csp-inline-inventory.mjs`, poza CI; test `csp-inline-inventory`): blokują
+  chunki i ładunek RSC Next.js (nonce tylko per żądanie — koniec ISR, hash niemożliwy), skrypt
+  banera zgód (hash albo nonce), atrybuty `style` (next/image, paski postępu) i `<noscript><style>`;
+  JSON-LD i skrypty wstawiane dynamicznie (beacon CF, Turnstile) nie blokują. Warianty A–D
+  do decyzji właściciela.
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
 - [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
   funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
