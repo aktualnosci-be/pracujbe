@@ -27,9 +27,11 @@ import {
   registerEmployerSchema,
   resetSchema,
 } from '@/lib/validation/auth';
+import { registerInvitedEmployerSchema } from '@/lib/validation/team-invite-signup';
 import {
   registerCandidate,
   registerEmployer,
+  registerInvitedEmployer,
   requestPasswordReset,
   signIn,
   type AuthActionResult,
@@ -51,7 +53,12 @@ import {
  * co po stronie serwera). Komunikaty błędów to klucze i18n — tłumaczone tutaj.
  */
 
-export type AuthFormVariant = 'login' | 'registerCandidate' | 'registerEmployer' | 'reset';
+export type AuthFormVariant =
+  | 'login'
+  | 'registerCandidate'
+  | 'registerEmployer'
+  | 'registerInvitedEmployer'
+  | 'reset';
 
 type FieldName =
   | 'email'
@@ -99,6 +106,14 @@ const FIELDS: Record<AuthFormVariant, readonly FieldConfig[]> = {
     { name: 'password', type: 'password', autoComplete: 'new-password', hint: true },
     { name: 'passwordConfirm', type: 'password', autoComplete: 'new-password' },
   ],
+  // 0108: z linku zaproszenia do zespołu — bez nazwy firmy, adres z zaproszenia (tylko odczyt).
+  registerInvitedEmployer: [
+    { name: 'firstName', type: 'text', autoComplete: 'given-name' },
+    { name: 'lastName', type: 'text', autoComplete: 'family-name' },
+    { name: 'email', type: 'email', autoComplete: 'email' },
+    { name: 'password', type: 'password', autoComplete: 'new-password', hint: true },
+    { name: 'passwordConfirm', type: 'password', autoComplete: 'new-password' },
+  ],
   reset: [{ name: 'email', type: 'email', autoComplete: 'email' }],
 };
 
@@ -106,6 +121,7 @@ const SCHEMAS: Record<AuthFormVariant, z.ZodTypeAny> = {
   login: loginSchema,
   registerCandidate: registerCandidateSchema,
   registerEmployer: registerEmployerSchema,
+  registerInvitedEmployer: registerInvitedEmployerSchema,
   reset: resetSchema,
 };
 
@@ -113,6 +129,7 @@ const SUBMIT_KEY: Record<AuthFormVariant, string> = {
   login: 'submitLogin',
   registerCandidate: 'submitRegister',
   registerEmployer: 'submitRegister',
+  registerInvitedEmployer: 'submitRegister',
   reset: 'resetSubmit',
 };
 
@@ -121,6 +138,7 @@ const BOT_CHECK_FLOW: Record<AuthFormVariant, TurnstileFlow> = {
   login: 'login',
   registerCandidate: 'register',
   registerEmployer: 'register',
+  registerInvitedEmployer: 'register',
   reset: 'passwordReset',
 };
 
@@ -128,6 +146,7 @@ const SHOW_TERMS: Record<AuthFormVariant, boolean> = {
   login: false,
   registerCandidate: true,
   registerEmployer: true,
+  registerInvitedEmployer: true,
   reset: false,
 };
 
@@ -137,11 +156,12 @@ function errorMessageKey(code: ErrorCode): string {
   return `errors.${camel}`;
 }
 
-function buildDefaults(variant: AuthFormVariant): DefaultValues<AuthFormValues> {
+function buildDefaults(variant: AuthFormVariant, email?: string): DefaultValues<AuthFormValues> {
   const values: AuthFormValues = {};
   for (const field of FIELDS[variant]) {
     values[field.name] = '';
   }
+  if (email) values.email = email;
   if (SHOW_TERMS[variant]) {
     values.agreeTerms = false;
   }
@@ -157,9 +177,16 @@ export interface AuthFormProps {
    * Serwer waliduje go ponownie (`safeNextPath`). Używany przy logowaniu i rejestracji kandydata.
    */
   next?: string | null;
+  /** Wariant `registerInvitedEmployer`: token z linku zaproszenia i adres zaproszenia. */
+  invitation?: { token: string; email: string } | null;
 }
 
-export function AuthForm({ variant, initialError = null, next = null }: AuthFormProps): React.JSX.Element {
+export function AuthForm({
+  variant,
+  initialError = null,
+  next = null,
+  invitation = null,
+}: AuthFormProps): React.JSX.Element {
   const t = useTranslations('auth');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -193,7 +220,7 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
     formState: { errors, isSubmitting },
   } = useForm<AuthFormValues>({
     resolver,
-    defaultValues: buildDefaults(variant),
+    defaultValues: buildDefaults(variant, invitation?.email),
     mode: 'onSubmit',
   });
 
@@ -252,6 +279,17 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
             agreeTerms: true,
             locale: locale as Locale,
           }, token);
+          break;
+        case 'registerInvitedEmployer':
+          result = await registerInvitedEmployer({
+            email: values.email ?? '',
+            password: values.password ?? '',
+            passwordConfirm: values.passwordConfirm ?? '',
+            firstName: values.firstName ?? '',
+            lastName: values.lastName ?? '',
+            agreeTerms: true,
+            locale: locale as Locale,
+          }, invitation?.token ?? '', token);
           break;
         case 'reset':
           result = await requestPasswordReset({ email: values.email ?? '' }, token);
@@ -323,6 +361,7 @@ export function AuthForm({ variant, initialError = null, next = null }: AuthForm
               autoComplete={field.autoComplete}
               aria-invalid={fieldError ? true : undefined}
               aria-describedby={describedBy}
+              readOnly={variant === 'registerInvitedEmployer' && field.name === 'email' ? true : undefined}
               {...register(field.name)}
             />
             {field.hint ? (

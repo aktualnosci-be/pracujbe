@@ -562,7 +562,16 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.company_invitations': {
     activities: ['companies'],
     subjects: ['invitee', 'employer'],
-    columns: { email: 'contact', role: 'identity', invited_by: 'reference', responded_by: 'reference' },
+    columns: {
+      email: 'contact',
+      role: 'identity',
+      invited_by: 'reference',
+      responded_by: 'reference',
+      locale: 'preferences',
+      signup_token_hash: 'credentials',
+      signup_token_used_at: 'credentials',
+    },
+    note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0108); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
   },
   'public.company_vies_checks': {
     activities: ['companies'],

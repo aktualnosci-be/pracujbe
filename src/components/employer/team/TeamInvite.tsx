@@ -3,10 +3,11 @@
 import * as React from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Loader2 } from 'lucide-react';
 
 import { useRouter } from '@/i18n/navigation';
+import { isLocale, localeNames, routing } from '@/i18n/routing';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,6 +36,10 @@ import { cn } from '@/lib/utils';
  * Formularz: RHF + ten sam schemat Zod co akcja (Invariant #11: blokada podczas zapisu,
  * błędy przy polach, fokus na pierwszym błędzie, dane zostają po błędzie, jasny sukces).
  * Odpowiedź po wysłaniu jest taka sama bez względu na to, czy adres ma konto.
+ *
+ * Język zaproszenia (0108): domyślnie język strony zapraszającego. Decyduje o języku e-maila
+ * tylko dla adresu bez konta (brak profilu odbiorcy, Invariant #1); konto z profilem dostaje
+ * e-mail w swoim języku.
  */
 
 export interface TeamInvitationView {
@@ -56,6 +61,8 @@ export function TeamInvite({
   const t = useTranslations('team');
   const tRoot = useTranslations();
   const router = useRouter();
+  const pageLocale = useLocale();
+  const defaultLocale = isLocale(pageLocale) ? pageLocale : routing.defaultLocale;
   const [serverError, setServerError] = React.useState<TeamError | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [revoking, setRevoking] = React.useState<string | null>(null);
@@ -69,7 +76,11 @@ export function TeamInvite({
     formState: { errors, isSubmitting },
   } = useForm<TeamInviteInput>({
     resolver,
-    defaultValues: { email: '', role: (roles.includes('recruiter') ? 'recruiter' : roles[0]) ?? 'member' },
+    defaultValues: {
+      email: '',
+      role: (roles.includes('recruiter') ? 'recruiter' : roles[0]) ?? 'member',
+      locale: defaultLocale,
+    },
     mode: 'onSubmit',
   });
 
@@ -84,8 +95,8 @@ export function TeamInvite({
         setServerError(result.error);
         return;
       }
-      setNotice(result.demo ? t('demoNotice') : t('invited'));
-      reset({ email: '', role: values.role });
+      setNotice(result.demo ? t('demoNotice') : t('invitedSent'));
+      reset({ email: '', role: values.role, locale: values.locale });
       router.refresh();
     } catch {
       setServerError('INTERNAL');
@@ -121,7 +132,7 @@ export function TeamInvite({
         </p>
       ) : null}
 
-      <form onSubmit={onSubmit} noValidate className="grid min-w-0 gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,14rem)_auto] sm:items-end">
+      <form onSubmit={onSubmit} noValidate className="grid min-w-0 gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_minmax(0,11rem)_auto] sm:items-end">
         <div className="flex min-w-0 flex-col gap-[9px]">
           <Label htmlFor="team-invite-email" className={FORM_LABEL}>{t('emailLabel')}</Label>
           <Input
@@ -161,12 +172,33 @@ export function TeamInvite({
             </p>
           ) : null}
         </div>
+        <div className="flex min-w-0 flex-col gap-[9px]">
+          <Label htmlFor="team-invite-locale" className={FORM_LABEL}>{t('localeLabel')}</Label>
+          <select
+            id="team-invite-locale"
+            className={controlClass}
+            aria-invalid={errors.locale ? true : undefined}
+            aria-describedby={errors.locale ? 'team-invite-locale-error team-invite-locale-hint' : 'team-invite-locale-hint'}
+            {...register('locale')}
+          >
+            {routing.locales.map((code) => (
+              <option key={code} value={code} lang={code}>
+                {localeNames[code]}
+              </option>
+            ))}
+          </select>
+          {errors.locale?.message ? (
+            <p id="team-invite-locale-error" className="text-[13px] text-error-text">
+              {tRoot(String(errors.locale.message))}
+            </p>
+          ) : null}
+        </div>
         <Button type="submit" className={cn(BTN_PRIMARY, 'h-auto whitespace-normal')} disabled={isSubmitting}>
           {isSubmitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
           {isSubmitting ? t('saving') : t('inviteSubmit')}
         </Button>
       </form>
-      <p className={PANEL_P}>{t('inviteNoAccountHint')}</p>
+      <p id="team-invite-locale-hint" className={PANEL_P}>{t('inviteLinkHint')}</p>
 
       <section aria-labelledby="team-invitations-title" className="space-y-3">
         <h3 id="team-invitations-title" className={ROW_TITLE}>

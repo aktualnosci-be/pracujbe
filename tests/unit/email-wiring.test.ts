@@ -37,7 +37,7 @@ function enqueuedIn(sql: string, type: string): boolean {
 
 /** #98: e-maile do gościa bez profilu idą przez `enqueue_guest_email(...)`. */
 function guestEnqueuedIn(sql: string, type: string): boolean {
-  const calls = sql.match(/enqueue_guest_email\([^;]*?\)\s*;/gs) ?? [];
+  const calls = sql.match(/enqueue_(?:guest|team_invitation_signup)_email\([^;]*?\)\s*;/gs) ?? [];
   return calls.some((call) => call.includes(`'${type}'`));
 }
 
@@ -55,7 +55,7 @@ describe('#295: pokrycie szablonów e-mail zdarzeniami', () => {
     expect(enqueuedIn(SQL, type)).toBe(true);
   });
 
-  it.each(GUEST_EMAIL_TYPES)('%s jest kolejkowany na adres gościa (0095)', (type) => {
+  it.each(GUEST_EMAIL_TYPES)('%s jest kolejkowany na adres bez konta (0095/0108)', (type) => {
     expect(guestEnqueuedIn(SQL, type)).toBe(true);
     // Nie przez enqueue_email: gość nie ma profilu, z którego enqueue_email bierze adres.
     expect(enqueuedIn(SQL, type)).toBe(false);

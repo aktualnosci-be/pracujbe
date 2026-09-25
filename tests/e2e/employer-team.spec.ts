@@ -10,11 +10,12 @@ import { expect, test, type Page } from '@playwright/test';
  * `supabase/tests/rls.sql` (sekcja TM403); tu: nawigacja, formularze, stany i a11y.
  */
 
-type TeamCopy = Record<string, string> & { error: Record<string, string> };
+type TeamCopy = Record<string, string> & { error: Record<string, string>; signup: Record<string, string> };
 type Messages = {
   team: TeamCopy;
   dashboard: Record<string, string>;
   company: Record<string, string> & { error: Record<string, string> };
+  auth: Record<string, string>;
 };
 
 const LOCALES = ['pl', 'nl', 'fr', 'en'] as const;
@@ -106,6 +107,27 @@ test('„Dodaj kolejną firmę” z przełącznika otwiera formularz nowej firmy
   await main.getByLabel(messages.pl.company.name).fill('Druga Firma Demo');
   await main.getByRole('button', { name: messages.pl.company.submitCreate }).click();
   await expect(main.getByRole('status').filter({ hasText: t.demoNotice })).toBeVisible();
+});
+
+for (const locale of LOCALES) {
+  test(`język zaproszenia domyślnie = język strony, tylko PL/NL/FR/EN (0108, ${locale})`, async ({ page }) => {
+    const t = messages[locale].team;
+    await page.goto(`/${locale}/employer/zespol`);
+    const main = page.getByRole('main');
+    const select = main.getByRole('combobox', { name: t.localeLabel, exact: true });
+    await expect(select).toHaveValue(locale);
+    await expect(select.locator('option')).toHaveCount(4);
+    await expect(select).toHaveAccessibleDescription(t.inviteLinkHint);
+  });
+}
+
+test('link rejestracji z nieważnym tokenem: token znika z adresu, komunikat, zwykła rejestracja (0108)', async ({ page }) => {
+  const t = messages.pl.team;
+  await page.goto('/pl/rejestracja-pracodawca#token=' + 'x'.repeat(43));
+  const main = page.getByRole('main');
+  await expect(main.getByRole('alert').filter({ hasText: t.signup.invalid })).toBeVisible();
+  await expect(page).toHaveURL(/\/pl\/rejestracja-pracodawca$/);
+  await expect(main.getByLabel(messages.pl.auth.companyName!, { exact: true })).toBeVisible();
 });
 
 for (const locale of LOCALES) {

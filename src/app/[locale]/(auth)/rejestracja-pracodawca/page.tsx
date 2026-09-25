@@ -5,12 +5,15 @@ import { Link, redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { getPortalIdentity, isPortalDataConfigured } from '@/lib/db/portal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AuthForm } from '@/components/auth/AuthForm';
+import { EmployerSignupEntry } from '@/components/auth/EmployerSignupEntry';
 
 /**
  * Rejestracja pracodawcy. Formularz kliencki (AuthForm) wywołuje server action
  * `registerEmployer` (rola = employer, nazwa firmy w metadanych do dalszego onboardingu),
  * zapisuje `preferred_locale` = bieżące locale i przekierowuje do potwierdzenia e-maila.
+ *
+ * Link z zaproszenia do zespołu (0108, `#token=` we fragmencie) przełącza formularz na
+ * rejestrację bez nazwy firmy (`EmployerSignupEntry`); zaproszenie czeka potem w panelu.
  *
  * Zalogowany pracodawca nie widzi formularza nowego konta (#365): trafia do panelu, który
  * sam pokaże zakładanie firmy, jeśli jeszcze jej nie ma.
@@ -52,7 +55,7 @@ export default async function RegisterEmployerPage({ params }: PageProps) {
             <CardTitle as="h1" className="text-2xl">{t('registerEmployerTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <AuthForm variant="registerEmployer" />
+            <EmployerSignupEntry />
 
             <div className="space-y-3 text-center text-sm">
               <Link

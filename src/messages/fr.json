@@ -2435,7 +2435,19 @@
       "alreadyMember": "Cette personne fait déjà partie de l’équipe.",
       "invitationLimit": "La limite de 50 invitations en attente est atteinte. Annulez les invitations obsolètes.",
       "companyLimit": "Vous pouvez gérer au maximum 5 entreprises.",
-      "lastOwner": "L’entreprise doit avoir au moins un propriétaire actif."
+      "lastOwner": "L’entreprise doit avoir au moins un propriétaire actif.",
+      "localeRequired": "Choisissez la langue de l’invitation."
+    },
+    "localeLabel": "Langue de l’invitation",
+    "invitedSent": "Invitation enregistrée. Cette personne recevra un e-mail : avec un compte employeur, dans la langue de ce compte ; sans compte, dans la langue choisie, avec un lien d’inscription.",
+    "inviteLinkHint": "Une personne sans compte reçoit un e-mail dans la langue choisie avec un lien pour créer un compte employeur (utilisable une fois, valable 14 jours). Après confirmation de l’adresse, l’invitation l’attendra dans son espace. Une personne avec un compte reçoit l’e-mail dans la langue de son compte.",
+    "signup": {
+      "checking": "Vérification du lien d’invitation…",
+      "intro": "Invitation à rejoindre l’équipe de {company}. Rôle : {role}.",
+      "nextSteps": "Créez un compte employeur et confirmez votre adresse e-mail. L’invitation vous attendra dans votre espace, dans l’onglet « Équipe » : vous pourrez y rejoindre l’entreprise ou la refuser.",
+      "emailFixed": "Le compte est créé avec l’adresse qui a reçu l’invitation.",
+      "used": "Ce lien d’invitation a déjà été utilisé. Si vous avez un compte, connectez-vous : l’invitation vous attend dans votre espace.",
+      "invalid": "Le lien d’invitation est invalide ou a expiré. Demandez une nouvelle invitation à l’entreprise ou créez un compte employeur classique."
     }
   },
   "emailUnsubscribe": {

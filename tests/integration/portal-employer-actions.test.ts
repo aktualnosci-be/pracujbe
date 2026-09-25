@@ -72,7 +72,7 @@ async function verifyEmail(id: string) {
 /** Zaproszenie przez akcję (owner/admin) i przyjęcie przez adresata (zweryfikowany e-mail). */
 async function join(inviter: string, invitee: string, role: 'admin' | 'recruiter' | 'member') {
   actAs(as(inviter));
-  expect(await team.inviteTeamMember({ email: `${invitee}@example.invalid`, role })).toEqual({ ok: true });
+  expect(await team.inviteTeamMember({ email: `${invitee}@example.invalid`, role, locale: 'pl' })).toEqual({ ok: true });
   const [inv] = await admin(`SELECT id FROM public.company_invitations
     WHERE email = $1 AND status = 'pending'`, [`${invitee}@example.invalid`]);
   actAs(as(invitee));
@@ -332,9 +332,9 @@ describe('zespół — hierarchia ról (#25)', () => {
 
   it('getTeamPageData: owner widzi zespół i zaproszenia; member — tylko własną rolę', async () => {
     actAs(as(ownerA));
-    expect(await team.inviteTeamMember({ email: 'nowa@example.invalid', role: 'member' })).toEqual({ ok: true });
+    expect(await team.inviteTeamMember({ email: 'nowa@example.invalid', role: 'member', locale: 'pl' })).toEqual({ ok: true });
     // Powtórka zaproszenia na ten sam adres — idempotentnie jedno oczekujące.
-    expect(await team.inviteTeamMember({ email: 'nowa@example.invalid', role: 'member' })).toEqual({ ok: true });
+    expect(await team.inviteTeamMember({ email: 'nowa@example.invalid', role: 'member', locale: 'pl' })).toEqual({ ok: true });
     const data = await getTeamPageData();
     expect(data).toMatchObject({ status: 'ok', demo: false, activeRole: 'owner' });
     if (data.status !== 'ok') return;
@@ -354,7 +354,7 @@ describe('zespół — hierarchia ról (#25)', () => {
     const invitee = await realSession.db!.createUser('employer');
     await verifyEmail(invitee);
     actAs(as(ownerB));
-    expect(await team.inviteTeamMember({ email: `${invitee}@example.invalid`, role: 'recruiter' })).toEqual({ ok: true });
+    expect(await team.inviteTeamMember({ email: `${invitee}@example.invalid`, role: 'recruiter', locale: 'pl' })).toEqual({ ok: true });
     actAs(as(invitee));
     expect(await getMyTeamInvitations()).toMatchObject({
       status: 'ok', invitations: [{ companyName: 'Firma B Nowa', role: 'recruiter' }],
@@ -375,7 +375,7 @@ describe('zespół — hierarchia ról (#25)', () => {
     expect(await team.setTeamMemberRole(recruiterRow, 'member')).toEqual({ ok: true });
     expect(await team.setTeamMemberRole(recruiterRow, 'admin')).toMatchObject({ ok: false });
     expect(await team.setTeamMemberActive(ownerRow, false)).toMatchObject({ ok: false });
-    expect(await team.inviteTeamMember({ email: 'adm@example.invalid', role: 'admin' })).toMatchObject({ ok: false });
+    expect(await team.inviteTeamMember({ email: 'adm@example.invalid', role: 'admin', locale: 'pl' })).toMatchObject({ ok: false });
     actAs(as(memberA));
     // RPC nie ujawnia członków komuś bez prawa zarządzania (NOT_FOUND), stan bez zmian.
     expect(await team.setTeamMemberRole(recruiterRow, 'recruiter')).toEqual({ ok: false, error: 'NOT_FOUND' });

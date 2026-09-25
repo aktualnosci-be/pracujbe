@@ -64,6 +64,8 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
       return '/zglos-tresc/sprawa';
     case 'teamInvitation':
       return '/employer/zespol';
+    case 'teamInvitationSignup':
+      return '/rejestracja-pracodawca';
     case 'jobMatch':
       return '/candidate/wyszukiwania';
     case 'guestApplicationConfirm':
@@ -145,10 +147,14 @@ export function deliveryJobMatchJobs(
   return out;
 }
 
-/** Szablony do gościa (#98): link niesie jednorazowy token, którego nie ma w bazie. */
+/**
+ * Szablony z linkiem niosącym jednorazowy token, którego nie ma w bazie: gość (#98) i
+ * zaproszenie do zespołu dla adresu bez konta (0108).
+ */
 export const GUEST_TOKEN_TEMPLATES: ReadonlySet<string> = new Set([
   'guestApplicationConfirm',
   'guestApplicationSent',
+  'teamInvitationSignup',
 ]);
 
 /**

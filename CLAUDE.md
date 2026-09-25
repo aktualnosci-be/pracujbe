@@ -774,8 +774,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   ≤ 10 min, audyt). Rola `member`: zamiast „Dodaj ofertę”, edycji i cyklu życia ofert —
   wyjaśnienie (`RecruiterOnlyNote`). Każda zmiana → `audit_logs`. Dowód: `rls.sql` sekcja TM403;
   unit `team-actions`, `team-members-ui`; E2E `employer-team.spec`.
-  **Otwarte:** e-mail zaproszenia dla adresu BEZ konta (brak profilu = brak locale odbiorcy
-  wg Invariantu #1; wymaga wyboru języka zaproszenia i linku rejestracji z tokenem).
+  Adres BEZ konta (migracja `0108`): zapraszający wybiera język zaproszenia (PL/NL/FR/EN,
+  domyślnie język strony — decyzja: brak profilu odbiorcy = jedyny znany język, Invariant #1;
+  konto z profilem dostaje e-mail w języku profilu), `company_invitations.locale`. E-mail
+  `teamInvitationSignup` z linkiem `/{locale}/rejestracja-pracodawca#token=` — token =
+  HMAC(`GUEST_APPLY_SECRET`, `team-invite:`+nonce) (`src/lib/team/invite-token.ts`), w bazie
+  tylko hash (czyszczony po rozstrzygnięciu), nonce w payloadzie; odświeżenie zaproszenia
+  wymienia token; najwyżej 3 linki na adres na dobę. Strona rejestracji (`EmployerSignupEntry`)
+  czyta token z fragmentu, podgląd `team_invitation_signup_preview` (service_role) → formularz
+  bez nazwy firmy, adres z zaproszenia; `registerInvitedEmployer` zużywa token
+  (`consume_team_invitation_signup`, raz, tylko ten adres). Konto powstaje bez firmy, a
+  zaproszenie czeka w panelu po weryfikacji adresu. Wynik RPC niezależny od konta. Dowód:
+  `rls.sql` sekcja TI403 (kontrole ujemne), unit `team-invitation-signup-*`, E2E `employer-team`.
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
