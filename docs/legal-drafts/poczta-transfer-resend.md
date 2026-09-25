@@ -54,7 +54,7 @@ Nowe pole w payloadzie SQL powoduje czerwony test, dopóki ktoś nie zdecyduje, 
 ## 2. Uprawnienie odbiorcy w chwili wysyłki
 
 E-maile z danymi kandydata do firmy kolejkujemy tylko dla aktywnych rekruterów, administratorów
-i właścicieli firmy z aktywnym kontem. Od #503 (migracja `0112`, numer tymczasowy) to samo
+i właścicieli firmy z aktywnym kontem. Od #503 (migracja `0122`) to samo
 sprawdzamy przy odbiorze wiersza z kolejki (`claim_email_batch` → `email_recipient_authorized`):
 odebrana rola, dezaktywowane członkostwo, zamknięte konto albo usunięty obiekt (aplikacja,
 propozycja, wiadomość) = wiersz nie wychodzi i zostaje jako ślad

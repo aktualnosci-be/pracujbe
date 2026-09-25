@@ -24,6 +24,30 @@ export function serializeJsonLd(data: unknown): string {
   return JSON.stringify(data).replace(/</g, '\\u003c');
 }
 
+const HOST_LABEL = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+
+/**
+ * Adres do publikacji w danych strukturalnych: bezwzględny https z nazwą hosta (co najmniej
+ * jedna kropka), bez danych logowania, najwyżej 2048 znaków; inaczej `undefined`. Druga
+ * warstwa po `public_https_url` w bazie (0114) — dane mogą też przyjść z innego źródła.
+ */
+export function publicHttpsUrl(value: string | undefined): string | undefined {
+  const raw = value?.trim();
+  if (!raw || raw.length > 2048 || !raw.startsWith('https://') || /[\s"<>\\`]/.test(raw)) {
+    return undefined;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return undefined;
+  }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return undefined;
+  const labels = parsed.hostname.split('.');
+  if (labels.length < 2 || !labels.every((label) => HOST_LABEL.test(label))) return undefined;
+  return parsed.href;
+}
+
 /** Mapowanie rodzaju umowy na schema.org employmentType. */
 const EMPLOYMENT_TYPE: Record<ContractType, string> = {
   permanent: 'FULL_TIME',
@@ -133,6 +157,10 @@ export function buildJobPostingJsonLd(
       }
     : undefined;
 
+  // Linki firmy tylko jako bezpieczny https (baza zwraca je wyłącznie dla firmy verified).
+  const sameAs = publicHttpsUrl(job.companyWebsite);
+  const logo = publicHttpsUrl(job.companyLogoUrl);
+
   return {
     '@context': 'https://schema.org/',
     '@type': 'JobPosting',
@@ -150,6 +178,8 @@ export function buildJobPostingJsonLd(
     hiringOrganization: {
       '@type': 'Organization',
       name: job.companyName,
+      ...(sameAs ? { sameAs } : {}),
+      ...(logo ? { logo } : {}),
     },
     jobLocation: {
       '@type': 'Place',

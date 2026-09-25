@@ -2,7 +2,12 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AuthPage,
+  AuthPageHeader,
+  AuthPageTitle,
+  AuthPaper,
+} from '@/components/auth/auth-page';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { safeNextPath } from '@/lib/auth/next-path';
 
@@ -36,35 +41,31 @@ export default async function RegisterCandidatePage({ params, searchParams }: Pa
   const t = await getTranslations('auth');
 
   return (
-    <div className="container flex min-h-[calc(100vh-8rem)] items-center justify-center py-12">
-      <div className="w-full max-w-md">
-        <Card>
-          <CardHeader className="space-y-2 text-center">
-            <CardTitle as="h1" className="text-2xl">{t('registerCandidateTitle')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <AuthForm variant="registerCandidate" next={next} />
+    <AuthPage>
+      <AuthPageHeader>
+        <AuthPageTitle>{t('registerCandidateTitle')}</AuthPageTitle>
+      </AuthPageHeader>
+      <AuthPaper>
+        <AuthForm variant="registerCandidate" next={next} />
 
-            <div className="space-y-3 text-center text-sm">
-              <Link
-                href="/rejestracja-pracodawca"
-                className="font-medium text-primary underline-offset-4 hover:underline"
-              >
-                {t('registerAsEmployer')}
-              </Link>
-              <p className="text-muted-foreground">
-                {t('haveAccount')}{' '}
-                <Link
-                  href={next ? { pathname: '/logowanie', query: { next } } : '/logowanie'}
-                  className="font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  {t('submitLogin')}
-                </Link>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+        <div className="space-y-3 text-sm">
+          <Link
+            href="/rejestracja-pracodawca"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {t('registerAsEmployer')}
+          </Link>
+          <p className="text-muted-foreground">
+            {t('haveAccount')}{' '}
+            <Link
+              href={next ? { pathname: '/logowanie', query: { next } } : '/logowanie'}
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {t('submitLogin')}
+            </Link>
+          </p>
+        </div>
+      </AuthPaper>
+    </AuthPage>
   );
 }

@@ -46,11 +46,11 @@ const DROPPED: Partial<Record<EmailType, readonly string[]>> = {
   moderationCompanySuspended: ['jobTitle'],
 };
 
-/** Pola z listy, których SQL dziś nie kolejkuje (dane przyszłych payloadów, np. #293/#290). */
-const NOT_YET_QUEUED: Partial<Record<EmailType, readonly string[]>> = {
-  jobOffer: ['currency', 'expiresAt', 'salaryMax', 'salaryMin', 'salaryPeriod'],
-  newMessage: ['conversationId'],
-};
+/**
+ * Pola z listy, których SQL dziś nie kolejkuje (dane przyszłych payloadów). Od 0113
+ * `jobOffer` (kwoty, `expiresAt`) i `newMessage` (`conversationId`) są już kolejkowane.
+ */
+const NOT_YET_QUEUED: Partial<Record<EmailType, readonly string[]>> = {};
 
 /** Wartości-kanarki: gdyby którakolwiek trafiła do treści, minimalizacja nie działa. */
 const CANARIES = {
