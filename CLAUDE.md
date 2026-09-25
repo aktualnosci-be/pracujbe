@@ -971,9 +971,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Linki (#505): token we fragmencie `#token=` → POST do cookie HttpOnly ścieżki → czysty URL;
   stary format `?token=` odrzucany w middleware (303 bez cookie, „link nieprawidłowy”) —
   `guest-legacy-link.test` z kontrolą ujemną.
-  Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture). **Otwarte:** powiadomienie gościa
-  o zmianie statusu (brak profilu odbiorcy); okres retencji do potwierdzenia w polityce
-  prywatności (#40).
+  Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture).
+  Zmiana statusu (0122): `transition_application` → `enqueue_guest_status_email` →
+  `guestStatusChanged` w języku formularza (`guest_application_requests.locale` — jawnie
+  zapisany język odbiorcy bez profilu, Invariant #1), klucz = id wiersza historii, tylko
+  potwierdzone zgłoszenie, nieusunięta aplikacja bez konta, adres bez blokady (#44); wiersz
+  kolejki = encja aplikacji (retencja #486 usuwa go z aplikacją); payload: imię gościa, firma,
+  tytuł, status; CTA lista ofert, bez tokenu i linku wypisania. Dowód: `rls.sql` sekcja GS98
+  (kontrole ujemne), unit `guest-status-email`. **Otwarte:** okres retencji do potwierdzenia
+  w polityce prywatności (#40).
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia

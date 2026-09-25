@@ -128,7 +128,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'guest-applications': {
     name: 'Aplikacja bez konta',
-    inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto.',
+    inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto.',
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
       'purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach.',

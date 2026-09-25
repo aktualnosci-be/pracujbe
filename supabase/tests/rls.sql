@@ -9452,6 +9452,209 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
+-- GS98. E-mail do gościa o zmianie statusu (#98, 0122): transition_application kolejkuje
+--       `guestStatusChanged` na adres gościa w języku jego formularza (nie firmy), klucz =
+--       id wiersza historii, tylko potwierdzone zgłoszenie, bez zablokowanego adresu (#44),
+--       wiersz kolejki usuwany z aplikacją przez retencję (#486). Kontrole ujemne: helper
+--       bez sprawdzenia blokady / potwierdzenia wysyła — testy to wykrywają.
+-- ============================================================================
+\set GSO 'e9810000-0000-0000-0000-0000000000a1'
+\set GSR 'e9810000-0000-0000-0000-0000000000a2'
+\set GSC 'e9810000-0000-0000-0000-0000000000c1'
+\set GSJ 'e9810000-0000-0000-0000-0000000000d1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'GSO','gso@test.be','Gerd O','{"role":"employer","first_name":"Gerd","last_name":"Owner","locale":"fr"}');
+update auth.users set email_verified = true where id = :'GSO';
+insert into public.companies(id,name,status) values (:'GSC','Firma GS','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'GSC',:'GSO','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'GSJ',:'GSC','gs-job','Magazynier GS','warehouse','permanent','Gent','Flandria','active','pl');
+
+set role service_role;
+select public.submit_guest_application(:'GSJ', 'gs-guest@test.be', 'Greta Gość', null, null, null, 'nl',
+  'idem-gs-0001', 'nonce-gs-0001-aaaaaaaa', encode(sha256('tok-gs-1'::bytea), 'hex')) as gsreq \gset
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-gs-1'::bytea), 'hex'),
+     'nonce-claim-gs-00001', encode(sha256('claim-gs-1'::bytea), 'hex'))) = 'confirmed',
+  'GS98-0 przygotowanie: potwierdzona aplikacja gościa (formularz nl, firma fr)');
+reset role;
+select id as gsapp from public.applications where job_id = :'GSJ' \gset
+
+-- GS98-1: klient nie woła helpera; helper przyjmuje tylko swój typ.
+set role authenticated; set app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.enqueue_guest_status_email(%L, %L, %L, %L::jsonb)',
+  :'gsapp', 'guestStatusChanged', 'gs-x', '{}'), 'permission denied', 'GS98-1 authenticated bez EXECUTE helpera');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.enqueue_guest_status_email(%L, %L, %L, %L::jsonb)',
+  :'gsapp', 'guestStatusChanged', 'gs-x', '{}'), 'permission denied', 'GS98-1b anon bez EXECUTE helpera');
+reset role;
+select pg_temp.expect_error(format('select public.enqueue_guest_status_email(%L, %L, %L, %L::jsonb)',
+  :'gsapp', 'statusChanged', 'gs-x', '{}'), 'VALIDATION_FAILED', 'GS98-1c helper odrzuca inny typ e-maila');
+
+-- GS98-2: zmiana statusu → jeden e-mail do gościa w języku formularza, klucz = wiersz historii.
+set role authenticated; set app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'viewed');
+select public.transition_application(:'gsapp', 'viewed'); -- retry bez zmiany stanu
+reset role; reset app.current_uid;
+select id as gshist1 from public.application_status_history
+ where application_id = :'gsapp' and to_status = 'viewed' \gset
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where template = 'guestStatusChanged' and entity_id = :'gsapp') = 1
+  and (select to_email = 'gs-guest@test.be' and locale = 'nl' and profile_id is null
+              and entity_type = 'application' and status::text = 'queued'
+              and idempotency_key = 'appstatus-' || :'gsapp' || '-' || :'gshist1'
+         from public.email_deliveries where template = 'guestStatusChanged' and entity_id = :'gsapp'),
+  'GS98-2 jeden e-mail do gościa (nl, nie fr firmy), klucz = id wiersza historii; retry bez duplikatu');
+select pg_temp.assert(
+  (select array_agg(k order by k) = array['companyName','jobTitle','recipientName','status']
+          and payload ->> 'status' = 'viewed' and payload ->> 'companyName' = 'Firma GS'
+          and payload ->> 'jobTitle' = 'Magazynier GS' and payload ->> 'recipientName' = 'Greta Gość'
+     from public.email_deliveries, jsonb_object_keys(payload) k
+    where template = 'guestStatusChanged' and entity_id = :'gsapp'
+    group by payload),
+  'GS98-2b payload: tylko imię gościa, nazwa firmy, tytuł oferty, status');
+select pg_temp.assert(
+  not exists (select 1 from public.notifications where entity_id = :'gsapp' and type = 'application_status_changed')
+  and not exists (select 1 from public.email_deliveries where entity_id = :'gsapp'
+                    and template in ('applicationViewed', 'statusChanged')),
+  'GS98-2c bez powiadomienia in-app i bez e-maili kandydata (brak profilu)');
+
+-- GS98-3: kolejny status = nowy wiersz historii = nowy e-mail.
+set role authenticated; set app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'shortlisted');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(distinct idempotency_key) from public.email_deliveries
+    where template = 'guestStatusChanged' and entity_id = :'gsapp') = 2
+  and exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                and entity_id = :'gsapp' and payload ->> 'status' = 'shortlisted'),
+  'GS98-3 kolejna zmiana statusu → drugi e-mail z nowym kluczem');
+
+-- GS98-4: adres z aktywną blokadą (#44) → brak e-maila; historia i status zapisane.
+insert into public.email_suppressions(email, reason) values ('gs-guest@test.be', 'hard_bounce');
+set role authenticated; set app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'interview');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.applications where id = :'gsapp') = 'interview'
+  and not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                    and entity_id = :'gsapp' and payload ->> 'status' = 'interview'),
+  'GS98-4 zablokowany adres: status zmieniony, e-mail niekolejkowany');
+-- Kontrola ujemna: helper bez sprawdzenia blokady kolejkuje e-mail na zablokowany adres.
+begin;
+create or replace function public.enqueue_guest_status_email(
+  p_application_id uuid, p_type text, p_idempotency_key text, p_payload jsonb
+) returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  insert into public.email_deliveries
+    (profile_id, to_email, template, locale, subject, status, entity_type, entity_id,
+     idempotency_key, payload, queued_at, next_attempt_at, attempts)
+  select null, a.guest_email, p_type, g.locale, p_type, 'queued', 'application', a.id,
+         p_idempotency_key, p_payload, now(), now(), 0
+    from public.applications a
+    join public.guest_application_requests g
+      on g.id = a.guest_request_id and g.application_id = a.id and g.status = 'confirmed'
+   where a.id = p_application_id and a.candidate_id is null
+  on conflict (idempotency_key) where idempotency_key is not null do nothing;
+end $$;
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role;
+select pg_temp.assert(exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                        and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
+  'GS98-4b kontrola ujemna: bez sprawdzenia blokady e-mail trafia do kolejki');
+rollback;
+delete from public.email_suppressions where email = 'gs-guest@test.be';
+
+-- GS98-5: zgłoszenie niepotwierdzone (stan inny niż confirmed) → brak e-maila.
+begin;
+update public.guest_application_requests set status = 'duplicate' where id = :'gsreq';
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                        and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
+  'GS98-5 tylko potwierdzone zgłoszenie dostaje e-mail');
+rollback;
+-- Kontrola ujemna: helper bez warunku potwierdzenia wysyła mimo niepotwierdzonego zgłoszenia.
+begin;
+create or replace function public.enqueue_guest_status_email(
+  p_application_id uuid, p_type text, p_idempotency_key text, p_payload jsonb
+) returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  insert into public.email_deliveries
+    (profile_id, to_email, template, locale, subject, status, entity_type, entity_id,
+     idempotency_key, payload, queued_at, next_attempt_at, attempts)
+  select null, a.guest_email, p_type, g.locale, p_type, 'queued', 'application', a.id,
+         p_idempotency_key, p_payload, now(), now(), 0
+    from public.applications a
+    join public.guest_application_requests g on g.id = a.guest_request_id
+   where a.id = p_application_id and a.candidate_id is null
+     and not public.email_address_suppressed(a.guest_email::text)
+  on conflict (idempotency_key) where idempotency_key is not null do nothing;
+end $$;
+update public.guest_application_requests set status = 'duplicate' where id = :'gsreq';
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role;
+select pg_temp.assert(exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                        and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
+  'GS98-5b kontrola ujemna: bez warunku potwierdzenia e-mail trafia do kolejki');
+rollback;
+
+-- GS98-6: aplikacja usunięta miękko → brak e-maila.
+begin;
+update public.applications set deleted_at = now() where id = :'gsapp';
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                        and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
+  'GS98-6 usunięta aplikacja nie wysyła e-maila');
+rollback;
+
+-- GS98-7: retencja zamkniętych aplikacji (#486) usuwa e-maile gościa razem z aplikacją.
+begin;
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'rejected');
+reset role;
+select pg_temp.assert((select count(*) from public.email_deliveries
+    where template = 'guestStatusChanged' and entity_id = :'gsapp') = 3,
+  'GS98-7 przygotowanie: e-mail o odrzuceniu w kolejce');
+update public.retention_policies set period = interval '30 days' where key = 'closed_application';
+set local session_replication_role = replica;
+update public.applications set updated_at = now() - interval '60 days' where id = :'gsapp';
+set local session_replication_role = origin;
+set local role service_role;
+select public.run_retention_purge(100);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.applications where id = :'gsapp')
+  and not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged' and entity_id = :'gsapp'),
+  'GS98-7b retencja usuwa aplikację gościa razem z e-mailami o statusie');
+rollback;
+
+-- GS98-8: po przejęciu aplikacji przez konto — ścieżka kandydata, bez e-maila gościa.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'GSR','gs-guest@test.be','Greta G','{"role":"candidate","first_name":"Greta","last_name":"G","locale":"pl"}');
+update auth.users set email_verified = true where id = :'GSR';
+set role authenticated; set app.current_uid = :'GSR'; select pg_temp.assert_client_role();
+select public.claim_guest_application(encode(sha256('claim-gs-1'::bytea), 'hex')) as gsclaim \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  :'gsclaim' = :'gsapp'
+  and (select locale = 'pl' from public.email_deliveries where template = 'statusChanged'
+         and entity_id = :'gsapp' and profile_id = :'GSR')
+  and not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                    and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
+  'GS98-8 przejęta aplikacja: statusChanged do kandydata (pl), bez e-maila gościa');
+
+-- ============================================================================
 -- TI403. Zaproszenie do zespołu dla adresu BEZ konta (0121, #403 „Otwarte”):
 --        język zaproszenia wybrany jawnie (brak profilu odbiorcy, Invariant #1),
 --        link rejestracji z jednorazowym tokenem (w bazie tylko hash), limit e-maili

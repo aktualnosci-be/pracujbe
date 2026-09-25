@@ -73,6 +73,9 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
       return '/aplikacja/potwierdz';
     case 'guestApplicationSent':
       return '/aplikacja/przejmij';
+    case 'guestStatusChanged':
+      // Gość nie ma panelu; e-mail bez tokenu — CTA prowadzi do listy ofert.
+      return '/oferty-pracy';
     case 'reportReceived': {
       // #41: numer sprawy i kod dostępu w części `#` (nie trafia do serwera ani logów).
       const caseNumber = payload?.['caseNumber'];
