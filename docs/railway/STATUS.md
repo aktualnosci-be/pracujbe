@@ -99,3 +99,7 @@ buduje ze zmiennymi usługi). Teraz `dynamic = 'force-dynamic'`. Strażnik i mac
 zmienna rdzenia osobno → 503 w middleware i health, komplet Supabase bez `DATABASE_*` → 503, tryb
 demo bez zmian): `tests/unit/readiness-postgres-only.test.ts`. CI nie buduje z `APP_MODE=production`,
 więc tego przypadku nie wykryje sam build w CI — pilnuje go ten test.
+
+## Cron caller i rozdział sekretów (#13) — 24 września 2026
+
+Caller `scripts/railway-cron-call.mjs` wysyła sekret wyłącznie pod `/api/email/process` albo `/api/maintenance` (bez query; HTTP tylko w `*.railway.internal`/`localhost`), czas `CRON_TIMEOUT_SECONDS` 1–600 (domyślnie 120), kody wyjścia 0/1/2. Endpointy używają wspólnego `src/lib/cron/secrets.ts`: sekret jednego zadania nie otwiera drugiego, wspólna wartość obu zmiennych nie otwiera żadnego, `CRON_SECRET` działa przejściowo dla obu (rollback = ponowne ustawienie zmiennej). `/api/health` raportuje `maintenanceSecret`, `cronSecretsSeparate`, `legacyCronSecret`. Harmonogram i kolejność usunięcia `CRON_SECRET`: README, sekcja „Cron”. Testy: `railway-cron`, `cron-secrets` (z kontrolą ujemną), `cron-docs`. Zmiennych Railway nie ustawiono; konfiguracja usług cron i ręczne wywołania pozostają do odbioru (#14, #16).
