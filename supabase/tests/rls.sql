@@ -9000,7 +9000,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- PL108. Payloady e-maili i odczyt historii (0108; #293, #22, #290, #184):
+-- PL109. Payloady e-maili i odczyt historii (0109; #293, #22, #290, #184):
 --   send_offer → expiresAt + kwoty oferty (bez treści wiadomości rekrutera, #503),
 --   send_message → conversationId, get_applied_jobs_display(p_locale, p_job_ids).
 --   Kontrole ujemne (transakcje cofane): definicja bez nowego klucza → asercja pada.
@@ -9017,123 +9017,123 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'PLC','plc@test.be','Noor V','{"role":"candidate","first_name":"Noor","last_name":"Vermeulen","locale":"nl"}'),
   (:'PLC2','plc2@test.be','Luc D','{"role":"candidate","first_name":"Luc","last_name":"Dubois","locale":"fr"}'),
   (:'PLE','ple@test.be','Piotr R','{"role":"employer","first_name":"Piotr","last_name":"Rekruter","locale":"pl"}');
-insert into public.companies(id,name,status) values (:'PLCO','Firma PL108','verified');
+insert into public.companies(id,name,status) values (:'PLCO','Firma PL109','verified');
 insert into public.company_members(company_id,profile_id,role,is_active) values (:'PLCO',:'PLE','owner',true);
 insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
                         salary_min,salary_max,currency,salary_period,expires_at) values
-  (:'PLJ1',:'PLCO','job-pl108-1','Magazynier PL108','warehouse','permanent','Gent','Flandria','active','pl',
+  (:'PLJ1',:'PLCO','job-pl109-1','Magazynier PL109','warehouse','permanent','Gent','Flandria','active','pl',
    2500,3100,'EUR','month', now() + interval '10 days'),
-  (:'PLJ2',:'PLCO','job-pl108-2','Kierowca PL108','warehouse','permanent','Gent','Flandria','active','pl',
+  (:'PLJ2',:'PLCO','job-pl109-2','Kierowca PL109','warehouse','permanent','Gent','Flandria','active','pl',
    null,null,'EUR','hour', null),
-  (:'PLJ3',:'PLCO','job-pl108-3','Pomocnik PL108','warehouse','permanent','Gent','Flandria','active','pl',
+  (:'PLJ3',:'PLCO','job-pl109-3','Pomocnik PL109','warehouse','permanent','Gent','Flandria','active','pl',
    null,null,'EUR','month', null);
 insert into public.candidate_profiles(profile_id, is_searchable) values (:'PLC', false), (:'PLC2', false);
 
 select set_config('app.current_uid', :'PLC', false);
 set role authenticated; select pg_temp.assert_client_role();
-select public.apply_to_job(:'PLJ1'::uuid, 'pl108-app-1', null, null, null) as plapp1 \gset
-select public.apply_to_job(:'PLJ2'::uuid, 'pl108-app-2', null, null, null) as plapp2 \gset
+select public.apply_to_job(:'PLJ1'::uuid, 'pl109-app-1', null, null, null) as plapp1 \gset
+select public.apply_to_job(:'PLJ2'::uuid, 'pl109-app-2', null, null, null) as plapp2 \gset
 reset role;
 select set_config('app.current_uid', :'PLC2', false);
 set role authenticated; select pg_temp.assert_client_role();
-select public.apply_to_job(:'PLJ3'::uuid, 'pl108-app-3', null, null, null) as plapp3 \gset
+select public.apply_to_job(:'PLJ3'::uuid, 'pl109-app-3', null, null, null) as plapp3 \gset
 reset role;
 select set_config('app.current_uid', :'PLE', false);
 set role authenticated; select pg_temp.assert_client_role();
-select public.send_offer(:'PLJ1'::uuid, :'PLC'::uuid, 'pl108-off-1', 'Bel me op 0470 12 34 56', null) as ploff1 \gset
-select public.send_offer(:'PLJ2'::uuid, :'PLC'::uuid, 'pl108-off-2', null, null) as ploff2 \gset
+select public.send_offer(:'PLJ1'::uuid, :'PLC'::uuid, 'pl109-off-1', 'Bel me op 0470 12 34 56', null) as ploff1 \gset
+select public.send_offer(:'PLJ2'::uuid, :'PLC'::uuid, 'pl109-off-2', null, null) as ploff2 \gset
 select public.get_or_create_conversation(:'plapp1'::uuid, null) as plconv \gset
 select public.send_message(:'plconv'::uuid, 'Dzień dobry', gen_random_uuid()) as plmsg \gset
 reset role; reset app.current_uid;
 
--- PL108-1: termin = offers.expires_at (ten, który sprawdza respond_to_offer) jako ISO.
+-- PL109-1: termin = offers.expires_at (ten, który sprawdza respond_to_offer) jako ISO.
 select pg_temp.assert(
   (select (d.payload->>'expiresAt')::timestamptz = o.expires_at
      from public.email_deliveries d join public.offers o on o.id = d.entity_id
     where d.entity_id = :'ploff1' and d.template = 'jobOffer'),
-  'PL108-1 jobOffer.expiresAt = offers.expires_at');
--- PL108-2: kwoty jako liczby + okres i waluta (tekst składa worker w locale odbiorcy).
+  'PL109-1 jobOffer.expiresAt = offers.expires_at');
+-- PL109-2: kwoty jako liczby + okres i waluta (tekst składa worker w locale odbiorcy).
 select pg_temp.assert(
   (select payload->'salaryMin' = '2500'::jsonb and payload->'salaryMax' = '3100'::jsonb
       and payload->>'salaryPeriod' = 'month' and payload->>'currency' = 'EUR'
       and not payload ? 'salary'
      from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
-  'PL108-2 jobOffer niesie kwoty oferty, bez gotowego tekstu wynagrodzenia');
--- PL108-3: oferta bez kwot → null (worker pomija pole), okres z danych.
+  'PL109-2 jobOffer niesie kwoty oferty, bez gotowego tekstu wynagrodzenia');
+-- PL109-3: oferta bez kwot → null (worker pomija pole), okres z danych.
 select pg_temp.assert(
   (select payload ? 'salaryMin' and payload->'salaryMin' = 'null'::jsonb
       and payload->'salaryMax' = 'null'::jsonb and payload->>'salaryPeriod' = 'hour'
       and payload->>'expiresAt' is not null
      from public.email_deliveries where entity_id = :'ploff2' and template = 'jobOffer'),
-  'PL108-3 oferta bez kwot: null w payloadzie, termin domyślny (+30 dni) obecny');
--- PL108-4: treść wiadomości rekrutera zostaje w offers, NIE trafia do payloadu (#503).
+  'PL109-3 oferta bez kwot: null w payloadzie, termin domyślny (+30 dni) obecny');
+-- PL109-4: treść wiadomości rekrutera zostaje w offers, NIE trafia do payloadu (#503).
 select pg_temp.assert(
   (select o.message from public.offers o where o.id = :'ploff1') = 'Bel me op 0470 12 34 56'
   and (select not payload ? 'message' and payload::text not like '%0470%'
          from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
-  'PL108-4 payload jobOffer bez treści wiadomości rekrutera');
--- PL108-5: język e-maila = język ODBIORCY (nl), nie nadawcy (pl) — Invariant #1.
+  'PL109-4 payload jobOffer bez treści wiadomości rekrutera');
+-- PL109-5: język e-maila = język ODBIORCY (nl), nie nadawcy (pl) — Invariant #1.
 select pg_temp.assert(
   (select locale from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer') = 'nl',
-  'PL108-5 jobOffer w języku kandydata');
--- PL108-6: newMessage niesie identyfikator rozmowy (CTA do wątku).
+  'PL109-5 jobOffer w języku kandydata');
+-- PL109-6: newMessage niesie identyfikator rozmowy (CTA do wątku).
 select pg_temp.assert(
   (select payload->>'conversationId' = :'plconv' and locale = 'nl'
      from public.email_deliveries where entity_id = :'plmsg' and profile_id = :'PLC'),
-  'PL108-6 newMessage.conversationId = rozmowa wiadomości');
+  'PL109-6 newMessage.conversationId = rozmowa wiadomości');
 
--- PL108-7: get_applied_jobs_display — filtr p_job_ids wewnątrz RPC, tylko własne aplikacje.
+-- PL109-7: get_applied_jobs_display — filtr p_job_ids wewnątrz RPC, tylko własne aplikacje.
 set role authenticated; set app.current_uid = :'PLC'; select pg_temp.assert_client_role();
 select pg_temp.assert((select count(*) from public.get_applied_jobs_display('pl')) = 2,
-  'PL108-7 bez filtra: cała historia własnych aplikacji (zgodność wstecz)');
+  'PL109-7 bez filtra: cała historia własnych aplikacji (zgodność wstecz)');
 select pg_temp.assert(
   (select array_agg(job_id::text) from public.get_applied_jobs_display(p_locale => 'pl',
      p_job_ids => array[:'PLJ1'::uuid])) = array[:'PLJ1'::text],
-  'PL108-7b filtr zwraca tylko wskazaną ofertę');
+  'PL109-7b filtr zwraca tylko wskazaną ofertę');
 select pg_temp.assert(
   (select count(*) from public.get_applied_jobs_display(p_locale => 'pl',
      p_job_ids => array[:'PLJ3'::uuid, gen_random_uuid()])) = 0,
-  'PL108-7c cudza aplikacja (PLC2) i nieznany job_id w filtrze → brak wierszy');
+  'PL109-7c cudza aplikacja (PLC2) i nieznany job_id w filtrze → brak wierszy');
 select pg_temp.assert(
   (select count(*) from public.get_applied_jobs_display(p_locale => 'pl', p_job_ids => array[]::uuid[])) = 0,
-  'PL108-7d pusta lista → brak wierszy');
+  'PL109-7d pusta lista → brak wierszy');
 select pg_temp.expect_error(
   'select count(*) from public.get_applied_jobs_display(''pl'', array(select gen_random_uuid() from generate_series(1, 101)))',
-  'VALIDATION_FAILED', 'PL108-7e ponad 100 identyfikatorów odrzucone');
+  'VALIDATION_FAILED', 'PL109-7e ponad 100 identyfikatorów odrzucone');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   to_regprocedure('public.get_applied_jobs_display(text)') is null
   and has_function_privilege('authenticated', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
   and not has_function_privilege('anon', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE'),
-  'PL108-7f stary podpis usunięty; EXECUTE tylko authenticated');
+  'PL109-7f stary podpis usunięty; EXECUTE tylko authenticated');
 
--- KONTROLA UJEMNA 1: send_offer bez expiresAt → asercja PL108-1 wykrywa brak.
+-- KONTROLA UJEMNA 1: send_offer bez expiresAt → asercja PL109-1 wykrywa brak.
 begin;
 do $pl$ begin
   execute regexp_replace(pg_get_functiondef('public.send_offer(uuid, uuid, text, text, timestamptz)'::regprocedure),
     '''expiresAt'', v_expires,', '', 'g');
 end $pl$;
 select pg_temp.assert(pg_get_functiondef('public.send_offer(uuid, uuid, text, text, timestamptz)'::regprocedure)
-  not like '%expiresAt%', 'PL108-N1 mutacja usunęła klucz expiresAt');
+  not like '%expiresAt%', 'PL109-N1 mutacja usunęła klucz expiresAt');
 select set_config('app.current_uid', :'PLE', false);
 set local role authenticated; select pg_temp.assert_client_role();
-select public.send_offer(:'PLJ3'::uuid, :'PLC2'::uuid, 'pl108-off-neg', null, null) as ploffneg \gset
+select public.send_offer(:'PLJ3'::uuid, :'PLC2'::uuid, 'pl109-off-neg', null, null) as ploffneg \gset
 reset role;
 select pg_temp.assert(
   not coalesce((select (payload->>'expiresAt')::timestamptz is not null
      from public.email_deliveries where entity_id = :'ploffneg' and template = 'jobOffer'), false),
-  'PL108-N1b bez klucza predykat PL108-1 jest fałszywy (test wykrywa regresję)');
+  'PL109-N1b bez klucza predykat PL109-1 jest fałszywy (test wykrywa regresję)');
 rollback;
 reset role; reset app.current_uid;
 
--- KONTROLA UJEMNA 2: send_message bez conversationId → asercja PL108-6 wykrywa brak.
+-- KONTROLA UJEMNA 2: send_message bez conversationId → asercja PL109-6 wykrywa brak.
 begin;
 do $pl$ begin
   execute regexp_replace(pg_get_functiondef('public.send_message(uuid, text, uuid)'::regprocedure),
     ',\s*''conversationId'', p_conversation_id', '', 'g');
 end $pl$;
 select pg_temp.assert(pg_get_functiondef('public.send_message(uuid, text, uuid)'::regprocedure)
-  not like '%''conversationId''%', 'PL108-N2 mutacja usunęła klucz conversationId');
+  not like '%''conversationId''%', 'PL109-N2 mutacja usunęła klucz conversationId');
 select set_config('app.current_uid', :'PLE', false);
 set local role authenticated; select pg_temp.assert_client_role();
 select public.send_message(:'plconv'::uuid, 'Druga', gen_random_uuid()) as plmsgneg \gset
@@ -9141,7 +9141,7 @@ reset role;
 select pg_temp.assert(
   not coalesce((select payload->>'conversationId' = :'plconv'
      from public.email_deliveries where entity_id = :'plmsgneg' and profile_id = :'PLC'), false),
-  'PL108-N2b bez klucza predykat PL108-6 jest fałszywy (test wykrywa regresję)');
+  'PL109-N2b bez klucza predykat PL109-6 jest fałszywy (test wykrywa regresję)');
 rollback;
 reset role; reset app.current_uid;
 

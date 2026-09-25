@@ -11,14 +11,14 @@ import { extractEmailPayloads } from '../../scripts/privacy/email-payloads.mjs';
 import { loadMigrationFiles } from '../../scripts/privacy/schema.mjs';
 
 /**
- * 0108 (#293, #22, #290): klucze payloadu z AKTUALNYCH definicji `send_offer`/`send_message`
+ * 0109 (#293, #22, #290): klucze payloadu z AKTUALNYCH definicji `send_offer`/`send_message`
  * w migracjach → worker (`buildDeliveryData`) → render w locale ODBIORCY (Invariant #1).
- * Kontrola ujemna: te same asercje na migracjach bez 0108 (stan sprzed zmiany) padają.
+ * Kontrola ujemna: te same asercje na migracjach bez 0109 (stan sprzed zmiany) padają.
  */
 
 const ROOT = resolve(__dirname, '../..');
 const files = loadMigrationFiles(ROOT);
-const withoutFollowup = files.filter((f) => !/0108_email_payload_followups\.sql$/.test(f.path));
+const withoutFollowup = files.filter((f) => !/0109_email_payload_followups\.sql$/.test(f.path));
 const SITE = 'https://pracuj.be';
 const CONVERSATION = '6f1c2a4e-1b2c-4d5e-8f90-123456789abc';
 const OFFER_KEYS = ['expiresAt', 'salaryMin', 'salaryMax', 'salaryPeriod', 'currency'];
@@ -38,7 +38,7 @@ function missingKeys(migrations: typeof files): string[] {
   ];
 }
 
-describe('0108: klucze payloadu z migracji', () => {
+describe('0109: klucze payloadu z migracji', () => {
   it('send_offer niesie termin i kwoty, send_message identyfikator rozmowy', () => {
     expect(missingKeys(files)).toEqual([]);
     expect(payloadsOf(files).get('jobOffer')?.functions).toEqual(['send_offer']);
@@ -52,12 +52,12 @@ describe('0108: klucze payloadu z migracji', () => {
     expect(payloadsOf(files).get('newMessage')?.keys).not.toContain('preview');
   });
 
-  it('kontrola ujemna: migracje bez 0108 nie spełniają kontraktu', () => {
+  it('kontrola ujemna: migracje bez 0109 nie spełniają kontraktu', () => {
     expect(missingKeys(withoutFollowup)).toEqual([...OFFER_KEYS.map((k) => `jobOffer.${k}`), 'newMessage.conversationId']);
   });
 });
 
-describe('0108: worker formatuje w locale odbiorcy', () => {
+describe('0109: worker formatuje w locale odbiorcy', () => {
   // Kształt, jaki daje jsonb_build_object: timestamptz jako ISO z przesunięciem, kwoty jako liczby.
   const offerPayload = {
     companyName: 'Acme',
