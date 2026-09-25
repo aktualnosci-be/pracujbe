@@ -40,6 +40,8 @@ const ROUTES = [
   '/admin/naruszenia',
   '/admin/naruszenia/nowy',
   '/admin/naruszenia/demo-b1',
+  // Wiadomości z formularza kontaktu (#61).
+  '/admin/kontakt',
   // Przegląd pytań screeningowych (#497).
   '/admin/pytania',
   '/admin/dziennik',

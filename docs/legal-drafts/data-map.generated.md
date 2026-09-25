@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
+Tabele w migracjach: 97; z danymi osobowymi: 61; bez danych osobowych: 36.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -23,6 +23,7 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 | E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Resend, EmailLabs | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Kod nie usuwa danych — do ustalenia |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora). | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
+| Formularz kontaktu (`support-contact`) | Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt. | `public.contact_messages` | Railway, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Discord (webhook kanału błędów), Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
@@ -549,6 +550,23 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 | `granted` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0007_misc.sql` |
 | `ip_address` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
 | `user_agent` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
+
+### `public.contact_messages`
+
+- **Migracja:** `supabase/migrations/0125_contact_messages.sql`
+- **Czynności:** Formularz kontaktu
+- **Osoby:** Odwiedzający (bez konta), Kandydaci (konto), Pracodawcy i członkowie firm, Administratorzy portalu
+- **Uwaga:** Wiadomości z formularza kontaktu (0125). Retencja i powiązanie z eksportem/usunięciem konta — do decyzji właściciela (#486).
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `sender_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0125_contact_messages.sql` |
+| `sender_name` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0125_contact_messages.sql` |
+| `sender_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0125_contact_messages.sql` |
+| `topic` | Korespondencja i treści swobodne | `supabase/migrations/0125_contact_messages.sql` |
+| `message` | Korespondencja i treści swobodne | `supabase/migrations/0125_contact_messages.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0125_contact_messages.sql` |
+| `handled_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0125_contact_messages.sql` |
 
 ### `public.conversation_members`
 
@@ -1083,6 +1101,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `companyRejected` | `companyName`, `reason` | — | `admin_set_company_status` |
 | `companySuspended` | `companyName`, `reason` | — | `admin_set_company_status` |
 | `companyVerified` | `companyName`, `reason` | `reason` | `admin_set_company_status` |
+| `contactMessageAdmin` | `reference`, `topic` | — | `submit_contact_message` |
 | `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `jobSlug`, `nonce` | `submit_guest_application` |
 | `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `nonce` | `confirm_guest_application` |
 | `guestStatusChanged` | `companyName`, `jobTitle`, `recipientName`, `status` | — | `transition_application` |
@@ -1101,6 +1120,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `reportReceived` | `accessCode`, `caseNumber`, `recipientName`, `targetType` | — | `submit_content_report` |
 | `reportRestored` | `caseNumber`, `recipientName` | — | `admin_restore_moderation` |
 | `statusChanged` | `companyName`, `jobTitle`, `status` | — | `transition_application` |
+| `supportContact` | `recipientName`, `reference`, `topic` | — | `submit_contact_message` |
 | `teamInvitation` | `companyName`, `inviterName`, `panel` | — | `invite_company_member` |
 | `teamInvitationSignup` | `companyName`, `inviterName`, `nonce` | `nonce` | `invite_company_member` |
 

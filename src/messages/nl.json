@@ -2223,6 +2223,24 @@
     "breachNoticeRecipientsMalformed": "Ongeldig adres of ongeldige ID: {list}.",
     "breachNoticeContentRequired": "Vul onderwerp en tekst in minstens één taal in.",
     "breachNoticeNotAllowed": "Een kennisgeving kan worden verstuurd voor een open inbreuk in verband met persoonsgegevens met de opgeslagen beslissing „we brengen de betrokkenen op de hoogte”.",
+    "navContact": "Contact",
+    "contactTitle": "Berichten via het contactformulier",
+    "contactSubtitle": "Berichten verstuurd via het contactformulier. Antwoord vanuit je eigen mailbox aan de afzender en markeer het bericht daarna als afgehandeld.",
+    "contactFilterLabel": "Berichtenfilter",
+    "contactFilterNew": "Nieuw",
+    "contactFilterHandled": "Afgehandeld",
+    "contactStatusNew": "Nieuw",
+    "contactStatusHandled": "Afgehandeld",
+    "contactSearchLabel": "Berichten zoeken",
+    "contactSearchHint": "Berichtnummer, e-mailadres of voornaam van de afzender.",
+    "contactEmpty": "Geen berichten.",
+    "contactReceivedAt": "Ontvangen:",
+    "contactFormLocale": "Taal van het formulier: {locale}",
+    "contactHandledBy": "Afgehandeld door: {name}",
+    "contactActionHandle": "Markeren als afgehandeld",
+    "contactActionReopen": "Terugzetten naar nieuw",
+    "contactMarkedHandled": "Bericht gemarkeerd als afgehandeld.",
+    "contactReopened": "Bericht teruggezet naar nieuw.",
     "kindMessage": "Berichten",
     "targetConversation": "Gesprek",
     "messageReportScopeMessage": "Bewijs: gemeld bericht (stand op het moment van de melding)",
@@ -2861,6 +2879,124 @@
     "categoryUnion": "lidmaatschap van een vakbond",
     "categoryPolitical": "politieke overtuiging",
     "categoryCriminal": "strafrechtelijk verleden"
+  },
+  "help": {
+    "metaTitle": "Help — vragen en antwoorden",
+    "metaDescription": "Hoe Pracuj.be werkt: profiel zonder cv, solliciteren, vacaturematching, werkgeversaccount, bedrijfsverificatie en e-mails in jouw taal.",
+    "title": "Help",
+    "intro": "Antwoorden op de meest gestelde vragen over hoe Pracuj.be werkt. Vind je hier geen antwoord, stuur ons dan een bericht via het contactformulier.",
+    "groups": {
+      "candidates": "Voor kandidaten",
+      "employers": "Voor werkgevers",
+      "account": "Account, e-mails en veiligheid"
+    },
+    "faq": {
+      "noCv": {
+        "q": "Heb ik een cv nodig om werk te zoeken?",
+        "a": "Nee. Na je <register>registratie</register> maak je in zes korte stappen een eenvoudig beroepsprofiel — onder meer beroepen, vaardigheden, talen en beschikbaarheid. Een cv-bestand (PDF, DOC of DOCX tot 5 MB) kun je toevoegen, maar het is niet verplicht."
+      },
+      "guestApply": {
+        "q": "Kan ik solliciteren zonder account?",
+        "a": "Ja. In het sollicitatieformulier vul je je voor- en achternaam en e-mailadres in, en je bevestigt je sollicitatie via de link in de e-mail. Later kun je een account aanmaken met hetzelfde adres en de sollicitatie overnemen."
+      },
+      "match": {
+        "q": "Hoe wordt de match met een vacature berekend?",
+        "a": "Het matchpercentage volgt uit vaste criteria: beroep en categorie, vaardigheden, locatie, ervaring, beschikbaarheid, talen, certificaten, rijbewijs en contractvoorwaarden. Het resultaat wordt niet door kunstmatige intelligentie bepaald, en bij de vacature zie je waaraan je voldoet en wat ontbreekt."
+      },
+      "visibility": {
+        "q": "Zien werkgevers mijn profiel?",
+        "a": "Geverifieerde bedrijven kunnen je profiel alleen vinden als je de optie ‘Geverifieerde werkgevers mogen mijn profiel vinden’ in je instellingen aanzet — standaard staat die uit. Een bedrijf waar je solliciteert, ziet je sollicitatie. Bepaalde bedrijven kun je blokkeren in het onderdeel ‘Geblokkeerde bedrijven’."
+      },
+      "alerts": {
+        "q": "Hoe krijg ik meldingen over nieuwe vacatures?",
+        "a": "Stel op de <jobs>vacaturelijst</jobs> filters in en kies ‘Zoekopdracht opslaan’. In het kandidatenpaneel zet je er e-mailmeldingen voor aan — dagelijks of wekelijks."
+      },
+      "data": {
+        "q": "Hoe download ik mijn gegevens of verwijder ik mijn account?",
+        "a": "In de instellingen van het kandidatenpaneel, in het onderdeel ‘Je gegevens en account’, download je je gegevens als JSON-bestand of verwijder je je account."
+      },
+      "free": {
+        "q": "Wat kost het publiceren van vacatures?",
+        "a": "In de huidige fase is Pracuj.be gratis voor werkgevers. Het portaal verkoopt geen pakketten of betaalde vacaturepublicaties."
+      },
+      "verification": {
+        "q": "Waarom moet mijn bedrijf geverifieerd worden?",
+        "a": "Alleen bedrijven die door een beheerder van het portaal zijn geverifieerd, kunnen vacatures publiceren. De verificatiestatus zie je in het werkgeverspaneel. Wordt je bedrijf afgewezen, dan zie je de reden en kun je kiezen voor ‘Opnieuw ter verificatie sturen’."
+      },
+      "drafts": {
+        "q": "Kan ik een vacature voorbereiden vóór de verificatie?",
+        "a": "Ja. De vacaturewizard slaat na elke stap een concept op. Je publiceert het zodra je bedrijf geverifieerd is."
+      },
+      "team": {
+        "q": "Hoe voeg ik collega’s toe?",
+        "a": "De eigenaar of beheerder van het bedrijf nodigt teamleden uit via hun e-mailadres in het werkgeverspaneel en geeft hun een rol."
+      },
+      "applications": {
+        "q": "Hoe neem ik contact op met kandidaten?",
+        "a": "Sollicitaties, berichten en jobaanbiedingen beheer je in het werkgeverspaneel. Meer lees je op de pagina <employer>Voor werkgevers</employer>."
+      },
+      "languages": {
+        "q": "In welke talen is de website beschikbaar?",
+        "a": "De website is beschikbaar in het Pools, Nederlands, Frans en Engels. Je wijzigt de taal in de kop of in de voettekst van de pagina."
+      },
+      "emailLanguage": {
+        "q": "In welke taal ontvang ik e-mails?",
+        "a": "E-mails over je account sturen we in de taal die op je account is ingesteld — ook als het bericht komt van een werkgever die een andere taal gebruikt."
+      },
+      "noEmail": {
+        "q": "Ik ontvang geen e-mails van de website. Wat nu?",
+        "a": "Controleer je spammap en of je e-mailadres klopt. Komt er nog steeds niets aan, stuur ons dan een bericht via het contactformulier."
+      },
+      "suspicious": {
+        "q": "Een vacature lijkt verdacht. Wat moet ik doen?",
+        "a": "Kies op de vacaturepagina ‘Vacature melden’ of ‘Bedrijf melden’. Je kunt een melding ook zonder account versturen en krijgt een dossiernummer waarmee je de status volgt."
+      }
+    },
+    "contactTitle": "Geen antwoord gevonden?",
+    "contactDesc": "Stuur ons een bericht via het contactformulier. We antwoorden op het e-mailadres dat je in het formulier invult.",
+    "contactCta": "Naar het contactformulier"
+  },
+  "contact": {
+    "metaTitle": "Contact",
+    "metaDescription": "Stuur het team van Pracuj.be een bericht via het contactformulier — over je kandidatenaccount, werkgeversaccount, vacatures of technische problemen.",
+    "title": "Contact",
+    "intro": "Heb je een vraag over je account, een vacature of de werking van de website? Stuur ons een bericht via het formulier — we antwoorden op het opgegeven e-mailadres.",
+    "formTitle": "Contactformulier",
+    "topicLabel": "Onderwerp",
+    "topicPlaceholder": "Kies een onderwerp",
+    "topicCandidateAccount": "Kandidatenaccount",
+    "topicEmployerAccount": "Werkgeversaccount of bedrijf",
+    "topicJobListing": "Vacature",
+    "topicTechnical": "Technisch probleem",
+    "topicPrivacy": "Mijn persoonsgegevens",
+    "topicOther": "Iets anders",
+    "messageLabel": "Bericht",
+    "messageHint": "Beschrijf je vraag (minstens {min} tekens). Vermeld geen rijksregisternummer, PESEL of documentnummers.",
+    "nameLabel": "Voornaam (optioneel)",
+    "emailLabel": "E-mailadres",
+    "emailHint": "Naar dit adres sturen we de bevestiging en het antwoord.",
+    "submit": "Bericht versturen",
+    "networkError": "Er kon geen verbinding met de server worden gemaakt. Je bericht staat nog in het formulier — probeer het opnieuw.",
+    "successTitle": "Bericht verstuurd",
+    "successBody": "Bedankt. We hebben een bevestiging met het berichtnummer naar het opgegeven adres gestuurd.",
+    "successDuplicate": "Dit bericht was al eerder verstuurd — we hebben het niet nog een keer verstuurd.",
+    "referenceLabel": "Berichtnummer",
+    "referenceHint": "Vermeld dit nummer als je later iets wilt toevoegen.",
+    "backToHelp": "Terug naar de hulppagina",
+    "beforeTitle": "Voordat je schrijft",
+    "beforeHelp": "Antwoorden op de meest gestelde vragen vind je op de pagina <help>Help</help>.",
+    "beforeReport": "Meld een verdachte vacature rechtstreeks op de vacaturepagina (‘Vacature melden’) — je vindt ze in de <jobs>vacaturelijst</jobs>.",
+    "beforeNoIds": "Stuur geen documentnummers of wachtwoorden in je bericht.",
+    "error": {
+      "topicRequired": "Kies een onderwerp.",
+      "messageRequired": "Typ je bericht.",
+      "messageTooShort": "Je bericht is te kort — beschrijf je vraag iets uitgebreider.",
+      "messageTooLong": "Je bericht is te lang.",
+      "nameTooLong": "De voornaam is te lang.",
+      "emailRequired": "Vul je e-mailadres in.",
+      "emailInvalid": "Vul een geldig e-mailadres in.",
+      "sensitiveId": "Verwijder het rijksregisternummer, PESEL of documentnummer — dat is niet nodig om je bericht te beantwoorden."
+    }
   },
   "savedSearchAlertOff": {
     "metaTitle": "Melding uitzetten",

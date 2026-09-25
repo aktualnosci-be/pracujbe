@@ -16,7 +16,6 @@ import { render } from '@react-email/render';
 import { Section } from '@react-email/components';
 
 import type { Locale } from '@/i18n/routing';
-import { env } from '@/lib/env';
 import {
   EmailButton,
   EmailHeading,
@@ -30,7 +29,16 @@ import {
   EmailTextLink,
 } from '@/emails/_components';
 import type { EmailCopy, EmailType } from '@/emails/copy';
-import { emailCopy, greetings, interpolate, jobMatchAlertOffLabel, jobOfferPassportCopy, layoutCopy, moderationLabels } from '@/emails/copy';
+import {
+  contactTopicLabels,
+  emailCopy,
+  greetings,
+  interpolate,
+  jobMatchAlertOffLabel,
+  jobOfferPassportCopy,
+  layoutCopy,
+  moderationLabels,
+} from '@/emails/copy';
 import { applicationStatusLabel } from '@/emails/status-labels';
 import type { EmailSenderIdentity } from '@/lib/email/sender';
 
@@ -141,7 +149,13 @@ export interface EmailDataMap {
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
   invoice: { recipientName?: string; invoiceNumber: string; amount: string; downloadUrl: string };
-  supportContact: { name?: string; subject?: string; message?: string; actionUrl?: string };
+  /** Potwierdzenie wiadomości z formularza kontaktu (#61) — do nadawcy, w języku formularza. */
+  supportContact: { recipientName?: string | null; reference: string; topic?: string; actionUrl: string };
+  /**
+   * Powiadomienie admina o wiadomości z formularza kontaktu (#61), w języku admina. Tylko numer
+   * i temat — treść i adres nadawcy admin czyta w panelu (`/admin/kontakt`).
+   */
+  contactMessageAdmin: { recipientName?: string; reference: string; topic: string; actionUrl: string };
   /** Potwierdzenie zgłoszenia treści (#41) — także do osoby bez konta, w jej języku. */
   reportReceived: {
     recipientName?: string | null;
@@ -751,15 +765,27 @@ export function InvoiceEmail(props: EmailProps<'invoice'>): ReactElement {
 }
 
 export function SupportContactEmail(props: EmailProps<'supportContact'>): ReactElement {
-  const ctaHref = props.actionUrl ?? `${env.siteUrl}/${props.locale}`;
   return (
     <EmailShell
       locale={props.locale}
       type="supportContact"
       vars={props}
-      ctaHref={ctaHref}
-      greetingName={props.name}
-      quote={props.message}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+    />
+  );
+}
+
+export function ContactMessageAdminEmail(props: EmailProps<'contactMessageAdmin'>): ReactElement {
+  const labels = contactTopicLabels[props.locale];
+  const topicLabel = props.topic in labels ? labels[props.topic as keyof typeof labels] : labels.other;
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="contactMessageAdmin"
+      vars={{ ...props, topicLabel }}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
     />
   );
 }
@@ -954,6 +980,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   payment: PaymentEmail,
   invoice: InvoiceEmail,
   supportContact: SupportContactEmail,
+  contactMessageAdmin: ContactMessageAdminEmail,
   reportReceived: ReportReceivedEmail,
   reportDecisionActioned: ReportDecisionActionedEmail,
   reportDecisionNoAction: ReportDecisionNoActionEmail,

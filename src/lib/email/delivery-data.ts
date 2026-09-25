@@ -66,6 +66,11 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
       return '/zglos-tresc/sprawa';
     case 'teamInvitation':
       return '/employer/zespol';
+    case 'supportContact':
+      // #61: nadawca (często bez konta) — strona Pomoc, nie panel.
+      return '/pomoc';
+    case 'contactMessageAdmin':
+      return '/admin/kontakt';
     case 'teamInvitationSignup':
       return '/rejestracja-pracodawca';
     case 'jobMatch':

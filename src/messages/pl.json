@@ -2223,6 +2223,24 @@
     "breachNoticeRecipientsMalformed": "Nieprawidłowy adres lub identyfikator: {list}.",
     "breachNoticeContentRequired": "Wpisz temat i treść w co najmniej jednym języku.",
     "breachNoticeNotAllowed": "Zawiadomienie można wysłać dla otwartego naruszenia danych osobowych z zapisaną decyzją „zawiadamiamy osoby”.",
+    "navContact": "Kontakt",
+    "contactTitle": "Wiadomości z formularza kontaktu",
+    "contactSubtitle": "Wiadomości wysłane przez formularz kontaktu. Odpowiadaj ze swojej skrzynki na adres nadawcy, a potem oznacz wiadomość jako obsłużoną.",
+    "contactFilterLabel": "Filtr wiadomości",
+    "contactFilterNew": "Nowe",
+    "contactFilterHandled": "Obsłużone",
+    "contactStatusNew": "Nowa",
+    "contactStatusHandled": "Obsłużona",
+    "contactSearchLabel": "Szukaj wiadomości",
+    "contactSearchHint": "Numer wiadomości, adres e-mail albo imię nadawcy.",
+    "contactEmpty": "Brak wiadomości.",
+    "contactReceivedAt": "Otrzymano:",
+    "contactFormLocale": "Język formularza: {locale}",
+    "contactHandledBy": "Obsłużył(a): {name}",
+    "contactActionHandle": "Oznacz jako obsłużoną",
+    "contactActionReopen": "Przywróć do nowych",
+    "contactMarkedHandled": "Wiadomość oznaczona jako obsłużona.",
+    "contactReopened": "Wiadomość przywrócona do nowych.",
     "kindMessage": "Wiadomości",
     "targetConversation": "Rozmowa",
     "messageReportScopeMessage": "Dowód: zgłoszona wiadomość (stan z chwili zgłoszenia)",
@@ -2861,6 +2879,124 @@
     "categoryUnion": "przynależność do związku zawodowego",
     "categoryPolitical": "poglądy polityczne",
     "categoryCriminal": "karalność"
+  },
+  "help": {
+    "metaTitle": "Pomoc — pytania i odpowiedzi",
+    "metaDescription": "Jak działa Pracuj.be: profil bez CV, aplikowanie, dopasowanie ofert, konto pracodawcy, weryfikacja firmy i e-maile w Twoim języku.",
+    "title": "Pomoc",
+    "intro": "Odpowiedzi na najczęstsze pytania o to, jak działa Pracuj.be. Jeśli nie znajdziesz tu odpowiedzi, napisz do nas przez formularz kontaktu.",
+    "groups": {
+      "candidates": "Dla kandydatów",
+      "employers": "Dla pracodawców",
+      "account": "Konto, e-maile i bezpieczeństwo"
+    },
+    "faq": {
+      "noCv": {
+        "q": "Czy potrzebuję CV, żeby szukać pracy?",
+        "a": "Nie. Po <register>rejestracji</register> tworzysz prosty profil zawodowy w sześciu krótkich krokach — m.in. zawody, umiejętności, języki i dostępność. Plik CV (PDF, DOC lub DOCX do 5 MB) możesz dodać, ale nie jest wymagany."
+      },
+      "guestApply": {
+        "q": "Czy mogę aplikować bez zakładania konta?",
+        "a": "Tak. W formularzu aplikacji podajesz imię i nazwisko oraz adres e-mail, a zgłoszenie potwierdzasz linkiem z wiadomości e-mail. Później możesz założyć konto z tym samym adresem i przejąć zgłoszenie."
+      },
+      "match": {
+        "q": "Jak liczone jest dopasowanie do oferty?",
+        "a": "Procent dopasowania wynika ze stałych kryteriów: zawodu i kategorii, umiejętności, lokalizacji, doświadczenia, dostępności, języków, certyfikatów, prawa jazdy i warunków umowy. Wyniku nie ustala sztuczna inteligencja, a przy ofercie widzisz, co spełniasz i czego brakuje."
+      },
+      "visibility": {
+        "q": "Czy pracodawcy widzą mój profil?",
+        "a": "Zweryfikowane firmy mogą znaleźć Twój profil tylko wtedy, gdy włączysz opcję „Pozwól zweryfikowanym pracodawcom znaleźć mój profil” w ustawieniach — domyślnie jest wyłączona. Firma, do której aplikujesz, widzi Twoje zgłoszenie. Wybrane firmy możesz zablokować w sekcji „Zablokowane firmy”."
+      },
+      "alerts": {
+        "q": "Jak dostawać powiadomienia o nowych ofertach?",
+        "a": "Na <jobs>liście ofert</jobs> ustaw filtry i wybierz „Zapisz wyszukiwanie”. W panelu kandydata włączysz dla niego powiadomienia e-mail — codziennie albo raz w tygodniu."
+      },
+      "data": {
+        "q": "Jak pobrać swoje dane albo usunąć konto?",
+        "a": "W ustawieniach panelu kandydata, w sekcji „Twoje dane i konto”, pobierzesz swoje dane w pliku JSON albo usuniesz konto."
+      },
+      "free": {
+        "q": "Ile kosztuje publikowanie ofert?",
+        "a": "Na obecnym etapie korzystanie z Pracuj.be jest dla pracodawców bezpłatne. Portal nie sprzedaje pakietów ani płatnych publikacji ofert."
+      },
+      "verification": {
+        "q": "Dlaczego firma musi zostać zweryfikowana?",
+        "a": "Oferty publikują tylko firmy zweryfikowane przez administratora portalu. Status weryfikacji widzisz w panelu pracodawcy. Jeśli firma zostanie odrzucona, zobaczysz powód i możesz wybrać „Wyślij ponownie do weryfikacji”."
+      },
+      "drafts": {
+        "q": "Czy mogę przygotować ofertę przed weryfikacją?",
+        "a": "Tak. Kreator oferty zapisuje szkic po każdym kroku. Opublikujesz go, gdy firma zostanie zweryfikowana."
+      },
+      "team": {
+        "q": "Jak dodać współpracowników?",
+        "a": "Właściciel lub administrator firmy zaprasza osoby z zespołu po adresie e-mail w panelu pracodawcy i nadaje im rolę."
+      },
+      "applications": {
+        "q": "Jak kontaktuję się z kandydatami?",
+        "a": "Zgłoszenia, wiadomości i propozycje pracy obsługujesz w panelu pracodawcy. Więcej przeczytasz na stronie <employer>Dla pracodawców</employer>."
+      },
+      "languages": {
+        "q": "W jakich językach działa serwis?",
+        "a": "Serwis jest dostępny po polsku, niderlandzku, francusku i angielsku. Język zmienisz w nagłówku albo w stopce strony."
+      },
+      "emailLanguage": {
+        "q": "W jakim języku dostaję e-maile?",
+        "a": "E-maile z konta wysyłamy w języku ustawionym na Twoim koncie — także wtedy, gdy wiadomość wysyła pracodawca używający innego języka."
+      },
+      "noEmail": {
+        "q": "Nie dostaję e-maili z serwisu. Co zrobić?",
+        "a": "Sprawdź folder spam i poprawność adresu e-mail. Jeśli wiadomości nadal nie ma, napisz do nas przez formularz kontaktu."
+      },
+      "suspicious": {
+        "q": "Oferta wygląda podejrzanie. Co zrobić?",
+        "a": "Na stronie oferty wybierz „Zgłoś ofertę” albo „Zgłoś firmę”. Zgłoszenie wyślesz także bez konta i dostaniesz numer sprawy, po którym sprawdzisz jej status."
+      }
+    },
+    "contactTitle": "Nie znalazłeś odpowiedzi?",
+    "contactDesc": "Napisz do nas przez formularz kontaktu. Odpowiemy na adres e-mail podany w formularzu.",
+    "contactCta": "Przejdź do formularza kontaktu"
+  },
+  "contact": {
+    "metaTitle": "Kontakt",
+    "metaDescription": "Napisz do zespołu Pracuj.be przez formularz kontaktu — w sprawie konta kandydata, konta pracodawcy, ofert pracy lub problemów technicznych.",
+    "title": "Kontakt",
+    "intro": "Masz pytanie o konto, ofertę albo działanie serwisu? Napisz do nas przez formularz — odpowiemy na podany adres e-mail.",
+    "formTitle": "Formularz kontaktu",
+    "topicLabel": "Temat",
+    "topicPlaceholder": "Wybierz temat",
+    "topicCandidateAccount": "Konto kandydata",
+    "topicEmployerAccount": "Konto pracodawcy lub firma",
+    "topicJobListing": "Oferta pracy",
+    "topicTechnical": "Problem techniczny",
+    "topicPrivacy": "Moje dane osobowe",
+    "topicOther": "Inna sprawa",
+    "messageLabel": "Wiadomość",
+    "messageHint": "Opisz sprawę (co najmniej {min} znaków). Nie podawaj numeru rejestru narodowego, PESEL ani numerów dokumentów.",
+    "nameLabel": "Imię (opcjonalnie)",
+    "emailLabel": "Adres e-mail",
+    "emailHint": "Na ten adres wyślemy potwierdzenie i odpowiedź.",
+    "submit": "Wyślij wiadomość",
+    "networkError": "Nie udało się połączyć z serwerem. Twoja wiadomość jest nadal w formularzu — spróbuj ponownie.",
+    "successTitle": "Wiadomość wysłana",
+    "successBody": "Dziękujemy. Na podany adres wysłaliśmy potwierdzenie z numerem wiadomości.",
+    "successDuplicate": "Ta wiadomość została już wysłana wcześniej — nie wysłaliśmy jej drugi raz.",
+    "referenceLabel": "Numer wiadomości",
+    "referenceHint": "Podaj ten numer, jeśli będziesz chcieć coś dodać.",
+    "backToHelp": "Wróć do strony Pomoc",
+    "beforeTitle": "Zanim napiszesz",
+    "beforeHelp": "Odpowiedzi na najczęstsze pytania znajdziesz na stronie <help>Pomoc</help>.",
+    "beforeReport": "Podejrzaną ofertę zgłoś bezpośrednio na jej stronie („Zgłoś ofertę”) — znajdziesz ją na <jobs>liście ofert</jobs>.",
+    "beforeNoIds": "Nie wysyłaj w wiadomości numerów dokumentów ani haseł.",
+    "error": {
+      "topicRequired": "Wybierz temat wiadomości.",
+      "messageRequired": "Wpisz treść wiadomości.",
+      "messageTooShort": "Wiadomość jest za krótka — opisz sprawę trochę dokładniej.",
+      "messageTooLong": "Wiadomość jest za długa.",
+      "nameTooLong": "Imię jest za długie.",
+      "emailRequired": "Podaj adres e-mail.",
+      "emailInvalid": "Podaj poprawny adres e-mail.",
+      "sensitiveId": "Usuń numer rejestru narodowego, PESEL lub numer dokumentu — nie jest potrzebny, żeby odpowiedzieć na wiadomość."
+    }
   },
   "savedSearchAlertOff": {
     "metaTitle": "Wyłączenie alertu",

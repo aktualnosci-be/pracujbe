@@ -79,6 +79,7 @@ export type ActivityId =
   | 'email-notifications'
   | 'consents'
   | 'dsa-moderation'
+  | 'support-contact'
   | 'security-audit'
   | 'ai-job-import'
   | 'job-statistics'
@@ -168,6 +169,13 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     name: 'Zgłoszenia treści (DSA) i moderacja',
     inCode: 'Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora).',
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
+    retentionInCode: null,
+  },
+  'support-contact': {
+    name: 'Formularz kontaktu',
+    inCode:
+      'Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt.',
+    processors: [...HOSTING, 'resend', 'cloudflare-turnstile'],
     retentionInCode: null,
   },
   'security-audit': {
@@ -707,6 +715,20 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       // Dowód: stan oferty/firmy (DSA) albo treść zgłoszonej wiadomości i id nadawcy (0116).
       target_snapshot: 'correspondence',
     },
+  },
+  'public.contact_messages': {
+    activities: ['support-contact'],
+    subjects: ['visitor', 'candidate', 'employer', 'admin'],
+    columns: {
+      sender_id: 'reference',
+      sender_name: 'identity',
+      sender_email: 'contact',
+      topic: 'correspondence',
+      message: 'correspondence',
+      locale: 'preferences',
+      handled_by: 'reference',
+    },
+    note: 'Wiadomości z formularza kontaktu (0125). Retencja i powiązanie z eksportem/usunięciem konta — do decyzji właściciela (#486).',
   },
   'public.report_events': {
     activities: ['dsa-moderation'],

@@ -227,6 +227,40 @@ export async function liftEmailSuppression(
   }
 }
 
+/**
+ * Oznacza wiadomość z formularza kontaktu jako obsłużoną albo przywraca ją do nowych (#61).
+ * Tylko admin (RPC `admin_set_contact_message_status`, 0125: CAS po statusie, audyt bez treści).
+ */
+export async function setContactMessageStatus(
+  messageId: string,
+  status: 'new' | 'handled',
+  expectedStatus: 'new' | 'handled',
+): Promise<AdminActionResult> {
+  const statuses = ['new', 'handled'];
+  if (!statuses.includes(status) || !statuses.includes(expectedStatus)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  // Tryb DEMO: identyfikatory przykładowych wiadomości nie są UUID; nic nie zapisujemy.
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  if (typeof messageId !== 'string' || !UUID_RE.test(messageId)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  try {
+    const call = await callAdminRpc('admin_set_contact_message_status', {
+      p_id: messageId,
+      p_status: status,
+      p_expected_status: expectedStatus,
+    });
+    if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
+    if (call.status === 'db_error') return { ok: false, error: mapPgError(call.message) };
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'admin.setContactMessageStatus' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
 export type ModerationActionResult =
   | { ok: true; demo?: boolean }
   | {

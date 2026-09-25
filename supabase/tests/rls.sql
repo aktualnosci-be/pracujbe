@@ -11165,6 +11165,120 @@ select pg_temp.assert(
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
 -- ============================================================================
+-- CT61. Formularz kontaktu (#61, 0125): tabela tylko przez RPC service_role; walidacja,
+--       idempotencja, limit na adres; potwierdzenie w języku FORMULARZA, powiadomienie
+--       każdego admina w JEGO języku (Invariant #1); payload bez treści i adresu nadawcy;
+--       obsługa przez admina z CAS i audytem.
+-- ============================================================================
+\set CTK1 'c6100000-0000-0000-0000-000000000001'
+\set CTK2 'c6100000-0000-0000-0000-000000000002'
+\set CTMSG 'Dzień dobry, nie mogę dokończyć profilu kandydata w kroku piątym.'
+reset role; reset app.current_uid;
+
+-- CT61-1: anon/authenticated nie czytają tabeli i nie wołają RPC wysyłki.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select 1 from public.contact_messages', 'permission denied',
+  'CT61-1 anon nie czyta wiadomości');
+select pg_temp.expect_error(format(
+  'select * from public.submit_contact_message(null, %L, ''other'', %L, null, ''x@test.be'', ''pl'')',
+  :'CTK1', :'CTMSG'), 'permission denied', 'CT61-1b anon nie wywoła RPC (obejście Turnstile/limitera)');
+reset role;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select 1 from public.contact_messages', 'permission denied',
+  'CT61-1c admin nie czyta tabeli bezpośrednio (panel czyta service-rolem)');
+reset role; reset app.current_uid;
+
+-- CT61-2: walidacja w bazie (niezależnie od Zod).
+set role service_role;
+select pg_temp.expect_error(format(
+  'select * from public.submit_contact_message(null, %L, ''spam'', %L, null, ''x@test.be'', ''pl'')',
+  :'CTK1', :'CTMSG'), 'VALIDATION_FAILED', 'CT61-2 nieznany temat odrzucony');
+select pg_temp.expect_error(format(
+  'select * from public.submit_contact_message(null, %L, ''other'', ''za krótko'', null, ''x@test.be'', ''pl'')',
+  :'CTK1'), 'VALIDATION_FAILED', 'CT61-2b za krótka treść odrzucona');
+select pg_temp.expect_error(format(
+  'select * from public.submit_contact_message(null, %L, ''other'', %L, null, ''nie-adres'', ''pl'')',
+  :'CTK1', :'CTMSG'), 'VALIDATION_FAILED', 'CT61-2c zły e-mail odrzucony');
+select pg_temp.expect_error(format(
+  'select * from public.submit_contact_message(null, %L, ''other'', %L, null, ''x@test.be'', ''de'')',
+  :'CTK1', :'CTMSG'), 'VALIDATION_FAILED', 'CT61-2d nieobsługiwany język odrzucony');
+
+-- CT61-3: wysłanie z formularza NL; ponowienie z tym samym kluczem = ta sama wiadomość.
+select reference as ct_ref, message_id as ct_id from public.submit_contact_message(
+  null, :'CTK1', 'candidate_account', :'CTMSG', 'Jan', ' Kontakt@Test.be ', 'nl') \gset
+select pg_temp.assert(
+  (select created = false and reference = :'ct_ref' from public.submit_contact_message(
+     null, :'CTK1', 'candidate_account', :'CTMSG', 'Jan', 'kontakt@test.be', 'nl')),
+  'CT61-3 ponowienie z tym samym kluczem zwraca tę samą wiadomość');
+reset role;
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(reference ~ '^KON-[0-9A-F]{4}-[0-9A-F]{4}$' and status = 'new'
+          and sender_email = 'kontakt@test.be' and locale = 'nl' and topic = 'candidate_account')
+     from public.contact_messages where idempotency_key = :'CTK1'),
+  'CT61-3b jeden wiersz: numer, status new, adres znormalizowany, język formularza');
+
+-- CT61-4: potwierdzenie do nadawcy w języku formularza; jedno.
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(locale = 'nl' and to_email = 'kontakt@test.be'
+          and payload->>'reference' = :'ct_ref')
+     from public.email_deliveries where template = 'supportContact' and entity_id = :'ct_id'),
+  'CT61-4 jedno potwierdzenie supportContact w języku formularza (nl)');
+
+-- CT61-5: powiadomienie każdego aktywnego admina w JEGO języku, nikogo innego.
+select pg_temp.assert(
+  (select count(*) = (select count(*) from public.profiles where role = 'admin' and deleted_at is null)
+          and count(*) >= 2
+          and bool_and(d.locale = public.resolve_recipient_locale(d.profile_id))
+          and bool_and(p.role = 'admin')
+     from public.email_deliveries d join public.profiles p on p.id = d.profile_id
+    where d.template = 'contactMessageAdmin' and d.entity_id = :'ct_id'),
+  'CT61-5 powiadomienie każdego admina w języku odbiorcy');
+select pg_temp.assert(
+  (select locale = 'fr' from public.email_deliveries
+    where template = 'contactMessageAdmin' and entity_id = :'ct_id' and profile_id = :'ADMIN2'),
+  'CT61-5b admin z językiem fr dostaje fr, nie język formularza (nl)');
+-- KONTROLA UJEMNA: język formularza dla admina byłby błędem — asercja 5b to wykrywa.
+select pg_temp.assert(
+  (select locale <> 'nl' from public.email_deliveries
+    where template = 'contactMessageAdmin' and entity_id = :'ct_id' and profile_id = :'ADMIN2'),
+  'CT61-5c kontrola ujemna: język formularza ≠ język admina');
+
+-- CT61-6: payload bez treści wiadomości i adresu nadawcy.
+select pg_temp.assert(
+  (select bool_and(payload::text not like '%piątym%' and payload::text not like '%kontakt@test.be%'
+          and not (payload ? 'message'))
+     from public.email_deliveries where entity_id = :'ct_id'),
+  'CT61-6 kolejka e-mail bez treści i adresu nadawcy');
+
+-- CT61-7: limit 3 wiadomości / adres / 24 h (nowe klucze).
+set role service_role;
+select count(*) from public.submit_contact_message(null, gen_random_uuid(), 'other', :'CTMSG', null, 'kontakt@test.be', 'pl');
+select count(*) from public.submit_contact_message(null, gen_random_uuid(), 'other', :'CTMSG', null, 'kontakt@test.be', 'pl');
+select pg_temp.expect_error(format(
+  'select * from public.submit_contact_message(null, %L, ''other'', %L, null, ''KONTAKT@test.be'', ''pl'')',
+  :'CTK2', :'CTMSG'), 'RATE_LIMITED', 'CT61-7 czwarta wiadomość z adresu w 24 h odrzucona');
+reset role;
+
+-- CT61-8: obsługa — tylko admin, CAS, audyt bez treści.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_set_contact_message_status(%L, ''handled'', ''new'')', :'ct_id'),
+  'PERMISSION_DENIED', 'CT61-8 kandydat nie zmieni statusu');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_contact_message_status(:'ct_id', 'handled', 'new');
+select pg_temp.expect_error(format('select public.admin_set_contact_message_status(%L, ''new'', ''new'')', :'ct_id'),
+  'STALE_STATE', 'CT61-8b nieaktualny oczekiwany status → STALE_STATE');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'handled' and handled_by = :'ADMIN'::uuid and handled_at is not null
+     from public.contact_messages where id = :'ct_id'),
+  'CT61-8c status handled z autorem i czasem');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(after_data->>'status' = 'handled' and after_data::text not like '%piątym%')
+     from public.audit_logs where action = 'contact_message.status_changed' and entity_id = :'ct_id'),
+  'CT61-8d audyt zmiany statusu bez treści');
+
+-- ============================================================================
 -- AIB36. Globalny budżet AI (#36, 0120): rezerwacja przed API, dzienny i miesięczny limit,
 --        fail-closed (brak limitu / limit 0), rozliczenie idempotentne, uprawnienia.
 --        Kontrola ujemna: ai_budget_spent licząca tylko rozliczone wiersze przepuszcza
