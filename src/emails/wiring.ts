@@ -43,7 +43,7 @@ export const QUEUED_EMAIL_TYPES = [
 export const GUEST_EMAIL_TYPES = [
   'guestApplicationConfirm', // submit_guest_application
   'guestApplicationSent', // confirm_guest_application
-  'teamInvitationSignup', // invite_company_member (0115) — adres bez konta, język zaproszenia
+  'teamInvitationSignup', // invite_company_member (0124) — adres bez konta, język zaproszenia
 ] as const satisfies readonly EmailType[];
 
 /** E-maile konta — kolejka Better Auth (`src/lib/auth/email-outbox.ts`, worker `email-worker.ts`). */

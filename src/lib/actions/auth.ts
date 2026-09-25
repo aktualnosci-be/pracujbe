@@ -351,7 +351,7 @@ export async function registerEmployer(
 }
 
 /**
- * Rejestracja pracodawcy z linku zaproszenia do zespołu (0115). Token z fragmentu `#token=`
+ * Rejestracja pracodawcy z linku zaproszenia do zespołu (0124). Token z fragmentu `#token=`
  * musi wskazywać oczekujące, niezużyte zaproszenie dla TEGO adresu — inaczej `AUTH_LINK_INVALID`
  * (formularz nie zmienia adresu, więc inny adres = manipulacja). Konto powstaje bez firmy
  * (bez `company_name` w metadanych), a token zostaje zużyty. Zaproszenie przyjmuje się w panelu

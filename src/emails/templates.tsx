@@ -114,7 +114,7 @@ export interface EmailDataMap {
     inviterName?: string | null;
     actionUrl: string;
   };
-  /** 0115: adres bez konta — `actionUrl` = rejestracja pracodawcy z tokenem we fragmencie `#`. */
+  /** 0124: adres bez konta — `actionUrl` = rejestracja pracodawcy z tokenem we fragmencie `#`. */
   teamInvitationSignup: {
     companyName: string;
     inviterName?: string | null;

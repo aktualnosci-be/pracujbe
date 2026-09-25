@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0115 — zaproszenie do zespołu firmy dla adresu BEZ konta (#403, „Otwarte”).
+-- 0124 — zaproszenie do zespołu firmy dla adresu BEZ konta (#403, „Otwarte”).
 --
 -- 0086 wysyłało e-mail zaproszenia tylko do istniejącego konta pracodawcy (język ODBIORCY
 -- z profilu). Adres bez konta nie ma profilu, więc nie ma też `preferred/account/signup_locale`

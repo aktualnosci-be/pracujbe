@@ -55,7 +55,7 @@ describe('#295: pokrycie szablonów e-mail zdarzeniami', () => {
     expect(enqueuedIn(SQL, type)).toBe(true);
   });
 
-  it.each(GUEST_EMAIL_TYPES)('%s jest kolejkowany na adres bez konta (0095/0115)', (type) => {
+  it.each(GUEST_EMAIL_TYPES)('%s jest kolejkowany na adres bez konta (0095/0124)', (type) => {
     expect(guestEnqueuedIn(SQL, type)).toBe(true);
     // Nie przez enqueue_email: gość nie ma profilu, z którego enqueue_email bierze adres.
     expect(enqueuedIn(SQL, type)).toBe(false);

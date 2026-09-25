@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * 0115 — rejestracja pracodawcy z linku zaproszenia do zespołu. Konto powstaje tylko dla
+ * 0124 — rejestracja pracodawcy z linku zaproszenia do zespołu. Konto powstaje tylko dla
  * ważnego, niezużytego tokenu i adresu zaproszenia, bez nazwy firmy w metadanych (brak
  * bootstrapu firmy — zaproszenie czeka w panelu), a token jest zużywany po rejestracji.
  */

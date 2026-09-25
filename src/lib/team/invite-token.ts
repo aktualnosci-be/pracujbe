@@ -5,7 +5,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { guestApplySecret, hashGuestToken, isGuestTokenFormat } from '@/lib/guest-apply/token';
 
 /**
- * Jednorazowy token linku rejestracji z zaproszenia do zespołu (#403, migracja 0115) —
+ * Jednorazowy token linku rejestracji z zaproszenia do zespołu (#403, migracja 0124) —
  * ten sam schemat co aplikacja gościa (#98): baza trzyma WYŁĄCZNIE `sha256(token)` (hex),
  * a `nonce` jest tylko w payloadzie e-maila. Token = `HMAC-SHA256(sekret, "team-invite:<nonce>")`
  * w base64url, liczony przez akcję zaproszenia (hash do zapisu) i przez worker e-mail (link).
