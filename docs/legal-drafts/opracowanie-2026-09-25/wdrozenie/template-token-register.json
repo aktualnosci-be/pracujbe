@@ -1,0 +1,763 @@
+{
+  "static_publication_and_duty_tokens": [
+    "AGE_NOTICE_URL",
+    "ANTIBOT_NOTICE_EN",
+    "ANTIBOT_NOTICE_FR",
+    "ANTIBOT_NOTICE_NL",
+    "ANTIBOT_NOTICE_PL",
+    "AUTHORIZED_SIGNATORY",
+    "COOKIES_URL",
+    "COOKIE_SETTINGS_URL",
+    "DPO_NOTICE_EN",
+    "DPO_NOTICE_FR",
+    "DPO_NOTICE_NL",
+    "DPO_NOTICE_PL",
+    "DSA_AUTHORITY_EMAIL",
+    "DSA_DEPUTY",
+    "DSA_EMAIL",
+    "DSA_FORM_URL",
+    "DSA_OWNER",
+    "EFFECTIVE_DATE",
+    "EMAIL_PROCESSOR_NOTICE_EN",
+    "EMAIL_PROCESSOR_NOTICE_FR",
+    "EMAIL_PROCESSOR_NOTICE_NL",
+    "EMAIL_PROCESSOR_NOTICE_PL",
+    "EMPLOYMENT_REGISTRATION_NOTICE_EN",
+    "EMPLOYMENT_REGISTRATION_NOTICE_FR",
+    "EMPLOYMENT_REGISTRATION_NOTICE_NL",
+    "EMPLOYMENT_REGISTRATION_NOTICE_PL",
+    "ESSENTIAL_COOKIE_INVENTORY_EN",
+    "ESSENTIAL_COOKIE_INVENTORY_FR",
+    "ESSENTIAL_COOKIE_INVENTORY_NL",
+    "ESSENTIAL_COOKIE_INVENTORY_PL",
+    "HOSTING_NOTICE_EN",
+    "HOSTING_NOTICE_FR",
+    "HOSTING_NOTICE_NL",
+    "HOSTING_NOTICE_PL",
+    "INCIDENT_BACKUP_CONTACT",
+    "INCIDENT_LEAD",
+    "INCIDENT_PHONE",
+    "LEGAL_FORM",
+    "MAIN_ESTABLISHMENT",
+    "OPERATOR_ADDRESS",
+    "OPERATOR_NAME",
+    "OUT_OF_BAND_CONTACT",
+    "PRIVACY_DEPUTY",
+    "PRIVACY_EMAIL",
+    "PRIVACY_OWNER",
+    "PRIVACY_URL",
+    "PRIVACY_VERSION",
+    "REGISTER_NAME",
+    "REGISTER_NUMBER",
+    "SUPPORT_EMAIL",
+    "SUPPORT_PHONE",
+    "TECH_CONTACT",
+    "TERMS_URL",
+    "TERMS_VERSION",
+    "TRANSFER_NOTICE_EN",
+    "TRANSFER_NOTICE_FR",
+    "TRANSFER_NOTICE_NL",
+    "TRANSFER_NOTICE_PL",
+    "VAT_NUMBER"
+  ],
+  "application_runtime_tokens": [
+    "APPLICATION_DATA_SUMMARY",
+    "EMPLOYER_ADDRESS",
+    "EMPLOYER_NAME",
+    "EMPLOYER_PRIVACY_CONTACT",
+    "EMPLOYER_PRIVACY_URL"
+  ],
+  "incident_runtime_tokens": [
+    "INCIDENT_ACTIONS_COMPLETED",
+    "INCIDENT_ACTIONS_PLANNED",
+    "INCIDENT_ART34_DECISION_AND_REASONS",
+    "INCIDENT_ART34_DELIVERY",
+    "INCIDENT_ART34_EXCEPTION",
+    "INCIDENT_ATTACHMENTS",
+    "INCIDENT_AWARENESS_DATE_EN",
+    "INCIDENT_AWARENESS_DATE_FR",
+    "INCIDENT_AWARENESS_DATE_NL",
+    "INCIDENT_AWARENESS_DATE_PL",
+    "INCIDENT_AWARENESS_TIME",
+    "INCIDENT_CAUSE_STATUS",
+    "INCIDENT_CONSEQUENCES_EN",
+    "INCIDENT_CONSEQUENCES_FR",
+    "INCIDENT_CONSEQUENCES_NL",
+    "INCIDENT_CONSEQUENCES_PL",
+    "INCIDENT_CONTACT_EMAIL",
+    "INCIDENT_CONTACT_NAME",
+    "INCIDENT_CONTACT_PHONE",
+    "INCIDENT_COUNTRIES",
+    "INCIDENT_DATA_CATEGORIES_AND_COUNT",
+    "INCIDENT_DELAY_REASONS",
+    "INCIDENT_DISCOVERY",
+    "INCIDENT_DPO_DETAILS",
+    "INCIDENT_FACTS",
+    "INCIDENT_FIRST_SIGNAL",
+    "INCIDENT_ID",
+    "INCIDENT_MEASURES_EN",
+    "INCIDENT_MEASURES_FR",
+    "INCIDENT_MEASURES_NL",
+    "INCIDENT_MEASURES_PL",
+    "INCIDENT_NEXT_STEPS_EN",
+    "INCIDENT_NEXT_STEPS_FR",
+    "INCIDENT_NEXT_STEPS_NL",
+    "INCIDENT_NEXT_STEPS_PL",
+    "INCIDENT_NOTIFICATION_TYPE",
+    "INCIDENT_OTHER_PARTIES",
+    "INCIDENT_PENDING_INFORMATION",
+    "INCIDENT_PERIOD",
+    "INCIDENT_PERIOD_EN",
+    "INCIDENT_PERIOD_FR",
+    "INCIDENT_PERIOD_NL",
+    "INCIDENT_PERIOD_PL",
+    "INCIDENT_PERSONAL_DATA_EN",
+    "INCIDENT_PERSONAL_DATA_FR",
+    "INCIDENT_PERSONAL_DATA_NL",
+    "INCIDENT_PERSONAL_DATA_PL",
+    "INCIDENT_PERSONAL_FACTS_EN",
+    "INCIDENT_PERSONAL_FACTS_FR",
+    "INCIDENT_PERSONAL_FACTS_NL",
+    "INCIDENT_PERSONAL_FACTS_PL",
+    "INCIDENT_PERSON_CATEGORIES",
+    "INCIDENT_PERSON_COUNT",
+    "INCIDENT_PREEXISTING_CONTROLS",
+    "INCIDENT_PUBLIC_CONTACT_EMAIL",
+    "INCIDENT_PUBLIC_CONTACT_NAME",
+    "INCIDENT_PUBLIC_CONTACT_PHONE",
+    "INCIDENT_RECOMMENDED_ACTIONS_EN",
+    "INCIDENT_RECOMMENDED_ACTIONS_FR",
+    "INCIDENT_RECOMMENDED_ACTIONS_NL",
+    "INCIDENT_RECOMMENDED_ACTIONS_PL",
+    "INCIDENT_REPORTER_AUTHORITY",
+    "INCIDENT_REPORT_DATE",
+    "INCIDENT_RISK_ASSESSMENT",
+    "INCIDENT_SECURITY_PROPERTIES",
+    "INCIDENT_SENSITIVE_DATA",
+    "INCIDENT_TIMEZONE",
+    "INCIDENT_UNAUTHORISED_RECIPIENTS",
+    "INCIDENT_UNCERTAINTY_EN",
+    "INCIDENT_UNCERTAINTY_FR",
+    "INCIDENT_UNCERTAINTY_NL",
+    "INCIDENT_UNCERTAINTY_PL"
+  ],
+  "locations": {
+    "AGE_NOTICE_URL": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/pl/01-regulamin.md"
+    ],
+    "COOKIES_URL": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/02-prywatnosc.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/02-prywatnosc.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/02-prywatnosc.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/02-prywatnosc.md"
+    ],
+    "DSA_EMAIL": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/03-cookies.md",
+      "publiczne/en/06-zgloszenie-dsa.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/03-cookies.md",
+      "publiczne/fr/06-zgloszenie-dsa.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/03-cookies.md",
+      "publiczne/nl/06-zgloszenie-dsa.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/03-cookies.md",
+      "publiczne/pl/06-zgloszenie-dsa.md",
+      "szkice/dsa-moderacja.md"
+    ],
+    "DSA_FORM_URL": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/06-zgloszenie-dsa.md",
+      "publiczne/en/07-wiek.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/06-zgloszenie-dsa.md",
+      "publiczne/fr/07-wiek.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/06-zgloszenie-dsa.md",
+      "publiczne/nl/07-wiek.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/06-zgloszenie-dsa.md",
+      "publiczne/pl/07-wiek.md",
+      "szkice/dsa-moderacja.md"
+    ],
+    "EFFECTIVE_DATE": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/02-prywatnosc.md",
+      "publiczne/en/03-cookies.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/02-prywatnosc.md",
+      "publiczne/fr/03-cookies.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/02-prywatnosc.md",
+      "publiczne/nl/03-cookies.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/02-prywatnosc.md",
+      "publiczne/pl/03-cookies.md"
+    ],
+    "EMPLOYMENT_REGISTRATION_NOTICE_EN": [
+      "publiczne/en/01-regulamin.md"
+    ],
+    "LEGAL_FORM": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/pl/01-regulamin.md",
+      "szkice/rejestr-czynnosci.md"
+    ],
+    "OPERATOR_ADDRESS": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/02-prywatnosc.md",
+      "publiczne/en/04-informacja-kandydata.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/02-prywatnosc.md",
+      "publiczne/fr/04-informacja-kandydata.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/02-prywatnosc.md",
+      "publiczne/nl/04-informacja-kandydata.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/02-prywatnosc.md",
+      "publiczne/pl/04-informacja-kandydata.md",
+      "szkice/rejestr-czynnosci.md",
+      "szkice/role-portal-pracodawca.md",
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "OPERATOR_NAME": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/02-prywatnosc.md",
+      "publiczne/en/03-cookies.md",
+      "publiczne/en/04-informacja-kandydata.md",
+      "publiczne/en/05-zgoda-marketingowa.md",
+      "publiczne/en/06-zgloszenie-dsa.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/02-prywatnosc.md",
+      "publiczne/fr/03-cookies.md",
+      "publiczne/fr/04-informacja-kandydata.md",
+      "publiczne/fr/05-zgoda-marketingowa.md",
+      "publiczne/fr/06-zgloszenie-dsa.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/02-prywatnosc.md",
+      "publiczne/nl/03-cookies.md",
+      "publiczne/nl/04-informacja-kandydata.md",
+      "publiczne/nl/05-zgoda-marketingowa.md",
+      "publiczne/nl/06-zgloszenie-dsa.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/02-prywatnosc.md",
+      "publiczne/pl/03-cookies.md",
+      "publiczne/pl/04-informacja-kandydata.md",
+      "publiczne/pl/05-zgoda-marketingowa.md",
+      "publiczne/pl/06-zgloszenie-dsa.md",
+      "szkice/ai-act-art22-dpia.md",
+      "szkice/procedura-naruszen.md",
+      "szkice/rejestr-czynnosci.md",
+      "szkice/role-portal-pracodawca.md",
+      "wzory/naruszenie-art33-FR.md",
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "PRIVACY_EMAIL": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/02-prywatnosc.md",
+      "publiczne/en/03-cookies.md",
+      "publiczne/en/04-informacja-kandydata.md",
+      "publiczne/en/05-zgoda-marketingowa.md",
+      "publiczne/en/07-wiek.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/02-prywatnosc.md",
+      "publiczne/fr/03-cookies.md",
+      "publiczne/fr/04-informacja-kandydata.md",
+      "publiczne/fr/05-zgoda-marketingowa.md",
+      "publiczne/fr/07-wiek.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/02-prywatnosc.md",
+      "publiczne/nl/03-cookies.md",
+      "publiczne/nl/04-informacja-kandydata.md",
+      "publiczne/nl/05-zgoda-marketingowa.md",
+      "publiczne/nl/07-wiek.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/02-prywatnosc.md",
+      "publiczne/pl/03-cookies.md",
+      "publiczne/pl/04-informacja-kandydata.md",
+      "publiczne/pl/05-zgoda-marketingowa.md",
+      "publiczne/pl/07-wiek.md",
+      "szkice/procedura-naruszen.md",
+      "szkice/rejestr-czynnosci.md",
+      "szkice/retencja-i-prawa-kandydata.md"
+    ],
+    "PRIVACY_URL": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/03-cookies.md",
+      "publiczne/en/04-informacja-kandydata.md",
+      "publiczne/en/05-zgoda-marketingowa.md",
+      "publiczne/en/06-zgloszenie-dsa.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/03-cookies.md",
+      "publiczne/fr/04-informacja-kandydata.md",
+      "publiczne/fr/05-zgoda-marketingowa.md",
+      "publiczne/fr/06-zgloszenie-dsa.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/03-cookies.md",
+      "publiczne/nl/04-informacja-kandydata.md",
+      "publiczne/nl/05-zgoda-marketingowa.md",
+      "publiczne/nl/06-zgloszenie-dsa.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/03-cookies.md",
+      "publiczne/pl/04-informacja-kandydata.md",
+      "publiczne/pl/05-zgoda-marketingowa.md",
+      "publiczne/pl/06-zgloszenie-dsa.md"
+    ],
+    "REGISTER_NAME": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/02-prywatnosc.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/02-prywatnosc.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/02-prywatnosc.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/02-prywatnosc.md",
+      "szkice/rejestr-czynnosci.md"
+    ],
+    "REGISTER_NUMBER": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/02-prywatnosc.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/02-prywatnosc.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/02-prywatnosc.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/02-prywatnosc.md",
+      "szkice/rejestr-czynnosci.md",
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "SUPPORT_EMAIL": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/en/03-cookies.md",
+      "publiczne/en/07-wiek.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/fr/03-cookies.md",
+      "publiczne/fr/07-wiek.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/nl/03-cookies.md",
+      "publiczne/nl/07-wiek.md",
+      "publiczne/pl/01-regulamin.md",
+      "publiczne/pl/03-cookies.md",
+      "publiczne/pl/07-wiek.md"
+    ],
+    "SUPPORT_PHONE": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/pl/01-regulamin.md"
+    ],
+    "TERMS_VERSION": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/pl/01-regulamin.md"
+    ],
+    "VAT_NUMBER": [
+      "publiczne/en/01-regulamin.md",
+      "publiczne/fr/01-regulamin.md",
+      "publiczne/nl/01-regulamin.md",
+      "publiczne/pl/01-regulamin.md",
+      "szkice/rejestr-czynnosci.md"
+    ],
+    "ANTIBOT_NOTICE_EN": [
+      "publiczne/en/02-prywatnosc.md",
+      "publiczne/en/03-cookies.md"
+    ],
+    "DPO_NOTICE_EN": [
+      "publiczne/en/02-prywatnosc.md"
+    ],
+    "EMAIL_PROCESSOR_NOTICE_EN": [
+      "publiczne/en/02-prywatnosc.md"
+    ],
+    "HOSTING_NOTICE_EN": [
+      "publiczne/en/02-prywatnosc.md"
+    ],
+    "PRIVACY_VERSION": [
+      "publiczne/en/02-prywatnosc.md",
+      "publiczne/fr/02-prywatnosc.md",
+      "publiczne/nl/02-prywatnosc.md",
+      "publiczne/pl/02-prywatnosc.md"
+    ],
+    "TRANSFER_NOTICE_EN": [
+      "publiczne/en/02-prywatnosc.md"
+    ],
+    "COOKIE_SETTINGS_URL": [
+      "publiczne/en/03-cookies.md",
+      "publiczne/fr/03-cookies.md",
+      "publiczne/nl/03-cookies.md",
+      "publiczne/pl/03-cookies.md"
+    ],
+    "ESSENTIAL_COOKIE_INVENTORY_EN": [
+      "publiczne/en/03-cookies.md"
+    ],
+    "APPLICATION_DATA_SUMMARY": [
+      "publiczne/en/04-informacja-kandydata.md",
+      "publiczne/fr/04-informacja-kandydata.md",
+      "publiczne/nl/04-informacja-kandydata.md",
+      "publiczne/pl/04-informacja-kandydata.md"
+    ],
+    "EMPLOYER_ADDRESS": [
+      "publiczne/en/04-informacja-kandydata.md",
+      "publiczne/fr/04-informacja-kandydata.md",
+      "publiczne/nl/04-informacja-kandydata.md",
+      "publiczne/pl/04-informacja-kandydata.md"
+    ],
+    "EMPLOYER_NAME": [
+      "publiczne/en/04-informacja-kandydata.md",
+      "publiczne/fr/04-informacja-kandydata.md",
+      "publiczne/nl/04-informacja-kandydata.md",
+      "publiczne/pl/04-informacja-kandydata.md"
+    ],
+    "EMPLOYER_PRIVACY_CONTACT": [
+      "publiczne/en/04-informacja-kandydata.md",
+      "publiczne/fr/04-informacja-kandydata.md",
+      "publiczne/nl/04-informacja-kandydata.md",
+      "publiczne/pl/04-informacja-kandydata.md"
+    ],
+    "EMPLOYER_PRIVACY_URL": [
+      "publiczne/en/04-informacja-kandydata.md",
+      "publiczne/fr/04-informacja-kandydata.md",
+      "publiczne/nl/04-informacja-kandydata.md",
+      "publiczne/pl/04-informacja-kandydata.md"
+    ],
+    "TERMS_URL": [
+      "publiczne/en/04-informacja-kandydata.md",
+      "publiczne/fr/04-informacja-kandydata.md",
+      "publiczne/nl/04-informacja-kandydata.md",
+      "publiczne/pl/04-informacja-kandydata.md"
+    ],
+    "EMPLOYMENT_REGISTRATION_NOTICE_FR": [
+      "publiczne/fr/01-regulamin.md"
+    ],
+    "ANTIBOT_NOTICE_FR": [
+      "publiczne/fr/02-prywatnosc.md",
+      "publiczne/fr/03-cookies.md"
+    ],
+    "DPO_NOTICE_FR": [
+      "publiczne/fr/02-prywatnosc.md"
+    ],
+    "EMAIL_PROCESSOR_NOTICE_FR": [
+      "publiczne/fr/02-prywatnosc.md"
+    ],
+    "HOSTING_NOTICE_FR": [
+      "publiczne/fr/02-prywatnosc.md"
+    ],
+    "TRANSFER_NOTICE_FR": [
+      "publiczne/fr/02-prywatnosc.md"
+    ],
+    "ESSENTIAL_COOKIE_INVENTORY_FR": [
+      "publiczne/fr/03-cookies.md"
+    ],
+    "EMPLOYMENT_REGISTRATION_NOTICE_NL": [
+      "publiczne/nl/01-regulamin.md"
+    ],
+    "ANTIBOT_NOTICE_NL": [
+      "publiczne/nl/02-prywatnosc.md",
+      "publiczne/nl/03-cookies.md"
+    ],
+    "DPO_NOTICE_NL": [
+      "publiczne/nl/02-prywatnosc.md"
+    ],
+    "EMAIL_PROCESSOR_NOTICE_NL": [
+      "publiczne/nl/02-prywatnosc.md"
+    ],
+    "HOSTING_NOTICE_NL": [
+      "publiczne/nl/02-prywatnosc.md"
+    ],
+    "TRANSFER_NOTICE_NL": [
+      "publiczne/nl/02-prywatnosc.md"
+    ],
+    "ESSENTIAL_COOKIE_INVENTORY_NL": [
+      "publiczne/nl/03-cookies.md"
+    ],
+    "EMPLOYMENT_REGISTRATION_NOTICE_PL": [
+      "publiczne/pl/01-regulamin.md"
+    ],
+    "ANTIBOT_NOTICE_PL": [
+      "publiczne/pl/02-prywatnosc.md",
+      "publiczne/pl/03-cookies.md"
+    ],
+    "DPO_NOTICE_PL": [
+      "publiczne/pl/02-prywatnosc.md"
+    ],
+    "EMAIL_PROCESSOR_NOTICE_PL": [
+      "publiczne/pl/02-prywatnosc.md"
+    ],
+    "HOSTING_NOTICE_PL": [
+      "publiczne/pl/02-prywatnosc.md"
+    ],
+    "TRANSFER_NOTICE_PL": [
+      "publiczne/pl/02-prywatnosc.md"
+    ],
+    "ESSENTIAL_COOKIE_INVENTORY_PL": [
+      "publiczne/pl/03-cookies.md"
+    ],
+    "PRIVACY_OWNER": [
+      "szkice/ai-act-art22-dpia.md",
+      "szkice/procedura-naruszen.md",
+      "szkice/rejestr-czynnosci.md",
+      "szkice/retencja-i-prawa-kandydata.md"
+    ],
+    "DSA_AUTHORITY_EMAIL": [
+      "szkice/dsa-moderacja.md"
+    ],
+    "DSA_DEPUTY": [
+      "szkice/dsa-moderacja.md"
+    ],
+    "DSA_OWNER": [
+      "szkice/dsa-moderacja.md"
+    ],
+    "AUTHORIZED_SIGNATORY": [
+      "szkice/procedura-naruszen.md"
+    ],
+    "INCIDENT_BACKUP_CONTACT": [
+      "szkice/procedura-naruszen.md"
+    ],
+    "INCIDENT_LEAD": [
+      "szkice/procedura-naruszen.md"
+    ],
+    "INCIDENT_PHONE": [
+      "szkice/procedura-naruszen.md"
+    ],
+    "OUT_OF_BAND_CONTACT": [
+      "szkice/procedura-naruszen.md"
+    ],
+    "PRIVACY_DEPUTY": [
+      "szkice/procedura-naruszen.md",
+      "szkice/rejestr-czynnosci.md",
+      "szkice/retencja-i-prawa-kandydata.md"
+    ],
+    "TECH_CONTACT": [
+      "szkice/procedura-naruszen.md"
+    ],
+    "MAIN_ESTABLISHMENT": [
+      "szkice/rejestr-czynnosci.md"
+    ],
+    "INCIDENT_ACTIONS_COMPLETED": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_ACTIONS_PLANNED": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_ART34_DECISION_AND_REASONS": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_ART34_DELIVERY": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_ART34_EXCEPTION": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_ATTACHMENTS": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_AWARENESS_TIME": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_CAUSE_STATUS": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_CONTACT_EMAIL": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_CONTACT_NAME": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_CONTACT_PHONE": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_COUNTRIES": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_DATA_CATEGORIES_AND_COUNT": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_DELAY_REASONS": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_DISCOVERY": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_DPO_DETAILS": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_FACTS": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_FIRST_SIGNAL": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_ID": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_NOTIFICATION_TYPE": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_OTHER_PARTIES": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_PENDING_INFORMATION": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_PERIOD": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_PERSON_CATEGORIES": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_PERSON_COUNT": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_PREEXISTING_CONTROLS": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_REPORTER_AUTHORITY": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_REPORT_DATE": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_RISK_ASSESSMENT": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_SECURITY_PROPERTIES": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_SENSITIVE_DATA": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_TIMEZONE": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_UNAUTHORISED_RECIPIENTS": [
+      "wzory/naruszenie-art33-FR.md"
+    ],
+    "INCIDENT_AWARENESS_DATE_EN": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_AWARENESS_DATE_FR": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_AWARENESS_DATE_NL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_AWARENESS_DATE_PL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_CONSEQUENCES_EN": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_CONSEQUENCES_FR": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_CONSEQUENCES_NL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_CONSEQUENCES_PL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_MEASURES_EN": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_MEASURES_FR": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_MEASURES_NL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_MEASURES_PL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_NEXT_STEPS_EN": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_NEXT_STEPS_FR": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_NEXT_STEPS_NL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_NEXT_STEPS_PL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERIOD_EN": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERIOD_FR": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERIOD_NL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERIOD_PL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERSONAL_DATA_EN": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERSONAL_DATA_FR": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERSONAL_DATA_NL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERSONAL_DATA_PL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERSONAL_FACTS_EN": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERSONAL_FACTS_FR": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERSONAL_FACTS_NL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PERSONAL_FACTS_PL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PUBLIC_CONTACT_EMAIL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PUBLIC_CONTACT_NAME": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_PUBLIC_CONTACT_PHONE": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_RECOMMENDED_ACTIONS_EN": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_RECOMMENDED_ACTIONS_FR": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_RECOMMENDED_ACTIONS_NL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_RECOMMENDED_ACTIONS_PL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_UNCERTAINTY_EN": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_UNCERTAINTY_FR": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_UNCERTAINTY_NL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ],
+    "INCIDENT_UNCERTAINTY_PL": [
+      "wzory/naruszenie-art34-PL-NL-FR-EN.md"
+    ]
+  },
+  "publication_rule": "No unresolved static tokens or authoring metadata in published pages. Runtime tokens require validated contextual values."
+}

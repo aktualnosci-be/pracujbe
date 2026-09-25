@@ -115,7 +115,7 @@ function candidateProfileRow(step: Step, value: unknown): Record<string, unknown
       has_driving_license: v.hasDrivingLicense, has_car: v.hasCar,
     };
   }
-  const v = value as Omit<CandidateStep6, 'agreeTerms'>;
+  const v = value as Omit<CandidateStep6, 'agreeTerms' | 'privacyNoticeAck'>;
   return {
     availability: v.availability,
     preferred_contract_types: v.preferredContractTypes,
