@@ -49,6 +49,22 @@ export const env = {
   get authBaseUrl(): string | undefined {
     return process.env.BETTER_AUTH_URL || undefined;
   },
+  /** Ograniczone połączenie domeny (rola pracujbe_app) — dane, profile i sesje portalu. */
+  get appDatabaseUrl(): string | undefined {
+    return process.env.DATABASE_APP_URL || undefined;
+  },
+  /** Login workera wiadomości auth (rola pracujbe_auth_mail, 0061). */
+  get authMailDatabaseUrl(): string | undefined {
+    return process.env.DATABASE_AUTH_MAIL_URL || undefined;
+  },
+  /** Login limitera (rola pracujbe_rate_limit, 0058). */
+  get rateLimitDatabaseUrl(): string | undefined {
+    return process.env.DATABASE_RATE_LIMIT_URL || undefined;
+  },
+  /** Sekret HMAC kluczy limitera (min. 32 bajty); niezależny od sekretu sesji. */
+  get rateLimitKeySecret(): string | undefined {
+    return process.env.RATE_LIMIT_KEY_SECRET || undefined;
+  },
 };
 
 /**
@@ -61,12 +77,32 @@ export function isSupabaseConfigured(): boolean {
 
 /** Publiczne oferty korzystają z ograniczonego loginu PostgreSQL Railway. */
 export function isDatabaseConfigured(): boolean {
-  return Boolean(process.env.DATABASE_APP_URL);
+  return Boolean(env.appDatabaseUrl);
 }
 
 /** Czy komplet prywatnej konfiguracji runtime Better Auth jest obecny. */
 export function isAuthRuntimeConfigured(): boolean {
   return Boolean(env.authDatabaseUrl && env.authSecret && env.authBaseUrl);
+}
+
+/**
+ * Konta i sesje portalu (#24): Better Auth potwierdza sesję, a pula domeny czyta aktywny profil
+ * (`readPortalIdentity`). Bez obu części logowanie, guardy paneli i akcje auth nie działają —
+ * poza produkcją to tryb demo, w produkcji `isAppReady()` = false (503).
+ */
+export function isPortalAuthConfigured(): boolean {
+  return isAuthRuntimeConfigured() && isDatabaseConfigured();
+}
+
+/** Trwały limiter PostgreSQL (osobny login + sekret HMAC ≥ 32 bajty). */
+export function isRateLimitDatabaseConfigured(): boolean {
+  const secret = env.rateLimitKeySecret;
+  return Boolean(env.rateLimitDatabaseUrl && secret && new TextEncoder().encode(secret).length >= 32);
+}
+
+/** Worker wiadomości auth (weryfikacja adresu, reset hasła) ma własny login. */
+export function isAuthMailConfigured(): boolean {
+  return Boolean(env.authMailDatabaseUrl);
 }
 
 /** Czy aplikacja działa w trybie produkcyjnym (fail-closed zamiast demo). SEC-19. */
@@ -104,6 +140,22 @@ export function hasPublicHttpsUrl(): boolean {
     // Gotowość stagingu jest niezależna od indeksowania przez wyszukiwarki.
     return url.protocol === 'https:' && !url.username && !url.password &&
       !/^(localhost|.*\.localhost|127(?:\.\d+){3}|0\.0\.0\.0|\[::1\]|\[::\])$/i.test(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `BETTER_AUTH_URL` = kanoniczny origin HTTPS serwisu (ten sam co `NEXT_PUBLIC_SITE_URL`):
+ * linki z e-maili, kontrola origin/CSRF i cookie `__Secure-` muszą wskazywać jeden host.
+ */
+export function hasCanonicalAuthUrl(): boolean {
+  const value = env.authBaseUrl;
+  if (!value || !hasPublicHttpsUrl()) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && url.pathname === '/'
+      && !url.search && !url.hash && url.origin === new URL(env.siteUrl).origin;
   } catch {
     return false;
   }
@@ -159,20 +211,25 @@ export function isFileStorageConfigured(): boolean {
 }
 
 /**
- * Zależności KRYTYCZNE dla gotowości (P1-18). W produkcji aplikacja nie może obsługiwać ruchu
- * bez rdzenia: Supabase (URL+anon), klucz service-role (operacje serwerowe) oraz realny https URL.
- * Dostawcy opcjonalni (Stripe/Resend/webhooki) NIE blokują gotowości — ich stan raportuje
- * /api/health jako `checks` (obserwowalność bez twardego 503 na starcie bez płatności/e-maili).
+ * Zależności KRYTYCZNE dla gotowości (P1-18, #429). Produkcja nie obsługuje ruchu bez rdzenia
+ * PostgreSQL Railway: pula domeny (`DATABASE_APP_URL`), Better Auth (`DATABASE_AUTH_URL`,
+ * `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` = origin serwisu), limiter prób logowania/rejestracji
+ * (`DATABASE_RATE_LIMIT_URL` + `RATE_LIMIT_KEY_SECRET`; bez niego akcje auth są blokowane) oraz
+ * realny https URL. Supabase nie jest już warunkiem gotowości (konta i sesje przepięte, #24).
+ * Dostawcy opcjonalni (Resend/worker poczty/Sentry) NIE blokują gotowości — ich stan raportuje
+ * /api/health jako `checks` (obserwowalność bez twardego 503).
  */
 export function readinessChecks(): Record<string, boolean> {
   return {
-    supabase: isSupabaseConfigured(),
-    serviceRole: hasServiceRoleKey(),
+    database: isDatabaseConfigured(),
+    auth: isAuthRuntimeConfigured(),
+    authUrl: hasCanonicalAuthUrl(),
+    rateLimit: isRateLimitDatabaseConfigured(),
+    authMail: isAuthMailConfigured(),
     httpsSiteUrl: hasPublicHttpsUrl(),
     // #51: sprzedaż wyłączona flagą — sekrety Stripe bez `BILLING_ENABLED` nie liczą się.
     stripe: isBillingEnabled() && Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
     resend: Boolean(process.env.RESEND_API_KEY),
-    emailHook: Boolean(process.env.SEND_EMAIL_HOOK_SECRET),
     queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),
     // #13: osobny sekret maintenance, rozdział sekretów cron, przejściowy CRON_SECRET.
     ...cronSecretChecks(),
@@ -184,11 +241,13 @@ export function readinessChecks(): Record<string, boolean> {
 }
 
 /**
- * Gotowość do obsługi ruchu (SEC-19 + P1-18). Tryb demo: zawsze gotowe (lokalnie/staging/E2E).
- * Tryb produkcyjny: wymaga rdzenia (Supabase + service-role + realny https URL) — brak =
- * „nieskonfigurowany" (fail-closed: 503/maintenance, nie fikcyjne demo). Nie ujawnia sekretów.
+ * Gotowość do obsługi ruchu (SEC-19 + P1-18 + #429). Tryb demo: zawsze gotowe (lokalnie/E2E).
+ * Tryb produkcyjny: wymaga rdzenia PostgreSQL + Better Auth + limitera + realnego https URL —
+ * brak = „nieskonfigurowany" (fail-closed: 503/maintenance, nie fikcyjne demo). Sama obecność
+ * zmiennych; łączność z bazą sprawdza dodatkowo `/api/health`. Nie ujawnia sekretów.
  */
 export function isAppReady(): boolean {
   if (!isProductionMode()) return true;
-  return isSupabaseConfigured() && hasServiceRoleKey() && hasPublicHttpsUrl();
+  return isDatabaseConfigured() && isAuthRuntimeConfigured() && hasCanonicalAuthUrl()
+    && isRateLimitDatabaseConfigured() && hasPublicHttpsUrl();
 }

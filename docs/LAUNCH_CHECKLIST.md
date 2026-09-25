@@ -133,7 +133,7 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 - [ ] Dane kontaktowe i informacje o podmiocie (impressum) na stronie.
 - [ ] Adres `dmarc@pracuj.be` / `kontakt@pracuj.be` odbiera pocztę.
 - [ ] Zgłoszenia treści (`reports`) trafiają do moderacji.
-- [ ] Plan wsparcia / kontaktu na wypadek incydentu.
+- [ ] Plan wsparcia / kontaktu na wypadek incydentu. Rejestr naruszeń w panelu (`/admin/naruszenia`, #490) gotowy; procedura to szkic do weryfikacji prawnika (`docs/legal-drafts/procedura-naruszen.md`).
 
 ## 14. Moduły: firma / admin / płatności / pliki
 

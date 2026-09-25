@@ -52,6 +52,7 @@ export const EMAIL_TYPES = [
   'appealReceived',
   'appealUpheld',
   'appealReversed',
+  'breachNotice',
 ] as const;
 
 export type EmailType = (typeof EMAIL_TYPES)[number];
@@ -1656,6 +1657,44 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'View details',
       highlight: '{appealReference}',
       footerNote: 'You are receiving this email because an appeal was submitted on Pracuj.be with this email address.',
+    },
+  },
+  /**
+   * Zawiadomienie osób o naruszeniu danych (#490) — szablon techniczny: temat i treść wpisuje
+   * administrator w języku odbiorcy (payload), szablon dodaje tylko identyfikator i link.
+   */
+  breachNotice: {
+    pl: {
+      subject: '{noticeSubject}',
+      preview: '{noticeSubject}',
+      heading: '{noticeSubject}',
+      body: '{noticeText}',
+      cta: 'Przejdź do ustawień konta',
+      outro: 'Identyfikator zdarzenia: {incidentReference}. Podaj go, jeśli kontaktujesz się z nami w tej sprawie.',
+    },
+    nl: {
+      subject: '{noticeSubject}',
+      preview: '{noticeSubject}',
+      heading: '{noticeSubject}',
+      body: '{noticeText}',
+      cta: 'Naar je accountinstellingen',
+      outro: 'Referentie van het incident: {incidentReference}. Vermeld deze als je hierover contact met ons opneemt.',
+    },
+    fr: {
+      subject: '{noticeSubject}',
+      preview: '{noticeSubject}',
+      heading: '{noticeSubject}',
+      body: '{noticeText}',
+      cta: 'Accéder aux paramètres du compte',
+      outro: 'Référence de l’incident : {incidentReference}. Indiquez-la si vous nous contactez à ce sujet.',
+    },
+    en: {
+      subject: '{noticeSubject}',
+      preview: '{noticeSubject}',
+      heading: '{noticeSubject}',
+      body: '{noticeText}',
+      cta: 'Go to account settings',
+      outro: 'Incident reference: {incidentReference}. Please quote it if you contact us about this.',
     },
   },
 };

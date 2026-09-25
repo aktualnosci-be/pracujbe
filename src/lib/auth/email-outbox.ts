@@ -118,7 +118,18 @@ export async function expireAuthEmails(pool: MailPool): Promise<number> {
   return (await pool.query('SELECT auth.expire_emails() AS expired')).rows[0]?.expired ?? 0;
 }
 
-/** Dane istniejącego szablonu. Bez wysyłki, logowania poświadczenia i URL od klienta. */
+/** Ścieżki stron aplikacji (bez prefiksu języka), które przyjmują token z e-maila. */
+export const AUTH_LINK_PAGES = { verification: '/potwierdz-email', password_reset: '/ustaw-nowe-haslo' } as const;
+
+/**
+ * Dane istniejącego szablonu. Bez wysyłki, logowania poświadczenia i URL od klienta.
+ *
+ * Link prowadzi do strony aplikacji w języku ODBIORCY (snapshot z kolejki), a token jest we
+ * fragmencie `#token=` (#505): przeglądarka nie wysyła fragmentu do serwera, więc sekret nie
+ * trafia do logów proxy/aplikacji ani do nagłówka Referer. Strona przekazuje go do Server Action
+ * dopiero po kliknięciu przycisku — skaner linków w skrzynce nie potwierdzi konta ani nie
+ * zużyje tokenu resetu. Rola nie jest częścią linku: panel po weryfikacji wynika z profilu.
+ */
 export function prepareAuthEmail(delivery: AuthEmailDelivery, baseURL: string) {
   const origin = new URL(baseURL);
   if (origin.protocol !== 'https:' || origin.username || origin.password
@@ -128,10 +139,8 @@ export function prepareAuthEmail(delivery: AuthEmailDelivery, baseURL: string) {
     throw new Error('Dzierżawa lub poświadczenie wiadomości wygasły.');
   }
   const reset = delivery.kind === 'password_reset';
-  const destination = new URL(`/${delivery.locale}/${reset ? 'ustaw-nowe-haslo' : delivery.recipient_role}`, origin);
-  const link = new URL(reset ? `/api/auth/reset-password/${encodeURIComponent(delivery.token)}` : '/api/auth/verify-email', origin);
-  if (!reset) link.searchParams.set('token', delivery.token);
-  link.searchParams.set('callbackURL', destination.href);
+  const link = new URL(`/${delivery.locale}${AUTH_LINK_PAGES[delivery.kind]}`, origin);
+  link.hash = new URLSearchParams({ token: delivery.token }).toString();
   return {
     to: delivery.recipient_email, locale: delivery.locale, idempotencyKey: delivery.id,
     template: reset ? 'passwordReset' as const : 'accountConfirmation' as const,

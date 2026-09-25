@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
+Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -20,10 +20,10 @@ Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Supabase, Resend | Kod nie usuwa danych — do ustalenia |
 | Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Supabase, Resend | Propozycje wygasają (expires_at), dane nie są usuwane. |
 | Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs`, `public.screening_question_reviews` | Railway, Supabase, Resend, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
-| E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Supabase, Resend | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
+| E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Supabase, Resend | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Supabase, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
-| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.rate_limits`, `public.system_events` | Railway, Supabase, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
+| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Supabase, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Supabase, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway, Supabase | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
 | Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
@@ -313,6 +313,57 @@ Tabele w migracjach: 87; z danymi osobowymi: 54; bez danych osobowych: 33.
 | `after_data` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
 | `ip_address` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
 | `user_agent` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
+
+### `public.breach_incident_events`
+
+- **Migracja:** `supabase/migrations/0106_breach_register.sql`
+- **Czynności:** Bezpieczeństwo, audyt i limity
+- **Osoby:** Administratorzy portalu
+- **Uwaga:** Niezmienna historia zmian wpisu (pole: przed/po).
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `actor_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0106_breach_register.sql` |
+| `changes` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0106_breach_register.sql` |
+| `note` | Korespondencja i treści swobodne | `supabase/migrations/0106_breach_register.sql` |
+
+### `public.breach_incidents`
+
+- **Migracja:** `supabase/migrations/0106_breach_register.sql`
+- **Czynności:** Bezpieczeństwo, audyt i limity
+- **Osoby:** Administratorzy portalu
+- **Uwaga:** Opis zdarzenia i skali bez kopii danych osób (interfejs prosi o opis zakresu). Dostęp tylko admin (RPC, odczyt service-role).
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0106_breach_register.sql` |
+| `description` | Korespondencja i treści swobodne | `supabase/migrations/0106_breach_register.sql` |
+| `actions_taken` | Korespondencja i treści swobodne | `supabase/migrations/0106_breach_register.sql` |
+
+### `public.breach_notice_recipients`
+
+- **Migracja:** `supabase/migrations/0106_breach_register.sql`
+- **Czynności:** Bezpieczeństwo, audyt i limity, E-maile i powiadomienia
+- **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
+- **Uwaga:** Kto dostał zawiadomienie o naruszeniu (konto + język), bez adresu e-mail.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0106_breach_register.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0106_breach_register.sql` |
+| `queued` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0106_breach_register.sql` |
+
+### `public.breach_notices`
+
+- **Migracja:** `supabase/migrations/0106_breach_register.sql`
+- **Czynności:** Bezpieczeństwo, audyt i limity, E-maile i powiadomienia
+- **Osoby:** Administratorzy portalu
+- **Uwaga:** Treść zawiadomienia wpisana przez administratora (per język), bez listy adresów.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0106_breach_register.sql` |
+| `content` | Korespondencja i treści swobodne | `supabase/migrations/0106_breach_register.sql` |
 
 ### `public.candidate_certificates`
 
@@ -959,6 +1010,7 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `appealReversed` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
 | `appealUpheld` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
 | `applicationViewed` | `companyName`, `jobTitle` | `transition_application` |
+| `breachNotice` | `incidentReference`, `noticeSubject`, `noticeText`, `panel` | `admin_notify_breach_subjects` |
 | `companyRejected` | `companyName`, `reason` | `admin_set_company_status` |
 | `companySuspended` | `companyName`, `reason` | `admin_set_company_status` |
 | `companyVerified` | `companyName`, `reason` | `admin_set_company_status` |

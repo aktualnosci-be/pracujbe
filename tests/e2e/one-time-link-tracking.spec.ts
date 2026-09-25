@@ -32,13 +32,15 @@ test('jednorazowe linki nie uruchamiają GA ani Meta po wcześniejszej zgodzie',
     `/pl/aplikacja/przejmij#token=${SECRET}`,
     `/pl/aplikacja/potwierdz?token=${SECRET}`,
     `/pl/ustaw-nowe-haslo?token=${SECRET}`,
+    `/pl/ustaw-nowe-haslo#token=${SECRET}`,
+    `/pl/potwierdz-email#token=a.${SECRET}.b`,
     `/pl/wypisz?t=${SECRET}`,
   ]) {
     trackerRequests.length = 0;
     const response = await page.goto(path);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1_000);
-    expect(trackerRequests, `zewnętrzne żądania na ${path.split('?')[0]}`).toEqual([]);
+    expect(trackerRequests, `zewnętrzne żądania na ${path.split(/[?#]/)[0]}`).toEqual([]);
     expect(response?.headers()['cache-control'], 'jednorazowy link bez cache').toContain('no-store');
     expect(response?.headers()['referrer-policy'], 'jednorazowy link bez Referer').toBe('no-referrer');
   }
