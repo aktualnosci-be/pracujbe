@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runCron } from '../../scripts/railway-cron-call.mjs';
 
-const env = { CRON_TARGET_URL: 'http://web.railway.internal:3000/api/email/process?private=hidden', CRON_AUTH_SECRET: 'secret-test-value' };
+const env = { CRON_TARGET_URL: 'http://web-private-host.railway.internal:3000/api/email/process', CRON_AUTH_SECRET: 'secret-test-value' };
 const logger = () => ({ log: vi.fn(), error: vi.fn() });
 afterEach(() => vi.useRealTimers());
 
@@ -14,6 +14,17 @@ describe('Railway cron caller', () => {
     { ...env, CRON_TARGET_URL: 'https://example.com/task#fragment' },
     { ...env, CRON_TARGET_URL: 'https://example.com/task#' },
     { ...env, CRON_AUTH_SECRET: '   ' }, { ...env, CRON_AUTH_SECRET: 'secret\r\nInjected: value' },
+    // #13: sekret trafia wyłącznie pod jedno z dwóch zadań, bez query, HTTP tylko w sieci prywatnej.
+    { ...env, CRON_TARGET_URL: 'http://web-private-host.railway.internal:3000/api/health' },
+    { ...env, CRON_TARGET_URL: 'http://web-private-host.railway.internal:3000/api/email/dispatch' },
+    { ...env, CRON_TARGET_URL: 'http://web-private-host.railway.internal:3000/api/maintenance/' },
+    { ...env, CRON_TARGET_URL: `${env.CRON_TARGET_URL}?debug=1` },
+    { ...env, CRON_TARGET_URL: `${env.CRON_TARGET_URL}?` },
+    { ...env, CRON_TARGET_URL: 'http://pracuj.be/api/maintenance' },
+    { ...env, CRON_TARGET_URL: 'http://railway.internal.example.com/api/maintenance' },
+    { ...env, CRON_TIMEOUT_SECONDS: '0' }, { ...env, CRON_TIMEOUT_SECONDS: '601' },
+    { ...env, CRON_TIMEOUT_SECONDS: '1.5' }, { ...env, CRON_TIMEOUT_SECONDS: '-5' },
+    { ...env, CRON_TIMEOUT_SECONDS: '30s' },
   ])('odrzuca błędną konfigurację bez żądania (%j)', async (configuration) => {
     const fetchImpl = vi.fn();
     expect(await runCron({ env: configuration, fetchImpl, logger: logger() })).toBe(2);
@@ -65,6 +76,29 @@ describe('Railway cron caller', () => {
     expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
     expect(JSON.stringify(logs.error.mock.calls)).not.toContain('private abort details');
+  });
+
+  it.each([
+    'http://web-private-host.railway.internal:3000/api/maintenance',
+    'http://localhost:3000/api/email/process',
+    'https://pracuj.be/api/maintenance',
+    'http://web-private-host.railway.internal:3000/api/translation/process',
+  ])('przyjmuje adres zadania %s', async (target) => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    expect(await runCron({ env: { ...env, CRON_TARGET_URL: target }, fetchImpl, logger: logger() })).toBe(0);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it('stosuje CRON_TIMEOUT_SECONDS', async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation((_url, options) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+    }));
+    const result = runCron({ env: { ...env, CRON_TIMEOUT_SECONDS: '30' }, fetchImpl, logger: logger() });
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await result).toBe(1);
   });
 
   it('usuwa timer także po sukcesie', async () => {
