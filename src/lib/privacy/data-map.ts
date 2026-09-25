@@ -626,7 +626,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       bounce_type: 'technical',
     },
     notPersonal: {
-      lock_token: 'Token dzierżawy workera (0140, #615) — losowy identyfikator do CAS, nie dane osobowe.',
+      lock_token: 'Token dzierżawy workera (0129, #615) — losowy identyfikator do CAS, nie dane osobowe.',
     },
     note: 'Pola payloadu dla każdego szablonu — sekcja „Treść e-maili” (generowana z migracji).',
   },

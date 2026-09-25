@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0140 — worker poczty: CAS na dzierżawie wiersza kolejki (#615, utwardzenie).
+-- 0129 — worker poczty: CAS na dzierżawie wiersza kolejki (#615, utwardzenie).
 --
 -- Problem: `email_delivery_send_check(id)` i późniejsze aktualizacje workera
 -- (mark-sent / mark-failed / defer, `src/lib/email/outbox.ts`) filtrowały tylko po

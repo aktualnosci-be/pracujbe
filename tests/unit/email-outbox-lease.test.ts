@@ -4,7 +4,7 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #615 — worker poczty nie może wysłać wiersza po utracie dzierżawy. `claim_email_batch`
- * nadaje `lock_token` (0140); `email_delivery_send_check` i każda dalsza aktualizacja wiersza
+ * nadaje `lock_token` (0129); `email_delivery_send_check` i każda dalsza aktualizacja wiersza
  * (mark-sent/mark-failed/defer) muszą go podać jako CAS. Zachowanie samego RPC (dwaj workerzy,
  * wygasła dzierżawa) — `supabase/tests/rls.sql` sekcja WL615.
  */

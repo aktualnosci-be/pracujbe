@@ -5420,7 +5420,7 @@ select id as sp_d4 from public.email_deliveries where idempotency_key = 'sp108-d
 select pg_temp.assert(
   (select count(*) from public.claim_email_batch(100000) c where c.id in (:'sp_d2', :'sp_d3', :'sp_d4')) = 3,
   'SS108-5 claim wydaje trzy wiersze (alert i zgody włączone)');
--- #615 (0140): claim nadał token każdemu wierszowi — worker go niesie do kontroli tuż przed wysyłką.
+-- #615 (0129): claim nadał token każdemu wierszowi — worker go niesie do kontroli tuż przed wysyłką.
 select lock_token as sp_d2_lt from public.email_deliveries where id = :'sp_d2' \gset
 select lock_token as sp_d3_lt from public.email_deliveries where id = :'sp_d3' \gset
 select lock_token as sp_d4_lt from public.email_deliveries where id = :'sp_d4' \gset
@@ -10050,7 +10050,7 @@ select pg_temp.assert(
 -- email_delivery_suppression_reason — sprawdzenie odbiorcy z 0122 nie może zniknąć.
 select id as es_recheck from public.email_deliveries
  where profile_id = :'ESR' and template = 'newApplication' limit 1 \gset
--- #615 (0140): symulacja „worker nadal trzyma dzierżawę" — jawny świeży token, nie null.
+-- #615 (0129): symulacja „worker nadal trzyma dzierżawę" — jawny świeży token, nie null.
 update public.email_deliveries set status = 'queued', suppressed_at = null, error_message = null,
   lock_token = gen_random_uuid()
  where id = :'es_recheck';
@@ -12088,12 +12088,12 @@ select pg_temp.expect_error(
 rollback;
 
 -- ============================================================================
--- WL615E83B29 (#615): worker poczty — CAS na dzierżawie wiersza kolejki (`lock_token`, 0140).
+-- WL615E83B29 (#615): worker poczty — CAS na dzierżawie wiersza kolejki (`lock_token`, 0129).
 --
 -- Bez tokenu `email_delivery_send_check(id)` (0124) sprawdzał tylko `status = 'queued'`, więc
 -- worker, którego dzierżawa wygasła (padł/zawiesił się), a wiersz przejął inny worker, i tak
 -- dostawał zielone światło (null = wolno wysyłać) — WL615-6 odtwarza dokładnie tę starą logikę
--- i pokazuje, że nadal zwraca null mimo utraconej dzierżawy (dowód luki). Naprawa (0140):
+-- i pokazuje, że nadal zwraca null mimo utraconej dzierżawy (dowód luki). Naprawa (0129):
 -- `claim_email_batch` nadaje NOWY `lock_token` przy KAŻDYM (ponownym) claimie;
 -- `email_delivery_send_check(id, lock_token)` zwraca `lease_lost` i NIE dotyka wiersza, gdy
 -- token się nie zgadza (wiersz należy już do innego workera). CAS na mark-sent/mark-failed/
