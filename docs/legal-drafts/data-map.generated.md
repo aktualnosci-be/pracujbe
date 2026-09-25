@@ -28,7 +28,7 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
 | Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
 | Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.storage_deletion_queue` | Railway | run_retention_purge (/api/maintenance): okresy z retention_policies; domyślnie tylko pliki i profile oznaczone jako usunięte (30 dni), pozostałe kategorie wyłączone. Ślad wniosków i rejestr usunięć bez usuwania do decyzji właściciela. |
-| Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy. | `public.erasure_tombstones` | Railway | BACKUP_RETENTION najnowszych kopii (domyślnie 14). |
+| Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy; kopia i manifest wysyłane do prywatnego bucketu Cloudflare R2 (BACKUP_S3_*, #569). | `public.erasure_tombstones` | Railway, Cloudflare R2 (bucket kopii bazy) | BACKUP_RETENTION najnowszych kopii (domyślnie 14) lokalnie i w buckecie R2; opcjonalnie BACKUP_S3_MAX_AGE_DAYS (najnowsza kopia zostaje zawsze). |
 | Płatności (wyłączone) (`billing-disabled`) | Martwy schemat po wyłączonym billingu (#51); brak aktywnego przepływu. | — | Stripe | Kod nie usuwa danych — do ustalenia |
 
 ## 2. Usługi zewnętrzne (subprocesorzy — kandydaci do weryfikacji)
@@ -42,7 +42,7 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 - **Kod:** `docs/railway/README.md`, `docs/railway/OPERATIONS.md`, `src/lib/db/pool.ts`, `src/lib/db/portal.ts`, `scripts/railway-cron-call.mjs`
 - **Uwaga:** Pliki CV w prywatnym buckecie S3 Railway (src/lib/storage/railway-bucket.ts, #26); pobranie tylko krótkim linkiem HMAC przez /api/files/cv.
 - **Uwaga:** Limiter (src/lib/rate-limit.ts): przy loginie DATABASE_RATE_LIMIT_URL klucz HMAC akcji i adresu IP; przejściowa ścieżka przez pulę service zapisuje klucz z adresem IP bez haszowania.
-- **Uwaga:** Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age i zapisuje w BACKUP_DIR; miejsce przechowywania kopii nie wynika z repozytorium.
+- **Uwaga:** Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age w usłudze cron Railway (docker/backup/Dockerfile); przechowywane są poza Railwayem w buckecie Cloudflare R2 (#569).
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
@@ -89,6 +89,22 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 - **Kod:** `sentry.client.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`, `src/lib/sentry-egress.ts`
 - **Uwaga:** sendDefaultPii: false, Session Replay i tracing wyłączone (sample rate 0).
 - **Uwaga:** beforeSend = redactSentryEvent: zdarzenie budowane od zera z bezpiecznych pól (bez URL, treści wyjątku, extras i załączników).
+- **Rola (procesor/administrator):** DO UZUPEŁNIENIA
+- **Region przetwarzania:** DO UZUPEŁNIENIA
+- **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
+- **Umowa (DPA):** DO UZUPEŁNIENIA
+- **Retencja u dostawcy:** DO UZUPEŁNIENIA
+
+### Cloudflare R2 (bucket kopii bazy) (`cloudflare-r2`)
+
+- **Cel w portalu:** Przechowywanie zaszyfrowanych kopii bazy poza Railwayem (#569); pliki CV zostają w buckecie Railway.
+- **Kategorie danych:** Zaszyfrowany (age, klucz publiczny) zrzut całej bazy — wszystkie kategorie z mapy tabel; dostawca nie ma klucza prywatnego; Manifest kopii bez danych: rozmiary, SHA-256, liczby tabel i migracji, wersja serwera
+- **Osoby:** Kandydaci, Aplikujący bez konta, Pracodawcy i członkowie firm, Zgłaszający treści, Administratorzy
+- **Aktywacja:** BACKUP_S3_ENDPOINT + BACKUP_S3_BUCKET + klucz zapisu BACKUP_S3_ACCESS_KEY_ID/SECRET w zadaniu kopii; aplikacja tylko klucz odczytu BACKUP_S3_READ_* (czujka wieku kopii).
+- **Kod:** `scripts/db/backup.sh`, `scripts/db/restore-backup.sh`, `scripts/db/lib/backup-s3.mjs`, `src/lib/ops/backup-freshness.ts`
+- **Uwaga:** Bucket prywatny, bez domeny publicznej i bez r2.dev (ustawienie w panelu Cloudflare — docs/railway/OPERATIONS.md).
+- **Uwaga:** Retencja w buckecie: BACKUP_RETENTION najnowszych kopii, opcjonalnie BACKUP_S3_MAX_AGE_DAYS; usuwa tylko obiekty o wzorcu nazwy kopii.
+- **Uwaga:** Usługa web czyta wyłącznie listę obiektów (wiek ostatniej kopii w /api/health/ops) — klucz zapisu w usłudze web to alarm backup_misconfigured.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
@@ -479,6 +495,7 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 - **Migracja:** `supabase/migrations/0086_company_team.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Osoby zaproszone do zespołu firmy, Pracodawcy i członkowie firm
+- **Uwaga:** Język zaproszenia wybiera zapraszający (adres bez konta, 0121); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -486,6 +503,9 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 | `role` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0086_company_team.sql` |
 | `invited_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0086_company_team.sql` |
 | `responded_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0086_company_team.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0121_team_invitation_signup.sql` |
+| `signup_token_hash` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0121_team_invitation_signup.sql` |
+| `signup_token_used_at` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0121_team_invitation_signup.sql` |
 
 ### `public.company_members`
 
@@ -1075,6 +1095,7 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `reportRestored` | `caseNumber`, `recipientName` | `admin_restore_moderation` |
 | `statusChanged` | `companyName`, `jobTitle`, `status` | `transition_application` |
 | `teamInvitation` | `companyName`, `inviterName`, `panel` | `invite_company_member` |
+| `teamInvitationSignup` | `companyName`, `inviterName`, `nonce` | `invite_company_member` |
 
 ## 5. Tabele bez danych osobowych
 
