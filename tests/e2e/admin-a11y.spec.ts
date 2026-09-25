@@ -32,6 +32,10 @@ const ROUTES = [
   '/admin/uzytkownicy',
   // Blokady adresów e-mail (#44).
   '/admin/poczta',
+  // Kampanie e-mail (#45): lista, szkic (dialog akcji), rewizja aktywna.
+  '/admin/kampanie',
+  '/admin/kampanie/demo-k3',
+  '/admin/kampanie/demo-k2',
   // Rejestr naruszeń (#490): lista, nowy wpis, wpis demonstracyjny.
   '/admin/naruszenia',
   '/admin/naruszenia/nowy',

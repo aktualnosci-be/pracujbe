@@ -26,6 +26,7 @@ export const QUEUED_EMAIL_TYPES = [
   'reportReceived', // submit_content_report (0094) — enqueue_email_to_address
   'reportDecisionActioned', // admin_decide_report (0099) → ograniczenie treści — do zgłaszającego
   'reportDecisionNoAction', // admin_decide_report (0099) → brak działań — do zgłaszającego
+  'reportRestored', // admin_restore_moderation (0109) → cofnięcie — do zgłaszającego
   'moderationJobRemoved', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
   'moderationCompanySuspended', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
   'moderationRestored', // admin_restore_moderation (0099)
@@ -33,8 +34,8 @@ export const QUEUED_EMAIL_TYPES = [
   'appealUpheld', // admin_decide_appeal (0104) → decyzja utrzymana
   'appealReversed', // admin_decide_appeal (0104) → odwołanie uwzględnione
   'breachNotice', // admin_notify_breach_subjects (0106) — treść od administratora
-  'supportContact', // submit_contact_message (0109) — potwierdzenie do nadawcy, enqueue_email_to_address
-  'contactMessageAdmin', // submit_contact_message (0109) — powiadomienie każdego admina
+  'supportContact', // submit_contact_message (0115) — potwierdzenie do nadawcy, enqueue_email_to_address
+  'contactMessageAdmin', // submit_contact_message (0115) — powiadomienie każdego admina
 ] as const satisfies readonly EmailType[];
 
 /**

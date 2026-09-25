@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * #61 — formularz kontaktu: kolejność ochron w Server Action (limiter → Turnstile `contact`
- * → walidacja), kontrakt z RPC `submit_contact_message` (0109) wołanym pulą service,
+ * → walidacja), kontrakt z RPC `submit_contact_message` (0115) wołanym pulą service,
  * tożsamość nadawcy wyłącznie z sesji serwera, minimalizacja (NISS/PESEL/numer dokumentu
  * odrzucony przy polu, zanim cokolwiek trafi do bazy) i mapowanie błędów bez technikaliów.
  */

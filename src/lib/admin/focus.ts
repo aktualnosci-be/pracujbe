@@ -30,3 +30,7 @@ export function screeningReviewFocusKey(id: string): string {
 export function contactMessageFocusKey(id: string): string {
   return `contact-message-${id}`;
 }
+
+export function emailCampaignFocusKey(id: string): string {
+  return `email-campaign-${id}`;
+}

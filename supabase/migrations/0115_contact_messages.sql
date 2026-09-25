@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0109 — Formularz kontaktu (#61, część techniczna)
+-- 0115 — Formularz kontaktu (#61, część techniczna)
 -- =============================================================================
 -- 1. contact_messages — wiadomość z publicznego formularza `/{locale}/kontakt`: nadawca
 --    (imię opcjonalne, e-mail), temat ze słownika, treść, język formularza, numer

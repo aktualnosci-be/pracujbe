@@ -1122,6 +1122,9 @@ export async function listAuditLogs(
         } else if (entityType === 'breach_incident' && id) {
           const uuid = parseUuid(id);
           entityHref = uuid ? { pathname: `/admin/naruszenia/${uuid}` } : null;
+        } else if (entityType === 'email_campaign' && id) {
+          const uuid = parseUuid(id);
+          entityHref = uuid ? { pathname: `/admin/kampanie/${uuid}` } : null;
         }
         return {
           id: asString(row['id']),
@@ -1517,7 +1520,7 @@ export async function listEmailSuppressions(
 }
 
 /* ---------------------------------------------------------------------------
- * Wiadomości z formularza kontaktu (#61, 0109)
+ * Wiadomości z formularza kontaktu (#61, 0115)
  * ------------------------------------------------------------------------- */
 
 export interface AdminContactMessageRow {

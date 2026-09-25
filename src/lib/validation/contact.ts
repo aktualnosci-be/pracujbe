@@ -5,7 +5,7 @@ import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
 
 /**
  * Walidacja formularza kontaktu (#61) — ten sam schemat w formularzu (React Hook Form)
- * i w Server Action. Reguły lustrzane do `submit_contact_message` (0109); baza sprawdza je
+ * i w Server Action. Reguły lustrzane do `submit_contact_message` (0115); baza sprawdza je
  * ponownie, więc ominięcie formularza niczego nie daje.
  *
  * Komunikaty błędów to klucze i18n (`contact.error.*`), tłumaczone w formularzu.
@@ -15,7 +15,7 @@ import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
  * przy polu, zanim cokolwiek trafi do bazy.
  */
 
-/** Tematy wiadomości (kolejność = kolejność w formularzu). Zgodne z CHECK w 0109. */
+/** Tematy wiadomości (kolejność = kolejność w formularzu). Zgodne z CHECK w 0115. */
 export const CONTACT_TOPICS = [
   'candidate_account',
   'employer_account',
