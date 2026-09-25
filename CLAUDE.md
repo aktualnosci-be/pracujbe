@@ -1259,8 +1259,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Ponowna zgoda na marketing po wycofaniu woła `fbq('consent','grant')`. Kontrakt parametrów
   `recordConsent` ↔ `record_consent` z migracji (`consent-action.test`). **Otwarte:** wersja
   polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
-  **Do zrobienia:** asercje `email_deliveries.locale` na żywej bazie w `rls.sql` (#348, SQL),
-  raport flaków (#375).
+  Invariant #1 na żywej bazie (#348): `rls.sql` sekcja LOC348 — `email_deliveries.locale` dla
+  newApplication, applicationViewed, statusChanged, jobOffer (+ `offers.locale`), offerAccepted/
+  Declined, newMessage (obie strony), companyVerified, teamInvitation; nadawca, odbiorca i oferta
+  w różnych językach, fallback preferred → account → signup → `en`, komplet szablonów sekcji;
+  kontrole ujemne (język sesji nadawcy, odwrócony fallback). Raport flaków z kilku lokalnych
+  przebiegów (#375, poza CI): `npm run test:e2e:flaky -- --runs N` (`scripts/e2e-flaky-report.mjs`,
+  opis `docs/E2E_FLAKY_REPORT.md`, test `flaky-aggregate`).
   Post 1080×1080 z prawdziwej oferty (#181): `scripts/export-job-post.mjs slug locale wyjście`
   — dane wyłącznie z `get_public_job` (`DATABASE_APP_URL`, `SET LOCAL ROLE anon`, odmowa loginu
   superusera; `scripts/lib/job-post-source.mjs`), bez JSON od operatora; renderer przyjmuje tylko
