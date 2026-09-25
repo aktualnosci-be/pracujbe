@@ -4895,7 +4895,7 @@ rollback;
 
 -- Użycie indeksu przy realnej liczbie ofert mierzy scripts/db/search-benchmark.sh (EXPLAIN
 -- przed/po); tu — definicja zgodna z predykatem get_public_jobs (status/deleted_at, trigram).
--- Od 0109 indeks miasta jest wyrażeniowy na search_fold(city) (idx_jobs_city_trgm usunięty).
+-- Od 0110 indeks miasta jest wyrażeniowy na search_fold(city) (idx_jobs_city_trgm usunięty).
 select pg_temp.assert(
   (select pg_get_indexdef('public.idx_jobs_city_fold_trgm'::regclass))
     like '%USING gin (search_fold(city) gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))%',
@@ -9236,7 +9236,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- SU47. Wyszukiwanie ofert bez diakrytyków i z literalnym %/_/\ (0109, #47):
+-- SU47. Wyszukiwanie ofert bez diakrytyków i z literalnym %/_/\ (0110, #47):
 --       get_public_jobs/_count/facety składają tytuł i miasto przez search_fold
 --       (lower + unaccent) i escapują wpis użytkownika. Prefiltr po indeksach nie
 --       zmienia wyniku (dokładny warunek na wyświetlanym tytule w locale).

@@ -1230,7 +1230,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
   cron kopii/odtworzenia), blokada HTTP w testach, odmiana i aliasy miast w SQL.
-  Wyszukiwanie (migracja `0109`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
+  Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
   wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
   `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
   jak w `0091`. Demo: lustro `src/lib/search-fold.ts`. Pomiar przed/po: `docs/railway/OPERATIONS.md` §3.

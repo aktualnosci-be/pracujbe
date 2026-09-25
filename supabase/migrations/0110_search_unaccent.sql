@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0109_search_unaccent.sql
+-- 0110_search_unaccent.sql
 -- #47 (dokończenie): wyszukiwanie ofert odporne na znaki diakrytyczne i literalne
 -- `%`/`_`/`\` w słowie kluczowym i mieście.
 --

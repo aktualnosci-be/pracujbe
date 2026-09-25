@@ -8,7 +8,7 @@
 # i węzeł planu dla tabeli jobs z wywołania `get_public_jobs` (auto_explain z
 # zagnieżdżonymi instrukcjami — plan ciała funkcji, nie kopii SQL). Pomiar wykonuje
 # dwa razy: na migracjach do BENCH_BASELINE włącznie (domyślnie 0108 — przed
-# wyszukiwaniem bez diakrytyków 0109) i po zastosowaniu pozostałych migracji.
+# wyszukiwaniem bez diakrytyków 0110) i po zastosowaniu pozostałych migracji.
 #
 # Użycie jak test-rls.sh (peer auth: sudo -u postgres bash …, albo PGHOST/PGUSER/…).
 #   BENCH_JOBS — liczba ofert (domyślnie 20000). Baza jest usuwana na końcu.

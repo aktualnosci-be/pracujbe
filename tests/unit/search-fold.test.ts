@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { searchFold } from '@/lib/search-fold';
 
 /**
- * Lustro `public.search_fold` (0109, #47). Oczekiwane wartości = wynik
+ * Lustro `public.search_fold` (0110, #47). Oczekiwane wartości = wynik
  * `lower(unaccent('public.unaccent', …))` na PostgreSQL 16 (rls.sql SU47-6).
  */
 describe('searchFold', () => {

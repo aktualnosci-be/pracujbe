@@ -119,9 +119,9 @@ Wnioski:
    wieloznaczne (`50%` dopasuje wszystko). To dotyczy poprawności wyników.
    Dane innych ofert nie są przez to dostępne.
 
-### Po `0109` — wyszukiwanie bez diakrytyków i literalne `%`/`_` (25.09.2026)
+### Po `0110` — wyszukiwanie bez diakrytyków i literalne `%`/`_` (25.09.2026)
 
-`0109_search_unaccent.sql` zmienia warunki słowa kluczowego i miasta w
+`0110_search_unaccent.sql` zmienia warunki słowa kluczowego i miasta w
 `get_public_jobs`/`_count`/`get_public_job_filter_facets` (pozostałe parametry
 i granty jak w `0091`):
 
@@ -136,7 +136,7 @@ i granty jak w `0091`):
   `idx_jobs_city_fold_trgm`.
 
 Pomiar `npm run db:search-benchmark` (PG16 lokalnie, 20 000 ofert, 16 000
-aktywnych; „przed” = migracje do `BENCH_BASELINE=0107`, „po” = z migracją wyszukiwania, dziś `0109`):
+aktywnych; „przed” = migracje do `BENCH_BASELINE=0107`, „po” = z migracją wyszukiwania, dziś `0110`):
 
 | Zapytanie (keyword / city) | Wyniki przed | Wyniki po | ms przed | ms po |
 |---|---:|---:|---:|---:|
@@ -164,7 +164,7 @@ pomiaru na kopii produkcyjnej bazy.
 
 **Nadal otwarte:** odmiana (`sprzątanie` ≠ „sprzątania”) i aliasy miast
 w innych językach w SQL (`Brussels`, `Luik`; dziś rozwija je aplikacja przez
-`src/lib/job-list-query.ts`). Przed wdrożeniem `0109` sprawdź na Railway:
+`src/lib/job-list-query.ts`). Przed wdrożeniem `0110` sprawdź na Railway:
 `select * from pg_available_extensions where name = 'unaccent'`.
 
 ## 4. Rollback — kod, schemat, dane
