@@ -9926,7 +9926,9 @@ select pg_temp.assert((select count(*) from public.email_deliveries
   'GS98-7 przygotowanie: e-mail o odrzuceniu w kolejce');
 update public.retention_policies set period = interval '30 days' where key = 'closed_application';
 set local session_replication_role = replica;
-update public.applications set updated_at = now() - interval '60 days' where id = :'gsapp';
+-- #574 (0127): retencja liczy od closed_at (replica pomija trigger — ustawiony wprost).
+update public.applications set updated_at = now() - interval '60 days',
+       closed_at = now() - interval '60 days' where id = :'gsapp';
 set local session_replication_role = origin;
 set local role service_role;
 select public.run_retention_purge(100);

@@ -699,40 +699,6 @@ export function InactiveAccountWarningEmail(props: EmailProps<'inactiveAccountWa
   );
 }
 
-/** Lista nowych ofert w digeście — sekcje jak paszporty newslettera: tytuł-link, firma · miasto. */
-function JobMatchList({ jobs }: { jobs: EmailDataMap['jobMatch']['jobs'] }): ReactElement | null {
-  const items = (jobs ?? []).filter((job) => job.title.trim().length > 0 && job.url.length > 0);
-  if (items.length === 0) return null;
-  return (
-    <Section style={{ margin: '4px 0 8px 0' }} data-email-component="job-match-list">
-      {items.map((job, index) => {
-        const meta = [job.companyName, job.city].filter((v) => v && v.trim().length > 0).join(' · ');
-        return (
-          <EmailPassport
-            key={index}
-            title={<EmailTextLink href={job.url} tone="title">{job.title}</EmailTextLink>}
-            fields={[]}
-            footer={meta ? <strong>{meta}</strong> : undefined}
-          />
-        );
-      })}
-    </Section>
-  );
-}
-
-export function JobMatchEmail(props: EmailProps<'jobMatch'>): ReactElement {
-  return (
-    <EmailShell
-      locale={props.locale}
-      type="jobMatch"
-      vars={props}
-      ctaHref={props.actionUrl}
-      greetingName={props.recipientName}
-      detail={<JobMatchList jobs={props.jobs} />}
-    />
-  );
-}
-
 export function GuestStatusChangedEmail(props: EmailProps<'guestStatusChanged'>): ReactElement {
   return (
     <EmailShell
