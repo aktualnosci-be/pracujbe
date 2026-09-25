@@ -1021,13 +1021,13 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `submit_guest_application` |
 | `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `confirm_guest_application` |
 | `jobMatch` | `count`, `jobs`, `query`, `searchName` | `process_saved_search_alerts` |
-| `jobOffer` | `companyName`, `jobTitle` | `send_offer` |
+| `jobOffer` | `companyName`, `currency`, `expiresAt`, `jobTitle`, `salaryMax`, `salaryMin`, `salaryPeriod` | `send_offer` |
 | `jobPublished` | `jobTitle` | `publish_job` |
 | `moderationCompanySuspended` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
 | `moderationJobRemoved` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
 | `moderationRestored` | `companyName`, `decisionReference`, `jobTitle`, `reason` | `moderation_restore_core` |
 | `newApplication` | `candidateName`, `jobTitle` | `apply_to_job`, `confirm_guest_application` |
-| `newMessage` | `panel`, `senderName` | `send_message` |
+| `newMessage` | `conversationId`, `panel`, `senderName` | `send_message` |
 | `offerAccepted` | `candidateName`, `jobTitle` | `respond_to_offer` |
 | `offerDeclined` | `candidateName`, `jobTitle` | `respond_to_offer` |
 | `reportDecisionActioned` | `caseNumber`, `recipientName`, `targetType` | `admin_decide_report` |
