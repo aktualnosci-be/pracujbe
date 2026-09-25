@@ -22,7 +22,7 @@ Tabele w migracjach: 92; z danymi osobowymi: 58; bez danych osobowych: 34.
 | Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs`, `public.screening_question_reviews` | Railway, Resend, EmailLabs, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
 | E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Resend, EmailLabs | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Kod nie usuwa danych — do ustalenia |
-| Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
+| Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora). | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
@@ -900,10 +900,11 @@ Tabele w migracjach: 92; z danymi osobowymi: 58; bez danych osobowych: 34.
 
 - **Migracja:** `supabase/migrations/0007_misc.sql`
 - **Czynności:** Zgłoszenia treści (DSA) i moderacja
-- **Osoby:** Zgłaszający treści (z kontem lub bez), Pracodawcy i członkowie firm
+- **Osoby:** Zgłaszający treści (z kontem lub bez), Pracodawcy i członkowie firm, Kandydaci (konto)
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
+| `conversation_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0116_message_reports.sql` |
 | `reporter_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0007_misc.sql` |
 | `reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0007_misc.sql` |
 | `details` | Korespondencja i treści swobodne | `supabase/migrations/0007_misc.sql` |
@@ -914,7 +915,7 @@ Tabele w migracjach: 92; z danymi osobowymi: 58; bez danych osobowych: 34.
 | `reporter_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0094_dsa_notices.sql` |
 | `reporter_locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0094_dsa_notices.sql` |
 | `good_faith_at` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0094_dsa_notices.sql` |
-| `target_snapshot` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0094_dsa_notices.sql` |
+| `target_snapshot` | Korespondencja i treści swobodne | `supabase/migrations/0094_dsa_notices.sql` |
 
 ### `public.retention_policies`
 
