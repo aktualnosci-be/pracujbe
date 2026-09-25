@@ -45,7 +45,7 @@ afterEach(() => {
 describe('getConsent — tylko ważna zgoda w bieżącej wersji polityki', () => {
   const valid = {
     v: '2.0',
-    categories: { necessary: true, preferences: false, analytics: true, marketing: false },
+    categories: { necessary: true, preferences: false, analytics: true },
     ts: '2026-09-01T00:00:00.000Z',
     id: 'c1',
   };
@@ -60,6 +60,27 @@ describe('getConsent — tylko ważna zgoda w bieżącej wersji polityki', () =>
     setConsentCookie({ ...valid, v: '1.0' });
     expect(consent.getConsent()).toBeNull();
     expect(consent.hasConsent('analytics')).toBe(false);
+  });
+
+  it('cookie sprzed #570 (wersja 1.0 z kategorią marketing) → nieaktualne, baner wraca', () => {
+    setConsentCookie({
+      v: '1.0',
+      categories: { necessary: true, preferences: true, analytics: true, marketing: true },
+      ts: '2026-09-01T00:00:00.000Z',
+      id: 'c-old',
+    });
+    expect(consent.getConsent()).toBeNull();
+    expect(consent.hasConsent('analytics')).toBe(false);
+  });
+
+  it('klucz marketing w bieżącej wersji jest ignorowany (nie ma takiej kategorii)', () => {
+    setConsentCookie({ ...valid, categories: { ...valid.categories, marketing: true } });
+    expect(consent.getConsent()?.categories).toEqual(valid.categories);
+  });
+
+  it('kategorie banera: necessary, preferences, analytics (bez marketing, #570)', () => {
+    expect([...consent.CONSENT_CATEGORIES]).toEqual(['necessary', 'preferences', 'analytics']);
+    expect(Object.keys(consent.acceptAllCategories())).not.toContain('marketing');
   });
 
   it.each([
@@ -78,14 +99,12 @@ describe('getConsent — tylko ważna zgoda w bieżącej wersji polityki', () =>
       necessary: true,
       preferences: false,
       analytics: false,
-      marketing: false,
     });
   });
 
   it('necessary zawsze aktywne, nawet bez żadnej zgody', () => {
     expect(consent.getConsent()).toBeNull();
     expect(consent.hasConsent('necessary')).toBe(true);
-    expect(consent.hasConsent('marketing')).toBe(false);
   });
 });
 
@@ -99,7 +118,7 @@ describe('saveConsent / updateConsent', () => {
     expect(written).toContain(`Max-Age=${180 * 24 * 60 * 60}`);
     expect(consent.getConsent()).toMatchObject({ v: '2.0' });
     expect(recordConsent).toHaveBeenCalledWith(
-      { necessary: true, preferences: false, analytics: false, marketing: false },
+      { necessary: true, preferences: false, analytics: false },
       'cookie_settings',
     );
   });
@@ -108,7 +127,7 @@ describe('saveConsent / updateConsent', () => {
     recordConsent.mockRejectedValueOnce(new Error('offline'));
     expect(() => consent.saveConsent(consent.acceptAllCategories())).not.toThrow();
     await Promise.resolve();
-    expect(consent.getConsent()?.categories.marketing).toBe(true);
+    expect(consent.getConsent()?.categories).toEqual({ necessary: true, preferences: true, analytics: true });
   });
 
   it('updateConsent: powiadamia subskrybentów i emituje zdarzenie DOM (bez reloadu)', () => {

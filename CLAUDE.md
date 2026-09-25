@@ -217,7 +217,7 @@ Te reguły wynikają wprost ze specyfikacji i z błędów poprzedniego produktu.
 4. **Aplikowanie idempotentne.** Unikat `(candidate_id, job_id)` — jedna aplikacja.
 5. **RLS wszędzie.** Każda tabela z danymi użytkownika ma polityki. Domyślnie deny.
 6. **Uprawnienia service_role tylko na serwerze.** Pula `withServiceRole` (`DATABASE_SERVICE_URL`, `src/lib/db/portal.ts`, `server-only`) nie może trafić do bundle klienta.
-7. **Zero trackingu przed zgodą.** Beacon Cloudflare Web Analytics (#570 — zamiast Google Analytics i Meta Pixel, usunięte) ładuje się dopiero po zgodzie w kategorii `analytics`.
+7. **Zero trackingu przed zgodą.** Beacon Cloudflare Web Analytics (#570 — zamiast Google Analytics i Meta Pixel, usunięte) ładuje się dopiero po zgodzie w kategorii `analytics` (kategorii `marketing` nie ma).
 8. **Użytkownik nie widzi technikaliów.** Żadnego stack trace/SQL/surowej odpowiedzi API/komunikatu dostawcy.
    Błędy przez centralny system (`src/lib/errors`), user-facing komunikat z klucza tłumaczenia.
 9. **Panele = `noindex`.** `candidate/*`, `employer/*`, `admin/*`, staging — wyłączone z indeksowania i sitemap.
@@ -1229,11 +1229,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   bezcookie'owy, `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN`) zamiast Google Analytics i Meta Pixel —
   usunięte z kodu, CSP, `.env.example`, CI i dokumentacji. Ładowany wyłącznie po zgodzie
   w kategorii `analytics` (`src/components/cookies/Analytics.tsx`), CSP: `static.cloudflareinsights.com`
-  (script-src) + `cloudflareinsights.com` (connect-src). Kategoria `marketing` zostaje w
-  centrum zgód bez zmian treści/wersji polityki cookies (jej usunięcie wymagałoby takiej
-  zmiany — decyzja dla właściciela), ale nie ładuje już żadnego trackera. Dowód: E2E
-  `cookie-consent-categories.spec`, `smoke.spec`, `one-time-link-tracking.spec`,
-  `public-cache-headers.spec`; unit `consent-store.test`, `privacy-data-map.test`.
+  (script-src) + `cloudflareinsights.com` (connect-src) — tylko gdy token jest ustawiony; bez
+  tokenu (stan startowy, token doda właściciel) beacon się nie ładuje, a CSP nie ma tych hostów.
+  Kategoria `marketing` usunięta (decyzja właściciela 25.09 — brak trackerów marketingowych):
+  kategorie = necessary/preferences/analytics (`src/lib/consent-cookie.ts`, `CONSENT_CATEGORIES`),
+  domyślna `CONSENT_POLICY_VERSION` = `2.0`, więc cookie sprzed zmiany (1.0, z marketingiem)
+  jest nieaktualne i baner pyta ponownie. Log zgód: migracja `0129` (numer tymczasowy)
+  — `record_consent` zapisuje 3 kategorie, akcja `recordConsent` odrzuca klucze spoza listy;
+  wartość `marketing` zostaje w enumie dla historycznych wierszy. Klucze `cookies.marketing*`
+  w `src/messages` bez użycia. Dowód: E2E `cookie-consent-categories.spec`, `smoke.spec`,
+  `one-time-link-tracking.spec`, `public-cache-headers.spec`; unit `consent-store.test`,
+  `consent-action.test` (kategorie RPC = banera, kontrola ujemna 0043), `csp-report.test`
+  (CSP z tokenem i bez), `privacy-data-map.test`; `rls.sql` Y2.
 - [x] Panel administratora — `/admin/**` (guard role='admin'→notFound, noindex): dashboard, firmy
   (weryfikuj/odrzuć/zawieś), zgłoszenia (moderacja), użytkownicy; odczyt service-role, zapis przez RPC (0019)
   Każdy odczyt service-role w `src/lib/data/admin.ts` sam potwierdza rolę admina sesji
@@ -1594,10 +1601,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Zgody cookies (#349/#570, `cookie-consent-categories.spec`, 4 języki): „Tylko niezbędne”,
   zgoda na analitykę → beacon Cloudflare Web Analytics (#570: zamiast Google Analytics i Meta
   Pixel — usunięte; bezcookie'owy, więc bez `_ga*`/`_fbp`/`_fbc` i bez `ga-disable`/
-  `fbq('consent', …)`), sam marketing → beacon się nie ładuje (kategoria zostaje w centrum
-  zgód bez własnego trackera — usunięcie wymagałoby zmiany treści/wersji polityki cookies,
-  decyzja dla właściciela), wycofanie ze stopki usuwa render beaconu natychmiast i po
-  odświeżeniu zero żądań; stara wersja polityki / uszkodzone cookie → baner z serwera
+  `fbq('consent', …)`), same preferencje → beacon się nie ładuje, centrum zgód bez
+  przełącznika „Marketing” (usunięty — decyzja właściciela 25.09), wycofanie ze stopki usuwa render beaconu natychmiast i po
+  odświeżeniu zero żądań; stara wersja polityki (także cookie 1.0 z marketingiem) / uszkodzone cookie → baner z serwera
   nieukryty przed hydratacją; cookie na 180 dni; wywołanie `recordConsent` z kategoriami
   i źródłem (centrum = `cookie_settings`). Kontrakt parametrów `recordConsent` ↔
   `record_consent` z migracji (`consent-action.test`). **Otwarte:** wersja

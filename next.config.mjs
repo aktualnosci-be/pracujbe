@@ -64,7 +64,11 @@ const nextConfig = {
     // (E2E) — patrz roadmapa. Poza tym pełne, restrykcyjne dyrektywy: object/base/
     // frame-ancestors/form-action oraz zawężone connect/img/font.
     // #570: Cloudflare Web Analytics (beacon, PO zgodzie w kategorii analytics) zamiast
-    // Google Analytics i Meta Pixel — usunięte.
+    // Google Analytics i Meta Pixel — usunięte. Bez tokenu beacon się nie ładuje
+    // (`Analytics.tsx`), więc CSP nie dopuszcza wtedy hostów Cloudflare Insights.
+    const cfAnalytics = Boolean(process.env.NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN?.trim());
+    const cfScript = cfAnalytics ? ' https://static.cloudflareinsights.com' : '';
+    const cfConnect = cfAnalytics ? ' https://cloudflareinsights.com' : '';
     const csp = [
       "default-src 'self'",
       "base-uri 'self'",
@@ -73,13 +77,13 @@ const nextConfig = {
       "form-action 'self'",
       // Skrypty: własne + inline (JSON-LD) + beacon Cloudflare Web Analytics (po zgodzie) + Turnstile (#46).
       // Dev dokłada 'unsafe-eval' (React Refresh/HMR Next dev).
-      `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://static.cloudflareinsights.com https://challenges.cloudflare.com`,
+      `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://challenges.cloudflare.com${cfScript}`,
       "style-src 'self' 'unsafe-inline'",
       // P3-02: obrazy wyłącznie z własnego origin, data:/blob:.
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       // XHR/fetch: API własne, beacon Cloudflare Web Analytics (webhook błędów #571 idzie z serwera — bez hosta w CSP).
-      `connect-src 'self' https://cloudflareinsights.com${isDev ? ' ws: http://localhost:*' : ''}`,
+      `connect-src 'self'${cfConnect}${isDev ? ' ws: http://localhost:*' : ''}`,
       // Ramki: tylko Cloudflare Turnstile (#46, ochrona formularzy), reszta zablokowana.
       "frame-src 'self' https://challenges.cloudflare.com",
       "worker-src 'self' blob:",

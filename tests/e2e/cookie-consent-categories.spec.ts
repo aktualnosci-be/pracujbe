@@ -16,9 +16,10 @@ import { E2E_CF_ANALYTICS_TOKEN } from "./fixtures/trackers";
  * cloudflareinsights.com jest przechwytywane i kończone pustym skryptem (`route.fulfill`) —
  * liczymy je, nic nie wychodzi do dostawcy.
  *
- * Kategoria `marketing` zostaje w centrum zgód (jej usunięcie wymagałoby zmiany treści/
- * wersji polityki cookies — decyzja dla właściciela, patrz PR #570), ale nie ładuje już
- * żadnego trackera: testy niżej to potwierdzają.
+ * Kategorii `marketing` nie ma (decyzja właściciela 2026-09-25, #570): centrum zgód ma
+ * tylko niezbędne, preferencje i analitykę, a jedynym trackerem jest beacon Cloudflare
+ * ładowany po zgodzie na analitykę. Cookie sprzed zmiany (wersja 1.0, z marketingiem) jest
+ * nieaktualne — baner pyta ponownie.
  *
  * Baner jest w HTML z serwera, a skrypt w <head> (consent-boot.ts) ukrywa go przed
  * pierwszym malowaniem tylko przy ważnej zgodzie w bieżącej wersji polityki (#389).
@@ -27,7 +28,7 @@ import { E2E_CF_ANALYTICS_TOKEN } from "./fixtures/trackers";
 const messages = { pl, nl, fr, en } as const;
 
 const CONSENT_COOKIE = "pracujbe_consent";
-const POLICY_VERSION = process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? "1.0";
+const POLICY_VERSION = process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? "2.0";
 const MAX_AGE_DAYS = 180;
 
 const TRACKER_HOSTS = /^https:\/\/([a-z0-9.-]*\.)?cloudflareinsights\.com\//;
@@ -127,13 +128,11 @@ const ALL = {
   necessary: true,
   preferences: true,
   analytics: true,
-  marketing: true,
 };
 const NONE = {
   necessary: true,
   preferences: false,
   analytics: false,
-  marketing: false,
 };
 
 for (const locale of routing.locales) {
@@ -148,19 +147,21 @@ for (const locale of routing.locales) {
   /** Z banera: „Dostosuj” → włączenie wskazanych kategorii → „Zapisz ustawienia”. */
   async function saveFromCustomize(
     page: Page,
-    enable: Array<"analytics" | "marketing">,
+    enable: Array<"preferences" | "analytics">,
   ) {
     await banner(page)
       .getByRole("button", { name: m.cookies.customize, exact: true })
       .click();
     const dialog = settings(page);
     await expect(dialog).toBeVisible();
-    for (const key of ["preferences", "analytics", "marketing"] as const) {
+    for (const key of ["preferences", "analytics"] as const) {
       await expect(
         dialog.getByRole("switch", { name: m.cookies[`${key}Name`] }),
         "kategorie opcjonalne domyślnie wyłączone",
       ).toHaveAttribute("aria-checked", "false");
     }
+    // #570: tylko dwie kategorie opcjonalne — bez przełącznika „Marketing”.
+    await expect(dialog.getByRole("switch")).toHaveCount(2);
     for (const key of enable) {
       const toggle = dialog.getByRole("switch", {
         name: m.cookies[`${key}Name`],
@@ -247,17 +248,17 @@ for (const locale of routing.locales) {
         .toBeGreaterThan(0);
     });
 
-    test("centrum ustawień: sam marketing → beacon się nie ładuje (marketing bez trackera)", async ({
+    test("centrum ustawień: same preferencje → beacon się nie ładuje (tylko analityka go włącza)", async ({
       page,
     }) => {
       const seen = await trackTrackerRequests(page);
       const calls = trackConsentActions(page);
       await page.goto(home);
-      await saveFromCustomize(page, ["marketing"]);
+      await saveFromCustomize(page, ["preferences"]);
 
       await expect.poll(() => calls.length).toBe(1);
       expect(calls[0]).toEqual({
-        categories: { ...NONE, marketing: true },
+        categories: { ...NONE, preferences: true },
         source: "cookie_settings",
       });
       await expectNoTrackers(page, seen);
@@ -285,17 +286,15 @@ for (const locale of routing.locales) {
         .click();
       const dialog = settings(page);
       await expect(dialog).toBeVisible();
-      for (const key of ["analytics", "marketing"] as const) {
-        const toggle = dialog.getByRole("switch", {
-          name: m.cookies[`${key}Name`],
-        });
-        await expect(toggle, "centrum pokazuje zapisaną zgodę").toHaveAttribute(
-          "aria-checked",
-          "true",
-        );
-        await toggle.click();
-        await expect(toggle).toHaveAttribute("aria-checked", "false");
-      }
+      const toggle = dialog.getByRole("switch", {
+        name: m.cookies.analyticsName,
+      });
+      await expect(toggle, "centrum pokazuje zapisaną zgodę").toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-checked", "false");
       await dialog
         .getByRole("button", { name: m.cookies.save, exact: true })
         .click();
@@ -305,7 +304,7 @@ for (const locale of routing.locales) {
       expect(calls).toEqual([
         { categories: ALL, source: "cookie_banner" },
         {
-          categories: { ...ALL, analytics: false, marketing: false },
+          categories: { ...ALL, analytics: false },
           source: "cookie_settings",
         },
       ]);
@@ -342,6 +341,13 @@ for (const locale of routing.locales) {
       [
         "zgoda na wszystko w starej wersji polityki",
         { v: `${POLICY_VERSION}-stara`, categories: ALL },
+      ],
+      [
+        "zgoda sprzed #570 (wersja 1.0, z kategorią marketing)",
+        {
+          v: "1.0",
+          categories: { ...ALL, marketing: true },
+        },
       ],
       [
         "uszkodzone cookie zgody",

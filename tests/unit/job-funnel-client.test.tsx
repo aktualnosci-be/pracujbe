@@ -46,7 +46,7 @@ function sentBodies() {
 function setStoredConsent(analytics: boolean): void {
   const record = {
     v: CONSENT_POLICY_VERSION,
-    categories: { necessary: true, preferences: false, analytics, marketing: false },
+    categories: { necessary: true, preferences: false, analytics },
     ts: '2026-01-01T00:00:00.000Z',
     id: 'funnel-client-test',
   };

@@ -6,7 +6,7 @@ const SECRET = 'B'.repeat(43);
 
 test('jednorazowe linki nie uruchamiają beaconu Cloudflare Web Analytics po wcześniejszej zgodzie', async ({ page, context, baseURL }) => {
   const consent = {
-    v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
+    v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
     categories: { necessary: true, preferences: true, analytics: true, marketing: true },
     ts: new Date().toISOString(),
     id: 'one-time-link-tracking-e2e',

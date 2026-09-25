@@ -166,7 +166,8 @@ Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 - **Osoby:** Odwiedzający, którzy wyrazili zgodę
 - **Aktywacja:** NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN + zgoda analytics w banerze cookies.
 - **Kod:** `src/components/cookies/Analytics.tsx`, `src/lib/consent-store.ts`
-- **Uwaga:** Kategoria marketing zostaje w centrum zgód (usunięcie wymagałoby zmiany treści/wersji polityki cookies — decyzja dla właściciela), ale nie ładuje już żadnego trackera.
+- **Uwaga:** Kategorii marketing nie ma w banerze ani w logu zgód (decyzja właściciela 2026-09-25; wersja polityki cookies 2.0, migracja 0129).
+- **Uwaga:** Bez tokenu beacon się nie ładuje, a CSP nie dopuszcza hostów cloudflareinsights.com.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA

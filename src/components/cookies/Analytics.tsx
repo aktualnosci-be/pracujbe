@@ -22,14 +22,14 @@ import { allowsTrackingOnPath } from '@/lib/analytics/route-policy';
  * dlatego, tak jak zapowiada Invariant #7, gwarancją jest brak ładowania PRZED zgodą i PO
  * odświeżeniu strony, a nie natychmiastowe zniknięcie już wstawionego znacznika w tej samej sesji.
  *
- * Kategoria `marketing` obecnie nie ładuje żadnego trackera (Meta Pixel usunięty); zostaje
- * w centrum zgód bez zmian, bo jej usunięcie wymagałoby zmiany treści/wersji polityki cookies —
- * patrz opis w PR #570 (decyzja dla właściciela).
+ * Kategorii `marketing` nie ma (decyzja właściciela 2026-09-25): portal nie używa trackerów
+ * marketingowych, a wersja polityki cookies poszła w górę (`CONSENT_POLICY_VERSION`).
  *
  * Token pochodzi z env `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN`; brak tokenu = nic się nie ładuje.
  */
 
-const CF_ANALYTICS_TOKEN = process.env.NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN;
+// Pusty/biały znak = brak tokenu (spójnie z CSP w next.config.mjs).
+const CF_ANALYTICS_TOKEN = process.env.NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN?.trim() || undefined;
 
 export function Analytics() {
   const [record, setRecord] = useState<ConsentRecord | null>(null);
