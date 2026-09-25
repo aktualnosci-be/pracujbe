@@ -886,7 +886,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
   i alerty pojedyncze (`rls.sql` PP7–PP8).
-- [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** załączniki, zgłoszenia
+- [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** załączniki
+  Zgłoszenia (migracja `0108`, numer tymczasowy): strona rozmowy zgłasza wiadomość drugiej
+  strony („Zgłoś” pod dymkiem) albo całą rozmowę (nagłówek wątku) — `ReportContentButton`
+  (powód ze słownika `MESSAGE_REPORT_CATEGORIES`, opis ≤ 1000, znacznik treści prawnej „do
+  uzupełnienia”) → `reportConversationContent` (limiter 10/h na konto) → RPC pod sesją
+  `report_conversation_content`: `reports.kind='message_report'` (cel `message` albo nowy
+  `conversation`, `conversation_id`), dostęp jak `is_conversation_member` (obca rozmowa i
+  wiadomość spoza niej = `NOT_FOUND`, własna strona = `VALIDATION_FAILED`), dowód budowany w
+  bazie z treścią WYŁĄCZNIE zgłoszonej wiadomości (rozmowa: same metadane), widoczny tylko dla
+  admina (`reports_select_own` pomija ten rodzaj; stan własnych zgłoszeń bez dowodu —
+  `get_my_message_reports`), idempotencja po kluczu (`duplicate`), jedna otwarta sprawa na
+  wiadomość i na rozmowę × zgłaszającego (`already_open`, indeksy częściowe + blokada), limit
+  20/dobę w bazie, niezmienność każdej roli (`reports_message_report_immutable`). Admin:
+  `/admin/zgloszenia?kind=message_report` (dowód, strony, data), rozstrzyga `admin_resolve_report`.
+  Dowód: `rls.sql` sekcja MR (kontrole ujemne: obca rozmowa, powtórka, stara polityka),
+  unit `message-reports`, `thread-message-list`, E2E `message-report.spec`. **Otwarte:**
+  treść prawna i retencja dowodu (#40/#486 — dowód zostaje po usunięciu konta nadawcy),
+  powiadomienie zgłaszającego o wyniku, zgłoszenie jako sprawa DSA.
   Wysyłka idempotentna (0075, #147): `send_message(conversation, body, client_message_id)` —
   `MessageComposer` trzyma jeden UUID na operację danej treści (`useRef`), ponowienie po
   zerwanym połączeniu = ta sama wiadomość bez drugiego powiadomienia/e-maila. Dowód: `rls.sql`

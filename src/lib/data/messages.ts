@@ -617,3 +617,39 @@ export async function getUnreadConversationsCount(locale?: string): Promise<numb
   const conversations = await getConversations(locale);
   return conversations.filter((c) => c.unread).length;
 }
+
+/** Własne zgłoszenia w rozmowie (0108): zgłoszone wiadomości i czy zgłoszono całą rozmowę. */
+export interface MyMessageReports {
+  messageIds: string[];
+  conversationReported: boolean;
+}
+
+const NO_REPORTS: MyMessageReports = { messageIds: [], conversationReported: false };
+
+/**
+ * Stan własnych zgłoszeń w rozmowie — RPC `get_my_message_reports` pod sesją (bez dowodu
+ * i opisu). Liczą się tylko sprawy otwarte i w analizie: po rozstrzygnięciu treść można zgłosić
+ * ponownie. Awaria = brak oznaczeń (przycisk zgłoszenia zostaje; baza i tak nie zdubluje sprawy).
+ */
+export async function getMyMessageReports(conversationId: string): Promise<MyMessageReports> {
+  if (!isPortalDataConfigured()) return NO_REPORTS;
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return NO_REPORTS;
+    const rows = await withPortalTransaction(me, (tx) =>
+      rpcRows(tx, 'get_my_message_reports', { p_conversation_id: conversationId }),
+    );
+    const active = rows
+      .map(asRecord)
+      .filter((row) => ['open', 'reviewing'].includes(asStr(row['status'])));
+    return {
+      messageIds: active
+        .filter((row) => asStr(row['target_type']) === 'message')
+        .map((row) => asStr(row['target_id'])),
+      conversationReported: active.some((row) => asStr(row['target_type']) === 'conversation'),
+    };
+  } catch (error) {
+    captureError(error, { area: 'messages.getMyMessageReports' });
+    return NO_REPORTS;
+  }
+}

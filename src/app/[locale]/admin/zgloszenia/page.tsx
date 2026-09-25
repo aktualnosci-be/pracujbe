@@ -58,6 +58,7 @@ const TARGET_LABEL: Record<string, string> = {
   company: 'targetCompany',
   user: 'targetUser',
   message: 'targetMessage',
+  conversation: 'targetConversation',
 };
 
 /** Etykieta chipa filtra statusu. */
@@ -74,6 +75,7 @@ const FILTER_LABEL: Record<string, string> = {
 const KIND_LABEL: Record<string, string> = {
   all: 'filterKindAll',
   dsa_notice: 'kindDsa',
+  message_report: 'kindMessage',
   quality: 'kindQuality',
 };
 
@@ -107,6 +109,12 @@ const STATUS_LABEL: Record<string, string> = {
   reviewing: 'statusReviewing',
   resolved: 'statusResolved',
   dismissed: 'statusDismissed',
+};
+
+/** Strona rozmowy w dowodzie zgłoszenia wiadomości (0108). */
+const SIDE_LABEL: Record<string, string> = {
+  company: 'messageReportSideCompany',
+  candidate: 'messageReportSideCandidate',
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -270,9 +278,48 @@ export default async function AdminReportsPage({
                           )}
                         </p>
                         {target.preview ? (
-                          <blockquote className="break-words rounded-[14px] border border-border bg-soft px-4 py-3 text-[13px] text-foreground">
+                          <blockquote className="whitespace-pre-wrap break-words rounded-[14px] border border-border bg-soft px-4 py-3 text-[13px] text-foreground">
                             {target.preview}
                           </blockquote>
+                        ) : null}
+                        {/* Zgłoszenie wiadomości/rozmowy (0108): dowód z chwili zgłoszenia. */}
+                        {report.messageReport ? (
+                          <div className="space-y-1 rounded-[14px] border border-border px-4 py-3 text-[13px]">
+                            <p className="font-medium text-foreground">
+                              {t(
+                                report.messageReport.scope === 'message'
+                                  ? 'messageReportScopeMessage'
+                                  : 'messageReportScopeConversation',
+                              )}
+                            </p>
+                            {report.messageReport.senderSide ? (
+                              <p className="text-muted-foreground">
+                                {t('messageReportSender', {
+                                  side: t(SIDE_LABEL[report.messageReport.senderSide] ?? 'messageReportSideCandidate'),
+                                })}
+                              </p>
+                            ) : null}
+                            {report.messageReport.reporterSide ? (
+                              <p className="text-muted-foreground">
+                                {t('messageReportReporter', {
+                                  side: t(SIDE_LABEL[report.messageReport.reporterSide] ?? 'messageReportSideCandidate'),
+                                })}
+                              </p>
+                            ) : null}
+                            {report.messageReport.scope === 'conversation' &&
+                            report.messageReport.messageCount !== null ? (
+                              <p className="text-muted-foreground">
+                                {t('messageReportCount', { count: report.messageReport.messageCount })}
+                              </p>
+                            ) : null}
+                            {report.messageReport.capturedAt ? (
+                              <p className="text-muted-foreground">
+                                {t('messageReportCaptured', {
+                                  date: formatDate(report.messageReport.capturedAt),
+                                })}
+                              </p>
+                            ) : null}
+                          </div>
                         ) : null}
                         {reason.freeText ? (
                           <p className={ROW_META}>

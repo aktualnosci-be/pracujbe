@@ -8618,4 +8618,215 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
   'SV25-3 claim jako service_role (bez błędu uprawnień)');
 reset role;
 
+-- ============================================================================
+-- MR. Zgłoszenia wiadomości i rozmów (0108): tylko strona rozmowy, dowód z bazy tylko dla
+--     admina, idempotencja, jedna otwarta sprawa na wiadomość, limit, niezmienność.
+--     Kontrole ujemne: obca rozmowa, wiadomość spoza rozmowy, powtórka, polityka z 0009.
+-- ============================================================================
+reset role; reset app.current_uid;
+\set CANDMR 'e1080000-0000-0000-0000-00000000000c'
+\set CANDMX 'e1080000-0000-0000-0000-00000000000d'
+\set RECMR  'e1080000-0000-0000-0000-0000000000a1'
+\set RECMX  'e1080000-0000-0000-0000-0000000000a2'
+\set COMPMR 'e1080000-0000-0000-0000-0000000000f1'
+\set COMPMX 'e1080000-0000-0000-0000-0000000000f2'
+\set JOBMR  'e1080000-0000-0000-0000-0000000000b1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDMR','candmr@test.be','Mira R','{"role":"candidate","first_name":"Mira","last_name":"R","locale":"pl"}'),
+  (:'CANDMX','candmx@test.be','Xena R','{"role":"candidate","first_name":"Xena","last_name":"R","locale":"pl"}'),
+  (:'RECMR','recmr@test.be','Rik R','{"role":"employer","first_name":"Rik","last_name":"R","locale":"nl"}'),
+  (:'RECMX','recmx@test.be','Xavi R','{"role":"employer","first_name":"Xavi","last_name":"R","locale":"fr"}');
+insert into public.companies(id,name,status) values
+  (:'COMPMR','Firma MR','verified'), (:'COMPMX','Firma MX','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPMR',:'RECMR','owner',true), (:'COMPMX',:'RECMX','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JOBMR',:'COMPMR','job-mr1','Magazynier MR','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDMR', false), (:'CANDMX', false);
+
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JOBMR'::uuid, 'mr-app-1', null, null, null)::text as app_mr \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECMR'; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'app_mr'::uuid, null)::text as conv_mr \gset
+select public.send_message(:'conv_mr'::uuid, 'Proszę przesłać numer konta i kod PIN', gen_random_uuid())::text as msg_mr1 \gset
+select public.send_message(:'conv_mr'::uuid, 'Druga wiadomość rekrutera', gen_random_uuid())::text as msg_mr2 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select public.send_message(:'conv_mr'::uuid, 'Odpowiedź kandydatki', gen_random_uuid())::text as msg_mr3 \gset
+reset role; reset app.current_uid;
+-- Wiadomość z innej rozmowy (EMPA ↔ CANDA z sekcji E) do kontroli „spoza rozmowy”.
+select pg_temp.assert(:'msg' is not null, 'MR0 przygotowanie: wiadomość z innej rozmowy');
+
+\set MRKEY1 'e1080000-0000-0000-0000-000000000101'
+\set MRKEY2 'e1080000-0000-0000-0000-000000000102'
+\set MRKEY3 'e1080000-0000-0000-0000-000000000103'
+\set MRKEY4 'e1080000-0000-0000-0000-000000000104'
+\set MRKEY5 'e1080000-0000-0000-0000-000000000105'
+
+-- MR1: bez EXECUTE dla anon; bez bezpośredniego INSERT dla klienta.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.report_conversation_content(uuid, uuid, text, text, uuid)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.get_my_message_reports(uuid)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.report_conversation_content(uuid, uuid, text, text, uuid)', 'EXECUTE'),
+  'MR1 anon bez EXECUTE, authenticated z EXECUTE');
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format(
+  $q$insert into public.reports(target_type, target_id, reason, kind, idempotency_key, category, target_snapshot, conversation_id)
+     values ('message', %L, 'spam', 'message_report', gen_random_uuid(), 'spam', '{}'::jsonb, %L)$q$, :'msg_mr1', :'conv_mr'),
+  'permission denied', 'MR1b klient nie wstawia zgłoszenia bezpośrednio');
+
+-- MR2: kandydatka zgłasza wiadomość rekrutera → created, dowód z bazy tylko tej wiadomości.
+select report_id::text as mr_r1, outcome as mr_o1
+  from public.report_conversation_content(:'conv_mr', :'msg_mr1', 'fraud', '  Prośba o PIN  ', :'MRKEY1') \gset
+select pg_temp.assert(:'mr_o1' = 'created' and :'mr_r1' <> '', 'MR2 zgłoszenie przyjęte');
+-- Dowód niewidoczny dla zgłaszającej (tylko admin); stan przez get_my_message_reports.
+select pg_temp.assert((select count(*) = 0 from public.reports where id = :'mr_r1'),
+  'MR2b zgłaszająca nie czyta wiersza z dowodem');
+select pg_temp.assert(
+  (select count(*) = 1 from public.get_my_message_reports(:'conv_mr')
+     where target_type = 'message' and target_id = :'msg_mr1' and status = 'open'),
+  'MR2c stan własnego zgłoszenia bez dowodu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select kind = 'message_report' and reporter_id = :'CANDMR' and target_type::text = 'message'
+          and category = 'fraud' and reason = 'fraud' and details = 'Prośba o PIN'
+          and conversation_id = :'conv_mr' and status = 'open'
+          and target_snapshot->'message'->>'body' = 'Proszę przesłać numer konta i kod PIN'
+          and target_snapshot->'message'->>'senderSide' = 'company'
+          and target_snapshot->'conversation'->>'reporterSide' = 'candidate'
+          and target_snapshot::text not like '%Druga wiadomość%'
+          and target_snapshot::text not like '%Odpowiedź kandydatki%'
+     from public.reports where id = :'mr_r1'),
+  'MR2d dowód: treść wyłącznie zgłoszonej wiadomości');
+select pg_temp.assert((select count(*) = 1 from public.report_events where report_id = :'mr_r1' and event_type = 'submitted'),
+  'MR2e historia: submitted');
+set role service_role;
+select pg_temp.assert((select count(*) = 1 from public.reports where id = :'mr_r1' and target_snapshot is not null),
+  'MR2f panel admina (service_role) czyta dowód');
+reset role;
+
+-- MR3: ponowienie z tym samym kluczem → duplicate, to samo id, jeden wiersz.
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select report_id::text as mr_r1b, outcome as mr_o1b
+  from public.report_conversation_content(:'conv_mr', :'msg_mr1', 'fraud', 'Prośba o PIN', :'MRKEY1') \gset
+select pg_temp.assert(:'mr_o1b' = 'duplicate' and :'mr_r1b' = :'mr_r1', 'MR3 ponowienie = to samo zgłoszenie');
+-- MR3b: ten sam klucz dla innej treści → odmowa.
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg_mr2', 'spam', :'MRKEY1'), 'VALIDATION_FAILED', 'MR3b klucz innego zgłoszenia');
+-- MR4 (powtórka): nowy klucz, ta sama wiadomość → already_open, bez nowego wiersza.
+select coalesce(report_id::text, '') as mr_r2, outcome as mr_o2
+  from public.report_conversation_content(:'conv_mr', :'msg_mr1', 'spam', null, :'MRKEY2') \gset
+select pg_temp.assert(:'mr_o2' = 'already_open' and :'mr_r2' = '', 'MR4 powtórka: sprawa już otwarta');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) = 1 from public.reports where kind = 'message_report' and target_id = :'msg_mr1'),
+  'MR4b jedna otwarta sprawa na wiadomość');
+select pg_temp.expect_error(format(
+  $q$insert into public.reports(reporter_id, target_type, target_id, reason, kind, idempotency_key, category, target_snapshot, conversation_id)
+     values (%L, 'message', %L, 'spam', 'message_report', gen_random_uuid(), 'spam', '{}'::jsonb, %L)$q$,
+  :'CANDMR', :'msg_mr1', :'conv_mr'),
+  'reports_message_open_uq', 'MR4c indeks blokuje drugą otwartą sprawę także poza RPC');
+
+-- MR5 (obca rozmowa): obca firma i obcy kandydat → NOT_FOUND, bez wiersza.
+set role authenticated; set app.current_uid = :'RECMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg_mr3', 'spam', :'MRKEY3'), 'NOT_FOUND', 'MR5 obca firma nie zgłasza cudzej rozmowy');
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, null, %L, null, %L)',
+  :'conv_mr', 'spam', :'MRKEY3'), 'NOT_FOUND', 'MR5b obca firma nie zgłasza cudzej rozmowy (całość)');
+select pg_temp.assert((select count(*) = 0 from public.get_my_message_reports(:'conv_mr')),
+  'MR5c obcy nie czyta stanu zgłoszeń cudzej rozmowy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg_mr1', 'spam', :'MRKEY3'), 'NOT_FOUND', 'MR5d obcy kandydat nie zgłasza cudzej rozmowy');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) = 0 from public.reports where idempotency_key = :'MRKEY3'),
+  'MR5e obca rozmowa: brak wiersza');
+
+-- MR6: wiadomość spoza rozmowy → NOT_FOUND; własna wiadomość → VALIDATION_FAILED.
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg', 'spam', :'MRKEY4'), 'NOT_FOUND', 'MR6 wiadomość z innej rozmowy');
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg_mr3', 'spam', :'MRKEY4'), 'VALIDATION_FAILED', 'MR6b własnej wiadomości nie zgłaszamy');
+-- MR7: słownik powodów i limit opisu.
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg_mr2', 'nie_ma', :'MRKEY4'), 'VALIDATION_FAILED: kategoria', 'MR7 powód spoza słownika');
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, %L, %L)',
+  :'conv_mr', :'msg_mr2', 'spam', repeat('x', 1001), :'MRKEY4'), 'VALIDATION_FAILED: opis', 'MR7b opis ponad limit');
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, null)',
+  :'conv_mr', :'msg_mr2', 'spam'), 'VALIDATION_FAILED', 'MR7c bez klucza idempotencji');
+
+-- MR8: zgłoszenie całej rozmowy — dowód bez treści wiadomości; druga strona zgłasza osobno.
+select report_id::text as mr_c1, outcome as mr_oc1
+  from public.report_conversation_content(:'conv_mr', null, 'harassment', null, :'MRKEY4') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mr_oc1' = 'created', 'MR8 zgłoszenie rozmowy przyjęte');
+select pg_temp.assert(
+  (select target_type::text = 'conversation' and target_id = :'conv_mr' and not (target_snapshot ? 'message')
+          and (target_snapshot->'conversation'->>'messageCount')::int = 3
+          and target_snapshot::text not like '%PIN%' and target_snapshot::text not like '%Odpowiedź%'
+     from public.reports where id = :'mr_c1'),
+  'MR8b dowód rozmowy: metadane bez treści');
+set role authenticated; set app.current_uid = :'RECMR'; select pg_temp.assert_client_role();
+select outcome as mr_oc2 from public.report_conversation_content(:'conv_mr', null, 'harassment', null, :'MRKEY5') \gset
+select pg_temp.assert(:'mr_oc2' = 'created', 'MR8c druga strona zgłasza rozmowę osobno (bez ujawnienia cudzej sprawy)');
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, gen_random_uuid())',
+  :'conv_mr', :'msg_mr2', 'spam'), 'VALIDATION_FAILED', 'MR8d firma nie zgłasza wiadomości własnej strony');
+reset role; reset app.current_uid;
+
+-- MR9: dezaktywowany członek firmy traci dostęp → NOT_FOUND.
+update public.company_members set is_active = false where company_id = :'COMPMR' and profile_id = :'RECMR';
+set role authenticated; set app.current_uid = :'RECMR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, gen_random_uuid())',
+  :'conv_mr', :'msg_mr3', 'spam'), 'NOT_FOUND', 'MR9 były członek firmy nie zgłasza');
+reset role; reset app.current_uid;
+update public.company_members set is_active = true where company_id = :'COMPMR' and profile_id = :'RECMR';
+
+-- MR10: niezmienność dowodu dla każdej roli; usunięcie odrzucone.
+select pg_temp.expect_error(format($q$update public.reports set target_snapshot = '{}'::jsonb where id = %L$q$, :'mr_r1'),
+  'niezmienna', 'MR10 dowodu nie zmienia nawet właściciel tabel');
+set role service_role;
+select pg_temp.expect_error(format('update public.reports set details = %L where id = %L', 'x', :'mr_r1'),
+  'niezmienna', 'MR10b service_role nie zmienia opisu');
+select pg_temp.expect_error(format('delete from public.reports where id = %L', :'mr_r1'),
+  'nie można usunąć', 'MR10c zgłoszenia nie można usunąć');
+reset role;
+begin;
+update public.reports set reporter_id = null where id = :'mr_r1';
+select pg_temp.assert((select reporter_id is null from public.reports where id = :'mr_r1'),
+  'MR10d usunięcie konta zgłaszającej (FK → null) przechodzi');
+rollback;
+
+-- MR11: admin rozstrzyga (admin_resolve_report); potem ta sama wiadomość znów zgłaszalna.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report(:'mr_r1', 'resolved', 'open');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status = 'resolved' from public.reports where id = :'mr_r1'),
+  'MR11 admin rozstrzygnął zgłoszenie wiadomości');
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select outcome as mr_o3 from public.report_conversation_content(:'conv_mr', :'msg_mr1', 'fraud', null, gen_random_uuid()) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mr_o3' = 'created', 'MR11b po rozstrzygnięciu nowa sprawa tej wiadomości');
+
+-- MR12: limit w bazie — 20 zgłoszeń / konto / 24 h.
+begin;
+insert into public.reports(reporter_id, target_type, target_id, reason, kind, idempotency_key, category, target_snapshot, conversation_id, status)
+  select :'CANDMR', 'message', gen_random_uuid(), 'spam', 'message_report', gen_random_uuid(), 'spam', '{}'::jsonb, :'conv_mr', 'resolved'
+  from generate_series(1, 18);
+set local role authenticated; set local app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, gen_random_uuid())',
+  :'conv_mr', :'msg_mr2', 'spam'), 'RATE_LIMITED', 'MR12 limit zgłoszeń na konto');
+rollback;
+
+-- MR13 (kontrola ujemna): polityka z 0009 (bez wyłączenia `message_report`) odsłoniłaby
+-- zgłaszającej dowód — asercja MR2b wykrywa taką regresję.
+begin;
+drop policy reports_select_own on public.reports;
+create policy reports_select_own on public.reports for select to authenticated using (reporter_id = auth.uid());
+set local role authenticated; set local app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) > 0 from public.reports where id = :'mr_r1'),
+  'MR13 kontrola ujemna: stara polityka odsłania dowód');
+rollback;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -1,9 +1,10 @@
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@/i18n/routing';
-import type { ConversationThread } from '@/lib/data/messages';
+import type { ConversationThread, MyMessageReports } from '@/lib/data/messages';
 import { threadDisplayName, toMessageViews } from '@/lib/messaging/thread-view';
 
+import { ReportContentButton } from './ReportContentButton';
 import { ThreadMessageList } from './ThreadMessageList';
 import { CONVERSATION_HEAD } from '@/components/candidate/candidate-styles';
 import { ICON_BOX } from '@/components/dashboard/panel-styles';
@@ -28,9 +29,11 @@ export interface MessageThreadProps {
   locale: Locale;
   /** `id` nagłówka `<h2>` — rodzic wskazuje go w `aria-labelledby` regionu wątku. */
   headingId: string;
+  /** Otwarte zgłoszenia bieżącego użytkownika w tej rozmowie (0108). */
+  reports?: MyMessageReports;
 }
 
-export async function MessageThread({ thread, locale, headingId }: MessageThreadProps) {
+export async function MessageThread({ thread, locale, headingId, reports }: MessageThreadProps) {
   const t = await getTranslations({ locale, namespace: 'messages' });
   const displayName = threadDisplayName(thread, t('title'));
 
@@ -51,6 +54,13 @@ export async function MessageThread({ thread, locale, headingId }: MessageThread
               <p className="mt-1 truncate text-xs text-muted-foreground">{thread.subject}</p>
             ) : null}
           </div>
+          <ReportContentButton
+            className="ml-auto shrink-0 self-start"
+            conversationId={thread.id}
+            messageId={null}
+            reported={reports?.conversationReported ?? false}
+            label={t('reportConversationLabel', { name: displayName })}
+          />
         </div>
       </div>
 
@@ -62,6 +72,7 @@ export async function MessageThread({ thread, locale, headingId }: MessageThread
         displayName={displayName}
         initialMessages={toMessageViews(thread.messages, locale)}
         initialOlderCursor={thread.olderCursor}
+        reportedMessageIds={reports?.messageIds ?? []}
       />
     </div>
   );
