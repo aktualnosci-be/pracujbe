@@ -7,6 +7,14 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
  * nadaje `lock_token` (0140); `email_delivery_send_check` i każda dalsza aktualizacja wiersza
  * (mark-sent/mark-failed/defer) muszą go podać jako CAS. Zachowanie samego RPC (dwaj workerzy,
  * wygasła dzierżawa) — `supabase/tests/rls.sql` sekcja WL615.
+ *
+ * #621 (dokończenie #615) — od strony workera (JS) nic się nie zmienia: `processEmailQueue`
+ * przekazuje ten sam `p_lock_token` do `email_delivery_send_check` jak dotąd. Naprawa (0141)
+ * jest wyłącznie po stronie bazy: `send_check` ODNAWIA dzierżawę (`locked_at = now()`) TUŻ
+ * PRZED wywołaniem `transport.send`, więc czas trwania żądania do dostawcy dostaje pełne,
+ * świeże okno, niezależnie od tego, ile z pierwotnej dzierżawy claimu już upłynęło (koniec
+ * wyścigu TOCTOU między kontrolą a wysyłką). Dowód RPC (dwaj workerzy, dzierżawa prawie
+ * wygasła w chwili kontroli, potem czas trwania wysyłki) — `supabase/tests/rls.sql` sekcja WL621.
  */
 
 const { send } = vi.hoisted(() => ({ send: vi.fn() }));

@@ -67,6 +67,16 @@ import { emailProviderFromEnv, mailTransportFromEnv, MailSendError } from '@/lib
  * Jeśli dzierżawa wygaśnie w trakcie (wolny dostawca) i wiersz przejmie inny worker, token się
  * nie zgadza — stary worker dostaje `lease_lost`/`rowCount=0` i NIC nie nadpisuje (wiersz
  * należy już do kogoś innego), więc nie ma podwójnej wysyłki ani wyścigu aktualizacji statusu.
+ *
+ * #621 (dokończenie #615, 0141): `email_delivery_send_check` odnawia dzierżawę (`locked_at =
+ * now()`) TUŻ PRZED wywołaniem `transport.send` poniżej — w TEJ SAMEJ transakcji co kontrola
+ * tokenu/zgody, CAS po `lock_token`. Zamyka to wyścig TOCTOU: bez odnowienia dzierżawa nadal
+ * biegła od czasu claimu CAŁEJ paczki, więc przy wielu wierszach albo wolnym poprzednim
+ * wierszu okno mogło być prawie zużyte w chwili kontroli — worker dostawał zielone światło
+ * tuż przed wygaśnięciem dzierżawy i mógł zdążyć wysłać już PO tym, jak inny worker przejął
+ * wiersz. Po odnowieniu dostawca dostaje pełne, świeże okno dzierżawy (domyślnie 300 s) liczone
+ * od chwili tuż przed wywołaniem. Awaria/timeout dłuższy niż to okno nadal kończy się
+ * bezpiecznym ponowieniem (CAS na mark-sent/mark-failed/defer bez zmian).
  */
 
 const MAX_ATTEMPTS = 5;
