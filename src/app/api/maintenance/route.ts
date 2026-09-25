@@ -2,6 +2,8 @@ import { timingSafeEqual } from 'node:crypto';
 
 import { NextResponse } from 'next/server';
 
+import { campaignSendingReady } from '@/lib/admin/campaigns';
+import { dsaRetentionMode } from '@/lib/admin/dsa-retention-mode';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc, type RpcArgs } from '@/lib/db/sql';
 import { isProductionMode } from '@/lib/env';
@@ -32,6 +34,9 @@ import {
  * Nieudane usunięcie obiektu to ponowienie w kolejnym przebiegu, nie błąd zadania.
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
+ * #43: czyszczenie spraw DSA (`dsa_retention_run`, 0104) — domyślnie WYŁĄCZONE (terminy czekają
+ * na decyzję właściciela, #40); `DSA_RETENTION_MODE=dry-run` = podgląd, `apply` = anonimizacja
+ * (`src/lib/admin/dsa-retention-mode.ts`). Odpowiedź: tryb + liczniki przebiegu.
  *
  * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
  * Wymaga puli service_role (`DATABASE_SERVICE_URL`; RPC są service_role-only). #25: każde
@@ -73,7 +78,7 @@ async function objectDeleter(): Promise<ObjectDeleter> {
   return railwayDeleter(createRailwayBucket(config));
 }
 
-/** Same liczniki z `run_retention_purge` (liczby całkowite), bez innych pól. */
+/** Same liczniki z `run_retention_purge`/`dsa_retention_run` (liczby całkowite), bez innych pól. */
 function retentionCounters(value: unknown): Record<string, number> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
   return Object.fromEntries(
@@ -101,6 +106,7 @@ async function run(request: Request): Promise<Response> {
     | 'savedSearchAlerts'
     | 'emailCampaigns'
     | 'retention'
+    | 'dsaRetention'
     | 'storageDeletions';
   const failures: Array<{ task: Task; error: unknown }> = [];
 
@@ -129,9 +135,11 @@ async function run(request: Request): Promise<Response> {
       ? 0
       : await task('savedSearchAlerts', 'process_saved_search_alerts', { p_limit: 500 });
   // #45: rezerwacja i kolejkowanie paczki odbiorców aktywnych rewizji kampanii (0101).
-  const campaignEmailsQueued = await task('emailCampaigns', 'process_email_campaigns', {
-    p_limit: 500,
-  });
+  // Bez nadawcy marketingu i linku wypisania worker listu nie wyśle — nie rezerwujemy
+  // odbiorców (rezerwacja jest jednorazowa na rewizję), kampania czeka na konfigurację.
+  const campaignEmailsQueued = campaignSendingReady()
+    ? await task('emailCampaigns', 'process_email_campaigns', { p_limit: 500 })
+    : 0;
   // #486: retencja jako dane (0105) — zwraca liczniki per kategoria (jsonb).
   let retention: Record<string, number> = {};
   try {
@@ -140,6 +148,19 @@ async function run(request: Request): Promise<Response> {
     );
   } catch (error) {
     failures.push({ task: 'retention', error });
+  }
+  // #43: sprawy DSA — tylko za jawną flagą; `off` nie woła bazy.
+  const dsaMode = dsaRetentionMode();
+  let dsaRetention: { mode: typeof dsaMode } & Record<string, number | string> = { mode: dsaMode };
+  if (dsaMode !== 'off') {
+    try {
+      const summary = await withServiceRole((tx) =>
+        rpc(tx, 'dsa_retention_run', { p_dry_run: dsaMode === 'dry-run' }),
+      );
+      dsaRetention = { ...retentionCounters(summary), mode: dsaMode };
+    } catch (error) {
+      failures.push({ task: 'dsaRetention', error });
+    }
   }
   // Po retencji: kolejka usuwania obiektów storage (także plików usuniętych w tym przebiegu).
   let storageDeletions: Awaited<ReturnType<typeof processStorageDeletions>> | null = null;
@@ -163,6 +184,7 @@ async function run(request: Request): Promise<Response> {
     savedSearchDigests: savedSearchDigests ?? 0,
     campaignEmailsQueued: campaignEmailsQueued ?? 0,
     retention,
+    dsaRetention,
     storageDeletions,
   });
 }
