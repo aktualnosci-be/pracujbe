@@ -8442,4 +8442,297 @@ select pg_temp.assert(
   (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp') = 2,
   'CV7b po kontroli ujemnej stan przywrócony');
 
+-- ============================================================================
+-- BR490 (#490, 0106): rejestr incydentów i naruszeń danych osobowych — tylko admin,
+-- niezmienna historia, CAS wersji, reguły art. 33/34, eksport, zawiadomienie osób przez
+-- outbox w języku ODBIORCY. Kontrole ujemne (w transakcjach cofanych): grant SELECT bez
+-- RLS, wyłączony trigger historii, treść w języku nadawcy — każda daje wykrywalny błąd.
+-- ============================================================================
+\set BRA 'e4900000-0000-0000-0000-0000000000a1'
+\set BRB 'e4900000-0000-0000-0000-0000000000a2'
+\set BRC 'e4900000-0000-0000-0000-0000000000a3'
+\set BRK1 'e4900000-0000-0000-0000-0000000000c1'
+\set BRK2 'e4900000-0000-0000-0000-0000000000c2'
+\set BRN1 'e4900000-0000-0000-0000-0000000000d1'
+\set BRN2 'e4900000-0000-0000-0000-0000000000d2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'BRA','bra@test.be','Br A','{"role":"candidate","first_name":"Br","last_name":"A","locale":"pl"}'),
+  (:'BRB','brb@test.be','Br B','{"role":"employer","first_name":"Br","last_name":"B","locale":"nl"}'),
+  (:'BRC','brc@test.be','Br C','{"role":"candidate","first_name":"Br","last_name":"C","locale":"fr"}');
+-- Adres BRC ma aktywną blokadę (#44) — zawiadomienie nie trafi do kolejki (widać w liczniku).
+insert into public.email_suppressions(email, reason) values ('brc@test.be', 'hard_bounce');
+
+select jsonb_build_object(
+  'kind', 'personal_data_breach', 'title', 'Błędny adresat e-maila',
+  'description', 'Powiadomienie trafiło do niewłaściwej osoby.',
+  'detectedAt', (now() - interval '2 hours')::text, 'occurredAt', (now() - interval '3 hours')::text,
+  'dataCategories', jsonb_build_array('contact', 'applications', 'contact'),
+  'affectedCount', '1', 'affectedCountEstimated', false,
+  'riskLevel', 'not_assessed', 'authorityDecision', 'pending', 'subjectsDecision', 'pending'
+)::text as br_form \gset
+
+-- BR490-1: tabele rejestru niedostępne bezpośrednio (także dla admina — tylko RPC).
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select 1 from public.breach_incidents', 'permission denied',
+  'BR490-1 anon nie czyta rejestru');
+select pg_temp.expect_error($$select public.admin_create_breach_incident(gen_random_uuid(), '{}'::jsonb)$$,
+  'permission denied', 'BR490-1b anon nie wywoła RPC rejestru');
+reset role;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select 1 from public.breach_incidents', 'permission denied',
+  'BR490-1c admin nie czyta tabeli bezpośrednio');
+select pg_temp.expect_error('select 1 from public.breach_incident_events', 'permission denied',
+  'BR490-1d admin nie czyta historii bezpośrednio');
+select pg_temp.expect_error($$insert into public.breach_incidents(reference, client_key, title, description, detected_at)
+  values ('X', gen_random_uuid(), 't', 'd', now())$$, 'permission denied', 'BR490-1e brak bezpośredniego INSERT');
+select pg_temp.expect_error('select 1 from public.breach_notice_recipients', 'permission denied',
+  'BR490-1f admin nie czyta listy odbiorców bezpośrednio');
+reset role; reset app.current_uid;
+-- KONTROLA UJEMNA: z grantem SELECT i bez RLS odczyt by przeszedł — asercje 1–1f to wykrywają.
+begin;
+grant select on public.breach_incidents to authenticated;
+alter table public.breach_incidents disable row level security;
+set local role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) >= 0 from public.breach_incidents),
+  'BR490-1g z grantem i bez RLS odczyt przechodzi (test wykrywa błąd)');
+rollback;
+reset role; reset app.current_uid;
+
+-- BR490-2: kandydat i pracodawca nie mają dostępu do RPC (PERMISSION_DENIED).
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_breach_incident(%L, %L::jsonb)', :'BRK1', :'br_form'),
+  'PERMISSION_DENIED', 'BR490-2 kandydat nie założy wpisu');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_export_breach_incident(%L, ''json'')', :'BRK1'),
+  'PERMISSION_DENIED', 'BR490-2b pracodawca nie eksportuje');
+reset role; reset app.current_uid;
+
+-- BR490-3: admin zakłada wpis; ponowienie z tym samym kluczem = ten sam wpis.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_breach_incident(:'BRK1', :'br_form'::jsonb) as br1 \gset
+select pg_temp.assert(public.admin_create_breach_incident(:'BRK1', :'br_form'::jsonb) = :'br1'::uuid,
+  'BR490-3 ponowienie z tym samym kluczem zwraca ten sam wpis');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(reference ~ '^NAR-[0-9]{4}-[0-9A-F]{10}$' and version = 1
+          and status = 'open' and data_categories = array['applications','contact']
+          and affected_count = 1 and not affected_count_estimated and created_by = :'ADMIN'::uuid)
+     from public.breach_incidents where client_key = :'BRK1'),
+  'BR490-3b jeden wpis: numer, wersja 1, kategorie bez duplikatów, autor');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(event_type = 'created' and changes ? 'title' and actor_id = :'ADMIN'::uuid)
+     from public.breach_incident_events where incident_id = :'br1'),
+  'BR490-3c historia: jedno zdarzenie created z polami');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(actor_id = :'ADMIN'::uuid and after_data::text not like '%niewłaściwej%')
+     from public.audit_logs where action = 'breach.created' and entity_id = :'br1'),
+  'BR490-3d audyt breach.created bez treści opisu');
+
+-- BR490-4: reguły art. 33/34 i wymagane uzasadnienia (kod pola w błędzie).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"riskLevel":"risk"}')::text),
+  'riskAssessment:required', 'BR490-4 ocena ryzyka wymaga uzasadnienia');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"riskLevel":"risk","riskAssessment":"r","authorityDecision":"not_required","authorityDecisionReason":"x"}')::text),
+  'authorityDecision:conflictsWithRisk', 'BR490-4b ryzyko + „nie zgłaszamy” odrzucone (art. 33)');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"riskLevel":"high_risk","riskAssessment":"r","subjectsDecision":"not_required","subjectsDecisionReason":"x"}')::text),
+  'subjectsDecision:conflictsWithRisk', 'BR490-4c wysokie ryzyko + „nie zawiadamiamy” odrzucone (art. 34)');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"authorityDecision":"notify"}')::text),
+  'authorityDecisionReason:required', 'BR490-4d decyzja bez uzasadnienia odrzucona');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || jsonb_build_object('riskLevel', 'risk', 'riskAssessment', 'r',
+     'authorityDecision', 'notify', 'authorityDecisionReason', 'x',
+     'detectedAt', (now() - interval '100 hours')::text, 'occurredAt', (now() - interval '101 hours')::text,
+     'authorityNotifiedAt', (now() - interval '1 hour')::text))::text),
+  'authorityDelayReason:required', 'BR490-4e zgłoszenie po 72 h wymaga przyczyn opóźnienia');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || jsonb_build_object('detectedAt', (now() + interval '1 day')::text))::text),
+  'detectedAt:future', 'BR490-4f stwierdzenie w przyszłości odrzucone');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"detectedAt":"nie-data"}')::text),
+  'detectedAt:invalid', 'BR490-4g zła data odrzucona z kodem pola');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"dataCategories":["cv_files","hasla"]}')::text),
+  'dataCategories:invalid', 'BR490-4h kategoria spoza listy odrzucona');
+reset role; reset app.current_uid;
+-- CHECK na tabeli działa niezależnie od RPC (bezpośredni zapis właściciela).
+select pg_temp.expect_error(format(
+  $$update public.breach_incidents set risk_level = 'high_risk', risk_assessment = 'r',
+    subjects_decision = 'not_required', subjects_decision_reason = 'x' where id = %L$$, :'br1'),
+  'breach_subjects_vs_risk', 'BR490-4i CHECK art. 34 także poza RPC');
+
+-- BR490-5: edycja z CAS wersji; różnice w historii; zapis bez zmian nie tworzy zdarzenia.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.admin_update_breach_incident(:'br1', 1,
+  (:'br_form'::jsonb || jsonb_build_object('riskLevel', 'high_risk', 'riskAssessment', 'Dane kontaktowe i aplikacja',
+     'authorityDecision', 'notify', 'authorityDecisionReason', 'Prawdopodobne ryzyko',
+     'subjectsDecision', 'notify', 'subjectsDecisionReason', 'Wysokie ryzyko',
+     'actionsTaken', 'Poprawiono wybór adresata'))) = 2,
+  'BR490-5 edycja podnosi wersję do 2');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1', :'br_form'),
+  'STALE_STATE', 'BR490-5b nieaktualna wersja → STALE_STATE');
+select pg_temp.assert(public.admin_update_breach_incident(:'br1', 2,
+  (:'br_form'::jsonb || jsonb_build_object('riskLevel', 'high_risk', 'riskAssessment', 'Dane kontaktowe i aplikacja',
+     'authorityDecision', 'notify', 'authorityDecisionReason', 'Prawdopodobne ryzyko',
+     'subjectsDecision', 'notify', 'subjectsDecisionReason', 'Wysokie ryzyko',
+     'actionsTaken', 'Poprawiono wybór adresata'))) = 2,
+  'BR490-5c zapis bez zmian nie podnosi wersji');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(version = 2 and changes -> 'risk_level' = '{"from":"not_assessed","to":"high_risk"}'::jsonb
+          and not changes ? 'title')
+     from public.breach_incident_events where incident_id = :'br1' and event_type = 'updated'),
+  'BR490-5d jedno zdarzenie updated tylko ze zmienionymi polami (przed/po)');
+select pg_temp.assert(
+  (select after_data -> 'fields' ? 'risk_level' and after_data::text not like '%Dane kontaktowe%'
+     from public.audit_logs where action = 'breach.updated' and entity_id = :'br1'),
+  'BR490-5e audyt: nazwy pól bez treści');
+
+-- BR490-6: historia i wpis niezmienne dla KAŻDEJ roli (tu superuser).
+select pg_temp.expect_error(format('update public.breach_incident_events set note = %L where incident_id = %L', 'x', :'br1'),
+  'BREACH_HISTORY_IMMUTABLE', 'BR490-6 historia bez UPDATE');
+select pg_temp.expect_error(format('delete from public.breach_incident_events where incident_id = %L', :'br1'),
+  'BREACH_HISTORY_IMMUTABLE', 'BR490-6b historia bez DELETE');
+select pg_temp.expect_error('truncate public.breach_incident_events', 'BREACH_HISTORY_IMMUTABLE',
+  'BR490-6c historia bez TRUNCATE');
+select pg_temp.expect_error(format('delete from public.breach_incidents where id = %L', :'br1'),
+  'BREACH_REGISTER_NO_DELETE', 'BR490-6d wpisu rejestru nie da się usunąć');
+select pg_temp.expect_error(format('update public.breach_incidents set reference = %L where id = %L', 'NAR-0000-X', :'br1'),
+  'BREACH_REGISTER_IMMUTABLE_FIELD', 'BR490-6e numeru wpisu nie da się zmienić');
+-- KONTROLA UJEMNA: bez triggera wpis historii dałby się przepisać.
+begin;
+alter table public.breach_incident_events disable trigger trg_breach_events_immutable;
+update public.breach_incident_events set note = 'przepisane' where incident_id = :'br1';
+select pg_temp.assert(exists (select 1 from public.breach_incident_events where note = 'przepisane'),
+  'BR490-6f bez triggera historia jest zmienialna (test wykrywa błąd)');
+rollback;
+
+-- BR490-7: zamknięcie tylko po udokumentowaniu decyzji; zamknięty wpis bez edycji; ponowne otwarcie.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_close_breach_incident(%L, 2, %L)', :'br1', 'Koniec'),
+  'BREACH_NOT_READY: authorityNotifiedAt', 'BR490-7 zamknięcie bez daty zgłoszenia do organu odrzucone');
+select pg_temp.expect_error(format('select public.admin_close_breach_incident(%L, 2, %L)', :'br1', '  '),
+  'closureSummary:required', 'BR490-7b zamknięcie wymaga podsumowania');
+reset role; reset app.current_uid;
+
+-- BR490-8: eksport — wpis, historia, bez klucza klienta; eksport zostaje w historii i dzienniku.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_export_breach_incident(:'br1', 'json')::text as br_export \gset
+select pg_temp.expect_error(format('select public.admin_export_breach_incident(%L, ''xml'')', :'br1'),
+  'format:invalid', 'BR490-8 nieznany format odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (:'br_export'::jsonb -> 'incident' ->> 'reference') ~ '^NAR-'
+  and not (:'br_export'::jsonb -> 'incident' ? 'client_key')
+  and jsonb_array_length(:'br_export'::jsonb -> 'events') = 2,
+  'BR490-8b eksport: wpis bez client_key + dwa zdarzenia (created, updated)');
+select pg_temp.assert(
+  (select count(*) = 1 from public.breach_incident_events where incident_id = :'br1' and event_type = 'exported')
+  and (select count(*) = 1 from public.audit_logs where action = 'breach.exported' and entity_id = :'br1'),
+  'BR490-8c eksport zapisany w historii i w dzienniku');
+
+-- BR490-9: zawiadomienie osób — treść wymagana w języku KAŻDEGO odbiorcy (Invariant #1).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_notify_breach_subjects(:'br1', :'BRN1',
+  array[:'BRA', 'BRB@test.be', 'nieznany@test.be', :'BRC'],
+  '{"pl":{"subject":"Temat PL","body":"Treść PL"},"en":{"subject":"Subject EN","body":"Body EN"}}'::jsonb)::text as br_invalid \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  :'br_invalid'::jsonb ->> 'status' = 'invalid'
+  and :'br_invalid'::jsonb -> 'missingLocales' = '["fr", "nl"]'::jsonb
+  and :'br_invalid'::jsonb -> 'unknown' = '["nieznany@test.be"]'::jsonb,
+  'BR490-9 brak treści nl/fr i nieznany adres → invalid');
+select pg_temp.assert(not exists (select 1 from public.email_deliveries where template = 'breachNotice')
+  and not exists (select 1 from public.breach_notices),
+  'BR490-9b nic nie zakolejkowano przy błędnym zestawie');
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_notify_breach_subjects(:'br1', :'BRN1', array[:'BRA', 'BRB@test.be', :'BRC'],
+  '{"pl":{"subject":"Temat PL","body":"Treść PL"},"nl":{"subject":"Onderwerp NL","body":"Tekst NL"},"fr":{"subject":"Sujet FR","body":"Texte FR"}}'::jsonb)::text as br_ok \gset
+select pg_temp.assert(public.admin_notify_breach_subjects(:'br1', :'BRN1', array[:'BRA'], '{}'::jsonb)::jsonb
+    -> 'noticeId' = :'br_ok'::jsonb -> 'noticeId',
+  'BR490-9c ponowienie z tym samym kluczem zwraca to samo zawiadomienie');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  :'br_ok'::jsonb ->> 'status' = 'queued' and (:'br_ok'::jsonb ->> 'recipients')::int = 3
+  and (:'br_ok'::jsonb ->> 'queued')::int = 2,
+  'BR490-9d 3 odbiorców, 2 w kolejce (adres z blokadą pominięty)');
+select pg_temp.assert(
+  (select count(*) = 2
+          and bool_and((profile_id = :'BRA'::uuid and locale = 'pl' and payload ->> 'noticeSubject' = 'Temat PL'
+                        and payload ->> 'panel' = 'candidate')
+                    or (profile_id = :'BRB'::uuid and locale = 'nl' and payload ->> 'noticeSubject' = 'Onderwerp NL'
+                        and payload ->> 'panel' = 'employer'))
+     from public.email_deliveries where template = 'breachNotice'),
+  'BR490-9e każdy e-mail w języku odbiorcy (pl/nl), nie nadawcy (admin: en)');
+select pg_temp.assert(
+  (select count(*) = 3 and count(*) filter (where queued) = 2 from public.breach_notice_recipients),
+  'BR490-9f lista odbiorców z flagą kolejki');
+select pg_temp.assert(
+  (select count(*) = 1 from public.breach_incident_events where incident_id = :'br1' and event_type = 'subjects_notified')
+  and (select after_data::text not like '%bra@test.be%' from public.audit_logs
+        where action = 'breach.subjects_notified' and entity_id = :'br1'),
+  'BR490-9g historia i dziennik bez adresów odbiorców');
+-- KONTROLA UJEMNA: treść wybierana po języku nadawcy (admin = en) dałaby zły język.
+select pg_temp.assert(public.resolve_recipient_locale(:'ADMIN') = 'en'
+  and (select payload ->> 'noticeSubject' from public.email_deliveries
+        where template = 'breachNotice' and profile_id = :'BRB') <> 'Subject EN',
+  'BR490-9h język nadawcy różni się od odbiorcy — test rozróżnia te przypadki');
+
+-- BR490-10: incydent bez decyzji o zawiadomieniu — brak wysyłki; zamknięcie i ponowne otwarcie.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_breach_incident(:'BRK2',
+  (:'br_form'::jsonb || '{"kind":"security_incident","title":"Skan portów"}')::text::jsonb) as br2 \gset
+select pg_temp.expect_error(format('select public.admin_notify_breach_subjects(%L, %L, array[%L], %L::jsonb)',
+    :'br2', :'BRN2', :'BRA', '{"pl":{"subject":"a","body":"b"}}'),
+  'BREACH_NOTIFY_NOT_DECIDED', 'BR490-10 bez decyzji o zawiadomieniu nie ma wysyłki');
+select pg_temp.assert(public.admin_close_breach_incident(:'br2', 1, 'Brak danych osobowych') = 2,
+  'BR490-10b incydent bezpieczeństwa zamykany bez decyzji art. 33/34');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 2, %L::jsonb)', :'br2', :'br_form'),
+  'BREACH_CLOSED', 'BR490-10c zamkniętego wpisu nie edytujemy');
+select pg_temp.expect_error(format('select public.admin_reopen_breach_incident(%L, 2, %L)', :'br2', ''),
+  'reason:required', 'BR490-10d ponowne otwarcie wymaga powodu');
+select pg_temp.assert(public.admin_reopen_breach_incident(:'br2', 2, 'Nowe ustalenia') = 3,
+  'BR490-10e ponowne otwarcie z powodem');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'open' and closed_at is null and closure_summary = '' from public.breach_incidents where id = :'br2')
+  and (select array_agg(event_type order by created_at, version) = array['created','closed','reopened']
+         from public.breach_incident_events where incident_id = :'br2')
+  and (select note = 'Brak danych osobowych' from public.breach_incident_events
+        where incident_id = :'br2' and event_type = 'closed'),
+  'BR490-10f podsumowanie zamknięcia zostaje w historii po ponownym otwarciu');
+
+-- BR490-11: panel admina czyta rejestr service-rolem (po potwierdzeniu roli w aplikacji).
+set role service_role;
+select pg_temp.assert((select count(*) = 2 from public.breach_incidents)
+  and (select count(*) >= 6 from public.breach_incident_events)
+  and (select count(*) = 1 from public.breach_notices),
+  'BR490-11 service_role czyta wpisy, historię i zawiadomienia');
+reset role;
+
+-- BR490-12: usunięcie konta admina (FK `on delete set null`) zeruje autora w historii,
+-- wpisie i zawiadomieniu; każda inna zmiana tych wierszy nadal odrzucana.
+begin;
+select pg_temp.assert((select count(*) > 0 from public.breach_incident_events where actor_id = :'ADMIN'),
+  'BR490-12 przygotowanie: admin jest autorem wpisów historii');
+update public.breach_incident_events set actor_id = null where actor_id = :'ADMIN';
+update public.breach_incidents set created_by = null where created_by = :'ADMIN';
+update public.breach_notices set created_by = null where created_by = :'ADMIN';
+select pg_temp.assert((select count(*) = 0 from public.breach_incident_events where actor_id is not null)
+  and (select count(*) = 0 from public.breach_incidents where created_by is not null),
+  'BR490-12 autor wyzerowany jak przy usunięciu konta');
+select pg_temp.expect_error(format('update public.breach_incident_events set note = %L where incident_id = %L', 'x', :'br1'),
+  'BREACH_HISTORY_IMMUTABLE', 'BR490-12b inna zmiana historii nadal odrzucana');
+select pg_temp.expect_error(format('update public.breach_incidents set created_by = %L where id = %L', :'ADMIN', :'br1'),
+  'BREACH_REGISTER_IMMUTABLE_FIELD', 'BR490-12c autora nie da się podmienić');
+select pg_temp.expect_error(format('update public.breach_notices set queued_count = 0 where incident_id = %L', :'br1'),
+  'BREACH_HISTORY_IMMUTABLE', 'BR490-12d zawiadomienie nadal niezmienne');
+rollback;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

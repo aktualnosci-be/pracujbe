@@ -124,6 +124,11 @@ export function createAuthServer(dependencies: AuthServerDependencies) {
     },
     emailVerification: {
       sendOnSignUp: true,
+      // Logowanie niepotwierdzonego konta (dopiero PO poprawnym haśle, więc bez enumeracji)
+      // zleca nowy link — wygasły link z rejestracji nie blokuje aktywacji konta.
+      sendOnSignIn: true,
+      // Link ważny 12 h (domyślnie SDK: godzina; kolejka 0061 przyjmuje najwyżej dobę).
+      expiresIn: 60 * 60 * 12,
       autoSignInAfterVerification: true,
       sendVerificationEmail: dependencies.sendVerificationEmail ?? senders.sendVerificationEmail,
     },

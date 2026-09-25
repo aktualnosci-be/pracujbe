@@ -162,6 +162,14 @@ export interface EmailDataMap {
   appealReceived: AppealEmailData;
   appealUpheld: AppealEmailData & { reasoning: string };
   appealReversed: AppealEmailData & { reasoning: string };
+  /** Zawiadomienie o naruszeniu danych (#490): temat i treść od administratora (tekst). */
+  breachNotice: {
+    recipientName?: string;
+    noticeSubject: string;
+    noticeText: string;
+    incidentReference: string;
+    actionUrl: string;
+  };
 }
 
 /**
@@ -836,6 +844,18 @@ export function AppealReversedEmail(props: EmailProps<'appealReversed'>): ReactE
   );
 }
 
+export function BreachNoticeEmail(props: EmailProps<'breachNotice'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="breachNotice"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Rejestr + renderEmail                                                      */
 /* -------------------------------------------------------------------------- */
@@ -880,6 +900,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   appealReceived: AppealReceivedEmail,
   appealUpheld: AppealUpheldEmail,
   appealReversed: AppealReversedEmail,
+  breachNotice: BreachNoticeEmail,
 };
 
 /**

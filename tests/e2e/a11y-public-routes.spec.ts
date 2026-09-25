@@ -43,6 +43,8 @@ const ROUTES = [
   '/rejestracja',
   '/rejestracja-pracodawca',
   '/reset-hasla',
+  '/ustaw-nowe-haslo',
+  '/potwierdz-email',
   '/offline',
   '/nie-istnieje',
 ];

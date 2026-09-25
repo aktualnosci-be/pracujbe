@@ -5,10 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { NewPasswordForm } from './NewPasswordForm';
 
 /**
- * Ustawienie nowego hasła. Dostępne po sesji recovery — użytkownik trafia tu z linku resetu
- * przez `/auth/callback` (który wymienia kod na sesję i przekierowuje na `next` = ta strona).
- * Formularz kliencki (NewPasswordForm) wywołuje server action `updatePassword`.
- * Strona wyłączona z indeksowania (noindex).
+ * Ustawienie nowego hasła z linku resetu (`/{locale}/ustaw-nowe-haslo#token=…`, język odbiorcy).
+ * Token jest we fragmencie — strona serwerowa go nie widzi; czyta go formularz kliencki
+ * (NewPasswordForm) i przekazuje do server action `updatePassword`. Strona wyłączona z indeksowania.
  */
 
 type PageProps = {
