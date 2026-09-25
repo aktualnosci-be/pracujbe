@@ -11,7 +11,7 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #487 — akcje importu CV: flaga (domyślnie wyłączona), konto kandydata, limit wywołań
- * modelu, a zapis WYŁĄCZNIE zatwierdzonych pozycji przez RPC 0114 pod sesją kandydata.
+ * modelu, a zapis WYŁĄCZNIE zatwierdzonych pozycji przez RPC 0115 pod sesją kandydata.
  * Brak zatwierdzenia = brak wywołania bazy. Klient AI i baza to atrapy — zero prawdziwych wywołań.
  */
 

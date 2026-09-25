@@ -8742,7 +8742,7 @@ begin; select pg_temp.cj_drop_filter('j.deleted_at is null');
 select pg_temp.assert(pg_temp.cj_public('cj-deleted') = 1, 'CJ186-4f bez filtra usunięcia wycieka'); rollback;
 select pg_temp.assert(pg_temp.cj_public(s) = 0, 'CJ186-4g po cofnięciu filtry wróciły: ' || s)
 from unnest(array['cj-demo', 'cj-demo-company', 'cj-paused', 'cj-expired', 'cj-unverified', 'cj-deleted']) s;
--- CV487. Import CV przez AI (#487, #498, 0114): do profilu trafiają WYŁĄCZNIE pozycje
+-- CV487. Import CV przez AI (#487, #498, 0115): do profilu trafiają WYŁĄCZNIE pozycje
 -- zatwierdzone przez kandydata, dopisane (nie replace-all) w jednej transakcji. Brak
 -- zatwierdzenia = brak zapisu; za długa pozycja cofa całe wywołanie; tylko własny profil
 -- konta kandydata. Kontrola ujemna: wersja replace-all kasuje ręcznie wpisane pozycje.

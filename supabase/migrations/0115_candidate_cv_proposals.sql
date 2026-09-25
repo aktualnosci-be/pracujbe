@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0114 — import CV przez AI: zapis WYŁĄCZNIE zatwierdzonych propozycji (#487, #498).
+-- 0115 — import CV przez AI: zapis WYŁĄCZNIE zatwierdzonych propozycji (#487, #498).
 --
 -- Numer TYMCZASOWY: ostateczny poda koordynator (kolejka migracji); runner wymaga ciągłego zakresu.
 --
