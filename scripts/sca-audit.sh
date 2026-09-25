@@ -7,52 +7,78 @@
 # co daje deterministyczne drzewo i omija błąd „Invalid package tree" pojawiający
 # się przy audycie rozpakowanego artefaktu node_modules.
 #
-# Odporność na flaky endpoint: publiczny endpoint audytu npm bywa niestabilny i
-# jest wygaszany („This endpoint is being retired") — potrafi zwrócić 400/5xx.
-# `npm audit` kończy się kodem 1 ZARÓWNO przy wykryciu podatności, JAK I przy
-# błędzie endpointu, więc nie polegamy na kodzie wyjścia — parsujemy JSON i
-# blokujemy WYŁĄCZNIE, gdy realnie policzono high+critical > 0. Błąd/pusty wynik
-# endpointu → ostrzeżenie (nie blokujemy CI na fladze infrastruktury npm).
+# Decyzja #607: trzy różne wyniki, nie dwa. Publiczny endpoint audytu npm bywa
+# niestabilny/wygaszany i potrafi zwrócić puste ciało, HTML błędu albo JSON bez
+# `metadata.vulnerabilities`. Wcześniej KAŻDY z tych przypadków kończył się kodem 0
+# z samym ostrzeżeniem — bramka bezpieczeństwa była zielona bez żadnego dowodu.
+# Teraz `scripts/lib/sca-audit-outcome.mjs` klasyfikuje wynik na:
+#   - clean/vulnerable        — audyt policzony, mamy liczby (dowód);
+#   - recognized_transient    — jawnie rozpoznana awaria przejściowa dostawcy
+#                                 (sieć: ENOTFOUND/ETIMEDOUT/…, HTML zamiast JSON,
+#                                 albo ustrukturyzowane `error` samego npm) — po
+#                                 kontrolowanych ponowieniach NIE blokujemy CI,
+#                                 ale zostaje to w logu jako jawnie opisana decyzja;
+#   - unrecognized            — pusty/niepoprawny/pozbawiony metadanych wynik BEZ
+#                                 rozpoznanej przyczyny → BLOKUJEMY CI (brak dowodu
+#                                 braku podatności to nie to samo, co brak podatności).
+# Retry tylko dla `recognized_transient` (sieć/infrastruktura może się same naprawić
+# w kilka sekund); `unrecognized` nie jest ponawiane — nic nie wskazuje, że kolejna
+# próba coś wyjaśni, a ponawianie pustego wyniku zjadałoby tylko minuty CI.
 # =============================================================================
 set -uo pipefail
 
-audit_json="$(npm audit --json --package-lock-only 2>/dev/null || true)"
+# Nadpisywalne tylko przez testy integracyjne skryptu (retry bez realnego czekania).
+MAX_ATTEMPTS="${SCA_AUDIT_MAX_ATTEMPTS:-3}"
+RETRY_DELAY_SECONDS="${SCA_AUDIT_RETRY_DELAY_SECONDS:-4}"
 
-if [ -z "$audit_json" ]; then
-  echo "::warning::npm audit zwrócił pusty wynik (prawdopodobnie błąd/wygaszony endpoint npm) — pomijam bramkę SCA."
-  exit 0
-fi
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+stdout_file="$(mktemp)"
+stderr_file="$(mktemp)"
+trap 'rm -f "$stdout_file" "$stderr_file"' EXIT
 
-counts="$(printf '%s' "$audit_json" | node -e '
-  let s = "";
-  process.stdin.on("data", (d) => (s += d)).on("end", () => {
-    try {
-      const j = JSON.parse(s);
-      const v = (j.metadata && j.metadata.vulnerabilities) || null;
-      if (!v) { console.log("NOMETA"); return; }
-      console.log(`${v.high || 0} ${v.critical || 0}`);
-    } catch (e) {
-      console.log("PARSE_ERR");
-    }
-  });
-')"
+attempt=1
+outcome_json=""
+status=""
 
-if [ "$counts" = "PARSE_ERR" ] || [ "$counts" = "NOMETA" ]; then
-  echo "::warning::Nie udało się odczytać wyniku npm audit ($counts) — pomijam bramkę SCA (nie blokuję na fladze endpointu)."
-  exit 0
-fi
+while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+  npm audit --json --package-lock-only >"$stdout_file" 2>"$stderr_file" || true
+  outcome_json="$(node "$script_dir/lib/sca-audit-outcome.mjs" "$stdout_file" "$stderr_file")"
+  status="$(printf '%s' "$outcome_json" | node -e 'process.stdin.on("data",d=>process.stdout.write(JSON.parse(d).status))')"
 
-high="${counts%% *}"
-critical="${counts##* }"
-total=$(( high + critical ))
+  if [ "$status" != "recognized_transient" ]; then
+    break
+  fi
 
-echo "SCA: podatności high=${high}, critical=${critical}."
+  reason="$(printf '%s' "$outcome_json" | node -e 'process.stdin.on("data",d=>process.stdout.write(JSON.parse(d).reason))')"
+  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+    echo "::warning::Próba ${attempt}/${MAX_ATTEMPTS} audytu: rozpoznana przejściowa awaria (${reason}) — ponawiam za ${RETRY_DELAY_SECONDS}s."
+    sleep "$RETRY_DELAY_SECONDS"
+  fi
+  attempt=$((attempt + 1))
+done
 
-if [ "$total" -gt 0 ]; then
-  echo "::error::Wykryto ${total} podatności o severity high/critical — bramka SCA blokuje CI."
-  # Czytelny raport w logu (kod wyjścia ignorowany — raport pomocniczy).
-  npm audit --audit-level=high --package-lock-only || true
-  exit 1
-fi
-
-echo "SCA OK — brak podatności high/critical."
+case "$status" in
+  clean)
+    echo "SCA OK — brak podatności high/critical."
+    exit 0
+    ;;
+  vulnerable)
+    high="$(printf '%s' "$outcome_json" | node -e 'process.stdin.on("data",d=>process.stdout.write(String(JSON.parse(d).high)))')"
+    critical="$(printf '%s' "$outcome_json" | node -e 'process.stdin.on("data",d=>process.stdout.write(String(JSON.parse(d).critical)))')"
+    total=$((high + critical))
+    echo "SCA: podatności high=${high}, critical=${critical}."
+    echo "::error::Wykryto ${total} podatności o severity high/critical — bramka SCA blokuje CI."
+    npm audit --audit-level=high --package-lock-only || true
+    exit 1
+    ;;
+  recognized_transient)
+    reason="$(printf '%s' "$outcome_json" | node -e 'process.stdin.on("data",d=>process.stdout.write(JSON.parse(d).reason))')"
+    echo "::warning::Rozpoznana przejściowa awaria dostawcy audytu po ${MAX_ATTEMPTS} próbach (${reason}) — DECYZJA: nie blokuję CI na fladze infrastruktury npm, ale wynik audytu jest NIEZNANY dla tego przebiegu. Uruchom ponownie później albo sprawdź ręcznie (npm audit --package-lock-only)."
+    exit 0
+    ;;
+  unrecognized|*)
+    reason="$(printf '%s' "$outcome_json" | node -e 'process.stdin.on("data",d=>process.stdout.write(JSON.parse(d).reason))')"
+    echo "::error::Wynik npm audit jest pusty/nieczytelny i przyczyna NIE jest jawnie rozpoznaną awarią przejściową (${reason}) — bramka SCA blokuje CI (brak dowodu braku podatności high/critical)."
+    exit 1
+    ;;
+esac

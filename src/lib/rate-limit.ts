@@ -71,6 +71,9 @@ const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
   'guest-apply-email',
   // Formularz kontaktu (#61): publiczny formularz wysyłający potwierdzenie na podany adres.
   'contact',
+  // Bramka SITE_ACCESS_PASSWORD (#584): jedyna zapora przed produkcją — awaria limitera nie
+  // może otwierać nieograniczonego zgadywania hasła.
+  'site-access',
 ]);
 
 /**

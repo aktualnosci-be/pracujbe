@@ -126,7 +126,9 @@ describe('/api/maintenance + GC (#17)', () => {
   const MAINTENANCE_RPCS = [
     'release_stale_discount_reservations', 'release_stale_checkout_intents', 'expire_due_jobs',
     'purge_guest_application_requests', 'process_saved_search_alerts', 'process_email_campaigns',
-    'run_retention_purge', 'purge_stale_message_attachments',
+    'run_retention_purge',
+    'purge_job_funnel_data',
+    'purge_stale_message_attachments',
   ];
   const request = () => new Request('http://web.internal/api/maintenance', {
     method: 'POST', headers: { authorization: 'Bearer maintenance-secret' },

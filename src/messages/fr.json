@@ -595,7 +595,8 @@
       "privacyNoticeRequired": "Confirmez avoir pris connaissance des informations sur la vie privée.",
       "companyNameRequired": "Saisissez le nom de l'entreprise.",
       "companyNameTooShort": "Le nom de l'entreprise est trop court.",
-      "companyNameTooLong": "Le nom de l'entreprise est trop long."
+      "companyNameTooLong": "Le nom de l'entreprise est trop long.",
+      "ageConfirmRequired": "Choisissez votre tranche d’âge."
     },
     "botCheckLabel": "Vérification de sécurité",
     "botCheckLoading": "Chargement de la vérification de sécurité…",
@@ -603,6 +604,11 @@
     "botCheckExpired": "La vérification a expiré. Confirmez-la à nouveau.",
     "botCheckLoadFailed": "La vérification de sécurité n'a pas pu être chargée. Vérifiez votre connexion ou désactivez le blocage de contenu pour ce site, puis réessayez.",
     "botCheckRetry": "Recharger la vérification",
+    "ageBandLegend": "Votre âge",
+    "ageBandMinor": "J’ai entre {min} et {max} ans",
+    "ageBandAdult": "J’ai {age} ans ou plus",
+    "ageBandMinorHint": "Dans cette tranche d’âge, votre profil ne sera pas visible par les entreprises dans la recherche de candidats. Vous pouvez toujours postuler vous-même aux offres.",
+    "ageConfirmHint": "Nous ne demandons ni votre date de naissance ni de pièce d’identité.",
     "confirmEmailTitle": "Activer le compte",
     "confirmEmailIntro": "Cliquez sur le bouton pour confirmer votre adresse e-mail et accéder à votre compte.",
     "confirmEmailSubmit": "Confirmer l’adresse e-mail",
@@ -662,6 +668,8 @@
     "appealWindowClosed": "Le délai de recours contre cette décision a expiré.",
     "reviewerConflict": "Le recours est examiné par un autre administrateur que l’auteur de la décision.",
     "jobImportSensitiveData": "L’annonce contient un numéro d’identification de personne ou de document ; nous ne l’avons donc pas importée. Remplissez le formulaire manuellement.",
+    "ageAttestationRequired": "Pour continuer, confirmez que vous avez au moins l’âge requis. Si le formulaire était ouvert depuis longtemps, actualisez la page.",
+    "ageAdultRequired": "Seules les personnes majeures peuvent activer cette fonction.",
     "screeningReviewRequired": "L’offre contient une question que l’équipe du portail doit vérifier avant la publication. Vous pourrez la publier une fois la question acceptée ou après l’avoir modifiée.",
     "screeningQuestionRejected": "Une des questions n’a pas été acceptée. Modifiez-la ou supprimez-la pour publier l’offre.",
     "jobAssistEmpty": "Rédigez d'abord un texte. L'assistant améliore votre texte, mais ne rédige pas l'offre à partir de zéro.",
@@ -1246,7 +1254,9 @@
     "screeningYes": "Oui",
     "screeningNo": "Non",
     "sensitiveIdHint": "Votre candidature ne nécessite ni numéro NISS/BIS ni numéro de pièce d’identité — ne les indiquez pas.",
-    "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
+    "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler.",
+    "ageRequired": "Avant de postuler, confirmez votre âge dans les paramètres de votre compte.",
+    "ageRequiredLink": "Ouvrir les paramètres"
   },
   "guestApply": {
     "subtitle": "Postulez sans créer de compte ou connectez-vous pour utiliser votre profil. Pas besoin de CV.",
@@ -1299,7 +1309,8 @@
       "messageTooLong": "Le message peut comporter au maximum 500 caractères.",
       "privacyNoticeRequired": "Confirmez avoir pris connaissance des informations sur la vie privée pour envoyer la candidature.",
       "idempotencyKeyInvalid": "Actualisez la page et renvoyez le formulaire.",
-      "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler."
+      "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler.",
+      "ageConfirmRequired": "Choisissez votre tranche d’âge."
     }
   },
   "legal": {
@@ -1941,6 +1952,7 @@
     "caseFlag": "Signal automatique : {flag}",
     "auditActionModerationDecided": "Décision de modération",
     "auditActionModerationRestored": "Levée de la restriction",
+    "auditActionAgePolicyUpdated": "Modification de l’âge minimum des candidats",
     "navAppeals": "Recours",
     "navDsaReport": "Rapport DSA",
     "appealsTitle": "Recours contre les décisions de modération",
@@ -2176,6 +2188,8 @@
     "breachExportJson": "Export JSON",
     "breachExportCsv": "Export CSV",
     "breachExportHint": "L’export contient l’entrée et l’historique, sans les adresses des destinataires. Chaque export reste dans l’historique.",
+    "breachExportPending": "Export en cours…",
+    "breachExportError": "Échec de l’export. Réessayez.",
     "breachActionClose": "Clôturer l’entrée",
     "breachActionReopen": "Rouvrir",
     "breachCloseTitle": "Clôturer l’entrée ?",
@@ -2305,6 +2319,7 @@
     "auditActionCampaignActivated": "Activation d’une révision de campagne",
     "auditActionCampaignCancelled": "Arrêt d’une révision de campagne",
     "entityEmailCampaign": "Campagne e-mail",
+    "entityAgePolicy": "Seuil d'âge des candidats",
     "appealTargetRestoration": "Contre la levée de la restriction",
     "appealRestorationSummary": "Restriction levée le {date} : {reason}",
     "navAiCosts": "Coûts IA",
@@ -2328,7 +2343,36 @@
     "aiCostsFeatureJobImport": "Import d’annonce",
     "aiCostsFeatureTranslation": "Traduction du contenu",
     "aiCostsFeatureAssist": "Assistant de rédaction d’offre",
-    "aiCostsFeatureCvImport": "Import de CV"
+    "aiCostsFeatureCvImport": "Import de CV",
+    "navSettings": "Paramètres",
+    "agePolicyTitle": "Seuil d'âge des candidats",
+    "agePolicySubtitle": "Âge minimum pour un compte candidat et pour la visibilité du profil pour les entreprises.",
+    "agePolicyCurrentTitle": "Réglage actuel",
+    "agePolicyCurrentLabel": "Seuil actuel",
+    "agePolicyNewLabel": "Nouveau seuil",
+    "agePolicyOption16": "16 ans",
+    "agePolicyOption18": "18 ans",
+    "agePolicyConfirmedField": "Approuvé par le propriétaire",
+    "agePolicyConfirmedYes": "Approuvé",
+    "agePolicyConfirmedNo": "Valeur provisoire (non approuvée)",
+    "agePolicyConfirmedHint": "Une valeur provisoire signifie que le seuil n'est pas encore une décision définitive du propriétaire.",
+    "agePolicyLastChangeTitle": "Dernière modification",
+    "agePolicyLastChangeNone": "Aucune modification enregistrée dans le journal d'activité — la valeur de départ s'applique.",
+    "agePolicyLastChangeTransition": "Changement de seuil",
+    "agePolicyTransitionValue": "{from} → {to}",
+    "agePolicyLastChangeAt": "Date de la modification",
+    "agePolicyLastChangeBy": "Modifié par",
+    "agePolicyLastChangeHidden": "Profils masqués",
+    "agePolicyFormTitle": "Modifier le seuil",
+    "agePolicyFormHint": "Relever le seuil masque immédiatement, dans la recherche, les profils des candidats dont la déclaration d'âge est inférieure. L'abaisser ne réaffiche rien.",
+    "agePolicyFieldLegend": "Nouveau seuil du compte",
+    "agePolicyReasonLabel": "Justification (obligatoire)",
+    "agePolicyReasonHint": "Sera consignée dans le journal d'activité. Au maximum {max} caractères.",
+    "agePolicySubmit": "Enregistrer le seuil",
+    "agePolicyConfirmTitle": "Modifier le seuil d'âge des candidats ?",
+    "agePolicyConfirmDescription": "Le seuil passera de « {from} » à « {to} ».",
+    "agePolicySuccess": "Le seuil d'âge des candidats a été enregistré.",
+    "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count} profils ont été masqués de la recherche."
   },
   "settings": {
     "title": "Préférences de notification",
@@ -2444,7 +2488,8 @@
     "lead": "Le site n’est pas encore ouvert au public. Si vous avez un mot de passe d’accès, saisissez-le ci-dessous.",
     "passwordLabel": "Mot de passe d’accès",
     "submit": "Entrer",
-    "error": "Mot de passe incorrect. Veuillez réessayer."
+    "error": "Mot de passe incorrect. Veuillez réessayer.",
+    "rateLimited": "Trop de tentatives. Réessayez dans quelques minutes."
   },
   "offline": {
     "title": "Pas de connexion",
@@ -2557,7 +2602,9 @@
     "savedOn": "Votre profil est maintenant visible pour les entreprises vérifiées.",
     "savedOff": "Votre profil est maintenant masqué dans les recherches des entreprises.",
     "saveError": "La modification n’a pas pu être enregistrée. Le réglage n’a pas changé — veuillez réessayer.",
-    "loadError": "Impossible de charger la visibilité de votre profil. Actualisez la page dans un instant."
+    "loadError": "Impossible de charger la visibilité de votre profil. Actualisez la page dans un instant.",
+    "requiresAge": "Pour partager votre profil avec les entreprises, confirmez d’abord votre âge dans la section « Âge ».",
+    "requiresAdult": "Votre profil ne peut être visible par les entreprises qu’à partir de 18 ans. Quand vous aurez 18 ans, confirmez-le dans la section « Âge »."
   },
   "team": {
     "title": "Équipe",
@@ -2680,6 +2727,7 @@
   "jobFunnel": {
     "title": "Entonnoir des offres",
     "range": "Période : du {from} au {to} (heure de Bruxelles)",
+    "consentNote": "Les apparitions dans les résultats, les vues et les candidatures commencées ne sont comptées que pour les personnes qui ont accepté les cookies analytiques. Toutes les candidatures envoyées sont comptées.",
     "rangeLabel": "Période de l’entonnoir des offres",
     "rangeDays": "{count, plural, one {# jour} other {# jours}}",
     "searchAppearances": "Affichages dans les résultats",
@@ -2844,6 +2892,18 @@
     "restorationAppealIntro": "Si vous n’êtes pas d’accord avec la levée de la restriction, vous pouvez introduire un recours. L’auteur du contenu signalé ne verra pas vos données.",
     "restorationAppealDeadlineNotStarted": "Le délai de recours commencera à courir lorsque vous recevrez l’e-mail sur la levée de la restriction.",
     "restorationAppealWindowClosed": "Le délai de recours contre la levée de la restriction est expiré."
+  },
+  "ageAttestation": {
+    "sectionTitle": "Âge",
+    "sectionDescription": "Vous pouvez avoir un compte candidat dès {age} ans et un profil visible par les entreprises dès {adultAge} ans. Nous enregistrons seulement la tranche d’âge choisie et la date de confirmation — pas de date de naissance.",
+    "stateAdult": "Confirmé : vous avez {age} ans ou plus.",
+    "stateMinor": "Confirmé : vous avez moins de {adultAge} ans. Vous pouvez postuler aux offres, mais votre profil n’est pas visible par les entreprises. Quand vous aurez {adultAge} ans, confirmez-le ci-dessous.",
+    "stateMissing": "Aucune confirmation. Sans elle, vous ne pouvez ni postuler ni partager votre profil avec les entreprises.",
+    "submit": "Confirmer",
+    "saving": "Enregistrement…",
+    "saved": "Confirmation d’âge enregistrée.",
+    "saveError": "Impossible d’enregistrer la confirmation. Réessayez.",
+    "loadError": "Impossible de charger les informations sur votre confirmation d’âge."
   },
   "campaignBanner": {
     "eyebrow": "Offre d’emploi en Belgique",

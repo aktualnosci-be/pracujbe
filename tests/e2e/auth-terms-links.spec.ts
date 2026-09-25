@@ -30,6 +30,7 @@ for (const locale of locales) {
 
 test('klik w link regulaminu otwiera nową kartę i nie zaznacza zgody', async ({ page, context }) => {
   await page.goto('/pl/rejestracja');
+  // Na rejestracji kandydata są kilka pól wyboru (deklaracja wieku #492, zgody #493) — bierzemy regulamin.
   const checkbox = page.locator('#agreeTerms');
   await expect(checkbox).not.toBeChecked();
 

@@ -114,14 +114,30 @@ export function extractEmailPayloads(files, emailTypes) {
   const known = new Set(emailTypes);
   const functions = new Map();
   const headerRe = /create\s+(?:or\s+replace\s+)?function\s+((?:[A-Za-z_]+\.)?[A-Za-z_][A-Za-z0-9_]*)\s*\(/gi;
+  // `alter function x(...) rename to y` (np. 0126: wrapper nad dawną funkcją) przenosi definicję.
+  const renameRe = /alter\s+function\s+((?:[A-Za-z_]+\.)?[A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*rename\s+to\s+([A-Za-z_][A-Za-z0-9_]*)/gi;
+  const bare = (name) => name.toLowerCase().replace(/^public\./, "");
   for (const { path, sql } of files) {
     const text = stripComments(sql);
     const headers = [...text.matchAll(headerRe)];
-    headers.forEach((match, index) => {
+    const events = [
+      ...headers.map((match, index) => ({ at: match.index, kind: "create", match, index })),
+      ...[...text.matchAll(renameRe)].map((match) => ({ at: match.index, kind: "rename", match })),
+    ].sort((a, b) => a.at - b.at);
+    for (const event of events) {
+      if (event.kind === "rename") {
+        const from = bare(event.match[1]);
+        const entry = functions.get(from);
+        if (entry) {
+          functions.delete(from);
+          functions.set(bare(event.match[2]), entry);
+        }
+        continue;
+      }
+      const { match, index } = event;
       const end = index + 1 < headers.length ? headers[index + 1].index : text.length;
-      const name = match[1].toLowerCase().replace(/^public\./, "");
-      functions.set(name, { path, body: text.slice(match.index, end) });
-    });
+      functions.set(bare(match[1]), { path, body: text.slice(match.index, end) });
+    }
   }
 
   const result = new Map();
