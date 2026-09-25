@@ -161,10 +161,17 @@ begin
 end $$;
 revoke all on function public.touch_profile_activity() from public, anon, authenticated;
 
-drop trigger if exists trg_auth_sessions_touch_activity on auth.sessions;
-create trigger trg_auth_sessions_touch_activity
-  after insert or update of expires_at on auth.sessions
-  for each row execute function public.touch_profile_activity();
+-- auth.sessions pochodzi z database/auth (0057). Zestaw bez schematu Better Auth (np. seed
+-- na shimie) pomija trigger — aktywność bierze się wyłącznie z sesji.
+do $$
+begin
+  if to_regclass('auth.sessions') is not null then
+    execute 'drop trigger if exists trg_auth_sessions_touch_activity on auth.sessions';
+    execute 'create trigger trg_auth_sessions_touch_activity
+               after insert or update of expires_at on auth.sessions
+               for each row execute function public.touch_profile_activity()';
+  end if;
+end $$;
 
 create index if not exists idx_profiles_candidate_activity
   on public.profiles ((coalesce(last_seen_at, created_at))) where role = 'candidate';
