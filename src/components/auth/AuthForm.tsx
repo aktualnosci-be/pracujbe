@@ -157,6 +157,7 @@ const SHOW_AGE: Record<AuthFormVariant, boolean> = {
   login: false,
   registerCandidate: true,
   registerEmployer: false,
+  registerInvitedEmployer: false,
   reset: false,
 };
 

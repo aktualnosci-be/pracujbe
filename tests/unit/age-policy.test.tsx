@@ -34,7 +34,7 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/env', () => ({ isDatabaseConfigured: vi.fn(() => false) }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/actions/age-attestation', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/actions/age-attestation')>();
   return { ...actual, attestCandidateAgeAction: vi.fn(actual.attestCandidateAgeAction) };

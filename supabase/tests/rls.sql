@@ -5309,6 +5309,7 @@ reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'SPA','spa@test.be','Sol A','{"role":"candidate","first_name":"Sol","last_name":"A","locale":"fr"}'),
   (:'SPB','spb@test.be','Sam B','{"role":"candidate","first_name":"Sam","last_name":"B","locale":"nl"}');
+select test_fixture.attest_candidates();
 insert into public.companies(id,name,status) values (:'SPC','Firma SP108','verified');
 
 set role authenticated; set app.current_uid = :'SPA'; select pg_temp.assert_client_role();
@@ -7088,6 +7089,7 @@ select pg_temp.un45_sql($q$
   insert into auth.users(id,email,name,raw_user_meta_data) values
     ('e0450000-0000-0000-0000-0000000000f1','cmp1@test.be','Cm P1','{"role":"candidate","first_name":"Cm","last_name":"P1","locale":"pl"}'),
     ('e0450000-0000-0000-0000-0000000000f2','cmp2@test.be','Cm P2','{"role":"candidate","first_name":"Cm","last_name":"P2","locale":"en"}');
+select test_fixture.attest_candidates();
   update public.notification_preferences set email_marketing = true
    where profile_id in ('e0450000-0000-0000-0000-0000000000f1','e0450000-0000-0000-0000-0000000000f2');
   insert into public.email_recipient_budget_config (scope, window_seconds, max_per_recipient)
@@ -7946,6 +7948,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
     'age_min_attested',18,
     'optional_consents', jsonb_build_object('email_marketing', true),
     'consent_wording', jsonb_build_object('terms','sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','privacy','sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','email_marketing','sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc')));
+select test_fixture.attest_candidates();
 select pg_temp.assert(
   (select array_agg(kind order by kind) from public.document_acceptances where profile_id = :'CS3')
     = array['privacy_notice_ack','terms_acceptance']
@@ -7976,6 +7979,7 @@ select pg_temp.assert(
 -- v2 bez zgody opcjonalnej: konto powstaje, marketing wyłączony, brak dowodu zgody.
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CS5','cs5@test.be','Cs Five','{"role":"employer","first_name":"Cs","last_name":"Five","locale":"pl","signup_receipt_version":2,"agree_terms":true,"privacy_notice_ack":true}');
+select test_fixture.attest_candidates();
 select pg_temp.assert(
   (select count(*) from public.document_acceptances where profile_id = :'CS5') = 2
   and (select count(*) from public.email_consent_events where profile_id = :'CS5') = 0
@@ -9059,6 +9063,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CVC','cvc@test.be','Cv C','{"role":"candidate","first_name":"Celina","last_name":"Cv","locale":"pl"}'),
   (:'CVO','cvo@test.be','Cv O','{"role":"candidate","first_name":"Otto","last_name":"Cv","locale":"nl"}'),
   (:'CVE','cve@test.be','Cv E','{"role":"employer","first_name":"Rek","last_name":"Cv","locale":"fr"}');
+select test_fixture.attest_candidates();
 
 -- Stan wyjściowy wpisany ręcznie (onboarding): zawód, umiejętność, język z poziomem, certyfikat z datą.
 select set_config('app.current_uid', :'CVC', false);
@@ -9980,6 +9985,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'ESC','esc@test.be','Cleo C','{"role":"candidate","first_name":"Cleo","last_name":"Candidat","locale":"fr"}'),
   (:'ESO','eso@test.be','Otto O','{"role":"employer","first_name":"Otto","last_name":"Owner","locale":"nl"}'),
   (:'ESR','esr@test.be','Rita R','{"role":"employer","first_name":"Rita","last_name":"Recruiter","locale":"en"}');
+select test_fixture.attest_candidates();
 insert into public.companies(id,name,status) values (:'ESCO','Firma ES','verified');
 insert into public.company_members(company_id,profile_id,role,is_active) values
   (:'ESCO',:'ESO','owner',true),
@@ -10098,6 +10104,7 @@ rollback;
 reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'GSO','gso@test.be','Gerd O','{"role":"employer","first_name":"Gerd","last_name":"Owner","locale":"fr"}');
+select test_fixture.attest_candidates();
 update auth.users set email_verified = true where id = :'GSO';
 insert into public.companies(id,name,status) values (:'GSC','Firma GS','verified');
 insert into public.company_members(company_id,profile_id,role,is_active) values (:'GSC',:'GSO','owner',true);
@@ -10106,7 +10113,7 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
 
 set role service_role;
 select public.submit_guest_application(:'GSJ', 'gs-guest@test.be', 'Greta Gość', null, null, null, 'nl',
-  'idem-gs-0001', 'nonce-gs-0001-aaaaaaaa', encode(sha256('tok-gs-1'::bytea), 'hex')) as gsreq \gset
+  'idem-gs-0001', 'nonce-gs-0001-aaaaaaaa', encode(sha256('tok-gs-1'::bytea), 'hex'), p_age_attested_min => 18) as gsreq \gset
 select pg_temp.assert(
   (select outcome from public.confirm_guest_application(encode(sha256('tok-gs-1'::bytea), 'hex'),
      'nonce-claim-gs-00001', encode(sha256('claim-gs-1'::bytea), 'hex'))) = 'confirmed',
@@ -10272,6 +10279,7 @@ rollback;
 -- GS98-8: po przejęciu aplikacji przez konto — ścieżka kandydata, bez e-maila gościa.
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'GSR','gs-guest@test.be','Greta G','{"role":"candidate","first_name":"Greta","last_name":"G","locale":"pl"}');
+select test_fixture.attest_candidates();
 update auth.users set email_verified = true where id = :'GSR';
 set role authenticated; set app.current_uid = :'GSR'; select pg_temp.assert_client_role();
 select public.claim_guest_application(encode(sha256('claim-gs-1'::bytea), 'hex')) as gsclaim \gset
@@ -10307,6 +10315,7 @@ reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'TIO','tio@ti.test','Ola O','{"role":"employer","first_name":"Ola","last_name":"Owner","locale":"pl"}'),
   (:'TIE','tie@ti.test','Eva E','{"role":"employer","first_name":"Eva","last_name":"Existing","locale":"fr"}');
+select test_fixture.attest_candidates();
 update auth.users set email_verified = true where id in (:'TIO', :'TIE');
 insert into public.companies(id,name,status) values
   (:'TICA','Firma TI A','verified'), (:'TICB','Firma TI B','verified');
@@ -10438,6 +10447,7 @@ select pg_temp.assert(
 -- TI403-6: po rejestracji zaproszenie czeka w panelu — dopiero po weryfikacji adresu.
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'TIN','nowy@ti.test','Nina N','{"role":"employer","first_name":"Nina","last_name":"New","locale":"fr"}');
+select test_fixture.attest_candidates();
 select pg_temp.assert(
   not exists (select 1 from public.company_members where profile_id = :'TIN'),
   'TI403-6 rejestracja nie dołącza do firmy');
@@ -10558,6 +10568,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'MAC','mac@test.be','Ma C','{"role":"candidate","first_name":"Ma","last_name":"Cand","locale":"pl"}'),
   (:'MAE','mae@test.be','Ma E','{"role":"employer","first_name":"Ma","last_name":"Rek","locale":"nl"}'),
   (:'MAX','max@test.be','Ma X','{"role":"employer","first_name":"Ma","last_name":"Obcy","locale":"fr"}');
+select test_fixture.attest_candidates();
 insert into public.companies(id,name,status) values (:'MAF','Firma MA','verified');
 insert into public.company_members(company_id,profile_id,role,is_active) values (:'MAF',:'MAE','owner',true);
 insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values

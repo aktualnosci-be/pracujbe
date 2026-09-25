@@ -15,7 +15,7 @@ import 'server-only';
 
 import { CANDIDATE_MIN_AGE_FALLBACK, normalizeCandidateMinAge } from '@/lib/age-policy/constants';
 import { isDatabaseConfigured } from '@/lib/env';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { isBuildPhase } from '@/lib/static-rendering';
 
 export async function getCandidateMinAge(): Promise<number> {
