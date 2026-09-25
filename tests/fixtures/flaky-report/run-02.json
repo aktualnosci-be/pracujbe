@@ -1,0 +1,135 @@
+{
+  "suites": [
+    {
+      "title": "demo.spec.mjs",
+      "file": "demo.spec.mjs",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "grupa",
+          "file": "demo.spec.mjs",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "stabilny",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "status": "passed",
+                      "errors": [],
+                      "retry": 0
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "file": "demo.spec.mjs",
+              "line": 5,
+              "column": 3
+            },
+            {
+              "title": "niestabilny",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "status": "passed",
+                      "errors": [],
+                      "retry": 0
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "file": "demo.spec.mjs",
+              "line": 6,
+              "column": 3
+            },
+            {
+              "title": "zawsze czerwony",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "status": "failed",
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m"
+                      },
+                      "errors": [
+                        {
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m"
+                        }
+                      ],
+                      "retry": 0
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "file": "demo.spec.mjs",
+              "line": 10,
+              "column": 3
+            },
+            {
+              "title": "pominięty",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "skipped",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "status": "skipped",
+                      "errors": [],
+                      "retry": 0
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "file": "demo.spec.mjs",
+              "line": 11,
+              "column": 8
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "expected": 2,
+    "unexpected": 1,
+    "flaky": 0,
+    "skipped": 1
+  }
+}

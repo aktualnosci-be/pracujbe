@@ -105,3 +105,22 @@ export function markdownTable(headers, rows) {
     ...rows.map(line),
   ].join("\n");
 }
+
+/**
+ * INP-proxy jednej interakcji z wpisów Event Timing (`{ interactionId, duration }`):
+ * jak INP w Chromium — czas interakcji = najdłuższy wpis z tym samym `interactionId`
+ * (pointerdown/pointerup/click jednego tapnięcia), a wynik = najdłuższa interakcja.
+ * Wpisy bez `interactionId` (np. pointermove) się nie liczą. Brak wpisów = 0: API zgłasza
+ * tylko zdarzenia ≥ `durationThreshold` (16 ms), więc interakcja była krótsza.
+ */
+export function inpFromEventEntries(entries) {
+  const byInteraction = new Map();
+  for (const { interactionId, duration } of entries) {
+    if (!interactionId) continue;
+    byInteraction.set(
+      interactionId,
+      Math.max(byInteraction.get(interactionId) ?? 0, duration),
+    );
+  }
+  return Math.max(0, ...byInteraction.values());
+}

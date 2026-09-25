@@ -23,7 +23,7 @@ import {
 import { BreachDeadlineBadge } from '@/components/admin/BreachDeadlineBadge';
 import {
   BTN_PRIMARY,
-  chipClass,
+  filterTabClass,
   INLINE_LINK,
   PANEL,
   ROW,
@@ -114,7 +114,7 @@ export default async function AdminBreachesPage({
               key={value}
               href={{ pathname: BASE_PATH, query }}
               aria-current={value === filter ? 'true' : undefined}
-              className={chipClass(value === filter)}
+              className={filterTabClass(value === filter)}
             >
               {t(FILTER_LABEL[value] ?? 'filterAll')}
             </Link>

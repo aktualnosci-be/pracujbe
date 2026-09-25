@@ -12,22 +12,22 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 
 | Czynność | Co robi kod | Tabele | Usługi zewnętrzne | Retencja/usuwanie w kodzie |
 |---|---|---|---|---|
-| Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.document_acceptances`, `public.profiles` | Railway, Supabase, Resend, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile). |
-| Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.candidate_visibility_events`, `public.saved_jobs` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
-| Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.storage_deletion_queue` | Railway, Supabase | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona. |
-| Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Supabase, Resend | Kod nie usuwa danych — do ustalenia |
-| Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Supabase, Resend, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
-| Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Supabase, Resend | Kod nie usuwa danych — do ustalenia |
-| Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Supabase, Resend | Propozycje wygasają (expires_at), dane nie są usuwane. |
-| Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs`, `public.screening_question_reviews` | Railway, Supabase, Resend, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
-| E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Supabase, Resend | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
-| Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway, Supabase | Kod nie usuwa danych — do ustalenia |
-| Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Supabase, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
-| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Supabase, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
-| Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Supabase, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
-| Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway, Supabase | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
+| Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.document_acceptances`, `public.profiles` | Railway, Resend, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile). |
+| Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.candidate_visibility_events`, `public.saved_jobs` | Railway | Kod nie usuwa danych — do ustalenia |
+| Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.storage_deletion_queue` | Railway | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona. |
+| Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Resend | Kod nie usuwa danych — do ustalenia |
+| Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
+| Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Resend | Kod nie usuwa danych — do ustalenia |
+| Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend | Propozycje wygasają (expires_at), dane nie są usuwane. |
+| Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs`, `public.screening_question_reviews` | Railway, Resend, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
+| E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Resend | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
+| Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Kod nie usuwa danych — do ustalenia |
+| Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
+| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
+| Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
+| Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
 | Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
-| Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.storage_deletion_queue` | Railway, Supabase | run_retention_purge (/api/maintenance): okresy z retention_policies; domyślnie tylko pliki i profile oznaczone jako usunięte (30 dni), pozostałe kategorie wyłączone. Ślad wniosków i rejestr usunięć bez usuwania do decyzji właściciela. |
+| Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.storage_deletion_queue` | Railway | run_retention_purge (/api/maintenance): okresy z retention_policies; domyślnie tylko pliki i profile oznaczone jako usunięte (30 dni), pozostałe kategorie wyłączone. Ślad wniosków i rejestr usunięć bez usuwania do decyzji właściciela. |
 | Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy. | `public.erasure_tombstones` | Railway | BACKUP_RETENTION najnowszych kopii (domyślnie 14). |
 | Płatności (wyłączone) (`billing-disabled`) | Martwy schemat po wyłączonym billingu (#51); brak aktywnego przepływu. | — | Stripe | Kod nie usuwa danych — do ustalenia |
 
@@ -40,23 +40,9 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 - **Osoby:** Kandydaci, Aplikujący bez konta, Pracodawcy i członkowie firm, Zgłaszający treści, Administratorzy, Odwiedzający
 - **Aktywacja:** Produkcja wdrażana na Railway (docs/railway/README.md); połączenia DB przez DATABASE_APP_URL / DATABASE_SERVICE_URL / DATABASE_AUTH_URL / DATABASE_OPS_URL.
 - **Kod:** `docs/railway/README.md`, `docs/railway/OPERATIONS.md`, `src/lib/db/pool.ts`, `src/lib/db/portal.ts`, `scripts/railway-cron-call.mjs`
-- **Uwaga:** Adapter bucketa S3 (src/lib/storage/railway-bucket.ts) istnieje, ale obecny kod plików CV korzysta z Supabase Storage (src/lib/storage.ts).
+- **Uwaga:** Pliki CV w prywatnym buckecie S3 Railway (src/lib/storage/railway-bucket.ts, #26); pobranie tylko krótkim linkiem HMAC przez /api/files/cv.
+- **Uwaga:** Limiter (src/lib/rate-limit.ts): przy loginie DATABASE_RATE_LIMIT_URL klucz HMAC akcji i adresu IP; przejściowa ścieżka przez pulę service zapisuje klucz z adresem IP bez haszowania.
 - **Uwaga:** Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age i zapisuje w BACKUP_DIR; miejsce przechowywania kopii nie wynika z repozytorium.
-- **Rola (procesor/administrator):** DO UZUPEŁNIENIA
-- **Region przetwarzania:** DO UZUPEŁNIENIA
-- **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
-- **Umowa (DPA):** DO UZUPEŁNIENIA
-- **Retencja u dostawcy:** DO UZUPEŁNIENIA
-
-### Supabase (`supabase`)
-
-- **Cel w portalu:** Warstwa przejściowa: sesje i trasy logowania Supabase Auth (do przepięcia w #24, usunięcie SDK w #27). Panele, Server Actions i limiter korzystają z PostgreSQL Railway (#25).
-- **Kategorie danych:** Konto i sesja logowania (e-mail, identyfikator)
-- **Osoby:** Kandydaci, Pracodawcy i członkowie firm, Administratorzy
-- **Aktywacja:** NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (+ SUPABASE_SERVICE_ROLE_KEY po stronie serwera).
-- **Kod:** `src/lib/supabase/server.ts`, `src/lib/actions/auth.ts`, `src/middleware.ts`
-- **Uwaga:** CLAUDE.md opisuje Supabase jako przejściowe; docelowa baza to PostgreSQL na Railway.
-- **Uwaga:** Limiter (src/lib/rate-limit.ts) zapisuje w PostgreSQL Railway klucz z akcji i adresu IP bez haszowania (pula service); wariant z HMAC (src/lib/db/rate-limit.ts) czeka na podłączenie.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
@@ -69,7 +55,7 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 - **Kategorie danych:** Adres e-mail odbiorcy; Temat i treść HTML wyrenderowanego szablonu (pola payloadu — patrz sekcja e-maili w mapie); Nagłówki List-Unsubscribe z tokenem wypisania; Identyfikator wysyłki (idempotency key = id wiersza email_deliveries)
 - **Osoby:** Kandydaci, Aplikujący bez konta, Pracodawcy i członkowie firm, Zgłaszający treści
 - **Aktywacja:** RESEND_API_KEY (bez klucza worker pomija wysyłkę); webhook wymaga RESEND_WEBHOOK_SECRET.
-- **Kod:** `src/lib/email/outbox.ts`, `src/app/api/email/webhook/resend/route.ts`, `src/app/api/auth/email-hook/route.ts`, `src/emails/wiring.ts`
+- **Kod:** `src/lib/email/outbox.ts`, `src/app/api/email/webhook/resend/route.ts`, `src/lib/auth/email-worker.ts`, `src/emails/wiring.ts`
 - **Uwaga:** Wywołanie resend.emails.send przekazuje from, to, subject, html i opcjonalnie nagłówki wypisania; kod nie ustawia opcji śledzenia otwarć/kliknięć — stan tych ustawień na koncie do sprawdzenia.
 - **Uwaga:** Payloady kolejki nie zawierają treści wiadomości czatu ani odpowiedzi screeningowych (sekcja e-maili w mapie jest generowana z migracji).
 - **Uwaga:** Do szablonu trafiają tylko pola z listy src/lib/email/payload-fields.ts (#503); odbiorca firmowy jest ponownie sprawdzany przy odbiorze z kolejki (email_recipient_authorized).
@@ -570,6 +556,8 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
 | `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0054_document_acceptances.sql` |
+| `kind` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0108_consent_separation.sql` |
+| `source` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0108_consent_separation.sql` |
 | `document_version` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0054_document_acceptances.sql` |
 | `accepted_at` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0054_document_acceptances.sql` |
 | `ip_address` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0054_document_acceptances.sql` |
@@ -679,7 +667,7 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 - **Migracja:** `supabase/migrations/0007_misc.sql`
 - **Czynności:** Pliki CV
 - **Osoby:** Kandydaci (konto)
-- **Uwaga:** Treść pliku leży w buckecie (Supabase Storage), w tabeli są metadane.
+- **Uwaga:** Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -1003,7 +991,7 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 Klucze z `jsonb_build_object` w aktualnych definicjach funkcji SQL. Worker dokłada imię odbiorcy
 z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.ts`,
 `src/lib/email/guest-delivery.ts`). E-maile konta (`src/lib/email/auth-email.ts`):
-`accountConfirmation`, `passwordReset`, `magicLink`, `emailChange`, `invite` — zawierają link z tokenem.
+`accountConfirmation`, `passwordReset` — zawierają link z tokenem.
 
 Minimalizacja (#503): do szablonu — a więc do dostawcy poczty — trafiają tylko pola z listy
 `src/lib/email/payload-fields.ts`; resztę payloadu worker odrzuca przed renderem (zostaje w bazie).

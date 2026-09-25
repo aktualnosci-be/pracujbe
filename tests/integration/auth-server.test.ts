@@ -1,12 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { hashPassword, verifyPassword } from 'better-auth/crypto';
 import { createAuthServer, type AuthServerDependencies } from '../../src/lib/auth/server';
 import { withCandidateSignup, withEmployerSignup } from '../../src/lib/auth/signup-context';
-import { loadMigrations } from '../../scripts/db/migration-files.mjs';
+import { loadProductionMigrations } from '../../scripts/db/production-migrations.mjs';
 import { applyMigrations } from '../../scripts/db/migrate.mjs';
 
 const baseURL = 'https://auth.example.invalid';
@@ -48,13 +47,9 @@ beforeAll(async () => {
   if (!ready) throw new Error('Izolowany PostgreSQL nie uruchomił się.');
   const occupied = await admin.query("SELECT to_regclass('auth.users') AS users, to_regclass('app_migrations.history') AS history");
   expect(occupied.rows[0]).toEqual({ users: null, history: null });
-  const bootstrap = await loadMigrations(fileURLToPath(new URL('../../database/bootstrap/', import.meta.url)));
-  const domain = await loadMigrations(fileURLToPath(new URL('../../supabase/migrations/', import.meta.url)));
-  const authMigrations = await loadMigrations(fileURLToPath(new URL('../../database/auth/', import.meta.url)));
-  await admin.query('BEGIN');
-  for (const migration of bootstrap) await admin.query(migration.sql);
-  await admin.query('COMMIT');
-  await applyMigrations(admin, [...domain, ...authMigrations]);
+  // Ta sama kolejność co produkcja: bootstrap, potem domena i auth w globalnej numeracji
+  // (migracje domeny po 0059 mogą zmieniać obiekty auth, np. 0108 dla #493).
+  await applyMigrations(admin, await loadProductionMigrations());
   const password = randomBytes(24).toString('hex');
   await admin.query(`CREATE ROLE auth_runtime_test_login LOGIN PASSWORD '${password}' NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
   await admin.query('GRANT pracujbe_auth TO auth_runtime_test_login');
@@ -87,7 +82,7 @@ function post(path: string, body: object, cookie?: string, origin = baseURL) {
 const cookieFrom = (response: Response) => response.headers.getSetCookie().map(value => value.split(';')[0]).join('; ');
 const readSession = async (cookie: string) => (await auth.handler(new Request(`${baseURL}/api/auth/get-session`, { headers: { cookie } }))).json();
 function form(email: string, locale: typeof locales[number] = 'pl') {
-  return { email, locale, password: signupPassword, passwordConfirm: signupPassword, firstName: 'Anna', lastName: 'Nowak', agreeTerms: true, companyName: 'Firma ' + locale };
+  return { email, locale, password: signupPassword, passwordConfirm: signupPassword, firstName: 'Anna', lastName: 'Nowak', agreeTerms: true, privacyNoticeAck: true, companyName: 'Firma ' + locale };
 }
 async function snapshot() {
   return (await admin.query(`SELECT (SELECT count(*)::int FROM auth.users) AS users,
@@ -112,14 +107,23 @@ describe('SDK Better Auth na izolowanym PostgreSQL', () => {
         JOIN auth.accounts a ON a.user_id=u.id WHERE u.id=$1`, [result.user.id])).rows[0];
       expect(persisted).toMatchObject({ email_verified: false, role, first_name: 'Anna', last_name: 'Nowak',
         preferred_locale: locale, account_locale: locale, signup_locale: locale, provider_id: 'credential' });
-      expect(persisted.metadata).toEqual({ signup_receipt_version: 1, agree_terms: true, role, locale,
+      expect(persisted.metadata).toEqual({ signup_receipt_version: 2, agree_terms: true, privacy_notice_ack: true,
+        optional_consents: { email_marketing: false },
+        consent_wording: {
+          terms: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+          privacy: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+          email_marketing: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        },
+        role, locale,
         first_name: 'Anna', last_name: 'Nowak', ...(role === 'employer' ? { company_name: 'Firma ' + locale } : {}) });
       expect(await verifyPassword({ hash: persisted.password, password: signupPassword })).toBe(true);
-      const receipts = (await admin.query(`SELECT document, document_version, locale, ip_address, user_agent,
+      const receipts = (await admin.query(`SELECT document, kind, source, document_version, locale, ip_address, user_agent,
         consent_version_id, accepted_at FROM public.document_acceptances WHERE profile_id=$1 ORDER BY document`, [result.user.id])).rows;
       expect(receipts).toHaveLength(2);
       for (const receipt of receipts) {
-        expect(receipt).toMatchObject({ locale, ip_address: null, user_agent: null,
+        // #493: regulamin i informacja o prywatności jako osobne elementy z kanału rejestracji.
+        expect(receipt).toMatchObject({ locale, ip_address: null, user_agent: null, source: 'signup',
+          kind: receipt.document === 'terms' ? 'terms_acceptance' : 'privacy_notice_ack',
           document_version: `${receipt.document}-${locale}-v1` });
         expect(receipt.consent_version_id).toMatch(/^[a-f0-9-]{36}$/);
         expect(receipt.accepted_at).toBeInstanceOf(Date);
@@ -134,6 +138,10 @@ describe('SDK Better Auth na izolowanym PostgreSQL', () => {
     const action = vi.fn();
     for (const agreeTerms of [undefined, false]) {
       await expect(withCandidateSignup({ ...form('no-consent@example.invalid'), agreeTerms }, 'pl', action)).rejects.toThrow();
+    }
+    // #493: bez potwierdzenia informacji o prywatności konto też nie powstaje.
+    for (const privacyNoticeAck of [undefined, false]) {
+      await expect(withCandidateSignup({ ...form('no-consent@example.invalid'), privacyNoticeAck }, 'pl', action)).rejects.toThrow();
     }
     expect(action).not.toHaveBeenCalled();
     for (const email of ['direct@example.invalid', 'candidate-pl@example.invalid']) {

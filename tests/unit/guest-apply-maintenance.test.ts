@@ -6,10 +6,6 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(), fileBucketConfig: () => null }));
-// Bez bucketu Railway kolejka storage używa (przejściowo) klienta Storage Supabase.
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminClient: () => ({ storage: { from: () => ({ remove: async () => ({ error: null }) }) } }),
-}));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const { POST } = await import('@/app/api/maintenance/route');
@@ -102,14 +98,9 @@ describe('maintenance: retencja danych i kolejka storage (#486)', () => {
   });
 });
 
-describe('maintenance: kolejka storage bez bucketu i bez klienta Storage (#25)', () => {
-  it('pusta kolejka nie tworzy klienta Storage; błąd klienta = ponowienie wiersza, nie 503', async () => {
-    const admin = await import('@/lib/supabase/admin');
-    const spy = vi.spyOn(admin, 'createAdminClient').mockImplementation(() => {
-      throw new Error('supabase_admin_env_missing');
-    });
+describe('maintenance: kolejka storage bez bucketu (#27)', () => {
+  it('pusta kolejka = 200; wiersz bez bucketu = ponowienie z kodem, nie 503', async () => {
     expect((await POST(request())).status).toBe(200);
-    expect(spy).not.toHaveBeenCalled();
 
     fakeDb
       .rpc('claim_storage_deletions', [{ id: 'q1', bucket: 'candidate-files', path: 'u1/cv.pdf' }])
@@ -117,6 +108,6 @@ describe('maintenance: kolejka storage bez bucketu i bez klienta Storage (#25)',
     const res = await POST(request());
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ storageDeletions: { claimed: 1, deleted: 0, failed: 1 } });
-    expect(fakeDb.callsTo('complete_storage_deletion')[0]?.args).toEqual({ p_id: 'q1', p_ok: false, p_error: 'STORAGE_UNAVAILABLE' });
+    expect(fakeDb.callsTo('complete_storage_deletion')[0]?.args).toEqual({ p_id: 'q1', p_ok: false, p_error: 'STORAGE_UNCONFIGURED' });
   });
 });

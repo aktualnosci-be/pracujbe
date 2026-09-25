@@ -13,7 +13,6 @@ type ToConfirm = typeof TO_CONFIRM;
 
 export type ProcessorId =
   | 'railway'
-  | 'supabase'
   | 'resend'
   | 'sentry'
   | 'cloudflare-turnstile'
@@ -65,23 +64,9 @@ export const PROCESSORS: readonly Processor[] = [
     activation: 'Produkcja wdrażana na Railway (docs/railway/README.md); połączenia DB przez DATABASE_APP_URL / DATABASE_SERVICE_URL / DATABASE_AUTH_URL / DATABASE_OPS_URL.',
     codeRefs: ['docs/railway/README.md', 'docs/railway/OPERATIONS.md', 'src/lib/db/pool.ts', 'src/lib/db/portal.ts', 'scripts/railway-cron-call.mjs'],
     notes: [
-      'Adapter bucketa S3 (src/lib/storage/railway-bucket.ts) istnieje, ale obecny kod plików CV korzysta z Supabase Storage (src/lib/storage.ts).',
+      'Pliki CV w prywatnym buckecie S3 Railway (src/lib/storage/railway-bucket.ts, #26); pobranie tylko krótkim linkiem HMAC przez /api/files/cv.',
+      'Limiter (src/lib/rate-limit.ts): przy loginie DATABASE_RATE_LIMIT_URL klucz HMAC akcji i adresu IP; przejściowa ścieżka przez pulę service zapisuje klucz z adresem IP bez haszowania.',
       'Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age i zapisuje w BACKUP_DIR; miejsce przechowywania kopii nie wynika z repozytorium.',
-    ],
-    ...UNKNOWN,
-  },
-  {
-    id: 'supabase',
-    name: 'Supabase',
-    purpose:
-      'Warstwa przejściowa: sesje i trasy logowania Supabase Auth (do przepięcia w #24, usunięcie SDK w #27). Panele, Server Actions i limiter korzystają z PostgreSQL Railway (#25).',
-    dataCategories: ['Konto i sesja logowania (e-mail, identyfikator)'],
-    dataSubjects: ['Kandydaci', 'Pracodawcy i członkowie firm', 'Administratorzy'],
-    activation: 'NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (+ SUPABASE_SERVICE_ROLE_KEY po stronie serwera).',
-    codeRefs: ['src/lib/supabase/server.ts', 'src/lib/actions/auth.ts', 'src/middleware.ts'],
-    notes: [
-      'CLAUDE.md opisuje Supabase jako przejściowe; docelowa baza to PostgreSQL na Railway.',
-      'Limiter (src/lib/rate-limit.ts) zapisuje w PostgreSQL Railway klucz z akcji i adresu IP bez haszowania (pula service); wariant z HMAC (src/lib/db/rate-limit.ts) czeka na podłączenie.',
     ],
     ...UNKNOWN,
   },
@@ -98,7 +83,7 @@ export const PROCESSORS: readonly Processor[] = [
     ],
     dataSubjects: ['Kandydaci', 'Aplikujący bez konta', 'Pracodawcy i członkowie firm', 'Zgłaszający treści'],
     activation: 'RESEND_API_KEY (bez klucza worker pomija wysyłkę); webhook wymaga RESEND_WEBHOOK_SECRET.',
-    codeRefs: ['src/lib/email/outbox.ts', 'src/app/api/email/webhook/resend/route.ts', 'src/app/api/auth/email-hook/route.ts', 'src/emails/wiring.ts'],
+    codeRefs: ['src/lib/email/outbox.ts', 'src/app/api/email/webhook/resend/route.ts', 'src/lib/auth/email-worker.ts', 'src/emails/wiring.ts'],
     notes: [
       'Wywołanie resend.emails.send przekazuje from, to, subject, html i opcjonalnie nagłówki wypisania; kod nie ustawia opcji śledzenia otwarć/kliknięć — stan tych ustawień na koncie do sprawdzenia.',
       'Payloady kolejki nie zawierają treści wiadomości czatu ani odpowiedzi screeningowych (sekcja e-maili w mapie jest generowana z migracji).',
