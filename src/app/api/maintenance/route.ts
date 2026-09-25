@@ -1,9 +1,8 @@
-import { timingSafeEqual } from 'node:crypto';
-
 import { NextResponse } from 'next/server';
 
 import { campaignSendingReady } from '@/lib/admin/campaigns';
 import { dsaRetentionMode } from '@/lib/admin/dsa-retention-mode';
+import { isCronAuthorized } from '@/lib/cron/auth';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc, type RpcArgs } from '@/lib/db/sql';
 import { isProductionMode } from '@/lib/env';
@@ -38,7 +37,8 @@ import {
  * na decyzję właściciela, #40); `DSA_RETENTION_MODE=dry-run` = podgląd, `apply` = anonimizacja
  * (`src/lib/admin/dsa-retention-mode.ts`). Odpowiedź: tryb + liczniki przebiegu.
  *
- * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
+ * Chroniony `MAINTENANCE_SECRET` (`Authorization: Bearer`); przejściowo także `CRON_SECRET`
+ * (`src/lib/cron/secrets.ts` — sekret e-mail nie otwiera tego zadania).
  * Wymaga puli service_role (`DATABASE_SERVICE_URL`; RPC są service_role-only). #25: każde
  * zadanie to OSOBNA, krótka transakcja `withServiceRole` — wynik jednego zadania jest
  * zatwierdzony niezależnie od błędu innego (jak dawniej osobne wywołania RPC), a zadania
@@ -49,22 +49,6 @@ import {
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
-
-function authorized(request: Request): boolean {
-  const header = request.headers.get('authorization');
-  if (!header) return false;
-  const secrets = [process.env.MAINTENANCE_SECRET, process.env.CRON_SECRET].filter(
-    (s): s is string => Boolean(s),
-  );
-  return secrets.some((s) => safeEqual(header, `Bearer ${s}`));
-}
 
 /**
  * Pliki CV leżą w prywatnym buckecie Railway (#26). Brak jego konfiguracji to błąd każdego
@@ -89,7 +73,7 @@ function retentionCounters(value: unknown): Record<string, number> {
 }
 
 async function run(request: Request): Promise<Response> {
-  if (!authorized(request)) {
+  if (!isCronAuthorized(request, 'maintenance')) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   if (!isServiceDatabaseConfigured()) {
