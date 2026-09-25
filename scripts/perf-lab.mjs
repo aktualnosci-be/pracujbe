@@ -115,7 +115,7 @@ function installObservers() {
         });
     }).observe({ type: "event", buffered: true, durationThreshold: 16 });
   } catch {
-    // Brak Event Timing — pomiar interakcji zgłosi błąd.
+    // Brak Event Timing — measureInteraction zgłasza błąd.
   }
 }
 
@@ -290,7 +290,13 @@ async function measureInteraction(browser, scenario) {
             : ""),
       );
     }
-    const mark = await page.evaluate(() => performance.now());
+    const { mark, supported } = await page.evaluate(() => ({
+      mark: performance.now(),
+      supported: typeof PerformanceEventTiming !== "undefined",
+    }));
+    // Bez Event Timing wynik byłby zawsze 0 (zielony) — to błąd pomiaru.
+    if (!supported)
+      throw new Error(`${scenario.name}: przeglądarka bez Event Timing`);
     await trigger.tap({ timeout: 10_000 });
     await page
       .locator(scenario.done)
