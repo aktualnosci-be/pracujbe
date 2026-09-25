@@ -9370,18 +9370,18 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- MR. Zgłoszenia wiadomości i rozmów (0113): tylko strona rozmowy, dowód z bazy tylko dla
+-- MR. Zgłoszenia wiadomości i rozmów (0116): tylko strona rozmowy, dowód z bazy tylko dla
 --     admina, idempotencja, jedna otwarta sprawa na wiadomość, limit, niezmienność.
 --     Kontrole ujemne: obca rozmowa, wiadomość spoza rozmowy, powtórka, polityka z 0009.
 -- ============================================================================
 reset role; reset app.current_uid;
-\set CANDMR 'e1080000-0000-0000-0000-00000000000c'
-\set CANDMX 'e1080000-0000-0000-0000-00000000000d'
-\set RECMR  'e1080000-0000-0000-0000-0000000000a1'
-\set RECMX  'e1080000-0000-0000-0000-0000000000a2'
-\set COMPMR 'e1080000-0000-0000-0000-0000000000f1'
-\set COMPMX 'e1080000-0000-0000-0000-0000000000f2'
-\set JOBMR  'e1080000-0000-0000-0000-0000000000b1'
+\set CANDMR 'e1160000-0000-0000-0000-00000000000c'
+\set CANDMX 'e1160000-0000-0000-0000-00000000000d'
+\set RECMR  'e1160000-0000-0000-0000-0000000000a1'
+\set RECMX  'e1160000-0000-0000-0000-0000000000a2'
+\set COMPMR 'e1160000-0000-0000-0000-0000000000f1'
+\set COMPMX 'e1160000-0000-0000-0000-0000000000f2'
+\set JOBMR  'e1160000-0000-0000-0000-0000000000b1'
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CANDMR','candmr@test.be','Mira R','{"role":"candidate","first_name":"Mira","last_name":"R","locale":"pl"}'),
   (:'CANDMX','candmx@test.be','Xena R','{"role":"candidate","first_name":"Xena","last_name":"R","locale":"pl"}'),
@@ -9409,11 +9409,11 @@ reset role; reset app.current_uid;
 -- Wiadomość z innej rozmowy (EMPA ↔ CANDA z sekcji E) do kontroli „spoza rozmowy”.
 select pg_temp.assert(:'msg' is not null, 'MR0 przygotowanie: wiadomość z innej rozmowy');
 
-\set MRKEY1 'e1080000-0000-0000-0000-000000000101'
-\set MRKEY2 'e1080000-0000-0000-0000-000000000102'
-\set MRKEY3 'e1080000-0000-0000-0000-000000000103'
-\set MRKEY4 'e1080000-0000-0000-0000-000000000104'
-\set MRKEY5 'e1080000-0000-0000-0000-000000000105'
+\set MRKEY1 'e1160000-0000-0000-0000-000000000101'
+\set MRKEY2 'e1160000-0000-0000-0000-000000000102'
+\set MRKEY3 'e1160000-0000-0000-0000-000000000103'
+\set MRKEY4 'e1160000-0000-0000-0000-000000000104'
+\set MRKEY5 'e1160000-0000-0000-0000-000000000105'
 
 -- MR1: bez EXECUTE dla anon; bez bezpośredniego INSERT dla klienta.
 select pg_temp.assert(

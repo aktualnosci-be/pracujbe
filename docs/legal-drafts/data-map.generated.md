@@ -904,7 +904,7 @@ Tabele w migracjach: 92; z danymi osobowymi: 58; bez danych osobowych: 34.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `conversation_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0113_message_reports.sql` |
+| `conversation_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0116_message_reports.sql` |
 | `reporter_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0007_misc.sql` |
 | `reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0007_misc.sql` |
 | `details` | Korespondencja i treści swobodne | `supabase/migrations/0007_misc.sql` |

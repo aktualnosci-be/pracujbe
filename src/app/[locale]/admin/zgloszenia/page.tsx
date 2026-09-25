@@ -111,7 +111,7 @@ const STATUS_LABEL: Record<string, string> = {
   dismissed: 'statusDismissed',
 };
 
-/** Strona rozmowy w dowodzie zgłoszenia wiadomości (0113). */
+/** Strona rozmowy w dowodzie zgłoszenia wiadomości (0116). */
 const SIDE_LABEL: Record<string, string> = {
   company: 'messageReportSideCompany',
   candidate: 'messageReportSideCandidate',
@@ -282,7 +282,7 @@ export default async function AdminReportsPage({
                             {target.preview}
                           </blockquote>
                         ) : null}
-                        {/* Zgłoszenie wiadomości/rozmowy (0113): dowód z chwili zgłoszenia. */}
+                        {/* Zgłoszenie wiadomości/rozmowy (0116): dowód z chwili zgłoszenia. */}
                         {report.messageReport ? (
                           <div className="space-y-1 rounded-[14px] border border-border px-4 py-3 text-[13px]">
                             <p className="font-medium text-foreground">

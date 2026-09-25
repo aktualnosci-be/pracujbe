@@ -12,7 +12,7 @@ const messagesActions = await import('../../src/lib/actions/messages');
 const messagesData = await import('../../src/lib/data/messages');
 const { reportConversationContent } = await import('../../src/lib/actions/message-reports');
 
-// 0113: zgłoszenie wiadomości/rozmowy przez Server Action pod sesją na PostgreSQL 16 —
+// 0116: zgłoszenie wiadomości/rozmowy przez Server Action pod sesją na PostgreSQL 16 —
 // strona rozmowy zgłasza, obcy dostaje NOT_FOUND, ponowienie = to samo zgłoszenie,
 // powtórka = already_open, dowód tylko dla service_role, stan własnych zgłoszeń bez dowodu.
 let anna: PortalIdentity;
@@ -61,7 +61,7 @@ beforeAll(async () => {
 
 afterAll(async () => { await realSession.db?.stop(); });
 
-describe('zgłoszenia wiadomości na PostgreSQL (0113)', () => {
+describe('zgłoszenia wiadomości na PostgreSQL (0116)', () => {
   it('kandydatka zgłasza wiadomość rekrutera; ponowienie = duplicate; nowy klucz = already_open', async () => {
     actAs(anna);
     const key = randomUUID();

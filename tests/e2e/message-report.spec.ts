@@ -7,7 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
 
 /**
- * Zgłoszenie wiadomości i rozmowy (0113) w trybie DEMO: przycisk tylko przy wiadomości
+ * Zgłoszenie wiadomości i rozmowy (0116) w trybie DEMO: przycisk tylko przy wiadomości
  * drugiej strony, dialog z powodem ze słownika (błąd przy polu z fokusem, bez wysyłki),
  * opcjonalny opis z limitem, znacznik treści prawnej „do uzupełnienia”, stan „Zgłoszenie
  * przyjęte” z fokusem na komunikacie; axe (critical/serious + target-size) przy otwartym

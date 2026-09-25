@@ -618,7 +618,7 @@ export async function getUnreadConversationsCount(locale?: string): Promise<numb
   return conversations.filter((c) => c.unread).length;
 }
 
-/** Własne zgłoszenia w rozmowie (0113): zgłoszone wiadomości i czy zgłoszono całą rozmowę. */
+/** Własne zgłoszenia w rozmowie (0116): zgłoszone wiadomości i czy zgłoszono całą rozmowę. */
 export interface MyMessageReports {
   messageIds: string[];
   conversationReported: boolean;

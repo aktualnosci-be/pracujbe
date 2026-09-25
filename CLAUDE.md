@@ -957,7 +957,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
   i alerty pojedyncze (`rls.sql` PP7–PP8).
 - [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** załączniki
-  Zgłoszenia (migracja `0113`, numer tymczasowy): strona rozmowy zgłasza wiadomość drugiej
+  Zgłoszenia (migracja `0116`): strona rozmowy zgłasza wiadomość drugiej
   strony („Zgłoś” pod dymkiem) albo całą rozmowę (nagłówek wątku) — `ReportContentButton`
   (powód ze słownika `MESSAGE_REPORT_CATEGORIES`, opis ≤ 1000, znacznik treści prawnej „do
   uzupełnienia”) → `reportConversationContent` (limiter 10/h na konto) → RPC pod sesją

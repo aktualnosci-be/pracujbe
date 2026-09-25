@@ -667,7 +667,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   // --- DSA i moderacja ------------------------------------------------------------------------
   'public.reports': {
     activities: ['dsa-moderation'],
-    // Zgłoszenie wiadomości (0113): zgłaszający i nadawca to kandydat albo członek firmy.
+    // Zgłoszenie wiadomości (0116): zgłaszający i nadawca to kandydat albo członek firmy.
     subjects: ['reporter', 'employer', 'candidate'],
     columns: {
       conversation_id: 'reference',
@@ -681,7 +681,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       reporter_email: 'contact',
       reporter_locale: 'preferences',
       good_faith_at: 'consent',
-      // Dowód: stan oferty/firmy (DSA) albo treść zgłoszonej wiadomości i id nadawcy (0113).
+      // Dowód: stan oferty/firmy (DSA) albo treść zgłoszonej wiadomości i id nadawcy (0116).
       target_snapshot: 'correspondence',
     },
   },

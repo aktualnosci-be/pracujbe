@@ -32,7 +32,7 @@ export interface ThreadMessageListProps {
   displayName: string;
   initialMessages: ThreadMessageView[];
   initialOlderCursor: ThreadCursor | null;
-  /** Wiadomości z otwartym zgłoszeniem bieżącego użytkownika (0113). */
+  /** Wiadomości z otwartym zgłoszeniem bieżącego użytkownika (0116). */
   reportedMessageIds?: string[];
 }
 
@@ -184,7 +184,7 @@ export function ThreadMessageList({
               <div className={message.mine ? BUBBLE_MINE : BUBBLE}>
                 <p className="whitespace-pre-wrap break-words">{message.body}</p>
               </div>
-              {/* Zgłoszenie wiadomości drugiej strony (0113) — po treści w DOM, wizualnie pod podpisem. */}
+              {/* Zgłoszenie wiadomości drugiej strony (0116) — po treści w DOM, wizualnie pod podpisem. */}
               {!message.mine ? (
                 <ReportContentButton
                   className="order-last mt-0.5"

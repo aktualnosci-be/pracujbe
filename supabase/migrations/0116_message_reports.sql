@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0113 — zgłoszenia wiadomości i rozmów (Etap 5, „Wiadomości: zgłoszenia”).
+-- 0116 — zgłoszenia wiadomości i rozmów (Etap 5, „Wiadomości: zgłoszenia”).
 --
 -- NUMER TYMCZASOWY — ostateczny nada integrator (kolejka migracji).
 --

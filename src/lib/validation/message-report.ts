@@ -1,7 +1,7 @@
 import { z } from 'zod/v3';
 
 /**
- * Zgłoszenie wiadomości albo całej rozmowy (Etap 5, migracja 0113).
+ * Zgłoszenie wiadomości albo całej rozmowy (Etap 5, migracja 0116).
  *
  * Słownik powodów i limit opisu = te same wartości co w RPC `report_conversation_content`
  * i ograniczeniu `reports_message_report_complete` (test porównuje je z migracją).

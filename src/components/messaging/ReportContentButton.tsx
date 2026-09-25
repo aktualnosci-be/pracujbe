@@ -20,7 +20,7 @@ import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialo
 import { BTN_PRIMARY, BTN_SECONDARY, PANEL_H2 } from '@/components/dashboard/panel-styles';
 
 /**
- * ReportContentButton — zgłoszenie wiadomości drugiej strony albo całej rozmowy (0113).
+ * ReportContentButton — zgłoszenie wiadomości drugiej strony albo całej rozmowy (0116).
  *
  * Dialog z powodem ze słownika (`MESSAGE_REPORT_CATEGORIES`) i opcjonalnym opisem. Klucz
  * idempotencji jest stały dla jednego otwarcia dialogu: podwójne kliknięcie i ponowienie po
