@@ -13,8 +13,8 @@ import {
 } from '@/lib/admin/breach';
 import { parseUuid } from '@/lib/admin/list-params';
 import { getBreachIncident } from '@/lib/data/admin';
+import { isPortalDataConfigured } from '@/lib/db/portal';
 import { createAppDateFormatter } from '@/lib/datetime';
-import { isSupabaseConfigured } from '@/lib/env';
 import { cn } from '@/lib/utils';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import { AdminEmptyState, AdminPageHeader } from '@/components/admin/AdminListControls';
@@ -23,7 +23,7 @@ import { BreachIncidentForm } from '@/components/admin/BreachIncidentForm';
 import { BreachNoticeForm } from '@/components/admin/BreachNoticeForm';
 import { BreachStatusActions } from '@/components/admin/BreachStatusActions';
 import {
-  BTN_SMALL,
+  BTN_SECONDARY,
   PANEL,
   PANEL_H2,
   PANEL_P,
@@ -91,7 +91,7 @@ export default async function AdminBreachDetailPage({ params }: PageProps) {
   const open = incident.status === 'open';
   const canNotify = open && incident.kind === 'personal_data_breach' && incident.subjectsDecision === 'notify';
   const exportId = parseUuid(incident.id);
-  const exportable = Boolean(exportId) && isSupabaseConfigured();
+  const exportable = Boolean(exportId) && isPortalDataConfigured();
   const now = Date.now();
 
   const changeLabel = (column: string): string => {
@@ -152,14 +152,14 @@ export default async function AdminBreachDetailPage({ params }: PageProps) {
             <>
               <a
                 href={`/api/admin/breaches/${exportId}/export?format=json`}
-                className={cn(BTN_SMALL, 'border-[color:var(--pp-line)] text-foreground hover:bg-soft')}
+                className={BTN_SECONDARY}
               >
                 <Download className="size-4" aria-hidden="true" />
                 {t('breachExportJson')}
               </a>
               <a
                 href={`/api/admin/breaches/${exportId}/export?format=csv`}
-                className={cn(BTN_SMALL, 'border-[color:var(--pp-line)] text-foreground hover:bg-soft')}
+                className={BTN_SECONDARY}
               >
                 <Download className="size-4" aria-hidden="true" />
                 {t('breachExportCsv')}

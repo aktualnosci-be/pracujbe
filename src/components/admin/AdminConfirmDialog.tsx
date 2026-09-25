@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
-import { BTN_SMALL, PANEL, PANEL_H2 } from '@/components/admin/admin-styles';
+import { BTN_ACTION, PANEL, PANEL_H2 } from '@/components/admin/admin-styles';
 
 /**
  * AdminConfirmDialog — dialog potwierdzenia decyzji admina (firmy #310, zgłoszenia #422).
@@ -33,8 +33,8 @@ const CONFIRM_CLASS: Record<AdminActionTone, string> = {
   neutral: 'border-transparent bg-foreground text-background hover:opacity-90',
 };
 
-/** Przycisk akcji w wierszu = `.people .notice .btn` z prototypu (12 px / 650, 11/17 px, min. 44 px). */
-export const ADMIN_BUTTON_BASE = BTN_SMALL;
+/** Przycisk akcji w wierszu i w dialogu = `.people .btn` z prototypu (14 px / 650, 49 px, promień 11 px — #7, Z6). */
+export const ADMIN_BUTTON_BASE = BTN_ACTION;
 
 export interface AdminConfirmDialogProps {
   title: string;

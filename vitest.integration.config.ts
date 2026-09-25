@@ -3,6 +3,8 @@ import { defineConfig } from 'vitest/config';
 
 /** Integracja używa wyłącznie własnego, jednorazowego PostgreSQL w Dockerze. */
 export default defineConfig({
+  // Szablony React Email (#78: worker renderuje je na prawdziwej kolejce) — automatyczny runtime JSX.
+  esbuild: { jsx: 'automatic' },
   test: {
     environment: 'node',
     include: ['tests/integration/**/*.test.ts'],

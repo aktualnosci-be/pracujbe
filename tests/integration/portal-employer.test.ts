@@ -8,7 +8,6 @@ vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).r
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 // Aktywna firma bez cookie = pierwsze aktywne członkostwo (company-context waliduje cookie).
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
-vi.mock('@/lib/storage', () => ({ getSignedFileUrl: async () => null }));
 
 const employer = await import('../../src/lib/data/employer');
 const { getBilling } = await import('../../src/lib/data/billing');
