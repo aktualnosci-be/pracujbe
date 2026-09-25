@@ -19,6 +19,8 @@ const envExample = readFileSync(join(ROOT, '.env.example'), 'utf8');
 const NOT_OPERATOR = new Set([
   'NODE_ENV', 'NEXT_RUNTIME', 'NEXT_PHASE', 'PORT', 'RAILWAY_GIT_COMMIT_SHA', 'GITHUB_SHA',
   'NEXT_PUBLIC_APP_VERSION', 'NEXT_PUBLIC_BUILD_TIME', 'PLAYWRIGHT_APPLICATIONS_FIXTURE',
+  // Nazwa środowiska ustawiana przez Railway (etykieta w wiadomości webhooka błędów, #571).
+  'RAILWAY_ENVIRONMENT_NAME',
 ]);
 
 function files(dir: string): string[] {

@@ -9,14 +9,14 @@ import { fakeDb, resetFakeDb } from '../helpers/fake-db';
  */
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 const bucket = vi.hoisted(() => ({ config: null as unknown, store: null as unknown }));
 vi.mock('@/lib/env', () => ({ isProductionMode: () => true, fileBucketConfig: () => bucket.config }));
 vi.mock('@/lib/storage/railway-bucket', () => ({ createRailwayBucket: () => bucket.store }));
 
 const { runStorageGc, storageGcDryRun, StorageGcError } = await import('@/lib/storage-gc');
 const { POST } = await import('@/app/api/maintenance/route');
-const { captureError } = await import('@/lib/sentry');
+const { captureError } = await import('@/lib/error-report');
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const key = (n: number) => `${OWNER}/cv-${String(n).padStart(8, '0')}-2222-4222-8222-222222222222.pdf`;
@@ -128,6 +128,7 @@ describe('/api/maintenance + GC (#17)', () => {
     'purge_guest_application_requests', 'process_saved_search_alerts', 'process_email_campaigns',
     'run_retention_purge',
     'purge_job_funnel_data',
+    'purge_stale_message_attachments',
   ];
   const request = () => new Request('http://web.internal/api/maintenance', {
     method: 'POST', headers: { authorization: 'Bearer maintenance-secret' },

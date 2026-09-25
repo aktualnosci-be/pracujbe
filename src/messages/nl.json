@@ -1525,7 +1525,8 @@
     "errorFileType": "Alleen PNG-, JPG- en WebP-afbeeldingen worden ondersteund.",
     "errorUrlMissing": "Plak een link naar de vacature.",
     "errorNetwork": "Geen verbinding met de server. Controleer je verbinding en probeer het opnieuw.",
-    "contactNote": "E-mailadressen, telefoonnummers en identificatienummers nemen we niet over in het formulier. Vul het contact-e-mailadres zelf in bij de laatste stap."
+    "contactNote": "E-mailadressen, telefoonnummers en identificatienummers nemen we niet over in het formulier. Vul het contact-e-mailadres zelf in bij de laatste stap.",
+    "errorBudget": "Importeren uit een vacature is tijdelijk niet beschikbaar. Vul het formulier handmatig in of probeer het later opnieuw."
   },
   "jobAssist": {
     "title": "Tekst verbeteren met de AI-assistent",
@@ -1588,6 +1589,18 @@
     "threadStart": "Dit is het begin van het gesprek.",
     "senderCompanyFallback": "Werkgever",
     "senderCandidateFallback": "Kandidaat",
+    "attachFile": "Bestand toevoegen",
+    "attachHint": "PDF, DOC, DOCX, JPG of PNG, max. 5 MB, hoogstens {max} bestanden per bericht.",
+    "attachmentsLabel": "Bijlagen",
+    "attachmentUploading": "Uploaden…",
+    "attachmentUploadError": "Het bestand kon niet worden toegevoegd. Probeer het opnieuw.",
+    "attachmentErrorType": "Toegestane formaten: PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentLimit": "Je kunt hoogstens {max} bestanden aan één bericht toevoegen.",
+    "attachmentRemove": "Bestand {name} verwijderen",
+    "attachmentDownload": "{name} downloaden ({size})",
+    "attachmentDownloadError": "Het bestand kon niet worden gedownload. Probeer het opnieuw.",
+    "attachmentUnavailable": "Bestand wordt gecontroleerd — downloaden niet beschikbaar.",
+    "attachmentOnlyPreview": "Bijlage",
     "reportMessage": "Melden",
     "reportMessageLabel": "Bericht melden: {sender}",
     "reportConversation": "Gesprek melden",
@@ -2210,6 +2223,24 @@
     "breachNoticeRecipientsMalformed": "Ongeldig adres of ongeldige ID: {list}.",
     "breachNoticeContentRequired": "Vul onderwerp en tekst in minstens één taal in.",
     "breachNoticeNotAllowed": "Een kennisgeving kan worden verstuurd voor een open inbreuk in verband met persoonsgegevens met de opgeslagen beslissing „we brengen de betrokkenen op de hoogte”.",
+    "navContact": "Contact",
+    "contactTitle": "Berichten via het contactformulier",
+    "contactSubtitle": "Berichten verstuurd via het contactformulier. Antwoord vanuit je eigen mailbox aan de afzender en markeer het bericht daarna als afgehandeld.",
+    "contactFilterLabel": "Berichtenfilter",
+    "contactFilterNew": "Nieuw",
+    "contactFilterHandled": "Afgehandeld",
+    "contactStatusNew": "Nieuw",
+    "contactStatusHandled": "Afgehandeld",
+    "contactSearchLabel": "Berichten zoeken",
+    "contactSearchHint": "Berichtnummer, e-mailadres of voornaam van de afzender.",
+    "contactEmpty": "Geen berichten.",
+    "contactReceivedAt": "Ontvangen:",
+    "contactFormLocale": "Taal van het formulier: {locale}",
+    "contactHandledBy": "Afgehandeld door: {name}",
+    "contactActionHandle": "Markeren als afgehandeld",
+    "contactActionReopen": "Terugzetten naar nieuw",
+    "contactMarkedHandled": "Bericht gemarkeerd als afgehandeld.",
+    "contactReopened": "Bericht teruggezet naar nieuw.",
     "kindMessage": "Berichten",
     "targetConversation": "Gesprek",
     "messageReportScopeMessage": "Bewijs: gemeld bericht (stand op het moment van de melding)",
@@ -2275,7 +2306,29 @@
     "auditActionCampaignCancelled": "Campagnerevisie gestopt",
     "entityEmailCampaign": "E-mailcampagne",
     "appealTargetRestoration": "Tegen opheffen van beperking",
-    "appealRestorationSummary": "Beperking opgeheven op {date}: {reason}"
+    "appealRestorationSummary": "Beperking opgeheven op {date}: {reason}",
+    "navAiCosts": "AI-kosten",
+    "aiCostsTitle": "AI-kosten",
+    "aiCostsSubtitle": "Uitgaven aan AI-modelaanroepen ten opzichte van het globale budget. Alleen lezen.",
+    "aiCostsBudget": "Budget",
+    "aiCostsToday": "Vandaag",
+    "aiCostsMonth": "Deze maand",
+    "aiCostsOfLimit": "van {limit} ({percent}%)",
+    "aiCostsNoLimit": "Geen limiet ingesteld — aanroepen worden geblokkeerd",
+    "aiCostsNearLimit": "Minstens 80% van de limiet is gebruikt.",
+    "aiCostsExhausted": "Limiet bereikt — nieuwe aanroepen worden geblokkeerd.",
+    "aiCostsStale": "Reserveringen langer dan 15 minuten niet verrekend: {count}",
+    "aiCostsHowCounted": "De kosten worden berekend op basis van de tokens die de aanbieder meldt en de prijslijst in de code. Een niet-verrekende reservering telt volledig mee. Dag en maand volgen de tijd in Brussel.",
+    "aiCostsLimitsHint": "De eigenaar stelt de limieten in de database in (zie docs/AI_BUDGET.md). Een limiet van 0 schakelt alle AI-functies uit.",
+    "aiCostsDaily": "Laatste {days} dagen",
+    "aiCostsMonthly": "Maanden",
+    "aiCostsNoData": "Geen aanroepen in deze periode.",
+    "aiCostsRow": "Aanroepen: {calls} · geslaagd: {ok} · mislukt: {notOk} · bezig: {open} · invoer-/uitvoertokens: {input} / {output}",
+    "aiCostsCalls": "aanroepen: {calls}",
+    "aiCostsFeatureJobImport": "Vacature importeren",
+    "aiCostsFeatureTranslation": "Inhoud vertalen",
+    "aiCostsFeatureAssist": "Assistent voor vacaturetekst",
+    "aiCostsFeatureCvImport": "Cv importeren"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",
@@ -2583,7 +2636,19 @@
       "alreadyMember": "Deze persoon zit al in het team.",
       "invitationLimit": "De limiet van 50 openstaande uitnodigingen is bereikt. Trek verouderde uitnodigingen in.",
       "companyLimit": "Je kunt maximaal 5 bedrijven beheren.",
-      "lastOwner": "Het bedrijf moet minstens één actieve eigenaar hebben."
+      "lastOwner": "Het bedrijf moet minstens één actieve eigenaar hebben.",
+      "localeRequired": "Kies de taal van de uitnodiging."
+    },
+    "localeLabel": "Taal van de uitnodiging",
+    "invitedSent": "Uitnodiging opgeslagen. Deze persoon krijgt een e-mail: met een werkgeversaccount in de taal van dat account, zonder account in de gekozen taal, met een link om te registreren.",
+    "inviteLinkHint": "Iemand zonder account krijgt een e-mail in de gekozen taal met een link om een werkgeversaccount aan te maken (werkt één keer, 14 dagen geldig). Na bevestiging van het adres wacht de uitnodiging in het dashboard. Iemand met een account krijgt de e-mail in de taal van dat account.",
+    "signup": {
+      "checking": "We controleren de uitnodigingslink…",
+      "intro": "Uitnodiging voor het team van {company}. Rol: {role}.",
+      "nextSteps": "Maak een werkgeversaccount aan en bevestig je e-mailadres. De uitnodiging wacht dan in je dashboard, op het tabblad ‘Team’ — daar neem je deel aan het bedrijf of weiger je de uitnodiging.",
+      "emailFixed": "Je maakt het account aan met het adres waarop de uitnodiging binnenkwam.",
+      "used": "Deze uitnodigingslink is al gebruikt. Heb je een account? Log dan in — de uitnodiging wacht in je dashboard.",
+      "invalid": "De uitnodigingslink is ongeldig of verlopen. Vraag het bedrijf om een nieuwe uitnodiging of maak een gewoon werkgeversaccount aan."
     }
   },
   "emailUnsubscribe": {
@@ -2664,7 +2729,13 @@
     "deleteTitle": "Zoekopdracht ‘{name}’ verwijderen?",
     "deleteDescription": "Je krijgt dan geen meldingen meer over nieuwe vacatures met deze filters.",
     "deleted": "We hebben de zoekopdracht verwijderd.",
-    "updated": "We hebben de wijzigingen opgeslagen."
+    "updated": "We hebben de wijzigingen opgeslagen.",
+    "rename": "Naam wijzigen",
+    "renameLabel": "Nieuwe naam van de zoekopdracht",
+    "renameSave": "Naam opslaan",
+    "renameCancel": "Annuleren",
+    "renamed": "We hebben de naam van de zoekopdracht gewijzigd.",
+    "renameHint": "1 tot 80 tekens."
   },
   "contentReport": {
     "metaTitle": "Inhoud melden",
@@ -2809,6 +2880,141 @@
     "categoryUnion": "lidmaatschap van een vakbond",
     "categoryPolitical": "politieke overtuiging",
     "categoryCriminal": "strafrechtelijk verleden"
+  },
+  "help": {
+    "metaTitle": "Help — vragen en antwoorden",
+    "metaDescription": "Hoe Pracuj.be werkt: profiel zonder cv, solliciteren, vacaturematching, werkgeversaccount, bedrijfsverificatie en e-mails in jouw taal.",
+    "title": "Help",
+    "intro": "Antwoorden op de meest gestelde vragen over hoe Pracuj.be werkt. Vind je hier geen antwoord, stuur ons dan een bericht via het contactformulier.",
+    "groups": {
+      "candidates": "Voor kandidaten",
+      "employers": "Voor werkgevers",
+      "account": "Account, e-mails en veiligheid"
+    },
+    "faq": {
+      "noCv": {
+        "q": "Heb ik een cv nodig om werk te zoeken?",
+        "a": "Nee. Na je <register>registratie</register> maak je in zes korte stappen een eenvoudig beroepsprofiel — onder meer beroepen, vaardigheden, talen en beschikbaarheid. Een cv-bestand (PDF, DOC of DOCX tot 5 MB) kun je toevoegen, maar het is niet verplicht."
+      },
+      "guestApply": {
+        "q": "Kan ik solliciteren zonder account?",
+        "a": "Ja. In het sollicitatieformulier vul je je voor- en achternaam en e-mailadres in, en je bevestigt je sollicitatie via de link in de e-mail. Later kun je een account aanmaken met hetzelfde adres en de sollicitatie overnemen."
+      },
+      "match": {
+        "q": "Hoe wordt de match met een vacature berekend?",
+        "a": "Het matchpercentage volgt uit vaste criteria: beroep en categorie, vaardigheden, locatie, ervaring, beschikbaarheid, talen, certificaten, rijbewijs en contractvoorwaarden. Het resultaat wordt niet door kunstmatige intelligentie bepaald, en bij de vacature zie je waaraan je voldoet en wat ontbreekt."
+      },
+      "visibility": {
+        "q": "Zien werkgevers mijn profiel?",
+        "a": "Geverifieerde bedrijven kunnen je profiel alleen vinden als je de optie ‘Geverifieerde werkgevers mogen mijn profiel vinden’ in je instellingen aanzet — standaard staat die uit. Een bedrijf waar je solliciteert, ziet je sollicitatie. Bepaalde bedrijven kun je blokkeren in het onderdeel ‘Geblokkeerde bedrijven’."
+      },
+      "alerts": {
+        "q": "Hoe krijg ik meldingen over nieuwe vacatures?",
+        "a": "Stel op de <jobs>vacaturelijst</jobs> filters in en kies ‘Zoekopdracht opslaan’. In het kandidatenpaneel zet je er e-mailmeldingen voor aan — dagelijks of wekelijks."
+      },
+      "data": {
+        "q": "Hoe download ik mijn gegevens of verwijder ik mijn account?",
+        "a": "In de instellingen van het kandidatenpaneel, in het onderdeel ‘Je gegevens en account’, download je je gegevens als JSON-bestand of verwijder je je account."
+      },
+      "free": {
+        "q": "Wat kost het publiceren van vacatures?",
+        "a": "In de huidige fase is Pracuj.be gratis voor werkgevers. Het portaal verkoopt geen pakketten of betaalde vacaturepublicaties."
+      },
+      "verification": {
+        "q": "Waarom moet mijn bedrijf geverifieerd worden?",
+        "a": "Alleen bedrijven die door een beheerder van het portaal zijn geverifieerd, kunnen vacatures publiceren. De verificatiestatus zie je in het werkgeverspaneel. Wordt je bedrijf afgewezen, dan zie je de reden en kun je kiezen voor ‘Opnieuw ter verificatie sturen’."
+      },
+      "drafts": {
+        "q": "Kan ik een vacature voorbereiden vóór de verificatie?",
+        "a": "Ja. De vacaturewizard slaat na elke stap een concept op. Je publiceert het zodra je bedrijf geverifieerd is."
+      },
+      "team": {
+        "q": "Hoe voeg ik collega’s toe?",
+        "a": "De eigenaar of beheerder van het bedrijf nodigt teamleden uit via hun e-mailadres in het werkgeverspaneel en geeft hun een rol."
+      },
+      "applications": {
+        "q": "Hoe neem ik contact op met kandidaten?",
+        "a": "Sollicitaties, berichten en jobaanbiedingen beheer je in het werkgeverspaneel. Meer lees je op de pagina <employer>Voor werkgevers</employer>."
+      },
+      "languages": {
+        "q": "In welke talen is de website beschikbaar?",
+        "a": "De website is beschikbaar in het Pools, Nederlands, Frans en Engels. Je wijzigt de taal in de kop of in de voettekst van de pagina."
+      },
+      "emailLanguage": {
+        "q": "In welke taal ontvang ik e-mails?",
+        "a": "E-mails over je account sturen we in de taal die op je account is ingesteld — ook als het bericht komt van een werkgever die een andere taal gebruikt."
+      },
+      "noEmail": {
+        "q": "Ik ontvang geen e-mails van de website. Wat nu?",
+        "a": "Controleer je spammap en of je e-mailadres klopt. Komt er nog steeds niets aan, stuur ons dan een bericht via het contactformulier."
+      },
+      "suspicious": {
+        "q": "Een vacature lijkt verdacht. Wat moet ik doen?",
+        "a": "Kies op de vacaturepagina ‘Vacature melden’ of ‘Bedrijf melden’. Je kunt een melding ook zonder account versturen en krijgt een dossiernummer waarmee je de status volgt."
+      }
+    },
+    "contactTitle": "Geen antwoord gevonden?",
+    "contactDesc": "Stuur ons een bericht via het contactformulier. We antwoorden op het e-mailadres dat je in het formulier invult.",
+    "contactCta": "Naar het contactformulier"
+  },
+  "contact": {
+    "metaTitle": "Contact",
+    "metaDescription": "Stuur het team van Pracuj.be een bericht via het contactformulier — over je kandidatenaccount, werkgeversaccount, vacatures of technische problemen.",
+    "title": "Contact",
+    "intro": "Heb je een vraag over je account, een vacature of de werking van de website? Stuur ons een bericht via het formulier — we antwoorden op het opgegeven e-mailadres.",
+    "formTitle": "Contactformulier",
+    "topicLabel": "Onderwerp",
+    "topicPlaceholder": "Kies een onderwerp",
+    "topicCandidateAccount": "Kandidatenaccount",
+    "topicEmployerAccount": "Werkgeversaccount of bedrijf",
+    "topicJobListing": "Vacature",
+    "topicTechnical": "Technisch probleem",
+    "topicPrivacy": "Mijn persoonsgegevens",
+    "topicOther": "Iets anders",
+    "messageLabel": "Bericht",
+    "messageHint": "Beschrijf je vraag (minstens {min} tekens). Vermeld geen rijksregisternummer, PESEL of documentnummers.",
+    "nameLabel": "Voornaam (optioneel)",
+    "emailLabel": "E-mailadres",
+    "emailHint": "Naar dit adres sturen we de bevestiging en het antwoord.",
+    "submit": "Bericht versturen",
+    "networkError": "Er kon geen verbinding met de server worden gemaakt. Je bericht staat nog in het formulier — probeer het opnieuw.",
+    "successTitle": "Bericht verstuurd",
+    "successBody": "Bedankt. We hebben een bevestiging met het berichtnummer naar het opgegeven adres gestuurd.",
+    "successDuplicate": "Dit bericht was al eerder verstuurd — we hebben het niet nog een keer verstuurd.",
+    "referenceLabel": "Berichtnummer",
+    "referenceHint": "Vermeld dit nummer als je later iets wilt toevoegen.",
+    "backToHelp": "Terug naar de hulppagina",
+    "beforeTitle": "Voordat je schrijft",
+    "beforeHelp": "Antwoorden op de meest gestelde vragen vind je op de pagina <help>Help</help>.",
+    "beforeReport": "Meld een verdachte vacature rechtstreeks op de vacaturepagina (‘Vacature melden’) — je vindt ze in de <jobs>vacaturelijst</jobs>.",
+    "beforeNoIds": "Stuur geen documentnummers of wachtwoorden in je bericht.",
+    "error": {
+      "topicRequired": "Kies een onderwerp.",
+      "messageRequired": "Typ je bericht.",
+      "messageTooShort": "Je bericht is te kort — beschrijf je vraag iets uitgebreider.",
+      "messageTooLong": "Je bericht is te lang.",
+      "nameTooLong": "De voornaam is te lang.",
+      "emailRequired": "Vul je e-mailadres in.",
+      "emailInvalid": "Vul een geldig e-mailadres in.",
+      "sensitiveId": "Verwijder het rijksregisternummer, PESEL of documentnummer — dat is niet nodig om je bericht te beantwoorden."
+    }
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Melding uitzetten",
+    "title": "Deze melding uitzetten?",
+    "confirmText": "We sturen geen e-mails met nieuwe vacatures meer voor deze ene opgeslagen zoekopdracht. Je andere zoekopdrachten en meldingen blijven ongewijzigd.",
+    "confirmButton": "Deze melding uitzetten",
+    "pending": "Opslaan…",
+    "doneTitle": "Melding uitgezet",
+    "doneText": "We sturen je geen meldingen meer voor deze zoekopdracht. De zoekopdracht blijft bewaard — je zet de melding weer aan in je kandidatenpaneel.",
+    "settingsHint": "Opgeslagen zoekopdrachten en meldingen wijzig je nadat je bent ingelogd.",
+    "loginLink": "Inloggen",
+    "invalidTitle": "De link is ongeldig",
+    "invalidText": "Deze link is onvolledig of gewijzigd. Gebruik de link uit de nieuwste e-mail of wijzig de melding nadat je bent ingelogd.",
+    "expiredTitle": "De link is verlopen",
+    "expiredText": "Deze link is niet meer geldig. Gebruik de link uit de nieuwste e-mail of wijzig de melding nadat je bent ingelogd.",
+    "unavailableText": "De melding uitzetten kan nu even niet. Probeer het later opnieuw of wijzig de melding nadat je bent ingelogd.",
+    "errorText": "De wijziging kon niet worden opgeslagen. Probeer het opnieuw."
   },
   "cvImport": {
     "eyebrow": "Je profiel",

@@ -25,7 +25,7 @@ import { isBillingEnabled } from '@/lib/billing/flag';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /* ---------------------------------------------------------------------------
  * Kontrakty dla UI

@@ -2,7 +2,7 @@ import 'server-only';
 
 import Anthropic from '@anthropic-ai/sdk';
 
-import { ExtractorError } from '@/lib/ai-import/extract';
+import { ExtractorError, type ExtractionHooks } from '@/lib/ai-import/extract';
 import { cvImportModel } from '@/lib/cv-import/config';
 import { CV_EXTRACTION_JSON_SCHEMA } from '@/lib/cv-import/proposals';
 
@@ -19,8 +19,11 @@ import { CV_EXTRACTION_JSON_SCHEMA } from '@/lib/cv-import/proposals';
 
 export interface CvExtractor {
   /** Zwraca SUROWY (niezwalidowany) obiekt odpowiedzi. */
-  extract(minimizedText: string): Promise<unknown>;
+  extract(minimizedText: string, hooks?: ExtractionHooks): Promise<unknown>;
 }
+
+/** Limit tokenów odpowiedzi — także górna granica wyjścia w rezerwacji budżetu AI (#36). */
+export const CV_EXTRACTION_MAX_TOKENS = 6000;
 
 export const CV_EXTRACTION_SYSTEM_PROMPT = [
   'You help a job seeker fill in their own professional profile on a recruitment platform. From their CV you propose profile entries that the person will review and approve one by one. You do not assess, score, rank or judge the person.',
@@ -54,12 +57,12 @@ export class AnthropicCvExtractor implements CvExtractor {
     this.client = client ?? new Anthropic({ timeout: 60_000, maxRetries: 1 });
   }
 
-  async extract(minimizedText: string): Promise<unknown> {
+  async extract(minimizedText: string, hooks?: ExtractionHooks): Promise<unknown> {
     let response: Anthropic.Message;
     try {
       response = await this.client.messages.create({
         model: cvImportModel(),
-        max_tokens: 6000,
+        max_tokens: CV_EXTRACTION_MAX_TOKENS,
         system: CV_EXTRACTION_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: [{ type: 'text', text: wrapCvText(minimizedText) }] }],
         output_config: {
@@ -70,6 +73,17 @@ export class AnthropicCvExtractor implements CvExtractor {
     } catch (e) {
       if (e instanceof Anthropic.RateLimitError) throw new ExtractorError('rateLimited');
       throw new ExtractorError('failed');
+    }
+    // #36: zużycie naliczane także przy odmowie — zgłaszamy je przed oceną odpowiedzi. Bez
+    // `usage` budżet rozlicza pełną kwotę rezerwacji (zachowawczo).
+    const usage = response.usage as Anthropic.Usage | undefined;
+    if (usage) {
+      hooks?.onUsage?.({
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
+        cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
+      });
     }
     if (response.stop_reason === 'refusal') throw new ExtractorError('refused');
     if (response.stop_reason !== 'end_turn') throw new ExtractorError('failed');
@@ -92,7 +106,9 @@ export class AnthropicCvExtractor implements CvExtractor {
  * instrukcji dla AI zgłasza ją.
  */
 export class FixtureCvExtractor implements CvExtractor {
-  async extract(minimizedText: string): Promise<unknown> {
+  async extract(minimizedText: string, hooks?: ExtractionHooks): Promise<unknown> {
+    // Atrapa nic nie kosztuje, ale przechodzi tę samą ścieżkę rozliczenia budżetu (#36).
+    hooks?.onUsage?.({ inputTokens: 0, outputTokens: 0 });
     const injected = /ignore (all )?previous instructions/i.test(minimizedText);
     const leaked = [...minimizedText.matchAll(/[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d ./-]{7,}\d/g)].map((m) => m[0]);
     const has = (s: string) => minimizedText.toLowerCase().includes(s.toLowerCase());

@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { FILTERED, redactError, redactString, redactUrl, redactValue } from '@/lib/privacy/redact';
-import { redactSentryEvent } from '@/lib/sentry-egress';
+import { buildErrorWebhookText } from '@/lib/error-webhook';
 import { installConsoleRedaction } from '@/lib/privacy/console';
 import { PII, UUID, expectNoPii } from '../helpers/privacy-fixtures';
 
 /**
- * #502 — dane kandydata nie wychodzą z aplikacji przez Sentry ani logi serwera.
+ * #502 — dane kandydata nie wychodzą z aplikacji przez kanał błędów (webhook #571) ani logi serwera.
  * Wartości syntetyczne; każda kontrola sprawdza najpierw, że wejście je zawiera (kontrola ujemna).
  */
 describe('redactString', () => {
@@ -95,56 +95,20 @@ describe('redactError', () => {
   });
 });
 
-describe('filtr Sentry (#508) na pełnym zdarzeniu z danymi kandydata', () => {
-  it('usuwa PII z każdego pola zdarzenia, zostawia kod błędu', () => {
-    const event = {
-      event_id: 'abc',
-      message: `failed for ${PII.email}`,
-      logentry: { message: `hello ${PII.email}`, params: [PII.firstName] },
-      transaction: `GET /pl/aplikacja/potwierdz?token=${PII.token}`,
-      user: { id: UUID, email: PII.email, ip_address: '203.0.113.9', username: PII.firstName },
-      request: {
-        method: 'POST',
-        url: `https://pracuj.be/pl/candidate/profil?email=${PII.email}`,
-        query_string: `token=${PII.token}`,
-        headers: { cookie: `session=${PII.token}`, authorization: `Bearer ${PII.jwt}` },
-        cookies: { session: PII.token },
-        data: { bio: PII.bio, message: PII.messageBody },
-        env: { REMOTE_ADDR: '203.0.113.9' },
-      },
-      exception: {
-        values: [
-          {
-            type: 'Error',
-            value: `insert failed: Key (email)=(${PII.email}) ${PII.niss}`,
-            stacktrace: { frames: [{ filename: '/app/x.js', vars: { body: PII.messageBody } }] },
-          },
-          { type: 'Error', value: `cause: ${PII.cvFile} ${PII.phoneNational}` },
-        ],
-      },
-      extra: { area: 'files.upload', fileName: PII.cvFile, __serialized__: { message: PII.messageBody, code: 'X1' } },
-      contexts: {
-        os: { name: 'Linux', version: '6.1' },
-        trace: { trace_id: 'a'.repeat(32), span_id: 'b'.repeat(16), data: { 'url.full': `https://x.be/a?t=${PII.token}` } },
-        candidate: { email: PII.email },
-      },
-      tags: { errorCode: 'INTERNAL', 'url': `/pl/x?e=${PII.email}` },
-      breadcrumbs: [
-        { category: 'console', message: `log ${PII.email}`, data: { arguments: [{ bio: PII.bio }] } },
-        { category: 'fetch', data: { url: `https://api.x/y?token=${PII.token}`, method: 'GET', status_code: 500 } },
-        { category: 'navigation', data: { from: `/pl/a?e=${PII.email}`, to: `/pl/b#${PII.token}` } },
-      ],
-      spans: [{ description: `GET https://x.be/api?email=${PII.email}`, data: { 'http.query': `q=${PII.lastName}`, 'db.system': 'postgresql' } }],
+describe('wiadomość webhooka błędów (#571) z danymi kandydata na wejściu', () => {
+  it('zostaje kod i trasa bez parametrów; wydanie/środowisko bez danych', () => {
+    const input = {
+      code: `failed for ${PII.email}`,
+      route: `https://pracuj.be/pl/candidate/profil/${PII.cvFile}?email=${PII.email}#${PII.token}`,
+      release: `1.0.0+${PII.jwt}`,
+      environment: `prod ${PII.phoneIntl}`,
+      time: new Date(0),
     };
-    expect(JSON.stringify(event)).toContain(PII.bio);
-    const out = redactSentryEvent(structuredClone(event) as never);
-    const json = JSON.stringify(out);
-    expectNoPii(json);
-    expect(json).not.toContain('203.0.113.9');
-    expect(out.user).toBeUndefined();
-    expect(out.request).toBeUndefined();
-    expect(out.breadcrumbs).toBeUndefined();
-    expect(out.tags).toEqual({ errorCode: 'INTERNAL' });
+    expect(JSON.stringify(input)).toContain(PII.email);
+    const out = buildErrorWebhookText(input);
+    expectNoPii(out);
+    expect(out).toContain('Kod: INTERNAL');
+    expect(out).toContain('Trasa: /pl/candidate/profil/[Filtered]');
   });
 });
 
@@ -164,15 +128,14 @@ describe('logi serwera (console)', () => {
 });
 
 describe('strażnik konfiguracji telemetrii', () => {
-  it('każdy Sentry.init ma filtr #508 i wyłączony tracing; logi serwera idą przez redakcję', async () => {
-    const { readFileSync } = await import('node:fs');
+  it('brak konfiguracji Sentry; instrumentation rejestruje webhook błędów i redakcję logów', async () => {
+    const { existsSync, readFileSync } = await import('node:fs');
     for (const file of ['sentry.client.config.ts', 'sentry.server.config.ts', 'sentry.edge.config.ts']) {
-      const src = readFileSync(file, 'utf8');
-      expect(src, file).toContain('beforeSend: redactSentryEvent');
-      expect(src, file).toMatch(/tracesSampleRate:\s*0,/);
-      expect(src, file).toMatch(/sendDefaultPii:\s*false/);
+      expect(existsSync(file), file).toBe(false);
     }
     const instrumentation = readFileSync('src/instrumentation.ts', 'utf8');
     expect(instrumentation).toContain('installConsoleRedaction()');
+    expect(instrumentation).toContain('installErrorWebhook()');
+    expect(instrumentation).toContain('onRequestError = reportRequestError');
   });
 });

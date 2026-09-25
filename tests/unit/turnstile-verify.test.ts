@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const mocks = vi.hoisted(() => ({ captureError: vi.fn() }));
-vi.mock('@/lib/sentry', () => ({ captureError: mocks.captureError }));
+vi.mock('@/lib/error-report', () => ({ captureError: mocks.captureError }));
 
 import {
   enforceTurnstile,

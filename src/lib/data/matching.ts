@@ -2,7 +2,7 @@ import 'server-only';
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, queryRows, rpcRows } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { locationLookupKeys, resolveCoordinates, type LocationAliasRow } from '@/lib/matching/locations';
 import { referenceDate } from '@/lib/matching/reference-date';
 import {

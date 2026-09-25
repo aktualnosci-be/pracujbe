@@ -1,7 +1,7 @@
 import { emptyDownloadResponse, openCvDownload } from '@/lib/files/candidate-cv';
 import { getCvServiceDeps, readCandidateSession } from '@/lib/files/runtime';
 import { AppError } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Pobranie własnego CV (#26, Invariant #10). Link wystawia akcja `prepareCvDownload`

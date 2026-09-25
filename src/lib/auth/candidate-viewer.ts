@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { isAuthRuntimeConfigured, isDatabaseConfigured } from '@/lib/env';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * UUID zalogowanego kandydata dla listy ofert (#97): baza pomija oferty firm, które
@@ -10,7 +10,7 @@ import { captureError } from '@/lib/sentry';
  * odczytanego wprost. Gość, pracodawca, admin i brak konfiguracji → `null` (lista gościa).
  *
  * Awaria odczytu sesji nie blokuje listy: wynik gościa zawiera więcej ofert, nie ujawnia
- * żadnych danych, a błąd trafia do Sentry.
+ * żadnych danych, a błąd trafia do kanału błędów.
  */
 export async function readCandidateViewerId(): Promise<string | null> {
   if (!isAuthRuntimeConfigured() || !isDatabaseConfigured()) return null;
