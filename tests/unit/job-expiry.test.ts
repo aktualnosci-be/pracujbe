@@ -56,6 +56,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
   const TASKS = [
     'release_stale_discount_reservations',
     'release_stale_checkout_intents',
+    'ai_budget_release_stale_reservations',
     'expire_due_jobs',
     'purge_guest_application_requests',
     'process_saved_search_alerts',
@@ -97,6 +98,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       ok: true,
       releasedDiscounts: 0,
       releasedCheckouts: 0,
+      releasedAiBudgetReservations: 0,
       expiredJobs: 3,
       savedSearchDigests: 0,
       purgedGuestRequests: 0,

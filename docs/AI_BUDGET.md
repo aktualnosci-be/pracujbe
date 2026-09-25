@@ -47,6 +47,19 @@ budżetu także `pracujbe_ops`). Mapa danych: `src/lib/privacy/data-map.ts`.
 Retencja rejestru: brak automatycznego usuwania (same liczniki, bez danych osobowych);
 raport czyta ostatnie 31 dni i 12 miesięcy.
 
+## Porzucone rezerwacje (#609)
+
+Jeśli proces kończy się MIĘDZY rezerwacją a rozliczeniem (crash, restart, redeploy,
+timeout), wiersz zostaje w stanie `reserved` i bez GC liczyłby się do budżetu bezterminowo.
+`/api/maintenance` woła co godzinę `ai_budget_release_stale_reservations` (0144,
+service_role): rezerwacja starsza niż 60 minut, wciąż `reserved`, jest rozliczana jako
+`outcome='failed'`, `cost_micro_usd=0` — wiersz (ślad audytowy) zostaje w rejestrze, ale
+przestaje liczyć się do wydanego budżetu, więc limit doby/miesiąca wraca do użycia. TTL
+(60 min) jest wyraźnie dłuższy niż próg ostrzeżenia `staleReservations` w `ai_budget_status`
+(15 min), żeby GC nie zwolniło rezerwacji trwającego jeszcze wywołania. Idempotentne
+(`FOR UPDATE SKIP LOCKED`, filtr po statusie) — kolejne przebiegi i przebiegi równoległe nie
+rozliczają tego samego wiersza dwukrotnie.
+
 ## Raport i monitoring
 
 - **Panel** `/admin/koszty-ai` (tylko admin, tylko odczyt): wydatek dziś / w miesiącu
