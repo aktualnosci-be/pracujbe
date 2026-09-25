@@ -985,7 +985,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `rls.sql` sekcja CM45 (dblink, kontrole ujemne), unit `email-consent-campaigns`.
   **Do zrobienia (właściciel):** wartości `EMAIL_SENDER_*`, wyłączenie trackingu w Resend i
   kontrola odebranego `.eml` na produkcji; treść prawna zgody marketingowej (#40). **Otwarte:**
-  panel admina kampanii (dziś RPC service_role), rejestracja z opt-in marketingu.
+  tworzenie rewizji kampanii z panelu (dziś `create_email_campaign_revision`, service_role),
+  prawdziwa pauza z wznowieniem (wymaga zmiany `claim_email_batch`), rejestracja z opt-in marketingu.
+  Panel kampanii (#45, migracja `0111`): `/admin/kampanie` — rewizje
+  (filtr statusu, slug, kursor) z liczbami odbiorców według statusu (bez adresów),
+  `/admin/kampanie/[id]` — podgląd treści w każdym języku (walidacja jak worker,
+  `src/lib/admin/campaigns.ts`), rewizje sluga, „Aktywuj rewizję”/„Zatrzymaj wysyłkę” z dialogiem
+  (`admin_activate_email_campaign`/`admin_cancel_email_campaign`: is_admin, CAS
+  `p_expected_status` → `STALE_STATE`, `INVALID_TRANSITION`, skutek = RPC z 0101, audyt
+  `email_campaign.*` bez treści i odbiorców). Bez `EMAIL_FROM` + `EMAIL_SENDER_*` +
+  `EMAIL_UNSUBSCRIBE_SECRET` (`campaignSendingReady`): jawny komunikat, akcja aktywacji odmawia
+  przed bazą, `/api/maintenance` nie woła `process_email_campaigns`. Dowód: `rls.sql` sekcja
+  AC45 (kontrola ujemna bez CAS), unit `admin-email-campaigns` (kontrole ujemne bramki nadawcy),
+  E2E `admin-email-campaigns`, `admin-a11y`.
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
