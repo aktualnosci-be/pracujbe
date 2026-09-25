@@ -367,6 +367,26 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(await getMyJobMatch(randomUUID())).toEqual({ status: 'none' });
   });
 
+  it('odległość ze słownika locations (0112): gminy spoza listy w kodzie, kontrola ujemna', async () => {
+    const setCities = async (candidate: string, job: string) => {
+      await db().admin.query('UPDATE public.candidate_profiles SET city = $2 WHERE profile_id = $1', [alice, candidate]);
+      await db().admin.query('UPDATE public.jobs SET city = $2 WHERE id = $1', [jobIds[0], job]);
+    };
+    actAs({ id: alice, role: 'candidate' });
+    try {
+      // Puurs (gmina zniesiona 2019) i Bornem — obie tylko w bazie, ~5 km.
+      await setCities('Puurs', 'Bornem');
+      const near = await getMyJobMatch(jobIds[0]!);
+      expect(near.status === 'ok' && near.result.strengths).toContain('withinCommuteRadius');
+      await setCities('Atlantyda', 'Bornem');
+      const unknown = await getMyJobMatch(jobIds[0]!);
+      expect(unknown.status).toBe('ok');
+      expect(unknown.status === 'ok' && unknown.result.strengths).not.toContain('withinCommuteRadius');
+    } finally {
+      await setCities('Gent', 'Gent');
+    }
+  });
+
   it('ostatnie wiadomości i licznik nieprzeczytanych rozmów tylko dla członka', async () => {
     const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, subject, last_message_at)
       VALUES ($1, 'Rozmowa', now()) RETURNING id`, [companyId]);
