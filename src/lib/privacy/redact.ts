@@ -1,6 +1,6 @@
 /**
  * Jedno źródło reguł redakcji danych osobowych przed wysłaniem poza aplikację
- * (Sentry: przeglądarka/Node/Edge, logi serwera). Czyste funkcje bez zależności —
+ * (webhook błędów #571, logi serwera). Czyste funkcje bez zależności —
  * trafiają też do bundla klienta, więc zostają małe.
  *
  * Zasada: usuwamy WARTOŚCI (e-mail, telefon, NISS/BIS, IBAN, tokeny, query i fragment

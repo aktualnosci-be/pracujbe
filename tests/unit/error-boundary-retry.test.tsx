@@ -17,7 +17,7 @@ vi.mock('@/i18n/navigation', () => ({
     <a href={href} {...rest}>{children}</a>
   ),
 }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 beforeEach(() => {
   calls.length = 0;

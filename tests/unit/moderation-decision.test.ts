@@ -23,7 +23,7 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
  */
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const REPORT_ID = '0b9a9c0e-5f4e-4c1a-9d52-6f1f3c1d2e01';
 const DECISION_ID = '1c9a9c0e-5f4e-4c1a-9d52-6f1f3c1d2e02';

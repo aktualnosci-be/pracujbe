@@ -5,7 +5,7 @@ import { parseUuid } from '@/lib/admin/list-params';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Eksport wpisu rejestru naruszeń (#490) — `GET /api/admin/breaches/<id>/export?format=json|csv`.

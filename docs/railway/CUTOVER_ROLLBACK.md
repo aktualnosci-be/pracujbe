@@ -160,8 +160,8 @@ bramce kończy się błędem z podpowiedzią. Testy: `tests/unit/railway-prod-sm
 | przez 48 h, co kilka godzin | smoke; CPU i RAM usługi web i bazy (brak stałego wzrostu); `db_connections` < 80%; wiek kolejek e-mail i auth; nieudane wysyłki (`email_failed`, `auth_email_failed`) i odbicia z webhooka Resend; `webhook_stuck`; `maintenance_lag` po włączeniu kroku 5; upload i pobranie CV kontem testowym, gdy bucket jest skonfigurowany |
 | przez 48 h | płatności wyłączone (#51): `/api/stripe/webhook` = 404; żadnych zdarzeń Stripe |
 
-Sentry pozostaje bez DSN do decyzji właściciela (`docs/TELEMETRY_PRIVACY.md`) — do
-tego czasu źródłem błędów są logi Railway (redagowane) i czujki `/api/health/ops`.
+Błędy serwera trafiają na kanał Discorda z `ERROR_WEBHOOK_URL` (#571, `docs/TELEMETRY_PRIVACY.md`;
+Sentry usunięte); bez zmiennej źródłem błędów są logi Railway (redagowane) i czujki `/api/health/ops`.
 
 ### 4.3 Protokół
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deleteMyAccountAction } from '@/lib/actions/account-data';
 import { POST as exportData } from '@/app/api/account/export/route';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
@@ -12,7 +12,7 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/env', () => ({ env: { siteUrl: 'https://pracuj.be' } }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const SELF = '11111111-1111-4111-8111-111111111111';
 /** Wywołania RPC (nazwa + argumenty po nazwach) z atrapy transakcji (#25). */

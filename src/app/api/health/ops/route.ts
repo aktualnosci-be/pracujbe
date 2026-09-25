@@ -1,4 +1,5 @@
 import { domainPoolStats } from '@/lib/db/runtime';
+import { backupAlerts, readBackupFreshness } from '@/lib/ops/backup-freshness';
 import { HEALTH_TOKEN_HEADER, healthTokenMatches } from '@/lib/ops/health-token';
 import { readOpsMetrics } from '@/lib/ops/metrics-source';
 import { evaluateOps } from '@/lib/ops/sensors';
@@ -13,8 +14,11 @@ import { evaluateOps } from '@/lib/ops/sensors';
  *
  * HTTP 200 `ok` — brak alarmów (także sygnał recovery po alarmie);
  * HTTP 503 `alert` — co najmniej jeden próg przekroczony (kody w `alerts`);
- * HTTP 503 `unavailable` — metryk nie da się odczytać (baza/konfiguracja; szczegół w Sentry);
+ * HTTP 503 `unavailable` — metryk nie da się odczytać (baza/konfiguracja; szczegół w kanale błędów);
  * HTTP 503 `unconfigured` — brak źródła metryk (`DATABASE_OPS_URL` ani service-role).
+ *
+ * #569: `backup` = wiek ostatniej kopii w R2 (klucz odczytu `BACKUP_S3_READ_*`). Każdy stan
+ * poza `ok` — także `unconfigured` — dokłada alarm `backup_*` do `alerts` (503).
  */
 
 export const runtime = 'nodejs';
@@ -28,16 +32,18 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const checkedAt = new Date().toISOString();
-  const result = await readOpsMetrics();
+  const [result, backup] = await Promise.all([readOpsMetrics(), readBackupFreshness()]);
   if (result.kind !== 'ok') {
     const status = result.kind === 'unconfigured' ? 'unconfigured' : 'unavailable';
-    return Response.json({ status, checkedAt }, { status: 503, headers });
+    return Response.json({ status, checkedAt, backup }, { status: 503, headers });
   }
 
   const appPool = domainPoolStats();
-  const evaluation = evaluateOps(result.metrics, appPool);
+  const evaluation = evaluateOps(result.metrics, appPool, result.aiBudget);
+  const alerts = [...evaluation.alerts, ...backupAlerts(backup)];
+  const status = alerts.length ? 'alert' : 'ok';
   return Response.json(
-    { ...evaluation, checkedAt, metrics: result.metrics, appPool },
-    { status: evaluation.status === 'ok' ? 200 : 503, headers },
+    { ...evaluation, status, alerts, checkedAt, metrics: result.metrics, appPool, aiBudget: result.aiBudget ?? null, backup },
+    { status: status === 'ok' ? 200 : 503, headers },
   );
 }

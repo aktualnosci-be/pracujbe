@@ -5,9 +5,10 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { jobImportModel, jobImportProvider } from '@/lib/ai-import/config';
-import { withJobImportUsageLog } from '@/lib/ai/job-import-usage';
+import { withJobImportBudget, withJobImportUsageLog } from '@/lib/ai/job-import-usage';
+import { isServiceDatabaseConfigured } from '@/lib/db/portal';
 import { AnthropicJobExtractor, FixtureJobExtractor } from '@/lib/ai-import/extract';
 import { IMPORT_IMAGE_MAX_BYTES, type ImportImageProblem } from '@/lib/ai-import/image';
 import { buildImportDraftContent, type ImportedWizardValues } from '@/lib/ai-import/map';
@@ -107,10 +108,15 @@ export async function importJobListing(formData: FormData, locale?: string): Pro
     }
 
     // Log użycia bez treści i PII (#489, src/lib/ai/usage-log.ts).
-    const extractor = withJobImportUsageLog(
+    const model = provider === 'fixture' ? 'fixture' : jobImportModel();
+    const logged = withJobImportUsageLog(
       provider === 'fixture' ? new FixtureJobExtractor() : new AnthropicJobExtractor(),
-      provider === 'fixture' ? 'fixture' : jobImportModel(),
+      model,
     );
+    // Globalny budżet AI (#36): płatny dostawca ZAWSZE przez rezerwację (bez bazy zadań
+    // serwerowych = odmowa); atrapa przez budżet tylko wtedy, gdy baza jest dostępna.
+    const extractor =
+      provider === 'fixture' && !isServiceDatabaseConfigured() ? logged : withJobImportBudget(logged, model);
     const result = await runJobImport(source, { extractor });
     if (!result.ok) return result;
     const { mapped } = result;

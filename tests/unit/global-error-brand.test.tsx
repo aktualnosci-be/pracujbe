@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import GlobalError, { GlobalErrorContent } from '@/app/global-error';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 beforeEach(() => vi.mocked(captureError).mockClear());
 

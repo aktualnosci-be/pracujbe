@@ -51,42 +51,42 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/design/compare-p
 | public | `jobs` | `/pl/polityka-cookies` | — | — | 94% | 90% | ✓ | jw. |
 | public | `jobs` | `/pl/zglos-tresc` | — | — | 94% | 90% | ✓ | Formularz DSA (#41): `.pp-page-title` (ten PR). |
 | public | `jobs` | `/pl/nie-ma-takiej-strony` | — | — | 98% | 100% | ✓ | Strona 404 = `.p-list-header` (nadtytuł „404”, H1 `.pp-page-title`) + `.pp-btn`/`.pp-btn-secondary` (Z5). Jedyna różnica: przycisk 49 px zamiast 58 px przycisku wyszukiwarki prototypu. |
-| auth | `apply` | `/pl/logowanie` | — | — | 95% | 95% | ✓ | Brak ekranu; kalka `#people/apply` (Z4): nagłówek i stopka witryny, H1 `.extended` 40/30 px, `.dash-intro`, karta `.paper.demo-form` (pola 15 px/promień 11 px, przycisk `.people .btn`). Brak nadtytułu (treść bez odpowiednika). |
-| auth | `apply` | `/pl/rejestracja` | — | — | 95% | 95% | ✓ | jw. |
+| auth | `apply` | `/pl/logowanie` | — | — | 97% | 97% | ✓ | Brak ekranu; kalka `#people/apply` (Z4): nagłówek i stopka witryny, H1 `.extended` 40/30 px, `.dash-intro`, karta `.paper.demo-form` (pola 15 px/promień 11 px, przycisk `.people .btn`). Brak nadtytułu (treść bez odpowiednika). |
+| auth | `apply` | `/pl/rejestracja` | — | — | 97% | 97% | ✓ | jw. |
 | auth | `apply` | `/pl/rejestracja-pracodawca` | — | — | 95% | 95% | ✓ | jw. |
 | auth | `apply` | `/pl/reset-hasla` | — | — | 95% | 95% | ✓ | jw. |
 | auth | `apply` | `/pl/ustaw-nowe-haslo` | — | — | 94% | 94% | ✓ | jw. |
 | auth | `apply` | `/pl/potwierdzenie` | — | — | 94% | 94% | ✓ | jw. |
 | auth | `apply` | `/pl/wypisz` | — | — | 94% | 94% | ✓ | jw. |
 | candidate | `candidate` | `/pl/candidate` | 9.5% | 13.1% | 86% | 75% | ~ | Treść = kalka `#people/candidate`. Różnice: chrome panelu (pasek 64 px z powiadomieniami zamiast nagłówka witryny 95 px, logo w sidebarze zamiast `.side-person`) → Z1; ≤ 850 px dolny pasek zakładek (decyzja #496). ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
-| candidate | `profile` | `/pl/candidate/profil` | 7.4% | 13.1% | 84% | 79% | ~ | jw. (`#people/profile`). ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
+| candidate | `profile` | `/pl/candidate/profil` | 7.4% | 13.1% | 86% | 81% | ~ | jw. (`#people/profile`). ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
 | candidate | `applications` | `/pl/candidate/aplikacje` | 5.8% | 11.1% | 83% | 79% | ~ | jw. (`#people/applications`). ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
 | candidate | `proposals` | `/pl/candidate/propozycje` | 8.6% | 14.9% | 80% | 75% | ~ | jw. (`#people/proposals`). ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
 | candidate | `messages` | `/pl/candidate/wiadomosci` | 6.6% | 12.6% | 81% | 75% | ~ | jw. (`#people/messages`). ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
 | candidate | `saved` | `/pl/candidate/zapisane` | 7.8% | 13.5% | 81% | 69% | ~ | jw. (`#people/saved`); karty `.pp-passport` zamiast `.job`. ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
 | candidate | `saved` | `/pl/candidate/oferty-polecane` | — | — | 81% | 69% | ✗ | Brak ekranu; złożone z `saved`. Niska zgodność przy 390 px = dolny pasek zakładek (Z1). ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
-| candidate | `profile` | `/pl/candidate/onboarding` | — | — | 79% | 79% | ~ | Brak ekranu; `.paper.demo-form` + numer kroku. ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
-| candidate | `saved` | `/pl/candidate/wyszukiwania` | — | — | 82% | 73% | ~ | Brak ekranu; prymitywy panelu. ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
+| candidate | `profile` | `/pl/candidate/onboarding` | — | — | 81% | 81% | ~ | Brak ekranu; `.paper.demo-form` + numer kroku. ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
+| candidate | `saved` | `/pl/candidate/wyszukiwania` | — | — | 84% | 75% | ~ | Brak ekranu; prymitywy panelu. ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
 | candidate | `profile` | `/pl/candidate/ustawienia` | — | — | 79% | 73% | ~ | Brak ekranu; przełączniki zamiast przycisku głównego. ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
-| employer | `employer` | `/pl/employer` | 6.7% | 11.3% | 85% | 67% | ~ | Treść = kalka `#people/employer`; karty paszportowe ofert zamiast tabeli (decyzja #171). Chrome panelu → Z1. ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
-| employer | `newjob` | `/pl/employer/oferty/nowa` | 6.5% | 13.1% | 90% | 73% | ~ | Kalka `#people/newjob` (9 kroków zamiast skrótu prototypu). ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
+| employer | `employer` | `/pl/employer` | 6.7% | 11.3% | 88% | 69% | ~ | Treść = kalka `#people/employer`; karty paszportowe ofert zamiast tabeli (decyzja #171). Chrome panelu → Z1. ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
+| employer | `newjob` | `/pl/employer/oferty/nowa` | 6.5% | 13.1% | 92% | 75% | ~ | Kalka `#people/newjob` (9 kroków zamiast skrótu prototypu). ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
 | employer | `talent` | `/pl/employer/kandydaci` | 9.2% | 17.4% | 90% | 68% | ~ | Kalka `#people/talent`; H1 40 px `.extended` (ten PR). ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
-| employer | `company` | `/pl/employer/firma` | 23.7% | 29.7% | 90% | 81% | ~ | Kalka `#people/company`; większa różnica pikseli = formularz edycji + baner statusu weryfikacji ponad treścią prototypu. ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
+| employer | `company` | `/pl/employer/firma` | 23.7% | 29.7% | 92% | 83% | ~ | Kalka `#people/company`; większa różnica pikseli = formularz edycji + baner statusu weryfikacji ponad treścią prototypu. ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
 | employer | `talent` | `/pl/employer/oferty` | — | — | 90% | 68% | ✗ | Brak ekranu; H1 `.extended` (ten PR). 390 px: dolny pasek zakładek (Z1). ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
 | employer | `talent` | `/pl/employer/aplikacje` | — | — | 87% | 68% | ✗ | jw. ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
 | employer | `profile` | `/pl/employer/aplikacje/[id]` | — | — | 85% | 67% | ✗ | Brak ekranu; szczegół zgłoszenia z prymitywów `profile`. 390 px: Z1. ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
 | employer | `messages` | `/pl/employer/wiadomosci` | — | — | 88% | 75% | ~ | Wspólny widok wiadomości z kandydatem. ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
 | employer | `talent` | `/pl/employer/statystyki` | — | — | 90% | 77% | ~ | Brak ekranu; H1 `.extended` (ten PR). ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
-| employer | `company` | `/pl/employer/zespol` | — | — | 90% | 81% | ~ | Brak ekranu; H1 `.extended` (ten PR). ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
+| employer | `company` | `/pl/employer/zespol` | — | — | 92% | 83% | ~ | Brak ekranu; H1 `.extended` (ten PR). ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
 | employer | `company` | `/pl/employer/ustawienia` | — | — | 83% | 75% | ~ | Brak ekranu; przełączniki zamiast przycisku. ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
-| employer | `company` | `/pl/employer/firma/nowa` | — | — | 90% | 81% | ~ | Brak ekranu; H1 `.extended` (ten PR). ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
+| employer | `company` | `/pl/employer/firma/nowa` | — | — | 92% | 83% | ~ | Brak ekranu; H1 `.extended` (ten PR). ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
 | admin | `employer` | `/pl/admin` | — | — | 81% | 69% | ✗ | Brak ekranu; prymitywy panelu pracodawcy (#483). Chrome panelu → Z1; przyciski w tabelach mniejsze niż `.btn`. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
-| admin | `employer` | `/pl/admin/firmy` | — | — | 84% | 73% | ~ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
+| admin | `employer` | `/pl/admin/firmy` | — | — | 86% | 75% | ~ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
 | admin | `company` | `/pl/admin/firmy/[id]` | — | — | 81% | 69% | ✗ | H1 `.extended` 40/30 px (Z6); przyciski akcji = `.btn`. Pozostała różnica = chrome panelu → Z1. |
-| admin | `employer` | `/pl/admin/zgloszenia` | — | — | 84% | 73% | ~ | Filtry statusu i rodzaju = `.btn`/`.btn.secondary` (Z6). Pozostała różnica = chrome panelu → Z1. |
-| admin | `employer` | `/pl/admin/uzytkownicy` | — | — | 84% | 73% | ~ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
-| admin | `employer` | `/pl/admin/poczta` | — | — | 79% | 73% | ~ | Filtry = `.btn`/`.btn.secondary` zamiast pigułek (Z6). Pozostała różnica = chrome panelu → Z1. |
-| admin | `employer` | `/pl/admin/dziennik` | — | — | 84% | 81% | ~ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
+| admin | `employer` | `/pl/admin/zgloszenia` | — | — | 86% | 75% | ~ | Filtry statusu i rodzaju = `.btn`/`.btn.secondary` (Z6). Pozostała różnica = chrome panelu → Z1. |
+| admin | `employer` | `/pl/admin/uzytkownicy` | — | — | 86% | 83% | ~ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
+| admin | `employer` | `/pl/admin/poczta` | — | — | 81% | 75% | ~ | Filtry = `.btn`/`.btn.secondary` zamiast pigułek (Z6). Pozostała różnica = chrome panelu → Z1. |
+| admin | `employer` | `/pl/admin/dziennik` | — | — | 86% | 83% | ~ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
 | brand | `home` | `/pl/offline` | — | — | 55% | 55% | ✗ | Samodzielny `public/offline.html` bez nagłówka witryny (działa bez sieci); logo/kolory prototypu. ([#510](https://github.com/aktualnosci-be/pracujbe/pull/510)) |
 | email | `materials/newsletter.html` | `React Email (newsletter)` | 6.2% | 18.6% | — | — | ~ | Odstępstwa klientów pocztowych (#510): bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii, inne teksty i liczba ofert; 390 px — różna wysokość treści. ([#510](https://github.com/aktualnosci-be/pracujbe/pull/510)) |
 | email | `materials/newsletter.html` | `React Email (transactional)` | — | — | — | — | — | Wszystkie typy: jeden layout z newslettera (paleta pilnowana testem `email-palette`); bez pomiaru pikseli — inna treść. ([#510](https://github.com/aktualnosci-be/pracujbe/pull/510)) |
@@ -96,6 +96,32 @@ Ekran prototypu `#people/brand` (identyfikacja) nie ma trasy w aplikacji — pok
 Widok `#people/apply` (formularz aplikowania) = `ApplyModal`/formularz gościa; w trybie demo modal
 pokazuje komunikat zamiast formularza (#297), dlatego służy tu tylko jako referencja formularzy
 (auth). Pomiar obejmuje język PL; układ w NL/FR/EN pilnują istniejące testy reflow/zoom.
+
+## Etap 04 — panele i kreatory (#5), pomiar 2026-09-25
+
+Ponowny pomiar 29 tras paneli (kandydat, pracodawca, admin) przy 1280/390 px. Przed zmianą
+wyniki były identyczne z tabelą powyżej; rozbieżności stylów w panelach (58 pomiarów) to:
+
+| Właściwość | Liczba pomiarów | Przyczyna | Stan |
+|---|---|---|---|
+| nagłówek (wysokość 64 vs 95/77 px, 16 vs 14 px), logo (24/700 vs 29/800) | 58 / 46 | chrome panelu | **Z1 — decyzja właściciela** |
+| aktywna pozycja menu przy 390 px (dolny pasek zakładek zamiast `.side-item.active`) | 15 | chrome panelu (#496) | **Z1 — decyzja właściciela** |
+| interlinia przycisku `.btn`: 20 px (`text-sm`) zamiast `normal` (≈ 18,2 px) | 32 | prototyp nie ustawia `line-height` | **poprawione** |
+| H1 przy 390 px (1 zamiast 2 wierszy), brak przycisku głównego / nadtytułu | 12 / 14 / 4 | inna treść ekranu (dane demo, krótsze teksty) | bez zmian — nie styl |
+| „przycisk główny” w ustawieniach i propozycjach | 6 | heurystyka mierzy inny element (przełącznik, CTA karty 12 px) | bez zmian — artefakt pomiaru |
+
+Poprawka: `leading-[normal]` w `BTN_PRIMARY`/`BTN_SECONDARY`/`BTN_ACTION`/`BTN_SMALL`
+(`panel-styles.ts`), `Button size="passport"`, przycisk „Zapisz” w wariancie paszportu i
+przycisk pomocniczy onboardingu. Po zmianie style tras paneli +2 pp (tabela wyżej; kolumny
+„style” zmierzone na `next dev` tego drzewa, % pikseli z buildu produkcyjnego sprzed zmiany —
+interlinia nie zmienia wysokości przycisku 49 px). Strażnik: `prototype-matrix.spec.ts` —
+`BTN` sprawdza interlinię (Z2/Z4/Z5/Z6), nowy test „przyciski paneli” (PL/FR, 7 tras) zbiera
+każdy przycisk `.btn` w `main`; kontrola ujemna: pigułka z `text-sm` (20 px) nie przechodzi.
+
+Wszystkie pozostałe statusy ✗ w panelach (`oferty-polecane`, `employer/oferty`,
+`employer/aplikacje`, `aplikacje/[id]`, `admin`, `admin/firmy/[id]`) wynikają wyłącznie z
+pomiaru przy 390 px chrome'u panelu (Z1). Poza Z1 treść paneli i kreatorów nie ma już
+rozbieżności stylów względem prototypu.
 
 ## Favicon, PWA, OG
 

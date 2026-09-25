@@ -9,11 +9,11 @@ import {
   failAuthEmail, prepareAuthEmail,
 } from '../../src/lib/auth/email-outbox';
 import { AuthMailSendError, processAuthEmailBatch, type MailSender } from '../../src/lib/auth/email-worker';
-import { captureError } from '../../src/lib/sentry';
+import { captureError } from '../../src/lib/error-report';
 import { loadProductionMigrations } from '../../scripts/db/production-migrations.mjs';
 import { applyMigrations } from '../../scripts/db/migrate.mjs';
 
-vi.mock('../../src/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('../../src/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const baseURL = 'https://auth.example.invalid';
 const secret = 'auth-email-queue-test-not-for-production-0123456789';

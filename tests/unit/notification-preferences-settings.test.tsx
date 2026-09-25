@@ -30,7 +30,7 @@ vi.mock('next-intl/server', () => ({
 }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 // Sekcja zablokowanych firm (#97) ma własne testy (company-blocks-action, E2E).
 vi.mock('@/lib/data/company-blocks', () => ({
   loadMyCompanyBlocks: async () => ({ status: 'ready', blocks: [], demo: false }),

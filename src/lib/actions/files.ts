@@ -5,7 +5,7 @@ import { headers } from 'next/headers';
 import { isProductionMode } from '@/lib/env';
 import { AppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
 
 /**

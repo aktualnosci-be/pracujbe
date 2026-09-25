@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { ErrorCode } from '@/lib/errors';
+import { AiBudgetError } from '@/lib/ai/budget-error';
 import { ExtractorError } from '@/lib/ai-import/extract';
 import type { CvExtractor } from '@/lib/cv-import/extract';
 import { minimizeCvText } from '@/lib/cv-import/minimize';
@@ -61,6 +62,8 @@ export async function proposeFromCv(text: string, extractor: CvExtractor): Promi
   try {
     raw = await extractor.extract(prepared.text);
   } catch (e) {
+    // #36: budżet przekroczony lub niedostępny — model nie został wywołany (fail-closed).
+    if (e instanceof AiBudgetError) return { ok: false, error: 'AI_BUDGET_EXCEEDED' };
     if (e instanceof ExtractorError && e.reason === 'rateLimited') return { ok: false, error: 'RATE_LIMITED' };
     return { ok: false, error: 'CV_IMPORT_FAILED' };
   }

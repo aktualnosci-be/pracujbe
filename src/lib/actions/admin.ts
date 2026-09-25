@@ -21,7 +21,7 @@ import {
   type ScreeningReviewDecision,
 } from '@/lib/screening/review';
 import type { ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { checkBelgianVatInVies, type ViesCheckResult } from '@/lib/vies/client';
 import { compareCompanyNames, type CompanyNameComparison } from '@/lib/vies/name-match';
 import { companyVatSource } from '@/lib/vies/state';
@@ -87,7 +87,7 @@ type AdminRpcCall = { status: 'ok' } | { status: 'unauthenticated' } | { status:
 /**
  * RPC `admin_*` pod sesją bieżącego użytkownika (RLS/`is_admin()` decyduje w bazie). Błąd bazy
  * wraca jako komunikat do mapowania na kod użytkowy; wyjątek spoza bazy (sieć, konfiguracja)
- * rzuca dalej — trafia do Sentry w akcji.
+ * rzuca dalej — trafia do kanału błędów w akcji.
  */
 async function callAdminRpc(fn: string, args: RpcArgs): Promise<AdminRpcCall> {
   const me = await getPortalIdentity();

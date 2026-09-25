@@ -9,7 +9,9 @@
  * tam sekretów (service-role key czytany jest osobno, tylko po stronie serwera).
  */
 import { isBillingEnabled } from '@/lib/billing/flag';
+import { cronSecretChecks } from '@/lib/cron/secrets';
 import { emailProviderFromEnv } from '@/lib/email/transport/select';
+import { errorWebhookFromEnv } from '@/lib/error-webhook/url';
 
 export const env = {
   /** Publiczny URL aplikacji (kanoniczne linki, e-maile). Fallback: localhost. */
@@ -201,7 +203,7 @@ export function isFileStorageConfigured(): boolean {
  * (`DATABASE_RATE_LIMIT_URL` + `RATE_LIMIT_KEY_SECRET`; bez niego akcje auth są blokowane) oraz
  * login zadań serwerowych (`DATABASE_SERVICE_URL`, service_role: worker poczty, webhooki, cron,
  * odczyty admina — #25) oraz realny https URL.
- * Dostawcy opcjonalni (poczta EmailLabs/Resend, worker poczty, Sentry) NIE blokują gotowości — ich stan raportuje
+ * Dostawcy opcjonalni (poczta EmailLabs/Resend, worker poczty, webhook błędów) NIE blokują gotowości — ich stan raportuje
  * /api/health jako `checks` (obserwowalność bez twardego 503).
  */
 export function readinessChecks(): Record<string, boolean> {
@@ -221,7 +223,10 @@ export function readinessChecks(): Record<string, boolean> {
     emailProviderReady: emailProviderFromEnv().ready,
     emaillabsWebhook: Boolean(process.env.EMAILLABS_WEBHOOK_SECRET?.trim()),
     queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),
-    sentry: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN),
+    // #13: osobny sekret maintenance, rozdział sekretów cron, przejściowy CRON_SECRET.
+    ...cronSecretChecks(),
+    // #571: kanał błędów = webhook Discorda; pusta/niepoprawna ERROR_WEBHOOK_URL = false.
+    errorWebhook: errorWebhookFromEnv() !== null,
     // #26: prywatny bucket Railway (endpoint/region/bucket/klucze) + sekret linków pobrania CV.
     fileBucket: fileBucketConfig() !== null,
     fileDownloadSecret: fileDownloadSecret() !== null,
