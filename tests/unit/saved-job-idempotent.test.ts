@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toggleSavedJob } from '@/lib/actions/candidate';
-import { createServerClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured } from '@/lib/env';
+import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
+vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const jobId = '11111111-1111-4111-8111-111111111111';
 const userId = '22222222-2222-4222-8222-222222222222';
@@ -12,81 +11,61 @@ const userId = '22222222-2222-4222-8222-222222222222';
 /**
  * Tabela `saved_jobs` w pamięci: unikat (candidate_id, job_id) jak w 0004, polityki RLS
  * „własne wiersze” jak w 0009. Wiersze przeżywają kolejne wywołania akcji (= odświeżenie strony).
+ * INSERT z `ON CONFLICT (candidate_id, job_id) DO NOTHING` nie dubluje istniejącej pary.
  */
-function fakeDb() {
+function savedJobsTable() {
+  resetFakeDb({ id: userId, role: 'candidate' });
   const rows = new Set<string>();
   const inserts: string[] = [];
   const deletes: string[] = [];
-  const keyOf = (candidate: unknown, job: unknown) => `${candidate}:${job}`;
-  const table = () => {
-    const filters: Record<string, unknown> = {};
-    let mode: 'select' | 'delete' = 'select';
-    const q = {
-      select: () => q,
-      delete: () => {
-        mode = 'delete';
-        return q;
-      },
-      eq: (column: string, value: unknown) => {
-        filters[column] = value;
-        if (mode === 'delete' && 'candidate_id' in filters && 'job_id' in filters) {
-          const key = keyOf(filters.candidate_id, filters.job_id);
-          deletes.push(key);
-          rows.delete(key);
-          return Promise.resolve({ error: null });
-        }
-        return q;
-      },
-      maybeSingle: () =>
-        Promise.resolve({
-          data: rows.has(keyOf(filters.candidate_id, filters.job_id)) ? { id: 'row' } : null,
-          error: null,
-        }),
-      insert: (row: { candidate_id: string; job_id: string }) => {
-        if (row.candidate_id !== userId)
-          return Promise.resolve({ error: { code: '42501', message: 'row-level security' } });
-        const key = keyOf(row.candidate_id, row.job_id);
-        inserts.push(key);
-        if (rows.has(key))
-          return Promise.resolve({ error: { code: '23505', message: 'duplicate key' } });
-        rows.add(key);
-        return Promise.resolve({ error: null });
-      },
-    };
-    return q;
-  };
-  vi.mocked(createServerClient).mockResolvedValue({
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: userId } } }) },
-    from: vi.fn(() => table()),
-  } as never);
+  const keyOf = (values: unknown[]) => `${values[0]}:${values[1]}`;
+  fakeDb
+    .rows('candidate.saved-job-state', ({ values }) => (rows.has(keyOf(values)) ? [{ id: 'row' }] : []))
+    .exec('candidate.saved-job-delete', ({ values }) => {
+      const key = keyOf(values);
+      deletes.push(key);
+      return rows.delete(key) ? 1 : 0;
+    })
+    .exec('candidate.saved-job-insert', ({ values, text }) => {
+      if (values[0] !== userId) throw pgError('42501', 'new row violates row-level security policy');
+      const key = keyOf(values);
+      inserts.push(key);
+      if (rows.has(key)) {
+        if (!/ON CONFLICT \(candidate_id, job_id\) DO NOTHING/.test(text)) throw pgError('23505', 'duplicate key');
+        return 0;
+      }
+      rows.add(key);
+      return 1;
+    });
   return { rows, inserts, deletes };
 }
 
 beforeEach(() => {
-  vi.resetAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  vi.clearAllMocks();
 });
 
 describe('toggleSavedJob — idempotentny zapis oferty (#9)', () => {
   it('ponowienie „zapisz” zostawia jedną zapisaną ofertę, także po odświeżeniu', async () => {
-    const db = fakeDb();
+    const db = savedJobsTable();
     expect(await toggleSavedJob(jobId, true)).toEqual({ ok: true, saved: true });
     // Retry po zgubionej odpowiedzi / druga karta / podwójne kliknięcie.
     expect(await toggleSavedJob(jobId, true)).toEqual({ ok: true, saved: true });
     expect(db.rows.size).toBe(1);
     expect(db.deletes).toHaveLength(0);
+    // Zapis wyłącznie dla konta z sesji.
+    expect(fakeDb.callsTo('candidate.saved-job-insert').every((call) => call.values[0] === userId && call.as === userId)).toBe(true);
   });
 
   it('kontrola ujemna: toggle bez stanu docelowego odwraca zapis przy ponowieniu', async () => {
     // Dokładnie ten błąd naprawia `desired`: to samo żądanie powtórzone kasuje zapis.
-    const db = fakeDb();
+    const db = savedJobsTable();
     expect(await toggleSavedJob(jobId)).toEqual({ ok: true, saved: true });
     expect(await toggleSavedJob(jobId)).toEqual({ ok: true, saved: false });
     expect(db.rows.size).toBe(0);
   });
 
-  it('wyścig insertów tej samej pary (unikat 23505) to sukces, nie fałszywy błąd', async () => {
-    const db = fakeDb();
+  it('wyścig insertów tej samej pary (unikat) to sukces, nie fałszywy błąd', async () => {
+    const db = savedJobsTable();
     const [first, second] = await Promise.all([
       toggleSavedJob(jobId, true),
       toggleSavedJob(jobId, true),
@@ -97,7 +76,7 @@ describe('toggleSavedJob — idempotentny zapis oferty (#9)', () => {
   });
 
   it('ponowienie „usuń” jest idempotentne', async () => {
-    const db = fakeDb();
+    const db = savedJobsTable();
     await toggleSavedJob(jobId, true);
     expect(await toggleSavedJob(jobId, false)).toEqual({ ok: true, saved: false });
     expect(await toggleSavedJob(jobId, false)).toEqual({ ok: true, saved: false });
@@ -106,25 +85,29 @@ describe('toggleSavedJob — idempotentny zapis oferty (#9)', () => {
   });
 
   it('inny błąd zapisu nie udaje sukcesu', async () => {
-    fakeDb();
-    vi.mocked(createServerClient).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: userId } } }) },
-      from: vi.fn(() => ({
-        insert: () =>
-          Promise.resolve({ error: { code: '42501', message: 'row-level security' } }),
-      })),
-    } as never);
+    savedJobsTable();
+    fakeDb.exec('candidate.saved-job-insert', () => {
+      throw pgError('42501', 'new row violates row-level security policy');
+    });
     expect(await toggleSavedJob(jobId, true)).toEqual({
       ok: false,
       error: 'PERMISSION_DENIED',
     });
   });
 
+  it('bez sesji nie zapisuje', async () => {
+    savedJobsTable();
+    resetFakeDb(null);
+    expect(await toggleSavedJob(jobId, true)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
   it('odrzuca niepoprawny stan docelowy przed połączeniem', async () => {
+    savedJobsTable();
     expect(await toggleSavedJob(jobId, 'yes' as never)).toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(createServerClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });

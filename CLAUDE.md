@@ -79,7 +79,11 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 - **Rendering:** publiczne strony SSR/SSG (oferty statycznie generowane/rewalidowane), panele SSR + wyspy klienckie.
 - **Język/typy:** TypeScript `strict: true`. Walidacja I/O przez **Zod** (jedno źródło typów: `z.infer`).
 - **UI:** Tailwind CSS + **shadcn/ui** (dostępne komponenty Radix). Komponenty w `src/components/ui`.
-- **Dane/Auth/Storage:** **Supabase**. Trzy klienty:
+- **Dane (#25):** PostgreSQL Railway bez PostgREST — `src/lib/db/portal.ts` (`getPortalIdentity` z sesji Better Auth,
+  `withPortalTransaction` = RLS jako użytkownik, `withServiceRole` = osobna pula `DATABASE_SERVICE_URL` tylko dla
+  workera/webhooków/crona/odczytów admina), zapytania `src/lib/db/sql.ts`. Konwencje: `docs/railway/WARSTWA_DANYCH.md`.
+  Testy: atrapa `tests/helpers/fake-db.ts`, PG16 `tests/integration/portal-*.test.ts`.
+- **Auth/Storage (przejściowo):** **Supabase** — sesje (#24) i upload CV (#26), SDK do usunięcia w #27. Trzy klienty:
   - `src/lib/supabase/server.ts` — RSC/Server Actions/Route Handlers (cookies, sesja użytkownika).
   - `src/lib/supabase/client.ts` — komponenty klienckie (anon key).
   - `src/lib/supabase/admin.ts` — **tylko** kod serwerowy zaufany (service role). NIGDY nie importować w komponencie klienckim.
@@ -1199,6 +1203,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Otwarte (właściciel):** region/retencja/DPA/dostęp Sentry i logów Railway, rejestr (#485),
   usuwanie danych już wysłanych (#486); do tego czasu Sentry bez DSN. Sentry w przeglądarce nie
   jest wpięte (brak `instrumentation-client`).
+- [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
+  (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
+  `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0107`
+  (`claim_email_batch` dla `service_role`). Dowód: `tests/integration/portal-*.test.ts` (PG16). **Otwarte:** nazwa
+  firmy z rejestracji w formularzu firmy (metadane konta), nazwa firmy w wiadomościach kandydata (od 0014);
+  spięcie z trasami sesji (#24) i usunięcie SDK (#27).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
@@ -1362,7 +1372,7 @@ npm run db:reset       # (supabase CLI) reset + migracje + seed [lokalnie]
 - Komponenty serwerowe domyślnie; `"use client"` tylko gdy potrzebne (interakcje/hooki).
 - Walidacja I/O = Zod; typy z `z.infer`. Brak `any` (strict).
 - Teksty przez `useTranslations`/`getTranslations` (next-intl) — nigdy literały w JSX.
-- Dostęp do DB: przez klienty z `src/lib/supabase`. Operacje wrażliwe = Server Actions/route handlers.
+- Dostęp do DB: `src/lib/db/portal.ts` + `src/lib/db/sql.ts` (#25); nazwy zapytań/funkcji tylko stałe, wartości w `$n`. Operacje wrażliwe = Server Actions/route handlers.
 - Błędy: rzucaj `AppError` z kodem (`src/lib/errors`); mapuj na komunikat tłumaczony.
 - Nazwy plików: `kebab-case`; komponenty React: `PascalCase`.
 - Każdy nowy przepływ krytyczny = test (unit i/lub e2e).

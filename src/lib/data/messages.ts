@@ -1,24 +1,24 @@
 /**
  * Warstwa dostępu do danych KOMUNIKACJI (Etap 6) — Pracuj.be.
  *
- * Strategia (spójna z `@/lib/data/candidate`): gdy `isSupabaseConfigured()` — dane czytane są
- * POD SESJĄ użytkownika (`createServerClient`, RLS wg `auth.uid()`, NIE service-role); bez env —
- * te same struktury wypełnione danymi DEMO (build i UX działają bez backendu).
+ * Strategia (#25): gdy `isPortalDataConfigured()` — dane czytane są POD SESJĄ użytkownika
+ * (`getPortalIdentity` + `withPortalTransaction`: jedna transakcja, RLS wg `auth.uid()`,
+ * NIE service-role); bez env — te same struktury wypełnione danymi DEMO.
  *
  * Widoczność stron konwersacji wynika z RLS:
  * - `profiles`: właściciel + kandydat powiązany relacją z firmą (pracodawca widzi kandydata,
  *   kandydat NIE widzi profilu pracodawcy) — dlatego nazwę drugiej strony ustalamy z `profiles`,
- *   a przy braku dostępu (perspektywa kandydata) spadamy na nazwę firmy (`companies`, publiczne
- *   tylko dla zweryfikowanych).
+ *   a przy braku dostępu (perspektywa kandydata) spadamy na nazwę firmy (`companies` pod RLS —
+ *   od 0014 czytelne tylko dla członków firmy, więc kandydat dostaje '' → neutralna etykieta UI).
  * - `conversations`/`conversation_members`/`messages`: wyłącznie uczestnik konwersacji.
  *
  * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do Sentry,
  * a wyniki listy i wątku odróżniają awarię od prawdziwego braku danych.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js';
-
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { queryOne, queryRows, rpcRows } from '@/lib/db/sql';
+import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
@@ -98,19 +98,6 @@ function asRecord(value: unknown): Record<string, unknown> {
 function asStr(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
-function asArr(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-/** Zwraca zalogowanego użytkownika (albo null), a awarii Auth nie maskuje jako braku sesji. */
-async function getAuthUserId(supabase: SupabaseClient): Promise<string | null> {
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-  if (error) throw error;
-  return user?.id ?? null;
-}
 
 /** Składa „imię nazwisko" z rekordu profilu (pusty string, gdy brak). */
 function fullName(record: Record<string, unknown>): string {
@@ -119,19 +106,16 @@ function fullName(record: Record<string, unknown>): string {
 
 /** Mapa profile_id → „imię nazwisko" (tylko profile widoczne pod RLS). */
 async function fetchProfileNames(
-  supabase: SupabaseClient,
+  tx: TransactionQuery,
   ids: string[],
 ): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   if (ids.length === 0) return map;
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, first_name, last_name')
-    .in('id', ids);
-  if (error) throw error;
+  const rows = await queryRows(tx, 'messages.profile-names',
+    'SELECT id, first_name, last_name FROM public.profiles WHERE id = ANY($1::uuid[])', [ids]);
 
-  for (const row of asArr(data)) {
+  for (const row of rows) {
     const r = asRecord(row);
     const id = asStr(r['id']);
     const name = fullName(r);
@@ -140,18 +124,18 @@ async function fetchProfileNames(
   return map;
 }
 
-/** Mapa company_id → nazwa (tylko firmy widoczne pod RLS: zweryfikowane / własne). */
+/** Mapa company_id → nazwa (tylko firmy widoczne pod RLS — od 0014 wyłącznie własne). */
 async function fetchCompanyNames(
-  supabase: SupabaseClient,
+  tx: TransactionQuery,
   ids: string[],
 ): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   if (ids.length === 0) return map;
 
-  const { data, error } = await supabase.from('companies').select('id, name').in('id', ids);
-  if (error) throw error;
+  const rows = await queryRows(tx, 'messages.company-names',
+    'SELECT id, name FROM public.companies WHERE id = ANY($1::uuid[])', [ids]);
 
-  for (const row of asArr(data)) {
+  for (const row of rows) {
     const r = asRecord(row);
     const id = asStr(r['id']);
     const name = asStr(r['name']);
@@ -183,32 +167,27 @@ function resolveCounterparty(
  * zwrócony wiersz, więc kolejna strona nie ma luk ani duplikatów, a wiadomość dopisana między
  * pobraniami (nowsza od kursora) nie przesuwa starszych stron. Pobieramy `limit + 1`, aby bez
  * osobnego `count` wiedzieć, czy istnieją starsze. Zwraca wiersze CHRONOLOGICZNIE.
- * Odczyt pod sesją — RLS `messages` ogranicza wynik do uczestnika rozmowy.
+ * Odczyt pod sesją — RLS `messages` ogranicza wynik do uczestnika rozmowy. Kursor z Server
+ * Action jest sprawdzany przez Zod (ISO datetime + UUID); znacznik czasu z `json_agg` ma
+ * pełną precyzję (mikrosekundy), więc porównanie w SQL jest dokładne.
  */
 async function fetchMessagePage(
-  supabase: SupabaseClient,
+  tx: TransactionQuery,
   conversationId: string,
   cursor: ThreadCursor | null,
 ): Promise<{ rows: unknown[]; olderCursor: ThreadCursor | null }> {
-  let query = supabase
-    .from('messages')
-    .select('id, body, sender_id, is_system, created_at')
-    .eq('conversation_id', conversationId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .order('id', { ascending: false });
-  if (cursor) {
-    // PostgREST wymaga cudzysłowu dla wartości ISO 8601 (dwukropki, kropka). Kursor z Server
-    // Action jest sprawdzany przez Zod (ISO datetime + UUID) przed trafieniem tutaj.
-    const timestamp = `"${cursor.createdAt}"`;
-    query = query.or(
-      `created_at.lt.${timestamp},and(created_at.eq.${timestamp},id.lt.${cursor.id})`,
-    );
-  }
-  const { data, error } = await query.limit(THREAD_PAGE_SIZE + 1);
-  if (error) throw error;
+  const rows = await queryRows(tx, 'messages.thread-page',
+    `SELECT m.id, m.body, m.sender_id, m.is_system, m.created_at
+       FROM public.messages m
+      WHERE m.conversation_id = $1
+        AND m.deleted_at IS NULL
+        AND ($2::timestamptz IS NULL
+             OR m.created_at < $2::timestamptz
+             OR (m.created_at = $2::timestamptz AND m.id < $3::uuid))
+      ORDER BY m.created_at DESC, m.id DESC
+      LIMIT $4`,
+    [conversationId, cursor?.createdAt ?? null, cursor?.id ?? null, THREAD_PAGE_SIZE + 1]);
 
-  const rows = asArr(data);
   const visible = rows.slice(0, THREAD_PAGE_SIZE);
   const oldest = asRecord(visible[visible.length - 1]);
   const olderCursor =
@@ -233,19 +212,16 @@ interface SenderContext {
 
 /** Członkowie firmy rozmowy spośród `profileIds` (widoczni tylko dla członków tej firmy). */
 async function fetchCompanyMemberIds(
-  supabase: SupabaseClient,
+  tx: TransactionQuery,
   companyId: string,
   profileIds: string[],
 ): Promise<Set<string>> {
   const ids = new Set<string>();
   if (!companyId || profileIds.length === 0) return ids;
-  const { data, error } = await supabase
-    .from('company_members')
-    .select('profile_id')
-    .eq('company_id', companyId)
-    .in('profile_id', profileIds);
-  if (error) throw error;
-  for (const row of asArr(data)) {
+  const rows = await queryRows(tx, 'messages.company-members',
+    `SELECT profile_id FROM public.company_members
+      WHERE company_id = $1 AND profile_id = ANY($2::uuid[])`, [companyId, profileIds]);
+  for (const row of rows) {
     const pid = asStr(asRecord(row)['profile_id']);
     if (pid) ids.add(pid);
   }
@@ -254,16 +230,15 @@ async function fetchCompanyMemberIds(
 
 /** Nazwy nadawców + nazwa firmy + zespół — jeden zestaw zapytań pod RLS dla strony wątku. */
 async function fetchSenderContext(
-  supabase: SupabaseClient,
+  tx: TransactionQuery,
   uid: string,
   companyId: string,
   profileIds: Set<string>,
 ): Promise<SenderContext> {
-  const [nameByProfile, companyNameById, memberIds] = await Promise.all([
-    fetchProfileNames(supabase, [...profileIds]),
-    fetchCompanyNames(supabase, companyId ? [companyId] : []),
-    fetchCompanyMemberIds(supabase, companyId, [...new Set([...profileIds, uid])]),
-  ]);
+  // Sekwencyjnie na jednej transakcji (jedno połączenie); błąd dowolnego odczytu = błąd wątku.
+  const nameByProfile = await fetchProfileNames(tx, [...profileIds]);
+  const companyNameById = await fetchCompanyNames(tx, companyId ? [companyId] : []);
+  const memberIds = await fetchCompanyMemberIds(tx, companyId, [...new Set([...profileIds, uid])]);
   return {
     nameByProfile,
     companyName: companyNameById.get(companyId) ?? '',
@@ -431,113 +406,94 @@ function toLocale(locale: string | undefined): Locale {
  * wyłącznie treścią DEMO (#359); realne wiadomości to dane użytkowników, bez tłumaczenia.
  */
 export async function getConversationsResult(locale?: string): Promise<ConversationsResult> {
-  if (!isSupabaseConfigured()) return { status: 'ready', items: buildDemo(toLocale(locale)).list };
+  if (!isPortalDataConfigured()) return { status: 'ready', items: buildDemo(toLocale(locale)).list };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const uid = await getAuthUserId(supabase);
-    if (!uid) return { status: 'ready', items: [] };
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'ready', items: [] };
+    const uid = me.id;
 
-    // 1) Moje członkostwa → conversation_id + last_read_at.
-    const { data: memberData, error: memberError } = await supabase
-      .from('conversation_members')
-      .select('conversation_id, last_read_at')
-      .eq('profile_id', uid);
-    if (memberError) throw memberError;
+    const items = await withPortalTransaction(me, async (tx): Promise<ConversationListItem[]> => {
+      // 1) Moje członkostwa → conversation_id (RLS: uczestnik rozmowy).
+      const memberRows = await queryRows(tx, 'messages.my-memberships',
+        'SELECT conversation_id, last_read_at FROM public.conversation_members WHERE profile_id = $1',
+        [uid]);
+      const convIds = [...new Set(memberRows.map((row) => asStr(asRecord(row)['conversation_id'])).filter(Boolean))];
+      if (convIds.length === 0) return [];
 
-    const lastReadByConv = new Map<string, string | null>();
-    for (const row of asArr(memberData)) {
-      const r = asRecord(row);
-      const cid = asStr(r['conversation_id']);
-      if (cid) {
-        lastReadByConv.set(cid, typeof r['last_read_at'] === 'string' ? (r['last_read_at'] as string) : null);
+      // 2) Konwersacje (najświeższe pierwsze).
+      const convs = await queryRows(tx, 'messages.conversations',
+        `SELECT id, subject, company_id, last_message_at
+           FROM public.conversations
+          WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL
+          ORDER BY last_message_at DESC NULLS LAST`, [convIds]);
+      if (convs.length === 0) return [];
+      const orderedIds = convs.map((c) => asStr(asRecord(c)['id'])).filter(Boolean);
+
+      // 3) Pozostali uczestnicy (kandydaci na „drugą stronę").
+      const otherMembers = await queryRows(tx, 'messages.other-members',
+        `SELECT conversation_id, profile_id
+           FROM public.conversation_members
+          WHERE conversation_id = ANY($1::uuid[]) AND profile_id <> $2`, [orderedIds, uid]);
+
+      const otherIdsByConv = new Map<string, string[]>();
+      const allOtherIds = new Set<string>();
+      for (const row of otherMembers) {
+        const r = asRecord(row);
+        const cid = asStr(r['conversation_id']);
+        const pid = asStr(r['profile_id']);
+        if (!cid || !pid) continue;
+        const arr = otherIdsByConv.get(cid) ?? [];
+        arr.push(pid);
+        otherIdsByConv.set(cid, arr);
+        allOtherIds.add(pid);
       }
-    }
-    if (lastReadByConv.size === 0) return { status: 'ready', items: [] };
-    const convIds = [...lastReadByConv.keys()];
 
-    // 2) Konwersacje (najświeższe pierwsze).
-    const { data: convData, error: convError } = await supabase
-      .from('conversations')
-      .select('id, subject, company_id, last_message_at')
-      .in('id', convIds)
-      .is('deleted_at', null)
-      .order('last_message_at', { ascending: false, nullsFirst: false });
-    if (convError) throw convError;
+      const companyIds = new Set<string>();
+      for (const c of convs) {
+        const companyId = asStr(asRecord(c)['company_id']);
+        if (companyId) companyIds.add(companyId);
+      }
 
-    const convs = asArr(convData);
-    if (convs.length === 0) return { status: 'ready', items: [] };
-    const orderedIds = convs.map((c) => asStr(asRecord(c)['id'])).filter(Boolean);
+      // 4) Nazwy stron (profile widoczne pod RLS) + firmy (fallback) + PODSUMOWANIA konwersacji.
+      // Ostatnia wiadomość i licznik nieprzeczytanych liczone PO STRONIE SQL (RPC 0021/0039,
+      // DISTINCT/LATERAL) — bez pobierania WSZYSTKICH wiadomości (P2#10). Nazwę drugiej
+      // strony nadal rozwiązujemy pod RLS (nie z RPC, który omija RLS) — bez zmiany prywatności.
+      const nameByProfile = await fetchProfileNames(tx, [...allOtherIds]);
+      const companyNameById = await fetchCompanyNames(tx, [...companyIds]);
+      const summaries = await rpcRows(tx, 'get_conversation_summaries');
 
-    // 3) Pozostali uczestnicy (kandydaci na „drugą stronę").
-    const { data: otherMembers, error: otherError } = await supabase
-      .from('conversation_members')
-      .select('conversation_id, profile_id')
-      .in('conversation_id', orderedIds)
-      .neq('profile_id', uid);
-    if (otherError) throw otherError;
+      const lastMsgByConv = new Map<string, { body: string; createdAt: string }>();
+      const unreadByConv = new Map<string, number>();
+      for (const row of summaries) {
+        const r = asRecord(row);
+        const cid = asStr(r['conversation_id']);
+        if (!cid) continue;
+        lastMsgByConv.set(cid, { body: asStr(r['last_body']), createdAt: asStr(r['last_at']) });
+        const n = r['unread_count'];
+        unreadByConv.set(cid, typeof n === 'number' ? n : Number(n ?? 0) || 0);
+      }
 
-    const otherIdsByConv = new Map<string, string[]>();
-    const allOtherIds = new Set<string>();
-    for (const row of asArr(otherMembers)) {
-      const r = asRecord(row);
-      const cid = asStr(r['conversation_id']);
-      const pid = asStr(r['profile_id']);
-      if (!cid || !pid) continue;
-      const arr = otherIdsByConv.get(cid) ?? [];
-      arr.push(pid);
-      otherIdsByConv.set(cid, arr);
-      allOtherIds.add(pid);
-    }
-
-    const companyIds = new Set<string>();
-    for (const c of convs) {
-      const companyId = asStr(asRecord(c)['company_id']);
-      if (companyId) companyIds.add(companyId);
-    }
-
-    // 4) Nazwy stron (profile widoczne pod RLS) + firmy (fallback) + PODSUMOWANIA konwersacji.
-    // Ostatnia wiadomość i licznik nieprzeczytanych liczone PO STRONIE SQL (RPC 0021,
-    // DISTINCT/LATERAL) — koniec pobierania WSZYSTKICH wiadomości do UI (P2#10). Nazwę drugiej
-    // strony nadal rozwiązujemy pod RLS (nie z RPC, który omija RLS) — bez zmiany prywatności.
-    const [nameByProfile, companyNameById, summaryResult] = await Promise.all([
-      fetchProfileNames(supabase, [...allOtherIds]),
-      fetchCompanyNames(supabase, [...companyIds]),
-      supabase.rpc('get_conversation_summaries'),
-    ]);
-    if (summaryResult.error) throw summaryResult.error;
-
-    const lastMsgByConv = new Map<string, { body: string; createdAt: string }>();
-    const unreadByConv = new Map<string, number>();
-    for (const row of asArr(summaryResult.data)) {
-      const r = asRecord(row);
-      const cid = asStr(r['conversation_id']);
-      if (!cid) continue;
-      lastMsgByConv.set(cid, { body: asStr(r['last_body']), createdAt: asStr(r['last_at']) });
-      const n = r['unread_count'];
-      unreadByConv.set(cid, typeof n === 'number' ? n : Number(n ?? 0) || 0);
-    }
-
-    const items = convs.map((c) => {
-      const r = asRecord(c);
-      const cid = asStr(r['id']);
-      const last = lastMsgByConv.get(cid);
-      const unreadCount = unreadByConv.get(cid) ?? 0;
-      return {
-        id: cid,
-        subject: asStr(r['subject']),
-        counterpartyName: resolveCounterparty(
-          otherIdsByConv.get(cid) ?? [],
-          asStr(r['company_id']),
-          nameByProfile,
-          companyNameById,
-        ),
-        lastPreview: last?.body ?? '',
-        lastMessageAt: last?.createdAt || asStr(r['last_message_at']),
-        unread: unreadCount > 0,
-        unreadCount,
-      };
+      return convs.map((c) => {
+        const r = asRecord(c);
+        const cid = asStr(r['id']);
+        const last = lastMsgByConv.get(cid);
+        const unreadCount = unreadByConv.get(cid) ?? 0;
+        return {
+          id: cid,
+          subject: asStr(r['subject']),
+          counterpartyName: resolveCounterparty(
+            otherIdsByConv.get(cid) ?? [],
+            asStr(r['company_id']),
+            nameByProfile,
+            companyNameById,
+          ),
+          lastPreview: last?.body ?? '',
+          lastMessageAt: last?.createdAt || asStr(r['last_message_at']),
+          unread: unreadCount > 0,
+          unreadCount,
+        };
+      });
     });
     return { status: 'ready', items };
   } catch (error) {
@@ -559,73 +515,61 @@ export async function getConversationThread(
   conversationId: string,
   locale?: string,
 ): Promise<ConversationThreadResult> {
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     const thread = buildDemo(toLocale(locale)).threads.get(conversationId);
     return thread ? { status: 'ready', thread } : { status: 'not-found' };
   }
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const uid = await getAuthUserId(supabase);
-    if (!uid) return { status: 'not-found' };
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'not-found' };
+    const uid = me.id;
 
-    const { data: convRow, error: convError } = await supabase
-      .from('conversations')
-      .select('id, subject, company_id')
-      .eq('id', conversationId)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (convError) throw convError;
+    return await withPortalTransaction(me, async (tx): Promise<ConversationThreadResult> => {
+      const conv = asRecord(await queryOne(tx, 'messages.conversation',
+        `SELECT id, subject, company_id FROM public.conversations
+          WHERE id = $1 AND deleted_at IS NULL`, [conversationId]));
+      const cid = asStr(conv['id']);
+      if (!cid) return { status: 'not-found' }; // brak dostępu (RLS) lub nie istnieje
 
-    const conv = asRecord(convRow);
-    const cid = asStr(conv['id']);
-    if (!cid) return { status: 'not-found' }; // brak dostępu (RLS) lub nie istnieje
+      const { rows: messageRows, olderCursor } = await fetchMessagePage(tx, conversationId, null);
 
-    const { rows: messageRows, olderCursor } = await fetchMessagePage(
-      supabase,
-      conversationId,
-      null,
-    );
+      // Nazwy nadawców (profile widoczne pod RLS) + pozostali uczestnicy (druga strona).
+      const senderIds = senderIdsOf(messageRows);
 
-    // Nazwy nadawców (profile widoczne pod RLS) + pozostali uczestnicy (druga strona).
-    const senderIds = senderIdsOf(messageRows);
+      const otherMembers = await queryRows(tx, 'messages.thread-other-members',
+        `SELECT profile_id FROM public.conversation_members
+          WHERE conversation_id = $1 AND profile_id <> $2`, [conversationId, uid]);
 
-    const { data: otherMembers, error: otherError } = await supabase
-      .from('conversation_members')
-      .select('profile_id')
-      .eq('conversation_id', conversationId)
-      .neq('profile_id', uid);
-    if (otherError) throw otherError;
-
-    const otherIds: string[] = [];
-    for (const row of asArr(otherMembers)) {
-      const pid = asStr(asRecord(row)['profile_id']);
-      if (pid) {
-        otherIds.push(pid);
-        senderIds.add(pid);
+      const otherIds: string[] = [];
+      for (const row of otherMembers) {
+        const pid = asStr(asRecord(row)['profile_id']);
+        if (pid) {
+          otherIds.push(pid);
+          senderIds.add(pid);
+        }
       }
-    }
 
-    const companyId = asStr(conv['company_id']);
-    const ctx = await fetchSenderContext(supabase, uid, companyId, senderIds);
-    const messages = toThreadMessages(messageRows, uid, ctx);
+      const companyId = asStr(conv['company_id']);
+      const ctx = await fetchSenderContext(tx, uid, companyId, senderIds);
+      const messages = toThreadMessages(messageRows, uid, ctx);
 
-    return {
-      status: 'ready',
-      thread: {
-        id: cid,
-        subject: asStr(conv['subject']),
-        counterpartyName: resolveCounterparty(
-          otherIds,
-          companyId,
-          ctx.nameByProfile,
-          new Map([[companyId, ctx.companyName]]),
-        ),
-        messages,
-        olderCursor,
-      },
-    };
+      return {
+        status: 'ready',
+        thread: {
+          id: cid,
+          subject: asStr(conv['subject']),
+          counterpartyName: resolveCounterparty(
+            otherIds,
+            companyId,
+            ctx.nameByProfile,
+            new Map([[companyId, ctx.companyName]]),
+          ),
+          messages,
+          olderCursor,
+        },
+      };
+    });
   } catch (error) {
     captureError(error, { area: 'messages.getConversationThread' });
     return { status: 'error' };
@@ -640,7 +584,7 @@ export async function getOlderThreadMessages(
   conversationId: string,
   cursor: ThreadCursor,
 ): Promise<OlderMessagesResult> {
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     // Demo ma krótkie wątki (bez kursora), więc starsza strona zawsze jest pusta.
     return DEMO_SEEDS.some((seed) => seed.id === conversationId)
       ? { status: 'ready', messages: [], olderCursor: null }
@@ -648,24 +592,19 @@ export async function getOlderThreadMessages(
   }
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const uid = await getAuthUserId(supabase);
-    if (!uid) return { status: 'not-found' };
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'not-found' };
 
-    const { data: convRow, error: convError } = await supabase
-      .from('conversations')
-      .select('id, company_id')
-      .eq('id', conversationId)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (convError) throw convError;
-    const conv = asRecord(convRow);
-    if (!asStr(conv['id'])) return { status: 'not-found' };
+    return await withPortalTransaction(me, async (tx): Promise<OlderMessagesResult> => {
+      const conv = asRecord(await queryOne(tx, 'messages.conversation-access',
+        'SELECT id, company_id FROM public.conversations WHERE id = $1 AND deleted_at IS NULL',
+        [conversationId]));
+      if (!asStr(conv['id'])) return { status: 'not-found' };
 
-    const { rows, olderCursor } = await fetchMessagePage(supabase, conversationId, cursor);
-    const ctx = await fetchSenderContext(supabase, uid, asStr(conv['company_id']), senderIdsOf(rows));
-    return { status: 'ready', messages: toThreadMessages(rows, uid, ctx), olderCursor };
+      const { rows, olderCursor } = await fetchMessagePage(tx, conversationId, cursor);
+      const ctx = await fetchSenderContext(tx, me.id, asStr(conv['company_id']), senderIdsOf(rows));
+      return { status: 'ready', messages: toThreadMessages(rows, me.id, ctx), olderCursor };
+    });
   } catch (error) {
     captureError(error, { area: 'messages.getOlderThreadMessages' });
     return { status: 'error' };

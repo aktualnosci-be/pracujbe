@@ -3,13 +3,15 @@
  * eksport decyzji i podgląd retencji.
  *
  * Jak `@/lib/data/admin`: KAŻDA funkcja publiczna sama potwierdza rolę admina (`requireAdmin`)
- * PRZED utworzeniem klienta service-role (RPC raportu/retencji mają EXECUTE tylko dla
- * service_role). Bez konfiguracji Supabase — puste dane trybu DEMO.
+ * PRZED otwarciem transakcji service-role (`withServiceRole`; RPC raportu/retencji i tabela
+ * `moderation_appeals` są dostępne tylko dla service_role). Bez konfiguracji bazy
+ * (`isPortalDataConfigured()`) — puste dane trybu DEMO.
  */
 
 import { isAppealRole, isAppealStatus, type AppealRole, type AppealStatus } from '@/lib/admin/appeals';
 import { requireAdmin } from '@/lib/data/admin';
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
+import { queryCount, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
 
 function asString(value: unknown, fallback = ''): string {
@@ -60,10 +62,18 @@ export type AdminAppealsResult =
   | { status: 'ok'; pending: AdminAppealRow[]; decided: AdminAppealRow[] }
   | { status: 'error' };
 
-const APPEAL_SELECT =
-  'id, reference, status, appellant_role, submitted_at, due_at, decided_at, grounds, outcome_reasoning, same_reviewer, ' +
-  'decision:moderation_decisions!moderation_appeals_decision_id_fkey(id, reference, decision, facts, ground_type, ground_reference, decided_at, decided_by), ' +
-  'report:reports!moderation_appeals_report_id_fkey(id, case_number, target_type, category)';
+/** Odwołanie z decyzją (`decision_id`) i sprawą (`report_id`) — kształt jak dawny embed PostgREST. */
+const APPEAL_SELECT = `
+  SELECT a.id, a.reference, a.status, a.appellant_role, a.submitted_at, a.due_at, a.decided_at,
+         a.grounds, a.outcome_reasoning, a.same_reviewer,
+         (SELECT to_json(d) FROM (
+            SELECT md.id, md.reference, md.decision, md.facts, md.ground_type, md.ground_reference,
+                   md.decided_at, md.decided_by
+              FROM public.moderation_decisions md WHERE md.id = a.decision_id) d) AS decision,
+         (SELECT to_json(r) FROM (
+            SELECT rp.id, rp.case_number, rp.target_type, rp.category
+              FROM public.reports rp WHERE rp.id = a.report_id) r) AS report
+    FROM public.moderation_appeals a`;
 
 function mapAppeal(row: Record<string, unknown>, viewerId: string | null, otherAdmins: boolean): AdminAppealRow | null {
   const status = row['status'];
@@ -104,37 +114,28 @@ function mapAppeal(row: Record<string, unknown>, viewerId: string | null, otherA
 
 /** Odwołania: oczekujące (wg terminu rozpatrzenia) i 20 ostatnio rozpatrzonych. */
 export async function listAppeals(): Promise<AdminAppealsResult> {
-  if (!isSupabaseConfigured()) return { status: 'ok', pending: [], decided: [] };
+  if (!isPortalDataConfigured()) return { status: 'ok', pending: [], decided: [] };
   await requireAdmin();
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const session = await createServerClient();
-    const {
-      data: { user },
-    } = await session.auth.getUser();
-    const viewerId = user?.id ?? null;
-
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const supabase = createAdminClient();
-    const [pending, decided, admins] = await Promise.all([
-      supabase.from('moderation_appeals').select(APPEAL_SELECT).eq('status', 'pending')
-        .order('due_at', { ascending: true }).limit(100),
-      supabase.from('moderation_appeals').select(APPEAL_SELECT).neq('status', 'pending')
-        .order('decided_at', { ascending: false }).limit(20),
-      supabase.from('profiles').select('id', { count: 'exact', head: true })
-        .eq('role', 'admin').is('deleted_at', null).neq('id', viewerId ?? '00000000-0000-0000-0000-000000000000'),
-    ]);
-    if (pending.error || decided.error || admins.error) {
-      throw pending.error ?? decided.error ?? admins.error;
-    }
-    const otherAdmins = (admins.count ?? 0) > 0;
+    const viewerId = (await getPortalIdentity())?.id ?? null;
+    const { pending, decided, admins } = await withServiceRole(async (tx) => ({
+      pending: await queryRows(tx, 'admin-dsa.appeals-pending',
+        `${APPEAL_SELECT} WHERE a.status = 'pending' ORDER BY a.due_at ASC, a.id ASC LIMIT 100`),
+      decided: await queryRows(tx, 'admin-dsa.appeals-decided',
+        `${APPEAL_SELECT} WHERE a.status <> 'pending' ORDER BY a.decided_at DESC NULLS LAST, a.id DESC LIMIT 20`),
+      admins: await queryCount(tx, 'admin-dsa.other-admins',
+        `SELECT 1 FROM public.profiles
+          WHERE role = 'admin' AND deleted_at IS NULL AND ($1::uuid IS NULL OR id <> $1::uuid)`,
+        [viewerId]),
+    }));
+    const otherAdmins = admins > 0;
     const map = (rows: unknown) =>
       asRows(rows).flatMap((row) => {
         const mapped = mapAppeal(row, viewerId, otherAdmins);
         return mapped ? [mapped] : [];
       });
-    return { status: 'ok', pending: map(pending.data), decided: map(decided.data) };
+    return { status: 'ok', pending: map(pending), decided: map(decided) };
   } catch (error) {
     captureError(error, { area: 'adminDsa.listAppeals' });
     return { status: 'error' };
@@ -229,15 +230,12 @@ function emptyReport(from: Date, to: Date): DsaTransparencyReport {
 }
 
 export async function getTransparencyReport(from: Date, to: Date): Promise<DsaReportResult> {
-  if (!isSupabaseConfigured()) return { status: 'ok', report: emptyReport(from, to) };
+  if (!isPortalDataConfigured()) return { status: 'ok', report: emptyReport(from, to) };
   await requireAdmin();
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const { data, error } = await createAdminClient().rpc('dsa_transparency_report', {
-      p_from: from.toISOString(),
-      p_to: to.toISOString(),
-    });
-    if (error) throw error;
+    const data = await withServiceRole((tx) =>
+      rpc(tx, 'dsa_transparency_report', { p_from: from.toISOString(), p_to: to.toISOString() }),
+    );
     const report = parseTransparencyReport(data);
     if (!report) throw new Error('dsa_transparency_report: nieoczekiwana odpowiedź');
     return { status: 'ok', report };
@@ -268,15 +266,12 @@ export type DsaExportRow = Record<(typeof DSA_EXPORT_COLUMNS)[number], string | 
 export type DsaExportResult = { status: 'ok'; rows: DsaExportRow[] } | { status: 'error' };
 
 export async function getStatementsExport(from: Date, to: Date): Promise<DsaExportResult> {
-  if (!isSupabaseConfigured()) return { status: 'ok', rows: [] };
+  if (!isPortalDataConfigured()) return { status: 'ok', rows: [] };
   await requireAdmin();
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const { data, error } = await createAdminClient().rpc('dsa_statements_export', {
-      p_from: from.toISOString(),
-      p_to: to.toISOString(),
-    });
-    if (error) throw error;
+    const data = await withServiceRole((tx) =>
+      rpcRows(tx, 'dsa_statements_export', { p_from: from.toISOString(), p_to: to.toISOString() }),
+    );
     const rows = asRows(data).map(
       (row) =>
         Object.fromEntries(
@@ -348,22 +343,19 @@ export function parseRetentionReport(
 }
 
 export async function getRetentionOverview(): Promise<DsaRetentionResult> {
-  if (!isSupabaseConfigured()) return { status: 'ok', overview: parseRetentionReport({}, []) };
+  if (!isPortalDataConfigured()) return { status: 'ok', overview: parseRetentionReport({}, []) };
   await requireAdmin();
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const supabase = createAdminClient();
-    const [report, runs] = await Promise.all([
-      supabase.rpc('dsa_retention_report'),
-      supabase.from('dsa_retention_runs').select('id, run_at, dry_run, summary')
-        .order('run_at', { ascending: false }).limit(10),
-    ]);
-    if (report.error || runs.error) throw report.error ?? runs.error;
+    const { report, runs } = await withServiceRole(async (tx) => ({
+      report: await rpc(tx, 'dsa_retention_report'),
+      runs: await queryRows(tx, 'admin-dsa.retention-runs',
+        'SELECT id, run_at, dry_run, summary FROM public.dsa_retention_runs ORDER BY run_at DESC, id DESC LIMIT 10'),
+    }));
     return {
       status: 'ok',
       overview: parseRetentionReport(
-        report.data,
-        asRows(runs.data).map((row) => {
+        report,
+        asRows(runs).map((row) => {
           const summary = asRecord(row['summary']);
           return {
             id: asString(row['id']),

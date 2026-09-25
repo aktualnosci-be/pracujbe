@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { cookies } from 'next/headers';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { queryRows } from '@/lib/db/sql';
+import type { TransactionQuery } from '@/lib/db/transaction';
 
 /**
  * Aktywny kontekst firmy (FUN-07) — JEDNO źródło prawdy dla paneli/akcji pracodawcy.
@@ -33,48 +34,32 @@ export interface ActiveCompanyContext {
 function asStr(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
-function asArr(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-function asRec(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object'
-    ? (value as Record<string, unknown>)
-    : {};
-}
-/** Embed PostgREST bywa obiektem (to-one) lub tablicą — normalizujemy do pierwszego rekordu. */
-function embed(value: unknown): Record<string, unknown> {
-  return Array.isArray(value) ? asRec(value[0]) : asRec(value);
-}
 
 /**
  * Zwraca aktywną firmę użytkownika (z cookie, zwalidowaną) + listę jego firm.
  * `activeId === null`, gdy użytkownik nie ma żadnego aktywnego członkostwa.
  */
 export async function getActiveCompany(
-  supabase: SupabaseClient,
+  tx: TransactionQuery,
   userId: string,
 ): Promise<ActiveCompanyContext> {
-  const { data, error } = await supabase
-    .from('company_members')
-    .select('company_id, role, companies(id, name, status)')
-    .eq('profile_id', userId)
-    .eq('is_active', true)
-    .order('created_at', { ascending: true });
-  if (error) throw error;
-  if (!Array.isArray(data))
-    throw new Error('Company membership read returned no rows');
+  // company_members_select (RLS): własne wiersze; companies pod własną polityką członka.
+  const rows = await queryRows<Record<string, unknown>>(tx, 'company-context.memberships',
+    `SELECT m.company_id, m.role, c.name, c.status
+       FROM public.company_members m
+       LEFT JOIN public.companies c ON c.id = m.company_id
+      WHERE m.profile_id = $1 AND m.is_active = true
+      ORDER BY m.created_at ASC`, [userId]);
 
   const companies: CompanyOption[] = [];
-  for (const row of asArr(data)) {
-    const r = asRec(row);
-    const c = embed(r['companies']);
-    const id = asStr(r['company_id']) || asStr(c['id']);
+  for (const r of rows) {
+    const id = asStr(r['company_id']);
     if (!id) throw new Error('Company membership row is missing company id');
     companies.push({
       id,
-      name: asStr(c['name']),
+      name: asStr(r['name']),
       role: asStr(r['role'], 'member'),
-      status: asStr(c['status'], 'unverified'),
+      status: asStr(r['status'], 'unverified'),
     });
   }
 
@@ -105,8 +90,8 @@ export async function getActiveCompany(
  * Zwraca `null`, gdy brak aktywnego członkostwa.
  */
 export async function getActiveCompanyId(
-  supabase: SupabaseClient,
+  tx: TransactionQuery,
   userId: string,
 ): Promise<string | null> {
-  return (await getActiveCompany(supabase, userId)).activeId;
+  return (await getActiveCompany(tx, userId)).activeId;
 }

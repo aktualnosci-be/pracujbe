@@ -2,7 +2,9 @@
 
 import { z } from 'zod/v3';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
 
 /**
@@ -12,7 +14,9 @@ import { captureError } from '@/lib/sentry';
  * adresem e-mail konta (porównanie w bazie, bez rozróżniania wielkości liter), w tej samej
  * transakcji usunięcie danych procesu, profilu i konta auth, tombstone i ślad wniosku. Obiekty
  * storage idą do kolejki (`storage_deletion_queue`), którą opróżnia `/api/maintenance`.
- * Po sukcesie sesja jest zamykana — konto już nie istnieje.
+ * Sesje Better Auth (`auth.session`, `on delete cascade` z `auth.users`, 0057) znikają w tej
+ * samej transakcji — konto i jego sesje przestają istnieć razem (#25: wywołanie pod sesją
+ * przez `withPortalTransaction`).
  *
  * Tryb demo (bez env): walidacja adresu bez zapisu (`demo: true`). Błędy → kod użytkowy
  * (Invariant #8): `mismatch` (inny adres), `denied` (brak sesji / konto nie-kandydata),
@@ -29,28 +33,24 @@ export type DeleteAccountResult =
 function mapPgError(message: string | undefined): DeleteAccountError {
   const m = message ?? '';
   if (m.includes('CONFIRMATION_MISMATCH')) return 'mismatch';
-  if (m.includes('PERMISSION_DENIED') || m.includes('UNAUTHENTICATED') || m.includes('JWT')) return 'denied';
+  if (m.includes('PERMISSION_DENIED') || m.includes('UNAUTHENTICATED')) return 'denied';
   return 'failed';
 }
 
 export async function deleteMyAccountAction(confirmEmail: unknown): Promise<DeleteAccountResult> {
   const parsed = confirmSchema.safeParse(confirmEmail);
   if (!parsed.success) return { ok: false, error: 'mismatch' };
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { error } = await supabase.rpc('request_account_erasure', { p_confirm_email: parsed.data });
-    if (error) {
-      const code = mapPgError(error.message);
-      if (code === 'failed') captureError(error, { area: 'account-data.deleteMyAccountAction' });
-      return { ok: false, error: code };
-    }
-    await supabase.auth.signOut().catch(() => undefined);
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'denied' };
+    await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'request_account_erasure', { p_confirm_email: parsed.data }));
     return { ok: true };
   } catch (error) {
-    captureError(error, { area: 'account-data.deleteMyAccountAction' });
-    return { ok: false, error: 'failed' };
+    const code = isDatabaseError(error) ? mapPgError(databaseErrorMessage(error)) : 'failed';
+    if (code === 'failed') captureError(error, { area: 'account-data.deleteMyAccountAction' });
+    return { ok: false, error: code };
   }
 }

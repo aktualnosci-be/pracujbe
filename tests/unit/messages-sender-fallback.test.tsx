@@ -8,16 +8,13 @@ import fr from '@/messages/fr.json';
 import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
 
-const { createServerClient, configured } = vi.hoisted(() => ({
-  createServerClient: vi.fn(),
-  configured: { value: true },
-}));
+import type { PortalIdentity } from '@/lib/auth/session';
+import { fakeDb, fakeSession, resetFakeDb } from '../helpers/fake-db';
 
 const translations = { pl, nl, fr, en } as const;
 type Loc = keyof typeof translations;
 
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: () => configured.value }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/actions/messages', () => ({ loadOlderMessages: vi.fn() }));
 vi.mock('next-intl/server', () => ({
@@ -40,66 +37,44 @@ import type { ThreadMessageView } from '@/lib/messaging/thread-view';
 afterEach(cleanup);
 
 /**
- * Supabase pod RLS w pamięci: profile widoczne tylko z `visibleProfiles`, członkowie firmy
+ * Baza pod RLS w pamięci: profile widoczne tylko z `visibleProfiles`, członkowie firmy
  * widoczni tylko dla członka tej firmy (`company_members_select`).
  */
 function fakeClient(opts: { uid: string; team: string[]; visibleProfiles: Record<string, string> }) {
+  resetFakeDb({ id: opts.uid, role: opts.team.includes(opts.uid) ? 'employer' : 'candidate' } as unknown as PortalIdentity);
   const viewerIsMember = opts.team.includes(opts.uid);
-  const rows: Record<string, unknown> = {
-    conversations: { id: 'thread-1', subject: 'Magazynier', company_id: 'company-1' },
-    messages: [
+  const conversation = { id: 'thread-1', subject: 'Magazynier', company_id: 'company-1' };
+  const members = [{ profile_id: 'rec' }, { profile_id: 'cand' }, { profile_id: 'mate' }].filter(
+    (row) => row.profile_id !== opts.uid,
+  );
+  fakeDb
+    .rows('messages.conversation', [conversation])
+    .rows('messages.conversation-access', [conversation])
+    .rows('messages.thread-page', [
       { id: 'm2', body: 'Od kandydata', sender_id: 'cand', is_system: false, created_at: '2026-09-23T12:01:00Z' },
       { id: 'm1', body: 'Od rekrutera', sender_id: 'rec', is_system: false, created_at: '2026-09-23T12:00:00Z' },
-    ],
-    conversation_members: [{ profile_id: 'rec' }, { profile_id: 'cand' }, { profile_id: 'mate' }].filter(
-      (row) => row.profile_id !== opts.uid,
-    ),
-  };
-  const from = vi.fn((table: string) => {
-    let inIds: string[] = [];
-    const resolveIn = () => {
-      if (table === 'profiles') {
-        return inIds
-          .filter((id) => opts.visibleProfiles[id])
-          .map((id) => {
-            const [first_name, last_name] = opts.visibleProfiles[id]!.split(' ');
-            return { id, first_name, last_name };
-          });
-      }
-      if (table === 'companies') return [{ id: 'company-1', name: 'Firma Logistyczna' }];
-      if (table === 'company_members') {
-        // Kandydat nie jest członkiem firmy, więc pod RLS nie widzi żadnego wiersza zespołu.
-        if (!viewerIsMember) return [];
-        return inIds.filter((id) => opts.team.includes(id)).map((profile_id) => ({ profile_id }));
-      }
-      return [];
-    };
-    const query = {
-      select: () => query,
-      eq: () => query,
-      is: () => query,
-      or: () => query,
-      order: () => query,
-      limit: () => Promise.resolve({ data: rows.messages, error: null }),
-      neq: () => Promise.resolve({ data: rows.conversation_members, error: null }),
-      in: (_column: string, ids: string[]) => {
-        inIds = ids;
-        return Promise.resolve({ data: resolveIn(), error: null });
-      },
-      maybeSingle: () => Promise.resolve({ data: rows.conversations, error: null }),
-    };
-    return query;
-  });
-  createServerClient.mockResolvedValue({
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: opts.uid } }, error: null }) },
-    from,
-  });
+    ])
+    .rows('messages.thread-other-members', members)
+    .rows('messages.profile-names', ({ values }) =>
+      (values[0] as string[])
+        .filter((id) => opts.visibleProfiles[id])
+        .map((id) => {
+          const [first_name, last_name] = opts.visibleProfiles[id]!.split(' ');
+          return { id, first_name, last_name };
+        }),
+    )
+    .rows('messages.company-names', [{ id: 'company-1', name: 'Firma Logistyczna' }])
+    .rows('messages.company-members', ({ values }) =>
+      // Kandydat nie jest członkiem firmy, więc pod RLS nie widzi żadnego wiersza zespołu.
+      viewerIsMember
+        ? (values[1] as string[]).filter((id) => opts.team.includes(id)).map((profile_id) => ({ profile_id }))
+        : [],
+    );
 }
 
 describe('nadawca wiadomości pod RLS (#355)', () => {
   beforeEach(() => {
-    configured.value = true;
-    createServerClient.mockReset();
+    resetFakeDb();
   });
 
   it('kandydat: rekruter bez widocznego profilu → nazwa firmy, bez imienia rekrutera', async () => {
@@ -207,7 +182,8 @@ describe('lista rozmów bez nazwy drugiej strony (#355)', () => {
 
 describe('tryb demo w języku strony (#359)', () => {
   beforeEach(() => {
-    configured.value = false;
+    resetFakeDb();
+    fakeSession.configured = false;
   });
 
   it.each(['nl', 'fr', 'en'] as const)('wątek demo-conv-0 bez polskich fraz (%s)', async (locale) => {

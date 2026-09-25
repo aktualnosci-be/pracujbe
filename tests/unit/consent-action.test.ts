@@ -3,10 +3,11 @@ import { join } from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { PortalIdentity } from '@/lib/auth/session';
 import { recordConsent } from '@/lib/actions/consent';
-import { isSupabaseConfigured } from '@/lib/env';
+import * as portal from '@/lib/db/portal';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { createServerClient } from '@/lib/supabase/server';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #349 — dowód zgody (RODO art. 7): `recordConsent` przekazuje do RPC `record_consent`
@@ -14,11 +15,8 @@ import { createServerClient } from '@/lib/supabase/server';
  * `{ ok: false }` bez wyjątku do UI (Invariant #8).
  */
 
-const rpc = vi.fn();
-
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn(() => true) }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn(async () => ({ rpc })) }));
 vi.mock('next/headers', () => ({
   headers: async () =>
     new Headers({ 'x-forwarded-for': '203.0.113.7, 10.0.0.1', 'user-agent': 'Mozilla/5.0 test' }),
@@ -28,47 +26,66 @@ vi.mock('next/headers', () => ({
 }));
 
 const CATEGORIES = { necessary: true, preferences: false, analytics: true, marketing: false };
+const USER = '11111111-1111-4111-8111-111111111111';
+
+/** Argumenty wysłane do RPC; jsonb (`p_categories`) wraca jako obiekt. */
+function sentArgs(index = 0): Record<string, unknown> {
+  const args = { ...fakeDb.callsTo('record_consent')[index]!.args };
+  args['p_categories'] = JSON.parse(String(args['p_categories']));
+  return args;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  resetFakeDb({ id: USER, role: 'candidate' } as PortalIdentity);
+  fakeDb.rpc('record_consent', null);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
-  rpc.mockResolvedValue({ error: null });
 });
 
 describe('recordConsent', () => {
   it('wysyła kategorie, źródło, visitor_id, IP klienta i user-agent', async () => {
     expect(await recordConsent(CATEGORIES, 'cookie_settings')).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledWith('record_consent', {
+    expect(sentArgs()).toEqual({
       p_categories: CATEGORIES,
       p_source: 'cookie_settings',
       p_visitor_id: 'visitor-1',
       p_ip: '203.0.113.7',
       p_user_agent: 'Mozilla/5.0 test',
     });
+    // Zalogowany: transakcja sesji (auth.uid() = konto), jsonb jako JSON.
+    expect(fakeDb.callsTo('record_consent')[0]!.as).toBe(USER);
+  });
+
+  it('gość: zapis jako anon (bez konta), tak samo jak z banera przed logowaniem', async () => {
+    fakeSession.identity = null;
+    expect(await recordConsent(CATEGORIES, 'cookie_banner')).toEqual({ ok: true });
+    expect(fakeDb.callsTo('record_consent')[0]!.as).toBeNull();
   });
 
   it('nieznane źródło → cookie_banner (nie zapisujemy dowolnego tekstu klienta)', async () => {
     await recordConsent(CATEGORIES, '<script>');
-    expect(rpc.mock.calls[0]![1].p_source).toBe('cookie_banner');
+    expect(sentArgs().p_source).toBe('cookie_banner');
   });
 
   it('błąd RPC → ok:false', async () => {
-    rpc.mockResolvedValue({ error: { message: 'permission denied for function record_consent' } });
+    fakeDb.rpc('record_consent', () => {
+      throw pgError('42501', 'permission denied for function record_consent');
+    });
     expect(await recordConsent(CATEGORIES, 'cookie_banner')).toEqual({ ok: false });
   });
 
-  it('wyjątek klienta danych → ok:false bez rzucania do UI', async () => {
-    vi.mocked(createServerClient).mockRejectedValueOnce(new Error('ECONNREFUSED 10.0.0.1:5432'));
+  it('wyjątek warstwy danych → ok:false bez rzucania do UI', async () => {
+    const spy = vi.spyOn(portal, 'withPortalTransaction').mockRejectedValueOnce(new Error('ECONNREFUSED 10.0.0.1:5432'));
     await expect(recordConsent(CATEGORIES, 'cookie_banner')).resolves.toEqual({ ok: false });
+    spy.mockRestore();
   });
 
   it('limit przekroczony albo tryb demo → ok:false bez RPC', async () => {
     vi.mocked(checkRateLimit).mockResolvedValueOnce(false);
     expect(await recordConsent(CATEGORIES, 'footer')).toEqual({ ok: false });
-    vi.mocked(isSupabaseConfigured).mockReturnValueOnce(false);
+    fakeSession.configured = false;
     expect(await recordConsent(CATEGORIES, 'footer')).toEqual({ ok: false });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });
 
@@ -93,7 +110,7 @@ function recordConsentParams(): string[] {
 describe('recordConsent ↔ RPC record_consent (kontrakt z migracją)', () => {
   it('wysyła dokładnie parametry z najnowszej definicji funkcji w bazie', async () => {
     await recordConsent(CATEGORIES, 'cookie_banner');
-    const sent = Object.keys(rpc.mock.calls[0]![1] as Record<string, unknown>).sort();
+    const sent = Object.keys(fakeDb.callsTo('record_consent')[0]!.args).sort();
     expect(sent).toEqual(recordConsentParams().sort());
   });
 });

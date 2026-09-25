@@ -56,6 +56,8 @@ for (const locale of LOCALES) {
       'href',
       `/${locale}/admin/firmy`,
     );
+    // Po nawigacji klienckiej tytuł dokumentu dociera ze strumieniem metadanych — axe dopiero po nim.
+    await expect(page).toHaveTitle(/\S/);
     expect(await blockingViolations(page)).toEqual([]);
   });
 

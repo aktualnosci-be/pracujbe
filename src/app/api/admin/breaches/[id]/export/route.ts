@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 
 import { breachExportCsv } from '@/lib/admin/breach';
 import { parseUuid } from '@/lib/admin/list-params';
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
 
 /**
  * Eksport wpisu rejestru naruszeń (#490) — `GET /api/admin/breaches/<id>/export?format=json|csv`.
@@ -12,7 +13,7 @@ import { createServerClient } from '@/lib/supabase/server';
  * Dane do przygotowania zgłoszenia (np. przepisania do formularza organu nadzorczego):
  * wpis, historia zmian i liczniki zawiadomień, bez adresów odbiorców. Odczyt i wpis w
  * historii/dzienniku robi jedno RPC `admin_export_breach_incident` pod SESJĄ administratora
- * (`is_admin()`), więc każdy eksport zostaje odnotowany. Brak sesji lub roli → 404 (nie
+ * (`withPortalTransaction`, `is_admin()`), więc każdy eksport zostaje odnotowany. Brak sesji lub roli → 404 (nie
  * ujawniamy istnienia panelu), jak strony `/admin`. Bez env (DEMO) → 404.
  */
 
@@ -35,22 +36,20 @@ export async function GET(
   const { id } = await params;
   const uuid = parseUuid(id);
   const format = new URL(request.url).searchParams.get('format') === 'csv' ? 'csv' : 'json';
-  if (!uuid || !isSupabaseConfigured()) return notFound();
+  if (!uuid || !isPortalDataConfigured()) return notFound();
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return notFound();
+    const me = await getPortalIdentity();
+    if (!me) return notFound();
 
-    const { data, error } = await supabase.rpc('admin_export_breach_incident', {
-      p_id: uuid,
-      p_format: format,
-    });
-    if (error) {
-      const message = error.message ?? '';
-      if (message.includes('NOT_FOUND') || message.includes('PERMISSION_DENIED') || message.includes('UNAUTHENTICATED')) {
+    let data: unknown;
+    try {
+      data = await withPortalTransaction(me, (tx) =>
+        rpc(tx, 'admin_export_breach_incident', { p_id: uuid, p_format: format }),
+      );
+    } catch (error) {
+      const message = databaseErrorMessage(error);
+      if (isDatabaseError(error) && (message.includes('NOT_FOUND') || message.includes('PERMISSION_DENIED') || message.includes('UNAUTHENTICATED'))) {
         return notFound();
       }
       throw error;
