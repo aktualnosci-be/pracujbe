@@ -40,7 +40,7 @@ rankingu ani screeningu. Ewentualne użycie do oceny kandydatów wymaga osobnej 
 
 Reużyte: detektor `src/lib/privacy/sensitive-data.ts` (#495/#500 — NISS/BIS, PESEL, dokumenty,
 e-mail, telefon), `ExtractorError` i model domyślny z importu ogłoszeń, sygnatury plików
-z `src/lib/validation/cv-file.ts` (upload CV w `files.ts` ma jeszcze własną kopię — ujednolicenie po przepięciu plików #26), limiter `rate_limit_hit`.
+z `src/lib/validation/cv-file.ts` (upload CV z #26 ma własną kopię w `src/lib/files/cv-content.ts` — do ujednolicenia osobno), limiter `rate_limit_hit`.
 
 ## Minimalizacja (deterministyczna, przed modelem)
 
