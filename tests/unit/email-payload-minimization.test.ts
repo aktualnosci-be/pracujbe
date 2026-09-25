@@ -44,6 +44,7 @@ const DROPPED: Partial<Record<EmailType, readonly string[]>> = {
   guestApplicationSent: ['nonce'],
   jobMatch: ['query'],
   moderationCompanySuspended: ['jobTitle'],
+  teamInvitationSignup: ['nonce'],
 };
 
 /**

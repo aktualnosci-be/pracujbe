@@ -2618,7 +2618,19 @@
       "alreadyMember": "Ta osoba jest już w zespole.",
       "invitationLimit": "Osiągnięto limit 50 oczekujących zaproszeń. Cofnij nieaktualne zaproszenia.",
       "companyLimit": "Możesz prowadzić maksymalnie 5 firm.",
-      "lastOwner": "Firma musi mieć co najmniej jednego aktywnego właściciela."
+      "lastOwner": "Firma musi mieć co najmniej jednego aktywnego właściciela.",
+      "localeRequired": "Wybierz język zaproszenia."
+    },
+    "localeLabel": "Język zaproszenia",
+    "invitedSent": "Zaproszenie zapisane. Ta osoba dostanie e-mail: z kontem pracodawcy — w języku swojego konta, bez konta — w wybranym języku, z linkiem do rejestracji.",
+    "inviteLinkHint": "Osoba bez konta dostanie e-mail w wybranym języku z linkiem do założenia konta pracodawcy (działa raz, ważny 14 dni). Po potwierdzeniu adresu zaproszenie będzie czekać w jej panelu. Osoba z kontem dostaje e-mail w języku swojego konta.",
+    "signup": {
+      "checking": "Sprawdzamy link zaproszenia…",
+      "intro": "Zaproszenie do zespołu firmy {company}. Rola: {role}.",
+      "nextSteps": "Załóż konto pracodawcy i potwierdź adres e-mail. Zaproszenie będzie czekać w Twoim panelu, w zakładce „Zespół” — tam dołączysz do firmy albo je odrzucisz.",
+      "emailFixed": "Konto zakładasz na adres, na który przyszło zaproszenie.",
+      "used": "Ten link zaproszenia został już użyty. Jeśli masz konto, zaloguj się — zaproszenie czeka w panelu.",
+      "invalid": "Link zaproszenia jest nieprawidłowy albo wygasł. Poproś firmę o nowe zaproszenie albo załóż zwykłe konto pracodawcy."
     }
   },
   "emailUnsubscribe": {

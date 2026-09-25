@@ -3744,14 +3744,20 @@ insert into public.companies(id,name,status) values
 insert into public.company_members(company_id,profile_id,role,is_active) values
   (:'TMCA',:'TMO','owner',true), (:'TMCB',:'TMB','owner',true);
 
+-- 0121: invite_company_member wymaga języka zaproszenia i tokenu (hash + nonce).
+create or replace function pg_temp.tm_hash() returns text language sql volatile as $$
+  select encode(sha256(convert_to(gen_random_uuid()::text, 'UTF8')), 'hex') $$;
+create or replace function pg_temp.tm_nonce() returns text language sql volatile as $$
+  select replace(gen_random_uuid()::text, '-', '') $$;
+
 -- TM403-1: owner zaprasza rekrutera; e-mail w języku ODBIORCY (fr), nie nadawcy (pl).
 set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
 select invitation_id as tminv, created as tmcreated
-  from public.invite_company_member(:'TMCA', '  TMR@test.be ', 'recruiter') \gset
+  from public.invite_company_member(:'TMCA', '  TMR@test.be ', 'recruiter', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
 select pg_temp.assert(:'tmcreated'::boolean, 'TM403-1 zaproszenie utworzone');
 -- Ponowienie: to samo zaproszenie, bez drugiego e-maila.
 select invitation_id as tminv2, created as tmcreated2
-  from public.invite_company_member(:'TMCA', 'tmr@test.be', 'recruiter') \gset
+  from public.invite_company_member(:'TMCA', 'tmr@test.be', 'recruiter', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
 select pg_temp.assert(:'tminv' = :'tminv2' and not :'tmcreated2'::boolean,
   'TM403-1b ponowienie zwraca to samo zaproszenie');
 select pg_temp.assert((select count(*) from public.get_company_invitations(:'TMCA')) = 1,
@@ -3802,7 +3808,7 @@ select pg_temp.assert(
 
 -- TM403-5: member — dołącza, ale nie zarządza zespołem ani ofertami (KONTROLE UJEMNE).
 set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
-select invitation_id as tminvm from public.invite_company_member(:'TMCA', 'tmm@test.be', 'member') \gset
+select invitation_id as tminvm from public.invite_company_member(:'TMCA', 'tmm@test.be', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
 reset role; reset app.current_uid;
 set role authenticated; set app.current_uid = :'TMM'; select pg_temp.assert_client_role();
 select public.respond_to_company_invitation(:'tminvm', true);
@@ -3823,7 +3829,7 @@ select pg_temp.expect_error(
   'select * from public.get_company_team(''' || :'TMCA' || ''')',
   'PERMISSION_DENIED', 'TM403-5d member nie widzi listy zespołu (e-maile)');
 select pg_temp.expect_error(
-  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''x@test.be'', ''member'')',
+  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''x@test.be'', ''member'', ''pl'', pg_temp.tm_hash(), pg_temp.tm_nonce())',
   'PERMISSION_DENIED', 'TM403-5e member nie zaprasza');
 update public.company_members set role = 'owner' where id = :'tmmid';
 update public.company_members set role = 'member' where id = :'tmrid';
@@ -3914,7 +3920,7 @@ select pg_temp.expect_error(
   'select public.set_company_member_active(''' || :'tmmid' || ''', false)',
   'NOT_FOUND', 'TM403-8d obca firma nie dezaktywuje');
 select pg_temp.expect_error(
-  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''x@test.be'', ''member'')',
+  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''x@test.be'', ''member'', ''pl'', pg_temp.tm_hash(), pg_temp.tm_nonce())',
   'PERMISSION_DENIED', 'TM403-8e obca firma nie zaprasza do A');
 select pg_temp.expect_error('select count(*) from public.company_invitations',
   'permission denied', 'TM403-8f brak bezpośredniego odczytu zaproszeń');
@@ -3925,9 +3931,9 @@ reset role; reset app.current_uid;
 
 -- TM403-9: konto kandydata nie dołącza do firmy; e-maila do kandydata nie kolejkujemy.
 set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
-select invitation_id as tminvx from public.invite_company_member(:'TMCA', 'tmx@test.be', 'member') \gset
+select invitation_id as tminvx from public.invite_company_member(:'TMCA', 'tmx@test.be', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
 select invitation_id as tminvn, created as tmcreatedn
-  from public.invite_company_member(:'TMCA', 'nikt@test.be', 'member') \gset
+  from public.invite_company_member(:'TMCA', 'nikt@test.be', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
 reset role; reset app.current_uid;
 select pg_temp.assert(:'tmcreatedn'::boolean, 'TM403-9 zaproszenie adresu bez konta — ta sama odpowiedź');
 select pg_temp.assert(
@@ -3941,16 +3947,16 @@ reset role; reset app.current_uid;
 
 -- TM403-10: cofnięte i wygasłe zaproszenie nie działa; role spoza listy odrzucone.
 set role authenticated; set app.current_uid = :'TMO'; select pg_temp.assert_client_role();
-select invitation_id as tminvb from public.invite_company_member(:'TMCA', 'tmb@test.be', 'member') \gset
+select invitation_id as tminvb from public.invite_company_member(:'TMCA', 'tmb@test.be', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
 select public.revoke_company_invitation(:'tminvb');
 select pg_temp.expect_error(
-  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''y@test.be'', ''owner'')',
+  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''y@test.be'', ''owner'', ''pl'', pg_temp.tm_hash(), pg_temp.tm_nonce())',
   'VALIDATION_FAILED', 'TM403-10 zaproszenie na ownera odrzucone');
 select pg_temp.expect_error(
-  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''bez-malpy'', ''member'')',
+  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''bez-malpy'', ''member'', ''pl'', pg_temp.tm_hash(), pg_temp.tm_nonce())',
   'VALIDATION_FAILED', 'TM403-10b niepoprawny e-mail odrzucony');
 select pg_temp.expect_error(
-  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''tmm@test.be'', ''member'')',
+  'select * from public.invite_company_member(''' || :'TMCA' || ''', ''tmm@test.be'', ''member'', ''pl'', pg_temp.tm_hash(), pg_temp.tm_nonce())',
   'MEMBER_ALREADY_EXISTS', 'TM403-10c aktywny członek nie jest zapraszany ponownie');
 reset role; reset app.current_uid;
 set role authenticated; set app.current_uid = :'TMB'; select pg_temp.assert_client_role();
@@ -9557,7 +9563,7 @@ select pg_temp.assert(pg_temp.loc348_ok('newMessage', :'OWN348')
 -- Zaproszenie do zespołu: owner (en) zaprasza konto pracodawcy z samym signup fr.
 select set_config('app.current_uid', :'OWN348', false);
 set role authenticated; select pg_temp.assert_client_role();
-select invitation_id as inv348 from public.invite_company_member(:'COM348'::uuid, 'inv348@test.be', 'recruiter') \gset
+select invitation_id as inv348 from public.invite_company_member(:'COM348'::uuid, 'inv348@test.be', 'recruiter', 'en', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
 reset role; reset app.current_uid;
 select pg_temp.assert(pg_temp.loc348_ok('teamInvitation', :'INV348'),
   'LOC348-10 teamInvitation w języku zaproszonego (signup fr), nie zapraszającego (en)');
@@ -9622,7 +9628,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- ES503. Uprawnienie odbiorcy firmowego w chwili wysyłki (#503, 0122): e-mail z danymi
+-- ES503. Uprawnienie odbiorcy firmowego w chwili wysyłki (#503, 0123): e-mail z danymi
 --        kandydata zakolejkowany dla recruitera nie wychodzi, gdy przed claimem stracił
 --        rolę; właściciel i kandydat dostają swoje. Kontrola ujemna: bez sprawdzenia
 --        (helper zawsze true) ten sam claim wydaje wiersze byłego recruitera.
@@ -9744,7 +9750,7 @@ select pg_temp.assert(
 rollback;
 
 -- ============================================================================
--- GS98. E-mail do gościa o zmianie statusu (#98, 0121): transition_application kolejkuje
+-- GS98. E-mail do gościa o zmianie statusu (#98, 0122): transition_application kolejkuje
 --       `guestStatusChanged` na adres gościa w języku jego formularza (nie firmy), klucz =
 --       id wiersza historii, tylko potwierdzone zgłoszenie, bez zablokowanego adresu (#44),
 --       wiersz kolejki usuwany z aplikacją przez retencję (#486). Kontrole ujemne: helper
@@ -9945,6 +9951,253 @@ select pg_temp.assert(
   and not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
                     and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
   'GS98-8 przejęta aplikacja: statusChanged do kandydata (pl), bez e-maila gościa');
+
+-- ============================================================================
+-- TI403. Zaproszenie do zespołu dla adresu BEZ konta (0121, #403 „Otwarte”):
+--        język zaproszenia wybrany jawnie (brak profilu odbiorcy, Invariant #1),
+--        link rejestracji z jednorazowym tokenem (w bazie tylko hash), limit e-maili
+--        na adres, odpowiedź RPC niezależna od konta, zaproszenie czeka w panelu.
+-- ============================================================================
+\set TIO 'e8800000-0000-0000-0000-0000000000a1'
+\set TIE 'e8800000-0000-0000-0000-0000000000a2'
+\set TIN 'e8800000-0000-0000-0000-0000000000a3'
+\set TICA 'e8800000-0000-0000-0000-0000000000f1'
+\set TICB 'e8800000-0000-0000-0000-0000000000f2'
+\set TIH1 '1111111111111111111111111111111111111111111111111111111111111111'
+\set TIH2 '2222222222222222222222222222222222222222222222222222222222222222'
+\set TIH3 '3333333333333333333333333333333333333333333333333333333333333333'
+\set TIH4 '4444444444444444444444444444444444444444444444444444444444444444'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'TIO','tio@ti.test','Ola O','{"role":"employer","first_name":"Ola","last_name":"Owner","locale":"pl"}'),
+  (:'TIE','tie@ti.test','Eva E','{"role":"employer","first_name":"Eva","last_name":"Existing","locale":"fr"}');
+update auth.users set email_verified = true where id in (:'TIO', :'TIE');
+insert into public.companies(id,name,status) values
+  (:'TICA','Firma TI A','verified'), (:'TICB','Firma TI B','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'TICA',:'TIO','owner',true), (:'TICB',:'TIO','owner',true);
+
+-- TI403-1: adres bez konta → teamInvitationSignup w JAWNIE wybranym języku (nl), nie w języku
+-- zapraszającego (pl); w e-mailu nonce, w bazie hash; bez teamInvitation i powiadomienia.
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select invitation_id as tinv, created as ticreated
+  from public.invite_company_member(:'TICA', ' Nowy@TI.test ', 'recruiter', 'nl', :'TIH1', 'nonce-ti-0000000001') \gset
+-- Istniejące konto pracodawcy (fr) — ten sam kształt odpowiedzi.
+select invitation_id as tinve, created as ticreatede
+  from public.invite_company_member(:'TICA', 'tie@ti.test', 'member', 'nl', :'TIH3', 'nonce-ti-0000000003') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'ticreated'::boolean and :'ticreatede'::boolean,
+  'TI403-1 odpowiedź RPC taka sama dla adresu z kontem i bez konta');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'nowy@ti.test') = 1
+  and (select locale from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'nowy@ti.test') = 'nl'
+  and (select profile_id from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'nowy@ti.test') is null,
+  'TI403-1b jeden e-mail rejestracji w wybranym języku (nl), bez profilu');
+select pg_temp.assert(
+  (select payload ->> 'nonce' from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'nowy@ti.test') = 'nonce-ti-0000000001'
+  and (select payload ->> 'companyName' from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'nowy@ti.test') = 'Firma TI A'
+  and (select position(:'TIH1' in payload::text) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'nowy@ti.test') = 0,
+  'TI403-1c payload: nonce i firma, bez hashu tokenu');
+select pg_temp.assert(
+  (select signup_token_hash from public.company_invitations where id = :'tinv') = :'TIH1'
+  and (select locale from public.company_invitations where id = :'tinv') = 'nl'
+  and (select email::text from public.company_invitations where id = :'tinv') = 'nowy@ti.test',
+  'TI403-1d zaproszenie trzyma hash tokenu i język');
+-- Konto z profilem: język z PROFILU (fr), wybrany nl go nie nadpisuje; bez linku rejestracji.
+select pg_temp.assert(
+  (select locale from public.email_deliveries where profile_id = :'TIE' and template = 'teamInvitation') = 'fr'
+  and (select count(*) from public.email_deliveries
+         where template = 'teamInvitationSignup' and to_email = 'tie@ti.test') = 0,
+  'TI403-1e konto z profilem: teamInvitation w języku odbiorcy, bez linku rejestracji');
+
+-- TI403-2: walidacja wejścia (język spoza PL/NL/FR/EN, token).
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TICA' || ''', ''a@ti.test'', ''member'', ''de'', ''' || :'TIH2' || ''', ''nonce-ti-0000000009'')',
+  'VALIDATION_FAILED', 'TI403-2 język spoza obsługiwanych odrzucony');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TICA' || ''', ''a@ti.test'', ''member'', ''pl'', ''abc'', ''nonce-ti-0000000009'')',
+  'VALIDATION_FAILED', 'TI403-2b hash w złym formacie odrzucony');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TICA' || ''', ''a@ti.test'', ''member'', ''pl'', ''' || :'TIH2' || ''', null)',
+  'VALIDATION_FAILED', 'TI403-2c brak nonce odrzucony');
+-- Klient nie ma podglądu ani zużycia tokenu.
+select pg_temp.expect_error('select * from public.team_invitation_signup_preview(''' || :'TIH1' || ''')',
+  'permission denied', 'TI403-2d authenticated bez podglądu tokenu');
+select pg_temp.expect_error('select public.consume_team_invitation_signup(''' || :'TIH1' || ''', ''nowy@ti.test'')',
+  'permission denied', 'TI403-2e authenticated bez zużycia tokenu');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.team_invitation_signup_preview(''' || :'TIH1' || ''')',
+  'permission denied', 'TI403-2f anon bez podglądu tokenu');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TICA' || ''', ''a@ti.test'', ''member'', ''pl'', ''' || :'TIH2' || ''', ''nonce-ti-0000000009'')',
+  'permission denied', 'TI403-2g anon bez zaproszeń');
+reset role;
+
+-- TI403-3: podgląd tokenu (service_role).
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.team_invitation_signup_preview(:'TIH1')) = 'valid'
+  and (select company_name from public.team_invitation_signup_preview(:'TIH1')) = 'Firma TI A'
+  and (select email from public.team_invitation_signup_preview(:'TIH1')) = 'nowy@ti.test'
+  and (select role from public.team_invitation_signup_preview(:'TIH1')) = 'recruiter'
+  and (select locale from public.team_invitation_signup_preview(:'TIH1')) = 'nl',
+  'TI403-3 ważny token: firma, adres, rola, język');
+select pg_temp.assert(
+  (select outcome from public.team_invitation_signup_preview(:'TIH2')) = 'invalid'
+  and (select outcome from public.team_invitation_signup_preview('zly')) = 'invalid'
+  and (select company_name from public.team_invitation_signup_preview(:'TIH2')) is null,
+  'TI403-3b nieznany / zły token → invalid bez danych');
+reset role;
+
+-- TI403-4: odświeżenie oczekującego zaproszenia wymienia token i wysyła nowy link (fr).
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select invitation_id as tinv2, created as ticreated2
+  from public.invite_company_member(:'TICA', 'nowy@ti.test', 'recruiter', 'fr', :'TIH2', 'nonce-ti-0000000002') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'tinv' = :'tinv2' and not :'ticreated2'::boolean,
+  'TI403-4 to samo zaproszenie (idempotentnie)');
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.team_invitation_signup_preview(:'TIH1')) = 'invalid'
+  and (select outcome from public.team_invitation_signup_preview(:'TIH2')) = 'valid'
+  and (select locale from public.team_invitation_signup_preview(:'TIH2')) = 'fr',
+  'TI403-4b stary link nieważny, nowy ważny w nowym języku');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'nowy@ti.test') = 2
+  and exists (select 1 from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'nowy@ti.test' and locale = 'fr'
+       and payload ->> 'nonce' = 'nonce-ti-0000000002'),
+  'TI403-4c nowy link wysłany w języku fr');
+
+-- TI403-5: token działa raz i tylko dla adresu zaproszenia.
+set role service_role;
+select pg_temp.assert(public.consume_team_invitation_signup(:'TIH2', 'inny@ti.test') = 'email_mismatch',
+  'TI403-5 inny adres nie zużywa tokenu');
+select pg_temp.assert((select outcome from public.team_invitation_signup_preview(:'TIH2')) = 'valid',
+  'TI403-5b po odmowie token nadal ważny');
+select pg_temp.assert(public.consume_team_invitation_signup(:'TIH2', ' NOWY@ti.test') = 'consumed',
+  'TI403-5c zużycie przez adres zaproszenia');
+select pg_temp.assert(public.consume_team_invitation_signup(:'TIH2', 'nowy@ti.test') = 'used'
+  and (select outcome from public.team_invitation_signup_preview(:'TIH2')) = 'used'
+  and (select company_name from public.team_invitation_signup_preview(:'TIH2')) is null,
+  'TI403-5d drugie użycie → used, bez danych zaproszenia');
+select pg_temp.assert(public.consume_team_invitation_signup(:'TIH1', 'nowy@ti.test') = 'invalid',
+  'TI403-5e wymieniony token → invalid');
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs where action = 'company.member_invitation_signup'
+            and entity_id = :'TICA'),
+  'TI403-5f zużycie tokenu w audycie');
+
+-- TI403-6: po rejestracji zaproszenie czeka w panelu — dopiero po weryfikacji adresu.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'TIN','nowy@ti.test','Nina N','{"role":"employer","first_name":"Nina","last_name":"New","locale":"fr"}');
+select pg_temp.assert(
+  not exists (select 1 from public.company_members where profile_id = :'TIN'),
+  'TI403-6 rejestracja nie dołącza do firmy');
+set role authenticated; set app.current_uid = :'TIN'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_my_company_invitations()) = 0,
+  'TI403-6b niezweryfikowany adres nie widzi zaproszenia');
+reset role; reset app.current_uid;
+update auth.users set email_verified = true where id = :'TIN';
+set role authenticated; set app.current_uid = :'TIN'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_my_company_invitations()) = 1
+  and (select company_name from public.get_my_company_invitations()) = 'Firma TI A',
+  'TI403-6c zweryfikowany ten sam adres widzi zaproszenie w panelu');
+select pg_temp.assert(public.respond_to_company_invitation(:'tinv', true) = :'TICA'::uuid,
+  'TI403-6d przyjęcie w panelu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select role::text from public.company_members where company_id = :'TICA' and profile_id = :'TIN') = 'recruiter'
+  and (select signup_token_hash from public.company_invitations where id = :'tinv') is null,
+  'TI403-6e członek z rolą zaproszenia; hash usunięty po rozstrzygnięciu');
+-- Konto istnieje → kolejne zaproszenie (firma B) bez linku rejestracji.
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select invitation_id as tinvb from public.invite_company_member(:'TICB', 'nowy@ti.test', 'member', 'nl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'nowy@ti.test') = 2
+  and (select locale from public.email_deliveries where profile_id = :'TIN' and template = 'teamInvitation') = 'fr',
+  'TI403-6f adres z kontem: teamInvitation w języku profilu, bez nowego linku rejestracji');
+
+-- TI403-7: najwyżej 3 linki rejestracji na adres na dobę (wszystkie firmy razem);
+-- odpowiedź RPC bez zmian.
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select invitation_id as tisp from public.invite_company_member(:'TICA', 'spam@ti.test', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
+select * from public.invite_company_member(:'TICA', 'spam@ti.test', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset tisp2_
+select * from public.invite_company_member(:'TICB', 'spam@ti.test', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset tisp3_
+select * from public.invite_company_member(:'TICB', 'spam@ti.test', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset tisp4_
+reset role; reset app.current_uid;
+select pg_temp.assert(:'tisp2_invitation_id' = :'tisp' and not :'tisp4_created'::boolean,
+  'TI403-7 odpowiedzi RPC jak zwykle');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'spam@ti.test') = 3,
+  'TI403-7b czwarty link na dobę nie wychodzi');
+
+-- TI403-8: wygasłe i cofnięte zaproszenie — token nieważny; cofnięcie czyści hash.
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select invitation_id as tiexp from public.invite_company_member(:'TICA', 'exp@ti.test', 'member', 'en', :'TIH4', 'nonce-ti-0000000004') \gset
+reset role; reset app.current_uid;
+update public.company_invitations set expires_at = now() - interval '1 second' where id = :'tiexp';
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.team_invitation_signup_preview(:'TIH4')) = 'invalid'
+  and public.consume_team_invitation_signup(:'TIH4', 'exp@ti.test') = 'invalid',
+  'TI403-8 wygasłe zaproszenie → token nieważny');
+reset role;
+update public.company_invitations set expires_at = now() + interval '1 day' where id = :'tiexp';
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select public.revoke_company_invitation(:'tiexp');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select signup_token_hash from public.company_invitations where id = :'tiexp') is null,
+  'TI403-8b cofnięcie usuwa hash tokenu');
+set role service_role;
+select pg_temp.assert((select outcome from public.team_invitation_signup_preview(:'TIH4')) = 'invalid',
+  'TI403-8c cofnięte zaproszenie → token nieważny');
+reset role;
+
+-- TI403-9 (kontrola ujemna): bez triggera 0121 hash zostaje po rozstrzygnięciu — asercja
+-- TI403-8b by nie przeszła.
+begin;
+alter table public.company_invitations disable trigger trg_company_invitations_clear_signup_token;
+update public.company_invitations set status = 'pending', signup_token_hash = :'TIH4' where id = :'tiexp';
+update public.company_invitations set status = 'revoked' where id = :'tiexp';
+select pg_temp.assert(
+  (select signup_token_hash from public.company_invitations where id = :'tiexp') = :'TIH4',
+  'TI403-9 kontrola ujemna: bez triggera hash zostaje');
+rollback;
+
+-- TI403-10 (kontrola ujemna): bez limitu na adres czwarty link by wyszedł — ta sama ścieżka
+-- insertu z pominięciem kontroli daje 4 wiersze (TI403-7b by nie przeszła).
+begin;
+insert into public.email_deliveries
+  (profile_id, to_email, template, locale, subject, status, entity_type, entity_id,
+   idempotency_key, payload, queued_at, next_attempt_at, attempts)
+  values (null, 'spam@ti.test', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued',
+          'company_invitation', :'tisp', 'ti403-control', '{}'::jsonb, now(), now(), 0);
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'spam@ti.test') = 4,
+  'TI403-10 kontrola ujemna: bez limitu byłyby 4 linki');
+select pg_temp.assert(
+  not public.enqueue_team_invitation_signup_email(:'tisp', 'spam@ti.test', 'pl', 'teamInvitationSignup', :'TIH1', '{}'::jsonb),
+  'TI403-10b funkcja z limitem odmawia kolejnego');
+rollback;
 
 -- ============================================================================
 -- MA (0119): załączniki w rozmowach — RPC-only, przygotowanie + wysłanie jedną transakcją

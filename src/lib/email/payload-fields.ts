@@ -60,8 +60,10 @@ export const EMAIL_PAYLOAD_FIELDS = {
   breachNotice: ['incidentReference', 'noticeSubject', 'noticeText', 'panel'],
   guestApplicationConfirm: ['recipientName', 'companyName', 'jobTitle'],
   guestApplicationSent: ['recipientName', 'companyName', 'jobTitle'],
-  // #98 (0121): e-mail do gościa o zmianie statusu — ten sam zakres co statusChanged + powitanie.
+  // #98 (0122): e-mail do gościa o zmianie statusu — ten sam zakres co statusChanged + powitanie.
   guestStatusChanged: ['recipientName', 'companyName', 'jobTitle', 'status'],
+  // #403 (0121): zaproszenie na adres bez konta — link składa worker z `nonce` przed minimalizacją.
+  teamInvitationSignup: ['companyName', 'inviterName'],
 } as const satisfies Record<DeliveredType, readonly string[]>;
 
 /** Payload ograniczony do pól dozwolonych dla szablonu; nieznany szablon → pusty obiekt. */

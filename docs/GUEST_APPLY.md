@@ -71,14 +71,14 @@ sekcja GA98 (z kontrolami ujemnymi).
 Aplikacja gościa jest na liście, na pulpicie i w szczególe jak zwykła, z oznaczeniem
 „Bez konta” (`dashboard.employerApplicationGuestBadge`). Szczegół pokazuje e-mail (`mailto:`)
 i telefon. Zmiana statusu działa, a historia się zapisuje. Gość nie ma profilu, więc nie
-dostaje powiadomienia in-app, ale od `0121` dostaje e-mail `guestStatusChanged` (niżej,
+dostaje powiadomienia in-app, ale od `0122` dostaje e-mail `guestStatusChanged` (niżej,
 „E-mail o zmianie statusu”). Rozmowy w
 serwisie wymagają konta: przycisk „Napisz wiadomość” jest ukryty, a trigger
 `trg_conversations_guest_guard` odrzuca rozmowę z aplikacji gościa (`GUEST_APPLICATION`).
 Propozycje (`send_offer`) wymagają `candidate_id`, więc dla gościa są dostępne dopiero po
 przejęciu aplikacji.
 
-## E-mail o zmianie statusu (0121)
+## E-mail o zmianie statusu (0122)
 
 `transition_application` dla aplikacji gościa woła `enqueue_guest_status_email`, który
 kolejkuje `guestStatusChanged` tylko, gdy:
@@ -118,7 +118,7 @@ linki, które już wysłano.
 
 Gość nie ma profilu (`preferred/account/signup_locale`), więc jego język to język formularza
 (`guest_application_requests.locale`), ustawiany przez `enqueue_guest_email` i
-`enqueue_guest_status_email` (0121). E-maile do
+`enqueue_guest_status_email` (0122). E-maile do
 firmy idą przez `enqueue_email`, czyli w języku odbiorcy.
 
 ## Idempotencja
@@ -172,7 +172,7 @@ alter table public.applications
 drop table if exists public.guest_application_requests;
 ```
 
-Najpierw cofnij `0121`: odtwórz `transition_application` z `0095` i usuń
+Najpierw cofnij `0122`: odtwórz `transition_application` z `0095` i usuń
 `enqueue_guest_status_email(uuid, text, text, jsonb)`.
 
 Na koniec odtwórz `enforce_application_integrity` z `0020`, `transition_application` z
