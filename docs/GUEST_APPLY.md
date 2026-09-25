@@ -52,10 +52,11 @@ sekcja GA98 (z kontrolami ujemnymi).
      nie jest publikowany (`is_searchable` bez zmian). Zapis trafia do `audit_logs`
      (`application.guest_claimed`).
 
-## Deklaracja wieku (#492)
+## Deklaracja wieku (#492, #576)
 
-Formularz gościa ma deklarację „mam co najmniej {age} lat” (próg z `candidate_min_age()`,
-bez daty urodzenia). Akcja przekazuje `p_age_attested_min`; od migracji `0126`
+Formularz gościa ma wybór przedziału wieku „16–17” / „18 lub więcej” (przedziały od progu
+konta z `candidate_min_age()`, bez daty urodzenia; wybór 16–17 wyłącza lejek ofert na tym
+urządzeniu). Akcja przekazuje `p_age_attested_min`; od migracji `0126`
 `submit_guest_application` to wrapper, który sprawdza deklarację i woła wewnętrzne
 `submit_guest_application_core` (bez EXECUTE dla ról aplikacji). Trigger na
 `guest_application_requests` zapisuje `age_attested_min`/`age_attested_at` i odrzuca

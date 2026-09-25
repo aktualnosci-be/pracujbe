@@ -3,25 +3,28 @@
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
+import { CANDIDATE_ADULT_AGE, candidateAgeBandsFor } from '@/lib/age-policy/constants';
 import { cn } from '@/lib/utils';
 
 /**
- * AgeDeclarationField — deklaracja „mam co najmniej {minAge} lat” (#492).
+ * AgeDeclarationField — potwierdzenie przedziału wieku (#492, #576): „16–17 lat” albo
+ * „18 lat lub więcej”.
  *
- * Osobny komponent, żeby formularze rejestracji (AuthForm), aplikacji gościa (GuestApplyForm)
- * i ustawień kandydata miały jedną treść i jedną semantykę pola, bez mieszania z polem zgód
- * rozwijanym w #493. Minimalizacja: tylko oświadczenie o progu — bez daty i roku urodzenia.
- * Próg (`minAge`) przychodzi z serwera (`public.candidate_min_age()`), nie z kodu.
+ * Osobny komponent, żeby formularze rejestracji (AuthForm) i ustawień kandydata miały jedną
+ * treść i jedną semantykę pola. Minimalizacja: tylko przedział — bez daty i roku urodzenia.
+ * Próg konta (`minAge`) przychodzi z serwera (`public.candidate_min_age()`), nie z kodu;
+ * przedział poniżej progu nie jest pokazywany. Przy przedziale 16–17 pole wyjaśnia, że profil
+ * nie będzie widoczny dla firm (LAUNCH-1).
  *
- * Kontrolowany: stan i komunikat błędu (już przetłumaczony) trzyma formularz-rodzic.
+ * Kontrolowany: wybrany przedział (dolna granica: 16 albo 18) i komunikat błędu (już
+ * przetłumaczony) trzyma formularz-rodzic. `ref` = pierwsza opcja (fokus po błędzie).
  */
 export interface AgeDeclarationFieldProps {
   id: string;
   minAge: number;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
+  /** Wybrany przedział (16 albo 18); `null` = brak wyboru. */
+  value: number | null;
+  onChange: (value: number) => void;
   onBlur?: () => void;
   /** Przetłumaczony komunikat błędu przy polu; brak = pole poprawne. */
   error?: string | null;
@@ -30,52 +33,87 @@ export interface AgeDeclarationFieldProps {
   variant?: 'auth' | 'compact';
 }
 
-export const AgeDeclarationField = React.forwardRef<HTMLButtonElement, AgeDeclarationFieldProps>(
+export const AgeDeclarationField = React.forwardRef<HTMLInputElement, AgeDeclarationFieldProps>(
   function AgeDeclarationField(
-    { id, minAge, checked, onCheckedChange, onBlur, error, disabled, variant = 'auth' },
+    { id, minAge, value, onChange, onBlur, error, disabled, variant = 'auth' },
     ref,
   ) {
     const t = useTranslations('auth');
+    const bands = candidateAgeBandsFor(minAge);
+    const legendId = `${id}-legend`;
     const hintId = `${id}-hint`;
+    const minorHintId = `${id}-minor-hint`;
     const errorId = `${id}-error`;
-    const describedBy = [hintId, error ? errorId : null].filter(Boolean).join(' ');
+    const minorSelected = value !== null && value < CANDIDATE_ADULT_AGE;
+    const describedBy = [hintId, minorSelected ? minorHintId : null, error ? errorId : null]
+      .filter(Boolean)
+      .join(' ');
 
     return (
-      <div className="space-y-1.5">
-        <div className={cn('flex items-start', variant === 'compact' ? 'gap-[9px]' : 'gap-2.5')}>
-          <Checkbox
-            ref={ref}
-            id={id}
-            checked={checked}
-            onCheckedChange={(value) => onCheckedChange(value === true)}
-            onBlur={onBlur}
-            disabled={disabled}
-            aria-required="true"
-            aria-invalid={error ? true : undefined}
-            aria-describedby={describedBy}
-            className={cn(variant === 'auth' ? 'mt-0.5' : undefined, error ? 'border-error' : undefined)}
-          />
-          <Label
-            htmlFor={id}
-            className={cn(
-              'cursor-pointer font-normal',
-              variant === 'compact'
-                ? 'text-[13px] leading-[1.5] text-foreground'
-                : 'text-sm leading-snug text-muted-foreground',
-            )}
-          >
-            {t('ageConfirm', { age: minAge })}
-          </Label>
+      <fieldset className="space-y-1.5" aria-labelledby={legendId}>
+        <legend
+          id={legendId}
+          className={cn(
+            'font-medium text-foreground',
+            variant === 'compact' ? 'text-[13px] leading-[1.5]' : 'text-sm leading-snug',
+          )}
+        >
+          {t('ageBandLegend')}
+        </legend>
+        <div
+          className="flex flex-col gap-1.5"
+          role="radiogroup"
+          aria-required="true"
+          aria-invalid={error ? true : undefined}
+          aria-labelledby={legendId}
+        >
+          {bands.map((band, index) => {
+            const optionId = `${id}-${band}`;
+            return (
+              <label
+                key={band}
+                htmlFor={optionId}
+                className={cn(
+                  'flex cursor-pointer items-center gap-2.5 font-normal',
+                  variant === 'compact'
+                    ? 'text-[13px] leading-[1.5] text-foreground'
+                    : 'text-sm leading-snug text-muted-foreground',
+                )}
+              >
+                <input
+                  ref={index === 0 ? ref : undefined}
+                  type="radio"
+                  id={optionId}
+                  name={id}
+                  value={band}
+                  checked={value === band}
+                  onChange={() => onChange(band)}
+                  onBlur={onBlur}
+                  disabled={disabled}
+                  aria-describedby={describedBy}
+                  className={cn('h-4 w-4 shrink-0 accent-primary', error ? 'outline outline-1 outline-error' : undefined)}
+                />
+                {band < CANDIDATE_ADULT_AGE
+                  ? t('ageBandMinor', { min: band, max: CANDIDATE_ADULT_AGE - 1 })
+                  : t('ageBandAdult', { age: CANDIDATE_ADULT_AGE })}
+              </label>
+            );
+          })}
         </div>
         <p id={hintId} className="text-xs text-muted-foreground">
           {t('ageConfirmHint')}
         </p>
+        {minorSelected ? (
+          <p id={minorHintId} className="text-xs text-muted-foreground">
+            {t('ageBandMinorHint')}
+          </p>
+        ) : null}
         {error ? (
           <p id={errorId} className="text-sm text-error">
             {error}
           </p>
         ) : null}
-      </div>
+      </fieldset>
     );
   },
 );

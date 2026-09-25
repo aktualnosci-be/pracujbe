@@ -17,26 +17,32 @@ co już działa technicznie, żeby nie trzeba było tego odtwarzać z kodu.
 
 Migracja `0126_candidate_age_policy.sql` i zmiany w aplikacji:
 
-- **Próg jako dane.** Tabela `age_policy` (jeden wiersz): `candidate_min_age` w zakresie
-  13–18, domyślnie **18** (najbardziej zachowawczy wariant z issue), z flagą
-  `confirmed = false` — wartość robocza, niezatwierdzona. Zmiana progu tylko przez
-  administratora (`admin_set_candidate_min_age`, wymagane uzasadnienie, wpis w `audit_logs`).
-- **Minimalizacja.** Kandydat składa oświadczenie „mam co najmniej N lat”. Nie zbieramy daty
-  ani roku urodzenia ani dokumentu tożsamości. Zapisujemy: zadeklarowany próg, źródło
-  (rejestracja / ustawienia), język, czas (`candidate_age_attestations`, wpis niezmienny).
-  Gość (aplikacja bez konta) — próg i czas przy zgłoszeniu.
+- **Decyzja właściciela 25.09.2026 (#576, model LAUNCH-1 z #573).** Samodzielne konto
+  kandydata od 16 lat; widoczność profilu dla firm tylko dla pełnoletnich; młodsi — bez konta.
+- **Próg konta jako dane.** Tabela `age_policy` (jeden wiersz): `candidate_min_age` = 16 albo
+  18, ustawione **16** z `confirmed = true`. Zmiana progu tylko przez administratora
+  (`admin_set_candidate_min_age`, wymagane uzasadnienie, wpis w `audit_logs`).
+- **Minimalizacja.** Kandydat wybiera przedział wieku: „16–17 lat” albo „18 lat lub więcej”.
+  Nie zbieramy daty ani roku urodzenia ani dokumentu tożsamości. Zapisujemy: dolną granicę
+  przedziału (16 albo 18), źródło (rejestracja / ustawienia), język, czas
+  (`candidate_age_attestations`, wpis niezmienny). Gość (aplikacja bez konta) — przedział i
+  czas przy zgłoszeniu.
+- **Ograniczenia konta 16–17 (LAUNCH-1).** Profil nie może być widoczny dla firm (baza odrzuca
+  włączenie wyszukiwalności); lejek ofert na urządzeniu takiej osoby nie wysyła zdarzeń (jak
+  brak zgody). Po ukończeniu 18 lat osoba potwierdza przedział 18+ w ustawieniach.
 - **Egzekwowanie w bazie** (niezależnie od interfejsu):
   - bez ważnej deklaracji nie można założyć konta kandydata, aplikować, przejąć aplikacji
     gościa ani włączyć widoczności profilu dla firm;
   - firma nie może wysłać propozycji osobie bez ważnej deklaracji (neutralny komunikat);
-  - podniesienie progu natychmiast ukrywa profile osób z niższą deklaracją i wymaga nowej
-    deklaracji przed kolejną aplikacją. Obniżenie progu niczego nie odsłania.
+  - włączenie widoczności profilu dla firm wymaga potwierdzenia 18+ (konto 16–17 — odmowa);
+  - podniesienie progu konta do 18 wymaga potwierdzenia 18+ przed kolejną aplikacją.
 - **Czego nie ma** (celowo, bo wymaga decyzji): zgody opiekuna, oznaczania ofert dla
   młodocianych, odrębnych zasad kontaktu i AI dla osób niepełnoletnich, procedury dla
   przypadkowo wykrytego konta osoby niepełnoletniej, treści regulaminu i polityki prywatności.
 
-Interfejs pokazuje wyłącznie neutralne komunikaty („Oświadczam, że mam co najmniej {age} lat”,
-„Nie pytamy o datę urodzenia ani o dokument tożsamości”). Nie ma tekstów prawnych.
+Interfejs pokazuje wyłącznie neutralne komunikaty (wybór przedziału wieku, „Nie pytamy o datę
+urodzenia ani o dokument tożsamości”, wyjaśnienie, że profil osoby 16–17 nie jest widoczny dla
+firm). Nie ma tekstów prawnych; treść `07-wiek.md` czeka na akceptację.
 
 ## 3. Pytania do prawnika — decyzja o wariancie
 

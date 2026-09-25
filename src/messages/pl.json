@@ -596,7 +596,7 @@
       "companyNameRequired": "Podaj nazwę firmy.",
       "companyNameTooShort": "Nazwa firmy jest za krótka.",
       "companyNameTooLong": "Nazwa firmy jest za długa.",
-      "ageConfirmRequired": "Potwierdź, że masz co najmniej wymagany wiek."
+      "ageConfirmRequired": "Wybierz swój przedział wieku."
     },
     "botCheckLabel": "Weryfikacja bezpieczeństwa",
     "botCheckLoading": "Ładowanie weryfikacji bezpieczeństwa…",
@@ -604,7 +604,10 @@
     "botCheckExpired": "Weryfikacja wygasła. Potwierdź ją ponownie.",
     "botCheckLoadFailed": "Nie udało się załadować weryfikacji bezpieczeństwa. Sprawdź połączenie lub wyłącz blokowanie treści dla tej strony i spróbuj ponownie.",
     "botCheckRetry": "Załaduj weryfikację ponownie",
-    "ageConfirm": "Oświadczam, że mam co najmniej {age} lat.",
+    "ageBandLegend": "Twój wiek",
+    "ageBandMinor": "Mam {min}–{max} lat",
+    "ageBandAdult": "Mam {age} lat lub więcej",
+    "ageBandMinorHint": "Przy tym przedziale Twój profil nie będzie widoczny dla firm w wyszukiwarce kandydatów. Nadal możesz sam aplikować na oferty.",
     "ageConfirmHint": "Nie pytamy o datę urodzenia ani o dokument tożsamości.",
     "confirmEmailTitle": "Aktywuj konto",
     "confirmEmailIntro": "Kliknij przycisk, aby potwierdzić adres e-mail i przejść do swojego konta.",
@@ -666,6 +669,7 @@
     "reviewerConflict": "Odwołanie rozpatruje inny administrator niż autor decyzji.",
     "jobImportSensitiveData": "Ogłoszenie zawiera numer identyfikacyjny osoby lub dokumentu, więc go nie zaimportowaliśmy. Wypełnij formularz ręcznie.",
     "ageAttestationRequired": "Aby kontynuować, potwierdź, że masz co najmniej wymagany wiek. Jeśli formularz był otwarty dłużej, odśwież stronę.",
+    "ageAdultRequired": "Tę funkcję mogą włączyć tylko osoby pełnoletnie.",
     "screeningReviewRequired": "Oferta ma pytanie, które przed publikacją musi sprawdzić zespół portalu. Opublikujesz ją po akceptacji pytania albo po jego zmianie.",
     "screeningQuestionRejected": "Jedno z pytań nie zostało zaakceptowane. Zmień je albo usuń, aby opublikować ofertę.",
     "jobAssistEmpty": "Najpierw wpisz treść. Asystent poprawia Twój tekst, ale nie pisze oferty od zera.",
@@ -1306,7 +1310,7 @@
       "privacyNoticeRequired": "Potwierdź zapoznanie się z informacją o prywatności, aby wysłać zgłoszenie.",
       "idempotencyKeyInvalid": "Odśwież stronę i wyślij formularz ponownie.",
       "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania.",
-      "ageConfirmRequired": "Potwierdź, że masz co najmniej wymagany wiek."
+      "ageConfirmRequired": "Wybierz swój przedział wieku."
     }
   },
   "legal": {
@@ -2513,7 +2517,8 @@
     "savedOff": "Twój profil jest teraz ukryty przed wyszukiwaniem firm.",
     "saveError": "Nie udało się zapisać zmiany. Ustawienie pozostało bez zmian — spróbuj ponownie.",
     "loadError": "Nie udało się wczytać ustawienia widoczności profilu. Odśwież stronę za chwilę.",
-    "requiresAge": "Aby udostępnić profil firmom, najpierw potwierdź swój wiek w sekcji „Wiek”."
+    "requiresAge": "Aby udostępnić profil firmom, najpierw potwierdź swój wiek w sekcji „Wiek”.",
+    "requiresAdult": "Profil może być widoczny dla firm dopiero od 18 lat. Gdy skończysz 18 lat, potwierdź to w sekcji „Wiek”."
   },
   "team": {
     "title": "Zespół",
@@ -2785,8 +2790,9 @@
   },
   "ageAttestation": {
     "sectionTitle": "Wiek",
-    "sectionDescription": "Aplikować i udostępniać profil firmom mogą osoby, które mają co najmniej {age} lat. Zapisujemy tylko Twoje oświadczenie i jego datę — bez daty urodzenia.",
-    "stateOk": "Potwierdzone: masz co najmniej {age} lat.",
+    "sectionDescription": "Konto kandydata możesz mieć od {age} lat, a profil widoczny dla firm — od {adultAge} lat. Zapisujemy tylko wybrany przedział wieku i datę potwierdzenia — bez daty urodzenia.",
+    "stateAdult": "Potwierdzone: masz {age} lat lub więcej.",
+    "stateMinor": "Potwierdzone: masz mniej niż {adultAge} lat. Możesz aplikować na oferty, ale Twój profil nie jest widoczny dla firm. Gdy skończysz {adultAge} lat, potwierdź to poniżej.",
     "stateMissing": "Brak potwierdzenia. Bez niego nie możesz aplikować ani udostępniać profilu firmom.",
     "submit": "Potwierdź",
     "saving": "Zapisywanie…",

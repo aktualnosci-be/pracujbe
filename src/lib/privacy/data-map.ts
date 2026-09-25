@@ -655,13 +655,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['account', 'candidate-profile'],
     subjects: ['candidate'],
     columns: { profile_id: 'reference', min_age: 'identity', source: 'technical', locale: 'preferences', created_at: 'identity' },
-    note: 'Oświadczenie „mam co najmniej N lat” (0126, #492): sam próg i czas, bez daty urodzenia; niezmienne.',
+    note: 'Potwierdzenie przedziału wieku 16–17 / 18+ (0126, #492/#576): dolna granica przedziału i czas, bez daty urodzenia; niezmienne.',
   },
   'public.age_policy': {
     activities: ['account', 'security-audit'],
     subjects: ['admin'],
     columns: { updated_by: 'reference' },
-    note: 'Próg wieku kandydatów jako dane (0126, #492); zmienia go administrator z uzasadnieniem i audytem.',
+    note: 'Próg konta kandydata jako dane (0126, #492/#576: 16 albo 18); zmienia go administrator z uzasadnieniem i audytem.',
   },
   'public.document_acceptances': {
     activities: ['consents', 'account'],

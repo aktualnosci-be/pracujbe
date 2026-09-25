@@ -9,33 +9,40 @@ import { BTN_PRIMARY, BTN_RESET, PAPER } from '@/components/dashboard/panel-styl
 import { Button } from '@/components/ui/button';
 import { attestCandidateAgeAction } from '@/lib/actions/age-attestation';
 import type { AgeAttestationState } from '@/lib/data/age-policy';
+import { CANDIDATE_ADULT_AGE, candidateAgeBandsFor } from '@/lib/age-policy/constants';
+import { setKnownMinorDevice } from '@/lib/job-funnel/client';
 import { cn } from '@/lib/utils';
 
 /**
- * AgeAttestationSettings — deklaracja progu wieku w ustawieniach kandydata (#492).
+ * AgeAttestationSettings — potwierdzenie przedziału wieku w ustawieniach kandydata (#492, #576).
  *
  * Dla konta sprzed polityki wieku albo po podniesieniu progu: bez ważnej deklaracji baza
- * odrzuca aplikowanie i włączenie widoczności profilu (0126). Zbieramy tylko oświadczenie
- * „mam co najmniej {minAge} lat” — bez daty urodzenia. Stan po zapisie pochodzi z serwera;
+ * odrzuca aplikowanie i włączenie widoczności profilu (0126). Zbieramy tylko przedział
+ * (16–17 albo 18+) — bez daty urodzenia. Konto 16–17 widzi, że profil nie jest widoczny dla
+ * firm, i po ukończeniu 18 lat potwierdza przedział 18+. Stan po zapisie pochodzi z serwera;
  * jedno żądanie naraz, błąd przy polu i `role="alert"`, sukces `role="status"` (Invariant #11).
  */
 export function AgeAttestationSettings({ initial }: { initial: AgeAttestationState }): React.JSX.Element {
   const t = useTranslations('ageAttestation');
   const tAuth = useTranslations('auth');
   const [meets, setMeets] = React.useState(initial.meetsPolicy);
-  const [confirmed, setConfirmed] = React.useState(false);
+  const [adult, setAdult] = React.useState(initial.isAdult);
+  const [band, setBand] = React.useState<number | null>(null);
   const [fieldError, setFieldError] = React.useState<string | null>(null);
   const [error, setError] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [pending, setPending] = React.useState(false);
-  const fieldRef = React.useRef<HTMLButtonElement>(null);
+  const fieldRef = React.useRef<HTMLInputElement>(null);
+  // Konto 16–17 potwierdza tylko przejście na 18+ (niższy przedział już ma).
+  const minorOnly = meets && !adult;
+  const bands = minorOnly ? [CANDIDATE_ADULT_AGE] : candidateAgeBandsFor(initial.requiredMinAge);
 
   const submit = async (event: React.FormEvent): Promise<void> => {
     event.preventDefault();
     if (pending) return;
     setError(false);
     setSaved(false);
-    if (!confirmed) {
+    if (band === null) {
       setFieldError(tAuth('error.ageConfirmRequired'));
       fieldRef.current?.focus();
       return;
@@ -43,9 +50,13 @@ export function AgeAttestationSettings({ initial }: { initial: AgeAttestationSta
     setFieldError(null);
     setPending(true);
     try {
-      const result = await attestCandidateAgeAction({ confirmed: true, minAge: initial.requiredMinAge });
+      const result = await attestCandidateAgeAction({ confirmed: true, minAge: band });
       if (result.ok && result.meetsPolicy) {
+        const isAdult = band >= CANDIDATE_ADULT_AGE;
         setMeets(true);
+        setAdult(isAdult);
+        setBand(null);
+        setKnownMinorDevice(!isAdult);
         setSaved(true);
       } else {
         setError(true);
@@ -66,23 +77,27 @@ export function AgeAttestationSettings({ initial }: { initial: AgeAttestationSta
         {t('sectionTitle')}
       </h2>
       <p className="mt-1 text-[15px] leading-[1.7] text-muted-foreground">
-        {t('sectionDescription', { age: initial.requiredMinAge })}
+        {t('sectionDescription', { age: initial.requiredMinAge, adultAge: CANDIDATE_ADULT_AGE })}
       </p>
 
       <p className="mt-4 text-sm font-medium text-foreground" data-testid="age-attestation-state">
-        {meets ? t('stateOk', { age: initial.requiredMinAge }) : t('stateMissing')}
+        {!meets
+          ? t('stateMissing')
+          : adult
+            ? t('stateAdult', { age: CANDIDATE_ADULT_AGE })
+            : t('stateMinor', { adultAge: CANDIDATE_ADULT_AGE })}
       </p>
 
-      {meets ? null : (
+      {meets && adult ? null : (
         <form onSubmit={(event) => void submit(event)} noValidate className="mt-4 space-y-4">
           <AgeDeclarationField
             ref={fieldRef}
             id="age-attestation-confirm"
-            minAge={initial.requiredMinAge}
-            checked={confirmed}
-            onCheckedChange={(value) => {
-              setConfirmed(value);
-              if (value) setFieldError(null);
+            minAge={bands[0] ?? initial.requiredMinAge}
+            value={band}
+            onChange={(value) => {
+              setBand(value);
+              setFieldError(null);
             }}
             error={fieldError}
             disabled={pending}

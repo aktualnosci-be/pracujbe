@@ -9403,11 +9403,13 @@ select pg_temp.assert(public.resolve_recipient_locale(:'CAN348') = 'fr',
 rollback;
 
 -- ============================================================================
--- AGE492. Polityka wieku kandydatów (#492, 0126): próg jako dane (domyślnie 18,
--- niezatwierdzony), deklaracja „mam co najmniej N lat” bez daty urodzenia, egzekwowana
--- w bazie dla aplikacji, propozycji, widoczności profilu, aplikacji gościa i rejestracji.
--- Konta poniżej są tworzone BEZ fixture'u deklaracji — nie mają jej, dopóki jej nie złożą. Kontrole ujemne: bez triggera aplikacja przechodzi (AGE9n), bez wrappera
--- gość bez deklaracji przechodzi (AGE14n).
+-- AGE492. Polityka wieku kandydatów (#492/#576, 0126): próg konta jako dane (16, decyzja
+-- właściciela), potwierdzenie przedziału 16–17 / 18+ bez daty urodzenia, egzekwowane
+-- w bazie dla aplikacji, propozycji, widoczności profilu, aplikacji gościa i rejestracji;
+-- widoczność profilu dla firm tylko 18+ (LAUNCH-1).
+-- Konta poniżej są tworzone BEZ fixture'u deklaracji — nie mają jej, dopóki jej nie złożą.
+-- Kontrole ujemne: bez triggera aplikacja przechodzi (AGE9n), bez triggera konto 16–17 staje
+-- się wyszukiwalne (AGE11n), bez wrappera gość bez deklaracji przechodzi (AGE14n).
 -- ============================================================================
 reset role; reset app.current_uid;
 \set AGC  'e4920000-0000-0000-0000-000000000001'
@@ -9418,6 +9420,7 @@ reset role; reset app.current_uid;
 \set AGS2 'e4920000-0000-0000-0000-000000000006'
 \set AGS3 'e4920000-0000-0000-0000-000000000007'
 \set AGS4 'e4920000-0000-0000-0000-000000000008'
+\set AGS5 'e4920000-0000-0000-0000-000000000009'
 \set AGF  'e4920000-0000-0000-0000-0000000000f1'
 \set AGJ  'e4920000-0000-0000-0000-0000000000a1'
 \set AGJ2 'e4920000-0000-0000-0000-0000000000a2'
@@ -9433,13 +9436,13 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
   (:'AGJ',:'AGF','age-job','Magazynier AGE','warehouse','permanent','Gent','Flandria','active','pl'),
   (:'AGJ2',:'AGF','age-job-2','Kierowca AGE','transport','permanent','Gent','Flandria','active','pl');
 
--- AGE1: próg jako dane — domyślnie 18 i niezatwierdzony; odczyt progu publiczny, tabela nie.
+-- AGE1: próg jako dane — konto od 16 lat (decyzja #576, potwierdzona); odczyt progu publiczny, tabela nie.
 select pg_temp.assert(
-  (select candidate_min_age = 18 and not confirmed from public.age_policy)
+  (select candidate_min_age = 16 and confirmed from public.age_policy)
   and (select count(*) from public.candidate_age_attestations where profile_id in (:'AGC', :'AGC2')) = 0,
-  'AGE1 domyślny próg 18, confirmed=false; konta bez deklaracji');
+  'AGE1 próg konta 16, confirmed=true; konta bez deklaracji');
 set role anon; select pg_temp.assert_client_role();
-select pg_temp.assert(public.candidate_min_age() = 18, 'AGE1b anon odczytuje próg');
+select pg_temp.assert(public.candidate_min_age() = 16, 'AGE1b anon odczytuje próg');
 select pg_temp.expect_error('select * from public.age_policy', 'permission denied',
   'AGE1c anon nie czyta tabeli polityki');
 select pg_temp.expect_error('select public.attest_candidate_age(18)', 'permission denied',
@@ -9451,12 +9454,14 @@ set role authenticated; set app.current_uid = :'AGC'; select pg_temp.assert_clie
 select pg_temp.expect_error(format('select public.apply_to_job(%L, ''idem-age-1'', null, null, ''x'')', :'AGJ'),
   'AGE_ATTESTATION_REQUIRED', 'AGE2 aplikacja bez deklaracji odrzucona');
 select pg_temp.assert(
-  (select meets_policy is false and attested_min_age is null and required_min_age = 18
+  (select meets_policy is false and is_adult is false and attested_min_age is null and required_min_age = 16
    from public.get_my_age_attestation()),
-  'AGE2b stan deklaracji: brak, wymagane 18');
--- AGE3: deklaracja poniżej progu, poza zakresem, pusta.
-select pg_temp.expect_error('select public.attest_candidate_age(17)', 'AGE_ATTESTATION_REQUIRED',
-  'AGE3 deklaracja poniżej progu odrzucona');
+  'AGE2b stan deklaracji: brak, wymagane 16');
+-- AGE3: deklaracja poniżej progu, spoza przedziałów, pusta.
+select pg_temp.expect_error('select public.attest_candidate_age(15)', 'AGE_ATTESTATION_REQUIRED',
+  'AGE3 deklaracja poniżej progu konta odrzucona');
+select pg_temp.expect_error('select public.attest_candidate_age(17)', 'VALIDATION_FAILED',
+  'AGE3d wartość spoza przedziałów 16–17 / 18+ odrzucona');
 select pg_temp.expect_error('select public.attest_candidate_age(null)', 'AGE_ATTESTATION_REQUIRED',
   'AGE3b pusta deklaracja odrzucona');
 select pg_temp.expect_error('select public.attest_candidate_age(19)', 'VALIDATION_FAILED',
@@ -9499,7 +9504,7 @@ select pg_temp.assert(
   and (select status = 'submitted' from public.applications where id = :'agapp'),
   'AGE9 po deklaracji aplikacja zapisana; receipt: źródło self, język konta');
 select pg_temp.expect_error(
-  format('update public.candidate_age_attestations set min_age = 13 where profile_id = %L', :'AGC'),
+  format('update public.candidate_age_attestations set min_age = 16 where profile_id = %L', :'AGC'),
   'PERMISSION_DENIED', 'AGE9b receipt niezmienny także dla właściciela bazy');
 
 -- AGE9c: eksport danych kandydata (#486) zawiera deklarację — sam próg, bez daty urodzenia.
@@ -9527,39 +9532,58 @@ select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, false
   'PERMISSION_DENIED', 'AGE10 pracodawca nie zmienia progu');
 reset role;
 set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.admin_set_candidate_min_age(12, false, ''test'')',
-  'VALIDATION_FAILED', 'AGE10b próg poniżej 13 odrzucony');
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(15, false, ''test'')',
+  'VALIDATION_FAILED', 'AGE10b próg poniżej 16 odrzucony (młodsi bez konta, #576)');
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(17, false, ''test'')',
+  'VALIDATION_FAILED', 'AGE10b2 próg spoza 16/18 odrzucony');
 select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, false, ''  '')',
   'VALIDATION_FAILED', 'AGE10c zmiana bez uzasadnienia odrzucona');
-select pg_temp.assert(public.admin_set_candidate_min_age(16, false, 'Wariant roboczy do testu') = 0,
-  'AGE10d obniżenie progu nikogo nie ukrywa');
 reset role; reset app.current_uid;
-select pg_temp.assert(public.candidate_min_age() = 16
-  and exists (select 1 from public.audit_logs where action = 'age_policy.updated' and actor_id = :'AGA'
-                and (before_data->>'candidate_min_age')::int = 18 and (after_data->>'candidate_min_age')::int = 16),
-  'AGE10e próg 16 w bazie + audit_logs z wartością przed/po');
 
--- AGE11: przy progu 16 deklaracja 16 wystarcza (aplikacja + widoczność).
+-- AGE11: konto 16–17 (deklaracja 16) aplikuje, ale NIE staje się wyszukiwalne (#576, LAUNCH-1).
 set role authenticated; set app.current_uid = :'AGC2'; select pg_temp.assert_client_role();
-select pg_temp.assert(public.attest_candidate_age(16) is true, 'AGE11 deklaracja 16 przy progu 16');
+select pg_temp.assert(public.attest_candidate_age(16) is true, 'AGE11 deklaracja 16–17 przy progu 16');
+select pg_temp.assert(
+  (select meets_policy and not is_adult and attested_min_age = 16 from public.get_my_age_attestation()),
+  'AGE11a stan: konto 16–17 spełnia próg konta, nie jest pełnoletnie');
 select public.set_candidate_searchable(false);
 select public.apply_to_job(:'AGJ', 'idem-age-3', null, null, 'x') as agapp2 \gset
 reset role; reset app.current_uid;
-update public.candidate_profiles set is_searchable = true, profile_completed = true where profile_id = :'AGC2';
-select pg_temp.assert((select is_searchable from public.candidate_profiles where profile_id = :'AGC2'),
-  'AGE11b profil z deklaracją 16 może być widoczny przy progu 16');
-
--- AGE12: podniesienie progu ukrywa profile z niższą deklaracją (historia + audyt).
-set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
-select pg_temp.assert(public.admin_set_candidate_min_age(18, false, 'Powrót do wariantu 18+') = 1,
-  'AGE12 podniesienie progu zwraca liczbę ukrytych profili');
+update public.candidate_profiles set profile_completed = true where profile_id = :'AGC2';
+set role authenticated; set app.current_uid = :'AGC2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.set_candidate_searchable(true)', 'AGE_ADULT_REQUIRED',
+  'AGE11b set_candidate_searchable(true) odrzucone dla konta 16–17 (kompletny profil)');
 reset role; reset app.current_uid;
+select pg_temp.expect_error(
+  format('update public.candidate_profiles set is_searchable = true where profile_id = %L', :'AGC2'),
+  'AGE_ADULT_REQUIRED', 'AGE11c zapis systemowy też nie odsłania konta 16–17 (chokepoint triggera)');
 select pg_temp.assert(
-  (select not is_searchable and searchable_changed_at is not null from public.candidate_profiles where profile_id = :'AGC2')
-  and (select count(*) from public.candidate_visibility_events where candidate_id = :'AGC2' and not searchable) = 1
-  and exists (select 1 from public.audit_logs where action = 'age_policy.updated'
-                and (after_data->>'hidden_profiles')::int = 1),
-  'AGE12b profil ukryty, zdarzenie widoczności, audyt z liczbą');
+  (select not is_searchable from public.candidate_profiles where profile_id = :'AGC2')
+  and (select count(*) from public.candidate_visibility_events where candidate_id = :'AGC2' and searchable) = 0,
+  'AGE11d konto 16–17 niewyszukiwalne, bez zdarzenia włączenia');
+-- AGE11n: kontrola ujemna — bez triggera konto 16–17 staje się wyszukiwalne.
+begin;
+drop trigger trg_candidate_profiles_age_policy on public.candidate_profiles;
+set local app.current_uid = :'AGC2'; set local role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_candidate_searchable(true) is true,
+  'AGE11n kontrola ujemna: bez triggera konto 16–17 staje się wyszukiwalne');
+rollback;
+
+-- AGE12: próg konta 18 (wariant tylko dorośli) — audyt; profile 18+ zostają widoczne.
+update public.candidate_profiles set profile_completed = true where profile_id = :'AGC';
+set role authenticated; set app.current_uid = :'AGC'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_candidate_searchable(true) is true, 'AGE12a konto 18+ włącza wyszukiwalność');
+reset role;
+set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.admin_set_candidate_min_age(18, false, 'Wariant tylko dorośli do testu') = 0,
+  'AGE12 podniesienie progu konta nie ukrywa profili 18+');
+reset role; reset app.current_uid;
+select pg_temp.assert(public.candidate_min_age() = 18
+  and (select is_searchable from public.candidate_profiles where profile_id = :'AGC')
+  and exists (select 1 from public.audit_logs where action = 'age_policy.updated' and actor_id = :'AGA'
+                and (before_data->>'candidate_min_age')::int = 16 and (after_data->>'candidate_min_age')::int = 18
+                and (after_data->>'hidden_profiles')::int = 0),
+  'AGE12b próg 18 w bazie, profil 18+ widoczny, audit_logs z wartością przed/po');
 
 -- AGE13: po podniesieniu progu — nowa aplikacja i propozycja od firmy zablokowane.
 set role authenticated; set app.current_uid = :'AGC2'; select pg_temp.assert_client_role();
@@ -9578,6 +9602,12 @@ set role authenticated; set app.current_uid = :'AGC2'; select pg_temp.assert_cli
 select pg_temp.assert(public.attest_candidate_age(18) is true, 'AGE13e ponowna deklaracja 18 przywraca aplikowanie');
 select pg_temp.assert(public.apply_to_job(:'AGJ2', 'idem-age-5', null, null, 'x') is not null,
   'AGE13f aplikacja po ponownej deklaracji');
+select pg_temp.assert(public.set_candidate_searchable(true) is true,
+  'AGE13g kontrola dodatnia: po potwierdzeniu 18+ profil może być wyszukiwalny');
+reset role; reset app.current_uid;
+-- Powrót do decyzji #576 (konto od 16) dla dalszych kroków.
+set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
+select public.admin_set_candidate_min_age(16, true, 'Decyzja właściciela #576');
 reset role; reset app.current_uid;
 
 -- AGE14: aplikacja gościa wymaga deklaracji; funkcja core niedostępna i bez deklaracji odrzuca.
@@ -9586,7 +9616,7 @@ select pg_temp.expect_error(
   format('select public.submit_guest_application(%L, ''age-g@test.be'', ''G'', null, null, null, ''pl'', ''idem-age-g1'', repeat(''n'',32), repeat(''a'',64))', :'AGJ'),
   'AGE_ATTESTATION_REQUIRED', 'AGE14 gość bez deklaracji odrzucony');
 select pg_temp.expect_error(
-  format('select public.submit_guest_application(%L, ''age-g@test.be'', ''G'', null, null, null, ''pl'', ''idem-age-g1'', repeat(''n'',32), repeat(''a'',64), p_age_attested_min => 17)', :'AGJ'),
+  format('select public.submit_guest_application(%L, ''age-g@test.be'', ''G'', null, null, null, ''pl'', ''idem-age-g1'', repeat(''n'',32), repeat(''a'',64), p_age_attested_min => 15)', :'AGJ'),
   'AGE_ATTESTATION_REQUIRED', 'AGE14b gość z deklaracją poniżej progu odrzucony');
 select pg_temp.expect_error(
   format('select public.submit_guest_application_core(%L, ''age-g@test.be'', ''G'', null, null, null, ''pl'', ''idem-age-g1'', repeat(''n'',32), repeat(''a'',64))', :'AGJ'),
@@ -9598,6 +9628,13 @@ select pg_temp.assert(
   (select age_attested_min = 18 and age_attested_at is not null from public.guest_application_requests where id = :'agguest')
   and (select count(*) from public.guest_application_requests where job_id = :'AGJ') = 1,
   'AGE14d zgłoszenie gościa z zapisanym progiem deklaracji (bez daty urodzenia)');
+set role service_role;
+select public.submit_guest_application(:'AGJ2', 'age-m@test.be', 'M', null, null, null, 'nl',
+  'idem-age-g5', repeat('n',32), repeat('e',64), p_age_attested_min => 16) as agguest16 \gset
+reset role;
+select pg_temp.assert(
+  (select age_attested_min = 16 from public.guest_application_requests where id = :'agguest16'),
+  'AGE14f gość 16–17 może aplikować (próg konta 16), zapisany przedział 16');
 select pg_temp.expect_error(
   format('select public.submit_guest_application_core(%L, ''age-h@test.be'', ''H'', null, null, null, ''pl'', ''idem-age-g3'', repeat(''n'',32), repeat(''c'',64))', :'AGJ'),
   'AGE_ATTESTATION_REQUIRED', 'AGE14e core bez deklaracji odrzucony także dla właściciela (trigger)');
@@ -9617,13 +9654,15 @@ select pg_temp.expect_error(
   'AGE_ATTESTATION_REQUIRED', 'AGE15 rejestracja kandydata bez deklaracji odrzucona');
 select pg_temp.expect_error(
   format($$insert into auth.users(id,email,name,raw_user_meta_data) values (%L, 'ags2@test.be', 'S2',
-    '{"signup_receipt_version":1,"agree_terms":true,"role":"candidate","locale":"pl","first_name":"S","last_name":"2","age_min_attested":16}')$$, :'AGS2'),
+    '{"signup_receipt_version":1,"agree_terms":true,"role":"candidate","locale":"pl","first_name":"S","last_name":"2","age_min_attested":15}')$$, :'AGS2'),
   'AGE_ATTESTATION_REQUIRED', 'AGE15b rejestracja z deklaracją poniżej progu odrzucona');
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'AGS3', 'ags3@test.be', 'S3',
    '{"signup_receipt_version":1,"agree_terms":true,"role":"candidate","locale":"fr","first_name":"S","last_name":"3","age_min_attested":18}'),
   (:'AGS4', 'ags4@test.be', 'S4',
-   '{"signup_receipt_version":1,"agree_terms":true,"role":"employer","locale":"nl","first_name":"S","last_name":"4"}');
+   '{"signup_receipt_version":1,"agree_terms":true,"role":"employer","locale":"nl","first_name":"S","last_name":"4"}'),
+  (:'AGS5', 'ags5@test.be', 'S5',
+   '{"signup_receipt_version":1,"agree_terms":true,"role":"candidate","locale":"en","first_name":"S","last_name":"5","age_min_attested":16}');
 select pg_temp.assert(
   not exists (select 1 from auth.users where id in (:'AGS1', :'AGS2'))
   and (select count(*) from public.candidate_age_attestations
@@ -9631,10 +9670,14 @@ select pg_temp.assert(
   and (select count(*) from public.candidate_age_attestations where profile_id = :'AGS4') = 0
   and (select count(*) from public.document_acceptances where profile_id = :'AGS3') = 2,
   'AGE15c rejestracja kandydata zapisuje deklarację i akceptacje; pracodawca bez deklaracji');
+select pg_temp.assert(
+  (select count(*) from public.candidate_age_attestations where profile_id = :'AGS5' and min_age = 16) = 1
+  and not coalesce((select is_searchable from public.candidate_profiles where profile_id = :'AGS5'), false),
+  'AGE15d rejestracja 16–17 tworzy konto z przedziałem 16, profil niewyszukiwalny');
 
 -- AGE16: service_role (akcja rejestracji Supabase Auth) — ten sam kontrakt.
 set role service_role;
-select pg_temp.expect_error(format('select public.record_candidate_age_attestation(%L, 17, ''pl'')', :'AGC2'),
+select pg_temp.expect_error(format('select public.record_candidate_age_attestation(%L, 15, ''pl'')', :'AGC2'),
   'AGE_ATTESTATION_REQUIRED', 'AGE16 receipt rejestracji poniżej progu odrzucony');
 select pg_temp.expect_error(format('select public.record_candidate_age_attestation(%L, 18, ''pl'')', :'AGE'),
   'PERMISSION_DENIED', 'AGE16b receipt tylko dla konta kandydata');

@@ -1,34 +1,43 @@
 -- =============================================================================
 -- 0126_candidate_age_policy.sql — polityka wieku kandydatów (#492), część techniczna.
 --
--- Decyzja o wariancie (tylko dorośli czy także 15–17 lat) należy do właściciela produktu
--- po przeglądzie prawnym. Ta migracja NIE rozstrzyga prawa — daje mechanizm:
---   1. `age_policy` — próg wieku kandydata jako DANE (jeden wiersz). Domyślnie 18 —
---      najbezpieczniejszy wariant z issue — z `confirmed = false` (do potwierdzenia).
---      Zakres 13–18: górna granica = pełnoletność, więc deklaracja „mam co najmniej 18 lat”
---      spełnia każdy dopuszczalny próg.
---   2. `candidate_age_attestations` — niezmienny receipt deklaracji „mam co najmniej N lat”.
+-- Decyzja właściciela 25.09.2026 (#576, model LAUNCH-1 z opracowania #573): samodzielne
+-- konto kandydata od 16 lat; wyszukiwalność profilu przez firmy (#494) tylko dla
+-- pełnoletnich; młodsi — bez konta. Ta migracja nie zawiera treści prawnej — daje mechanizm:
+--   1. `age_policy` — próg KONTA kandydata jako DANE (jeden wiersz): 16 albo 18. Domyślnie 16
+--      (decyzja #576, `confirmed = true`). Próg widoczności profilu dla firm = pełnoletność
+--      (18), stała (`candidate_is_adult`), niezależna od progu konta.
+--   2. `candidate_age_attestations` — niezmienny receipt potwierdzenia PRZEDZIAŁU wieku:
+--      `min_age` = dolna granica przedziału (16 = „16–17 lat”, 18 = „18 lat lub więcej”).
 --      Minimalizacja (RODO art. 5(1)(c)): bez daty i roku urodzenia, bez dokumentu — tylko
---      zadeklarowany próg, źródło, język i czas.
+--      przedział, źródło, język i czas. Osoba 16–17 po ukończeniu 18 lat potwierdza 18+
+--      (nowy receipt; poprzedni zostaje).
 --   3. Egzekwowanie w bazie (jeden chokepoint na ścieżkę, bez wyjątku dla ról systemowych):
 --      * `applications` BEFORE INSERT / zmiana `candidate_id` — kandydat bez ważnej
 --        deklaracji nie aplikuje i nie przejmuje aplikacji gościa (AGE_ATTESTATION_REQUIRED);
 --      * `offers` BEFORE INSERT — firma nie wyśle propozycji takiej osobie (neutralny błąd
 --        jak przy braku relacji — firma nie dowiaduje się dlaczego);
---      * `candidate_profiles` BEFORE UPDATE — profil bez ważnej deklaracji nie staje się
---        widoczny dla firm (#494, 0100);
+--      * `candidate_profiles` BEFORE UPDATE — profil staje się widoczny dla firm (#494, 0100,
+--        `set_candidate_searchable` i każda inna ścieżka) tylko przy potwierdzeniu 18+
+--        (AGE_ADULT_REQUIRED); konto 16–17 zostaje niewyszukiwalne (LAUNCH-1);
 --      * `guest_application_requests` BEFORE INSERT / ponowne wysłanie — gość deklaruje próg
 --        w formularzu; bez deklaracji zgłoszenie nie powstaje.
---   4. `admin_set_candidate_min_age` — zmiana progu (admin), audyt `age_policy.updated`.
+--   4. `admin_set_candidate_min_age` — zmiana progu konta (16/18, admin), audyt `age_policy.updated`.
 --      Podniesienie progu od razu ukrywa profile kandydatów, których deklaracja jest niższa
 --      (historia w `candidate_visibility_events`, jak w 0100). Obniżenie niczego nie odsłania.
 --   5. Rejestracja: deklaracja zapisywana w tej samej transakcji co konto — Better Auth przez
 --      trigger `auth.record_signup_receipts` (metadane z walidowanej akcji), Supabase Auth
 --      przez `record_candidate_age_attestation` (service_role) w akcji rejestracji.
 --
+--   6. Jednorazowo: profile wyszukiwalne bez potwierdzenia 18+ są ukrywane (DATA-01 — nowy
+--      kandydat niewyszukiwalny; historia w `candidate_visibility_events`).
+--
+-- Lejek ofert dla konta 16–17 = brak zgody: wyłącza go klient (znacznik urządzenia,
+-- `src/lib/job-funnel/client.ts`), bo zdarzenia lejka nie niosą tożsamości.
+--
 -- Poza zakresem (wymaga decyzji właściciela/prawnika, patrz
--- docs/legal-drafts/kandydaci-niepelnoletni.md): wariant z niepełnoletnimi (zgoda opiekuna,
--- oznaczanie ofert dla młodocianych), treść regulaminu i polityki prywatności.
+-- docs/legal-drafts/kandydaci-niepelnoletni.md): kontakt osób poniżej 16 lat z udziałem
+-- opiekuna, oznaczanie ofert dla młodocianych, treść informacji o wieku (07-wiek.md).
 --
 -- Rollback: przywrócić `auth.record_signup_receipts` z database/auth/0059; drop nowego
 -- `export_my_data()` i zmienić nazwę `export_my_data_base` z powrotem (grant authenticated); zmienić nazwę
@@ -40,15 +49,16 @@
 -- --- 1. Próg jako dane --------------------------------------------------------------------
 create table if not exists public.age_policy (
   id                boolean primary key default true check (id),
-  candidate_min_age smallint not null default 18 check (candidate_min_age between 13 and 18),
-  -- false = wartość robocza, niezatwierdzona przez właściciela po przeglądzie prawnym.
+  -- #576: 16 (konto od 16 lat) albo 18 (tylko dorośli); młodszych nie obsługujemy.
+  candidate_min_age smallint not null default 16 check (candidate_min_age in (16, 18)),
+  -- false = wartość robocza, niezatwierdzona przez właściciela.
   confirmed         boolean not null default false,
   reason            text check (reason is null or char_length(reason) <= 1000),
   updated_at        timestamptz not null default now(),
   updated_by        uuid references public.profiles(id) on delete set null
 );
-insert into public.age_policy (id, candidate_min_age, confirmed)
-  values (true, 18, false)
+insert into public.age_policy (id, candidate_min_age, confirmed, reason)
+  values (true, 16, true, 'Decyzja właściciela 25.09.2026 (#576): konto kandydata od 16 lat, wyszukiwalność tylko 18+.')
   on conflict (id) do nothing;
 
 alter table public.age_policy enable row level security;
@@ -68,7 +78,8 @@ grant execute on function public.candidate_min_age() to anon, authenticated, ser
 create table if not exists public.candidate_age_attestations (
   id         uuid primary key default gen_random_uuid(),
   profile_id uuid not null references public.profiles(id) on delete cascade,
-  min_age    smallint not null check (min_age between 13 and 18),
+  -- Dolna granica potwierdzonego przedziału: 16 = „16–17 lat”, 18 = „18 lat lub więcej”.
+  min_age    smallint not null check (min_age in (16, 18)),
   source     text not null check (source in ('signup', 'self')),
   locale     text references public.supported_locales(code),
   created_at timestamptz not null default now()
@@ -107,6 +118,17 @@ returns boolean language sql stable security definer set search_path = public, p
 $$;
 revoke all on function public.candidate_meets_age_policy(uuid) from public, anon, authenticated;
 
+-- Czy kandydat potwierdził przedział 18+ (pełnoletność — próg widoczności dla firm, #576).
+-- Stała, nie dane: niezależna od progu konta.
+create or replace function public.candidate_is_adult(p_profile uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select exists (
+    select 1 from public.candidate_age_attestations a
+    where a.profile_id = p_profile and a.min_age >= 18
+  );
+$$;
+revoke all on function public.candidate_is_adult(uuid) from public, anon, authenticated;
+
 -- Wspólna walidacja deklarowanego progu (null / poniżej progu / poza zakresem).
 create or replace function public.assert_age_attestation(p_min_age integer)
 returns smallint language plpgsql stable security definer set search_path = public, pg_temp as $$
@@ -114,8 +136,9 @@ begin
   if p_min_age is null or p_min_age < public.candidate_min_age() then
     raise exception 'AGE_ATTESTATION_REQUIRED' using errcode = '42501';
   end if;
-  if p_min_age > 18 then
-    raise exception 'VALIDATION_FAILED: deklarowany próg poza zakresem' using errcode = '42501';
+  -- Tylko dwa przedziały (#576): 16–17 (16) i 18+ (18).
+  if p_min_age not in (16, 18) then
+    raise exception 'VALIDATION_FAILED: nieznany przedział wieku' using errcode = '42501';
   end if;
   return p_min_age::smallint;
 end $$;
@@ -168,14 +191,15 @@ end $$;
 revoke all on function public.attest_candidate_age(integer) from public, anon;
 grant execute on function public.attest_candidate_age(integer) to authenticated;
 
--- Stan dla UI kandydata: bieżący próg, najwyższa deklaracja i czy wystarcza.
+-- Stan dla UI kandydata: bieżący próg, najwyższa deklaracja, czy wystarcza i czy 18+.
 create or replace function public.get_my_age_attestation()
 returns table (required_min_age smallint, attested_min_age smallint, attested_at timestamptz,
-               meets_policy boolean)
+               meets_policy boolean, is_adult boolean)
 language sql stable security definer set search_path = public, pg_temp as $$
   select public.candidate_min_age(),
          a.min_age, a.created_at,
-         coalesce(a.min_age >= public.candidate_min_age(), false)
+         coalesce(a.min_age >= public.candidate_min_age(), false),
+         coalesce(a.min_age >= 18, false)
   from (select 1) as one
   left join lateral (
     select min_age, created_at from public.candidate_age_attestations
@@ -221,13 +245,19 @@ create trigger trg_offers_age_policy
   before insert on public.offers
   for each row execute function public.enforce_offer_age_policy();
 
--- Widoczność profilu dla firm (#494): włączenie tylko z ważną deklaracją.
+-- Widoczność profilu dla firm (#494): włączenie tylko po potwierdzeniu 18+ (#576, LAUNCH-1).
+-- Brak deklaracji → AGE_ATTESTATION_REQUIRED; konto 16–17 → AGE_ADULT_REQUIRED.
 create or replace function public.enforce_searchable_age_policy()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  if new.is_searchable and not coalesce(old.is_searchable, false)
-     and not public.candidate_meets_age_policy(new.profile_id) then
-    raise exception 'AGE_ATTESTATION_REQUIRED' using errcode = '42501';
+  if new.is_searchable and not coalesce(old.is_searchable, false) then
+    if not public.candidate_meets_age_policy(new.profile_id) then
+      raise exception 'AGE_ATTESTATION_REQUIRED' using errcode = '42501';
+    end if;
+    if not public.candidate_is_adult(new.profile_id) then
+      raise exception 'AGE_ADULT_REQUIRED: wyszukiwalność profilu tylko dla osób pełnoletnich'
+        using errcode = '42501';
+    end if;
   end if;
   return new;
 end $$;
@@ -240,7 +270,7 @@ create trigger trg_candidate_profiles_age_policy
 -- --- 4. Aplikacja gościa -------------------------------------------------------------------
 alter table public.guest_application_requests
   add column if not exists age_attested_min smallint
-    check (age_attested_min is null or age_attested_min between 13 and 18),
+    check (age_attested_min is null or age_attested_min in (16, 18)),
   add column if not exists age_attested_at timestamptz;
 
 -- Deklarację przekazuje wrapper `submit_guest_application` przez ustawienie transakcji;
@@ -318,7 +348,7 @@ begin
   if not public.is_admin() then
     raise exception 'PERMISSION_DENIED' using errcode = '42501';
   end if;
-  if p_min_age is null or p_min_age not between 13 and 18 or p_confirmed is null
+  if p_min_age is null or p_min_age not in (16, 18) or p_confirmed is null
      or v_reason is null or char_length(v_reason) > 1000 then
     raise exception 'VALIDATION_FAILED' using errcode = '42501';
   end if;
@@ -337,7 +367,8 @@ begin
   with hidden as (
     update public.candidate_profiles cp
        set is_searchable = false, searchable_changed_at = now()
-     where cp.is_searchable and not public.candidate_meets_age_policy(cp.profile_id)
+     where cp.is_searchable
+       and not (public.candidate_meets_age_policy(cp.profile_id) and public.candidate_is_adult(cp.profile_id))
     returning cp.profile_id
   ), events as (
     insert into public.candidate_visibility_events (candidate_id, searchable)
@@ -354,6 +385,16 @@ begin
 end $$;
 revoke all on function public.admin_set_candidate_min_age(integer, boolean, text) from public, anon;
 grant execute on function public.admin_set_candidate_min_age(integer, boolean, text) to authenticated;
+
+-- --- 5a. Jednorazowo: widoczne tylko profile z potwierdzeniem 18+ (#576, DATA-01) -----------
+with hidden as (
+  update public.candidate_profiles cp
+     set is_searchable = false, searchable_changed_at = now()
+   where cp.is_searchable and not public.candidate_is_adult(cp.profile_id)
+  returning cp.profile_id
+)
+insert into public.candidate_visibility_events (candidate_id, searchable)
+select profile_id, false from hidden;
 
 -- --- 5b. Eksport danych kandydata (#486, art. 15/20) obejmuje deklaracje wieku --------------
 -- Bez kopiowania całej funkcji z 0105: dotychczasowa staje się wewnętrzną częścią, a nowa

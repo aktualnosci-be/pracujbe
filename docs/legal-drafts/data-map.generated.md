@@ -259,7 +259,7 @@ Tabele w migracjach: 95; z danymi osobowymi: 61; bez danych osobowych: 34.
 - **Migracja:** `supabase/migrations/0126_candidate_age_policy.sql`
 - **Czynności:** Konto i uwierzytelnianie, Bezpieczeństwo, audyt i limity
 - **Osoby:** Administratorzy portalu
-- **Uwaga:** Próg wieku kandydatów jako dane (0126, #492); zmienia go administrator z uzasadnieniem i audytem.
+- **Uwaga:** Próg konta kandydata jako dane (0126, #492/#576: 16 albo 18); zmienia go administrator z uzasadnieniem i audytem.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -383,7 +383,7 @@ Tabele w migracjach: 95; z danymi osobowymi: 61; bez danych osobowych: 34.
 - **Migracja:** `supabase/migrations/0126_candidate_age_policy.sql`
 - **Czynności:** Konto i uwierzytelnianie, Profil zawodowy kandydata
 - **Osoby:** Kandydaci (konto)
-- **Uwaga:** Oświadczenie „mam co najmniej N lat” (0126, #492): sam próg i czas, bez daty urodzenia; niezmienne.
+- **Uwaga:** Potwierdzenie przedziału wieku 16–17 / 18+ (0126, #492/#576): dolna granica przedziału i czas, bez daty urodzenia; niezmienne.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|

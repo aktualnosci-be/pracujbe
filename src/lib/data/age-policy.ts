@@ -45,6 +45,8 @@ export interface AgeAttestationState {
   /** Najwyższy zadeklarowany próg; `null` = brak deklaracji. */
   attestedMinAge: number | null;
   meetsPolicy: boolean;
+  /** Potwierdzony przedział 18+ (#576) — warunek widoczności profilu dla firm. */
+  isAdult: boolean;
 }
 
 export type AgeAttestationLoad =
@@ -63,6 +65,7 @@ export async function loadMyAgeAttestation(): Promise<AgeAttestationLoad> {
       requiredMinAge: CANDIDATE_MIN_AGE_FALLBACK,
       attestedMinAge: CANDIDATE_MIN_AGE_FALLBACK,
       meetsPolicy: true,
+      isAdult: true,
     };
   }
   try {
@@ -79,6 +82,7 @@ export async function loadMyAgeAttestation(): Promise<AgeAttestationLoad> {
       requiredMinAge: normalizeCandidateMinAge(row['required_min_age']),
       attestedMinAge: typeof attested === 'number' ? attested : null,
       meetsPolicy: row['meets_policy'] === true,
+      isAdult: row['is_adult'] === true,
     };
   } catch (error) {
     captureError(error, { area: 'age-policy.myAttestation' });

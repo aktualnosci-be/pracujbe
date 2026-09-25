@@ -3,10 +3,10 @@ import { resolve } from 'path';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * #492 — deklaracja progu wieku przy rejestracji kandydata (osobny komponent
+ * #492/#576 — potwierdzenie przedziału wieku przy rejestracji kandydata (osobny komponent
  * `AgeDeclarationField`, obok zgody z #493). Sprawdza w 4 językach:
- * - etykieta „mam co najmniej {age} lat” z progiem z serwera (bez bazy = 18) i podpowiedź,
- *   że nie pytamy o datę urodzenia; pole wymagane (`aria-required`);
+ * - przedziały z progu konta z serwera (bez bazy = 18 → tylko „18 lat lub więcej”) i podpowiedź,
+ *   że nie pytamy o datę urodzenia; grupa wymagana (`aria-required` na radiogroup);
  * - bez deklaracji: błąd przy polu, fokus na deklaracji, żadne żądanie nie wychodzi;
  * - z deklaracją: akcja dostaje sam próg (`ageConfirmed`, `minAge`), bez daty urodzenia;
  * - rejestracja pracodawcy nie ma deklaracji wieku kandydata.
@@ -15,7 +15,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 const LOCALES = ['pl', 'nl', 'fr', 'en'] as const;
 type Locale = (typeof LOCALES)[number];
-type Messages = { auth: { ageConfirm: string; ageConfirmHint: string; error: { ageConfirmRequired: string } } };
+type Messages = {
+  auth: { ageBandAdult: string; ageBandLegend: string; ageConfirmHint: string; error: { ageConfirmRequired: string } };
+};
 
 function msgs(locale: Locale): Messages {
   return JSON.parse(readFileSync(resolve(process.cwd(), 'src', 'messages', `${locale}.json`), 'utf-8')) as Messages;
@@ -53,14 +55,14 @@ for (const locale of LOCALES) {
     const bodies = captureActions(page, path);
     await page.goto(path);
 
-    const age = page.getByRole('checkbox', { name: t.auth.ageConfirm.replace('{age}', '18') });
+    const age = page.getByRole('radio', { name: t.auth.ageBandAdult.replace('{age}', '18') });
     await expect(age).toBeVisible();
-    await expect(age).toHaveAttribute('aria-required', 'true');
+    await expect(page.getByRole('radiogroup', { name: t.auth.ageBandLegend })).toHaveAttribute('aria-required', 'true');
     await expect(age).toHaveAccessibleDescription(t.auth.ageConfirmHint);
 
     await fillCandidate(page);
     await page.locator('form button[type="submit"]').click();
-    await expect(age).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('radiogroup', { name: t.auth.ageBandLegend })).toHaveAttribute('aria-invalid', 'true');
     await expect(age).toBeFocused();
     await expect(age).toHaveAccessibleDescription(`${t.auth.ageConfirmHint} ${t.auth.error.ageConfirmRequired}`);
     expect(bodies).toHaveLength(0);
@@ -77,5 +79,6 @@ for (const locale of LOCALES) {
 test('rejestracja pracodawcy nie ma deklaracji wieku kandydata', async ({ page }) => {
   await page.goto('/pl/rejestracja-pracodawca');
   await expect(page.locator('#agreeTerms')).toBeVisible();
-  await expect(page.locator('#ageConfirmed')).toHaveCount(0);
+  await expect(page.locator('#ageConfirmed-18')).toHaveCount(0);
+  await expect(page.getByRole('radiogroup')).toHaveCount(0);
 });

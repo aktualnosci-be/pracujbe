@@ -76,15 +76,17 @@ function renderForm(
   return {
     name: screen.getByRole('textbox', { name: new RegExp(m.fullName) }),
     email: screen.getByRole('textbox', { name: new RegExp(m.email) }),
-    age: screen.getByRole('checkbox', { name: ageLabel(messages, candidateMinAge ?? 18) }),
+    age: screen.getByRole('radio', { name: ageLabel(messages, candidateMinAge ?? 18) }),
     consent: screen.getByRole('checkbox', { name: privacyAckName(messages.apply.privacyNoticeAck) }),
     submit: screen.getByRole('button', { name: messages.apply.submit }),
   };
 }
 
-/** #492: etykieta deklaracji progu wieku z komunikatów (próg z serwera). */
+/** #492/#576: etykieta NAJNIŻSZEGO przedziału wieku przy progu konta z serwera (16 → „16–17”, 18 → „18+”). */
 function ageLabel(messages: Messages, age: number): string {
-  return messages.auth.ageConfirm.replace('{age}', String(age));
+  return age < 18
+    ? messages.auth.ageBandMinor.replace('{min}', String(age)).replace('{max}', '17')
+    : messages.auth.ageBandAdult.replace('{age}', '18');
 }
 
 describe('GuestApplyForm', () => {
@@ -107,7 +109,7 @@ describe('GuestApplyForm', () => {
     fireEvent.click(f.consent);
     fireEvent.click(f.submit);
     expect(submitGuestApplication).not.toHaveBeenCalled();
-    expect(f.age).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-invalid', 'true');
     expect(document.activeElement).toBe(f.age);
   });
 
@@ -123,9 +125,27 @@ describe('GuestApplyForm', () => {
     const sent = vi.mocked(submitGuestApplication).mock.calls[0]![0];
     expect(sent).toMatchObject({ ageConfirmed: true, minAge: 16 });
     expect(JSON.stringify(sent)).not.toMatch(/birth/i);
-    await waitFor(() => expect(f.age).toHaveAttribute('aria-invalid', 'true'));
+    await waitFor(() => expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-invalid', 'true'));
     expect(f.age).toHaveAccessibleDescription(new RegExp(en.errors.ageAttestationRequired.slice(0, 30)));
     expect(f.name).toHaveValue('Anna');
+    // #576: przedział 16–17 → lejek ofert wyłączony na tym urządzeniu.
+    expect(window.localStorage.getItem('pracujbe.funnel.minor')).toBe('1');
+    window.localStorage.clear();
+  });
+
+  it('#576: przy progu 16 oba przedziały; 18+ nie oznacza urządzenia jako osoby niepełnoletniej', async () => {
+    vi.mocked(submitGuestApplication).mockResolvedValueOnce({ ok: true });
+    const f = renderForm('en', en, [], 16);
+    const adult = screen.getByRole('radio', { name: ageLabel(en, 18) });
+    expect(f.age).toBeInTheDocument();
+    fireEvent.change(f.name, { target: { value: 'Anna' } });
+    fireEvent.change(f.email, { target: { value: 'anna@example.com' } });
+    fireEvent.click(adult);
+    fireEvent.click(f.consent);
+    fireEvent.click(f.submit);
+    await waitFor(() => expect(submitGuestApplication).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(submitGuestApplication).mock.calls[0]![0]).toMatchObject({ minAge: 18 });
+    expect(window.localStorage.getItem('pracujbe.funnel.minor')).toBeNull();
   });
 
   it('invalid address is flagged at the field', () => {

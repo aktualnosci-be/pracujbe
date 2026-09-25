@@ -64,7 +64,7 @@ export async function registerThroughForm(page: Page, options: {
   await page.getByRole('checkbox', { name: richLabel(t('privacyNoticeAckLinks')) }).check();
   // #492: kandydat deklaruje próg wieku (bez daty urodzenia).
   if (!company) {
-    await page.getByRole('checkbox', { name: t('ageConfirm').replace('{age}', '18'), exact: true }).check();
+    await page.getByRole('radio', { name: t('ageBandAdult').replace('{age}', '18'), exact: true }).check();
   }
   await page.getByRole('button', { name: t('submitRegister'), exact: true }).click();
   await page.waitForURL(`**/${locale}/potwierdzenie`);

@@ -30,7 +30,7 @@ const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const BLOCKING = new Set(['critical', 'serious']);
 
 type Messages = {
-  auth: { ageConfirm: string };
+  auth: { ageBandAdult: string };
   jobs: { applyNow: string };
   apply: { submit: string; privacyNoticeAck: string; message: string; sensitiveIdHint: string };
   guestApply: {
@@ -81,7 +81,7 @@ test.beforeEach(async ({ context, baseURL }) => {
 
 /** #492: etykieta deklaracji wieku; serwer fixture nie ma bazy → próg awaryjny 18. */
 function ageLabel(t: Messages): string {
-  return t.auth.ageConfirm.replace('{age}', '18');
+  return t.auth.ageBandAdult.replace('{age}', '18');
 }
 
 async function openGuestForm(page: Page, locale: Locale, width: number, slug = JOB_SLUG) {
@@ -122,14 +122,14 @@ for (const locale of LOCALES) {
     await expect(form.getByRole('checkbox', { name: privacyAckName(t) })).toHaveAccessibleDescription(
       t.guestApply.error.privacyNoticeRequired,
     );
-    await expect(form.getByRole('checkbox', { name: ageLabel(t) })).toHaveAccessibleDescription(
+    await expect(form.getByRole('radio', { name: ageLabel(t) })).toHaveAccessibleDescription(
       new RegExp(t.guestApply.error.ageConfirmRequired),
     );
     expect(actions).toHaveLength(0);
 
     await name.fill('Anna Nowak');
     await email.fill('anna@example.com');
-    await form.getByRole('checkbox', { name: ageLabel(t) }).click();
+    await form.getByRole('radio', { name: ageLabel(t) }).click();
     await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
     await submit.click();
 
@@ -156,7 +156,7 @@ test('#492: bez deklaracji wieku zgłoszenie nie wychodzi, fokus na deklaracji',
   await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
   await form.getByRole('button', { name: t.apply.submit }).click();
 
-  const age = form.getByRole('checkbox', { name: ageLabel(t) });
+  const age = form.getByRole('radio', { name: ageLabel(t) });
   await expect(age).toHaveAttribute('aria-invalid', 'true');
   await expect(age).toBeFocused();
   await expect(dialog.getByTestId('guest-apply-sent')).toHaveCount(0);
@@ -171,7 +171,7 @@ test('pytania screeningowe (#101): gość musi odpowiedzieć na wymagane, potem 
   const { t, dialog, form } = await openGuestForm(page, 'pl', 1280, SCREENING_JOB_SLUG);
   await form.getByRole('textbox', { name: t.guestApply.fullName }).fill('Anna Nowak');
   await form.getByRole('textbox', { name: t.guestApply.email }).fill('anna@example.com');
-  await form.getByRole('checkbox', { name: ageLabel(t) }).click();
+  await form.getByRole('radio', { name: ageLabel(t) }).click();
   await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
   await form.getByRole('button', { name: t.apply.submit }).click();
 
@@ -191,7 +191,7 @@ test('#495: NISS w wiadomości gościa — błąd przy polu, bez wysłania zgło
   const message = form.getByRole('textbox', { name: t.apply.message });
   // Syntetyczny numer z poprawną sumą kontrolną.
   await message.fill('Mój NISS: 85.07.30-033.28');
-  await form.getByRole('checkbox', { name: ageLabel(t) }).click();
+  await form.getByRole('radio', { name: ageLabel(t) }).click();
   await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
   await form.getByRole('button', { name: t.apply.submit }).click();
 

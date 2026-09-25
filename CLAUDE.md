@@ -666,25 +666,32 @@ unit `profile-visibility`; E2E `candidate-profile-visibility.spec`. **Otwarte:**
 od firmy odsłania jej imię i kontakt z konta (`company_can_view_candidate` po `offers`) —
 decyzja produktowo-prawna (#485/#34).
 
-Polityka wieku kandydatów (#492, migracja `0126`): próg jako dane
-(`age_policy`, zakres 13–18, domyślnie 18, `confirmed=false` = do zatwierdzenia przez
-właściciela po przeglądzie prawnym; zmiana tylko `admin_set_candidate_min_age` z uzasadnieniem
-i audytem `age_policy.updated`). Minimalizacja: oświadczenie „mam co najmniej N lat” bez daty
-urodzenia (`candidate_age_attestations`, niezmienne, RPC-only). Deklaracja: rejestracja
-kandydata (`AgeDeclarationField` — osobny komponent obok zgód #493; Better Auth przez trigger
-`auth.record_signup_receipts` w transakcji konta; odmowa progu → `AGE_ATTESTATION_REQUIRED`; RPC service_role
-`record_candidate_age_attestation` zostaje dla kont zakładanych poza formularzem),
-formularz gościa (`p_age_attested_min` → wrapper `submit_guest_application`), sekcja „Wiek”
-w `/candidate/ustawienia` (`attest_candidate_age`). Egzekwowanie w bazie triggerami: aplikacja
-i przejęcie aplikacji gościa, propozycja (neutralny błąd), włączenie widoczności (#494),
-zgłoszenie gościa. Podniesienie progu od razu ukrywa profile z niższą deklaracją. Formularze
-pokazują próg z `candidate_min_age()` (błąd odczytu → 18). Dowód: `rls.sql` sekcja AGE492
-(kontrole ujemne: bez triggera aplikacja/gość bez deklaracji przechodzą); unit `age-policy`;
-E2E `auth-age-declaration`, `guest-apply`. Szkic pytań prawnych (nieopublikowany):
-`docs/legal-drafts/kandydaci-niepelnoletni.md`. **Otwarte (właściciel/prawnik):** wybór
-wariantu, treść regulaminu/polityki, wariant z niepełnoletnimi (zgoda opiekuna, oznaczenie
-ofert, ograniczenia kontaktu/CV/AI), procedura dla wykrytego konta osoby niepełnoletniej,
-UI zmiany progu w panelu admina.
+Polityka wieku kandydatów (#492, #576, migracja `0126`). Decyzja właściciela 25.09.2026
+(LAUNCH-1): konto kandydata od 16 lat, widoczność profilu dla firm (#494) tylko 18+, młodsi bez
+konta. Próg konta jako dane (`age_policy`: 16 albo 18, domyślnie 16, `confirmed=true`; zmiana
+tylko `admin_set_candidate_min_age` z uzasadnieniem i audytem `age_policy.updated`). Minimalizacja:
+potwierdzenie PRZEDZIAŁU „16–17” / „18 lub więcej” bez daty urodzenia (`candidate_age_attestations.min_age`
+= 16 albo 18, niezmienne, RPC-only; po ukończeniu 18 lat nowe potwierdzenie 18+). Deklaracja:
+rejestracja kandydata (`AgeDeclarationField` — radiogroup obok zgód #493; Better Auth przez trigger
+`auth.record_signup_receipts` w transakcji konta; poniżej progu → `AGE_ATTESTATION_REQUIRED`; RPC
+service_role `record_candidate_age_attestation` dla kont spoza formularza), formularz gościa
+(`p_age_attested_min` → wrapper `submit_guest_application`), sekcja „Wiek” w `/candidate/ustawienia`
+(`attest_candidate_age`; konto 16–17 widzi ograniczenie i potwierdza 18+). Egzekwowanie w bazie
+triggerami: aplikacja i przejęcie aplikacji gościa, propozycja (neutralny błąd), zgłoszenie gościa;
+włączenie widoczności (`set_candidate_searchable` i każda inna ścieżka) tylko przy 18+
+(`candidate_is_adult`, `AGE_ADULT_REQUIRED` → UI: wyłączony przełącznik z wyjaśnieniem
+`profileVisibility.requiresAdult`); migracja jednorazowo ukrywa profile bez 18+. Lejek ofert
+(#99) dla 16–17 = brak zgody: znacznik urządzenia `pracujbe.funnel.minor` (panel kandydata po
+odczycie z bazy — `FunnelMinorMarker`; rejestracja/gość po wyborze 16–17) → `sendFunnelEvent` nic
+nie wysyła; potwierdzenie 18+ zdejmuje znacznik. Formularze pokazują przedziały od
+`candidate_min_age()` (błąd odczytu → tylko 18+). Dowód: `rls.sql` sekcja AGE492 (kontrole ujemne:
+bez triggera aplikacja/gość bez deklaracji przechodzą, konto 16–17 staje się wyszukiwalne — AGE11n);
+unit `age-policy` (lejek z kontrolą ujemną), `profile-visibility`, `guest-apply-form`; E2E
+`auth-age-declaration`, `guest-apply`. Szkic (nieopublikowany): `docs/legal-drafts/kandydaci-niepelnoletni.md`.
+**Otwarte (właściciel/prawnik):** treść informacji o wieku (`07-wiek.md`) po akceptacji, kontakt
+osób poniżej 16 lat z udziałem opiekuna, oznaczenie ofert dla młodocianych, procedura dla
+wykrytego konta poniżej progu, UI zmiany progu w panelu admina, test sieciowy lejka PRIV-01
+(unload, dwie karty) dla znacznika.
 
 Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
 `/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja

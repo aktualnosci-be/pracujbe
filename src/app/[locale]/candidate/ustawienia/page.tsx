@@ -85,7 +85,10 @@ export default async function CandidateSettingsPage({
       )}
 
       {visibility.status === 'ready' ? (
-        <ProfileVisibilitySettings initial={visibility} />
+        <ProfileVisibilitySettings
+          initial={visibility}
+          adult={age.status === 'ready' && age.attestedMinAge !== null ? age.isAdult : undefined}
+        />
       ) : (
         <section aria-labelledby="profile-visibility-title" className={PAPER}>
           <h2 id="profile-visibility-title" className={H2_EXTENDED}>

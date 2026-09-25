@@ -108,7 +108,7 @@ for (const { slug, employer } of pages) {
     await page.locator('#agreeTerms').check();
     await page.locator('#privacyNoticeAck').check();
     // #492: rejestracja kandydata wymaga też deklaracji wieku (osobne pole, nie zgoda).
-    if (!employer) await page.locator('#ageConfirmed').check();
+    if (!employer) await page.locator('#ageConfirmed-18').check();
     await page.locator('form button[type="submit"]').click();
     await expect(page.locator('main').getByRole('alert')).toBeVisible();
     expect(bodies).toHaveLength(1);
