@@ -11,7 +11,7 @@ import { captureError } from '@/lib/sentry';
  * Server Actions panelu kampanii e-mail (#45, `/admin/kampanie`).
  *
  *   - `activateEmailCampaign` — aktywuje szkic rewizji przez `admin_activate_email_campaign`
- *     (0109: is_admin(), CAS statusu, audyt). NIE wysyła niczego sama — odbiorców kolejkuje
+ *     (0111: is_admin(), CAS statusu, audyt). NIE wysyła niczego sama — odbiorców kolejkuje
  *     harmonogram. Bez kompletu konfiguracji nadawcy marketingu (`campaignSendingReady`)
  *     odmawia PRZED wywołaniem bazy (`reason: 'senderMissing'`).
  *   - `cancelEmailCampaign` — zatrzymuje rewizję przez `admin_cancel_email_campaign`

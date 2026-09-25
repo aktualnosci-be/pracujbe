@@ -987,7 +987,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   kontrola odebranego `.eml` na produkcji; treść prawna zgody marketingowej (#40). **Otwarte:**
   tworzenie rewizji kampanii z panelu (dziś `create_email_campaign_revision`, service_role),
   prawdziwa pauza z wznowieniem (wymaga zmiany `claim_email_batch`), rejestracja z opt-in marketingu.
-  Panel kampanii (#45, migracja `0109`, numer tymczasowy): `/admin/kampanie` — rewizje
+  Panel kampanii (#45, migracja `0111`): `/admin/kampanie` — rewizje
   (filtr statusu, slug, kursor) z liczbami odbiorców według statusu (bez adresów),
   `/admin/kampanie/[id]` — podgląd treści w każdym języku (walidacja jak worker,
   `src/lib/admin/campaigns.ts`), rewizje sluga, „Aktywuj rewizję”/„Zatrzymaj wysyłkę” z dialogiem

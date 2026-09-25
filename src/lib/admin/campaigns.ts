@@ -2,7 +2,7 @@
  * Kampanie e-mail w panelu administratora (#45, `/admin/kampanie`) — czyste reguły, bez DB.
  *
  *   - statusy rewizji (`email_campaigns.status`, 0101) i filtr listy,
- *   - dozwolone akcje admina (lustro macierzy w RPC `admin_*_email_campaign`, 0109),
+ *   - dozwolone akcje admina (lustro macierzy w RPC `admin_*_email_campaign`, 0111),
  *   - statusy odbiorców (`email_campaign_recipients.status`) — w panelu same liczby,
  *   - gotowość wysyłki marketingu: jawny nadawca (`marketingSenderFromEnv`) i sekret linku
  *     wypisania. Bez kompletu worker i tak nie wyśle listu marketingowego (`renderDelivery`),
@@ -52,7 +52,7 @@ export function campaignStatusesFor(filter: CampaignFilter): CampaignStatus[] | 
 }
 
 /* ---------------------------------------------------------------------------
- * Akcje (lustro RPC 0109)
+ * Akcje (lustro RPC 0111)
  * ------------------------------------------------------------------------- */
 
 /** Aktywować można tylko szkic (`admin_activate_email_campaign`). */

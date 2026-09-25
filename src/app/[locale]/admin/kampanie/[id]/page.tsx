@@ -42,7 +42,7 @@ import {
  * Stan rewizji, liczby odbiorców według statusu (bez adresów), podgląd treści w KAŻDYM języku
  * serwisu (list idzie w języku odbiorcy — Invariant #1; „niepoprawna treść” = worker jej nie
  * wyrenderuje), rewizje tego sluga oraz aktywacja/zatrzymanie (`EmailCampaignActions`, RPC
- * z CAS i audytem, 0109). Bez konfiguracji nadawcy marketingu — komunikat i brak aktywacji.
+ * z CAS i audytem, 0111). Bez konfiguracji nadawcy marketingu — komunikat i brak aktywacji.
  */
 
 export const dynamic = 'force-dynamic';
