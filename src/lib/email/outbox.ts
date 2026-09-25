@@ -1,7 +1,5 @@
 import 'server-only';
 
-import { Resend } from 'resend';
-
 import { withServiceRole } from '@/lib/db/portal';
 import { execute, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import { renderEmail } from '@/emails/templates';
@@ -27,13 +25,15 @@ import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
 import { captureError } from '@/lib/sentry';
 import { isProductionMode } from '@/lib/env';
+import { emailProviderFromEnv, mailTransportFromEnv, MailSendError } from '@/lib/email/transport';
 
 /**
  * Worker kolejki e-mail (outbox) — P1-13.
  *
  * Pobiera zakolejkowane wiadomości (`email_deliveries.status='queued'`, `next_attempt_at<=now`),
  * renderuje szablon React Email W JĘZYKU ODBIORCY (kolumna `locale`, ustawiona w DB wg
- * INVARIANTU #1) i wysyła przez Resend. Aktualizuje status/attempts/error/next_attempt_at.
+ * INVARIANTU #1) i wysyła przez dostawcę z `EMAIL_PROVIDER` (EmailLabs albo Resend —
+ * `src/lib/email/transport`). Aktualizuje status/attempts/error/next_attempt_at.
  *
  * Zapis domenowy (aplikacja/propozycja) jest niezależny: błąd dostawcy NIE usuwa rekordu —
  * zwiększa `attempts` i planuje ponowienie (backoff), a po `MAX_ATTEMPTS` oznacza `failed`.
@@ -188,16 +188,17 @@ export interface ProcessResult {
 }
 
 export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
-  const apiKey = process.env.RESEND_API_KEY;
+  const transport = mailTransportFromEnv();
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
-  if (!apiKey) {
-    // Brak klucza w PRODUKCJI = błąd konfiguracji (503, alarm). W demo = oczekiwane (200).
+  if (!transport) {
+    // Brak dostawcy w PRODUKCJI = błąd konfiguracji (503, alarm). W demo = oczekiwane (200).
+    const { provider } = emailProviderFromEnv();
     return {
       processed: 0,
       sent: 0,
       failed: 0,
-      skipped: 'RESEND_API_KEY not set',
+      skipped: provider ? `${provider} not configured` : 'email provider not configured',
       ok: !isProductionMode(),
     };
   }
@@ -215,7 +216,6 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     return { processed: 0, sent: 0, failed: 0, skipped: 'claim error', ok: false };
   }
 
-  const resend = new Resend(apiKey);
   const unsubscribeSecret = unsubscribeSecretFromEnv();
   let sent = 0;
   let failed = 0;
@@ -319,9 +319,11 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         continue;
       }
 
-      // P1-17: idempotency key = delivery.id — jeśli po wysyłce zapis 'sent' zawiedzie i
-      // wiersz wróci do puli, ponowna wysyłka jest deduplikowana po stronie Resend (bez dubletu).
-      const result = await resend.emails.send(
+      // P1-17: klucz idempotencji = delivery.id — jeśli po wysyłce zapis 'sent' zawiedzie i
+      // wiersz wróci do puli, ponowienie nie tworzy drugiego listu (Resend: Idempotency-Key,
+      // EmailLabs: stały messageId + sprawdzenie przed wysyłką). Transport potwierdza wysyłkę
+      // tylko z identyfikatorem wiadomości od dostawcy.
+      const result = await transport.send(
         {
           from,
           to: row.to_email,
@@ -333,11 +335,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         { idempotencyKey: row.id },
       );
 
-      if (result.error) {
-        throw new Error(result.error.message);
-      }
-
-      const providerMessageId = result.data?.id ?? null;
+      const providerMessageId = result.id;
       // Zapis wyniku PO wysyłce — osobna transakcja (bez otwartej transakcji w trakcie HTTP).
       // SEC-15: e-mail WYSŁANY, ale zapis „sent" się nie powiódł — stan niejednoznaczny.
       // Bez tego rekord wróciłby do 'queued' (po wygaśnięciu dzierżawy) i został wysłany PONOWNIE
@@ -349,17 +347,17 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
             tx,
             'email.outbox.mark-sent',
             `UPDATE public.email_deliveries
-                SET status = 'sent', sent_at = now(), provider = 'resend',
+                SET status = 'sent', sent_at = now(), provider = $4,
                     provider_message_id = $2, attempts = $3, locked_at = NULL
               WHERE id = $1`,
-            [row.id, providerMessageId, row.attempts + 1],
+            [row.id, providerMessageId, row.attempts + 1, transport.provider],
           ),
         );
       } catch (markErr) {
         captureError(markErr, {
           area: 'email.outbox.markSent',
           deliveryId: row.id,
-          providerMessageId: providerMessageId ?? 'unknown',
+          providerMessageId,
         });
       }
       sent += 1;
@@ -380,7 +378,8 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
               row.id,
               isFinal ? 'failed' : 'queued',
               attempts,
-              err instanceof Error ? err.message.slice(0, 500) : 'unknown',
+              // Kod błędu dostawcy zamiast jego komunikatu (może zawierać adres odbiorcy).
+              err instanceof MailSendError ? err.message : err instanceof Error ? err.message.slice(0, 500) : 'unknown',
               new Date(Date.now() + backoffMin * 60_000).toISOString(),
             ],
           ),
