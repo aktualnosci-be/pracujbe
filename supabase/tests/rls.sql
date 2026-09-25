@@ -5259,7 +5259,7 @@ select pg_temp.assert(
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- SS108. Zapisane wyszukiwania — dokończenie #100 (0123): zmiana nazwy (RPC-only, tylko
+-- SS108. Zapisane wyszukiwania — dokończenie #100 (0124): zmiana nazwy (RPC-only, tylko
 -- własne, limit długości), wyłączenie JEDNEGO alertu z linku w e-mailu (service_role,
 -- tylko właściciel z tokenu), wygaszanie zakolejkowanego digestu przy claimie i ponowna
 -- kontrola tuż przed wysyłką (email_delivery_send_check).
@@ -9698,7 +9698,7 @@ select pg_temp.assert(
      where profile_id = :'ESR' and status = 'failed' and suppressed_at is not null
        and error_message = 'suppressed_recipient_unauthorized' and locked_at is null) = 3,
   'ES503-2 wiersze b. recruitera wygaszone przy claimie (ślad zostaje, nic nie wychodzi)');
--- ES503-2b (0123): claim i kontrola tuż przed wysyłką idą przez
+-- ES503-2b (0124): claim i kontrola tuż przed wysyłką idą przez
 -- email_delivery_suppression_reason — sprawdzenie odbiorcy z 0122 nie może zniknąć.
 select id as es_recheck from public.email_deliveries
  where profile_id = :'ESR' and template = 'newApplication' limit 1 \gset
@@ -9708,9 +9708,9 @@ select pg_temp.assert(
   (select public.email_delivery_suppression_reason(e.profile_id, e.template, e.to_email::text,
             e.campaign_id, e.entity_type, e.entity_id)
      from public.email_deliveries e where e.id = :'es_recheck') = 'suppressed_recipient_unauthorized',
-  'ES503-2b przyczyna wygaszenia (0123) zawiera uprawnienie odbiorcy z 0122');
+  'ES503-2b przyczyna wygaszenia (0124) zawiera uprawnienie odbiorcy z 0122');
 select pg_temp.assert(public.email_delivery_send_check(:'es_recheck') = 'suppressed_recipient_unauthorized',
-  'ES503-2c kontrola tuż przed wysyłką (0123) odmawia wysyłki do b. recruitera');
+  'ES503-2c kontrola tuż przed wysyłką (0124) odmawia wysyłki do b. recruitera');
 select pg_temp.assert(
   (select status::text = 'failed' and suppressed_at is not null
           and error_message = 'suppressed_recipient_unauthorized'

@@ -680,7 +680,7 @@ rejestruje parę w `saved_search_alerts` (PK = brak ponownej wysyłki), tworzy j
 język odbiorcy, opt-out `email_job_matches`); digest najwyżej raz na dobę/tydzień. Panel:
 `/candidate/wyszukiwania` (alert, częstotliwość, usunięcie). Dowód: `rls.sql` sekcja SS100;
 unit `saved-search-alerts`; E2E `saved-search.spec`.
-Dokończenie (migracja `0123`): zmiana nazwy w `/candidate/wyszukiwania`
+Dokończenie (migracja `0124`): zmiana nazwy w `/candidate/wyszukiwania`
 (RPC `rename_saved_search`: tylko własne, 1–80 znaków, bez znaków sterujących; cudze = `NOT_FOUND`).
 E-mail `jobMatch` ma link „Wyłącz tylko ten alert” → `/{locale}/wypisz-alert#t=` (noindex,
 token HMAC `src/lib/email/saved-search-alert-token.ts`: UUID konta + wyszukiwania, osobna
