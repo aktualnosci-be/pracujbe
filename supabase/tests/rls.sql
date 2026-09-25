@@ -5317,7 +5317,7 @@ select pg_temp.expect_error(
 select pg_temp.expect_error(
   'select public.saved_search_alert_unsubscribe(''' || :'SPA' || ''', ''' || :'sp1' || ''')',
   'permission denied', 'SS108-2d klient nie wywoła wyłączenia alertu z linku (tylko service_role)');
-select pg_temp.expect_error('select public.email_delivery_send_check(gen_random_uuid())',
+select pg_temp.expect_error('select public.email_delivery_send_check(gen_random_uuid(), gen_random_uuid())',
   'permission denied', 'SS108-2e klient nie wywoła kontroli przed wysyłką');
 reset role; reset app.current_uid;
 set role anon; select pg_temp.assert_client_role();
@@ -5384,8 +5384,12 @@ select id as sp_d4 from public.email_deliveries where idempotency_key = 'sp108-d
 select pg_temp.assert(
   (select count(*) from public.claim_email_batch(100000) c where c.id in (:'sp_d2', :'sp_d3', :'sp_d4')) = 3,
   'SS108-5 claim wydaje trzy wiersze (alert i zgody włączone)');
+-- #615 (0140): claim nadał token każdemu wierszowi — worker go niesie do kontroli tuż przed wysyłką.
+select lock_token as sp_d2_lt from public.email_deliveries where id = :'sp_d2' \gset
+select lock_token as sp_d3_lt from public.email_deliveries where id = :'sp_d3' \gset
+select lock_token as sp_d4_lt from public.email_deliveries where id = :'sp_d4' \gset
 set role service_role;
-select pg_temp.assert(public.email_delivery_send_check(:'sp_d2') is null,
+select pg_temp.assert(public.email_delivery_send_check(:'sp_d2'::uuid, :'sp_d2_lt'::uuid) is null,
   'SS108-5b KONTROLA UJEMNA: bez zmian kontrola przepuszcza wiersz');
 reset role;
 select pg_temp.assert(
@@ -5395,15 +5399,15 @@ select pg_temp.assert(
 -- Alert wyłączony z linku między claimem a wysyłką.
 set role service_role;
 select public.saved_search_alert_unsubscribe(:'SPA', :'sp2');
-select pg_temp.assert(public.email_delivery_send_check(:'sp_d3') = 'suppressed_alert_disabled',
+select pg_temp.assert(public.email_delivery_send_check(:'sp_d3'::uuid, :'sp_d3_lt'::uuid) = 'suppressed_alert_disabled',
   'SS108-5d alert wyłączony po claimie → kontrola zatrzymuje digest');
 -- Wypisanie z kategorii job_matches między claimem a wysyłką.
 select public.email_unsubscribe(:'SPA', 'job_matches');
-select pg_temp.assert(public.email_delivery_send_check(:'sp_d2') = 'suppressed_opt_out',
+select pg_temp.assert(public.email_delivery_send_check(:'sp_d2'::uuid, :'sp_d2_lt'::uuid) = 'suppressed_opt_out',
   'SS108-5e wypisanie z kategorii po claimie → kontrola zatrzymuje wiersz');
-select pg_temp.assert(public.email_delivery_send_check(:'sp_d4') is null,
+select pg_temp.assert(public.email_delivery_send_check(:'sp_d4'::uuid, :'sp_d4_lt'::uuid) is null,
   'SS108-5f inna kategoria (propozycje) nadal wychodzi');
-select pg_temp.assert(public.email_delivery_send_check(:'sp_d2') = 'not_queued',
+select pg_temp.assert(public.email_delivery_send_check(:'sp_d2'::uuid, :'sp_d2_lt'::uuid) = 'not_queued',
   'SS108-5g wiersz już wygaszony → not_queued (worker nic nie wysyła)');
 reset role;
 select pg_temp.assert(
@@ -9702,14 +9706,18 @@ select pg_temp.assert(
 -- email_delivery_suppression_reason — sprawdzenie odbiorcy z 0122 nie może zniknąć.
 select id as es_recheck from public.email_deliveries
  where profile_id = :'ESR' and template = 'newApplication' limit 1 \gset
-update public.email_deliveries set status = 'queued', suppressed_at = null, error_message = null
+-- #615 (0140): symulacja „worker nadal trzyma dzierżawę" — jawny świeży token, nie null.
+update public.email_deliveries set status = 'queued', suppressed_at = null, error_message = null,
+  lock_token = gen_random_uuid()
  where id = :'es_recheck';
+select lock_token as es_recheck_lt from public.email_deliveries where id = :'es_recheck' \gset
 select pg_temp.assert(
   (select public.email_delivery_suppression_reason(e.profile_id, e.template, e.to_email::text,
             e.campaign_id, e.entity_type, e.entity_id)
      from public.email_deliveries e where e.id = :'es_recheck') = 'suppressed_recipient_unauthorized',
   'ES503-2b przyczyna wygaszenia (0124) zawiera uprawnienie odbiorcy z 0122');
-select pg_temp.assert(public.email_delivery_send_check(:'es_recheck') = 'suppressed_recipient_unauthorized',
+select pg_temp.assert(
+  public.email_delivery_send_check(:'es_recheck'::uuid, :'es_recheck_lt'::uuid) = 'suppressed_recipient_unauthorized',
   'ES503-2c kontrola tuż przed wysyłką (0124) odmawia wysyłki do b. recruitera');
 select pg_temp.assert(
   (select status::text = 'failed' and suppressed_at is not null
@@ -9717,7 +9725,7 @@ select pg_temp.assert(
      from public.email_deliveries where id = :'es_recheck'),
   'ES503-2c2 wiersz wygaszony z przyczyną (ślad zostaje)');
 select pg_temp.assert(
-  (select public.email_delivery_send_check(id) is null from public.email_deliveries
+  (select public.email_delivery_send_check(id, lock_token) is null from public.email_deliveries
      where profile_id = :'ESO' and template = 'newApplication' and status = 'queued' limit 1),
   'ES503-2d kontrola dodatnia: aktywny właściciel przechodzi kontrolę przed wysyłką');
 select pg_temp.assert(
@@ -11386,5 +11394,100 @@ select pg_temp.expect_error(
   'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 60000)',
   'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
 rollback;
+
+-- ============================================================================
+-- WL615E83B29 (#615): worker poczty — CAS na dzierżawie wiersza kolejki (`lock_token`, 0140).
+--
+-- Bez tokenu `email_delivery_send_check(id)` (0124) sprawdzał tylko `status = 'queued'`, więc
+-- worker, którego dzierżawa wygasła (padł/zawiesił się), a wiersz przejął inny worker, i tak
+-- dostawał zielone światło (null = wolno wysyłać) — WL615-6 odtwarza dokładnie tę starą logikę
+-- i pokazuje, że nadal zwraca null mimo utraconej dzierżawy (dowód luki). Naprawa (0140):
+-- `claim_email_batch` nadaje NOWY `lock_token` przy KAŻDYM (ponownym) claimie;
+-- `email_delivery_send_check(id, lock_token)` zwraca `lease_lost` i NIE dotyka wiersza, gdy
+-- token się nie zgadza (wiersz należy już do innego workera). CAS na mark-sent/mark-failed/
+-- defer w samym workerze (JS) — `tests/unit/email-outbox-lease.test.ts`.
+-- ============================================================================
+\set WLU 'e6150000-0000-0000-0000-0000000000a1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'WLU','wl615@test.be','Wl A','{"role":"candidate","first_name":"Wl","last_name":"A","locale":"pl"}');
+select public.enqueue_email(:'WLU', 'jobPublished', 'job', gen_random_uuid(), 'wl615-1', '{"jobTitle":"X"}'::jsonb);
+
+-- Worker A claimuje jako pierwszy — dostaje token A (limit wysoki: kolejka może nieść zaległe
+-- wiersze z wcześniejszych sekcji, jak w innych testach tego pliku, np. UN45/I8).
+set role service_role;
+select id, lock_token from public.claim_email_batch(100000, 300) where idempotency_key = 'wl615-1' \gset wl615_a_
+reset role;
+select pg_temp.assert(:'wl615_a_id' is not null, 'WL615-1 claim zwraca nasz wiersz');
+select pg_temp.assert(:'wl615_a_lock_token' is not null, 'WL615-1b claim nadaje lock_token');
+
+-- Dzierżawa A wygasa (worker padł/zawiesił się na dostawcy) — symulujemy upływ czasu.
+update public.email_deliveries set locked_at = now() - interval '10 minutes'
+ where idempotency_key = 'wl615-1';
+
+-- Worker B claimuje TEN SAM wiersz (wygasła dzierżawa) — dostaje NOWY token, różny od A.
+set role service_role;
+select lock_token from public.claim_email_batch(100000, 300) where idempotency_key = 'wl615-1' \gset wl615_b_
+reset role;
+select pg_temp.assert(:'wl615_b_lock_token' is not null
+    and :'wl615_b_lock_token' is distinct from :'wl615_a_lock_token',
+  'WL615-2 ponowny claim nadaje NOWY token, różny od poprzedniego');
+
+-- Worker A (NIEAKTUALNY token) woła kontrolę tuż przed wysyłką — MUSI dostać lease_lost
+-- i NIE MOŻE dotknąć wiersza (należy już do B): status/lock_token bez zmian.
+-- (Wynik NIE idzie przez \gset: dla WL615-4 jest NULL, a \gset na NULL kasuje zmienną
+-- zamiast ją ustawić — wołamy funkcję wprost wewnątrz assert, jak w SS108-5/ES503-2.)
+set role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check(:'wl615_a_id'::uuid, :'wl615_a_lock_token'::uuid) = 'lease_lost',
+  'WL615-3 worker z wygasłą dzierżawą dostaje lease_lost, NIE null/wygaszenie');
+reset role;
+select pg_temp.assert(
+  (select status = 'queued' and lock_token::text = :'wl615_b_lock_token'
+     from public.email_deliveries where idempotency_key = 'wl615-1'),
+  'WL615-3b wiersz nietknięty przez A — nadal należy do B (status queued, token B)');
+
+-- Worker B (AKTUALNY token) przechodzi kontrolę normalnie (brak przyczyny wygaszenia → null).
+set role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check(:'wl615_a_id'::uuid, :'wl615_b_lock_token'::uuid) is null,
+  'WL615-4 worker z aktualnym tokenem może wysłać (null)');
+reset role;
+
+-- WL615-5: uprawnienia na nowej sygnaturze — tylko service_role.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.email_delivery_send_check(%L::uuid, %L::uuid)', :'wl615_a_id', :'wl615_b_lock_token'),
+  'permission denied', 'WL615-5 anon bez EXECUTE');
+reset role;
+set role authenticated; set app.current_uid = :'WLU'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.email_delivery_send_check(%L::uuid, %L::uuid)', :'wl615_a_id', :'wl615_b_lock_token'),
+  'permission denied', 'WL615-5b zalogowany kandydat (właściciel wiersza) bez EXECUTE');
+reset role; reset app.current_uid;
+select pg_temp.expect_error(
+  'select public.email_delivery_send_check(''' || :'wl615_a_id' || '''::uuid)',
+  'does not exist', 'WL615-5c stara sygnatura jednoargumentowa (0124) usunięta');
+
+-- WL615-6 (KONTROLA UJEMNA): logika 0124 bez tokenu — odtworzona wprost — nadal zwraca null
+-- (zielone światło) dla WYGASŁEJ dzierżawy A, mimo że wiersz należy już do B. To jest dokładnie
+-- luka z #615: bez CAS na tokenie stary worker dostałby pozwolenie na wysyłkę.
+create function pg_temp.wl615_send_check_0124(p_id uuid) returns text
+language plpgsql as $$
+declare v_row public.email_deliveries%rowtype; v_reason text;
+begin
+  select * into v_row from public.email_deliveries d where d.id = p_id for update;
+  if v_row.id is null or v_row.status <> 'queued' then return 'not_queued'; end if;
+  v_reason := public.email_delivery_suppression_reason(
+    v_row.profile_id, v_row.template, v_row.to_email::text, v_row.campaign_id,
+    v_row.entity_type, v_row.entity_id);
+  if v_reason is not null then
+    update public.email_deliveries set status = 'failed', suppressed_at = now(),
+      error_message = v_reason, locked_at = null where id = v_row.id;
+  end if;
+  return v_reason;
+end $$;
+select pg_temp.assert(pg_temp.wl615_send_check_0124(:'wl615_a_id'::uuid) is null,
+  'WL615-6 KONTROLA UJEMNA: bez tokenu stary worker (A) dostałby zielone światło mimo utraconej dzierżawy');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

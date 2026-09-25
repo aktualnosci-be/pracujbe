@@ -667,6 +667,7 @@ Tabele w migracjach: 97; z danymi osobowymi: 61; bez danych osobowych: 36.
 | `error_message` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0006_messaging.sql` |
 | `provider_message_id` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0006_messaging.sql` |
 | `bounce_type` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0098_email_delivery_events.sql` |
+| `lock_token` | nie dotyczy: Token dzierżawy workera (0140, #615) — losowy identyfikator do CAS, nie dane osobowe. | — |
 
 ### `public.email_recipient_windows`
 
