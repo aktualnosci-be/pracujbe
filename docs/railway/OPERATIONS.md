@@ -72,7 +72,8 @@ Tworzy jednorazową bazę z migracjami, 20 000 syntetycznych ofert (16 000
 aktywnych) z tytułami PL/RO/UK/FR/NL/EN i miastami w kilku zapisach. Dla każdego
 zapytania wypisuje liczbę wyników `get_public_jobs_count` oraz czas i węzeł
 planu ciała `get_public_jobs` (auto_explain, drugie wywołanie w sesji).
-Porównuje stan bez indeksu `idx_jobs_city_trgm` (sprzed `0096`) i z nim.
+Porównuje stan przed migracjami po `BENCH_BASELINE` (domyślnie `0108`) i po nich.
+Tabela niżej = pomiar z 24.09.2026 dla `0096` (indeks miasta).
 
 Wyniki z 24.09.2026 (lokalnie, czas w ms):
 
@@ -118,14 +119,53 @@ Wnioski:
    wieloznaczne (`50%` dopasuje wszystko). To dotyczy poprawności wyników.
    Dane innych ofert nie są przez to dostępne.
 
-**Follow-up (wymaga zmiany `get_public_jobs`/`_count`/facet, więc po scaleniu #188):**
-osobna kolumna wyszukiwania (np. `search_text` z `unaccent(lower(tytuł + tłumaczenia))`
-utrzymywana triggerem) z indeksem GIN `gin_trgm_ops`, literalne escapowanie
-`%`/`_`/`\` przed ILIKE, normalizacja miasta przez kanoniczną listę aliasów
-(`src/lib/matching/belgian-cities.ts`). Ponowny pomiar tym samym skryptem.
-`unaccent` jest rozszerzeniem contrib ze standardowej dystrybucji PostgreSQL;
-jego włączenie wymaga migracji z `create extension` (sprawdź dostępność na
-Railway przed migracją: `select * from pg_available_extensions where name = 'unaccent'`).
+### Po `0110` — wyszukiwanie bez diakrytyków i literalne `%`/`_` (25.09.2026)
+
+`0110_search_unaccent.sql` zmienia warunki słowa kluczowego i miasta w
+`get_public_jobs`/`_count`/`get_public_job_filter_facets` (pozostałe parametry
+i granty jak w `0091`):
+
+- obie strony porównania składa `search_fold(text)` = `lower(unaccent(…))`
+  ze stałym słownikiem (IMMUTABLE, indeksowalne); cyrylicę słownik zostawia
+  bez zmian (poza `ё`), rumuńskie `ș`/`ț` i polskie `ł` składa;
+- wpis użytkownika trafia do `LIKE` jako literał (`search_like_pattern`
+  escapuje `\`, `%`, `_`), więc `50%` szuka napisu „50%”;
+- prefiltry przez indeksy GIN `gin_trgm_ops` na `search_fold(title)`
+  (oferty, tłumaczenia) i `search_fold(city)`; dokładny warunek na tytule
+  wyświetlanym w locale zostaje. `idx_jobs_city_trgm` z `0096` zastąpił
+  `idx_jobs_city_fold_trgm`.
+
+Pomiar `npm run db:search-benchmark` (PG16 lokalnie, 20 000 ofert, 16 000
+aktywnych; „przed” = migracje do `BENCH_BASELINE=0107`, „po” = z migracją wyszukiwania, dziś `0110`):
+
+| Zapytanie (keyword / city) | Wyniki przed | Wyniki po | ms przed | ms po |
+|---|---:|---:|---:|---:|
+| `sprzątanie` / — | 0 | 0 | 947 | 3 |
+| `sprzątania` / — | 889 | 889 | 824 | 74 |
+| `sprzatania` / — | **0** | 889 | 895 | 81 |
+| `SPRZATANIA` / — | **0** | 889 | 964 | 134 |
+| `50%` / — | 0 | 0 | 993 | 4 |
+| `_` / — | **16000** | 0 | 1034 | 286 |
+| `sofer` / — | **0** | 889 | 883 | 99 |
+| `Водій` / — | 889 | 889 | 878 | 68 |
+| `Preparateur` / — | **0** | 889 | 992 | 168 |
+| `warehouse` / — | 888 | 888 | 1041 | 121 |
+| — / `Bruxelles` | 1340 | 1340 | 72 | 144 |
+| — / `Liège` | 1339 | 1339 | 88 | 79 |
+| — / `Liege` | **0** | 1339 | 8 | 101 |
+| — / `Brussels` | 0 | 0 | 7 | 3 |
+| `Kierowca` / `Gent` | 74 | 74 | 84 | 88 |
+
+Wnioski: słowo kluczowe jest 6–300× szybsze, bo wiersze bez trafienia w
+tytule lub tłumaczeniu odpadają przed złączeniem LATERAL. Miasto o wielu
+trafieniach kosztuje podobnie jak dotąd (składanie tylko w prefiltrze).
+`_`/`%` przestały dopasowywać wszystko. Czasy PG18 (Railway) do ponownego
+pomiaru na kopii produkcyjnej bazy.
+
+**Nadal otwarte:** odmiana (`sprzątanie` ≠ „sprzątania”) i aliasy miast
+w innych językach w SQL (`Brussels`, `Luik`; dziś rozwija je aplikacja przez
+`src/lib/job-list-query.ts`). Przed wdrożeniem `0110` sprawdź na Railway:
+`select * from pg_available_extensions where name = 'unaccent'`.
 
 ## 4. Rollback — kod, schemat, dane
 

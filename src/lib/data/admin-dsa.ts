@@ -56,6 +56,8 @@ export interface AdminAppealRow {
     decidedAt: string;
   };
   report: { id: string; caseNumber: string; targetType: string; category: string | null };
+  /** Odwołanie zgłaszającego od cofnięcia ograniczenia (0109) — cofnięcie, którego dotyczy. */
+  restoration: { restoredAt: string; reason: string | null } | null;
 }
 
 export type AdminAppealsResult =
@@ -72,7 +74,10 @@ const APPEAL_SELECT = `
               FROM public.moderation_decisions md WHERE md.id = a.decision_id) d) AS decision,
          (SELECT to_json(r) FROM (
             SELECT rp.id, rp.case_number, rp.target_type, rp.category
-              FROM public.reports rp WHERE rp.id = a.report_id) r) AS report
+              FROM public.reports rp WHERE rp.id = a.report_id) r) AS report,
+         (SELECT to_json(x) FROM (
+            SELECT mr.restored_at, mr.reason, mr.restored_by
+              FROM public.moderation_restorations mr WHERE mr.id = a.appealed_restoration_id) x) AS restoration
     FROM public.moderation_appeals a`;
 
 function mapAppeal(row: Record<string, unknown>, viewerId: string | null, otherAdmins: boolean): AdminAppealRow | null {
@@ -81,7 +86,9 @@ function mapAppeal(row: Record<string, unknown>, viewerId: string | null, otherA
   if (!isAppealStatus(status) || !isAppealRole(role)) return null;
   const d = asRecord(row['decision']);
   const r = asRecord(row['report']);
-  const decidedBy = asNullableString(d['decided_by']);
+  const rs = row['restoration'] ? asRecord(row['restoration']) : null;
+  // Odwołanie od cofnięcia rozpatruje ktoś inny niż osoba, która cofnęła (jak RPC, 0109).
+  const decidedBy = rs ? asNullableString(rs['restored_by']) : asNullableString(d['decided_by']);
   return {
     id: asString(row['id']),
     reference: asString(row['reference']),
@@ -109,6 +116,9 @@ function mapAppeal(row: Record<string, unknown>, viewerId: string | null, otherA
       targetType: asString(r['target_type']),
       category: asNullableString(r['category']),
     },
+    restoration: rs
+      ? { restoredAt: asString(rs['restored_at']), reason: asNullableString(rs['reason']) }
+      : null,
   };
 }
 

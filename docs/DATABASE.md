@@ -314,8 +314,36 @@ koordynatora migracji). Buduje na sprawie z 0094 i decyzji z 0099.
   `requireAdmin`.
 
 **Wartości tymczasowe (#40):** okno odwołania 6 miesięcy, termin rozpatrzenia 14 dni, retencja
-12 miesięcy; zakres publikacji raportu i przekazywania do bazy DSA. Harmonogram
-`dsa_retention_run(false)` — dopiero po ich zatwierdzeniu (dziś tylko ręcznie).
+12 miesięcy; zakres publikacji raportu i przekazywania do bazy DSA. Harmonogram: cron
+`/api/maintenance` woła `dsa_retention_run` wyłącznie za jawną flagą `DSA_RETENTION_MODE`
+(`dry-run` = podgląd z licznikami, `apply` = anonimizacja; brak/inna wartość = wyłączone,
+bez zapytania do bazy — `src/lib/admin/dsa-retention-mode.ts`). `apply` — dopiero po
+zatwierdzeniu wartości.
+
+### Odwołanie zgłaszającego od cofnięcia ograniczenia (0109)
+
+Migracja `0109_dsa_restoration_appeals.sql`
+rozszerza tę samą maszynę odwołań:
+
+- `moderation_appeals.appealed_restoration_id` — odwołanie od cofnięcia
+  (`moderation_restorations`), tylko zgłaszającego (CHECK), cofnięcie musi dotyczyć decyzji
+  odwołania (trigger). Unikaty: jedno odwołanie od decyzji i jedno od każdego cofnięcia.
+- Ręczne cofnięcie (`admin_restore_moderation`) kolejkuje e-mail `reportRestored` do
+  zgłaszającego w jego języku (profil → `resolve_recipient_locale`, gość — język formularza),
+  bez powodu cofnięcia i danych autora. Termin odwołania biegnie od faktycznego wysłania tego
+  e-maila (`moderation_restoration_informed_at`/`_appeal_deadline`).
+- `moderation_restoration_appealable(id)`: od cofnięcia po uwzględnionym odwołaniu autora
+  (albo przy jego odwołaniu w toku) i od cofnięcia decyzji, która już nie rozstrzyga sprawy —
+  `INVALID_TRANSITION` (e-mail też nie wychodzi).
+- `submit_report_restoration_appeal` (service_role, numer sprawy + kod, idempotentne) i
+  `admin_decide_appeal`: rozpatruje ktoś inny niż osoba, która COFNĘŁA ograniczenie;
+  uwzględnienie = nowa decyzja ograniczająca z `appeal_id` (jak przy braku działań).
+- `get_report_case` zwraca `restoration` (data, stan drogi odwołania, termin, odwołanie);
+  retencja czeka na koniec drogi odwołania od cofnięcia i czyści payload `reportRestored`;
+  raport ma `appeals.againstRestoration`, eksport nie przypisuje decyzji odwołania od cofnięcia.
+
+Dowód: `rls.sql` sekcja RA43 (kontrole ujemne: reguła recenzenta z 0104, retencja od chwili
+cofnięcia, złączenie odwołań po samej decyzji). Rollback: w nagłówku migracji.
 
 Dowód: `supabase/tests/rls.sql` sekcja APL43 — m.in. termin od poinformowania (e-mail w kolejce,
 odbity, doręczony 7 mies. temu), rozdzielenie rozpatrującego z kontrolą (jedyny admin),
