@@ -4,7 +4,7 @@
     "routeJsGzipKb": {
       "/[locale]/(public)/page": 173,
       "/[locale]/(public)/oferty-pracy/page": 175,
-      "/[locale]/(public)/oferty-pracy/[slug]/page": 244,
+      "/[locale]/(public)/oferty-pracy/[slug]/page": 243,
       "/[locale]/(public)/poradniki/[slug]/page": 162,
       "/[locale]/(auth)/logowanie/page": 194
     },
