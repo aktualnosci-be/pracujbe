@@ -126,7 +126,7 @@ describe('inviteTeamMember (#403)', () => {
     expect(noCompany.calls).toHaveLength(0);
   });
 
-  it('0109: język zaproszenia i token — do bazy tylko hash tokenu i nonce', async () => {
+  it('0115: język zaproszenia i token — do bazy tylko hash tokenu i nonce', async () => {
     const db = client({ data: [{ invitation_id: INVITE, created: true }], error: null });
     expect(await inviteTeamMember({ email: 'nowy@firma.be', role: 'member', locale: 'nl' })).toEqual({ ok: true });
     const args = db.calls[0]?.args as Record<string, string>;

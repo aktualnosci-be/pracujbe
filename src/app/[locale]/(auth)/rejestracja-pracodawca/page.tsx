@@ -12,7 +12,7 @@ import { EmployerSignupEntry } from '@/components/auth/EmployerSignupEntry';
  * `registerEmployer` (rola = employer, nazwa firmy w metadanych do dalszego onboardingu),
  * zapisuje `preferred_locale` = bieżące locale i przekierowuje do potwierdzenia e-maila.
  *
- * Link z zaproszenia do zespołu (0109, `#token=` we fragmencie) przełącza formularz na
+ * Link z zaproszenia do zespołu (0115, `#token=` we fragmencie) przełącza formularz na
  * rejestrację bez nazwy firmy (`EmployerSignupEntry`); zaproszenie czeka potem w panelu.
  *
  * Zalogowany pracodawca nie widzi formularza nowego konta (#365): trafia do panelu, który

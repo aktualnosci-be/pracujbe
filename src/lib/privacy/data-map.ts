@@ -571,7 +571,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       signup_token_hash: 'credentials',
       signup_token_used_at: 'credentials',
     },
-    note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0109); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
+    note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0115); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
   },
   'public.company_vies_checks': {
     activities: ['companies'],
@@ -862,6 +862,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.certificates': DICTIONARY('certyfikaty'),
   'public.languages': DICTIONARY('języki'),
   'public.locations': DICTIONARY('miejscowości'),
+  'public.location_aliases': DICTIONARY('nazwy miejscowości PL/NL/FR/EN'),
   'public.occupations': DICTIONARY('zawody'),
   'public.skills': DICTIONARY('umiejętności'),
   'public.occupation_labels': DICTIONARY('etykiety zawodów ESCO'),

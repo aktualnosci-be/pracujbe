@@ -27,7 +27,7 @@ import {
  *
  *   - `inviteTeamMember`     — zaproszenie po e-mailu do AKTYWNEJ firmy (idempotentne); język
  *                              zaproszenia i jednorazowy token linku rejestracji dla adresu
- *                              bez konta (0109) — wynik nie zależy od istnienia konta,
+ *                              bez konta (0115) — wynik nie zależy od istnienia konta,
  *   - `revokeTeamInvitation` — cofnięcie oczekującego zaproszenia,
  *   - `setTeamMemberRole`    — zmiana roli członka,
  *   - `setTeamMemberActive`  — dezaktywacja / przywrócenie członka,

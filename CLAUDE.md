@@ -557,7 +557,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
   Grosze = dwa miejsca dla obu granic, jedna granica = „od”/„do”, min = max = jedna kwota,
   brak kwoty = brak pola, okres tylko z danych. Testy: `salary.test.ts`, E2E `job-detail-salary`.
-  **Do zrobienia (SQL):** kwoty oferty w payloadzie `jobOffer` (`send_offer`).
+  E-mail propozycji (0113): `send_offer` kolejkuje kwoty oferty (`salaryMin`/`salaryMax`/
+  `salaryPeriod`/`currency`), tekst składa worker w locale odbiorcy (`email-payload-followups.test`).
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner
@@ -570,8 +571,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `validThrough` (tylko realne `expires_at`), pełny opis HTML (opis, obowiązki, wymagania, warunki,
   godziny, zmiany; escapowany); Article z `image`, `dateModified` (`guides.ts` `updatedAt`) i logo
   wydawcy. Obraz marki `/og.png` przez `brandShareImageUrl` na wszystkich publicznych stronach z
-  własnym `openGraph` (#116/#182; strażnik `tests/unit/structured-data.test.ts`). **Do zrobienia:**
-  `hiringOrganization.sameAs`/`logo` (wymaga rozszerzenia `get_public_job` o `companies.website`).
+  własnym `openGraph` (#116/#182; strażnik `tests/unit/structured-data.test.ts`).
+  `hiringOrganization.sameAs`/`logo` (migracja `0114`): `get_public_job` zwraca `company_website`/
+  `company_logo_url` tylko dla firmy `verified` i tylko jako bezwzględny https (`public_https_url`),
+  JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL112 (kontrole ujemne:
+  bez walidacji / bez bramki weryfikacji link wycieka). **Otwarte:** edycja strony i logo firmy
+  w panelu pracodawcy (dziś pola tylko w schemacie).
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,
@@ -612,10 +617,10 @@ Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilny
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
 Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
 `candidate-applications-pagination`).
-Metadane ofert (#184): `get_applied_jobs_display` z filtrem `in('job_id')` tylko dla ofert
-bieżącej strony — „Pokaż więcej” nie przesyła metadanych całej historii. **Otwarte:** funkcja
-(SECURITY DEFINER, bez inliningu) nadal liczy całą historię w bazie; parametr `p_job_ids`
-wymaga migracji.
+Metadane ofert (#184, 0113): `get_applied_jobs_display(p_locale, p_job_ids)` filtruje oferty
+bieżącej strony WEWNĄTRZ funkcji (SECURITY DEFINER nie jest inline'owana), więc baza nie liczy
+całej historii; ≤ 100 identyfikatorów, tylko własne aplikacje. Ten sam filtr dla propozycji
+i ostatniej aktywnej propozycji. Dowód: `rls.sql` sekcja PL109.
 Paszport tożsamości nad siatką `/candidate/profil` (#172, `CandidateIdentity`): imię, pierwszy
 zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie odczytu tylko komunikat.
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
@@ -800,7 +805,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   ≤ 10 min, audyt). Rola `member`: zamiast „Dodaj ofertę”, edycji i cyklu życia ofert —
   wyjaśnienie (`RecruiterOnlyNote`). Każda zmiana → `audit_logs`. Dowód: `rls.sql` sekcja TM403;
   unit `team-actions`, `team-members-ui`; E2E `employer-team.spec`.
-  Adres BEZ konta (migracja `0109`): zapraszający wybiera język zaproszenia (PL/NL/FR/EN,
+  Adres BEZ konta (migracja `0115`): zapraszający wybiera język zaproszenia (PL/NL/FR/EN,
   domyślnie język strony — decyzja: brak profilu odbiorcy = jedyny znany język, Invariant #1;
   konto z profilem dostaje e-mail w języku profilu), `company_invitations.locale`. E-mail
   `teamInvitationSignup` z linkiem `/{locale}/rejestracja-pracodawca#token=` — token =
@@ -822,8 +827,22 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `locations` z bazy, potem kanoniczna lista ~46 belgijskich miast w kodzie z aliasami
   PL/NL/FR/EN (`src/lib/matching/belgian-cities.ts`, 10 miast = wartości z `0010`, strażnik
   w `matching-locations.test.ts`); miasto spoza obu → ten sam region = 10 bez etykiety
-  „w promieniu”. **Do zrobienia:** współrzędne w bazie dla pozostałych miast (migracja
-  `locations`), geokodowanie miejscowości spoza listy.
+  „w promieniu”.
+  Słownik w bazie (#194, migracja `0112`): 602 miejscowości = lista
+  kanoniczna z kodu (jej współrzędne i aliasy mają pierwszeństwo) + wszystkie gminy Belgii
+  i gminy zniesione przy fuzjach 2019/2025 z migawki Wikidata (CC0 1.0,
+  `data/locations/`, bez API w runtime), `is_demo = false`. Kolumny `locations.kind`
+  (`municipality`/`former_municipality`/`locality`) i `refnis` (kod NIS). Tabela
+  `location_aliases` (nazwy PL/NL/FR/EN, `alias_key` = `cityKey`, unikalny; własna nazwa gminy
+  wygrywa z egzonimem — „Saint-Nicolas” to gmina w prowincji Liège, nie Sint-Niklaas),
+  odczyt publiczny, zapis service_role. Loader `getMyJobMatch` pyta tylko o klucze miasta
+  kandydata i oferty. Migracja jest GENEROWANA (`node scripts/locations/build-migration.mjs`;
+  odświeżenie migawki `node scripts/locations/fetch-wikidata.mjs`); test porównuje plik
+  z generatorem, lustro TS z bazą (z kontrolą ujemną) i klucze z `cityKey`. Dowód: `rls.sql`
+  sekcja LOC194 (kontrola ujemna bez polityki RLS), rollback `supabase/rollback/0112_…down.sql`,
+  integracja `portal-candidate` (Puurs–Bornem tylko z bazy; mutacja bez słownika = czerwony).
+  **Do zrobienia:** części gmin (deelgemeenten), geokodowanie miejscowości spoza słownika;
+  zmiana listy w kodzie po wdrożeniu 0112 = nowa migracja (test wskazuje plik 0112).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
   Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
   `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
@@ -995,7 +1014,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `rls.sql` sekcja CM45 (dblink, kontrole ujemne), unit `email-consent-campaigns`.
   **Do zrobienia (właściciel):** wartości `EMAIL_SENDER_*`, wyłączenie trackingu w Resend i
   kontrola odebranego `.eml` na produkcji; treść prawna zgody marketingowej (#40). **Otwarte:**
-  panel admina kampanii (dziś RPC service_role), rejestracja z opt-in marketingu.
+  tworzenie rewizji kampanii z panelu (dziś `create_email_campaign_revision`, service_role),
+  prawdziwa pauza z wznowieniem (wymaga zmiany `claim_email_batch`), rejestracja z opt-in marketingu.
+  Panel kampanii (#45, migracja `0111`): `/admin/kampanie` — rewizje
+  (filtr statusu, slug, kursor) z liczbami odbiorców według statusu (bez adresów),
+  `/admin/kampanie/[id]` — podgląd treści w każdym języku (walidacja jak worker,
+  `src/lib/admin/campaigns.ts`), rewizje sluga, „Aktywuj rewizję”/„Zatrzymaj wysyłkę” z dialogiem
+  (`admin_activate_email_campaign`/`admin_cancel_email_campaign`: is_admin, CAS
+  `p_expected_status` → `STALE_STATE`, `INVALID_TRANSITION`, skutek = RPC z 0101, audyt
+  `email_campaign.*` bez treści i odbiorców). Bez `EMAIL_FROM` + `EMAIL_SENDER_*` +
+  `EMAIL_UNSUBSCRIBE_SECRET` (`campaignSendingReady`): jawny komunikat, akcja aktywacji odmawia
+  przed bazą, `/api/maintenance` nie woła `process_email_campaigns`. Dowód: `rls.sql` sekcja
+  AC45 (kontrola ujemna bez CAS), unit `admin-email-campaigns` (kontrole ujemne bramki nadawcy),
+  E2E `admin-email-campaigns`, `admin-a11y`.
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
@@ -1020,8 +1051,11 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   treści przy braku nazwy nadawcy (`EmailCopy.anonymous`); CTA do sekcji panelu w locale odbiorcy
   (`src/lib/email/delivery-data.ts`); imię odbiorcy w powitaniu (worker czyta `profiles`); e-maile
   Auth: język wg Invariantu #1 (`src/lib/email/auth-email.ts`) i osobne treści magic link/zmiana
-  e-maila/zaproszenie. **Do zrobienia (SQL):** `send_offer` → `message`/`expiresAt` w payloadzie
-  `jobOffer` (#293), `send_message` → `conversationId` w payloadzie `newMessage` (#290).
+  e-maila/zaproszenie. Payloady (0113): `jobOffer` niesie `expiresAt` (= `offers.expires_at`)
+  i kwoty oferty (#293, #22), `newMessage` — `conversationId` (CTA do wątku, #290); dowód
+  `rls.sql` sekcja PL109 (kontrole ujemne), `email-payload-followups.test`. Treść wiadomości
+  rekrutera świadomie poza payloadem (tekst wolny = korespondencja, #503) — kandydat czyta ją
+  w panelu. **Otwarte (#503, właściciel):** czy cytat wiadomości rekrutera może trafić do e-maila.
 - [x] Powiadomienia in-app + preferencje — in-app (RPC 0016, dropdown+badge, „oznacz wszystkie") + ekran preferencji `/candidate/ustawienia` i `/employer/ustawienia` (upsert `notification_preferences` pod RLS)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
   tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” ukryte do czasu
@@ -1127,8 +1161,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
   `admin-a11y` (nowe trasy). **Do zatwierdzenia przez właściciela (#40):** okno odwołania
   6 mies., termin rozpatrzenia 14 dni, retencja 12 mies., zakres publikacji i przekazywania do
-  bazy DSA, treść prawna o procedurze. **Otwarte:** harmonogram czyszczenia (po #40), odwołanie
-  zgłaszającego od cofnięcia ograniczenia, retencja `audit_logs` z uzasadnieniami.
+  bazy DSA, treść prawna o procedurze. Harmonogram czyszczenia: `/api/maintenance` woła
+  `dsa_retention_run` tylko za flagą `DSA_RETENTION_MODE` (`dry-run`/`apply`, domyślnie
+  wyłączone, liczniki w odpowiedzi; `src/lib/admin/dsa-retention-mode.ts`). Odwołanie
+  zgłaszającego od cofnięcia ograniczenia (migracja `0109`): ręczne cofnięcie
+  wysyła `reportRestored` w języku zgłaszającego, termin od wysłania, formularz na
+  `/zglos-tresc/sprawa` (znacznik treści prawnej), `submit_report_restoration_appeal`,
+  rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
+  autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
+  retencja `audit_logs` z uzasadnieniami.
 - [~] Rejestr naruszeń RODO (#490, migracja `0106`): `/admin/naruszenia`
   (tylko admin). Wpis = incydent bezpieczeństwa albo naruszenie danych osobowych: czas
   stwierdzenia (termin 72 h liczony od niego — `breachDeadline` w `src/lib/admin/breach.ts`),
@@ -1232,8 +1273,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
-  cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
-  `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
+  cron kopii/odtworzenia), blokada HTTP w testach, odmiana i aliasy miast w SQL.
+  Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
+  wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
+  `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
+  jak w `0091`. Demo: lustro `src/lib/search-fold.ts`. Pomiar przed/po: `docs/railway/OPERATIONS.md` §3.
+  Dowód: `rls.sql` sekcja SU47 (kontrola ujemna: stary ILIKE). Raporty CSP: `report-uri`/`report-to`
+  → `POST /api/csp-report` (tylko log: dyrektywa, origin zasobu, ścieżka bez query/ID; 16 KB, 20/min
+  z adresu, 300 wpisów/min na proces; `src/lib/security/csp-report.ts`), `Referrer-Policy:
+  strict-origin-when-cross-origin` globalnie — test `csp-report`.
   Cutover i rollback (#16/#18): runbook `docs/railway/CUTOVER_ROLLBACK.md` (kolejność: bazy →
   Better Auth → Resend/cron → `APP_MODE` na decyzję właściciela; rollback = wyzerowanie zmiennych
   w odwrotnej kolejności albo redeploy ostatniego dobrego wdrożenia, baza tylko do przodu;

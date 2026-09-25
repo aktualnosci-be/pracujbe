@@ -17,6 +17,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
+import { searchFold } from '@/lib/search-fold';
 
 export type ContractType =
   | 'permanent'
@@ -94,6 +95,10 @@ export interface JobDetail extends JobListItem {
   companyDescription: string;
   /** Data wygaśnięcia oferty (ISO) — do JSON-LD validThrough (P1-12). */
   expiresAt?: string;
+  /** Strona firmy (https, tylko firma verified — 0114) — JSON-LD `hiringOrganization.sameAs`. */
+  companyWebsite?: string;
+  /** Logo firmy (https, tylko firma verified — 0114) — JSON-LD `hiringOrganization.logo`. */
+  companyLogoUrl?: string;
   /** Język treści (tytuł, opis, listy) — może różnić się od języka strony; brak = nieznany (#301). */
   contentLocale?: Locale;
   /** Języki z własnym tłumaczeniem treści; brak = nieznane, traktowane jak wszystkie (#301). */
@@ -223,24 +228,24 @@ function getJobsFromDemo(
     jobs = jobs.filter((job) => locs.includes(job.city));
   }
   if (params.city) {
-    const q = params.city.trim().toLowerCase();
+    const q = searchFold(params.city.trim());
     if (q) {
       jobs = jobs.filter(
         (job) =>
-          job.city.toLowerCase().includes(q) ||
+          searchFold(job.city).includes(q) ||
           job.slug.toLowerCase().includes(q),
       );
     }
   }
   if (params.keyword) {
-    const q = params.keyword.trim().toLowerCase();
+    const q = searchFold(params.keyword.trim());
     if (q) {
       jobs = jobs.filter(
         (job) =>
-          job.title.toLowerCase().includes(q) ||
-          job.companyName.toLowerCase().includes(q) ||
-          job.description.toLowerCase().includes(q) ||
-          job.highlights.some((h) => h.toLowerCase().includes(q)),
+          searchFold(job.title).includes(q) ||
+          searchFold(job.companyName).includes(q) ||
+          searchFold(job.description).includes(q) ||
+          job.highlights.some((h) => searchFold(h).includes(q)),
       );
     }
   }
@@ -387,6 +392,12 @@ function rowToJobDetail(row: unknown): JobDetail {
     companyDescription: asString(r['company_description']),
     ...(asOptString(r['expires_at'])
       ? { expiresAt: asOptString(r['expires_at']) }
+      : {}),
+    ...(asOptString(r['company_website'])
+      ? { companyWebsite: asOptString(r['company_website']) }
+      : {}),
+    ...(asOptString(r['company_logo_url'])
+      ? { companyLogoUrl: asOptString(r['company_logo_url']) }
       : {}),
   };
 }

@@ -60,6 +60,7 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
       return payload?.['appellantRole'] === 'author' ? '/employer/firma' : '/zglos-tresc/sprawa';
     case 'reportDecisionActioned':
     case 'reportDecisionNoAction':
+    case 'reportRestored':
       // #42: bez kodu dostępu (baza zna tylko jego skrót) — zgłaszający wpisuje go sam.
       return '/zglos-tresc/sprawa';
     case 'teamInvitation':
@@ -149,7 +150,7 @@ export function deliveryJobMatchJobs(
 
 /**
  * Szablony z linkiem niosącym jednorazowy token, którego nie ma w bazie: gość (#98) i
- * zaproszenie do zespołu dla adresu bez konta (0109).
+ * zaproszenie do zespołu dla adresu bez konta (0115).
  */
 export const GUEST_TOKEN_TEMPLATES: ReadonlySet<string> = new Set([
   'guestApplicationConfirm',

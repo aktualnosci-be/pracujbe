@@ -9,6 +9,7 @@ import {
   brandShareImageUrl,
   buildArticleJsonLd,
   buildJobPostingJsonLd,
+  publicHttpsUrl,
   serializeJsonLd,
   type JobPostingLabels,
 } from '@/lib/seo/structured-data';
@@ -113,6 +114,65 @@ describe('JobPosting JSON-LD (#313)', () => {
     const html = serializeJsonLd(buildJobPostingJsonLd(job({ title: '</script><b>' }), 'u', labels));
     expect(html).not.toContain('<');
     expect(JSON.parse(html).title).toBe('</script><b>');
+  });
+});
+
+describe('JobPosting hiringOrganization sameAs/logo (0114)', () => {
+  const org = (overrides: Partial<JobDetail>) =>
+    buildJobPostingJsonLd(job(overrides), 'u', labels).hiringOrganization as Record<string, unknown>;
+
+  it('publikuje stronę i logo firmy jako sameAs i logo', () => {
+    expect(
+      org({
+        companyWebsite: ' https://www.bouw.example/over-ons ',
+        companyLogoUrl: 'https://cdn.bouw.example/logo.png?v=2',
+      }),
+    ).toEqual({
+      '@type': 'Organization',
+      name: 'Bouw & Co',
+      sameAs: 'https://www.bouw.example/over-ons',
+      logo: 'https://cdn.bouw.example/logo.png?v=2',
+    });
+  });
+
+  it('bez linków firmy organizacja ma tylko nazwę', () => {
+    expect(org({})).toEqual({ '@type': 'Organization', name: 'Bouw & Co' });
+  });
+
+  it.each([
+    'http://bouw.example',
+    'javascript:alert(1)',
+    '//bouw.example',
+    '/logo.png',
+    'https://localhost',
+    'https://user:pw@bouw.example',
+    'https://bouw.example/x y',
+    'https://bouw.example/"></script><script>alert(1)</script>',
+    'https://-bouw.example',
+    `https://bouw.example/${'x'.repeat(2048)}`,
+    '',
+  ])('zły adres %j → brak pola', (url) => {
+    expect(publicHttpsUrl(url)).toBeUndefined();
+    const data = org({ companyWebsite: url, companyLogoUrl: url });
+    expect(data).not.toHaveProperty('sameAs');
+    expect(data).not.toHaveProperty('logo');
+  });
+
+  it('serializacja escapuje „<” także w polach organizacji', () => {
+    const data = buildJobPostingJsonLd(
+      job({ companyName: 'A</script>', companyWebsite: 'https://a.example/?q=%3C' }),
+      'u',
+      labels,
+    );
+    const json = serializeJsonLd(data);
+    expect(json).not.toContain('</script>');
+    expect(json).toContain('"sameAs":"https://a.example/?q=%3C"');
+  });
+
+  it('kontrola ujemna: surowy adres bez walidacji przepuściłby javascript:', () => {
+    const naive = (value: string | undefined) => value?.trim() || undefined;
+    expect(naive('javascript:alert(1)')).toBeDefined();
+    expect(publicHttpsUrl('javascript:alert(1)')).toBeUndefined();
   });
 });
 

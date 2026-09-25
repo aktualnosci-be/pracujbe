@@ -26,6 +26,7 @@ export const QUEUED_EMAIL_TYPES = [
   'reportReceived', // submit_content_report (0094) — enqueue_email_to_address
   'reportDecisionActioned', // admin_decide_report (0099) → ograniczenie treści — do zgłaszającego
   'reportDecisionNoAction', // admin_decide_report (0099) → brak działań — do zgłaszającego
+  'reportRestored', // admin_restore_moderation (0109) → cofnięcie — do zgłaszającego
   'moderationJobRemoved', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
   'moderationCompanySuspended', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
   'moderationRestored', // admin_restore_moderation (0099)
@@ -42,7 +43,7 @@ export const QUEUED_EMAIL_TYPES = [
 export const GUEST_EMAIL_TYPES = [
   'guestApplicationConfirm', // submit_guest_application
   'guestApplicationSent', // confirm_guest_application
-  'teamInvitationSignup', // invite_company_member (0109) — adres bez konta, język zaproszenia
+  'teamInvitationSignup', // invite_company_member (0115) — adres bez konta, język zaproszenia
 ] as const satisfies readonly EmailType[];
 
 /** E-maile konta — kolejka Better Auth (`src/lib/auth/email-outbox.ts`, worker `email-worker.ts`). */

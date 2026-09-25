@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
+Tabele w migracjach: 92; z danymi osobowymi: 58; bez danych osobowych: 34.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -479,7 +479,7 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 - **Migracja:** `supabase/migrations/0086_company_team.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Osoby zaproszone do zespołu firmy, Pracodawcy i członkowie firm
-- **Uwaga:** Język zaproszenia wybiera zapraszający (adres bez konta, 0109); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.
+- **Uwaga:** Język zaproszenia wybiera zapraszający (adres bez konta, 0115); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -487,9 +487,9 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 | `role` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0086_company_team.sql` |
 | `invited_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0086_company_team.sql` |
 | `responded_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0086_company_team.sql` |
-| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0109_team_invitation_signup.sql` |
-| `signup_token_hash` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0109_team_invitation_signup.sql` |
-| `signup_token_used_at` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0109_team_invitation_signup.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0115_team_invitation_signup.sql` |
+| `signup_token_hash` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0115_team_invitation_signup.sql` |
+| `signup_token_used_at` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0115_team_invitation_signup.sql` |
 
 ### `public.company_members`
 
@@ -1014,9 +1014,9 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 
 | Szablon | Pola payloadu | Funkcje SQL |
 |---|---|---|
-| `appealReceived` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `recipientName` | `submit_moderation_appeal`, `submit_report_appeal` |
-| `appealReversed` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
-| `appealUpheld` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
+| `appealReceived` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `recipientName` | `submit_moderation_appeal`, `submit_report_appeal`, `submit_report_restoration_appeal` |
+| `appealReversed` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
+| `appealUpheld` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
 | `applicationViewed` | `companyName`, `jobTitle` | `transition_application` |
 | `breachNotice` | `incidentReference`, `noticeSubject`, `noticeText`, `panel` | `admin_notify_breach_subjects` |
 | `companyRejected` | `companyName`, `reason` | `admin_set_company_status` |
@@ -1025,18 +1025,19 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `submit_guest_application` |
 | `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `confirm_guest_application` |
 | `jobMatch` | `count`, `jobs`, `query`, `searchName` | `process_saved_search_alerts` |
-| `jobOffer` | `companyName`, `jobTitle` | `send_offer` |
+| `jobOffer` | `companyName`, `currency`, `expiresAt`, `jobTitle`, `salaryMax`, `salaryMin`, `salaryPeriod` | `send_offer` |
 | `jobPublished` | `jobTitle` | `publish_job` |
 | `moderationCompanySuspended` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
 | `moderationJobRemoved` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
 | `moderationRestored` | `companyName`, `decisionReference`, `jobTitle`, `reason` | `moderation_restore_core` |
 | `newApplication` | `candidateName`, `jobTitle` | `apply_to_job`, `confirm_guest_application` |
-| `newMessage` | `panel`, `senderName` | `send_message` |
+| `newMessage` | `conversationId`, `panel`, `senderName` | `send_message` |
 | `offerAccepted` | `candidateName`, `jobTitle` | `respond_to_offer` |
 | `offerDeclined` | `candidateName`, `jobTitle` | `respond_to_offer` |
 | `reportDecisionActioned` | `caseNumber`, `recipientName`, `targetType` | `admin_decide_report` |
 | `reportDecisionNoAction` | `caseNumber`, `recipientName`, `targetType` | `admin_decide_report` |
 | `reportReceived` | `accessCode`, `caseNumber`, `recipientName`, `targetType` | `submit_content_report` |
+| `reportRestored` | `caseNumber`, `recipientName` | `admin_restore_moderation` |
 | `statusChanged` | `companyName`, `jobTitle`, `status` | `transition_application` |
 | `teamInvitation` | `companyName`, `inviterName`, `panel` | `invite_company_member` |
 | `teamInvitationSignup` | `companyName`, `inviterName`, `nonce` | `invite_company_member` |
@@ -1067,6 +1068,7 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `public.job_skills` | Treść ogłoszenia (dane firmy). |
 | `public.job_translations` | Treść ogłoszenia (dane firmy). |
 | `public.languages` | Słownik/konfiguracja (języki) — bez danych osobowych. |
+| `public.location_aliases` | Słownik/konfiguracja (nazwy miejscowości PL/NL/FR/EN) — bez danych osobowych. |
 | `public.locations` | Słownik/konfiguracja (miejscowości) — bez danych osobowych. |
 | `public.occupation_labels` | Słownik/konfiguracja (etykiety zawodów ESCO) — bez danych osobowych. |
 | `public.occupation_skills` | Słownik/konfiguracja (relacje ESCO) — bez danych osobowych. |
