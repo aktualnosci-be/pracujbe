@@ -14,7 +14,8 @@ import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 /**
  * AppealForm — odwołanie od decyzji moderacyjnej (DSA, #43), wspólne dla obu stron:
  *   - `decision` — autor treści w danych firmy (RPC pod sesją),
- *   - `case` — zgłaszający na stronie sprawy (numer + kod dostępu, jak sprawdzenie sprawy).
+ *   - `case` — zgłaszający na stronie sprawy (numer + kod dostępu, jak sprawdzenie sprawy);
+ *     `restoration` — odwołanie od cofnięcia ograniczenia zamiast od wyniku sprawy (#43, 0108).
  *
  * Formularz otwiera przycisk (odwołanie to świadoma decyzja, nie domyślne pole). Jeden klucz
  * idempotencji na otwarcie formularza: ponowienie po błędzie sieci nie tworzy drugiego
@@ -24,7 +25,7 @@ import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 
 type Target =
   | { kind: 'decision'; decisionId: string }
-  | { kind: 'case'; caseNumber: string; accessCode: string };
+  | { kind: 'case'; caseNumber: string; accessCode: string; restoration?: boolean };
 
 const ERROR_KEY: Record<ModerationFieldError, string> = {
   required: 'appealErrorRequired',
@@ -129,6 +130,7 @@ export function AppealForm({ target, messages, onSubmitted }: AppealFormProps): 
                 accessCode: target.accessCode,
                 grounds,
                 idempotencyKey: key,
+                target: target.restoration ? 'restoration' : 'decision',
               });
       } catch {
         setServerError('NETWORK');

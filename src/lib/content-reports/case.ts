@@ -34,7 +34,18 @@ export interface ReportCaseView {
   appealDeadline: string | null;
   /** Odwołanie zgłaszającego (bez danych autora treści). */
   appeal: ReportCaseAppeal | null;
+  /** Ostatnie cofnięcie ograniczenia w sprawie i droga odwołania od niego (#43, 0108). */
+  restoration: ReportCaseRestoration | null;
   events: ReportCaseEvent[];
+}
+
+export interface ReportCaseRestoration {
+  restoredAt: string;
+  /** `OK` — można się odwołać od cofnięcia; null = nieznany stan (nie pokazujemy formularza). */
+  appealState: AppealState | null;
+  /** Koniec terminu odwołania od cofnięcia; null = termin jeszcze nie biegnie. */
+  appealDeadline: string | null;
+  appeal: ReportCaseAppeal | null;
 }
 
 export interface ReportCaseAppeal {
@@ -60,6 +71,18 @@ function parseAppeal(raw: unknown): ReportCaseAppeal | null {
     dueAt: str(a['dueAt']),
     decidedAt: str(a['decidedAt']),
     reasoning: str(a['reasoning']),
+  };
+}
+
+function parseRestoration(raw: unknown): ReportCaseRestoration | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r['restoredAt'] !== 'string') return null;
+  return {
+    restoredAt: r['restoredAt'],
+    appealState: parseAppealState(r['appealState']),
+    appealDeadline: typeof r['appealDeadline'] === 'string' ? r['appealDeadline'] : null,
+    appeal: parseAppeal(r['appeal']),
   };
 }
 
@@ -95,6 +118,7 @@ export function parseReportCase(data: unknown): ReportCaseView | null {
     appealState: parseAppealState(r['appealState']),
     appealDeadline: typeof r['appealDeadline'] === 'string' ? r['appealDeadline'] : null,
     appeal: parseAppeal(r['appeal']),
+    restoration: parseRestoration(r['restoration']),
     events,
   };
 }
@@ -121,6 +145,7 @@ export function fixtureReportCase(): ReportCaseView {
     appealState: null,
     appealDeadline: null,
     appeal: null,
+    restoration: null,
     events: [
       { type: 'submitted', toStatus: 'open', at: '2026-09-20T10:00:00.000Z' },
       { type: 'status_changed', toStatus: 'reviewing', at: '2026-09-21T09:30:00.000Z' },
@@ -142,6 +167,28 @@ export function fixtureDismissedReportCase(): ReportCaseView {
     events: [
       { type: 'submitted', toStatus: 'open', at: '2026-09-20T10:00:00.000Z' },
       { type: 'status_changed', toStatus: 'dismissed', at: '2026-09-22T10:00:00.000Z' },
+    ],
+  };
+}
+
+/** Sprawa fixture z cofniętym ograniczeniem — z otwartą drogą odwołania od cofnięcia (E2E). */
+export const FIXTURE_RESTORED_CASE_NUMBER = 'DSA-0000-0000-0000-2E2E';
+
+export function fixtureRestoredReportCase(): ReportCaseView {
+  return {
+    ...fixtureReportCase(),
+    caseNumber: FIXTURE_RESTORED_CASE_NUMBER,
+    status: 'resolved',
+    outcome: 'action_taken',
+    restoration: {
+      restoredAt: '2026-09-23T10:00:00.000Z',
+      appealState: 'OK',
+      appealDeadline: '2027-03-23T10:00:00.000Z',
+      appeal: null,
+    },
+    events: [
+      { type: 'submitted', toStatus: 'open', at: '2026-09-20T10:00:00.000Z' },
+      { type: 'status_changed', toStatus: 'resolved', at: '2026-09-22T10:00:00.000Z' },
     ],
   };
 }

@@ -10,7 +10,11 @@ import {
   type AppealDecisionInput,
 } from '@/lib/admin/appeals';
 import type { ModerationFieldError } from '@/lib/admin/moderation';
-import { FIXTURE_DISMISSED_CASE_NUMBER, isReportFixtureMode } from '@/lib/content-reports/case';
+import {
+  FIXTURE_DISMISSED_CASE_NUMBER,
+  FIXTURE_RESTORED_CASE_NUMBER,
+  isReportFixtureMode,
+} from '@/lib/content-reports/case';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
@@ -30,8 +34,10 @@ import { reportCaseLookupSchema } from '@/lib/validation/content-report';
  *
  *   - `submitModerationAppeal` — autor treści (owner/admin firmy) pod SESJĄ: RPC sam sprawdza
  *     członkostwo, termin od poinformowania i to, że od decyzji przysługuje odwołanie.
- *   - `submitReportAppeal` — zgłaszający, numer sprawy + kod dostępu (jak sprawdzenie sprawy).
- *     RPC ma EXECUTE tylko dla service_role — inaczej bezpośrednie wywołanie omijałoby limiter.
+ *   - `submitReportAppeal` — zgłaszający, numer sprawy + kod dostępu (jak sprawdzenie sprawy):
+ *     od braku działań (`submit_report_appeal`) albo od cofnięcia ograniczenia
+ *     (`target: 'restoration'` → `submit_report_restoration_appeal`, 0108). Oba RPC mają
+ *     EXECUTE tylko dla service_role — inaczej bezpośrednie wywołanie omijałoby limiter.
  *   - `decideAppeal` — rozpatrzenie przez administratora (inny niż autor decyzji, gdy to
  *     możliwe); skutek, historia, audyt i powiadomienia w jednej transakcji w bazie.
  *
@@ -152,9 +158,11 @@ export interface ReportAppealInput {
   accessCode: string;
   grounds: string;
   idempotencyKey: string;
+  /** Od czego odwołanie: wynik sprawy (brak działań, domyślnie) albo cofnięcie ograniczenia. */
+  target?: 'decision' | 'restoration';
 }
 
-/** Odwołanie zgłaszającego od decyzji o braku działań (strona sprawy). */
+/** Odwołanie zgłaszającego od braku działań albo od cofnięcia ograniczenia (strona sprawy). */
 export async function submitReportAppeal(input: ReportAppealInput): Promise<AppealActionResult> {
   if (!(await checkRateLimit('report-appeal', { max: 10, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
@@ -169,10 +177,13 @@ export async function submitReportAppeal(input: ReportAppealInput): Promise<Appe
   if (typeof input.idempotencyKey !== 'string' || !UUID_RE.test(input.idempotencyKey)) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
+  const target = input.target ?? 'decision';
+  if (target !== 'decision' && target !== 'restoration') return { ok: false, error: 'VALIDATION_FAILED' };
 
   if (!isServiceDatabaseConfigured()) {
     if (isReportFixtureMode()) {
-      return lookup.data.caseNumber === FIXTURE_DISMISSED_CASE_NUMBER
+      const fixtureCase = target === 'restoration' ? FIXTURE_RESTORED_CASE_NUMBER : FIXTURE_DISMISSED_CASE_NUMBER;
+      return lookup.data.caseNumber === fixtureCase
         ? { ok: true, reference: FIXTURE_APPEAL_REFERENCE, created: true }
         : { ok: false, error: 'NOT_FOUND' };
     }
@@ -181,7 +192,7 @@ export async function submitReportAppeal(input: ReportAppealInput): Promise<Appe
 
   try {
     const rows = await withServiceRole((tx) =>
-      rpcRows<AppealRow>(tx, 'submit_report_appeal', {
+      rpcRows<AppealRow>(tx, target === 'restoration' ? 'submit_report_restoration_appeal' : 'submit_report_appeal', {
         p_case_number: lookup.data.caseNumber,
         p_access_code: lookup.data.accessCode,
         p_idempotency_key: input.idempotencyKey,

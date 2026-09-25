@@ -2127,7 +2127,9 @@
     "breachNoticeRecipientsRequired": "Indiquez au moins un destinataire.",
     "breachNoticeRecipientsMalformed": "Adresse ou identifiant non valide : {list}.",
     "breachNoticeContentRequired": "Saisissez l’objet et le texte dans au moins une langue.",
-    "breachNoticeNotAllowed": "L’information peut être envoyée pour une violation de données personnelles ouverte avec la décision enregistrée « nous informons les personnes »."
+    "breachNoticeNotAllowed": "L’information peut être envoyée pour une violation de données personnelles ouverte avec la décision enregistrée « nous informons les personnes ».",
+    "appealTargetRestoration": "Contre la levée de la restriction",
+    "appealRestorationSummary": "Restriction levée le {date} : {reason}"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -2618,7 +2620,13 @@
     "appealTitle": "Recours contre le résultat",
     "appealIntro": "Si vous n’êtes pas d’accord avec le résultat, vous pouvez introduire un recours. L’auteur du contenu signalé ne verra pas vos données.",
     "appealStatusTitle": "Votre recours {reference}",
-    "appealLegalPlaceholder": "Informations juridiques sur la procédure de recours et le règlement extrajudiciaire des litiges — à compléter par le propriétaire du site."
+    "appealLegalPlaceholder": "Informations juridiques sur la procédure de recours et le règlement extrajudiciaire des litiges — à compléter par le propriétaire du site.",
+    "restorationTitle": "Restriction levée",
+    "restorationInfo": "Après un nouvel examen, la restriction du contenu signalé a été levée le {date}.",
+    "restorationAppealTitle": "Recours contre la levée de la restriction",
+    "restorationAppealIntro": "Si vous n’êtes pas d’accord avec la levée de la restriction, vous pouvez introduire un recours. L’auteur du contenu signalé ne verra pas vos données.",
+    "restorationAppealDeadlineNotStarted": "Le délai de recours commencera à courir lorsque vous recevrez l’e-mail sur la levée de la restriction.",
+    "restorationAppealWindowClosed": "Le délai de recours contre la levée de la restriction est expiré."
   },
   "campaignBanner": {
     "eyebrow": "Offre d’emploi en Belgique",

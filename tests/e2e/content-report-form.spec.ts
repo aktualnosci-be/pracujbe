@@ -145,3 +145,30 @@ test('zgłaszający odwołuje się od braku działań (#43): walidacja, sukces, 
   await expect(sent).toBeFocused();
   expect(await blockingViolations(page)).toEqual([]);
 });
+
+test('zgłaszający odwołuje się od cofnięcia ograniczenia (#43, 0108): formularz, znacznik, sukces', async ({ page }) => {
+  const restoredCase = 'DSA-0000-0000-0000-2E2E';
+  await page.goto(`/pl/zglos-tresc/sprawa#nr=${restoredCase}&kod=ABCDEFGHIJKLMNOPQRSTUVWX`);
+  await expect(page.getByTestId('report-case-outcome')).toHaveText(t.outcomeActionTaken);
+  const section = page.getByTestId('report-case-restoration');
+  await expect(section.getByRole('heading', { name: t.restorationTitle })).toBeVisible();
+  // Wynik ograniczający: bez formularza odwołania od wyniku sprawy (kontrola ujemna).
+  await expect(page.getByTestId('report-case-appeal-form')).toHaveCount(0);
+
+  const form = page.getByTestId('report-case-restoration-appeal-form');
+  await expect(form.getByRole('heading', { name: t.restorationAppealTitle })).toBeVisible();
+  await expect(form.getByText(t.appealLegalPlaceholder)).toBeVisible();
+  await form.getByRole('button', { name: t.appealAction }).click();
+  const grounds = form.getByRole('textbox', { name: t.appealGroundsLabel });
+  await expect(grounds).toBeFocused();
+  await form.getByRole('button', { name: t.appealSubmit }).click();
+  await expect(form.getByText(t.appealErrorRequired)).toBeVisible();
+  expect(await blockingViolations(page)).toEqual([]);
+
+  await grounds.fill('Po cofnięciu oferta nadal wymaga opłaty od kandydatów.');
+  await form.getByRole('button', { name: t.appealSubmit }).click();
+  const sent = page.getByRole('status').filter({ hasText: 'APL-0000-0000-0E2E' });
+  await expect(sent).toHaveText(t.appealSent.replace('{reference}', 'APL-0000-0000-0E2E'));
+  await expect(sent).toBeFocused();
+  expect(await blockingViolations(page)).toEqual([]);
+});

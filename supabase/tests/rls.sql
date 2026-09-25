@@ -8174,6 +8174,241 @@ select pg_temp.expect_error('select public.dsa_transparency_report(now(), now() 
   'VALIDATION_FAILED', 'APL43-11c zły okres raportu');
 reset role;
 -- ============================================================================
+-- RA43. Odwołanie zgłaszającego od COFNIĘCIA ograniczenia (0108, #43): ręczne cofnięcie
+-- informuje zgłaszającego w jego języku; termin od poinformowania; od cofnięcia po odwołaniu
+-- autora odwołanie nie przysługuje; rozpatruje ktoś inny niż osoba, która cofnęła;
+-- uwzględnienie = nowa decyzja ograniczająca; retencja, raport i eksport.
+-- ============================================================================
+\echo '--- RA43 odwołanie od cofnięcia ---'
+\set RAJ1 'e9800000-0000-0000-0000-0000000000b1'
+\set RAJ2 'e9800000-0000-0000-0000-0000000000b2'
+\set RAJ3 'e9800000-0000-0000-0000-0000000000b3'
+\set RAJ4 'e9800000-0000-0000-0000-0000000000b4'
+\set RAREASON 'Po ponownym przeglądzie oferta nie wymaga żadnych opłat.'
+\set RAGROUNDS 'Rekruter nadal żąda opłaty; opisuję przebieg rozmowy telefonicznej.'
+reset role; reset app.current_uid;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'RAJ1',:'APCO','ra-job-1','Magazynier R1','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'RAJ2',:'APCO','ra-job-2','Magazynier R2','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'RAJ3',:'APCO','ra-job-3','Magazynier R3','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'RAJ4',:'APCO','ra-job-4','Magazynier R4','warehouse','permanent','Antwerpia','Flandria','active','pl');
+
+set role service_role;
+select report_id as rr1, case_number as rcase1 from public.submit_content_report(null, gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RAJ1', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null,
+  'Gość Ra', 'ra1@test.be', 'fr', true) \gset
+select report_id as rr2, case_number as rcase2 from public.submit_content_report(:'CANDA', gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RAJ2', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, null,
+  'ra2@test.be', 'en', true) \gset
+select report_id as rr3, case_number as rcase3 from public.submit_content_report(null, gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RAJ3', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, null,
+  'ra3@test.be', 'nl', true) \gset
+select report_id as rr4 from public.submit_content_report(null, gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RAJ4', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, null,
+  'ra4@test.be', 'nl', true) \gset
+reset role;
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'rr1', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as rd1 \gset
+select public.admin_decide_report(:'rr2', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as rd2 \gset
+select public.admin_decide_report(:'rr3', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as rd3 \gset
+select public.admin_decide_report(:'rr4', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as rd4 \gset
+reset role; reset app.current_uid;
+
+-- RA43-1: ręczne cofnięcie (inny admin niż autor decyzji) informuje zgłaszającego w JEGO języku.
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select public.admin_restore_moderation(:'rd1', :'RAREASON') as rs1 \gset
+select public.admin_restore_moderation(:'rd2', :'RAREASON') as rs2 \gset
+select public.admin_restore_moderation(:'rd4', :'RAREASON') as rs4 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where template = 'reportRestored' and entity_type = 'moderation_restoration'
+     and entity_id = :'rs1' and to_email = 'ra1@test.be' and locale = 'fr' and profile_id is null
+     and payload->>'caseNumber' = :'rcase1' and not (payload ? 'reason') and not (payload ? 'companyName')) = 1
+  and (select count(*) from public.email_deliveries where template = 'reportRestored' and entity_id = :'rs2'
+     and profile_id = :'CANDA' and locale = public.resolve_recipient_locale(:'CANDA') and locale <> 'en') = 1,
+  'RA43-1 e-mail o cofnięciu do zgłaszającego: gość w języku formularza, konto wg profilu; bez powodu i danych autora');
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_appealable(:'rs1') = 'OK'
+  and public.moderation_restoration_appeal_deadline(:'rs1') is null,
+  'RA43-1b e-mail w kolejce: odwołanie przysługuje, termin jeszcze nie biegnie');
+reset role;
+
+-- RA43-2: cofnięcie będące skutkiem odwołania autora — bez odwołania zgłaszającego i bez e-maila.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select appeal_id as raa3 from public.submit_moderation_appeal(:'rd3', gen_random_uuid(), :'APGROUNDS') \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select public.admin_decide_appeal(:'raa3', 'pending', 'reversed', :'RAREASON');
+reset role; reset app.current_uid;
+select id as rs3 from public.moderation_restorations where decision_id = :'rd3' \gset
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_appealable(:'rs3') = 'INVALID_TRANSITION',
+  'RA43-2 od cofnięcia po uwzględnionym odwołaniu autora odwołanie nie przysługuje');
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase3' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'INVALID_TRANSITION', 'RA43-2b RPC odrzuca odwołanie od cofnięcia po odwołaniu autora');
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'acase2' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'INVALID_TRANSITION', 'RA43-2c sprawa bez cofnięcia: odwołanie od cofnięcia nie przysługuje');
+reset role;
+select pg_temp.assert((select count(*) from public.email_deliveries where template = 'reportRestored' and entity_id = :'rs3') = 0,
+  'RA43-2d cofnięcie po odwołaniu autora nie wysyła zgłaszającemu e-maila o odwołaniu');
+
+-- RA43-3: dostęp — tylko service_role (za limiterem), zły kod = NOT_FOUND.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase2' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'permission denied', 'RA43-3 klient nie woła RPC z pominięciem limitera');
+select pg_temp.expect_error('select public.moderation_restoration_appealable(''' || :'rs1' || ''')',
+  'permission denied', 'RA43-3b stan drogi odwołania tylko przez serwer');
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase1' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWY'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'NOT_FOUND', 'RA43-3c zły kod dostępu = NOT_FOUND');
+reset role;
+
+-- RA43-4: termin od POINFORMOWANIA o cofnięciu.
+update public.email_deliveries set status = 'bounced', sent_at = now() - interval '2 years'
+  where entity_id = :'rs2' and template = 'reportRestored';
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_appeal_deadline(:'rs2') is null
+  and public.moderation_restoration_appealable(:'rs2') = 'OK',
+  'RA43-4 odbity e-mail o cofnięciu nie jest poinformowaniem');
+reset role;
+update public.email_deliveries set status = 'delivered' where entity_id = :'rs2' and template = 'reportRestored';
+update public.email_deliveries set status = 'sent', sent_at = now() where entity_id = :'rs1' and template = 'reportRestored';
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_appealable(:'rs2') = 'APPEAL_WINDOW_CLOSED',
+  'RA43-4b dwa lata od doręczenia: termin odwołania od cofnięcia upłynął');
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase2' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'APPEAL_WINDOW_CLOSED', 'RA43-4c odwołanie od cofnięcia po terminie odrzucone');
+select public.get_report_case(:'rcase1', 'ABCDEFGHIJKLMNOPQRSTUVWX') as rlook1 \gset
+reset role;
+select pg_temp.assert((:'rlook1'::jsonb)->'restoration'->>'appealState' = 'OK'
+  and ((:'rlook1'::jsonb)->'restoration'->>'appealDeadline')::timestamptz > now() + interval '5 months'
+  and (:'rlook1'::jsonb)->'appeal' = 'null'::jsonb and (:'rlook1'::jsonb)->>'appealState' is null
+  and position(:'RAREASON' in :'rlook1') = 0,
+  'RA43-4d zgłaszający widzi cofnięcie i termin odwołania, bez powodu cofnięcia');
+
+-- RA43-5: odwołanie od cofnięcia — idempotentne, jedno na cofnięcie, e-mail w języku zgłaszającego.
+set role service_role;
+select 'e9800000-0000-0000-0000-00000000a001' as rkey1 \gset
+select appeal_id as rap1, created as rcr1 from public.submit_report_restoration_appeal(:'rcase1',
+  'ABCDEFGHIJKLMNOPQRSTUVWX', :'rkey1', :'RAGROUNDS') \gset
+select appeal_id as rap1r, created as rcr1r from public.submit_report_restoration_appeal(:'rcase1',
+  'ABCDEFGHIJKLMNOPQRSTUVWX', :'rkey1', :'RAGROUNDS') \gset
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase1' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'APPEAL_EXISTS', 'RA43-5 drugie odwołanie od tego samego cofnięcia');
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase1' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''za krótko'')',
+  'GROUNDS_REQUIRED', 'RA43-5b uzasadnienie wymagane');
+reset role;
+select pg_temp.assert(:'rcr1'::boolean and not :'rcr1r'::boolean and :'rap1' = :'rap1r'
+  and (select appellant_role = 'reporter' and appealed_restoration_id = :'rs1'::uuid and decision_id = :'rd1'::uuid
+          and appellant_locale = 'fr' and status = 'pending' from public.moderation_appeals where id = :'rap1')
+  and (select count(*) from public.email_deliveries where template = 'appealReceived' and entity_id = :'rap1'
+         and to_email = 'ra1@test.be' and locale = 'fr' and payload->>'appealTarget' = 'restoration') = 1
+  and (select count(*) from public.audit_logs where action = 'moderation.appeal_submitted' and entity_id = :'rr1'
+         and after_data->>'appealedRestorationId' = :'rs1') = 1,
+  'RA43-5c odwołanie od cofnięcia: idempotencja, stan, e-mail (fr), audyt');
+
+-- RA43-6: strażniki tabeli (niezależne od RPC).
+select pg_temp.expect_error('insert into public.moderation_appeals(reference, decision_id, report_id, appellant_role, appellant_locale, grounds, idempotency_key, due_at, appealed_restoration_id) values (''APL-X'', ''' || :'rd2' || ''', ''' || :'rr2' || ''', ''reporter'', ''pl'', ''' || :'RAGROUNDS' || ''', gen_random_uuid(), now(), ''' || :'rs1' || ''')',
+  'nie dotyczy tej decyzji', 'RA43-6 cofnięcie innej decyzji odrzucone przez strażnik');
+select pg_temp.expect_error('insert into public.moderation_appeals(reference, decision_id, report_id, appellant_role, appellant_locale, grounds, idempotency_key, due_at, appealed_restoration_id) values (''APL-Y'', ''' || :'rd2' || ''', ''' || :'rr2' || ''', ''author'', ''pl'', ''' || :'RAGROUNDS' || ''', gen_random_uuid(), now(), ''' || :'rs2' || ''')',
+  'moderation_appeals_restoration_role', 'RA43-6b od cofnięcia odwołuje się wyłącznie zgłaszający');
+select pg_temp.expect_error('update public.moderation_appeals set appealed_restoration_id = null where id = ''' || :'rap1' || '''',
+  'niezmienne', 'RA43-6c celu odwołania nie zmienia bezpośredni zapis');
+
+-- RA43-7: rozpatruje inny człowiek niż osoba, która COFNĘŁA (nie autor decyzji).
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'rap1' || ''', ''pending'', ''upheld'', ''' || :'RAREASON' || ''')',
+  'REVIEWER_CONFLICT', 'RA43-7 osoba, która cofnęła ograniczenie, nie rozpatruje odwołania od cofnięcia');
+reset role; reset app.current_uid;
+select pg_temp.assert((select decided_by = :'ADMIN'::uuid from public.moderation_decisions where id = :'rd1')
+  and (select restored_by = :'ADMIN2'::uuid from public.moderation_restorations where id = :'rs1'),
+  'RA43-7b kontrola: reguła 0104 (autor decyzji) zablokowałaby ADMIN i przepuściła ADMIN2');
+-- Awaria skutku cofa całość.
+create function pg_temp.ra_fail_job() returns trigger language plpgsql as $$
+begin
+  if new.id = 'e9800000-0000-0000-0000-0000000000b1'::uuid then raise exception 'INJECTED_RESTORATION_APPEAL_FAILURE'; end if;
+  return new;
+end $$;
+create trigger trg_ra_fail before update on public.jobs for each row execute function pg_temp.ra_fail_job();
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'rap1' || ''', ''pending'', ''reversed'', ''' || :'RAREASON' || ''', ''job_removed'', ''terms'', ''Regulamin § 4'')',
+  'INJECTED_RESTORATION_APPEAL_FAILURE', 'RA43-7c awaria ponownego ograniczenia przerywa rozpatrzenie');
+reset role; reset app.current_uid;
+drop trigger trg_ra_fail on public.jobs;
+select pg_temp.assert(
+  (select status = 'pending' from public.moderation_appeals where id = :'rap1')
+  and (select count(*) from public.moderation_decisions where appeal_id = :'rap1') = 0
+  and (select status::text = 'active' and moderation_decision_id is null from public.jobs where id = :'RAJ1'),
+  'RA43-7d po awarii: odwołanie oczekuje, treść bez nowego ograniczenia');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_appeal(:'rap1', 'pending', 'reversed', 'Zgłaszający wykazał, że opłata jest nadal pobierana.',
+  'job_removed', 'terms', 'Regulamin § 4 ust. 2');
+reset role; reset app.current_uid;
+select new_decision_id as rd1n from public.moderation_appeals where id = :'rap1' \gset
+select pg_temp.assert(
+  (select status = 'reversed' and decided_by = :'ADMIN'::uuid and not same_reviewer and restoration_id is null
+     from public.moderation_appeals where id = :'rap1')
+  and (select appeal_id = :'rap1'::uuid and decision = 'job_removed' from public.moderation_decisions where id = :'rd1n')
+  and (select status::text = 'resolved' and decision_id = :'rd1n'::uuid from public.reports where id = :'rr1')
+  and (select status::text = 'closed' and moderation_decision_id = :'rd1n'::uuid from public.jobs where id = :'RAJ1')
+  and (select count(*) from public.email_deliveries where template = 'appealReversed' and entity_id = :'rap1'
+         and to_email = 'ra1@test.be' and locale = 'fr' and payload->>'appealTarget' = 'restoration'
+         and not (payload ? 'companyName')) = 1
+  and (select count(*) from public.email_deliveries where template = 'moderationJobRemoved' and entity_id = :'rd1n'
+         and profile_id = :'EMPA') = 1,
+  'RA43-7e uwzględnione odwołanie od cofnięcia: nowa decyzja, treść znów ograniczona, wyniki w językach odbiorców');
+set role service_role;
+select public.get_report_case(:'rcase1', 'ABCDEFGHIJKLMNOPQRSTUVWX') as rlook1b \gset
+select pg_temp.assert(public.moderation_restoration_appealable(:'rs1') = 'APPEAL_EXISTS'
+  and public.moderation_appealable(:'rd1n') = 'OK',
+  'RA43-7f po rozpatrzeniu: od cofnięcia już nie, od nowej decyzji autor może się odwołać');
+reset role;
+select pg_temp.assert((:'rlook1b'::jsonb)->'restoration'->'appeal'->>'status' = 'reversed'
+  and (:'rlook1b'::jsonb)->>'outcome' = 'action_taken',
+  'RA43-7g zgłaszający widzi wynik odwołania od cofnięcia');
+
+-- RA43-8: retencja — cofnięcie bez poinformowania czeka; po terminie od poinformowania — czyszczenie.
+set session_replication_role = replica;
+update public.moderation_restorations set restored_at = now() - interval '2 years' where id in (:'rs2', :'rs4');
+set session_replication_role = origin;
+update public.reports set resolved_at = now() - interval '2 years' where id in (:'rr2', :'rr4');
+set role service_role;
+select pg_temp.assert(
+  exists (select 1 from public.dsa_retention_cases() where report_id = :'rr4' and retention_start is null)
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'rr2' and eligible_at <= now())
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'rr1' and retention_start is null),
+  'RA43-8 niepoinformowany o cofnięciu czeka; po terminie od poinformowania i retencji — kwalifikuje się; nowa decyzja z odwołania otwiera drogę autora');
+select pg_temp.assert((select greatest(r.resolved_at, mr.restored_at) + public.dsa_case_retention() <= now()
+    from public.reports r join public.moderation_decisions d on d.report_id = r.id
+    join public.moderation_restorations mr on mr.decision_id = d.id where r.id = :'rr4'),
+  'RA43-8b kontrola: reguła 0104 (od chwili cofnięcia) objęłaby sprawę przed końcem drogi odwołania');
+select public.dsa_retention_run(false) as rrun \gset
+reset role;
+select pg_temp.assert(
+  (select redacted_at is not null from public.reports where id = :'rr2')
+  and (select count(*) from public.email_deliveries where entity_id = :'rs2' and template = 'reportRestored'
+         and payload = '{}'::jsonb) = 1
+  and (select reason is null and redacted_at is not null from public.moderation_restorations where id = :'rs2')
+  and (select redacted_at is null and reporter_email is not null from public.reports where id = :'rr4')
+  and (select count(*) from public.email_deliveries where entity_id = :'rs4' and payload <> '{}'::jsonb) = 1,
+  'RA43-8c anonimizacja obejmuje e-mail o cofnięciu; sprawa niepoinformowana nienaruszona');
+
+-- RA43-9: raport i eksport — odwołanie od cofnięcia liczone osobno, wiersz na decyzję.
+set role service_role;
+select public.dsa_transparency_report(now() - interval '1 day', now() + interval '1 day') as rtr \gset
+select pg_temp.assert(((:'rtr'::jsonb)->'appeals'->>'againstRestoration')::int = 1
+  and (select appeal_status is null from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day')
+        where decision_reference = (select reference from public.moderation_decisions where id = :'rd1'))
+  and (select count(*) from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day'))
+        = (select count(*) from public.moderation_decisions where decided_at > now() - interval '1 day'),
+  'RA43-9 raport: odwołania od cofnięcia; eksport bez przypisania ich do decyzji jako jej odwołania');
+reset role;
+select pg_temp.assert((select count(*) from public.moderation_decisions d
+    join public.moderation_appeals a on a.decision_id = d.id where d.id = :'rd1') = 1,
+  'RA43-9b kontrola: złączenie po samej decyzji (0104) przypisałoby decyzji odwołanie od cofnięcia');
+-- ============================================================================
 -- CJ186. Zaufany odczyt oferty do materiałów kampanii (#186, #175, 0102): tylko aktywna,
 -- niedemonstracyjna, niewygasła oferta zweryfikowanej firmy; wąskie pola bez PII; wejście
 -- panelu tylko dla recruiter+ firmy oferty lub admina; kontrola ujemna po zdjęciu filtra.

@@ -317,3 +317,85 @@ describe('raport przejrzystości i eksport', () => {
     expect(parseDsaReportRange('2026-02-30', '2026-03-01', now).ok).toBe(false);
   });
 });
+
+describe('odwołanie zgłaszającego od cofnięcia ograniczenia (0108)', () => {
+  beforeEach(() => {
+    resetFakeDb(null);
+    fakeSession.identity = null;
+    mocks.rateLimit.mockResolvedValue(true);
+  });
+
+  it('target=restoration → osobne RPC service_role; domyślnie wynik sprawy (kontrola ujemna)', async () => {
+    fakeDb.rpc('submit_report_restoration_appeal', [APPEAL_ROW]).rpc('submit_report_appeal', [APPEAL_ROW]);
+    const input = { caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B', accessCode: CODE, grounds: GROUNDS, idempotencyKey: KEY };
+    expect(await submitReportAppeal({ ...input, target: 'restoration' })).toMatchObject({ ok: true });
+    expect(fakeDb.callsTo('submit_report_restoration_appeal')).toEqual([
+      expect.objectContaining({
+        as: 'service',
+        args: { p_case_number: input.caseNumber, p_access_code: CODE, p_idempotency_key: KEY, p_grounds: GROUNDS },
+      }),
+    ]);
+    expect(fakeDb.callsTo('submit_report_appeal')).toHaveLength(0);
+
+    await submitReportAppeal(input);
+    expect(fakeDb.callsTo('submit_report_appeal')).toHaveLength(1);
+    expect(fakeDb.callsTo('submit_report_restoration_appeal')).toHaveLength(1);
+
+    expect(await submitReportAppeal({ ...input, target: 'other' as never })).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+  });
+
+  it('błędy bazy → kody użytkowe (termin, istniejące odwołanie, brak drogi)', async () => {
+    const input = { caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B', accessCode: CODE, grounds: GROUNDS, idempotencyKey: KEY, target: 'restoration' as const };
+    for (const [message, code] of [
+      ['APPEAL_WINDOW_CLOSED', 'APPEAL_WINDOW_CLOSED'],
+      ['APPEAL_EXISTS', 'APPEAL_EXISTS'],
+      ['INVALID_TRANSITION', 'INVALID_TRANSITION'],
+    ] as const) {
+      fakeDb.rpc('submit_report_restoration_appeal', () => {
+        throw pgError('P0001', message);
+      });
+      expect(await submitReportAppeal(input)).toEqual({ ok: false, error: code });
+    }
+  });
+
+  it('widok sprawy: cofnięcie z drogą odwołania; nieznany stan nie otwiera formularza', () => {
+    const base = {
+      caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B',
+      status: 'resolved',
+      targetType: 'job',
+      category: 'fraud',
+      createdAt: '2026-09-20T10:00:00Z',
+      outcome: 'action_taken',
+      events: [],
+    };
+    const view = parseReportCase({
+      ...base,
+      restoration: {
+        restoredAt: '2026-09-23T10:00:00Z',
+        appealState: 'OK',
+        appealDeadline: '2027-03-23T10:00:00Z',
+        appeal: { reference: 'APL-2', status: 'pending', submittedAt: '2026-09-24T10:00:00Z', dueAt: '2026-10-08T10:00:00Z' },
+      },
+    });
+    expect(view?.restoration).toMatchObject({
+      restoredAt: '2026-09-23T10:00:00Z',
+      appealState: 'OK',
+      appealDeadline: '2027-03-23T10:00:00Z',
+      appeal: { reference: 'APL-2', status: 'pending' },
+    });
+    expect(parseReportCase({ ...base, restoration: { restoredAt: 'x', appealState: 'HACK' } })?.restoration?.appealState).toBeNull();
+    expect(parseReportCase({ ...base, restoration: { appealState: 'OK' } })?.restoration).toBeNull();
+    expect(parseReportCase(base)?.restoration).toBeNull();
+  });
+
+  it.each(LOCALES)('%s: e-mail o cofnięciu — do strony sprawy, bez powodu i danych autora', async (locale) => {
+    const payload = { caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B', recipientName: 'Ra' };
+    const built = buildDeliveryData({ template: 'reportRestored', locale, payload }, SITE);
+    const { subject, html } = await renderEmail('reportRestored', built.locale, built.data as never);
+    expect(html).toContain(`lang="${locale}"`);
+    expect(subject).toContain('DSA-1A2B-3C4D-5E6F-7A8B');
+    expect(html).toContain(`${SITE}/${locale}/zglos-tresc/sprawa`);
+    expect(subject).not.toMatch(/\{\w+\}/);
+    expect(html).not.toMatch(/\{\w+\}/);
+  });
+});
