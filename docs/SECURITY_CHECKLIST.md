@@ -80,10 +80,10 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 
 ## 9. Zgody / cookies / tracking
 
-- [ ] **Zero trackingu przed zgodą** (Invariant #7): GA/Meta Pixel ładowane dopiero po
-      zgodzie w kategorii `analytics`/`marketing`.
-- [ ] Baner cookies z kategoriami (necessary/preferences/analytics/marketing) + centrum
-      ustawień; `necessary` always-on.
+- [ ] **Zero trackingu przed zgodą** (Invariant #7): beacon Cloudflare Web Analytics i lejek
+      ofert dopiero po zgodzie w kategorii `analytics`; GA/Meta Pixel usunięte (#570).
+- [ ] Baner cookies z kategoriami (necessary/analytics, od #570 bez preferences/marketing)
+      + centrum ustawień; `necessary` always-on.
 - [ ] Zgody zapisywane w `consents` z `consent_version_id` (wersjonowanie polityki:
       `NEXT_PUBLIC_CONSENT_POLICY_VERSION`).
 

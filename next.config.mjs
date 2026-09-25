@@ -58,29 +58,30 @@ const nextConfig = {
 
     // --- Content-Security-Policy (P2-01) -------------------------------------
     // Świadomie BEZ nonce/strict-dynamic: strony renderują dane strukturalne JSON-LD
-    // (SEO) oraz — PO zgodzie — inline'owe skrypty GA/Meta Pixel; strict-dynamic bez
-    // pełnego wpięcia nonce do każdego <script> zablokowałby je i popsuł produkt.
+    // (SEO) oraz inline'owe skrypty Next; strict-dynamic bez pełnego wpięcia nonce do
+    // każdego <script> zablokowałby je i popsuł produkt.
     // 'unsafe-inline' dla script-src jest słabsze niż nonce, ale NIE łamie działania;
     // twarda migracja do nonce wymaga testów przeglądarkowych (E2E) — patrz roadmapa.
     // Poza tym pełne, restrykcyjne dyrektywy: object/base/frame-ancestors/form-action
-    // oraz zawężone connect/img/font (Supabase, Sentry, GA/Meta tylko tam, gdzie trzeba).
+    // oraz zawężone connect/img/font (Sentry, beacon Cloudflare Web Analytics — #570).
     const csp = [
       "default-src 'self'",
       "base-uri 'self'",
       "object-src 'none'",
       "frame-ancestors 'none'",
       "form-action 'self'",
-      // Skrypty: własne + inline (JSON-LD, gtag/fbq po zgodzie) + hosty trackerów + Turnstile (#46).
+      // Skrypty: własne + inline (JSON-LD) + beacon Cloudflare Web Analytics po zgodzie (#570)
+      // + Turnstile (#46). GA/Meta Pixel usunięte.
       // Dev dokłada 'unsafe-eval' (React Refresh/HMR Next dev).
-      `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://www.googletagmanager.com https://connect.facebook.net https://challenges.cloudflare.com`,
+      `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://static.cloudflareinsights.com https://challenges.cloudflare.com`,
       "style-src 'self' 'unsafe-inline'",
-      // P3-02: obrazy z własnego origin, data:/blob: i piksele trackerów (po zgodzie).
-      "img-src 'self' data: blob: https://www.google-analytics.com https://www.facebook.com",
+      // P3-02: obrazy z własnego origin i data:/blob: (bez pikseli trackerów od #570).
+      "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      // XHR/fetch: API własne, Sentry ingest, GA/Meta.
-      `connect-src 'self' https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://connect.facebook.net${isDev ? ' ws: http://localhost:*' : ''}`,
-      // Ramki: Meta Pixel (fallback) i Cloudflare Turnstile (#46, ochrona formularzy), reszta zablokowana.
-      "frame-src 'self' https://www.facebook.com https://challenges.cloudflare.com",
+      // XHR/fetch: API własne, Sentry ingest, beacon Cloudflare Web Analytics (#570).
+      `connect-src 'self' https://*.sentry.io https://cloudflareinsights.com${isDev ? ' ws: http://localhost:*' : ''}`,
+      // Ramki: Cloudflare Turnstile (#46, ochrona formularzy), reszta zablokowana.
+      "frame-src 'self' https://challenges.cloudflare.com",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
       // #47: raporty naruszeń (bez zmiany egzekwowanej polityki). `report-uri` dla przeglądarek

@@ -217,7 +217,7 @@ Te reguły wynikają wprost ze specyfikacji i z błędów poprzedniego produktu.
 4. **Aplikowanie idempotentne.** Unikat `(candidate_id, job_id)` — jedna aplikacja.
 5. **RLS wszędzie.** Każda tabela z danymi użytkownika ma polityki. Domyślnie deny.
 6. **Uprawnienia service_role tylko na serwerze.** Pula `withServiceRole` (`DATABASE_SERVICE_URL`, `src/lib/db/portal.ts`, `server-only`) nie może trafić do bundle klienta.
-7. **Zero trackingu przed zgodą.** GA/Meta Pixel/remarketing ładują się dopiero po zgodzie w kategoriach cookies.
+7. **Zero trackingu przed zgodą.** Statystyka (Cloudflare Web Analytics, #570) i lejek ofert (#575) działają dopiero po zgodzie w kategorii analitycznej. GA/Meta Pixel usunięte — nie wracają bez decyzji właściciela.
 8. **Użytkownik nie widzi technikaliów.** Żadnego stack trace/SQL/surowej odpowiedzi API/komunikatu dostawcy.
    Błędy przez centralny system (`src/lib/errors`), user-facing komunikat z klucza tłumaczenia.
 9. **Panele = `noindex`.** `candidate/*`, `employer/*`, `admin/*`, staging — wyłączone z indeksowania i sitemap.
@@ -1113,6 +1113,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 
 ### Etap 7 — admin / prywatność / płatności
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)
+  Cloudflare Web Analytics zamiast GA/Meta Pixel (#570, decyzja właściciela 25.09): beacon
+  (`src/lib/analytics/cloudflare.ts`, `Analytics.tsx`) tylko z tokenem `NEXT_PUBLIC_CF_ANALYTICS_TOKEN`,
+  po zgodzie analitycznej i poza trasami prywatnymi; po wycofaniu (także w innej karcie) bramka
+  blokuje wysyłki załadowanego skryptu (`installCloudflareBeaconGuard`). CSP: host beaconu zamiast
+  Google/Meta. Baner: tylko niezbędne + analityczne (preferencje/marketing zawsze `false`), wersja
+  polityki `2.0` (zgody 1.0 nieważne). Mapa danych/dostawcy: `cloudflare-web-analytics`. Szkic:
+  `docs/legal-drafts/statystyka-cloudflare.md`. Dowód: unit `cloudflare-analytics` (kontrola ujemna
+  bramki), `consent-store`; E2E `cookie-consent-categories`, `smoke`, `one-time-link-tracking`
+  (pozytywne scenariusze beaconu wymagają testowego tokenu w buildzie — **do zrobienia
+  (właściciel):** `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` w jobach build/e2e `ci.yml` zamiast martwych
+  zmiennych GA/Meta; do tego czasu są jawnie pomijane), token w Railway, usunięcie zmiennych GA/Meta.
 - [x] Panel administratora — `/admin/**` (guard role='admin'→notFound, noindex): dashboard, firmy
   (weryfikuj/odrzuć/zawieś), zgłoszenia (moderacja), użytkownicy; odczyt service-role, zapis przez RPC (0019)
   Każdy odczyt service-role w `src/lib/data/admin.ts` sam potwierdza rolę admina sesji
@@ -1288,7 +1299,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
-  connect/img/font, GA/Meta/Supabase/Sentry). Wariant nonce/strict-dynamic = follow-up (E2E).
+  connect/img/font, Sentry, beacon Cloudflare Web Analytics — #570). Wariant nonce/strict-dynamic = follow-up (E2E).
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
 - [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
   funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
@@ -1431,12 +1442,11 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   render (#348, `email-recipient-locale-e2e`): kontrakt najnowszych `resolve_recipient_locale`/
   `enqueue_email` z migracji (kolejność preferred → account → signup → `en`, locale z
   `p_profile_id`), zgodność z TS, nadawca i odbiorca w różnych językach, kontrola ujemna.
-  Zgody cookies (#349, `cookie-consent-categories.spec`, 4 języki): „Tylko niezbędne”, sama
-  analityka (GA bez Meta), sam marketing (Meta bez GA), wycofanie ze stopki (`ga-disable`,
-  `fbq('consent','revoke')`, usunięcie `_ga*`/`_fbp`/`_fbc`, po odświeżeniu zero żądań), stara
-  wersja polityki / uszkodzone cookie → baner z serwera nieukryty przed hydratacją; cookie na
-  180 dni; wywołanie `recordConsent` z kategoriami i źródłem (centrum = `cookie_settings`).
-  Ponowna zgoda na marketing po wycofaniu woła `fbq('consent','grant')`. Kontrakt parametrów
+  Zgody cookies (#349, #570, `cookie-consent-categories.spec`, 4 języki): „Tylko niezbędne”,
+  analityka → beacon Cloudflare (GA/Meta nigdy), wycofanie ze stopki (bramka wysyłki beaconu,
+  usunięcie pozostałych `_ga*`/`_fbp`/`_fbc`, po odświeżeniu zero żądań), stara wersja polityki
+  (1.0) / uszkodzone cookie → baner z serwera nieukryty przed hydratacją; cookie na 180 dni;
+  wywołanie `recordConsent` z kategoriami i źródłem (centrum = `cookie_settings`). Kontrakt parametrów
   `recordConsent` ↔ `record_consent` z migracji (`consent-action.test`). **Otwarte:** wersja
   polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
   Invariant #1 na żywej bazie (#348): `rls.sql` sekcja LOC348 — `email_deliveries.locale` dla

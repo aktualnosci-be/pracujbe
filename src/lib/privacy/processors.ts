@@ -19,8 +19,7 @@ export type ProcessorId =
   | 'cloudflare-turnstile'
   | 'anthropic'
   | 'stripe'
-  | 'google-analytics'
-  | 'meta-pixel'
+  | 'cloudflare-web-analytics'
   | 'vies';
 
 export interface Processor {
@@ -181,25 +180,19 @@ export const PROCESSORS: readonly Processor[] = [
     ...UNKNOWN,
   },
   {
-    id: 'google-analytics',
-    name: 'Google Analytics (gtag)',
-    purpose: 'Analityka ruchu — wyłącznie po zgodzie w kategorii analytics.',
-    dataCategories: ['Wyświetlenia stron i identyfikatory cookies _ga* ustawiane przez skrypt dostawcy (pełny zakres określa dostawca)'],
+    id: 'cloudflare-web-analytics',
+    name: 'Cloudflare Web Analytics',
+    purpose: 'Statystyka odwiedzin (#570, zamiast Google Analytics i Meta Pixel) — wyłącznie po zgodzie w kategorii analytics.',
+    dataCategories: [
+      'Adres strony, referrer, dane techniczne przeglądarki i czasy ładowania zbierane przez skrypt beaconu (pełny zakres określa dostawca); adres IP połączenia',
+    ],
     dataSubjects: ['Odwiedzający, którzy wyrazili zgodę'],
-    activation: 'NEXT_PUBLIC_GA_MEASUREMENT_ID + zgoda analytics w banerze cookies.',
-    codeRefs: ['src/components/cookies/Analytics.tsx', 'src/lib/consent-store.ts'],
-    notes: ['gtag config z anonymize_ip: true; wycofanie zgody usuwa cookies _ga*.'],
-    ...UNKNOWN,
-  },
-  {
-    id: 'meta-pixel',
-    name: 'Meta Pixel',
-    purpose: 'Marketing/remarketing — wyłącznie po zgodzie w kategorii marketing.',
-    dataCategories: ['Zdarzenie PageView i identyfikatory cookies _fbp/_fbc ustawiane przez skrypt dostawcy (pełny zakres określa dostawca)'],
-    dataSubjects: ['Odwiedzający, którzy wyrazili zgodę'],
-    activation: 'NEXT_PUBLIC_META_PIXEL_ID + zgoda marketing w banerze cookies.',
-    codeRefs: ['src/components/cookies/Analytics.tsx', 'src/lib/consent-store.ts'],
-    notes: ["Wycofanie zgody: fbq('consent','revoke') i usunięcie cookies _fbp/_fbc."],
+    activation: 'NEXT_PUBLIC_CF_ANALYTICS_TOKEN + zgoda analytics w banerze cookies; nigdy na trasach prywatnych (allowsTrackingOnPath).',
+    codeRefs: ['src/components/cookies/Analytics.tsx', 'src/lib/analytics/cloudflare.ts', 'next.config.mjs'],
+    notes: [
+      'Beacon nie ustawia cookies ani localStorage (deklaracja dostawcy; kod portalu niczego nie zapisuje).',
+      'Po wycofaniu zgody bramka blokuje wysyłki załadowanego skryptu (sendBeacon/fetch/XHR do cloudflareinsights.com i /cdn-cgi/rum).',
+    ],
     ...UNKNOWN,
   },
   {

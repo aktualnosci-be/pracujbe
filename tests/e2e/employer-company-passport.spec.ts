@@ -33,7 +33,7 @@ for (const locale of locales) {
         {
           name: 'pracujbe_consent',
           value: JSON.stringify({
-            v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
+            v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
             categories: {
               necessary: true,
               preferences: false,

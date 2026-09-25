@@ -19,15 +19,13 @@ import {
   type ConsentRecord,
   type ConsentSource,
 } from './consent';
-import { allowsTrackingOnPath } from './analytics/route-policy';
 import { CONSENT_CHANGE_EVENT } from './consent-cookie';
 
-/** Measurement ID GA (publiczny, wstrzykiwany do bundle klienta). */
-const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
-
-/** Prefiksy cookies ustawianych przez trackery — usuwane po wycofaniu zgody. */
-const GA_COOKIE_PREFIXES = ['_ga', '_gid', '_gat'] as const;
-const META_COOKIE_PREFIXES = ['_fbp', '_fbc'] as const;
+/**
+ * Prefiksy cookies dawnych trackerów (GA, Meta Pixel — usunięte w #570). Nic ich już nie
+ * ustawia; pozostałości z wcześniejszych wizyt są usuwane przy każdej synchronizacji zgody.
+ */
+const LEGACY_TRACKER_COOKIE_PREFIXES = ['_ga', '_gid', '_gat', '_fbp', '_fbc'] as const;
 
 /** Zdarzenie DOM emitowane po zmianie zgody (detail: ConsentRecord) — definicja w consent-cookie. */
 export { CONSENT_CHANGE_EVENT };
@@ -60,19 +58,16 @@ export function subscribeConsent(listener: ConsentListener): () => void {
  * Zapis nowej zgody + rozgłoszenie zmiany do subskrybentów i przez zdarzenie DOM.
  * To jedyna droga zmiany zgody używana przez UI (baner i panel).
  *
- * Natychmiast egzekwuje bieżący stan na poziomie samych trackerów (`syncTrackers`) — nie tylko
- * przez (nie)renderowanie skryptów w <Analytics/>. Dzięki temu wycofanie zgody realnie wyłącza
- * GA/Meta i czyści ich cookies, zanim jeszcze React zdąży ponownie wyrenderować drzewo.
+ * Natychmiast egzekwuje bieżący stan (`syncTrackers`), zanim React ponownie wyrenderuje drzewo.
+ * Beacon Cloudflare (#570) po wycofaniu blokuje bramka wysyłki (`installCloudflareBeaconGuard`),
+ * a lejek ofert (#575) czyta zgodę tuż przed wysyłką.
  */
 export function updateConsent(
   categories: ConsentCategories,
   source: ConsentSource = 'cookie_banner',
 ): ConsentRecord {
   const record = saveConsent(categories, source);
-  syncTrackers({
-    analytics: record.categories.analytics === true,
-    marketing: record.categories.marketing === true,
-  });
+  syncTrackers({ analytics: record.categories.analytics === true });
   for (const listener of listeners) {
     listener(record);
   }
@@ -82,67 +77,20 @@ export function updateConsent(
   return record;
 }
 
-/** Flagi zgody istotne dla trackerów. */
+/** Flagi zgody istotne dla statystyki. */
 export interface TrackerConsent {
   analytics: boolean;
-  marketing: boolean;
 }
 
 /**
- * Egzekwuje bieżący stan zgody na poziomie trackerów (skuteczne WYCOFANIE, nie tylko usunięcie
- * tagu <Script>). Wołane z `updateConsent` (przy zmianie) oraz z <Analytics/> (przy montażu
- * i zmianie stanu). Idempotentne i bezpieczne na serwerze (strażowane `window`/`document`).
- *
- * - analytics WYŁĄCZONE → `window['ga-disable-<ID>']=true` (GA respektuje to nawet po załadowaniu)
- *   + usunięcie cookies `_ga*`; analytics WŁĄCZONE → flaga = false (ponowne włączenie po re-zgodzie).
- * - marketing WYŁĄCZONE → `fbq('consent','revoke')` (jeśli obecne) + usunięcie cookies `_fbp`/`_fbc`;
- *   marketing WŁĄCZONE → `fbq('consent','grant')` (jeśli obecne — ponowna zgoda po wycofaniu).
- *
- * Invariant #7 (zero trackingu przed zgodą): gdy kategoria nie jest przyznana, flaga blokująca
- * jest ustawiona, a cookies wyczyszczone; skrypty i tak nie są renderowane przez <Analytics/>.
+ * Egzekwuje bieżący stan zgody (wołane z `updateConsent` i z <Analytics/>). Idempotentne
+ * i bezpieczne na serwerze. Od #570 jedyną statystyką jest beacon Cloudflare bez cookies —
+ * tu zostało usuwanie cookies dawnych trackerów GA/Meta z wcześniejszych wizyt (niezależnie
+ * od zgody: żadna kategoria ich już nie potrzebuje). Parametr zostaje dla czytelności wywołań.
  */
-export function syncTrackers({ analytics, marketing }: TrackerConsent): void {
+export function syncTrackers(_consent: TrackerConsent): void {
   if (typeof window === 'undefined') return;
-
-  // Consent cannot enable tracking on routes carrying credentials or private data.
-  const routeAllowed = allowsTrackingOnPath(window.location.pathname);
-  analytics = analytics && routeAllowed;
-  marketing = marketing && routeAllowed;
-
-  const w = window as unknown as Record<string, unknown> & {
-    fbq?: (...args: unknown[]) => void;
-  };
-
-  // --- Google Analytics ---
-  if (GA_ID) {
-    // Flaga odwoływalna w obie strony: !analytics blokuje, analytics=true odblokowuje.
-    w[`ga-disable-${GA_ID}`] = !analytics;
-  }
-  if (!analytics) {
-    clearCookiesByPrefix(GA_COOKIE_PREFIXES);
-  }
-
-  // --- Meta Pixel ---
-  if (marketing) {
-    // Pixel załadowany wcześniej i odwołany (`revoke`) nie wznawia się sam — ponowna zgoda
-    // w tej samej sesji strony musi go jawnie przywrócić.
-    if (typeof w.fbq === 'function') {
-      try {
-        w.fbq('consent', 'grant');
-      } catch {
-        // pixel w trakcie inicjalizacji — ignorujemy
-      }
-    }
-  } else {
-    if (typeof w.fbq === 'function') {
-      try {
-        w.fbq('consent', 'revoke');
-      } catch {
-        // pixel w trakcie inicjalizacji — ignorujemy
-      }
-    }
-    clearCookiesByPrefix(META_COOKIE_PREFIXES);
-  }
+  clearCookiesByPrefix(LEGACY_TRACKER_COOKIE_PREFIXES);
 }
 
 /** Usuwa wszystkie cookies o podanych prefiksach (ścieżka `/`, host oraz domena bazowa). */

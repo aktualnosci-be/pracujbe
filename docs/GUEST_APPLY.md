@@ -60,7 +60,7 @@ sekcja GA98 (z kontrolami ujemnymi).
   Action `stageGuestLink`) do cookie HttpOnly przypisanego do ścieżki (`pb_guest_confirm`
   48 h, `pb_guest_claim` 30 dni) i przeładowuje czysty adres.
 - Trasy mają `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer`, `noindex`
-  (middleware + metadata) i nie ładują GA/Meta nawet po zgodzie (`route-policy.ts`).
+  (middleware + metadata) i nie ładują statystyki (beacon Cloudflare, #570) nawet po zgodzie (`route-policy.ts`).
 - Stary format `?token=` (linki wysłane przed #506) jest **odrzucany**: middleware przekierowuje
   303 na czysty adres bez zapisywania tokenu, a strona pokazuje „link nieprawidłowy” z prośbą
   o ponowne wysłanie aplikacji. Wybraliśmy odrzucenie zamiast wymiany, bo token z query jest już

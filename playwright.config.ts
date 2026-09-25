@@ -1,7 +1,5 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { join } from 'path';
 import { defineConfig, devices } from '@playwright/test';
-import { E2E_GA_MEASUREMENT_ID, E2E_META_PIXEL_ID } from './tests/e2e/fixtures/trackers';
+import { E2E_CF_ANALYTICS_TOKEN } from './tests/e2e/fixtures/trackers';
 import { E2E_UNSUBSCRIBE_SECRET } from './tests/e2e/fixtures/unsubscribe';
 
 /**
@@ -28,14 +26,13 @@ const BASE_URL = `http://localhost:${PORT}`;
 const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH;
 
 /**
- * Testowe identyfikatory trackerów (Invariant #7, issue #234). Bez nich komponent
- * `Analytics` nigdy nie renderuje GA/Meta Pixel i test zgód nie może wykryć regresji.
- * NEXT_PUBLIC_* są wklejane do bundla w czasie `next build`, więc muszą trafić do builda.
- * Żądania do Google/Meta są w testach przechwytywane (`page.route`) — zero realnego ruchu.
+ * Testowy token Cloudflare Web Analytics (Invariant #7, #234, #570). Bez niego komponent
+ * `Analytics` nigdy nie renderuje beaconu i pozytywne scenariusze zgód nie mają czego sprawdzić.
+ * NEXT_PUBLIC_* są wklejane do bundla w czasie `next build`, więc token trafia do builda
+ * budowanego tutaj. Żądania do Cloudflare są w testach przechwytywane — zero realnego ruchu.
  */
 const TRACKER_ENV = {
-  NEXT_PUBLIC_GA_MEASUREMENT_ID: E2E_GA_MEASUREMENT_ID,
-  NEXT_PUBLIC_META_PIXEL_ID: E2E_META_PIXEL_ID,
+  NEXT_PUBLIC_CF_ANALYTICS_TOKEN: E2E_CF_ANALYTICS_TOKEN,
 };
 
 /**
@@ -56,27 +53,10 @@ const JOB_ASSIST_ENV = {
   AI_JOB_ASSIST_PROVIDER: 'fixture',
 };
 
-/** Czy gotowy build (.next) ma wklejone testowe ID trackerów. */
-function buildHasTrackerIds(): boolean {
-  const dir = join(process.cwd(), '.next', 'static', 'chunks');
-  if (!existsSync(dir)) return false;
-  const pending = [dir];
-  while (pending.length > 0) {
-    const current = pending.pop()!;
-    for (const name of readdirSync(current)) {
-      const file = join(current, name);
-      if (statSync(file).isDirectory()) pending.push(file);
-      else if (name.endsWith('.js') && readFileSync(file, 'utf-8').includes(E2E_GA_MEASUREMENT_ID)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-// CI buduje w osobnym kroku (PLAYWRIGHT_SKIP_BUILD=1). Jeśli ten build nie ma testowych ID
-// trackerów, przebudowujemy go tutaj — inaczej test zgód przechodziłby zawsze (issue #234).
-const reuseBuild = process.env.PLAYWRIGHT_SKIP_BUILD === '1' && buildHasTrackerIds();
+// CI buduje w osobnym kroku (PLAYWRIGHT_SKIP_BUILD=1) i ten build jest używany zawsze — bez
+// drugiego builda w jobie e2e. Jeśli nie ma testowego tokenu (`buildHasCfToken`), pozytywne
+// scenariusze beaconu są jawnie pomijane (#570); scenariusze „bez zgody” działają zawsze.
+const reuseBuild = process.env.PLAYWRIGHT_SKIP_BUILD === '1';
 
 export default defineConfig({
   testDir: './tests/e2e',

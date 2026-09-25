@@ -5,15 +5,25 @@ import en from "../../src/messages/en.json";
 import fr from "../../src/messages/fr.json";
 import nl from "../../src/messages/nl.json";
 import pl from "../../src/messages/pl.json";
-import { E2E_GA_MEASUREMENT_ID } from "./fixtures/trackers";
+import {
+  buildHasCfToken,
+  CF_SCRIPT,
+  E2E_CF_ANALYTICS_TOKEN,
+  watchAnalytics,
+  type AnalyticsSeen,
+} from "./fixtures/trackers";
 
 /**
- * Zgody na cookies — kategorie, wycofanie i wersja polityki w 4 językach (#349, Invariant #7).
+ * Zgody na cookies — kategorie, wycofanie i wersja polityki w 4 językach (#349, #570, Invariant #7).
  *
- * Build E2E ma testowe ID GA/Meta (playwright.config.ts), więc `Analytics` realnie renderuje
- * trackery po zgodzie. Każde żądanie do Google/Meta jest przechwytywane i kończone pustym
- * skryptem (`route.fulfill`) — liczymy je, nic nie wychodzi do dostawców. Dzięki pustej
- * odpowiedzi `fbq` zostaje kolejką (stub z inline skryptu Pixela), którą można odczytać.
+ * Od #570 jedyną statystyką jest Cloudflare Web Analytics (bez cookies), ładowany po zgodzie
+ * w kategorii analitycznej; GA i Meta Pixel usunięte. Baner pyta tylko o niezbędne i analityczne
+ * (bez preferencji i marketingu), wersja polityki 2.0. Żądania do Cloudflare i dawnych hostów
+ * GA/Meta są przechwytywane (`watchAnalytics`) — nic nie wychodzi do dostawców. Atrapa beaconu
+ * wystawia `__cfBeaconSend()`, więc sprawdzamy też bramkę wysyłki po wycofaniu zgody.
+ *
+ * Build E2E ma testowy token (playwright.config.ts). Build bez niego (CI przed dodaniem
+ * `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` do ci.yml) pomija scenariusze pozytywne — jawnie (`skip`).
  *
  * Baner jest w HTML z serwera, a skrypt w <head> (consent-boot.ts) ukrywa go przed
  * pierwszym malowaniem tylko przy ważnej zgodzie w bieżącej wersji polityki (#389).
@@ -22,39 +32,12 @@ import { E2E_GA_MEASUREMENT_ID } from "./fixtures/trackers";
 const messages = { pl, nl, fr, en } as const;
 
 const CONSENT_COOKIE = "pracujbe_consent";
-const POLICY_VERSION = process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? "1.0";
+const POLICY_VERSION = process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? "2.0";
 const MAX_AGE_DAYS = 180;
-
-const TRACKER_HOSTS =
-  /^https:\/\/(www\.googletagmanager\.com|[a-z0-9.-]*google-analytics\.com|connect\.facebook\.net|www\.facebook\.com)\//;
-const GTM_SCRIPT = 'script[src*="googletagmanager.com"]';
-const META_SCRIPT = "script#meta-pixel";
+const HAS_TOKEN = buildHasCfToken();
 
 // Skrypty `afterInteractive` wstrzykiwane są po hydratacji — „brak żądania" sprawdzamy w oknie.
 const QUIET_WINDOW_MS = 3_000;
-
-type Seen = { gtm: string[]; meta: string[] };
-
-async function trackTrackerRequests(page: Page): Promise<Seen> {
-  const seen: Seen = { gtm: [], meta: [] };
-  await page.route(TRACKER_HOSTS, async (route) => {
-    const url = route.request().url();
-    if (
-      url.includes("googletagmanager.com") ||
-      url.includes("google-analytics.com")
-    ) {
-      seen.gtm.push(url);
-    } else {
-      seen.meta.push(url);
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/javascript",
-      body: "",
-    });
-  });
-  return seen;
-}
 
 type ConsentCall = { categories: Record<string, boolean>; source: string };
 
@@ -86,19 +69,31 @@ function trackConsentActions(page: Page): ConsentCall[] {
   return calls;
 }
 
-async function expectNoTrackers(page: Page, seen: Seen) {
+async function expectNoTrackers(page: Page, seen: AnalyticsSeen) {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(QUIET_WINDOW_MS);
-  expect(seen.gtm, "żądania GA bez zgody na analitykę").toEqual([]);
-  expect(seen.meta, "żądania Meta Pixel bez zgody na marketing").toEqual([]);
-  await expect(page.locator(GTM_SCRIPT)).toHaveCount(0);
-  await expect(page.locator(META_SCRIPT)).toHaveCount(0);
+  expect(seen.script, "beacon bez zgody na analitykę").toEqual([]);
+  expect(seen.rum, "wysyłki statystyki bez zgody").toEqual([]);
+  expect(seen.legacy, "GA/Meta usunięte (#570)").toEqual([]);
+  await expect(page.locator(CF_SCRIPT)).toHaveCount(0);
   expect(
     await page.evaluate(() => {
       const w = window as unknown as { gtag?: unknown; fbq?: unknown };
       return { gtag: typeof w.gtag, fbq: typeof w.fbq };
     }),
   ).toEqual({ gtag: "undefined", fbq: "undefined" });
+}
+
+/** Beacon załadowany z testowym tokenem, GA/Meta nigdy. */
+async function expectBeacon(page: Page, seen: AnalyticsSeen) {
+  await expect
+    .poll(() => seen.script.length, { message: "beacon po zgodzie" })
+    .toBeGreaterThan(0);
+  await expect(page.locator(CF_SCRIPT)).toHaveCount(1);
+  expect(
+    await page.locator(CF_SCRIPT).getAttribute("data-cf-beacon"),
+  ).toContain(E2E_CF_ANALYTICS_TOKEN);
+  expect(seen.legacy, "GA/Meta usunięte (#570)").toEqual([]);
 }
 
 async function storeConsent(
@@ -138,11 +133,12 @@ async function recordBannerAtDomReady(page: Page) {
   });
 }
 
+/** „Akceptuj wszystkie” od #570: niezbędne + analityczne (preferencje/marketing zawsze false). */
 const ALL = {
   necessary: true,
-  preferences: true,
+  preferences: false,
   analytics: true,
-  marketing: true,
+  marketing: false,
 };
 const NONE = {
   necessary: true,
@@ -160,26 +156,27 @@ for (const locale of routing.locales) {
   const settings = (page: Page) =>
     page.getByRole("dialog", { name: m.cookies.settingsTitle });
 
-  /** Z banera: „Dostosuj” → włączenie wskazanych kategorii → „Zapisz ustawienia”. */
-  async function saveFromCustomize(
-    page: Page,
-    enable: Array<"analytics" | "marketing">,
-  ) {
+  /** Z banera: „Dostosuj” → (opcjonalnie) włączenie analityki → „Zapisz ustawienia”. */
+  async function saveFromCustomize(page: Page, analytics: boolean) {
     await banner(page)
       .getByRole("button", { name: m.cookies.customize, exact: true })
       .click();
     const dialog = settings(page);
     await expect(dialog).toBeVisible();
-    for (const key of ["preferences", "analytics", "marketing"] as const) {
-      await expect(
-        dialog.getByRole("switch", { name: m.cookies[`${key}Name`] }),
-        "kategorie opcjonalne domyślnie wyłączone",
-      ).toHaveAttribute("aria-checked", "false");
-    }
-    for (const key of enable) {
-      const toggle = dialog.getByRole("switch", {
-        name: m.cookies[`${key}Name`],
-      });
+    // #570: jedyna kategoria opcjonalna to analityka; preferencji i marketingu nie ma.
+    await expect(dialog.getByRole("switch")).toHaveCount(1);
+    await expect(
+      dialog.getByRole("switch", { name: m.cookies.preferencesName }),
+    ).toHaveCount(0);
+    await expect(
+      dialog.getByRole("switch", { name: m.cookies.marketingName }),
+    ).toHaveCount(0);
+    const toggle = dialog.getByRole("switch", { name: m.cookies.analyticsName });
+    await expect(toggle, "analityka domyślnie wyłączona").toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    if (analytics) {
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-checked", "true");
     }
@@ -191,11 +188,11 @@ for (const locale of routing.locales) {
   }
 
   test.describe(`zgody cookies (${locale})`, () => {
-    test("przed zgodą i po „Tylko niezbędne” zero GA/Meta; zgoda zapisana na 180 dni i wysłana do serwera", async ({
+    test("przed zgodą i po „Tylko niezbędne” zero statystyki; zgoda zapisana na 180 dni i wysłana do serwera", async ({
       page,
       context,
     }) => {
-      const seen = await trackTrackerRequests(page);
+      const seen = await watchAnalytics(page);
       const calls = trackConsentActions(page);
       await page.goto(home);
       await expect(banner(page)).toBeVisible();
@@ -230,84 +227,61 @@ for (const locale of routing.locales) {
       await expectNoTrackers(page, seen);
     });
 
-    test("centrum ustawień: tylko analityka → GA bez Meta Pixel (także po odświeżeniu)", async ({
+    test("centrum ustawień: analityka → beacon Cloudflare, bez GA/Meta (także po odświeżeniu)", async ({
       page,
     }) => {
-      const seen = await trackTrackerRequests(page);
+      test.skip(!HAS_TOKEN, "build bez testowego tokenu Cloudflare (#570)");
+      const seen = await watchAnalytics(page);
       const calls = trackConsentActions(page);
       await page.goto(home);
-      await saveFromCustomize(page, ["analytics"]);
-
-      await expect
-        .poll(() => seen.gtm.length, { message: "żądanie GA po zgodzie" })
-        .toBeGreaterThan(0);
-      expect(seen.gtm.some((url) => url.includes(E2E_GA_MEASUREMENT_ID))).toBe(
-        true,
-      );
-      await page.waitForTimeout(QUIET_WINDOW_MS);
-      expect(seen.meta, "Meta Pixel bez zgody na marketing").toEqual([]);
-      await expect(page.locator(META_SCRIPT)).toHaveCount(0);
+      await saveFromCustomize(page, true);
+      await expectBeacon(page, seen);
 
       await expect.poll(() => calls.length).toBe(1);
-      expect(calls[0]).toEqual({
-        categories: { ...NONE, analytics: true },
-        source: "cookie_settings",
-      });
+      expect(calls[0]).toEqual({ categories: ALL, source: "cookie_settings" });
 
-      seen.gtm.length = 0;
+      seen.script.length = 0;
       await page.reload();
-      await expect
-        .poll(() => seen.gtm.length, { message: "GA po powrocie" })
-        .toBeGreaterThan(0);
-      await page.waitForTimeout(QUIET_WINDOW_MS);
-      expect(seen.meta).toEqual([]);
+      await expectBeacon(page, seen);
     });
 
-    test("centrum ustawień: tylko marketing → Meta Pixel bez GA (także po odświeżeniu)", async ({
+    test("centrum ustawień: zapis z wyłączoną analityką = brak statystyki", async ({
       page,
     }) => {
-      const seen = await trackTrackerRequests(page);
+      const seen = await watchAnalytics(page);
       const calls = trackConsentActions(page);
       await page.goto(home);
-      await saveFromCustomize(page, ["marketing"]);
-
-      await expect
-        .poll(() => seen.meta.length, { message: "żądanie Meta po zgodzie" })
-        .toBeGreaterThan(0);
-      await page.waitForTimeout(QUIET_WINDOW_MS);
-      expect(seen.gtm, "GA bez zgody na analitykę").toEqual([]);
-      await expect(page.locator(GTM_SCRIPT)).toHaveCount(0);
-
+      await saveFromCustomize(page, false);
+      await expectNoTrackers(page, seen);
       await expect.poll(() => calls.length).toBe(1);
-      expect(calls[0]).toEqual({
-        categories: { ...NONE, marketing: true },
-        source: "cookie_settings",
-      });
-
-      seen.meta.length = 0;
-      await page.reload();
-      await expect
-        .poll(() => seen.meta.length, { message: "Meta po powrocie" })
-        .toBeGreaterThan(0);
-      await page.waitForTimeout(QUIET_WINDOW_MS);
-      expect(seen.gtm).toEqual([]);
+      expect(calls[0]).toEqual({ categories: NONE, source: "cookie_settings" });
     });
 
-    test("wycofanie zgody ze stopki: trackery odwołane, cookies GA/Meta usunięte, po odświeżeniu zero żądań", async ({
+    test("wycofanie zgody ze stopki: beacon nic nie wysyła, cookies GA/Meta usunięte, po odświeżeniu zero żądań", async ({
       page,
       context,
     }) => {
-      const seen = await trackTrackerRequests(page);
+      test.skip(!HAS_TOKEN, "build bez testowego tokenu Cloudflare (#570)");
+      const seen = await watchAnalytics(page);
       const calls = trackConsentActions(page);
       await page.goto(home);
       await banner(page)
         .getByRole("button", { name: m.cookies.acceptAll, exact: true })
         .click();
       await expect(banner(page)).toHaveCount(0);
-      await expect.poll(() => seen.gtm.length).toBeGreaterThan(0);
-      await expect.poll(() => seen.meta.length).toBeGreaterThan(0);
+      await expectBeacon(page, seen);
 
-      // Cookies, które ustawiłyby prawdziwe skrypty GA/Meta (odpowiedzi dostawców są puste).
+      // Kontrola ujemna bramki: ze zgodą wysyłka beaconu przechodzi.
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            (window as unknown as { __cfBeaconSend?: () => boolean }).__cfBeaconSend?.(),
+          ),
+        )
+        .toBe(true);
+      await expect.poll(() => seen.rum.length).toBe(1);
+
+      // Pozostałości dawnych trackerów z wcześniejszych wizyt.
       await page.evaluate(() => {
         for (const name of ["_ga", "_ga_TEST000000", "_gid", "_fbp", "_fbc"]) {
           document.cookie = `${name}=1; Path=/`;
@@ -320,17 +294,13 @@ for (const locale of routing.locales) {
         .click();
       const dialog = settings(page);
       await expect(dialog).toBeVisible();
-      for (const key of ["analytics", "marketing"] as const) {
-        const toggle = dialog.getByRole("switch", {
-          name: m.cookies[`${key}Name`],
-        });
-        await expect(toggle, "centrum pokazuje zapisaną zgodę").toHaveAttribute(
-          "aria-checked",
-          "true",
-        );
-        await toggle.click();
-        await expect(toggle).toHaveAttribute("aria-checked", "false");
-      }
+      const toggle = dialog.getByRole("switch", { name: m.cookies.analyticsName });
+      await expect(toggle, "centrum pokazuje zapisaną zgodę").toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-checked", "false");
       await dialog
         .getByRole("button", { name: m.cookies.save, exact: true })
         .click();
@@ -343,48 +313,37 @@ for (const locale of routing.locales) {
             .filter((n) => /^_(ga|gid|fb)/.test(n)),
         )
         .toEqual([]);
+      // Załadowany skrypt zostaje w karcie, ale jego wysyłki blokuje bramka.
       expect(
-        await page.evaluate((gaId) => {
-          const w = window as unknown as Record<string, unknown> & {
-            fbq?: { queue?: unknown[][] };
-          };
-          return {
-            gaDisabled: w[`ga-disable-${gaId}`],
-            fbqRevoked: (w.fbq?.queue ?? []).some(
-              (args) =>
-                Array.from(args)[0] === "consent" &&
-                Array.from(args)[1] === "revoke",
-            ),
-          };
-        }, E2E_GA_MEASUREMENT_ID),
-      ).toEqual({ gaDisabled: true, fbqRevoked: true });
+        await page.evaluate(() =>
+          (window as unknown as { __cfBeaconSend?: () => boolean }).__cfBeaconSend?.(),
+        ),
+      ).toBe(false);
+      await page.waitForTimeout(1_000);
+      expect(seen.rum, "po wycofaniu żadnej wysyłki").toHaveLength(1);
 
       await expect.poll(() => calls.length).toBe(2);
       expect(calls).toEqual([
         { categories: ALL, source: "cookie_banner" },
-        {
-          categories: { ...ALL, analytics: false, marketing: false },
-          source: "cookie_settings",
-        },
+        { categories: NONE, source: "cookie_settings" },
       ]);
 
-      seen.gtm.length = 0;
-      seen.meta.length = 0;
+      seen.script.length = 0;
+      seen.rum.length = 0;
       await page.reload();
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(banner(page)).toBeHidden();
       await expectNoTrackers(page, seen);
     });
 
-    test("ważna zgoda w bieżącej wersji: baner ukryty przed hydratacją, trackery wg kategorii", async ({
+    test("ważna zgoda w bieżącej wersji: baner ukryty przed hydratacją, beacon po zgodzie analitycznej", async ({
       page,
       context,
       baseURL,
     }) => {
-      await storeConsent(context, baseURL!, {
-        categories: { ...NONE, analytics: true },
-      });
-      const seen = await trackTrackerRequests(page);
+      test.skip(!HAS_TOKEN, "build bez testowego tokenu Cloudflare (#570)");
+      await storeConsent(context, baseURL!, { categories: ALL });
+      const seen = await watchAnalytics(page);
       await recordBannerAtDomReady(page);
       await page.goto(home);
 
@@ -394,14 +353,19 @@ for (const locale of routing.locales) {
         ),
       ).toBe("none");
       await expect(banner(page)).toHaveCount(0);
-      await expect.poll(() => seen.gtm.length).toBeGreaterThan(0);
-      await page.waitForTimeout(QUIET_WINDOW_MS);
-      expect(seen.meta).toEqual([]);
+      await expectBeacon(page, seen);
     });
 
     for (const [label, record] of [
       [
-        "zgoda na wszystko w starej wersji polityki",
+        "zgoda na wszystko w poprzedniej wersji polityki (1.0, z marketingiem)",
+        {
+          v: "1.0",
+          categories: { necessary: true, preferences: true, analytics: true, marketing: true },
+        },
+      ],
+      [
+        "zgoda w innej wersji polityki",
         { v: `${POLICY_VERSION}-stara`, categories: ALL },
       ],
       [
@@ -413,13 +377,13 @@ for (const locale of routing.locales) {
         { raw: JSON.stringify({ analytics: true, marketing: true }) },
       ],
     ] as const) {
-      test(`${label} → baner pyta ponownie, trackery się nie ładują`, async ({
+      test(`${label} → baner pyta ponownie, statystyka się nie ładuje`, async ({
         page,
         context,
         baseURL,
       }) => {
         await storeConsent(context, baseURL!, record);
-        const seen = await trackTrackerRequests(page);
+        const seen = await watchAnalytics(page);
         const calls = trackConsentActions(page);
         await recordBannerAtDomReady(page);
         await page.goto(home);

@@ -22,8 +22,7 @@ i [`data-map.generated.md`](data-map.generated.md) sekcja 2 (usługi) i 4 (treś
 | Sentry | raporty błędów | `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Cloudflare Turnstile | ochrona formularzy | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Anthropic | import ogłoszeń | `AI_JOB_IMPORT_ENABLED` + `ANTHROPIC_API_KEY` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
-| Google Analytics | analityka po zgodzie | ID pomiaru + zgoda `analytics` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
-| Meta Pixel | marketing po zgodzie | ID piksela + zgoda `marketing` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
+| Cloudflare Web Analytics | statystyka odwiedzin po zgodzie (#570) | token witryny + zgoda `analytics` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | VIES (Komisja Europejska) | sprawdzenie VAT firmy | akcja administratora | do ustalenia | do ustalenia | do ustalenia | nie dotyczy / do ustalenia |
 | Stripe | płatności — wyłączone | tylko `BILLING_ENABLED=true` | nie dotyczy do czasu włączenia | — | — | — |
 
@@ -153,7 +152,8 @@ funkcji wysyłających dane kandydata do dostawcy bez zatwierdzonego wpisu (#488
   haszowania (ścieżka PostgreSQL zapisuje HMAC).
 - **Sentry:** zdarzenie budowane od zera z kodu błędu, identyfikatora i czasu (`redactSentryEvent`);
   `sendDefaultPii: false`, replay i tracing wyłączone.
-- **Google Analytics / Meta Pixel:** ładowane dopiero po zgodzie; wycofanie usuwa cookies.
+- **Cloudflare Web Analytics (#570):** beacon ładowany dopiero po zgodzie analitycznej, bez cookies;
+  po wycofaniu bramka blokuje wysyłki. Google Analytics i Meta Pixel usunięte z kodu.
 - **VIES:** numer VAT firmy wysyłany do usługi Komisji Europejskiej na żądanie administratora.
 
 ## 6. Procedura przeglądu (propozycja do zatwierdzenia)

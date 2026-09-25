@@ -95,7 +95,7 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 ## 9. Prywatność / RODO / cookies
 
 - [ ] Baner cookies + centrum ustawień (necessary/preferences/analytics/marketing).
-- [ ] **Zero trackingu przed zgodą** (GA/Pixel ładowane po zgodzie) — Invariant #7.
+- [ ] **Zero trackingu przed zgodą** (beacon Cloudflare Web Analytics i lejek ofert po zgodzie analitycznej; GA/Pixel usunięte — #570) — Invariant #7.
 - [ ] Polityka prywatności, regulamin, polityka cookies opublikowane (PL/NL/FR/EN),
       wersjonowane w `consent_versions` (`is_current`).
 - [ ] Mechanizm eksportu/usunięcia danych na żądanie.

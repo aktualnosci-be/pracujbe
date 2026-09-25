@@ -5,7 +5,7 @@
  * Bezpieczny na serwerze: bez `document` odczyt zwraca `null`.
  */
 
-/** Kategorie zgód. `necessary` jest zawsze aktywna i nie podlega wyłączeniu. */
+/** Kategorie zgód. `necessary` jest zawsze aktywna i nie podlega wyłączeniu (#570: w UI tylko necessary + analytics). */
 export type ConsentCategory = 'necessary' | 'preferences' | 'analytics' | 'marketing';
 
 /** Stan zgody dla każdej kategorii. */
@@ -39,7 +39,7 @@ export const CONSENT_COOKIE_NAME = 'pracujbe_consent';
  * Wersja polityki prywatności/cookies. Zmiana wartości w env unieważnia dotychczasowe zgody
  * (użytkownik zobaczy baner ponownie) — patrz `getConsent()`.
  */
-export const CONSENT_POLICY_VERSION = process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0';
+export const CONSENT_POLICY_VERSION = process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0';
 
 /** Zdarzenie DOM emitowane po zmianie zgody (detail: ConsentRecord). */
 export const CONSENT_CHANGE_EVENT = 'pracujbe:consent-change';
@@ -95,11 +95,12 @@ function parseRecord(raw: string): ConsentRecord | null {
   }
 
   const c = cats as Record<string, unknown>;
+  // #570: preferencje i marketing nie mają już odbiorcy — stara zgoda na nie nic nie daje.
   const categories: ConsentCategories = {
     necessary: true,
-    preferences: c.preferences === true,
+    preferences: false,
     analytics: c.analytics === true,
-    marketing: c.marketing === true,
+    marketing: false,
   };
 
   return { v, categories, ts, id };

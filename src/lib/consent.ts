@@ -8,6 +8,11 @@
  *
  * Zasada: ZERO trackingu przed zgodą. Kategoria `necessary` jest zawsze aktywna (działanie
  * platformy: logowanie, bezpieczeństwo, sam zapis zgody), pozostałe domyślnie WYŁĄCZONE.
+ *
+ * Od #570 (Cloudflare Web Analytics zamiast GA/Meta Pixel) baner pyta tylko o kategorię
+ * `analytics` (beacon Cloudflare i lejek ofert #575). `preferences` i `marketing` zostają w typie
+ * i w rekordzie (schemat `consents`, enum `consent_category`), ale nic z nich nie korzysta —
+ * są zawsze zapisywane jako `false`. Zmiana zakresu = nowa wersja polityki (2.0).
  */
 
 import { recordConsent } from '@/lib/actions/consent';
@@ -36,22 +41,17 @@ export {
 /** Czas życia cookie ze zgodą (dni). RODO sugeruje odpytywać nie rzadziej niż co ~12 mies. */
 export const CONSENT_MAX_AGE_DAYS = 180;
 
-/** Pełna lista kategorii w kolejności prezentacji w panelu ustawień. */
-export const CONSENT_CATEGORIES: readonly ConsentCategory[] = [
-  'necessary',
-  'preferences',
-  'analytics',
-  'marketing',
-];
+/** Kategorie pokazywane w panelu ustawień (#570: bez realnych trackerów marketingowych i preferencji). */
+export const CONSENT_CATEGORIES: readonly ConsentCategory[] = ['necessary', 'analytics'];
 
 /** Zgoda minimalna: tylko kategoria niezbędna (odrzucenie opcjonalnych). */
 export function necessaryOnly(): ConsentCategories {
   return { necessary: true, preferences: false, analytics: false, marketing: false };
 }
 
-/** Pełna zgoda: wszystkie kategorie włączone. */
+/** „Akceptuj wszystkie”: wszystkie kategorie pokazywane w banerze (#570: necessary + analytics). */
 export function acceptAllCategories(): ConsentCategories {
-  return { necessary: true, preferences: true, analytics: true, marketing: true };
+  return { necessary: true, preferences: false, analytics: true, marketing: false };
 }
 
 /** Czy dana kategoria jest objęta ważną zgodą (necessary zawsze true). */
@@ -75,11 +75,12 @@ export function saveConsent(
 ): ConsentRecord {
   const record: ConsentRecord = {
     v: CONSENT_POLICY_VERSION,
+    // #570: preferencje i marketing nie mają już żadnego odbiorcy — zawsze false.
     categories: {
       necessary: true,
-      preferences: categories.preferences === true,
+      preferences: false,
       analytics: categories.analytics === true,
-      marketing: categories.marketing === true,
+      marketing: false,
     },
     ts: new Date().toISOString(),
     id: createConsentId(),

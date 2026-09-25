@@ -58,7 +58,7 @@ async function storeConsent(context: BrowserContext, baseURL: string, analytics:
   await context.addCookies([{
     name: CONSENT_COOKIE,
     value: encodeURIComponent(JSON.stringify({
-      v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
+      v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
       categories: { necessary: true, preferences: false, analytics, marketing: false },
       ts: '2026-01-01T00:00:00.000Z',
       id: 'job-funnel-e2e',

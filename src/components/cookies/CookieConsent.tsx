@@ -78,9 +78,8 @@ type CategoryMeta = {
 
 const CATEGORY_META: readonly CategoryMeta[] = [
   { key: 'necessary', nameKey: 'necessaryName', descKey: 'necessaryDesc', locked: true },
-  { key: 'preferences', nameKey: 'preferencesName', descKey: 'preferencesDesc', locked: false },
+  // #570: bez preferencji i marketingu — żadna funkcja ich nie używa (GA/Meta Pixel usunięte).
   { key: 'analytics', nameKey: 'analyticsName', descKey: 'analyticsDesc', locked: false },
-  { key: 'marketing', nameKey: 'marketingName', descKey: 'marketingDesc', locked: false },
 ];
 
 /**
