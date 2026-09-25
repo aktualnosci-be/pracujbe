@@ -132,7 +132,7 @@ describe('Czujki poczty (#44)', () => {
     return m;
   };
 
-  it('baza sprzed 0111 (brak sekcji mail) = czujki poczty milczą, bez 503', () => {
+  it('baza sprzed 0112 (brak sekcji mail) = czujki poczty milczą, bez 503', () => {
     const { mail: _omit, ...legacy } = healthy();
     const parsed = parseOpsMetrics(legacy);
     expect(parsed).not.toBeNull();

@@ -1008,7 +1008,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   E-maile Auth nie są blokowane (obowiązkowe). Panel `/admin/poczta`: lista, filtr, zdjęcie
   blokady z uzasadnieniem (`admin_lift_email_suppression`, audyt). Dowód: `rls.sql` sekcja
   ML44, `email-delivery-webhook.test.ts`, `admin-email-suppressions.test.ts`, E2E
-  `admin-email-suppressions.spec`. Alarmy poczty (migracja `0111`, numer tymczasowy):
+  `admin-email-suppressions.spec`. Alarmy poczty (migracja `0112`, numer tymczasowy):
   sekcja `mail` w `ops_metrics()` (kohorta wysyłki 24 h i 7 dób bazowych, trwałe odbicia,
   skargi, aktywne/nowe blokady — same liczby, rola `pracujbe_ops`), progi w
   `src/lib/ops/sensors.ts` (`mail_*`: odsetek > 5% odbić / 0,3% skarg, wzrost > 2× bazy,
