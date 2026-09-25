@@ -22,6 +22,29 @@ export async function getCvServiceDeps(): Promise<CvServiceDeps | null> {
   return { pool, store, downloadSecret: secret };
 }
 
+/** Te same zasoby dla załączników wiadomości (0108): jeden prywatny bucket i sekret linków. */
+export async function getAttachmentServiceDeps(): Promise<
+  import('./message-attachments').AttachmentServiceDeps | null
+> {
+  return getCvServiceDeps();
+}
+
+/**
+ * Zalogowany użytkownik (dowolna rola) z potwierdzonej sesji dla nagłówków BIEŻĄCEGO żądania —
+ * trasa pobrania załącznika; dostęp do rozmowy rozstrzyga baza. Awaria rzuca.
+ */
+export async function readSessionUserId(
+  pool: TransactionPool,
+  requestHeaders: Headers,
+): Promise<string | null> {
+  const [{ getAuthRuntime }, { readPortalIdentity }] = await Promise.all([
+    import('@/lib/auth/runtime'),
+    import('@/lib/auth/session'),
+  ]);
+  const identity = await readPortalIdentity(await getAuthRuntime(), pool, requestHeaders);
+  return identity?.id ?? null;
+}
+
 export type CandidateSession =
   | { status: 'candidate'; id: string }
   | { status: 'anonymous' }

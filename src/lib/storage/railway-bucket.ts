@@ -16,12 +16,20 @@ const OBJECT_UUID =
   "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const OWNER = new RegExp(`^${UUID}$`);
 const KEY = new RegExp(`^${UUID}/cv-${OBJECT_UUID}\\.(pdf|doc|docx)$`);
+/** Załącznik rozmowy (0108): prefiks = id rozmowy, nazwa `att-<uuid>` nadana przez serwer. */
+const ATTACHMENT_KEY = new RegExp(
+  `^${UUID}/att-${OBJECT_UUID}\\.(pdf|doc|docx|jpg|png)$`,
+);
 const TYPES = {
   pdf: "application/pdf",
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  jpg: "image/jpeg",
+  png: "image/png",
 } as const;
+type CvExtension = "pdf" | "doc" | "docx";
 type Extension = keyof typeof TYPES;
+export type AttachmentExtension = Extension;
 type ContentType = (typeof TYPES)[Extension];
 export type StorageErrorCode =
   | "NOT_CONFIGURED"
@@ -50,15 +58,29 @@ export interface RailwayBucketOptions {
 /** ownerId pochodzi z potwierdzonej sesji serwera, nigdy z formularza. */
 export function createCandidateCvKey(
   ownerId: string,
-  extension: Extension,
+  extension: CvExtension,
 ): string {
   if (
     typeof ownerId !== "string" ||
     !OWNER.test(ownerId) ||
-    !Object.prototype.hasOwnProperty.call(TYPES, extension)
+    !["pdf", "doc", "docx"].includes(extension)
   )
     throw new Error("INVALID_INPUT");
   return `${ownerId}/cv-${randomUUID()}.${extension}`;
+}
+
+/** conversationId pochodzi z rozmowy, do której dostęp potwierdza baza (stage_message_attachment). */
+export function createMessageAttachmentKey(
+  conversationId: string,
+  extension: Extension,
+): string {
+  if (
+    typeof conversationId !== "string" ||
+    !OWNER.test(conversationId) ||
+    !Object.prototype.hasOwnProperty.call(TYPES, extension)
+  )
+    throw new Error("INVALID_INPUT");
+  return `${conversationId}/att-${randomUUID()}.${extension}`;
 }
 
 function failure(error: StorageErrorCode): StorageResult<never> {
@@ -69,7 +91,7 @@ function failure(error: StorageErrorCode): StorageResult<never> {
   };
 }
 function validKey(key: string): boolean {
-  return typeof key === "string" && KEY.test(key);
+  return typeof key === "string" && (KEY.test(key) || ATTACHMENT_KEY.test(key));
 }
 function contentType(key: string): ContentType {
   return TYPES[key.slice(key.lastIndexOf(".") + 1) as Extension];
@@ -119,7 +141,7 @@ function configured(options: RailwayBucketOptions): boolean {
   }
 }
 
-/** Tylko transport CV. Sesja, RLS, scan_status i zgodność z metadanymi wymagają kontroli przez wywołującego. */
+/** Tylko transport CV i załączników rozmów. Sesja, RLS, scan_status i zgodność z metadanymi wymagają kontroli przez wywołującego. */
 export function createRailwayBucket(options: RailwayBucketOptions) {
   const bucket = options.bucket;
   const client = configured(options)

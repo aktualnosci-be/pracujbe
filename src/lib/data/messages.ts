@@ -34,6 +34,8 @@ export interface ConversationListItem {
   counterpartyName: string;
   /** Treść ostatniej wiadomości (skrót). */
   lastPreview: string;
+  /** Ostatnia wiadomość istnieje, ale ma tylko załączniki (pusta treść, 0108) → UI: etykieta. */
+  lastIsAttachmentOnly?: boolean;
   /** Czas ostatniej wiadomości (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
   lastMessageAt: string;
   unread: boolean;
@@ -56,6 +58,18 @@ export interface ThreadMessage {
   /** Strona nadawcy: firma (rekruter/zespół) albo kandydat — wybór etykiety zastępczej w UI. */
   senderSide: 'company' | 'candidate';
   isSystem: boolean;
+  /** Załączniki wysłane z wiadomością (0108), widoczne dla bieżącego uczestnika. */
+  attachments?: ThreadAttachment[];
+}
+
+/** Załącznik w wątku: bez klucza obiektu i URL — link wystawia akcja przy kliknięciu. */
+export interface ThreadAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** `false` = plik w kwarantannie (skan) — nazwa widoczna, pobranie niedostępne. */
+  downloadable: boolean;
 }
 
 /** Stabilny kursor stronicowania wątku: najstarsza widoczna wiadomość (`created_at`, `id`). */
@@ -194,7 +208,43 @@ async function fetchMessagePage(
     rows.length > THREAD_PAGE_SIZE
       ? { createdAt: asStr(oldest['created_at']), id: asStr(oldest['id']) }
       : null;
-  return { rows: visible.reverse(), olderCursor };
+  const attachments = await fetchAttachments(tx, visible.map((row) => asStr(asRecord(row)['id'])));
+  const withAttachments = visible.map((row) => {
+    const r = asRecord(row);
+    return { ...r, attachments: attachments.get(asStr(r['id'])) ?? [] };
+  });
+  return { rows: withAttachments.reverse(), olderCursor };
+}
+
+/**
+ * Załączniki strony wątku (0108): RPC sprawdza bieżący dostęp do rozmowy i blokadę firmy
+ * (#97) — pliki kandydata, który zablokował firmę, nie trafiają do strony firmowej.
+ */
+async function fetchAttachments(
+  tx: TransactionQuery,
+  messageIds: string[],
+): Promise<Map<string, ThreadAttachment[]>> {
+  const map = new Map<string, ThreadAttachment[]>();
+  const ids = messageIds.filter(Boolean);
+  if (ids.length === 0) return map;
+  const rows = await rpcRows(tx, 'get_message_attachments', { p_message_ids: ids });
+  for (const row of rows) {
+    const r = asRecord(row);
+    const messageId = asStr(r['message_id']);
+    const id = asStr(r['id']);
+    const size = r['size_bytes'];
+    if (!messageId || !id) continue;
+    const list = map.get(messageId) ?? [];
+    list.push({
+      id,
+      fileName: asStr(r['file_name']),
+      mimeType: asStr(r['mime_type']),
+      sizeBytes: typeof size === 'number' ? size : 0,
+      downloadable: r['downloadable'] === true,
+    });
+    map.set(messageId, list);
+  }
+  return map;
 }
 
 /**
@@ -271,6 +321,7 @@ function toThreadMessages(rows: unknown[], uid: string, ctx: SenderContext): Thr
       senderName: resolved || (fromCompany ? ctx.companyName : ''),
       senderSide: fromCompany ? 'company' : 'candidate',
       isSystem: Boolean(r['is_system']),
+      attachments: Array.isArray(r['attachments']) ? (r['attachments'] as ThreadAttachment[]) : [],
     };
   });
 }
@@ -489,6 +540,7 @@ export async function getConversationsResult(locale?: string): Promise<Conversat
             companyNameById,
           ),
           lastPreview: last?.body ?? '',
+          ...(last && last.createdAt && !last.body ? { lastIsAttachmentOnly: true } : {}),
           lastMessageAt: last?.createdAt || asStr(r['last_message_at']),
           unread: unreadCount > 0,
           unreadCount,

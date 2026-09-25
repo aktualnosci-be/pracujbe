@@ -8618,4 +8618,232 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
   'SV25-3 claim jako service_role (bez błędu uprawnień)');
 reset role;
 
+-- ============================================================================
+-- MA (0108): załączniki w rozmowach — RPC-only, przygotowanie + wysłanie jedną transakcją
+-- send_message (idempotencja client_message_id i client_upload_id), dostęp tylko dla
+-- bieżących uczestników, kwarantanna scan_status, blokada firmy (#97), metadane plików
+-- chronione przed klientem, sprzątanie przez kolejkę storage (#486). Kontrole ujemne:
+-- wyłączony strażnik files, podmieniony załącznik — każda daje wykrywalny wynik.
+-- ============================================================================
+\set MAC 'e1080000-0000-0000-0000-0000000000c1'
+\set MAE 'e1080000-0000-0000-0000-0000000000e1'
+\set MAX 'e1080000-0000-0000-0000-0000000000e2'
+\set MAF 'e1080000-0000-0000-0000-0000000000f1'
+\set MAJ 'e1080000-0000-0000-0000-0000000000b1'
+\set MAU1 'e1080000-0000-0000-0000-0000000000d1'
+\set MAU2 'e1080000-0000-0000-0000-0000000000d2'
+\set MAU3 'e1080000-0000-0000-0000-0000000000d3'
+\set MAU4 'e1080000-0000-0000-0000-0000000000d4'
+\set MAU5 'e1080000-0000-0000-0000-0000000000d5'
+\set MAK1 'e1080000-0000-0000-0000-0000000000a1'
+\set MAK2 'e1080000-0000-0000-0000-0000000000a2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'MAC','mac@test.be','Ma C','{"role":"candidate","first_name":"Ma","last_name":"Cand","locale":"pl"}'),
+  (:'MAE','mae@test.be','Ma E','{"role":"employer","first_name":"Ma","last_name":"Rek","locale":"nl"}'),
+  (:'MAX','max@test.be','Ma X','{"role":"employer","first_name":"Ma","last_name":"Obcy","locale":"fr"}');
+insert into public.companies(id,name,status) values (:'MAF','Firma MA','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'MAF',:'MAE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'MAJ',:'MAF','job-ma-1','Magazynier MA','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values (:'MAC', false, true);
+
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'MAJ'::uuid, 'ma-app-1', null, 'immediate', null) as maapp \gset
+select public.get_or_create_conversation(:'maapp'::uuid, null) as maconv \gset
+reset role;
+select :'maconv' || '/att-' || gen_random_uuid()::text || '.pdf' as mapath1,
+       :'maconv' || '/att-' || gen_random_uuid()::text || '.png' as mapath2,
+       :'maconv' || '/att-' || gen_random_uuid()::text || '.pdf' as mapath3,
+       :'maconv' || '/att-' || gen_random_uuid()::text || '.jpg' as mapath4,
+       :'maconv' || '/att-' || gen_random_uuid()::text || '.docx' as mapath5,
+       gen_random_uuid()::text || '/att-' || gen_random_uuid()::text || '.pdf' as mapathx,
+       repeat('a', 64) as masha \gset
+
+-- MA1: tabela niedostępna bezpośrednio (także dla uczestnika); RPC nie dla anon.
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select 1 from public.message_attachments', 'permission denied',
+  'MA1 uczestnik nie czyta tabeli załączników bezpośrednio');
+select pg_temp.expect_error(format($$insert into public.message_attachments(conversation_id, uploader_id, file_id, client_upload_id)
+  values (%L, %L, gen_random_uuid(), gen_random_uuid())$$, :'maconv', :'MAC'),
+  'permission denied', 'MA1b brak bezpośredniego INSERT');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), 'x', 'a.pdf', 'application/pdf', 1, %L)$$,
+  :'maconv', :'masha'), 'permission denied', 'MA1c anon nie wywoła stage_message_attachment');
+reset role;
+
+-- MA2: kandydat przygotowuje plik; ponowienie z tym samym client_upload_id = ten sam załącznik.
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select attachment_id as maatt1, created as macreated1 from public.stage_message_attachment(
+  :'maconv'::uuid, :'MAU1'::uuid, :'mapath1', 'CV Ma.pdf', 'application/pdf', 1000, :'masha') \gset
+select attachment_id as maatt1b, created as macreated1b from public.stage_message_attachment(
+  :'maconv'::uuid, :'MAU1'::uuid, :'mapath3', 'CV Ma.pdf', 'application/pdf', 1000, :'masha') \gset
+select pg_temp.assert(:'maatt1' = :'maatt1b' and :'macreated1'::boolean and not :'macreated1b'::boolean,
+  'MA2 ponowienie uploadu zwraca istniejący załącznik (created=false)');
+-- MA2b: walidacja — cudzy prefiks rozmowy, MIME ≠ rozszerzenie, > 5 MB, zły skrót, stan skanu.
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.pdf', 'application/pdf', 1, %L)$$,
+  :'maconv', :'mapathx', :'masha'), 'VALIDATION_FAILED', 'MA2b ścieżka spoza rozmowy odrzucona');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.png', 'image/jpeg', 1, %L)$$,
+  :'maconv', :'mapath2', :'masha'), 'VALIDATION_FAILED', 'MA2c MIME niezgodny z rozszerzeniem odrzucony');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.png', 'image/png', 5242881, %L)$$,
+  :'maconv', :'mapath2', :'masha'), 'VALIDATION_FAILED', 'MA2d plik > 5 MB odrzucony');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.png', 'image/png', 10, 'zly')$$,
+  :'maconv', :'mapath2'), 'VALIDATION_FAILED', 'MA2e zły skrót odrzucony');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.png', 'image/png', 10, %L, 'clean')$$,
+  :'maconv', :'mapath2', :'masha'), 'VALIDATION_FAILED', 'MA2f klient nie ustawi scan_status=clean');
+select attachment_id as maatt2 from public.stage_message_attachment(
+  :'maconv'::uuid, :'MAU2'::uuid, :'mapath2', 'zdjecie.png', 'image/png', 2000, :'masha') \gset
+-- MA3: przed wysłaniem plik nie jest widoczny ani do pobrania — także dla autora.
+select pg_temp.assert((select count(*) from public.get_message_attachment_download(:'maatt1'::uuid)) = 0,
+  'MA3 przygotowany (niewysłany) plik nie do pobrania');
+reset role;
+
+-- MA3b: obcy pracodawca nie przygotuje pliku w cudzej rozmowie.
+select set_config('app.current_uid', :'MAX', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.pdf', 'application/pdf', 1, %L)$$,
+  :'maconv', :'mapath5', :'masha'), 'PERMISSION_DENIED', 'MA3b obcy nie dołącza pliku do rozmowy');
+reset role;
+
+-- MA4: wysłanie z załącznikiem (pusta treść dozwolona tylko z plikiem); ponowienie tym
+-- samym kluczem zwraca tę samą wiadomość bez ponownego łączenia.
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($$select public.send_message(%L, '  ', gen_random_uuid())$$, :'maconv'),
+  'VALIDATION_FAILED', 'MA4 pusta treść bez załącznika odrzucona');
+select public.send_message(:'maconv'::uuid, '', :'MAK1'::uuid, array[:'maatt1'::uuid]) as mamsg1 \gset
+select public.send_message(:'maconv'::uuid, '', :'MAK1'::uuid, array[:'maatt1'::uuid]) as mamsg1b \gset
+select pg_temp.assert(:'mamsg1' = :'mamsg1b', 'MA4b ponowienie zwraca tę samą wiadomość');
+select pg_temp.assert(
+  (select count(*) from public.get_message_attachments(array[:'mamsg1'::uuid])) = 1
+  and (select file_name from public.get_message_attachments(array[:'mamsg1'::uuid])) = 'CV Ma.pdf',
+  'MA4c autor widzi wysłany załącznik');
+select pg_temp.expect_error(format($$select public.send_message(%L, 'drugi raz', gen_random_uuid(), array[%L::uuid])$$,
+  :'maconv', :'maatt1'), 'VALIDATION_FAILED', 'MA4d wysłany załącznik nie trafi do drugiej wiadomości');
+select pg_temp.expect_error(format($$select public.send_message(%L, 'cztery', gen_random_uuid(), array[gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid()])$$,
+  :'maconv'), 'VALIDATION_FAILED', 'MA4e więcej niż 3 załączniki odrzucone');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.messages where conversation_id = :'maconv' and body = 'drugi raz') = 0,
+  'MA4f odrzucenie załącznika cofa całą wiadomość (atomowość)');
+
+-- MA5: rekruter (uczestnik) widzi i może pobrać; nie użyje cudzego przygotowanego pliku.
+select set_config('app.current_uid', :'MAE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_message_attachments(array[:'mamsg1'::uuid]) where downloadable) = 1
+  and (select path from public.get_message_attachment_download(:'maatt1'::uuid)) = :'mapath1',
+  'MA5 druga strona rozmowy widzi i pobiera załącznik');
+select pg_temp.expect_error(format($$select public.send_message(%L, 'cudzy', gen_random_uuid(), array[%L::uuid])$$,
+  :'maconv', :'maatt2'), 'VALIDATION_FAILED', 'MA5b cudzy przygotowany plik odrzucony');
+select attachment_id as maatt4 from public.stage_message_attachment(
+  :'maconv'::uuid, :'MAU4'::uuid, :'mapath4', 'umowa.jpg', 'image/jpeg', 3000, :'masha') \gset
+select public.send_message(:'maconv'::uuid, 'Umowa w załączniku', gen_random_uuid(), array[:'maatt4'::uuid]) as mamsg4 \gset
+reset role;
+-- MA5c: obcy nie widzi i nie pobiera (brak członkostwa).
+select set_config('app.current_uid', :'MAX', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_message_attachments(array[:'mamsg1'::uuid, :'mamsg4'::uuid])) = 0
+  and (select count(*) from public.get_message_attachment_download(:'maatt1'::uuid)) = 0,
+  'MA5c obcy nie widzi ani nie pobiera załączników');
+reset role;
+
+-- MA6: kwarantanna — plik 'pending' widoczny jako niedostępny, bez pobrania.
+update public.files set scan_status = 'pending'
+ where id = (select file_id from public.message_attachments where id = :'maatt1');
+select set_config('app.current_uid', :'MAE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select not downloadable from public.get_message_attachments(array[:'mamsg1'::uuid]))
+  and (select count(*) from public.get_message_attachment_download(:'maatt1'::uuid)) = 0,
+  'MA6 plik w kwarantannie nie do pobrania');
+reset role;
+update public.files set scan_status = 'skipped'
+ where id = (select file_id from public.message_attachments where id = :'maatt1');
+
+-- MA7: klient nie zmieni metadanych pliku załącznika (ścieżka, kwarantanna) ani nie utworzy go wprost.
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($$update public.files set path = %L where id = (select f.id from public.files f where f.path = %L)$$,
+  :'mapathx', :'mapath1'), 'PERMISSION_DENIED', 'MA7 właściciel nie podmieni ścieżki obiektu');
+select pg_temp.expect_error(format($$insert into public.files(owner_id, bucket, path, entity_type) values (%L, 'message-files', %L, 'message_attachment')$$,
+  :'MAC', :'mapathx'), 'PERMISSION_DENIED', 'MA7b brak bezpośredniego INSERT pliku załącznika');
+reset role;
+-- KONTROLA UJEMNA: bez strażnika właściciel podmieniłby ścieżkę (pobranie cudzego obiektu).
+begin;
+alter table public.files disable trigger trg_files_guard_message_attachment;
+select set_config('app.current_uid', :'MAC', true);
+set local role authenticated; select pg_temp.assert_client_role();
+update public.files set path = :'mapathx' where path = :'mapath1';
+reset role;
+select pg_temp.assert((select count(*) from public.files where path = :'mapathx') = 1,
+  'MA7c kontrola ujemna: bez strażnika ścieżka zostaje podmieniona');
+rollback;
+
+-- MA8: blokada firmy (#97) — firma nie widzi plików kandydata i nie dołącza nowych;
+-- kandydat widzi swoje; własny plik firmy zostaje dla firmy.
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.set_company_block(:'MAF'::uuid, true);
+reset role;
+select set_config('app.current_uid', :'MAE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_message_attachments(array[:'mamsg1'::uuid])) = 0
+  and (select count(*) from public.get_message_attachment_download(:'maatt1'::uuid)) = 0,
+  'MA8 firma zablokowana nie widzi ani nie pobiera plików kandydata');
+select pg_temp.assert((select count(*) from public.get_message_attachments(array[:'mamsg4'::uuid])) = 1,
+  'MA8b kontrola ujemna: własny plik firmy nadal widoczny dla firmy');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 1, %L)$$,
+  :'maconv', :'mapath5', :'masha'), 'PERMISSION_DENIED', 'MA8c firma zablokowana nie dołącza pliku');
+reset role;
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_message_attachments(array[:'mamsg1'::uuid, :'mamsg4'::uuid])) = 2,
+  'MA8d kandydat widzi wszystkie załączniki rozmowy');
+select public.set_company_block(:'MAF'::uuid, false);
+reset role;
+
+-- MA9: rezygnacja z przygotowanego pliku → wiersz files usunięty, obiekt w kolejce storage.
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select attachment_id as maatt5 from public.stage_message_attachment(
+  :'maconv'::uuid, :'MAU5'::uuid, :'mapath5', 'list.docx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 4000, :'masha') \gset
+select pg_temp.assert(public.discard_message_attachment(:'maatt5'::uuid), 'MA9 rezygnacja z własnego pliku');
+select pg_temp.assert(not public.discard_message_attachment(:'maatt1'::uuid), 'MA9b wysłanego pliku nie da się wycofać');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.files where path = :'mapath5') = 0
+  and (select count(*) from public.storage_deletion_queue where path = :'mapath5') = 1,
+  'MA9c plik usunięty i zakolejkowany do usunięcia z bucketu');
+
+-- MA10: sprzątanie porzuconych uploadów tylko przez service_role; wysłane zostają.
+select pg_temp.assert(
+  has_function_privilege('service_role', 'public.purge_stale_message_attachments(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.purge_stale_message_attachments(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.purge_stale_message_attachments(integer, integer)', 'EXECUTE'),
+  'MA10 purge tylko dla service_role');
+update public.message_attachments set created_at = now() - interval '2 days' where id in (:'maatt1', :'maatt2');
+set role service_role;
+select public.purge_stale_message_attachments(24) as mapurged \gset
+reset role;
+select pg_temp.assert(:mapurged >= 1
+  and (select count(*) from public.message_attachments where id = :'maatt2') = 0
+  and (select count(*) from public.message_attachments where id = :'maatt1') = 1
+  and (select count(*) from public.storage_deletion_queue where path = :'mapath2') = 1,
+  'MA10b porzucony plik usunięty i zakolejkowany, wysłany (kontrola ujemna) zostaje');
+
+-- MA11: usunięcie rozmowy (np. usunięcie konta #486) kasuje pliki obu stron i kolejkuje obiekty.
+delete from public.conversations where id = :'maconv';
+select pg_temp.assert(
+  (select count(*) from public.files where path in (:'mapath1', :'mapath4')) = 0
+  and (select count(*) from public.storage_deletion_queue where path in (:'mapath1', :'mapath4')) = 2,
+  'MA11 usunięcie rozmowy usuwa metadane plików i kolejkuje obiekty');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -9,6 +9,7 @@ import { mergeThreadMessages, type ThreadMessageView } from '@/lib/messaging/thr
 import { cn } from '@/lib/utils';
 import { BTN_SECONDARY } from '@/components/dashboard/panel-styles';
 import { BUBBLE, BUBBLE_MINE } from '@/components/candidate/candidate-styles';
+import { MessageAttachmentList } from './MessageAttachmentList';
 
 /**
  * ThreadMessageList — lista wiadomości wątku ze stronicowaniem od najnowszych (#146).
@@ -177,7 +178,8 @@ export function ThreadMessageList({
               </span>
               {/* `.bubble` / `.bubble.mine` z prototypu „04 Ludzie i praca”. */}
               <div className={message.mine ? BUBBLE_MINE : BUBBLE}>
-                <p className="whitespace-pre-wrap break-words">{message.body}</p>
+                {message.body ? <p className="whitespace-pre-wrap break-words">{message.body}</p> : null}
+                <MessageAttachmentList attachments={message.attachments ?? []} />
               </div>
             </li>
           );

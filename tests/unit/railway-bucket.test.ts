@@ -3,6 +3,7 @@ import { PassThrough, Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createCandidateCvKey,
+  createMessageAttachmentKey,
   createRailwayBucket,
   type RailwayBucketOptions,
 } from "@/lib/storage/railway-bucket";
@@ -79,6 +80,30 @@ async function requireStream(
 afterEach(() => vi.useRealTimers());
 
 describe("Prywatny adapter Railway Bucket przez rzeczywisty SDK S3", () => {
+  it("załączniki rozmów (0108): klucz `<rozmowa>/att-<uuid>` z JPG/PNG; CV nadal bez obrazów", async () => {
+    const { store, handle } = fixture();
+    const png = createMessageAttachmentKey(owner, "png");
+    expect(png).toMatch(
+      new RegExp(`^${owner}/att-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.png$`),
+    );
+    expect((await store.put({ key: png, bytes: new Uint8Array([1]), contentType: "image/png" })).ok).toBe(true);
+    expect((await store.delete({ key: png })).ok).toBe(true);
+    expect(handle).toHaveBeenCalledTimes(2);
+    // Kontrole ujemne: MIME ≠ rozszerzenie, obraz jako CV, obcy prefiks nazwy i rozszerzenie.
+    handle.mockClear();
+    for (const invalid of [
+      { key: png, contentType: "image/jpeg" as const },
+      { key: key.replace(".pdf", ".png"), contentType: "image/png" as const },
+      { key: png.replace("/att-", "/img-"), contentType: "image/png" as const },
+      { key: png.replace(".png", ".gif"), contentType: "image/png" as const },
+    ]) {
+      expect(await store.put({ ...invalid, bytes: new Uint8Array([1]) })).toMatchObject({ error: "INVALID_INPUT" });
+    }
+    expect(handle).not.toHaveBeenCalled();
+    expect(() => createMessageAttachmentKey("../x", "png")).toThrow("INVALID_INPUT");
+    expect(() => createCandidateCvKey(owner, "png" as "pdf")).toThrow("INVALID_INPUT");
+  });
+
   it("tworzy unikalne klucze UUIDv4 bez nazwy pliku i przyjmuje je przy zapisie", async () => {
     const { store, handle } = fixture();
     const keys = new Set(

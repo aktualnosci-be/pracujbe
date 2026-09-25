@@ -1532,7 +1532,19 @@
     "loadOlderError": "Impossible de charger les messages plus anciens. Réessayez.",
     "threadStart": "C'est le début de la conversation.",
     "senderCompanyFallback": "Employeur",
-    "senderCandidateFallback": "Candidat"
+    "senderCandidateFallback": "Candidat",
+    "attachFile": "Joindre un fichier",
+    "attachHint": "PDF, DOC, DOCX, JPG ou PNG, 5 Mo max., {max} fichiers au plus par message.",
+    "attachmentsLabel": "Pièces jointes",
+    "attachmentUploading": "Envoi du fichier…",
+    "attachmentUploadError": "Impossible d’ajouter le fichier. Veuillez réessayer.",
+    "attachmentErrorType": "Formats acceptés : PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentLimit": "Vous pouvez joindre au plus {max} fichiers à un message.",
+    "attachmentRemove": "Retirer le fichier {name}",
+    "attachmentDownload": "Télécharger {name} ({size})",
+    "attachmentDownloadError": "Impossible de télécharger le fichier. Veuillez réessayer.",
+    "attachmentUnavailable": "Fichier en cours de vérification — téléchargement indisponible.",
+    "attachmentOnlyPreview": "Pièce jointe"
   },
   "files": {
     "cvTitle": "Votre CV / documents",

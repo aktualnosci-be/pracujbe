@@ -1532,7 +1532,19 @@
     "loadOlderError": "Nie udało się wczytać starszych wiadomości. Spróbuj ponownie.",
     "threadStart": "To początek rozmowy.",
     "senderCompanyFallback": "Pracodawca",
-    "senderCandidateFallback": "Kandydat"
+    "senderCandidateFallback": "Kandydat",
+    "attachFile": "Dołącz plik",
+    "attachHint": "PDF, DOC, DOCX, JPG lub PNG, maks. 5 MB, najwyżej {max} pliki w wiadomości.",
+    "attachmentsLabel": "Załączniki",
+    "attachmentUploading": "Wgrywanie…",
+    "attachmentUploadError": "Nie udało się dodać pliku. Spróbuj ponownie.",
+    "attachmentErrorType": "Dozwolone formaty: PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentLimit": "Do jednej wiadomości możesz dołączyć najwyżej {max} pliki.",
+    "attachmentRemove": "Usuń plik {name}",
+    "attachmentDownload": "Pobierz {name} ({size})",
+    "attachmentDownloadError": "Nie udało się pobrać pliku. Spróbuj ponownie.",
+    "attachmentUnavailable": "Plik czeka na sprawdzenie — pobieranie niedostępne.",
+    "attachmentOnlyPreview": "Załącznik"
   },
   "files": {
     "cvTitle": "Twoje CV / dokumenty",

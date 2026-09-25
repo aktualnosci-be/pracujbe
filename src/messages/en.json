@@ -1532,7 +1532,19 @@
     "loadOlderError": "Could not load older messages. Please try again.",
     "threadStart": "This is the start of the conversation.",
     "senderCompanyFallback": "Employer",
-    "senderCandidateFallback": "Candidate"
+    "senderCandidateFallback": "Candidate",
+    "attachFile": "Attach file",
+    "attachHint": "PDF, DOC, DOCX, JPG or PNG, max. 5 MB, up to {max} files per message.",
+    "attachmentsLabel": "Attachments",
+    "attachmentUploading": "Uploading…",
+    "attachmentUploadError": "The file could not be added. Please try again.",
+    "attachmentErrorType": "Allowed formats: PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentLimit": "You can attach up to {max} files to one message.",
+    "attachmentRemove": "Remove file {name}",
+    "attachmentDownload": "Download {name} ({size})",
+    "attachmentDownloadError": "The file could not be downloaded. Please try again.",
+    "attachmentUnavailable": "File is being checked — download unavailable.",
+    "attachmentOnlyPreview": "Attachment"
   },
   "files": {
     "cvTitle": "Your CV / documents",

@@ -6,6 +6,7 @@ import {
   getOwnDownloadableCv,
   listOwnCandidateFiles,
   type CandidateFileListItem,
+  type CreateCandidateCvInput,
 } from '@/lib/db/candidate-files';
 import type { TransactionPool } from '@/lib/db/transaction';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
@@ -102,7 +103,7 @@ export async function storeCandidateCv(
   } catch {
     return { ok: false, error: 'PERMISSION_DENIED' };
   }
-  const mimeType = file.type as Parameters<CvObjectStore['put']>[0]['contentType'];
+  const mimeType = file.type as CreateCandidateCvInput['mimeType'];
   const put = await deps.store.put({ key, bytes, contentType: mimeType });
   if (!put.ok) {
     // Timeout/awaria: nie wiemy, czy obiekt powstał — sprzątamy ten sam klucz, bez sukcesu.
