@@ -25,7 +25,7 @@ import {
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
 import { captureError } from '@/lib/sentry';
-import { isProductionMode } from '@/lib/env';
+import { isProductionMode, resendApiKey } from '@/lib/env';
 
 /**
  * Worker kolejki e-mail (outbox) — P1-13.
@@ -161,7 +161,7 @@ export interface ProcessResult {
 }
 
 export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = resendApiKey();
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
   if (!apiKey) {

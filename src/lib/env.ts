@@ -194,6 +194,23 @@ export function isFileStorageConfigured(): boolean {
 }
 
 /**
+ * Znane wartości przykładowe z `.env.example`/dokumentacji — nigdy prawdziwy klucz Resend.
+ * Skopiowanie pliku bez zmian nie może dać fałszywej gotowości poczty (#587).
+ */
+const RESEND_API_KEY_PLACEHOLDERS = new Set(['re_YOUR_KEY']);
+
+/**
+ * Klucz Resend po odrzuceniu znanych placeholderów (#587). Jedyne źródło prawdy dla gotowości
+ * (`readinessChecks`) i workerów wysyłki (`email/outbox.ts`, `auth/email-worker.ts`) — placeholder
+ * ma zachowywać się jak brak klucza, nie jak prawdziwa konfiguracja.
+ */
+export function resendApiKey(): string | undefined {
+  const value = process.env.RESEND_API_KEY;
+  if (!value || RESEND_API_KEY_PLACEHOLDERS.has(value)) return undefined;
+  return value;
+}
+
+/**
  * Zależności KRYTYCZNE dla gotowości (P1-18, #429). Produkcja nie obsługuje ruchu bez rdzenia
  * PostgreSQL Railway: pula domeny (`DATABASE_APP_URL`), Better Auth (`DATABASE_AUTH_URL`,
  * `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` = origin serwisu), limiter prób logowania/rejestracji
@@ -214,7 +231,7 @@ export function readinessChecks(): Record<string, boolean> {
     httpsSiteUrl: hasPublicHttpsUrl(),
     // #51: sprzedaż wyłączona flagą — sekrety Stripe bez `BILLING_ENABLED` nie liczą się.
     stripe: isBillingEnabled() && Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
-    resend: Boolean(process.env.RESEND_API_KEY),
+    resend: Boolean(resendApiKey()),
     queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),
     sentry: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN),
     // #26: prywatny bucket Railway (endpoint/region/bucket/klucze) + sekret linków pobrania CV.

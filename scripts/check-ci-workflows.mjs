@@ -64,7 +64,7 @@ for (const [name, body] of jobs) {
 const unit = jobs.get('unit');
 assert.match(unit, /^          cache: npm\s*$/m, 'unit: użyj cache pobrań npm');
 assert.match(unit, /^        run: npm ci --prefer-offline --no-audit --fund=false\s*$/m, 'unit: npm ci musi uruchomić się zawsze');
-assert.doesNotMatch(unit, /actions\/cache\/restore@v4/, 'unit: nie odtwarzaj node_modules');
+assert.doesNotMatch(unit, /actions\/cache\/restore@/, 'unit: nie odtwarzaj node_modules');
 assert.match(unit, /require\.resolve\('ms'\)/, 'unit: sprawdź zależność przed Vitest');
 
 for (const name of ['unit', 'e2e']) {
@@ -83,9 +83,9 @@ for (const [name, body] of [['build', build], ['e2e', e2e]]) {
   assert.match(body, /NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'/, `${name}: build z testowym ID Meta Pixel`);
   assert.match(body, /node scripts\/check-next-build\.mjs/, `${name}: zweryfikuj kompletność .next`);
 }
-assert.match(build, /uses: actions\/cache\/save@v4/, 'build: zapisz .next w cache Actions');
+assert.match(build, /uses: actions\/cache\/save@/, 'build: zapisz .next w cache Actions');
 assert.doesNotMatch(build, /upload-artifact/, 'build: .next przez cache, nie artefakt (limit storage)');
-assert.match(e2e, /uses: actions\/cache\/restore@v4[\s\S]*restore-keys: next-build-/, 'e2e: odtwórz .next z jobu build');
+assert.match(e2e, /uses: actions\/cache\/restore@[\s\S]*restore-keys: next-build-/, 'e2e: odtwórz .next z jobu build');
 assert.match(e2e, /^        id: next-build\s*$/m, 'e2e: krok weryfikacji builda');
 assert.match(e2e, /if: steps\.next-build\.outcome != 'success'/, 'e2e: fallback build przy braku/niekompletności');
 
@@ -104,7 +104,7 @@ assert.ok(
   'e2e: lab CWV po testach E2E, przed fixture (`next dev` nadpisuje produkcyjny .next)',
 );
 assert.ok(
-  stepIndex(e2e, 'Performance budget (lab CWV)') < e2e.indexOf('uses: actions/upload-artifact@v4'),
+  stepIndex(e2e, 'Performance budget (lab CWV)') < e2e.indexOf('uses: actions/upload-artifact@'),
   'e2e: lab CWV przed wysłaniem raportu (JSON wyników w playwright-report/)',
 );
 assert.equal((ci.match(/npx playwright install/g) ?? []).length, 2, 'ci.yml: Chromium instalują tylko unit i e2e');

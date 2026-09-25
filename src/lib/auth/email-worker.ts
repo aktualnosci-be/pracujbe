@@ -4,7 +4,7 @@ import { Resend } from 'resend';
 
 import { renderEmail } from '@/emails/templates';
 import { emailFromEnv } from '@/lib/email/sender';
-import { env, isAuthMailConfigured, isPortalAuthConfigured, isProductionMode } from '@/lib/env';
+import { env, isAuthMailConfigured, isPortalAuthConfigured, isProductionMode, resendApiKey } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 import {
   claimAuthEmails,
@@ -157,7 +157,7 @@ export async function processAuthEmailBatch(
 export async function processAuthEmailQueue(limit = 20): Promise<AuthEmailProcessResult> {
   const empty = { processed: 0, sent: 0, failed: 0, expired: 0 };
   if (!isPortalAuthConfigured()) return { ...empty, skipped: 'auth not configured', ok: true };
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = resendApiKey();
   const baseURL = env.authBaseUrl;
   if (!isAuthMailConfigured() || !apiKey || !baseURL) {
     return { ...empty, skipped: 'auth mail not configured', ok: !isProductionMode() };
