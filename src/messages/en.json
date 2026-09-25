@@ -2297,7 +2297,8 @@
     "aiCostsCalls": "calls: {calls}",
     "aiCostsFeatureJobImport": "Listing import",
     "aiCostsFeatureTranslation": "Content translation",
-    "aiCostsFeatureAssist": "Job text assistant"
+    "aiCostsFeatureAssist": "Job text assistant",
+    "aiCostsFeatureCvImport": "CV import"
   },
   "settings": {
     "title": "Notification preferences",

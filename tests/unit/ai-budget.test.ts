@@ -247,8 +247,8 @@ describe('rezerwacja w bazie (databaseBudgetStore)', () => {
     });
   });
 
-  it('wyniki i funkcje w TS zgadzają się z CHECK-ami migracji 0114', async () => {
-    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/0114_ai_budget.sql'), 'utf8');
+  it('wyniki i funkcje w TS zgadzają się z CHECK-ami migracji 0120', async () => {
+    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/0120_ai_budget.sql'), 'utf8');
     const { AI_USAGE_OUTCOMES } = await import('@/lib/ai/usage-log');
     const { AI_FEATURE_IDS } = await import('@/lib/ai/inventory');
     const list = (values: readonly string[]) => values.map((v) => `'${v}'`).join(', ');

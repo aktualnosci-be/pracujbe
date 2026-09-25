@@ -10106,7 +10106,7 @@ select pg_temp.assert(
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
 -- ============================================================================
--- AIB36. Globalny budżet AI (#36, 0114): rezerwacja przed API, dzienny i miesięczny limit,
+-- AIB36. Globalny budżet AI (#36, 0120): rezerwacja przed API, dzienny i miesięczny limit,
 --        fail-closed (brak limitu / limit 0), rozliczenie idempotentne, uprawnienia.
 --        Kontrola ujemna: ai_budget_spent licząca tylko rozliczone wiersze przepuszcza
 --        rezerwację ponad limit — test AIB36-3 by ją złapał.

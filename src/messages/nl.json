@@ -2297,7 +2297,8 @@
     "aiCostsCalls": "aanroepen: {calls}",
     "aiCostsFeatureJobImport": "Vacature importeren",
     "aiCostsFeatureTranslation": "Inhoud vertalen",
-    "aiCostsFeatureAssist": "Assistent voor vacaturetekst"
+    "aiCostsFeatureAssist": "Assistent voor vacaturetekst",
+    "aiCostsFeatureCvImport": "Cv importeren"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",

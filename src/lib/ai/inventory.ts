@@ -131,6 +131,8 @@ export const AI_FEATURES: readonly AiFeature[] = [
       'Kandydat widzi tekst przed wysłaniem i zaznacza każdą propozycję osobno (CvImportPanel); zapis tylko zaznaczonych przez applyCvProposals → apply_candidate_cv_proposals.',
     decidesAboutPerson: false,
     usageLogged: true,
+    // `withAiBudget` w src/lib/actions/cv-import.ts (#36): rezerwacja przed wywołaniem modelu.
+    costBudgeted: true,
   },
 ];
 

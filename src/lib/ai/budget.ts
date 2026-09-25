@@ -9,7 +9,7 @@ import { rpc } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
 
 /**
- * Globalny budżet kosztów AI (#36, migracja 0114).
+ * Globalny budżet kosztów AI (#36, migracja 0120).
  *
  * Każde płatne wywołanie modelu przechodzi przez {@link withAiBudget}:
  *   1. rezerwacja szacunku PRZED wywołaniem API (`ai_budget_reserve`, blokada w bazie —

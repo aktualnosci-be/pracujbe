@@ -1,7 +1,7 @@
 -- =============================================================================
--- 0114_ai_budget.sql — #36: globalny budżet kosztów funkcji AI (dzienny i miesięczny).
+-- 0120_ai_budget.sql — #36: globalny budżet kosztów funkcji AI (dzienny i miesięczny).
 --
--- Numer migracji tymczasowy — ostateczny nada koordynator.
+-- Numer migracji nadany przez koordynatora.
 --
 -- 1. ai_budget_limits — limity globalne w mikro-USD (1 USD = 1 000 000) na dobę i miesiąc
 --    kalendarzowy w strefie Europe/Brussels. Wartości startowe są zachowawcze (10 USD/dobę,
@@ -61,7 +61,7 @@ create table if not exists public.ai_usage_ledger (
   usage_day           date not null,
   created_at          timestamptz not null default now(),
   settled_at          timestamptz,
-  constraint ai_usage_ledger_feature check (feature in ('job_listing_import', 'content_translation', 'job_offer_assist')),
+  constraint ai_usage_ledger_feature check (feature in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import')),
   constraint ai_usage_ledger_model check (model ~ '^[a-z0-9][a-z0-9.-]{2,63}$'),
   constraint ai_usage_ledger_status check (status in ('reserved', 'settled')),
   constraint ai_usage_ledger_outcome check (
@@ -126,7 +126,7 @@ declare
   v_month_limit bigint;
   v_id uuid;
 begin
-  if p_feature is null or p_feature not in ('job_listing_import', 'content_translation', 'job_offer_assist') then
+  if p_feature is null or p_feature not in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import') then
     raise exception 'VALIDATION_FAILED: feature' using errcode = '22023';
   end if;
   if p_model is null or p_model !~ '^[a-z0-9][a-z0-9.-]{2,63}$' then
