@@ -309,7 +309,7 @@ describe('strażnik: adres tylko po stronie serwera, bez Sentry', () => {
     expect(files.filter((f) => /NEXT_PUBLIC_ERROR_WEBHOOK/.test(f.src)).map((f) => f.path)).toEqual([]);
     expect(files.filter((f) => /@sentry\//.test(f.src)).map((f) => f.path)).toEqual([]);
     const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { dependencies?: Record<string, string> };
-    expect(Object.keys(pkg.dependencies ?? {}).filter((d) => d.startsWith('@sentry/'))).toEqual([]);
+    expect(Object.keys(pkg.dependencies ?? {}).filter((d) => d.startsWith(['@sentry', ''].join('/')))).toEqual([]);
     // Kontrola ujemna strażnika: wzorzec wykrywa import w komponencie klienckim.
     expect("'use client';\nimport { x } from '@/lib/error-webhook';".includes('@/lib/error-webhook')).toBe(true);
   });

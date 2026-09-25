@@ -39,6 +39,12 @@ identyfikatorów ani konfiguracji.
 | `db_connections` | alarm | użyte ≥ 80% z `max_connections − superuser_reserved_connections` | wyciek połączeń, za dużo replik |
 | `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h | błędne adresy, odrzucenia dostawcy |
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |
+| `mail_hard_bounce_rate` | alarm | ≥ 50 listów przyjętych w 24 h i > 5% z nich trwale odbitych | zła lista adresów, import, literówki w formularzu |
+| `mail_hard_bounce_rising` | alarm | odsetek trwałych odbić 24 h > 2% i > 2× odsetka z 7 dób bazowych (≥ 50 listów w obu oknach) | jak wyżej, wcześniejszy sygnał |
+| `mail_complaint_rate` | alarm | ≥ 50 listów w 24 h i > 0,3% skarg | niechciane wiadomości, brak łatwego wypisania |
+| `mail_complaint_rising` | alarm | odsetek skarg 24 h > 0,1% i > 2× odsetka z 7 dób bazowych | nowa kampania/szablon |
+| `mail_suppressions_new` | alarm | > 20 nowych blokad adresów w 24 h | nagły skok odbić lub skarg |
+| `mail_suppressions_active` | ostrzeżenie | > 1000 aktywnych blokad | przegląd listy w `/admin/poczta` |
 
 Liczby pochodzą z `public.ops_metrics()` (migracja `0096`, `SECURITY DEFINER`,
 EXECUTE mają tylko `pracujbe_ops` i `service_role`). Rola `pracujbe_ops` nie ma
@@ -46,6 +52,24 @@ EXECUTE mają tylko `pracujbe_ops` i `service_role`). Rola `pracujbe_ops` nie ma
 `tests/integration/ops-metrics.test.ts` z prawdziwym loginem, kontrolą ujemną
 i odmową dostępu do tabel. `appPool` opisuje pulę jednej instancji. Przy kilku
 replikach każde wywołanie może trafić do innej instancji.
+
+### Poczta (#44, migracja `0118`)
+
+Sekcja `mail` w `ops_metrics()` zawiera same liczby: listy przyjęte przez dostawcę
+(`sent_at`) w ostatnich 24 h i w 7 dobach bazowych przed nimi (okno 2.–8. doba), ile
+z tej samej kohorty trwale się odbiło (`bounce_type = 'permanent'`) i ile dostało
+skargę (zdarzenia z webhooka Resend, 0098), liczbę aktywnych blokad
+(`email_suppressions`, `lifted_at is null`) i blokad założonych w 24 h. Odsetki
+liczymy dla kohorty wysyłki, więc spóźnione zdarzenie (np. skarga po dwóch dniach)
+trafia do okna, w którym list wyszedł. Poniżej 50 listów w oknie odsetków nie
+oceniamy — pojedyncze odbicie przy małym ruchu nie podnosi alarmu. Wiek najstarszego
+gotowego wiersza obu kolejek (`email_deliveries`, `auth.email_outbox`) to istniejące
+`email_queue_age` / `auth_email_queue_age`. Progi to wartości startowe
+(`OPS_THRESHOLDS.mail*`) — skoryguj je po kilku tygodniach realnego ruchu. Baza bez
+`0118` nie ma sekcji `mail`: czujki poczty milczą, reszta działa. Kolejka auth nie
+zapisuje zdarzeń doręczenia, więc odsetki dotyczą tylko poczty domenowej. Dowód:
+`rls.sql` sekcja OPS44 (z kontrolą ujemną na ciele z `0096`), test integracyjny
+z loginem monitoringu (alarm → recovery), `tests/unit/ops-sensors.test.ts`.
 
 Źródło metryk ustala `src/lib/ops/metrics-source.ts`. Pierwszeństwo ma
 `DATABASE_OPS_URL` (PostgreSQL Railway, osobny login, jedna sesja na proces),
@@ -173,6 +197,7 @@ w innych językach w SQL (`Brussels`, `Luik`; dziś rozwija je aplikacja przez
 |---|---|---|
 | **Kod** (route `/api/health/ops`, `src/lib/ops/*`, skrypty) | redeploy poprzedniego SHA w Railway; endpoint znika, pozostałe trasy bez zmian | — |
 | **Schemat** (`0096`) | NOWA migracja naprawcza: `drop function public.ops_metrics()`, `drop index public.idx_jobs_city_trgm`, `revoke usage on schema public from pracujbe_ops`, a po odebraniu członkostwa loginowi monitoringu `drop role pracujbe_ops` | nie edytuj zastosowanej `0096`; kod starszy niż `0096` działa na bazie z `0096` (funkcja i indeks są addytywne) |
+| **Schemat** (`0118`, poczta) | NOWA migracja naprawcza z ciałem `ops_metrics()` z `0096` i `drop index public.idx_email_deliveries_sent_at` | aplikacja toleruje brak sekcji `mail` (czujki poczty milczą) |
 | **Dane** | `0096` nie zmienia danych. Utracone dane odtwarzasz z kopii: `restore-backup.sh` do izolowanej bazy, weryfikacja, potem decyzja o przełączeniu/eksporcie | nigdy nie odtwarzaj kopii bezpośrednio do produkcyjnej bazy; skrypty odmawiają celu spoza `pracujbe_restore_*` |
 
 Kopie logiczne nie zastępują snapshotów wolumenu Railway i odwrotnie. Snapshot

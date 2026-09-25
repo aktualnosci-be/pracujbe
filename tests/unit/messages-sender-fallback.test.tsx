@@ -48,6 +48,7 @@ function fakeClient(opts: { uid: string; team: string[]; visibleProfiles: Record
     (row) => row.profile_id !== opts.uid,
   );
   fakeDb
+    .rpc('get_message_attachments', [])
     .rows('messages.conversation', [conversation])
     .rows('messages.conversation-access', [conversation])
     .rows('messages.thread-page', [

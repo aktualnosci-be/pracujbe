@@ -41,6 +41,7 @@ function setup(failing?: Stage, missing = false) {
       return rows[stage];
     });
   }
+  fakeDb.rpc('get_message_attachments', []);
   const spy = failing === 'auth' ? vi.spyOn(portal, 'getPortalIdentity').mockRejectedValueOnce(failure) : null;
   return { failure, spy };
 }

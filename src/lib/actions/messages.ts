@@ -11,7 +11,8 @@ import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
-import { messageBodySchema } from '@/lib/validation/message';
+import { MESSAGE_BODY_MAX_LENGTH } from '@/lib/validation/message';
+import { MESSAGE_ATTACHMENTS_MAX } from '@/lib/validation/message-attachment';
 
 /**
  * Server Actions komunikacji (Etap 6) — cienka warstwa nad RPC z migracji 0016.
@@ -85,18 +86,28 @@ export async function openConversation(input: {
 }
 
 const clientMessageIdSchema = z.string().uuid();
+const attachmentIdsSchema = z.array(z.string().uuid()).max(MESSAGE_ATTACHMENTS_MAX)
+  .refine((ids) => new Set(ids).size === ids.length);
+/** Treść może być pusta tylko z co najmniej jednym załącznikiem (jak `send_message`, 0119). */
+const sendInputSchema = z.object({
+  body: z.string().trim().max(MESSAGE_BODY_MAX_LENGTH),
+  attachmentIds: attachmentIdsSchema,
+}).refine((input) => input.body.length > 0 || input.attachmentIds.length > 0);
 
 /**
  * Wysyła wiadomość w konwersacji (tylko uczestnik — egzekwuje RPC).
  * `clientMessageId` = stały UUID jednej operacji wysyłki (#147): ponowienie po utracie
  * odpowiedzi z tym samym kluczem zwraca istniejącą wiadomość bez duplikatu i alertów.
+ * `attachmentIds` = własne, przygotowane w tej rozmowie pliki (`uploadMessageAttachment`);
+ * baza łączy je z wiadomością w tej samej transakcji (0119) — brak któregokolwiek cofa wysyłkę.
  */
 export async function sendMessage(
   conversationId: string,
   body: string,
   clientMessageId: string,
+  attachmentIds: string[] = [],
 ): Promise<MsgResult> {
-  const parsed = messageBodySchema.safeParse(body);
+  const parsed = sendInputSchema.safeParse({ body, attachmentIds });
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   if (!clientMessageIdSchema.safeParse(clientMessageId).success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
@@ -116,8 +127,9 @@ export async function sendMessage(
     const data = await withPortalTransaction(me, (tx) =>
       rpc(tx, 'send_message', {
         p_conversation_id: conversationId,
-        p_body: parsed.data,
+        p_body: parsed.data.body,
         p_client_message_id: clientMessageId,
+        p_attachment_ids: parsed.data.attachmentIds,
       }),
     );
     if (typeof data !== 'string' || !data) return { ok: false, error: 'INTERNAL' };

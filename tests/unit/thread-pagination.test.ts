@@ -57,6 +57,7 @@ function fakeThread(store: { rows: Row[]; conversation: boolean; failMessages?: 
   resetFakeDb({ id: ME, role: 'candidate' } as unknown as PortalIdentity);
   const calls = { limit: [] as number[], texts: [] as string[] };
   fakeDb
+    .rpc('get_message_attachments', [])
     .rows('messages.conversation', store.conversation ? [{ id: 'thread-1', subject: 'Praca', company_id: 'company-1' }] : [])
     .rows('messages.conversation-access', store.conversation ? [{ id: 'thread-1', company_id: 'company-1' }] : [])
     .rows('messages.thread-other-members', [{ profile_id: 'other' }])
