@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 94; z danymi osobowymi: 58; bez danych osobowych: 36.
+Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -14,11 +14,11 @@ Tabele w migracjach: 94; z danymi osobowymi: 58; bez danych osobowych: 36.
 |---|---|---|---|---|
 | Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.document_acceptances`, `public.profiles` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile). |
 | Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.candidate_visibility_events`, `public.saved_jobs` | Railway | Kod nie usuwa danych — do ustalenia |
-| Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.storage_deletion_queue` | Railway | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona. |
+| Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.storage_deletion_queue`, `public.storage_gc_sweeps` | Railway | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona. |
 | Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
 | Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, EmailLabs, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
-| Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend, EmailLabs | Propozycje wygasają (expires_at), dane nie są usuwane. |
+| Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.files`, `public.message_attachments`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend, EmailLabs | Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue. |
 | Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs`, `public.screening_question_reviews` | Railway, Resend, EmailLabs, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
 | E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Resend, EmailLabs | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Kod nie usuwa danych — do ustalenia |
@@ -680,9 +680,9 @@ Tabele w migracjach: 94; z danymi osobowymi: 58; bez danych osobowych: 36.
 ### `public.files`
 
 - **Migracja:** `supabase/migrations/0007_misc.sql`
-- **Czynności:** Pliki CV
-- **Osoby:** Kandydaci (konto)
-- **Uwaga:** Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane.
+- **Czynności:** Pliki CV, Kontakt pracodawca–kandydat
+- **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
+- **Uwaga:** Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane. entity_type: candidate_cv (CV) albo message_attachment (załącznik rozmowy, entity_id = rozmowa).
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -747,6 +747,22 @@ Tabele w migracjach: 94; z danymi osobowymi: 58; bez danych osobowych: 36.
 | `missing` | Proces rekrutacyjny (statusy, dopasowanie, odpowiedzi screeningowe) | `supabase/migrations/0005_processes.sql` |
 | `strengths` | Proces rekrutacyjny (statusy, dopasowanie, odpowiedzi screeningowe) | `supabase/migrations/0005_processes.sql` |
 | `mandatory_met` | Proces rekrutacyjny (statusy, dopasowanie, odpowiedzi screeningowe) | `supabase/migrations/0005_processes.sql` |
+
+### `public.message_attachments`
+
+- **Migracja:** `supabase/migrations/0119_message_attachments.sql`
+- **Czynności:** Kontakt pracodawca–kandydat
+- **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
+- **Uwaga:** Powiązanie pliku (public.files) z rozmową i wiadomością; treść i nazwa pliku w public.files/buckecie.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `uploader_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0119_message_attachments.sql` |
+| `file_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0119_message_attachments.sql` |
+| `message_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0119_message_attachments.sql` |
+| `client_upload_id` | nie dotyczy: Losowy klucz idempotencji uploadu. | — |
+| `position` | nie dotyczy: Kolejność pliku w wiadomości. | — |
+| `linked_at` | nie dotyczy: Czas wysłania z wiadomością. | — |
 
 ### `public.messages`
 
@@ -989,6 +1005,27 @@ Tabele w migracjach: 94; z danymi osobowymi: 58; bez danych osobowych: 36.
 |---|---|---|
 | `path` | Pliki (CV) i ich metadane | `supabase/migrations/0105_data_retention_rights.sql` |
 | `bucket` | nie dotyczy: Nazwa bucketa. | — |
+
+### `public.storage_gc_sweeps`
+
+- **Migracja:** `supabase/migrations/0117_storage_gc.sql`
+- **Czynności:** Pliki CV
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Przebieg GC bucketu CV (#17): same liczniki; kursor = ostatni sprawdzony klucz (UUID właściciela), czyszczony po zakończeniu przebiegu, historia 90 dni.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `cursor_key` | Pliki (CV) i ich metadane | `supabase/migrations/0117_storage_gc.sql` |
+| `bucket` | nie dotyczy: Nazwa bucketa. | — |
+| `dry_run` | nie dotyczy: Tryb przebiegu GC. | — |
+| `locked_until` | nie dotyczy: Dzierżawa przebiegu. | — |
+| `pages` | nie dotyczy: Licznik stron. | — |
+| `objects_scanned` | nie dotyczy: Licznik obiektów. | — |
+| `orphan_objects` | nie dotyczy: Licznik sierot. | — |
+| `orphan_queued` | nie dotyczy: Licznik sierot w kolejce. | — |
+| `missing_objects` | nie dotyczy: Licznik wierszy bez obiektu. | — |
+| `started_at` | nie dotyczy: Czas startu przebiegu. | — |
+| `finished_at` | nie dotyczy: Czas końca przebiegu. | — |
 
 ### `public.system_events`
 

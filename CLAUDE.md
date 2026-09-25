@@ -968,7 +968,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
   i alerty pojedyncze (`rls.sql` PP7–PP8).
-- [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** załączniki
+- [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania, zgłoszenia i załączniki gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16)
   Zgłoszenia (migracja `0116`): strona rozmowy zgłasza wiadomość drugiej
   strony („Zgłoś” pod dymkiem) albo całą rozmowę (nagłówek wątku) — `ReportContentButton`
   (powód ze słownika `MESSAGE_REPORT_CATEGORIES`, opis ≤ 1000, znacznik treści prawnej „do
@@ -986,6 +986,23 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   unit `message-reports`, `thread-message-list`, E2E `message-report.spec`. **Otwarte:**
   treść prawna i retencja dowodu (#40/#486 — dowód zostaje po usunięciu konta nadawcy),
   powiadomienie zgłaszającego o wyniku, zgłoszenie jako sprawa DSA.
+  Załączniki (migracja `0119`): PDF/DOC/DOCX/JPG/PNG ≤ 5 MB, najwyżej 3 na
+  wiadomość (`src/lib/validation/message-attachment.ts` — przeglądarka i akcja; magic bytes
+  i OOXML w `src/lib/files/message-attachments.ts`). „Dołącz plik” wgrywa plik od razu
+  (`uploadMessageAttachment`: `can_attach_in_conversation` → PUT do prywatnego bucketu pod
+  `<rozmowa>/att-<uuid>` → `stage_message_attachment`, idempotentnie po `client_upload_id`),
+  `send_message(…, p_attachment_ids)` łączy pliki z wiadomością w tej samej transakcji
+  (`client_message_id` jak #147; pusta treść tylko z plikiem). Lista w wątku
+  (`get_message_attachments`) i pobranie (`get_message_attachment_download`) tylko dla bieżących
+  uczestników i wysłanych wiadomości; pobranie = link HMAC 60 s `/api/files/message/<id>?t=`
+  (klucz pochodny od `FILE_DOWNLOAD_SECRET`, trasa ponownie sprawdza sesję, dostęp i
+  `scan_status`; kwarantanna = brak pobrania). Blokada firmy (#97): strona firmowa nie wgrywa
+  plików i nie widzi plików kandydata. Tabela `message_attachments` bez grantów (RPC-only),
+  klient nie tworzy/zmienia wierszy `files` załączników (trigger). Usunięcie wiadomości/rozmowy
+  (także konta #486) usuwa `files` → `storage_deletion_queue`; niewysłane pliki > 24 h sprząta
+  `purge_stale_message_attachments` w `/api/maintenance`. Dowód: `rls.sql` sekcja MA (kontrola
+  ujemna: bez strażnika `files` ścieżka zostaje podmieniona); unit `message-attachments-*`.
+  **Otwarte:** AV (jak CV), podgląd obrazów w wątku, e-mail `newMessage` bez informacji o pliku.
   Wysyłka idempotentna (0075, #147): `send_message(conversation, body, client_message_id)` —
   `MessageComposer` trzyma jeden UUID na operację danej treści (`useRef`), ponowienie po
   zerwanym połączeniu = ta sama wiadomość bez drugiego powiadomienia/e-maila. Dowód: `rls.sql`
@@ -1074,8 +1091,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   E-maile Auth nie są blokowane (obowiązkowe). Panel `/admin/poczta`: lista, filtr, zdjęcie
   blokady z uzasadnieniem (`admin_lift_email_suppression`, audyt). Dowód: `rls.sql` sekcja
   ML44, `email-delivery-webhook.test.ts`, `admin-email-suppressions.test.ts`, E2E
-  `admin-email-suppressions.spec`. **Do zrobienia (#44):** alarmy (wiek kolejki, wzrost
-  bounce/complaint), stany w `/api/health`, adapter drugiego dostawcy.
+  `admin-email-suppressions.spec`. Alarmy poczty (migracja `0118`):
+  sekcja `mail` w `ops_metrics()` (kohorta wysyłki 24 h i 7 dób bazowych, trwałe odbicia,
+  skargi, aktywne/nowe blokady — same liczby, rola `pracujbe_ops`), progi w
+  `src/lib/ops/sensors.ts` (`mail_*`: odsetek > 5% odbić / 0,3% skarg, wzrost > 2× bazy,
+  > 20 nowych blokad; próba ≥ 50 listów) → `/api/health/ops` 503/200; wiek kolejek =
+  istniejące `email_queue_age`/`auth_email_queue_age`. Opis `docs/railway/OPERATIONS.md`;
+  dowód `rls.sql` OPS44, `ops-metrics` (PG16), `ops-sensors`. **Do zrobienia (#44):**
+  kalibracja progów na ruchu produkcyjnym, adapter drugiego dostawcy.
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
@@ -1361,7 +1384,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `AWS_S3_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_URL_STYLE`) +
   `FILE_DOWNLOAD_SECRET`; `/api/health` → `fileBucket`/`fileDownloadSecret`. Bez bucketu: demo =
   `DEMO_UNAVAILABLE`, produkcja = błąd. Opis: `docs/railway/STORAGE_ADAPTER_CONTRACT.md`.
-  **Otwarte:** utworzenie bucketu (właściciel), GC sierot, AV, PDF faktur (`storage.ts`, #27).
+  GC sierot (#17, migracja `0117`): dzienny przebieg w `/api/maintenance` (`src/lib/storage-gc.ts`,
+  `list` w adapterze) — obiekt bez wiersza `files` po 24 h → `storage_deletion_queue`, wiersz bez
+  obiektu → tylko licznik; partie z kursorem (`storage_gc_sweeps`), dry-run domyślnie
+  (`STORAGE_GC_MODE=delete` = kasowanie), same liczniki w odpowiedzi. Opis: `docs/DATA_RETENTION.md` §3a.
+  **Otwarte:** utworzenie bucketu (właściciel), zatwierdzenie trybu `delete` na produkcji, GC
+  `email_deliveries`/`processed_webhooks`/`rate_limit` z #17, AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,

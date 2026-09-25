@@ -69,12 +69,48 @@ describe('Login monitoringu pracujbe_ops (#47)', () => {
     expect(evaluateOps(metrics!).status).toBe('ok');
   });
 
+  it('#44: skok trwałych odbić i blokad → alarm poczty; po sprzątnięciu → ok (recovery)', async () => {
+    const pool = await createRuntimePool(url('ops_monitor'), 'ops');
+    pools.push(pool);
+    const read = async () => {
+      const { rows } = await pool.query<{ metrics: unknown }>('SELECT public.ops_metrics() AS metrics');
+      const metrics = parseOpsMetrics(rows[0]?.metrics);
+      expect(metrics?.mail).not.toBeNull();
+      return metrics!;
+    };
+    expect(evaluateOps(await read()).alerts).toEqual([]);
+
+    // 60 listów z 24 h, 6 trwałych odbić (10% > 5%) i 25 nowych blokad (> 20).
+    await admin!.query(`
+      INSERT INTO public.email_deliveries (to_email, template, status, sent_at, bounce_type, bounced_at)
+      SELECT 'ops44-' || g || '@test.invalid', 'newMessage',
+             (CASE WHEN g <= 6 THEN 'bounced' ELSE 'delivered' END)::public.email_status,
+             now() - interval '1 hour',
+             CASE WHEN g <= 6 THEN 'permanent' END,
+             CASE WHEN g <= 6 THEN now() - interval '30 minutes' END
+        FROM generate_series(1, 60) g;
+      INSERT INTO public.email_suppressions (email, reason)
+      SELECT 'ops44-block-' || g || '@test.invalid', 'hard_bounce' FROM generate_series(1, 25) g;`);
+    const alerting = await read();
+    expect(alerting.mail).toMatchObject({ sentLast24h: 60, hardBouncesLast24h: 6, newSuppressionsLast24h: 25 });
+    expect(evaluateOps(alerting)).toMatchObject({
+      status: 'alert', alerts: ['mail_hard_bounce_rate', 'mail_suppressions_new'],
+    });
+    expect(JSON.stringify(alerting)).not.toContain('@');
+
+    await admin!.query(`
+      DELETE FROM public.email_suppressions WHERE email::text LIKE 'ops44-%';
+      DELETE FROM public.email_deliveries WHERE to_email LIKE 'ops44-%';`);
+    expect(evaluateOps(await read())).toMatchObject({ status: 'ok', alerts: [] });
+  });
+
   it('nie czyta tabel ani nie przełącza się na role aplikacji', async () => {
     const pool = await createRuntimePool(url('ops_monitor'), 'ops');
     pools.push(pool);
     for (const sql of [
       'SELECT count(*) FROM public.email_deliveries',
       'SELECT count(*) FROM auth.email_outbox',
+      'SELECT count(*) FROM public.email_suppressions',
       'SELECT public.expire_due_jobs()',
       'SET ROLE pracujbe_app',
       'SET ROLE service_role',
