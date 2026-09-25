@@ -4,13 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { routing } from './i18n/routing';
 import { resolveCitySlugAlias } from '@/lib/locations/city-aliases';
 import { isOneTimeLinkPath } from '@/lib/analytics/route-policy';
-import {
-  guestLinkCookieName,
-  guestLinkMaxAge,
-  guestLinkPath,
-  guestLinkPurpose,
-  isGuestLinkToken,
-} from '@/lib/guest-apply/link-state';
+import { guestLinkPurpose } from '@/lib/guest-apply/link-state';
 import { isAppReady } from '@/lib/env';
 import {
   SITE_ACCESS_COOKIE,
@@ -63,30 +57,17 @@ function protectOneTimeResponse(request: NextRequest, response: NextResponse): N
   return response;
 }
 
-/** Existing query links are exchanged for a path-scoped HttpOnly cookie and a clean URL. */
-function exchangeLegacyGuestLink(request: NextRequest): NextResponse | null {
-  const link = guestLinkPurpose(request.nextUrl.pathname);
-  if (!link || !request.nextUrl.searchParams.has('token')) return null;
-
-  const values = request.nextUrl.searchParams.getAll('token');
+/**
+ * Linki gościa z tokenem w query (format sprzed #506) są odrzucane (#505): token w query trafia
+ * do logów pierwszego żądania, więc nie przyjmujemy go jako uprawnienia. Czysty URL bez cookie —
+ * strona pokazuje „link nieprawidłowy” z prośbą o ponowne wysłanie aplikacji (nowy link ma token
+ * we fragmencie). Cookie staged z nowego linku zostaje nietknięte.
+ */
+function rejectLegacyGuestLink(request: NextRequest): NextResponse | null {
+  if (!guestLinkPurpose(request.nextUrl.pathname) || !request.nextUrl.searchParams.has('token')) return null;
   const url = request.nextUrl.clone();
   url.search = '';
-  const response = NextResponse.redirect(url, 303);
-  const name = guestLinkCookieName(link.purpose);
-  const path = guestLinkPath(link.locale, link.purpose);
-  const token = values.length === 1 ? values[0] : null;
-  if (isGuestLinkToken(token)) {
-    response.cookies.set(name, token, {
-      path,
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: request.nextUrl.protocol === 'https:',
-      maxAge: guestLinkMaxAge(link.purpose),
-    });
-  } else {
-    response.cookies.set(name, '', { path, maxAge: 0 });
-  }
-  return protectOneTimeResponse(request, response);
+  return protectOneTimeResponse(request, NextResponse.redirect(url, 303));
 }
 
 const CITY_LANDING_RE = /^\/([a-z]{2})\/praca\/miasto\/([^/]+)\/?$/;
@@ -138,7 +119,7 @@ async function siteAccessGate(request: NextRequest): Promise<NextResponse | null
 }
 
 export default async function middleware(request: NextRequest) {
-  const guestRedirect = exchangeLegacyGuestLink(request);
+  const guestRedirect = rejectLegacyGuestLink(request);
   if (guestRedirect) return guestRedirect;
 
   const gated = await siteAccessGate(request);
