@@ -1267,10 +1267,21 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (niekompletny → `ONBOARDING_INCOMPLETE`), wyszukiwalność tylko po ukończeniu i opt-in
   (widok pracodawcy pod RLS). Mutacje: `searchable-without-complete|skills-append|
   completeness-guard-off|relations-dml-open`. Zestaw real-flow nie jest w CI (uruchamiany ręcznie).
-  **Otwarte:** panele i Server Actions nadal używają klienta Supabase (PostgREST nie ustawia
-  `app.current_uid`), więc kliknięć w panelach i `revalidatePath` ten test nie obejmuje — po
-  #24/#25 dołożyć kroki UI w tym samym configu. Wpięcie w CI (job z usługą `postgres:16`) —
-  gotowy fragment `ci.yml` w opisie PR tej zmiany.
+  Kroki UI w przeglądarce (`tests/e2e-real/ui-flow.spec.ts`, helpery `support/ui.ts`): serwer
+  `next dev` z Better Auth na ograniczonym loginie auth (`DATABASE_AUTH_URL`, origin jak w stosie
+  testu). Rejestracja pracodawcy (nl) i kandydata (fr) formularzami → link potwierdzenia z
+  `auth.email_outbox` (język odbiorcy) → przycisk „Potwierdź” → panel wg roli; logowanie
+  formularzem (złe hasło bez sesji), panel bez sesji → logowanie. Kreator onboardingu 1–6
+  (błąd pola, „Zakończ” → `profile_completed` w bazie), przełącznik widoczności profilu,
+  ApplyModal (podwójne kliknięcie, ponowne wysłanie → „już aplikowałeś”), menu statusu w
+  szczególe zgłoszenia, propozycja z `/employer/kandydaci`, akceptacja w
+  `/candidate/propozycje`, wiadomości w obu panelach, obca firma → 404 szczegółu. Wyjątki bez
+  ścieżki UI: weryfikacja firmy przez RPC admina, oferta przez RPC kreatora pod sesją
+  z przeglądarki, wiersz `matches` wstawia operator (pipeline P1-03). Mutacje UI:
+  `respond-offer-noop|transition-noop` (czerwone są też `finish-onboarding-noop` i
+  `recipient-locale-en`; `rls-applications-off` łapie tylko critical-flow — panel sam filtruje
+  po aktywnej firmie). **Otwarte:** wpięcie w CI (job z usługą `postgres:16`) — gotowy
+  fragment `ci.yml` w opisie PR; kreator oferty (9 kroków) w tym przebiegu.
   Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
   worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
