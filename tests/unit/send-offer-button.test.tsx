@@ -69,6 +69,17 @@ describe('SendOfferButton (#327)', () => {
     expect(second.idempotencyKey).toBe(first.idempotencyKey);
   });
 
+  it('sukces: stan „wysłano” i komunikat o wysłaniu (toast nie znika razem z przyciskiem)', async () => {
+    sendOffer.mockResolvedValue({ ok: true, id: 'offer-1' });
+    renderButton();
+    fireEvent.click(screen.getByRole('button', { name: /^sendOfferTo/ }));
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getAllByRole('button', { name: 'sendOffer' }).at(-1)!);
+    expect(await screen.findByText('offerSentSuccess')).toBeInTheDocument();
+    expect(screen.getByText('offerSentOn|20 wrz 2026')).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it('za krótka własna wiadomość: błąd przy polu, brak wysyłki', async () => {
     renderButton();
     fireEvent.click(screen.getByRole('button', { name: /^sendOfferTo/ }));
