@@ -9,6 +9,7 @@
  * tam sekretów (service-role key czytany jest osobno, tylko po stronie serwera).
  */
 import { isBillingEnabled } from '@/lib/billing/flag';
+import { cronSecretChecks } from '@/lib/cron/secrets';
 import { emailProviderFromEnv } from '@/lib/email/transport/select';
 
 export const env = {
@@ -221,6 +222,8 @@ export function readinessChecks(): Record<string, boolean> {
     emailProviderReady: emailProviderFromEnv().ready,
     emaillabsWebhook: Boolean(process.env.EMAILLABS_WEBHOOK_SECRET?.trim()),
     queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),
+    // #13: osobny sekret maintenance, rozdział sekretów cron, przejściowy CRON_SECRET.
+    ...cronSecretChecks(),
     sentry: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN),
     // #26: prywatny bucket Railway (endpoint/region/bucket/klucze) + sekret linków pobrania CV.
     fileBucket: fileBucketConfig() !== null,
