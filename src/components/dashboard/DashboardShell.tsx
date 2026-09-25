@@ -53,6 +53,8 @@ export interface DashboardShellProps {
    * przycisk byłby ogłaszany przez czytnik ekranu). Domyślnie true.
    */
   showNotifications?: boolean;
+  /** Pełna lista powiadomień (#148, bez prefiksu locale) — „Zobacz wszystkie” w dropdownie. */
+  notificationsHref?: string;
   children: React.ReactNode;
 }
 
@@ -77,6 +79,7 @@ export function DashboardShell({
   notifItems,
   unreadMessages,
   showNotifications = true,
+  notificationsHref,
   children,
 }: DashboardShellProps): React.JSX.Element {
   const tc = useTranslations('common');
@@ -349,6 +352,8 @@ export function DashboardShell({
                     onRetry={() => router.refresh()}
                     onMarkAllRead={handleMarkAllRead}
                     onItemOpen={handleItemOpen}
+                    seeAllHref={notificationsHref}
+                    onSeeAll={() => setNotifOpen(false)}
                     markAllPending={markAllPending}
                     markAllDone={markAllDone}
                     markAllError={markAllError ? tRoot(toUserMessageKey(markAllError)) : null}

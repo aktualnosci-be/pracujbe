@@ -662,6 +662,7 @@
     "savedSearchLimitReached": "Je hebt al 20 opgeslagen zoekopdrachten. Verwijder er een om een nieuwe toe te voegen.",
     "moderationLocked": "Deze inhoud is beperkt door een moderatiebeslissing, dus de status kan niet worden gewijzigd.",
     "guestApplyUnavailable": "Solliciteren zonder account is tijdelijk niet beschikbaar. Probeer later opnieuw of log in.",
+    "siteAccessUnavailable": "De toegang tot de website is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
     "emailNotVerified": "Bevestig eerst het e-mailadres van je account — klik op de link die we bij de registratie stuurden.",
     "claimExpired": "De koppellink is verlopen (hij was 30 dagen geldig).",
     "appealExists": "Er is al bezwaar gemaakt tegen deze beslissing.",
@@ -1201,7 +1202,20 @@
     "itemModerationAppealUpheld": "Bezwaar behandeld: beslissing gehandhaafd",
     "itemModerationAppealReversed": "Bezwaar gegrond: beslissing gewijzigd",
     "itemScreeningApproved": "Een vraag in je vacature is goedgekeurd",
-    "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd"
+    "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd",
+    "listIntro": "Alle meldingen van je account, nieuwste eerst.",
+    "filterLabel": "Meldingenfilter",
+    "filterAll": "Alle",
+    "filterUnread": "Ongelezen",
+    "markRead": "Markeren als gelezen",
+    "markReadItem": "Markeren als gelezen: {title}",
+    "markedRead": "Melding gemarkeerd als gelezen.",
+    "emptyUnread": "Je hebt geen ongelezen meldingen.",
+    "unreadCount": "{count, plural, =0 {Geen ongelezen} one {1 ongelezen} other {# ongelezen}}",
+    "loadMore": "Meer tonen",
+    "loadingMore": "Laden…",
+    "listEnd": "Dat zijn al je meldingen.",
+    "moreError": "Meer meldingen laden is mislukt. Probeer het opnieuw."
   },
   "pricing": {
     "standard": "Standaard",
@@ -2489,7 +2503,8 @@
     "passwordLabel": "Toegangswachtwoord",
     "submit": "Doorgaan",
     "error": "Onjuist wachtwoord. Probeer het opnieuw.",
-    "rateLimited": "Te veel pogingen. Probeer het over enkele minuten opnieuw."
+    "rateLimited": "Te veel pogingen. Probeer het over enkele minuten opnieuw.",
+    "unavailable": "De toegang is tijdelijk niet beschikbaar. Probeer het later opnieuw."
   },
   "offline": {
     "title": "Geen verbinding",

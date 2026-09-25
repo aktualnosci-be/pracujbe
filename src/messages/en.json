@@ -662,6 +662,7 @@
     "savedSearchLimitReached": "You already have 20 saved searches. Delete one to add a new one.",
     "moderationLocked": "This content is restricted by a moderation decision, so its status cannot be changed.",
     "guestApplyUnavailable": "Applying without an account is temporarily unavailable. Try again later or log in.",
+    "siteAccessUnavailable": "Access to the website is temporarily unavailable. Please try again later.",
     "emailNotVerified": "First confirm your account’s email address — click the link we sent when you registered.",
     "claimExpired": "The link to link the application has expired (it was valid for 30 days).",
     "appealExists": "An appeal against this decision has already been submitted.",
@@ -1201,7 +1202,20 @@
     "itemModerationAppealUpheld": "Appeal reviewed: decision upheld",
     "itemModerationAppealReversed": "Appeal granted: decision changed",
     "itemScreeningApproved": "A question in your job was approved",
-    "itemScreeningRejected": "A question in your job was not approved"
+    "itemScreeningRejected": "A question in your job was not approved",
+    "listIntro": "All notifications from your account, newest first.",
+    "filterLabel": "Notification filter",
+    "filterAll": "All",
+    "filterUnread": "Unread",
+    "markRead": "Mark as read",
+    "markReadItem": "Mark as read: {title}",
+    "markedRead": "Notification marked as read.",
+    "emptyUnread": "You have no unread notifications.",
+    "unreadCount": "{count, plural, =0 {No unread} one {1 unread} other {# unread}}",
+    "loadMore": "Show more",
+    "loadingMore": "Loading…",
+    "listEnd": "That's all your notifications.",
+    "moreError": "Could not load more notifications. Please try again."
   },
   "pricing": {
     "standard": "Standard",
@@ -2489,7 +2503,8 @@
     "passwordLabel": "Access password",
     "submit": "Enter",
     "error": "Incorrect password. Please try again.",
-    "rateLimited": "Too many attempts. Please try again in a few minutes."
+    "rateLimited": "Too many attempts. Please try again in a few minutes.",
+    "unavailable": "Access is temporarily unavailable. Please try again later."
   },
   "offline": {
     "title": "No connection",

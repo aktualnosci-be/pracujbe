@@ -55,6 +55,8 @@ export interface NotificationsDropdownProps {
   onItemOpen?: (item: NotificationItem) => void;
   /** Dedykowana lista powiadomień (bez prefiksu locale). Bez niej akcja jest ukryta. */
   seeAllHref?: string;
+  /** Klik „Zobacz wszystkie” — rodzic zamyka panel. */
+  onSeeAll?: () => void;
   /** Trwa zapis „oznacz wszystkie" — przycisk zajęty (bez utraty fokusu), klik ignorowany. */
   markAllPending?: boolean;
   /** Zapis „oznacz wszystkie" udany — komunikat statusu + fokus na tytule panelu. */
@@ -71,6 +73,7 @@ export function NotificationsDropdown({
   onMarkAllRead,
   onItemOpen,
   seeAllHref,
+  onSeeAll,
   markAllPending = false,
   markAllDone = false,
   markAllError = null,
@@ -203,6 +206,7 @@ export function NotificationsDropdown({
         <div className="border-t border-border px-5 py-2.5 text-center">
           <Link
             href={seeAllHref}
+            onClick={() => onSeeAll?.()}
             className="inline-flex min-h-11 items-center rounded text-sm font-bold text-primary hover:underline"
           >
             {t('seeAll')}

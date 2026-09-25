@@ -54,7 +54,7 @@ function events(): string[] {
 function writeConsentCookie(analytics: boolean): void {
   const record = {
     v: CONSENT_POLICY_VERSION,
-    categories: { necessary: true, preferences: false, analytics, marketing: false },
+    categories: { necessary: true, preferences: false, analytics },
     ts: '2026-01-01T00:00:00.000Z',
     id: 'funnel-consent-test',
   };
@@ -132,10 +132,10 @@ describe('JobFunnelBeacon bez zgody', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('sama zgoda marketingowa nie włącza lejka', () => {
+  it('sama zgoda na preferencje nie włącza lejka', () => {
     render(<JobFunnelBeacon event="detail_view" jobIds={[JOB]} />);
     act(() => {
-      updateConsent({ ...necessaryOnly(), marketing: true }, 'cookie_banner');
+      updateConsent({ ...necessaryOnly(), preferences: true }, 'cookie_banner');
     });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(pendingFunnelEventCount()).toBe(0);
