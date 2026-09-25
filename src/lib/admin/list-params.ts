@@ -251,6 +251,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'offer.status_changed': 'auditActionOfferStatus',
   'email.suppressed': 'auditActionEmailSuppressed',
   'email.suppression_lifted': 'auditActionEmailSuppressionLifted',
+  'age_policy.updated': 'auditActionAgePolicyUpdated',
   'breach.created': 'auditActionBreachCreated',
   'breach.updated': 'auditActionBreachUpdated',
   'breach.closed': 'auditActionBreachClosed',

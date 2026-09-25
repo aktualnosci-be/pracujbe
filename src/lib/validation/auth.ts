@@ -1,5 +1,6 @@
 import { z } from 'zod/v3';
-import { routing } from '@/i18n/routing';
+import { minAgeSchema } from '@/lib/age-policy';
+import { localeSchema } from '@/lib/validation/locale';
 
 /**
  * Schematy walidacji autoryzacji (logowanie, rejestracja kandydata/pracodawcy, reset hasła).
@@ -8,7 +9,7 @@ import { routing } from '@/i18n/routing';
  * warstwa formularza mapuje je na tłumaczenia.
  */
 
-export const localeSchema = z.enum(routing.locales);
+export { localeSchema };
 
 export const emailSchema = z
   .string({ required_error: 'auth.error.emailRequired' })
@@ -45,6 +46,16 @@ const agreeTermsSchema = z.custom<true>((value) => value === true, {
 });
 
 /**
+ * #492: deklaracja „mam co najmniej {minAge} lat” (bez daty urodzenia). Błąd niekrytyczny —
+ * jak zgoda na regulamin. `minAge` to próg pokazany w formularzu; baza porównuje go
+ * z bieżącym progiem (`candidate_min_age()`), więc wartość od klienta niczego nie obniża.
+ */
+const ageConfirmedSchema = z.custom<true>((value) => value === true, {
+  message: 'auth.error.ageConfirmRequired',
+  fatal: false,
+});
+
+/**
  * Potwierdzenie zapoznania się z informacją o prywatności (#493) — osobne pole, NIE zgoda.
  * Wymagane (dowód spełnienia obowiązku informacyjnego), niekrytyczne jak regulamin.
  */
@@ -77,6 +88,8 @@ export const registerCandidateSchema = z
     agreeTerms: agreeTermsSchema,
     privacyNoticeAck: privacyNoticeAckSchema,
     marketingOptIn: optionalConsentSchema,
+    ageConfirmed: ageConfirmedSchema,
+    minAge: minAgeSchema,
   })
   .refine(passwordsMatch, {
     path: ['passwordConfirm'],
