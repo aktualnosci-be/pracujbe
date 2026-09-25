@@ -102,7 +102,7 @@ Kolejność: limit rozmiaru → parsowanie → walidacja (zdarzenie z listy, non
   `pracujbe.funnel_writer`). Tabele bez uprawnień dla `anon`/`authenticated`.
 - Odczyt: `get_company_job_funnel` — recruiter+ firmy oferty; zwraca sumy dzienne oraz
   `applications_submitted` liczone ze stanu `applications`.
-- **Terminy (migracja `0130`, #575):** `purge_job_funnel_data` (service_role, partie
+- **Terminy (migracja `0128`, #575):** `purge_job_funnel_data` (service_role, partie
   `SKIP LOCKED`, same liczniki) woła `/api/maintenance` co godzinę — receipts starsze niż
   48 h i agregaty sprzed `job_funnel_retention_cutoff(now())` (1. dzień miesiąca 12 miesięcy
   przed bieżącym) znikają niezależnie od ruchu. `record_job_funnel_event` sprząta receipts

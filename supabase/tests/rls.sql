@@ -11165,7 +11165,7 @@ select pg_temp.assert(
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
 -- ============================================================================
--- FC575. Terminy lejka ofert (0130, #575): receipts ≤ 48 h, agregaty z bieżącego i 12
+-- FC575. Terminy lejka ofert (0128, #575): receipts ≤ 48 h, agregaty z bieżącego i 12
 --        poprzednich miesięcy kalendarzowych (Europe/Brussels), zadanie tylko service_role.
 --        Kontrola ujemna: bez zadania (sprzątanie tylko przy zapisie, 0089) dane zostają.
 -- ============================================================================

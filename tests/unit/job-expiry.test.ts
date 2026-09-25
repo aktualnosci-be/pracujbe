@@ -103,7 +103,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,
       retention: {},
-      // #575: terminy lejka ofert (0130).
+      // #575: terminy lejka ofert (0128).
       jobFunnel: {},
       purgedMessageAttachments: 0,
       // #17: bez bucketu Railway GC bucketu pominięty.

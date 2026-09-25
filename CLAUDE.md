@@ -761,7 +761,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `/employer/statystyki?dni=7|30|90`: zakres dat, definicje metryk, karty per oferta zawijane przy 200% tekstu (recruiter+).
   Dowód: `rls.sql` sekcja FN99, unit `job-funnel*`, E2E `public-cache-headers` (cache nienaruszony)
   i `e2e-real` (licznik rośnie, bot pominięty, mutacja `funnel-no-dedup` = czerwony).
-  Tylko po zgodzie (#575, decyzja właściciela 25.09, migracja `0130` — numer tymczasowy): lejek
+  Tylko po zgodzie (#575, decyzja właściciela 25.09, migracja `0128` — numer tymczasowy): lejek
   wysyła zdarzenie WYŁĄCZNIE przy zgodzie w kategorii `analytics` banera (`funnelConsentState`
   w `src/lib/job-funnel/client.ts`, cookie czytane tuż przed wysyłką — działa też po wycofaniu
   w innej karcie i po restarcie). Wyświetlenie sprzed decyzji czeka w pamięci karty i wychodzi

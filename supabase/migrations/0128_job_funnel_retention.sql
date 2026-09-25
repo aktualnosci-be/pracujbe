@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0130_job_funnel_retention.sql — #575: twarde terminy danych lejka ofert
+-- 0128_job_funnel_retention.sql — #575: twarde terminy danych lejka ofert
 -- (numer tymczasowy — ostateczny nada integrator).
 --
 -- Decyzja właściciela (25.09.2026): lejek działa tylko po zgodzie analitycznej, a jego dane

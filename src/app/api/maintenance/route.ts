@@ -39,7 +39,7 @@ import {
  * wiersze bez obiektu tylko liczone. Bez bucketu Railway — pominięty (`storageGc: null`).
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
- * #575: twarde terminy lejka ofert (`purge_job_funnel_data`, 0130) — receipts deduplikacji
+ * #575: twarde terminy lejka ofert (`purge_job_funnel_data`, 0128) — receipts deduplikacji
  * najwyżej 48 h, sumy dzienne z bieżącego i 12 poprzednich miesięcy kalendarzowych.
  * #43: czyszczenie spraw DSA (`dsa_retention_run`, 0104) — domyślnie WYŁĄCZONE (terminy czekają
  * na decyzję właściciela, #40); `DSA_RETENTION_MODE=dry-run` = podgląd, `apply` = anonimizacja
@@ -144,7 +144,7 @@ async function run(request: Request): Promise<Response> {
   } catch (error) {
     failures.push({ task: 'retention', error });
   }
-  // #575: lejek ofert — receipts ≤ 48 h, agregaty ≤ 13 miesięcy kalendarzowych (0130).
+  // #575: lejek ofert — receipts ≤ 48 h, agregaty ≤ 13 miesięcy kalendarzowych (0128).
   let jobFunnel: Record<string, number> = {};
   try {
     jobFunnel = retentionCounters(

@@ -7,7 +7,7 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #575 — twarde terminy lejka ofert w cronie `/api/maintenance`: `purge_job_funnel_data`
- * (0130) jako service_role, w odpowiedzi same liczniki, błąd → 503. Migracja ustala terminy
+ * (0128) jako service_role, w odpowiedzi same liczniki, błąd → 503. Migracja ustala terminy
  * 48 h (receipts) i 13 miesięcy kalendarzowych (agregaty); pełny dowód w `rls.sql` sekcja FC575.
  */
 
@@ -68,9 +68,9 @@ describe('maintenance: terminy lejka ofert (#575)', () => {
   });
 });
 
-describe('migracja 0130: terminy w SQL', () => {
+describe('migracja 0128: terminy w SQL', () => {
   const sql = readFileSync(
-    resolve(__dirname, '../../supabase/migrations/0130_job_funnel_retention.sql'),
+    resolve(__dirname, '../../supabase/migrations/0128_job_funnel_retention.sql'),
     'utf8',
   );
 
