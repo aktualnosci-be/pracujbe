@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
+import { getCurrentIdentity } from '@/lib/auth/current';
+import { readSignupCompanyName } from '@/lib/auth/signup-company-name';
+import { isPortalAuthConfigured } from '@/lib/env';
 import { getCompanyModerationDecisions, getMyCompany } from '@/lib/data/company';
 import { CompanyModerationDecisions } from '@/components/employer/CompanyModerationDecisions';
 import { CompanyForm } from '@/components/employer/CompanyForm';
@@ -72,7 +75,14 @@ export default async function EmployerCompanyPage({
   const t = await getTranslations({ locale, namespace: 'company' });
   const companyLoad = await getMyCompany();
   const company = companyLoad.status === 'ok' ? companyLoad.company : null;
-  if (companyLoad.status === 'ok' && !company) return <CompanyOnboarding />;
+  if (companyLoad.status === 'ok' && !company) {
+    // #365: nazwa firmy z rejestracji (metadane konta) wypełnia formularz domyślnie.
+    // `!company` tylko gdy konta są skonfigurowane (bez env `getMyCompany` zwraca demo) —
+    // sesja jest więc już zagwarantowana przez guard w `employer/layout.tsx`.
+    const identity = isPortalAuthConfigured() ? await getCurrentIdentity() : null;
+    const defaultName = identity ? await readSignupCompanyName(identity) : '';
+    return <CompanyOnboarding defaultName={defaultName} />;
+  }
   // Decyzje moderacyjne (#42) — uzasadnienie widzi owner/admin firmy (RPC zwraca pustą listę innym).
   const moderation =
     company && company.canEdit ? await getCompanyModerationDecisions(company.id) : null;

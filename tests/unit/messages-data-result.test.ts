@@ -46,7 +46,7 @@ describe('wynik wczytania listy rozmów', () => {
     expect(fakeDb.callsTo('messages.my-memberships').at(-1)).toMatchObject({ values: [ME], as: ME });
   });
 
-  it('składa listę: druga strona pod RLS, podsumowanie z RPC, fallback na nazwę firmy', async () => {
+  it('składa listę: druga strona pod RLS, podsumowanie z RPC (w tym nazwa firmy, #25/0166)', async () => {
     fakeDb
       .rows('messages.my-memberships', [{ conversation_id: 'c1', last_read_at: null }, { conversation_id: 'c2', last_read_at: null }])
       .rows('messages.conversations', [
@@ -55,9 +55,8 @@ describe('wynik wczytania listy rozmów', () => {
       ])
       .rows('messages.other-members', [{ conversation_id: 'c1', profile_id: 'p-anna' }, { conversation_id: 'c2', profile_id: 'p-hidden' }])
       .rows('messages.profile-names', [{ id: 'p-anna', first_name: 'Anna', last_name: 'Nowak' }])
-      .rows('messages.company-names', [{ id: 'co-1', name: 'Firma' }])
       .rpc('get_conversation_summaries', [
-        { conversation_id: 'c2', last_body: 'Dzień dobry', last_at: '2026-09-23T10:00:00.123456+00:00', unread_count: 2 },
+        { conversation_id: 'c2', company_name: 'Firma', last_body: 'Dzień dobry', last_at: '2026-09-23T10:00:00.123456+00:00', unread_count: 2 },
       ]);
 
     const result = await getConversationsResult();

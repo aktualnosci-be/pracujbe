@@ -11735,4 +11735,101 @@ select pg_temp.expect_error(
   'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
 rollback;
 
+-- ============================================================================
+-- CN166. Nazwa firmy w wiadomościach kandydata (0166, #25): kandydat czyta nazwę firmy
+--        drugiej strony rozmowy przez `get_conversation_summaries`/`get_conversation_company_name`
+--        (SECURITY DEFINER, gejtowane `is_conversation_member` jak 0039) — `companies` samo
+--        w sobie jest czytelne pod RLS tylko dla członków firmy (0014), więc bez tych funkcji
+--        kandydat dostaje zero wierszy. Obie funkcje zwracają WYŁĄCZNIE `companies.name`,
+--        nigdy profilu rekrutera (decyzja 0023). Kontrole ujemne: kandydat bez rozmowy z firmą,
+--        obcy kandydat cudzej rozmowy, `anon` bez EXECUTE.
+-- ============================================================================
+reset role; reset app.current_uid;
+\set CANDCN 'e1660000-0000-0000-0000-00000000000c'
+\set CANDCX 'e1660000-0000-0000-0000-00000000000d'
+\set RECCN  'e1660000-0000-0000-0000-0000000000a1'
+\set COMPCN 'e1660000-0000-0000-0000-0000000000f1'
+\set JOBCN  'e1660000-0000-0000-0000-0000000000b1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDCN','candcn@test.be','Cora N','{"role":"candidate","first_name":"Cora","last_name":"N","locale":"pl"}'),
+  (:'CANDCX','candcx@test.be','Xara N','{"role":"candidate","first_name":"Xara","last_name":"N","locale":"pl"}'),
+  (:'RECCN','reccn@test.be','Remi N','{"role":"employer","first_name":"Remi","last_name":"N","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'COMPCN','Firma CN','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'COMPCN',:'RECCN','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JOBCN',:'COMPCN','job-cn1','Magazynier CN','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDCN', false), (:'CANDCX', false);
+
+set role authenticated; set app.current_uid = :'CANDCN'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JOBCN'::uuid, 'cn-app-1', null, null, null)::text as app_cn \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECCN'; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'app_cn'::uuid, null)::text as conv_cn \gset
+select public.send_message(:'conv_cn'::uuid, 'Dzień dobry, dziękujemy za zgłoszenie', gen_random_uuid())::text as msg_cn1 \gset
+reset role; reset app.current_uid;
+
+-- CN1: anon bez EXECUTE, authenticated z EXECUTE.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.get_conversation_company_name(uuid)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_conversation_company_name(uuid)', 'EXECUTE'),
+  'CN1 anon bez EXECUTE, authenticated z EXECUTE');
+
+-- CN2: `companies` samo w sobie NIE jest czytelne dla kandydata (0014) — RPC jest naprawą.
+set role authenticated; set app.current_uid = :'CANDCN'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) = 0 from public.companies where id = :'COMPCN'),
+  'CN2 kandydat nie czyta wprost tabeli companies (0014)');
+
+-- CN3: kandydat czyta nazwę firmy SWOJEJ rozmowy przez obie funkcje.
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') = 'Firma CN',
+  'CN3 get_conversation_company_name zwraca nazwę firmy własnej rozmowy');
+select pg_temp.assert(
+  (select company_name = 'Firma CN' from public.get_conversation_summaries() where conversation_id = :'conv_cn'),
+  'CN3b get_conversation_summaries niesie company_name');
+-- Rekrutera nie ujawniamy: żadna z funkcji nie zwraca imienia/nazwiska ani id profilu.
+select pg_temp.assert(
+  (select not exists (
+      select 1 from public.get_conversation_summaries() s
+      where s.conversation_id = :'conv_cn' and s::text like '%Remi%'
+   )),
+  'CN3c bez imienia rekrutera w podsumowaniu (0023)');
+reset role; reset app.current_uid;
+
+-- CN4 (kontrola ujemna — obcy): kandydat bez rozmowy z tą firmą i cudzy kandydat → brak nazwy.
+set role authenticated; set app.current_uid = :'CANDCX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
+  'CN4 obcy kandydat nie dostaje nazwy cudzej rozmowy');
+select pg_temp.assert(
+  (select count(*) = 0 from public.get_conversation_summaries() where conversation_id = :'conv_cn'),
+  'CN4b obcy kandydat nie widzi cudzej rozmowy w podsumowaniach');
+reset role; reset app.current_uid;
+
+-- CN5: rozmowa bez firmy (company_id null) → nazwa null, bez błędu.
+update public.conversations set company_id = null where id = :'conv_cn';
+set role authenticated; set app.current_uid = :'CANDCN'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
+  'CN5 rozmowa bez firmy: nazwa null');
+reset role; reset app.current_uid;
+update public.conversations set company_id = :'COMPCN' where id = :'conv_cn';
+
+-- CN6 (kontrola ujemna): bez `is_conversation_member` w treści funkcji, dowolna rozmowa
+-- z firmą wyciekłaby nazwę obcemu kandydatowi — CN4 wykrywa taką regresję.
+begin;
+savepoint cn_neg;
+create or replace function public.get_conversation_company_name(p_conversation_id uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select comp.name from public.conversations c
+  join public.companies comp on comp.id = c.company_id
+  where c.id = p_conversation_id and c.deleted_at is null and c.company_id is not null;
+$$;
+set local role authenticated; set local app.current_uid = :'CANDCX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') = 'Firma CN',
+  'CN6 kontrola ujemna: bez is_conversation_member obcy kandydat czyta nazwę firmy');
+rollback to savepoint cn_neg;
+set local role authenticated; set local app.current_uid = :'CANDCX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
+  'CN6b poprawna funkcja znów odmawia obcemu');
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

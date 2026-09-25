@@ -17,7 +17,7 @@
  */
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { queryOne, queryRows, rpcRows } from '@/lib/db/sql';
+import { queryOne, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
@@ -138,24 +138,20 @@ async function fetchProfileNames(
   return map;
 }
 
-/** Mapa company_id → nazwa (tylko firmy widoczne pod RLS — od 0014 wyłącznie własne). */
-async function fetchCompanyNames(
+/**
+ * Nazwa firmy KONWERSACJI (0166, #25) — `companies` jest czytelne pod RLS tylko dla członków
+ * firmy (0014), więc kandydat nie widzi go wprost. RPC `get_conversation_company_name` gejtuje
+ * po `is_conversation_member` (jak `get_conversation_summaries`, 0039) i zwraca WYŁĄCZNIE nazwę
+ * firmy — nigdy imienia/nazwiska rekrutera (decyzja 0023).
+ */
+async function fetchConversationCompanyName(
   tx: TransactionQuery,
-  ids: string[],
-): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  if (ids.length === 0) return map;
-
-  const rows = await queryRows(tx, 'messages.company-names',
-    'SELECT id, name FROM public.companies WHERE id = ANY($1::uuid[])', [ids]);
-
-  for (const row of rows) {
-    const r = asRecord(row);
-    const id = asStr(r['id']);
-    const name = asStr(r['name']);
-    if (id && name) map.set(id, name);
-  }
-  return map;
+  conversationId: string,
+): Promise<string> {
+  const name = await rpc<string | null>(tx, 'get_conversation_company_name', {
+    p_conversation_id: conversationId,
+  });
+  return typeof name === 'string' ? name : '';
 }
 
 /**
@@ -164,15 +160,14 @@ async function fetchCompanyNames(
  */
 function resolveCounterparty(
   otherProfileIds: string[],
-  companyId: string,
   nameByProfile: Map<string, string>,
-  companyNameById: Map<string, string>,
+  companyName: string,
 ): string {
   for (const pid of otherProfileIds) {
     const name = nameByProfile.get(pid);
     if (name) return name;
   }
-  return companyId ? (companyNameById.get(companyId) ?? '') : '';
+  return companyName;
 }
 
 /**
@@ -282,16 +277,17 @@ async function fetchCompanyMemberIds(
 async function fetchSenderContext(
   tx: TransactionQuery,
   uid: string,
+  conversationId: string,
   companyId: string,
   profileIds: Set<string>,
 ): Promise<SenderContext> {
   // Sekwencyjnie na jednej transakcji (jedno połączenie); błąd dowolnego odczytu = błąd wątku.
   const nameByProfile = await fetchProfileNames(tx, [...profileIds]);
-  const companyNameById = await fetchCompanyNames(tx, companyId ? [companyId] : []);
+  const companyName = companyId ? await fetchConversationCompanyName(tx, conversationId) : '';
   const memberIds = await fetchCompanyMemberIds(tx, companyId, [...new Set([...profileIds, uid])]);
   return {
     nameByProfile,
-    companyName: companyNameById.get(companyId) ?? '',
+    companyName,
     teamIds: memberIds,
     viewerIsCompany: memberIds.has(uid),
   };
@@ -500,22 +496,19 @@ export async function getConversationsResult(locale?: string): Promise<Conversat
         allOtherIds.add(pid);
       }
 
-      const companyIds = new Set<string>();
-      for (const c of convs) {
-        const companyId = asStr(asRecord(c)['company_id']);
-        if (companyId) companyIds.add(companyId);
-      }
-
-      // 4) Nazwy stron (profile widoczne pod RLS) + firmy (fallback) + PODSUMOWANIA konwersacji.
-      // Ostatnia wiadomość i licznik nieprzeczytanych liczone PO STRONIE SQL (RPC 0021/0039,
-      // DISTINCT/LATERAL) — bez pobierania WSZYSTKICH wiadomości (P2#10). Nazwę drugiej
-      // strony nadal rozwiązujemy pod RLS (nie z RPC, który omija RLS) — bez zmiany prywatności.
+      // 4) Nazwy stron (profile widoczne pod RLS) + PODSUMOWANIA konwersacji (0021/0039/0166,
+      // RPC gejtowane bieżącym dostępem `is_conversation_member`): ostatnia wiadomość, licznik
+      // nieprzeczytanych i nazwa firmy konwersacji — bez pobierania WSZYSTKICH wiadomości
+      // (P2#10) i bez odczytu `companies` wprost (0014 ogranicza go do członków firmy, więc
+      // kandydat nic by nie dostał). Nazwę drugiej strony jako OSOBY nadal rozwiązujemy pod
+      // RLS `profiles` (nie z RPC, który omija RLS) — bez zmiany prywatności (0023: imię/nazwisko
+      // rekrutera zostaje nieujawnione, RPC zwraca wyłącznie nazwę firmy).
       const nameByProfile = await fetchProfileNames(tx, [...allOtherIds]);
-      const companyNameById = await fetchCompanyNames(tx, [...companyIds]);
       const summaries = await rpcRows(tx, 'get_conversation_summaries');
 
       const lastMsgByConv = new Map<string, { body: string; createdAt: string }>();
       const unreadByConv = new Map<string, number>();
+      const companyNameByConv = new Map<string, string>();
       for (const row of summaries) {
         const r = asRecord(row);
         const cid = asStr(r['conversation_id']);
@@ -523,6 +516,8 @@ export async function getConversationsResult(locale?: string): Promise<Conversat
         lastMsgByConv.set(cid, { body: asStr(r['last_body']), createdAt: asStr(r['last_at']) });
         const n = r['unread_count'];
         unreadByConv.set(cid, typeof n === 'number' ? n : Number(n ?? 0) || 0);
+        const companyName = asStr(r['company_name']);
+        if (companyName) companyNameByConv.set(cid, companyName);
       }
 
       return convs.map((c) => {
@@ -535,9 +530,8 @@ export async function getConversationsResult(locale?: string): Promise<Conversat
           subject: asStr(r['subject']),
           counterpartyName: resolveCounterparty(
             otherIdsByConv.get(cid) ?? [],
-            asStr(r['company_id']),
             nameByProfile,
-            companyNameById,
+            companyNameByConv.get(cid) ?? '',
           ),
           lastPreview: last?.body ?? '',
           ...(last && last.createdAt && !last.body ? { lastIsAttachmentOnly: true } : {}),
@@ -603,7 +597,7 @@ export async function getConversationThread(
       }
 
       const companyId = asStr(conv['company_id']);
-      const ctx = await fetchSenderContext(tx, uid, companyId, senderIds);
+      const ctx = await fetchSenderContext(tx, uid, cid, companyId, senderIds);
       const messages = toThreadMessages(messageRows, uid, ctx);
 
       return {
@@ -611,12 +605,7 @@ export async function getConversationThread(
         thread: {
           id: cid,
           subject: asStr(conv['subject']),
-          counterpartyName: resolveCounterparty(
-            otherIds,
-            companyId,
-            ctx.nameByProfile,
-            new Map([[companyId, ctx.companyName]]),
-          ),
+          counterpartyName: resolveCounterparty(otherIds, ctx.nameByProfile, ctx.companyName),
           messages,
           olderCursor,
         },
@@ -654,7 +643,7 @@ export async function getOlderThreadMessages(
       if (!asStr(conv['id'])) return { status: 'not-found' };
 
       const { rows, olderCursor } = await fetchMessagePage(tx, conversationId, cursor);
-      const ctx = await fetchSenderContext(tx, me.id, asStr(conv['company_id']), senderIdsOf(rows));
+      const ctx = await fetchSenderContext(tx, me.id, conversationId, asStr(conv['company_id']), senderIdsOf(rows));
       return { status: 'ready', messages: toThreadMessages(rows, me.id, ctx), olderCursor };
     });
   } catch (error) {
