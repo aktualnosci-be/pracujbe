@@ -134,7 +134,7 @@ i panelach: ~2,0–2,4 s → 0,64–0,86 s. Strażnik: `tests/e2e/first-visit-lc
 Dwa kroki w istniejących jobach (bez nowego joba, drugiego builda i instalacji przeglądarki).
 Budżety i progi są w jednym pliku [`perf-budgets.json`](../perf-budgets.json) — zmiana
 budżetu to świadomy diff w PR z uzasadnieniem. Obie tabele trafiają do podsumowania
-przebiegu (`$GITHUB_STEP_SUMMARY`).
+przebiegu (`$GITHUB_STEP_SUMMARY`), razem z tabelą INP-proxy.
 
 **`Build (Next.js)` → „Performance budget (static)”** — `node scripts/perf-budget-static.mjs`
 (~1 s, po `check-next-build.mjs`). JS (gzip) trasy = wszystkie pliki `.js` z
@@ -156,7 +156,7 @@ Budżet JS = stan + ok. 5%: aktualizacja zależności mieści się, nowa bibliot
 w layoucie publicznym już nie (kontrola ujemna w `tests/unit/perf-budget.test.ts`).
 
 **`E2E (Playwright)` → „Performance budget (lab CWV)”** — `node scripts/perf-lab.mjs`
-(~1,5–2 min, po testach E2E, na tym samym buildzie i Chromium co Playwright; własny
+(~2–2,5 min z INP-proxy, po testach E2E, na tym samym buildzie i Chromium co Playwright; własny
 `next start` na porcie 3100). Strony: `/pl`, `/pl/oferty-pracy`, pierwsza oferta z listy,
 pierwszy poradnik, `/pl/logowanie` × {pierwsza wizyta, z zapisaną zgodą} × 3 próby
 w świeżym kontekście, przeplatane runda po rundzie; liczy się **mediana**. Warunki: CPU 4×
@@ -174,6 +174,36 @@ co najmniej 3 s od nawigacji, najwyżej 8 s — łapie treść dorysowaną po `l
 | LCP, z zapisaną zgodą | 1 500 ms | 612–836 ms |
 | CLS | 0,05 | 0–0,001 |
 | TBT | 400 ms | 104–266 ms |
+| INP-proxy (filtry / zapis oferty / ApplyModal) | 200 ms (próg „dobrego” INP) | 32–112 ms (main 2026-09-25, 2 przebiegi) |
+
+**INP-proxy** (ten sam krok i ten sam `next start`, próby przeplatane z pomiarem stron) —
+czas reakcji na tapnięcie w tych samych warunkach (CPU 4×, 412×823, dotyk), z zapisaną zgodą
+(baner nie zasłania wyzwalaczy), 3 próby w świeżym kontekście, **mediana** vs `lab.thresholds.inpMs`:
+
+| interakcja | strona | wyzwalacz → oczekiwany skutek |
+|---|---|---|
+| otwarcie filtrów | `/pl/oferty-pracy` | „Filtry” (`FilterSheet`) → arkusz filtrów |
+| zapis oferty | `/pl/oferty-pracy` | zakładka pierwszej karty (`.pp-save`) → `aria-pressed="true"` |
+| otwarcie ApplyModal | pierwsza oferta z listy | „Aplikuj teraz” w dolnym pasku → `role="dialog"` |
+
+Pomiar: `PerformanceObserver` typu `event` (Event Timing, `durationThreshold` 16 ms) od
+załadowania strony; po tapnięciu (Playwright `tap`, pointer + touch + click) i pojawieniu się
+skutku czekamy na wpis `click`. Czas interakcji = najdłuższy wpis z tym samym `interactionId`
+(jak INP w Chromium: od wejścia do następnego malowania, z przetwarzaniem handlerów),
+`scripts/lib/perf-budget.mjs` → `inpFromEventEntries`. Brak wpisów = poniżej 16 ms (0). To proxy,
+nie INP polowy: jedna interakcja na stronę, bez historii i bez 98. percentyla.
+
+Zapis oferty w CI nie ma sesji kandydata (build bez bazy → przycisk „niedostępne”, wyłączony),
+więc skrypt podmienia odpowiedź akcji odczytu stanu (`getPublicSavedJobs`,
+`{"status":"unavailable"}` → kandydat bez zapisanych). Mierzone jest tapnięcie —
+optymistyczne przełączenie i render kart; sam zapis (`toggleSavedJob`) odpowiada później
+i nie wchodzi w czas interakcji. Brak podmiany albo brak skutku tapnięcia = błąd kroku, nie
+zielony wynik.
+
+Kontrola ujemna: `--inject-click-delay-ms 300` dodaje blokujący listener kliknięcia (faza
+przechwytywania — to samo zadanie co handler Reacta, jak ciężki handler w komponencie).
+Wynik lokalny: 344–376 ms we wszystkich trzech interakcjach, krok czerwony (kod 1). Test
+jednostkowy tej samej reguły w `tests/unit/perf-budget.test.ts`.
 
 Progi są granicą regresji z zapasem na rozrzut hostowanych runnerów, a nie celem (cele polowe
 w §2). Próg przekroczony → komunikat z nazwą strony, medianą i wartościami każdej próby.
@@ -185,6 +215,7 @@ node scripts/perf-budget-static.mjs
 PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/perf-lab.mjs   # własny next start :3100
 node scripts/perf-lab.mjs --base http://localhost:3000                         # istniejący serwer
 node scripts/perf-lab.mjs --runs 5 --out /tmp/perf-lab.json
+node scripts/perf-lab.mjs --interactions-only --inject-click-delay-ms 300           # kontrola ujemna INP → kod 1
 ```
 
 ---
