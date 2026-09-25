@@ -1,12 +1,12 @@
 # Konfiguracja usługi production — lista kontrolna (#14)
 
-Stan: 25 września 2026, `main` po #532/#533. Jedno środowisko `production`, gałąź `main`,
+Stan: 25 września 2026, `main` po #532/#533/#27. Jedno środowisko `production`, gałąź `main`,
 bez stagingu (decyzja właściciela 21.09). Ten dokument wymienia **nazwy** zmiennych i ustawień —
 nigdy wartości. Sekretów nie wpisuj do repozytorium, issue, PR ani logów. Odhaczenie pozycji
 wymaga odczytu z Railway (UI/API), a nie samej zmiany w kodzie.
 
 Strażnik: `tests/unit/production-config-checklist.test.ts` — każda zmienna czytana przez
-aplikację musi być na tej liście (albo w wykazie „nie ustawiać”), a każda z listy w `.env.example`.
+aplikację musi być na tej liście (albo w wykazie „nie ustawiać”), a każda z listy poza 2D w `.env.example`.
 
 ## 1. Ustawienia usługi web (`pracujbe`)
 
@@ -77,8 +77,8 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 
 | Zmienna | Powód |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL` | Supabase nie jest już backendem (#24/#25/#26); usunięcie resztek w #27 |
-| `SEND_EMAIL_HOOK_SECRET` | hook GoTrue — zastąpiony kolejką auth PostgreSQL |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL` | kod ich nie czyta od #27 — jeśli zostały w usłudze, usuń |
+| `SEND_EMAIL_HOOK_SECRET` | hook GoTrue usunięty w #27 (kolejka auth PostgreSQL) |
 | `BILLING_ENABLED`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | bezpłatne MVP (#51) |
 | `AI_JOB_IMPORT_PROVIDER` | atrapa testowa; ignorowana przy `APP_MODE=production` |
 | `CRON_SECRET` | przestarzały wspólny sekret cronów; używaj `EMAIL_QUEUE_SECRET`/`MAINTENANCE_SECRET` |
@@ -107,5 +107,5 @@ Kopie i odtworzenie bazy: `OPERATIONS.md` sekcja 5 (osobne usługi, własne zmie
 - [ ] Odczyt listy nazw zmiennych usługi web z Railway: komplet 2A, pozycje 2B zgodnie z decyzją
       właściciela, **brak** zmiennych z 2D.
 - [ ] Nowy deployment z `main` po zielonym CI; SHA w stopce i w `/api/health` (z tokenem) = SHA `main`.
-- [ ] `node scripts/production-smoke.mjs` (test wdrożeniowy z #12, PR #562) zielony, wynik zapisany w issue.
+- [ ] `node scripts/production-smoke.mjs` (test wdrożeniowy z #12, `TEST_WDROZENIOWY.md`) zielony, wynik zapisany w issue.
 - [ ] Usługi cron: po jednym wywołaniu ręcznym kod 0; harmonogramy jak w sekcji 4, bez duplikatów.

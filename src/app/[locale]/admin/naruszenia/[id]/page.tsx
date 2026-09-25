@@ -13,8 +13,8 @@ import {
 } from '@/lib/admin/breach';
 import { parseUuid } from '@/lib/admin/list-params';
 import { getBreachIncident } from '@/lib/data/admin';
+import { isPortalDataConfigured } from '@/lib/db/portal';
 import { createAppDateFormatter } from '@/lib/datetime';
-import { isSupabaseConfigured } from '@/lib/env';
 import { cn } from '@/lib/utils';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import { AdminEmptyState, AdminPageHeader } from '@/components/admin/AdminListControls';
@@ -91,7 +91,7 @@ export default async function AdminBreachDetailPage({ params }: PageProps) {
   const open = incident.status === 'open';
   const canNotify = open && incident.kind === 'personal_data_breach' && incident.subjectsDecision === 'notify';
   const exportId = parseUuid(incident.id);
-  const exportable = Boolean(exportId) && isSupabaseConfigured();
+  const exportable = Boolean(exportId) && isPortalDataConfigured();
   const now = Date.now();
 
   const changeLabel = (column: string): string => {

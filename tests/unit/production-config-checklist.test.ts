@@ -61,7 +61,9 @@ describe('lista kontrolna konfiguracji produkcji (#14)', () => {
   it('każda zmienna operatora z listy jest w .env.example (bez wartości sekretów)', () => {
     // Także wiersze zakomentowane (`# NAZWA=`) — opcjonalne zmienne opisane w pliku.
     const exampleNames = new Set([...envExample.matchAll(/^#?\s*([A-Z][A-Z0-9_]+)=/gm)].map((m) => m[1]!));
-    const operator = [...documented].filter((name) => !NOT_OPERATOR.has(name) && name !== 'CRON_SECRET');
+    // 2D = zmienne do usunięcia z usługi (np. Supabase po #27) — nie muszą już istnieć w przykładzie.
+    const doNotSet = section('### 2D.');
+    const operator = [...documented].filter((name) => !NOT_OPERATOR.has(name) && !doNotSet.has(name));
     expect(operator.filter((name) => !exampleNames.has(name))).toEqual([]);
   });
 
