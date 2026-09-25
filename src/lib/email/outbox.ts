@@ -13,7 +13,7 @@ import {
   unsubscribePageUrl,
   unsubscribeSecretFromEnv,
 } from '@/lib/email/unsubscribe-token';
-import { alertOffPageUrl, createAlertOffToken } from '@/lib/email/saved-search-alert-token';
+import { alertOffOneClickUrl, alertOffPageUrl, createAlertOffToken } from '@/lib/email/saved-search-alert-token';
 import { newsletterJobsFromPayload } from '@/lib/email/newsletter-delivery';
 import {
   emailFromEnv,
@@ -140,21 +140,47 @@ export function unsubscribeLinksFor(
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+type AlertOffRow = {
+  profile_id: string | null;
+  template: string;
+  entity_type?: string | null;
+  entity_id?: string | null;
+};
+
+/** Token wyłączenia JEDNEGO alertu (digest `jobMatch` zapisanego wyszukiwania) albo `null`. */
+function alertOffTokenFor(row: AlertOffRow, secret: string | null): string | null {
+  if (row.template !== 'jobMatch' || row.entity_type !== 'saved_search') return null;
+  if (!row.profile_id || !row.entity_id || !UUID_RE.test(row.entity_id) || !secret) return null;
+  return createAlertOffToken({ profileId: row.profile_id, savedSearchId: row.entity_id }, secret);
+}
+
 /**
  * #100: link wyłączenia JEDNEGO alertu dla digestu `jobMatch` zapisanego wyszukiwania.
  * `null` = inny typ maila, brak powiązanego wyszukiwania albo brak sekretu. Token niesie
  * tylko UUID konta i wyszukiwania (bez e-maila); zapis dopiero po kliknięciu na stronie.
  */
-export function alertOffLinkFor(
-  row: { profile_id: string | null; template: string; entity_type?: string | null; entity_id?: string | null },
+export function alertOffLinkFor(row: AlertOffRow, locale: string, site: string, secret: string | null): string | null {
+  const token = alertOffTokenFor(row, secret);
+  return token ? alertOffPageUrl(site, locale, token) : null;
+}
+
+/**
+ * Nagłówki one-click (RFC 8058) digestu alertu: „Wypisz” w kliencie poczty wyłącza TYLKO
+ * ten alert (tym samym tokenem co `/wypisz-alert`), nie całą kategorię `job_matches`.
+ * `null` = mail bez alertu — wtedy obowiązują nagłówki kategorii (`unsubscribeLinksFor`).
+ */
+export function alertOffHeadersFor(
+  row: AlertOffRow,
   locale: string,
   site: string,
   secret: string | null,
-): string | null {
-  if (row.template !== 'jobMatch' || row.entity_type !== 'saved_search') return null;
-  if (!row.profile_id || !row.entity_id || !UUID_RE.test(row.entity_id) || !secret) return null;
-  const token = createAlertOffToken({ profileId: row.profile_id, savedSearchId: row.entity_id }, secret);
-  return alertOffPageUrl(site, locale, token);
+): Record<string, string> | null {
+  const token = alertOffTokenFor(row, secret);
+  if (!token) return null;
+  return {
+    'List-Unsubscribe': `<${alertOffOneClickUrl(site, locale, token)}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
 }
 
 interface DeliveryRow {
@@ -286,6 +312,10 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         // Marketing nigdy nie wychodzi bez działającego wypisania (#45).
         throw new Error('marketing email without unsubscribe link');
       }
+      // Digest alertu: nagłówek one-click wyłącza tylko ten alert; inne maile — kategorię.
+      const listHeaders = unsubscribe
+        ? (alertOffHeadersFor(row, locale, site, unsubscribeSecret) ?? unsubscribe.headers)
+        : null;
       const { from, subject, html, text } = await renderDelivery(
         row,
         locale,
@@ -330,7 +360,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
           subject,
           html,
           text,
-          ...(unsubscribe ? { headers: unsubscribe.headers } : {}),
+          ...(listHeaders ? { headers: listHeaders } : {}),
         },
         { idempotencyKey: row.id },
       );

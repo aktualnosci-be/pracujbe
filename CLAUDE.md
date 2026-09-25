@@ -739,8 +739,13 @@ zgoda kategorii, uprawnienie odbiorcy firmowego z 0122 — kontrola `ES503-2b/2c
 niedozwolony jest wygaszany (`suppressed_alert_disabled` / `suppressed_opt_out`…). Dowód:
 `rls.sql` sekcja SS108 (kontrole ujemne), unit `saved-search-followups`,
 `saved-search-rename-ui`, E2E `saved-search.spec` (`/wypisz-alert`).
-**Otwarte:** na przebieg najwyżej 100 najnowszych pasujących ofert; nagłówek one-click
-(`List-Unsubscribe`) nadal wypisuje z całej kategorii `job_matches`.
+Nagłówek one-click digestu alertu (`List-Unsubscribe` + `List-Unsubscribe-Post`, RFC 8058)
+wskazuje `POST /api/email/unsubscribe-alert?t=&l=` z tym samym tokenem alertu co `/wypisz-alert`
+(`alertOffHeadersFor` w `outbox.ts`) — wyłącza tylko ten alert (`saved_search_alert_unsubscribe`,
+service_role, idempotentnie), GET = 303 na stronę potwierdzenia; inne maile i `jobMatch` bez
+wyszukiwania zachowują nagłówek kategorii, stopka nadal ma wypisanie z kategorii. Dowód: unit
+`saved-search-followups` (kontrola ujemna: token kategorii w nagłówku/trasie), E2E `saved-search.spec`.
+**Otwarte:** na przebieg najwyżej 100 najnowszych pasujących ofert.
 
 Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w

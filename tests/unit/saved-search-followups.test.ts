@@ -20,6 +20,7 @@ import type { PortalIdentity } from '@/lib/auth/session';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 import {
   ALERT_OFF_TOKEN_TTL_SECONDS,
+  alertOffOneClickUrl,
   alertOffPageUrl,
   createAlertOffToken,
   verifyAlertOffToken,
@@ -239,6 +240,42 @@ describe('worker: link alertu i kontrola tuż przed wysyłką', () => {
     expect(html).toContain(jobMatchAlertOffLabel.fr);
   });
 
+  it('digest wyszukiwania: List-Unsubscribe (RFC 8058) wyłącza TYLKO ten alert, nie kategorię', async () => {
+    mockQueue([row('d1', 'jobMatch', { entity_type: 'saved_search', entity_id: SEARCH })]);
+    const { processEmailQueue } = await import('@/lib/email/outbox');
+    await processEmailQueue();
+    const headers = send.mock.calls[0]![0].headers as Record<string, string>;
+    expect(headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
+    const oneClick = new URL(headers['List-Unsubscribe']!.slice(1, -1));
+    expect(`${oneClick.origin}${oneClick.pathname}`).toBe(`${SITE}/api/email/unsubscribe-alert`);
+    expect(oneClick.searchParams.get('l')).toBe('fr');
+    expect(verifyAlertOffToken(oneClick.searchParams.get('t'), SECRET)).toMatchObject({
+      ok: true, profileId: PROFILE, savedSearchId: SEARCH,
+    });
+    // KONTROLA UJEMNA: token kategorii (wypisanie z całego job_matches) nie trafia do nagłówka.
+    expect(verifyUnsubscribeToken(oneClick.searchParams.get('t'), SECRET)).toMatchObject({ ok: false });
+    expect(headers['List-Unsubscribe']).not.toContain('d1@example.test');
+    // Stopka nadal ma też wypisanie z kategorii (świadomy wybór odbiorcy).
+    expect(send.mock.calls[0]![0].html).toContain(`${SITE}/fr/wypisz#t=`);
+  });
+
+  it('inne maile i jobMatch bez wyszukiwania: nagłówek kategorii bez zmian', async () => {
+    mockQueue([
+      row('d1', 'jobOffer', { entity_type: 'saved_search', entity_id: SEARCH }),
+      row('d2', 'jobMatch', { entity_type: 'job', entity_id: SEARCH }),
+      row('d3', 'jobMatch', { entity_type: 'saved_search', entity_id: 'nie-uuid' }),
+    ]);
+    const { processEmailQueue } = await import('@/lib/email/outbox');
+    await processEmailQueue();
+    const categories = send.mock.calls.map(([message]) => {
+      const oneClick = new URL((message.headers as Record<string, string>)['List-Unsubscribe']!.slice(1, -1));
+      expect(oneClick.pathname).toBe('/api/email/unsubscribe');
+      const verified = verifyUnsubscribeToken(oneClick.searchParams.get('t'), SECRET);
+      return verified.ok ? verified.category : null;
+    });
+    expect(categories).toEqual(['offers', 'job_matches', 'job_matches']);
+  });
+
   it('inne maile i jobMatch bez wyszukiwania → bez linku alertu', async () => {
     mockQueue([
       row('d1', 'jobOffer', { entity_type: 'saved_search', entity_id: SEARCH }),
@@ -284,5 +321,65 @@ describe('worker: link alertu i kontrola tuż przed wysyłką', () => {
     expect(send).not.toHaveBeenCalled();
     const failed = fakeDb.callsTo('email.outbox.mark-failed')[0]!;
     expect(failed.values.slice(0, 3)).toEqual(['d1', 'queued', 1]);
+  });
+});
+
+describe('POST/GET /api/email/unsubscribe-alert (RFC 8058, #100)', () => {
+  const token = () => createAlertOffToken({ profileId: PROFILE, savedSearchId: SEARCH }, SECRET);
+  const route = () => import('@/app/api/email/unsubscribe-alert/route');
+  const post = (t: string) =>
+    new Request(alertOffOneClickUrl(SITE, 'nl', t), {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'List-Unsubscribe=One-Click',
+    });
+
+  it('POST wyłącza tylko ten alert (service_role), ponowienie = ten sam wynik', async () => {
+    fakeDb.rpc('saved_search_alert_unsubscribe', null);
+    const { POST } = await route();
+    for (let i = 0; i < 2; i += 1) {
+      const res = await POST(post(token()));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ status: 'done' });
+      expect(res.headers.get('cache-control')).toBe('no-store');
+    }
+    expect(fakeDb.callsTo('saved_search_alert_unsubscribe')).toEqual([
+      expect.objectContaining({ args: { p_profile_id: PROFILE, p_saved_search_id: SEARCH }, as: 'service' }),
+      expect.objectContaining({ args: { p_profile_id: PROFILE, p_saved_search_id: SEARCH }, as: 'service' }),
+    ]);
+    // Nigdy nie dotyka kategorii całego konta.
+    expect(fakeDb.callsTo('email_unsubscribe')).toHaveLength(0);
+  });
+
+  it('KONTROLA UJEMNA: token kategorii i podrobiony token → 400 bez zapytania', async () => {
+    const { POST } = await route();
+    const category = createUnsubscribeToken({ profileId: PROFILE, category: 'job_matches' }, SECRET);
+    expect((await POST(post(category))).status).toBe(400);
+    expect((await POST(post(`${token()}x`))).status).toBe(400);
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('błąd bazy → 500 (klient ponowi); brak puli/sekretu → 503', async () => {
+    const { POST } = await route();
+    fakeDb.rpc('saved_search_alert_unsubscribe', () => {
+      throw pgError('08006', 'db down');
+    });
+    expect((await POST(post(token()))).status).toBe(500);
+    fakeSession.serviceConfigured = false;
+    expect((await POST(post(token()))).status).toBe(503);
+  });
+
+  it('GET niczego nie zmienia: 303 na stronę potwierdzenia w języku odbiorcy, token we fragmencie', async () => {
+    const { GET } = await route();
+    const t = token();
+    const res = await GET(new Request(alertOffOneClickUrl(SITE, 'nl', t)));
+    expect(res.status).toBe(303);
+    const location = new URL(res.headers.get('location')!);
+    expect(location.pathname).toBe('/nl/wypisz-alert');
+    expect(location.search).toBe('');
+    expect(decodeURIComponent(location.hash)).toBe(`#t=${t}`);
+    const fallback = await GET(new Request(`${SITE}/api/email/unsubscribe-alert?l=xx`));
+    expect(new URL(fallback.headers.get('location')!).pathname).toBe('/pl/wypisz-alert');
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });
