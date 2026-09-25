@@ -8,8 +8,12 @@ import {
   claimAuthEmails, completeAuthEmail, createAuthEmailSenders, expireAuthEmails,
   failAuthEmail, prepareAuthEmail,
 } from '../../src/lib/auth/email-outbox';
+import { AuthMailSendError, processAuthEmailBatch, type MailSender } from '../../src/lib/auth/email-worker';
+import { captureError } from '../../src/lib/sentry';
 import { loadProductionMigrations } from '../../scripts/db/production-migrations.mjs';
 import { applyMigrations } from '../../scripts/db/migrate.mjs';
+
+vi.mock('../../src/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const baseURL = 'https://auth.example.invalid';
 const secret = 'auth-email-queue-test-not-for-production-0123456789';
@@ -262,5 +266,106 @@ describe('Trwała kolejka auth na PostgreSQL', () => {
     expect(await completeAuthEmail(mail, delivery!, 'too-late')).toBe(false);
     expect(() => prepareAuthEmail({ ...delivery!, expires_at: new Date(0) }, baseURL)).toThrow('wygasły');
     expect(() => prepareAuthEmail(delivery!, 'https://attacker@example.invalid')).toThrow('kanonicznego origin');
+  });
+});
+
+/**
+ * #78 — worker wysyłki na prawdziwej kolejce: claim → render istniejącego szablonu w języku
+ * odbiorcy → wysyłka (atrapa dostawcy) → complete. Kontrole ujemne: brak ACK bez identyfikatora
+ * dostawcy, brak drugiej wysyłki, brak tokenu w logach, stara dzierżawa nie zatwierdza wyniku.
+ */
+describe('Worker wysyłki kolejki auth (#78)', () => {
+  const from = 'Pracuj.be <no-reply@example.invalid>';
+  type Sent = { message: Parameters<MailSender['send']>[0]; idempotencyKey: string };
+
+  function stubSender(respond: (sent: Sent) => Promise<{ id: string }> | { id: string } = ({ idempotencyKey }) => ({ id: 'prov-' + idempotencyKey })) {
+    const sent: Sent[] = [];
+    const sender: MailSender = {
+      async send(message, { idempotencyKey }) {
+        const record = { message, idempotencyKey };
+        sent.push(record);
+        return respond(record);
+      },
+    };
+    return { sender, sent };
+  }
+
+  async function row(userId: string, kind: 'verification' | 'password_reset') {
+    return (await admin.query('SELECT * FROM auth.email_outbox WHERE user_id=$1 AND kind=$2', [userId, kind])).rows[0];
+  }
+
+  it('weryfikacja i reset: queued → leased → sent z provider_message_id, język odbiorcy, token usunięty', async () => {
+    const account = await signup(auth, 'fr');
+    await admin.query("UPDATE public.profiles SET preferred_locale='nl' WHERE id=$1", [account.user.id]);
+    await auth.api.requestPasswordReset({ body: { email: account.user.email, redirectTo: `${baseURL}/pl/ustaw-nowe-haslo` } });
+    const verification = await row(account.user.id, 'verification');
+    const reset = await row(account.user.id, 'password_reset');
+    expect([verification.status, reset.status]).toEqual(['queued', 'queued']);
+
+    const { sender, sent } = stubSender();
+    const result = await processAuthEmailBatch(mail, sender, { baseURL, from });
+    expect(result).toMatchObject({ processed: 2, sent: 2, failed: 0, stale: 0, ackErrors: 0, ok: true });
+
+    // Klucz idempotencji dostawcy = UUID zlecenia; linki w języku odbiorcy (snapshot z kolejki).
+    const byKey = new Map(sent.map(item => [item.idempotencyKey, item.message]));
+    expect([...byKey.keys()].sort()).toEqual([verification.id, reset.id].sort());
+    expect(byKey.get(verification.id)!.html).toContain(`${baseURL}/fr/potwierdz-email#token=`);
+    expect(byKey.get(reset.id)!.html).toContain(`${baseURL}/nl/ustaw-nowe-haslo#token=`);
+    expect(byKey.get(reset.id)!.to).toBe(account.user.email);
+
+    for (const [kind, id] of [['verification', verification.id], ['password_reset', reset.id]] as const) {
+      const after = await row(account.user.id, kind);
+      expect(after).toMatchObject({ status: 'sent', provider_message_id: 'prov-' + id, token: null, lease_id: null });
+      expect(after.sent_at).toBeInstanceOf(Date);
+    }
+
+    // Powtórne wykonanie nie wysyła drugi raz tej samej wiadomości.
+    const again = stubSender();
+    expect(await processAuthEmailBatch(mail, again.sender, { baseURL, from })).toMatchObject({ processed: 0, sent: 0 });
+    expect(again.sent).toHaveLength(0);
+  });
+
+  it('kontrola ujemna: dostawca niedostępny → brak sent, provider_unavailable, zlecenie wraca do kolejki, bez tokenu w logach', async () => {
+    vi.mocked(captureError).mockClear();
+    const account = await signup(auth, 'nl');
+    const before = await row(account.user.id, 'verification');
+    const { sender } = stubSender(() => { throw new Error(`socket hang up ${before.token} ${account.user.email}`); });
+    const result = await processAuthEmailBatch(mail, sender, { baseURL, from });
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1, ok: true });
+    const after = await row(account.user.id, 'verification');
+    expect(after).toMatchObject({ status: 'queued', error_code: 'provider_unavailable', provider_message_id: null, attempts: 1 });
+    expect(after.token).toBe(before.token);
+    expect(after.next_attempt_at.getTime()).toBeGreaterThan(Date.now());
+    const logged = JSON.stringify(vi.mocked(captureError).mock.calls.map(([error, context]) => [String(error), context]));
+    expect(logged).not.toContain(before.token);
+    expect(logged).not.toContain(account.user.email);
+  });
+
+  it('kontrola ujemna: odpowiedź bez identyfikatora dostawcy nie jest potwierdzana (brak ACK)', async () => {
+    const account = await signup(auth, 'pl');
+    const { sender } = stubSender(() => { throw new AuthMailSendError('provider_unavailable'); });
+    await processAuthEmailBatch(mail, sender, { baseURL, from });
+    expect(await row(account.user.id, 'verification')).toMatchObject({ status: 'queued', provider_message_id: null, sent_at: null });
+  });
+
+  it('ACK=false: dzierżawa przejęta w trakcie wysyłki — spóźniony worker nie zatwierdza wyniku', async () => {
+    const account = await signup(auth, 'en');
+    const { sender } = stubSender(async ({ idempotencyKey }) => {
+      // Symulacja: dzierżawa wygasła i przejął ją inny worker, zanim dostawca odpowiedział.
+      await admin.query('UPDATE auth.email_outbox SET lease_id=gen_random_uuid() WHERE id=$1', [idempotencyKey]);
+      return { id: 'prov-late' };
+    });
+    const result = await processAuthEmailBatch(mail, sender, { baseURL, from });
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 0, stale: 1, ok: true });
+    expect(await row(account.user.id, 'verification')).toMatchObject({ status: 'leased', provider_message_id: null });
+  });
+
+  it('błąd renderowania (niekanoniczny origin) → render_failed bez wysyłki', async () => {
+    const account = await signup(auth, 'fr');
+    const { sender, sent } = stubSender();
+    const result = await processAuthEmailBatch(mail, sender, { baseURL: 'http://auth.example.invalid', from });
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 });
+    expect(sent).toHaveLength(0);
+    expect(await row(account.user.id, 'verification')).toMatchObject({ status: 'queued', error_code: 'render_failed' });
   });
 });

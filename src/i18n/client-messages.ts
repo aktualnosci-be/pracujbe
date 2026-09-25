@@ -31,6 +31,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'guestApply',
   'home',
   'job',
+  'jobAssist',
   'jobImport',
   'jobWizard',
   'jobs',

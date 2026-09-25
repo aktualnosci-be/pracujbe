@@ -98,7 +98,7 @@ export interface Activity {
 }
 
 /** Wspólne dla każdej czynności: hosting aplikacji i bazy. */
-const HOSTING: ProcessorId[] = ['railway', 'supabase'];
+const HOSTING: ProcessorId[] = ['railway'];
 
 export const ACTIVITIES: Record<ActivityId, Activity> = {
   account: {
@@ -430,7 +430,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       checksum_sha256: 'file',
       scan_status: 'file',
     },
-    note: 'Treść pliku leży w buckecie (Supabase Storage), w tabeli są metadane.',
+    note: 'Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane.',
   },
 
   // --- Aplikacje ---------------------------------------------------------------------------

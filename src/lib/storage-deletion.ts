@@ -17,24 +17,15 @@ import { rpc, rpcRows } from '@/lib/db/sql';
  * Brak obiektu w storage to sukces (usuwanie idempotentne). Do logów trafia tylko kod błędu —
  * nigdy ścieżka obiektu ani URL.
  *
- * Obiekty usuwa `ObjectDeleter`: prywatny bucket Railway (#26), gdy jest skonfigurowany, inaczej
- * Supabase Storage (przejściowo, `supabaseDeleter`).
+ * Obiekty usuwa `ObjectDeleter`: prywatny bucket Railway (#26). Bez jego konfiguracji każdy
+ * wiersz kończy się błędem `STORAGE_UNCONFIGURED` i wraca do kolejki z backoffem.
  */
 
 /** Usunięcie jednego obiektu; `null` = sukces, inaczej krótki kod błędu (bez ścieżki). */
 export type ObjectDeleter = (bucket: string, path: string) => Promise<string | null>;
 
-/** Minimalny kontrakt Storage klienta service-role Supabase (przejściowo, #27). */
-export interface StorageRemover {
-  storage: { from(bucket: string): { remove(paths: string[]): Promise<{ error: unknown }> } };
-}
-
-export function supabaseDeleter(admin: StorageRemover): ObjectDeleter {
-  return async (bucket, path) => {
-    const result = await admin.storage.from(bucket).remove([path]);
-    return result.error ? 'STORAGE_ERROR' : null;
-  };
-}
+/** Bez bucketu: obiekt nie może zostać usunięty — wiersz zostaje w kolejce (ponowienie). */
+export const unconfiguredDeleter: ObjectDeleter = async () => 'STORAGE_UNCONFIGURED';
 
 /** Bucket Railway ma jedną nazwę z konfiguracji; wiersze CV mają w `files.bucket` 'candidate-files'. */
 export function railwayDeleter(
