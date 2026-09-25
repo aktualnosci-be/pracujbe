@@ -2225,7 +2225,9 @@
     "campaignCancelled": "De verzending van de revisie is gestopt.",
     "auditActionCampaignActivated": "Activering van campagnerevisie",
     "auditActionCampaignCancelled": "Campagnerevisie gestopt",
-    "entityEmailCampaign": "E-mailcampagne"
+    "entityEmailCampaign": "E-mailcampagne",
+    "appealTargetRestoration": "Tegen opheffen van beperking",
+    "appealRestorationSummary": "Beperking opgeheven op {date}: {reason}"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",
@@ -2716,7 +2718,13 @@
     "appealTitle": "Bezwaar tegen de uitkomst",
     "appealIntro": "Ben je het niet eens met de uitkomst, dan kun je bezwaar maken. De auteur van de gemelde inhoud krijgt je gegevens niet te zien.",
     "appealStatusTitle": "Je bezwaar {reference}",
-    "appealLegalPlaceholder": "Juridische informatie over de bezwaarprocedure en buitengerechtelijke geschillenbeslechting — in te vullen door de eigenaar van de website."
+    "appealLegalPlaceholder": "Juridische informatie over de bezwaarprocedure en buitengerechtelijke geschillenbeslechting — in te vullen door de eigenaar van de website.",
+    "restorationTitle": "Beperking opgeheven",
+    "restorationInfo": "Na een nieuwe beoordeling is de beperking van de gemelde inhoud op {date} opgeheven.",
+    "restorationAppealTitle": "Bezwaar tegen het opheffen van de beperking",
+    "restorationAppealIntro": "Ben je het niet eens met het opheffen? Dan kun je bezwaar maken. De auteur van de gemelde inhoud krijgt je gegevens niet te zien.",
+    "restorationAppealDeadlineNotStarted": "De bezwaartermijn gaat in zodra je de e-mail over het opheffen van de beperking ontvangt.",
+    "restorationAppealWindowClosed": "De termijn voor bezwaar tegen het opheffen van de beperking is verstreken."
   },
   "campaignBanner": {
     "eyebrow": "Vacature in België",

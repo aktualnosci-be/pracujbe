@@ -101,6 +101,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,
       retention: {},
+      // #43: czyszczenie spraw DSA wyłączone bez jawnej flagi — bez wywołania bazy.
+      dsaRetention: { mode: 'off' },
       storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
     });
   });

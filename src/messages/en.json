@@ -2225,7 +2225,9 @@
     "campaignCancelled": "Sending of the revision has been stopped.",
     "auditActionCampaignActivated": "Campaign revision activated",
     "auditActionCampaignCancelled": "Campaign revision stopped",
-    "entityEmailCampaign": "Email campaign"
+    "entityEmailCampaign": "Email campaign",
+    "appealTargetRestoration": "Against lifting a restriction",
+    "appealRestorationSummary": "Restriction lifted on {date}: {reason}"
   },
   "settings": {
     "title": "Notification preferences",
@@ -2716,7 +2718,13 @@
     "appealTitle": "Appeal the outcome",
     "appealIntro": "If you disagree with the outcome, you can appeal. The author of the reported content will not see your details.",
     "appealStatusTitle": "Your appeal {reference}",
-    "appealLegalPlaceholder": "Legal information about the appeal procedure and out-of-court dispute settlement — to be completed by the website owner."
+    "appealLegalPlaceholder": "Legal information about the appeal procedure and out-of-court dispute settlement — to be completed by the website owner.",
+    "restorationTitle": "Restriction lifted",
+    "restorationInfo": "After a further review, the restriction on the reported content was lifted on {date}.",
+    "restorationAppealTitle": "Appeal against lifting the restriction",
+    "restorationAppealIntro": "If you disagree with the restriction being lifted, you can appeal. The author of the reported content will not see your details.",
+    "restorationAppealDeadlineNotStarted": "The appeal period starts when you receive the email about the restriction being lifted.",
+    "restorationAppealWindowClosed": "The period for appealing against the restriction being lifted has ended."
   },
   "campaignBanner": {
     "eyebrow": "Job in Belgium",

@@ -2225,7 +2225,9 @@
     "campaignCancelled": "Wysyłka rewizji została zatrzymana.",
     "auditActionCampaignActivated": "Aktywacja rewizji kampanii",
     "auditActionCampaignCancelled": "Zatrzymanie rewizji kampanii",
-    "entityEmailCampaign": "Kampania e-mail"
+    "entityEmailCampaign": "Kampania e-mail",
+    "appealTargetRestoration": "Od cofnięcia ograniczenia",
+    "appealRestorationSummary": "Ograniczenie cofnięte {date}: {reason}"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -2716,7 +2718,13 @@
     "appealTitle": "Odwołanie od wyniku",
     "appealIntro": "Jeśli nie zgadzasz się z wynikiem, możesz się odwołać. Autor zgłoszonej treści nie pozna Twoich danych.",
     "appealStatusTitle": "Twoje odwołanie {reference}",
-    "appealLegalPlaceholder": "Informacja prawna o procedurze odwoławczej i pozasądowym rozstrzyganiu sporów — do uzupełnienia przez właściciela serwisu."
+    "appealLegalPlaceholder": "Informacja prawna o procedurze odwoławczej i pozasądowym rozstrzyganiu sporów — do uzupełnienia przez właściciela serwisu.",
+    "restorationTitle": "Ograniczenie cofnięte",
+    "restorationInfo": "Po ponownym przeglądzie ograniczenie zgłoszonej treści zostało cofnięte {date}.",
+    "restorationAppealTitle": "Odwołanie od cofnięcia ograniczenia",
+    "restorationAppealIntro": "Jeśli nie zgadzasz się z cofnięciem, możesz się odwołać. Autor zgłoszonej treści nie pozna Twoich danych.",
+    "restorationAppealDeadlineNotStarted": "Termin na odwołanie zacznie biec, gdy otrzymasz e-mail o cofnięciu ograniczenia.",
+    "restorationAppealWindowClosed": "Termin na odwołanie od cofnięcia ograniczenia upłynął."
   },
   "campaignBanner": {
     "eyebrow": "Oferta pracy w Belgii",
