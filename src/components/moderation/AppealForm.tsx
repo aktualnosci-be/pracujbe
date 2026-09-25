@@ -15,7 +15,7 @@ import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
  * AppealForm — odwołanie od decyzji moderacyjnej (DSA, #43), wspólne dla obu stron:
  *   - `decision` — autor treści w danych firmy (RPC pod sesją),
  *   - `case` — zgłaszający na stronie sprawy (numer + kod dostępu, jak sprawdzenie sprawy);
- *     `restoration` — odwołanie od cofnięcia ograniczenia zamiast od wyniku sprawy (#43, 0108).
+ *     `restoration` — odwołanie od cofnięcia ograniczenia zamiast od wyniku sprawy (#43, 0109).
  *
  * Formularz otwiera przycisk (odwołanie to świadoma decyzja, nie domyślne pole). Jeden klucz
  * idempotencji na otwarcie formularza: ponowienie po błędzie sieci nie tworzy drugiego

@@ -320,9 +320,9 @@ koordynatora migracji). Buduje na sprawie z 0094 i decyzji z 0099.
 bez zapytania do bazy — `src/lib/admin/dsa-retention-mode.ts`). `apply` — dopiero po
 zatwierdzeniu wartości.
 
-### Odwołanie zgłaszającego od cofnięcia ograniczenia (0108)
+### Odwołanie zgłaszającego od cofnięcia ograniczenia (0109)
 
-Migracja `0108_dsa_restoration_appeals.sql` (numer tymczasowy — ostateczny nada integrator)
+Migracja `0109_dsa_restoration_appeals.sql`
 rozszerza tę samą maszynę odwołań:
 
 - `moderation_appeals.appealed_restoration_id` — odwołanie od cofnięcia

@@ -146,7 +146,7 @@ test('zgłaszający odwołuje się od braku działań (#43): walidacja, sukces, 
   expect(await blockingViolations(page)).toEqual([]);
 });
 
-test('zgłaszający odwołuje się od cofnięcia ograniczenia (#43, 0108): formularz, znacznik, sukces', async ({ page }) => {
+test('zgłaszający odwołuje się od cofnięcia ograniczenia (#43, 0109): formularz, znacznik, sukces', async ({ page }) => {
   const restoredCase = 'DSA-0000-0000-0000-2E2E';
   await page.goto(`/pl/zglos-tresc/sprawa#nr=${restoredCase}&kod=ABCDEFGHIJKLMNOPQRSTUVWX`);
   await expect(page.getByTestId('report-case-outcome')).toHaveText(t.outcomeActionTaken);

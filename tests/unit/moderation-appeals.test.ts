@@ -318,7 +318,7 @@ describe('raport przejrzystości i eksport', () => {
   });
 });
 
-describe('odwołanie zgłaszającego od cofnięcia ograniczenia (0108)', () => {
+describe('odwołanie zgłaszającego od cofnięcia ograniczenia (0109)', () => {
   beforeEach(() => {
     resetFakeDb(null);
     fakeSession.identity = null;

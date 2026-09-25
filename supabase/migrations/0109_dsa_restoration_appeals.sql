@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0108 — DSA: odwołanie zgłaszającego od COFNIĘCIA ograniczenia (#43, „Otwarte”).
+-- 0109 — DSA: odwołanie zgłaszającego od COFNIĘCIA ograniczenia (#43, „Otwarte”).
 -- Numer TYMCZASOWY (ostatni w main + 1) — ostateczny nada integrator.
 --
 -- Buduje na maszynie odwołań z 0104 (ta sama tabela, ten sam `admin_decide_appeal`):
@@ -331,7 +331,7 @@ begin
     into v_report from public.reports r where r.id = v_appeal.report_id for update;
 
   -- Ponowny przegląd przez innego człowieka niż autor rozstrzygnięcia, od którego jest
-  -- odwołanie — o ile jest inny administrator. Odwołanie od cofnięcia (#43, 0108): autorem
+  -- odwołanie — o ile jest inny administrator. Odwołanie od cofnięcia (#43, 0109): autorem
   -- rozstrzygnięcia jest osoba, która cofnęła ograniczenie, nie autor decyzji.
   if v_appeal.appealed_restoration_id is not null then
     select mr.restored_by into v_reviewed
@@ -536,7 +536,7 @@ begin
     from public.moderation_appeals a
     where a.report_id = v_report.id and a.appellant_role = 'reporter' and a.appealed_restoration_id is null;
 
-  -- Ostatnie cofnięcie ograniczenia w sprawie i odwołanie zgłaszającego od niego (0108).
+  -- Ostatnie cofnięcie ograniczenia w sprawie i odwołanie zgłaszającego od niego (0109).
   select mr.id, mr.restored_at into v_rest
     from public.moderation_restorations mr
     join public.moderation_decisions d on d.id = mr.decision_id
@@ -590,7 +590,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
                   else greatest(r.resolved_at, max(x.end_at)) end as start_at
         from (
           select case
-                   -- Odwołanie zgłaszającego od cofnięcia (0108): null, gdy w toku.
+                   -- Odwołanie zgłaszającego od cofnięcia (0109): null, gdy w toku.
                    when ra.id is not null then ra.decided_at
                    -- Cofnięcie, od którego przysługuje odwołanie: koniec terminu od
                    -- POINFORMOWANIA zgłaszającego (null, gdy nie poinformowano).

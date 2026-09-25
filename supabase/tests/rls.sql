@@ -8373,7 +8373,7 @@ select pg_temp.expect_error('select public.dsa_transparency_report(now(), now() 
   'VALIDATION_FAILED', 'APL43-11c zły okres raportu');
 reset role;
 -- ============================================================================
--- RA43. Odwołanie zgłaszającego od COFNIĘCIA ograniczenia (0108, #43): ręczne cofnięcie
+-- RA43. Odwołanie zgłaszającego od COFNIĘCIA ograniczenia (0109, #43): ręczne cofnięcie
 -- informuje zgłaszającego w jego języku; termin od poinformowania; od cofnięcia po odwołaniu
 -- autora odwołanie nie przysługuje; rozpatruje ktoś inny niż osoba, która cofnęła;
 -- uwzględnienie = nowa decyzja ograniczająca; retencja, raport i eksport.

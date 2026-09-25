@@ -1120,7 +1120,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   bazy DSA, treść prawna o procedurze. Harmonogram czyszczenia: `/api/maintenance` woła
   `dsa_retention_run` tylko za flagą `DSA_RETENTION_MODE` (`dry-run`/`apply`, domyślnie
   wyłączone, liczniki w odpowiedzi; `src/lib/admin/dsa-retention-mode.ts`). Odwołanie
-  zgłaszającego od cofnięcia ograniczenia (migracja `0108`, numer tymczasowy): ręczne cofnięcie
+  zgłaszającego od cofnięcia ograniczenia (migracja `0109`): ręczne cofnięcie
   wysyła `reportRestored` w języku zgłaszającego, termin od wysłania, formularz na
   `/zglos-tresc/sprawa` (znacznik treści prawnej), `submit_report_restoration_appeal`,
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu

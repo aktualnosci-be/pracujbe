@@ -143,7 +143,7 @@ export interface EmailDataMap {
   /** Wynik sprawy DSA dla zgłaszającego (#42) — bez uzasadnienia i danych autora. */
   reportDecisionActioned: { recipientName?: string | null; caseNumber: string; actionUrl: string };
   reportDecisionNoAction: { recipientName?: string | null; caseNumber: string; actionUrl: string };
-  /** Cofnięcie ograniczenia — do zgłaszającego (#43, 0108): bez powodu i danych autora. */
+  /** Cofnięcie ograniczenia — do zgłaszającego (#43, 0109): bez powodu i danych autora. */
   reportRestored: { recipientName?: string | null; caseNumber: string; actionUrl: string };
   /**
    * Uzasadnienie decyzji moderacyjnej dla autora treści (#42): fakty (cytat), podstawa

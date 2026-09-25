@@ -56,7 +56,7 @@ export interface AdminAppealRow {
     decidedAt: string;
   };
   report: { id: string; caseNumber: string; targetType: string; category: string | null };
-  /** Odwołanie zgłaszającego od cofnięcia ograniczenia (0108) — cofnięcie, którego dotyczy. */
+  /** Odwołanie zgłaszającego od cofnięcia ograniczenia (0109) — cofnięcie, którego dotyczy. */
   restoration: { restoredAt: string; reason: string | null } | null;
 }
 
@@ -87,7 +87,7 @@ function mapAppeal(row: Record<string, unknown>, viewerId: string | null, otherA
   const d = asRecord(row['decision']);
   const r = asRecord(row['report']);
   const rs = row['restoration'] ? asRecord(row['restoration']) : null;
-  // Odwołanie od cofnięcia rozpatruje ktoś inny niż osoba, która cofnęła (jak RPC, 0108).
+  // Odwołanie od cofnięcia rozpatruje ktoś inny niż osoba, która cofnęła (jak RPC, 0109).
   const decidedBy = rs ? asNullableString(rs['restored_by']) : asNullableString(d['decided_by']);
   return {
     id: asString(row['id']),

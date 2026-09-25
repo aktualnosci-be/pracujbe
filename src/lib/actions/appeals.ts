@@ -36,7 +36,7 @@ import { reportCaseLookupSchema } from '@/lib/validation/content-report';
  *     członkostwo, termin od poinformowania i to, że od decyzji przysługuje odwołanie.
  *   - `submitReportAppeal` — zgłaszający, numer sprawy + kod dostępu (jak sprawdzenie sprawy):
  *     od braku działań (`submit_report_appeal`) albo od cofnięcia ograniczenia
- *     (`target: 'restoration'` → `submit_report_restoration_appeal`, 0108). Oba RPC mają
+ *     (`target: 'restoration'` → `submit_report_restoration_appeal`, 0109). Oba RPC mają
  *     EXECUTE tylko dla service_role — inaczej bezpośrednie wywołanie omijałoby limiter.
  *   - `decideAppeal` — rozpatrzenie przez administratora (inny niż autor decyzji, gdy to
  *     możliwe); skutek, historia, audyt i powiadomienia w jednej transakcji w bazie.

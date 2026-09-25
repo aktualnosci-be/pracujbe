@@ -34,7 +34,7 @@ export interface ReportCaseView {
   appealDeadline: string | null;
   /** Odwołanie zgłaszającego (bez danych autora treści). */
   appeal: ReportCaseAppeal | null;
-  /** Ostatnie cofnięcie ograniczenia w sprawie i droga odwołania od niego (#43, 0108). */
+  /** Ostatnie cofnięcie ograniczenia w sprawie i droga odwołania od niego (#43, 0109). */
   restoration: ReportCaseRestoration | null;
   events: ReportCaseEvent[];
 }
