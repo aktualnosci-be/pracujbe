@@ -32,6 +32,17 @@ Funkcje wyłącznie dla `service_role`:
   `superseded`, `stale_lease`, `not_found`.
 - `fail_translation_job(job, lease, kod, ponawialny, retry_after_s)` — backoff 30 s·2ⁿ⁻¹
   (max 1 h, jitter ±20%, Retry-After jako dolna granica) albo `failed`. Kod bez treści.
+- `defer_translation_job(job, lease, kod, opóźnienie_s)` — globalny budżet AI (#36) odmówił,
+  model nie został wywołany: zadanie wraca po opóźnieniu (1 s–1 h) i oddaje próbę z claim.
+  Worker: `budget_exceeded` → 1 h, `budget_unavailable` → 5 min.
+
+## Koszt (#36)
+
+Adapter Anthropic woła model wyłącznie przez `withAiBudget` (`src/lib/ai/budget.ts`):
+rezerwacja górnej granicy (`estimateTranslationCost`: prompt, pola z glosariuszem, schemat,
+pełne `max_tokens` = 16000) przed API, rozliczenie tokenami z `usage` (także przy odmowie
+modelu). Brak bazy zadań albo błąd rezerwacji = brak wywołania (fail-closed). Każde wywołanie
+= jeden wiersz logu użycia bez treści (`ai_usage`, #489).
 - `deactivate_translation_source(typ, id, purge)` — ukrycie (zaległe zadania `superseded`,
   spóźniony wynik niczego nie publikuje) albo purge (usunięcie konta/oferty: rewizje, zadania,
   przekłady i korekty; opóźniony worker dostaje `not_found`).
@@ -81,6 +92,6 @@ treść pól, promptu ani komunikatu dostawcy.
 
 ## Otwarte (poza tym krokiem)
 
-Wpięcie ofert (#33) i profili (#34), trasa/cron workera, budżet i raport kosztów (#36),
+Wpięcie ofert (#33) i profili (#34), trasa/cron workera,
 benchmark i wybór modelu/effortu (#30), UI stanu tłumaczenia i SEO, bramka prywatności
 przed prawdziwymi profilami (umowa powierzenia, retencja dostawcy — decyzja właściciela).

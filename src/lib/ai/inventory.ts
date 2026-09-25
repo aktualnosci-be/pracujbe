@@ -94,9 +94,10 @@ export const AI_FEATURES: readonly AiFeature[] = [
     humanStep:
       'Walidacja automatyczna i korekta ręczna po fakcie (PR #514) — do potwierdzenia po scaleniu, czy tłumaczenie jest publikowane bez przeglądu.',
     decidesAboutPerson: false,
-    usageLogged: false,
-    // Hook gotowy: `withAiBudget({ feature: 'content_translation', … })` (docs/AI_BUDGET.md).
-    costBudgeted: false,
+    usageLogged: true,
+    // `withAiBudget` w src/lib/translation/anthropic-provider.ts (#36): rezerwacja przed
+    // wywołaniem modelu; odmowa budżetu = odroczenie zadania bez zużycia próby.
+    costBudgeted: true,
   },
   {
     id: 'job_offer_assist',

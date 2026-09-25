@@ -6864,6 +6864,52 @@ select pg_temp.assert(not exists (select 1 from public.translation_sources where
 select pg_temp.assert((select prosrc like '%current_revision_id is distinct from v_job.revision_id%'
   from pg_proc where proname = 'complete_translation_job'), 'TR31-Nc produkcyjna funkcja przywrócona');
 
+-- TR31-13 (#36): budżet AI odmówił — odroczenie oddaje próbę, więc wielokrotna odmowa (więcej
+-- razy niż max_attempts) nie zamienia zadania w trwały błąd. Kontrola ujemna: ten sam
+-- scenariusz przez fail_translation_job(retryable) kończy się failed.
+set role service_role;
+select public.record_translation_source('job', :'JOBB', 'pl', :'TRF1'::jsonb, 'tr-v1')->>'status' = 'created' as tr13_ok \gset
+select pg_temp.assert(:'tr13_ok', 'TR31-13 źródło JOBB');
+select job_id as tr13_nl, lease_id as tr13_lease from public.claim_translation_jobs(10, 300)
+ where entity_id = :'JOBB' and target_locale = 'nl' \gset
+select pg_temp.assert(public.defer_translation_job(:'tr13_nl', gen_random_uuid(), 'budget_exceeded', 600) = 'stale_lease',
+  'TR31-13b obcy lease nie odracza');
+select pg_temp.expect_error('select public.defer_translation_job(''' || :'tr13_nl' || ''', ''' || :'tr13_lease' || ''', ''Budżet 10 USD'', 60)',
+  'error_code', 'TR31-13c kod bez treści');
+select pg_temp.assert(public.defer_translation_job(:'tr13_nl', :'tr13_lease', 'budget_exceeded', 600) = 'deferred',
+  'TR31-13d odroczenie');
+select pg_temp.assert((select status = 'retry' and attempts = 0 and lease_id is null and last_error_code = 'budget_exceeded'
+  and next_attempt_at between now() + interval '599 seconds' and now() + interval '601 seconds'
+  from public.translation_jobs where id = :'tr13_nl'), 'TR31-13e próba oddana, termin = opóźnienie');
+reset role;
+select max_attempts as tr13_max from public.translation_jobs where id = :'tr13_nl' \gset
+create temp table tr13_log(outcome text);
+select format($f$
+  do $d$ declare v_lease uuid; begin
+    for i in 1..%s loop
+      update public.translation_jobs set next_attempt_at = now() - interval '1 second' where id = %L;
+      select lease_id into v_lease from public.claim_translation_jobs(10, 300) where job_id = %L;
+      insert into tr13_log select public.defer_translation_job(%L, v_lease, 'budget_exceeded', 60);
+    end loop; end $d$;
+$f$, :tr13_max + 2, :'tr13_nl', :'tr13_nl', :'tr13_nl') as tr13_sql \gset
+:tr13_sql
+select pg_temp.assert((select count(*) = :tr13_max + 2 and bool_and(outcome = 'deferred') from tr13_log)
+  and (select status = 'retry' and attempts = 0 from public.translation_jobs where id = :'tr13_nl'),
+  'TR31-13f odroczenia ponad max_attempts nie wyczerpują prób');
+reset role;
+begin;
+truncate tr13_log;
+select replace(:'tr13_sql', 'public.defer_translation_job(' || quote_literal(:'tr13_nl') || ', v_lease, ''budget_exceeded'', 60)',
+  'public.fail_translation_job(' || quote_literal(:'tr13_nl') || ', v_lease, ''budget_exceeded'', true, 60)') as tr13n_sql \gset
+:tr13n_sql
+select pg_temp.assert((select status = 'failed' from public.translation_jobs where id = :'tr13_nl'),
+  'TR31-13N kontrola ujemna: te same odmowy przez fail(retryable) = trwały błąd');
+rollback;
+select pg_temp.assert((select status = 'retry' from public.translation_jobs where id = :'tr13_nl'),
+  'TR31-13Nb kontrola ujemna cofnięta');
+drop table tr13_log;
+select public.deactivate_translation_source('job', :'JOBB', true) >= 0 as tr13_purged \gset
+
 -- ============================================================================
 -- SR497. Kontrola treści pytań screeningowych przed publikacją (0103, #497): detektor w bazie
 --        (treść + opcje + tłumaczenia), kolejka przeglądu przy zapisie, blokada aktywacji do

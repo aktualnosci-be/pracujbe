@@ -3,6 +3,9 @@ import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 
 import { localeNames, type Locale } from '@/i18n/routing';
+import { AiBudgetError, withAiBudget, type AiBudgetStore } from '@/lib/ai/budget';
+import { estimateMicroUsd, textTokenUpperBound } from '@/lib/ai/pricing';
+import { withAiUsageLog, type AiUsageOutcome, type AiUsageSink } from '@/lib/ai/usage-log';
 import { translationEffort, translationModel } from '@/lib/translation/config';
 import { DO_NOT_TRANSLATE, glossaryFor } from '@/lib/translation/glossary';
 import {
@@ -21,7 +24,15 @@ import {
  *   - odpowiedź ograniczona schematem JSON z dokładnie tymi kluczami; model nie ma narzędzi,
  *   - wynik i tak przechodzi walidację faktów przed zapisem.
  * SDK nie ponawia (`maxRetries: 0`) — ponowienia z backoffem prowadzi kolejka w bazie.
+ *
+ * Koszt (#36): każde wywołanie przechodzi przez globalny budżet AI (`withAiBudget`,
+ * rezerwacja górnej granicy PRZED API, rozliczenie tokenami z `usage`). Odmowa budżetu =
+ * `budget_exceeded`/`budget_unavailable` bez wywołania modelu — worker odracza zadanie.
+ * Każde wywołanie modelu daje też jeden wiersz logu użycia bez treści (#489).
  */
+
+/** Limit wyjścia jednego tłumaczenia — także górna granica w rezerwacji budżetu. */
+export const TRANSLATION_MAX_TOKENS = 16000;
 
 const ENGLISH_NAMES: Record<Locale, string> = {
   pl: 'Polish',
@@ -101,22 +112,81 @@ export function mapProviderError(e: unknown): TranslationProviderError {
   return new TranslationProviderError('provider_unavailable');
 }
 
+const PROMPT_OVERHEAD_TOKENS = textTokenUpperBound(TRANSLATION_SYSTEM_PROMPT) + 500;
+
+/**
+ * Górna granica kosztu jednego tłumaczenia (mikro-USD) — kwota rezerwacji w budżecie AI (#36):
+ * prompt systemowy + cała wiadomość z polami, glosariuszem i schematem + pełne `max_tokens`.
+ */
+export function estimateTranslationCost(request: TranslationRequest, model: string): number {
+  const schema = JSON.stringify(translationJsonSchema(Object.keys(request.fields)));
+  return estimateMicroUsd(model, {
+    inputTokens: PROMPT_OVERHEAD_TOKENS + textTokenUpperBound(wrapSourceFields(request)) + textTokenUpperBound(schema),
+    maxOutputTokens: TRANSLATION_MAX_TOKENS,
+  });
+}
+
+/** Wynik wywołania dla rejestru budżetu i logu użycia (enum, bez treści). */
+export function classifyTranslation(result: { ok: true } | { ok: false; error: unknown }): AiUsageOutcome {
+  if (result.ok) return 'ok';
+  if (result.error instanceof TranslationProviderError) {
+    if (result.error.reason === 'refused') return 'refused';
+    if (result.error.reason === 'rate_limited') return 'rate_limited';
+  }
+  return 'failed';
+}
+
+export interface AnthropicTranslationOptions {
+  /** Magazyn budżetu (#36); domyślnie PostgreSQL (pula service-role). */
+  budgetStore?: AiBudgetStore;
+  /** Odbiorca logu użycia (#489); domyślnie `console.info`. */
+  usageSink?: AiUsageSink;
+}
+
 export class AnthropicTranslationProvider implements TranslationProvider {
   private readonly client: Anthropic;
+  private readonly options: AnthropicTranslationOptions;
 
-  constructor(client?: Anthropic) {
+  constructor(client?: Anthropic, options: AnthropicTranslationOptions = {}) {
     // Klucz czytany przez SDK z `ANTHROPIC_API_KEY` (tylko serwer).
     this.client = client ?? new Anthropic({ timeout: 60_000, maxRetries: 0 });
+    this.options = options;
   }
 
   async translate(request: TranslationRequest): Promise<TranslationResponse> {
-    const keys = Object.keys(request.fields);
     const model = translationModel();
+    try {
+      return await withAiBudget(
+        { feature: 'content_translation', model, estimateMicroUsd: estimateTranslationCost(request, model) },
+        (reportUsage) =>
+          withAiUsageLog(
+            { feature: 'content_translation', inputKind: 'text', model },
+            () => this.call(request, model, reportUsage),
+            classifyTranslation,
+            this.options.usageSink,
+          ),
+        classifyTranslation,
+        this.options.budgetStore,
+      );
+    } catch (e) {
+      if (e instanceof AiBudgetError) {
+        throw new TranslationProviderError(e.reason === 'exceeded' ? 'budget_exceeded' : 'budget_unavailable');
+      }
+      throw mapProviderError(e);
+    }
+  }
+
+  private async call(
+    request: TranslationRequest,
+    model: string,
+    reportUsage: (usage: { inputTokens: number; outputTokens: number }) => void,
+  ): Promise<TranslationResponse> {
+    const keys = Object.keys(request.fields);
     let response: Anthropic.Message;
     try {
       response = await this.client.messages.create({
         model,
-        max_tokens: 16000,
+        max_tokens: TRANSLATION_MAX_TOKENS,
         system: TRANSLATION_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: wrapSourceFields(request) }],
         output_config: {
@@ -127,6 +197,8 @@ export class AnthropicTranslationProvider implements TranslationProvider {
     } catch (e) {
       throw mapProviderError(e);
     }
+    // Zużycie zgłaszane przed oceną odpowiedzi — odmowa i ucięta odpowiedź też kosztują.
+    reportUsage({ inputTokens: response.usage?.input_tokens ?? 0, outputTokens: response.usage?.output_tokens ?? 0 });
 
     if (response.stop_reason === 'refusal') throw new TranslationProviderError('refused');
     if (response.stop_reason !== 'end_turn') throw new TranslationProviderError('incomplete');

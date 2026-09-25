@@ -29,6 +29,7 @@
 --                                 wynik starej rewizji = superseded, korekta ręczna nie jest
 --                                 nadpisywana (wynik zostaje jako propozycja),
 --   fail_translation_job        — retry z backoffem i jitterem albo failed (błąd trwały),
+--   defer_translation_job       — odroczenie bez zużycia próby (budżet AI odmówił, model nie wołany),
 --   deactivate_translation_source — ukrycie (zaległe zadania superseded) albo purge
 --                                 (usunięcie konta/oferty: rewizje, zadania, przekłady),
 --   save_manual_translation / release_manual_translation — korekta ręczna i jawny reset.
@@ -529,6 +530,40 @@ begin
 end $$;
 revoke all on function public.fail_translation_job(uuid, uuid, text, boolean, integer) from public;
 grant execute on function public.fail_translation_job(uuid, uuid, text, boolean, integer) to service_role;
+
+-- --- 9a. Odroczenie bez zużycia próby (budżet AI, #36) ------------------------------------------------
+-- Model NIE został wywołany (globalny budżet AI przekroczony albo niedostępny) — zadanie wraca
+-- do puli po p_delay_seconds (1 s–1 h), a próba z claim jest oddawana. Inaczej wyczerpany
+-- dzienny budżet zamieniłby po max_attempts każde zaległe zadanie w trwały błąd.
+-- Zwraca: deferred, superseded, stale_lease albo not_found.
+create or replace function public.defer_translation_job(
+  p_job_id uuid,
+  p_lease_id uuid,
+  p_error_code text,
+  p_delay_seconds integer
+) returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_job public.translation_jobs;
+begin
+  if p_error_code is null or p_error_code !~ '^[a-z0-9_]{1,40}$' then
+    raise exception 'VALIDATION_FAILED: error_code' using errcode = '22023';
+  end if;
+  select * into v_job from public.translation_jobs where id = p_job_id for update;
+  if not found then return 'not_found'; end if;
+  if v_job.status = 'superseded' then return 'superseded'; end if;
+  if v_job.status <> 'leased' or v_job.lease_id is distinct from p_lease_id then
+    return 'stale_lease';
+  end if;
+  update public.translation_jobs
+     set status = 'retry', last_error_code = p_error_code,
+         attempts = greatest(v_job.attempts - 1, 0),
+         next_attempt_at = now() + make_interval(secs => least(greatest(coalesce(p_delay_seconds, 300), 1), 3600)),
+         lease_id = null, lease_expires_at = null, updated_at = now()
+   where id = p_job_id;
+  return 'deferred';
+end $$;
+revoke all on function public.defer_translation_job(uuid, uuid, text, integer) from public;
+grant execute on function public.defer_translation_job(uuid, uuid, text, integer) to service_role;
 
 -- --- 10. Ukrycie / usunięcie encji ---------------------------------------------------------------------------
 -- p_purge = false: encja niewidoczna (np. oferta wstrzymana) — zaległe zadania superseded,

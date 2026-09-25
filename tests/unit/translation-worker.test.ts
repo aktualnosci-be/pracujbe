@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { processTranslationBatch } from '@/lib/translation/worker';
+import { BUDGET_DEFER_SECONDS, processTranslationBatch } from '@/lib/translation/worker';
 import {
   FixtureTranslationProvider,
   TranslationProviderError,
@@ -34,6 +34,7 @@ function store(jobs: ClaimedTranslationJob[], completeOutcome: Awaited<ReturnTyp
     claim: vi.fn(async () => jobs),
     complete: vi.fn(async () => completeOutcome),
     fail: vi.fn(async (_j: ClaimedTranslationJob, _c: string, retryable: boolean) => (retryable ? 'retry' : 'failed') as 'retry' | 'failed'),
+    defer: vi.fn(async () => 'deferred' as const),
   };
   return s satisfies TranslationQueueStore;
 }
@@ -89,6 +90,35 @@ describe('processTranslationBatch', () => {
     const r2 = await processTranslationBatch({ store: s2, provider: provider(new TranslationProviderError('refused')) });
     expect(r2.failed).toBe(1);
     expect(s2.fail).toHaveBeenCalledWith(expect.anything(), 'refused', false, null);
+  });
+
+  it('odmowa budżetu AI (#36) → odroczenie bez zużycia próby, nie fail', async () => {
+    const s = store([job(), job({ job_id: 'job-2', target_locale: 'fr' })]);
+    const p: TranslationProvider = {
+      translate: vi
+        .fn()
+        .mockRejectedValueOnce(new TranslationProviderError('budget_exceeded'))
+        .mockRejectedValueOnce(new TranslationProviderError('budget_unavailable')),
+    };
+    const r = await processTranslationBatch({ store: s, provider: p });
+    expect(r).toMatchObject({ claimed: 2, deferred: 2, retried: 0, failed: 0 });
+    expect(s.fail).not.toHaveBeenCalled();
+    expect(s.defer).toHaveBeenCalledWith(expect.objectContaining({ job_id: 'job-1' }), 'budget_exceeded', BUDGET_DEFER_SECONDS.budget_exceeded);
+    expect(s.defer).toHaveBeenCalledWith(expect.objectContaining({ job_id: 'job-2' }), 'budget_unavailable', BUDGET_DEFER_SECONDS.budget_unavailable);
+  });
+
+  it('kontrola ujemna: zwykły błąd przejściowy nadal zużywa próbę (fail retryable), nie defer', async () => {
+    const s = store([job()]);
+    await processTranslationBatch({ store: s, provider: provider(new TranslationProviderError('timeout')) });
+    expect(s.defer).not.toHaveBeenCalled();
+    expect(s.fail).toHaveBeenCalledWith(expect.anything(), 'timeout', true, null);
+  });
+
+  it('błąd zapisu odroczenia = dropped (dzierżawa wygaśnie)', async () => {
+    const s = store([job()]);
+    s.defer.mockRejectedValueOnce(new Error('db down'));
+    const r = await processTranslationBatch({ store: s, provider: provider(new TranslationProviderError('budget_exceeded')) });
+    expect(r).toMatchObject({ deferred: 0, dropped: 1 });
   });
 
   it('nieznany wyjątek dostawcy → retry z kodem technicznym', async () => {

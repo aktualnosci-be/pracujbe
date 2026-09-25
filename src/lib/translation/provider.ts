@@ -39,12 +39,28 @@ export type ProviderFailure =
   | 'timeout'
   | 'provider_unavailable'
   | 'bad_request'
-  | 'provider_auth';
+  | 'provider_auth'
+  | 'budget_exceeded'
+  | 'budget_unavailable';
 
-const RETRYABLE: ReadonlySet<ProviderFailure> = new Set(['rate_limited', 'timeout', 'provider_unavailable']);
+const RETRYABLE: ReadonlySet<ProviderFailure> = new Set([
+  'rate_limited',
+  'timeout',
+  'provider_unavailable',
+  'budget_exceeded',
+  'budget_unavailable',
+]);
+
+/**
+ * Odmowa globalnego budżetu AI (#36): model NIE został wywołany, więc zadanie jest odraczane
+ * bez zużycia próby (`defer_translation_job`), a nie ponawiane z licznikiem prób.
+ */
+const DEFERRED: ReadonlySet<ProviderFailure> = new Set(['budget_exceeded', 'budget_unavailable']);
 
 export class TranslationProviderError extends Error {
   readonly retryable: boolean;
+  /** Model nie został wywołany — odroczenie bez zużycia próby. */
+  readonly deferred: boolean;
 
   constructor(
     readonly reason: ProviderFailure,
@@ -53,6 +69,7 @@ export class TranslationProviderError extends Error {
     super(reason);
     this.name = 'TranslationProviderError';
     this.retryable = RETRYABLE.has(reason);
+    this.deferred = DEFERRED.has(reason);
   }
 }
 

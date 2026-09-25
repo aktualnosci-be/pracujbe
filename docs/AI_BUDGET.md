@@ -67,9 +67,13 @@ raport czyta ostatnie 31 dni i 12 miesięcy.
   rozliczenie), szacunek `src/lib/ai-assist/cost.ts`.
 - Import CV kandydata (#487, #498): `withAiBudget` w `src/lib/actions/cv-import.ts`, szacunek
   `src/lib/cv-import/cost.ts` (prompt + schemat + zminimalizowany tekst + `max_tokens`).
-- Tłumaczenia (#514): jeszcze nie — hook poniżej.
+- Tłumaczenia (#514, #31/#32): `withAiBudget` w `AnthropicTranslationProvider`
+  (`src/lib/translation/anthropic-provider.ts`), szacunek `estimateTranslationCost` (prompt +
+  pola z glosariuszem + schemat + pełne `max_tokens`). Odmowa budżetu = `budget_exceeded`/
+  `budget_unavailable` → worker woła `defer_translation_job` (zadanie wraca po 1 h / 5 min
+  bez zużycia próby), więc wyczerpany limit dnia nie zamienia kolejki w trwałe błędy.
 
-## Nowa funkcja AI (hook, np. tłumaczenia #514)
+## Nowa funkcja AI (hook)
 
 ```ts
 import { withAiBudget } from '@/lib/ai/budget';

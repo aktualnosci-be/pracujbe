@@ -953,7 +953,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Do zrobienia (właściciel):** pobranie oficjalnych paczek CSV (formularz z linkiem e-mail),
   zatwierdzenie `data/esco/esco-v1.2.1.manifest.json`, pełny import; atrybucja w UI i matching
   na ESCO = osobne issues.
-- [~] Tłumaczenia AI — rdzeń (#31, #32, migracja `0129`, `docs/AI_TRANSLATION.md`), tylko
+- [~] Tłumaczenia AI — rdzeń (#31, #32, migracja `0129` — numer tymczasowy, `docs/AI_TRANSLATION.md`), tylko
   pl/nl/fr/en, domyślnie wyłączone (`AI_TRANSLATION_ENABLED`). Kolejka: niezmienne rewizje
   źródła (kanoniczne pola + SHA-256, ta sama treść = no-op), zadania per język docelowy i wersję
   pipeline (unikat = deduplikacja), `claim_translation_jobs` (SKIP LOCKED + lease, restart =
@@ -965,9 +965,11 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   kształtu i niezmienności faktów pole po polu (`facts.ts`: liczby, kwoty, waluty, daty,
   godziny, e-maile/URL/telefony, jednostki, brutto/netto, okres stawki, kwalifikacje, nazwy
   własne, negacja) — niepoprawny wynik nigdy nie trafia do bazy; logi tylko kody. Worker
-  `processTranslationBatch` (dostawca poza transakcją). Dowód: `rls.sql` sekcja TR31 z kontrolą
-  ujemną TR31-N; unit `translation-*`. **Do zrobienia:** wpięcie ofert (#33) i profili (#34),
-  trasa/cron workera, budżet (#36), benchmark i wybór modelu (#30), UI/SEO stanu tłumaczenia.
+  `processTranslationBatch` (dostawca poza transakcją). Budżet AI (#36): adapter przez
+  `withAiBudget` (rezerwacja przed API, rozliczenie tokenami, log użycia bez treści); odmowa
+  budżetu → `defer_translation_job` (zadanie wraca po 1 h / 5 min bez zużycia próby). Dowód:
+  `rls.sql` sekcja TR31 z kontrolami ujemnymi TR31-N i TR31-13N; unit `translation-*`.
+  **Do zrobienia:** wpięcie ofert (#33) i profili (#34), trasa/cron workera, benchmark i wybór modelu (#30), UI/SEO stanu tłumaczenia.
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
