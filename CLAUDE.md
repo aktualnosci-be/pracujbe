@@ -571,9 +571,9 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   godziny, zmiany; escapowany); Article z `image`, `dateModified` (`guides.ts` `updatedAt`) i logo
   wydawcy. Obraz marki `/og.png` przez `brandShareImageUrl` na wszystkich publicznych stronach z
   własnym `openGraph` (#116/#182; strażnik `tests/unit/structured-data.test.ts`).
-  `hiringOrganization.sameAs`/`logo` (migracja `0109`): `get_public_job` zwraca `company_website`/
+  `hiringOrganization.sameAs`/`logo` (migracja `0112`): `get_public_job` zwraca `company_website`/
   `company_logo_url` tylko dla firmy `verified` i tylko jako bezwzględny https (`public_https_url`),
-  JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL109 (kontrole ujemne:
+  JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL112 (kontrole ujemne:
   bez walidacji / bez bramki weryfikacji link wycieka). **Otwarte:** edycja strony i logo firmy
   w panelu pracodawcy (dziś pola tylko w schemacie).
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
@@ -938,7 +938,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 
 ### Etap 6 — komunikacja
 - [x] Wybór języka odbiorcy (fallback) — util + test + `resolve_recipient_locale()` w DB (INVARIANT #1 egzekwowany przy kolejkowaniu)
-- [~] Kolejka e-mail + worker + ponawianie — outbox (`email_deliveries`: attempts/next_attempt_at/payload), worker `src/lib/email/outbox.ts` + route `/api/email/process` (sekret) gotowe; realna wysyłka wymaga `RESEND_API_KEY`
+- [~] Kolejka e-mail + worker + ponawianie — outbox (`email_deliveries`: attempts/next_attempt_at/payload), worker `src/lib/email/outbox.ts` + route `/api/email/process` (sekret) gotowe; realna wysyłka wymaga kluczy dostawcy
+  Dostawca poczty (decyzja właściciela 25.09): **EmailLabs** domyślnie, Resend jako alternatywa —
+  wspólny transport `src/lib/email/transport/` (wybór `EMAIL_PROVIDER=emaillabs|resend`; pusty =
+  EmailLabs przy komplecie `EMAILLABS_APP_KEY`/`_SECRET_KEY`/`_SMTP_ACCOUNT`, inaczej Resend;
+  jawny bez kluczy albo nieznana wartość = brak wysyłki, bez cichego przełączenia) w obu
+  workerach (`email_deliveries` i `auth.email_outbox`). EmailLabs REST v2.1: `messageId` =
+  UUID wiersza + domena nadawcy (= `provider_message_id`), deduplikacja ponowień przez
+  `GET /v2.1/email?messageId` przed każdą wysyłką (brak Idempotency-Key u dostawcy), ACK tylko
+  z tym identyfikatorem w odpowiedzi, `X-TRACKING-OFF: 1`, nagłówki wypisania bez zmian, kody
+  `EMAIL_PROVIDER_*` zamiast komunikatu dostawcy. Webhook `POST /api/email/webhook/emaillabs`
+  (SHA1 sekret|data|Request-Id + opcjonalny Basic auth, inbox `emaillabs:<Request-Id>`,
+  hardbounce → blokada, softbounce/spambounce bez blokady, deferred → opóźnienie, ok →
+  delivered). `/api/health`: `emailProvider`, `checks.emailProviderReady`/`emaillabsWebhook`.
+  Opis i kroki panelu:
+  `docs/EMAILLABS_SETUP.md`. Testy: `emaillabs-transport`, `emaillabs-webhook` (atrapa HTTP,
+  kontrola ujemna deduplikacji). **Do zrobienia (właściciel):** domena/DKIM/SPF/DMARC, konto
+  SMTP z wyłączonym open trackingiem, własnym wypisem i stopką, klucze API z prawem odczytu
+  statusów, webhook, włączenie statusów „OK” u wsparcia, zmienne w Railway.
   Harmonogram: cron Railway (`scripts/railway-cron-call.mjs` → `/api/email/process`), opis w `docs/RESEND_SETUP.md` §6 (#296).
   Wypisanie i budżety (#45, etap 1, migracja `0087`): token HMAC (`src/lib/email/unsubscribe-token.ts`,
   `EMAIL_UNSUBSCRIBE_SECRET`; UUID konta + kategoria + 180 dni, bez e-maila w URL), link w stopce
@@ -972,7 +989,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `rls.sql` sekcja CM45 (dblink, kontrole ujemne), unit `email-consent-campaigns`.
   **Do zrobienia (właściciel):** wartości `EMAIL_SENDER_*`, wyłączenie trackingu w Resend i
   kontrola odebranego `.eml` na produkcji; treść prawna zgody marketingowej (#40). **Otwarte:**
-  panel admina kampanii (dziś RPC service_role), rejestracja z opt-in marketingu.
+  tworzenie rewizji kampanii z panelu (dziś `create_email_campaign_revision`, service_role),
+  prawdziwa pauza z wznowieniem (wymaga zmiany `claim_email_batch`), rejestracja z opt-in marketingu.
+  Panel kampanii (#45, migracja `0111`): `/admin/kampanie` — rewizje
+  (filtr statusu, slug, kursor) z liczbami odbiorców według statusu (bez adresów),
+  `/admin/kampanie/[id]` — podgląd treści w każdym języku (walidacja jak worker,
+  `src/lib/admin/campaigns.ts`), rewizje sluga, „Aktywuj rewizję”/„Zatrzymaj wysyłkę” z dialogiem
+  (`admin_activate_email_campaign`/`admin_cancel_email_campaign`: is_admin, CAS
+  `p_expected_status` → `STALE_STATE`, `INVALID_TRANSITION`, skutek = RPC z 0101, audyt
+  `email_campaign.*` bez treści i odbiorców). Bez `EMAIL_FROM` + `EMAIL_SENDER_*` +
+  `EMAIL_UNSUBSCRIBE_SECRET` (`campaignSendingReady`): jawny komunikat, akcja aktywacji odmawia
+  przed bazą, `/api/maintenance` nie woła `process_email_campaigns`. Dowód: `rls.sql` sekcja
+  AC45 (kontrola ujemna bez CAS), unit `admin-email-campaigns` (kontrole ujemne bramki nadawcy),
+  E2E `admin-email-campaigns`, `admin-a11y`.
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
@@ -1104,8 +1133,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
   `admin-a11y` (nowe trasy). **Do zatwierdzenia przez właściciela (#40):** okno odwołania
   6 mies., termin rozpatrzenia 14 dni, retencja 12 mies., zakres publikacji i przekazywania do
-  bazy DSA, treść prawna o procedurze. **Otwarte:** harmonogram czyszczenia (po #40), odwołanie
-  zgłaszającego od cofnięcia ograniczenia, retencja `audit_logs` z uzasadnieniami.
+  bazy DSA, treść prawna o procedurze. Harmonogram czyszczenia: `/api/maintenance` woła
+  `dsa_retention_run` tylko za flagą `DSA_RETENTION_MODE` (`dry-run`/`apply`, domyślnie
+  wyłączone, liczniki w odpowiedzi; `src/lib/admin/dsa-retention-mode.ts`). Odwołanie
+  zgłaszającego od cofnięcia ograniczenia (migracja `0109`): ręczne cofnięcie
+  wysyła `reportRestored` w języku zgłaszającego, termin od wysłania, formularz na
+  `/zglos-tresc/sprawa` (znacznik treści prawnej), `submit_report_restoration_appeal`,
+  rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
+  autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
+  retencja `audit_logs` z uzasadnieniami.
 - [~] Rejestr naruszeń RODO (#490, migracja `0106`): `/admin/naruszenia`
   (tylko admin). Wpis = incydent bezpieczeństwa albo naruszenie danych osobowych: czas
   stwierdzenia (termin 72 h liczony od niego — `breachDeadline` w `src/lib/admin/breach.ts`),
@@ -1209,8 +1245,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
-  cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
-  `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
+  cron kopii/odtworzenia), blokada HTTP w testach, odmiana i aliasy miast w SQL.
+  Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
+  wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
+  `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
+  jak w `0091`. Demo: lustro `src/lib/search-fold.ts`. Pomiar przed/po: `docs/railway/OPERATIONS.md` §3.
+  Dowód: `rls.sql` sekcja SU47 (kontrola ujemna: stary ILIKE). Raporty CSP: `report-uri`/`report-to`
+  → `POST /api/csp-report` (tylko log: dyrektywa, origin zasobu, ścieżka bez query/ID; 16 KB, 20/min
+  z adresu, 300 wpisów/min na proces; `src/lib/security/csp-report.ts`), `Referrer-Policy:
+  strict-origin-when-cross-origin` globalnie — test `csp-report`.
   Cutover i rollback (#16/#18): runbook `docs/railway/CUTOVER_ROLLBACK.md` (kolejność: bazy →
   Better Auth → Resend/cron → `APP_MODE` na decyzję właściciela; rollback = wyzerowanie zmiennych
   w odwrotnej kolejności albo redeploy ostatniego dobrego wdrożenia, baza tylko do przodu;

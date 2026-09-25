@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0109_public_job_company_links.sql — SEO (CLAUDE.md, Etap 2): JobPosting
+-- 0112_public_job_company_links.sql — SEO (CLAUDE.md, Etap 2): JobPosting
 -- `hiringOrganization.sameAs` / `logo` z danych firmy.
 --
 -- get_public_job zwraca dodatkowo `company_website` i `company_logo_url` (nowe kolumny na
