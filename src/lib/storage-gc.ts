@@ -5,7 +5,7 @@ import { rpcRows } from '@/lib/db/sql';
 import type { createRailwayBucket } from '@/lib/storage/railway-bucket';
 
 /**
- * Dzienny GC prywatnego bucketu CV (#17, migracja 0113).
+ * Dzienny GC prywatnego bucketu CV (#17, migracja 0117).
  *
  * Przebieg porównuje listę obiektów bucketu z wierszami `files` partiami (strona listy =
  * jedna krótka transakcja `storage_gc_page`, kursor w bazie):

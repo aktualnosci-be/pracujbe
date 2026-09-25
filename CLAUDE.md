@@ -1349,7 +1349,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `AWS_S3_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_URL_STYLE`) +
   `FILE_DOWNLOAD_SECRET`; `/api/health` → `fileBucket`/`fileDownloadSecret`. Bez bucketu: demo =
   `DEMO_UNAVAILABLE`, produkcja = błąd. Opis: `docs/railway/STORAGE_ADAPTER_CONTRACT.md`.
-  GC sierot (#17, migracja `0113`): dzienny przebieg w `/api/maintenance` (`src/lib/storage-gc.ts`,
+  GC sierot (#17, migracja `0117`): dzienny przebieg w `/api/maintenance` (`src/lib/storage-gc.ts`,
   `list` w adapterze) — obiekt bez wiersza `files` po 24 h → `storage_deletion_queue`, wiersz bez
   obiektu → tylko licznik; partie z kursorem (`storage_gc_sweeps`), dry-run domyślnie
   (`STORAGE_GC_MODE=delete` = kasowanie), same liczniki w odpowiedzi. Opis: `docs/DATA_RETENTION.md` §3a.

@@ -4,7 +4,7 @@ import { realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
 
 /**
- * #17 — dzienny GC bucketu CV na PostgreSQL 16 (migracja 0113) z bucketem w pamięci:
+ * #17 — dzienny GC bucketu CV na PostgreSQL 16 (migracja 0117) z bucketem w pamięci:
  * obiekt bez wiersza `files` → kolejka usuwania (tylko w trybie delete, po karencji),
  * wiersz bez obiektu → licznik, partie z kursorem, dzienny rytm, dzierżawa, uprawnienia.
  */

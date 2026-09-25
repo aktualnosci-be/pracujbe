@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0113_storage_gc.sql — #17: dzienny GC plików prywatnego bucketu CV (Railway).
+-- 0117_storage_gc.sql — #17: dzienny GC plików prywatnego bucketu CV (Railway).
 -- NUMER TYMCZASOWY — ostateczny nada integrator.
 --
 -- Przebieg (sweep) porównuje listę obiektów bucketu z wierszami `files`, partiami w
