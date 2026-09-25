@@ -1229,8 +1229,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
-  cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
-  `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
+  cron kopii/odtworzenia), blokada HTTP w testach, odmiana i aliasy miast w SQL.
+  Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
+  wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
+  `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
+  jak w `0091`. Demo: lustro `src/lib/search-fold.ts`. Pomiar przed/po: `docs/railway/OPERATIONS.md` §3.
+  Dowód: `rls.sql` sekcja SU47 (kontrola ujemna: stary ILIKE). Raporty CSP: `report-uri`/`report-to`
+  → `POST /api/csp-report` (tylko log: dyrektywa, origin zasobu, ścieżka bez query/ID; 16 KB, 20/min
+  z adresu, 300 wpisów/min na proces; `src/lib/security/csp-report.ts`), `Referrer-Policy:
+  strict-origin-when-cross-origin` globalnie — test `csp-report`.
   Cutover i rollback (#16/#18): runbook `docs/railway/CUTOVER_ROLLBACK.md` (kolejność: bazy →
   Better Auth → Resend/cron → `APP_MODE` na decyzję właściciela; rollback = wyzerowanie zmiennych
   w odwrotnej kolejności albo redeploy ostatniego dobrego wdrożenia, baza tylko do przodu;
