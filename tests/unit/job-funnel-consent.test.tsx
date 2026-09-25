@@ -209,3 +209,16 @@ describe('apply_started po wycofaniu zgody', () => {
     expect(pendingFunnelEventCount()).toBe(1); // tylko wyświetlenie szczegółu
   });
 });
+
+describe('bundel strony oferty (#575)', () => {
+  it('klient lejka czyta zgodę bez Server Action i store’u banera (budżet JS strony oferty)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const read = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf8');
+    const imports = (code: string) => [...code.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
+    for (const banned of ['@/lib/consent', '@/lib/consent-store', '@/lib/actions/consent']) {
+      expect(imports(read('src/lib/job-funnel/client.ts'))).not.toContain(banned);
+    }
+    expect(imports(read('src/lib/consent-cookie.ts'))).toEqual([]);
+  });
+});

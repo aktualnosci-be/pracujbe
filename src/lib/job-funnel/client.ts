@@ -1,6 +1,5 @@
 import { allowsTrackingOnPath } from '@/lib/analytics/route-policy';
-import { getConsent, type ConsentRecord } from '@/lib/consent';
-import { CONSENT_CHANGE_EVENT } from '@/lib/consent-store';
+import { CONSENT_CHANGE_EVENT, getConsent, type ConsentRecord } from '@/lib/consent-cookie';
 
 import { FUNNEL_ENDPOINT, type FunnelEvent } from './events';
 

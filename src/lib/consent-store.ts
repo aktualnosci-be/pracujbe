@@ -20,6 +20,7 @@ import {
   type ConsentSource,
 } from './consent';
 import { allowsTrackingOnPath } from './analytics/route-policy';
+import { CONSENT_CHANGE_EVENT } from './consent-cookie';
 
 /** Measurement ID GA (publiczny, wstrzykiwany do bundle klienta). */
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
@@ -28,8 +29,8 @@ const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 const GA_COOKIE_PREFIXES = ['_ga', '_gid', '_gat'] as const;
 const META_COOKIE_PREFIXES = ['_fbp', '_fbc'] as const;
 
-/** Zdarzenie DOM emitowane po zmianie zgody (detail: ConsentRecord). */
-export const CONSENT_CHANGE_EVENT = 'pracujbe:consent-change';
+/** Zdarzenie DOM emitowane po zmianie zgody (detail: ConsentRecord) — definicja w consent-cookie. */
+export { CONSENT_CHANGE_EVENT };
 
 /**
  * Zdarzenie DOM proszące o otwarcie panelu ustawień cookies.
