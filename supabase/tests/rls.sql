@@ -9236,6 +9236,123 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
+-- AC45. Panel admina kampanii e-mail (#45, 0111): admin_activate/cancel_email_campaign —
+--       tylko admin (is_admin), CAS statusu (STALE_STATE), macierz przejść
+--       (INVALID_TRANSITION), skutek = istniejące RPC z 0101, audyt bez treści i odbiorców.
+-- ============================================================================
+reset role; reset app.current_uid;
+select public.create_email_campaign_revision('ac45-news', :'CMJOBS'::jsonb) as ac_rev1 \gset
+
+-- AC45-1: anon bez EXECUTE; kandydat i pracodawca → PERMISSION_DENIED, bez zmiany stanu.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''draft'')', :'ac_rev1'),
+  'permission denied', 'AC45-1 anon nie wywoła aktywacji');
+reset role;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''draft'')', :'ac_rev1'),
+  'PERMISSION_DENIED', 'AC45-1b kandydat nie aktywuje');
+select pg_temp.expect_error(format('select public.activate_email_campaign(%L)', :'ac_rev1'),
+  'permission denied', 'AC45-1c kandydat nie wywoła RPC service_role z 0101');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_cancel_email_campaign(%L, ''draft'')', :'ac_rev1'),
+  'PERMISSION_DENIED', 'AC45-1d pracodawca nie zatrzyma');
+select pg_temp.expect_error('select count(*) from public.email_campaigns', 'permission denied',
+  'AC45-1e pracodawca nie czyta tabeli kampanii');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status from public.email_campaigns where id = :'ac_rev1') = 'draft',
+  'AC45-1f odmowy nie zmieniły rewizji');
+
+-- AC45-2: CAS — admin widział inny status → STALE_STATE, bez zmiany i bez audytu.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''active'')', :'ac_rev1'),
+  'STALE_STATE', 'AC45-2 nieaktualny status → STALE_STATE');
+select pg_temp.expect_error(format('select public.admin_cancel_email_campaign(%L, null)', :'ac_rev1'),
+  'STALE_STATE', 'AC45-2b brak oczekiwanego statusu → STALE_STATE');
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''draft'')', gen_random_uuid()),
+  'NOT_FOUND', 'AC45-2c nieistniejąca rewizja → NOT_FOUND');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'ac_rev1') = 'draft'
+  and not exists (select 1 from public.audit_logs where entity_id = :'ac_rev1'::uuid),
+  'AC45-2d po odmowie: szkic bez zmian, brak wpisu w dzienniku');
+
+-- AC45-3: aktywacja szkicu przez admina + audyt (aktor = admin, bez treści kampanii).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_activate_email_campaign(:'ac_rev1', 'draft');
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''active'')', :'ac_rev1'),
+  'INVALID_TRANSITION', 'AC45-3 aktywna rewizja nie jest ponownie aktywowana');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'active' and activated_at is not null from public.email_campaigns where id = :'ac_rev1'),
+  'AC45-3b szkic aktywny');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(actor_id = :'ADMIN'::uuid and entity_type = 'email_campaign'
+                                    and before_data ->> 'status' = 'draft' and after_data ->> 'status' = 'active'
+                                    and not (after_data ? 'content') and not (before_data ? 'content'))
+     from public.audit_logs where action = 'email_campaign.activated' and entity_id = :'ac_rev1'::uuid),
+  'AC45-3c audyt aktywacji: admin, statusy, bez treści');
+
+-- AC45-4: aktywacja nowszej rewizji zastępuje poprzednią (skutek 0101), audyt ją wymienia.
+select public.create_email_campaign_revision('ac45-news', :'CMJOBS'::jsonb) as ac_rev2 \gset
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_activate_email_campaign(:'ac_rev2', 'draft');
+select pg_temp.expect_error(format('select public.admin_cancel_email_campaign(%L, ''superseded'')', :'ac_rev1'),
+  'INVALID_TRANSITION', 'AC45-4 zastąpionej rewizji nie da się zatrzymać');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'ac_rev1') = 'superseded'
+  and (select status from public.email_campaigns where id = :'ac_rev2') = 'active'
+  and (select after_data -> 'superseded' -> 0 ->> 'id' from public.audit_logs
+        where action = 'email_campaign.activated' and entity_id = :'ac_rev2'::uuid) = :'ac_rev1',
+  'AC45-4b poprzednia rewizja zastąpiona i wymieniona w audycie');
+
+-- AC45-5: zatrzymanie aktywnej rewizji — zakolejkowany list wygaszony, odbiorca cancelled,
+--         audyt z liczbą wygaszonych listów; ponowienie ze starym statusem → STALE_STATE.
+insert into public.email_deliveries(profile_id, to_email, template, status, entity_type, entity_id,
+                                    idempotency_key, campaign_id)
+values (:'CMN1', 'cmn1@test.be', 'newsletter', 'queued', 'email_campaign', :'ac_rev2',
+        'campaign:' || :'ac_rev2' || ':' || :'CMN1', :'ac_rev2')
+returning id as ac_delivery \gset
+insert into public.email_campaign_recipients(campaign_id, profile_id, status, delivery_id)
+values (:'ac_rev2', :'CMN1', 'queued', :'ac_delivery');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_cancel_email_campaign(:'ac_rev2', 'active');
+select pg_temp.expect_error(format('select public.admin_cancel_email_campaign(%L, ''active'')', :'ac_rev2'),
+  'STALE_STATE', 'AC45-5 drugi admin ze starym widokiem → STALE_STATE');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'ac_rev2') = 'cancelled'
+  and (select status::text || '/' || error_message from public.email_deliveries where id = :'ac_delivery')
+      = 'failed/suppressed_campaign_inactive'
+  and (select status || '/' || reason from public.email_campaign_recipients
+        where campaign_id = :'ac_rev2' and profile_id = :'CMN1') = 'cancelled/cancelled',
+  'AC45-5b rewizja zatrzymana, list wygaszony, odbiorca cancelled');
+select pg_temp.assert(
+  (select (after_data ->> 'suppressed_deliveries')::int = 1 and actor_id = :'ADMIN'::uuid
+          and not (after_data ? 'profile_id') and not (after_data ? 'to_email')
+     from public.audit_logs where action = 'email_campaign.cancelled' and entity_id = :'ac_rev2'::uuid),
+  'AC45-5c audyt zatrzymania: liczba listów, bez danych odbiorcy');
+
+-- AC45-6: KONTROLA UJEMNA — wersja bez porównania statusu przepuściłaby decyzję opartą
+--         na nieaktualnym widoku (asercja AC45-2 wykrywa brak CAS).
+begin;
+create or replace function public.admin_cancel_email_campaign(p_campaign_id uuid, p_expected_status text)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception 'PERMISSION_DENIED' using errcode = '42501'; end if;
+  perform public.cancel_email_campaign(p_campaign_id);
+end $$;
+select public.create_email_campaign_revision('ac45-neg', :'CMJOBS'::jsonb) as ac_neg \gset
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_cancel_email_campaign(:'ac_neg', 'active');
+reset role;
+select pg_temp.assert((select status from public.email_campaigns where id = :'ac_neg') = 'cancelled',
+  'AC45-6 bez CAS nieaktualny widok (active ≠ draft) zatrzymuje rewizję — test wykrywa błąd');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- SU47. Wyszukiwanie ofert bez diakrytyków i z literalnym %/_/\ (0110, #47):
 --       get_public_jobs/_count/facety składają tytuł i miasto przez search_fold
 --       (lower + unaccent) i escapują wpis użytkownika. Prefiltr po indeksach nie
