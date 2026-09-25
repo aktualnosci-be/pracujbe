@@ -3,6 +3,7 @@ import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 
 import { jobImportModel } from '@/lib/ai-import/config';
+import type { AiTokenUsage } from '@/lib/ai/pricing';
 import { JOB_EXTRACTION_JSON_SCHEMA } from '@/lib/ai-import/schema';
 import { CATEGORY_KEYS, CONTRACT_TYPES } from '@/lib/validation/candidate';
 
@@ -34,10 +35,21 @@ export class ExtractorError extends Error {
   }
 }
 
+/**
+ * Zużycie zgłaszane przez ekstraktor (#36) — tokeny z odpowiedzi dostawcy trafiają do
+ * rozliczenia budżetu AI. Bez treści: same liczby.
+ */
+export interface ExtractionHooks {
+  onUsage?: (usage: AiTokenUsage) => void;
+}
+
 /** Zwraca SUROWY (niezwalidowany) obiekt odpowiedzi — walidacja jest po stronie wywołującego. */
 export interface JobExtractor {
-  extract(input: ExtractionInput): Promise<unknown>;
+  extract(input: ExtractionInput, hooks?: ExtractionHooks): Promise<unknown>;
 }
+
+/** Limit tokenów odpowiedzi — także górna granica wyjścia w rezerwacji budżetu. */
+export const JOB_EXTRACTION_MAX_TOKENS = 8000;
 
 export const EXTRACTION_SYSTEM_PROMPT = [
   'You extract structured data from a single job advertisement for an employer who is drafting the same offer on a recruitment platform.',
@@ -94,12 +106,12 @@ export class AnthropicJobExtractor implements JobExtractor {
     this.client = client ?? new Anthropic({ timeout: 60_000, maxRetries: 1 });
   }
 
-  async extract(input: ExtractionInput): Promise<unknown> {
+  async extract(input: ExtractionInput, hooks?: ExtractionHooks): Promise<unknown> {
     let response: Anthropic.Message;
     try {
       response = await this.client.messages.create({
         model: jobImportModel(),
-        max_tokens: 8000,
+        max_tokens: JOB_EXTRACTION_MAX_TOKENS,
         system: EXTRACTION_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: buildUserContent(input) }],
         output_config: {
@@ -111,6 +123,18 @@ export class AnthropicJobExtractor implements JobExtractor {
     } catch (e) {
       if (e instanceof Anthropic.RateLimitError) throw new ExtractorError('rateLimited');
       throw new ExtractorError('failed');
+    }
+
+    // Zużycie jest naliczane także przy odmowie — zgłaszamy je przed oceną odpowiedzi. Bez
+    // `usage` nic nie zgłaszamy: budżet rozliczy wtedy pełną kwotę rezerwacji (zachowawczo).
+    const usage = response.usage as Anthropic.Usage | undefined;
+    if (usage) {
+      hooks?.onUsage?.({
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
+        cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
+      });
     }
 
     if (response.stop_reason === 'refusal') throw new ExtractorError('refused');
@@ -135,7 +159,9 @@ export class AnthropicJobExtractor implements JobExtractor {
  * sprawdzenia, nigdy publikacją).
  */
 export class FixtureJobExtractor implements JobExtractor {
-  async extract(input: ExtractionInput): Promise<unknown> {
+  async extract(input: ExtractionInput, hooks?: ExtractionHooks): Promise<unknown> {
+    // Atrapa nic nie kosztuje, ale przechodzi tę samą ścieżkę rozliczenia budżetu (#36).
+    hooks?.onUsage?.({ inputTokens: 0, outputTokens: 0 });
     const material =
       input.kind === 'text' ? input.text : Buffer.from(input.base64, 'base64').toString('latin1');
     const injected = /ignore (all )?previous instructions|publish (this|now)/i.test(material);

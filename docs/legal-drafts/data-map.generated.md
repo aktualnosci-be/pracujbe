@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
+Tabele w migracjach: 93; z danymi osobowymi: 58; bez danych osobowych: 35.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -1036,6 +1036,8 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 
 | Tabela | Uzasadnienie |
 |---|---|
+| `public.ai_budget_limits` | Słownik/konfiguracja (globalne limity kosztów AI, #36) — bez danych osobowych. |
+| `public.ai_usage_ledger` | Liczniki wywołań modeli AI (funkcja, model, wynik, tokeny, koszt, doba) — bez treści i identyfikatorów osób/firm (#36). |
 | `public.categories` | Słownik/konfiguracja (kategorie) — bez danych osobowych. |
 | `public.certificates` | Słownik/konfiguracja (certyfikaty) — bez danych osobowych. |
 | `public.checkout_intents` | Martwy schemat billingu. |

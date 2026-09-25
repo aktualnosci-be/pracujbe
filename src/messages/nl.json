@@ -656,7 +656,8 @@
     "reviewerConflict": "Het bezwaar wordt behandeld door een andere beheerder dan de auteur van de beslissing.",
     "jobImportSensitiveData": "De vacature bevat een identificatienummer van een persoon of document, daarom hebben we ze niet geïmporteerd. Vul het formulier handmatig in.",
     "screeningReviewRequired": "De vacature bevat een vraag die het team van het portaal vóór publicatie moet controleren. Je kunt ze publiceren zodra de vraag is goedgekeurd of nadat je ze hebt aangepast.",
-    "screeningQuestionRejected": "Een van de vragen is niet goedgekeurd. Pas ze aan of verwijder ze om de vacature te publiceren."
+    "screeningQuestionRejected": "Een van de vragen is niet goedgekeurd. Pas ze aan of verwijder ze om de vacature te publiceren.",
+    "aiBudgetExceeded": "Importeren uit een vacature is tijdelijk niet beschikbaar. Vul het formulier handmatig in of probeer het later opnieuw."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -2127,7 +2128,27 @@
     "breachNoticeRecipientsRequired": "Vul minstens één ontvanger in.",
     "breachNoticeRecipientsMalformed": "Ongeldig adres of ongeldige ID: {list}.",
     "breachNoticeContentRequired": "Vul onderwerp en tekst in minstens één taal in.",
-    "breachNoticeNotAllowed": "Een kennisgeving kan worden verstuurd voor een open inbreuk in verband met persoonsgegevens met de opgeslagen beslissing „we brengen de betrokkenen op de hoogte”."
+    "breachNoticeNotAllowed": "Een kennisgeving kan worden verstuurd voor een open inbreuk in verband met persoonsgegevens met de opgeslagen beslissing „we brengen de betrokkenen op de hoogte”.",
+    "navAiCosts": "AI-kosten",
+    "aiCostsTitle": "AI-kosten",
+    "aiCostsSubtitle": "Uitgaven aan AI-modelaanroepen ten opzichte van het globale budget. Alleen lezen.",
+    "aiCostsBudget": "Budget",
+    "aiCostsToday": "Vandaag",
+    "aiCostsMonth": "Deze maand",
+    "aiCostsOfLimit": "van {limit} ({percent}%)",
+    "aiCostsNoLimit": "Geen limiet ingesteld — aanroepen worden geblokkeerd",
+    "aiCostsNearLimit": "Minstens 80% van de limiet is gebruikt.",
+    "aiCostsExhausted": "Limiet bereikt — nieuwe aanroepen worden geblokkeerd.",
+    "aiCostsStale": "Reserveringen langer dan 15 minuten niet verrekend: {count}",
+    "aiCostsHowCounted": "De kosten worden berekend op basis van de tokens die de aanbieder meldt en de prijslijst in de code. Een niet-verrekende reservering telt volledig mee. Dag en maand volgen de tijd in Brussel.",
+    "aiCostsLimitsHint": "De eigenaar stelt de limieten in de database in (zie docs/AI_BUDGET.md). Een limiet van 0 schakelt alle AI-functies uit.",
+    "aiCostsDaily": "Laatste {days} dagen",
+    "aiCostsMonthly": "Maanden",
+    "aiCostsNoData": "Geen aanroepen in deze periode.",
+    "aiCostsRow": "Aanroepen: {calls} · geslaagd: {ok} · mislukt: {notOk} · bezig: {open} · invoer-/uitvoertokens: {input} / {output}",
+    "aiCostsCalls": "aanroepen: {calls}",
+    "aiCostsFeatureJobImport": "Vacature importeren",
+    "aiCostsFeatureTranslation": "Inhoud vertalen"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",

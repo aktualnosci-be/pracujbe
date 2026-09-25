@@ -741,7 +741,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   wszystko do sprawdzenia, bez zapisu. Env: `AI_JOB_IMPORT_ENABLED`, `ANTHROPIC_API_KEY`,
   opcjonalnie `AI_JOB_IMPORT_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
   produkcją (E2E `job-import.spec`). Research, koszty, prywatność: `docs/AI_JOB_IMPORT.md`.
-  **Otwarte:** globalny budżet i raport kosztów (#36), DPA/retencja dostawcy (decyzja właściciela).
+  Globalny budżet AI (#36, migracja `0108`, `docs/AI_BUDGET.md`): każde wywołanie modelu przez
+  `withAiBudget` (`src/lib/ai/budget.ts`) — rezerwacja górnej granicy kosztu PRZED API
+  (`ai_budget_reserve`, blokada doradcza, limit doby i miesiąca w Europe/Brussels), rozliczenie
+  tokenami z `usage` (`ai_budget_settle`; bez `usage` = pełna rezerwacja). Fail-closed: limit
+  przekroczony/0/brak, brak bazy zadań albo błąd = brak wywołania, `AI_BUDGET_EXCEEDED`. Limity
+  startowe 10 USD/dobę i 100 USD/miesiąc (`ai_budget_limits`, zmiana tylko w bazie). Rejestr
+  `ai_usage_ledger` bez treści i identyfikatorów osób/firm. Raport tylko do odczytu
+  `/admin/koszty-ai`; czujki `ai_budget_*` w `/api/health/ops`. Strażnik: funkcja `behind_flag`
+  w inwentarzu musi mieć `costBudgeted: true`. Hook dla tłumaczeń (#514) opisany w
+  `docs/AI_BUDGET.md`. Dowód: `rls.sql` sekcja AIB36 (kontrola ujemna), unit `ai-budget`,
+  `ai-budget-report`. **Otwarte:** DPA/retencja dostawcy (decyzja właściciela), limity per firma
+  poza limiterem importu, podpięcie tłumaczeń po scaleniu #514.
   Minimalizacja (#500): przed modelem tylko `<main>`/`<article>` i `JobPosting` z listy pól
   (`src/lib/ai-import/minimize.ts`), e-maile/telefony/NISS/numery dokumentów zastąpione
   znacznikiem, w prompcie sam host; `contactEmail` poza schematem (ręcznie w kroku 9). Wyjście:

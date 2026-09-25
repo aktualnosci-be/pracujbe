@@ -120,4 +120,19 @@ describe('inwentarz AI (#489)', () => {
     // Kontrola ujemna reguły.
     expect("await supabase.rpc('transition_application', { p_status: 'rejected' })").toMatch(forbidden);
   });
+
+  it('funkcje „behind_flag” przechodzą przez globalny budżet kosztów (#36)', () => {
+    const unbudgeted = AI_FEATURES.filter((f) => f.status === 'behind_flag' && !f.costBudgeted).map((f) => f.id);
+    expect(unbudgeted).toEqual([]);
+    // Kontrola ujemna reguły: wpis bez budżetu jest wykrywany.
+    const bad = { ...AI_FEATURES[0]!, status: 'behind_flag' as const, costBudgeted: false };
+    expect([bad].filter((f) => f.status === 'behind_flag' && !f.costBudgeted)).toHaveLength(1);
+  });
+
+  it('akcja importu owija ekstraktor budżetem przed wywołaniem modelu (#36)', () => {
+    const action = readFileSync(join(ROOT, 'src/lib/actions/job-import.ts'), 'utf8');
+    expect(action).toMatch(/withJobImportBudget\(logged, model\)/);
+    // Płatny dostawca nie ma ścieżki z pominięciem budżetu: wyjątek tylko dla atrapy bez bazy.
+    expect(action).toMatch(/provider === 'fixture' && !isServiceDatabaseConfigured\(\) \? logged : withJobImportBudget/);
+  });
 });

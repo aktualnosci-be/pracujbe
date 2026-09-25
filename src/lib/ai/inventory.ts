@@ -49,6 +49,12 @@ export interface AiFeature {
   decidesAboutPerson: false;
   /** Pisze log użycia bez treści i PII (`recordAiUsage`). */
   usageLogged: boolean;
+  /**
+   * Każde wywołanie przechodzi przez globalny budżet kosztów (#36, `withAiBudget` w
+   * `src/lib/ai/budget.ts`): rezerwacja przed API, odmowa po przekroczeniu limitu. Wymagane
+   * (`true`) dla funkcji ze statusem `behind_flag` — pilnuje `ai-inventory.test.ts`.
+   */
+  costBudgeted: boolean;
 }
 
 export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation'] as const;
@@ -70,6 +76,7 @@ export const AI_FEATURES: readonly AiFeature[] = [
       'Szkic w kreatorze (src/lib/actions/job-import.ts nie woła publish_job); publikację wykonuje rekruter przyciskiem „Opublikuj” (publish_job).',
     decidesAboutPerson: false,
     usageLogged: true,
+    costBudgeted: true,
   },
   {
     id: 'content_translation',
@@ -86,6 +93,8 @@ export const AI_FEATURES: readonly AiFeature[] = [
       'Walidacja automatyczna i korekta ręczna po fakcie (PR #514) — do potwierdzenia po scaleniu, czy tłumaczenie jest publikowane bez przeglądu.',
     decidesAboutPerson: false,
     usageLogged: false,
+    // Hook gotowy: `withAiBudget({ feature: 'content_translation', … })` (docs/AI_BUDGET.md).
+    costBudgeted: false,
   },
 ];
 

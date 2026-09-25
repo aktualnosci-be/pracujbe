@@ -35,9 +35,9 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const appPool = domainPoolStats();
-  const evaluation = evaluateOps(result.metrics, appPool);
+  const evaluation = evaluateOps(result.metrics, appPool, result.aiBudget);
   return Response.json(
-    { ...evaluation, checkedAt, metrics: result.metrics, appPool },
+    { ...evaluation, checkedAt, metrics: result.metrics, appPool, aiBudget: result.aiBudget ?? null },
     { status: evaluation.status === 'ok' ? 200 : 503, headers },
   );
 }

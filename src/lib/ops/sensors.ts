@@ -1,5 +1,7 @@
 import { z } from 'zod/v3';
 
+import { aiBudgetLevel, type AiBudgetStatus } from '@/lib/admin/ai-costs';
+
 /**
  * Czujki operacyjne (#47). Baza zwraca same liczby (`public.ops_metrics()`, 0096);
  * tutaj — walidacja kształtu i progi alarmowe. Moduł jest czysty (bez I/O), więc
@@ -59,7 +61,11 @@ export type OpsSignal =
   | 'webhook_failed'
   | 'maintenance_lag'
   | 'db_connections'
-  | 'app_pool_waiting';
+  | 'app_pool_waiting'
+  | 'ai_budget_exhausted'
+  | 'ai_budget_near_limit'
+  | 'ai_budget_stale_reservation'
+  | 'ai_budget_unavailable';
 
 export interface OpsEvaluation {
   status: 'ok' | 'alert';
@@ -72,7 +78,15 @@ export function parseOpsMetrics(raw: unknown): OpsMetrics | null {
   return parsed.success ? parsed.data : null;
 }
 
-export function evaluateOps(metrics: OpsMetrics, pool: AppPoolStats | null = null): OpsEvaluation {
+/**
+ * @param aiBudget stan budżetu AI (#36, `ai_budget_status()` z 0108): `null` = odczyt się nie
+ *   udał (ostrzeżenie — rezerwacje i tak odmawiają przy błędzie bazy), `undefined` = nie mierzono.
+ */
+export function evaluateOps(
+  metrics: OpsMetrics,
+  pool: AppPoolStats | null = null,
+  aiBudget?: AiBudgetStatus | null,
+): OpsEvaluation {
   const alerts: OpsSignal[] = [];
   const warnings: OpsSignal[] = [];
 
@@ -102,6 +116,17 @@ export function evaluateOps(metrics: OpsMetrics, pool: AppPoolStats | null = nul
 
   // Żądania czekające na połączenie puli procesu = pula za mała albo zablokowane zapytania.
   if (pool && pool.waiting > 0) warnings.push('app_pool_waiting');
+
+  // Budżet AI (#36): wyczerpany limit (albo limit 0 / brak limitu) = funkcje AI zablokowane →
+  // alarm; ≥ 80% limitu i rezerwacje bez rozliczenia = ostrzeżenia.
+  if (aiBudget === null) {
+    warnings.push('ai_budget_unavailable');
+  } else if (aiBudget) {
+    const levels = [aiBudgetLevel(aiBudget.day), aiBudgetLevel(aiBudget.month)];
+    if (levels.includes('exhausted')) alerts.push('ai_budget_exhausted');
+    else if (levels.includes('warning')) warnings.push('ai_budget_near_limit');
+    if (aiBudget.staleReservations > 0) warnings.push('ai_budget_stale_reservation');
+  }
 
   return { status: alerts.length > 0 ? 'alert' : 'ok', alerts, warnings };
 }

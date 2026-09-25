@@ -656,7 +656,8 @@
     "reviewerConflict": "Odwołanie rozpatruje inny administrator niż autor decyzji.",
     "jobImportSensitiveData": "Ogłoszenie zawiera numer identyfikacyjny osoby lub dokumentu, więc go nie zaimportowaliśmy. Wypełnij formularz ręcznie.",
     "screeningReviewRequired": "Oferta ma pytanie, które przed publikacją musi sprawdzić zespół portalu. Opublikujesz ją po akceptacji pytania albo po jego zmianie.",
-    "screeningQuestionRejected": "Jedno z pytań nie zostało zaakceptowane. Zmień je albo usuń, aby opublikować ofertę."
+    "screeningQuestionRejected": "Jedno z pytań nie zostało zaakceptowane. Zmień je albo usuń, aby opublikować ofertę.",
+    "aiBudgetExceeded": "Import z ogłoszenia jest chwilowo niedostępny. Wypełnij formularz ręcznie albo spróbuj później."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -2127,7 +2128,27 @@
     "breachNoticeRecipientsRequired": "Wpisz co najmniej jednego odbiorcę.",
     "breachNoticeRecipientsMalformed": "Nieprawidłowy adres lub identyfikator: {list}.",
     "breachNoticeContentRequired": "Wpisz temat i treść w co najmniej jednym języku.",
-    "breachNoticeNotAllowed": "Zawiadomienie można wysłać dla otwartego naruszenia danych osobowych z zapisaną decyzją „zawiadamiamy osoby”."
+    "breachNoticeNotAllowed": "Zawiadomienie można wysłać dla otwartego naruszenia danych osobowych z zapisaną decyzją „zawiadamiamy osoby”.",
+    "navAiCosts": "Koszty AI",
+    "aiCostsTitle": "Koszty AI",
+    "aiCostsSubtitle": "Wydatki na wywołania modeli AI względem globalnego budżetu. Tylko odczyt.",
+    "aiCostsBudget": "Budżet",
+    "aiCostsToday": "Dziś",
+    "aiCostsMonth": "Bieżący miesiąc",
+    "aiCostsOfLimit": "z {limit} ({percent}%)",
+    "aiCostsNoLimit": "Brak limitu — wywołania są blokowane",
+    "aiCostsNearLimit": "Wykorzystano co najmniej 80% limitu.",
+    "aiCostsExhausted": "Limit wyczerpany — nowe wywołania są blokowane.",
+    "aiCostsStale": "Rezerwacje bez rozliczenia od ponad 15 minut: {count}",
+    "aiCostsHowCounted": "Koszt liczony z tokenów zgłoszonych przez dostawcę i cennika w kodzie. Rezerwacja bez rozliczenia liczy się w pełnej kwocie. Doba i miesiąc według czasu w Brukseli.",
+    "aiCostsLimitsHint": "Limity ustawia właściciel w bazie danych (opis: docs/AI_BUDGET.md). Limit 0 wyłącza wszystkie funkcje AI.",
+    "aiCostsDaily": "Ostatnie {days} dni",
+    "aiCostsMonthly": "Miesiące",
+    "aiCostsNoData": "Brak wywołań w tym okresie.",
+    "aiCostsRow": "Wywołania: {calls} · udane: {ok} · nieudane: {notOk} · w toku: {open} · tokeny wejścia/wyjścia: {input} / {output}",
+    "aiCostsCalls": "wywołania: {calls}",
+    "aiCostsFeatureJobImport": "Import ogłoszenia",
+    "aiCostsFeatureTranslation": "Tłumaczenie treści"
   },
   "settings": {
     "title": "Preferencje powiadomień",

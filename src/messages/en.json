@@ -656,7 +656,8 @@
     "reviewerConflict": "The appeal must be reviewed by an administrator other than the one who made the decision.",
     "jobImportSensitiveData": "The listing contains a personal or document identification number, so we did not import it. Please fill in the form manually.",
     "screeningReviewRequired": "The job has a question that the portal team must check before publication. You can publish it once the question is approved or after you change it.",
-    "screeningQuestionRejected": "One of the questions was not approved. Change or remove it to publish the job."
+    "screeningQuestionRejected": "One of the questions was not approved. Change or remove it to publish the job.",
+    "aiBudgetExceeded": "Importing from a listing is temporarily unavailable. Please fill in the form manually or try again later."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -2127,7 +2128,27 @@
     "breachNoticeRecipientsRequired": "Enter at least one recipient.",
     "breachNoticeRecipientsMalformed": "Invalid address or ID: {list}.",
     "breachNoticeContentRequired": "Enter a subject and text in at least one language.",
-    "breachNoticeNotAllowed": "A notice can be sent for an open personal data breach with the saved decision “we notify the people affected”."
+    "breachNoticeNotAllowed": "A notice can be sent for an open personal data breach with the saved decision “we notify the people affected”.",
+    "navAiCosts": "AI costs",
+    "aiCostsTitle": "AI costs",
+    "aiCostsSubtitle": "Spending on AI model calls against the global budget. Read only.",
+    "aiCostsBudget": "Budget",
+    "aiCostsToday": "Today",
+    "aiCostsMonth": "This month",
+    "aiCostsOfLimit": "of {limit} ({percent}%)",
+    "aiCostsNoLimit": "No limit set — calls are blocked",
+    "aiCostsNearLimit": "At least 80% of the limit has been used.",
+    "aiCostsExhausted": "Limit reached — new calls are blocked.",
+    "aiCostsStale": "Reservations not settled for more than 15 minutes: {count}",
+    "aiCostsHowCounted": "Cost is calculated from the tokens reported by the provider and the price list in the code. An unsettled reservation counts in full. Day and month follow Brussels time.",
+    "aiCostsLimitsHint": "Limits are set by the owner in the database (see docs/AI_BUDGET.md). A limit of 0 turns off all AI features.",
+    "aiCostsDaily": "Last {days} days",
+    "aiCostsMonthly": "Months",
+    "aiCostsNoData": "No calls in this period.",
+    "aiCostsRow": "Calls: {calls} · successful: {ok} · failed: {notOk} · in progress: {open} · input/output tokens: {input} / {output}",
+    "aiCostsCalls": "calls: {calls}",
+    "aiCostsFeatureJobImport": "Listing import",
+    "aiCostsFeatureTranslation": "Content translation"
   },
   "settings": {
     "title": "Notification preferences",

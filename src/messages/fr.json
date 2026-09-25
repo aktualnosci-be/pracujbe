@@ -656,7 +656,8 @@
     "reviewerConflict": "Le recours est examiné par un autre administrateur que l’auteur de la décision.",
     "jobImportSensitiveData": "L’annonce contient un numéro d’identification de personne ou de document ; nous ne l’avons donc pas importée. Remplissez le formulaire manuellement.",
     "screeningReviewRequired": "L’offre contient une question que l’équipe du portail doit vérifier avant la publication. Vous pourrez la publier une fois la question acceptée ou après l’avoir modifiée.",
-    "screeningQuestionRejected": "Une des questions n’a pas été acceptée. Modifiez-la ou supprimez-la pour publier l’offre."
+    "screeningQuestionRejected": "Une des questions n’a pas été acceptée. Modifiez-la ou supprimez-la pour publier l’offre.",
+    "aiBudgetExceeded": "L’import depuis une annonce est temporairement indisponible. Remplissez le formulaire manuellement ou réessayez plus tard."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -2127,7 +2128,27 @@
     "breachNoticeRecipientsRequired": "Indiquez au moins un destinataire.",
     "breachNoticeRecipientsMalformed": "Adresse ou identifiant non valide : {list}.",
     "breachNoticeContentRequired": "Saisissez l’objet et le texte dans au moins une langue.",
-    "breachNoticeNotAllowed": "L’information peut être envoyée pour une violation de données personnelles ouverte avec la décision enregistrée « nous informons les personnes »."
+    "breachNoticeNotAllowed": "L’information peut être envoyée pour une violation de données personnelles ouverte avec la décision enregistrée « nous informons les personnes ».",
+    "navAiCosts": "Coûts IA",
+    "aiCostsTitle": "Coûts IA",
+    "aiCostsSubtitle": "Dépenses liées aux appels de modèles d’IA par rapport au budget global. Lecture seule.",
+    "aiCostsBudget": "Budget",
+    "aiCostsToday": "Aujourd’hui",
+    "aiCostsMonth": "Ce mois-ci",
+    "aiCostsOfLimit": "sur {limit} ({percent} %)",
+    "aiCostsNoLimit": "Aucune limite définie — les appels sont bloqués",
+    "aiCostsNearLimit": "Au moins 80 % de la limite a été utilisée.",
+    "aiCostsExhausted": "Limite atteinte — les nouveaux appels sont bloqués.",
+    "aiCostsStale": "Réservations non réglées depuis plus de 15 minutes : {count}",
+    "aiCostsHowCounted": "Le coût est calculé à partir des tokens déclarés par le fournisseur et de la grille tarifaire du code. Une réservation non réglée compte en entier. Le jour et le mois suivent l’heure de Bruxelles.",
+    "aiCostsLimitsHint": "Le propriétaire fixe les limites dans la base de données (voir docs/AI_BUDGET.md). Une limite de 0 désactive toutes les fonctions d’IA.",
+    "aiCostsDaily": "{days} derniers jours",
+    "aiCostsMonthly": "Mois",
+    "aiCostsNoData": "Aucun appel sur cette période.",
+    "aiCostsRow": "Appels : {calls} · réussis : {ok} · échoués : {notOk} · en cours : {open} · tokens entrée/sortie : {input} / {output}",
+    "aiCostsCalls": "appels : {calls}",
+    "aiCostsFeatureJobImport": "Import d’annonce",
+    "aiCostsFeatureTranslation": "Traduction du contenu"
   },
   "settings": {
     "title": "Préférences de notification",
