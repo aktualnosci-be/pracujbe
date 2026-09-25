@@ -29,6 +29,11 @@ export interface MailMessage {
 export interface MailSendOptions {
   /** UUID wiersza kolejki — klucz idempotencji ponowień. */
   idempotencyKey: string;
+  /**
+   * #628: termin całej wysyłki (krótszy niż dzierżawa wiersza). Po przerwaniu adapter nie
+   * zaczyna kolejnego żądania, a trwające żądanie HTTP przerywa, jeśli umie.
+   */
+  signal?: AbortSignal;
 }
 
 export type MailErrorCode = 'delivery_failed' | 'provider_unavailable';
