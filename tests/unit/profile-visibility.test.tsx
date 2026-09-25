@@ -152,3 +152,49 @@ describe('ProfileVisibilitySettings (#494)', () => {
     expect(screen.getByRole('link', { name: t.completeProfile })).toHaveAttribute('href', '/candidate/onboarding');
   });
 });
+
+describe('konto 16–17: widoczność tylko dla pełnoletnich (#576, LAUNCH-1)', () => {
+  // Szpiedzy akcji z poprzednich bloków zostają do końca pliku — tu potrzebna prawdziwa akcja.
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('baza odrzuca włączenie (AGE_ADULT_REQUIRED) → własny kod, nie „profil niekompletny”', async () => {
+    dbWith({ rpc: { fail: 'AGE_ADULT_REQUIRED: wyszukiwalność profilu tylko dla osób pełnoletnich' } });
+    expect(await setProfileVisibilityAction(true)).toEqual({ ok: false, error: 'AGE_ADULT_REQUIRED' });
+  });
+
+  it('adult=false: przełącznik wyłączony z wyjaśnieniem, bez wywołania akcji', async () => {
+    const action = vi.fn();
+    vi.spyOn(await import('@/lib/actions/profile-visibility'), 'setProfileVisibilityAction').mockImplementation(action);
+    render(
+      <NextIntlClientProvider locale="pl" messages={pl} timeZone="Europe/Brussels">
+        <ProfileVisibilitySettings initial={{ searchable: false, completed: true, changedAt: null }} adult={false} />
+      </NextIntlClientProvider>,
+    );
+    const toggle = screen.getByRole('switch', { name: t.toggleLabel });
+    expect(toggle).toBeDisabled();
+    expect(screen.getByTestId('profile-visibility-adult-only')).toHaveTextContent(t.requiresAdult);
+    fireEvent.click(toggle);
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('kontrola ujemna: adult=true (18+) z kompletnym profilem — przełącznik aktywny, bez wyjaśnienia', () => {
+    render(
+      <NextIntlClientProvider locale="pl" messages={pl} timeZone="Europe/Brussels">
+        <ProfileVisibilitySettings initial={{ searchable: false, completed: true, changedAt: null }} adult />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByRole('switch', { name: t.toggleLabel })).toBeEnabled();
+    expect(screen.queryByTestId('profile-visibility-adult-only')).toBeNull();
+  });
+
+  it('odmowa bazy mimo UI (stan nieznany): komunikat „tylko pełnoletni” przy przełączniku', async () => {
+    vi.spyOn(await import('@/lib/actions/profile-visibility'), 'setProfileVisibilityAction')
+      .mockResolvedValue({ ok: false, error: 'AGE_ADULT_REQUIRED' });
+    renderSettings({ searchable: false, completed: true, changedAt: null });
+    fireEvent.click(screen.getByRole('switch', { name: t.toggleLabel }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(t.requiresAdult));
+    expect(screen.getByRole('switch', { name: t.toggleLabel })).toHaveAttribute('aria-checked', 'false');
+  });
+});

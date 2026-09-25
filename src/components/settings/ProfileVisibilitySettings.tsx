@@ -19,17 +19,28 @@ import { cn } from '@/lib/utils';
  * serwer: bez optymistycznej zmiany, po błędzie zostaje poprzednia wartość z komunikatem
  * `role="alert"` (Invariant #11: jedno żądanie naraz, `aria-busy`). Włączenie wymaga
  * ukończonego profilu (sprawdza też RPC); wyłączenie jest dostępne zawsze.
+ *
+ * #576 (LAUNCH-1): włączenie tylko dla konta z potwierdzonym przedziałem 18+. Konto 16–17
+ * (`adult === false`) widzi wyłączony przełącznik z wyjaśnieniem; baza odrzuca włączenie
+ * niezależnie od UI (`AGE_ADULT_REQUIRED`). `adult` nieznane (błąd odczytu) = bez blokady w UI.
  */
-export function ProfileVisibilitySettings({ initial }: { initial: ProfileVisibility }): React.JSX.Element {
+export function ProfileVisibilitySettings({
+  initial,
+  adult,
+}: {
+  initial: ProfileVisibility;
+  adult?: boolean;
+}): React.JSX.Element {
   const t = useTranslations('profileVisibility');
   const format = useFormatter();
   const [searchable, setSearchable] = React.useState(initial.searchable);
   const [changedAt, setChangedAt] = React.useState<string | null>(initial.changedAt);
   const [pending, setPending] = React.useState(false);
-  const [error, setError] = React.useState<'save' | 'incomplete' | null>(null);
+  const [error, setError] = React.useState<'save' | 'incomplete' | 'age' | 'adult' | null>(null);
   const [saved, setSaved] = React.useState<boolean | null>(null);
 
-  const canEnable = initial.completed;
+  const minor = adult === false;
+  const canEnable = initial.completed && !minor;
   const disabled = pending || (!searchable && !canEnable);
 
   const toggle = async (): Promise<void> => {
@@ -41,7 +52,15 @@ export function ProfileVisibilitySettings({ initial }: { initial: ProfileVisibil
     try {
       const result = await setProfileVisibilityAction(next);
       if (!result.ok) {
-        setError(result.error === 'ONBOARDING_INCOMPLETE' ? 'incomplete' : 'save');
+        setError(
+          result.error === 'ONBOARDING_INCOMPLETE'
+            ? 'incomplete'
+            : result.error === 'AGE_ATTESTATION_REQUIRED'
+              ? 'age'
+              : result.error === 'AGE_ADULT_REQUIRED'
+                ? 'adult'
+                : 'save',
+        );
         return;
       }
       setSearchable(result.searchable);
@@ -131,7 +150,13 @@ export function ProfileVisibilitySettings({ initial }: { initial: ProfileVisibil
         </button>
       </div>
 
-      {!canEnable && !searchable ? (
+      {minor && !searchable ? (
+        <p className="mt-3 text-sm text-foreground" data-testid="profile-visibility-adult-only">
+          {t('requiresAdult')}
+        </p>
+      ) : null}
+
+      {!initial.completed && !searchable ? (
         <p className="mt-3 text-sm text-foreground">
           {t('requiresComplete')}{' '}
           <Link href="/candidate/onboarding" className="font-medium text-primary underline underline-offset-4">
@@ -148,7 +173,15 @@ export function ProfileVisibilitySettings({ initial }: { initial: ProfileVisibil
             className="mt-4 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>{error === 'incomplete' ? t('requiresComplete') : t('saveError')}</p>
+            <p>
+              {error === 'incomplete'
+                ? t('requiresComplete')
+                : error === 'age'
+                  ? t('requiresAge')
+                  : error === 'adult'
+                    ? t('requiresAdult')
+                    : t('saveError')}
+            </p>
           </div>
         ) : null}
         {saved !== null ? (

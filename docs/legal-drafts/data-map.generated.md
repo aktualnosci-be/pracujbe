@@ -6,14 +6,14 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 97; z danymi osobowymi: 61; bez danych osobowych: 36.
+Tabele w migracjach: 99; z danymi osobowymi: 63; bez danych osobowych: 36.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
 | Czynność | Co robi kod | Tabele | Usługi zewnętrzne | Retencja/usuwanie w kodzie |
 |---|---|---|---|---|
-| Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.document_acceptances`, `public.profiles` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile). |
-| Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.candidate_visibility_events`, `public.saved_jobs` | Railway | Kod nie usuwa danych — do ustalenia |
+| Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.age_policy`, `public.candidate_age_attestations`, `public.document_acceptances`, `public.profiles` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile). |
+| Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_age_attestations`, `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.candidate_visibility_events`, `public.saved_jobs` | Railway | Kod nie usuwa danych — do ustalenia |
 | Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.storage_deletion_queue`, `public.storage_gc_sweeps` | Railway | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona. |
 | Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
 | Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, EmailLabs, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
@@ -24,7 +24,7 @@ Tabele w migracjach: 97; z danymi osobowymi: 61; bez danych osobowych: 36.
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Kod nie usuwa danych — do ustalenia |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora). | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Formularz kontaktu (`support-contact`) | Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt. | `public.contact_messages` | Railway, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
-| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Discord (webhook kanału błędów), Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
+| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.age_policy`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Discord (webhook kanału błędów), Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
 | Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
@@ -273,6 +273,17 @@ Tabele w migracjach: 97; z danymi osobowymi: 61; bez danych osobowych: 36.
 | `identifier` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `database/auth/0057_better_auth_core.sql` |
 | `value` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `database/auth/0057_better_auth_core.sql` |
 
+### `public.age_policy`
+
+- **Migracja:** `supabase/migrations/0126_candidate_age_policy.sql`
+- **Czynności:** Konto i uwierzytelnianie, Bezpieczeństwo, audyt i limity
+- **Osoby:** Administratorzy portalu
+- **Uwaga:** Próg konta kandydata jako dane (0126, #492/#576: 16 albo 18); zmienia go administrator z uzasadnieniem i audytem.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `updated_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0126_candidate_age_policy.sql` |
+
 ### `public.application_screening_answers`
 
 - **Migracja:** `supabase/migrations/0093_screening_questions.sql`
@@ -385,6 +396,21 @@ Tabele w migracjach: 97; z danymi osobowymi: 61; bez danych osobowych: 36.
 |---|---|---|
 | `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0106_breach_register.sql` |
 | `content` | Korespondencja i treści swobodne | `supabase/migrations/0106_breach_register.sql` |
+
+### `public.candidate_age_attestations`
+
+- **Migracja:** `supabase/migrations/0126_candidate_age_policy.sql`
+- **Czynności:** Konto i uwierzytelnianie, Profil zawodowy kandydata
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Potwierdzenie przedziału wieku 16–17 / 18+ (0126, #492/#576): dolna granica przedziału i czas, bez daty urodzenia; niezmienne.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0126_candidate_age_policy.sql` |
+| `min_age` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0126_candidate_age_policy.sql` |
+| `source` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0126_candidate_age_policy.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0126_candidate_age_policy.sql` |
+| `created_at` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0126_candidate_age_policy.sql` |
 
 ### `public.candidate_certificates`
 
@@ -759,6 +785,8 @@ Tabele w migracjach: 97; z danymi osobowymi: 61; bez danych osobowych: 36.
 | `consent_accepted_at` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0095_guest_applications.sql` |
 | `consent_ip` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0095_guest_applications.sql` |
 | `consent_user_agent` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0095_guest_applications.sql` |
+| `age_attested_min` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0126_candidate_age_policy.sql` |
+| `age_attested_at` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0126_candidate_age_policy.sql` |
 
 ### `public.jobs`
 
@@ -1102,7 +1130,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `companySuspended` | `companyName`, `reason` | — | `admin_set_company_status` |
 | `companyVerified` | `companyName`, `reason` | `reason` | `admin_set_company_status` |
 | `contactMessageAdmin` | `reference`, `topic` | — | `submit_contact_message` |
-| `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `jobSlug`, `nonce` | `submit_guest_application` |
+| `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `jobSlug`, `nonce` | `submit_guest_application_core` |
 | `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `nonce` | `confirm_guest_application` |
 | `guestStatusChanged` | `companyName`, `jobTitle`, `recipientName`, `status` | — | `transition_application` |
 | `jobMatch` | `count`, `jobs`, `query`, `searchName` | `query` | `process_saved_search_alerts` |
