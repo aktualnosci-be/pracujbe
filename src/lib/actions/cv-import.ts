@@ -2,11 +2,12 @@
 
 import { z } from 'zod/v3';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
 import { withAiUsageLog } from '@/lib/ai/usage-log';
 import { ExtractorError } from '@/lib/ai-import/extract';
 import { cvImportModel, cvImportProvider } from '@/lib/cv-import/config';
@@ -30,7 +31,9 @@ import { CV_MAX_BYTES } from '@/lib/validation/cv-file';
  *   3. `applyCvProposals` — wyłącznie pozycje zaznaczone przez kandydata → jedno RPC
  *      `apply_candidate_cv_proposals` (0109: dopisanie w jednej transakcji, limity).
  *
- * Autoryzacja: zalogowane konto KANDYDATA (import dotyczy wyłącznie własnego profilu).
+ * Autoryzacja: zalogowane konto KANDYDATA z sesji serwera (`getPortalIdentity`, rola z bazy);
+ * zapis pod RLS jako ten użytkownik (`withPortalTransaction`) — import dotyczy wyłącznie
+ * własnego profilu, właściciela nie przyjmujemy od klienta.
  * Limit wywołań modelu per konto (fail-closed, bo każde wywołanie kosztuje).
  * Plik, tekst CV i propozycje nie są zapisywane, logowane ani wysyłane do telemetrii — przy
  * błędzie do Sentry trafia wyłącznie obszar/krok (`captureError` wysyła sam kod błędu, #508).
@@ -58,20 +61,14 @@ const PROPOSE_DAILY_MAX = 10;
 
 type Gate = { ok: true; userId: string | null } | { ok: false; error: ErrorCode };
 
-/** Konto kandydata z sesji; w trybie demo (bez Supabase) tylko z atrapą dostawcy. */
+/** Konto kandydata z sesji; w trybie demo (bez backendu) tylko z atrapą dostawcy. */
 async function requireCandidate(provider: 'anthropic' | 'fixture'): Promise<Gate> {
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return provider === 'fixture' ? { ok: true, userId: null } : { ok: false, error: 'DEMO_UNAVAILABLE' };
   }
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
-  const { data: profile, error } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-  if (error) return { ok: false, error: 'INTERNAL' };
-  if (profile?.role !== 'candidate') return { ok: false, error: 'PERMISSION_DENIED' };
-  return { ok: true, userId: user.id };
+  const me = await getPortalIdentity();
+  if (!me || me.role !== 'candidate') return { ok: false, error: 'PERMISSION_DENIED' };
+  return { ok: true, userId: me.id };
 }
 
 export async function prepareCvImportAction(formData: FormData): Promise<PrepareCvImportResult> {
@@ -190,19 +187,21 @@ export async function applyCvProposals(input: unknown): Promise<ApplyCvProposals
     certificates: v.certificates.length,
     experienceYears: v.experienceYears !== null,
   };
-  if (!isSupabaseConfigured()) return { ok: true, demo: true, added };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true, added };
 
   try {
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('apply_candidate_cv_proposals', {
-      p_occupations: v.occupations,
-      p_skills: v.skills,
-      p_languages: v.languages.map((l) => ({ language: l.language, level: l.level })),
-      p_certificates: v.certificates,
-      p_experience_years: v.experienceYears,
-    });
-    if (error) return { ok: false, error: mapPgError(error.message) };
-    const counts = (data ?? {}) as Partial<typeof added>;
+    const me = await getPortalIdentity();
+    if (!me || me.role !== 'candidate') return { ok: false, error: 'PERMISSION_DENIED' };
+    const data = await withPortalTransaction(me, (tx) =>
+      rpc<Partial<typeof added>>(tx, 'apply_candidate_cv_proposals', {
+        p_occupations: v.occupations,
+        p_skills: v.skills,
+        p_languages: jsonArg(v.languages.map((l) => ({ language: l.language, level: l.level }))),
+        p_certificates: v.certificates,
+        p_experience_years: v.experienceYears,
+      }),
+    );
+    const counts = data ?? {};
     return {
       ok: true,
       added: {
@@ -214,6 +213,7 @@ export async function applyCvProposals(input: unknown): Promise<ApplyCvProposals
       },
     };
   } catch (e) {
+    if (isDatabaseError(e)) return { ok: false, error: mapPgError(databaseErrorMessage(e)) };
     captureError(e, { area: 'cv-import', step: 'apply' });
     return { ok: false, error: 'INTERNAL' };
   }
