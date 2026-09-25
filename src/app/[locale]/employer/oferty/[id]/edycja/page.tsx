@@ -15,6 +15,7 @@ import {
   PAPER,
 } from '@/components/dashboard/panel-styles';
 import { getEmployerShellData, getJobDraft } from '@/lib/data/employer';
+import { isJobAssistEnabled } from '@/lib/ai-assist/config';
 
 /**
  * Wznowienie SZKICU albo poprawka OPUBLIKOWANEJ oferty — `/employer/oferty/[id]/edycja`.
@@ -89,6 +90,7 @@ export default async function EditJobPage({
         initialValues={draft.values}
         published={{ status: draft.jobStatus, slug: draft.slug, updatedAt: draft.updatedAt }}
         contentLocale={draft.contentLocale}
+        assistEnabled={isJobAssistEnabled()}
       />
     );
   }
@@ -104,7 +106,12 @@ export default async function EditJobPage({
           className="mx-auto mb-5 max-w-5xl"
         />
       ) : null}
-      <JobWizard initialJobId={draft.jobId} initialValues={draft.values} contentLocale={draft.contentLocale} />
+      <JobWizard
+        initialJobId={draft.jobId}
+        initialValues={draft.values}
+        contentLocale={draft.contentLocale}
+        assistEnabled={isJobAssistEnabled()}
+      />
     </>
   );
 }

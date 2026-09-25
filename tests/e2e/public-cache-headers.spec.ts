@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
 import { expect, test, type APIResponse } from "@playwright/test";
 
 import { E2E_GA_MEASUREMENT_ID, E2E_META_PIXEL_ID } from "./fixtures/trackers";
@@ -99,6 +103,41 @@ test("HTML z cache nie zależy od cookies sesji ani zgód i nie zawiera tracker�
     expect(html).not.toContain("connect.facebook.net");
     expect(html).not.toContain(E2E_META_PIXEL_ID);
     expect(html).not.toMatch(new RegExp(`<script[^>]*${E2E_GA_MEASUREMENT_ID}`));
+  }
+});
+
+/**
+ * #298 („Otwarte”): 404 losowych slugów ofert nie trafia na dysk. Domyślny handler Next
+ * zapisywał każdy taki wynik (`.html`/`.rsc`/`.meta` w `.next/server/app`) bez limitu; własny
+ * cacheHandler (`src/lib/cache/isr-cache-handler.mjs`) trzyma je krótko w małej puli pamięci.
+ * Serwer E2E działa na tym samym katalogu `.next`, więc liczymy pliki bezpośrednio.
+ */
+function countFiles(dir: string): number {
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir, { recursive: true }).length;
+}
+
+test("seria losowych slugów ofert: 404 z cache, bez nowych plików na dysku", async ({ request }) => {
+  // Domyślny handler pisał tu `<slug>.html/.rsc/.meta`; własny nie pisze do katalogu buildu wcale.
+  const buildDir = join(process.cwd(), ".next/server/app/pl/oferty-pracy");
+  // Katalog runtime handlera: plik = sha256(klucz). Inne testy (równolegle) mogą tu zapisać
+  // poprawne strony, więc sprawdzamy wyłącznie pliki kluczy z tej serii.
+  const handlerDir = join(process.cwd(), ".next/cache/isr-handler");
+  const before = countFiles(buildDir);
+  const run = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const paths = Array.from({ length: 40 }, (_, i) => `/pl/oferty-pracy/e2e-losowy-${run}-${i}`);
+  for (const path of paths) {
+    const response = await request.get(path, { maxRedirects: 0 });
+    expect(response.status()).toBe(404);
+  }
+  // Powtórzony slug trafia w krótką pulę 404 w pamięci (bez ponownego renderu).
+  const repeated = await request.get(paths[0]!, { maxRedirects: 0 });
+  expect(repeated.status()).toBe(404);
+  expect(repeated.headers()["x-nextjs-cache"]).toBe("HIT");
+  expect(countFiles(buildDir)).toBe(before);
+  const handlerFiles = new Set(existsSync(handlerDir) ? readdirSync(handlerDir) : []);
+  for (const path of paths) {
+    expect(handlerFiles.has(`${createHash("sha256").update(path).digest("hex")}.json`)).toBe(false);
   }
 });
 

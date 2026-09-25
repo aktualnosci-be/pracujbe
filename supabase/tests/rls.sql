@@ -7493,6 +7493,205 @@ select pg_temp.assert((select count(*) from public.moderation_decisions) = 5
 reset role;
 
 -- ============================================================================
+-- CS493. #493 — osobno: regulamin, informacja o prywatności, zgody opcjonalne (0108)
+-- ============================================================================
+\set CS1 'c4930000-0000-0000-0000-000000000001'
+\set CS2 'c4930000-0000-0000-0000-000000000002'
+\set CS3 'c4930000-0000-0000-0000-000000000003'
+\set CS4 'c4930000-0000-0000-0000-000000000004'
+\set CS5 'c4930000-0000-0000-0000-000000000005'
+-- Konta bez markera receiptu (profil z triggera, bez akceptacji).
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CS1','cs1@test.be','Cs One','{"role":"candidate","first_name":"Cs","last_name":"One","locale":"nl"}'),
+  (:'CS2','cs2@test.be','Cs Two','{"role":"employer","first_name":"Cs","last_name":"Two","locale":"fr"}');
+
+-- CS493-0: wiersze sprzed #493 i dawne API = legacy_combined (znaczenie zachowane).
+select pg_temp.assert(
+  (select bool_and(kind = 'legacy_combined' and source is null)
+     from public.document_acceptances where profile_id = :'CANDA'),
+  'CS493-0 dawny wspólny checkbox zapisany jako legacy_combined');
+
+-- CS493-1: klient nie pisze receiptów ani nie woła RPC zapisu.
+set role authenticated; set app.current_uid = :'CS1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'insert into public.document_acceptances (profile_id, document, kind) values ('''
+    || :'CS1' || ''', ''terms'', ''terms_acceptance'')',
+  'permission denied', 'CS493-1 authenticated nie pisze document_acceptances');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{}'', ''signup'')',
+  'permission denied', 'CS493-1b authenticated nie woła record_signup_consents');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{}'', ''signup'')',
+  'permission denied', 'CS493-1c anon nie woła record_signup_consents');
+reset role;
+
+-- CS493-2: regulamin i informacja o prywatności są wymagane; nieznany cel = błąd; bez zapisu.
+set role service_role;
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', false, true, ''{}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2 bez akceptacji regulaminu');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, false, ''{}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2b bez potwierdzenia informacji o prywatności');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{"ai_matching": true}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2c cel spoza listy');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{"email_marketing": "yes"}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2d wybór nie-boolean');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{}'', ''cookie_banner'')',
+  'VALIDATION_FAILED', 'CS493-2e kanał spoza listy');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CS1') = 0
+  and (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0,
+  'CS493-2f odrzucone wywołania nie zostawiają receiptu');
+
+-- CS493-3: odmowa zgody opcjonalnej nie blokuje; każdy element osobno; zgoda nie jest włączana.
+set role service_role;
+select public.record_signup_consents(:'CS1', true, true, '{"email_marketing": false}', 'signup', 'nl',
+  '{"terms": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "privacy": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "email_marketing": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}',
+  '203.0.113.9', 'UA/2.0');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CS1') = 2
+  and exists (select 1 from public.document_acceptances where profile_id = :'CS1'
+               and document = 'terms' and kind = 'terms_acceptance' and source = 'signup'
+               and locale = 'nl' and document_version = 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' and ip_address = '203.0.113.9')
+  and exists (select 1 from public.document_acceptances where profile_id = :'CS1'
+               and document = 'privacy' and kind = 'privacy_notice_ack' and source = 'signup'),
+  'CS493-3 regulamin i informacja o prywatności jako osobne receipty z wersją i kanałem');
+select pg_temp.assert(
+  (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0,
+  'CS493-3b odmowa nie tworzy zdarzenia zgody (#513: dziennik zapisuje tylko zmiany)');
+select pg_temp.assert(
+  coalesce((select email_marketing from public.notification_preferences where profile_id = :'CS1'), false) = false,
+  'CS493-3c odmowa nie włącza marketingu');
+
+-- CS493-4: zgoda włącza kategorię (wycofanie = ustawienia powiadomień).
+set role service_role;
+select public.record_signup_consents(:'CS2', true, true, '{"email_marketing": true}', 'signup', 'fr',
+  '{"email_marketing": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}', null, null);
+reset role;
+select pg_temp.assert(
+  (select email_marketing from public.notification_preferences where profile_id = :'CS2') = true
+  and (select count(*) from public.email_consent_events where profile_id = :'CS2') = 1
+  and (select granted and category = 'marketing' and source = 'signup' and locale = 'fr'
+              and wording_version = 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+         from public.email_consent_events where profile_id = :'CS2'),
+  'CS493-4 zgoda na marketing: kategoria włączona, zdarzenie #513 ze źródłem signup i wersją treści');
+-- Kontekst źródła nie przecieka na kolejne zapisy w tej samej transakcji.
+select pg_temp.assert(
+  public.email_consent_context('source') is null and public.email_consent_context('wording') is null,
+  'CS493-4a kontekst signup wyczyszczony po zapisie');
+set role authenticated; set app.current_uid = :'CS2'; select pg_temp.assert_client_role();
+select public.set_notification_preferences(
+  '{"email_applications": true, "email_offers": true, "email_messages": true, "email_job_matches": true,
+    "email_marketing": false, "push_enabled": true, "in_app_enabled": true}', 'fr', null);
+select pg_temp.assert(
+  (select email_marketing from public.notification_preferences where profile_id = :'CS2') = false
+  and (select count(*) from public.email_consent_events) = 2
+  and exists (select 1 from public.email_consent_events where category = 'marketing'
+               and not granted and source = 'settings'),
+  'CS493-4b wycofanie w ustawieniach (RPC #513); użytkownik widzi tylko własny dowód');
+reset role; reset app.current_uid;
+
+-- CS493-5: onboarding bez pokazanych zgód opcjonalnych nie tworzy fałszywego dowodu.
+set role service_role;
+select public.record_signup_consents(:'CS1', true, true, '{}', 'onboarding', 'nl', '{}', null, null);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0
+  and (select count(*) from public.document_acceptances where profile_id = :'CS1' and source = 'onboarding') = 2,
+  'CS493-5 onboarding: tylko regulamin + informacja, bez zgody na inne cele');
+
+-- CS493-6: receipty są niezmienne dla każdej roli (także właściciela tabel).
+select pg_temp.expect_error(
+  'update public.document_acceptances set kind = ''legacy_combined'' where profile_id = ''' || :'CS1' || '''',
+  'CONSENT_RECEIPT_IMMUTABLE', 'CS493-6 document_acceptances bez UPDATE');
+select pg_temp.expect_error(
+  'delete from public.document_acceptances where profile_id = ''' || :'CS1' || '''',
+  'CONSENT_RECEIPT_IMMUTABLE', 'CS493-6b document_acceptances bez DELETE');
+-- Kontrola ujemna: bez triggera przepisanie akceptacji regulaminu na dawny wpis przechodzi.
+begin;
+drop trigger document_acceptances_immutable on public.document_acceptances;
+update public.document_acceptances set kind = 'legacy_combined', source = null where profile_id = :'CS1';
+select pg_temp.assert(
+  not exists (select 1 from public.document_acceptances where profile_id = :'CS1' and kind <> 'legacy_combined'),
+  'CS493-6d kontrola ujemna: bez triggera znaczenie receiptu dałoby się przepisać');
+rollback;
+-- Kontrola ujemna: bez źródła 'signup' w triggerze 0101 zgoda z rejestracji byłaby 'direct'.
+begin;
+create or replace function public.record_email_consent_change()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $f$
+begin
+  insert into public.email_consent_events (profile_id, category, granted, source, locale)
+  values (new.profile_id, 'marketing', new.email_marketing, 'direct', 'pl');
+  return null;
+end $f$;
+set role service_role;
+select public.record_signup_consents(:'CS1', true, true, '{"email_marketing": true}', 'signup', 'nl', '{}', null, null);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.email_consent_events where profile_id = :'CS1' and source = 'signup'),
+  'CS493-6e kontrola ujemna: trigger bez źródła signup nie daje dowodu z rejestracji');
+rollback;
+
+-- CS493-7: Better Auth, marker v2 — osobne receipty, zgoda opcjonalna z formularza.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CS3','cs3@test.be','Cs Three', jsonb_build_object('role','candidate','first_name','Cs','last_name','Three',
+    'locale','en','signup_receipt_version',2,'agree_terms',true,'privacy_notice_ack',true,
+    'optional_consents', jsonb_build_object('email_marketing', true),
+    'consent_wording', jsonb_build_object('terms','sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','privacy','sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','email_marketing','sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc')));
+select pg_temp.assert(
+  (select array_agg(kind order by kind) from public.document_acceptances where profile_id = :'CS3')
+    = array['privacy_notice_ack','terms_acceptance']
+  and (select granted and source = 'signup' and locale = 'en' and wording_version = 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+         from public.email_consent_events where profile_id = :'CS3' and category = 'marketing')
+  and (select email_marketing from public.notification_preferences where profile_id = :'CS3'),
+  'CS493-7 rejestracja v2: dwa osobne receipty + zgoda opcjonalna');
+-- v2 bez potwierdzenia informacji o prywatności albo z celem spoza listy = brak konta.
+select pg_temp.expect_error(format(
+  'insert into auth.users(id,email,name,raw_user_meta_data) values (%L,%L,%L,%L::jsonb)',
+  :'CS4', 'cs4@test.be', 'Cs Four',
+  '{"role":"employer","first_name":"Cs","last_name":"Four","locale":"pl","signup_receipt_version":2,"agree_terms":true}'),
+  'VALIDATION_FAILED', 'CS493-7b v2 bez potwierdzenia informacji o prywatności');
+select pg_temp.expect_error(format(
+  'insert into auth.users(id,email,name,raw_user_meta_data) values (%L,%L,%L,%L::jsonb)',
+  :'CS4', 'cs4@test.be', 'Cs Four',
+  '{"role":"employer","first_name":"Cs","last_name":"Four","locale":"pl","signup_receipt_version":2,"agree_terms":true,"privacy_notice_ack":true,"optional_consents":{"profile_ai":true}}'),
+  'VALIDATION_FAILED', 'CS493-7c v2 z celem spoza listy');
+select pg_temp.expect_error(format(
+  'insert into auth.users(id,email,name,raw_user_meta_data) values (%L,%L,%L,%L::jsonb)',
+  :'CS4', 'cs4@test.be', 'Cs Four',
+  '{"role":"employer","first_name":"Cs","last_name":"Four","locale":"pl","signup_receipt_version":null,"agree_terms":true}'),
+  'VALIDATION_FAILED', 'CS493-7d marker null');
+select pg_temp.assert(
+  not exists (select 1 from auth.users where id = :'CS4')
+  and not exists (select 1 from public.profiles where id = :'CS4'),
+  'CS493-7e odrzucona rejestracja nie zostawia konta');
+-- v2 bez zgody opcjonalnej: konto powstaje, marketing wyłączony, brak dowodu zgody.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CS5','cs5@test.be','Cs Five','{"role":"employer","first_name":"Cs","last_name":"Five","locale":"pl","signup_receipt_version":2,"agree_terms":true,"privacy_notice_ack":true}');
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CS5') = 2
+  and (select count(*) from public.email_consent_events where profile_id = :'CS5') = 0
+  and coalesce((select email_marketing from public.notification_preferences where profile_id = :'CS5'), false) = false,
+  'CS493-7f brak zgody opcjonalnej nie blokuje konta');
+
+-- CS493-8: usunięcie konta (kaskada) usuwa receipty mimo niezmienności.
+delete from auth.users where id = :'CS5';
+select pg_temp.assert(
+  not exists (select 1 from public.document_acceptances where profile_id = :'CS5')
+  and not exists (select 1 from public.profiles where id = :'CS5'),
+  'CS493-8 kaskada usunięcia konta usuwa receipty');
+delete from auth.users where id = :'CS3';
+select pg_temp.assert(
+  not exists (select 1 from public.email_consent_events where profile_id = :'CS3'),
+  'CS493-8b kaskada usuwa dowód zgód opcjonalnych (#513)');
 -- DR486. Retencja, eksport danych kandydata, usunięcie konta, kolejka storage,
 --        ponowne usunięcie po odtworzeniu kopii (0105)
 -- ============================================================================
@@ -8599,6 +8798,188 @@ select pg_temp.expect_error(format('update public.breach_incidents set created_b
   'BREACH_REGISTER_IMMUTABLE_FIELD', 'BR490-12c autora nie da się podmienić');
 select pg_temp.expect_error(format('update public.breach_notices set queued_count = 0 where incident_id = %L', :'br1'),
   'BREACH_HISTORY_IMMUTABLE', 'BR490-12d zawiadomienie nadal niezmienne');
+rollback;
+
+-- ============================================================================
+-- LOC348. Invariant #1 na żywej bazie (#348): email_deliveries.locale = język ODBIORCY
+--   dla każdego szablonu z przepływów (§9 + weryfikacja firmy + zaproszenie do zespołu),
+--   nadawca zawsze w innym języku niż odbiorca, oferta w trzecim (default_locale='pl'
+--   ≠ preferowane języki stron). Fallback preferred → account → signup → 'en'.
+--   Kontrole ujemne: resolve_recipient_locale podmieniony na język SESJI NADAWCY albo
+--   na odwróconą kolejność fallbacku → ten sam predykat daje fałsz.
+--   Całość w transakcji z rollbackiem — dalsze sekcje nie widzą tych danych. Sekcja stoi
+--   na końcu pliku (jak BR490-12): harness rate-limit.test.ts owija cały plik w jedno
+--   BEGIN … ROLLBACK, a `rollback` kończy wtedy także tę zewnętrzną transakcję.
+-- ============================================================================
+\set CAN348 'e3480000-0000-0000-0000-0000000000a1'
+\set OWN348 'e3480000-0000-0000-0000-0000000000a2'
+\set REC348 'e3480000-0000-0000-0000-0000000000a3'
+\set INV348 'e3480000-0000-0000-0000-0000000000a4'
+\set SGN348 'e3480000-0000-0000-0000-0000000000a5'
+\set NUL348 'e3480000-0000-0000-0000-0000000000a6'
+\set COM348 'e3480000-0000-0000-0000-0000000000f1'
+\set JOB348 'e3480000-0000-0000-0000-0000000000b1'
+\set JOB348B 'e3480000-0000-0000-0000-0000000000b2'
+reset role; reset app.current_uid;
+begin;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CAN348','can348@test.be','Clara F','{"role":"candidate","first_name":"Clara","last_name":"Fontaine","locale":"pl"}'),
+  (:'OWN348','own348@test.be','Owen E','{"role":"employer","first_name":"Owen","last_name":"Evans","locale":"nl"}'),
+  (:'REC348','rec348@test.be','Rita P','{"role":"employer","first_name":"Rita","last_name":"Peeters","locale":"fr"}'),
+  (:'INV348','inv348@test.be','Ivo N','{"role":"employer","first_name":"Ivo","last_name":"Nowak","locale":"fr"}'),
+  (:'SGN348','sgn348@test.be','Sam S','{"role":"candidate","first_name":"Sam","last_name":"S","locale":"nl"}'),
+  (:'NUL348','nul348@test.be','Nel N','{"role":"candidate","first_name":"Nel","last_name":"N"}');
+-- Języki: kandydat fr (preferred; signup pl), owner en (preferred; signup nl),
+-- rekruter pl (account; signup fr, bez preferred), zapraszany fr (tylko signup),
+-- SGN nl (tylko signup), NUL bez żadnego języka → en. Admin w tej transakcji: nl.
+update public.profiles set preferred_locale = 'fr' where id = :'CAN348';
+update public.profiles set preferred_locale = 'en' where id = :'OWN348';
+update public.profiles set preferred_locale = null, account_locale = 'pl', signup_locale = 'fr' where id = :'REC348';
+update public.profiles set preferred_locale = null, account_locale = null where id in (:'INV348', :'SGN348');
+update public.profiles set preferred_locale = null, account_locale = null, signup_locale = null where id = :'NUL348';
+update public.profiles set preferred_locale = 'nl' where id = :'ADMIN';
+
+create temp table loc348_expected(profile_id uuid primary key, locale text not null) on commit drop;
+insert into loc348_expected values
+  (:'CAN348','fr'), (:'OWN348','en'), (:'REC348','pl'), (:'INV348','fr'), (:'SGN348','nl'), (:'NUL348','en');
+
+-- Predykat wszystkich asercji sekcji (używany także w kontrolach ujemnych):
+-- istnieje ≥1 wiersz szablonu dla odbiorcy i KAŻDY ma locale = oczekiwany język odbiorcy.
+create function pg_temp.loc348_ok(p_template text, p_profile uuid) returns boolean
+language sql as $$
+  select count(*) > 0 and bool_and(d.locale = e.locale)
+    from public.email_deliveries d join loc348_expected e on e.profile_id = d.profile_id
+   where d.template = p_template and d.profile_id = p_profile
+$$;
+
+-- LOC348-1: fallback w bazie (ten sam kod, którego używa enqueue_email).
+select pg_temp.assert(
+  public.resolve_recipient_locale(:'CAN348') = 'fr'
+  and public.resolve_recipient_locale(:'REC348') = 'pl'
+  and public.resolve_recipient_locale(:'SGN348') = 'nl'
+  and public.resolve_recipient_locale(:'NUL348') = 'en'
+  and public.resolve_recipient_locale('e3480000-0000-0000-0000-00000000dead') = 'en',
+  'LOC348-1 fallback preferred → account → signup → en (także brak profilu)');
+
+-- Firma czeka na weryfikację; admin (nl) weryfikuje → companyVerified do ownera (en).
+insert into public.companies(id,name,status) values (:'COM348','Firma 348','pending');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COM348',:'OWN348','owner',true), (:'COM348',:'REC348','recruiter',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JOB348',:'COM348','job-348','Operator 348','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JOB348B',:'COM348','job-348b','Operator 348B','warehouse','permanent','Gent','Flandria','active','pl');
+select set_config('app.current_uid', :'ADMIN', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.admin_set_company_status(:'COM348'::uuid, 'verified', 'pending', null);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('companyVerified', :'OWN348'),
+  'LOC348-2 companyVerified w języku ownera (en), nie admina (nl)');
+
+-- Kandydat (fr) aplikuje dwa razy → newApplication do ownera (en) i rekrutera (pl).
+select set_config('app.current_uid', :'CAN348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JOB348'::uuid, 'loc348-app-1', null, null, 'Bonjour') as app348 \gset
+select public.apply_to_job(:'JOB348B'::uuid, 'loc348-app-2', null, null, null) as app348b \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('newApplication', :'OWN348')
+  and pg_temp.loc348_ok('newApplication', :'REC348'),
+  'LOC348-3 newApplication: owner en, rekruter pl (nadawca fr, oferta pl)');
+
+-- Rekruter (pl) zmienia statusy i wysyła propozycję → e-maile do kandydata (fr).
+select set_config('app.current_uid', :'REC348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'app348'::uuid, 'viewed');
+select public.transition_application(:'app348'::uuid, 'shortlisted');
+select public.send_offer(:'JOB348'::uuid, :'CAN348'::uuid, 'loc348-off-1', 'Zapraszamy', null) as off348 \gset
+reset role;
+-- Drugą propozycję wysyła owner (en): odpowiedź trafia do NADAWCY propozycji.
+select set_config('app.current_uid', :'OWN348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'JOB348B'::uuid, :'CAN348'::uuid, 'loc348-off-2', 'Invitation', null) as off348b \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('applicationViewed', :'CAN348'),
+  'LOC348-4 applicationViewed w języku kandydata (fr), nie rekrutera (pl)');
+select pg_temp.assert(pg_temp.loc348_ok('statusChanged', :'CAN348'),
+  'LOC348-5 statusChanged w języku kandydata (fr)');
+select pg_temp.assert(pg_temp.loc348_ok('jobOffer', :'CAN348')
+  and (select bool_and(locale = 'fr') from public.offers where id in (:'off348', :'off348b')),
+  'LOC348-6 jobOffer i offers.locale w języku kandydata (fr)');
+
+-- Kandydat akceptuje propozycję rekrutera i odrzuca propozycję ownera → odpowiedź do nadawcy.
+select set_config('app.current_uid', :'CAN348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.respond_to_offer(:'off348'::uuid, true);
+select public.respond_to_offer(:'off348b'::uuid, false);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('offerAccepted', :'REC348'),
+  'LOC348-7 offerAccepted do rekrutera w jego języku (pl), nie kandydata (fr)');
+select pg_temp.assert(pg_temp.loc348_ok('offerDeclined', :'OWN348'),
+  'LOC348-8 offerDeclined do ownera w jego języku (en)');
+
+-- Wiadomości w obie strony.
+select set_config('app.current_uid', :'REC348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'app348'::uuid, null) as conv348 \gset
+select public.send_message(:'conv348'::uuid, 'Dzień dobry', gen_random_uuid()) as msg348a \gset
+reset role;
+select set_config('app.current_uid', :'CAN348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'conv348'::uuid, 'Merci', gen_random_uuid()) as msg348b \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('newMessage', :'CAN348'),
+  'LOC348-9 newMessage firma → kandydat w języku kandydata (fr)');
+select pg_temp.assert(pg_temp.loc348_ok('newMessage', :'OWN348')
+  and pg_temp.loc348_ok('newMessage', :'REC348'),
+  'LOC348-9b newMessage kandydat → firma: owner en, rekruter pl');
+
+-- Zaproszenie do zespołu: owner (en) zaprasza konto pracodawcy z samym signup fr.
+select set_config('app.current_uid', :'OWN348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select invitation_id as inv348 from public.invite_company_member(:'COM348'::uuid, 'inv348@test.be', 'recruiter') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('teamInvitation', :'INV348'),
+  'LOC348-10 teamInvitation w języku zaproszonego (signup fr), nie zapraszającego (en)');
+
+-- LOC348-11: pokrycie — KAŻDY e-mail wygenerowany w sekcji ma język odbiorcy i żaden
+-- szablon z listy nie został pominięty (nowy szablon w tych przepływach = aktualizacja listy).
+select pg_temp.assert(
+  (select bool_and(d.locale = e.locale) from public.email_deliveries d
+     join loc348_expected e on e.profile_id = d.profile_id)
+  and (select array_agg(distinct d.template order by d.template) from public.email_deliveries d
+     join loc348_expected e on e.profile_id = d.profile_id)
+    = array['applicationViewed','companyVerified','jobOffer','newApplication','newMessage',
+            'offerAccepted','offerDeclined','statusChanged','teamInvitation'],
+  'LOC348-11 wszystkie e-maile sekcji w języku odbiorcy, komplet szablonów');
+
+-- Kontrola ujemna 1: regresja „język sesji nadawcy”. Rekruter (pl) zmienia status →
+-- statusChanged do kandydata dostaje pl; ten sam predykat musi to wykryć.
+savepoint loc348_neg;
+create or replace function public.resolve_recipient_locale(p_profile_id uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select coalesce((select p.preferred_locale from public.profiles p where p.id = auth.uid()),
+                  (select p.account_locale from public.profiles p where p.id = auth.uid()), 'en');
+$$;
+select set_config('app.current_uid', :'REC348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'app348b'::uuid, 'viewed');
+reset role; reset app.current_uid;
+select pg_temp.assert(not pg_temp.loc348_ok('applicationViewed', :'CAN348'),
+  'LOC348-N1 kontrola ujemna: język nadawcy (pl) zamiast odbiorcy (fr) wykryty');
+rollback to savepoint loc348_neg;
+
+-- Kontrola ujemna 2: odwrócona kolejność fallbacku (signup przed preferred).
+savepoint loc348_neg2;
+create or replace function public.resolve_recipient_locale(p_profile_id uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select coalesce((select coalesce(p.signup_locale, p.account_locale, p.preferred_locale)
+                     from public.profiles p where p.id = p_profile_id), 'en');
+$$;
+select pg_temp.assert(public.resolve_recipient_locale(:'CAN348') <> 'fr'
+  and public.resolve_recipient_locale(:'REC348') <> 'pl',
+  'LOC348-N2 kontrola ujemna: odwrócony fallback daje inny język niż oczekiwany');
+rollback to savepoint loc348_neg2;
+select pg_temp.assert(public.resolve_recipient_locale(:'CAN348') = 'fr',
+  'LOC348-N3 po kontrolach ujemnych funkcja produkcyjna wróciła');
 rollback;
 
 -- ============================================================================

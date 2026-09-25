@@ -43,11 +43,15 @@ export default defineConfig({
     env: {
       // Strony publiczne czytają oferty z bazy przez ograniczony login aplikacji (nie demo).
       DATABASE_APP_URL: appUrl,
-      // Migrator i login auth nie trafiają do procesu aplikacji.
+      // Konta i sesje (#24): Better Auth na ograniczonym loginie auth, jak w produkcji.
+      // Origin kanoniczny = ten sam co w stosie testu (support/stack.ts): akcje wołają
+      // `auth.api` bez obiektu Request, więc origin/CSRF SDK nie dotyczy formularzy aplikacji.
+      DATABASE_AUTH_URL: process.env.E2E_REAL_AUTH_URL,
+      BETTER_AUTH_URL: 'https://auth.e2e-real.invalid',
+      BETTER_AUTH_SECRET: 'e2e-real-flow-secret-not-for-production-0123456789abcdef',
+      // Migrator nie trafia do procesu aplikacji.
       E2E_REAL_ADMIN_URL: '',
       E2E_REAL_AUTH_URL: '',
-      NEXT_PUBLIC_SUPABASE_URL: '',
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
       NODE_OPTIONS: `--require="${requireShim}"`,
     },
   },
