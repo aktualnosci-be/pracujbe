@@ -100,17 +100,17 @@ export const NOTICE_TEXT =
 const BTN_BASE =
   'inline-flex max-w-full items-center justify-center gap-2.5 text-center [overflow-wrap:anywhere] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
-/** `.people .btn` — 14 px / 650, padding 12/19 px, promień 11 px, min. 49 px, tło marki. */
-export const BTN_PRIMARY = `${BTN_BASE} min-h-[49px] rounded-[11px] border border-primary bg-primary px-[19px] py-3 text-sm font-[650] text-primary-foreground hover:bg-primary-dark`;
+/** `.people .btn` — 14 px / 650, interlinia `normal` (prototyp jej nie ustawia: DM Sans ≈ 1,3 → 18,2 px), padding 12/19 px, promień 11 px, min. 49 px, tło marki. */
+export const BTN_PRIMARY = `${BTN_BASE} min-h-[49px] rounded-[11px] border border-primary bg-primary px-[19px] py-3 text-sm font-[650] leading-[normal] text-primary-foreground hover:bg-primary-dark`;
 
 /** `.btn.secondary` — białe tło, linia #ddd (`--pp-line-btn`), tekst ink. */
-export const BTN_SECONDARY = `${BTN_BASE} min-h-[49px] rounded-[11px] border border-[color:var(--pp-line-btn)] bg-card px-[19px] py-3 text-sm font-[650] text-foreground hover:bg-soft`;
+export const BTN_SECONDARY = `${BTN_BASE} min-h-[49px] rounded-[11px] border border-[color:var(--pp-line-btn)] bg-card px-[19px] py-3 text-sm font-[650] leading-[normal] text-foreground hover:bg-soft`;
 
 /**
  * Geometria `.people .btn` bez kolorów (14 px / 650, padding 13/21 px, promień 11 px, min. 49 px) —
  * przyciski akcji w wierszach tabel panelu admina (#7, Z6); kolor nadaje wariant tonu.
  */
-export const BTN_ACTION = `${BTN_BASE} min-h-[49px] rounded-[11px] border px-[21px] py-[13px] text-sm font-[650]`;
+export const BTN_ACTION = `${BTN_BASE} min-h-[49px] rounded-[11px] border px-[21px] py-[13px] text-sm font-[650] leading-[normal]`;
 
 /**
  * Filtr listy (np. status w panelu admina) jako przycisk prototypu (#7, Z6): aktywny = `.btn`,
@@ -121,7 +121,7 @@ export function filterTabClass(isActive: boolean): string {
 }
 
 /** `.people .notice .btn` — mniejszy przycisk akcji w wierszu: 12 px, padding 11/17 px, min. 44 px. */
-export const BTN_SMALL = `${BTN_BASE} min-h-11 rounded-[11px] border bg-card px-[17px] py-[11px] text-xs font-[650]`;
+export const BTN_SMALL = `${BTN_BASE} min-h-11 rounded-[11px] border bg-card px-[17px] py-[11px] text-xs font-[650] leading-[normal]`;
 
 /** `.text-link` — 14 px / 700, kolor marki, min. 44 px. */
 export const TEXT_LINK =
