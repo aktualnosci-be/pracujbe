@@ -166,7 +166,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     processors: HOSTING,
     retentionInCode:
       'Receipt akceptacji przy rejestracji: IP (tylko zaufany nagłówek proxy) i User-Agent wyzerowane po 7 dniach ' +
-      '(acceptance_ip_user_agent, 0130; harmonogram za RETENTION_MODE, domyślnie wyłączony), receipt zostaje; ' +
+      '(acceptance_ip_user_agent, 0132; harmonogram za RETENTION_MODE, domyślnie wyłączony), receipt zostaje; ' +
       'w metadanych konta tylko w transakcji rejestracji. Receipt cookies (consents) — do ustalenia.',
   },
   'dsa-moderation': {

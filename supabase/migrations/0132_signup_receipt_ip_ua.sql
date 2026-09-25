@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0130_signup_receipt_ip_ua.sql (numer tymczasowy — ostateczny nada integrator)
+-- 0132_signup_receipt_ip_ua.sql
 -- IP i user-agent w receiptach akceptacji przy rejestracji (CLAUDE.md, Etap 3 „Otwarte”).
 --
 -- Rejestracja Better Auth zapisuje receipty (`document_acceptances`) triggerem

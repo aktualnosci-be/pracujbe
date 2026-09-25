@@ -167,7 +167,7 @@ describe('rejestracja kandydata — deklaracja progu wieku (#492)', () => {
   });
 });
 
-describe('dowód akceptacji: zaufany adres i user-agent (0130)', () => {
+describe('dowód akceptacji: zaufany adres i user-agent (0132)', () => {
   const valid = { ...candidate, agreeTerms: true, privacyNoticeAck: true } as never;
 
   it('adres wyłącznie z zaufanego nagłówka proxy, user-agent obcięty do 512 znaków', async () => {

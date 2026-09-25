@@ -12261,12 +12261,12 @@ select pg_temp.assert(pg_temp.wl615_send_check_0124(:'wl615_a_id'::uuid) is null
   'WL615-6 KONTROLA UJEMNA: bez tokenu stary worker (A) dostałby zielone światło mimo utraconej dzierżawy');
 
 -- ============================================================================
--- RIP. IP i user-agent w receiptach akceptacji (0130, numer tymczasowy): kategoria retencji
+-- RIP. IP i user-agent w receiptach akceptacji (0132): kategoria retencji
 --      7 dni, receipt niezmienny poza wyzerowaniem IP/UA, krok w run_retention_purge
 --      (dry-run bez zmian, świeże receipty zostają). Kontrole ujemne: dawny strażnik 0108
 --      blokuje minimalizację, sama partia 0127 nie zeruje receiptów.
 -- ============================================================================
-\echo '--- RIP ip/ua receiptów (0130) ---'
+\echo '--- RIP ip/ua receiptów (0132) ---'
 reset role; reset app.current_uid;
 \set RIPC1 'e1300000-0000-4000-8000-0000000000c1'
 \set RIPC2 'e1300000-0000-4000-8000-0000000000c2'
@@ -12314,7 +12314,7 @@ set session_replication_role = replica;
 update public.document_acceptances set accepted_at = now() - interval '8 days' where profile_id = :'RIPC1';
 set session_replication_role = origin;
 
--- KONTROLA UJEMNA: partia z 0127 (bez kroku 0130) nie dotyka receiptów, a dawny strażnik 0108
+-- KONTROLA UJEMNA: partia z 0127 (bez kroku 0132) nie dotyka receiptów, a dawny strażnik 0108
 -- odrzuciłby samo wyzerowanie.
 begin;
 select public.retention_purge_batch(200);

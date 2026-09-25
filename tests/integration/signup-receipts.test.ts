@@ -93,7 +93,7 @@ describe('Atomowe receipty rejestracji', () => {
     expect(age.rows).toEqual([{ min_age: 18, source: 'signup' }]);
   });
 
-  // 0130: dowód akceptacji (zaufany adres + user-agent) trafia do receiptów, nie zostaje w koncie.
+  // 0132: dowód akceptacji (zaufany adres + user-agent) trafia do receiptów, nie zostaje w koncie.
   it.each([1, 2])('v%i: IP i user-agent w receiptach, usunięte z metadanych konta', async version => {
     const id = await insert({
       role: 'employer', locale: 'fr', agree_terms: true, signup_receipt_version: version,
