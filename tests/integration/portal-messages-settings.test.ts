@@ -8,8 +8,15 @@ vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).r
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+// #588: tylko zaufany X-Real-IP trafia do receiptu — X-Forwarded-For (dopisywany przez klienta)
+// jest tu celowo obecny obok niego i MUSI zostać zignorowany.
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers({ 'x-forwarded-for': '203.0.113.9', 'user-agent': 'vitest-it' }),
+  headers: async () =>
+    new Headers({
+      'x-real-ip': '203.0.113.9',
+      'x-forwarded-for': '198.51.100.66',
+      'user-agent': 'vitest-it',
+    }),
   cookies: async () => ({
     get: (name: string) => (name === 'pracujbe_visitor' ? { value: 'visitor-it' } : undefined),
   }),

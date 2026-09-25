@@ -3,11 +3,13 @@ import type { ErrorReport, ErrorReporter } from '@/lib/error-report';
 import { buildErrorWebhookPayload, buildErrorWebhookText, safeErrorCode } from './message';
 import { errorWebhookFromEnv, type ErrorWebhookTarget } from './url';
 
-/** Ten sam kod najwyżej raz na to okno. */
+/** Ten sam kod najwyżej raz na to okno — TYLKO po udanej (2xx) wysyłce. */
 export const ERROR_WEBHOOK_DEDUP_MS = 10 * 60 * 1000;
 export const ERROR_WEBHOOK_TIMEOUT_MS = 3000;
 /** Górna granica przerwy po 429 (Discord podaje `retry_after` w sekundach). */
 const MAX_BACKOFF_MS = 60 * 60 * 1000;
+/** Krótki, stały odstęp między próbami po błędzie sieci/serwera (nie rośnie z powtórzeniami). */
+export const ERROR_WEBHOOK_FAILURE_BACKOFF_MS = 5000;
 const MAX_TRACKED_CODES = 200;
 
 export interface ErrorWebhookDeps {
@@ -18,6 +20,7 @@ export interface ErrorWebhookDeps {
   environment?: () => string | undefined;
   dedupMs?: number;
   timeoutMs?: number;
+  failureBackoffMs?: number;
 }
 
 export type ErrorWebhookResult = 'sent' | 'disabled' | 'deduplicated' | 'rate_limited' | 'failed';
@@ -45,10 +48,27 @@ export function createErrorWebhookSender(deps: ErrorWebhookDeps = {}) {
     deps.environment ?? (() => process.env.RAILWAY_ENVIRONMENT_NAME || process.env.APP_MODE || process.env.NODE_ENV);
   const dedupMs = deps.dedupMs ?? ERROR_WEBHOOK_DEDUP_MS;
   const timeoutMs = deps.timeoutMs ?? ERROR_WEBHOOK_TIMEOUT_MS;
+  const failureBackoffMs = deps.failureBackoffMs ?? ERROR_WEBHOOK_FAILURE_BACKOFF_MS;
 
+  // `lastSent` = ostatnia POTWIERDZONA (2xx) wysyłka tego kodu — jedyny stan liczący się do
+  // pełnego okna deduplikacji. `lastFailure` = ostatnia nieudana próba (sieć/timeout/5xx) —
+  // krótki, stały odstęp, żeby awaria kanału nie blokowała zgłoszeń na cały `dedupMs`.
+  // `inFlight` chroni przed dwoma równoległymi próbami tego samego kodu, zanim pierwsza
+  // zdąży zapisać wynik (dwa `captureError` tuż po sobie, zanim fetch się rozstrzygnie).
   const lastSent = new Map<string, number>();
+  const lastFailure = new Map<string, number>();
+  const inFlight = new Set<string>();
   const suppressed = new Map<string, number>();
   let blockedUntil = 0;
+
+  function track(map: Map<string, number>, code: string, at: number): void {
+    if (map.size >= MAX_TRACKED_CODES && !map.has(code)) {
+      const oldest = map.keys().next().value;
+      if (oldest !== undefined) map.delete(oldest);
+    }
+    map.delete(code);
+    map.set(code, at);
+  }
 
   async function send(report: ErrorReport): Promise<ErrorWebhookResult> {
     const webhook = target();
@@ -60,19 +80,24 @@ export function createErrorWebhookSender(deps: ErrorWebhookDeps = {}) {
       suppressed.set(code, (suppressed.get(code) ?? 0) + 1);
       return 'rate_limited';
     }
-    const previous = lastSent.get(code);
-    if (previous !== undefined && at - previous < dedupMs) {
+    const previousSent = lastSent.get(code);
+    if (previousSent !== undefined && at - previousSent < dedupMs) {
       suppressed.set(code, (suppressed.get(code) ?? 0) + 1);
       return 'deduplicated';
     }
-    if (lastSent.size >= MAX_TRACKED_CODES && !lastSent.has(code)) {
-      const oldest = lastSent.keys().next().value;
-      if (oldest !== undefined) lastSent.delete(oldest);
+    const previousFailure = lastFailure.get(code);
+    if (previousFailure !== undefined && at - previousFailure < failureBackoffMs) {
+      suppressed.set(code, (suppressed.get(code) ?? 0) + 1);
+      return 'deduplicated';
     }
-    lastSent.delete(code);
-    lastSent.set(code, at);
+    if (inFlight.has(code)) {
+      suppressed.set(code, (suppressed.get(code) ?? 0) + 1);
+      return 'deduplicated';
+    }
+
     const repeated = suppressed.get(code) ?? 0;
     suppressed.delete(code);
+    inFlight.add(code);
 
     const text = buildErrorWebhookText({
       code,
@@ -97,11 +122,19 @@ export function createErrorWebhookSender(deps: ErrorWebhookDeps = {}) {
         blockedUntil = now() + retryAfterMs(response, body);
         return 'rate_limited';
       }
-      return response.ok ? 'sent' : 'failed';
+      if (response.ok) {
+        track(lastSent, code, at);
+        lastFailure.delete(code);
+        return 'sent';
+      }
+      track(lastFailure, code, at);
+      return 'failed';
     } catch {
+      track(lastFailure, code, at);
       return 'failed';
     } finally {
       clearTimeout(timer);
+      inFlight.delete(code);
     }
   }
 

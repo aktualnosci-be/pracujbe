@@ -4,6 +4,7 @@ import { cookies, headers } from 'next/headers';
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc } from '@/lib/db/sql';
+import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { ConsentCategories, ConsentSource } from '@/lib/consent';
 
@@ -29,16 +30,6 @@ const KNOWN_SOURCES: readonly ConsentSource[] = [
   'footer',
   'onboarding',
 ];
-
-/** Pierwszy adres z X-Forwarded-For (klient), fallback X-Real-IP. */
-function clientIp(h: Headers): string | null {
-  const xff = h.get('x-forwarded-for');
-  if (xff) {
-    const first = xff.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  return h.get('x-real-ip');
-}
 
 /**
  * Utrwala NIEZMIENNY receipt zgody po stronie serwera (RODO art. 7 — rozliczalność), przez
@@ -69,7 +60,7 @@ export async function recordConsent(
         p_categories: jsonArg(categories ?? {}),
         p_source: src,
         p_visitor_id: visitorId,
-        p_ip: clientIp(hdrs),
+        p_ip: trustedClientIp(hdrs),
         p_user_agent: hdrs.get('user-agent') ?? null,
       }),
     );

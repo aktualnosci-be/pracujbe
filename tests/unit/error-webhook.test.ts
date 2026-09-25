@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { captureError, setErrorReporter } from '@/lib/error-report';
 import {
+  ERROR_WEBHOOK_FAILURE_BACKOFF_MS,
   ERROR_WEBHOOK_MAX_CHARS,
   buildErrorWebhookPayload,
   buildErrorWebhookText,
@@ -256,6 +257,66 @@ describe('deduplikacja, 429, timeout i awarie', () => {
       }),
     ).toBe('failed');
     for (const spy of logs) expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('#612: awaria (5xx/sieć) NIE otwiera pełnego okna deduplikacji — krótki odstęp, potem ponowienie', async () => {
+    let now = 0;
+    const rec = recorder([new Response('boom', { status: 500 })]);
+    const sender = createErrorWebhookSender({ fetch: rec.fetch, target, now: () => now, dedupMs: 600_000 });
+    // Pierwsza próba: 500 → 'failed'; NIE zapisuje jak udana wysyłka (kontrola ujemna niżej).
+    expect(await sender.send({ code: 'INTERNAL' })).toBe('failed');
+    expect(rec.calls).toHaveLength(1);
+    // Tuż po awarii — krótki odstęp (nie 10 minut z dedupMs) tłumi kolejną próbę.
+    now += 100;
+    expect(await sender.send({ code: 'INTERNAL' })).toBe('deduplicated');
+    expect(rec.calls).toHaveLength(1);
+    // Po upływie krótkiego odstępu — realna PONOWNA próba (kanał mógł wrócić), nie 10-minutowa blokada.
+    now += ERROR_WEBHOOK_FAILURE_BACKOFF_MS;
+    expect(await sender.send({ code: 'INTERNAL' })).toBe('sent');
+    expect(rec.calls).toHaveLength(2);
+    // Po udanej wysyłce dedupMs (600s) faktycznie blokuje kolejne zgłoszenie tego kodu.
+    now += 1000;
+    expect(await sender.send({ code: 'INTERNAL' })).toBe('deduplicated');
+    expect(rec.calls).toHaveLength(2);
+  });
+
+  it('#612: timeout też tylko krótko tłumi, nie blokuje na cały dedupMs', async () => {
+    let now = 0;
+    const hanging = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    ) as unknown as typeof fetch;
+    const sender = createErrorWebhookSender({
+      fetch: hanging,
+      target,
+      now: () => now,
+      dedupMs: 600_000,
+      timeoutMs: 20,
+    });
+    expect(await sender.send({ code: 'INTERNAL' })).toBe('failed');
+    now += ERROR_WEBHOOK_FAILURE_BACKOFF_MS + 1;
+    // Druga próba realnie woła fetch ponownie (kanał mógł wrócić) zamiast czekać 10 minut.
+    expect(await sender.send({ code: 'INTERNAL' })).toBe('failed');
+    expect(hanging).toHaveBeenCalledTimes(2);
+  });
+
+  it('#612: dwie równoległe próby tego samego kodu przed rozstrzygnięciem pierwszej nie dublują żądania', async () => {
+    let resolveFetch: ((r: Response) => void) | null = null;
+    const pending = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    ) as unknown as typeof fetch;
+    const sender = createErrorWebhookSender({ fetch: pending, target, now: () => 0 });
+    const first = sender.send({ code: 'INTERNAL' });
+    // Druga próba startuje zanim pierwsza się rozstrzygnie — inFlight ją tłumi, bez drugiego fetch.
+    expect(await sender.send({ code: 'INTERNAL' })).toBe('deduplicated');
+    expect(pending).toHaveBeenCalledTimes(1);
+    resolveFetch!(new Response(null, { status: 204 }));
+    expect(await first).toBe('sent');
   });
 
   it('reporter (captureError) nie rzuca nawet przy awarii wysyłki', () => {
