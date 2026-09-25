@@ -17,7 +17,7 @@ Baza: b35087b, gałąź infra/railway oparta na pracach PR #8. Zmiany migracyjne
 - [P1: Railway — odbiór produkcji i integracji](https://github.com/aktualnosci-be/pracujbe/issues/16)
 - [P2: Railway — dzienna retencja i GC](https://github.com/aktualnosci-be/pracujbe/issues/17)
 - [P1: Railway — domeny, cutover, rollback i obserwacja](https://github.com/aktualnosci-be/pracujbe/issues/18)
-- [P2: Railway — IaC i cleanup po okresie stabilności](https://github.com/aktualnosci-be/pracujbe/issues/19)
+- [P2: Railway — IaC i cleanup po okresie stabilności](https://github.com/aktualnosci-be/pracujbe/issues/19) — `.railway/railway.ts` + strażnik gotowe, niewłączone ([IAC.md](IAC.md)); cleanup Vercela otwarty
 - [P2: Railway — opcjonalne usprawnienia po migracji](https://github.com/aktualnosci-be/pracujbe/issues/20)
 ## Pierwszy etap implementacji
 
@@ -42,6 +42,10 @@ Bootstrap ról, wykonawca migracji z blokadą transakcyjną i kontrolą sum oraz
 To fundament, nie gotowa migracja: publiczny odczyt ofert jest już przełączony na PostgreSQL; przepływy logowania, prywatny odczyt/zapis domeny i magazyn CV nadal wymagają spięcia z aplikacją. Nie uruchamiaj samego schematu auth jako predeploy. `npm run db:migrate:production` układa bootstrap, całą historię domeny i migracje auth we wspólną transakcję z kontrolą sum. Rollback kodu zostawia tabele auth; usunięcie tabel skasowałoby sesje i poświadczenia.
 
 Pule runtime (`src/lib/db/pool.ts`) używają oddzielnych loginów i ról startup dla auth oraz domeny. Kontrola odrzuca login superusera, CREATEROLE, ADMIN OPTION, dodatkowe członkostwo i właściciela bazy. Siedem testów na rzeczywistym PG16 potwierdza startup na dwóch różnych połączeniach, odmowę dostępu między pulami i brak eskalacji. Helper sesji (`src/lib/auth/session.ts`) bierze uprawnienia z aktywnego profilu, a nie pól klienta/cookie, oraz wymaga zweryfikowanego adresu. Sesje oczekują na spięcie z trasami; prywatne panele nadal korzystają ze starego dostawcy.
+
+## Usunięcie Supabase z runtime — 25 września 2026 (#27, część kodowa)
+
+Brak `@supabase/*` w zależnościach i w `src/`: usunięte klienty `src/lib/supabase/*`, `src/lib/storage.ts` (PDF faktur — billing wyłączony, #51), hook GoTrue `/api/auth/email-hook` z `SEND_EMAIL_HOOK_SECRET` (e-maile kont wysyła worker Better Auth), zmienne `NEXT_PUBLIC_SUPABASE_*`/`SUPABASE_*` i hosty `*.supabase.co` w CSP/`next/image`. Kolejka usuwania obiektów bez bucketu Railway zwraca `STORAGE_UNCONFIGURED` i ponawia wiersz. Tryb demo bez zmian. Strażnik `tests/unit/no-supabase-runtime.test.ts` z kontrolą ujemną. Bez migracji i bez zmian zmiennych Railway. Do odbioru #27 zostaje: smoke produkcji (healthcheck, wersja w stopce, ścieżki użytkownika) i domena `pracuj.be` w Cloudflare.
 
 ## Warstwa danych paneli na PostgreSQL — 24 września 2026 (#25)
 

@@ -23,10 +23,9 @@
 
 import { isBillingEnabled } from '@/lib/billing/flag';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { attempt, queryOne, queryRows } from '@/lib/db/sql';
+import { queryRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/sentry';
-import { getSignedFileUrl } from '@/lib/storage';
 
 /* ---------------------------------------------------------------------------
  * Kontrakty dla UI
@@ -203,33 +202,6 @@ async function activeCompanyId(tx: TransactionQuery, userId: string): Promise<st
   return getActiveCompanyId(tx, userId);
 }
 
-/**
- * Best-effort metadane pliku PDF faktury, czytane pod sesją (RLS `files_select_own`); jeśli plik
- * należy do usługi (nie do usera) odczyt zwróci null i po prostu nie pokażemy linku. Sekcja
- * `attempt` — błąd odczytu nie przerywa transakcji ekranu. NIGDY nie rzuca do wywołującego.
- */
-async function readInvoicePdfFile(
-  tx: TransactionQuery,
-  pdfFileId: string,
-): Promise<{ bucket: string; path: string } | null> {
-  const result = await attempt(tx, () =>
-    queryOne(tx, 'billing.invoice-pdf-file', 'SELECT bucket, path FROM public.files WHERE id = $1', [pdfFileId]));
-  if (!result.ok || !result.value) return null;
-  const bucket = asString(result.value['bucket']);
-  const path = asString(result.value['path']);
-  return bucket && path ? { bucket, path } : null;
-}
-
-/** Krótkotrwały signed URL (TTL 300 s — link do pobrania, nie do udostępniania). NIGDY nie rzuca. */
-async function signInvoicePdf(file: { bucket: string; path: string } | null): Promise<string | null> {
-  if (!file) return null;
-  try {
-    return await getSignedFileUrl(file.path, file.bucket, 300);
-  } catch {
-    return null;
-  }
-}
-
 /* ---------------------------------------------------------------------------
  * Publiczne API
  * ------------------------------------------------------------------------- */
@@ -270,18 +242,12 @@ export async function getBilling(): Promise<BillingData> {
 
       // Faktury (najnowsze pierwsze). RLS: invoices_select_admin.
       const invoiceRows = await queryRows(tx, 'billing.invoices',
-        `SELECT id, number, status, amount_cents, tax_cents, currency, issued_at, pdf_file_id
+        `SELECT id, number, status, amount_cents, tax_cents, currency, issued_at
            FROM public.invoices
           WHERE company_id = $1
           ORDER BY issued_at DESC NULLS LAST
           LIMIT 50`, [companyId]);
-
-      const invoiceFiles: ({ bucket: string; path: string } | null)[] = [];
-      for (const row of asRows(invoiceRows)) {
-        const pdfFileId = asString(row['pdf_file_id']);
-        invoiceFiles.push(pdfFileId ? await readInvoicePdfFile(tx, pdfFileId) : null);
-      }
-      return { subRows, invoiceRows, invoiceFiles };
+      return { subRows, invoiceRows };
     });
     if (!loaded) {
       return { subscription: null, invoices: [], plans: PLANS, providerConfigured };
@@ -300,10 +266,9 @@ export async function getBilling(): Promise<BillingData> {
         }
       : null;
 
-    // Signed URL poza transakcją — połączenie z bazą nie czeka na Storage.
+    // PDF faktur nie ma gdzie leżeć: billing wyłączony (#51), Supabase Storage usunięte (#27).
     const invoices: BillingInvoice[] = [];
-    const rows = asRows(loaded.invoiceRows);
-    for (const [index, row] of rows.entries()) {
+    for (const row of asRows(loaded.invoiceRows)) {
       invoices.push({
         id: asString(row['id']),
         number: asNullableString(row['number']),
@@ -312,7 +277,7 @@ export async function getBilling(): Promise<BillingData> {
         taxCents: asInt(row['tax_cents']),
         currency: asString(row['currency'], 'EUR'),
         issuedAt: asNullableString(row['issued_at']),
-        pdfUrl: await signInvoicePdf(loaded.invoiceFiles[index] ?? null),
+        pdfUrl: null,
       });
     }
 

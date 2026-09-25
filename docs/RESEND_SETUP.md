@@ -3,8 +3,7 @@
 > **Dostawca domyślny produkcji to EmailLabs** ([`EMAILLABS_SETUP.md`](./EMAILLABS_SETUP.md)).
 > Resend zostaje działającą alternatywą: `EMAIL_PROVIDER=resend` + `RESEND_API_KEY`. Wybór
 > dostawcy, idempotencja, ACK i kody błędów: `src/lib/email/transport/`. Kolejka, wypisanie,
-> budżety i blokady opisane niżej działają tak samo dla obu dostawców. Wyjątek: hook Supabase
-> Auth (`/api/auth/email-hook`, ścieżka przejściowa do usunięcia w #27) wysyła zawsze przez Resend.
+> budżety i blokady opisane niżej działają tak samo dla obu dostawców.
 
 Konfiguracja Resend do e-maili transakcyjnych Pracuj.be: konto, domena i DNS
 (SPF/DKIM/DMARC), API key, `EMAIL_FROM`, test wysyłki oraz kolejka `email_deliveries`
