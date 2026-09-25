@@ -10,6 +10,7 @@ import {
   TABLE_CLASSIFICATION,
 } from "../../src/lib/privacy/data-map.ts";
 import { PROCESSORS } from "../../src/lib/privacy/processors.ts";
+import { EMAIL_PAYLOAD_FIELDS } from "../../src/lib/email/payload-fields.ts";
 import { AUTH_EMAIL_TYPES, GUEST_EMAIL_TYPES, QUEUED_EMAIL_TYPES } from "../../src/emails/wiring.ts";
 import { extractEmailPayloads } from "./email-payloads.mjs";
 import { loadMigrationFiles, parseSchema } from "./schema.mjs";
@@ -160,13 +161,21 @@ export function renderDataMap(tables, emailPayloads) {
     "`src/lib/email/guest-delivery.ts`). E-maile konta (`src/lib/email/auth-email.ts`):",
     `${AUTH_EMAIL_TYPES.map(code).join(", ")} — zawierają link z tokenem.`,
     "",
-    "| Szablon | Pola payloadu | Funkcje SQL |",
-    "|---|---|---|",
+    "Minimalizacja (#503): do szablonu — a więc do dostawcy poczty — trafiają tylko pola z listy",
+    "`src/lib/email/payload-fields.ts`; resztę payloadu worker odrzuca przed renderem (zostaje w bazie).",
+    "Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal ma uprawnienie",
+    "(`email_recipient_authorized` w `claim_email_batch`).",
+    "",
+    "| Szablon | Pola payloadu | Odrzucane przez workera | Funkcje SQL |",
+    "|---|---|---|---|",
   );
   for (const template of [...QUEUED_EMAIL_TYPES, ...GUEST_EMAIL_TYPES].slice().sort()) {
     const found = emailPayloads.get(template);
+    const allowed = new Set(EMAIL_PAYLOAD_FIELDS[template] ?? []);
+    const dropped = found ? found.keys.filter((key) => !allowed.has(key)) : [];
     push(
       `| ${code(template)} | ${found ? found.keys.map(code).join(", ") || "—" : "nie znaleziono w migracjach"} | ` +
+        `${dropped.map(code).join(", ") || "—"} | ` +
         `${found ? found.functions.map(code).join(", ") : "—"} |`,
     );
   }

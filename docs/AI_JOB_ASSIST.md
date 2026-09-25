@@ -57,10 +57,11 @@ Szacunek na wywołanie (do potwierdzenia pomiarem `usage`): wejście ~1,5–4 ty
 (prompt + tekst oferty), wyjście ~0,5–2 tys. Górna granica przy pełnym limicie — do policzenia
 w #36 po cenach z dnia włączenia.
 
-**Budżet (#36).** Do scalenia #36 domyślna bramka zawsze się zgadza, a koszty ogranicza limit
-per firma. #36 podmienia bramkę (`setAiBudgetGate`) albo zastępuje `budget.ts` adapterem; odmowa
-= kod `AI_BUDGET_EXCEEDED` bez wywołania modelu. `settle` dostaje wyłącznie funkcję, firmę,
-model i liczby tokenów.
+**Budżet (#36).** Bramka `budget.ts` rezerwuje w globalnym budżecie AI (`ai_budget_reserve`,
+migracja 0120, `docs/AI_BUDGET.md`) górną granicę kosztu (`src/lib/ai-assist/cost.ts`: prompt +
+schemat + treść pól + pełne `max_tokens`) PRZED wywołaniem modelu. Odmowa albo brak bazy zadań
+= kod `AI_BUDGET_EXCEEDED` bez wywołania. Bilet rozlicza tę rezerwację samymi liczbami tokenów;
+błąd wywołania = rozliczenie pełną rezerwacją. Identyfikator firmy nie trafia do rejestru kosztów.
 
 ## Bezpieczeństwo
 

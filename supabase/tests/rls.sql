@@ -4901,6 +4901,82 @@ select pg_temp.assert(
     like '%USING gin (search_fold(city) gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))%',
   'OPS47-9 idx_jobs_city_fold_trgm: GIN trigram na search_fold(city), częściowy jak predykat listy ofert');
 
+-- =============================================================================
+-- OPS44 — czujki poczty (0118, #44): sekcja `mail` w ops_metrics — kohorta listów
+-- przyjętych w 24 h / 7 dobach bazowych, trwałe odbicia i skargi tej kohorty, aktywne
+-- i nowe blokady. Tylko liczby; pracujbe_ops nadal bez praw do tabel.
+-- =============================================================================
+\echo '--- OPS44 ops_metrics mail ---'
+set role pracujbe_ops;
+select pg_temp.expect_error('select count(*) from public.email_suppressions', 'permission denied',
+  'OPS44-1 pracujbe_ops nie czyta blokad');
+select pg_temp.assert(
+  (select jsonb_typeof(public.ops_metrics() -> 'mail') = 'object'
+     and (public.ops_metrics() -> 'mail') ?& array['sentLast24h', 'hardBouncesLast24h', 'complaintsLast24h',
+       'sentBaseline7d', 'hardBouncesBaseline7d', 'complaintsBaseline7d', 'activeSuppressions',
+       'newSuppressionsLast24h']),
+  'OPS44-2 pracujbe_ops czyta sekcję mail z kompletem kluczy');
+reset role;
+
+select public.ops_metrics() -> 'mail' as mail_base \gset
+begin;
+insert into public.email_deliveries(to_email, template, status, sent_at, bounce_type, bounced_at, complained_at) values
+  -- kohorta 24 h: 4 przyjęte, 1 trwałe odbicie, 1 skarga, 1 odbicie przejściowe (nie liczone)
+  ('ops44-a@test.invalid', 'newMessage', 'delivered', now() - interval '1 hour', null, null, null),
+  ('ops44-b@test.invalid', 'newMessage', 'bounced', now() - interval '2 hours', 'permanent', now() - interval '2 hours', null),
+  ('ops44-c@test.invalid', 'newMessage', 'complained', now() - interval '3 hours', null, null, now() - interval '1 hour'),
+  ('ops44-d@test.invalid', 'newMessage', 'sent', now() - interval '4 hours', 'transient', now() - interval '4 hours', null),
+  -- okno bazowe (2–8 dób): 2 przyjęte, 1 trwałe odbicie ze zdarzeniem DZIŚ (liczy się kohorta)
+  ('ops44-e@test.invalid', 'newMessage', 'delivered', now() - interval '3 days', null, null, null),
+  ('ops44-f@test.invalid', 'newMessage', 'bounced', now() - interval '5 days', 'permanent', now() - interval '1 hour', null),
+  -- poza oknem 8 dób i bez sent_at (queued/failed) — pomijane
+  ('ops44-g@test.invalid', 'newMessage', 'bounced', now() - interval '9 days', 'permanent', now() - interval '9 days', null),
+  ('ops44-h@test.invalid', 'newMessage', 'queued', null, null, null, null);
+insert into public.email_suppressions(email, reason, created_at, lifted_at, lift_reason) values
+  ('ops44-b@test.invalid', 'hard_bounce', now() - interval '2 hours', null, null),
+  ('ops44-c@test.invalid', 'complaint', now() - interval '3 days', null, null),
+  ('ops44-z@test.invalid', 'hard_bounce', now() - interval '1 hour', now(), 'ops44 zdjęta');
+set local role pracujbe_ops;
+select public.ops_metrics() -> 'mail' as mail_now \gset
+reset role;
+select pg_temp.assert(
+  ((:'mail_now')::jsonb ->> 'sentLast24h')::int = ((:'mail_base')::jsonb ->> 'sentLast24h')::int + 4
+  and ((:'mail_now')::jsonb ->> 'hardBouncesLast24h')::int = ((:'mail_base')::jsonb ->> 'hardBouncesLast24h')::int + 1
+  and ((:'mail_now')::jsonb ->> 'complaintsLast24h')::int = ((:'mail_base')::jsonb ->> 'complaintsLast24h')::int + 1,
+  'OPS44-3 kohorta 24 h: przyjęte, trwałe odbicia (przejściowe pominięte), skargi');
+select pg_temp.assert(
+  ((:'mail_now')::jsonb ->> 'sentBaseline7d')::int = ((:'mail_base')::jsonb ->> 'sentBaseline7d')::int + 2
+  and ((:'mail_now')::jsonb ->> 'hardBouncesBaseline7d')::int = ((:'mail_base')::jsonb ->> 'hardBouncesBaseline7d')::int + 1
+  and ((:'mail_now')::jsonb ->> 'complaintsBaseline7d')::int = ((:'mail_base')::jsonb ->> 'complaintsBaseline7d')::int,
+  'OPS44-4 okno bazowe 7 dób: kohorta po sent_at, starsze niż 8 dób i niewysłane pominięte');
+select pg_temp.assert(
+  ((:'mail_now')::jsonb ->> 'activeSuppressions')::int = ((:'mail_base')::jsonb ->> 'activeSuppressions')::int + 2
+  and ((:'mail_now')::jsonb ->> 'newSuppressionsLast24h')::int = ((:'mail_base')::jsonb ->> 'newSuppressionsLast24h')::int + 2,
+  'OPS44-5 blokady: aktywne bez zdjętych, nowe z 24 h (także zdjęta)');
+select pg_temp.assert(
+  position('ops44' in (:'mail_now')) = 0 and position('@' in (:'mail_now')) = 0,
+  'OPS44-6 sekcja mail bez adresów i identyfikatorów');
+rollback;
+
+-- Kontrola ujemna: funkcja o kształcie z 0096 (te same sekcje, bez `mail`) nie przechodzi
+-- warunku OPS44-2 — asercja zależy od 0118, a nie od przypadkowego klucza. (Bez \ir:
+-- plik bywa podawany przez stdin, np. tests/integration/rate-limit.test.ts.)
+begin;
+alter function public.ops_metrics() rename to ops_metrics_0118;
+create function public.ops_metrics() returns jsonb language sql stable security definer
+  set search_path = pg_catalog, public, pg_temp as $$ select public.ops_metrics_0118() - 'mail' $$;
+grant execute on function public.ops_metrics() to pracujbe_ops;
+set local role pracujbe_ops;
+select pg_temp.assert(
+  (public.ops_metrics() ?& array['email', 'authEmail', 'webhooks', 'maintenance', 'connections'])
+  and not coalesce(jsonb_typeof(public.ops_metrics() -> 'mail') = 'object', false),
+  'OPS44-7 kontrola ujemna: kształt z 0096 nie daje sekcji mail');
+rollback;
+select pg_temp.assert(
+  (select pg_get_indexdef('public.idx_email_deliveries_sent_at'::regclass))
+    like '%(sent_at) WHERE (sent_at IS NOT NULL)%',
+  'OPS44-8 idx_email_deliveries_sent_at: częściowy indeks pod okno kohorty');
+
 -- ============================================================================
 -- SS100. Zapisane wyszukiwania i alerty o nowych ofertach (0092, #100): kanoniczne
 -- filtry bez duplikatów, izolacja właściciela, RPC-only DML, worker przez
@@ -9546,6 +9622,538 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
+-- ES503. Uprawnienie odbiorcy firmowego w chwili wysyłki (#503, 0122): e-mail z danymi
+--        kandydata zakolejkowany dla recruitera nie wychodzi, gdy przed claimem stracił
+--        rolę; właściciel i kandydat dostają swoje. Kontrola ujemna: bez sprawdzenia
+--        (helper zawsze true) ten sam claim wydaje wiersze byłego recruitera.
+-- ============================================================================
+\echo '--- ES503 send-time recipient check ---'
+begin;
+\set ESC  'e5030000-0000-0000-0000-00000000000c'
+\set ESO  'e5030000-0000-0000-0000-0000000000a1'
+\set ESR  'e5030000-0000-0000-0000-0000000000a2'
+\set ESCO 'e5030000-0000-0000-0000-0000000000f1'
+\set ESJ  'e5030000-0000-0000-0000-0000000000b1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'ESC','esc@test.be','Cleo C','{"role":"candidate","first_name":"Cleo","last_name":"Candidat","locale":"fr"}'),
+  (:'ESO','eso@test.be','Otto O','{"role":"employer","first_name":"Otto","last_name":"Owner","locale":"nl"}'),
+  (:'ESR','esr@test.be','Rita R','{"role":"employer","first_name":"Rita","last_name":"Recruiter","locale":"en"}');
+insert into public.companies(id,name,status) values (:'ESCO','Firma ES','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'ESCO',:'ESO','owner',true),
+  (:'ESCO',:'ESR','recruiter',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'ESJ',:'ESCO','job-es503','Operator ES','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'ESC', false);
+
+-- Wszystko kolejkowane, gdy ESR jest aktywnym recruiterem.
+select set_config('app.current_uid', :'ESC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'ESJ'::uuid, 'es503-app', null, null, null) as esapp \gset
+reset role;
+select set_config('app.current_uid', :'ESR', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'ESJ'::uuid, :'ESC'::uuid, 'es503-off', null, null) as esoff \gset
+select public.get_or_create_conversation(:'esapp'::uuid, null) as esconv \gset
+select public.send_message(:'esconv'::uuid, 'Zapraszamy', gen_random_uuid()) as esmsg_to_cand \gset
+reset role;
+select set_config('app.current_uid', :'ESC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.respond_to_offer(:'esoff'::uuid, true);
+select public.send_message(:'esconv'::uuid, 'Dziękuję', gen_random_uuid()) as esmsg_to_co \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where profile_id = :'ESR' and status = 'queued'
+       and template in ('newApplication', 'offerAccepted', 'newMessage')) = 3,
+  'ES503-0 e-maile z danymi kandydata zakolejkowane dla aktywnego recruitera');
+select pg_temp.assert(
+  public.email_recipient_authorized('newApplication', 'application', :'esapp'::uuid, :'ESR'::uuid)
+  and public.email_recipient_authorized('newMessage', 'message', :'esmsg_to_cand'::uuid, :'ESC'::uuid),
+  'ES503-0b przed odebraniem roli: recruiter i kandydat uprawnieni');
+
+-- ESR traci rolę rekrutacyjną po zakolejkowaniu, przed wysyłką.
+update public.company_members set role = 'member' where company_id = :'ESCO' and profile_id = :'ESR';
+
+-- Kontrola ujemna: bez sprawdzenia w chwili wysyłki claim wydaje wiersze ESR.
+savepoint es503_neg;
+create or replace function public.email_recipient_authorized(
+  p_template text, p_entity_type text, p_entity_id uuid, p_profile_id uuid)
+  returns boolean language sql stable as 'select true';
+select pg_temp.assert(
+  (select count(*) from public.claim_email_batch(100000) c where c.profile_id = :'ESR') = 3,
+  'ES503-1 kontrola ujemna: bez sprawdzenia uprawnień e-maile trafiłyby do b. recruitera');
+rollback to savepoint es503_neg;
+
+select count(*) from public.claim_email_batch(100000) \gset es_claim_
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where profile_id = :'ESR' and status = 'failed' and suppressed_at is not null
+       and error_message = 'suppressed_recipient_unauthorized' and locked_at is null) = 3,
+  'ES503-2 wiersze b. recruitera wygaszone przy claimie (ślad zostaje, nic nie wychodzi)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where profile_id = :'ESO' and status = 'queued' and locked_at is not null
+       and template in ('newApplication', 'newMessage')) = 3,
+  'ES503-3 aktywny właściciel dostaje e-maile: aplikacja + 2 wiadomości (wiersze wydane workerowi)');
+select pg_temp.assert(
+  (select status::text = 'queued' and locked_at is not null from public.email_deliveries
+     where entity_id = :'esmsg_to_cand' and profile_id = :'ESC'),
+  'ES503-4 kandydat (strona spoza firmy) nadal dostaje e-mail o wiadomości');
+
+-- Brak obiektu wiersza albo niezgodny typ obiektu = brak uprawnienia (fail-closed).
+select pg_temp.assert(
+  not public.email_recipient_authorized('newApplication', 'application', gen_random_uuid(), :'ESO'::uuid)
+  and not public.email_recipient_authorized('offerAccepted', 'application', :'esapp'::uuid, :'ESO'::uuid)
+  and not public.email_recipient_authorized('newMessage', 'message', gen_random_uuid(), :'ESC'::uuid)
+  and public.email_recipient_authorized('offerAccepted', 'offer', :'esoff'::uuid, :'ESO'::uuid)
+  and public.email_recipient_authorized('statusChanged', 'application', gen_random_uuid(), :'ESC'::uuid),
+  'ES503-5 obiekt nieistniejący / zły typ → false; szablony spoza firmy bez zmian');
+-- Dezaktywacja członkostwa i usunięcie konta też odbierają uprawnienie.
+update public.company_members set is_active = false where company_id = :'ESCO' and profile_id = :'ESO';
+select pg_temp.assert(
+  not public.email_recipient_authorized('newApplication', 'application', :'esapp'::uuid, :'ESO'::uuid),
+  'ES503-6 nieaktywne członkostwo → brak uprawnienia');
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.email_recipient_authorized(text, text, uuid, uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.email_recipient_authorized(text, text, uuid, uuid)', 'execute'),
+  'ES503-7 helper niedostępny dla ról klienta');
+rollback;
+
+-- ============================================================================
+-- GS98. E-mail do gościa o zmianie statusu (#98, 0121): transition_application kolejkuje
+--       `guestStatusChanged` na adres gościa w języku jego formularza (nie firmy), klucz =
+--       id wiersza historii, tylko potwierdzone zgłoszenie, bez zablokowanego adresu (#44),
+--       wiersz kolejki usuwany z aplikacją przez retencję (#486). Kontrole ujemne: helper
+--       bez sprawdzenia blokady / potwierdzenia wysyła — testy to wykrywają.
+-- ============================================================================
+\set GSO 'e9810000-0000-0000-0000-0000000000a1'
+\set GSR 'e9810000-0000-0000-0000-0000000000a2'
+\set GSC 'e9810000-0000-0000-0000-0000000000c1'
+\set GSJ 'e9810000-0000-0000-0000-0000000000d1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'GSO','gso@test.be','Gerd O','{"role":"employer","first_name":"Gerd","last_name":"Owner","locale":"fr"}');
+update auth.users set email_verified = true where id = :'GSO';
+insert into public.companies(id,name,status) values (:'GSC','Firma GS','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'GSC',:'GSO','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'GSJ',:'GSC','gs-job','Magazynier GS','warehouse','permanent','Gent','Flandria','active','pl');
+
+set role service_role;
+select public.submit_guest_application(:'GSJ', 'gs-guest@test.be', 'Greta Gość', null, null, null, 'nl',
+  'idem-gs-0001', 'nonce-gs-0001-aaaaaaaa', encode(sha256('tok-gs-1'::bytea), 'hex')) as gsreq \gset
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-gs-1'::bytea), 'hex'),
+     'nonce-claim-gs-00001', encode(sha256('claim-gs-1'::bytea), 'hex'))) = 'confirmed',
+  'GS98-0 przygotowanie: potwierdzona aplikacja gościa (formularz nl, firma fr)');
+reset role;
+select id as gsapp from public.applications where job_id = :'GSJ' \gset
+
+-- GS98-1: klient nie woła helpera; helper przyjmuje tylko swój typ.
+set role authenticated; set app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.enqueue_guest_status_email(%L, %L, %L, %L::jsonb)',
+  :'gsapp', 'guestStatusChanged', 'gs-x', '{}'), 'permission denied', 'GS98-1 authenticated bez EXECUTE helpera');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.enqueue_guest_status_email(%L, %L, %L, %L::jsonb)',
+  :'gsapp', 'guestStatusChanged', 'gs-x', '{}'), 'permission denied', 'GS98-1b anon bez EXECUTE helpera');
+reset role;
+select pg_temp.expect_error(format('select public.enqueue_guest_status_email(%L, %L, %L, %L::jsonb)',
+  :'gsapp', 'statusChanged', 'gs-x', '{}'), 'VALIDATION_FAILED', 'GS98-1c helper odrzuca inny typ e-maila');
+
+-- GS98-2: zmiana statusu → jeden e-mail do gościa w języku formularza, klucz = wiersz historii.
+set role authenticated; set app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'viewed');
+select public.transition_application(:'gsapp', 'viewed'); -- retry bez zmiany stanu
+reset role; reset app.current_uid;
+select id as gshist1 from public.application_status_history
+ where application_id = :'gsapp' and to_status = 'viewed' \gset
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where template = 'guestStatusChanged' and entity_id = :'gsapp') = 1
+  and (select to_email = 'gs-guest@test.be' and locale = 'nl' and profile_id is null
+              and entity_type = 'application' and status::text = 'queued'
+              and idempotency_key = 'appstatus-' || :'gsapp' || '-' || :'gshist1'
+         from public.email_deliveries where template = 'guestStatusChanged' and entity_id = :'gsapp'),
+  'GS98-2 jeden e-mail do gościa (nl, nie fr firmy), klucz = id wiersza historii; retry bez duplikatu');
+select pg_temp.assert(
+  (select array_agg(k order by k) = array['companyName','jobTitle','recipientName','status']
+          and payload ->> 'status' = 'viewed' and payload ->> 'companyName' = 'Firma GS'
+          and payload ->> 'jobTitle' = 'Magazynier GS' and payload ->> 'recipientName' = 'Greta Gość'
+     from public.email_deliveries, jsonb_object_keys(payload) k
+    where template = 'guestStatusChanged' and entity_id = :'gsapp'
+    group by payload),
+  'GS98-2b payload: tylko imię gościa, nazwa firmy, tytuł oferty, status');
+select pg_temp.assert(
+  not exists (select 1 from public.notifications where entity_id = :'gsapp' and type = 'application_status_changed')
+  and not exists (select 1 from public.email_deliveries where entity_id = :'gsapp'
+                    and template in ('applicationViewed', 'statusChanged')),
+  'GS98-2c bez powiadomienia in-app i bez e-maili kandydata (brak profilu)');
+
+-- GS98-3: kolejny status = nowy wiersz historii = nowy e-mail.
+set role authenticated; set app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'shortlisted');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(distinct idempotency_key) from public.email_deliveries
+    where template = 'guestStatusChanged' and entity_id = :'gsapp') = 2
+  and exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                and entity_id = :'gsapp' and payload ->> 'status' = 'shortlisted'),
+  'GS98-3 kolejna zmiana statusu → drugi e-mail z nowym kluczem');
+
+-- GS98-4: adres z aktywną blokadą (#44) → brak e-maila; historia i status zapisane.
+insert into public.email_suppressions(email, reason) values ('gs-guest@test.be', 'hard_bounce');
+set role authenticated; set app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'interview');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.applications where id = :'gsapp') = 'interview'
+  and not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                    and entity_id = :'gsapp' and payload ->> 'status' = 'interview'),
+  'GS98-4 zablokowany adres: status zmieniony, e-mail niekolejkowany');
+-- Kontrola ujemna: helper bez sprawdzenia blokady kolejkuje e-mail na zablokowany adres.
+begin;
+create or replace function public.enqueue_guest_status_email(
+  p_application_id uuid, p_type text, p_idempotency_key text, p_payload jsonb
+) returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  insert into public.email_deliveries
+    (profile_id, to_email, template, locale, subject, status, entity_type, entity_id,
+     idempotency_key, payload, queued_at, next_attempt_at, attempts)
+  select null, a.guest_email, p_type, g.locale, p_type, 'queued', 'application', a.id,
+         p_idempotency_key, p_payload, now(), now(), 0
+    from public.applications a
+    join public.guest_application_requests g
+      on g.id = a.guest_request_id and g.application_id = a.id and g.status = 'confirmed'
+   where a.id = p_application_id and a.candidate_id is null
+  on conflict (idempotency_key) where idempotency_key is not null do nothing;
+end $$;
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role;
+select pg_temp.assert(exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                        and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
+  'GS98-4b kontrola ujemna: bez sprawdzenia blokady e-mail trafia do kolejki');
+rollback;
+delete from public.email_suppressions where email = 'gs-guest@test.be';
+
+-- GS98-5: zgłoszenie niepotwierdzone (stan inny niż confirmed) → brak e-maila.
+begin;
+update public.guest_application_requests set status = 'duplicate' where id = :'gsreq';
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                        and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
+  'GS98-5 tylko potwierdzone zgłoszenie dostaje e-mail');
+rollback;
+-- Kontrola ujemna: helper bez warunku potwierdzenia wysyła mimo niepotwierdzonego zgłoszenia.
+begin;
+create or replace function public.enqueue_guest_status_email(
+  p_application_id uuid, p_type text, p_idempotency_key text, p_payload jsonb
+) returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  insert into public.email_deliveries
+    (profile_id, to_email, template, locale, subject, status, entity_type, entity_id,
+     idempotency_key, payload, queued_at, next_attempt_at, attempts)
+  select null, a.guest_email, p_type, g.locale, p_type, 'queued', 'application', a.id,
+         p_idempotency_key, p_payload, now(), now(), 0
+    from public.applications a
+    join public.guest_application_requests g on g.id = a.guest_request_id
+   where a.id = p_application_id and a.candidate_id is null
+     and not public.email_address_suppressed(a.guest_email::text)
+  on conflict (idempotency_key) where idempotency_key is not null do nothing;
+end $$;
+update public.guest_application_requests set status = 'duplicate' where id = :'gsreq';
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role;
+select pg_temp.assert(exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                        and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
+  'GS98-5b kontrola ujemna: bez warunku potwierdzenia e-mail trafia do kolejki');
+rollback;
+
+-- GS98-6: aplikacja usunięta miękko → brak e-maila.
+begin;
+update public.applications set deleted_at = now() where id = :'gsapp';
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                        and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
+  'GS98-6 usunięta aplikacja nie wysyła e-maila');
+rollback;
+
+-- GS98-7: retencja zamkniętych aplikacji (#486) usuwa e-maile gościa razem z aplikacją.
+begin;
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'rejected');
+reset role;
+select pg_temp.assert((select count(*) from public.email_deliveries
+    where template = 'guestStatusChanged' and entity_id = :'gsapp') = 3,
+  'GS98-7 przygotowanie: e-mail o odrzuceniu w kolejce');
+update public.retention_policies set period = interval '30 days' where key = 'closed_application';
+set local session_replication_role = replica;
+update public.applications set updated_at = now() - interval '60 days' where id = :'gsapp';
+set local session_replication_role = origin;
+set local role service_role;
+select public.run_retention_purge(100);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.applications where id = :'gsapp')
+  and not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged' and entity_id = :'gsapp'),
+  'GS98-7b retencja usuwa aplikację gościa razem z e-mailami o statusie');
+rollback;
+
+-- GS98-8: po przejęciu aplikacji przez konto — ścieżka kandydata, bez e-maila gościa.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'GSR','gs-guest@test.be','Greta G','{"role":"candidate","first_name":"Greta","last_name":"G","locale":"pl"}');
+update auth.users set email_verified = true where id = :'GSR';
+set role authenticated; set app.current_uid = :'GSR'; select pg_temp.assert_client_role();
+select public.claim_guest_application(encode(sha256('claim-gs-1'::bytea), 'hex')) as gsclaim \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  :'gsclaim' = :'gsapp'
+  and (select locale = 'pl' from public.email_deliveries where template = 'statusChanged'
+         and entity_id = :'gsapp' and profile_id = :'GSR')
+  and not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
+                    and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
+  'GS98-8 przejęta aplikacja: statusChanged do kandydata (pl), bez e-maila gościa');
+
+-- ============================================================================
+-- MA (0119): załączniki w rozmowach — RPC-only, przygotowanie + wysłanie jedną transakcją
+-- send_message (idempotencja client_message_id i client_upload_id), dostęp tylko dla
+-- bieżących uczestników, kwarantanna scan_status, blokada firmy (#97), metadane plików
+-- chronione przed klientem, sprzątanie przez kolejkę storage (#486). Kontrole ujemne:
+-- wyłączony strażnik files, podmieniony załącznik — każda daje wykrywalny wynik.
+-- ============================================================================
+\set MAC 'e1190000-0000-0000-0000-0000000000c1'
+\set MAE 'e1190000-0000-0000-0000-0000000000e1'
+\set MAX 'e1190000-0000-0000-0000-0000000000e2'
+\set MAF 'e1190000-0000-0000-0000-0000000000f1'
+\set MAJ 'e1190000-0000-0000-0000-0000000000b1'
+\set MAU1 'e1190000-0000-0000-0000-0000000000d1'
+\set MAU2 'e1190000-0000-0000-0000-0000000000d2'
+\set MAU3 'e1190000-0000-0000-0000-0000000000d3'
+\set MAU4 'e1190000-0000-0000-0000-0000000000d4'
+\set MAU5 'e1190000-0000-0000-0000-0000000000d5'
+\set MAK1 'e1190000-0000-0000-0000-0000000000a1'
+\set MAK2 'e1190000-0000-0000-0000-0000000000a2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'MAC','mac@test.be','Ma C','{"role":"candidate","first_name":"Ma","last_name":"Cand","locale":"pl"}'),
+  (:'MAE','mae@test.be','Ma E','{"role":"employer","first_name":"Ma","last_name":"Rek","locale":"nl"}'),
+  (:'MAX','max@test.be','Ma X','{"role":"employer","first_name":"Ma","last_name":"Obcy","locale":"fr"}');
+insert into public.companies(id,name,status) values (:'MAF','Firma MA','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'MAF',:'MAE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'MAJ',:'MAF','job-ma-1','Magazynier MA','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values (:'MAC', false, true);
+
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'MAJ'::uuid, 'ma-app-1', null, 'immediate', null) as maapp \gset
+select public.get_or_create_conversation(:'maapp'::uuid, null) as maconv \gset
+reset role;
+select :'maconv' || '/att-' || gen_random_uuid()::text || '.pdf' as mapath1,
+       :'maconv' || '/att-' || gen_random_uuid()::text || '.png' as mapath2,
+       :'maconv' || '/att-' || gen_random_uuid()::text || '.pdf' as mapath3,
+       :'maconv' || '/att-' || gen_random_uuid()::text || '.jpg' as mapath4,
+       :'maconv' || '/att-' || gen_random_uuid()::text || '.docx' as mapath5,
+       gen_random_uuid()::text || '/att-' || gen_random_uuid()::text || '.pdf' as mapathx,
+       repeat('a', 64) as masha \gset
+
+-- MA1: tabela niedostępna bezpośrednio (także dla uczestnika); RPC nie dla anon.
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select 1 from public.message_attachments', 'permission denied',
+  'MA1 uczestnik nie czyta tabeli załączników bezpośrednio');
+select pg_temp.expect_error(format($$insert into public.message_attachments(conversation_id, uploader_id, file_id, client_upload_id)
+  values (%L, %L, gen_random_uuid(), gen_random_uuid())$$, :'maconv', :'MAC'),
+  'permission denied', 'MA1b brak bezpośredniego INSERT');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), 'x', 'a.pdf', 'application/pdf', 1, %L)$$,
+  :'maconv', :'masha'), 'permission denied', 'MA1c anon nie wywoła stage_message_attachment');
+reset role;
+
+-- MA2: kandydat przygotowuje plik; ponowienie z tym samym client_upload_id = ten sam załącznik.
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select attachment_id as maatt1, created as macreated1 from public.stage_message_attachment(
+  :'maconv'::uuid, :'MAU1'::uuid, :'mapath1', 'CV Ma.pdf', 'application/pdf', 1000, :'masha') \gset
+select attachment_id as maatt1b, created as macreated1b from public.stage_message_attachment(
+  :'maconv'::uuid, :'MAU1'::uuid, :'mapath3', 'CV Ma.pdf', 'application/pdf', 1000, :'masha') \gset
+select pg_temp.assert(:'maatt1' = :'maatt1b' and :'macreated1'::boolean and not :'macreated1b'::boolean,
+  'MA2 ponowienie uploadu zwraca istniejący załącznik (created=false)');
+-- MA2b: walidacja — cudzy prefiks rozmowy, MIME ≠ rozszerzenie, > 5 MB, zły skrót, stan skanu.
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.pdf', 'application/pdf', 1, %L)$$,
+  :'maconv', :'mapathx', :'masha'), 'VALIDATION_FAILED', 'MA2b ścieżka spoza rozmowy odrzucona');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.png', 'image/jpeg', 1, %L)$$,
+  :'maconv', :'mapath2', :'masha'), 'VALIDATION_FAILED', 'MA2c MIME niezgodny z rozszerzeniem odrzucony');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.png', 'image/png', 5242881, %L)$$,
+  :'maconv', :'mapath2', :'masha'), 'VALIDATION_FAILED', 'MA2d plik > 5 MB odrzucony');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.png', 'image/png', 10, 'zly')$$,
+  :'maconv', :'mapath2'), 'VALIDATION_FAILED', 'MA2e zły skrót odrzucony');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.png', 'image/png', 10, %L, 'clean')$$,
+  :'maconv', :'mapath2', :'masha'), 'VALIDATION_FAILED', 'MA2f klient nie ustawi scan_status=clean');
+select attachment_id as maatt2 from public.stage_message_attachment(
+  :'maconv'::uuid, :'MAU2'::uuid, :'mapath2', 'zdjecie.png', 'image/png', 2000, :'masha') \gset
+-- MA3: przed wysłaniem plik nie jest widoczny ani do pobrania — także dla autora.
+select pg_temp.assert((select count(*) from public.get_message_attachment_download(:'maatt1'::uuid)) = 0,
+  'MA3 przygotowany (niewysłany) plik nie do pobrania');
+reset role;
+
+-- MA3b: obcy pracodawca nie przygotuje pliku w cudzej rozmowie.
+select set_config('app.current_uid', :'MAX', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.pdf', 'application/pdf', 1, %L)$$,
+  :'maconv', :'mapath5', :'masha'), 'PERMISSION_DENIED', 'MA3b obcy nie dołącza pliku do rozmowy');
+reset role;
+
+-- MA4: wysłanie z załącznikiem (pusta treść dozwolona tylko z plikiem); ponowienie tym
+-- samym kluczem zwraca tę samą wiadomość bez ponownego łączenia.
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($$select public.send_message(%L, '  ', gen_random_uuid())$$, :'maconv'),
+  'VALIDATION_FAILED', 'MA4 pusta treść bez załącznika odrzucona');
+select public.send_message(:'maconv'::uuid, '', :'MAK1'::uuid, array[:'maatt1'::uuid]) as mamsg1 \gset
+select public.send_message(:'maconv'::uuid, '', :'MAK1'::uuid, array[:'maatt1'::uuid]) as mamsg1b \gset
+select pg_temp.assert(:'mamsg1' = :'mamsg1b', 'MA4b ponowienie zwraca tę samą wiadomość');
+select pg_temp.assert(
+  (select count(*) from public.get_message_attachments(array[:'mamsg1'::uuid])) = 1
+  and (select file_name from public.get_message_attachments(array[:'mamsg1'::uuid])) = 'CV Ma.pdf',
+  'MA4c autor widzi wysłany załącznik');
+select pg_temp.expect_error(format($$select public.send_message(%L, 'drugi raz', gen_random_uuid(), array[%L::uuid])$$,
+  :'maconv', :'maatt1'), 'VALIDATION_FAILED', 'MA4d wysłany załącznik nie trafi do drugiej wiadomości');
+select pg_temp.expect_error(format($$select public.send_message(%L, 'cztery', gen_random_uuid(), array[gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid()])$$,
+  :'maconv'), 'VALIDATION_FAILED', 'MA4e więcej niż 3 załączniki odrzucone');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.messages where conversation_id = :'maconv' and body = 'drugi raz') = 0,
+  'MA4f odrzucenie załącznika cofa całą wiadomość (atomowość)');
+
+-- MA5: rekruter (uczestnik) widzi i może pobrać; nie użyje cudzego przygotowanego pliku.
+select set_config('app.current_uid', :'MAE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_message_attachments(array[:'mamsg1'::uuid]) where downloadable) = 1
+  and (select path from public.get_message_attachment_download(:'maatt1'::uuid)) = :'mapath1',
+  'MA5 druga strona rozmowy widzi i pobiera załącznik');
+select pg_temp.expect_error(format($$select public.send_message(%L, 'cudzy', gen_random_uuid(), array[%L::uuid])$$,
+  :'maconv', :'maatt2'), 'VALIDATION_FAILED', 'MA5b cudzy przygotowany plik odrzucony');
+select attachment_id as maatt4 from public.stage_message_attachment(
+  :'maconv'::uuid, :'MAU4'::uuid, :'mapath4', 'umowa.jpg', 'image/jpeg', 3000, :'masha') \gset
+select public.send_message(:'maconv'::uuid, 'Umowa w załączniku', gen_random_uuid(), array[:'maatt4'::uuid]) as mamsg4 \gset
+reset role;
+-- MA5c: obcy nie widzi i nie pobiera (brak członkostwa).
+select set_config('app.current_uid', :'MAX', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_message_attachments(array[:'mamsg1'::uuid, :'mamsg4'::uuid])) = 0
+  and (select count(*) from public.get_message_attachment_download(:'maatt1'::uuid)) = 0,
+  'MA5c obcy nie widzi ani nie pobiera załączników');
+reset role;
+
+-- MA6: kwarantanna — plik 'pending' widoczny jako niedostępny, bez pobrania.
+update public.files set scan_status = 'pending'
+ where id = (select file_id from public.message_attachments where id = :'maatt1');
+select set_config('app.current_uid', :'MAE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select not downloadable from public.get_message_attachments(array[:'mamsg1'::uuid]))
+  and (select count(*) from public.get_message_attachment_download(:'maatt1'::uuid)) = 0,
+  'MA6 plik w kwarantannie nie do pobrania');
+reset role;
+update public.files set scan_status = 'skipped'
+ where id = (select file_id from public.message_attachments where id = :'maatt1');
+
+-- MA7: klient nie zmieni metadanych pliku załącznika (ścieżka, kwarantanna) ani nie utworzy go wprost.
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($$update public.files set path = %L where id = (select f.id from public.files f where f.path = %L)$$,
+  :'mapathx', :'mapath1'), 'PERMISSION_DENIED', 'MA7 właściciel nie podmieni ścieżki obiektu');
+select pg_temp.expect_error(format($$insert into public.files(owner_id, bucket, path, entity_type) values (%L, 'message-files', %L, 'message_attachment')$$,
+  :'MAC', :'mapathx'), 'PERMISSION_DENIED', 'MA7b brak bezpośredniego INSERT pliku załącznika');
+reset role;
+-- KONTROLA UJEMNA: bez strażnika właściciel podmieniłby ścieżkę (pobranie cudzego obiektu).
+begin;
+alter table public.files disable trigger trg_files_guard_message_attachment;
+select set_config('app.current_uid', :'MAC', true);
+set local role authenticated; select pg_temp.assert_client_role();
+update public.files set path = :'mapathx' where path = :'mapath1';
+reset role;
+select pg_temp.assert((select count(*) from public.files where path = :'mapathx') = 1,
+  'MA7c kontrola ujemna: bez strażnika ścieżka zostaje podmieniona');
+rollback;
+
+-- MA8: blokada firmy (#97) — firma nie widzi plików kandydata i nie dołącza nowych;
+-- kandydat widzi swoje; własny plik firmy zostaje dla firmy.
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.set_company_block(:'MAF'::uuid, true);
+reset role;
+select set_config('app.current_uid', :'MAE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_message_attachments(array[:'mamsg1'::uuid])) = 0
+  and (select count(*) from public.get_message_attachment_download(:'maatt1'::uuid)) = 0,
+  'MA8 firma zablokowana nie widzi ani nie pobiera plików kandydata');
+select pg_temp.assert((select count(*) from public.get_message_attachments(array[:'mamsg4'::uuid])) = 1,
+  'MA8b kontrola ujemna: własny plik firmy nadal widoczny dla firmy');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 1, %L)$$,
+  :'maconv', :'mapath5', :'masha'), 'PERMISSION_DENIED', 'MA8c firma zablokowana nie dołącza pliku');
+reset role;
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_message_attachments(array[:'mamsg1'::uuid, :'mamsg4'::uuid])) = 2,
+  'MA8d kandydat widzi wszystkie załączniki rozmowy');
+select public.set_company_block(:'MAF'::uuid, false);
+reset role;
+
+-- MA9: rezygnacja z przygotowanego pliku → wiersz files usunięty, obiekt w kolejce storage.
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select attachment_id as maatt5 from public.stage_message_attachment(
+  :'maconv'::uuid, :'MAU5'::uuid, :'mapath5', 'list.docx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 4000, :'masha') \gset
+select pg_temp.assert(public.discard_message_attachment(:'maatt5'::uuid), 'MA9 rezygnacja z własnego pliku');
+select pg_temp.assert(not public.discard_message_attachment(:'maatt1'::uuid), 'MA9b wysłanego pliku nie da się wycofać');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.files where path = :'mapath5') = 0
+  and (select count(*) from public.storage_deletion_queue where path = :'mapath5') = 1,
+  'MA9c plik usunięty i zakolejkowany do usunięcia z bucketu');
+
+-- MA10: sprzątanie porzuconych uploadów tylko przez service_role; wysłane zostają.
+select pg_temp.assert(
+  has_function_privilege('service_role', 'public.purge_stale_message_attachments(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.purge_stale_message_attachments(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.purge_stale_message_attachments(integer, integer)', 'EXECUTE'),
+  'MA10 purge tylko dla service_role');
+update public.message_attachments set created_at = now() - interval '2 days' where id in (:'maatt1', :'maatt2');
+set role service_role;
+select public.purge_stale_message_attachments(24) as mapurged \gset
+reset role;
+select pg_temp.assert(:mapurged >= 1
+  and (select count(*) from public.message_attachments where id = :'maatt2') = 0
+  and (select count(*) from public.message_attachments where id = :'maatt1') = 1
+  and (select count(*) from public.storage_deletion_queue where path = :'mapath2') = 1,
+  'MA10b porzucony plik usunięty i zakolejkowany, wysłany (kontrola ujemna) zostaje');
+
+-- MA11: usunięcie rozmowy (np. usunięcie konta #486) kasuje pliki obu stron i kolejkuje obiekty.
+delete from public.conversations where id = :'maconv';
+select pg_temp.assert(
+  (select count(*) from public.files where path in (:'mapath1', :'mapath4')) = 0
+  and (select count(*) from public.storage_deletion_queue where path in (:'mapath1', :'mapath4')) = 2,
+  'MA11 usunięcie rozmowy usuwa metadane plików i kolejkuje obiekty');
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- MR. Zgłoszenia wiadomości i rozmów (0116): tylko strona rozmowy, dowód z bazy tylko dla
 --     admina, idempotencja, jedna otwarta sprawa na wiadomość, limit, niezmienność.
 --     Kontrole ujemne: obca rozmowa, wiadomość spoza rozmowy, powtórka, polityka z 0009.
@@ -9967,10 +10575,10 @@ reset role; reset app.current_uid;
 -- KONTROLA UJEMNA 2: send_message bez conversationId → asercja PL109-6 wykrywa brak.
 begin;
 do $pl$ begin
-  execute regexp_replace(pg_get_functiondef('public.send_message(uuid, text, uuid)'::regprocedure),
+  execute regexp_replace(pg_get_functiondef('public.send_message(uuid, text, uuid, uuid[])'::regprocedure),
     ',\s*''conversationId'', p_conversation_id', '', 'g');
 end $pl$;
-select pg_temp.assert(pg_get_functiondef('public.send_message(uuid, text, uuid)'::regprocedure)
+select pg_temp.assert(pg_get_functiondef('public.send_message(uuid, text, uuid, uuid[])'::regprocedure)
   not like '%''conversationId''%', 'PL109-N2 mutacja usunęła klucz conversationId');
 select set_config('app.current_uid', :'PLE', false);
 set local role authenticated; select pg_temp.assert_client_role();
@@ -10280,5 +10888,114 @@ select pg_temp.assert(
   and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
   and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute'),
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
+
+-- ============================================================================
+-- AIB36. Globalny budżet AI (#36, 0120): rezerwacja przed API, dzienny i miesięczny limit,
+--        fail-closed (brak limitu / limit 0), rozliczenie idempotentne, uprawnienia.
+--        Kontrola ujemna: ai_budget_spent licząca tylko rozliczone wiersze przepuszcza
+--        rezerwację ponad limit — test AIB36-3 by ją złapał.
+-- ============================================================================
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.ai_budget_settle(uuid, text, integer, integer, bigint)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.ai_cost_report(integer)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.ai_budget_status()', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_status()', 'EXECUTE')
+  and not has_table_privilege('authenticated', 'public.ai_usage_ledger', 'SELECT')
+  and not has_table_privilege('anon', 'public.ai_budget_limits', 'SELECT'),
+  'AIB36-1 klient (anon/authenticated) bez dostępu do budżetu i rejestru');
+select pg_temp.assert(
+  has_function_privilege('pracujbe_ops', 'public.ai_budget_status()', 'EXECUTE')
+  and not has_function_privilege('pracujbe_ops', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('pracujbe_ops', 'public.ai_cost_report(integer)', 'EXECUTE'),
+  'AIB36-2 monitoring czyta tylko stan budżetu');
+
+begin;
+set role service_role;
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
+update public.ai_budget_limits set limit_micro_usd = 5000000 where period = 'month';
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 600000) as aib_r1 \gset
+-- AIB36-3: otwarta rezerwacja liczy się w całości — druga ponad limit doby odrzucona.
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 500000)',
+  'AI_BUDGET_EXCEEDED', 'AIB36-3 rezerwacja ponad limit dzienny odrzucona');
+-- AIB36-4: rozliczenie rzeczywistym kosztem zwalnia resztę; drugie rozliczenie = false.
+select pg_temp.assert(public.ai_budget_settle(:'aib_r1', 'ok', 1200, 800, 100000),
+  'AIB36-4 rozliczenie rezerwacji');
+select pg_temp.assert(not public.ai_budget_settle(:'aib_r1', 'failed', 0, 0, 0),
+  'AIB36-4b ponowne rozliczenie bez skutku');
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 500000) is not null,
+  'AIB36-4c po rozliczeniu mieści się kolejna rezerwacja');
+select pg_temp.assert(
+  (select cost_micro_usd = 100000 and input_tokens = 1200 and outcome = 'ok' from public.ai_usage_ledger where id = :'aib_r1'),
+  'AIB36-4d zapisany koszt i tokeny');
+-- AIB36-5: nieznany koszt = kwota rezerwacji.
+select public.ai_budget_reserve('content_translation', 'claude-sonnet-5', 300000) as aib_r2 \gset
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''content_translation'', ''claude-sonnet-5'', 200000)',
+  'AI_BUDGET_EXCEEDED', 'AIB36-5 limit wspólny dla wszystkich funkcji');
+select public.ai_budget_settle(:'aib_r2', 'failed', null, null, null);
+select pg_temp.assert((select cost_micro_usd = 300000 from public.ai_usage_ledger where id = :'aib_r2'),
+  'AIB36-5b brak kosztu rozliczony kwotą rezerwacji');
+-- AIB36-6: limit miesięczny działa niezależnie od dziennego.
+update public.ai_budget_limits set limit_micro_usd = 50000000 where period = 'day';
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'month';
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 200000)',
+  'AI_BUDGET_EXCEEDED', 'AIB36-6 rezerwacja ponad limit miesięczny odrzucona');
+-- AIB36-7: limit 0 = wyłącznik; brak limitu = odmowa.
+update public.ai_budget_limits set limit_micro_usd = 50000000 where period = 'month';
+update public.ai_budget_limits set limit_micro_usd = 0 where period = 'day';
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 1)',
+  'AI_BUDGET_EXCEEDED', 'AIB36-7 limit 0 blokuje każde wywołanie');
+delete from public.ai_budget_limits where period = 'day';
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 1)',
+  'AI_BUDGET_UNCONFIGURED', 'AIB36-7b brak limitu = odmowa (fail-closed)');
+insert into public.ai_budget_limits (period, limit_micro_usd) values ('day', 50000000);
+-- AIB36-8: walidacja wejścia (szacunek 0, obca funkcja, identyfikator modelu z treścią).
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 0)',
+  'VALIDATION_FAILED', 'AIB36-8 rezerwacja zerowa odrzucona');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''cv_import'', ''claude-opus-5'', 10)',
+  'VALIDATION_FAILED', 'AIB36-8b funkcja spoza inwentarza odrzucona');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''Jan Kowalski jan@example.com'', 10)',
+  'VALIDATION_FAILED', 'AIB36-8c model musi być identyfikatorem');
+-- AIB36-9: raport i stan — same liczby, bez identyfikatorów wierszy.
+select pg_temp.assert(
+  (select (r->'daily'->0) ?& array['day','feature','calls','ok','notOk','open','inputTokens','outputTokens','costMicroUsd']
+      and not ((r->'daily'->0) ? 'id')
+      and jsonb_array_length(r->'monthly') >= 1
+      and (r->'status'->'day'->>'limitMicroUsd')::bigint = 50000000
+     from (select public.ai_cost_report(31) as r) x),
+  'AIB36-9 raport kosztów z agregatami');
+reset role;
+set role pracujbe_ops;
+select pg_temp.assert(
+  (select (s->'day'->>'spentMicroUsd')::bigint = 900000 and (s->>'staleReservations')::int = 0
+     from (select public.ai_budget_status() as s) x),
+  'AIB36-9b stan budżetu dla monitoringu');
+reset role;
+-- AIB36-10 (kontrola ujemna): wadliwa suma tylko rozliczonych przepuszcza rezerwację
+-- ponad limit — AIB36-3 opiera się na liczeniu otwartych rezerwacji.
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 50000) as aib_r3 \gset
+savepoint aib_neg;
+create or replace function public.ai_budget_spent(p_from date, p_to date)
+returns bigint language sql stable security definer set search_path = public, pg_temp as $f$
+  select coalesce(sum(cost_micro_usd), 0)::bigint from public.ai_usage_ledger
+   where status = 'settled' and usage_day >= p_from and usage_day <= p_to $f$;
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 60000) is not null,
+  'AIB36-10 kontrola ujemna: bez liczenia otwartych rezerwacji limit przepuszcza');
+rollback to savepoint aib_neg;
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 60000)',
+  'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
+rollback;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

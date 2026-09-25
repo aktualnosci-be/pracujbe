@@ -56,7 +56,9 @@ for (const [name, body] of jobs) {
   assert.deepEqual(parsed, needs, `${name}: nieoczekiwane zależności jobu`);
   assert.match(body, /^    runs-on: ubuntu-latest\s*$/m, `${name}: użyj ubuntu-latest`);
   const timeout = Number(body.match(/^    timeout-minutes:\s*(\d+)\s*$/m)?.[1]);
-  assert.ok(timeout > 0 && timeout <= 30, `${name}: ustaw timeout-minutes (1–30), żeby nie zjadać puli minut`);
+  // E2E (Playwright + fixture'y + lab CWV) potrzebuje więcej czasu niż pozostałe joby.
+  const maxTimeout = name === 'e2e' ? 45 : 30;
+  assert.ok(timeout > 0 && timeout <= maxTimeout, `${name}: ustaw timeout-minutes (1–${maxTimeout}), żeby zawieszony job nie działał bez końca`);
 }
 
 // Vitest ma startować z drzewa odtworzonego przez npm ci, także przy trafieniu

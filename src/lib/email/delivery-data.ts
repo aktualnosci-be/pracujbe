@@ -2,6 +2,7 @@ import { isLocale, type Locale } from '@/i18n/routing';
 import { formatSalaryRange, type SalaryInput } from '@/lib/salary';
 import { ACCESS_CODE_RE, CASE_NUMBER_RE } from '@/lib/validation/content-report';
 import { salaryLabelsFor } from '@/lib/salary-labels';
+import { minimizeEmailPayload } from '@/lib/email/payload-fields';
 
 /**
  * Dane szablonu dla wiersza kolejki `email_deliveries` (czysta funkcja, bez I/O — testowalna).
@@ -71,6 +72,9 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
       return '/aplikacja/potwierdz';
     case 'guestApplicationSent':
       return '/aplikacja/przejmij';
+    case 'guestStatusChanged':
+      // Gość nie ma panelu; e-mail bez tokenu — CTA prowadzi do listy ofert.
+      return '/oferty-pracy';
     case 'reportReceived': {
       // #41: numer sprawy i kod dostępu w części `#` (nie trafia do serwera ani logów).
       const caseNumber = payload?.['caseNumber'];
@@ -153,7 +157,7 @@ export const GUEST_TOKEN_TEMPLATES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Buduje dane do `renderEmail` dla wiersza kolejki.
+ * Buduje dane do `renderEmail` dla wiersza kolejki (payload po minimalizacji, #503).
  *
  * #98: dla szablonów gościa `guestToken` (liczony przez workera z `nonce` i sekretu serwera)
  * trafia do adresu CTA; `nonce` nie trafia do danych szablonu. Brak tokenu = błąd (worker
@@ -166,7 +170,9 @@ export function buildDeliveryData(
   guestToken?: string | null,
 ): { locale: Locale; data: Record<string, unknown> } {
   const locale = deliveryLocale(row.locale);
-  const { nonce: _nonce, ...payload } = row.payload ?? {};
+  // #503: do szablonu (i dostawcy poczty) trafiają tylko pola z listy dozwolonych dla typu;
+  // `nonce` gościa nigdy (token liczy worker osobno).
+  const payload = minimizeEmailPayload(row.template, row.payload);
   const isGuest = GUEST_TOKEN_TEMPLATES.has(row.template);
   if (isGuest && !guestToken) throw new Error('guest_token_unavailable');
   // Fragment stays out of HTTP request targets and proxy logs. The landing page clears it
