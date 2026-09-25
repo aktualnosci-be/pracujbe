@@ -3,7 +3,7 @@ import { z } from 'zod/v3';
 import { AI_FEATURE_IDS } from '@/lib/ai/inventory';
 
 /**
- * Raport kosztów AI dla panelu admina (#36) — kształt odpowiedzi `ai_cost_report` (0109),
+ * Raport kosztów AI dla panelu admina (#36) — kształt odpowiedzi `ai_cost_report` (0114),
  * walidacja i pomocnicze obliczenia. Czysty moduł (bez I/O), testowany jednostkowo.
  * Kwoty w mikro-USD (1 USD = 1 000 000); raport nie zawiera identyfikatorów osób ani firm.
  */
@@ -51,7 +51,7 @@ export function parseAiBudgetStatus(raw: unknown): AiBudgetStatus | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** Limity startowe z migracji 0109 — także dla trybu DEMO. */
+/** Limity startowe z migracji 0114 — także dla trybu DEMO. */
 export const DEFAULT_AI_BUDGET_LIMITS = { dayMicroUsd: 10_000_000, monthMicroUsd: 100_000_000 } as const;
 
 /** Próg ostrzeżenia (panel i /api/health/ops). */

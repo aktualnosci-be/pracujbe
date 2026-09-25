@@ -28,7 +28,7 @@ import { getAiCostReport } from '@/lib/data/admin-ai-costs';
  *
  * Wydatek doby i bieżącego miesiąca (Europe/Brussels) względem globalnego limitu, dzienne
  * agregaty per funkcja AI (wywołania, wyniki, tokeny, koszt) i sumy miesięczne. Dane z
- * `ai_cost_report` (0109) — same liczby, bez treści i identyfikatorów osób/firm. Limity
+ * `ai_cost_report` (0114) — same liczby, bez treści i identyfikatorów osób/firm. Limity
  * zmienia właściciel w bazie (docs/AI_BUDGET.md); strona nie ma akcji zapisu.
  */
 

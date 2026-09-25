@@ -2,7 +2,7 @@
  * Cennik modeli dla budżetu AI (#36) — czysty moduł, bez I/O.
  *
  * Stawki: USD za 1 mln tokenów wg cennika pierwszej strony Anthropic (stan 2026-09). Koszty
- * liczymy w mikro-USD (1 USD = 1 000 000), jak kolumny `ai_usage_ledger` (0109). Nieznany
+ * liczymy w mikro-USD (1 USD = 1 000 000), jak kolumny `ai_usage_ledger` (0114). Nieznany
  * model = najdroższa stawka z tabeli — budżet nigdy nie zaniża kosztu. Atrapa `fixture` = 0.
  *
  * Zmiana cennika dostawcy = zmiana tej tabeli (test `ai-budget.test.ts` pilnuje, że każdy

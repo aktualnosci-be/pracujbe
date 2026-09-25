@@ -88,14 +88,14 @@ describe('raport kosztów', () => {
   });
 
   it('pusty raport DEMO ma limity startowe z migracji', () => {
-    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/0109_ai_budget.sql'), 'utf8');
+    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/0114_ai_budget.sql'), 'utf8');
     const empty = emptyAiCostReport();
     expect(sql).toContain(`('day', ${empty.status.day.limitMicroUsd})`);
     expect(sql).toContain(`('month', ${empty.status.month.limitMicroUsd})`);
   });
 
-  it('klucze schematów występują w SQL raportu i stanu (0109)', () => {
-    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/0109_ai_budget.sql'), 'utf8');
+  it('klucze schematów występują w SQL raportu i stanu (0114)', () => {
+    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/0114_ai_budget.sql'), 'utf8');
     const keys = [
       ...Object.keys(aiCostReportSchema.shape),
       ...Object.keys(aiCostReportSchema.shape.daily.element.shape),

@@ -58,7 +58,7 @@ Szacunek na wywołanie (do potwierdzenia pomiarem `usage`): wejście ~1,5–4 ty
 w #36 po cenach z dnia włączenia.
 
 **Budżet (#36).** Bramka `budget.ts` rezerwuje w globalnym budżecie AI (`ai_budget_reserve`,
-migracja 0109, `docs/AI_BUDGET.md`) górną granicę kosztu (`src/lib/ai-assist/cost.ts`: prompt +
+migracja 0114, `docs/AI_BUDGET.md`) górną granicę kosztu (`src/lib/ai-assist/cost.ts`: prompt +
 schemat + treść pól + pełne `max_tokens`) PRZED wywołaniem modelu. Odmowa albo brak bazy zadań
 = kod `AI_BUDGET_EXCEEDED` bez wywołania. Bilet rozlicza tę rezerwację samymi liczbami tokenów;
 błąd wywołania = rozliczenie pełną rezerwacją. Identyfikator firmy nie trafia do rejestru kosztów.

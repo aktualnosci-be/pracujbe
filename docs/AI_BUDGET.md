@@ -1,7 +1,7 @@
 # Budżet kosztów AI (#36)
 
 Globalny, twardy limit wydatków na wywołania modeli AI — wspólny dla wszystkich funkcji
-z inwentarza (`src/lib/ai/inventory.ts`). Migracja `0109_ai_budget.sql` (numer tymczasowy).
+z inwentarza (`src/lib/ai/inventory.ts`). Migracja `0114_ai_budget.sql` (numer tymczasowy).
 
 ## Jak działa
 

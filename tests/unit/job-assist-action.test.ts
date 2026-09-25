@@ -202,7 +202,7 @@ describe('autoryzacja, limity, budżet', () => {
     expect((await suggestJobText(INPUT)).ok).toBe(true);
   });
 
-  it('domyślna bramka = rezerwacja w bazie (0109); przekroczony limit = brak wywołania modelu', async () => {
+  it('domyślna bramka = rezerwacja w bazie (0114); przekroczony limit = brak wywołania modelu', async () => {
     fakeDb.rpc('ai_budget_reserve', () => {
       throw pgError('P0001', 'AI_BUDGET_EXCEEDED');
     });

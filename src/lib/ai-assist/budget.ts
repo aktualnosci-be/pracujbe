@@ -9,7 +9,7 @@ import { isServiceDatabaseConfigured } from '@/lib/db/portal';
 import { captureError } from '@/lib/sentry';
 
 /**
- * Bramka globalnego budżetu AI (#36, migracja 0109) dla asystenta treści oferty (#37).
+ * Bramka globalnego budżetu AI (#36, migracja 0114) dla asystenta treści oferty (#37).
  *
  * `reserve` PRZED wywołaniem modelu rezerwuje górną granicę kosztu w `ai_budget_reserve`
  * (wspólny limit doby i miesiąca dla wszystkich funkcji AI); `null` = budżet wyczerpany albo

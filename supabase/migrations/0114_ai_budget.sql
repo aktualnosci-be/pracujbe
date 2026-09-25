@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0109_ai_budget.sql — #36: globalny budżet kosztów funkcji AI (dzienny i miesięczny).
+-- 0114_ai_budget.sql — #36: globalny budżet kosztów funkcji AI (dzienny i miesięczny).
 --
 -- Numer migracji tymczasowy — ostateczny nada koordynator.
 --
