@@ -1067,36 +1067,41 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 `src/lib/email/guest-delivery.ts`). E-maile konta (`src/lib/email/auth-email.ts`):
 `accountConfirmation`, `passwordReset` — zawierają link z tokenem.
 
-| Szablon | Pola payloadu | Funkcje SQL |
-|---|---|---|
-| `appealReceived` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `recipientName` | `submit_moderation_appeal`, `submit_report_appeal`, `submit_report_restoration_appeal` |
-| `appealReversed` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
-| `appealUpheld` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
-| `applicationViewed` | `companyName`, `jobTitle` | `transition_application` |
-| `breachNotice` | `incidentReference`, `noticeSubject`, `noticeText`, `panel` | `admin_notify_breach_subjects` |
-| `companyRejected` | `companyName`, `reason` | `admin_set_company_status` |
-| `companySuspended` | `companyName`, `reason` | `admin_set_company_status` |
-| `companyVerified` | `companyName`, `reason` | `admin_set_company_status` |
-| `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `submit_guest_application` |
-| `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `confirm_guest_application` |
-| `guestStatusChanged` | `companyName`, `jobTitle`, `recipientName`, `status` | `transition_application` |
-| `jobMatch` | `count`, `jobs`, `query`, `searchName` | `process_saved_search_alerts` |
-| `jobOffer` | `companyName`, `currency`, `expiresAt`, `jobTitle`, `salaryMax`, `salaryMin`, `salaryPeriod` | `send_offer` |
-| `jobPublished` | `jobTitle` | `publish_job` |
-| `moderationCompanySuspended` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
-| `moderationJobRemoved` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
-| `moderationRestored` | `companyName`, `decisionReference`, `jobTitle`, `reason` | `moderation_restore_core` |
-| `newApplication` | `candidateName`, `jobTitle` | `apply_to_job`, `confirm_guest_application` |
-| `newMessage` | `conversationId`, `panel`, `senderName` | `send_message` |
-| `offerAccepted` | `candidateName`, `jobTitle` | `respond_to_offer` |
-| `offerDeclined` | `candidateName`, `jobTitle` | `respond_to_offer` |
-| `reportDecisionActioned` | `caseNumber`, `recipientName`, `targetType` | `admin_decide_report` |
-| `reportDecisionNoAction` | `caseNumber`, `recipientName`, `targetType` | `admin_decide_report` |
-| `reportReceived` | `accessCode`, `caseNumber`, `recipientName`, `targetType` | `submit_content_report` |
-| `reportRestored` | `caseNumber`, `recipientName` | `admin_restore_moderation` |
-| `statusChanged` | `companyName`, `jobTitle`, `status` | `transition_application` |
-| `teamInvitation` | `companyName`, `inviterName`, `panel` | `invite_company_member` |
-| `teamInvitationSignup` | `companyName`, `inviterName`, `nonce` | `invite_company_member` |
+Minimalizacja (#503): do szablonu — a więc do dostawcy poczty — trafiają tylko pola z listy
+`src/lib/email/payload-fields.ts`; resztę payloadu worker odrzuca przed renderem (zostaje w bazie).
+Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal ma uprawnienie
+(`email_recipient_authorized` w `claim_email_batch`).
+
+| Szablon | Pola payloadu | Odrzucane przez workera | Funkcje SQL |
+|---|---|---|---|
+| `appealReceived` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `recipientName` | `appealTarget`, `companyName` | `submit_moderation_appeal`, `submit_report_appeal`, `submit_report_restoration_appeal` |
+| `appealReversed` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `appealTarget`, `companyName` | `admin_decide_appeal` |
+| `appealUpheld` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `appealTarget`, `companyName` | `admin_decide_appeal` |
+| `applicationViewed` | `companyName`, `jobTitle` | — | `transition_application` |
+| `breachNotice` | `incidentReference`, `noticeSubject`, `noticeText`, `panel` | — | `admin_notify_breach_subjects` |
+| `companyRejected` | `companyName`, `reason` | — | `admin_set_company_status` |
+| `companySuspended` | `companyName`, `reason` | — | `admin_set_company_status` |
+| `companyVerified` | `companyName`, `reason` | `reason` | `admin_set_company_status` |
+| `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `jobSlug`, `nonce` | `submit_guest_application` |
+| `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `nonce` | `confirm_guest_application` |
+| `guestStatusChanged` | `companyName`, `jobTitle`, `recipientName`, `status` | — | `transition_application` |
+| `jobMatch` | `count`, `jobs`, `query`, `searchName` | `query` | `process_saved_search_alerts` |
+| `jobOffer` | `companyName`, `currency`, `expiresAt`, `jobTitle`, `salaryMax`, `salaryMin`, `salaryPeriod` | — | `send_offer` |
+| `jobPublished` | `jobTitle` | — | `publish_job` |
+| `moderationCompanySuspended` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
+| `moderationJobRemoved` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | — | `admin_decide_appeal`, `admin_decide_report` |
+| `moderationRestored` | `companyName`, `decisionReference`, `jobTitle`, `reason` | — | `moderation_restore_core` |
+| `newApplication` | `candidateName`, `jobTitle` | — | `apply_to_job`, `confirm_guest_application` |
+| `newMessage` | `conversationId`, `panel`, `senderName` | — | `send_message` |
+| `offerAccepted` | `candidateName`, `jobTitle` | — | `respond_to_offer` |
+| `offerDeclined` | `candidateName`, `jobTitle` | — | `respond_to_offer` |
+| `reportDecisionActioned` | `caseNumber`, `recipientName`, `targetType` | — | `admin_decide_report` |
+| `reportDecisionNoAction` | `caseNumber`, `recipientName`, `targetType` | — | `admin_decide_report` |
+| `reportReceived` | `accessCode`, `caseNumber`, `recipientName`, `targetType` | — | `submit_content_report` |
+| `reportRestored` | `caseNumber`, `recipientName` | — | `admin_restore_moderation` |
+| `statusChanged` | `companyName`, `jobTitle`, `status` | — | `transition_application` |
+| `teamInvitation` | `companyName`, `inviterName`, `panel` | — | `invite_company_member` |
+| `teamInvitationSignup` | `companyName`, `inviterName`, `nonce` | `nonce` | `invite_company_member` |
 
 ## 5. Tabele bez danych osobowych
 

@@ -1115,7 +1115,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   istniejące `email_queue_age`/`auth_email_queue_age`. Opis `docs/railway/OPERATIONS.md`;
   dowód `rls.sql` OPS44, `ops-metrics` (PG16), `ops-sensors`. **Do zrobienia (#44):**
   kalibracja progów na ruchu produkcyjnym, adapter drugiego dostawcy.
-  Minimalizacja treści (#503, migracja `0122`): worker przekazuje do
+  Minimalizacja treści (#503, migracja `0123`): worker przekazuje do
   szablonu tylko pola z `src/lib/email/payload-fields.ts` (reszta payloadu zostaje w bazie);
   poza listą m.in. podgląd rozmowy (`newMessage.preview`) i wiadomość do propozycji
   (`jobOffer.message`) — e-mail prowadzi do panelu. `claim_email_batch` ponownie sprawdza
