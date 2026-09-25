@@ -154,6 +154,14 @@
     "appealDeadlineNotStarted": "De bezwaartermijn begint te lopen zodra je de melding over de beslissing ontvangt.",
     "appealStatusLabel": "Bezwaar {reference}"
   },
+  "companyProfile": {
+    "metaTitle": "Vacatures bij {name}",
+    "metaDescription": "Bekijk de actieve vacatures van {name} op Pracuj.be.",
+    "noDescription": "Dit bedrijf heeft nog geen beschrijving toegevoegd.",
+    "jobsHeading": "Actieve vacatures van dit bedrijf",
+    "empty": "Dit bedrijf heeft momenteel geen actieve vacatures.",
+    "backToJobs": "Bekijk alle vacatures"
+  },
   "common": {
     "appName": "Pracuj.be",
     "loading": "Laden...",

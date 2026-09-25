@@ -1,0 +1,105 @@
+// @vitest-environment node
+import { createHash } from 'node:crypto';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import config from '../../next.config.mjs';
+import {
+  buildConsentBootScript,
+  buildGaInitScript,
+  buildMetaPixelScript,
+} from '@/lib/security/csp-inline-scripts.mjs';
+import { consentBootScript } from '@/lib/consent-boot';
+
+/**
+ * CSP script-src (#585). Znalezisko z realnego builda (`next build && next start`, Chromium):
+ * Next.js App Router wstrzykuje własne inline `<script>` strumieniujące dane RSC
+ * (`self.__next_f.push(...)`) na KAŻDEJ stronie, z treścią dynamiczną per strona/rewalidacja —
+ * nie da się ich objąć stałą listą hashy w `next.config.mjs` (funkcja liczy się raz na proces).
+ * Usunięcie `'unsafe-inline'` bez nonce blokuje te skrypty i psuje hydrację KAŻDEJ strony;
+ * Next.js oficjalnie wspiera tylko nonce per-request przez middleware, a jego własna
+ * dokumentacja mówi wprost, że to wyłącza ISR — sprzeczne z architekturą tego repo (#298).
+ *
+ * Dlatego enforced `script-src` ZOSTAJE z `'unsafe-inline'` (bez regresji — zweryfikowane
+ * budową i Chromium). Równolegle produkcja dostaje `Content-Security-Policy-Report-Only` z tą
+ * samą dyrektywą, ale hashem (bez `unsafe-inline`) dla skryptów, które kontrolujemy (baner zgód,
+ * gtag/fbq po zgodzie) — obserwowalny krok w stronę #585, nic nie blokujący.
+ */
+
+function sha256(text: string): string {
+  return `'sha256-${createHash('sha256').update(text, 'utf8').digest('base64')}'`;
+}
+
+async function headersFor(env: Record<string, string>) {
+  vi.stubEnv('NODE_ENV', 'production');
+  for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+  const rules = await config.headers!();
+  return rules.find((rule) => rule.source === '/:path*')!.headers;
+}
+
+function directive(csp: string, name: string): string {
+  return csp.split('; ').find((d) => d.startsWith(name))!;
+}
+
+afterEach(() => vi.unstubAllEnvs());
+
+describe('script-src enforced w produkcji (#585) — bez regresji', () => {
+  it('zostaje z unsafe-inline (Next.js App Router potrzebuje go do własnych skryptów RSC)', async () => {
+    const headers = await headersFor({ APP_MODE: 'production', NEXT_PUBLIC_SITE_URL: 'https://pracuj.be' });
+    const csp = headers.find((h) => h.key === 'Content-Security-Policy')!.value;
+    const scriptSrc = directive(csp, 'script-src');
+    expect(scriptSrc).toContain("'unsafe-inline'");
+    expect(scriptSrc).toContain('https://www.googletagmanager.com');
+    expect(scriptSrc).toContain('https://challenges.cloudflare.com');
+    expect(scriptSrc).not.toContain('unsafe-eval');
+  });
+});
+
+describe('script-src Report-Only (#585) — hashem, nie blokuje', () => {
+  it('bez GA/Meta: hash skryptu banera zgód, bez unsafe-inline', async () => {
+    const headers = await headersFor({ APP_MODE: 'production', NEXT_PUBLIC_SITE_URL: 'https://pracuj.be' });
+    const value = headers.find((h) => h.key === 'Content-Security-Policy-Report-Only')?.value;
+    expect(value).toBeTruthy();
+    const scriptSrc = directive(value!, 'script-src');
+    expect(scriptSrc).not.toContain('unsafe-inline');
+    expect(scriptSrc).toContain(sha256(consentBootScript()));
+  });
+
+  it('z GA i Meta Pixel skonfigurowanymi: hashe obu skryptów', async () => {
+    const headers = await headersFor({
+      APP_MODE: 'production',
+      NEXT_PUBLIC_SITE_URL: 'https://pracuj.be',
+      NEXT_PUBLIC_GA_MEASUREMENT_ID: 'G-TEST000000',
+      NEXT_PUBLIC_META_PIXEL_ID: '000000000000000',
+    });
+    const value = headers.find((h) => h.key === 'Content-Security-Policy-Report-Only')!.value;
+    const scriptSrc = directive(value, 'script-src');
+    expect(scriptSrc).toContain(sha256(buildGaInitScript('G-TEST000000')));
+    expect(scriptSrc).toContain(sha256(buildMetaPixelScript('000000000000000')));
+  });
+
+  it('kontrola ujemna: hash innej treści skryptu banera zgód NIE jest w Report-Only', async () => {
+    const headers = await headersFor({ APP_MODE: 'production', NEXT_PUBLIC_SITE_URL: 'https://pracuj.be' });
+    const value = headers.find((h) => h.key === 'Content-Security-Policy-Report-Only')!.value;
+    const tampered = buildConsentBootScript({ cookieName: 'inny_cookie', policyVersion: '1.0', attribute: 'data-consent' });
+    expect(value).not.toContain(sha256(tampered));
+  });
+
+  it('dev (NODE_ENV≠production): brak nagłówka Report-Only (nie zaśmieca lokalnego devu)', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const rules = await config.headers!();
+    const headers = rules.find((rule) => rule.source === '/:path*')!.headers;
+    expect(headers.some((h) => h.key === 'Content-Security-Policy-Report-Only')).toBe(false);
+  });
+});
+
+describe('jedno źródło treści skryptu banera zgód', () => {
+  it('consentBootScript() (komponent) zwraca dokładnie to, co next.config.mjs haszuje', () => {
+    const fromComponent = consentBootScript();
+    const fromSharedBuilder = buildConsentBootScript({
+      cookieName: 'pracujbe_consent',
+      policyVersion: '1.0',
+      attribute: 'data-consent',
+    });
+    expect(fromComponent).toBe(fromSharedBuilder);
+  });
+});

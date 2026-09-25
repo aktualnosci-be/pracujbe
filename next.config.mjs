@@ -1,7 +1,72 @@
 import createNextIntlPlugin from 'next-intl/plugin';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { createReleaseAwareBuildMetadata } from './scripts/build-version.mjs';
+import {
+  buildConsentBootScript,
+  buildGaInitScript,
+  buildMetaPixelScript,
+} from './src/lib/security/csp-inline-scripts.mjs';
+
+// #585: próba i ustalenie, empirycznie zweryfikowane przeciwko realnie zbudowanej stronie
+// (`next build`+`next start`, Chromium) — patrz też ADR niżej. Next.js App Router (RSC)
+// wstrzykuje WŁASNE inline `<script>` z danymi strumieniowanymi (`self.__next_f.push(...)`)
+// na KAŻDEJ stronie; ich treść jest inherentnie dynamiczna (różna treść/rozmiar per strona i
+// per rewalidacja ISR), więc nie da się ich objąć stałą listą hashy w `next.config.mjs`
+// (funkcja jest wywoływana raz na proces, nie per żądanie). Usunięcie 'unsafe-inline' bez
+// nonce blokuje te skrypty i psuje hydrację KAŻDEJ strony (potwierdzone: `getByRole('main')`
+// znika z żywego DOM, mimo że jest w surowym HTML — React nie kończy hydracji). Next.js
+// oficjalnie wspiera tylko wariant z noncem per-request przez middleware, ale jego własna
+// dokumentacja wprost mówi: "nonces are generated for each request, [so] Incremental Static
+// Regeneration (ISR) is not supported when adding nonces" — a strony publiczne w tym repo
+// są ISR (#298, budżety wydajności, cacheHandler) — to świadoma, udokumentowana decyzja
+// architektury tego projektu, więc migracja na nonce oznaczałaby utratę ISR na WSZYSTKICH
+// stronach publicznych, nie tylko lokalną zmianę CSP.
+//
+// Dlatego enforced `script-src` w produkcji ZOSTAJE z 'unsafe-inline' (bez regresji). Zamiast
+// tego dokładamy DRUGI, RÓWNOLEGŁY nagłówek `Content-Security-Policy-Report-Only` z tym samym
+// script-src, ale WYŁĄCZNIE hashami (bez 'unsafe-inline') dla skryptów, które kontrolujemy
+// (baner zgód w <head>, gtag/fbq po zgodzie — Invariant #7) — jedno źródło treści z komponentami:
+// src/lib/security/csp-inline-scripts.mjs. Report-Only nic nie blokuje, ale raportuje na
+// /api/csp-report każdy przypadek, który złamałby ściślejszą politykę (włącznie z własnymi
+// skryptami Next.js — oczekiwany szum, patrz komentarz przy nagłówku) — to obserwowalny,
+// bezpieczny krok w stronę #585, a NIE twierdzenie, że 'unsafe-inline' zniknęło z enforced
+// polityki. Pełne zamknięcie #585 wymaga decyzji właściciela: nonce + rezygnacja z ISR na
+// stronach publicznych (regres wydajności) ALBO inny mechanizm, którego Next 15 dziś nie ma.
+// JSON-LD (`type="application/ld+json"`) i tak nie jest egzekwowany przez script-src (nie jest
+// wykonywalnym typem skryptu), więc nie potrzebuje hasha w żadnym wariancie.
+function sha256(text) {
+  return `'sha256-${createHash('sha256').update(text, 'utf8').digest('base64')}'`;
+}
+
+// Te same stałe co src/lib/consent.ts / src/lib/consent-boot.ts (literały, nie logika —
+// zgodność pilnuje tests/unit/csp-inline-scripts.test.ts).
+const CONSENT_COOKIE_NAME = 'pracujbe_consent';
+const CONSENT_BOOT_ATTRIBUTE = 'data-consent';
+
+function scriptHashes() {
+  const hashes = [
+    sha256(
+      buildConsentBootScript({
+        cookieName: CONSENT_COOKIE_NAME,
+        // Odczyt WEWNĄTRZ headers(), nie na starcie modułu: musi widzieć env procesu w
+        // czasie żądania (zgodnie z resztą tej funkcji), tak samo jak `consent.ts` na starcie.
+        policyVersion: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
+        attribute: CONSENT_BOOT_ATTRIBUTE,
+      }),
+    ),
+  ];
+  // GA/Meta Pixel: `NEXT_PUBLIC_*` jest wpieczone w build tak samo jak w kliencie (Next zamienia
+  // je w bundlu) — ten sam env w tym samym buildzie daje identyczną treść skryptu i hash.
+  if (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID) {
+    hashes.push(sha256(buildGaInitScript(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID)));
+  }
+  if (process.env.NEXT_PUBLIC_META_PIXEL_ID) {
+    hashes.push(sha256(buildMetaPixelScript(process.env.NEXT_PUBLIC_META_PIXEL_ID)));
+  }
+  return hashes;
+}
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
@@ -56,23 +121,22 @@ const nextConfig = {
     const isProd = isProdMode && !/localhost|127\.0\.0\.1|0\.0\.0\.0|staging|preview/i.test(siteUrl);
     const isDev = process.env.NODE_ENV !== 'production';
 
-    // --- Content-Security-Policy (P2-01) -------------------------------------
-    // Świadomie BEZ nonce/strict-dynamic: strony renderują dane strukturalne JSON-LD
-    // (SEO) oraz — PO zgodzie — inline'owe skrypty GA/Meta Pixel; strict-dynamic bez
-    // pełnego wpięcia nonce do każdego <script> zablokowałby je i popsuł produkt.
-    // 'unsafe-inline' dla script-src jest słabsze niż nonce, ale NIE łamie działania;
-    // twarda migracja do nonce wymaga testów przeglądarkowych (E2E) — patrz roadmapa.
-    // Poza tym pełne, restrykcyjne dyrektywy: object/base/frame-ancestors/form-action
-    // oraz zawężone connect/img/font (GA/Meta tylko tam, gdzie trzeba).
+    // --- Content-Security-Policy (P2-01, #585) -------------------------------
+    // Enforced policy: bez zmiany zachowania (patrz ADR wyżej) — 'unsafe-inline' zostaje w
+    // script-src w KAŻDYM środowisku (Next.js App Router wstrzykuje własne inline skrypty
+    // strumieniowania RSC na każdej stronie; ich treść jest dynamiczna, więc nie da się ich
+    // objąć stałą listą hashy tutaj, a nonce wymagałby rezygnacji z ISR na stronach publicznych).
+    // Reszta dyrektyw pozostaje restrykcyjna: object/base/frame-ancestors/form-action oraz
+    // zawężone connect/img/font (GA/Meta tylko tam, gdzie trzeba).
+    const scriptSrcHosts =
+      'https://www.googletagmanager.com https://connect.facebook.net https://challenges.cloudflare.com';
     const csp = [
       "default-src 'self'",
       "base-uri 'self'",
       "object-src 'none'",
       "frame-ancestors 'none'",
       "form-action 'self'",
-      // Skrypty: własne + inline (JSON-LD, gtag/fbq po zgodzie) + hosty trackerów + Turnstile (#46).
-      // Dev dokłada 'unsafe-eval' (React Refresh/HMR Next dev).
-      `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://www.googletagmanager.com https://connect.facebook.net https://challenges.cloudflare.com`,
+      `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}${scriptSrcHosts}`,
       "style-src 'self' 'unsafe-inline'",
       // P3-02: obrazy z własnego origin, data:/blob: i piksele trackerów (po zgodzie).
       "img-src 'self' data: blob: https://www.google-analytics.com https://www.facebook.com",
@@ -91,8 +155,24 @@ const nextConfig = {
     ];
     if (isProd) csp.push('upgrade-insecure-requests');
 
+    // Report-Only (#585): sama dyrektywa script-src, bez 'unsafe-inline', hashem dla skryptów,
+    // które kontrolujemy. NIE blokuje niczego — tylko raportuje, co złamałaby ściślejsza
+    // polityka; oczekiwany szum: własne inline skrypty Next.js (patrz ADR wyżej) będą się
+    // zgłaszać jako naruszenia dopóki projekt nie zdecyduje się na nonce+utratę ISR. Poza dev,
+    // żeby nie zaśmiecać lokalnego devu (HMR).
+    const scriptSrcReportOnly = !isDev
+      ? [
+          `script-src 'self' ${scriptHashes().join(' ')} ${scriptSrcHosts}`,
+          `report-uri ${CSP_REPORT_PATH}`,
+          `report-to ${CSP_REPORT_GROUP}`,
+        ].join('; ')
+      : null;
+
     const security = [
       { key: 'Content-Security-Policy', value: csp.join('; ') },
+      ...(scriptSrcReportOnly
+        ? [{ key: 'Content-Security-Policy-Report-Only', value: scriptSrcReportOnly }]
+        : []),
       { key: 'Reporting-Endpoints', value: `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}"` },
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       // P3-03: spójnie z CSP `frame-ancestors 'none'` (było SAMEORIGIN — konflikt).

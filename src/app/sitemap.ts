@@ -15,10 +15,12 @@ import { getAllGuideSlugs } from '@/lib/guides/guides';
 /**
  * Mapa strony (sitemap.xml) — Pracuj.be.
  *
- * Zawiera: publiczne strony statyczne, listę ofert, szczegóły ofert (z `getJobs`)
- * oraz landing-page'e kategorii i lokalizacji (filtrowane widoki listy). Każdy wpis
- * ma alternatywy językowe (hreflang). Panele (candidate/employer/admin) i API są
- * celowo pominięte (patrz robots.ts). Działa bez env (dane demonstracyjne z `getJobs`).
+ * Zawiera: publiczne strony statyczne, listę ofert, szczegóły ofert (z `getJobs`),
+ * landing-page'e kategorii i lokalizacji (filtrowane widoki listy) oraz profile firm
+ * (#591 — jeden wpis na `companySlug` zebrany przy tej samej iteracji po ofertach, bez
+ * osobnego zapytania). Każdy wpis ma alternatywy językowe (hreflang). Panele
+ * (candidate/employer/admin) i API są celowo pominięte (patrz robots.ts). Działa bez env
+ * (dane demonstracyjne z `getJobs` nie mają `companySlug`, więc profili firm tam nie ma).
  *
  * TODO(i18n-slugs): segment listy ofert jest wspólny (`oferty-pracy`) — po wdrożeniu
  * lokalizowanych slugów zaktualizować ścieżki per język.
@@ -34,6 +36,7 @@ import { getAllGuideSlugs } from '@/lib/guides/guides';
 export const dynamic = 'force-dynamic';
 
 const JOBS_PATH = '/oferty-pracy';
+const COMPANIES_PATH = '/pracodawcy';
 const HUB_PATH = '/praca';
 const GUIDES_PATH = '/poradniki';
 const EMPLOYERS_PATH = '/dla-pracodawcow';
@@ -199,9 +202,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // więc iterujemy stronami do rozsądnego sufitu, zamiast brać tylko pierwszą setkę). ---
   const SITEMAP_PAGE = 100;
   const SITEMAP_MAX_JOBS = 5000; // sufit anty-abuse; powyżej rozważ sitemap index
+  // #591: profile firm zbierane PRZY OKAZJI tej samej iteracji (bez osobnego zapytania) —
+  // `job.companySlug` jest już w wyniku (0156). Jeden wpis na firmę, niezależnie od liczby ofert.
+  const companySlugs = new Set<string>();
   for (let page = 1; entries.length < SITEMAP_MAX_JOBS * locales.length; page += 1) {
     const result = await getJobs({ locale: routing.defaultLocale, page, pageSize: SITEMAP_PAGE });
     if (result.jobs.length === 0) break;
+    for (const job of result.jobs) {
+      if (job.companySlug) companySlugs.add(job.companySlug);
+    }
     // Tylko wersje językowe z tłumaczeniem (#301); nieznane (błąd odczytu) = wszystkie, jak dotąd.
     const availableByJob = await getJobsAvailableLocales(result.jobs.map((job) => job.id));
     for (const job of result.jobs) {
@@ -223,6 +232,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
     if (result.jobs.length < SITEMAP_PAGE) break; // ostatnia strona
     if (page * SITEMAP_PAGE >= SITEMAP_MAX_JOBS) break;
+  }
+
+  // --- Profile firm (#591) — jeden wpis na slug, komplet języków (treść nie zależy od
+  // tłumaczenia oferty, w przeciwieństwie do samej oferty). ---
+  for (const slug of companySlugs) {
+    const path = `${COMPANIES_PATH}/${slug}`;
+    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
+    for (const locale of locales) {
+      entries.push({
+        url: `${base}/${locale}${path}`,
+        changeFrequency: 'weekly',
+        priority: 0.5,
+        alternates: { languages },
+      });
+    }
   }
 
   return entries;

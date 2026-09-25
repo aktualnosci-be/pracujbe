@@ -11387,4 +11387,81 @@ select pg_temp.expect_error(
   'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
 rollback;
 
+-- ============================================================================
+-- CP591. Profil firmy (#591, 0156): `get_public_company`/`get_public_company_jobs` —
+--        wyłącznie zweryfikowana, nieusunięta firma po stabilnym slugu (nie po nazwie);
+--        `get_public_job` niesie `company_slug` dla CTA szczegółu oferty. Kontrola ujemna:
+--        firma odrzucona/zawieszona/usunięta albo zły slug = brak wiersza (strona 404).
+-- ============================================================================
+\set CPCOV 'cc590000-0000-0000-0000-000000000001'
+\set CPCOU 'cc590000-0000-0000-0000-000000000002'
+\set CPCOR 'cc590000-0000-0000-0000-000000000003'
+\set CPJ1  'cc590000-0000-0000-0000-000000000011'
+\set CPJ2  'cc590000-0000-0000-0000-000000000012'
+\set CPJ3  'cc590000-0000-0000-0000-000000000013'
+reset role; reset app.current_uid;
+begin;
+insert into public.companies(id, name, slug, status, description, city, region, industry, website, logo_url) values
+  (:'CPCOV', 'CP591 Firma Zweryfikowana', 'cp591-firma-zweryfikowana', 'verified',
+   'Opis firmy CP591.', 'Antwerpia', 'Flandria', 'logistyka',
+   'https://cp591.example.invalid', 'https://cp591.example.invalid/logo.png'),
+  (:'CPCOU', 'CP591 Firma Niezweryfikowana', 'cp591-firma-niezweryfikowana', 'unverified', 'x', null, null, null, null, null),
+  (:'CPCOR', 'CP591 Firma Odrzucona', 'cp591-firma-odrzucona', 'rejected', 'x', null, null, null, null, null);
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale, published_at) values
+  (:'CPJ1', :'CPCOV', 'cp591-oferta-1', 'Magazynier CP591', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl', now() - interval '1 hour'),
+  (:'CPJ2', :'CPCOV', 'cp591-oferta-2', 'Kierowca CP591', 'transport', 'permanent', 'Gent', 'Flandria', 'active', 'pl', now() - interval '2 hours'),
+  (:'CPJ3', :'CPCOU', 'cp591-oferta-3', 'Sprzątanie CP591', 'cleaning', 'permanent', 'Gent', 'Flandria', 'active', 'pl', now() - interval '3 hours');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+
+-- CP591-1: profil zweryfikowanej firmy — dane i liczba aktywnych ofert (2), nie licznik firmy B.
+select pg_temp.assert(
+  (select name = 'CP591 Firma Zweryfikowana' and slug = 'cp591-firma-zweryfikowana'
+      and description = 'Opis firmy CP591.' and city = 'Antwerpia' and region = 'Flandria'
+      and industry = 'logistyka' and website = 'https://cp591.example.invalid'
+      and logo_url = 'https://cp591.example.invalid/logo.png' and active_jobs_count = 2
+     from public.get_public_company('cp591-firma-zweryfikowana')),
+  'CP591-1 profil zweryfikowanej firmy po slugu, z liczbą aktywnych ofert');
+
+-- CP591-2: lista ofert firmy — tylko jej dwie aktywne, posortowane najnowsze pierwsze.
+select pg_temp.assert(
+  (select array_agg(slug order by published_at desc)
+     from public.get_public_company_jobs('cp591-firma-zweryfikowana')) = array['cp591-oferta-1', 'cp591-oferta-2'],
+  'CP591-2 lista ofert firmy — tylko jej aktywne oferty, najnowsze pierwsze');
+select pg_temp.assert(
+  (select count(*) from public.get_public_company_jobs('cp591-firma-zweryfikowana')) = 2,
+  'CP591-2b oferta innej firmy (CPCOU) nie miesza się z wynikiem');
+
+-- CP591-3: firma niezweryfikowana/odrzucona/zły slug → brak wiersza (strona = 404), nie błąd.
+select pg_temp.assert(
+  (select count(*) from public.get_public_company('cp591-firma-niezweryfikowana')) = 0,
+  'CP591-3 firma unverified nie ma publicznego profilu');
+select pg_temp.assert(
+  (select count(*) from public.get_public_company('cp591-firma-odrzucona')) = 0,
+  'CP591-3b firma rejected nie ma publicznego profilu');
+select pg_temp.assert(
+  (select count(*) from public.get_public_company('nie-taki-slug-CP591')) = 0,
+  'CP591-3c zły slug — brak wiersza');
+select pg_temp.assert(
+  (select count(*) from public.get_public_company_jobs('cp591-firma-niezweryfikowana')) = 0,
+  'CP591-3d oferty firmy niezweryfikowanej nie wychodzą przez profil');
+
+-- CP591-4: get_public_job niesie company_slug (CTA szczegółu oferty linkuje przez slug).
+select pg_temp.assert(
+  (select company_slug = 'cp591-firma-zweryfikowana' from public.get_public_job('cp591-oferta-1')),
+  'CP591-4 get_public_job zwraca company_slug zweryfikowanej firmy');
+
+-- KONTROLA UJEMNA: firma zawieszona po publikacji profilu traci go natychmiast (nie tylko
+-- przy kolejnym imporcie/cache) — polityka czyta status na bieżąco, nie migawkę.
+reset role; reset app.current_uid;
+update public.companies set status = 'suspended' where id = :'CPCOV';
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_public_company('cp591-firma-zweryfikowana')) = 0,
+  'CP591-5 kontrola ujemna: firma zawieszona natychmiast traci publiczny profil');
+select pg_temp.assert(
+  (select count(*) from public.get_public_company_jobs('cp591-firma-zweryfikowana')) = 0,
+  'CP591-5b kontrola ujemna: jej oferty znikają z listy profilu razem z nim');
+rollback;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

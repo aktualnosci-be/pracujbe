@@ -584,6 +584,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   w języku odbiorcy, bezpłatny etap z `docs/PRODUCT_DECISIONS.md`); bez cen i liczb (strażnik
   `tests/unit/employers-page.test.ts`). „Dla pracodawców” w nawigacji i stopce prowadzi tutaj;
   „Dodaj ofertę” i CTA strony — do `/rejestracja-pracodawca`. W bramce a11y (#221).
+- [x] Profil publiczny firmy `/pracodawcy/<slug>` (#591, migracja `0156`): zastępuje CTA
+  „Dowiedz się więcej o firmie”, które prowadziło do wyszukiwarki po nazwie firmy
+  (`?keyword=<nazwa>` — mogło zwrócić oferty innej firmy albo nic). Adres jest stabilny:
+  `companies.slug` (unikalny, ustawiany raz przy zakładaniu firmy, NIE zmienia się przy zmianie
+  wyświetlanej nazwy — `src/lib/actions/company.ts`). `get_public_company`/`get_public_company_jobs`
+  (nowe RPC) i `get_public_job`/`get_public_jobs` (+ `company_slug`) zwracają WYŁĄCZNIE
+  zweryfikowaną, nieusuniętą firmę; zła firma/zły slug = brak wiersza → strona 404 (Invariant #8).
+  CTA na szczególe oferty (`job.companySlug`) jest ukryte, gdy profil nie istnieje (demo/bezpiecznik),
+  zamiast linkować donikąd. Strona indeksowalna (canonical, hreflang), sitemap dodaje jeden wpis na
+  firmę zebrany PRZY OKAZJI iteracji po ofertach (bez osobnego zapytania). Dowód: `rls.sql` sekcja
+  CP591; unit `company-profile`, `jobs-postgres` (#591), `sitemap-robots` (#591, z kontrolą ujemną).
 - [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi
   wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
   `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść
@@ -1360,8 +1371,29 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `free-mvp-ui.test`, `sitemap-robots.test`, E2E `free-mvp-no-sales.spec` (4 języki).
 
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
-- [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
-  connect/img/font, GA/Meta; bez Sentry od #571). Wariant nonce/strict-dynamic = follow-up (E2E).
+- [~] CSP (P2-01, #585) — `next.config.mjs` (default/object/frame-ancestors/base/form-action +
+  zawężone connect/img/font, GA/Meta; bez Sentry od #571). **Próba usunięcia `'unsafe-inline'`
+  ze `script-src` w produkcji zweryfikowana i COFNIĘTA** po realnym buildzie (`next build` +
+  `next start`, Chromium): Next.js App Router (RSC) wstrzykuje WŁASNE inline `<script>` ze
+  strumieniowanymi danymi (`self.__next_f.push(...)`) na KAŻDEJ stronie, z treścią dynamiczną
+  per strona/rewalidacja — nie da się ich objąć stałą listą hashy liczoną raz na proces w
+  `next.config.mjs`. Bez `'unsafe-inline'` te skrypty są blokowane i hydracja KAŻDEJ strony się
+  psuje (potwierdzone: landmark `main` znika z żywego DOM mimo obecności w surowym HTML — React
+  nie kończy hydracji). Next.js oficjalnie wspiera tylko wariant z noncem per-request przez
+  middleware, a jego własna dokumentacja wprost mówi, że to wyłącza ISR — sprzeczne z architekturą
+  tego repo (#298, budżety wydajności). Enforced `script-src` ZOSTAJE więc z `'unsafe-inline'`
+  (bez regresji). Zamiast tego produkcja dostaje RÓWNOLEGŁY `Content-Security-Policy-Report-Only`
+  z tą samą dyrektywą, ale hashem (bez `unsafe-inline`) dla skryptów, które kontrolujemy (baner
+  zgód w `<head>`, gtag/fbq PO zgodzie — Invariant #7; jedno źródło treści z komponentami:
+  `src/lib/security/csp-inline-scripts.mjs`) — obserwowalny krok bez ryzyka regresji, nie pełne
+  zamknięcie #585. JSON-LD zostaje jako `type="application/ld+json"` — nie jest egzekwowany przez
+  `script-src` w żadnym wariancie. Dowód: `tests/unit/csp-inline-scripts.test.ts` (enforced z
+  `unsafe-inline` bez regresji, Report-Only z hashem i kontrolą ujemną), E2E pełny przebieg
+  (`a11y`/`cookie-consent-categories`/`public-cache-headers`/`job-detail-sections`, 61/61) po
+  buildzie produkcyjnym. **Otwarte (decyzja właściciela):** pełne zamknięcie #585 wymaga albo
+  noncu + rezygnacji z ISR na stronach publicznych (regres wydajności — sprzeczne z #298/#395),
+  albo innego mechanizmu, którego Next 15 dziś nie ma; do tego czasu enforced policy pozostaje
+  z `unsafe-inline`, a Report-Only daje realne dane o tym, co złamałaby ściślejsza polityka.
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
 - [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
   funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
