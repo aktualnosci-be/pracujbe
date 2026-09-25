@@ -5,6 +5,7 @@ import { NewJobWizard } from '@/components/employer/NewJobWizard';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { getEmployerShellData } from '@/lib/data/employer';
 import { isJobImportEnabled } from '@/lib/ai-import/config';
+import { isJobAssistEnabled } from '@/lib/ai-assist/config';
 
 /**
  * Kreator oferty pracy — nowa oferta (Etap 5, makieta panelu pracodawcy).
@@ -49,8 +50,9 @@ export default async function NewJobPage({
           className="mx-auto mb-5 max-w-5xl"
         />
       ) : null}
-      {/* #465: krok importu z ogłoszenia tylko przy włączonej fladze i skonfigurowanym dostawcy. */}
-      <NewJobWizard importEnabled={isJobImportEnabled()} />
+      {/* #465: krok importu z ogłoszenia tylko przy włączonej fladze i skonfigurowanym dostawcy;
+          #37: asystent redagowania treści — ta sama zasada (osobna flaga). */}
+      <NewJobWizard importEnabled={isJobImportEnabled()} assistEnabled={isJobAssistEnabled()} />
     </>
   );
 }
