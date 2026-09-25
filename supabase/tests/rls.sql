@@ -5176,7 +5176,7 @@ select pg_temp.assert(
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- SS108. Zapisane wyszukiwania — dokończenie #100 (0108): zmiana nazwy (RPC-only, tylko
+-- SS108. Zapisane wyszukiwania — dokończenie #100 (0109): zmiana nazwy (RPC-only, tylko
 -- własne, limit długości), wyłączenie JEDNEGO alertu z linku w e-mailu (service_role,
 -- tylko właściciel z tokenu), wygaszanie zakolejkowanego digestu przy claimie i ponowna
 -- kontrola tuż przed wysyłką (email_delivery_send_check).
