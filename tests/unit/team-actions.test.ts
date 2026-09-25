@@ -28,7 +28,7 @@ vi.mock('@/lib/company-context', () => ({
   getActiveCompany: vi.fn(),
 }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const MEMBER = '5b3f0a4e-2f4d-4c1e-9a36-1f7b2c9d8e01';
 const INVITE = '6c4f1b5e-3a5d-4d2f-8b47-2a8c3d0e9f12';

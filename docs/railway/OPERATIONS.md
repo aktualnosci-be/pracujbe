@@ -21,7 +21,7 @@ identyfikatorów ani konfiguracji.
 |---|---|---|
 | 200 | `ok` | brak alarmów; po alarmie to **sygnał recovery** |
 | 503 | `alert` | przekroczony próg, kody w `alerts` |
-| 503 | `unavailable` | nie da się odczytać metryk (baza/uprawnienia); szczegół w Sentry `ops.metrics` |
+| 503 | `unavailable` | nie da się odczytać metryk (baza/uprawnienia); szczegół: kod błędu na webhooku błędów (#571) |
 | 503 | `unconfigured` | brak źródła metryk (`DATABASE_OPS_URL` ani service-role) |
 
 `warnings` nie zmieniają kodu HTTP. To sygnały do przeglądu, np. nieudane wysyłki z 24 h.

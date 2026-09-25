@@ -4,7 +4,7 @@ import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import { verifyAlertOffToken } from '@/lib/email/saved-search-alert-token';
 import { unsubscribeSecretFromEnv } from '@/lib/email/unsubscribe-token';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Wyłączenie jednego alertu zapisanego wyszukiwania z linku w e-mailu `jobMatch` (#100).

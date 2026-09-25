@@ -12,7 +12,7 @@ import { isAppealRole, isAppealStatus, type AppealRole, type AppealStatus } from
 import { requireAdmin } from '@/lib/data/admin';
 import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
 import { queryCount, queryRows, rpc, rpcRows } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;

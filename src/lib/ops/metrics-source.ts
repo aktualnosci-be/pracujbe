@@ -2,7 +2,7 @@ import 'server-only';
 
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 import { parseAiBudgetStatus, type AiBudgetStatus } from '@/lib/admin/ai-costs';
 
@@ -20,7 +20,7 @@ export type OpsMetricsResult =
  *    w `pracujbe_ops` (kontrola uprawnień w `createRuntimePool`, jedna sesja na proces);
  * 2. pula zadań serwerowych (`DATABASE_SERVICE_URL`, transakcja service_role — ścieżka
  *    zapasowa, jak `/api/maintenance`).
- * Błąd sterownika nie wychodzi poza moduł (może zawierać adres lub login) — tylko Sentry.
+ * Błąd sterownika nie wychodzi poza moduł (może zawierać adres lub login) — tylko kanał błędów.
  */
 export async function readOpsMetrics(): Promise<OpsMetricsResult> {
   try {

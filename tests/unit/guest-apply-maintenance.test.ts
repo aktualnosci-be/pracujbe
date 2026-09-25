@@ -6,11 +6,11 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(), fileBucketConfig: () => null }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const { POST } = await import('@/app/api/maintenance/route');
 const { isProductionMode } = await import('@/lib/env');
-const { captureError } = await import('@/lib/sentry');
+const { captureError } = await import('@/lib/error-report');
 
 const MAINTENANCE_RPCS = [
   'release_stale_discount_reservations',

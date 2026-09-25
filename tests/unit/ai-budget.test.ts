@@ -11,7 +11,7 @@ vi.mock('@/lib/db/portal', () => ({
   withServiceRole: (action: (tx: unknown) => Promise<unknown>) => action({}),
 }));
 vi.mock('@/lib/db/sql', () => ({ rpc: (...args: unknown[]) => rpc(...args) }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 import { DEFAULT_JOB_IMPORT_MODEL } from '@/lib/ai-import/config';
 import { AnthropicJobExtractor, ExtractorError, FixtureJobExtractor, type JobExtractor } from '@/lib/ai-import/extract';

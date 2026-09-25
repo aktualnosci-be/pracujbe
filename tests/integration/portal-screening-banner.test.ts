@@ -5,7 +5,7 @@ import type { PortalIdentity } from '../../src/lib/auth/session';
 import { withUserTransaction } from '../../src/lib/db/transaction';
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/navigation', () => ({

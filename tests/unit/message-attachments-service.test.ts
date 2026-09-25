@@ -24,7 +24,7 @@ vi.mock('@/lib/db/transaction', () => ({
   withUserTransaction: vi.fn(async (_pool: unknown, _uid: unknown, action: (tx: unknown) => unknown) => action({})),
 }));
 vi.mock('@/lib/db/sql', () => ({ rpc: vi.fn(), rpcRows: vi.fn() }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const SELF = '11111111-1111-4111-8111-111111111111';
 const OTHER = '33333333-3333-4333-8333-333333333333';

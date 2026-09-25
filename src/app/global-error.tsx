@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 export function GlobalErrorContent({
   error,
@@ -102,7 +102,7 @@ export function GlobalErrorContent({
  * Globalna granica błędu (App Router) — łapie błędy w ROOT layoutcie, gdy [locale]/error.tsx
  * już nie zadziała. Zastępuje cały dokument, więc renderuje własne <html>/<body> i NIE ma
  * kontekstu i18n — stąd neutralny, wielojęzyczny komunikat i style inline (bez zależności od
- * arkusza). Bez stack trace/technikaliów (Invariant #8); szczegóły idą do Sentry.
+ * arkusza). Bez stack trace/technikaliów (Invariant #8); szczegóły idą do kanału błędów.
  */
 export default function GlobalError({
   error,

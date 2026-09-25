@@ -23,7 +23,7 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 | E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Resend, EmailLabs | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Kod nie usuwa danych — do ustalenia |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora). | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
-| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
+| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Discord (webhook kanału błędów), Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
 | Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
@@ -81,15 +81,16 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 - **Umowa (DPA):** DO UZUPEŁNIENIA
 - **Retencja u dostawcy:** DO UZUPEŁNIENIA
 
-### Sentry (`sentry`)
+### Discord (webhook kanału błędów) (`discord-webhook`)
 
-- **Cel w portalu:** Zgłaszanie błędów aplikacji (klient, serwer, edge).
-- **Kategorie danych:** Kod błędu z listy ErrorCodes, identyfikator i czas zdarzenia
-- **Osoby:** Użytkownicy, u których wystąpił błąd (pośrednio)
-- **Aktywacja:** NEXT_PUBLIC_SENTRY_DSN / SENTRY_DSN; bez DSN brak wysyłki.
-- **Kod:** `sentry.client.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`, `src/lib/sentry-egress.ts`
-- **Uwaga:** sendDefaultPii: false, Session Replay i tracing wyłączone (sample rate 0).
-- **Uwaga:** beforeSend = redactSentryEvent: zdarzenie budowane od zera z bezpiecznych pól (bez URL, treści wyjątku, extras i załączników).
+- **Cel w portalu:** Powiadomienie zespołu o błędzie serwera (5xx, captureError) na kanale Discorda (#571).
+- **Kategorie danych:** Dane techniczne bez danych osobowych: kod błędu z listy ErrorCodes, szablon trasy bez query/fragmentu, wersja wydania (SHA), środowisko, czas, liczba pominiętych powtórzeń
+- **Osoby:** Brak (wiadomość nie zawiera danych osób; trasa i tekst przechodzą redakcję #502)
+- **Aktywacja:** ERROR_WEBHOOK_URL (tylko serwer; https discord.com/discordapp.com); pusta zmienna = brak wysyłki.
+- **Kod:** `src/lib/error-webhook/`, `src/lib/error-report.ts`, `src/instrumentation.ts`
+- **Uwaga:** Wysyłka tylko z runtime serwera (reporter rejestrowany w instrumentation); w przeglądarce captureError to no-op.
+- **Uwaga:** Wiadomość budowana od zera z bezpiecznych pól — bez treści wyjątku, cause, kontekstu, nagłówków i parametrów; limit 2000 znaków.
+- **Uwaga:** Ten sam kod najwyżej raz na 10 min, przerwa po 429 wg retry_after, timeout 3 s; adres webhooka nie trafia do logów ani komunikatów.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA

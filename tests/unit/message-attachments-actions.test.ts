@@ -23,7 +23,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 vi.mock('@/lib/db/portal', () => ({ getPortalIdentity: vi.fn() }));
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn() }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/files/runtime', () => ({ getAttachmentServiceDeps: vi.fn(), readSessionUserId: vi.fn() }));
 vi.mock('@/lib/files/message-attachments', async (original) => ({
   ...(await original<typeof import('@/lib/files/message-attachments')>()),

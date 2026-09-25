@@ -8,7 +8,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { rpc, rpcRows, type RpcArgs } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { ACTIVE_COMPANY_COOKIE, getActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
 import { issueTeamInviteToken } from '@/lib/team/invite-token';
@@ -43,7 +43,7 @@ const MANAGE_RATE_MAX = 120;
 
 /**
  * Wyjątek akcji → wynik: błąd bazy (RAISE w RPC, RLS) → stabilny kod zespołu; inny wyjątek
- * (sieć, konfiguracja) → Sentry + INTERNAL. Tekst bazy nie trafia do użytkownika.
+ * (sieć, konfiguracja) → kanał błędów + INTERNAL. Tekst bazy nie trafia do użytkownika.
  */
 function failure(error: unknown, area: string): TeamActionResult {
   if (isDatabaseError(error)) return fail(mapTeamError(databaseErrorMessage(error)));

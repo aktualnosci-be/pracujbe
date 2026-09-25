@@ -15,7 +15,7 @@ propozycje pracy. Interfejs w **PL / NL / FR / EN**.
 
 Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind CSS + shadcn/ui ·
 Supabase (przejściowo) · PostgreSQL Railway · Zod · React Hook Form · Resend + React Email ·
-Sentry · Vitest + Playwright · Railway.
+webhook błędów (Discord) · Vitest + Playwright · Railway.
 
 **CI działa na GitHub-hosted runnerach (`ubuntu-latest`), a produkcję z `main` wdraża Railway po zielonym CI** —
 patrz [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
@@ -31,7 +31,7 @@ npm install
 
 # 2. Zmienne środowiskowe
 cp .env.example .env.local
-#   uzupełnij klucze Supabase / Resend / Sentry (patrz docs/SUPABASE_SETUP.md, docs/RESEND_SETUP.md)
+#   uzupełnij klucze Supabase / Resend / ERROR_WEBHOOK_URL (patrz docs/SUPABASE_SETUP.md, docs/RESEND_SETUP.md)
 
 # 3. Baza (lokalnie, wymaga Supabase CLI)
 #   supabase start

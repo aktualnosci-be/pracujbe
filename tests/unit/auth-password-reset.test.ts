@@ -17,7 +17,7 @@ vi.mock('@/lib/auth/runtime', async () => (await import('../helpers/auth-portal'
 vi.mock('@/lib/db/runtime', async () => (await import('../helpers/auth-portal')).dbRuntimeModule);
 vi.mock('@/lib/db/transaction', async () => (await import('../helpers/auth-portal')).transactionModule);
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.rateLimit }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 import { SESSION_COOKIE, api, authApiError, cookieJar, outcome, resetPortal, stubPortalEnv } from '../helpers/auth-portal';
 import { requestPasswordReset, signOut, updatePassword } from '@/lib/actions/auth';

@@ -19,7 +19,7 @@ i [`data-map.generated.md`](data-map.generated.md) sekcja 2 (usługi) i 4 (treś
 | Railway | wszystkie (hosting, baza, cron, logi) | produkcja | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Supabase | panele, Storage CV, limiter (przejściowo) | `NEXT_PUBLIC_SUPABASE_URL` + klucze | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Resend | e-maile transakcyjne i konta | `RESEND_API_KEY` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
-| Sentry | raporty błędów | `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
+| Discord (webhook błędów, #571) | powiadomienia o błędach serwera | `ERROR_WEBHOOK_URL` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Cloudflare Turnstile | ochrona formularzy | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Anthropic | import ogłoszeń | `AI_JOB_IMPORT_ENABLED` + `ANTHROPIC_API_KEY` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Google Analytics | analityka po zgodzie | ID pomiaru + zgoda `analytics` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
@@ -152,8 +152,8 @@ funkcji wysyłających dane kandydata do dostawcy bez zatwierdzonego wpisu (#488
   Miejsce przechowywania kopii zapasowych (`BACKUP_DIR`) nie wynika z repozytorium.
 - **Supabase:** warstwa przejściowa; ścieżka limitera zapisuje klucz z adresem IP bez
   haszowania (ścieżka PostgreSQL zapisuje HMAC).
-- **Sentry:** zdarzenie budowane od zera z kodu błędu, identyfikatora i czasu (`redactSentryEvent`);
-  `sendDefaultPii: false`, replay i tracing wyłączone.
+- **Discord (webhook błędów, #571; Sentry usunięte):** wiadomość budowana od zera z kodu błędu,
+  szablonu trasy bez query/fragmentu, wersji wydania, środowiska i czasu; wysyłka tylko z serwera.
 - **Google Analytics / Meta Pixel:** ładowane dopiero po zgodzie; wycofanie usuwa cookies.
 - **VIES:** numer VAT firmy wysyłany do usługi Komisji Europejskiej na żądanie administratora.
 

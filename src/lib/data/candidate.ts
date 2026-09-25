@@ -11,7 +11,7 @@
  * (P1-01: anon/authenticated-niebędący-członkiem nie czyta tabel bazowych), dlatego
  * wzbogacamy je przez RPC `get_public_jobs` (bezpieczne kolumny) i łączymy po `job_id`.
  *
- * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do Sentry
+ * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do kanału błędów
  * i degradujemy do bezpiecznej struktury, a nie do danych DEMO. Odczyty profilu
  * oznaczają awarię osobnym `loadFailed`, aby nie udawać 0% kompletności.
  */
@@ -22,7 +22,7 @@ import type { PortalIdentity } from '@/lib/auth/session';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { attempt, queryCount, queryOne, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 import { findLatestActiveProposal } from '@/lib/candidate-offers';
@@ -799,7 +799,7 @@ export async function getMyApplicationsPreview(
   try {
     return { status: 'ok', items: (await getMyApplicationsPage(locale)).items };
   } catch {
-    // getMyApplicationsPage zgłosił już błąd do Sentry.
+    // getMyApplicationsPage zgłosił już błąd do kanału błędów.
     return { status: 'error' };
   }
 }

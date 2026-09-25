@@ -10,7 +10,7 @@ import {
 } from '@/lib/db/candidate-files';
 import type { TransactionPool } from '@/lib/db/transaction';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import {
   createPrivateDownloadToken,
   verifyPrivateDownloadToken,
@@ -29,7 +29,7 @@ import { attachmentDisposition, cvDisplayName, isValidCvContent } from './cv-con
  * tylko krótki (60 s) link aplikacji podpisany HMAC, który trasa pobrania weryfikuje razem
  * z bieżącą sesją, własnością i stanem skanu (kwarantanna: `pending`/`infected` = brak pobrania).
  *
- * Logi/Sentry dostają wyłącznie kod błędu — bez klucza, nazwy pliku i danych kandydata (#502).
+ * Logi/kanał błędów dostają wyłącznie kod błędu — bez klucza, nazwy pliku i danych kandydata (#502).
  */
 
 export type CvObjectStore = Pick<ReturnType<typeof createRailwayBucket>, 'put' | 'delete' | 'openStream'>;

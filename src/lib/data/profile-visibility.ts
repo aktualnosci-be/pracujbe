@@ -5,7 +5,7 @@
  * Egzekwowanie żyje w bazie (0029/0078/0100): profil, relacje profilu i dopasowania widzi
  * tylko zweryfikowana firma, gdy `is_searchable` i `profile_completed`, a kandydat jej nie
  * zablokował. Relacja z aplikacji/propozycji (`company_can_view_candidate`) zostaje po
- * wyłączeniu. Błąd odczytu = jawny `error` (bez udawania „ukryty"); technikalia do Sentry.
+ * wyłączeniu. Błąd odczytu = jawny `error` (bez udawania „ukryty"); technikalia do kanału błędów.
  *
  * Tryb demo (bez env): ukończony, ukryty profil (`demo: true`, Invariant #12).
  */
@@ -13,7 +13,7 @@
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 export interface ProfileVisibility {
   searchable: boolean;

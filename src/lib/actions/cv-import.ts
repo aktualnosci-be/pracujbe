@@ -12,7 +12,7 @@ import {
 import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { withAiBudget } from '@/lib/ai/budget';
 import { withAiUsageLog, type AiUsageOutcome } from '@/lib/ai/usage-log';
 import { ExtractorError, type ExtractionHooks } from '@/lib/ai-import/extract';
@@ -43,7 +43,7 @@ import { CV_MAX_BYTES } from '@/lib/validation/cv-file';
  * własnego profilu, właściciela nie przyjmujemy od klienta.
  * Limit wywołań modelu per konto (fail-closed, bo każde wywołanie kosztuje).
  * Plik, tekst CV i propozycje nie są zapisywane, logowane ani wysyłane do telemetrii — przy
- * błędzie do Sentry trafia wyłącznie obszar/krok (`captureError` wysyła sam kod błędu, #508).
+ * błędzie do kanału błędów trafia wyłącznie obszar/krok (`captureError` wysyła sam kod błędu, #508).
  * Przepływ nie tworzy rekordu `files` i nie udostępnia CV firmom.
  */
 

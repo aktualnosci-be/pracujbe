@@ -6,7 +6,7 @@ import type { AiFeatureId } from '@/lib/ai/inventory';
 import { costMicroUsd, FIXTURE_MODEL } from '@/lib/ai/pricing';
 import type { AiUsageOutcome } from '@/lib/ai/usage-log';
 import { isServiceDatabaseConfigured } from '@/lib/db/portal';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Bramka globalnego budżetu AI (#36, migracja 0120) dla asystenta treści oferty (#37).

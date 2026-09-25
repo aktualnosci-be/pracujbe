@@ -23,7 +23,7 @@ import {
 } from '@/lib/email/sender';
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { isProductionMode } from '@/lib/env';
 import { emailProviderFromEnv, mailTransportFromEnv, MailSendError } from '@/lib/email/transport';
 

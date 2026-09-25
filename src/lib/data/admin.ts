@@ -41,7 +41,7 @@ import { demoJobs } from '@/lib/data/demo';
 import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
 import { attempt, queryCount, queryOne, queryRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import {
   isScreeningQuestionType,
   toLocalizedText,

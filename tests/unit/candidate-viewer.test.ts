@@ -11,7 +11,7 @@ vi.mock('next/headers', () => ({ headers: async () => new Headers({ cookie: 'tes
 vi.mock('@/lib/auth/runtime', () => ({ getAuthRuntime: mocks.getAuthRuntime }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: mocks.getDomainPool }));
 vi.mock('@/lib/auth/session', () => ({ readPortalIdentity: mocks.readPortalIdentity }));
-vi.mock('@/lib/sentry', () => ({ captureError: mocks.captureError }));
+vi.mock('@/lib/error-report', () => ({ captureError: mocks.captureError }));
 
 import { readCandidateViewerId } from '@/lib/auth/candidate-viewer';
 
@@ -50,7 +50,7 @@ describe('Kandydat przeglądający listę ofert (#97)', () => {
     expect(await readCandidateViewerId()).toBeNull();
   });
 
-  it('awaria sesji nie blokuje listy i trafia do Sentry', async () => {
+  it('awaria sesji nie blokuje listy i trafia do kanału błędów', async () => {
     configure();
     mocks.readPortalIdentity.mockRejectedValue(new Error('session store down'));
     expect(await readCandidateViewerId()).toBeNull();

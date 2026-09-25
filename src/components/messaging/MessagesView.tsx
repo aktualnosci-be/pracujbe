@@ -13,7 +13,7 @@ import {
 } from '@/lib/data/messages';
 import { markConversationRead } from '@/lib/actions/messages';
 import { threadDisplayName } from '@/lib/messaging/thread-view';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 import { ConversationList } from './ConversationList';
 import { MessageThread } from './MessageThread';

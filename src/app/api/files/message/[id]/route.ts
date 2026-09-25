@@ -1,7 +1,7 @@
 import { emptyAttachmentResponse, openAttachmentDownload } from '@/lib/files/message-attachments';
 import { getAttachmentServiceDeps, readSessionUserId } from '@/lib/files/runtime';
 import { AppError } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Pobranie załącznika wiadomości (0119, Invariant #10). Link wystawia akcja

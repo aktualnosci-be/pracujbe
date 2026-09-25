@@ -37,7 +37,7 @@ import { withUserTransaction } from '@/lib/db/transaction';
 import { env, isPortalAuthConfigured } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
   loginSchema,
@@ -171,7 +171,7 @@ async function sessionCookieNames(auth: AuthRuntime): Promise<string[]> {
 
 /**
  * Cofa świeżo wydaną sesję (np. brak znanej roli po logowaniu): usuwa ją z bazy i kasuje cookie
- * z odpowiedzi. Best-effort — błąd trafia do Sentry, a użytkownik i tak dostaje błąd, nie panel.
+ * z odpowiedzi. Best-effort — błąd trafia do kanału błędów, a użytkownik i tak dostaje błąd, nie panel.
  */
 async function discardSession(
   auth: AuthRuntime,
@@ -398,7 +398,7 @@ export async function registerInvitedEmployer(
 
 /**
  * Zamawia link resetu hasła. Odpowiedź jest ZAWSZE neutralna (nie ujawnia, czy konto istnieje):
- * także awaria zapisu zlecenia dla istniejącego konta daje ten sam wynik (błąd trafia do Sentry).
+ * także awaria zapisu zlecenia dla istniejącego konta daje ten sam wynik (błąd trafia do kanału błędów).
  * Wyjątki: limit prób, bot-check, walidacja i brak konfiguracji kont (INTERNAL).
  * Język wiadomości i docelowej strony wynika z profilu ODBIORCY (kolejka 0061), nie z formularza.
  */
@@ -564,7 +564,7 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
 
 /**
  * Wylogowanie: unieważnia sesję w bazie i usuwa cookie. Awaria bazy nie jest raportowana jako
- * globalne wylogowanie — cookie tej przeglądarki i tak znika, błąd trafia do Sentry.
+ * globalne wylogowanie — cookie tej przeglądarki i tak znika, błąd trafia do kanału błędów.
  * Zawsze przekierowuje na stronę logowania.
  */
 export async function signOut(): Promise<void> {

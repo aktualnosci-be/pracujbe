@@ -16,7 +16,7 @@ vi.mock('next/navigation', () => ({
     throw new Error('NEXT_NOT_FOUND');
   }),
 }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const ADMIN = { id: '00000000-0000-4000-8000-00000000a001', role: 'admin' } as const;
 

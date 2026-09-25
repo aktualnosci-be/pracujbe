@@ -9,7 +9,7 @@
 import { isDatabaseConfigured, isProductionMode } from '@/lib/env';
 import { isBuildPhase } from '@/lib/static-rendering';
 import { AppError } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoJobContentLocales, resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
 import { resolveJobContentLocales } from '@/lib/job-content-locale';

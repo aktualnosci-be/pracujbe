@@ -15,7 +15,7 @@ const translations = { pl, nl, fr, en } as const;
 type Loc = keyof typeof translations;
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/actions/messages', () => ({ loadOlderMessages: vi.fn() }));
 vi.mock('next-intl/server', () => ({
   getTranslations:

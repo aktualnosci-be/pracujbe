@@ -6,7 +6,7 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 const { captureError } = vi.hoisted(() => ({ captureError: vi.fn() }));
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError }));
+vi.mock('@/lib/error-report', () => ({ captureError }));
 
 import { getConversationsResult } from '@/lib/data/messages';
 import * as portal from '@/lib/db/portal';

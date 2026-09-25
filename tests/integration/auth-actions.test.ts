@@ -68,7 +68,7 @@ vi.mock('@/emails/templates', () => ({
     subject: locale, html: `<a href="${data.confirmationUrl ?? data.resetUrl}">link</a>`, text: 'link',
   }),
 }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const container = 'pracujbe-auth-actions-test-' + randomUUID();
 const clusterPassword = randomUUID();

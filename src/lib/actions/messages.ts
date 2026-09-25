@@ -10,7 +10,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { MESSAGE_BODY_MAX_LENGTH } from '@/lib/validation/message';
 import { MESSAGE_ATTACHMENTS_MAX } from '@/lib/validation/message-attachment';
 
@@ -43,7 +43,7 @@ function mapPgError(message: string | undefined): ErrorCode {
   return 'INTERNAL';
 }
 
-/** Błąd bazy → kod użytkowy; inny wyjątek (sieć, konfiguracja) → Sentry + INTERNAL. */
+/** Błąd bazy → kod użytkowy; inny wyjątek (sieć, konfiguracja) → kanał błędów + INTERNAL. */
 function mapFailure(error: unknown, area: string): ErrorCode {
   if (isDatabaseError(error)) return mapPgError(databaseErrorMessage(error));
   captureError(error, { area });

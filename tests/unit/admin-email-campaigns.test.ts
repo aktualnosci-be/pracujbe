@@ -33,7 +33,7 @@ vi.mock('next/navigation', () => ({
     throw new Error('NEXT_NOT_FOUND');
   }),
 }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/env')>()),
   isProductionMode: vi.fn(() => true),

@@ -8,7 +8,7 @@ import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Server Actions zapisanych wyszukiwań (#100) — cienka warstwa nad RPC z 0092.

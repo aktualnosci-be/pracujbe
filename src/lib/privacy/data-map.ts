@@ -173,7 +173,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   'security-audit': {
     name: 'Bezpieczeństwo, audyt i limity',
     inCode: 'Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów.',
-    processors: [...HOSTING, 'sentry', 'cloudflare-turnstile'],
+    processors: [...HOSTING, 'discord-webhook', 'cloudflare-turnstile'],
     retentionInCode: 'Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie.',
   },
   'ai-job-import': {

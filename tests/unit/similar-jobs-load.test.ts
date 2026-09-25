@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getSimilarJobs } from '@/lib/jobs';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * #191: odczyt podobnych ofert zwraca jawny wynik. Awaria listy lub licznika nie rzuca
@@ -11,7 +11,7 @@ import { captureError } from '@/lib/sentry';
 const adapters = vi.hoisted(() => ({ list: vi.fn(), pool: {} }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
 vi.mock('@/lib/db/public-jobs', () => ({ getPublicJobs: adapters.list }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 afterEach(() => {
   vi.unstubAllEnvs();

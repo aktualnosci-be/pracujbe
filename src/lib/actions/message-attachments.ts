@@ -6,7 +6,7 @@ import { getPortalIdentity } from '@/lib/db/portal';
 import { isProductionMode } from '@/lib/env';
 import { AppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { checkAttachmentFile, type AttachmentFileProblem } from '@/lib/validation/message-attachment';
 
 /**

@@ -4,7 +4,7 @@ import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { rpc, rpcRows } from '@/lib/db/sql';
 import { withUserTransaction, type TransactionPool } from '@/lib/db/transaction';
 import { AppError, type ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import {
   createPrivateDownloadToken,
   verifyPrivateDownloadToken,
@@ -32,7 +32,7 @@ import { attachmentDisposition, isValidCvContent } from './cv-content';
  * Pobranie = krótki (60 s) link HMAC do trasy aplikacji, która PONOWNIE sprawdza sesję,
  * członkostwo w rozmowie i stan skanu, a bajty strumieniuje z bucketu (bez adresu S3).
  *
- * Logi/Sentry dostają wyłącznie kod błędu — bez klucza, nazwy pliku i treści (#502).
+ * Logi/kanał błędów dostają wyłącznie kod błędu — bez klucza, nazwy pliku i treści (#502).
  */
 
 export type AttachmentObjectStore = Pick<ReturnType<typeof createRailwayBucket>, 'put' | 'delete' | 'openStream'>;
@@ -71,7 +71,7 @@ function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID.test(value);
 }
 
-/** Błąd bazy → kod użytkowy (Invariant #8); inny wyjątek → Sentry + INTERNAL. */
+/** Błąd bazy → kod użytkowy (Invariant #8); inny wyjątek → kanał błędów + INTERNAL. */
 function repositoryError(error: unknown, area: string): ErrorCode {
   if (isDatabaseError(error)) {
     const message = databaseErrorMessage(error);
