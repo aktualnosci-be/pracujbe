@@ -688,7 +688,7 @@ export default async function JobDetailPage({ params }: PageProps) {
       */}
       <div
         data-testid="job-mobile-cta-bar"
-        className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background/95 p-3 shadow-[0_-4px_12px_rgba(15,42,71,0.08)] backdrop-blur lg:hidden max-lg:[body:has(&)]:pb-24 max-lg:[html:has(&)]:scroll-pb-28"
+        className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background/95 p-3 shadow-[0_-4px_12px_hsl(var(--foreground)/0.08)] backdrop-blur lg:hidden max-lg:[body:has(&)]:pb-24 max-lg:[html:has(&)]:scroll-pb-28"
       >
         <PublicSaveJobButton jobId={job.id} iconOnly />
         <ApplyModal

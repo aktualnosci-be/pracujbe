@@ -58,7 +58,7 @@ import {
 /**
  * ApplyModal — modal „Aplikuj teraz” (szybka aplikacja) wg makiety 03-job-detail.
  *
- * Renderuje własny wyzwalacz (przycisk granatowy lub outline) i modal na Radix Dialog:
+ * Renderuje własny wyzwalacz (przycisk główny w kolorze marki lub outline) i modal na Radix Dialog:
  * telefon (kod kraju + numer), dostępność, wiadomość (licznik 0/500), zgoda RODO oraz
  * „Wyślij aplikację”. Walidacja kliencka blokuje wysyłkę bez telefonu i zgody; przycisk
  * jest zablokowany w trakcie wysyłki (Invariant #11).

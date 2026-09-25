@@ -10,7 +10,7 @@ import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
 import { CompanyReverifyButton } from '@/components/employer/CompanyReverifyButton';
 import {
   EYEBROW,
-  H1,
+  H1_EXTENDED,
   H2_EXTENDED,
   ICON_BOX,
   INFO_LABEL,
@@ -99,7 +99,7 @@ export default async function EmployerCompanyPage({
             </span>
           ) : null}
           <div className="min-w-0 flex-1">
-            <h1 className={H1}>{company?.name || t('title')}</h1>
+            <h1 className={H1_EXTENDED}>{company?.name || t('title')}</h1>
             <p className={INTRO}>
               {companyLoad.status === 'error'
                 ? t('loadErrorHint')

@@ -8,7 +8,7 @@ import { Link } from '@/i18n/navigation';
 /**
  * ForCompanies — karta „Jesteś pracodawcą?" (wg makiety `01-home`).
  *
- * Miękka karta na granatowo-neutralnym tle: nagłówek, opis, granatowe CTA „Dodaj ofertę pracy"
+ * Miękka karta na jasnym tle (`bg-soft`): nagłówek, opis, czerwone CTA „Dodaj ofertę pracy"
  * oraz lekka ilustracja ludzi. Renderowana w prawej kolumnie obok „Jak to działa?" przez
  * `page.tsx`. Komponent serwerowy; CTA jako Button asChild + Link (zachowuje prefiks języka).
  */

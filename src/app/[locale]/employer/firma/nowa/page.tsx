@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { CompanyForm } from '@/components/employer/CompanyForm';
-import { DEMO_NOTE, EYEBROW, H1, INTRO, PAPER } from '@/components/dashboard/panel-styles';
+import { DEMO_NOTE, EYEBROW, H1_EXTENDED, INTRO, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
  * Panel pracodawcy — kolejna firma (#403). Zalogowany pracodawca zakłada następną firmę
@@ -36,7 +36,7 @@ export default async function EmployerAddCompanyPage({
     <div className="min-w-0 max-w-4xl space-y-[22px]">
       <header className="min-w-0">
         <p className={EYEBROW}>{tc('title')}</p>
-        <h1 className={H1}>{t('addCompanyTitle')}</h1>
+        <h1 className={H1_EXTENDED}>{t('addCompanyTitle')}</h1>
         <p className={INTRO}>{t('addCompanyDesc')}</p>
       </header>
       <section className={PAPER}>

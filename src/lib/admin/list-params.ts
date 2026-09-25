@@ -157,6 +157,16 @@ export function parseEmailSuppressionFilter(raw: string | undefined | null): Ema
     : 'active';
 }
 
+/** Filtr rejestru naruszeń (#490, `breach_incidents.status`); domyślnie otwarte. */
+export const BREACH_LIST_FILTERS = ['open', 'closed', 'all'] as const;
+export type BreachListFilter = (typeof BREACH_LIST_FILTERS)[number];
+
+export function parseBreachFilter(raw: string | undefined | null): BreachListFilter {
+  return raw && (BREACH_LIST_FILTERS as readonly string[]).includes(raw)
+    ? (raw as BreachListFilter)
+    : 'open';
+}
+
 /** Filtr kolejki przeglądu pytań screeningowych (#497, 0103). Domyślnie oczekujące. */
 export const SCREENING_REVIEW_FILTERS = ['pending', 'decided', 'all'] as const;
 export type ScreeningReviewFilter = (typeof SCREENING_REVIEW_FILTERS)[number];
@@ -222,13 +232,14 @@ export function reportReasonView(reason: string): ReportReasonView {
  * Dziennik zdarzeń (audit_logs, #417)
  * ------------------------------------------------------------------------- */
 
-/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072). */
+/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106). */
 export const AUDIT_ENTITY_TYPES = [
   'company',
   'report',
   'application',
   'offer',
   'email_suppression',
+  'breach_incident',
   'screening_question_review',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
@@ -251,6 +262,12 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'email.suppressed': 'auditActionEmailSuppressed',
   'email.suppression_lifted': 'auditActionEmailSuppressionLifted',
   'age_policy.updated': 'auditActionAgePolicyUpdated',
+  'breach.created': 'auditActionBreachCreated',
+  'breach.updated': 'auditActionBreachUpdated',
+  'breach.closed': 'auditActionBreachClosed',
+  'breach.reopened': 'auditActionBreachReopened',
+  'breach.exported': 'auditActionBreachExported',
+  'breach.subjects_notified': 'auditActionBreachSubjectsNotified',
   'screening_question.review_requested': 'auditActionScreeningRequested',
   'screening_question.reviewed': 'auditActionScreeningReviewed',
 };

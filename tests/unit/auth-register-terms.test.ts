@@ -1,52 +1,27 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Zgoda na regulamin przy rejestracji jest sprawdzana na SERWERZE: żądanie bez zgody
- * nie tworzy konta, a konto bez zapisanego receiptu akceptacji nie zostaje.
+ * Zgoda na regulamin przy rejestracji jest sprawdzana na SERWERZE: żądanie bez zgody nie
+ * dociera do SDK. Receipty akceptacji zapisuje trigger 0059 w tej samej transakcji co konto
+ * (dowód na PostgreSQL: tests/integration/auth-email-outbox.test.ts) — tutaj sprawdzamy, że
+ * akcja wywołuje SDK wyłącznie w walidowanym kontekście z rolą wynikającą z akcji, a błąd
+ * zapisu (np. triggera receiptów) kończy rejestrację błędem bez przekierowania.
  */
 
-const mocks = vi.hoisted(() => {
-  class RedirectSignal extends Error {
-    constructor(public readonly target: unknown) {
-      super('NEXT_REDIRECT');
-    }
-  }
-  return {
-    RedirectSignal,
-    signUp: vi.fn(),
-    rpc: vi.fn(),
-    deleteUser: vi.fn(),
-    update: vi.fn(),
-  };
-});
-
 vi.mock('next-intl/server', () => ({ getLocale: async () => 'pl' }));
-vi.mock('next/headers', () => ({ headers: async () => new Headers() }));
-vi.mock('next/navigation', () => ({
-  redirect: (url: string) => {
-    throw new mocks.RedirectSignal(url);
-  },
-}));
-vi.mock('@/i18n/navigation', () => ({
-  redirect: (args: { href: string; locale: string }) => {
-    throw new mocks.RedirectSignal(`/${args.locale}${args.href}`);
-  },
-}));
+vi.mock('next/headers', async () => (await import('../helpers/auth-portal')).headersModule);
+vi.mock('next/navigation', async () => (await import('../helpers/auth-portal')).navigationModule);
+vi.mock('@/i18n/navigation', async () => (await import('../helpers/auth-portal')).intlNavigationModule);
+vi.mock('@/lib/auth/runtime', async () => (await import('../helpers/auth-portal')).runtimeModule);
+vi.mock('@/lib/db/runtime', async () => (await import('../helpers/auth-portal')).dbRuntimeModule);
+vi.mock('@/lib/db/transaction', async () => (await import('../helpers/auth-portal')).transactionModule);
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminClient: () => ({
-    rpc: mocks.rpc,
-    auth: { admin: { deleteUser: mocks.deleteUser } },
-    from: () => ({ update: (v: unknown) => ({ eq: async () => mocks.update(v) }) }),
-  }),
-}));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: async () => ({ auth: { signUp: mocks.signUp } }),
-}));
 
-const USER_ID = '00000000-0000-4000-8000-0000000000aa';
+import { api, authApiError, outcome, resetPortal, stubPortalEnv } from '../helpers/auth-portal';
+import { registerCandidate, registerEmployer } from '@/lib/actions/auth';
+import { authorizeSignupRequest, signupMetadataForUser } from '@/lib/auth/signup-context';
 
 const candidate = {
   email: 'jan@example.com',
@@ -54,7 +29,7 @@ const candidate = {
   passwordConfirm: 'Haslo1234',
   firstName: 'Jan',
   lastName: 'Kowalski',
-  locale: 'pl' as const,
+  locale: 'nl' as const,
   // #492: deklaracja progu wieku kandydata (bez daty urodzenia).
   ageConfirmed: true as const,
   minAge: 18,
@@ -62,24 +37,20 @@ const candidate = {
 const { ageConfirmed: _age, minAge: _minAge, ...employerBase } = candidate;
 const employer = { ...employerBase, companyName: 'Firma Testowa' };
 
-async function outcome(run: () => Promise<unknown>): Promise<unknown> {
-  try {
-    return await run();
-  } catch (e) {
-    if (e instanceof mocks.RedirectSignal) return { redirect: e.target };
-    throw e;
-  }
-}
+/** Metadane, które hook SDK zapisałby przy INSERT użytkownika (dokładnie jak w produkcji). */
+let captured: ReturnType<typeof signupMetadataForUser> | null = null;
 
 beforeEach(() => {
-  mocks.signUp.mockReset().mockResolvedValue({
-    data: { user: { id: USER_ID, email_confirmed_at: null, identities: [{ id: 'i1' }] } },
-    error: null,
+  resetPortal();
+  stubPortalEnv();
+  captured = null;
+  api.signUpEmail.mockImplementation(async ({ body }: { body: { email: string; password: string; name: string } }) => {
+    authorizeSignupRequest(body);
+    captured = signupMetadataForUser({ email: body.email, name: body.name });
+    return { token: null, user: { id: 'u1' } };
   });
-  mocks.rpc.mockReset().mockResolvedValue({ data: null, error: null });
-  mocks.deleteUser.mockReset().mockResolvedValue({ data: null, error: null });
-  mocks.update.mockReset().mockReturnValue({ error: null });
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe('rejestracja bez zgody na regulamin', () => {
   const withoutConsent: Array<[string, Record<string, unknown>]> = [
@@ -90,63 +61,56 @@ describe('rejestracja bez zgody na regulamin', () => {
   ];
 
   it.each(withoutConsent)('kandydat (%s) — odrzucone, konto nie powstaje', async (_label, extra) => {
-    const { registerCandidate } = await import('@/lib/actions/auth');
     const result = await outcome(() => registerCandidate({ ...candidate, ...extra } as never));
     expect(result).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(mocks.signUp).not.toHaveBeenCalled();
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(api.signUpEmail).not.toHaveBeenCalled();
   });
 
   it.each(withoutConsent)('pracodawca (%s) — odrzucone, konto nie powstaje', async (_label, extra) => {
-    const { registerEmployer } = await import('@/lib/actions/auth');
     const result = await outcome(() => registerEmployer({ ...employer, ...extra } as never));
     expect(result).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(mocks.signUp).not.toHaveBeenCalled();
+    expect(api.signUpEmail).not.toHaveBeenCalled();
   });
 });
 
-describe('rejestracja ze zgodą — receipt akceptacji jest obowiązkowy', () => {
-  it('zapisuje receipt regulaminu i polityki prywatności, potem przekierowuje', async () => {
-    const { registerCandidate } = await import('@/lib/actions/auth');
+describe('rejestracja ze zgodą', () => {
+  it('kandydat: kontekst z rolą candidate, zgodą i językiem formularza → strona potwierdzenia', async () => {
     const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
-    expect(result).toEqual({ redirect: '/pl/potwierdzenie' });
-    expect(mocks.rpc).toHaveBeenCalledWith(
-      'record_document_acceptance',
-      expect.objectContaining({ p_profile_id: USER_ID, p_documents: ['terms', 'privacy'], p_locale: 'pl' }),
-    );
-    expect(mocks.deleteUser).not.toHaveBeenCalled();
+    expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
+    expect(captured).toMatchObject({ role: 'candidate', agree_terms: true, locale: 'nl', signup_receipt_version: 1 });
+    expect(captured).not.toHaveProperty('company_name');
   });
 
-  it('błąd zapisu receiptu — rejestracja nieudana, niepotwierdzone konto cofnięte', async () => {
-    mocks.rpc.mockResolvedValue({ data: null, error: { message: 'db down' } });
-    const { registerEmployer } = await import('@/lib/actions/auth');
+  it('pracodawca: rola employer i nazwa firmy do bootstrapu po potwierdzeniu', async () => {
+    const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true }));
+    expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
+    expect(captured).toMatchObject({ role: 'employer', agree_terms: true, company_name: 'Firma Testowa' });
+  });
+
+  it('pole role=admin z formularza jest ignorowane (rolę wybiera akcja)', async () => {
+    await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, role: 'admin' } as never));
+    expect(captured?.role).toBe('candidate');
+  });
+
+  it('błąd zapisu konta/receiptu w SDK — rejestracja nieudana, bez przekierowania i technikaliów', async () => {
+    api.signUpEmail.mockRejectedValue(new Error('insert or update on table "document_acceptances" violates'));
     const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true }));
     expect(result).toEqual({ ok: false, error: 'INTERNAL' });
-    expect(mocks.deleteUser).toHaveBeenCalledWith(USER_ID);
+    expect(JSON.stringify(result)).not.toContain('document_acceptances');
   });
 
-  it('istniejący adres (odpowiedź bez tożsamości) — neutralne przekierowanie, nic nie usuwa', async () => {
-    mocks.signUp.mockResolvedValue({
-      data: { user: { id: USER_ID, email_confirmed_at: null, identities: [] } },
-      error: null,
-    });
-    const { registerCandidate } = await import('@/lib/actions/auth');
+  it('istniejący adres (neutralny sukces SDK) — to samo przekierowanie co nowe konto', async () => {
+    api.signUpEmail.mockResolvedValue({ token: null, user: { id: 'syntetyczny' } });
     const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
-    expect(result).toEqual({ redirect: '/pl/potwierdzenie' });
-    expect(mocks.rpc).not.toHaveBeenCalled();
-    expect(mocks.deleteUser).not.toHaveBeenCalled();
+    expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
   });
 
-  it('konto już potwierdzone — błąd receiptu nie usuwa konta', async () => {
-    mocks.signUp.mockResolvedValue({
-      data: { user: { id: USER_ID, email_confirmed_at: '2026-09-01T00:00:00Z', identities: [{ id: 'i1' }] } },
-      error: null,
+  it('odrzucone przez SDK hasło → VALIDATION_FAILED', async () => {
+    api.signUpEmail.mockRejectedValue(authApiError(400, 'PASSWORD_TOO_LONG'));
+    expect(await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }))).toEqual({
+      ok: false,
+      error: 'VALIDATION_FAILED',
     });
-    mocks.rpc.mockResolvedValue({ data: null, error: { message: 'db down' } });
-    const { registerCandidate } = await import('@/lib/actions/auth');
-    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
-    expect(result).toEqual({ ok: false, error: 'INTERNAL' });
-    expect(mocks.deleteUser).not.toHaveBeenCalled();
   });
 });
 
@@ -157,40 +121,30 @@ describe('rejestracja kandydata — deklaracja progu wieku (#492)', () => {
     ['brak progu', { minAge: undefined }],
     ['próg poza zakresem', { minAge: 19 }],
   ])('%s — odrzucone, konto nie powstaje', async (_label, extra) => {
-    const { registerCandidate } = await import('@/lib/actions/auth');
     const input = { ...candidate, agreeTerms: true, ...extra } as unknown as Parameters<typeof registerCandidate>[0];
     const result = await outcome(() => registerCandidate(input));
     expect(result).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(mocks.signUp).not.toHaveBeenCalled();
+    expect(api.signUpEmail).not.toHaveBeenCalled();
   });
 
-  it('zapisuje deklarację (sam próg, bez daty urodzenia) razem z receiptem dokumentów', async () => {
-    const { registerCandidate } = await import('@/lib/actions/auth');
+  it('metadane dla triggera zawierają sam próg (bez daty urodzenia)', async () => {
     const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
-    expect(result).toEqual({ redirect: '/pl/potwierdzenie' });
-    expect(mocks.rpc).toHaveBeenCalledWith('record_candidate_age_attestation', {
-      p_profile_id: USER_ID,
-      p_min_age: 18,
-      p_locale: 'pl',
-    });
+    expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
+    expect(captured).toMatchObject({ role: 'candidate', age_min_attested: 18 });
+    expect(JSON.stringify(captured)).not.toMatch(/birth|urodz/i);
   });
 
-  it('próg w bazie wyższy niż zadeklarowany — konto cofnięte, kod AGE_ATTESTATION_REQUIRED', async () => {
-    mocks.rpc.mockImplementation(async (name: string) =>
-      name === 'record_candidate_age_attestation'
-        ? { data: null, error: { message: 'AGE_ATTESTATION_REQUIRED' } }
-        : { data: null, error: null },
+  it('trigger odrzuca próg (zmieniony w bazie) — kod AGE_ATTESTATION_REQUIRED, bez technikaliów', async () => {
+    api.signUpEmail.mockRejectedValue(
+      new Error('Failed to create user', { cause: new Error('AGE_ATTESTATION_REQUIRED: deklaracja poniżej progu') }),
     );
-    const { registerCandidate } = await import('@/lib/actions/auth');
     const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true }));
     expect(result).toEqual({ ok: false, error: 'AGE_ATTESTATION_REQUIRED' });
-    expect(mocks.deleteUser).toHaveBeenCalledWith(USER_ID);
   });
 
   it('pracodawca nie składa deklaracji wieku kandydata', async () => {
-    const { registerEmployer } = await import('@/lib/actions/auth');
     const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true }));
-    expect(result).toEqual({ redirect: '/pl/potwierdzenie' });
-    expect(mocks.rpc).not.toHaveBeenCalledWith('record_candidate_age_attestation', expect.anything());
+    expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
+    expect(captured).not.toHaveProperty('age_min_attested');
   });
 });

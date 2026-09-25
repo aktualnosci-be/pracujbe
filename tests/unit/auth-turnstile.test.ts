@@ -2,58 +2,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Server Actions auth sprawdzają Turnstile (#46) przed dotknięciem Supabase Auth. Globalny
+ * Server Actions auth sprawdzają Turnstile (#46) przed dotknięciem Better Auth. Globalny
  * `fetch` jest podmieniony — żadnych połączeń z Cloudflare.
  */
 
-const mocks = vi.hoisted(() => {
-  class RedirectSignal extends Error {
-    constructor(public readonly target: unknown) {
-      super('NEXT_REDIRECT');
-    }
-  }
-  return {
-    RedirectSignal,
-    signUp: vi.fn(),
-    signInWithPassword: vi.fn(),
-    resetPasswordForEmail: vi.fn(),
-    rateLimit: vi.fn(),
-  };
-});
+const mocks = vi.hoisted(() => ({ rateLimit: vi.fn() }));
 
 vi.mock('next-intl/server', () => ({ getLocale: async () => 'pl' }));
-vi.mock('next/headers', () => ({ headers: async () => new Headers() }));
-vi.mock('next/navigation', () => ({
-  redirect: (url: string) => {
-    throw new mocks.RedirectSignal(url);
-  },
-}));
-vi.mock('@/i18n/navigation', () => ({
-  redirect: (args: { href: string; locale: string }) => {
-    throw new mocks.RedirectSignal(`/${args.locale}${args.href}`);
-  },
-}));
+vi.mock('next/headers', async () => (await import('../helpers/auth-portal')).headersModule);
+vi.mock('next/navigation', async () => (await import('../helpers/auth-portal')).navigationModule);
+vi.mock('@/i18n/navigation', async () => (await import('../helpers/auth-portal')).intlNavigationModule);
+vi.mock('@/lib/auth/runtime', async () => (await import('../helpers/auth-portal')).runtimeModule);
+vi.mock('@/lib/db/runtime', async () => (await import('../helpers/auth-portal')).dbRuntimeModule);
+vi.mock('@/lib/db/transaction', async () => (await import('../helpers/auth-portal')).transactionModule);
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.rateLimit }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminClient: () => ({
-    rpc: async () => ({ error: null }),
-    from: () => ({ update: () => ({ eq: async () => ({ error: null }) }) }),
-  }),
-}));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: async () => ({
-    auth: {
-      signUp: mocks.signUp,
-      signInWithPassword: mocks.signInWithPassword,
-      resetPasswordForEmail: mocks.resetPasswordForEmail,
-    },
-    from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: 'candidate' }, error: null }) }) }),
-    }),
-  }),
-}));
 
+import { api, outcome, resetPortal, stubPortalEnv } from '../helpers/auth-portal';
 import {
   registerCandidate,
   registerEmployer,
@@ -79,27 +44,14 @@ function siteverify(action: string) {
   );
 }
 
-async function outcome(run: () => Promise<unknown>): Promise<unknown> {
-  try {
-    return await run();
-  } catch (e) {
-    if (e instanceof mocks.RedirectSignal) return { redirect: e.target };
-    throw e;
-  }
-}
-
 beforeEach(() => {
   vi.stubEnv('APP_MODE', 'production');
   vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://pracuj.be');
   vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'site-key');
   vi.stubEnv('TURNSTILE_SECRET_KEY', 'secret-key');
   mocks.rateLimit.mockReset().mockResolvedValue(true);
-  mocks.signUp.mockReset().mockResolvedValue({
-    data: { user: { id: 'u1', email_confirmed_at: null, identities: [{ id: 'i1' }] } },
-    error: null,
-  });
-  mocks.signInWithPassword.mockReset().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
-  mocks.resetPasswordForEmail.mockReset().mockResolvedValue({ error: null });
+  resetPortal();
+  stubPortalEnv();
 });
 
 afterEach(() => {
@@ -115,7 +67,7 @@ describe('rejestracja', () => {
       ok: false,
       error: 'BOT_CHECK_FAILED',
     });
-    expect(mocks.signUp).not.toHaveBeenCalled();
+    expect(api.signUpEmail).not.toHaveBeenCalled();
   });
 
   it('kontrola ujemna: token z poprawną akcją przepuszcza rejestrację', async () => {
@@ -123,13 +75,13 @@ describe('rejestracja', () => {
     expect(await outcome(() => registerCandidate(candidate, null, 'tok'))).toEqual({
       redirect: '/pl/potwierdzenie',
     });
-    expect(mocks.signUp).toHaveBeenCalledTimes(1);
+    expect(api.signUpEmail).toHaveBeenCalledTimes(1);
   });
 
   it('token logowania nie działa przy rejestracji', async () => {
     vi.stubGlobal('fetch', siteverify('login'));
     expect(await registerCandidate(candidate, null, 'tok')).toEqual({ ok: false, error: 'BOT_CHECK_FAILED' });
-    expect(mocks.signUp).not.toHaveBeenCalled();
+    expect(api.signUpEmail).not.toHaveBeenCalled();
   });
 
   it('awaria Cloudflare = fail-closed', async () => {
@@ -138,7 +90,7 @@ describe('rejestracja', () => {
       ok: false,
       error: 'BOT_CHECK_UNAVAILABLE',
     });
-    expect(mocks.signUp).not.toHaveBeenCalled();
+    expect(api.signUpEmail).not.toHaveBeenCalled();
   });
 
   it('rate limit pozostaje pierwszą, niezależną warstwą', async () => {
@@ -156,7 +108,7 @@ describe('logowanie', () => {
   it('bez tokenu: odrzucone', async () => {
     vi.stubGlobal('fetch', vi.fn());
     expect(await signIn(credentials, null)).toEqual({ ok: false, error: 'BOT_CHECK_FAILED' });
-    expect(mocks.signInWithPassword).not.toHaveBeenCalled();
+    expect(api.signInEmail).not.toHaveBeenCalled();
   });
 
   it('awaria Cloudflare = fail-open (logowanie działa dalej)', async () => {
@@ -164,7 +116,7 @@ describe('logowanie', () => {
     expect(await outcome(() => signIn(credentials, null, 'tok'))).toEqual({
       redirect: '/pl/candidate',
     });
-    expect(mocks.signInWithPassword).toHaveBeenCalledTimes(1);
+    expect(api.signInEmail).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -175,13 +127,13 @@ describe('reset hasła', () => {
       ok: false,
       error: 'BOT_CHECK_FAILED',
     });
-    expect(mocks.resetPasswordForEmail).not.toHaveBeenCalled();
+    expect(api.requestPasswordReset).not.toHaveBeenCalled();
   });
 
   it('kontrola ujemna: poprawny token przepuszcza reset', async () => {
     vi.stubGlobal('fetch', siteverify('password_reset'));
     expect(await requestPasswordReset({ email: 'jan@example.com' }, 'tok')).toEqual({ ok: true });
-    expect(mocks.resetPasswordForEmail).toHaveBeenCalledTimes(1);
+    expect(api.requestPasswordReset).toHaveBeenCalledTimes(1);
   });
 });
 
