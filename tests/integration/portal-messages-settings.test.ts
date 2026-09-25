@@ -284,7 +284,7 @@ describe('widoczność profilu (#494)', () => {
 
 describe('receipt zgód (record_consent)', () => {
   it('gość zapisuje jako anon (profil NULL), zalogowany z własnym profilem', async () => {
-    const categories = { necessary: true, preferences: false, analytics: true, marketing: false };
+    const categories = { necessary: true, preferences: false, analytics: true };
     actAs(null);
     expect(await recordConsent(categories, 'cookie_banner')).toEqual({ ok: true });
     actAs(anna);
@@ -292,13 +292,13 @@ describe('receipt zgód (record_consent)', () => {
     const rows = (await pg().admin.query(
       `SELECT profile_id, source, category::text AS category, granted, host(ip_address) AS ip, visitor_id
          FROM public.consents WHERE visitor_id = 'visitor-it' ORDER BY created_at, category`)).rows;
-    expect(rows).toHaveLength(8);
+    expect(rows).toHaveLength(6);
     const guest = rows.filter((r) => r.profile_id === null);
     const own = rows.filter((r) => r.profile_id === anna.id);
-    expect(guest.map((r) => r.source)).toEqual(Array(4).fill('cookie_banner'));
-    expect(own.map((r) => r.source)).toEqual(Array(4).fill('cookie_settings'));
+    expect(guest.map((r) => r.source)).toEqual(Array(3).fill('cookie_banner'));
+    expect(own.map((r) => r.source)).toEqual(Array(3).fill('cookie_settings'));
     expect(own.find((r) => r.category === 'analytics')?.granted).toBe(true);
-    expect(own.find((r) => r.category === 'marketing')?.granted).toBe(false);
+    expect(rows.some((r) => r.category === 'marketing')).toBe(false);
     expect(own[0]!.ip).toBe('203.0.113.9');
   });
 });

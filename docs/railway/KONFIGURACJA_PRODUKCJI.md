@@ -77,7 +77,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `DSA_RETENTION_MODE` | domyślnie wyłączone; `dry-run` = podgląd, `apply` = anonimizacja spraw DSA w `/api/maintenance` — tylko po decyzji właściciela o terminach (#40) |
 | `RETENTION_MODE` | domyślnie wyłączone; `dry-run` = liczniki bez zmian, `apply` = retencja danych (okresy z 0127, #574) w `/api/maintenance` — tylko po akceptacji testów i danych operatora przez właściciela |
 | `NEXT_PUBLIC_CONSENT_POLICY_VERSION` | wersja polityki cookies w zgodach |
-| `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `NEXT_PUBLIC_META_PIXEL_ID` | tracking wyłącznie po zgodzie (Invariant #7) |
+| `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` | Cloudflare Web Analytics (#570, zamiast Google Analytics i Meta Pixel — usunięte), beacon wyłącznie po zgodzie w kategorii analityka (Invariant #7) |
 | `AI_JOB_IMPORT_ENABLED`, `ANTHROPIC_API_KEY`, `AI_JOB_IMPORT_MODEL` | import ogłoszeń przez AI (#465), domyślnie wyłączony |
 | `AI_JOB_ASSIST_ENABLED`, `AI_JOB_ASSIST_MODEL` | asystent redagowania oferty (#37), domyślnie wyłączony; ten sam `ANTHROPIC_API_KEY` |
 | `AI_CV_IMPORT_ENABLED`, `AI_CV_IMPORT_MODEL` | import CV przez AI (#487, #498, `docs/AI_CV_IMPORT.md`), domyślnie wyłączony; ten sam `ANTHROPIC_API_KEY` |

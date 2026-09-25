@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PortalIdentity } from '@/lib/auth/session';
 import { recordConsent } from '@/lib/actions/consent';
+import { CONSENT_CATEGORIES } from '@/lib/consent';
 import * as portal from '@/lib/db/portal';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
@@ -29,7 +30,7 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
-const CATEGORIES = { necessary: true, preferences: false, analytics: true, marketing: false };
+const CATEGORIES = { necessary: true, preferences: false, analytics: true };
 const USER = '11111111-1111-4111-8111-111111111111';
 
 /** Argumenty wysłane do RPC; jsonb (`p_categories`) wraca jako obiekt. */
@@ -86,6 +87,12 @@ describe('recordConsent', () => {
     expect(fakeDb.callsTo('record_consent')[0]!.as).toBeNull();
   });
 
+  it('klucz spoza kategorii (marketing ze starego klienta, #570) nie trafia do RPC', async () => {
+    const legacy = { ...CATEGORIES, marketing: true } as unknown as typeof CATEGORIES;
+    await recordConsent(legacy, 'cookie_banner');
+    expect(sentArgs().p_categories).toEqual(CATEGORIES);
+  });
+
   it('nieznane źródło → cookie_banner (nie zapisujemy dowolnego tekstu klienta)', async () => {
     await recordConsent(CATEGORIES, '<script>');
     expect(sentArgs().p_source).toBe('cookie_banner');
@@ -136,5 +143,32 @@ describe('recordConsent ↔ RPC record_consent (kontrakt z migracją)', () => {
     await recordConsent(CATEGORIES, 'cookie_banner');
     const sent = Object.keys(fakeDb.callsTo('record_consent')[0]!.args).sort();
     expect(sent).toEqual(recordConsentParams().sort());
+  });
+});
+
+/** Lista kategorii (`cats text[] := array[...]`) w najnowszej definicji `record_consent`. */
+function recordConsentCategories(files?: string[]): string[] {
+  const dir = join(process.cwd(), 'supabase', 'migrations');
+  let cats: string[] | null = null;
+  const names = files ?? readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+  for (const file of names) {
+    const sql = readFileSync(join(dir, file), 'utf-8');
+    const re = /create\s+or\s+replace\s+function\s+public\.record_consent[\s\S]*?cats\s+text\[\]\s*:=\s*array\[([^\]]*)\]/gi;
+    for (const match of sql.matchAll(re)) {
+      cats = [...match[1]!.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
+    }
+  }
+  if (!cats) throw new Error('brak listy kategorii record_consent w supabase/migrations');
+  return cats;
+}
+
+describe('kategorie logu zgód = kategorie banera (#570)', () => {
+  it('najnowsze record_consent zapisuje dokładnie CONSENT_CATEGORIES (bez marketing)', () => {
+    expect(recordConsentCategories()).toEqual([...CONSENT_CATEGORIES]);
+    expect(recordConsentCategories()).not.toContain('marketing');
+  });
+
+  it('kontrola ujemna: definicja z 0043 (z marketing) nie przechodzi porównania', () => {
+    expect(recordConsentCategories(['0043_consent_receipt.sql'])).not.toEqual([...CONSENT_CATEGORIES]);
   });
 });
