@@ -11,9 +11,20 @@ import {
   appealRestrictionsForTarget,
   parseAppealState,
 } from '@/lib/admin/appeals';
+import { ADMIN_PAGE_SIZE } from '@/lib/admin/list-params';
 import { parseDsaReportRange } from '@/lib/admin/dsa-report';
 import { parseReportCase } from '@/lib/content-reports/case';
-import { parseTransparencyReport, toCsv, DSA_EXPORT_COLUMNS, type DsaExportRow } from '@/lib/data/admin-dsa';
+import {
+  decodeDsaExportCursor,
+  DSA_EXPORT_COLUMNS,
+  DSA_EXPORT_PAGE_SIZE,
+  encodeDsaExportCursor,
+  getStatementsExport,
+  listAppeals,
+  parseTransparencyReport,
+  toCsv,
+  type DsaExportRow,
+} from '@/lib/data/admin-dsa';
 import { titleKeyForType } from '@/lib/data/notifications';
 import { buildDeliveryData, emailTargetPath } from '@/lib/email/delivery-data';
 
@@ -315,6 +326,132 @@ describe('raport przejrzystości i eksport', () => {
     expect(parseDsaReportRange('2026-09-10', '2026-09-01', now).ok).toBe(false);
     expect(parseDsaReportRange('2019-01-01', '2026-09-01', now).ok).toBe(false);
     expect(parseDsaReportRange('2026-02-30', '2026-03-01', now).ok).toBe(false);
+  });
+});
+
+/** Wiersz oczekującego odwołania (kolejka `moderation_appeals`, `APPEAL_SELECT`). */
+function pendingAppealRow(index: number) {
+  const hex = String(index).padStart(12, '0');
+  return {
+    id: `aaaaaaaa-aaaa-4aaa-8aaa-${hex}`,
+    reference: `APL-${index}`,
+    status: 'pending',
+    appellant_role: 'author',
+    submitted_at: '2026-09-01T00:00:00Z',
+    due_at: `2026-09-01T00:00:${String(index).padStart(2, '0')}Z`,
+    decided_at: null,
+    grounds: 'Uzasadnienie',
+    outcome_reasoning: null,
+    same_reviewer: null,
+    decision: {
+      id: 'dec-1', reference: 'DEC-1', decision: 'no_action', facts: null,
+      ground_type: null, ground_reference: null, decided_at: '2026-09-01T00:00:00Z', decided_by: null,
+    },
+    report: { id: 'rep-1', case_number: 'DSA-1', target_type: 'job', category: null },
+    restoration: null,
+  };
+}
+
+describe('kolejka odwołań: stronicowanie kursorem (#596)', () => {
+  beforeEach(() => {
+    resetFakeDb({ id: 'admin-1', role: 'admin' });
+  });
+
+  it('nie ukrywa oczekujących spraw po pierwszych 100 — strona 1 ma 50 i kursor, strona 2 resztę bez kursora', async () => {
+    const rows = Array.from({ length: ADMIN_PAGE_SIZE + 1 }, (_, i) => pendingAppealRow(i));
+    fakeDb
+      .rows('admin-dsa.appeals-pending', ({ values }) => (values.length === 1 ? rows : rows.slice(ADMIN_PAGE_SIZE)))
+      .rows('admin-dsa.appeals-decided', [])
+      .count('admin-dsa.other-admins', 0);
+
+    const page1 = await listAppeals();
+    expect(page1.status).toBe('ok');
+    if (page1.status !== 'ok') return;
+    expect(page1.pending).toHaveLength(ADMIN_PAGE_SIZE);
+    expect(page1.pending[0]?.reference).toBe('APL-0');
+    expect(page1.pending.at(-1)?.reference).toBe(`APL-${ADMIN_PAGE_SIZE - 1}`);
+    expect(page1.pendingNextCursor).not.toBeNull();
+    expect(fakeDb.callsTo('admin-dsa.appeals-pending')[0]?.values).toEqual([ADMIN_PAGE_SIZE + 1]);
+
+    const page2 = await listAppeals({ cursor: page1.pendingNextCursor });
+    expect(page2.status).toBe('ok');
+    if (page2.status !== 'ok') return;
+    expect(page2.pending).toHaveLength(1);
+    expect(page2.pending[0]?.reference).toBe(`APL-${ADMIN_PAGE_SIZE}`);
+    expect(page2.pendingNextCursor).toBeNull();
+    const last = pendingAppealRow(ADMIN_PAGE_SIZE - 1);
+    expect(fakeDb.callsTo('admin-dsa.appeals-pending')[1]?.values).toEqual([
+      last.due_at, last.id, ADMIN_PAGE_SIZE + 1,
+    ]);
+  });
+
+  it('kontrola ujemna: kursor spoza tej listy (zły/zniekształcony token) = pierwsza strona, nie błąd', async () => {
+    fakeDb.rows('admin-dsa.appeals-pending', []).rows('admin-dsa.appeals-decided', []).count('admin-dsa.other-admins', 0);
+    const result = await listAppeals({ cursor: 'to-nie-jest-poprawny-kursor' });
+    expect(result.status).toBe('ok');
+    // Brak warunku kursora w zapytaniu — tylko limit, jak przy pierwszej stronie.
+    expect(fakeDb.callsTo('admin-dsa.appeals-pending')[0]?.values).toEqual([ADMIN_PAGE_SIZE + 1]);
+  });
+});
+
+/** Wiersz eksportu decyzji DSA (kolumny `DSA_EXPORT_COLUMNS`). */
+function exportRow(index: number) {
+  return {
+    decision_reference: `DEC-${index}`,
+    decided_at: `2026-09-01T00:00:${String(index % 60).padStart(2, '0')}Z`,
+    decision: 'no_action',
+    content_type: 'job',
+    notice_category: 'fraud',
+    notice_received_at: '2026-09-01T00:00:00Z',
+    ground_type: null,
+    ground_reference: null,
+    automated_detection: false,
+    automated_decision: false,
+    from_appeal: false,
+    appeal_status: null,
+    restored: false,
+  };
+}
+
+describe('eksport decyzji DSA: stronicowanie zamiast całego zakresu naraz (#606)', () => {
+  beforeEach(() => {
+    resetFakeDb({ id: 'admin-1', role: 'admin' });
+  });
+
+  it('pełna strona ⇒ kursor do kolejnej; pusta reszta ⇒ koniec, z limitem i kursorem w wywołaniu RPC', async () => {
+    const rows = Array.from({ length: DSA_EXPORT_PAGE_SIZE }, (_, i) => exportRow(i));
+    fakeDb.rpc('dsa_statements_export', ({ args }: { args: Record<string, unknown> }) =>
+      args['p_cursor_decided_at'] ? [] : rows);
+    const from = new Date('2026-01-01T00:00:00Z');
+    const to = new Date('2026-12-31T00:00:00Z');
+
+    const page1 = await getStatementsExport(from, to);
+    expect(page1.status).toBe('ok');
+    if (page1.status !== 'ok') return;
+    expect(page1.rows).toHaveLength(DSA_EXPORT_PAGE_SIZE);
+    expect(page1.nextCursor).not.toBeNull();
+    expect(fakeDb.callsTo('dsa_statements_export')[0]?.args).toMatchObject({
+      p_limit: DSA_EXPORT_PAGE_SIZE, p_cursor_decided_at: null, p_cursor_reference: null,
+    });
+
+    const page2 = await getStatementsExport(from, to, page1.nextCursor);
+    expect(page2.status).toBe('ok');
+    if (page2.status !== 'ok') return;
+    expect(page2.rows).toHaveLength(0);
+    expect(page2.nextCursor).toBeNull();
+    const last = rows.at(-1)!;
+    expect(fakeDb.callsTo('dsa_statements_export')[1]?.args).toMatchObject({
+      p_cursor_decided_at: last.decided_at, p_cursor_reference: last.decision_reference,
+    });
+  });
+
+  it('kursor: round-trip nieprzezroczystego tokenu; kontrola ujemna zniekształconego wejścia', () => {
+    const token = encodeDsaExportCursor('2026-09-20T10:00:00.000Z', 'DEC-ABCD-1234');
+    expect(decodeDsaExportCursor(token)).toEqual({ decidedAt: '2026-09-20T10:00:00.000Z', reference: 'DEC-ABCD-1234' });
+    expect(decodeDsaExportCursor(null)).toBeNull();
+    expect(decodeDsaExportCursor('!!! nie base64url ###')).toBeNull();
+    // Token bez separatora `|` (np. spreparowany ręcznie) — odrzucony, nie zgłasza wyjątku.
+    expect(decodeDsaExportCursor(Buffer.from('brak-separatora', 'utf8').toString('base64url'))).toBeNull();
   });
 });
 

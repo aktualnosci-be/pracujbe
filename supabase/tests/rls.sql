@@ -8632,6 +8632,68 @@ select pg_temp.expect_error('select public.dsa_transparency_report(now(), now() 
   'VALIDATION_FAILED', 'APL43-11c zły okres raportu');
 reset role;
 -- ============================================================================
+-- PG606. Eksport decyzji DSA — stronicowanie zamiast całego zakresu naraz (0152, #606): panel
+-- administratora pobierał WSZYSTKIE decyzje z okresu (do 1830 dni) w jednym wywołaniu; teraz
+-- kursor po (`decided_at`, `reference`) + `p_limit` (domyślnie 2000, twardy sufit 5000).
+-- Wykorzystujemy decyzje już utworzone we wcześniejszych sekcjach DSA tego pliku (okno
+-- „teraz ± 1 dzień”, jak APL43-11) — bez tworzenia nowych wierszy wprost z pominięciem
+-- `admin_decide_report`/`admin_decide_appeal` (skutek/status sprawy egzekwuje trigger).
+-- ============================================================================
+\echo '--- PG606 stronicowanie eksportu DSA ---'
+set role service_role;
+select count(*) as pg606_total from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day') \gset
+select pg_temp.assert(:pg606_total >= 2,
+  'PG606-0 wystarczająco decyzji z wcześniejszych sekcji do testu stronicowania (>= 2)');
+
+-- Rekonstrukcja CAŁEGO wyniku przez powtarzane strony o rozmiarze 1 (kursor = ostatni wiersz
+-- poprzedniej strony) musi dać dokładnie ten sam zbiór i tę samą kolejność co jedno wywołanie
+-- bez kursora — bez pominięć i bez duplikatów.
+select pg_temp.assert(
+  (
+    with recursive full_set as (
+      select decision_reference, decided_at
+        from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day')
+    ),
+    paged as (
+      ( select e.decision_reference, e.decided_at, 1 as n
+          from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day', 1, null, null) e )
+      union all
+      ( select e.decision_reference, e.decided_at, p.n + 1
+          from paged p,
+               lateral public.dsa_statements_export(
+                 now() - interval '1 day', now() + interval '1 day', 1, p.decided_at, p.decision_reference) e
+         where p.n < 1000 )
+    )
+    select (select count(*) from full_set) = (select count(*) from paged)
+      and not exists (select decision_reference from full_set except select decision_reference from paged)
+      and not exists (select decision_reference from paged except select decision_reference from full_set)
+  ),
+  'PG606-1 strony po 1 wierszu (kursor = ostatni wiersz poprzedniej) odtwarzają cały zbiór 1:1');
+
+-- Bezpiecznik rozmiaru strony: p_limit <= 0 → domyślne 2000 (nie 0 wierszy).
+select count(*) as pg606_zero_limit from public.dsa_statements_export(
+  now() - interval '1 day', now() + interval '1 day', 0, null, null) \gset
+select pg_temp.assert(:pg606_zero_limit = :pg606_total,
+  'PG606-2 p_limit <= 0 → domyślny rozmiar strony (bezpiecznik), nie zero wierszy');
+
+-- Kontrola ujemna: stary dwuargumentowy podpis jest USUNIĘTY, nie przeciążony — wywołanie
+-- z dwoma argumentami trafia jednoznacznie w nową funkcję (żadnej niejednoznaczności overloadu)
+-- i nadal zwraca cały zakres jak przed migracją (APL43-11b to samo sprawdza inaczej).
+select count(*) as pg606_legacy_call from public.dsa_statements_export(
+  now() - interval '1 day', now() + interval '1 day') \gset
+select pg_temp.assert(:pg606_legacy_call = :pg606_total,
+  'PG606-3 wywołanie dwuargumentowe (bez przeciążenia) nadal zwraca cały zakres');
+
+select pg_temp.assert(
+  not has_function_privilege('anon',
+    'public.dsa_statements_export(timestamptz, timestamptz, integer, timestamptz, text)', 'EXECUTE')
+  and not has_function_privilege('authenticated',
+    'public.dsa_statements_export(timestamptz, timestamptz, integer, timestamptz, text)', 'EXECUTE')
+  and has_function_privilege('service_role',
+    'public.dsa_statements_export(timestamptz, timestamptz, integer, timestamptz, text)', 'EXECUTE'),
+  'PG606-4 uprawnienia niezmienione: tylko service_role wykonuje eksport');
+reset role;
+-- ============================================================================
 -- RA43. Odwołanie zgłaszającego od COFNIĘCIA ograniczenia (0109, #43): ręczne cofnięcie
 -- informuje zgłaszającego w jego języku; termin od poinformowania; od cofnięcia po odwołaniu
 -- autora odwołanie nie przysługuje; rozpatruje ktoś inny niż osoba, która cofnęła;
