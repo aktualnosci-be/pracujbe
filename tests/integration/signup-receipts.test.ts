@@ -118,7 +118,7 @@ describe('Atomowe receipty rejestracji', () => {
   });
 
   it.each([
-    [{}], [{ age_min_attested: 16 }], [{ age_min_attested: '18' }],
+    [{}], [{ age_min_attested: 15 }], [{ age_min_attested: '18' }],
     // v2 (#493) bez deklaracji — ta sama odmowa.
     [{ signup_receipt_version: 2, privacy_notice_ack: true }],
   ] as const)(
