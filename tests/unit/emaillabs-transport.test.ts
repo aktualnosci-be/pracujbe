@@ -137,6 +137,46 @@ describe('ACK i błędy', () => {
   });
 });
 
+describe('#628 — termin wysyłki workera', () => {
+  it('przerwanie terminu w trakcie POST przerywa żądanie HTTP → provider_unavailable', async () => {
+    const deadline = new AbortController();
+    const seen: AbortSignal[] = [];
+    const fn = vi.fn((_url: string, init: RequestInit) => {
+      if (init.method === 'GET') return Promise.resolve(jsonResponse(404, { meta: {} }));
+      seen.push(init.signal!);
+      return new Promise<Response>((_, reject) => {
+        init.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      });
+    });
+    const sending = emailLabsTransport(CONFIG, fn).send(MESSAGE, { idempotencyKey: KEY, signal: deadline.signal });
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+    deadline.abort();
+    const error = await sending.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(MailSendError);
+    expect((error as MailSendError).code).toBe('provider_unavailable');
+    expect(seen[0]!.aborted).toBe(true);
+  });
+
+  it('termin minął po sprawdzeniu messageId → brak POST', async () => {
+    const deadline = new AbortController();
+    const http = fakeFetch({ lookup: () => { deadline.abort(); return jsonResponse(404, { meta: {} }); } });
+    const error = await emailLabsTransport(CONFIG, http.fn)
+      .send(MESSAGE, { idempotencyKey: KEY, signal: deadline.signal })
+      .catch((e: unknown) => e);
+    expect((error as MailSendError).code).toBe('provider_unavailable');
+    expect(http.posts()).toHaveLength(0);
+  });
+
+  it('KONTROLA UJEMNA: bez przerwania terminu ten sam przebieg wysyła list', async () => {
+    const deadline = new AbortController();
+    const http = fakeFetch({});
+    await expect(
+      emailLabsTransport(CONFIG, http.fn).send(MESSAGE, { idempotencyKey: KEY, signal: deadline.signal }),
+    ).resolves.toEqual({ id: MESSAGE_ID });
+    expect(http.posts()).toHaveLength(1);
+  });
+});
+
 describe('idempotencja (EmailLabs nie ma Idempotency-Key)', () => {
   it('list o tym messageId już jest u dostawcy → ACK bez drugiej wysyłki', async () => {
     const http = fakeFetch({ lookup: () => jsonResponse(200, accepted(MESSAGE_ID)) });
