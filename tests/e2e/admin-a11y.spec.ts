@@ -49,6 +49,8 @@ const ROUTES = [
   '/admin/raport-dsa',
   // Koszty AI (#36) — raport tylko do odczytu.
   '/admin/koszty-ai',
+  // Próg wieku kandydatów (#492) — bieżące ustawienie + formularz zmiany.
+  '/admin/ustawienia',
 ];
 
 for (const viewport of [
