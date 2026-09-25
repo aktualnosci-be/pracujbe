@@ -26,14 +26,15 @@ AI albo adres jego API), który nie ma wpisu w inwentarzu. Test ma kontrolę uje
 | A2 | Tłumaczenie treści (#31, #32) | otwarty PR #514; na tej gałęzi brak pliku | pola oferty (pracodawca) i pola profilu kandydata (kandydat) | tłumaczenie tych pól na inne języki portalu, po walidacji faktów | do potwierdzenia po scaleniu #514 (w inwentarzu: `humanInTheLoop: false`, korekta ręczna po fakcie) | do potwierdzenia po scaleniu #514 |
 | A3 | Asystent redagowania oferty (#37, część pracodawcy) | ten PR, za flagą `AI_JOB_ASSIST_ENABLED` (domyślnie wyłączona) | tytuł, opis, obowiązki i wymagania obowiązkowe oferty wpisane przez rekrutera (e-maile, telefony, numery identyfikacyjne usuwane przed wysłaniem) | propozycja nowego brzmienia tych pól w języku oferty; propozycje z nowymi liczbami/linkami albo danymi kontaktowymi odrzuca serwer | tak: propozycja widoczna obok tekstu rekrutera; pole zmienia się dopiero po kliknięciu „Użyj propozycji”; akcja nic nie zapisuje i nie publikuje (test) | brak: wejście nie zawiera danych kandydatów (ścisły schemat, test); kod nie dotyka aplikacji, profili, dopasowań ani widoczności |
 | A4 | Import CV do profilu (#487, #498) | za flagą `AI_CV_IMPORT_ENABLED` (domyślnie wyłączona) | tekst CV wgrany przez kandydata, po lokalnej minimalizacji (bez referentów, kontaktów, danych osobowych i kategorii szczególnych; NISS/BIS/dokument = odmowa); kandydat widzi tekst przed wysłaniem | propozycje pól profilu ze źródłem i niepewnością | tak: każda propozycja zatwierdzana osobno przez kandydata; bez zatwierdzenia brak zapisu (`apply_candidate_cv_proposals`) | brak: wynik nie trafia do firm, dopasowania, rankingu ani statusu aplikacji; szczegóły i pytania prawne: `docs/legal-drafts/cv-ai-osoby-trzecie.md` |
+| A5 | Asystent budowania profilu z odpowiedzi (#37, część kandydata) | za flagą `AI_PROFILE_ASSIST_ENABLED` (domyślnie wyłączona) | odpowiedzi kandydata na 4 proste pytania (praca, umiejętności, języki, uprawnienia), po tej samej minimalizacji co A4 (bez osób trzecich, kontaktów, danych osobowych i kategorii szczególnych; NISS/BIS/dokument = odmowa); informacja o AI przed pierwszym użyciem | propozycje pól profilu z cytatem z odpowiedzi i niepewnością | tak: każda propozycja zatwierdzana osobno przez kandydata; bez zatwierdzenia brak zapisu (`apply_candidate_cv_proposals`) | brak: wynik nie trafia do firm, dopasowania, rankingu ani statusu aplikacji (test inwentarza) |
 
-Dostawca wszystkich funkcji: Anthropic (Messages API). Model domyślny: `claude-opus-5` (A1, A4),
+Dostawca wszystkich funkcji: Anthropic (Messages API). Model domyślny: `claude-opus-5` (A1, A4, A5),
 `claude-opus-5-5` (A3), nadpisywalny zmienną środowiskową. Model nie ma narzędzi; odpowiedź ogranicza schemat JSON.
 
 Log użycia: od tej zmiany import ogłoszenia (A1) zapisuje jeden wiersz JSON na wywołanie
 modelu (`src/lib/ai/usage-log.ts`): `type`, `at`, `feature`, `outcome`, `inputKind`, `model`,
 `durationMs`. Bez treści, promptu, odpowiedzi, adresu URL, nazwy pliku, identyfikatora
-użytkownika i firmy (test z kontrolą ujemną). A2 nie ma jeszcze logu (`usageLogged: false`). A4 zapisuje ten sam wiersz (`feature: cv_profile_import`, `inputKind: text`).
+użytkownika i firmy (test z kontrolą ujemną). A2 nie ma jeszcze logu (`usageLogged: false`). A4 zapisuje ten sam wiersz (`feature: cv_profile_import`, `inputKind: text`), A5 — `feature: profile_answers_assist`, `inputKind: text`.
 
 ### 1.2. Funkcje dotyczące kandydatów, które NIE używają modelu
 
@@ -123,6 +124,7 @@ Test `ai-inventory.test.ts` sprawdza, że pliki D1, D4–D6 nie wołają modelu.
 |---|---|---|---|---|---|
 | A1 | | | | | |
 | A2 | | | | | |
+| A5 | | | | | |
 | D1 | | | | | |
 | D2 | | | | | |
 | D3 | | | | | |

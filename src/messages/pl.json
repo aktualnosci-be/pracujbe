@@ -675,7 +675,14 @@
     "cvImportUncertain": "CV może zawierać dane kontaktowe innych osób, których nie umiemy bezpiecznie usunąć, więc niczego nie wysłaliśmy. Usuń je z pliku albo wypełnij profil ręcznie.",
     "cvImportNotACv": "Ten plik nie wygląda na CV. Wypełnij profil ręcznie albo wybierz inny plik.",
     "cvImportNoProposals": "Nie znaleźliśmy w CV nic do zaproponowania. Wypełnij profil ręcznie.",
-    "cvImportFailed": "Nie udało się przygotować propozycji. Spróbuj ponownie później albo wypełnij profil ręcznie."
+    "cvImportFailed": "Nie udało się przygotować propozycji. Spróbuj ponownie później albo wypełnij profil ręcznie.",
+    "profileAssistEmpty": "Napisz kilka zdań o swojej pracy — co najmniej jedną odpowiedź.",
+    "profileAssistSensitiveData": "Odpowiedź zawiera numer identyfikacyjny osoby lub dokumentu, więc niczego nie wysłaliśmy. Usuń ten numer i spróbuj ponownie.",
+    "profileAssistUncertain": "Odpowiedzi mogą zawierać dane kontaktowe innych osób, więc niczego nie wysłaliśmy. Usuń je i spróbuj ponownie.",
+    "profileAssistSuspicious": "Odpowiedzi zawierają tekst, który wygląda na polecenia dla AI, więc nie przygotowaliśmy propozycji. Opisz po prostu swoją pracę.",
+    "profileAssistNotAboutWork": "Z odpowiedzi nie wynika nic o Twojej pracy. Opisz, co robiłeś i co umiesz, albo wypełnij profil ręcznie.",
+    "profileAssistNoProposals": "Nie znaleźliśmy w odpowiedziach nic do zaproponowania. Dopisz więcej szczegółów albo wypełnij profil ręcznie.",
+    "profileAssistFailed": "Nie udało się przygotować propozycji. Spróbuj ponownie później albo wypełnij profil ręcznie."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -1002,7 +1009,8 @@
     "loadError": "Nie udało się wczytać profilu. Odśwież stronę i spróbuj ponownie.",
     "radius": "Dojazd do {count} km",
     "years": "{count, plural, one {# rok} few {# lata} many {# lat} other {# lat}}",
-    "importCv": "Uzupełnij z CV"
+    "importCv": "Uzupełnij z CV",
+    "profileAssist": "Uzupełnij z pomocą AI"
   },
   "onboarding": {
     "stepProgress": "Krok {current} z {total}",
@@ -2298,7 +2306,8 @@
     "aiCostsFeatureJobImport": "Import ogłoszenia",
     "aiCostsFeatureTranslation": "Tłumaczenie treści",
     "aiCostsFeatureAssist": "Asystent treści oferty",
-    "aiCostsFeatureCvImport": "Import CV"
+    "aiCostsFeatureCvImport": "Import CV",
+    "aiCostsFeatureProfileAssist": "Asystent profilu kandydata"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -2894,6 +2903,47 @@
     "errorFileType": "Obsługujemy pliki PDF i DOCX.",
     "errorFileDoc": "Pliku DOC nie odczytamy. Zapisz CV jako PDF lub DOCX albo wypełnij profil ręcznie.",
     "errorNothingSelected": "Zaznacz co najmniej jedną propozycję albo odrzuć wszystkie.",
+    "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie."
+  },
+  "profileAssist": {
+    "eyebrow": "Twój profil",
+    "title": "Zbuduj profil z odpowiedzi",
+    "intro": "Nie masz CV? Odpowiedz własnymi słowami na kilka pytań, a asystent AI zaproponuje wpisy do profilu. Każdą propozycję sprawdzasz i zatwierdzasz osobno.",
+    "answersTitle": "Opowiedz o swojej pracy",
+    "aiNotice": "Korzystasz z asystenta AI. Twoje odpowiedzi zostaną wysłane do zewnętrznego dostawcy AI, który przygotuje propozycje wpisów do profilu.",
+    "infoApproval": "Bez Twojego zatwierdzenia nic nie zostanie zapisane. Istniejące dane profilu się nie zmienią.",
+    "infoStorage": "Nie zapisujemy Twoich odpowiedzi.",
+    "infoOthers": "Nie pisz o innych osobach ani nie podawaj danych kontaktowych. Przed wysłaniem usuwamy dane kontaktowe, informacje o innych osobach i informacje wrażliwe.",
+    "infoNoMatching": "Asystent nie ocenia Ciebie i nie wpływa na dopasowanie do ofert ani na to, kto widzi Twój profil.",
+    "infoManual": "Możesz też wypełnić profil samodzielnie, bez AI.",
+    "manualLink": "Przejdź do kreatora profilu",
+    "questionWork": "Gdzie i jako kto ostatnio pracowałeś? Co tam robiłeś?",
+    "hintWork": "Np. „3 lata w magazynie w Gandawie, kompletowałem zamówienia, jeździłem wózkiem widłowym”.",
+    "questionSkills": "Co umiesz robić dobrze? Jakie maszyny lub narzędzia obsługujesz?",
+    "hintSkills": "Np. „skaner ręczny, wózek wysokiego składowania, praca na zmiany”.",
+    "questionLanguages": "Jakimi językami mówisz i jak dobrze?",
+    "hintLanguages": "Np. „polski ojczysty, angielski dobrze, niderlandzki podstawy”.",
+    "questionCertificates": "Jakie masz uprawnienia, certyfikaty lub prawo jazdy?",
+    "hintCertificates": "Np. „VCA, uprawnienia na wózek widłowy, prawo jazdy kat. B”.",
+    "charCount": "{count} / {max} znaków",
+    "propose": "Zaproponuj wpisy do profilu",
+    "analyzing": "Przygotowujemy propozycje…",
+    "busyHint": "Przygotowujemy propozycje. To może potrwać do minuty.",
+    "reviewTitle": "Wybierz, co dodać do profilu",
+    "reviewIntro": "Zaznacz tylko te propozycje, które są prawdziwe. Niezaznaczone nie zostaną zapisane.",
+    "removedCount": "{count, plural, one {Przed wysłaniem usunęliśmy # fragment (kontakt, dane innej osoby lub informację wrażliwą).} few {Przed wysłaniem usunęliśmy # fragmenty (kontakty, dane innych osób lub informacje wrażliwe).} many {Przed wysłaniem usunęliśmy # fragmentów (kontakty, dane innych osób lub informacje wrażliwe).} other {Przed wysłaniem usunęliśmy # fragmentu (kontakty, dane innych osób lub informacje wrażliwe).}}",
+    "source": "Z Twojej odpowiedzi: „{quote}”",
+    "noSource": "Nie znaleźliśmy tego wprost w Twoich odpowiedziach — sprawdź, zanim zaznaczysz.",
+    "selectedCount": "{count, plural, =0 {Nic nie zaznaczono.} one {Zaznaczono # propozycję.} few {Zaznaczono # propozycje.} many {Zaznaczono # propozycji.} other {Zaznaczono # propozycji.}}",
+    "apply": "Dodaj zaznaczone do profilu",
+    "saving": "Zapisujemy…",
+    "editAnswers": "Wróć do odpowiedzi",
+    "doneTitle": "Gotowe",
+    "doneText": "{count, plural, one {Dodaliśmy # pozycję do profilu.} few {Dodaliśmy # pozycje do profilu.} many {Dodaliśmy # pozycji do profilu.} other {Dodaliśmy # pozycji do profilu.}}",
+    "doneNothingNew": "Zaznaczone pozycje były już w Twoim profilu.",
+    "backToProfile": "Wróć do profilu",
+    "editProfile": "Edytuj profil",
+    "errorNothingSelected": "Zaznacz co najmniej jedną propozycję albo wróć do odpowiedzi.",
     "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie."
   }
 }

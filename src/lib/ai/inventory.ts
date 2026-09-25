@@ -59,7 +59,13 @@ export interface AiFeature {
   costBudgeted: boolean;
 }
 
-export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import'] as const;
+export const AI_FEATURE_IDS = [
+  'job_listing_import',
+  'content_translation',
+  'job_offer_assist',
+  'cv_profile_import',
+  'profile_answers_assist',
+] as const;
 export type AiFeatureId = (typeof AI_FEATURE_IDS)[number];
 
 export const AI_FEATURES: readonly AiFeature[] = [
@@ -132,6 +138,24 @@ export const AI_FEATURES: readonly AiFeature[] = [
     decidesAboutPerson: false,
     usageLogged: true,
     // `withAiBudget` w src/lib/actions/cv-import.ts (#36): rezerwacja przed wywołaniem modelu.
+    costBudgeted: true,
+  },
+  {
+    id: 'profile_answers_assist',
+    issues: ['#37'],
+    status: 'behind_flag',
+    callSites: ['src/lib/profile-assist/extract.ts'],
+    enableFlag: 'AI_PROFILE_ASSIST_ENABLED',
+    provider: 'anthropic',
+    inputs: ['candidate_profile_text'],
+    output:
+      'Propozycje pól profilu (zawody, umiejętności, języki, certyfikaty, lata doświadczenia) z odpowiedzi kandydata na proste pytania, ze źródłem (cytat z odpowiedzi) i niepewnością; nic nie jest zapisywane bez zatwierdzenia.',
+    humanInTheLoop: true,
+    humanStep:
+      'Kandydat widzi informację o AI przed wysłaniem i zaznacza każdą propozycję osobno (ProfileAssistPanel); zapis tylko zaznaczonych przez applyProfileAssistProposals → apply_candidate_cv_proposals.',
+    decidesAboutPerson: false,
+    usageLogged: true,
+    // `withAiBudget` w src/lib/actions/profile-assist.ts (#36).
     costBudgeted: true,
   },
 ];

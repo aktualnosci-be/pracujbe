@@ -127,6 +127,9 @@ describe('inwentarz AI (#489)', () => {
       'src/lib/ai-import/run-import.ts',
       'src/lib/actions/job-assist.ts',
       'src/lib/ai-assist/run-assist.ts',
+      'src/lib/actions/profile-assist.ts',
+      'src/lib/profile-assist/run.ts',
+      'src/lib/profile-assist/prepare.ts',
     ];
     const forbidden = /transition_application|apply_to_job|withdraw_application|is_searchable|set_candidate_searchable|public\.matches|from\(['"]matches['"]\)|from\(['"]applications['"]\)|\bpublic\.applications\b/;
     for (const path of files.filter((p) => existsSync(join(ROOT, p)))) {
@@ -149,5 +152,20 @@ describe('inwentarz AI (#489)', () => {
     expect(action).toMatch(/withJobImportBudget\(logged, model\)/);
     // Płatny dostawca nie ma ścieżki z pominięciem budżetu: wyjątek tylko dla atrapy bez bazy.
     expect(action).toMatch(/provider === 'fixture' && !isServiceDatabaseConfigured\(\) \? logged : withJobImportBudget/);
+  });
+
+  it('asystent profilu (#37): propozycje bez zapisu; zapis tylko zatwierdzonych przez wspólny rdzeń', () => {
+    const WRITE = /\brpc(?:Rows)?\(|\bsql\(|withPortalTransaction/;
+    for (const path of ['src/lib/profile-assist/run.ts', 'src/lib/profile-assist/extract.ts', 'src/lib/profile-assist/prepare.ts']) {
+      expect(readFileSync(join(ROOT, path), 'utf8'), path).not.toMatch(WRITE);
+    }
+    const action = readFileSync(join(ROOT, 'src/lib/actions/profile-assist.ts'), 'utf8');
+    expect(action).not.toMatch(WRITE);
+    expect(action).toMatch(/applyApprovedProposals\(input, 'profile-assist'\)/);
+    // Płatny dostawca nie ma ścieżki z pominięciem budżetu: wyjątek tylko dla atrapy bez bazy.
+    expect(action).toMatch(/provider === 'fixture' && !isServiceDatabaseConfigured\(\)\s*\?\s*logged/);
+    expect(action).toMatch(/withAiBudget\(\s*\{ feature: 'profile_answers_assist'/);
+    // Kontrola ujemna reguły.
+    expect("await rpc(tx, 'apply_candidate_cv_proposals', {})").toMatch(WRITE);
   });
 });

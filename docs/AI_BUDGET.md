@@ -67,6 +67,8 @@ raport czyta ostatnie 31 dni i 12 miesięcy.
   rozliczenie), szacunek `src/lib/ai-assist/cost.ts`.
 - Import CV kandydata (#487, #498): `withAiBudget` w `src/lib/actions/cv-import.ts`, szacunek
   `src/lib/cv-import/cost.ts` (prompt + schemat + zminimalizowany tekst + `max_tokens`).
+- Asystent profilu kandydata (#37): `withAiBudget` w `src/lib/actions/profile-assist.ts`,
+  szacunek `src/lib/profile-assist/cost.ts` (funkcja `profile_answers_assist`, migracja 0132).
 - Tłumaczenia (#514): jeszcze nie — hook poniżej.
 
 ## Nowa funkcja AI (hook, np. tłumaczenia #514)

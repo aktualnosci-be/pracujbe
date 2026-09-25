@@ -2,7 +2,7 @@
 
 Stan: 25.09.2026. Funkcja jest za flagą, **domyślnie wyłączona** (także w produkcji). Wzór
 konfiguracji, limitów i bezpieczeństwa: import ogłoszenia (#465, `docs/AI_JOB_IMPORT.md`).
-Część dla kandydata (profil z odpowiedzi) to osobny etap #37 — nie ma jej w tym kodzie.
+Część dla kandydata (profil z odpowiedzi) opisuje `docs/AI_PROFILE_ASSIST.md`.
 
 Rekruter na kroku 5 (opis, obowiązki) i 6 (wymagania obowiązkowe) kreatora oferty klika
 „Zaproponuj poprawki”. Serwer prosi Claude o lepsze brzmienie tych pól **w języku oferty**
