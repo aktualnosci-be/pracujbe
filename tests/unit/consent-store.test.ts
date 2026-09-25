@@ -147,6 +147,16 @@ describe('getConsent — tylko ważna zgoda w bieżącej wersji polityki', () =>
     expect(consent.hasConsent('necessary')).toBe(true);
     expect(consent.hasConsent('marketing')).toBe(false);
   });
+
+  it('uszkodzona sekwencja procentowa (URIError) → null, bez rzucania (#613)', () => {
+    // `setConsentCookie` zawsze koduje przez encodeURIComponent — tu ustawiamy wartość
+    // wprost, żeby odtworzyć realnie uszkodzone/spreparowane cookie (niedokończone `%`).
+    document.cookie = 'pracujbe_consent=%E0%A4%A; Path=/';
+    expect(() => consent.getConsent()).not.toThrow();
+    expect(consent.getConsent()).toBeNull();
+    expect(() => consent.hasConsent('analytics')).not.toThrow();
+    expect(consent.hasConsent('analytics')).toBe(false);
+  });
 });
 
 describe('saveConsent / updateConsent', () => {
