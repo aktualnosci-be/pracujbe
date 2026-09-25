@@ -14,7 +14,13 @@ import { expect, test } from "@playwright/test";
 
 const locales = ["pl", "nl", "fr", "en"] as const;
 type Locale = (typeof locales)[number];
-type Apply = { phone: string; dialCode: string; submit: string; consent: string };
+type Apply = { phone: string; dialCode: string; submit: string; privacyNoticeAck: string };
+
+/** #493: etykieta z linkiem — nazwa dostępna zaczyna się od tekstu do końca linku. */
+function privacyAckName(label: string): RegExp {
+  const lead = (label.split("</privacy>")[0] ?? "").replace(/<[^>]+>/g, "");
+  return new RegExp(`^${lead.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
+}
 const DEMO_JOB_SLUG = "bricklayer-brussels-1002";
 
 function msgs(locale: Locale): { apply: Apply; jobs: { applyNow: string } } {
@@ -42,7 +48,7 @@ for (const locale of locales) {
     await expect(dialog.getByRole("combobox", { name: t.apply.phone, exact: true })).toHaveCount(0);
 
     await expect(phone).toHaveAttribute("aria-required", "true");
-    const consent = dialog.getByRole("checkbox", { name: t.apply.consent });
+    const consent = dialog.getByRole("checkbox", { name: privacyAckName(t.apply.privacyNoticeAck) });
     await expect(consent).toHaveAttribute("aria-required", "true");
 
     await phone.fill("470123456");

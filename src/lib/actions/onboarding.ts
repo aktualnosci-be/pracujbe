@@ -14,6 +14,8 @@ import { execute, jsonArg, rpc } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
+import { consentWordingVersions } from '@/lib/signup-consents';
+import type { Locale } from '@/i18n/routing';
 import {
   step1Schema,
   step2Schema,
@@ -35,7 +37,7 @@ import {
  *   - krok 5 → RPC `save_candidate_onboarding_step5` (0082): języki (z poziomem) + certyfikaty,
  *   - kroki 2, 4, 6 → `candidate_profiles` (UPSERT po unikalnym `profile_id`),
  *   - krok 6 z `finish: true` („Zakończ”) wymaga zgody, woła `finish_onboarding` i zapisuje
- *     receipt akceptacji regulaminu/polityki (`record_document_acceptance`, 0054); bez `finish`
+ *     receipty regulaminu i informacji o prywatności (`record_signup_consents`, 0108); bez `finish`
  *     („Zapisz i wyjdź”, #337) zapisuje dane kroku bez zgody i bez kończenia onboardingu.
  *     Atomowy jest tu sam zapis danych kroku; `finish_onboarding` to osobna transakcja, która tylko
  *     sprawdza kompletność — dane kroku 6 zostają zapisane także przy `ONBOARDING_INCOMPLETE`
@@ -220,10 +222,11 @@ function validateStep(
 }
 
 /**
- * Niezmienny receipt akceptacji regulaminu i polityki prywatności z kroku 6 (#337) — to samo
- * gotowe RPC co przy rejestracji (0054, tylko service_role → `withServiceRole`), kluczowane po
- * zweryfikowanym UUID z sesji. Best-effort jak w rejestracji: awaria receiptu nie cofa zapisanego profilu,
- * ale trafia do Sentry (rozliczalność).
+ * Niezmienne receipty z kroku 6 (#337, #493): akceptacja regulaminu i potwierdzenie
+ * zapoznania się z informacją o prywatności jako OSOBNE wiersze (kanał `onboarding`).
+ * Krok 6 nie pokazuje zgód opcjonalnych, więc nie powstaje żaden dowód zgody na inne cele.
+ * Kluczowane po zweryfikowanym UUID z sesji (RPC tylko service_role → `withServiceRole`). Best-effort jak
+ * dotąd: awaria receiptu nie cofa zapisanego profilu, ale trafia do Sentry (rozliczalność).
  */
 async function recordTermsAcceptance(profileId: string): Promise<void> {
   try {
@@ -232,16 +235,20 @@ async function recordTermsAcceptance(profileId: string): Promise<void> {
       store.get('x-real-ip')?.trim() ||
       store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
       null;
-    const locale = await getLocale();
-    await withServiceRole((tx) => rpc(tx, 'record_document_acceptance', {
+    const locale = (await getLocale()) as Locale;
+    await withServiceRole((tx) => rpc(tx, 'record_signup_consents', {
       p_profile_id: profileId,
-      p_documents: ['terms', 'privacy'],
+      p_terms_accepted: true,
+      p_privacy_notice_ack: true,
+      p_optional: jsonArg({}),
+      p_source: 'onboarding',
       p_locale: locale,
+      p_wording_versions: jsonArg(consentWordingVersions('onboarding', locale)),
       p_ip: ip,
       p_user_agent: store.get('user-agent'),
     }));
   } catch (e) {
-    captureError(e, { area: 'onboarding.recordDocumentAcceptance' });
+    captureError(e, { area: 'onboarding.recordSignupConsents' });
   }
 }
 
@@ -253,7 +260,7 @@ function buildCandidateProfileRow(
 ): Record<string, unknown> {
   type S2 = import('@/lib/validation/candidate').CandidateStep2;
   type S4 = import('@/lib/validation/candidate').CandidateStep4;
-  type S6 = Omit<import('@/lib/validation/candidate').CandidateStep6, 'agreeTerms'>;
+  type S6 = Omit<import('@/lib/validation/candidate').CandidateStep6, 'agreeTerms' | 'privacyNoticeAck'>;
 
   if (step === 2) {
     const v = value as S2;
