@@ -6,17 +6,17 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 99; z danymi osobowymi: 63; bez danych osobowych: 36.
+Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
 | Czynność | Co robi kod | Tabele | Usługi zewnętrzne | Retencja/usuwanie w kodzie |
 |---|---|---|---|---|
-| Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.age_policy`, `public.candidate_age_attestations`, `public.document_acceptances`, `public.profiles` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile). |
+| Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.age_policy`, `public.candidate_age_attestations`, `public.document_acceptances`, `public.profiles`, `public.retention_warnings` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure). Wartości #574 (0127, harmonogram za RETENTION_MODE, domyślnie wyłączony): profil z deleted_at usuwany w 7 dni (deleted_profile), konto kandydata bez aktywności (last_seen_at z sesji) 730 dni z ostrzeżeniem 30 dni. |
 | Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_age_attestations`, `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.candidate_visibility_events`, `public.saved_jobs` | Railway | Kod nie usuwa danych — do ustalenia |
-| Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.storage_deletion_queue`, `public.storage_gc_sweeps` | Railway | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona. |
-| Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
-| Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, EmailLabs, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
+| Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.retention_warnings`, `public.storage_deletion_queue`, `public.storage_gc_sweeps` | Railway | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; obiekt przez storage_deletion_queue (≤ 72 h, dead-letter po 20 próbach). Wartości #574 (0127, harmonogram za RETENTION_MODE, domyślnie wyłączony): wiersz z deleted_at i obiekt usunięte w 7 dni (deleted_file), CV bez aktywności 365 dni z ostrzeżeniem 30 dni. |
+| Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Resend, EmailLabs | Wartości #574 (0127, harmonogram za RETENTION_MODE, domyślnie wyłączony): aplikacja w stanie końcowym (także hired) usuwana 180 dni od niezmiennego closed_at razem z rozmowami, powiadomieniami i e-mailami. |
+| Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, EmailLabs, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. Wartości #574 (0127, za RETENTION_MODE): niepotwierdzone 7 dni od pierwszego wysłania, potwierdzone 30 dni od potwierdzenia, IP/UA zgody 7 dni. |
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
 | Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.files`, `public.message_attachments`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend, EmailLabs | Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue. |
 | Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs`, `public.screening_question_reviews` | Railway, Resend, EmailLabs, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
@@ -28,7 +28,7 @@ Tabele w migracjach: 99; z danymi osobowymi: 63; bez danych osobowych: 36.
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. Zdarzenie wysyłane wyłącznie po zgodzie w kategorii analitycznej banera cookies (#575). | — | Railway | job_funnel_receipts (nonce deduplikacji) najwyżej 48 h, job_funnel_daily — bieżący i 12 poprzednich miesięcy kalendarzowych (purge_job_funnel_data w /api/maintenance). |
 | Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
-| Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.storage_deletion_queue` | Railway | run_retention_purge (/api/maintenance): okresy z retention_policies; domyślnie tylko pliki i profile oznaczone jako usunięte (30 dni), pozostałe kategorie wyłączone. Ślad wniosków i rejestr usunięć bez usuwania do decyzji właściciela. |
+| Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.retention_warnings`, `public.storage_deletion_queue` | Railway | run_retention_purge (/api/maintenance): okresy z retention_policies (wartości #574, 0127); harmonogram WYŁĄCZONY do jawnego RETENTION_MODE=dry-run\|apply. Ślad wniosków 1095 dni; rejestr usunięć bez usuwania (minimum 400 dni do zmiany po RET-09/RET-10). |
 | Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy; kopia i manifest wysyłane do prywatnego bucketu Cloudflare R2 (BACKUP_S3_*, #569). | `public.erasure_tombstones` | Railway, Cloudflare R2 (bucket kopii bazy) | BACKUP_RETENTION najnowszych kopii (domyślnie 14) lokalnie i w buckecie R2; opcjonalnie BACKUP_S3_MAX_AGE_DAYS (najnowsza kopia zostaje zawsze). |
 | Płatności (wyłączone) (`billing-disabled`) | Martwy schemat po wyłączonym billingu (#51); brak aktywnego przepływu. | — | Stripe | Kod nie usuwa danych — do ustalenia |
 
@@ -1012,6 +1012,18 @@ Tabele w migracjach: 99; z danymi osobowymi: 63; bez danych osobowych: 36.
 |---|---|---|
 | `updated_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0105_data_retention_rights.sql` |
 
+### `public.retention_warnings`
+
+- **Migracja:** `supabase/migrations/0127_retention_values.sql`
+- **Czynności:** Prawa osób i retencja, Konto i uwierzytelnianie, Pliki CV
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Ostrzeżenie przed usunięciem z powodu braku aktywności (#574): aktywność, czas ostrzeżenia i termin; znika z kontem.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0127_retention_values.sql` |
+| `policy_key` | nie dotyczy: Kategoria retencji. | — |
+
 ### `public.saved_jobs`
 
 - **Migracja:** `supabase/migrations/0004_candidate_relations.sql`
@@ -1133,6 +1145,8 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `jobSlug`, `nonce` | `submit_guest_application_core` |
 | `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `nonce` | `confirm_guest_application` |
 | `guestStatusChanged` | `companyName`, `jobTitle`, `recipientName`, `status` | — | `transition_application` |
+| `inactiveAccountWarning` | `deletionDate` | — | `retention_purge_batch` |
+| `inactiveCvWarning` | `deletionDate` | — | `retention_purge_batch` |
 | `jobMatch` | `count`, `jobs`, `query`, `searchName` | `query` | `process_saved_search_alerts` |
 | `jobOffer` | `companyName`, `currency`, `expiresAt`, `jobTitle`, `salaryMax`, `salaryMin`, `salaryPeriod` | — | `send_offer` |
 | `jobPublished` | `jobTitle` | — | `publish_job` |

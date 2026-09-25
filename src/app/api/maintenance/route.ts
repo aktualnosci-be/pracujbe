@@ -6,6 +6,12 @@ import { isCronAuthorized } from '@/lib/cron/auth';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc, type RpcArgs } from '@/lib/db/sql';
 import { isProductionMode } from '@/lib/env';
+import {
+  mergeRetentionCounters,
+  RETENTION_BATCH_LIMIT,
+  RETENTION_MAX_BATCHES,
+  retentionMode,
+} from '@/lib/retention/mode';
 import { captureError } from '@/lib/error-report';
 import { runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
@@ -32,6 +38,10 @@ import {
  * (null = kategoria wyłączona), partie z limitem i SKIP LOCKED; potem kolejka usuwania obiektów
  * storage (`processStorageDeletions`) — także obiektów plików usuniętych w tym przebiegu.
  * Nieudane usunięcie obiektu to ponowienie w kolejnym przebiegu, nie błąd zadania.
+ * #574: okresy z opracowania 2026-09-25 (0127) — retencja domyślnie WYŁĄCZONA; włącza ją
+ * `RETENTION_MODE=dry-run|apply` (`src/lib/retention/mode.ts`). `apply` woła kolejne partie,
+ * dopóki któraś kategoria wyczerpuje limit (`fullBatches`), najwyżej RETENTION_MAX_BATCHES.
+ * Kolejka usuwania obiektów działa niezależnie od trybu (usunięcie konta na wniosek).
  * 0119: załączniki wiadomości przygotowane, a niewysłane przez 24 h
  * (`purge_stale_message_attachments`) — wiersz files usunięty, obiekt trafia do kolejki storage.
  * #17: dzienny GC bucketu CV (`runStorageGc`, 0117) — obiekty bez wiersza `files` do kolejki
@@ -135,14 +145,31 @@ async function run(request: Request): Promise<Response> {
   const campaignEmailsQueued = campaignSendingReady()
     ? await task('emailCampaigns', 'process_email_campaigns', { p_limit: 500 })
     : 0;
-  // #486: retencja jako dane (0105) — zwraca liczniki per kategoria (jsonb).
-  let retention: Record<string, number> = {};
-  try {
-    retention = retentionCounters(
-      await withServiceRole((tx) => rpc(tx, 'run_retention_purge', { p_limit: 200 })),
-    );
-  } catch (error) {
-    failures.push({ task: 'retention', error });
+  // #486/#574: retencja jako dane (0105, 0127) — tylko za jawną flagą; `off` nie woła bazy.
+  const retentionRunMode = retentionMode();
+  let retention: { mode: typeof retentionRunMode; batches: number } & Record<string, number | string> = {
+    mode: retentionRunMode,
+    batches: 0,
+  };
+  if (retentionRunMode !== 'off') {
+    const dryRun = retentionRunMode === 'dry-run';
+    let counters: Record<string, number> = {};
+    let batches = 0;
+    try {
+      // Każda partia = osobna transakcja; dry-run = jedna partia (dane się nie zmieniają).
+      do {
+        const batch = retentionCounters(
+          await withServiceRole((tx) =>
+            rpc(tx, 'run_retention_purge', { p_limit: RETENTION_BATCH_LIMIT, p_dry_run: dryRun }),
+          ),
+        );
+        counters = mergeRetentionCounters(counters, batch);
+        batches += 1;
+      } while (!dryRun && (counters['fullBatches'] ?? 0) > 0 && batches < RETENTION_MAX_BATCHES);
+    } catch (error) {
+      failures.push({ task: 'retention', error });
+    }
+    retention = { ...counters, mode: retentionRunMode, batches };
   }
   // #575: lejek ofert — receipts ≤ 48 h, agregaty ≤ 13 miesięcy kalendarzowych (0128).
   let jobFunnel: Record<string, number> = {};
