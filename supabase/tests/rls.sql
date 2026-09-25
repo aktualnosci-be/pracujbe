@@ -9412,6 +9412,87 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
+-- OL112. Linki firmy w publicznym detalu oferty (0114): get_public_job zwraca
+--        company_website / company_logo_url tylko dla firmy verified i tylko jako
+--        bezwzględny https (public_https_url). Kontrole ujemne w transakcjach cofanych:
+--        bez walidacji zły URL wycieka, bez bramki weryfikacji wycieka link firmy
+--        niezweryfikowanej (po zdjęciu filtra wierszy).
+-- ============================================================================
+\set OLV 'c1080000-0000-0000-0000-0000000000a1'
+\set OLB 'c1080000-0000-0000-0000-0000000000a2'
+\set OLU 'c1080000-0000-0000-0000-0000000000a3'
+\set OLN 'c1080000-0000-0000-0000-0000000000a4'
+\echo '--- OL112 company links in get_public_job ---'
+reset role; reset app.current_uid;
+insert into public.companies(id,name,status,is_demo,website,logo_url) values
+  (:'OLV','Linki Sp','verified',false,' https://www.linki.example/o-nas?x=1 ','https://cdn.linki.example/logo.png'),
+  (:'OLB','Złe Linki Sp','verified',false,'http://zle.example','javascript:alert(1)'),
+  (:'OLU','Bez Weryfikacji Sp','unverified',false,'https://bez.example','https://bez.example/logo.png'),
+  (:'OLN','Bez Linków Sp','verified',false,null,'');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('c1080000-0000-0000-0000-0000000000b1',:'OLV','ol-ok','Magazynier linki','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b2',:'OLB','ol-bad','Magazynier złe linki','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b3',:'OLU','ol-unverified','Magazynier bez weryfikacji','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b4',:'OLN','ol-none','Magazynier bez linków','warehouse','permanent','Gent','Flandria','active','pl');
+
+-- OL112-1: walidator — tylko bezwzględny https z hostem; reszta null.
+select pg_temp.assert(public.public_https_url(u) is null, 'OL112-1 odrzucony adres: ' || coalesce(u, '<null>'))
+from unnest(array[null, '', '   ', 'http://a.example', 'javascript:alert(1)', '//a.example',
+                  'https://localhost', 'https://a.example/x y', 'https://a.example/"><script>',
+                  'https://user:pw@a.example', 'https://a.example/' || repeat('x', 2048),
+                  'HTTPS://A.EXAMPLE', 'data:text/html,x', 'https://-a.example']) u;
+select pg_temp.assert(public.public_https_url(' https://a.example/logo.png?v=2#x ') = 'https://a.example/logo.png?v=2#x',
+  'OL112-1b poprawny https (obcięte spacje)');
+select pg_temp.assert(public.public_https_url('https://a.example:8443') = 'https://a.example:8443',
+  'OL112-1c https z portem');
+
+-- OL112-2: gość — poprawne linki firmy verified; złe i puste → null; firma niezweryfikowana → brak wiersza.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select company_website = 'https://www.linki.example/o-nas?x=1'
+      and company_logo_url = 'https://cdn.linki.example/logo.png'
+   from public.get_public_job('ol-ok', 'pl')),
+  'OL112-2 firma verified: website i logo');
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-bad', 'pl')),
+  'OL112-2b http / javascript: → brak pól');
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-none', 'pl')),
+  'OL112-2c brak / pusty adres → brak pól');
+select pg_temp.assert((select count(*) from public.get_public_job('ol-unverified', 'pl')) = 0,
+  'OL112-2d firma niezweryfikowana → brak oferty (i linków)');
+reset role;
+
+-- OL112-3: kontrole ujemne (zmiana definicji w transakcji cofanej).
+create function pg_temp.ol_patch(p_from text, p_to text) returns void language plpgsql as $$
+declare
+  v_def text := pg_get_functiondef('public.get_public_job(text, text)'::regprocedure);
+begin
+  if position(p_from in v_def) = 0 then
+    raise exception 'ASSERT FAILED: OL112-3 fragment „%” nie występuje w get_public_job', p_from;
+  end if;
+  execute replace(v_def, p_from, p_to);
+end $$;
+-- Bez walidacji adresu zły URL trafia do wyniku (więc OL112-2b wykrywa regresję).
+begin; select pg_temp.ol_patch('public.public_https_url(c.website)', 'c.website');
+select pg_temp.assert((select company_website from public.get_public_job('ol-bad', 'pl')) = 'http://zle.example',
+  'OL112-3 bez walidacji wycieka http'); rollback;
+-- Po zdjęciu filtra wierszy bramka kolumny nadal ukrywa link firmy niezweryfikowanej…
+begin; select pg_temp.ol_patch(E'and c.status = ''verified''\n', '');
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-unverified', 'pl')),
+  'OL112-3b bramka kolumny: niezweryfikowana firma bez linków');
+-- …a bez niej link wycieka (asercja OL112-3b wykrywa regresję).
+select pg_temp.ol_patch('case when c.status = ''verified'' then public.public_https_url(c.website)',
+                        'case when true then public.public_https_url(c.website)');
+select pg_temp.assert((select company_website from public.get_public_job('ol-unverified', 'pl')) = 'https://bez.example',
+  'OL112-3c bez bramki weryfikacji wycieka link'); rollback;
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-bad', 'pl'))
+  and (select count(*) from public.get_public_job('ol-unverified', 'pl')) = 0,
+  'OL112-3d po cofnięciu definicja wróciła');
+
+-- ============================================================================
 -- PL109. Payloady e-maili i odczyt historii (0113; #293, #22, #290, #184):
 --   send_offer → expiresAt + kwoty oferty (bez treści wiadomości rekrutera, #503),
 --   send_message → conversationId, get_applied_jobs_display(p_locale, p_job_ids).
