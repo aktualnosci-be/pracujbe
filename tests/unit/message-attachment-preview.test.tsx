@@ -17,7 +17,7 @@ vi.mock('@/lib/actions/message-attachments', () => ({ prepareMessageAttachmentDo
 import { hasAttachmentPreview, MessageAttachmentList } from '@/components/messaging/MessageAttachmentList';
 
 /**
- * Podgląd JPG/PNG w wątku i liczba załączników w e-mailu `newMessage` (0131, #503).
+ * Podgląd JPG/PNG w wątku i liczba załączników w e-mailu `newMessage` (0132, #503).
  * Miniatura używa tego samego krótkiego linku co pobranie, dopiero po wejściu w widok, i nigdy
  * dla pliku w kwarantannie; e-mail mówi tylko, ile plików dołączono — bez nazw.
  */
