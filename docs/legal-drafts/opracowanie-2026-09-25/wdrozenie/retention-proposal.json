@@ -1,0 +1,76 @@
+{
+  "document_type": "legal_policy_proposal_not_executable_configuration",
+  "version": "1.0",
+  "date": "2026-09-25",
+  "model": "LAUNCH-1",
+  "owner_approved": false,
+  "applied_to_production": false,
+  "production_tests_performed": false,
+  "rules": [
+    {"key": "deleted_file", "days": 7, "trigger": "deleted_at", "scope": "routine_soft_deletion_only", "deadline_semantics": "physical_storage_deletion_completed_by_deadline", "requires_code_change": true, "explicit_erasure_request_uses_separate_72h_target": true},
+    {"key": "deleted_profile", "days": 7, "trigger": "deleted_at", "scope": "routine_soft_deletion_only", "deadline_semantics": "purge_completed_by_deadline", "requires_code_change": true},
+    {"key": "closed_application", "days": 180, "trigger": "stable_closed_at", "include_all_terminal_outcomes_including_hired": true, "requires_code_change": true, "updated_at_must_not_be_used": true},
+    {"key": "inactive_candidate_cv", "days": 365, "trigger": "last_meaningful_activity_at", "warning_days_before": 30, "requires_code_change": true, "precondition": "last_seen_at_or_replacement_updated_by_real_user_activity", "deadline_semantics": "physical_deletion_completed_by_deadline"},
+    {"key": "confirmed_guest_request", "days": 30, "trigger": "confirmed_at", "scope": "minimal_confirmation_buffer_not_application_record", "job_missing_in_input_description": true, "requires_code_change": true},
+    {"key": "data_rights_request_log", "days": 1095, "trigger": "request_closed_at", "scope": "minimised_evidence_only", "requires_code_change": true, "annual_review": true},
+    {"key": "erasure_tombstone", "days": 30, "trigger": "erased_at", "requires_code_change": true, "current_documented_minimum_days": 400, "activation_blocked_until": ["all_recoverable_copies_have_calendar_age_at_most_14_days", "complete_current_erasure_and_consent_replay_test_passed", "minimum_400_day_validation_changed", "deletion_immediately_before_disaster_test_passed"], "unsafe_fallback_prohibited": "do_not_purge_protective_tombstones_while_older_copies_or_incomplete_replay_exist"}
+  ],
+  "additional_jobs_and_limits": {
+    "explicit_erasure": {"online_access_revocation": "without_undue_delay_immediate_in_self_service", "physical_online_object_deletion_target_hours": 72, "alarm_after_hours": 24, "not_a_statutory_deadline": true},
+    "inactive_account": {"days": 730, "trigger": "last_meaningful_activity_at", "warning_days_before": 30, "new_job_required": true},
+    "searchable_profile": {"hide_after_inactivity_days": 180, "adult_only": true, "default_enabled": false, "new_job_required": true},
+    "stale_open_application": {"review_after_inactivity_days": 180, "status_confirmation_window_days": 30, "documented_genuinely_active_exception_with_next_review": true},
+    "application_messages_and_offers": {"days": 180, "trigger": "application_closed_at"},
+    "independent_message_thread": {"days": 180, "trigger": "last_substantive_message_at"},
+    "guest_verification_token": {"validity_hours": 48, "single_use": true, "get_must_not_mutate": true},
+    "unconfirmed_guest_data": {"absolute_max_days": 7, "trigger": "first_submitted_at", "resend_must_not_reset_deadline": true},
+    "guest_claim_token": {"max_days": 30, "trigger": "confirmed_at", "delete_earlier_when_used": true, "hash_only": true},
+    "guest_ip_user_agent": {"days": 7, "scope": "routine_antifraud_evidence"},
+    "raw_security_logs": {"days": 30, "redact_tokens_query_strings_and_content": true},
+    "minimised_audit": {"days": 365},
+    "rate_limit_state": {"maximum_extra_hours_after_window": 24},
+    "email_payload": {"days": 30, "trigger": "final_delivery_outcome_at", "include_auth_email_outbox": true, "auth_secrets_use_shorter_validity_and_cleanup": true},
+    "delivery_metadata_and_notifications": {"days": 90},
+    "company_invite": {"validity_days": 14, "cleanup_max_days_after_expiry": 7, "earlier_cleanup_when_used_if_no_evidence_needed": true},
+    "consent_acceptance_and_accountability_proof": {"days": 1095, "trigger": "withdrawal_or_purpose_end_or_case_closed_at_as_applicable", "minimise_first": true, "annual_review": true},
+    "incident_register": {"days": 1095, "trigger": "incident_closed_at", "scope": "minimal_record_not_full_breached_dataset"},
+    "suppression_record": {"fixed_period": null, "criterion": "only_while_needed_to_respect_objection_in_existing_mailing_system", "annual_review": true, "not_indefinite_unreviewed_storage": true},
+    "company_verification_evidence": {"days": 365, "trigger": "company_account_closed_at", "scope": "minimal_evidence_only"},
+    "funnel_receipts": {"absolute_max_hours": 48, "scheduled_purge_independent_of_traffic": true, "prior_analytics_consent_required": true},
+    "funnel_aggregate": {"calendar_months": 13, "min_group_count_for_default_display": 5, "threshold_is_not_anonymity_guarantee": true},
+    "all_backups_and_exports": {"absolute_max_calendar_days": 14, "not_latest_copy_count": true, "includes_provider_object_migration_and_emergency_copies": true}
+  },
+  "dsa": {
+    "micro_small_exemption_status": "unverified",
+    "appeal_window_calendar_months": 6,
+    "appeal_window_starts_at": "decision_notification_at",
+    "appeal_policy_voluntarily_applies_in_LAUNCH_1_even_if_article_19_exempt": true,
+    "notice_handling_target_calendar_days": 7,
+    "appeal_handling_target_calendar_days": 14,
+    "handling_targets_are_not_statutory_permission_to_delay": true,
+    "urgent_life_safety_cases": "immediate_escalation_and_article_18_assessment",
+    "case_retention_days": 365,
+    "case_retention_trigger": "later_of_appeal_window_end_and_resolution_of_timely_appeal",
+    "public_transparency_reporting_and_database_obligations": "conditional_on_documented_legal_scope_not_assumed_for_all_micro_small_enterprises"
+  },
+  "rights": {
+    "response_calendar_months": 1,
+    "possible_additional_calendar_months": 2,
+    "extension_notice_within_first_month": true,
+    "account_not_required": true,
+    "routine_identity_document_copy_prohibited": true
+  },
+  "legal_hold": {
+    "blanket_hold_all_candidates_prohibited": true,
+    "requires_specific_basis_scope_owner_review_date_and_end_criterion": true
+  },
+  "activation_sequence": [
+    "operator_accepts_policy_and_scope",
+    "implement_missing_jobs_and_correct_time_semantics",
+    "inventory_and_shorten_backups",
+    "pass_erasure_restore_and_monitoring_tests",
+    "apply_audited_configuration_change",
+    "translate_resolved_facts_and_publish_matching_notices",
+    "open_only_functions_with_completed_P0_acceptance"
+  ]
+}
