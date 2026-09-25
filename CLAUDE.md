@@ -1094,7 +1094,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (także konta #486) usuwa `files` → `storage_deletion_queue`; niewysłane pliki > 24 h sprząta
   `purge_stale_message_attachments` w `/api/maintenance`. Dowód: `rls.sql` sekcja MA (kontrola
   ujemna: bez strażnika `files` ścieżka zostaje podmieniona); unit `message-attachments-*`.
-  Podgląd i e-mail (migracja `0130` — numer tymczasowy): JPG/PNG dopuszczone do pobrania mają
+  Podgląd i e-mail (migracja `0131` — numer tymczasowy): JPG/PNG dopuszczone do pobrania mają
   miniaturę pod nazwą pliku (`MessageAttachmentList` → `AttachmentPreview`): link HMAC 60 s
   z `prepareMessageAttachmentDownload` wystawiany dopiero po wejściu w widok
   (IntersectionObserver), `<img loading="lazy">`, alt `messages.attachmentPreviewAlt` z nazwą;
@@ -1102,7 +1102,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `send_message` dokłada do payloadu `newMessage` tylko `attachmentCount` (bez nazw, #503;
   `payload-fields.ts`, mapa danych), strona firmowa zablokowana przez kandydata-nadawcę (#97)
   dostaje 0; e-mail pokazuje „Załączniki w wiadomości: N” (`newMessageAttachmentsLabel`, 1–3).
-  Dowód: `rls.sql` sekcja MN130 (kontrola ujemna: bez warunku blokady MN130-4 czerwony), unit
+  Dowód: `rls.sql` sekcja MN131 (kontrola ujemna: bez warunku blokady MN131-4 czerwony), unit
   `message-attachment-preview` (kontrole ujemne: kwarantanna, pole spoza listy workera).
   **Otwarte:** AV (jak CV), podgląd w trybie demo (brak załączników demo).
   Wysyłka idempotentna (0075, #147): `send_message(conversation, body, client_message_id)` —
