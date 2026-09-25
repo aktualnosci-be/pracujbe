@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -92,8 +92,15 @@ describe('Czujki operacyjne (#47)', () => {
     expect(parseOpsMetrics(negative)).toBeNull();
   });
 
-  it('klucze schematu zgadzają się z ops_metrics() z migracji 0096', () => {
-    const sql = readFileSync(resolve(__dirname, '../../supabase/migrations/0096_ops_metrics.sql'), 'utf8');
+  it('klucze schematu zgadzają się z najnowszym ops_metrics() z migracji (0096 → 0129)', () => {
+    const dir = resolve(__dirname, '../../supabase/migrations');
+    const latest = readdirSync(dir)
+      .filter((f) => /^\d{4}_.*\.sql$/.test(f))
+      .sort()
+      .filter((f) => readFileSync(resolve(dir, f), 'utf8').includes('create or replace function public.ops_metrics()'))
+      .at(-1);
+    expect(latest).toBeDefined();
+    const sql = readFileSync(resolve(dir, latest!), 'utf8');
     const keys = new Set<string>();
     const collect = (shape: Record<string, unknown>) => {
       for (const [key, value] of Object.entries(shape)) {
@@ -105,5 +112,19 @@ describe('Czujki operacyjne (#47)', () => {
     };
     collect(opsMetricsSchema.shape);
     for (const key of keys) expect(sql, key).toContain(`'${key}'`);
+  });
+
+  it('#574: obiekt storage czeka > 24 h albo dead-letter = alarm; bez sekcji (baza sprzed 0129) = ok', () => {
+    const m: OpsMetrics = { ...healthy(), storageDeletion: { pending: 2, oldestPendingAgeSeconds: 60, deadLetters: 0 } };
+    expect(evaluateOps(m)).toEqual({ status: 'ok', alerts: [], warnings: [] });
+    m.storageDeletion!.oldestPendingAgeSeconds = OPS_THRESHOLDS.storageDeletionOldestSeconds;
+    expect(evaluateOps(m).alerts).toEqual([]);
+    m.storageDeletion!.oldestPendingAgeSeconds += 1;
+    expect(evaluateOps(m).alerts).toEqual(['storage_deletion_age']);
+    m.storageDeletion = { pending: 0, oldestPendingAgeSeconds: 0, deadLetters: 1 };
+    expect(evaluateOps(m)).toMatchObject({ status: 'alert', alerts: ['storage_deletion_dead_letter'] });
+    expect(parseOpsMetrics(healthy())).not.toBeNull();
+    expect(parseOpsMetrics({ ...healthy(), storageDeletion: { pending: -1, oldestPendingAgeSeconds: 0, deadLetters: 0 } }))
+      .toBeNull();
   });
 });

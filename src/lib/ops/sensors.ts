@@ -28,6 +28,10 @@ export const opsMetricsSchema = z.object({
     staleCheckoutIntents: count,
   }),
   connections: z.object({ used: count, max: count, reserved: count }),
+  /** #574 (0129): kolejka fizycznego usuwania obiektów storage; brak = baza sprzed 0129. */
+  storageDeletion: z
+    .object({ pending: count, oldestPendingAgeSeconds: count, deadLetters: count })
+    .optional(),
 });
 
 export type OpsMetrics = z.infer<typeof opsMetricsSchema>;
@@ -46,6 +50,11 @@ export const OPS_THRESHOLDS = {
   authEmailOldestReadySeconds: 5 * 60,
   /** Udział połączeń PostgreSQL dostępnych dla aplikacji (max − zarezerwowane). */
   connectionsRatio: 0.8,
+  /**
+   * #574: obiekt storage czeka na fizyczne usunięcie dłużej niż 24 h (cel ≤ 72 h,
+   * `retention_policies.storage_physical_deletion`) — alarm, zanim termin minie.
+   */
+  storageDeletionOldestSeconds: 24 * 60 * 60,
 } as const;
 
 export type OpsSignal =
@@ -59,7 +68,9 @@ export type OpsSignal =
   | 'webhook_failed'
   | 'maintenance_lag'
   | 'db_connections'
-  | 'app_pool_waiting';
+  | 'app_pool_waiting'
+  | 'storage_deletion_age'
+  | 'storage_deletion_dead_letter';
 
 export interface OpsEvaluation {
   status: 'ok' | 'alert';
@@ -98,6 +109,15 @@ export function evaluateOps(metrics: OpsMetrics, pool: AppPoolStats | null = nul
   const available = metrics.connections.max - metrics.connections.reserved;
   if (available <= 0 || metrics.connections.used >= available * OPS_THRESHOLDS.connectionsRatio) {
     alerts.push('db_connections');
+  }
+
+  // #574: 20 nieudanych prób = dead-letter (obiekt CV został w storage) — zawsze alarm.
+  const storage = metrics.storageDeletion;
+  if (storage) {
+    if (storage.oldestPendingAgeSeconds > OPS_THRESHOLDS.storageDeletionOldestSeconds) {
+      alerts.push('storage_deletion_age');
+    }
+    if (storage.deadLetters > 0) alerts.push('storage_deletion_dead_letter');
   }
 
   // Żądania czekające na połączenie puli procesu = pula za mała albo zablokowane zapytania.

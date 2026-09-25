@@ -84,6 +84,10 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
           : '';
       return `/zglos-tresc/sprawa${fragment}`;
     }
+    case 'inactiveCvWarning':
+    case 'inactiveAccountWarning':
+      // #574: logowanie tworzy sesję → last_seen_at (0129) → ostrzeżenie traci ważność.
+      return '/logowanie';
     case 'breachNotice':
       // #490: ustawienia konta odbiorcy (panel z roli w payloadzie RPC).
       return payload?.['panel'] === 'employer' ? '/employer/ustawienia' : '/candidate/ustawienia';

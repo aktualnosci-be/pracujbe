@@ -105,7 +105,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     inCode: 'Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta.',
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
-      'Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile).',
+      'Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure). Wartości #574 (0129, harmonogram za RETENTION_MODE, domyślnie wyłączony): profil z deleted_at usuwany w 7 dni (deleted_profile), konto kandydata bez aktywności (last_seen_at z sesji) 730 dni z ostrzeżeniem 30 dni.',
   },
   'candidate-profile': {
     name: 'Profil zawodowy kandydata',
@@ -118,20 +118,21 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     inCode: 'Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela.',
     processors: HOSTING,
     retentionInCode:
-      'Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona.',
+      'Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; obiekt przez storage_deletion_queue (≤ 72 h, dead-letter po 20 próbach). Wartości #574 (0129, harmonogram za RETENTION_MODE, domyślnie wyłączony): wiersz z deleted_at i obiekt usunięte w 7 dni (deleted_file), CV bez aktywności 365 dni z ostrzeżeniem 30 dni.',
   },
   applications: {
     name: 'Aplikacje na oferty',
     inCode: 'Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe.',
     processors: [...HOSTING, 'resend', 'emaillabs'],
-    retentionInCode: null,
+    retentionInCode:
+      'Wartości #574 (0129, harmonogram za RETENTION_MODE, domyślnie wyłączony): aplikacja w stanie końcowym (także hired) usuwana 180 dni od niezmiennego closed_at razem z rozmowami, powiadomieniami i e-mailami.',
   },
   'guest-applications': {
     name: 'Aplikacja bez konta',
     inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto.',
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
-      'purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach.',
+      'purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. Wartości #574 (0129, za RETENTION_MODE): niepotwierdzone 7 dni od pierwszego wysłania, potwierdzone 30 dni od potwierdzenia, IP/UA zgody 7 dni.',
   },
   'matching-search': {
     name: 'Dopasowanie i zapisane wyszukiwania',
@@ -199,7 +200,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
       'Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii.',
     processors: HOSTING,
     retentionInCode:
-      'run_retention_purge (/api/maintenance): okresy z retention_policies; domyślnie tylko pliki i profile oznaczone jako usunięte (30 dni), pozostałe kategorie wyłączone. Ślad wniosków i rejestr usunięć bez usuwania do decyzji właściciela.',
+      'run_retention_purge (/api/maintenance): okresy z retention_policies (wartości #574, 0129); harmonogram WYŁĄCZONY do jawnego RETENTION_MODE=dry-run|apply. Ślad wniosków 1095 dni; rejestr usunięć bez usuwania (minimum 400 dni do zmiany po RET-09/RET-10).',
   },
   backups: {
     name: 'Kopie zapasowe bazy',
@@ -771,6 +772,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: { path: 'file' },
     notPersonal: { bucket: 'Nazwa bucketa.' },
     note: 'Klucz obiektu do usunięcia (zawiera UUID właściciela); wiersz znika po usunięciu obiektu.',
+  },
+  'public.retention_warnings': {
+    activities: ['data-rights', 'account', 'cv-files'],
+    subjects: ['candidate'],
+    columns: { profile_id: 'reference' },
+    notPersonal: { policy_key: 'Kategoria retencji.' },
+    note: 'Ostrzeżenie przed usunięciem z powodu braku aktywności (#574): aktywność, czas ostrzeżenia i termin; znika z kontem.',
   },
   'public.storage_gc_sweeps': {
     activities: ['cv-files'],

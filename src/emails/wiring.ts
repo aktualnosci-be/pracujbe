@@ -34,6 +34,8 @@ export const QUEUED_EMAIL_TYPES = [
   'appealUpheld', // admin_decide_appeal (0104) → decyzja utrzymana
   'appealReversed', // admin_decide_appeal (0104) → odwołanie uwzględnione
   'breachNotice', // admin_notify_breach_subjects (0106) — treść od administratora
+  'inactiveCvWarning', // retention_purge_batch (0129) — przed usunięciem CV (RETENTION_MODE)
+  'inactiveAccountWarning', // retention_purge_batch (0129) — przed usunięciem konta (RETENTION_MODE)
 ] as const satisfies readonly EmailType[];
 
 /**

@@ -7934,10 +7934,12 @@ rollback;
 set session_replication_role = replica;
 insert into public.files(owner_id, bucket, path, entity_type, deleted_at) values
   (:'RD2', 'candidate-files', :'RD2' || '/cv-old.pdf', 'candidate_cv', now() - interval '31 days'),
-  (:'RD2', 'candidate-files', :'RD2' || '/cv-recent.pdf', 'candidate_cv', now() - interval '5 days');
+  (:'RD2', 'candidate-files', :'RD2' || '/cv-recent.pdf', 'candidate_cv', now() - interval '1 day');
 update public.profiles set deleted_at = now() - interval '31 days', is_active = false where id = :'RD3';
 update public.profiles set deleted_at = now() - interval '1 day', is_active = false where id = :'RD4';
-update public.applications set status = 'rejected', updated_at = now() - interval '40 days' where id = :'rdapp2';
+-- #574 (0129): retencja liczy od niezmiennego closed_at (tu ustawiony wprost — replica pomija trigger).
+update public.applications set status = 'rejected', updated_at = now() - interval '40 days',
+       closed_at = now() - interval '40 days' where id = :'rdapp2';
 set session_replication_role = origin;
 set role service_role;
 select public.run_retention_purge(100)::text as rdpurge1 \gset
@@ -7965,8 +7967,8 @@ select pg_temp.expect_error('select public.admin_set_retention_policy(''nie_ma''
 select public.admin_set_retention_policy('closed_application', 30);
 select public.admin_set_retention_policy('confirmed_guest_request', 1);
 reset role; reset app.current_uid;
--- Ślad potwierdzonego zgłoszenia gościa powiązanego z zamkniętą aplikacją (#522: okres ustala
--- właściciel) — retencja go nie usuwa, nawet po ustawieniu wartości.
+-- Ślad potwierdzonego zgłoszenia gościa powiązanego z zamkniętą aplikacją: od #574 (0129)
+-- zadanie confirmed_guest_request istnieje — po okresie ślad znika (wcześniej: brak zadania).
 set session_replication_role = replica;
 insert into public.guest_application_requests(job_id, email, full_name, locale, idempotency_key, status,
     confirm_token_hash, confirm_nonce, confirm_expires_at, consent_accepted_at, confirmed_at, application_id)
@@ -7982,10 +7984,11 @@ select pg_temp.assert(
   not exists (select 1 from public.applications where id = :'rdapp2')
   and exists (select 1 from public.applications where candidate_id = :'CANDA')
   and (:'rdpurge3')::jsonb ->> 'closedApplications' = '0'
-  and (select application_id is null from public.guest_application_requests where id = :'rdguest')
-  and not ((:'rdpurge2')::jsonb ? 'confirmedGuestRequests')
+  and not exists (select 1 from public.guest_application_requests where id = :'rdguest')
+  and ((:'rdpurge2')::jsonb ->> 'confirmedGuestRequests')::int >= 1
+  and (:'rdpurge3')::jsonb ->> 'confirmedGuestRequests' = '0'
   and (select count(*) from public.audit_logs where action = 'retention.policy_changed') = 2,
-  'DR486-8f po włączeniu kategorii usunięta tylko zakończona aplikacja (ślad gościa zostaje); ponowny przebieg idempotentny');
+  'DR486-8f po włączeniu kategorii usunięta tylko zakończona aplikacja i ślad gościa po okresie; ponowny przebieg idempotentny');
 
 -- DR486-9: odtworzona kopia przywraca RD1 → tombstone usuwa go ponownie.
 insert into auth.users(id,email,name,raw_user_meta_data) values
@@ -10104,5 +10107,344 @@ select pg_temp.assert(
   and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
   and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute'),
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
+
+-- ============================================================================
+-- RV574. Retencja wg opracowania 2026-09-25 (#574, 0129): wartości w retention_policies,
+--        niezmienny closed_at (każdy stan końcowy), last_seen_at z sesji, ostrzeżenie 30 dni
+--        przed usunięciem CV/konta, ślad gościa 30/7/7, partie ≥ 601, dry-run bez zmian,
+--        dead-letter kolejki storage. Kontrole ujemne: stara reguła aplikacji (bez hired,
+--        od updated_at), usunięcie bez ostrzeżenia, complete_storage_deletion bez dead-letter,
+--        trigger closed_at zdjęty.
+-- ============================================================================
+\echo '--- RV574 retencja (0129) ---'
+reset role; reset app.current_uid;
+\set RVC1 'e5740000-0000-4000-8000-0000000000c1'
+\set RVC2 'e5740000-0000-4000-8000-0000000000c2'
+\set RVC3 'e5740000-0000-4000-8000-0000000000c3'
+\set RVC4 'e5740000-0000-4000-8000-0000000000c4'
+\set RVC5 'e5740000-0000-4000-8000-0000000000c5'
+\set RVC6 'e5740000-0000-4000-8000-0000000000c6'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RVC1','rvc1@test.be','Rv Jeden','{"role":"candidate","first_name":"Rv","last_name":"Jeden","locale":"nl"}'),
+  (:'RVC2','rvc2@test.be','Rv Dwa','{"role":"candidate","first_name":"Rv","last_name":"Dwa","locale":"pl"}'),
+  (:'RVC3','rvc3@test.be','Rv Trzy','{"role":"candidate","first_name":"Rv","last_name":"Trzy","locale":"fr"}'),
+  (:'RVC4','rvc4@test.be','Rv Cztery','{"role":"candidate","first_name":"Rv","last_name":"Cztery","locale":"en"}'),
+  (:'RVC5','rvc5@test.be','Rv Piec','{"role":"candidate","first_name":"Rv","last_name":"Piec","locale":"pl"}'),
+  (:'RVC6','rvc6@test.be','Rv Szesc','{"role":"candidate","first_name":"Rv","last_name":"Szesc","locale":"pl"}');
+-- DR486-8 zmieniła dwie wartości przez admina — przywracamy wartości z opracowania.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_retention_policy('closed_application', 180);
+select public.admin_set_retention_policy('confirmed_guest_request', 30);
+reset role; reset app.current_uid;
+
+-- RV574-1: wartości z opracowania; rejestr usunięć bez zmian (minimum 400 dni osobno).
+select pg_temp.assert(
+  (select period from public.retention_policies where key = 'deleted_file') = interval '7 days'
+  and (select period from public.retention_policies where key = 'deleted_profile') = interval '7 days'
+  and (select period from public.retention_policies where key = 'closed_application') = interval '180 days'
+  and (select period = interval '365 days' and warning_period = interval '30 days'
+         from public.retention_policies where key = 'inactive_candidate_cv')
+  and (select period = interval '730 days' and warning_period = interval '30 days'
+         from public.retention_policies where key = 'inactive_candidate_account')
+  and (select period from public.retention_policies where key = 'inactive_searchable_profile') = interval '180 days'
+  and (select period from public.retention_policies where key = 'confirmed_guest_request') = interval '30 days'
+  and (select period from public.retention_policies where key = 'unconfirmed_guest_request') = interval '7 days'
+  and (select period from public.retention_policies where key = 'guest_ip_user_agent') = interval '7 days'
+  and (select period from public.retention_policies where key = 'data_rights_request_log') = interval '1095 days'
+  and (select period = interval '3 days' and warning_period = interval '1 day' and enforcement = 'monitoring'
+         from public.retention_policies where key = 'storage_physical_deletion')
+  and (select period = interval '14 days' and enforcement = 'infrastructure'
+         from public.retention_policies where key = 'database_backup')
+  and (select period = interval '1095 days' and enforcement = 'none' from public.retention_policies where key = 'consent_evidence')
+  and (select period = interval '365 days' and enforcement = 'none' from public.retention_policies where key = 'audit_log')
+  and (select period = interval '30 days' and enforcement = 'infrastructure' from public.retention_policies where key = 'security_log')
+  and (select period is null from public.retention_policies where key = 'erasure_tombstone')
+  and (select count(*) from public.audit_logs where action = 'retention.policies_seeded') = 1,
+  'RV574-1 wartości z opracowania w retention_policies, tombstone bez zmian, wpis audytu');
+set role authenticated; set app.current_uid = :'RVC2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.retention_warnings', 'permission denied', 'RV574-1b kandydat nie czyta ostrzeżeń');
+select pg_temp.expect_error('select public.requeue_storage_dead_letters(null)', 'permission denied', 'RV574-1c kandydat nie rusza dead-letter');
+select pg_temp.expect_error('select public.run_retention_purge(10, true)', 'permission denied', 'RV574-1d kandydat nie uruchamia dry-run');
+reset role; reset app.current_uid;
+
+-- RV574-2: closed_at ustawia wejście w stan końcowy; nic go później nie przesuwa.
+insert into public.applications(job_id, candidate_id, company_id, status)
+  select :'RDJ', :'RVC2', j.company_id, 'submitted' from public.jobs j where j.id = :'RDJ'
+  returning id as rvapp1 \gset
+select pg_temp.assert((select closed_at is null from public.applications where id = :'rvapp1'),
+  'RV574-2 aplikacja otwarta bez closed_at');
+update public.applications set status = 'hired' where id = :'rvapp1';
+select closed_at as rvclosed1 from public.applications where id = :'rvapp1' \gset
+update public.applications set viewed_at = now(), updated_at = now() + interval '1 day' where id = :'rvapp1';
+update public.applications set closed_at = now() - interval '1000 days' where id = :'rvapp1';
+update public.applications set status = 'rejected' where id = :'rvapp1';
+select pg_temp.assert(
+  :'rvclosed1' <> '' and (select closed_at = :'rvclosed1'::timestamptz from public.applications where id = :'rvapp1'),
+  'RV574-2b hired ustawia closed_at; odczyt, updated_at, ręczny zapis i zmiana między stanami końcowymi go nie przesuwają');
+update public.applications set status = 'interview' where id = :'rvapp1';
+select pg_temp.assert((select closed_at is null from public.applications where id = :'rvapp1')
+  and exists (select 1 from public.audit_logs where action = 'application.status_changed' and entity_id = :'rvapp1'
+                and after_data->>'status' = 'interview'),
+  'RV574-2c ponowne otwarcie zeruje closed_at i jest audytowane');
+begin;
+drop trigger trg_applications_closed_at on public.applications;
+update public.applications set status = 'withdrawn' where id = :'rvapp1';
+select pg_temp.assert((select closed_at is null from public.applications where id = :'rvapp1'),
+  'RV574-2d kontrola: bez triggera stan końcowy nie ma closed_at (retencja by go pominęła)');
+rollback;
+delete from public.applications where id = :'rvapp1';
+
+-- RV574-3: aplikacja zamknięta 200 dni temu (hired) znika z rozmową, wiadomościami i
+-- powiadomieniami; zamknięta 100 dni temu i otwarta ze starym updated_at zostają.
+set session_replication_role = replica;
+insert into public.applications(id, job_id, candidate_id, company_id, status, closed_at, updated_at)
+  select 'e5740000-0000-4000-8000-0000000000a1', :'RDJ', :'RVC4', j.company_id, 'hired',
+         now() - interval '200 days', now() - interval '1 day' from public.jobs j where j.id = :'RDJ';
+insert into public.applications(id, job_id, candidate_id, company_id, status, closed_at, updated_at)
+  select 'e5740000-0000-4000-8000-0000000000a2', :'RDJ', :'RVC5', j.company_id, 'rejected',
+         now() - interval '100 days', now() - interval '300 days' from public.jobs j where j.id = :'RDJ';
+insert into public.applications(id, job_id, candidate_id, company_id, status, updated_at)
+  select 'e5740000-0000-4000-8000-0000000000a3', :'RDJ', :'RVC6', j.company_id, 'interview',
+         now() - interval '400 days' from public.jobs j where j.id = :'RDJ';
+insert into public.conversations(id, company_id, application_id)
+  select 'e5740000-0000-4000-8000-0000000000b1', j.company_id, 'e5740000-0000-4000-8000-0000000000a1'
+    from public.jobs j where j.id = :'RDJ';
+insert into public.conversation_members(conversation_id, profile_id)
+  values ('e5740000-0000-4000-8000-0000000000b1', :'RVC4');
+insert into public.messages(id, conversation_id, sender_id, body)
+  values ('e5740000-0000-4000-8000-0000000000b2', 'e5740000-0000-4000-8000-0000000000b1', :'RVC4', 'Dziękuję');
+insert into public.notifications(profile_id, type, title, entity_type, entity_id)
+  values (:'RVC4', 'message_received', 'x', 'conversation', 'e5740000-0000-4000-8000-0000000000b1');
+set session_replication_role = origin;
+-- Kontrola ujemna: reguła z 0105 (bez hired, od updated_at) nie wybrałaby aplikacji a1.
+select pg_temp.assert(not exists (select 1 from public.applications a
+    where a.id = 'e5740000-0000-4000-8000-0000000000a1'
+      and a.status in ('rejected', 'withdrawn', 'offer_declined') and a.updated_at < now() - interval '180 days'),
+  'RV574-3 kontrola: stara reguła pomija hired i liczy od updated_at');
+set role service_role;
+select public.run_retention_purge(200)::text as rvp1 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.applications where id = 'e5740000-0000-4000-8000-0000000000a1')
+  and not exists (select 1 from public.conversations where id = 'e5740000-0000-4000-8000-0000000000b1')
+  and not exists (select 1 from public.messages where id = 'e5740000-0000-4000-8000-0000000000b2')
+  and not exists (select 1 from public.notifications where entity_id = 'e5740000-0000-4000-8000-0000000000b1')
+  and exists (select 1 from public.applications where id = 'e5740000-0000-4000-8000-0000000000a2')
+  and exists (select 1 from public.applications where id = 'e5740000-0000-4000-8000-0000000000a3')
+  and ((:'rvp1')::jsonb ->> 'closedApplications')::int >= 1
+  and ((:'rvp1')::jsonb ->> 'closedApplicationConversations')::int >= 1,
+  'RV574-3b zamknięta 180+ dni (także hired) usunięta z rozmową; młodsza i otwarta zostają');
+
+-- RV574-4: last_seen_at z sesji (logowanie, odświeżenie), najwyżej raz na godzinę.
+update public.profiles set last_seen_at = null where id = :'RVC2';
+insert into auth.sessions(id, user_id, token, expires_at)
+  values ('e5740000-0000-4000-8000-0000000000d1', :'RVC2', 'rvc2-session', now() + interval '1 day');
+select pg_temp.assert((select last_seen_at > now() - interval '1 minute' from public.profiles where id = :'RVC2'),
+  'RV574-4 logowanie (nowa sesja) ustawia last_seen_at');
+update public.profiles set last_seen_at = now() - interval '2 hours' where id = :'RVC2';
+update auth.sessions set expires_at = now() + interval '2 days' where id = 'e5740000-0000-4000-8000-0000000000d1';
+select pg_temp.assert((select last_seen_at > now() - interval '1 minute' from public.profiles where id = :'RVC2'),
+  'RV574-4b odświeżenie sesji przy użyciu przesuwa last_seen_at');
+update public.profiles set last_seen_at = now() - interval '10 minutes' where id = :'RVC2';
+update auth.sessions set expires_at = now() + interval '3 days' where id = 'e5740000-0000-4000-8000-0000000000d1';
+update auth.sessions set user_agent = 'x' where id = 'e5740000-0000-4000-8000-0000000000d1';
+select pg_temp.assert((select last_seen_at < now() - interval '9 minutes' from public.profiles where id = :'RVC2'),
+  'RV574-4c zapis częściej niż raz na godzinę i zmiana innej kolumny sesji nie przesuwają aktywności');
+
+-- RV574-5: CV nieaktywnego kandydata — najpierw ostrzeżenie (e-mail w języku odbiorcy),
+-- usunięcie dopiero po terminie z ostrzeżenia; aktywność unieważnia ostrzeżenie.
+set session_replication_role = replica;
+update public.profiles set last_seen_at = now() - interval '400 days' where id in (:'RVC1', :'RVC6');
+update public.profiles set last_seen_at = now() - interval '720 days' where id = :'RVC3';
+update public.profiles set last_seen_at = now() - interval '200 days' where id = :'RVC5';
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed)
+  values (:'RVC5', true, true)
+  on conflict (profile_id) do update set is_searchable = true, profile_completed = true;
+insert into public.files(owner_id, bucket, path, entity_type) values
+  (:'RVC1', 'candidate-files', :'RVC1' || '/cv-rv1.pdf', 'candidate_cv'),
+  (:'RVC6', 'candidate-files', :'RVC6' || '/cv-rv6.pdf', 'candidate_cv');
+set session_replication_role = origin;
+set role service_role;
+select public.run_retention_purge(200)::text as rvp2 \gset
+select public.run_retention_purge(200)::text as rvp3 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RVC1' || '/cv-rv1.pdf' and deleted_at is null)
+  and (select due_at > now() + interval '29 days' from public.retention_warnings
+        where profile_id = :'RVC1' and policy_key = 'inactive_candidate_cv')
+  and (select count(*) = 1 and bool_and(locale = 'nl') from public.email_deliveries
+        where profile_id = :'RVC1' and template = 'inactiveCvWarning')
+  and (select (payload->>'deletionDate')::timestamptz > now() + interval '29 days' from public.email_deliveries
+        where profile_id = :'RVC1' and template = 'inactiveCvWarning')
+  and ((:'rvp3')::jsonb ->> 'inactiveCvWarned') = '0',
+  'RV574-5 bez ostrzeżenia CV zostaje: ostrzeżenie (nl) z terminem ≥ 30 dni, ponowny przebieg bez duplikatu');
+-- Termin minął: RVC1 bez nowej aktywności traci CV; RVC6 zalogował się — ostrzeżenie nieważne.
+update public.retention_warnings set due_at = now() - interval '1 day' where profile_id in (:'RVC1', :'RVC6');
+insert into auth.sessions(id, user_id, token, expires_at)
+  values ('e5740000-0000-4000-8000-0000000000d6', :'RVC6', 'rvc6-session', now() + interval '1 day');
+set role service_role;
+select public.run_retention_purge(200)::text as rvp4 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.files where path = :'RVC1' || '/cv-rv1.pdf')
+  and exists (select 1 from public.storage_deletion_queue where path = :'RVC1' || '/cv-rv1.pdf')
+  and exists (select 1 from public.files where path = :'RVC6' || '/cv-rv6.pdf' and deleted_at is null)
+  and not exists (select 1 from public.retention_warnings where profile_id = :'RVC6')
+  and exists (select 1 from public.profiles where id = :'RVC1'),
+  'RV574-5b po terminie CV usunięte (obiekt w kolejce); aktywny kandydat zachowuje CV, konto zostaje');
+-- Konto 720 dni bez aktywności: ostrzeżenie (fr), po terminie pełne usunięcie z tombstone.
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(locale = 'fr') from public.email_deliveries
+    where to_email = 'rvc3@test.be' and template = 'inactiveAccountWarning')
+  and exists (select 1 from public.profiles where id = :'RVC3'),
+  'RV574-5c konto: najpierw ostrzeżenie w języku odbiorcy, bez usunięcia');
+update public.retention_warnings set due_at = now() - interval '1 day' where profile_id = :'RVC3';
+set role service_role;
+select public.run_retention_purge(200)::text as rvp5 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.profiles where id = :'RVC3')
+  and (select channel = 'retention' from public.erasure_tombstones where subject_id = :'RVC3')
+  and ((:'rvp5')::jsonb ->> 'inactiveAccountsErased')::int >= 1,
+  'RV574-5d konto usunięte po terminie ostrzeżenia, tombstone kanału retention');
+-- Profil wyszukiwalny 200 dni bez aktywności → ukryty z wpisem historii.
+select pg_temp.assert(
+  (select not is_searchable from public.candidate_profiles where profile_id = :'RVC5')
+  and exists (select 1 from public.candidate_visibility_events where candidate_id = :'RVC5' and not searchable),
+  'RV574-5e profil bez aktywności 180+ dni ukryty w wyszukiwarce');
+-- Kontrola ujemna: bez wiersza ostrzeżenia (np. naiwne kasowanie po samej dacie) nic nie znika.
+delete from public.retention_warnings where profile_id = :'RVC6';
+set session_replication_role = replica;
+update public.profiles set last_seen_at = now() - interval '500 days' where id = :'RVC6';
+set session_replication_role = origin;
+set role service_role;
+select public.run_retention_purge(200)::text as rvp6 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RVC6' || '/cv-rv6.pdf' and deleted_at is null)
+  and exists (select 1 from public.retention_warnings where profile_id = :'RVC6' and policy_key = 'inactive_candidate_cv'),
+  'RV574-5f kontrola: 500 dni bez aktywności, ale bez wcześniejszego ostrzeżenia — tylko ostrzeżenie');
+
+-- RV574-6: ślad gościa — niepotwierdzone 7 dni od wysłania, potwierdzone 30 dni, IP/UA 7 dni.
+set session_replication_role = replica;
+insert into public.guest_application_requests(id, job_id, email, full_name, locale, idempotency_key, status,
+    confirm_token_hash, confirm_nonce, confirm_expires_at, consent_accepted_at, confirmed_at,
+    consent_ip, consent_user_agent, created_at) values
+  ('e5740000-0000-4000-8000-0000000000e1', :'RDJ', 'rv-g1@test.be', 'G1', 'pl', 'rv574-guest-1', 'pending',
+   repeat('1', 64), 'rv574-nonce-00001', now() + interval '1 day', now(), null, '10.0.0.1', 'ua', now() - interval '8 days'),
+  ('e5740000-0000-4000-8000-0000000000e2', :'RDJ', 'rv-g2@test.be', 'G2', 'pl', 'rv574-guest-2', 'pending',
+   repeat('2', 64), 'rv574-nonce-00002', now() + interval '1 day', now(), null, '10.0.0.2', 'ua', now() - interval '3 days'),
+  ('e5740000-0000-4000-8000-0000000000e3', :'RDJ', 'rv-g3@test.be', 'G3', 'pl', 'rv574-guest-3', 'confirmed',
+   repeat('3', 64), 'rv574-nonce-00003', now(), now(), now() - interval '31 days', null, null, now() - interval '32 days'),
+  ('e5740000-0000-4000-8000-0000000000e4', :'RDJ', 'rv-g4@test.be', 'G4', 'pl', 'rv574-guest-4', 'confirmed',
+   repeat('4', 64), 'rv574-nonce-00004', now(), now(), now() - interval '10 days', '10.0.0.4', 'ua', now() - interval '11 days');
+set session_replication_role = origin;
+set role service_role;
+select public.run_retention_purge(200)::text as rvp7 \gset
+select public.run_retention_purge(200)::text as rvp8 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.guest_application_requests where id = 'e5740000-0000-4000-8000-0000000000e1')
+  and exists (select 1 from public.guest_application_requests where id = 'e5740000-0000-4000-8000-0000000000e2'
+                and consent_ip is not null)
+  and not exists (select 1 from public.guest_application_requests where id = 'e5740000-0000-4000-8000-0000000000e3')
+  and (select consent_ip is null and consent_user_agent is null from public.guest_application_requests
+        where id = 'e5740000-0000-4000-8000-0000000000e4')
+  and (:'rvp8')::jsonb ->> 'unconfirmedGuestRequests' = '0'
+  and (:'rvp8')::jsonb ->> 'confirmedGuestRequests' = '0'
+  and (:'rvp8')::jsonb ->> 'guestIpCleared' = '0',
+  'RV574-6 gość: pending > 7 dni i confirmed > 30 dni usunięte, IP/UA > 7 dni wyzerowane; ponowienie bez zmian');
+
+-- RV574-7: dry-run liczy bez zmian danych i bez e-maili.
+set session_replication_role = replica;
+insert into public.files(owner_id, bucket, path, entity_type, deleted_at)
+  values (:'RVC2', 'candidate-files', :'RVC2' || '/cv-dry.pdf', 'candidate_cv', now() - interval '10 days');
+update public.profiles set last_seen_at = now() - interval '710 days' where id = :'RVC2';
+set session_replication_role = origin;
+select count(*) as rvmails0 from public.email_deliveries \gset
+set role service_role;
+select public.run_retention_purge(200, true)::text as rvdry \gset
+reset role;
+select pg_temp.assert(
+  ((:'rvdry')::jsonb ->> 'deletedFiles')::int >= 1
+  and ((:'rvdry')::jsonb ->> 'inactiveAccountsWarned')::int >= 1
+  and (:'rvdry')::jsonb ->> 'dryRun' = '1'
+  and exists (select 1 from public.files where path = :'RVC2' || '/cv-dry.pdf')
+  and not exists (select 1 from public.storage_deletion_queue where path = :'RVC2' || '/cv-dry.pdf')
+  and not exists (select 1 from public.retention_warnings where profile_id = :'RVC2')
+  and (select count(*) from public.email_deliveries) = :rvmails0,
+  'RV574-7 dry-run: liczniki bez usunięcia, kolejki, ostrzeżeń i e-maili');
+set role service_role;
+select public.run_retention_purge(200, false)::text as rvwet \gset
+reset role;
+select pg_temp.assert(not exists (select 1 from public.files where path = :'RVC2' || '/cv-dry.pdf')
+  and exists (select 1 from public.retention_warnings where profile_id = :'RVC2'),
+  'RV574-7b kontrola: ten sam przebieg bez dry-run zmienia dane');
+
+-- RV574-8: 601 rekordów → partie po 200 (fullBatches), zaległość opróżniona w 4 wywołaniach.
+insert into public.files(owner_id, bucket, path, entity_type, deleted_at)
+  select :'RVC2', 'candidate-files', :'RVC2' || '/bulk-' || g || '.pdf', 'candidate_cv', now() - interval '10 days'
+    from generate_series(1, 601) g;
+set role service_role;
+select public.run_retention_purge(200)::text as rvb1 \gset
+select public.run_retention_purge(200)::text as rvb2 \gset
+select public.run_retention_purge(200)::text as rvb3 \gset
+select public.run_retention_purge(200)::text as rvb4 \gset
+reset role;
+select pg_temp.assert(
+  (:'rvb1')::jsonb ->> 'deletedFiles' = '200' and ((:'rvb1')::jsonb ->> 'fullBatches')::int >= 1
+  and (:'rvb2')::jsonb ->> 'deletedFiles' = '200' and (:'rvb3')::jsonb ->> 'deletedFiles' = '200'
+  and (:'rvb4')::jsonb ->> 'deletedFiles' = '1' and (:'rvb4')::jsonb ->> 'fullBatches' = '0'
+  and not exists (select 1 from public.files where path like :'RVC2' || '/bulk-%')
+  and (select count(*) from public.storage_deletion_queue where path like :'RVC2' || '/bulk-%') = 601,
+  'RV574-8 601 rekordów w partiach 200/200/200/1, wszystkie obiekty w kolejce');
+
+-- RV574-9: kolejka storage — 20. nieudana próba = dead-letter (alarm), obsługa przez requeue.
+update public.storage_deletion_queue set attempts = 19, next_attempt_at = now() - interval '1 minute', locked_until = null
+ where path = :'RVC1' || '/cv-rv1.pdf';
+set role service_role;
+select id as rvq1 from public.claim_storage_deletions(200) where path = :'RVC1' || '/cv-rv1.pdf' \gset
+select public.complete_storage_deletion(:'rvq1', false, 'UNAVAILABLE');
+select public.ops_metrics() as rvops \gset
+reset role;
+update public.storage_deletion_queue set next_attempt_at = now() - interval '1 minute' where id = :'rvq1';
+set role service_role;
+select pg_temp.assert(
+  (select dead_lettered_at is not null and attempts = 20 from public.storage_deletion_queue where id = :'rvq1')
+  and not exists (select 1 from public.claim_storage_deletions(200) where id = :'rvq1')
+  and ((:'rvops')::jsonb #>> '{storageDeletion,deadLetters}')::int >= 1
+  and ((:'rvops')::jsonb #>> '{storageDeletion,pending}')::int >= 601,
+  'RV574-9 po 20 próbach dead-letter widoczny w ops_metrics, nie znika bez śladu');
+select public.requeue_storage_dead_letters(array[:'rvq1'::uuid]) as rvreq \gset
+select pg_temp.assert(:rvreq = 1 and (select attempts = 0 and dead_lettered_at is null and next_attempt_at <= now()
+    from public.storage_deletion_queue where id = :'rvq1'),
+  'RV574-9b requeue przywraca wiersz do kolejki (licznik prób od zera)');
+reset role;
+select pg_temp.assert(exists (select 1 from public.audit_logs where action = 'storage.dead_letters_requeued'),
+  'RV574-9c requeue w audycie');
+-- Porzucona dzierżawa po ostatniej próbie → dead-letter przy następnym claimie.
+update public.storage_deletion_queue set attempts = 20, locked_until = now() - interval '1 minute', dead_lettered_at = null
+ where id = :'rvq1';
+set role service_role;
+select count(*) from public.claim_storage_deletions(1);
+reset role;
+select pg_temp.assert((select dead_lettered_at is not null from public.storage_deletion_queue where id = :'rvq1'),
+  'RV574-9d porzucona dzierżawa po 20. próbie = dead-letter');
+-- Kontrola ujemna: complete_storage_deletion z 0105 zostawia wiersz bez dead-letter (cichy „sukces”).
+begin;
+create or replace function public.complete_storage_deletion(p_id uuid, p_ok boolean, p_error text default null)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if p_ok then delete from public.storage_deletion_queue where id = p_id;
+  else update public.storage_deletion_queue set locked_until = null, last_error = left(coalesce(p_error, 'unknown'), 40),
+         next_attempt_at = now() + interval '1 day' where id = p_id;
+  end if;
+end $$;
+update public.storage_deletion_queue set attempts = 20, dead_lettered_at = null, locked_until = now() + interval '5 minutes'
+ where id = :'rvq1';
+select public.complete_storage_deletion(:'rvq1', false, 'UNAVAILABLE');
+select pg_temp.assert((select dead_lettered_at is null from public.storage_deletion_queue where id = :'rvq1'),
+  'RV574-9e kontrola: bez dead-letter wyczerpany wiersz nie daje alarmu');
+rollback;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
