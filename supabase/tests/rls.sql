@@ -12261,7 +12261,7 @@ select pg_temp.assert(pg_temp.wl615_send_check_0124(:'wl615_a_id'::uuid) is null
   'WL615-6 KONTROLA UJEMNA: bez tokenu stary worker (A) dostałby zielone światło mimo utraconej dzierżawy');
 
 -- ============================================================================
--- WL621 (#621): worker poczty — odnowienie dzierżawy w send_check (0130, dokończenie #615/0129).
+-- WL621 (#621): worker poczty — odnowienie dzierżawy w send_check (0131, dokończenie #615/0129).
 --
 -- WL615E83B29 domknęło CAS na `lock_token` (0129), ale `email_delivery_send_check` kończyło
 -- transakcję PRZED wywołaniem dostawcy BEZ odnowienia dzierżawy (`locked_at`) — nadal biegła od
@@ -12272,7 +12272,7 @@ select pg_temp.assert(pg_temp.wl615_send_check_0124(:'wl615_a_id'::uuid) is null
 -- wysyłają (CAS na mark-sent z 0129 chronił tylko ZAPIS stanu, nie cofał już wysłanej
 -- wiadomości A — dokładnie luka z #621).
 --
--- WL621-1..4: PO wywołaniu `send_check` (0130) dzierżawa jest odnowiona (locked_at ~ now(),
+-- WL621-1..4: PO wywołaniu `send_check` (0131) dzierżawa jest odnowiona (locked_at ~ now(),
 -- token bez zmian) i wytrzymuje PEŁNE kolejne okno (czas trwania wywołania dostawcy), mimo że
 -- przed kontrolą była już prawie wygasła — `claim_email_batch` NIE przejmuje wiersza.
 -- WL621-5/6 (KONTROLA UJEMNA): logika SPRZED tej migracji (0129, bez odnowienia) odtworzona

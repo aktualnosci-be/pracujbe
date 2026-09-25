@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0130 — worker poczty: odnowienie dzierżawy w oknie wysyłki (#621, dokończenie #615/0129).
+-- 0131 — worker poczty: odnowienie dzierżawy w oknie wysyłki (#621, dokończenie #615/0129).
 --
 -- Problem: 0129 dodało CAS na `lock_token` (claim/send_check/mark-sent/mark-failed/defer), ale
 -- `email_delivery_send_check` kończyło transakcję PRZED wywołaniem dostawcy (`transport.send`

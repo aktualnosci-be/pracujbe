@@ -74,7 +74,7 @@ import {
  * nie zgadza — stary worker dostaje `lease_lost`/`rowCount=0` i NIC nie nadpisuje (wiersz
  * należy już do kogoś innego), więc nie ma podwójnej wysyłki ani wyścigu aktualizacji statusu.
  *
- * #621 (dokończenie #615, 0130): `email_delivery_send_check` odnawia dzierżawę (`locked_at =
+ * #621 (dokończenie #615, 0131): `email_delivery_send_check` odnawia dzierżawę (`locked_at =
  * now()`) TUŻ PRZED wywołaniem `transport.send` poniżej — w TEJ SAMEJ transakcji co kontrola
  * tokenu/zgody, CAS po `lock_token`. Zamyka to wyścig TOCTOU: bez odnowienia dzierżawa nadal
  * biegła od czasu claimu CAŁEJ paczki, więc przy wielu wierszach albo wolnym poprzednim

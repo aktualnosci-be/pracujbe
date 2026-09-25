@@ -9,7 +9,7 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
  * wygasła dzierżawa) — `supabase/tests/rls.sql` sekcja WL615.
  *
  * #621 (dokończenie #615) — od strony workera (JS) nic się nie zmienia: `processEmailQueue`
- * przekazuje ten sam `p_lock_token` do `email_delivery_send_check` jak dotąd. Naprawa (0130)
+ * przekazuje ten sam `p_lock_token` do `email_delivery_send_check` jak dotąd. Naprawa (0131)
  * jest wyłącznie po stronie bazy: `send_check` ODNAWIA dzierżawę (`locked_at = now()`) TUŻ
  * PRZED wywołaniem `transport.send`, więc czas trwania żądania do dostawcy dostaje pełne,
  * świeże okno, niezależnie od tego, ile z pierwotnej dzierżawy claimu już upłynęło (koniec
