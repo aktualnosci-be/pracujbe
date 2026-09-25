@@ -83,7 +83,7 @@ function mirrorProblems(cities: readonly BelgianCity[], rows: GeneratedRow[], al
   return problems;
 }
 
-describe('słownik locations w bazie (#194, migracja 0109)', () => {
+describe('słownik locations w bazie (#194, migracja 0112)', () => {
   const generated = generate();
   const migrationSql = readFileSync(join(process.cwd(), MIGRATION_FILE), 'utf8');
 

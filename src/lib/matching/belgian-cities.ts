@@ -3,7 +3,7 @@ import type { Coordinates } from '@/lib/matching/score';
 /**
  * Kanoniczne współrzędne belgijskich miast jako dane w kodzie (#194) — bez geokodowania
  * zewnętrznego. Źródłem prawdy jest słownik `locations` + `location_aliases` w bazie
- * (migracja 0109: te miasta + gminy Belgii z Wikidata, CC0); ta lista jest jego lustrem
+ * (migracja 0112: te miasta + gminy Belgii z Wikidata, CC0); ta lista jest jego lustrem
  * i zapasem, gdy wiersza w bazie brak. Generator migracji
  * (`scripts/locations/build-migration.mjs`) bierze stąd współrzędne i aliasy tych miast
  * (mają pierwszeństwo przed Wikidata); zgodność pilnuje `matching-locations.test.ts`.
@@ -12,7 +12,7 @@ import type { Coordinates } from '@/lib/matching/score';
  * i warianty bez myślników; porównanie bez wielkości liter i znaków diakrytycznych.
  * Miasto spoza listy i słownika = współrzędne nieznane — silnik wraca do reguły nazw/regionu.
  * Zmiana tej listy = ponowne `node scripts/locations/build-migration.mjs` (nowa migracja,
- * gdy 0109 jest już wdrożona).
+ * gdy 0112 jest już wdrożona).
  */
 export type BelgianCity = {
   slug: string;
@@ -33,7 +33,7 @@ export const BELGIAN_CITIES: readonly BelgianCity[] = [
   { slug: 'charleroi', lat: 50.4113, lng: 4.4445, aliases: ['Charleroi'] },
   { slug: 'bruges', lat: 51.2097, lng: 3.2247, aliases: ['Bruges', 'Brugge', 'Brugia'] },
   { slug: 'kortrijk', lat: 50.8282, lng: 3.2649, aliases: ['Kortrijk', 'Courtrai'] },
-  // --- pozostałe miasta (w bazie od 0109) ---
+  // --- pozostałe miasta (w bazie od 0112) ---
   { slug: 'namur', lat: 50.4674, lng: 4.8718, aliases: ['Namur', 'Namen'] },
   { slug: 'mons', lat: 50.4542, lng: 3.9567, aliases: ['Mons', 'Bergen'] },
   { slug: 'aalst', lat: 50.9378, lng: 4.0403, aliases: ['Aalst', 'Alost'] },

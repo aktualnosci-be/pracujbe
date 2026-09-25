@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0109_locations_be_municipalities.sql — #194: współrzędne miejscowości w bazie.
+-- 0112_locations_be_municipalities.sql — #194: współrzędne miejscowości w bazie.
 -- PLIK GENEROWANY: node scripts/locations/build-migration.mjs (nie edytuj ręcznie).
 --
 -- 1. locations: kolumny `kind` (municipality / former_municipality / locality) i `refnis`
@@ -15,7 +15,7 @@
 --    Dane rzeczywiste (is_demo = false). Bez geokodowania przez API zewnętrzne.
 -- 4. RLS: słownik czytelny publicznie, zapis tylko service_role (jak locations).
 --
--- Rollback: supabase/rollback/0109_locations_be_municipalities.down.sql
+-- Rollback: supabase/rollback/0112_locations_be_municipalities.down.sql
 -- =============================================================================
 
 alter table public.locations

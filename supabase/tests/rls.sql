@@ -9236,7 +9236,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- LOC194. Słownik miejscowości z aliasami (#194, 0109): gminy Belgii + lista kanoniczna,
+-- LOC194. Słownik miejscowości z aliasami (#194, 0112): gminy Belgii + lista kanoniczna,
 --         aliasy PL/NL/FR/EN po kluczu cityKey, odczyt publiczny, zapis tylko serwisowy.
 -- ============================================================================
 reset role; reset app.current_uid;

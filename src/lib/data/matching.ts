@@ -25,7 +25,7 @@ import {
  * RPC oferty, słownik lokalizacji) się nie udał — wtedy NIE liczymy procentu z niepełnych danych.
  *
  * Języki przechodzą z poziomami po obu stronach (#195); współrzędne miejscowości pochodzą
- * ze słownika `locations` przez aliasy (#194, 0109) — tylko wiersze dla miasta kandydata
+ * ze słownika `locations` przez aliasy (#194, 0112) — tylko wiersze dla miasta kandydata
  * i oferty; miasto spoza słownika i listy w kodzie = odległość nieznana.
  *
  * Prywatność: profil kandydata czytany pod RLS (własny wiersz, transakcja sesji

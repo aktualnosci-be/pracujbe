@@ -9,7 +9,7 @@ import { join } from 'node:path';
 
 import { cityKey } from './city-key.mjs';
 
-export const MIGRATION_FILE = 'supabase/migrations/0109_locations_be_municipalities.sql';
+export const MIGRATION_FILE = 'supabase/migrations/0112_locations_be_municipalities.sql';
 const SNAPSHOT_FILE = 'data/locations/be-municipalities.wikidata.json';
 const CURATED_FILE = 'src/lib/matching/belgian-cities.ts';
 /** Slugi z 0010 — ich nazw, współrzędnych i kolejności migracja nie zmienia. */
@@ -195,7 +195,7 @@ export function renderMigrationSql({ rows, aliases }, snapshot) {
     former: rows.filter((r) => r.kind === 'former_municipality').length,
   };
   return `-- =============================================================================
--- 0109_locations_be_municipalities.sql — #194: współrzędne miejscowości w bazie.
+-- 0112_locations_be_municipalities.sql — #194: współrzędne miejscowości w bazie.
 -- PLIK GENEROWANY: node scripts/locations/build-migration.mjs (nie edytuj ręcznie).
 --
 -- 1. locations: kolumny \`kind\` (municipality / former_municipality / locality) i \`refnis\`
@@ -211,7 +211,7 @@ export function renderMigrationSql({ rows, aliases }, snapshot) {
 --    Dane rzeczywiste (is_demo = false). Bez geokodowania przez API zewnętrzne.
 -- 4. RLS: słownik czytelny publicznie, zapis tylko service_role (jak locations).
 --
--- Rollback: supabase/rollback/0109_locations_be_municipalities.down.sql
+-- Rollback: supabase/rollback/0112_locations_be_municipalities.down.sql
 -- =============================================================================
 
 alter table public.locations

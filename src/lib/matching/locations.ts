@@ -3,7 +3,7 @@ import type { Coordinates } from '@/lib/matching/score';
 
 /**
  * Współrzędne miejscowości (#194) — bez geokodowania zewnętrznego. Najpierw słownik `locations`
- * z bazy przez aliasy (`location_aliases.alias_key` = `cityKey`, nazwy PL/NL/FR/EN, 0109:
+ * z bazy przez aliasy (`location_aliases.alias_key` = `cityKey`, nazwy PL/NL/FR/EN, 0112:
  * lista kanoniczna + gminy Belgii z Wikidata), potem kanoniczna lista w kodzie
  * (`belgian-cities.ts` — lustro części bazy, działa także bez odczytu słownika).
  * Miasto spoza obu = współrzędne nieznane (`undefined`): silnik nie szacuje wtedy odległości.
