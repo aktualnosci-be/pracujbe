@@ -1,7 +1,12 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AuthPage,
+  AuthPageHeader,
+  AuthPageTitle,
+  AuthPaper,
+} from '@/components/auth/auth-page';
 import { GuestClaimPanel } from '@/components/public/GuestClaimPanel';
 import { GuestLinkIntake } from '@/components/public/GuestLinkIntake';
 import { readGuestLinkToken } from '@/lib/guest-apply/link-cookie';
@@ -42,15 +47,15 @@ export default async function GuestClaimPage({ params }: PageProps) {
   const returnTo = `/${locale}/aplikacja/przejmij`;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle as="h1" className="text-2xl">{t('claimTitle')}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <AuthPage>
+      <AuthPageHeader>
+        <AuthPageTitle>{t('claimTitle')}</AuthPageTitle>
+      </AuthPageHeader>
+      <AuthPaper>
         <GuestLinkIntake locale={locale} purpose="claim" hasToken={hasToken}>
           {hasToken ? <GuestClaimPanel returnTo={returnTo} signedIn={await hasSession()} /> : null}
         </GuestLinkIntake>
-      </CardContent>
-    </Card>
+      </AuthPaper>
+    </AuthPage>
   );
 }

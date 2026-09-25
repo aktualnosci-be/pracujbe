@@ -37,7 +37,7 @@ const OTHER_SEARCH = '0d9c8b7a-6f5e-4d4c-8b3a-2f1e8d7c6b5a';
 const SITE = 'https://pracuj.be';
 const NOW = Date.UTC(2026, 8, 25, 12, 0, 0);
 const MIGRATION = readFileSync(
-  resolve(__dirname, '../../supabase/migrations/0115_saved_search_followups.sql'),
+  resolve(__dirname, '../../supabase/migrations/0123_saved_search_followups.sql'),
   'utf8',
 );
 
@@ -168,7 +168,7 @@ describe('zmiana nazwy wyszukiwania', () => {
     expect(await renameSavedSearchAction(ID, 'X')).toEqual({ ok: false, error: 'DEMO_UNAVAILABLE' });
   });
 
-  it('limit długości zgodny z bazą (0092/0115: 1–80, bez znaków sterujących)', () => {
+  it('limit długości zgodny z bazą (0092/0123: 1–80, bez znaków sterujących)', () => {
     expect(MIGRATION).toMatch(/char_length\(v_name\) not between 1 and 80 or v_name ~ '\[\[:cntrl:\]\]'/);
     expect(MIGRATION).toMatch(/grant execute on function public\.rename_saved_search\(uuid, text\) to authenticated/);
     expect(MIGRATION).toMatch(

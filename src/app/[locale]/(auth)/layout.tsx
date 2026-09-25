@@ -1,20 +1,23 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
-import { Link } from '@/i18n/navigation';
-import { Logo } from '@/components/brand/Logo';
-import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher';
+import { notFound } from 'next/navigation';
+import { setRequestLocale } from 'next-intl/server';
+
+import { routing } from '@/i18n/routing';
+import { Footer } from '@/components/layout/Footer';
+import { Header } from '@/components/layout/Header';
 
 /**
  * Layout stron uwierzytelniania (grupa `(auth)`): logowanie, rejestracja, reset hasła,
- * potwierdzenie e-mail.
+ * potwierdzenie e-mail, wypisanie, linki aplikacji bez konta.
  *
- * Celowo minimalny — bez pełnego Headera/Footera. U góry logo (link do strony głównej)
- * i przełącznik języka, a pod nimi wyśrodkowana kolumna z treścią formularza. Przełącznik
- * jest tu ważny: rejestracja zapisuje język strony jako `preferred_locale`, od którego zależy
- * język e-maili (Invariant #1). Zachowuje ścieżkę i parametry zapytania, a cel powrotu
- * `?next=` przenosi na wybrany język.
- * Dzięki temu strony auth są spokojne i skupione na jednym zadaniu. Komponent serwerowy.
+ * Kalka prototypu (#7, zadanie Z4 z `docs/design/people-passport/MATRIX.md`): nagłówek witryny
+ * `.pp-nav` (logo 29 px, nawigacja, kod języka) i stopka jak na stronach publicznych, między nimi
+ * kolumna `.extended` z kartą `.paper.demo-form` (`src/components/auth/auth-page.tsx`).
+ * Przełącznik języka z nagłówka zachowuje ścieżkę, parametry i cel `?next=` — ważne, bo
+ * rejestracja zapisuje język strony jako `preferred_locale`, od którego zależy język e-maili
+ * (Invariant #1).
  *
  * NOINDEX (Invariant #9, jak panele): strony logowania/rejestracji/resetu nie powinny być
  * indeksowane. Metadata dziedziczy się do stron auth, o ile nie zostanie nadpisana.
@@ -22,22 +25,27 @@ import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher';
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
-export default function AuthLayout({ children }: { children: ReactNode }) {
+
+export default async function AuthLayout({
+  children,
+  params,
+}: {
+  children: ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  // Jak layout `(public)`: nieobsługiwany segment nie może dojść do Intl w stopce.
+  const supportedLocales: readonly string[] = routing.locales;
+  if (!supportedLocales.includes(locale)) notFound();
+  setRequestLocale(locale);
+
   return (
-    <div className="flex min-h-screen flex-col bg-soft">
-      <header className="mx-auto flex w-full max-w-md items-center justify-between gap-4 px-4 py-6">
-        <Link href="/" className="rounded-sm">
-          <Logo />
-        </Link>
-        <LocaleSwitcher />
-      </header>
-      <main
-        id="main-content"
-        tabIndex={-1}
-        className="flex flex-1 items-start justify-center px-4 pb-16 outline-none"
-      >
-        <div className="w-full max-w-md">{children}</div>
+    <div className="flex min-h-screen flex-col">
+      <Header locale={locale} />
+      <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
+        {children}
       </main>
+      <Footer locale={locale} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0115 — zapisane wyszukiwania: dokończenie #100 (numer tymczasowy, nada integrator).
+-- 0123 — zapisane wyszukiwania: dokończenie #100.
 --
 -- 1. rename_saved_search(id, name) — zmiana nazwy WŁASNEGO wyszukiwania (RPC-only,
 --    authenticated). Te same reguły nazwy co save_saved_search (1–80 znaków po przycięciu)

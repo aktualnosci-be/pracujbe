@@ -190,16 +190,17 @@ function CheckRow({
   onChange: (checked: boolean) => void;
 }): React.JSX.Element {
   return (
-    <div className="flex min-h-12 items-center gap-2.5">
+    <div className="flex min-h-12 items-center gap-[9px]">
       <Checkbox
         id={id}
+        className="size-4 rounded-[3px]"
         checked={checked}
         onCheckedChange={(v) => onChange(v === true)}
       />
       <Label
         htmlFor={id}
         data-filter-target="checkbox-label"
-        className="flex min-h-12 flex-1 cursor-pointer items-center font-normal text-foreground"
+        className="flex min-h-12 min-w-0 flex-1 cursor-pointer items-center break-words text-[13px] font-normal text-muted-foreground"
       >
         {label}
       </Label>
@@ -221,7 +222,7 @@ function SectionTitle({
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+    <h3 className="mb-[14px] break-words text-[15px] font-bold text-foreground">
       {children}
     </h3>
   );
@@ -393,13 +394,13 @@ export function FilterFields({
         {/* Jednostka (#188, 0091): kwot miesięcznych i godzinowych nie przeliczamy. */}
         <fieldset className="mb-2">
           <legend className="sr-only">{t('salaryUnit')}</legend>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {SALARY_UNITS.map((unit) => (
               <label
                 key={unit}
                 data-filter-target="salary-unit"
                 className={cn(
-                  'relative inline-flex min-h-12 flex-1 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+                  'relative inline-flex min-h-12 flex-1 cursor-pointer items-center justify-center break-words rounded-[11px] border px-2 text-center text-[13px] font-semibold focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
                   value.salaryUnit === unit
                     ? 'border-foreground bg-foreground text-background'
                     : 'border-border text-foreground hover:bg-muted',
@@ -665,12 +666,12 @@ export function FilterSidebar({
     <div
       data-filter-passport="desktop"
       className={cn(
-        'flex min-h-0 min-w-0 flex-col border-r border-border pr-5',
+        'flex min-h-0 min-w-0 flex-col border-r border-[color:var(--pp-line-data)] pr-[22px]',
         className,
       )}
     >
-      <div className="mb-5 flex shrink-0 items-center justify-between gap-3 border-b border-border pb-4">
-        <h2 className="flex items-center gap-2.5 text-base font-semibold text-foreground before:h-2 before:w-2 before:shrink-0 before:rounded-full before:bg-primary">
+      <div className="mb-5 flex shrink-0 flex-wrap items-center justify-between gap-x-3 border-b border-[color:var(--pp-line-data)] pb-4">
+        <h2 className="text-[15px] font-bold text-foreground">
           {t('title')}
         </h2>
         <button
@@ -712,7 +713,8 @@ export function FilterSidebar({
         aria-busy={isNavigating || liveFacets.status === 'loading'}
         aria-disabled={isNavigating}
         data-filter-apply="desktop"
-        className="mt-6 w-full rounded-xl aria-disabled:cursor-not-allowed aria-disabled:opacity-70"
+        size="passport"
+        className="mt-6 w-full whitespace-normal aria-disabled:cursor-not-allowed aria-disabled:opacity-70"
       >
         {/* Licznik to tylko podpowiedź: bez aktualnej liczby zatwierdzenie nadal działa (#220). */}
         {isNavigating

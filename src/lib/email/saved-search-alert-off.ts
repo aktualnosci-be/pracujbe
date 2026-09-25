@@ -10,7 +10,7 @@ import { captureError } from '@/lib/sentry';
  * Wyłączenie jednego alertu zapisanego wyszukiwania z linku w e-mailu `jobMatch` (#100).
  *
  * Upoważnieniem jest wyłącznie podpisany token (bez sesji). Zapis przez RPC
- * `saved_search_alert_unsubscribe` (0115, tylko service_role) — idempotentny; cudze albo
+ * `saved_search_alert_unsubscribe` (0123, tylko service_role) — idempotentny; cudze albo
  * usunięte wyszukiwanie kończy się tym samym „done" (wynik nie zdradza stanu konta).
  * Zakolejkowane już digesty tego alertu nie wyjdą: worker sprawdza alert przy claimie
  * i tuż przed wysyłką (`email_delivery_send_check`).
