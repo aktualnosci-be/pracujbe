@@ -1065,6 +1065,22 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   6 mies., termin rozpatrzenia 14 dni, retencja 12 mies., zakres publikacji i przekazywania do
   bazy DSA, treść prawna o procedurze. **Otwarte:** harmonogram czyszczenia (po #40), odwołanie
   zgłaszającego od cofnięcia ograniczenia, retencja `audit_logs` z uzasadnieniami.
+- [~] Rejestr naruszeń RODO (#490, migracja `0106`): `/admin/naruszenia`
+  (tylko admin). Wpis = incydent bezpieczeństwa albo naruszenie danych osobowych: czas
+  stwierdzenia (termin 72 h liczony od niego — `breachDeadline` w `src/lib/admin/breach.ts`),
+  opis, kategorie danych, liczba osób, ocena ryzyka, decyzje art. 33/34 z uzasadnieniem, daty
+  zgłoszeń, przyczyny opóźnienia po 72 h, działania, zamknięcie. Reguły (sprzeczność decyzji
+  z ryzykiem, wymagane uzasadnienia) w `breach_incident_validate` + CHECK-i i w lustrze TS
+  `breachFormErrors`. Zapis wyłącznie RPC `admin_*_breach_*` (is_admin, CAS `version` →
+  `STALE_STATE`, idempotentne `client_key`, audyt bez treści). Historia `breach_incident_events`
+  i wpisy niezmienne dla każdej roli (trigger; bez DELETE/TRUNCATE). Eksport JSON/CSV
+  `GET /api/admin/breaches/[id]/export` (RPC zapisuje eksport w historii). Zawiadomienie osób:
+  `admin_notify_breach_subjects` → outbox `breachNotice` — treść wpisuje admin dla każdego
+  języka odbiorców; brak wersji w języku któregoś odbiorcy = nic nie wychodzi (Invariant #1).
+  Dowód: `rls.sql` sekcja BR490 (kontrole ujemne), unit `breach-register`, E2E `admin-breaches`.
+  Szkic procedury (nieopublikowany): `docs/legal-drafts/procedura-naruszen.md`. **Do zrobienia
+  (właściciel/prawnik):** role i kontakty dyżuru, organ i portal, treść zawiadomień, tabletop,
+  zatwierdzenie procedury; okres przechowywania wpisów.
 - [~] Mapa danych osobowych (#485/#488/#503/#504, część techniczna): `node scripts/privacy/data-map.mjs`
   generuje `docs/legal-drafts/data-map.generated.md` z migracji produkcyjnych (parser
   `scripts/privacy/schema.mjs`), klasyfikacji `src/lib/privacy/data-map.ts` (każda tabela, kategorie,

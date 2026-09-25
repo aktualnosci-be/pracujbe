@@ -59,7 +59,8 @@ Warunki: wszystkie **9/9** checki zielone dla aktualnego head SHA **i** czysty
    `sudo -u postgres bash scripts/test-rls.sh`; PG startuje przez `pg_ctlcluster 16 main start`).
    Nowe zależności npm lokalnie: `npm install --no-save`.
 4. `merge_pull_request` z `merge_method: squash` i `expectedHeadSha` = **pełny 40-znakowy SHA**.
-5. Po scaleniu: archiwizuj sesję tego PR-a; jeśli PR miał migrację — powiedz
+5. Po scaleniu: daj sesji tego PR-a kolejne zadanie z jej obszaru (sekcja 6,
+   „Ponowne użycie sesji”) albo ją archiwizuj; jeśli PR miał migrację — powiedz
    następnej w kolejce, że jej kolej (sekcja 4).
 
 Czerwone po scaleniu z main (typy, testy, bramki) → nie poprawiaj sam cudzej gałęzi;
@@ -100,8 +101,20 @@ CI 9/9, nie scalaj”.
 - **Stan sesji**: `list_sessions` (`mine: true`) — wynik bywa za duży i trafia do pliku;
   wyciągnij `id`/`status_bucket`/`title` przez `grep -oE`. Sesja `BLOCKED`/`need_input`
   → `get_session` → `post_turn_summary.needs_action` → odpowiedz triggerem.
-- **Archiwizacja**: po scaleniu PR-a sesji (`archive_session`). Nie archiwizuj
-  działających.
+- **Ponowne użycie sesji zamiast nowych (oszczędność limitu).** Start nowej sesji
+  (środowisko, klon, wczytanie CLAUDE.md) kosztuje najwięcej. Po scaleniu PR-a sesji
+  **nie archiwizuj jej od razu** — daj jej kolejne zadanie triggerem:
+  „Integrator: PR #X scalony. Następne zadanie: issue #N — <cel>. `git fetch origin`,
+  `git checkout -B claude/<temat> origin/main`, nowy PR, CI 9/9, nie scalaj.”
+  Dobieraj zadanie z tego samego obszaru (te same pliki/wiedza). Nową sesję twórz
+  tylko, gdy żadna aktywna nie jest wolna albo obszar jest zupełnie inny.
+  W prompcie nowej sesji od razu dawaj 2–3 powiązane issues po kolei (kolejny PR po
+  scaleniu poprzedniego albo osobna gałąź od `origin/main`), zamiast jednego.
+- **Archiwizacja**: gdy sesja nie ma już sensownego zadania w swoim obszarze albo jej
+  kontekst jest duży (> ~500 tys. tokenów w `context_usage.used_tokens`), albo utknęła.
+  Nie archiwizuj działających.
+- **Mniej budzenia**: nie wysyłaj sesjom wiadomości „na zapas”; jeden trigger z
+  kompletną instrukcją (numer migracji + błąd + następne zadanie) zamiast kilku.
 - **Subskrypcje**: każdy nowy PR z `claude/*` → `subscribe_pr_activity`.
 - **Czekanie**: nie używaj `sleep` w Bash (blokowane). Do powrotu za kilka minut —
   `send_later`; zdarzenia CI przychodzą same jako powiadomienia (`ReadNotifications`).
