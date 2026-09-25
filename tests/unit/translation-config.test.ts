@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { TRANSLATION_PIPELINE_VERSION } from '@/lib/translation/pipeline';
 import { isTranslationEnabled, translationModel, translationProvider } from '@/lib/translation/config';
 
-/** #32 — domyślnie wyłączone; atrapa nigdy w produkcji; wersja pipeline zgodna z CHECK w 0109. */
+/** #32 — domyślnie wyłączone; atrapa nigdy w produkcji; wersja pipeline zgodna z CHECK w 0112. */
 const KEYS = ['AI_TRANSLATION_ENABLED', 'AI_TRANSLATION_PROVIDER', 'AI_TRANSLATION_MODEL', 'ANTHROPIC_API_KEY', 'APP_MODE'];
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 afterEach(() => {

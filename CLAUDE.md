@@ -839,7 +839,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Do zrobienia (właściciel):** pobranie oficjalnych paczek CSV (formularz z linkiem e-mail),
   zatwierdzenie `data/esco/esco-v1.2.1.manifest.json`, pełny import; atrybucja w UI i matching
   na ESCO = osobne issues.
-- [~] Tłumaczenia AI — rdzeń (#31, #32, migracja `0109`, `docs/AI_TRANSLATION.md`), tylko
+- [~] Tłumaczenia AI — rdzeń (#31, #32, migracja `0112`, `docs/AI_TRANSLATION.md`), tylko
   pl/nl/fr/en, domyślnie wyłączone (`AI_TRANSLATION_ENABLED`). Kolejka: niezmienne rewizje
   źródła (kanoniczne pola + SHA-256, ta sama treść = no-op), zadania per język docelowy i wersję
   pipeline (unikat = deduplikacja), `claim_translation_jobs` (SKIP LOCKED + lease, restart =

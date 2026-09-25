@@ -184,7 +184,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'ai-translation': {
     name: 'Tłumaczenia AI (rdzeń)',
-    inCode: 'Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0109). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone.',
+    inCode: 'Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0112). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone.',
     processors: [...HOSTING, 'anthropic'],
     retentionInCode:
       'deactivate_translation_source(purge) usuwa rewizje, zadania i przekłady encji (wywołanie przy usunięciu konta/oferty — do wpięcia w #33/#34). Wynik odrzuconej rewizji nie jest przechowywany (poza propozycją przy korekcie ręcznej).',

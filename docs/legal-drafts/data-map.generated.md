@@ -25,7 +25,7 @@ Tabele w migracjach: 95; z danymi osobowymi: 62; bez danych osobowych: 33.
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron. | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Sentry, Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
-| Tłumaczenia AI (rdzeń) (`ai-translation`) | Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0109). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone. | `public.translation_documents`, `public.translation_jobs`, `public.translation_source_revisions`, `public.translation_sources` | Railway, Anthropic (Claude API) | deactivate_translation_source(purge) usuwa rewizje, zadania i przekłady encji (wywołanie przy usunięciu konta/oferty — do wpięcia w #33/#34). Wynik odrzuconej rewizji nie jest przechowywany (poza propozycją przy korekcie ręcznej). |
+| Tłumaczenia AI (rdzeń) (`ai-translation`) | Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0112). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone. | `public.translation_documents`, `public.translation_jobs`, `public.translation_source_revisions`, `public.translation_sources` | Railway, Anthropic (Claude API) | deactivate_translation_source(purge) usuwa rewizje, zadania i przekłady encji (wywołanie przy usunięciu konta/oferty — do wpięcia w #33/#34). Wynik odrzuconej rewizji nie jest przechowywany (poza propozycją przy korekcie ręcznej). |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
 | Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
 | Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.storage_deletion_queue` | Railway | run_retention_purge (/api/maintenance): okresy z retention_policies; domyślnie tylko pliki i profile oznaczone jako usunięte (30 dni), pozostałe kategorie wyłączone. Ślad wniosków i rejestr usunięć bez usuwania do decyzji właściciela. |
@@ -1004,53 +1004,53 @@ Tabele w migracjach: 95; z danymi osobowymi: 62; bez danych osobowych: 33.
 
 ### `public.translation_documents`
 
-- **Migracja:** `supabase/migrations/0109_translation_queue.sql`
+- **Migracja:** `supabase/migrations/0112_translation_queue.sql`
 - **Czynności:** Tłumaczenia AI (rdzeń)
 - **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
 - **Uwaga:** Aktualny przekład per język; korekta ręczna z autorem i wersją.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0109_translation_queue.sql` |
-| `fields` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0109_translation_queue.sql` |
-| `manual_author` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0109_translation_queue.sql` |
+| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0112_translation_queue.sql` |
+| `fields` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0112_translation_queue.sql` |
+| `manual_author` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0112_translation_queue.sql` |
 
 ### `public.translation_jobs`
 
-- **Migracja:** `supabase/migrations/0109_translation_queue.sql`
+- **Migracja:** `supabase/migrations/0112_translation_queue.sql`
 - **Czynności:** Tłumaczenia AI (rdzeń)
 - **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
 - **Uwaga:** Zadania kolejki; `result` tylko jako propozycja przy zablokowanej korekcie ręcznej.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0109_translation_queue.sql` |
-| `result` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0109_translation_queue.sql` |
-| `last_error_code` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0109_translation_queue.sql` |
+| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0112_translation_queue.sql` |
+| `result` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0112_translation_queue.sql` |
+| `last_error_code` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0112_translation_queue.sql` |
 
 ### `public.translation_source_revisions`
 
-- **Migracja:** `supabase/migrations/0109_translation_queue.sql`
+- **Migracja:** `supabase/migrations/0112_translation_queue.sql`
 - **Czynności:** Tłumaczenia AI (rdzeń)
 - **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
 - **Uwaga:** Niezmienne kopie pól źródła (treść oferty albo profilu — wolny tekst może zawierać dane osobowe).
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0109_translation_queue.sql` |
-| `fields` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0109_translation_queue.sql` |
+| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0112_translation_queue.sql` |
+| `fields` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0112_translation_queue.sql` |
 | `content_hash` | nie dotyczy: SHA-256 kanonicznej treści do wykrywania braku zmian, nie sekret. | — |
 
 ### `public.translation_sources`
 
-- **Migracja:** `supabase/migrations/0109_translation_queue.sql`
+- **Migracja:** `supabase/migrations/0112_translation_queue.sql`
 - **Czynności:** Tłumaczenia AI (rdzeń)
 - **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
 - **Uwaga:** Głowa encji tłumaczonej (oferta albo profil kandydata): bieżąca rewizja i aktywność.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0109_translation_queue.sql` |
+| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0112_translation_queue.sql` |
 
 ## 4. Treść e-maili (payload kolejki → dostawca poczty)
 

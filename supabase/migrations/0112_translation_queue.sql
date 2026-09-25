@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0109_translation_queue.sql — #31: rewizje źródeł i kolejka tłumaczeń AI odporna na
+-- 0112_translation_queue.sql — #31: rewizje źródeł i kolejka tłumaczeń AI odporna na
 -- edycje (fundament; wpięcie ofert #33 i profili #34 to osobne kroki).
 --
 -- Numer tymczasowy (koordynator nadaje ostateczny). Języki = public.supported_locales
