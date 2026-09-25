@@ -39,11 +39,11 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const appPool = domainPoolStats();
-  const evaluation = evaluateOps(result.metrics, appPool);
+  const evaluation = evaluateOps(result.metrics, appPool, result.aiBudget);
   const alerts = [...evaluation.alerts, ...backupAlerts(backup)];
   const status = alerts.length ? 'alert' : 'ok';
   return Response.json(
-    { ...evaluation, status, alerts, checkedAt, metrics: result.metrics, appPool, backup },
+    { ...evaluation, status, alerts, checkedAt, metrics: result.metrics, appPool, aiBudget: result.aiBudget ?? null, backup },
     { status: status === 'ok' ? 200 : 503, headers },
   );
 }

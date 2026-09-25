@@ -1525,7 +1525,8 @@
     "errorFileType": "Only PNG, JPG and WebP images are supported.",
     "errorUrlMissing": "Paste a link to the ad.",
     "errorNetwork": "Could not reach the server. Check your connection and try again.",
-    "contactNote": "We do not copy email addresses, phone numbers or identification numbers into the form. Enter the contact email yourself in the last step."
+    "contactNote": "We do not copy email addresses, phone numbers or identification numbers into the form. Enter the contact email yourself in the last step.",
+    "errorBudget": "Importing from a listing is temporarily unavailable. Please fill in the form manually or try again later."
   },
   "jobAssist": {
     "title": "Improve the text with the AI assistant",
@@ -2287,7 +2288,29 @@
     "auditActionCampaignCancelled": "Campaign revision stopped",
     "entityEmailCampaign": "Email campaign",
     "appealTargetRestoration": "Against lifting a restriction",
-    "appealRestorationSummary": "Restriction lifted on {date}: {reason}"
+    "appealRestorationSummary": "Restriction lifted on {date}: {reason}",
+    "navAiCosts": "AI costs",
+    "aiCostsTitle": "AI costs",
+    "aiCostsSubtitle": "Spending on AI model calls against the global budget. Read only.",
+    "aiCostsBudget": "Budget",
+    "aiCostsToday": "Today",
+    "aiCostsMonth": "This month",
+    "aiCostsOfLimit": "of {limit} ({percent}%)",
+    "aiCostsNoLimit": "No limit set — calls are blocked",
+    "aiCostsNearLimit": "At least 80% of the limit has been used.",
+    "aiCostsExhausted": "Limit reached — new calls are blocked.",
+    "aiCostsStale": "Reservations not settled for more than 15 minutes: {count}",
+    "aiCostsHowCounted": "Cost is calculated from the tokens reported by the provider and the price list in the code. An unsettled reservation counts in full. Day and month follow Brussels time.",
+    "aiCostsLimitsHint": "Limits are set by the owner in the database (see docs/AI_BUDGET.md). A limit of 0 turns off all AI features.",
+    "aiCostsDaily": "Last {days} days",
+    "aiCostsMonthly": "Months",
+    "aiCostsNoData": "No calls in this period.",
+    "aiCostsRow": "Calls: {calls} · successful: {ok} · failed: {notOk} · in progress: {open} · input/output tokens: {input} / {output}",
+    "aiCostsCalls": "calls: {calls}",
+    "aiCostsFeatureJobImport": "Listing import",
+    "aiCostsFeatureTranslation": "Content translation",
+    "aiCostsFeatureAssist": "Job text assistant",
+    "aiCostsFeatureCvImport": "CV import"
   },
   "settings": {
     "title": "Notification preferences",

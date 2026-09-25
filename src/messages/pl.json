@@ -1525,7 +1525,8 @@
     "errorFileType": "Obsługujemy tylko obrazy PNG, JPG i WebP.",
     "errorUrlMissing": "Wklej link do ogłoszenia.",
     "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie.",
-    "contactNote": "Adresów e-mail, numerów telefonu i numerów identyfikacyjnych nie przenosimy do formularza. E-mail kontaktowy wpisz ręcznie w ostatnim kroku."
+    "contactNote": "Adresów e-mail, numerów telefonu i numerów identyfikacyjnych nie przenosimy do formularza. E-mail kontaktowy wpisz ręcznie w ostatnim kroku.",
+    "errorBudget": "Import z ogłoszenia jest chwilowo niedostępny. Wypełnij formularz ręcznie albo spróbuj później."
   },
   "jobAssist": {
     "title": "Popraw treść z asystentem AI",
@@ -2287,7 +2288,29 @@
     "auditActionCampaignCancelled": "Zatrzymanie rewizji kampanii",
     "entityEmailCampaign": "Kampania e-mail",
     "appealTargetRestoration": "Od cofnięcia ograniczenia",
-    "appealRestorationSummary": "Ograniczenie cofnięte {date}: {reason}"
+    "appealRestorationSummary": "Ograniczenie cofnięte {date}: {reason}",
+    "navAiCosts": "Koszty AI",
+    "aiCostsTitle": "Koszty AI",
+    "aiCostsSubtitle": "Wydatki na wywołania modeli AI względem globalnego budżetu. Tylko odczyt.",
+    "aiCostsBudget": "Budżet",
+    "aiCostsToday": "Dziś",
+    "aiCostsMonth": "Bieżący miesiąc",
+    "aiCostsOfLimit": "z {limit} ({percent}%)",
+    "aiCostsNoLimit": "Brak limitu — wywołania są blokowane",
+    "aiCostsNearLimit": "Wykorzystano co najmniej 80% limitu.",
+    "aiCostsExhausted": "Limit wyczerpany — nowe wywołania są blokowane.",
+    "aiCostsStale": "Rezerwacje bez rozliczenia od ponad 15 minut: {count}",
+    "aiCostsHowCounted": "Koszt liczony z tokenów zgłoszonych przez dostawcę i cennika w kodzie. Rezerwacja bez rozliczenia liczy się w pełnej kwocie. Doba i miesiąc według czasu w Brukseli.",
+    "aiCostsLimitsHint": "Limity ustawia właściciel w bazie danych (opis: docs/AI_BUDGET.md). Limit 0 wyłącza wszystkie funkcje AI.",
+    "aiCostsDaily": "Ostatnie {days} dni",
+    "aiCostsMonthly": "Miesiące",
+    "aiCostsNoData": "Brak wywołań w tym okresie.",
+    "aiCostsRow": "Wywołania: {calls} · udane: {ok} · nieudane: {notOk} · w toku: {open} · tokeny wejścia/wyjścia: {input} / {output}",
+    "aiCostsCalls": "wywołania: {calls}",
+    "aiCostsFeatureJobImport": "Import ogłoszenia",
+    "aiCostsFeatureTranslation": "Tłumaczenie treści",
+    "aiCostsFeatureAssist": "Asystent treści oferty",
+    "aiCostsFeatureCvImport": "Import CV"
   },
   "settings": {
     "title": "Preferencje powiadomień",
