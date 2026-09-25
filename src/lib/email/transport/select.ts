@@ -19,6 +19,20 @@ export function envValue(env: Env, key: string): string | null {
   return v ? v : null;
 }
 
+/**
+ * Wartości `.env.example`/dokumentacji, które nigdy nie są prawdziwym kluczem Resend (#587).
+ * Skopiowany bez zmian plik nie może dać fałszywej gotowości poczty ani próby wysyłki
+ * literalnym placeholderem.
+ */
+const RESEND_API_KEY_PLACEHOLDERS = new Set(['re_YOUR_KEY']);
+
+/** Klucz Resend po odrzuceniu znanych placeholderów (#587) — jedyne źródło prawdy dla wyboru
+ * dostawcy (`emailProviderFromEnv`) i transportu (`mailTransportFromEnv`). */
+export function resendApiKeyFromEnv(env: Env = process.env): string | null {
+  const value = envValue(env, 'RESEND_API_KEY');
+  return value && !RESEND_API_KEY_PLACEHOLDERS.has(value) ? value : null;
+}
+
 export function emailLabsConfigFromEnv(env: Env = process.env): EmailLabsConfig | null {
   const appKey = envValue(env, 'EMAILLABS_APP_KEY');
   const secretKey = envValue(env, 'EMAILLABS_SECRET_KEY');
@@ -36,7 +50,7 @@ export function emailLabsConfigFromEnv(env: Env = process.env): EmailLabsConfig 
 export function emailProviderFromEnv(env: Env = process.env): EmailProviderSelection {
   const explicit = envValue(env, 'EMAIL_PROVIDER')?.toLowerCase() ?? null;
   const emaillabsReady = emailLabsConfigFromEnv(env) !== null;
-  const resendReady = envValue(env, 'RESEND_API_KEY') !== null;
+  const resendReady = resendApiKeyFromEnv(env) !== null;
   if (explicit !== null) {
     if (!(EMAIL_PROVIDERS as readonly string[]).includes(explicit)) return { provider: null, ready: false };
     const provider = explicit as EmailProvider;
@@ -46,4 +60,3 @@ export function emailProviderFromEnv(env: Env = process.env): EmailProviderSelec
   if (resendReady) return { provider: 'resend', ready: true };
   return { provider: null, ready: false };
 }
-

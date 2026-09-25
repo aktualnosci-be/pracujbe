@@ -10,7 +10,7 @@
  */
 import { isBillingEnabled } from '@/lib/billing/flag';
 import { cronSecretChecks } from '@/lib/cron/secrets';
-import { emailProviderFromEnv } from '@/lib/email/transport/select';
+import { emailProviderFromEnv, resendApiKeyFromEnv } from '@/lib/email/transport/select';
 import { errorWebhookFromEnv } from '@/lib/error-webhook/url';
 
 export const env = {
@@ -217,7 +217,8 @@ export function readinessChecks(): Record<string, boolean> {
     httpsSiteUrl: hasPublicHttpsUrl(),
     // #51: sprzedaż wyłączona flagą — sekrety Stripe bez `BILLING_ENABLED` nie liczą się.
     stripe: isBillingEnabled() && Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
-    resend: Boolean(process.env.RESEND_API_KEY),
+    // #587: placeholder .env.example (`re_YOUR_KEY`) nie może dać fałszywej gotowości.
+    resend: Boolean(resendApiKeyFromEnv()),
     // Dostawca wybrany przez `EMAIL_PROVIDER` (albo domyślny) ma komplet kluczy — nazwa
     // dostawcy w `/api/health` jako `emailProvider`.
     emailProviderReady: emailProviderFromEnv().ready,

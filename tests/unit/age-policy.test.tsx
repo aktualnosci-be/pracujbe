@@ -20,6 +20,7 @@ import { attestCandidateAgeAction } from '@/lib/actions/age-attestation';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
 import { AgeAttestationSettings } from '@/components/settings/AgeAttestationSettings';
 import { FUNNEL_MINOR_STORAGE_KEY, isKnownMinorDevice, sendFunnelEvent } from '@/lib/job-funnel/client';
+import { CONSENT_COOKIE_NAME, CONSENT_POLICY_VERSION } from '@/lib/consent';
 import type { PortalIdentity } from '@/lib/auth/session';
 import pl from '@/messages/pl.json';
 import en from '@/messages/en.json';
@@ -300,11 +301,19 @@ describe('lejek ofert dla konta 16–17 (#576, LAUNCH-1: jak brak zgody)', () =>
     vi.unstubAllGlobals();
   });
 
-  it('kontrola ujemna: bez znacznika zdarzenie jest wysyłane', () => {
+  it('kontrola ujemna: bez znacznika (i ze zgodą analityczną, #575) zdarzenie jest wysyłane', () => {
     const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
     vi.stubGlobal('fetch', fetchMock);
+    const record = {
+      v: CONSENT_POLICY_VERSION,
+      categories: { necessary: true, preferences: false, analytics: true, marketing: false },
+      ts: '2026-01-01T00:00:00.000Z',
+      id: 'age-policy-test',
+    };
+    document.cookie = `${CONSENT_COOKIE_NAME}=${encodeURIComponent(JSON.stringify(record))}; Path=/`;
     sendFunnelEvent('detail_view', ['00000000-0000-4000-8000-000000000001'], 'nonce-2');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    document.cookie = `${CONSENT_COOKIE_NAME}=; Max-Age=0; Path=/`;
     vi.unstubAllGlobals();
   });
 

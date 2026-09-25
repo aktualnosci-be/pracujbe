@@ -61,6 +61,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     'process_saved_search_alerts',
     'process_email_campaigns',
     'run_retention_purge',
+    'purge_job_funnel_data',
     'purge_stale_message_attachments',
     'claim_storage_deletions',
   ];
@@ -103,6 +104,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,
       retention: { mode: 'off', batches: 0 },
+      // #575: terminy lejka ofert (0128).
+      jobFunnel: {},
       purgedMessageAttachments: 0,
       // #17: bez bucketu Railway GC bucketu pominięty.
       storageGc: null,
