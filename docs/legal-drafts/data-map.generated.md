@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 93; z danymi osobowymi: 59; bez danych osobowych: 34.
+Tabele w migracjach: 94; z danymi osobowymi: 60; bez danych osobowych: 34.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -14,7 +14,7 @@ Tabele w migracjach: 93; z danymi osobowymi: 59; bez danych osobowych: 34.
 |---|---|---|---|---|
 | Konto i uwierzytelnianie (`account`) | Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta. | `auth.accounts`, `auth.email_outbox`, `auth.sessions`, `auth.users`, `auth.verifications`, `public.document_acceptances`, `public.profiles` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile). |
 | Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.candidate_visibility_events`, `public.saved_jobs` | Railway | Kod nie usuwa danych — do ustalenia |
-| Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.storage_deletion_queue` | Railway | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona. |
+| Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.storage_deletion_queue`, `public.storage_gc_sweeps` | Railway | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona. |
 | Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
 | Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, EmailLabs, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
@@ -1005,6 +1005,27 @@ Tabele w migracjach: 93; z danymi osobowymi: 59; bez danych osobowych: 34.
 |---|---|---|
 | `path` | Pliki (CV) i ich metadane | `supabase/migrations/0105_data_retention_rights.sql` |
 | `bucket` | nie dotyczy: Nazwa bucketa. | — |
+
+### `public.storage_gc_sweeps`
+
+- **Migracja:** `supabase/migrations/0117_storage_gc.sql`
+- **Czynności:** Pliki CV
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Przebieg GC bucketu CV (#17): same liczniki; kursor = ostatni sprawdzony klucz (UUID właściciela), czyszczony po zakończeniu przebiegu, historia 90 dni.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `cursor_key` | Pliki (CV) i ich metadane | `supabase/migrations/0117_storage_gc.sql` |
+| `bucket` | nie dotyczy: Nazwa bucketa. | — |
+| `dry_run` | nie dotyczy: Tryb przebiegu GC. | — |
+| `locked_until` | nie dotyczy: Dzierżawa przebiegu. | — |
+| `pages` | nie dotyczy: Licznik stron. | — |
+| `objects_scanned` | nie dotyczy: Licznik obiektów. | — |
+| `orphan_objects` | nie dotyczy: Licznik sierot. | — |
+| `orphan_queued` | nie dotyczy: Licznik sierot w kolejce. | — |
+| `missing_objects` | nie dotyczy: Licznik wierszy bez obiektu. | — |
+| `started_at` | nie dotyczy: Czas startu przebiegu. | — |
+| `finished_at` | nie dotyczy: Czas końca przebiegu. | — |
 
 ### `public.system_events`
 

@@ -50,7 +50,9 @@ describe('ApplicationScreeningAnswers', () => {
       'Opis',
     ]);
     expect(values).toEqual(['employerApplicationNo', 'Night', 'October 5, 2026', 'employerApplicationScreeningNoAnswer']);
-    expect(region).toHaveAttribute('aria-busy', 'false');
+    // Odpowiedzi mogą się wyrenderować, zanim przejście (useTransition) się zakończy —
+    // czekamy na koniec ładowania zamiast zakładać tę samą klatkę.
+    await waitFor(() => expect(region).toHaveAttribute('aria-busy', 'false'));
     expect(loadApplicationScreeningAnswers).toHaveBeenCalledWith('app-1');
 
     fireEvent.click(toggle);

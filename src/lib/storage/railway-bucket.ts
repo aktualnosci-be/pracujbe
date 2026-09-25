@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
   type GetObjectCommandOutput,
@@ -249,6 +250,86 @@ export function createRailwayBucket(options: RailwayBucketOptions) {
         return code === "NOT_FOUND"
           ? { ok: true, value: { deleted: true } }
           : failure(code);
+      } finally {
+        life.cleanup();
+      }
+    },
+    /**
+     * Jedna strona listy obiektów (#17, GC sierot) w kolejności kluczy, po `startAfter`.
+     * Zwraca tylko klucze w formacie CV (`objects`); inne klucze bucketu (także załączniki
+     * rozmów `att-*`, 0119) liczy (`foreign`) i
+     * pomija — GC nigdy ich nie dotyka. `nextStartAfter` = ostatni klucz strony (także obcy),
+     * `null` = koniec listy.
+     */
+    async list(input: {
+      startAfter?: string | null;
+      maxKeys?: number;
+      signal?: AbortSignal;
+    }): Promise<
+      StorageResult<{
+        objects: Array<{ key: string; lastModified: Date | null }>;
+        foreign: number;
+        nextStartAfter: string | null;
+      }>
+    > {
+      if (!client) return failure("NOT_CONFIGURED");
+      const maxKeys = input.maxKeys ?? 500;
+      if (
+        !Number.isSafeInteger(maxKeys) ||
+        maxKeys < 1 ||
+        maxKeys > 1000 ||
+        (input.startAfter != null &&
+          (typeof input.startAfter !== "string" ||
+            input.startAfter.length < 1 ||
+            input.startAfter.length > 500))
+      )
+        return failure("INVALID_INPUT");
+      const life = lifecycle(input.signal);
+      try {
+        if (life.signal.aborted) return failure("CANCELLED");
+        const result = await client.send(
+          new ListObjectsV2Command({
+            Bucket: bucket,
+            MaxKeys: maxKeys,
+            ...(input.startAfter ? { StartAfter: input.startAfter } : {}),
+          }),
+          { abortSignal: life.signal },
+        );
+        if (life.signal.aborted) return failure(life.code(null));
+        const objects: Array<{ key: string; lastModified: Date | null }> = [];
+        let foreign = 0;
+        let last: string | null = null;
+        for (const item of result.Contents ?? []) {
+          if (typeof item.Key !== "string") continue;
+          last = item.Key;
+          // Tylko klucze CV: GC (#17) porównuje je z `files.bucket = 'candidate-files'`.
+          // Załączniki rozmów (0119, `att-*`) mają inny bucket logiczny — dla GC są obce,
+          // inaczej trafiłyby do kolejki usuwania jako „sieroty”.
+          if (!KEY.test(item.Key)) {
+            foreign += 1;
+            continue;
+          }
+          const modified = item.LastModified;
+          objects.push({
+            key: item.Key,
+            lastModified:
+              modified instanceof Date && !Number.isNaN(modified.getTime())
+                ? modified
+                : null,
+          });
+        }
+        // Strona obcięta bez żadnego klucza nie przesunęłaby kursora — traktujemy jak awarię.
+        if (result.IsTruncated && last === null) return failure("UNAVAILABLE");
+        return {
+          ok: true,
+          value: {
+            objects,
+            foreign,
+            nextStartAfter: result.IsTruncated ? last : null,
+          },
+        };
+      } catch (error) {
+        return failure(life.code(error));
       } finally {
         life.cleanup();
       }
