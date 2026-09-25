@@ -11,7 +11,7 @@ import { captureError } from '@/lib/sentry';
 
 /**
  * Server Action deklaracji progu wieku kandydata (#492) — dla konta sprzed polityki albo po
- * podniesieniu progu. Zapis wyłącznie przez RPC `attest_candidate_age` (0110, SECURITY
+ * podniesieniu progu. Zapis wyłącznie przez RPC `attest_candidate_age` (0126, SECURITY
  * DEFINER): konto z sesji, deklaracja co najmniej na BIEŻĄCY próg (inaczej odmowa), bez daty
  * urodzenia. Zwracany stan pochodzi z bazy. Błędy → kod użytkowy (Invariant #8).
  */

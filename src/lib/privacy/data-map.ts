@@ -103,7 +103,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   account: {
     name: 'Konto i uwierzytelnianie',
     inCode: 'Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta.',
-    processors: [...HOSTING, 'resend', 'cloudflare-turnstile'],
+    processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
       'Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile).',
   },
@@ -123,38 +123,38 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   applications: {
     name: 'Aplikacje na oferty',
     inCode: 'Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe.',
-    processors: [...HOSTING, 'resend'],
+    processors: [...HOSTING, 'resend', 'emaillabs'],
     retentionInCode: null,
   },
   'guest-applications': {
     name: 'Aplikacja bez konta',
     inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto.',
-    processors: [...HOSTING, 'resend', 'cloudflare-turnstile'],
+    processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
       'purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach.',
   },
   'matching-search': {
     name: 'Dopasowanie i zapisane wyszukiwania',
     inCode: 'Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail.',
-    processors: [...HOSTING, 'resend'],
+    processors: [...HOSTING, 'resend', 'emaillabs'],
     retentionInCode: null,
   },
   'employer-contact': {
     name: 'Kontakt pracodawca–kandydat',
     inCode: 'Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata.',
-    processors: [...HOSTING, 'resend'],
+    processors: [...HOSTING, 'resend', 'emaillabs'],
     retentionInCode: 'Propozycje wygasają (expires_at), dane nie są usuwane.',
   },
   companies: {
     name: 'Konta firm, zespół i weryfikacja',
     inCode: 'Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy.',
-    processors: [...HOSTING, 'resend', 'vies'],
+    processors: [...HOSTING, 'resend', 'emaillabs', 'vies'],
     retentionInCode: 'Zaproszenia wygasają po 14 dniach (status), nie są usuwane.',
   },
   'email-notifications': {
     name: 'E-maile i powiadomienia',
     inCode: 'Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach.',
-    processors: [...HOSTING, 'resend'],
+    processors: [...HOSTING, 'resend', 'emaillabs'],
     retentionInCode: 'email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md).',
   },
   consents: {
@@ -165,8 +165,8 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'dsa-moderation': {
     name: 'Zgłoszenia treści (DSA) i moderacja',
-    inCode: 'Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron.',
-    processors: [...HOSTING, 'resend', 'cloudflare-turnstile'],
+    inCode: 'Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora).',
+    processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode: null,
   },
   'security-audit': {
@@ -655,13 +655,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['account', 'candidate-profile'],
     subjects: ['candidate'],
     columns: { profile_id: 'reference', min_age: 'identity', source: 'technical', locale: 'preferences', created_at: 'identity' },
-    note: 'Oświadczenie „mam co najmniej N lat” (0110, #492): sam próg i czas, bez daty urodzenia; niezmienne.',
+    note: 'Oświadczenie „mam co najmniej N lat” (0126, #492): sam próg i czas, bez daty urodzenia; niezmienne.',
   },
   'public.age_policy': {
     activities: ['account', 'security-audit'],
     subjects: ['admin'],
     columns: { updated_by: 'reference' },
-    note: 'Próg wieku kandydatów jako dane (0110, #492); zmienia go administrator z uzasadnieniem i audytem.',
+    note: 'Próg wieku kandydatów jako dane (0126, #492); zmienia go administrator z uzasadnieniem i audytem.',
   },
   'public.document_acceptances': {
     activities: ['consents', 'account'],
@@ -681,8 +681,10 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   // --- DSA i moderacja ------------------------------------------------------------------------
   'public.reports': {
     activities: ['dsa-moderation'],
-    subjects: ['reporter', 'employer'],
+    // Zgłoszenie wiadomości (0116): zgłaszający i nadawca to kandydat albo członek firmy.
+    subjects: ['reporter', 'employer', 'candidate'],
     columns: {
+      conversation_id: 'reference',
       reporter_id: 'reference',
       reason: 'moderation',
       details: 'correspondence',
@@ -693,7 +695,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       reporter_email: 'contact',
       reporter_locale: 'preferences',
       good_faith_at: 'consent',
-      target_snapshot: 'moderation',
+      // Dowód: stan oferty/firmy (DSA) albo treść zgłoszonej wiadomości i id nadawcy (0116).
+      target_snapshot: 'correspondence',
     },
   },
   'public.report_events': {
@@ -867,6 +870,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.certificates': DICTIONARY('certyfikaty'),
   'public.languages': DICTIONARY('języki'),
   'public.locations': DICTIONARY('miejscowości'),
+  'public.location_aliases': DICTIONARY('nazwy miejscowości PL/NL/FR/EN'),
   'public.occupations': DICTIONARY('zawody'),
   'public.skills': DICTIONARY('umiejętności'),
   'public.occupation_labels': DICTIONARY('etykiety zawodów ESCO'),

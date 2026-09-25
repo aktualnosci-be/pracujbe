@@ -67,7 +67,7 @@ import {
  * odpowiedzi blokuje wysyłkę przy pytaniu, a ten sam błąd z bazy (`questionId`) też tam trafia.
  *
  * Polityka wieku (#492): deklaracja „mam co najmniej {minAge} lat” (bez daty urodzenia) —
- * próg z bazy; bez deklaracji baza odrzuca zgłoszenie (0110).
+ * próg z bazy; bez deklaracji baza odrzuca zgłoszenie (0126).
  */
 
 const DIAL_CODES: ReadonlyArray<{ code: PhoneCountry; dial: string }> = [

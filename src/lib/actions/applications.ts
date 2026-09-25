@@ -49,7 +49,7 @@ function mapPgError(message: string | undefined): ErrorCode {
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
   // apply_to_job (0093): brak odpowiedzi na pytanie wymagane.
   if (m.includes('SCREENING_ANSWER_REQUIRED')) return 'SCREENING_ANSWER_REQUIRED';
-  // 0110 (#492): kandydat bez ważnej deklaracji progu wieku (np. po podniesieniu progu).
+  // 0126 (#492): kandydat bez ważnej deklaracji progu wieku (np. po podniesieniu progu).
   if (m.includes('AGE_ATTESTATION_REQUIRED')) return 'AGE_ATTESTATION_REQUIRED';
   // apply_to_job (0071): nowa próba na ofertę, na którą kandydat już aplikował (inny klucz).
   if (m.includes('APPLICATION_ALREADY_EXISTS')) return 'APPLICATION_ALREADY_EXISTS';

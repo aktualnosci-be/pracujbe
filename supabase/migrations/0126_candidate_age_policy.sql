@@ -1,7 +1,5 @@
 -- =============================================================================
--- 0110_candidate_age_policy.sql — polityka wieku kandydatów (#492), część techniczna.
---
--- NUMER TYMCZASOWY: koordynator nada ostateczny numer przy scalaniu.
+-- 0126_candidate_age_policy.sql — polityka wieku kandydatów (#492), część techniczna.
 --
 -- Decyzja o wariancie (tylko dorośli czy także 15–17 lat) należy do właściciela produktu
 -- po przeglądzie prawnym. Ta migracja NIE rozstrzyga prawa — daje mechanizm:

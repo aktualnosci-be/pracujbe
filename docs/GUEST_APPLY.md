@@ -55,7 +55,7 @@ sekcja GA98 (z kontrolami ujemnymi).
 ## Deklaracja wieku (#492)
 
 Formularz gościa ma deklarację „mam co najmniej {age} lat” (próg z `candidate_min_age()`,
-bez daty urodzenia). Akcja przekazuje `p_age_attested_min`; od migracji `0110`
+bez daty urodzenia). Akcja przekazuje `p_age_attested_min`; od migracji `0126`
 `submit_guest_application` to wrapper, który sprawdza deklarację i woła wewnętrzne
 `submit_guest_application_core` (bez EXECUTE dla ról aplikacji). Trigger na
 `guest_application_requests` zapisuje `age_attested_min`/`age_attested_at` i odrzuca

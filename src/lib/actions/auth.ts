@@ -290,7 +290,7 @@ async function signUp(
   try {
     await run((body) => auth.api.signUpEmail({ body, headers: requestHeaders }));
   } catch (error) {
-    // #492: trigger 0059/0110 odrzuca deklarację wieku poniżej BIEŻĄCEGO progu (zmieniony po
+    // #492: trigger 0059/0126 odrzuca deklarację wieku poniżej BIEŻĄCEGO progu (zmieniony po
     // wyświetleniu formularza) — własny kod zamiast INTERNAL.
     if (isAgeAttestationMessage(error)) {
       throw new AppError('AGE_ATTESTATION_REQUIRED', { cause: error, context: { reason: 'signup_age_policy' } });

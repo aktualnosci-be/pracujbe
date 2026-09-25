@@ -16,6 +16,7 @@ import type { z } from 'zod/v3';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AUTH_INPUT, AUTH_LABEL } from '@/components/auth/auth-page';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Link } from '@/i18n/navigation';
@@ -408,8 +409,9 @@ export function AuthForm({
 
         return (
           <div key={field.name} className="space-y-1.5">
-            <Label htmlFor={field.name}>{t(field.name)}</Label>
+            <Label htmlFor={field.name} className={AUTH_LABEL}>{t(field.name)}</Label>
             <Input
+              className={AUTH_INPUT}
               id={field.name}
               type={field.type}
               autoComplete={field.autoComplete}
@@ -499,7 +501,7 @@ export function AuthForm({
         />
       ) : null}
 
-      <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+      <Button type="submit" className="w-full" size="passport" disabled={isSubmitting}>
         {isSubmitting ? (
           <>
             <Loader2 className={cn('h-4 w-4 animate-spin')} aria-hidden="true" />

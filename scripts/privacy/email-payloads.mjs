@@ -114,7 +114,7 @@ export function extractEmailPayloads(files, emailTypes) {
   const known = new Set(emailTypes);
   const functions = new Map();
   const headerRe = /create\s+(?:or\s+replace\s+)?function\s+((?:[A-Za-z_]+\.)?[A-Za-z_][A-Za-z0-9_]*)\s*\(/gi;
-  // `alter function x(...) rename to y` (np. 0110: wrapper nad dawną funkcją) przenosi definicję.
+  // `alter function x(...) rename to y` (np. 0126: wrapper nad dawną funkcją) przenosi definicję.
   const renameRe = /alter\s+function\s+((?:[A-Za-z_]+\.)?[A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*rename\s+to\s+([A-Za-z_][A-Za-z0-9_]*)/gi;
   const bare = (name) => name.toLowerCase().replace(/^public\./, "");
   for (const { path, sql } of files) {

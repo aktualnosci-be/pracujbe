@@ -88,7 +88,7 @@ describe('Atomowe receipty rejestracji', () => {
     const events = await admin!.query('SELECT category, granted, source, locale, wording_version FROM public.email_consent_events WHERE profile_id=$1', [id]);
     expect(events.rows).toEqual(locale === 'fr'
       ? [{ category: 'marketing', granted: true, source: 'signup', locale, wording_version: `sha256:${'c'.repeat(64)}` }]
-      : []);    // #492: 0110 redefiniuje ten sam trigger — ścieżka v2 zapisuje też deklarację wieku.
+      : []);    // #492: 0126 redefiniuje ten sam trigger — ścieżka v2 zapisuje też deklarację wieku.
     const age = await admin!.query('SELECT min_age, source FROM public.candidate_age_attestations WHERE profile_id=$1', [id]);
     expect(age.rows).toEqual([{ min_age: 18, source: 'signup' }]);
   });
@@ -110,7 +110,7 @@ describe('Atomowe receipty rejestracji', () => {
       expect((await admin!.query('SELECT id FROM public.document_acceptances WHERE profile_id=$1', [id])).rows).toHaveLength(0);
     });
 
-  // #492 (0110): kandydat deklaruje próg wieku w tej samej transakcji co konto.
+  // #492 (0126): kandydat deklaruje próg wieku w tej samej transakcji co konto.
   it('zapisuje deklarację progu wieku kandydata (bez daty urodzenia)', async () => {
     const id = await insert({ role: 'candidate', locale: 'nl', agree_terms: true, signup_receipt_version: 1, age_min_attested: 18 });
     const rows = await admin!.query('SELECT min_age, source, locale FROM public.candidate_age_attestations WHERE profile_id=$1', [id]);

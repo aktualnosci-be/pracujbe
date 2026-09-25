@@ -236,9 +236,9 @@ on conflict (id) do update set
   last_seen_at = excluded.last_seen_at;
 
 -- ==========================================================================
--- candidate_age_attestations - deklaracja progu wieku kont demo (#492, 0110)
+-- candidate_age_attestations - deklaracja progu wieku kont demo (#492, 0126)
 -- ==========================================================================
--- Od 0110 aplikacja, propozycja i widocznosc profilu wymagaja deklaracji
+-- Od 0126 aplikacja, propozycja i widocznosc profilu wymagaja deklaracji
 -- „mam co najmniej N lat” (bez daty urodzenia). Konta demo deklaruja 18.
 insert into candidate_age_attestations (profile_id, min_age, source, locale)
 select p.id, 18, 'signup', p.signup_locale

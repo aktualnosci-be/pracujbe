@@ -2,7 +2,7 @@
  * Polityka wieku kandydatów (#492) — granice i wartość awaryjna, bez zależności (moduł trafia
  * do JS formularzy publicznych, więc bez Zoda — #390).
  *
- * Próg jest DANYMI w bazie (`public.age_policy`, migracja 0110), nie stałą w kodzie. Tu są
+ * Próg jest DANYMI w bazie (`public.age_policy`, migracja 0126), nie stałą w kodzie. Tu są
  * tylko granice zakresu (takie same jak CHECK w bazie) i wartość awaryjna, gdy odczyt progu
  * się nie uda. Awaryjne 18 = górna granica zakresu, więc deklaracja „mam co najmniej 18 lat”
  * spełnia każdy dopuszczalny próg — błąd odczytu nie może obniżyć ochrony.

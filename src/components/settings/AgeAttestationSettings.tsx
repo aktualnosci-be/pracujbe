@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
  * AgeAttestationSettings — deklaracja progu wieku w ustawieniach kandydata (#492).
  *
  * Dla konta sprzed polityki wieku albo po podniesieniu progu: bez ważnej deklaracji baza
- * odrzuca aplikowanie i włączenie widoczności profilu (0110). Zbieramy tylko oświadczenie
+ * odrzuca aplikowanie i włączenie widoczności profilu (0126). Zbieramy tylko oświadczenie
  * „mam co najmniej {minAge} lat” — bez daty urodzenia. Stan po zapisie pochodzi z serwera;
  * jedno żądanie naraz, błąd przy polu i `role="alert"`, sukces `role="status"` (Invariant #11).
  */

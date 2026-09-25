@@ -15,7 +15,7 @@ co już działa technicznie, żeby nie trzeba było tego odtwarzać z kodu.
 
 ## 2. Co jest wdrożone technicznie (bez decyzji prawnej)
 
-Migracja `0110_candidate_age_policy.sql` (numer tymczasowy) i zmiany w aplikacji:
+Migracja `0126_candidate_age_policy.sql` i zmiany w aplikacji:
 
 - **Próg jako dane.** Tabela `age_policy` (jeden wiersz): `candidate_min_age` w zakresie
   13–18, domyślnie **18** (najbardziej zachowawczy wariant z issue), z flagą

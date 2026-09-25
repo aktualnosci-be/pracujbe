@@ -22,7 +22,7 @@ import en from '@/messages/en.json';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * Polityka wieku kandydatów (#492): próg jako dane (0110), deklaracja bez daty urodzenia,
+ * Polityka wieku kandydatów (#492): próg jako dane (0126), deklaracja bez daty urodzenia,
  * akcja deklaracji w ustawieniach i sekcja „Wiek”. Egzekwowanie w bazie: rls.sql AGE492.
  */
 

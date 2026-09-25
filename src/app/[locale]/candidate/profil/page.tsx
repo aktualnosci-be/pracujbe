@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { MapPin, Pencil } from 'lucide-react';
+import { FileText, MapPin, Pencil } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
@@ -28,6 +28,7 @@ import { getCandidateProfileSummary, getCandidatePassport } from '@/lib/data/can
 import { loadCandidateFiles } from '@/lib/data/candidate-files';
 import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 import { getProfileLevelTitle } from '@/lib/profile-completeness';
+import { isCvImportEnabled } from '@/lib/cv-import/config';
 
 /**
  * Panel kandydata — Profil. Wygląd: `#people/profile` z prototypu „04 Ludzie i praca”
@@ -93,10 +94,19 @@ export default async function CandidateProfilePage({
       {/* `profileScreen()` z prototypu: `.eyebrow`, `.extended h1`, `.dash-intro` + akcja edycji. */}
       <div className="flex min-w-0 flex-wrap items-end justify-between gap-5">
         <CandidatePageHeader eyebrow={tp('eyebrow')} title={tp('title')} intro={tp('intro')} />
-        <Link href="/candidate/onboarding" className={cn(BTN_PRIMARY, 'mb-[25px]')}>
-          <Pencil className="size-4 shrink-0" aria-hidden="true" />
-          {tp('edit')}
-        </Link>
+        <div className="mb-[25px] flex flex-wrap gap-3">
+          {/* Import CV przez AI (#487) — tylko za flagą; ręczna edycja zawsze dostępna. */}
+          {isCvImportEnabled() ? (
+            <Link href="/candidate/profil/import-cv" className={BTN_SECONDARY}>
+              <FileText className="size-4 shrink-0" aria-hidden="true" />
+              {tp('importCv')}
+            </Link>
+          ) : null}
+          <Link href="/candidate/onboarding" className={BTN_PRIMARY}>
+            <Pencil className="size-4 shrink-0" aria-hidden="true" />
+            {tp('edit')}
+          </Link>
+        </div>
       </div>
 
       {/* `.profile-banner` */}

@@ -3,7 +3,7 @@ import 'server-only';
 /**
  * Polityka wieku kandydatów (#492) — odczyty.
  *
- * `getCandidateMinAge` — bieżący próg z `public.candidate_min_age()` (0110). Odczyt jako gość
+ * `getCandidateMinAge` — bieżący próg z `public.candidate_min_age()` (0126). Odczyt jako gość
  * przez pulę ograniczonego loginu (`DATABASE_APP_URL`, rola anon) — bez cookies, więc strony
  * ISR (szczegół oferty) zostają statyczne. Bez puli albo po błędzie odczytu → wartość
  * awaryjna 18 (górna granica zakresu), więc formularz nigdy nie pokaże progu niższego niż

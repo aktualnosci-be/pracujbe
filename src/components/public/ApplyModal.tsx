@@ -128,7 +128,7 @@ export interface ApplyModalProps {
   triggerHint?: string;
   triggerVariant?: 'default' | 'outline';
   triggerClassName?: string;
-  triggerSize?: 'default' | 'lg';
+  triggerSize?: 'default' | 'lg' | 'passport';
   /** Oferta z zestawu demonstracyjnego — modal pokazuje komunikat zamiast formularza. */
   demo?: boolean;
   /** Pytania screeningowe oferty (#101); brak = formularz bez pytań. */

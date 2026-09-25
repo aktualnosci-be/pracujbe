@@ -264,7 +264,7 @@ export async function claimGuestApplication(locale: string): Promise<GuestClaimR
       if (message.includes('EMAIL_NOT_VERIFIED')) return { ok: false, error: 'EMAIL_NOT_VERIFIED' };
       if (message.includes('CLAIM_EXPIRED')) return { ok: false, error: 'CLAIM_EXPIRED' };
       if (message.includes('APPLICATION_ALREADY_EXISTS')) return { ok: false, error: 'APPLICATION_ALREADY_EXISTS' };
-      // 0110 (#492): konto przejmujące bez ważnej deklaracji progu wieku.
+      // 0126 (#492): konto przejmujące bez ważnej deklaracji progu wieku.
       if (message.includes('AGE_ATTESTATION_REQUIRED')) return { ok: false, error: 'AGE_ATTESTATION_REQUIRED' };
       if (message.includes('PERMISSION_DENIED')) return { ok: false, error: 'PERMISSION_DENIED' };
       if (message.includes('NOT_FOUND')) return { ok: false, error: 'NOT_FOUND' };
