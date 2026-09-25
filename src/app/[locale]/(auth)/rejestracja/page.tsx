@@ -10,11 +10,13 @@ import {
 } from '@/components/auth/auth-page';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { safeNextPath } from '@/lib/auth/next-path';
+import { getCandidateMinAge } from '@/lib/data/age-policy';
 
 /**
  * Rejestracja kandydata (wybór roli). Formularz kliencki (AuthForm) wywołuje server action
  * `registerCandidate`, które zapisuje `preferred_locale` = bieżące locale i po sukcesie
  * przekierowuje do strony potwierdzenia e-maila. Link kieruje pracodawców do ich rejestracji.
+ * Deklaracja progu wieku (#492) pokazuje próg z bazy (`getCandidateMinAge`).
  */
 
 type PageProps = {
@@ -39,6 +41,8 @@ export default async function RegisterCandidatePage({ params, searchParams }: Pa
   const next = safeNextPath((await searchParams)['next']);
 
   const t = await getTranslations('auth');
+  // #492: próg deklaracji wieku z bazy (dane, nie stała); błąd odczytu → 18.
+  const candidateMinAge = await getCandidateMinAge();
 
   return (
     <AuthPage>
@@ -46,7 +50,7 @@ export default async function RegisterCandidatePage({ params, searchParams }: Pa
         <AuthPageTitle>{t('registerCandidateTitle')}</AuthPageTitle>
       </AuthPageHeader>
       <AuthPaper>
-        <AuthForm variant="registerCandidate" next={next} />
+        <AuthForm variant="registerCandidate" next={next} candidateMinAge={candidateMinAge} />
 
         <div className="space-y-3 text-sm">
           <Link

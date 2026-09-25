@@ -123,6 +123,36 @@ describe('Czujki operacyjne (#47)', () => {
     expect(keys.has('newSuppressionsLast24h')).toBe(true);
     for (const key of keys) expect(sql, key).toContain(`'${key}'`);
   });
+
+  it('#574: obiekt storage czeka > 24 h albo dead-letter = alarm; bez sekcji (baza sprzed 0127) = ok', () => {
+    const m: OpsMetrics = { ...healthy(), storageDeletion: { pending: 2, oldestPendingAgeSeconds: 60, deadLetters: 0 } };
+    expect(evaluateOps(m)).toEqual({ status: 'ok', alerts: [], warnings: [] });
+    m.storageDeletion!.oldestPendingAgeSeconds = OPS_THRESHOLDS.storageDeletionOldestSeconds;
+    expect(evaluateOps(m).alerts).toEqual([]);
+    m.storageDeletion!.oldestPendingAgeSeconds += 1;
+    expect(evaluateOps(m).alerts).toEqual(['storage_deletion_age']);
+    m.storageDeletion = { pending: 0, oldestPendingAgeSeconds: 0, deadLetters: 1 };
+    expect(evaluateOps(m)).toMatchObject({ status: 'alert', alerts: ['storage_deletion_dead_letter'] });
+    expect(parseOpsMetrics(healthy())).not.toBeNull();
+    expect(parseOpsMetrics({ ...healthy(), storageDeletion: { pending: -1, oldestPendingAgeSeconds: 0, deadLetters: 0 } }))
+      .toBeNull();
+  });
+});
+
+describe('Kolejka usuwania obiektów storage (#574)', () => {
+  it('obiekt czeka > 24 h albo dead-letter = alarm; bez sekcji (baza sprzed 0127) = ok', () => {
+    const m: OpsMetrics = { ...healthy(), storageDeletion: { pending: 2, oldestPendingAgeSeconds: 60, deadLetters: 0 } };
+    expect(evaluateOps(m)).toEqual({ status: 'ok', alerts: [], warnings: [] });
+    m.storageDeletion!.oldestPendingAgeSeconds = OPS_THRESHOLDS.storageDeletionOldestSeconds;
+    expect(evaluateOps(m).alerts).toEqual([]);
+    m.storageDeletion!.oldestPendingAgeSeconds += 1;
+    expect(evaluateOps(m).alerts).toEqual(['storage_deletion_age']);
+    m.storageDeletion = { pending: 0, oldestPendingAgeSeconds: 0, deadLetters: 1 };
+    expect(evaluateOps(m)).toMatchObject({ status: 'alert', alerts: ['storage_deletion_dead_letter'] });
+    expect(parseOpsMetrics(healthy())).not.toBeNull();
+    expect(parseOpsMetrics({ ...healthy(), storageDeletion: { pending: -1, oldestPendingAgeSeconds: 0, deadLetters: 0 } }))
+      .toBeNull();
+  });
 });
 
 describe('Czujki poczty (#44)', () => {

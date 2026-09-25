@@ -89,3 +89,12 @@ export function verifyAlertOffToken(
 export function alertOffPageUrl(site: string, locale: string, token: string): string {
   return `${site}/${locale}/wypisz-alert#t=${encodeURIComponent(token)}`;
 }
+
+/**
+ * Adres one-click (RFC 8058) dla nagłówka `List-Unsubscribe` digestu alertu — wyłącza TYLKO
+ * ten alert (POST `/api/email/unsubscribe-alert`), nie całą kategorię `job_matches`. `l` =
+ * język odbiorcy, wyłącznie dla przekierowania zwykłego GET na stronę potwierdzenia.
+ */
+export function alertOffOneClickUrl(site: string, locale: string, token: string): string {
+  return `${site}/api/email/unsubscribe-alert?t=${encodeURIComponent(token)}&l=${encodeURIComponent(locale)}`;
+}

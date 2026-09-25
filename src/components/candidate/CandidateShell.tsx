@@ -116,6 +116,7 @@ export function CandidateShell({
       notificationError={notificationError}
       notifItems={notifItems}
       unreadMessages={unreadMessages}
+      notificationsHref="/candidate/powiadomienia"
     >
       {children}
     </DashboardShell>

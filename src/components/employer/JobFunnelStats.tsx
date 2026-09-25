@@ -70,6 +70,10 @@ export function JobFunnelStats({
         <p className="text-sm text-muted-foreground" data-testid="job-funnel-range">
           {t('range', { from: day(range.from), to: day(range.to) })}
         </p>
+        {/* #575: zdarzenia lejka pochodzą tylko od osób ze zgodą analityczną. */}
+        <p className="text-sm text-muted-foreground" data-testid="job-funnel-consent-note">
+          {t('consentNote')}
+        </p>
       </div>
 
       <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-3">

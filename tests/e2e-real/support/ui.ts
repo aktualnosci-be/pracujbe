@@ -59,7 +59,13 @@ export async function registerThroughForm(page: Page, options: {
   await page.getByLabel(t('email'), { exact: true }).fill(email);
   await page.getByLabel(t('password'), { exact: true }).fill(PASSWORD);
   await page.getByLabel(t('passwordConfirm'), { exact: true }).fill(PASSWORD);
-  await page.getByRole('checkbox', { name: richLabel(t('agreeTermsLinks')) }).check();
+  // #493: regulamin i informacja o prywatności to osobne pola (zgoda marketingowa zostaje pusta).
+  await page.getByRole('checkbox', { name: richLabel(t('termsAcceptLinks')) }).check();
+  await page.getByRole('checkbox', { name: richLabel(t('privacyNoticeAckLinks')) }).check();
+  // #492: kandydat deklaruje próg wieku (bez daty urodzenia).
+  if (!company) {
+    await page.getByRole('radio', { name: t('ageBandAdult').replace('{age}', '18'), exact: true }).check();
+  }
   await page.getByRole('button', { name: t('submitRegister'), exact: true }).click();
   await page.waitForURL(`**/${locale}/potwierdzenie`);
 }

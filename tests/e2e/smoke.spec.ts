@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { expect, test, type Page } from '@playwright/test';
-import { E2E_GA_MEASUREMENT_ID } from './fixtures/trackers';
+import { E2E_CF_ANALYTICS_TOKEN } from './fixtures/trackers';
 
 /**
  * Testy dymne (smoke) — działają na danych demonstracyjnych (bez Supabase).
@@ -9,8 +9,8 @@ import { E2E_GA_MEASUREMENT_ID } from './fixtures/trackers';
  * Zakres:
  *  1. Strona główna /pl: obecność nagłówka (heroTitle) i wyszukiwarki.
  *  2. Lista ofert /pl/oferty-pracy: wyniki (co najmniej jedna oferta).
- *  3. Baner cookies (Invariant #7): przed zgodą i po „Tylko niezbędne" zero żądań GA/Meta;
- *     po „Akceptuj wszystkie" trackery się ładują (dowód, że test je widzi).
+ *  3. Baner cookies (Invariant #7): przed zgodą i po „Tylko niezbędne" zero żądań do beaconu
+ *     Cloudflare Web Analytics; po „Akceptuj wszystkie" beacon się ładuje (dowód, że test go widzi).
  */
 
 type Messages = {
@@ -74,42 +74,34 @@ test('lista ofert /pl/oferty-pracy renderuje wyniki', async ({ page }) => {
 });
 
 /**
- * Strażnik Invariantu #7 (zero trackingu przed zgodą), issue #234.
+ * Strażnik Invariantu #7 (zero trackingu przed zgodą), issue #234/#570.
  *
- * Build E2E ma testowe ID GA/Meta (playwright.config.ts), więc komponent `Analytics`
- * realnie wyrenderowałby trackery. Wszystkie żądania do hostów trackerów są przechwytywane
- * i blokowane (`page.route`) — liczymy je, ale nic nie wychodzi do Google/Meta.
+ * Build E2E ma testowy token Cloudflare Web Analytics (playwright.config.ts), więc komponent
+ * `Analytics` realnie wyrenderowałby beacon. Wszystkie żądania do cloudflareinsights.com są
+ * przechwytywane i blokowane (`page.route`) — liczymy je, ale nic nie wychodzi do dostawcy.
  */
-const TRACKER_HOSTS = /^https:\/\/(www\.googletagmanager\.com|[a-z0-9.-]*google-analytics\.com|connect\.facebook\.net|www\.facebook\.com)\//;
-const GTM_SCRIPT = 'script[src*="googletagmanager.com"]';
+const TRACKER_HOSTS = /^https:\/\/([a-z0-9.-]*\.)?cloudflareinsights\.com\//;
+const CF_BEACON_SCRIPT = 'script#cf-web-analytics';
 
 // Okno obserwacji: skrypty `afterInteractive` wstrzykiwane są asynchronicznie po hydratacji,
 // więc samo `count()` tuż po kliknięciu mogłoby je przegapić.
 const QUIET_WINDOW_MS = 3_000;
 
-async function trackTrackerRequests(page: Page): Promise<{ gtm: string[]; meta: string[] }> {
-  const seen = { gtm: [] as string[], meta: [] as string[] };
+async function trackTrackerRequests(page: Page): Promise<string[]> {
+  const seen: string[] = [];
   await page.route(TRACKER_HOSTS, async (route) => {
-    const url = route.request().url();
-    if (url.includes('googletagmanager.com') || url.includes('google-analytics.com')) seen.gtm.push(url);
-    else seen.meta.push(url);
-    // Pusty skrypt zamiast realnej odpowiedzi — zero ruchu do dostawców.
+    seen.push(route.request().url());
+    // Pusty skrypt zamiast realnej odpowiedzi — zero ruchu do dostawcy.
     await route.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
   });
   return seen;
 }
 
-async function expectNoTracking(page: Page, seen: { gtm: string[]; meta: string[] }) {
+async function expectNoTracking(page: Page, seen: string[]) {
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(QUIET_WINDOW_MS);
-  expect(seen.gtm, 'żądania GA przed zgodą').toEqual([]);
-  expect(seen.meta, 'żądania Meta Pixel przed zgodą').toEqual([]);
-  await expect(page.locator(GTM_SCRIPT)).toHaveCount(0);
-  const globals = await page.evaluate(() => {
-    const w = window as unknown as { gtag?: unknown; fbq?: unknown };
-    return { gtag: typeof w.gtag, fbq: typeof w.fbq };
-  });
-  expect(globals).toEqual({ gtag: 'undefined', fbq: 'undefined' });
+  expect(seen, 'żądania do Cloudflare Web Analytics przed zgodą').toEqual([]);
+  await expect(page.locator(CF_BEACON_SCRIPT)).toHaveCount(0);
 }
 
 test('baner cookies: przed zgodą i po „Tylko niezbędne" analityka się nie ładuje', async ({
@@ -136,7 +128,7 @@ test('baner cookies: przed zgodą i po „Tylko niezbędne" analityka się nie �
   await expectNoTracking(page, seen);
 });
 
-test('baner cookies: po „Akceptuj wszystkie" GA i Meta Pixel się ładują (test widzi trackery)', async ({
+test('baner cookies: po „Akceptuj wszystkie" beacon Cloudflare Web Analytics się ładuje (test go widzi)', async ({
   page,
 }) => {
   const seen = await trackTrackerRequests(page);
@@ -147,10 +139,12 @@ test('baner cookies: po „Akceptuj wszystkie" GA i Meta Pixel się ładują (te
   await banner.getByRole('button', { name: pl.cookies.acceptAll }).click();
   await expect(banner).toBeHidden();
 
-  // Dowód, że build ma testowe ID, a przechwytywanie działa — inaczej scenariusz ujemny
+  // Dowód, że build ma testowy token, a przechwytywanie działa — inaczej scenariusz ujemny
   // przechodziłby zawsze (issue #234).
-  await expect.poll(() => seen.gtm.length, { message: 'żądanie GA po zgodzie' }).toBeGreaterThan(0);
-  expect(seen.gtm.some((url) => url.includes(E2E_GA_MEASUREMENT_ID))).toBe(true);
-  await expect(page.locator(GTM_SCRIPT)).toHaveCount(1);
-  await expect.poll(() => seen.meta.length, { message: 'żądanie Meta Pixel po zgodzie' }).toBeGreaterThan(0);
+  await expect.poll(() => seen.length, { message: 'żądanie do beaconu po zgodzie' }).toBeGreaterThan(0);
+  expect(seen.some((url) => url.includes('beacon.min.js'))).toBe(true);
+  const script = page.locator(CF_BEACON_SCRIPT);
+  await expect(script).toHaveCount(1);
+  // Token jest w atrybucie `data-cf-beacon` (JSON), nie w adresie skryptu.
+  expect(await script.getAttribute('data-cf-beacon')).toContain(E2E_CF_ANALYTICS_TOKEN);
 });
