@@ -839,8 +839,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   kluczem nie nadpisuje odpowiedzi. Odczyt odpowiedzi: kandydat i recruiter+ firmy oferty; widok
   w szczególe zgłoszenia. Bez reguł dyskwalifikujących i bez LLM (osobny etap). Dowód: `rls.sql`
   sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
-  `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
-  zgłoszeń (RLS gotowe).
+  `employer-application-screening`. Historia zgłoszeń kandydata: karta z zapisanymi
+  odpowiedziami ma rozwijane „Moje odpowiedzi” (`ApplicationScreeningAnswers`; licznik z
+  podzapytania strony, treść przy pierwszym rozwinięciu przez `loadApplicationScreeningAnswers`
+  → `getMyApplicationScreeningAnswers` pod sesją/RLS, snapshot w języku widza z fallbackiem,
+  błąd z ponowieniem). Dowód: `portal-candidate.test.ts` (PG16), unit
+  `candidate-application-answers`, E2E `candidate-application-answers`, `panel-a11y`.
   Kontrola treści pytań przed publikacją (#497, migracja `0103`): detektor
   deterministyczny (wzorce PL/NL/FR/EN, bez AI) w bazie (`screening_fold`,
   `screening_risk_patterns`, `screening_question_risk`) sprawdza treść i KAŻDĄ opcję we
