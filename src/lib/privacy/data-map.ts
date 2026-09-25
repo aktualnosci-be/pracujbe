@@ -204,9 +204,11 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   backups: {
     name: 'Kopie zapasowe bazy',
-    inCode: 'scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy.',
-    processors: ['railway'],
-    retentionInCode: 'BACKUP_RETENTION najnowszych kopii (domyślnie 14).',
+    inCode:
+      'scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy; kopia i manifest wysyłane do prywatnego bucketu Cloudflare R2 (BACKUP_S3_*, #569).',
+    processors: ['railway', 'cloudflare-r2'],
+    retentionInCode:
+      'BACKUP_RETENTION najnowszych kopii (domyślnie 14) lokalnie i w buckecie R2; opcjonalnie BACKUP_S3_MAX_AGE_DAYS (najnowsza kopia zostaje zawsze).',
   },
   'billing-disabled': {
     name: 'Płatności (wyłączone)',
@@ -574,7 +576,16 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.company_invitations': {
     activities: ['companies'],
     subjects: ['invitee', 'employer'],
-    columns: { email: 'contact', role: 'identity', invited_by: 'reference', responded_by: 'reference' },
+    columns: {
+      email: 'contact',
+      role: 'identity',
+      invited_by: 'reference',
+      responded_by: 'reference',
+      locale: 'preferences',
+      signup_token_hash: 'credentials',
+      signup_token_used_at: 'credentials',
+    },
+    note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0121); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
   },
   'public.company_vies_checks': {
     activities: ['companies'],

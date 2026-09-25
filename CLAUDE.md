@@ -835,8 +835,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   ≤ 10 min, audyt). Rola `member`: zamiast „Dodaj ofertę”, edycji i cyklu życia ofert —
   wyjaśnienie (`RecruiterOnlyNote`). Każda zmiana → `audit_logs`. Dowód: `rls.sql` sekcja TM403;
   unit `team-actions`, `team-members-ui`; E2E `employer-team.spec`.
-  **Otwarte:** e-mail zaproszenia dla adresu BEZ konta (brak profilu = brak locale odbiorcy
-  wg Invariantu #1; wymaga wyboru języka zaproszenia i linku rejestracji z tokenem).
+  Adres BEZ konta (migracja `0121`): zapraszający wybiera język zaproszenia (PL/NL/FR/EN,
+  domyślnie język strony — decyzja: brak profilu odbiorcy = jedyny znany język, Invariant #1;
+  konto z profilem dostaje e-mail w języku profilu), `company_invitations.locale`. E-mail
+  `teamInvitationSignup` z linkiem `/{locale}/rejestracja-pracodawca#token=` — token =
+  HMAC(`GUEST_APPLY_SECRET`, `team-invite:`+nonce) (`src/lib/team/invite-token.ts`), w bazie
+  tylko hash (czyszczony po rozstrzygnięciu), nonce w payloadzie; odświeżenie zaproszenia
+  wymienia token; najwyżej 3 linki na adres na dobę. Strona rejestracji (`EmployerSignupEntry`)
+  czyta token z fragmentu, podgląd `team_invitation_signup_preview` (service_role) → formularz
+  bez nazwy firmy, adres z zaproszenia; `registerInvitedEmployer` zużywa token
+  (`consume_team_invitation_signup`, raz, tylko ten adres). Konto powstaje bez firmy, a
+  zaproszenie czeka w panelu po weryfikacji adresu. Wynik RPC niezależny od konta. Dowód:
+  `rls.sql` sekcja TI403 (kontrole ujemne), unit `team-invitation-signup-*`, E2E `employer-team`.
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
@@ -962,7 +972,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   stary format `?token=` odrzucany w middleware (303 bez cookie, „link nieprawidłowy”) —
   `guest-legacy-link.test` z kontrolą ujemną.
   Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture).
-  Zmiana statusu (0121): `transition_application` → `enqueue_guest_status_email` →
+  Zmiana statusu (0122): `transition_application` → `enqueue_guest_status_email` →
   `guestStatusChanged` w języku formularza (`guest_application_requests.locale` — jawnie
   zapisany język odbiorcy bez profilu, Invariant #1), klucz = id wiersza historii, tylko
   potwierdzone zgłoszenie, nieusunięta aplikacja bez konta, adres bez blokady (#44); wiersz
@@ -1347,6 +1357,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   opóźnienie maintenance, 80% połączeń) → 503 `alert` / 200 = recovery. Kopia zaszyfrowana `age`
   z manifestem i retencją (`scripts/db/backup.sh`) + odtworzenie z porównaniem sum
   (`restore-backup.sh`), test `npm run test:backup` (PG16, 8 kontroli ujemnych; nie w CI).
+  Kopia poza Railwayem (#569): `backup.sh` z `BACKUP_S3_*` wysyła artefakt, potem manifest do
+  prywatnego bucketu Cloudflare R2 (API S3, region `auto`; `scripts/db/lib/backup-s3.mjs` + czysta
+  logika `backup-s3-core.mjs`; odmowa, gdy wskazuje bucket/klucz CV `AWS_*`) i przycina retencję
+  w buckecie (`BACKUP_RETENTION`, opcjonalnie `BACKUP_S3_MAX_AGE_DAYS`; najnowsza kompletna
+  zostaje). `restore-backup.sh` z `RESTORE_S3_OBJECT=latest` pobiera kluczem odczytu. Czujka
+  `backup` w `/api/health/ops` (`src/lib/ops/backup-freshness.ts`, klucz odczytu
+  `BACKUP_S3_READ_*`): każdy stan poza `ok` — też `unconfigured` i klucz zapisu w usłudze web
+  (`misconfigured`) — to alarm `backup_*`. Obraz usługi cron `docker/backup/Dockerfile` (node 22,
+  pg 18, `age`). Dowód: `backup-r2.test` (atrapa S3 `tests/helpers/fake-s3-server.mjs`, klucz
+  odczytu nie zapisze), `backup-r2-image.test`, `ops-health-route.test`, scenariusz R2 w
+  `npm run test:backup`. **Do zrobienia (właściciel):** bucket bez domeny publicznej i `r2.dev`,
+  dwa tokeny, usługa `backup` w Railway, zmienne (`BACKUP_RESTORE.md`).
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,

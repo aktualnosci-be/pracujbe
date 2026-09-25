@@ -36,6 +36,7 @@ export const EMAIL_TYPES = [
   'companyRejected',
   'companySuspended',
   'teamInvitation',
+  'teamInvitationSignup',
   'jobMatch',
   'guestApplicationConfirm',
   'guestApplicationSent',
@@ -1049,6 +1050,67 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
         preview: 'You have been invited to join the {companyName} team on Pracuj.be.',
         body: 'You have been invited to join the {companyName} team on Pracuj.be. Sign in to your employer account and open the “Team” tab to join or decline the invitation.',
       },
+    },
+  },
+
+  // 0121: adres BEZ konta — język zaproszenia wybrany przez zapraszającego (Invariant #1:
+  // odbiorca nie ma profilu), link rejestracji pracodawcy z jednorazowym tokenem.
+  teamInvitationSignup: {
+    pl: {
+      subject: 'Zaproszenie do zespołu firmy {companyName}',
+      preview: '{inviterName} zaprasza Cię do zespołu {companyName} w Pracuj.be.',
+      heading: 'Zaproszenie do zespołu',
+      body: '{inviterName} zaprasza Cię do zespołu firmy {companyName} w Pracuj.be.\n\nZałóż konto pracodawcy na ten adres e-mail i potwierdź go — zaproszenie będzie czekać w Twoim panelu, w zakładce „Zespół”. Tam dołączysz do firmy albo odrzucisz zaproszenie.',
+      cta: 'Załóż konto i zobacz zaproszenie',
+      highlight: '{companyName}',
+      outro: 'Link działa raz i jest ważny 14 dni. Jeśli nie znasz tej firmy, zignoruj tę wiadomość — bez rejestracji nic się nie stanie.',
+      anonymous: {
+        preview: 'Masz zaproszenie do zespołu {companyName} w Pracuj.be.',
+        body: 'Masz zaproszenie do zespołu firmy {companyName} w Pracuj.be.\n\nZałóż konto pracodawcy na ten adres e-mail i potwierdź go — zaproszenie będzie czekać w Twoim panelu, w zakładce „Zespół”. Tam dołączysz do firmy albo odrzucisz zaproszenie.',
+      },
+      footerNote: 'Otrzymujesz tę wiadomość, ponieważ ten adres e-mail został zaproszony do zespołu firmy w Pracuj.be.',
+    },
+    nl: {
+      subject: 'Uitnodiging voor het team van {companyName}',
+      preview: '{inviterName} nodigt je uit voor het team van {companyName} op Pracuj.be.',
+      heading: 'Uitnodiging voor het team',
+      body: '{inviterName} nodigt je uit voor het team van {companyName} op Pracuj.be.\n\nMaak een werkgeversaccount aan met dit e-mailadres en bevestig het — de uitnodiging wacht dan in je dashboard, op het tabblad ‘Team’. Daar neem je deel aan het bedrijf of weiger je de uitnodiging.',
+      cta: 'Account aanmaken en uitnodiging bekijken',
+      highlight: '{companyName}',
+      outro: 'De link werkt één keer en is 14 dagen geldig. Ken je dit bedrijf niet? Negeer dan dit bericht — zonder registratie gebeurt er niets.',
+      anonymous: {
+        preview: 'Je bent uitgenodigd voor het team van {companyName} op Pracuj.be.',
+        body: 'Je bent uitgenodigd voor het team van {companyName} op Pracuj.be.\n\nMaak een werkgeversaccount aan met dit e-mailadres en bevestig het — de uitnodiging wacht dan in je dashboard, op het tabblad ‘Team’. Daar neem je deel aan het bedrijf of weiger je de uitnodiging.',
+      },
+      footerNote: 'Je ontvangt dit bericht omdat dit e-mailadres is uitgenodigd voor het team van een bedrijf op Pracuj.be.',
+    },
+    fr: {
+      subject: 'Invitation à rejoindre l’équipe de {companyName}',
+      preview: '{inviterName} vous invite à rejoindre l’équipe de {companyName} sur Pracuj.be.',
+      heading: 'Invitation à rejoindre une équipe',
+      body: '{inviterName} vous invite à rejoindre l’équipe de {companyName} sur Pracuj.be.\n\nCréez un compte employeur avec cette adresse e-mail et confirmez-la : l’invitation vous attendra dans votre espace, dans l’onglet « Équipe ». Vous pourrez y rejoindre l’entreprise ou refuser l’invitation.',
+      cta: 'Créer un compte et voir l’invitation',
+      highlight: '{companyName}',
+      outro: 'Le lien fonctionne une seule fois et est valable 14 jours. Si vous ne connaissez pas cette entreprise, ignorez ce message : sans inscription, rien ne se passera.',
+      anonymous: {
+        preview: 'Vous êtes invité(e) à rejoindre l’équipe de {companyName} sur Pracuj.be.',
+        body: 'Vous êtes invité(e) à rejoindre l’équipe de {companyName} sur Pracuj.be.\n\nCréez un compte employeur avec cette adresse e-mail et confirmez-la : l’invitation vous attendra dans votre espace, dans l’onglet « Équipe ». Vous pourrez y rejoindre l’entreprise ou refuser l’invitation.',
+      },
+      footerNote: 'Vous recevez ce message car cette adresse e-mail a été invitée à rejoindre l’équipe d’une entreprise sur Pracuj.be.',
+    },
+    en: {
+      subject: 'Invitation to join the {companyName} team',
+      preview: '{inviterName} invites you to join the {companyName} team on Pracuj.be.',
+      heading: 'Team invitation',
+      body: '{inviterName} invites you to join the {companyName} team on Pracuj.be.\n\nCreate an employer account with this email address and confirm it — the invitation will be waiting in your dashboard, on the “Team” tab. There you can join the company or decline the invitation.',
+      cta: 'Create an account and view the invitation',
+      highlight: '{companyName}',
+      outro: 'The link works once and is valid for 14 days. If you do not know this company, you can ignore this message — nothing happens without registration.',
+      anonymous: {
+        preview: 'You have been invited to join the {companyName} team on Pracuj.be.',
+        body: 'You have been invited to join the {companyName} team on Pracuj.be.\n\nCreate an employer account with this email address and confirm it — the invitation will be waiting in your dashboard, on the “Team” tab. There you can join the company or decline the invitation.',
+      },
+      footerNote: 'You are receiving this message because this email address was invited to join a company team on Pracuj.be.',
     },
   },
 

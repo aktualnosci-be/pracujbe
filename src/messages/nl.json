@@ -2618,7 +2618,19 @@
       "alreadyMember": "Deze persoon zit al in het team.",
       "invitationLimit": "De limiet van 50 openstaande uitnodigingen is bereikt. Trek verouderde uitnodigingen in.",
       "companyLimit": "Je kunt maximaal 5 bedrijven beheren.",
-      "lastOwner": "Het bedrijf moet minstens één actieve eigenaar hebben."
+      "lastOwner": "Het bedrijf moet minstens één actieve eigenaar hebben.",
+      "localeRequired": "Kies de taal van de uitnodiging."
+    },
+    "localeLabel": "Taal van de uitnodiging",
+    "invitedSent": "Uitnodiging opgeslagen. Deze persoon krijgt een e-mail: met een werkgeversaccount in de taal van dat account, zonder account in de gekozen taal, met een link om te registreren.",
+    "inviteLinkHint": "Iemand zonder account krijgt een e-mail in de gekozen taal met een link om een werkgeversaccount aan te maken (werkt één keer, 14 dagen geldig). Na bevestiging van het adres wacht de uitnodiging in het dashboard. Iemand met een account krijgt de e-mail in de taal van dat account.",
+    "signup": {
+      "checking": "We controleren de uitnodigingslink…",
+      "intro": "Uitnodiging voor het team van {company}. Rol: {role}.",
+      "nextSteps": "Maak een werkgeversaccount aan en bevestig je e-mailadres. De uitnodiging wacht dan in je dashboard, op het tabblad ‘Team’ — daar neem je deel aan het bedrijf of weiger je de uitnodiging.",
+      "emailFixed": "Je maakt het account aan met het adres waarop de uitnodiging binnenkwam.",
+      "used": "Deze uitnodigingslink is al gebruikt. Heb je een account? Log dan in — de uitnodiging wacht in je dashboard.",
+      "invalid": "De uitnodigingslink is ongeldig of verlopen. Vraag het bedrijf om een nieuwe uitnodiging of maak een gewoon werkgeversaccount aan."
     }
   },
   "emailUnsubscribe": {
