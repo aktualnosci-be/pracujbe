@@ -105,13 +105,16 @@ export function renderSiteAccessPage(opts: {
   locale: Locale;
   next: string;
   error: boolean;
+  /** Limit prób przekroczony (#584) — komunikat zamiast „nieprawidłowe hasło”. */
+  rateLimited?: boolean;
 }): string {
   const t = COPY[opts.locale];
   const next = escapeHtml(opts.next);
-  const error = opts.error
-    ? `<p id="pb-access-error" role="alert" style="margin:0 0 1rem;color:#B42318;font-weight:600">${escapeHtml(t.error)}</p>`
+  const message = opts.rateLimited ? t.rateLimited : opts.error ? t.error : null;
+  const error = message
+    ? `<p id="pb-access-error" role="alert" style="margin:0 0 1rem;color:#B42318;font-weight:600">${escapeHtml(message)}</p>`
     : '';
-  const describedBy = opts.error ? ' aria-describedby="pb-access-error" aria-invalid="true"' : '';
+  const describedBy = message ? ' aria-describedby="pb-access-error" aria-invalid="true"' : '';
   return (
     `<!doctype html><html lang="${opts.locale}"><head><meta charset="utf-8">` +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +

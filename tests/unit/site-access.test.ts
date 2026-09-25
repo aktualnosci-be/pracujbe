@@ -9,6 +9,12 @@ vi.mock('next-intl/middleware', async () => {
   const { NextResponse } = await import('next/server');
   return { default: () => () => NextResponse.next() };
 });
+// #584 — domyślnie zachowanie jak bez konfiguracji limitera w teście (przepuszcza), żeby nie
+// zmieniać istniejących testów; jeden opisany blok niżej nadpisuje to na `false`.
+const checkRateLimit = vi.fn(async (_action: string, _opts?: unknown) => true);
+vi.mock('@/lib/rate-limit', () => ({
+  checkRateLimit: (action: string, opts?: unknown) => checkRateLimit(action, opts),
+}));
 import { POST } from '@/app/api/site-access/route';
 import {
   SITE_ACCESS_COOKIE,
@@ -85,6 +91,12 @@ describe('bramka dostępu — logika', () => {
     expect(html).not.toContain('<script>');
     const noError = renderSiteAccessPage({ locale, next: '/pl', error: false });
     expect(noError).not.toContain('role="alert"');
+
+    // #584 — wariant „za dużo prób” pokazuje osobny komunikat, nie „nieprawidłowe hasło”.
+    const rateLimited = renderSiteAccessPage({ locale, next: '/pl', error: false, rateLimited: true });
+    expect(rateLimited).toContain(msgs.siteAccess.rateLimited);
+    expect(rateLimited).not.toContain(msgs.siteAccess.error);
+    expect(rateLimited).toContain('role="alert"');
   });
 });
 
@@ -141,6 +153,8 @@ describe('bramka dostępu — middleware', () => {
 describe('bramka dostępu — POST /api/site-access', () => {
   beforeEach(() => {
     vi.stubEnv('SITE_ACCESS_PASSWORD', PASSWORD);
+    checkRateLimit.mockClear();
+    checkRateLimit.mockResolvedValue(true);
   });
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -195,5 +209,46 @@ describe('bramka dostępu — POST /api/site-access', () => {
     const location = new URL(res.headers.get('location')!, ORIGIN);
     expect(location.origin).toBe(ORIGIN);
     expect(location.pathname).toBe('/en');
+  });
+});
+
+describe('bramka dostępu — limit prób (#584)', () => {
+  beforeEach(() => {
+    vi.stubEnv('SITE_ACCESS_PASSWORD', PASSWORD);
+    checkRateLimit.mockClear();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('przekroczony limit → 429 + Retry-After, BEZ porównania hasła (nawet poprawnego)', async () => {
+    checkRateLimit.mockResolvedValue(false);
+    const res = await POST(formRequest({ password: PASSWORD, next: '/pl', locale: 'pl' }));
+    expect(res.status).toBe(429);
+    expect(res.headers.get('retry-after')).toBe(String(15 * 60));
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('x-robots-tag')).toContain('noindex');
+    // Bez cookie dostępu — limit blokuje PRZED porównaniem hasła, nawet gdy było poprawne.
+    expect(res.headers.get('set-cookie')).toBeNull();
+    const html = await res.text();
+    expect(html).toContain(pl.siteAccess.rateLimited);
+    expect(html).not.toContain(pl.siteAccess.error);
+  });
+
+  it('limiter wołany z kluczem `site-access` per adres, PRZED odczytem/porównaniem hasła', async () => {
+    checkRateLimit.mockResolvedValue(true);
+    await POST(formRequest({ password: PASSWORD, next: '/pl', locale: 'pl' }));
+    expect(checkRateLimit).toHaveBeenCalledWith('site-access', expect.objectContaining({ max: 20, windowSeconds: 15 * 60 }));
+  });
+
+  it('kontrola ujemna: w limicie — zwykły przepływ (poprawne/błędne hasło) bez zmian', async () => {
+    checkRateLimit.mockResolvedValue(true);
+    const ok = await POST(formRequest({ password: PASSWORD, next: '/pl', locale: 'pl' }));
+    expect(ok.status).toBe(303);
+    expect(ok.headers.get('set-cookie')).not.toBeNull();
+
+    const bad = await POST(formRequest({ password: 'zle', next: '/pl', locale: 'pl' }));
+    expect(bad.status).toBe(303);
+    expect(new URL(bad.headers.get('location')!, ORIGIN).searchParams.get('pb_access')).toBe('denied');
   });
 });

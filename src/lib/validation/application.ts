@@ -1,5 +1,5 @@
 import { z } from 'zod/v3';
-import { localeSchema } from '@/lib/validation/auth';
+import { localeSchema } from '@/lib/validation/locale';
 import { AVAILABILITY_VALUES } from '@/lib/validation/candidate';
 import { normalizePhone, PHONE_COUNTRIES } from '@/lib/validation/phone';
 import { SCREENING_LIMITS } from '@/lib/screening/questions';
