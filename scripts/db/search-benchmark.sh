@@ -7,12 +7,12 @@
 # i dla zestawu zapytań wypisuje: liczbę wyników `get_public_jobs_count`, czas
 # i węzeł planu dla tabeli jobs z wywołania `get_public_jobs` (auto_explain z
 # zagnieżdżonymi instrukcjami — plan ciała funkcji, nie kopii SQL). Pomiar wykonuje
-# dwa razy: na migracjach do BENCH_BASELINE włącznie (domyślnie 0107 — przed
-# wyszukiwaniem bez diakrytyków 0108) i po zastosowaniu pozostałych migracji.
+# dwa razy: na migracjach do BENCH_BASELINE włącznie (domyślnie 0108 — przed
+# wyszukiwaniem bez diakrytyków 0109) i po zastosowaniu pozostałych migracji.
 #
 # Użycie jak test-rls.sh (peer auth: sudo -u postgres bash …, albo PGHOST/PGUSER/…).
 #   BENCH_JOBS — liczba ofert (domyślnie 20000). Baza jest usuwana na końcu.
-#   BENCH_BASELINE — ostatnia migracja stanu „przed” (domyślnie 0107).
+#   BENCH_BASELINE — ostatnia migracja stanu „przed” (domyślnie 0108).
 # Skrypt niczego nie asertuje (to pomiar, nie test) — kończy się kodem 0, gdy pomiar
 # się wykonał. Wyniki: docs/railway/OPERATIONS.md („Wyszukiwanie").
 # =============================================================================
@@ -21,7 +21,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DB=pracujbe_search_bench
 JOBS="${BENCH_JOBS:-20000}"
-BASELINE="${BENCH_BASELINE:-0107}"
+BASELINE="${BENCH_BASELINE:-0108}"
 [[ "$BASELINE" =~ ^[0-9]{4}$ ]] || { echo 'BENCH_BASELINE musi mieć postać NNNN.'; exit 2; }
 [[ "$JOBS" =~ ^[0-9]+$ ]] && [ "$JOBS" -ge 100 ] || { echo 'BENCH_JOBS musi być liczbą >= 100.'; exit 2; }
 

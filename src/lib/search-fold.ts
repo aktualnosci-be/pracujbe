@@ -1,5 +1,5 @@
 /**
- * Lustro `public.search_fold` (0108, #47) dla danych demonstracyjnych: małe litery bez znaków
+ * Lustro `public.search_fold` (0109, #47) dla danych demonstracyjnych: małe litery bez znaków
  * diakrytycznych w alfabecie łacińskim, żeby „sprzatania” znajdowało „sprzątania”, a „liege” —
  * „Liège”, jak w SQL. Jak słownik `unaccent`: cyrylicy nie zmieniamy (poza ё → е), litery bez
  * rozkładu Unicode (ł, đ, ø, ß, æ, œ, ı) mapujemy jawnie.

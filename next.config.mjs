@@ -1,21 +1,10 @@
 import createNextIntlPlugin from 'next-intl/plugin';
+import { fileURLToPath } from 'node:url';
+
 import { createReleaseAwareBuildMetadata } from './scripts/build-version.mjs';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
-// P3-02: wylicz host projektu Supabase z NEXT_PUBLIC_SUPABASE_URL i zawęź do niego zarówno
-// allowlistę next/image, jak i CSP img-src (koniec wildcardu `*.supabase.co` / `https:`).
-// Bez env (build/demo) pozostaje wildcard, by nie wywalić builda — produkcja ustawia URL.
-function supabaseHost() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!url) return null;
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return null;
-  }
-}
-const SUPABASE_HOST = supabaseHost();
 // #47: odbiorca raportów CSP (ścieżka względna — ten sam origin co strona).
 const CSP_REPORT_PATH = '/api/csp-report';
 const CSP_REPORT_GROUP = 'csp-endpoint';
@@ -35,18 +24,19 @@ const nextConfig = {
     NEXT_PUBLIC_BUILD_TIME: BUILD.buildTime,
   },
   reactStrictMode: true,
+  // #298: własny cache ISR — LRU w pamięci, limit dysku, 404 losowych slugów tylko krótko
+  // w pamięci. Cache obrazów działa bez zmian (isrFlushToDisk zostaje domyślny).
+  cacheHandler: fileURLToPath(new URL('./src/lib/cache/isr-cache-handler.mjs', import.meta.url)),
   poweredByHeader: false,
   images: {
     // WebP/AVIF automatycznie; ogranicz rozmiary do sensownych breakpointów (wydajność).
     formats: ['image/avif', 'image/webp'],
     // #394: wynik optymalizacji trzymany 31 dni (domyślnie 60 s → MISS/STALE i ponowna praca
     // `sharp` przy obrazie LCP). Pliki z public/ zmieniają się tylko z deployem — przy zmianie
-    // obrazu zmień nazwę pliku (np. team-v2.webp); zasoby Storage mają własne URL-e.
+    // obrazu zmień nazwę pliku (np. team-v2.webp).
     minimumCacheTTL: 2678400,
-    remotePatterns: [
-      // Supabase Storage (publiczne assety firm/ofert): dokładny host projektu, gdy znany.
-      { protocol: 'https', hostname: SUPABASE_HOST ?? '*.supabase.co' },
-    ],
+    // #27: bez zdalnych hostów — obrazy wyłącznie z własnego origin (Supabase Storage usunięte).
+    remotePatterns: [],
   },
   experimental: {
     // Ograniczenie JS na stronach publicznych: optymalizacja importów ikon.
@@ -84,12 +74,11 @@ const nextConfig = {
       // Dev dokłada 'unsafe-eval' (React Refresh/HMR Next dev).
       `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://www.googletagmanager.com https://connect.facebook.net https://challenges.cloudflare.com`,
       "style-src 'self' 'unsafe-inline'",
-      // P3-02: obrazy z własnego origin, data:/blob:, host Supabase (assety) i piksele trackerów
-      // (po zgodzie). Zamiast otwartego `https:`. Bez skonfigurowanego hosta Supabase — wildcard.
-      `img-src 'self' data: blob: ${SUPABASE_HOST ? `https://${SUPABASE_HOST}` : 'https://*.supabase.co'} https://www.google-analytics.com https://www.facebook.com`,
+      // P3-02: obrazy z własnego origin, data:/blob: i piksele trackerów (po zgodzie).
+      "img-src 'self' data: blob: https://www.google-analytics.com https://www.facebook.com",
       "font-src 'self' data:",
-      // XHR/fetch/WS: API własne, Supabase (REST/Realtime), Sentry ingest, GA/Meta.
-      `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://connect.facebook.net${isDev ? ' ws: http://localhost:*' : ''}`,
+      // XHR/fetch: API własne, Sentry ingest, GA/Meta.
+      `connect-src 'self' https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://connect.facebook.net${isDev ? ' ws: http://localhost:*' : ''}`,
       // Ramki: Meta Pixel (fallback) i Cloudflare Turnstile (#46, ochrona formularzy), reszta zablokowana.
       "frame-src 'self' https://www.facebook.com https://challenges.cloudflare.com",
       "worker-src 'self' blob:",
