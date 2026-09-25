@@ -1201,7 +1201,20 @@
     "itemModerationAppealUpheld": "Odwołanie rozpatrzone: decyzja utrzymana",
     "itemModerationAppealReversed": "Odwołanie uwzględnione: decyzja zmieniona",
     "itemScreeningApproved": "Pytanie w Twojej ofercie zostało zaakceptowane",
-    "itemScreeningRejected": "Pytanie w Twojej ofercie nie zostało zaakceptowane"
+    "itemScreeningRejected": "Pytanie w Twojej ofercie nie zostało zaakceptowane",
+    "listIntro": "Wszystkie powiadomienia z Twojego konta, od najnowszych.",
+    "filterLabel": "Filtr powiadomień",
+    "filterAll": "Wszystkie",
+    "filterUnread": "Nieprzeczytane",
+    "markRead": "Oznacz jako przeczytane",
+    "markReadItem": "Oznacz jako przeczytane: {title}",
+    "markedRead": "Oznaczono powiadomienie jako przeczytane.",
+    "emptyUnread": "Nie masz nieprzeczytanych powiadomień.",
+    "unreadCount": "{count, plural, =0 {Brak nieprzeczytanych} one {1 nieprzeczytane} few {# nieprzeczytane} many {# nieprzeczytanych} other {# nieprzeczytanych}}",
+    "loadMore": "Pokaż więcej",
+    "loadingMore": "Wczytywanie…",
+    "listEnd": "To wszystkie powiadomienia.",
+    "moreError": "Nie udało się wczytać kolejnych powiadomień. Spróbuj ponownie."
   },
   "pricing": {
     "standard": "Standard",
