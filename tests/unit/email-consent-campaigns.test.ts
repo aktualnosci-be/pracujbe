@@ -143,6 +143,7 @@ describe('worker: newsletter z kampanii', () => {
     locale: 'nl',
     payload: { campaignId: 'c1', jobs: NL_JOBS },
     attempts: 0,
+    lock_token: 'lock-n1',
   };
 
   it('wysyła HTML + text/plain, nagłówki RFC 8058 i From z konfiguracji', async () => {

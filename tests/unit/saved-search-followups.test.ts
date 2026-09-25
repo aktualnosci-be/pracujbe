@@ -215,6 +215,7 @@ describe('worker: link alertu i kontrola tuż przed wysyłką', () => {
       locale: 'fr',
       payload: { searchName: 'Entrepôt', count: 2, jobs: [], companyName: 'Acme', jobTitle: 'Chauffeur' },
       attempts: 0,
+      lock_token: `lock-${id}`,
       ...extra,
     };
   }
@@ -260,8 +261,8 @@ describe('worker: link alertu i kontrola tuż przed wysyłką', () => {
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0]![0].to).toBe('d2@example.test');
     expect(fakeDb.callsTo('email_delivery_send_check').map((c) => c.args)).toEqual([
-      { p_delivery_id: 'd1' },
-      { p_delivery_id: 'd2' },
+      { p_delivery_id: 'd1', p_lock_token: 'lock-d1' },
+      { p_delivery_id: 'd2', p_lock_token: 'lock-d2' },
     ]);
     expect(fakeDb.callsTo('email_delivery_send_check').every((c) => c.as === 'service')).toBe(true);
     expect(fakeDb.callsTo('take_email_send_budget')).toHaveLength(1);

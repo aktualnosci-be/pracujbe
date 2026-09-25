@@ -5,7 +5,12 @@ import { createErrorWebhookSender } from './send';
 export { parseErrorWebhookUrl, errorWebhookFromEnv } from './url';
 export type { ErrorWebhookFormat, ErrorWebhookTarget } from './url';
 export { buildErrorWebhookPayload, buildErrorWebhookText, safeRoute, ERROR_WEBHOOK_MAX_CHARS } from './message';
-export { createErrorWebhookSender, ERROR_WEBHOOK_DEDUP_MS, ERROR_WEBHOOK_TIMEOUT_MS } from './send';
+export {
+  createErrorWebhookSender,
+  ERROR_WEBHOOK_DEDUP_MS,
+  ERROR_WEBHOOK_TIMEOUT_MS,
+  ERROR_WEBHOOK_FAILURE_BACKOFF_MS,
+} from './send';
 
 let installed: ReturnType<typeof createErrorWebhookSender> | null = null;
 
