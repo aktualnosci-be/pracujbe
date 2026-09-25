@@ -9343,7 +9343,7 @@ select pg_temp.expect_error(
   'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
 rollback;
 
-=======
+-- ============================================================================
 -- PL109. Payloady e-maili i odczyt historii (0113; #293, #22, #290, #184):
 --   send_offer → expiresAt + kwoty oferty (bez treści wiadomości rekrutera, #503),
 --   send_message → conversationId, get_applied_jobs_display(p_locale, p_job_ids).
