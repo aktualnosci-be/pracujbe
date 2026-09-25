@@ -43,8 +43,9 @@ wyniku „Deploy”, gdy wdrożenie zostało pominięte z powodu braku tokenu.
 `vercel.json` oraz integracje Supabase i Stripe pozostają długiem migracyjnym,
 bo ich przepływy są jeszcze używane. Usuwamy je dopiero razem z zastępującym
 je przepływem i testem regresyjnym. Nie konfiguruj sekretów Vercela ani nie
-uruchamiaj drugiej produkcji. Przyszłe IaC pobierz z działającego projektu
-Railway; nie zapisuj sekretów w repo.
+uruchamiaj drugiej produkcji. IaC usług z tego repo (`pracujbe`, `db-migrator`) jest w
+`.railway/railway.ts` — niewłączone; opis, strażnik i kroki włączenia w
+[IAC.md](IAC.md). Nie zapisuj sekretów w repo.
 
 ## Źródła sprawdzone podczas implementacji
 
