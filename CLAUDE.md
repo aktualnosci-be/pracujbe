@@ -64,6 +64,8 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 **Kalka prototypu (#5/#7, decyzja właściciela 2026-09-24: „kalka jeden do jednego”):** nagłówek, hero, wyszukiwarka, „Najnowsze oferty”, karta-paszport, „W czym jesteś dobry?” i dolny pasek stopki mają reguły przepisane dosłownie z `docs/design/people-passport/prototype` (style.css → directions.css → people.css → conditions.css → extended.css) jako klasy `.pp-*` w `src/app/globals.css`; kolory tylko jako tokeny `--pp-*` w `:root`. Progi `@container` prototypu (1050/950/850/760/600/500 px) są media queries. Siatka ofert = to, co prototyp renderuje: 2 kolumny, 1 ≤ 950 px (conditions.css nadpisuje 3 kolumny z people.css); lista z filtrami 1 kolumna. Odstępstwa (tylko wymogi repo): #777 → #767676 (AA), fokus widoczny, stany demo i statusy karty w wierszu firmy, przycisk menu ≤ 850 px, sekcje aplikacji spoza prototypu pod „W czym jesteś dobry?”. Zmieniając te widoki, porównuj zrzuty 1280/390 px z prototypem (nakładka); nie owijaj kart ramką `divide-y` (podwójne krawędzie).
 
+**Weryfikacja (#7):** matryca zgodności z prototypem `docs/design/people-passport/MATRIX.md` (każdy ekran prototypu i trasa aplikacji, 1280/390 px, % pikseli > 40/255 + style kluczowych elementów), pomiar do powtórzenia `node scripts/design/compare-prototype.mjs` (poza CI, aplikacja w trybie demo). Lista ofert: nagłówek `.pp-list-header` + wyszukiwarka `.pp-search` jak na stronie głównej; strony treściowe: H1 `.pp-page-title`; podstrony paneli: `H1_EXTENDED` (40/30 px). Stara paleta (granat #0F2A47/#2563EB) i Inter usunięte — strażnik `tests/unit/legacy-palette.test.ts` z kontrolą ujemną.
+
 **Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Favicon, ikony PWA i `og.png` (#7) = ten sam znak z konturów DM Sans 800 (`scripts/brand-glyphs.py` → `assets/brand/logo-glyphs.json` → `scripts/generate-icons.mjs`; opis `public/ICONS_README.md`, strażnik `brand-assets.test.ts`).
 
 **E-maile (#7):** layout `src/emails/_components.tsx` = kalka `prototype/materials/newsletter.html` (tło #f4f4f4, biała kolumna 600 px, logo jak w nagłówku, H1 36 px, akapity 16 px/1,7 #666, przycisk z promieniem 11 px, sekcje „paszportu” z linią #e5e5e5, stopka #f8f8f8). Kolory wyłącznie z `emailPalette` (test `email-palette.test.tsx` odrzuca inne, z kontrolą ujemną). Odstępstwa klienta pocztowego: style inline + tabele, bez webfontów (`'DM Sans', Arial, sans-serif`), #777 → #767676, tekst stopki #6b6b6b (AA na #f8f8f8); bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii nagłówka (treść maili bez zmian).
@@ -499,7 +501,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-12 (JSON-LD:
 > `validThrough` z `expires_at` + `unitText` z `salary_period` — wymaga rozszerzenia zwrotu
 > `get_public_job`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
-> (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR),
+> (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
+> techniczna dla kandydata zrobiona w #486, patrz Etap 7),
 > P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
 > P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
@@ -508,7 +511,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
-- [x] System wizualny: tokeny kolorów, typografia (Inter), globals.css
+- [x] System wizualny: tokeny kolorów, typografia (DM Sans od #5/#7; wcześniej Inter), globals.css
 - [x] i18n: routing `[locale]`, next-intl, pliki `pl/nl/fr/en`, middleware
 - [x] Model danych: migracje SQL (schemat + enumy + indeksy)
 - [x] RLS: polityki bazowe
@@ -517,8 +520,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Centralny system błędów + kody + Sentry (config)
 - [ ] shadcn/ui — pełny zestaw komponentów (na razie podstawowe)
 
-### Redesign wg makiet — `docs/DESIGN_SCREENS.md` (ZROBIONE, UI)
-- [x] Paleta granatowa: `globals.css` + `tailwind.config.ts` (`--primary` #0F2A47 + `--accent` #2563EB), `manifest.ts` theme_color
+### Redesign wg makiet — HISTORYCZNE (`docs/DESIGN_SCREENS.md`), zastąpione „Ludzie i praca”
+> Obowiązujący wygląd = kalka prototypu `docs/design/people-passport/prototype` („04 Ludzie i praca”,
+> sekcja 2): biel, czerwień `#D92932`, czerń `#151515`, DM Sans. Granatowa paleta (#0F2A47/#2563EB)
+> i Inter zostały usunięte z kodu (strażnik `tests/unit/legacy-palette.test.ts` z kontrolą ujemną).
+> Matryca zgodności ekranów z prototypem (1280/390 px, nakładka zrzutów + style kluczowych
+> elementów): `docs/design/people-passport/MATRIX.md`, pomiar `node scripts/design/compare-prototype.mjs`
+> (poza CI). Poniższe punkty opisują strukturę komponentów z dawnych makiet — wygląd każdego z nich
+> jest już w stylu paszportu (#2–#7).
+- [x] ~~Paleta granatowa~~ → tokeny „Ludzie i praca” w `globals.css` (`--primary` #D92932, `--pp-*` prototypu) + `tailwind.config.ts`, `manifest.ts` theme_color #D92932
 - [x] Komponenty z makiet: JobCard(wiersz+hover), FilterSidebar+FilterSheet, StatusPill, StatCard, MatchBar, Stepper, DashboardShell(sidebar+bottom tab bar), NotificationsDropdown, Toast, ApplyModal, RecruitmentFunnel, PricingPackageCard
 - [x] Odwzorowanie 7 ekranów (home, lista+filtry, detal+modal, panel kandydata, onboarding, panel pracodawcy, stany cookies) — **UI gotowe**; panele na danych DEMO (podpięcie realnych danych = warstwa backendu, niżej)
 - [x] Restrukturyzacja layoutów: root=(html/body/providery/cookies), `(public)/layout`=Header+Footer, `(auth)/layout` minimalny, panele=własny layout (DashboardShell, noindex)
@@ -1088,6 +1098,31 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
   obiekt z linkiem; filtry typu obiektu, akcji, aktora, zakresu dat i `id` (skrót „Historia
   statusów” w wierszu firmy), stronicowanie kursorem.
+- [~] Retencja i prawa kandydata (#486, migracja `0105`, `docs/DATA_RETENTION.md`):
+  okresy jako dane (`retention_policies`, null = kategoria wyłączona; zmiana tylko
+  `admin_set_retention_policy` z audytem, rejestr usunięć ≥ 400 dni). `/api/maintenance` woła
+  `run_retention_purge` (partie, SKIP LOCKED, liczniki) i worker kolejki storage
+  (`src/lib/storage-deletion.ts`; `storage_deletion_queue` wypełnia trigger AFTER DELETE na `files`,
+  backoff, brak ścieżek w logach). Domyślnie włączone tylko sprzątanie danych już oznaczonych
+  (`deleted_file`, `deleted_profile` — 30 dni); reszta czeka na decyzję administratora danych.
+  `confirmed_guest_request` = tylko wartość do decyzji właściciela (bez zadania, ślad gościa zostaje
+  także przy `closed_application`); tokeny gościa czyści `purge_guest_application_requests` (#522).
+  Eksport JSON (`POST /api/account/export`, Origin tej witryny, `no-store` → `export_my_data`:
+  dane podane, proces, zapisane `matches`, rozmowy z `fromMe` bez tożsamości rekrutera, limit
+  10/dobę, ślad `data_rights_requests` + audyt). Usunięcie konta (`request_account_erasure`,
+  potwierdzenie adresem konta): jedna transakcja `erase_candidate_subject` — proces widoczny
+  dla firm, powiadomienia/e-maile o nim, pliki → kolejka, `auth.users` (kaskada), tombstone;
+  sprawy DSA zostają bez powiązania (`reports_guard`/`report_events_append_only` przepuszczają
+  tylko FK → null). Tombstone po restore: `scripts/db/export-erasure-tombstones.sh` +
+  `RESTORE_TOMBSTONES_FILE` w `restore-backup.sh` (`apply_erasure_tombstones`). UI: sekcja
+  „Twoje dane i konto” w `/candidate/ustawienia` (`AccountDataSettings`, klucze `accountData.*`
+  — tylko etykiety funkcji). Dowód: `rls.sql` sekcja DR486 (kontrole ujemne 5/5b/7f/9),
+  `npm run test:backup` (scenariusz #486), unit `account-data`, `storage-deletion`, E2E
+  `candidate-account-data`. Szkic dla prawnika (PROJEKT, nieopublikowany):
+  `docs/legal-drafts/retencja-i-prawa-kandydata.md`. **Otwarte:** zatwierdzone okresy i treść
+  dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13), aktualizacja
+  `last_seen_at`, sprostowanie/ograniczenie/sprzeciw, eksport i usunięcie konta pracodawcy,
+  potwierdzenie linkiem e-mail.
 - [x] Płatności — **WYŁĄCZONE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Stan aktywny:
   portal bez cennika, pakietów, CTA zakupu i limitów planu; billing niedostępny. Jedna jawna flaga
   `BILLING_ENABLED` (`src/lib/billing/flag.ts`), domyślnie wyłączona — włącza ją tylko dokładne
@@ -1151,7 +1186,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
-- [x] `next/font/local` (offline Inter), PWA (ikony/manifest/service worker), storage signed URLs + upload CV (0018, Invariant #10).
+- [x] `next/font/local` (offline DM Sans; wcześniej Inter), PWA (ikony/manifest/service worker), storage signed URLs + upload CV (0018, Invariant #10).
   Pliki CV na Railway (#26): upload, pobranie, usunięcie i kwarantanna przez prywatny bucket S3
   Railway (`src/lib/files/*`, repozytorium `db/candidate-files.ts`, adapter `storage/railway-bucket.ts`),
   bez Supabase Storage. Pobranie = krótki (60 s) link HMAC `/api/files/cv/<id>?t=…` wystawiany
@@ -1259,7 +1294,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   na `LightDialog*` bez przeliczania stylów całej strony przy otwarciu, z treścią montowaną
   w osobnym zadaniu po ramce z nakładką (#393; INP otwarcia < 100 ms przy CPU 4×,
   `dialog-open-inp.spec`), długi cache
-  obrazów z optymalizatora i plików `public/` (#394). Font Inter jako podzbiór łaciński ~73 KB (#388, przepis
+  obrazów z optymalizatora i plików `public/` (#394). Font jako podzbiór łaciński (#388: Inter ~73 KB, od #5/#7 DM Sans ~42 KB; przepis
   `scripts/subset-font.py`, fonty zastępcze z metrykami w `globals.css`) i baner zgód
   w HTML z serwera, ukrywany przed malowaniem przy zapisanej zgodzie (`consent-boot.ts`, #389);
   „Przejdź do treści” renderuje `[locale]/layout` przed banerem, każdy układ ma `#main-content`.

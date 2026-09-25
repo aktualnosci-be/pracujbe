@@ -117,7 +117,7 @@ export function renderSiteAccessPage(opts: {
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="robots" content="noindex,nofollow">' +
     `<title>${escapeHtml(t.pageTitle)}</title></head>` +
-    '<body style="margin:0;background:#FFFFFF;color:#151515;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif">' +
+    '<body style="margin:0;background:#FFFFFF;color:#151515;font-family:DM Sans,system-ui,-apple-system,Segoe UI,Roboto,sans-serif">' +
     '<main style="box-sizing:border-box;max-width:28rem;margin:12vh auto;padding:0 16px">' +
     '<p style="margin:0 0 2rem;font-size:1.75rem;font-weight:800;letter-spacing:-0.02em" aria-label="Pracuj.be">' +
     'pracuj<span style="display:inline-block;margin-left:2px;padding:0 0.3em;border-radius:0.5em;background:#D92932;color:#FFFFFF">.be</span></p>' +

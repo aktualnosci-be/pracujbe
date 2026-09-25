@@ -1,7 +1,7 @@
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { MapPin, Search, SearchX, X } from 'lucide-react';
+import { SearchX, X } from 'lucide-react';
 
 import { Link, redirect } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
@@ -406,86 +406,58 @@ export default async function JobsListPage({
         </ol>
       </nav>
 
-      {/* Prosty nagłówek zatwierdzonego kierunku „Ludzie i praca”. */}
-      <header className="mb-6 max-w-2xl">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-          {t('pageTitle')}
-        </h1>
-          <p className="mt-2 text-base leading-relaxed text-muted-foreground">
-            {t('subtitle')}
-          </p>
-      </header>
+      {/* Nagłówek listy = kalka `.p-list-header` prototypu „Ludzie i praca”: nadtytuł, H1
+          40 px (≤ 600 px: 32 px) i wyszukiwarka `.people .search` (klasy `.pp-*`). */}
+      <header className="pp-list-header">
+        <span className="pp-eyebrow">{tNav('jobs')}</span>
+        <h1>{t('pageTitle')}</h1>
+        <p className="pp-list-intro">{t('subtitle')}</p>
 
-      {isShowingDemoJobs() ? <DemoJobsNotice className="mb-6" /> : null}
+        {isShowingDemoJobs() ? <DemoJobsNotice className="mb-6" /> : null}
 
-      {/* Wyszukiwarka (GET — działa bez JS, zachowuje aktywne filtry) */}
-      <form
-        action={`/${locale}${BASE_PATH}`}
-        method="get"
-        role="search"
-        className="grid gap-3 rounded-[17px] border border-border bg-background p-2.5 md:grid-cols-[1.5fr_1.2fr_auto] md:items-end"
-      >
-        <div className="space-y-1.5 px-1.5 pt-1.5 md:py-1.5">
-            <label
-              htmlFor="q-keyword"
-              className="text-xs font-semibold text-muted-foreground"
-            >
+        {/* Wyszukiwarka (GET — działa bez JS, zachowuje aktywne filtry). Jak na stronie
+            głównej: etykieta z polem w środku, pola bez ramek, fokus = obrys komórki. */}
+        <form
+          action={`/${locale}${BASE_PATH}`}
+          method="get"
+          role="search"
+          className="pp-search"
+        >
+          <label htmlFor="q-keyword">
             {t('keyword')}
-          </label>
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
             <input
               id="q-keyword"
               name="keyword"
+              type="search"
               defaultValue={keyword ?? ''}
               placeholder={t('keywordPlaceholder')}
               autoComplete="off"
-              className="flex h-12 w-full rounded-[11px] border border-input bg-background pl-9 pr-3 text-base text-foreground transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
-          </div>
-        </div>
-
-        <div className="space-y-1.5 px-1.5 md:py-1.5">
-            <label
-              htmlFor="q-city"
-              className="text-xs font-semibold text-muted-foreground"
-            >
-            {t('location')}
           </label>
-          <div className="relative">
-            <MapPin
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
+          <label htmlFor="q-city">
+            {t('location')}
             <input
               id="q-city"
               name="city"
+              type="search"
               defaultValue={city ?? ''}
               placeholder={t('locationPlaceholder')}
               autoComplete="off"
-              className="flex h-12 w-full rounded-[11px] border border-input bg-background pl-9 pr-3 text-base text-foreground transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
-          </div>
-        </div>
+          </label>
 
-        {Object.entries(hiddenSearchParams).map(([key, value]) => (
-          <input key={key} type="hidden" name={key} value={value} />
-        ))}
+          {Object.entries(hiddenSearchParams).map(([key, value]) => (
+            <input key={key} type="hidden" name={key} value={value} />
+          ))}
 
-        <button
-          type="submit"
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[11px] bg-primary px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:min-h-[58px]"
-        >
-          <Search className="h-4 w-4" aria-hidden="true" />
-          {t('searchJobs')}
-        </button>
-      </form>
+          <button type="submit" className="pp-btn">
+            {t('searchJobs')} <span aria-hidden="true">↗</span>
+          </button>
+        </form>
+      </header>
 
       {/* Układ wyników */}
-      <div className="mt-6 lg:grid lg:grid-cols-[288px_1fr] lg:gap-8">
+      <div className="mt-2.5 lg:grid lg:grid-cols-[288px_1fr] lg:gap-8">
         {/* Sidebar (desktop) */}
         <aside className="hidden lg:block">
           <div className="sticky top-24">

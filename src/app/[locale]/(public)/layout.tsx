@@ -9,7 +9,7 @@ import { routing } from '@/i18n/routing';
 /**
  * Layout stron publicznych (grupa `(public)`).
  *
- * Dostarcza wspólny chrome witryny: sticky Header (nawigacja gościa) oraz granatową
+ * Dostarcza wspólny chrome witryny: sticky Header (nawigacja gościa) oraz jasną
  * stopkę. Strony treściowe (strona główna, lista ofert, szczegóły oferty itd.) renderują
  * się między nimi w `<main>`. Panele (candidate/employer), onboarding i strony auth mają
  * własne, odrębne layouty i NIE korzystają z tego chrome'u.

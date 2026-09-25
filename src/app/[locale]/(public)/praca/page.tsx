@@ -211,7 +211,7 @@ export default async function JobsHubPage({ params }: PageProps) {
 
       {/* Nagłówek */}
       <header className="max-w-2xl">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+        <h1 className="pp-page-title">
           {t('hubTitle')}
         </h1>
         <p className="mt-2 text-muted-foreground">{t('hubSubtitle')}</p>
