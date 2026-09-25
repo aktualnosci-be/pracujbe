@@ -5,6 +5,12 @@ const readOpsMetrics = vi.fn();
 const domainPoolStats = vi.fn(() => null);
 vi.mock('@/lib/ops/metrics-source', () => ({ readOpsMetrics: () => readOpsMetrics() }));
 vi.mock('@/lib/db/runtime', () => ({ domainPoolStats: () => domainPoolStats() }));
+const readBackupFreshness = vi.fn();
+vi.mock('@/lib/ops/backup-freshness', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ops/backup-freshness')>()),
+  readBackupFreshness: () => readBackupFreshness(),
+}));
+const freshBackup = { status: 'ok', ageSeconds: 3600, lastBackupAt: '2026-09-25T03:00:00.000Z' } as const;
 
 import { GET } from '@/app/api/health/ops/route';
 
@@ -24,6 +30,8 @@ function call(token?: string) {
 
 beforeEach(() => {
   readOpsMetrics.mockReset();
+  readBackupFreshness.mockReset();
+  readBackupFreshness.mockResolvedValue(freshBackup);
   vi.stubEnv('HEALTH_CHECK_SECRET', SECRET);
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -49,7 +57,7 @@ describe('GET /api/health/ops (#47)', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
     const body = await res.json();
-    expect(body).toMatchObject({ status: 'ok', alerts: [], warnings: [], metrics, appPool: null });
+    expect(body).toMatchObject({ status: 'ok', alerts: [], warnings: [], metrics, appPool: null, backup: freshBackup });
     expect(typeof body.checkedAt).toBe('string');
   });
 
@@ -70,7 +78,23 @@ describe('GET /api/health/ops (#47)', () => {
     const res = await call(SECRET);
     expect(res.status).toBe(503);
     const body = await res.json();
-    expect(Object.keys(body).sort()).toEqual(['checkedAt', 'status']);
+    expect(Object.keys(body).sort()).toEqual(['backup', 'checkedAt', 'status']);
     expect(body.status).toBe(status);
+  });
+
+  it.each([
+    [{ status: 'unconfigured' }, 'backup_unconfigured'],
+    [{ status: 'misconfigured' }, 'backup_misconfigured'],
+    [{ status: 'unavailable' }, 'backup_unavailable'],
+    [{ status: 'missing' }, 'backup_missing'],
+    [{ status: 'stale', ageSeconds: 200_000, lastBackupAt: '2026-09-22T03:00:00.000Z' }, 'backup_stale'],
+  ] as const)('#569: kopia %o → 503 alert %s (brak konfiguracji to nie „OK”)', async (backup, signal) => {
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics });
+    readBackupFreshness.mockResolvedValue(backup);
+    const res = await call(SECRET);
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toMatchObject({ status: 'alert', alerts: [signal], backup });
+    expect(JSON.stringify(body)).not.toMatch(/r2\.cloudflarestorage|BACKUP_S3/);
   });
 });
