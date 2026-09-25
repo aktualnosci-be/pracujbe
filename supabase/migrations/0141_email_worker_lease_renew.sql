@@ -22,6 +22,9 @@
 -- bezpiecznego ponowienia: `claim_email_batch` odda wiersz kolejnemu workerowi dopiero po
 -- upływie ŚWIEŻEGO okna, a `mark-sent`/`mark-failed` workera A z NIEAKTUALNYM tokenem (bo
 -- wiersz przejął B) i tak nic nie nadpiszą (CAS z 0140, bez zmian).
+-- Zawieszony dostawca (#628) — po stronie workera: termin wysyłki krótszy niż dzierżawa,
+-- ponowienie niejednoznacznego wyniku dopiero po pełnej dzierżawie, ten sam klucz
+-- idempotencji (`src/lib/email/outbox.ts`, `SEND_DEADLINE_MS`).
 --
 -- Rollback: przywrócić `email_delivery_send_check` z 0140 (bez odnowienia `locked_at`).
 -- =============================================================================

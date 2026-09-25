@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
@@ -155,5 +155,80 @@ describe('#615 — token dzierżawy przekazywany od claimu do każdej dalszej ak
       expect.any(Error),
       expect.objectContaining({ area: 'email.outbox.markSent.leaseLost', deliveryId: 'race-1' }),
     );
+  });
+});
+
+describe('#628 — wysyłka nie trwa dłużej niż dzierżawa (brak równoległego ponowienia)', () => {
+  function claimOne(id: string, token: string) {
+    fakeDb.rpc('claim_email_batch', [row(id, token)]);
+    fakeDb.rpc('email_delivery_send_check', null);
+    fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
+  }
+
+  it('termin wysyłki jest co najmniej 2× krótszy niż dzierżawa, a claim dostaje tę dzierżawę jawnie', async () => {
+    const { EMAIL_LEASE_SECONDS, SEND_DEADLINE_MS, processEmailQueue } = await import('@/lib/email/outbox');
+    expect(SEND_DEADLINE_MS * 2).toBeLessThanOrEqual(EMAIL_LEASE_SECONDS * 1000);
+    claimOne('d1', 'lt-1');
+    await processEmailQueue();
+    expect(fakeDb.callsTo('claim_email_batch')[0]).toMatchObject({
+      args: { p_limit: 20, p_lease_seconds: EMAIL_LEASE_SECONDS },
+    });
+  });
+
+  describe('zawieszony dostawca', () => {
+    beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] }));
+    afterEach(() => vi.useRealTimers());
+
+    it('po terminie: brak mark-sent, ponowienie najwcześniej po pełnej dzierżawie, spóźniony wynik pominięty', async () => {
+      const { EMAIL_LEASE_SECONDS, SEND_DEADLINE_MS, processEmailQueue } = await import('@/lib/email/outbox');
+      let resolveLate: (value: unknown) => void = () => undefined;
+      send.mockReturnValueOnce(new Promise((resolve) => { resolveLate = resolve; }));
+      claimOne('hang-1', 'lt-hang');
+      const started = Date.now();
+      const pending = processEmailQueue();
+      await vi.advanceTimersByTimeAsync(SEND_DEADLINE_MS);
+      const result = await pending;
+      expect(result).toMatchObject({ sent: 0, failed: 1, ok: true });
+      expect(fakeDb.callsTo('email.outbox.mark-sent')).toHaveLength(0);
+      const [markFailed] = fakeDb.callsTo('email.outbox.mark-failed');
+      const [, status, , errorMessage, nextAttemptAt, lockToken] = markFailed!.values;
+      expect({ status, errorMessage, lockToken }).toEqual({
+        status: 'queued',
+        errorMessage: 'EMAIL_PROVIDER_UNAVAILABLE',
+        lockToken: 'lt-hang',
+      });
+      expect(Date.parse(String(nextAttemptAt)) - started).toBeGreaterThanOrEqual(
+        SEND_DEADLINE_MS + EMAIL_LEASE_SECONDS * 1000,
+      );
+      // Dostawca odpowiada po terminie — wynik nie jest już zapisywany (wiersz nie jest nasz).
+      resolveLate({ data: { id: 'late-provider-id' }, error: null });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fakeDb.callsTo('email.outbox.mark-sent')).toHaveLength(0);
+    });
+
+    it('KONTROLA UJEMNA: odpowiedź przed terminem = zwykła wysyłka (mark-sent, bez ponowienia)', async () => {
+      const { SEND_DEADLINE_MS, processEmailQueue } = await import('@/lib/email/outbox');
+      send.mockReturnValueOnce(new Promise((resolve) => {
+        setTimeout(() => resolve({ data: { id: 'provider-slow' }, error: null }), SEND_DEADLINE_MS - 1);
+      }));
+      claimOne('slow-1', 'lt-slow');
+      const pending = processEmailQueue();
+      await vi.advanceTimersByTimeAsync(SEND_DEADLINE_MS - 1);
+      expect(await pending).toMatchObject({ sent: 1, failed: 0 });
+      expect(fakeDb.callsTo('email.outbox.mark-failed')).toHaveLength(0);
+      expect(fakeDb.callsTo('email.outbox.mark-sent')[0]!.values[1]).toBe('provider-slow');
+    });
+
+    it('KONTROLA UJEMNA: zwykły błąd dostawcy zachowuje krótki backoff (2 min), nie pełną dzierżawę', async () => {
+      const { EMAIL_LEASE_SECONDS, processEmailQueue } = await import('@/lib/email/outbox');
+      send.mockResolvedValueOnce({ data: null, error: { name: 'internal_server_error', message: 'x' } });
+      claimOne('err-1', 'lt-err');
+      const started = Date.now();
+      await processEmailQueue();
+      const nextAttemptAt = fakeDb.callsTo('email.outbox.mark-failed')[0]!.values[4];
+      const delay = Date.parse(String(nextAttemptAt)) - started;
+      expect(delay).toBe(2 * 60_000);
+      expect(delay).toBeLessThan(EMAIL_LEASE_SECONDS * 1000);
+    });
   });
 });
