@@ -7,7 +7,7 @@ import { isJobAssistEnabled, jobAssistModel } from '@/lib/ai-assist/config';
 import { getActiveCompany } from '@/lib/company-context';
 import { isProductionMode } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { fakeDb, fakeSession, resetFakeDb } from '../helpers/fake-db';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #37 — akcja asystenta redagowania: flaga i dostawca (atrapa nie w produkcji), recruiter+
@@ -57,6 +57,9 @@ beforeEach(() => {
   delete process.env.AI_JOB_ASSIST_PROVIDER;
   delete process.env.AI_JOB_ASSIST_MODEL;
   resetFakeDb({ id: USER, role: 'employer' });
+  // #36: globalny budżet AI (bramka bazy) — rezerwacja i rozliczenie w atrapie bazy.
+  fakeDb.rpc('ai_budget_reserve', () => '44444444-4444-4444-8444-444444444444');
+  fakeDb.rpc('ai_budget_settle', () => true);
   vi.mocked(isProductionMode).mockReturnValue(true);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
   vi.mocked(getActiveCompany).mockResolvedValue({
@@ -164,27 +167,58 @@ describe('autoryzacja, limity, budżet', () => {
   });
 
   it('budżet (#36): odmowa = brak wywołania; po wywołaniu rozliczenie samymi liczbami', async () => {
-    const reserve = vi.fn(async () => false);
     const settle = vi.fn(async () => undefined);
-    setAiBudgetGate({ reserve, settle });
+    const reserve = vi.fn(async () => null as { settle: typeof settle } | null);
+    setAiBudgetGate({ reserve });
     expect(await suggestJobText(INPUT)).toEqual({ ok: false, error: 'AI_BUDGET_EXCEEDED' });
     expect(suggest).not.toHaveBeenCalled();
-    expect(reserve).toHaveBeenCalledWith({ feature: 'job_offer_assist', companyId: COMPANY, model: 'claude-opus-5-5' });
-
-    reserve.mockResolvedValue(true);
-    expect((await suggestJobText(INPUT)).ok).toBe(true);
-    expect(settle).toHaveBeenCalledWith({
+    expect(reserve).toHaveBeenCalledWith({
       feature: 'job_offer_assist',
       companyId: COMPANY,
       model: 'claude-opus-5-5',
-      inputTokens: 900,
-      outputTokens: 300,
+      estimateMicroUsd: expect.any(Number),
     });
+    // Rezerwacja pokrywa co najmniej pełne max_tokens wyjścia (Opus 5.5: 20 USD / 1 mln).
+    const [[firstCall]] = reserve.mock.calls as unknown as [[{ estimateMicroUsd: number }]];
+    expect(firstCall.estimateMicroUsd).toBeGreaterThanOrEqual(6000 * 20);
+
+    reserve.mockResolvedValue({ settle });
+    expect((await suggestJobText(INPUT)).ok).toBe(true);
+    expect(settle).toHaveBeenCalledTimes(1);
+    expect(settle).toHaveBeenCalledWith({ inputTokens: 900, outputTokens: 300 }, 'ok');
+  });
+
+  it('błąd wywołania modelu: rezerwacja rozliczona pełną kwotą (bez zużycia)', async () => {
+    const settle = vi.fn(async () => undefined);
+    setAiBudgetGate({ reserve: async () => ({ settle }) });
+    suggest.mockRejectedValueOnce(new Error('api down'));
+    expect(await suggestJobText(INPUT)).toEqual({ ok: false, error: 'JOB_ASSIST_FAILED' });
+    expect(settle).toHaveBeenCalledTimes(1);
+    expect(settle).toHaveBeenCalledWith(null, 'failed');
   });
 
   it('błąd rozliczenia budżetu nie psuje odpowiedzi', async () => {
-    setAiBudgetGate({ reserve: async () => true, settle: async () => Promise.reject(new Error('down')) });
+    setAiBudgetGate({ reserve: async () => ({ settle: async () => Promise.reject(new Error('down')) }) });
     expect((await suggestJobText(INPUT)).ok).toBe(true);
+  });
+
+  it('domyślna bramka = rezerwacja w bazie (0120); przekroczony limit = brak wywołania modelu', async () => {
+    fakeDb.rpc('ai_budget_reserve', () => {
+      throw pgError('P0001', 'AI_BUDGET_EXCEEDED');
+    });
+    expect(await suggestJobText(INPUT)).toEqual({ ok: false, error: 'AI_BUDGET_EXCEEDED' });
+    expect(suggest).not.toHaveBeenCalled();
+    const reserveCall = fakeDb.calls.find((c) => c.name === 'ai_budget_reserve')!;
+    expect(reserveCall.as).toBe('service');
+    // Do bazy trafia tylko funkcja, model i kwota — bez identyfikatora firmy.
+    expect(Object.keys(reserveCall.args).sort()).toEqual(['p_estimate_micro_usd', 'p_feature', 'p_model']);
+
+    // Kontrola ujemna: dostępny budżet → model wołany i rezerwacja rozliczona.
+    fakeDb.rpc('ai_budget_reserve', () => '44444444-4444-4444-8444-444444444444');
+    fakeDb.rpc('ai_budget_settle', () => true);
+    expect((await suggestJobText(INPUT)).ok).toBe(true);
+    expect(suggest).toHaveBeenCalledTimes(1);
+    expect(fakeDb.calls.filter((c) => c.name === 'ai_budget_settle')).toHaveLength(1);
   });
 });
 

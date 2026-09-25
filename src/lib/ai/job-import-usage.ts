@@ -1,6 +1,15 @@
 import 'server-only';
 
-import { ExtractorError, type JobExtractor } from '@/lib/ai-import/extract';
+import {
+  EXTRACTION_SYSTEM_PROMPT,
+  ExtractorError,
+  JOB_EXTRACTION_MAX_TOKENS,
+  type ExtractionInput,
+  type JobExtractor,
+} from '@/lib/ai-import/extract';
+import { JOB_EXTRACTION_JSON_SCHEMA } from '@/lib/ai-import/schema';
+import { withAiBudget, type AiBudgetStore } from '@/lib/ai/budget';
+import { estimateMicroUsd, IMAGE_TOKEN_UPPER_BOUND, textTokenUpperBound } from '@/lib/ai/pricing';
 import { withAiUsageLog, type AiUsageOutcome, type AiUsageSink } from '@/lib/ai/usage-log';
 
 /**
@@ -19,12 +28,47 @@ export function classifyExtraction(result: { ok: true } | { ok: false; error: un
 
 export function withJobImportUsageLog(extractor: JobExtractor, model: string, sink?: AiUsageSink): JobExtractor {
   return {
-    extract: (input) =>
+    extract: (input, hooks) =>
       withAiUsageLog(
         { feature: 'job_listing_import', inputKind: input.kind, model },
-        () => extractor.extract(input),
+        () => extractor.extract(input, hooks),
         classifyExtraction,
         sink,
+      ),
+  };
+}
+
+/** Stała część promptu (instrukcje + schemat odpowiedzi) — liczona raz. */
+const PROMPT_OVERHEAD_TOKENS =
+  textTokenUpperBound(EXTRACTION_SYSTEM_PROMPT) + textTokenUpperBound(JSON.stringify(JOB_EXTRACTION_JSON_SCHEMA)) + 500;
+
+/** Górna granica kosztu jednej ekstrakcji (mikro-USD) — kwota rezerwacji budżetu (#36). */
+export function estimateJobImportCost(input: ExtractionInput, model: string): number {
+  const material = input.kind === 'image' ? IMAGE_TOKEN_UPPER_BOUND : textTokenUpperBound(input.text);
+  return estimateMicroUsd(model, {
+    inputTokens: PROMPT_OVERHEAD_TOKENS + material,
+    maxOutputTokens: JOB_EXTRACTION_MAX_TOKENS,
+  });
+}
+
+/**
+ * Budżet importu (#36): rezerwacja przed wywołaniem modelu, rozliczenie tokenami
+ * z odpowiedzi. Przekroczony/niedostępny budżet = `AiBudgetError`, ekstraktor nie jest wołany.
+ */
+export function withJobImportBudget(extractor: JobExtractor, model: string, store?: AiBudgetStore): JobExtractor {
+  return {
+    extract: (input, hooks) =>
+      withAiBudget(
+        { feature: 'job_listing_import', model, estimateMicroUsd: estimateJobImportCost(input, model) },
+        (reportUsage) =>
+          extractor.extract(input, {
+            onUsage: (usage) => {
+              reportUsage(usage);
+              hooks?.onUsage?.(usage);
+            },
+          }),
+        classifyExtraction,
+        store,
       ),
   };
 }

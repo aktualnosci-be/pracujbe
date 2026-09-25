@@ -60,6 +60,8 @@ export const EMAIL_PAYLOAD_FIELDS = {
   breachNotice: ['incidentReference', 'noticeSubject', 'noticeText', 'panel'],
   guestApplicationConfirm: ['recipientName', 'companyName', 'jobTitle'],
   guestApplicationSent: ['recipientName', 'companyName', 'jobTitle'],
+  // #98 (0121): e-mail do gościa o zmianie statusu — ten sam zakres co statusChanged + powitanie.
+  guestStatusChanged: ['recipientName', 'companyName', 'jobTitle', 'status'],
 } as const satisfies Record<DeliveredType, readonly string[]>;
 
 /** Payload ograniczony do pól dozwolonych dla szablonu; nieznany szablon → pusty obiekt. */

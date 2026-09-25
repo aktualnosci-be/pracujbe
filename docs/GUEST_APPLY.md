@@ -70,12 +70,35 @@ sekcja GA98 (z kontrolami ujemnymi).
 
 Aplikacja gościa jest na liście, na pulpicie i w szczególe jak zwykła, z oznaczeniem
 „Bez konta” (`dashboard.employerApplicationGuestBadge`). Szczegół pokazuje e-mail (`mailto:`)
-i telefon. Zmiana statusu działa, a historia się zapisuje. Gość nie ma profilu, więc
-`transition_application` nie wysyła mu powiadomienia ani e-maila o statusie. Rozmowy w
+i telefon. Zmiana statusu działa, a historia się zapisuje. Gość nie ma profilu, więc nie
+dostaje powiadomienia in-app, ale od `0121` dostaje e-mail `guestStatusChanged` (niżej,
+„E-mail o zmianie statusu”). Rozmowy w
 serwisie wymagają konta: przycisk „Napisz wiadomość” jest ukryty, a trigger
 `trg_conversations_guest_guard` odrzuca rozmowę z aplikacji gościa (`GUEST_APPLICATION`).
 Propozycje (`send_offer`) wymagają `candidate_id`, więc dla gościa są dostępne dopiero po
 przejęciu aplikacji.
+
+## E-mail o zmianie statusu (0121)
+
+`transition_application` dla aplikacji gościa woła `enqueue_guest_status_email`, który
+kolejkuje `guestStatusChanged` tylko, gdy:
+
+- aplikacja istnieje, nie jest usunięta, nadal nie ma konta (`candidate_id is null`);
+- zgłoszenie gościa istnieje, ma stan `confirmed` i wskazuje tę aplikację (gdy ślad
+  zgłoszenia usunie retencja, e-maila nie ma);
+- adres nie ma aktywnej blokady (#44, `email_address_suppressed`); `claim_email_batch`
+  sprawdza blokadę ponownie przed wysyłką.
+
+Klucz idempotencji to `appstatus-<aplikacja>-<id wiersza historii>` (jak u kandydata):
+ponowienie tej samej zmiany nie tworzy drugiego e-maila, powrót do statusu tworzy nowy
+wiersz historii i nowy e-mail. Wiersz kolejki ma `entity_type = 'application'`, więc
+retencja zamkniętych aplikacji (#486) usuwa go razem z aplikacją. Payload: imię i nazwisko
+gościa, nazwa firmy, tytuł oferty i status (etykieta w języku odbiorcy). Innych danych firmy
+nie ma. CTA prowadzi do listy ofert. E-mail nie ma tokenu, więc linki potwierdzenia i
+przejęcia się nie zmieniają. Nie ma też linku wypisania (brak konta, z którym wiąże się
+token wypisania, #45). Po przejęciu aplikacji przez konto działa zwykła ścieżka kandydata
+(`statusChanged`/`applicationViewed` w języku z profilu). Dowód: `supabase/tests/rls.sql`,
+sekcja GS98 (z kontrolami ujemnymi), `tests/unit/guest-status-email.test.ts`.
 
 ## Tokeny
 
@@ -94,7 +117,8 @@ linki, które już wysłano.
 ## Język e-maili (Invariant #1)
 
 Gość nie ma profilu (`preferred/account/signup_locale`), więc jego język to język formularza
-(`guest_application_requests.locale`), ustawiany przez `enqueue_guest_email`. E-maile do
+(`guest_application_requests.locale`), ustawiany przez `enqueue_guest_email` i
+`enqueue_guest_status_email` (0121). E-maile do
 firmy idą przez `enqueue_email`, czyli w języku odbiorcy.
 
 ## Idempotencja
@@ -147,6 +171,9 @@ alter table public.applications
   alter column candidate_id set not null;
 drop table if exists public.guest_application_requests;
 ```
+
+Najpierw cofnij `0121`: odtwórz `transition_application` z `0095` i usuń
+`enqueue_guest_status_email(uuid, text, text, jsonb)`.
 
 Na koniec odtwórz `enforce_application_integrity` z `0020`, `transition_application` z
 `0073` i `record_screening_answers` z `0093`. Zwykłe aplikacje zostają. Przejęte aplikacje gościa (z `candidate_id`) też zostają,

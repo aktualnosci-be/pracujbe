@@ -165,7 +165,8 @@ Harmonogram prowadzi osobna usługa cron w Railway, uruchamiająca
 Szczegóły konfiguracji: [`docs/railway/README.md`](./railway/README.md) (sekcja „Cron”).
 Najpierw uruchom zadanie ręcznie i sprawdź `email_deliveries.status`.
 
-Endpoint weryfikuje `Authorization: Bearer <EMAIL_QUEUE_SECRET>` (lub `CRON_SECRET`),
+Endpoint weryfikuje `Authorization: Bearer <EMAIL_QUEUE_SECRET>` (przejściowo także `CRON_SECRET`;
+`MAINTENANCE_SECRET` go nie otwiera — `src/lib/cron/secrets.ts`),
 inaczej zwraca 401. Gdy worker nie może wysyłać (brak konfiguracji w produkcji, błąd
 pobrania kolejki), zwraca 503, więc cron nie raportuje fałszywego sukcesu. Używa
 **service role** — `email_deliveries` nie ma polityk RLS.

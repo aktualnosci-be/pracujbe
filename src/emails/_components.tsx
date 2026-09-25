@@ -238,10 +238,11 @@ const styles = {
     verticalAlign: 'top',
     width: '50%',
   } satisfies CSSProperties,
+  /* newsletter.html: `<span style="color:#777;font-size:11px">` — bez światła (tylko nadtytuł
+     „PASZPORT PRACY” ma letter-spacing 1px). */
   passportLabel: {
     color: palette.muted,
     fontSize: '11px',
-    letterSpacing: '0.5px',
     lineHeight: '16px',
     margin: 0,
     textTransform: 'uppercase',
@@ -263,7 +264,12 @@ const styles = {
     lineHeight: '20px',
     margin: 0,
   } satisfies CSSProperties,
+  /* newsletter.html: `<p style="font-size:13px;margin:17px 0 0">` pod tabelą pól. Komórki pól
+     mają 12 px dolnego dopełnienia, więc margines akapitu = 17 − 12 = 5 px; rozmiar i interlinia
+     jawnie (inaczej <Text> React Email wstawia 14 px / 24 px). */
   passportLinkWrap: {
+    fontSize: '13px',
+    lineHeight: '20px',
     margin: '5px 0 0 0',
   } satisfies CSSProperties,
   passportLink: {
