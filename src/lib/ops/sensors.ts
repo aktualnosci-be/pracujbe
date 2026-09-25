@@ -28,7 +28,7 @@ export const opsMetricsSchema = z.object({
     staleCheckoutIntents: count,
   }),
   connections: z.object({ used: count, max: count, reserved: count }),
-  // #44 (0109). Brak sekcji = baza sprzed migracji: czujki poczty milczą zamiast 503.
+  // #44 (0111). Brak sekcji = baza sprzed migracji: czujki poczty milczą zamiast 503.
   mail: z.object({
     sentLast24h: count,
     hardBouncesLast24h: count,

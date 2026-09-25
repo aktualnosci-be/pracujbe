@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0109_ops_mail_metrics.sql   (numer TYMCZASOWY — ostateczny nada integrator)
+-- 0111_ops_mail_metrics.sql   (numer TYMCZASOWY — ostateczny nada integrator)
 -- #44: alarmy poczty w czujkach operacyjnych (#47, 0096).
 --
 -- ops_metrics() dostaje sekcję `mail` — wyłącznie LICZBY:
