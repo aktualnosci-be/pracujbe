@@ -1203,7 +1203,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `AWS_S3_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_URL_STYLE`) +
   `FILE_DOWNLOAD_SECRET`; `/api/health` → `fileBucket`/`fileDownloadSecret`. Bez bucketu: demo =
   `DEMO_UNAVAILABLE`, produkcja = błąd. Opis: `docs/railway/STORAGE_ADAPTER_CONTRACT.md`.
-  **Otwarte:** utworzenie bucketu (właściciel), GC sierot, AV, PDF faktur (`storage.ts`, #27).
+  GC sierot (#17, migracja `0108`): dzienny przebieg w `/api/maintenance` (`src/lib/storage-gc.ts`,
+  `list` w adapterze) — obiekt bez wiersza `files` po 24 h → `storage_deletion_queue`, wiersz bez
+  obiektu → tylko licznik; partie z kursorem (`storage_gc_sweeps`), dry-run domyślnie
+  (`STORAGE_GC_MODE=delete` = kasowanie), same liczniki w odpowiedzi. Opis: `docs/DATA_RETENTION.md` §3a.
+  **Otwarte:** utworzenie bucketu (właściciel), zatwierdzenie trybu `delete` na produkcji, GC
+  `email_deliveries`/`processed_webhooks`/`rate_limit` z #17, AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,

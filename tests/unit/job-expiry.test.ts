@@ -104,6 +104,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,
       retention: {},
+      // #17: bez bucketu Railway GC bucketu pominięty.
+      storageGc: null,
       storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
     });
   });

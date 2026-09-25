@@ -6,6 +6,7 @@ import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc, type RpcArgs } from '@/lib/db/sql';
 import { isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
+import { runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
   processStorageDeletions,
   railwayDeleter,
@@ -30,6 +31,9 @@ import {
  * (null = kategoria wyłączona), partie z limitem i SKIP LOCKED; potem kolejka usuwania obiektów
  * storage (`processStorageDeletions`) — także obiektów plików usuniętych w tym przebiegu.
  * Nieudane usunięcie obiektu to ponowienie w kolejnym przebiegu, nie błąd zadania.
+ * #17: dzienny GC bucketu CV (`runStorageGc`, 0108) — obiekty bez wiersza `files` do kolejki
+ * usuwania (tylko przy `STORAGE_GC_MODE=delete`; domyślnie dry-run z samymi licznikami),
+ * wiersze bez obiektu tylko liczone. Bez bucketu Railway — pominięty (`storageGc: null`).
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
  *
@@ -112,6 +116,7 @@ async function run(request: Request): Promise<Response> {
     | 'savedSearchAlerts'
     | 'emailCampaigns'
     | 'retention'
+    | 'storageGc'
     | 'storageDeletions';
   const failures: Array<{ task: Task; error: unknown }> = [];
 
@@ -152,6 +157,18 @@ async function run(request: Request): Promise<Response> {
   } catch (error) {
     failures.push({ task: 'retention', error });
   }
+  // #17: GC sierot bucketu CV przed workerem kolejki — sieroty znikają w tym samym przebiegu.
+  let storageGc: StorageGcRun | null = null;
+  try {
+    const { fileBucketConfig } = await import('@/lib/env');
+    const config = fileBucketConfig();
+    if (config) {
+      const { createRailwayBucket } = await import('@/lib/storage/railway-bucket');
+      storageGc = await runStorageGc(createRailwayBucket(config), { dryRun: storageGcDryRun() });
+    }
+  } catch (error) {
+    failures.push({ task: 'storageGc', error });
+  }
   // Po retencji: kolejka usuwania obiektów storage (także plików usuniętych w tym przebiegu).
   let storageDeletions: Awaited<ReturnType<typeof processStorageDeletions>> | null = null;
   try {
@@ -174,6 +191,7 @@ async function run(request: Request): Promise<Response> {
     savedSearchDigests: savedSearchDigests ?? 0,
     campaignEmailsQueued: campaignEmailsQueued ?? 0,
     retention,
+    storageGc,
     storageDeletions,
   });
 }
