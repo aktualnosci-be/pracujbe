@@ -2515,7 +2515,13 @@
     "deleteTitle": "Delete the search “{name}”?",
     "deleteDescription": "You will stop receiving alerts about new jobs matching these filters.",
     "deleted": "We deleted the search.",
-    "updated": "We saved your changes."
+    "updated": "We saved your changes.",
+    "rename": "Rename",
+    "renameLabel": "New search name",
+    "renameSave": "Save name",
+    "renameCancel": "Cancel",
+    "renamed": "We renamed the search.",
+    "renameHint": "1 to 80 characters."
   },
   "contentReport": {
     "metaTitle": "Report content",
@@ -2654,5 +2660,22 @@
     "categoryUnion": "trade union membership",
     "categoryPolitical": "political opinions",
     "categoryCriminal": "criminal record"
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Turn off alert",
+    "title": "Turn off this alert?",
+    "confirmText": "We will stop sending emails with new jobs for this one saved search. Your other searches and notifications stay as they are.",
+    "confirmButton": "Turn off this alert",
+    "pending": "Saving…",
+    "doneTitle": "Alert turned off",
+    "doneText": "We will no longer send you alerts for this search. The search stays saved — you can turn the alert back on in your candidate panel.",
+    "settingsHint": "You can change your saved searches and alerts after logging in.",
+    "loginLink": "Log in",
+    "invalidTitle": "The link is not valid",
+    "invalidText": "This link is incomplete or has been changed. Use the link from the latest email or change the alert after logging in.",
+    "expiredTitle": "The link has expired",
+    "expiredText": "This link is no longer valid. Use the link from the latest email or change the alert after logging in.",
+    "unavailableText": "Turning off the alert is temporarily unavailable. Try again later or change the alert after logging in.",
+    "errorText": "We could not save the change. Please try again."
   }
 }

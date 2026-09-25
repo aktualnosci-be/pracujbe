@@ -30,7 +30,7 @@ import {
   EmailTextLink,
 } from '@/emails/_components';
 import type { EmailCopy, EmailType } from '@/emails/copy';
-import { emailCopy, greetings, interpolate, jobOfferPassportCopy, layoutCopy, moderationLabels } from '@/emails/copy';
+import { emailCopy, greetings, interpolate, jobMatchAlertOffLabel, jobOfferPassportCopy, layoutCopy, moderationLabels } from '@/emails/copy';
 import { applicationStatusLabel } from '@/emails/status-labels';
 import type { EmailSenderIdentity } from '@/lib/email/sender';
 
@@ -124,6 +124,8 @@ export interface EmailDataMap {
     count: number;
     jobs?: Array<{ title: string; companyName?: string; city?: string; url: string }>;
     actionUrl: string;
+    /** Link wyłączenia tylko tego alertu — wyłącznie z opcji workera (renderEmail), nie z payloadu. */
+    alertOffUrl?: string;
   };
   /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
   guestApplicationConfirm: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
@@ -652,6 +654,9 @@ function JobMatchList({ jobs }: { jobs: EmailDataMap['jobMatch']['jobs'] }): Rea
 }
 
 export function JobMatchEmail(props: EmailProps<'jobMatch'>): ReactElement {
+  const alertOffUrl = typeof props.alertOffUrl === 'string' && props.alertOffUrl.length > 0
+    ? props.alertOffUrl
+    : undefined;
   return (
     <EmailShell
       locale={props.locale}
@@ -659,7 +664,16 @@ export function JobMatchEmail(props: EmailProps<'jobMatch'>): ReactElement {
       vars={props}
       ctaHref={props.actionUrl}
       greetingName={props.recipientName}
-      detail={<JobMatchList jobs={props.jobs} />}
+      detail={
+        <>
+          <JobMatchList jobs={props.jobs} />
+          {alertOffUrl ? (
+            <EmailText muted>
+              <EmailTextLink href={alertOffUrl}>{jobMatchAlertOffLabel[props.locale]}</EmailTextLink>
+            </EmailText>
+          ) : null}
+        </>
+      }
     />
   );
 }
@@ -911,7 +925,7 @@ export async function renderEmail<T extends EmailType>(
   type: T,
   locale: Locale,
   data: EmailDataMap[T],
-  options: { unsubscribeUrl?: string; sender?: EmailSenderIdentity } = {},
+  options: { unsubscribeUrl?: string; sender?: EmailSenderIdentity; alertOffUrl?: string } = {},
 ): Promise<{ subject: string; html: string; text: string }> {
   // Rejestr jest w pełni typowany; tu kasujemy generyk wyłącznie na potrzeby createElement
   // (TS nie potrafi skorelować EmailDataMap[T] z sygnaturą createElement).
@@ -923,6 +937,8 @@ export async function renderEmail<T extends EmailType>(
     locale,
     unsubscribeUrl: options.unsubscribeUrl,
     emailSender: options.sender,
+    // #100: link wyłączenia alertu też PO danych — payload kolejki go nie podmieni.
+    alertOffUrl: options.alertOffUrl,
   });
   const html = await render(element);
   // #45: wersja text/plain z tego samego drzewa (multipart/alternative u dostawcy).

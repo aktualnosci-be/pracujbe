@@ -88,6 +88,17 @@ export interface EmailCopy {
 }
 
 /** Powitanie (bez imienia) w każdym języku — imię dołączane jest w szablonie. */
+/**
+ * #100: link „wyłącz tylko ten alert” w digeście `jobMatch` (adres podaje worker, nie payload).
+ * Tekst linku — w języku odbiorcy jak cała wiadomość.
+ */
+export const jobMatchAlertOffLabel: Record<Locale, string> = {
+  pl: 'Wyłącz tylko ten alert',
+  nl: 'Alleen deze melding uitzetten',
+  fr: 'Désactiver uniquement cette alerte',
+  en: 'Turn off only this alert',
+};
+
 export const greetings: Record<Locale, string> = {
   pl: 'Cześć',
   nl: 'Hallo',

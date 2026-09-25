@@ -662,9 +662,21 @@ rejestruje parę w `saved_search_alerts` (PK = brak ponownej wysyłki), tworzy j
 (`job_match`, `entity_type='saved_search'`) i jeden e-mail `jobMatch` (digest ≤ 5 ofert,
 język odbiorcy, opt-out `email_job_matches`); digest najwyżej raz na dobę/tydzień. Panel:
 `/candidate/wyszukiwania` (alert, częstotliwość, usunięcie). Dowód: `rls.sql` sekcja SS100;
-unit `saved-search-alerts`; E2E `saved-search.spec`. **Otwarte:** zmiana nazwy wyszukiwania;
-link wypisania i ponowna kontrola zgody tuż przed wysyłką przychodzą z #466 (tam `jobMatch` →
-kategoria `job_matches`); na przebieg najwyżej 100 najnowszych pasujących ofert.
+unit `saved-search-alerts`; E2E `saved-search.spec`.
+Dokończenie (migracja `0108`, numer tymczasowy): zmiana nazwy w `/candidate/wyszukiwania`
+(RPC `rename_saved_search`: tylko własne, 1–80 znaków, bez znaków sterujących; cudze = `NOT_FOUND`).
+E-mail `jobMatch` ma link „Wyłącz tylko ten alert” → `/{locale}/wypisz-alert#t=` (noindex,
+token HMAC `src/lib/email/saved-search-alert-token.ts`: UUID konta + wyszukiwania, osobna
+domena podpisu, sekret `EMAIL_UNSUBSCRIBE_SECRET`, bez e-maila w URL; zapis po kliknięciu przez
+`saved_search_alert_unsubscribe`, tylko service_role, tylko właściciel z tokenu). Link liczy
+worker (payload go nie podmieni). Kolejka: `email_delivery_suppression_reason` (blokada adresu,
+zgoda kategorii, wyłączony/usunięty alert, kampania) w `claim_email_batch` i w
+`email_delivery_send_check` — worker woła ją tuż przed budżetem i `send` (#466 pkt 8), wiersz
+niedozwolony jest wygaszany (`suppressed_alert_disabled` / `suppressed_opt_out`…). Dowód:
+`rls.sql` sekcja SS108 (kontrole ujemne), unit `saved-search-followups`,
+`saved-search-rename-ui`, E2E `saved-search.spec` (`/wypisz-alert`).
+**Otwarte:** na przebieg najwyżej 100 najnowszych pasujących ofert; nagłówek one-click
+(`List-Unsubscribe`) nadal wypisuje z całej kategorii `job_matches`.
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).

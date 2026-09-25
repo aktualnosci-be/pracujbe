@@ -2515,7 +2515,13 @@
     "deleteTitle": "Zoekopdracht ‘{name}’ verwijderen?",
     "deleteDescription": "Je krijgt dan geen meldingen meer over nieuwe vacatures met deze filters.",
     "deleted": "We hebben de zoekopdracht verwijderd.",
-    "updated": "We hebben de wijzigingen opgeslagen."
+    "updated": "We hebben de wijzigingen opgeslagen.",
+    "rename": "Naam wijzigen",
+    "renameLabel": "Nieuwe naam van de zoekopdracht",
+    "renameSave": "Naam opslaan",
+    "renameCancel": "Annuleren",
+    "renamed": "We hebben de naam van de zoekopdracht gewijzigd.",
+    "renameHint": "1 tot 80 tekens."
   },
   "contentReport": {
     "metaTitle": "Inhoud melden",
@@ -2654,5 +2660,22 @@
     "categoryUnion": "lidmaatschap van een vakbond",
     "categoryPolitical": "politieke overtuiging",
     "categoryCriminal": "strafrechtelijk verleden"
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Melding uitzetten",
+    "title": "Deze melding uitzetten?",
+    "confirmText": "We sturen geen e-mails met nieuwe vacatures meer voor deze ene opgeslagen zoekopdracht. Je andere zoekopdrachten en meldingen blijven ongewijzigd.",
+    "confirmButton": "Deze melding uitzetten",
+    "pending": "Opslaan…",
+    "doneTitle": "Melding uitgezet",
+    "doneText": "We sturen je geen meldingen meer voor deze zoekopdracht. De zoekopdracht blijft bewaard — je zet de melding weer aan in je kandidatenpaneel.",
+    "settingsHint": "Opgeslagen zoekopdrachten en meldingen wijzig je nadat je bent ingelogd.",
+    "loginLink": "Inloggen",
+    "invalidTitle": "De link is ongeldig",
+    "invalidText": "Deze link is onvolledig of gewijzigd. Gebruik de link uit de nieuwste e-mail of wijzig de melding nadat je bent ingelogd.",
+    "expiredTitle": "De link is verlopen",
+    "expiredText": "Deze link is niet meer geldig. Gebruik de link uit de nieuwste e-mail of wijzig de melding nadat je bent ingelogd.",
+    "unavailableText": "De melding uitzetten kan nu even niet. Probeer het later opnieuw of wijzig de melding nadat je bent ingelogd.",
+    "errorText": "De wijziging kon niet worden opgeslagen. Probeer het opnieuw."
   }
 }

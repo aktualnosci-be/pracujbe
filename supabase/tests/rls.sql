@@ -5176,6 +5176,182 @@ select pg_temp.assert(
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- SS108. Zapisane wyszukiwania — dokończenie #100 (0108): zmiana nazwy (RPC-only, tylko
+-- własne, limit długości), wyłączenie JEDNEGO alertu z linku w e-mailu (service_role,
+-- tylko właściciel z tokenu), wygaszanie zakolejkowanego digestu przy claimie i ponowna
+-- kontrola tuż przed wysyłką (email_delivery_send_check).
+-- ============================================================================
+\set SPA 'e9310000-0000-0000-0000-0000000000a1'
+\set SPB 'e9310000-0000-0000-0000-0000000000a2'
+\set SPC 'e9310000-0000-0000-0000-0000000000c1'
+\set SPJ1 'e9310000-0000-0000-0000-0000000000d1'
+\set SPJ2 'e9310000-0000-0000-0000-0000000000d2'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SPA','spa@test.be','Sol A','{"role":"candidate","first_name":"Sol","last_name":"A","locale":"fr"}'),
+  (:'SPB','spb@test.be','Sam B','{"role":"candidate","first_name":"Sam","last_name":"B","locale":"nl"}');
+insert into public.companies(id,name,status) values (:'SPC','Firma SP108','verified');
+
+set role authenticated; set app.current_uid = :'SPA'; select pg_temp.assert_client_role();
+select saved_search_id as sp1 from public.save_saved_search('Wózek', 'pl',
+  '{"keyword":"wozkowy sp108"}', '?keyword=wozkowy+sp108') \gset
+select saved_search_id as sp2 from public.save_saved_search('Wózek FR', 'fr',
+  '{"keyword":"cariste sp108"}', '?keyword=cariste+sp108') \gset
+
+-- SS108-1: zmiana nazwy własnego wyszukiwania (przycięta), ta sama nazwa = no-op.
+select pg_temp.assert(public.rename_saved_search(:'sp1', '  Wózek nocny  ') = 'Wózek nocny',
+  'SS108-1 zmiana nazwy zwraca przyciętą nazwę');
+select pg_temp.assert((select name from public.saved_searches where id = :'sp1') = 'Wózek nocny',
+  'SS108-1b nazwa zapisana');
+select pg_temp.assert(public.rename_saved_search(:'sp1', 'Wózek nocny') = 'Wózek nocny',
+  'SS108-1c ta sama nazwa: bez błędu (idempotentnie)');
+select pg_temp.assert(public.rename_saved_search(:'sp1', repeat('x', 80)) = repeat('x', 80),
+  'SS108-1d granica: 80 znaków przechodzi');
+select pg_temp.expect_error('select public.rename_saved_search(''' || :'sp1' || ''', ''   '')',
+  'VALIDATION_FAILED', 'SS108-1e pusta nazwa odrzucona');
+select pg_temp.expect_error('select public.rename_saved_search(''' || :'sp1' || ''', repeat(''x'', 81))',
+  'VALIDATION_FAILED', 'SS108-1f 81 znaków odrzucone');
+select pg_temp.expect_error(
+  'select public.rename_saved_search(''' || :'sp1' || ''', ''a'' || chr(10) || ''b'')',
+  'VALIDATION_FAILED', 'SS108-1g znak sterujący odrzucony');
+select pg_temp.assert((select name from public.saved_searches where id = :'sp1') = repeat('x', 80),
+  'SS108-1h odrzucone nazwy nie zmieniły wiersza');
+select public.rename_saved_search(:'sp1', 'Wózek nocny');
+reset role; reset app.current_uid;
+
+-- SS108-2 (KONTROLE UJEMNE): obcy kandydat, anon i bezpośredni UPDATE nie zmienią nazwy.
+set role authenticated; set app.current_uid = :'SPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.rename_saved_search(''' || :'sp1' || ''', ''Przejęte'')',
+  'NOT_FOUND', 'SS108-2 obcy nie zmieni nazwy cudzego wyszukiwania');
+select pg_temp.expect_error('select public.rename_saved_search(gen_random_uuid(), ''X'')',
+  'NOT_FOUND', 'SS108-2b nieistniejące wyszukiwanie → NOT_FOUND (bez rozróżnienia)');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'update public.saved_searches set name = ''Bez RPC'' where id = ''' || :'sp1' || '''',
+  'permission denied', 'SS108-2c bezpośredni UPDATE nazwy odrzucony');
+select pg_temp.expect_error(
+  'select public.saved_search_alert_unsubscribe(''' || :'SPA' || ''', ''' || :'sp1' || ''')',
+  'permission denied', 'SS108-2d klient nie wywoła wyłączenia alertu z linku (tylko service_role)');
+select pg_temp.expect_error('select public.email_delivery_send_check(gen_random_uuid())',
+  'permission denied', 'SS108-2e klient nie wywoła kontroli przed wysyłką');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.rename_saved_search(''' || :'sp1' || ''', ''X'')',
+  'permission denied', 'SS108-2f anon bez EXECUTE');
+reset role;
+select pg_temp.assert((select name from public.saved_searches where id = :'sp1') = 'Wózek nocny',
+  'SS108-2g nazwa nietknięta po próbach obcych');
+
+-- SS108-3: wyłączenie alertu z linku — tylko para (właściciel, wyszukiwanie) z tokenu.
+set role service_role;
+select public.saved_search_alert_unsubscribe(:'SPB', :'sp1');
+reset role;
+select pg_temp.assert((select alerts_enabled from public.saved_searches where id = :'sp1'),
+  'SS108-3 KONTROLA UJEMNA: profil spoza tokenu (nie właściciel) niczego nie wyłącza');
+set role service_role;
+select public.saved_search_alert_unsubscribe(:'SPA', :'sp1');
+select public.saved_search_alert_unsubscribe(:'SPA', :'sp1');
+reset role;
+select pg_temp.assert(
+  (select not alerts_enabled and name = 'Wózek nocny' and filters ? 'keyword'
+     from public.saved_searches where id = :'sp1')
+  and (select alerts_enabled from public.saved_searches where id = :'sp2'),
+  'SS108-3b ten jeden alert wyłączony (idempotentnie), wyszukiwanie i drugi alert zostają');
+
+-- SS108-4: digest zakolejkowany przed wyłączeniem alertu nie wychodzi (claim wygasza).
+set role authenticated; set app.current_uid = :'SPA'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts(:'sp1', true);
+reset role; reset app.current_uid;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SPJ1',:'SPC','sp108-j1','Wozkowy SP108','warehouse','permanent','Gent','Vlaanderen','active','pl', now());
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 hour', alerts_since = now() - interval '1 hour' where id = :'sp1';
+set role service_role;
+select pg_temp.assert(public.process_saved_search_alerts(100) = 1, 'SS108-4 digest zakolejkowany');
+select public.saved_search_alert_unsubscribe(:'SPA', :'sp1');
+reset role;
+select id as sp_d1 from public.email_deliveries
+ where profile_id = :'SPA' and template = 'jobMatch' and entity_id = :'sp1' \gset
+select pg_temp.assert(
+  (select entity_type = 'saved_search' and status::text = 'queued' from public.email_deliveries where id = :'sp_d1'),
+  'SS108-4b digest powiązany z wyszukiwaniem (entity_type=saved_search)');
+-- KONTROLA UJEMNA: sama zgoda kategorii (claim z 0101) przepuściłaby ten wiersz.
+select pg_temp.assert(public.email_allowed(:'SPA', 'jobMatch') is true,
+  'SS108-4c kontrola ujemna: zgoda job_matches nadal włączona — kategoria nie zatrzyma digestu');
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c where c.id = :'sp_d1'),
+  'SS108-4d claim nie wydaje digestu wyłączonego alertu');
+select pg_temp.assert(
+  (select status::text = 'failed' and suppressed_at is not null
+          and error_message = 'suppressed_alert_disabled' and locked_at is null
+     from public.email_deliveries where id = :'sp_d1'),
+  'SS108-4e wiersz wygaszony (suppressed_alert_disabled), ślad zostaje');
+
+-- SS108-5: kontrola tuż przed wysyłką — wypisanie/wyłączenie PO claimie zatrzymuje wiersz.
+select public.enqueue_email(:'SPA', 'jobMatch', 'saved_search', :'sp2', 'sp108-d2',
+  '{"searchName":"Wózek FR","count":1}'::jsonb);
+select public.enqueue_email(:'SPA', 'jobMatch', 'saved_search', :'sp2', 'sp108-d3',
+  '{"searchName":"Wózek FR","count":1}'::jsonb);
+select public.enqueue_email(:'SPA', 'jobOffer', 'offer', :'SPJ1', 'sp108-d4', '{}'::jsonb);
+select id as sp_d2 from public.email_deliveries where idempotency_key = 'sp108-d2' \gset
+select id as sp_d3 from public.email_deliveries where idempotency_key = 'sp108-d3' \gset
+select id as sp_d4 from public.email_deliveries where idempotency_key = 'sp108-d4' \gset
+select pg_temp.assert(
+  (select count(*) from public.claim_email_batch(100000) c where c.id in (:'sp_d2', :'sp_d3', :'sp_d4')) = 3,
+  'SS108-5 claim wydaje trzy wiersze (alert i zgody włączone)');
+set role service_role;
+select pg_temp.assert(public.email_delivery_send_check(:'sp_d2') is null,
+  'SS108-5b KONTROLA UJEMNA: bez zmian kontrola przepuszcza wiersz');
+reset role;
+select pg_temp.assert(
+  (select status::text = 'queued' and locked_at is not null and suppressed_at is null
+     from public.email_deliveries where id = :'sp_d2'),
+  'SS108-5c przepuszczony wiersz nietknięty (dzierżawa workera zostaje)');
+-- Alert wyłączony z linku między claimem a wysyłką.
+set role service_role;
+select public.saved_search_alert_unsubscribe(:'SPA', :'sp2');
+select pg_temp.assert(public.email_delivery_send_check(:'sp_d3') = 'suppressed_alert_disabled',
+  'SS108-5d alert wyłączony po claimie → kontrola zatrzymuje digest');
+-- Wypisanie z kategorii job_matches między claimem a wysyłką.
+select public.email_unsubscribe(:'SPA', 'job_matches');
+select pg_temp.assert(public.email_delivery_send_check(:'sp_d2') = 'suppressed_opt_out',
+  'SS108-5e wypisanie z kategorii po claimie → kontrola zatrzymuje wiersz');
+select pg_temp.assert(public.email_delivery_send_check(:'sp_d4') is null,
+  'SS108-5f inna kategoria (propozycje) nadal wychodzi');
+select pg_temp.assert(public.email_delivery_send_check(:'sp_d2') = 'not_queued',
+  'SS108-5g wiersz już wygaszony → not_queued (worker nic nie wysyła)');
+reset role;
+select pg_temp.assert(
+  (select bool_and(status::text = 'failed' and suppressed_at is not null and locked_at is null)
+     from public.email_deliveries where id in (:'sp_d2', :'sp_d3'))
+  and (select error_message from public.email_deliveries where id = :'sp_d3') = 'suppressed_alert_disabled'
+  and (select error_message from public.email_deliveries where id = :'sp_d2') = 'suppressed_opt_out',
+  'SS108-5h wygaszone wiersze z przyczyną, ślad zostaje');
+
+-- SS108-6: usunięte wyszukiwanie — zakolejkowany digest nie wychodzi.
+update public.notification_preferences set email_job_matches = true where profile_id = :'SPA';
+set role authenticated; set app.current_uid = :'SPA'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts(:'sp2', true);
+reset role; reset app.current_uid;
+select public.enqueue_email(:'SPA', 'jobMatch', 'saved_search', :'sp2', 'sp108-d5',
+  '{"searchName":"Wózek FR","count":1}'::jsonb);
+set role authenticated; set app.current_uid = :'SPA'; select pg_temp.assert_client_role();
+select public.delete_saved_search(:'sp2');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.email_deliveries where idempotency_key = 'sp108-d5' and status = 'queued'),
+  'SS108-6 digest zakolejkowany przed usunięciem wyszukiwania');
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c where c.idempotency_key = 'sp108-d5'),
+  'SS108-6b claim nie wydaje digestu usuniętego wyszukiwania');
+select pg_temp.assert(
+  (select error_message from public.email_deliveries where idempotency_key = 'sp108-d5')
+    = 'suppressed_alert_disabled',
+  'SS108-6c wiersz wygaszony z przyczyną');
+
+-- ============================================================================
 -- SQ101. Pytania screeningowe (0093, #101): zapis w szkicu (recruiter+, atomowo z krokiem),
 --        odpowiedzi walidowane w bazie razem z aplikacją, niezmienny snapshot, RLS odczytu.
 -- ============================================================================
