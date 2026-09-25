@@ -50,12 +50,6 @@ export function decodeAdminCursor(token: string | undefined | null): AdminCursor
   return { createdAt, id };
 }
 
-/** Filtr PostgREST „starsze niż kursor” dla sortowania `created_at desc, id desc`. */
-export function cursorOrFilter(cursor: AdminCursor): string {
-  const ts = `"${cursor.createdAt}"`;
-  return `created_at.lt.${ts},and(created_at.eq.${ts},id.lt.${cursor.id})`;
-}
-
 /* ---------------------------------------------------------------------------
  * Wyszukiwanie
  * ------------------------------------------------------------------------- */
@@ -75,11 +69,6 @@ export function normalizeAdminSearch(raw: string | undefined | null): string | n
     .slice(0, ADMIN_SEARCH_MAX)
     .trim();
   return cleaned.length > 0 ? cleaned : null;
-}
-
-/** Filtr `or` PostgREST: fraza (już znormalizowana) w dowolnej z kolumn (ILIKE). */
-export function searchOrFilter(columns: readonly string[], q: string): string {
-  return columns.map((col) => `${col}.ilike."%${q}%"`).join(',');
 }
 
 /** Dopasowanie frazy w danych DEMO (bez bazy). */
@@ -157,6 +146,16 @@ export function parseEmailSuppressionFilter(raw: string | undefined | null): Ema
     : 'active';
 }
 
+/** Filtr rejestru naruszeń (#490, `breach_incidents.status`); domyślnie otwarte. */
+export const BREACH_LIST_FILTERS = ['open', 'closed', 'all'] as const;
+export type BreachListFilter = (typeof BREACH_LIST_FILTERS)[number];
+
+export function parseBreachFilter(raw: string | undefined | null): BreachListFilter {
+  return raw && (BREACH_LIST_FILTERS as readonly string[]).includes(raw)
+    ? (raw as BreachListFilter)
+    : 'open';
+}
+
 /** Filtr kolejki przeglądu pytań screeningowych (#497, 0103). Domyślnie oczekujące. */
 export const SCREENING_REVIEW_FILTERS = ['pending', 'decided', 'all'] as const;
 export type ScreeningReviewFilter = (typeof SCREENING_REVIEW_FILTERS)[number];
@@ -222,13 +221,14 @@ export function reportReasonView(reason: string): ReportReasonView {
  * Dziennik zdarzeń (audit_logs, #417)
  * ------------------------------------------------------------------------- */
 
-/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072). */
+/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106). */
 export const AUDIT_ENTITY_TYPES = [
   'company',
   'report',
   'application',
   'offer',
   'email_suppression',
+  'breach_incident',
   'screening_question_review',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
@@ -250,6 +250,12 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'offer.status_changed': 'auditActionOfferStatus',
   'email.suppressed': 'auditActionEmailSuppressed',
   'email.suppression_lifted': 'auditActionEmailSuppressionLifted',
+  'breach.created': 'auditActionBreachCreated',
+  'breach.updated': 'auditActionBreachUpdated',
+  'breach.closed': 'auditActionBreachClosed',
+  'breach.reopened': 'auditActionBreachReopened',
+  'breach.exported': 'auditActionBreachExported',
+  'breach.subjects_notified': 'auditActionBreachSubjectsNotified',
   'screening_question.review_requested': 'auditActionScreeningRequested',
   'screening_question.reviewed': 'auditActionScreeningReviewed',
 };

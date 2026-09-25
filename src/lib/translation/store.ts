@@ -1,10 +1,11 @@
 import 'server-only';
 
-import { createAdminClient } from '@/lib/supabase/admin';
+import { withServiceRole } from '@/lib/db/portal';
+import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { TranslationFields } from '@/lib/translation/validate';
 
 /**
- * Dostęp workera do kolejki tłumaczeń (0106). Każda metoda = jedno wywołanie RPC (osobna,
+ * Dostęp workera do kolejki tłumaczeń (0109). Każda metoda = jedno wywołanie RPC (osobna,
  * krótka transakcja w bazie) — wywołanie dostawcy odbywa się pomiędzy nimi, nigdy wewnątrz
  * transakcji. Interfejs pozwala testować worker bez bazy.
  */
@@ -42,40 +43,56 @@ export interface TranslationQueueStore {
   ): Promise<FailOutcome>;
 }
 
-/** Kolejka przez klienta service-role (jak outbox e-mail); wywołania tylko z serwera. */
-export function adminTranslationStore(): TranslationQueueStore {
-  const admin = createAdminClient();
+/**
+ * Kolejka przez pulę zadań serwerowych (service_role, jak outbox e-mail). Każde wywołanie to
+ * osobna, krótka transakcja `withServiceRole` — dostawca jest wołany pomiędzy nimi.
+ */
+export function serviceTranslationStore(): TranslationQueueStore {
   return {
     async claim(limit, leaseSeconds) {
-      const { data, error } = await admin.rpc('claim_translation_jobs', {
-        p_limit: limit,
-        p_lease_seconds: leaseSeconds,
-      });
-      if (error) throw new Error('translation_claim_failed');
-      return (data ?? []) as ClaimedTranslationJob[];
+      try {
+        return await withServiceRole((tx) =>
+          rpcRows<ClaimedTranslationJob>(tx, 'claim_translation_jobs', {
+            p_limit: limit,
+            p_lease_seconds: leaseSeconds,
+          }),
+        );
+      } catch {
+        throw new Error('translation_claim_failed');
+      }
     },
     async complete(job, fields, usage) {
-      const { data, error } = await admin.rpc('complete_translation_job', {
-        p_job_id: job.job_id,
-        p_lease_id: job.lease_id,
-        p_fields: fields,
-        p_model: usage.model.slice(0, 64),
-        p_input_tokens: usage.inputTokens,
-        p_output_tokens: usage.outputTokens,
-      });
-      if (error) throw new Error('translation_complete_failed');
-      return data as CompleteOutcome;
+      try {
+        const out = await withServiceRole((tx) =>
+          rpc<CompleteOutcome>(tx, 'complete_translation_job', {
+            p_job_id: job.job_id,
+            p_lease_id: job.lease_id,
+            p_fields: jsonArg(fields),
+            p_model: usage.model.slice(0, 64),
+            p_input_tokens: usage.inputTokens,
+            p_output_tokens: usage.outputTokens,
+          }),
+        );
+        return out ?? 'not_found';
+      } catch {
+        throw new Error('translation_complete_failed');
+      }
     },
     async fail(job, code, retryable, retryAfterSeconds) {
-      const { data, error } = await admin.rpc('fail_translation_job', {
-        p_job_id: job.job_id,
-        p_lease_id: job.lease_id,
-        p_error_code: code,
-        p_retryable: retryable,
-        p_retry_after_seconds: retryAfterSeconds,
-      });
-      if (error) throw new Error('translation_fail_failed');
-      return data as FailOutcome;
+      try {
+        const out = await withServiceRole((tx) =>
+          rpc<FailOutcome>(tx, 'fail_translation_job', {
+            p_job_id: job.job_id,
+            p_lease_id: job.lease_id,
+            p_error_code: code,
+            p_retryable: retryable,
+            p_retry_after_seconds: retryAfterSeconds,
+          }),
+        );
+        return out ?? 'not_found';
+      } catch {
+        throw new Error('translation_fail_failed');
+      }
     },
   };
 }

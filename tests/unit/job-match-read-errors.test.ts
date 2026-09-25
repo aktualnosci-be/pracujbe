@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getMyJobMatch } from '@/lib/data/matching';
-import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #197: dopasowanie nie jest liczone z niepełnych danych. Błąd KAŻDEGO z sześciu odczytów
@@ -12,13 +11,13 @@ import { createServerClient } from '@/lib/supabase/server';
  */
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 type Read = 'candidate_profiles' | 'candidate_skills' | 'candidate_languages' | 'candidate_certificates' | 'get_job_match_profile' | 'locations';
 const READS: Read[] = ['candidate_profiles', 'candidate_skills', 'candidate_languages', 'candidate_certificates', 'get_job_match_profile', 'locations'];
-const readError = { code: 'read-failed', message: 'relation does not exist' };
+const readError = pgError('42P01', 'relation does not exist');
+const USER = '11111111-1111-4111-8111-111111111111';
 
 const JOB = {
   occupation: 'forklift', category: 'warehouse', skills: ['Wózek widłowy'], mandatory_skills: ['Wózek widłowy'],
@@ -38,32 +37,37 @@ interface Options {
   relations?: Partial<Record<Read, unknown[]>>;
 }
 
+/** Nazwy zapytań loadera → źródło odczytu raportowane w telemetrii. */
+const QUERY_BY_READ: Record<Exclude<Read, 'get_job_match_profile'>, string> = {
+  candidate_profiles: 'matching.candidate-profile',
+  candidate_skills: 'matching.candidate-skills',
+  candidate_languages: 'matching.candidate-languages',
+  candidate_certificates: 'matching.candidate-certificates',
+  locations: 'matching.locations',
+};
+
 function client({ failed = null, profile = PROFILE, jobRows = [JOB], relations = {} }: Options = {}) {
-  const result = (read: Read, data: unknown) => (failed === read ? { data: null, error: readError } : { data, error: null });
+  resetFakeDb({ id: USER, role: 'candidate' });
+  const result = (read: Read, data: unknown) => () => {
+    if (failed === read) throw readError;
+    return data;
+  };
   const rows: Record<string, unknown[]> = {
     candidate_skills: [{ skill_label: 'Wózek widłowy' }],
     candidate_languages: [{ language_label: 'nl' }],
     candidate_certificates: [],
+    locations: [],
     ...relations,
   };
-  const query = (table: Read) => {
-    const q: Record<string, unknown> = {};
-    for (const method of ['select', 'eq']) q[method] = vi.fn(() => q);
-    q['maybeSingle'] = vi.fn(async () => result(table, profile));
-    q['then'] = (ok: (v: unknown) => unknown, fail: (r: unknown) => unknown) =>
-      Promise.resolve(result(table, rows[table])).then(ok, fail);
-    return q;
-  };
-  vi.mocked(createServerClient).mockResolvedValue({
-    auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'user-1' } } })) },
-    from: vi.fn((table: Read) => query(table)),
-    rpc: vi.fn(async () => result('get_job_match_profile', jobRows)),
-  } as never);
+  fakeDb.rows(QUERY_BY_READ.candidate_profiles, result('candidate_profiles', profile ? [profile] : []));
+  for (const read of ['candidate_skills', 'candidate_languages', 'candidate_certificates', 'locations'] as const) {
+    fakeDb.rows(QUERY_BY_READ[read], result(read, rows[read]));
+  }
+  fakeDb.rpc('get_job_match_profile', result('get_job_match_profile', jobRows));
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
 });
 
 describe('getMyJobMatch (#197)', () => {
@@ -73,6 +77,10 @@ describe('getMyJobMatch (#197)', () => {
     expect(load.status).toBe('ok');
     expect(load.status === 'ok' && load.result.score).toBeGreaterThan(0);
     expect(captureError).not.toHaveBeenCalled();
+    // Profil kandydata wyłącznie właściciela sesji; relacje po id jego profilu.
+    expect(fakeDb.callsTo('matching.candidate-profile')[0]).toMatchObject({ as: USER, values: [USER] });
+    expect(fakeDb.callsTo('matching.candidate-skills')[0]!.values).toEqual(['cp-1']);
+    expect(fakeDb.callsTo('get_job_match_profile')[0]!.args).toEqual({ p_job_id: 'job-1' });
   });
 
   it.each(READS)('błąd odczytu %s → error z telemetrią, bez procentu', async (read) => {
@@ -83,10 +91,19 @@ describe('getMyJobMatch (#197)', () => {
     expect(captureError).toHaveBeenCalledWith(readError, { area: 'matching.getMyJobMatch', source: read });
   });
 
-  it('wyjątek klienta → error (nie null/brak profilu)', async () => {
-    vi.mocked(createServerClient).mockRejectedValue(new Error('network'));
+  it('wyjątek połączenia → error (nie null/brak profilu)', async () => {
+    client();
+    const network = new Error('network');
+    fakeDb.rows(QUERY_BY_READ.candidate_profiles, () => { throw network; });
     await expect(getMyJobMatch('job-1')).resolves.toEqual({ status: 'error' });
     expect(captureError).toHaveBeenCalledTimes(1);
+  });
+
+  it('bez sesji → none, bez zapytań', async () => {
+    client();
+    fakeSession.identity = null;
+    await expect(getMyJobMatch('job-1')).resolves.toEqual({ status: 'none' });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('udane puste relacje kandydata to nadal wynik (nie błąd)', async () => {
@@ -139,7 +156,9 @@ describe('getMyJobMatch (#197)', () => {
   });
 
   it('bez konfiguracji (demo) → none', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    client();
+    fakeSession.configured = false;
     await expect(getMyJobMatch('job-1')).resolves.toEqual({ status: 'none' });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });

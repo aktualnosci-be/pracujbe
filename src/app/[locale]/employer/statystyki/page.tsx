@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { isPortalDataConfigured } from '@/lib/db/portal';
 import {
   getEmployerOverview,
   getFunnelStats,
@@ -15,7 +15,7 @@ import { EmployerStatsError } from '@/components/employer/EmployerStatsError';
 import { JobFunnelRangePicker, JobFunnelStats } from '@/components/employer/JobFunnelStats';
 import {
   EYEBROW,
-  H1,
+  H1_EXTENDED,
   PANEL,
   PANEL_H2,
   PANEL_P,
@@ -59,7 +59,7 @@ export default async function EmployerStatsPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tc = await getTranslations({ locale, namespace: 'common' });
 
-  const configured = isSupabaseConfigured();
+  const configured = isPortalDataConfigured();
   const tf = await getTranslations({ locale, namespace: 'jobFunnel' });
   const [overview, funnel, jobFunnel] = await Promise.all([
     getEmployerOverview(),
@@ -71,7 +71,7 @@ export default async function EmployerStatsPage({
     <div className="min-w-0 space-y-[19px]">
       <div>
         <p className={EYEBROW}>{td('employerRole')}</p>
-        <h1 className={H1}>{td('funnelTitle')}</h1>
+        <h1 className={H1_EXTENDED}>{td('funnelTitle')}</h1>
       </div>
 
       {/* Kafelki przeglądowe */}

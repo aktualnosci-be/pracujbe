@@ -1,18 +1,20 @@
 'use server';
 
-import { createServerClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { execute, queryOne, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
+import { captureError } from '@/lib/sentry';
 
 /**
- * Server Actions panelu KANDYDATA — zapisywane pod sesją użytkownika (RLS, nie service-role).
+ * Server Actions panelu KANDYDATA — zapisywane pod sesją użytkownika (transakcja sesji
+ * `withPortalTransaction`, RLS, nie service_role; #25).
  *
  *  - `toggleSavedJob`     — dodaje/usuwa ofertę z `saved_jobs` (unikat `candidate_id, job_id`).
- *  - `withdrawApplication`— wycofuje aplikację (`status = 'withdrawn'`). RLS `applications_update`
- *    (candidate_id = auth.uid()) + trigger `enforce_application_integrity` dopuszczają dla właściciela
- *    wyłącznie przejście do 'withdrawn' — reszta pól pozostaje niezmienna.
+ *  - `withdrawApplication`— wycofuje aplikację przez RPC `withdraw_application` (0025/0040:
+ *    autoryzacja candidate_id = auth.uid(), idempotentne, historia z triggera).
  *
- * TRYB DEMO (Invariant: panele działają bez env): gdy Supabase nie jest skonfigurowane,
+ * TRYB DEMO (Invariant: panele działają bez env): gdy baza nie jest skonfigurowana,
  * nie zapisujemy — zwracamy `{ ok: true }` (dla toggla echo optymistycznego stanu robi klient).
  * Błędy mapujemy na kod użytkowy — bez technikaliów (Invariant #8).
  */
@@ -57,48 +59,38 @@ export async function toggleSavedJob(
   }
 
   // Tryb demo — brak zapisu; klient trzyma optymistyczny stan przycisku.
-  if (!isSupabaseConfigured()) return { ok: true };
+  if (!isPortalDataConfigured()) return { ok: true };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    let target = desired;
-    if (target === undefined) {
-      // Stan bieżący (RLS: kandydat czyta wyłącznie własne saved_jobs).
-      const { data: existing, error: selError } = await supabase
-        .from('saved_jobs')
-        .select('id')
-        .eq('candidate_id', user.id)
-        .eq('job_id', jobId)
-        .maybeSingle();
-      if (selError) return { ok: false, error: mapPgError(selError.message) };
-      target = !existing;
-    }
+    return await withPortalTransaction(me, async (tx): Promise<ToggleSavedResult> => {
+      let target = desired;
+      if (target === undefined) {
+        // Stan bieżący (RLS: kandydat czyta wyłącznie własne saved_jobs).
+        const existing = await queryOne(tx, 'candidate.saved-job-state',
+          'SELECT id FROM public.saved_jobs WHERE candidate_id = $1 AND job_id = $2', [me.id, jobId]);
+        target = !existing;
+      }
 
-    if (!target) {
-      // DELETE brakującego wiersza nie jest błędem — ponowienie daje ten sam stan.
-      const { error: delError } = await supabase
-        .from('saved_jobs')
-        .delete()
-        .eq('candidate_id', user.id)
-        .eq('job_id', jobId);
-      if (delError) return { ok: false, error: mapPgError(delError.message) };
-      return { ok: true, saved: false };
-    }
+      if (!target) {
+        // DELETE brakującego wiersza nie jest błędem — ponowienie daje ten sam stan.
+        await execute(tx, 'candidate.saved-job-delete',
+          'DELETE FROM public.saved_jobs WHERE candidate_id = $1 AND job_id = $2', [me.id, jobId]);
+        return { ok: true, saved: false };
+      }
 
-    const { error: insError } = await supabase
-      .from('saved_jobs')
-      .insert({ candidate_id: user.id, job_id: jobId });
-    // 23505 = unique_violation: wiersz już istnieje, więc oferta jest zapisana.
-    if (insError && insError.code !== '23505') {
-      return { ok: false, error: mapPgError(insError.message) };
-    }
-    return { ok: true, saved: true };
-  } catch {
+      // Istniejący wiersz (także równoległy insert tej samej pary) = oferta już zapisana:
+      // unikat `(candidate_id, job_id)` + ON CONFLICT DO NOTHING zamiast błędu 23505.
+      await execute(tx, 'candidate.saved-job-insert',
+        `INSERT INTO public.saved_jobs (candidate_id, job_id) VALUES ($1, $2)
+         ON CONFLICT (candidate_id, job_id) DO NOTHING`, [me.id, jobId]);
+      return { ok: true, saved: true };
+    });
+  } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    captureError(error, { area: 'candidate.toggleSavedJob' });
     return { ok: false, error: 'INTERNAL' };
   }
 }
@@ -109,22 +101,20 @@ export async function withdrawApplication(applicationId: string): Promise<Withdr
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
 
-  if (!isSupabaseConfigured()) return { ok: true };
+  if (!isPortalDataConfigured()) return { ok: true };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
     // Bezpośredni DML na `applications` jest odebrany klientowi (0025, granica zaufania) —
     // wycofanie idzie przez SECURITY DEFINER RPC (autoryzacja auth.uid()=candidate_id,
     // idempotentne, historia z triggera). Zwraca finalny status.
-    const { error } = await supabase.rpc('withdraw_application', { p_application_id: applicationId });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+    await withPortalTransaction(me, (tx) => rpc(tx, 'withdraw_application', { p_application_id: applicationId }));
     return { ok: true };
-  } catch {
+  } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    captureError(error, { area: 'candidate.withdrawApplication' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

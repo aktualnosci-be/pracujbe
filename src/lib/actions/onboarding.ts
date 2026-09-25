@@ -3,11 +3,19 @@
 import { getLocale } from 'next-intl/server';
 import { headers } from 'next/headers';
 
-import { createServerClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import {
+  getPortalIdentity,
+  isPortalDataConfigured,
+  withPortalTransaction,
+  withServiceRole,
+} from '@/lib/db/portal';
+import { execute, jsonArg, rpc } from '@/lib/db/sql';
+import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
+import { consentWordingVersions } from '@/lib/signup-consents';
+import type { Locale } from '@/i18n/routing';
 import {
   step1Schema,
   step2Schema,
@@ -22,16 +30,16 @@ import {
  * Server Actions onboardingu kandydata — realny zapis kroków profilu do bazy.
  *
  * Każdy krok jest walidowany odpowiednim `stepNSchema` (to samo źródło prawdy, co po stronie
- * klienta) i zapisywany JEDNYM żądaniem do bazy — jedno żądanie = jedna transakcja, więc błąd
- * nie zostawia części kroku (#142):
+ * klienta) i zapisywany w JEDNEJ transakcji sesji (`withPortalTransaction`, RLS jako kandydat,
+ * #25) — błąd nie zostawia części kroku (#142):
  *   - krok 1 → `profiles` (first_name / last_name / phone; dane tożsamości są w profiles),
  *   - krok 3 → RPC `save_candidate_onboarding_step3` (0082): doświadczenie + umiejętności,
  *   - krok 5 → RPC `save_candidate_onboarding_step5` (0082): języki (z poziomem) + certyfikaty,
  *   - kroki 2, 4, 6 → `candidate_profiles` (UPSERT po unikalnym `profile_id`),
  *   - krok 6 z `finish: true` („Zakończ”) wymaga zgody, woła `finish_onboarding` i zapisuje
- *     receipt akceptacji regulaminu/polityki (`record_document_acceptance`, 0054); bez `finish`
+ *     receipty regulaminu i informacji o prywatności (`record_signup_consents`, 0108); bez `finish`
  *     („Zapisz i wyjdź”, #337) zapisuje dane kroku bez zgody i bez kończenia onboardingu.
- *     Atomowy jest tu sam zapis danych kroku; `finish_onboarding` to osobne żądanie, które tylko
+ *     Atomowy jest tu sam zapis danych kroku; `finish_onboarding` to osobna transakcja, która tylko
  *     sprawdza kompletność — dane kroku 6 zostają zapisane także przy `ONBOARDING_INCOMPLETE`
  *     (jak przy „Zapisz i wyjdź”), a receipt jest best-effort.
  *
@@ -39,7 +47,7 @@ import {
  * i normalizacja z `set_candidate_*`, 0028/0079) — koniec cichej utraty danych z FUN-04.
  * Bezpośredni DML na tych tabelach jest odebrany klientowi (0028), więc RPC to jedyna ścieżka zapisu.
  *
- * TRYB DEMO (Invariant: panele działają bez env): gdy Supabase nie jest skonfigurowane,
+ * TRYB DEMO (Invariant: panele działają bez env): gdy baza nie jest skonfigurowana,
  * walidujemy dane, ale NIE zapisujemy — zwracamy `{ ok: true, demo: true }`. Dzięki temu
  * build i UX działają bez backendu.
  * Bez technikaliów dla użytkownika (Invariant #8) — błędy mapujemy na kod użytkowy.
@@ -91,82 +99,108 @@ export async function saveOnboardingStep(
   if (!parsed.ok) return { ok: false, error: 'VALIDATION_FAILED' };
 
   // 2) Tryb demo (brak env) — nie zapisujemy, ale przepływ działa.
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return { ok: true, demo: true };
   }
 
-  // 3) Autoryzacja — potrzebny zalogowany użytkownik.
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
-
-  // 4) Zapis w zależności od kroku.
   try {
-    if (step === 1) {
-      const v = parsed.value as import('@/lib/validation/candidate').CandidateStep1;
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          first_name: v.firstName,
-          last_name: v.lastName,
-          phone: nullIfEmpty(v.phone),
-        })
-        .eq('id', user.id);
-      if (error) return { ok: false, error: mapPgError(error.message) };
-      return { ok: true };
-    }
+    // 3) Autoryzacja — potrzebny zalogowany użytkownik (tożsamość z sesji serwera).
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    if (step === 3) {
-      // Doświadczenie + umiejętności w jednej transakcji (0082) — błąd umiejętności cofa też
-      // doświadczenie, więc komunikat błędu odpowiada stanowi bazy (#142).
-      const v = parsed.value as import('@/lib/validation/candidate').CandidateStep3;
-      const { error } = await supabase.rpc('save_candidate_onboarding_step3', {
-        p_experience_years: v.experienceYears,
-        p_skills: v.skills,
-      });
-      if (error) return { ok: false, error: mapPgError(error.message) };
-      return { ok: true };
-    }
+    // 4) Zapis w zależności od kroku — jedna transakcja na krok.
+    await withPortalTransaction(me, async (tx) => {
+      if (step === 1) {
+        const v = parsed.value as import('@/lib/validation/candidate').CandidateStep1;
+        await execute(tx, 'onboarding.step1-profile',
+          'UPDATE public.profiles SET first_name = $2, last_name = $3, phone = $4 WHERE id = $1',
+          [me.id, v.firstName, v.lastName, nullIfEmpty(v.phone)]);
+        return;
+      }
 
-    if (step === 5) {
-      // Języki (z poziomem) + certyfikaty w jednej transakcji (0082, #142).
-      const v = parsed.value as import('@/lib/validation/candidate').CandidateStep5;
-      const { error } = await supabase.rpc('save_candidate_onboarding_step5', {
-        p_languages: v.languages.map((l) => ({ language: l.language, level: l.level })),
-        // Certyfikat z datą ważności (#96) — matching pomija wygasłe; brak daty = bezterminowy.
-        p_certificates: v.certificates.map((label) => ({
-          label,
-          expires_at: v.certificateExpiry[label] ?? null,
-        })),
-      });
-      if (error) return { ok: false, error: mapPgError(error.message) };
-      return { ok: true };
-    }
+      if (step === 3) {
+        // Doświadczenie + umiejętności w jednej transakcji (0082) — błąd umiejętności cofa też
+        // doświadczenie, więc komunikat błędu odpowiada stanowi bazy (#142).
+        const v = parsed.value as import('@/lib/validation/candidate').CandidateStep3;
+        await rpc(tx, 'save_candidate_onboarding_step3', {
+          p_experience_years: v.experienceYears,
+          p_skills: v.skills,
+        });
+        return;
+      }
 
-    // Kroki 2/4/6 → UPSERT do candidate_profiles po unikalnym profile_id.
-    const row = buildCandidateProfileRow(step, parsed.value, data);
-    const { error } = await supabase
-      .from('candidate_profiles')
-      .upsert({ profile_id: user.id, ...row }, { onConflict: 'profile_id' });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+      if (step === 5) {
+        // Języki (z poziomem) + certyfikaty w jednej transakcji (0082, #142).
+        const v = parsed.value as import('@/lib/validation/candidate').CandidateStep5;
+        await rpc(tx, 'save_candidate_onboarding_step5', {
+          p_languages: jsonArg(v.languages.map((l) => ({ language: l.language, level: l.level }))),
+          // Certyfikat z datą ważności (#96) — matching pomija wygasłe; brak daty = bezterminowy.
+          p_certificates: jsonArg(v.certificates.map((label) => ({
+            label,
+            expires_at: v.certificateExpiry[label] ?? null,
+          }))),
+        });
+        return;
+      }
+
+      // Kroki 2/4/6 → UPSERT do candidate_profiles po unikalnym profile_id (tylko kolumny kroku).
+      await upsertCandidateProfile(tx, me.id, buildCandidateProfileRow(step, parsed.value, data));
+    });
 
     if (finish) {
       // Kompletność liczy DB z obecności wymaganych danych (FUN-05) — klient nie może już
       // sam ustawić profile_completed (kolumna odebrana; RPC definer waliduje i ustawia).
-      const { data: complete, error: fe } = await supabase.rpc('finish_onboarding');
-      if (fe) return { ok: false, error: mapPgError(fe.message) };
+      // Osobna transakcja: dane kroku 6 zostają zapisane także przy ONBOARDING_INCOMPLETE.
+      const complete = await withPortalTransaction(me, (tx) => rpc(tx, 'finish_onboarding'));
       // P1-07: NIE zgłaszaj sukcesu, gdy baza uznała profil za niekompletny — inaczej kreator
       // przekierowuje, a profil pozostaje niewyszukiwalny bez żadnego komunikatu (pozorna awaria).
       if (complete !== true) return { ok: false, error: 'ONBOARDING_INCOMPLETE' };
-      await recordTermsAcceptance(user.id);
+      await recordTermsAcceptance(me.id);
     }
     return { ok: true };
-  } catch {
+  } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
     // Nieoczekiwany błąd — bez technikaliów dla użytkownika (Invariant #8).
+    captureError(error, { area: 'onboarding.saveOnboardingStep' });
     return { ok: false, error: 'INTERNAL' };
   }
+}
+
+/** Kolumny `candidate_profiles`, które kreator może zapisać (stała lista — nazwy trafiają do SQL). */
+const CANDIDATE_PROFILE_COLUMNS: ReadonlySet<string> = new Set([
+  'occupations',
+  'categories',
+  'city',
+  'region',
+  'radius_km',
+  'has_driving_license',
+  'has_car',
+  'availability',
+  'preferred_contract_types',
+  'expected_salary_min',
+  'expected_salary_currency',
+  'bio',
+]);
+
+/**
+ * `INSERT … ON CONFLICT (profile_id) DO UPDATE` wyłącznie kolumn danego kroku (jak dotychczasowy
+ * upsert): nowy profil dostaje wartości domyślne pozostałych kolumn, istniejący — bez zmian w nich.
+ */
+async function upsertCandidateProfile(
+  tx: TransactionQuery,
+  profileId: string,
+  row: Record<string, unknown>,
+): Promise<void> {
+  const columns = Object.keys(row);
+  if (columns.length === 0 || columns.some((column) => !CANDIDATE_PROFILE_COLUMNS.has(column))) {
+    throw new Error('Nieprawidłowe kolumny profilu kandydata.');
+  }
+  const placeholders = columns.map((_, index) => `$${index + 2}`);
+  await execute(tx, 'onboarding.candidate-profile-upsert',
+    `INSERT INTO public.candidate_profiles (profile_id, ${columns.join(', ')})
+     VALUES ($1, ${placeholders.join(', ')})
+     ON CONFLICT (profile_id) DO UPDATE SET ${columns.map((column) => `${column} = EXCLUDED.${column}`).join(', ')}`,
+    [profileId, ...columns.map((column) => row[column])]);
 }
 
 /** Waliduje dane kroku właściwym schematem; zwraca sparsowaną wartość albo błąd. */
@@ -188,10 +222,11 @@ function validateStep(
 }
 
 /**
- * Niezmienny receipt akceptacji regulaminu i polityki prywatności z kroku 6 (#337) — to samo
- * gotowe RPC co przy rejestracji (0054, tylko service_role), kluczowane po zweryfikowanym
- * `user.id` z sesji. Best-effort jak w rejestracji: awaria receiptu nie cofa zapisanego profilu,
- * ale trafia do Sentry (rozliczalność).
+ * Niezmienne receipty z kroku 6 (#337, #493): akceptacja regulaminu i potwierdzenie
+ * zapoznania się z informacją o prywatności jako OSOBNE wiersze (kanał `onboarding`).
+ * Krok 6 nie pokazuje zgód opcjonalnych, więc nie powstaje żaden dowód zgody na inne cele.
+ * Kluczowane po zweryfikowanym UUID z sesji (RPC tylko service_role → `withServiceRole`). Best-effort jak
+ * dotąd: awaria receiptu nie cofa zapisanego profilu, ale trafia do Sentry (rozliczalność).
  */
 async function recordTermsAcceptance(profileId: string): Promise<void> {
   try {
@@ -200,16 +235,20 @@ async function recordTermsAcceptance(profileId: string): Promise<void> {
       store.get('x-real-ip')?.trim() ||
       store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
       null;
-    const { error } = await createAdminClient().rpc('record_document_acceptance', {
+    const locale = (await getLocale()) as Locale;
+    await withServiceRole((tx) => rpc(tx, 'record_signup_consents', {
       p_profile_id: profileId,
-      p_documents: ['terms', 'privacy'],
-      p_locale: await getLocale(),
+      p_terms_accepted: true,
+      p_privacy_notice_ack: true,
+      p_optional: jsonArg({}),
+      p_source: 'onboarding',
+      p_locale: locale,
+      p_wording_versions: jsonArg(consentWordingVersions('onboarding', locale)),
       p_ip: ip,
       p_user_agent: store.get('user-agent'),
-    });
-    if (error) captureError(error, { area: 'onboarding.recordDocumentAcceptance' });
+    }));
   } catch (e) {
-    captureError(e, { area: 'onboarding.recordDocumentAcceptance' });
+    captureError(e, { area: 'onboarding.recordSignupConsents' });
   }
 }
 
@@ -221,7 +260,7 @@ function buildCandidateProfileRow(
 ): Record<string, unknown> {
   type S2 = import('@/lib/validation/candidate').CandidateStep2;
   type S4 = import('@/lib/validation/candidate').CandidateStep4;
-  type S6 = Omit<import('@/lib/validation/candidate').CandidateStep6, 'agreeTerms'>;
+  type S6 = Omit<import('@/lib/validation/candidate').CandidateStep6, 'agreeTerms' | 'privacyNoticeAck'>;
 
   if (step === 2) {
     const v = value as S2;

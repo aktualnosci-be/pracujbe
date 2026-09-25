@@ -1,31 +1,31 @@
 /**
  * Warstwa danych płatności/subskrypcji pracodawcy — Pracuj.be (Etap 7h, scaffold).
  *
- * Strategia spójna z `@/lib/data/company`/`@/lib/data/employer`: przy skonfigurowanym Supabase
- * dane czytane są pod SESJĄ zalogowanego użytkownika (RLS, NIGDY service-role) przez
- * `createServerClient`. Bez konfiguracji (build/preview bez env) zwracamy dane DEMO, dzięki czemu
+ * Strategia spójna z `@/lib/data/company`/`@/lib/data/employer`: przy skonfigurowanej bazie
+ * (`isPortalDataConfigured`, #25) dane czytane są pod SESJĄ zalogowanego użytkownika
+ * (`withPortalTransaction`, RLS, NIGDY service-role). Bez konfiguracji (build/preview bez env)
+ * zwracamy dane DEMO, dzięki czemu
  * ekran `/employer/platnosci` renderuje pełny widok (pakiety, subskrypcja, faktury) bez backendu.
  *
  * PROVIDER-GATED: realne rozliczenia wymagają zewnętrznego dostawcy (np. Stripe). Bez klucza
  * (`STRIPE_SECRET_KEY`) działamy w trybie podglądu — `providerConfigured=false`, akcje zwracają
  * `{ ok: true, demo: true }` (patrz `@/lib/actions/billing`). Ten moduł NIE integruje dostawcy.
  *
- * „Aktywna firma" = pierwsze aktywne członkostwo (`company_members.is_active = true`) — jak w
- * panelu pracodawcy. Odczyt subskrypcji/faktur wymaga roli owner/admin firmy (RLS
+ * „Aktywna firma" = `getActiveCompanyId` (cookie zwalidowane względem aktywnych członkostw,
+ * FUN-07) — jak w panelu pracodawcy. Odczyt subskrypcji/faktur wymaga roli owner/admin firmy (RLS
  * `subscriptions_select_admin` / `invoices_select_admin` → `is_company_admin`). Członek bez tej
  * roli zobaczy pusty stan.
  *
  * `discount_codes` NIE jest czytane tutaj (RLS: deny) — walidację kodu robi server action
- * service-rolem. Klient Supabase importowany LENIWIE (moduł nie ciągnie `next/headers` do bundla
+ * service-rolem. Kontekst firmy importowany LENIWIE (moduł nie ciągnie `next/headers` do bundla
  * trybu DEMO).
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js';
-
 import { isBillingEnabled } from '@/lib/billing/flag';
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { queryRows } from '@/lib/db/sql';
+import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/sentry';
-import { getSignedFileUrl } from '@/lib/storage';
 
 /* ---------------------------------------------------------------------------
  * Kontrakty dla UI
@@ -167,7 +167,7 @@ const DEMO_INVOICES: BillingInvoice[] = [
 ];
 
 /* ---------------------------------------------------------------------------
- * Pomocnicze parsowanie (klient Supabase jest nietypowany → dane `unknown`)
+ * Pomocnicze parsowanie (wiersze JSON z bazy → `unknown`)
  * ------------------------------------------------------------------------- */
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -197,35 +197,9 @@ function asInt(value: unknown, fallback = 0): number {
  * ------------------------------------------------------------------------- */
 
 /** Id aktywnej firmy zalogowanego (cookie-aware, zwalidowane — FUN-07) albo null. */
-async function activeCompanyId(supabase: SupabaseClient, userId: string): Promise<string | null> {
+async function activeCompanyId(tx: TransactionQuery, userId: string): Promise<string | null> {
   const { getActiveCompanyId } = await import('@/lib/company-context');
-  return getActiveCompanyId(supabase, userId);
-}
-
-/**
- * Best-effort signed URL do PDF faktury. Metadane pliku czytane pod sesją (RLS `files_select_own`);
- * jeśli plik należy do usługi (nie do usera) odczyt zwróci null i po prostu nie pokażemy linku.
- * NIGDY nie rzuca do wywołującego.
- */
-async function resolveInvoicePdfUrl(
-  supabase: SupabaseClient,
-  pdfFileId: string,
-): Promise<string | null> {
-  try {
-    const { data, error } = await supabase
-      .from('files')
-      .select('bucket, path')
-      .eq('id', pdfFileId)
-      .maybeSingle();
-    if (error || !data) return null;
-    const bucket = asString(asRecord(data)['bucket']);
-    const path = asString(asRecord(data)['path']);
-    if (!bucket || !path) return null;
-    // TTL 300 s — link do pobrania, nie do udostępniania.
-    return await getSignedFileUrl(path, bucket, 300);
-  } catch {
-    return null;
-  }
+  return getActiveCompanyId(tx, userId);
 }
 
 /* ---------------------------------------------------------------------------
@@ -237,7 +211,7 @@ async function resolveInvoicePdfUrl(
  * Odczyt subskrypcji/faktur wymaga roli owner/admin firmy (RLS) — inaczej zwracamy pusty stan.
  */
 export async function getBilling(): Promise<BillingData> {
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return {
       subscription: DEMO_SUBSCRIPTION,
       invoices: DEMO_INVOICES,
@@ -249,34 +223,37 @@ export async function getBilling(): Promise<BillingData> {
   const providerConfigured = isBillingProviderConfigured();
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    const me = await getPortalIdentity();
+    if (!me) {
       return { subscription: null, invoices: [], plans: PLANS, providerConfigured };
     }
 
-    const companyId = await activeCompanyId(supabase, user.id);
-    if (!companyId) {
+    const loaded = await withPortalTransaction(me, async (tx) => {
+      const companyId = await activeCompanyId(tx, me.id);
+      if (!companyId) return null;
+
+      // Subskrypcja (najnowsza, nieusunięta). RLS: subscriptions_select_admin.
+      const subRows = await queryRows(tx, 'billing.subscription',
+        `SELECT id, plan, status, current_period_end, trial_ends_at, cancel_at, canceled_at, created_at
+           FROM public.subscriptions
+          WHERE company_id = $1 AND deleted_at IS NULL
+          ORDER BY created_at DESC
+          LIMIT 1`, [companyId]);
+
+      // Faktury (najnowsze pierwsze). RLS: invoices_select_admin.
+      const invoiceRows = await queryRows(tx, 'billing.invoices',
+        `SELECT id, number, status, amount_cents, tax_cents, currency, issued_at
+           FROM public.invoices
+          WHERE company_id = $1
+          ORDER BY issued_at DESC NULLS LAST
+          LIMIT 50`, [companyId]);
+      return { subRows, invoiceRows };
+    });
+    if (!loaded) {
       return { subscription: null, invoices: [], plans: PLANS, providerConfigured };
     }
 
-    // Subskrypcja (najnowsza, nieusunięta). RLS: subscriptions_select_admin.
-    const { data: subData, error: subErr } = await supabase
-      .from('subscriptions')
-      .select(
-        'id, plan, status, current_period_end, trial_ends_at, cancel_at, canceled_at, created_at',
-      )
-      .eq('company_id', companyId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    if (subErr) throw subErr;
-
-    const subRow = asRows(subData)[0];
+    const subRow = asRows(loaded.subRows)[0];
     const subscription: BillingSubscription | null = subRow
       ? {
           id: asString(subRow['id']),
@@ -289,19 +266,9 @@ export async function getBilling(): Promise<BillingData> {
         }
       : null;
 
-    // Faktury (najnowsze pierwsze). RLS: invoices_select_admin.
-    const { data: invData, error: invErr } = await supabase
-      .from('invoices')
-      .select('id, number, status, amount_cents, tax_cents, currency, issued_at, pdf_file_id')
-      .eq('company_id', companyId)
-      .order('issued_at', { ascending: false, nullsFirst: false })
-      .limit(50);
-    if (invErr) throw invErr;
-
+    // PDF faktur nie ma gdzie leżeć: billing wyłączony (#51), Supabase Storage usunięte (#27).
     const invoices: BillingInvoice[] = [];
-    for (const row of asRows(invData)) {
-      const pdfFileId = asString(row['pdf_file_id']);
-      const pdfUrl = pdfFileId ? await resolveInvoicePdfUrl(supabase, pdfFileId) : null;
+    for (const row of asRows(loaded.invoiceRows)) {
       invoices.push({
         id: asString(row['id']),
         number: asNullableString(row['number']),
@@ -310,7 +277,7 @@ export async function getBilling(): Promise<BillingData> {
         taxCents: asInt(row['tax_cents']),
         currency: asString(row['currency'], 'EUR'),
         issuedAt: asNullableString(row['issued_at']),
-        pdfUrl,
+        pdfUrl: null,
       });
     }
 

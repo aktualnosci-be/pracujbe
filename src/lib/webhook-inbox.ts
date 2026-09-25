@@ -1,6 +1,7 @@
 import 'server-only';
 
-import type { createAdminClient } from '@/lib/supabase/admin';
+import { withServiceRole } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 
 /**
  * Inbox webhooków ze stanem + DZIERŻAWĄ (P0-01/P0-02/P2-06). Zamiast markera „widziany"
@@ -13,12 +14,15 @@ import type { createAdminClient } from '@/lib/supabase/admin';
  *   - `completeWebhook` (RPC) oznacza 'completed' i zwraca, czy trafił wiersz — błąd/false
  *     to dla wołającego powód do 500 (reprocessing), nie cichy sukces.
  *
+ * #25: claim i complete to OSOBNE, krótkie transakcje service_role (`withServiceRole`).
+ * Claim jest zatwierdzany przed przetwarzaniem, więc dzierżawa jest od razu widoczna dla
+ * równoległych workerów; przetwarzanie (wysyłka, zapis zdarzenia) nie trzyma otwartej
+ * transakcji inboxu.
+ *
  * Awaria przed `completed` NIE blokuje ponowienia (dzierżawa wygaśnie → reprocessing; zapisy
- * Stripe są idempotentne po stabilnych ID; dla e-maili ponowna wysyłka to mniejsze zło niż
- * trwała utrata). Tabela `processed_webhooks` + funkcje są dostępne tylko dla service_role.
+ * są idempotentne po stabilnych ID; dla e-maili ponowna wysyłka to mniejsze zło niż trwała
+ * utrata). Tabela `processed_webhooks` + funkcje są dostępne tylko dla service_role.
  */
-
-type Admin = ReturnType<typeof createAdminClient>;
 
 export type ClaimResult = 'claimed' | 'duplicate' | 'locked' | 'error';
 
@@ -30,23 +34,22 @@ const DEFAULT_LOCK_SECONDS = 300;
  *  - `duplicate` → zdarzenie już `completed`; pomiń, zwróć 200.
  *  - `locked`    → inny worker trzyma świeżą dzierżawę; pomiń (bez podwójnych skutków), zwróć 200.
  *  - `claimed`   → przetwarzaj (nowe LUB dzierżawa wygasła — reprocessing jest bezpieczny).
- *  - `error`     → inbox nieosiągalny (brak service-role/infra). Wołający decyduje.
+ *  - `error`     → inbox nieosiągalny (brak puli service/infra, błąd bazy). Wołający decyduje.
  */
 export async function claimWebhook(
-  admin: Admin,
   id: string,
   source: string,
   lockSeconds: number = DEFAULT_LOCK_SECONDS,
 ): Promise<ClaimResult> {
-  const { data, error } = await admin.rpc('claim_webhook', {
-    p_id: id,
-    p_source: source,
-    p_lock_seconds: lockSeconds,
-  });
-  if (error) return 'error';
-  const outcome = typeof data === 'string' ? data : '';
-  if (outcome === 'claimed' || outcome === 'duplicate' || outcome === 'locked') return outcome;
-  return 'error';
+  try {
+    const outcome = await withServiceRole((tx) =>
+      rpc<string>(tx, 'claim_webhook', { p_id: id, p_source: source, p_lock_seconds: lockSeconds }),
+    );
+    if (outcome === 'claimed' || outcome === 'duplicate' || outcome === 'locked') return outcome;
+    return 'error';
+  } catch {
+    return 'error';
+  }
 }
 
 /**
@@ -54,8 +57,11 @@ export async function claimWebhook(
  * oznaczony; `false` przy błędzie DB lub braku wpisu — wołający traktuje to jako powód do 500
  * (reprocessing), nie cichy sukces (P2-06).
  */
-export async function completeWebhook(admin: Admin, id: string): Promise<boolean> {
-  const { data, error } = await admin.rpc('complete_webhook', { p_id: id });
-  if (error) return false;
-  return data === true;
+export async function completeWebhook(id: string): Promise<boolean> {
+  try {
+    const done = await withServiceRole((tx) => rpc<boolean>(tx, 'complete_webhook', { p_id: id }));
+    return done === true;
+  } catch {
+    return false;
+  }
 }

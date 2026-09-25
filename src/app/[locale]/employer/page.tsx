@@ -3,7 +3,7 @@ import { ArrowRight, Plus } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
-import { isSupabaseConfigured } from '@/lib/env';
+import { isPortalDataConfigured } from '@/lib/db/portal';
 import {
   getCompanyJobsLoad,
   getEmployerOverview,
@@ -86,7 +86,7 @@ export default async function EmployerDashboardPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tc = await getTranslations({ locale, namespace: 'common' });
 
-  const configured = isSupabaseConfigured();
+  const configured = isPortalDataConfigured();
   const [overview, jobsLoad, recentApplications, candidates, funnel, shell] = await Promise.all([
     getEmployerOverview(),
     getCompanyJobsLoad(),

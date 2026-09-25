@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { updatePublishedJob } from '@/lib/actions/jobs';
-import { isSupabaseConfigured } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #325 — akcja `updatePublishedJob`: poprawka aktywnej/wstrzymanej oferty. Egzekwowanie (stan
@@ -11,15 +11,16 @@ import { checkRateLimit } from '@/lib/rate-limit';
  * wywołanie z całą treścią, wersja do CAS bez zmian i kody użytkowe zamiast tekstu bazy.
  */
 
-const rpc = vi.fn();
-const getUser = vi.fn();
-
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn(() => true) }));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: vi.fn(async () => ({ rpc, auth: { getUser } })),
-}));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+
+const USER = '22222222-2222-4222-8222-222222222222';
+let rpcResult: () => unknown;
+
+function calls() {
+  return fakeDb.callsTo('update_published_job');
+}
 
 const JOB = '11111111-1111-4111-8111-111111111111';
 const VERSION = '2026-09-24T10:00:00.123456+00:00';
@@ -48,13 +49,10 @@ function steps(): unknown[] {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  resetFakeDb({ id: USER, role: 'employer' });
   vi.mocked(checkRateLimit).mockResolvedValue(true);
-  getUser.mockResolvedValue({ data: { user: { id: 'u-1' } } });
-  rpc.mockResolvedValue({
-    data: { slug: 'magazynier-abc', updated_at: '2026-09-24T10:05:00.5+00:00' },
-    error: null,
-  });
+  rpcResult = () => ({ slug: 'magazynier-abc', updated_at: '2026-09-24T10:05:00.5+00:00' });
+  fakeDb.rpc('update_published_job', () => rpcResult());
 });
 
 describe('updatePublishedJob (#325)', () => {
@@ -62,12 +60,12 @@ describe('updatePublishedJob (#325)', () => {
     const result = await updatePublishedJob(JOB, steps(), VERSION);
 
     expect(result).toEqual({ ok: true, slug: 'magazynier-abc', updatedAt: '2026-09-24T10:05:00.5+00:00' });
-    expect(rpc).toHaveBeenCalledTimes(1);
-    const [name, args] = rpc.mock.calls[0]!;
-    expect(name).toBe('update_published_job');
+    expect(calls()).toHaveLength(1);
+    const { args, as } = calls()[0]!;
+    expect(as).toBe(USER);
     expect(args.p_job_id).toBe(JOB);
     expect(args.p_expected_updated_at).toBe(VERSION);
-    expect(args.p_content).toMatchObject({
+    expect(JSON.parse(String(args.p_content))).toMatchObject({
       job: {
         title: 'Magazynier – zmiana nocna',
         contract_type: 'temporary',
@@ -93,20 +91,20 @@ describe('updatePublishedJob (#325)', () => {
     const invalid = steps();
     invalid[5] = { requirementsMandatory: [], mandatorySkills: [] };
     expect(await updatePublishedJob(JOB, invalid, VERSION)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(calls()).toHaveLength(0);
   });
 
   it('odrzuca brak kroku, zły identyfikator i zniekształconą wersję przed RPC', async () => {
     expect(await updatePublishedJob(JOB, steps().slice(0, 8), VERSION)).toMatchObject({ ok: false });
     expect(await updatePublishedJob('demo-draft', steps(), VERSION)).toMatchObject({ ok: false });
     expect(await updatePublishedJob(JOB, steps(), 'wczoraj')).toMatchObject({ ok: false });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(calls()).toHaveLength(0);
   });
 
   it('limit żądań zatrzymuje zapis przed RPC', async () => {
     vi.mocked(checkRateLimit).mockResolvedValue(false);
     expect(await updatePublishedJob(JOB, steps(), VERSION)).toEqual({ ok: false, error: 'RATE_LIMITED' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(calls()).toHaveLength(0);
   });
 
   it.each([
@@ -116,15 +114,17 @@ describe('updatePublishedJob (#325)', () => {
     ['VALIDATION_FAILED: brak wymagań obowiązkowych', 'VALIDATION_FAILED'],
     ['PERMISSION_DENIED: edycja oferty wymaga roli recruiter+', 'PERMISSION_DENIED'],
   ])('błąd bazy „%s” → kod %s bez tekstu technicznego', async (message, code) => {
-    rpc.mockResolvedValue({ data: null, error: { message } });
+    rpcResult = () => {
+      throw pgError('P0001', message);
+    };
     const result = await updatePublishedJob(JOB, steps(), VERSION);
     expect(result).toEqual({ ok: false, error: code });
     expect(JSON.stringify(result)).not.toContain(message.slice(message.indexOf(':') + 1).trim());
   });
 
   it('bez zalogowanego użytkownika nie wywołuje RPC', async () => {
-    getUser.mockResolvedValue({ data: { user: null } });
+    fakeSession.identity = null;
     expect(await updatePublishedJob(JOB, steps(), null)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(calls()).toHaveLength(0);
   });
 });

@@ -6321,7 +6321,7 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
   'ESCO93-8b ręczne zawody z 0010 nietknięte');
 
 -- =============================================================================
--- TR31 (#31, 0106): rewizje źródeł i kolejka tłumaczeń odporna na edycje.
+-- TR31 (#31, 0109): rewizje źródeł i kolejka tłumaczeń odporna na edycje.
 -- Encja = oferta JOBA (typ 'job'), źródło pl → zadania nl/fr/en. Wszystkie funkcje tylko
 -- service_role; tabele bez polityk (domyślnie deny). Kontrola ujemna na końcu sekcji.
 -- =============================================================================
@@ -7740,6 +7740,205 @@ select pg_temp.assert((select count(*) from public.moderation_decisions) = 5
 reset role;
 
 -- ============================================================================
+-- CS493. #493 — osobno: regulamin, informacja o prywatności, zgody opcjonalne (0108)
+-- ============================================================================
+\set CS1 'c4930000-0000-0000-0000-000000000001'
+\set CS2 'c4930000-0000-0000-0000-000000000002'
+\set CS3 'c4930000-0000-0000-0000-000000000003'
+\set CS4 'c4930000-0000-0000-0000-000000000004'
+\set CS5 'c4930000-0000-0000-0000-000000000005'
+-- Konta bez markera receiptu (profil z triggera, bez akceptacji).
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CS1','cs1@test.be','Cs One','{"role":"candidate","first_name":"Cs","last_name":"One","locale":"nl"}'),
+  (:'CS2','cs2@test.be','Cs Two','{"role":"employer","first_name":"Cs","last_name":"Two","locale":"fr"}');
+
+-- CS493-0: wiersze sprzed #493 i dawne API = legacy_combined (znaczenie zachowane).
+select pg_temp.assert(
+  (select bool_and(kind = 'legacy_combined' and source is null)
+     from public.document_acceptances where profile_id = :'CANDA'),
+  'CS493-0 dawny wspólny checkbox zapisany jako legacy_combined');
+
+-- CS493-1: klient nie pisze receiptów ani nie woła RPC zapisu.
+set role authenticated; set app.current_uid = :'CS1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'insert into public.document_acceptances (profile_id, document, kind) values ('''
+    || :'CS1' || ''', ''terms'', ''terms_acceptance'')',
+  'permission denied', 'CS493-1 authenticated nie pisze document_acceptances');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{}'', ''signup'')',
+  'permission denied', 'CS493-1b authenticated nie woła record_signup_consents');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{}'', ''signup'')',
+  'permission denied', 'CS493-1c anon nie woła record_signup_consents');
+reset role;
+
+-- CS493-2: regulamin i informacja o prywatności są wymagane; nieznany cel = błąd; bez zapisu.
+set role service_role;
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', false, true, ''{}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2 bez akceptacji regulaminu');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, false, ''{}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2b bez potwierdzenia informacji o prywatności');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{"ai_matching": true}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2c cel spoza listy');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{"email_marketing": "yes"}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2d wybór nie-boolean');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{}'', ''cookie_banner'')',
+  'VALIDATION_FAILED', 'CS493-2e kanał spoza listy');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CS1') = 0
+  and (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0,
+  'CS493-2f odrzucone wywołania nie zostawiają receiptu');
+
+-- CS493-3: odmowa zgody opcjonalnej nie blokuje; każdy element osobno; zgoda nie jest włączana.
+set role service_role;
+select public.record_signup_consents(:'CS1', true, true, '{"email_marketing": false}', 'signup', 'nl',
+  '{"terms": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "privacy": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "email_marketing": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}',
+  '203.0.113.9', 'UA/2.0');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CS1') = 2
+  and exists (select 1 from public.document_acceptances where profile_id = :'CS1'
+               and document = 'terms' and kind = 'terms_acceptance' and source = 'signup'
+               and locale = 'nl' and document_version = 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' and ip_address = '203.0.113.9')
+  and exists (select 1 from public.document_acceptances where profile_id = :'CS1'
+               and document = 'privacy' and kind = 'privacy_notice_ack' and source = 'signup'),
+  'CS493-3 regulamin i informacja o prywatności jako osobne receipty z wersją i kanałem');
+select pg_temp.assert(
+  (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0,
+  'CS493-3b odmowa nie tworzy zdarzenia zgody (#513: dziennik zapisuje tylko zmiany)');
+select pg_temp.assert(
+  coalesce((select email_marketing from public.notification_preferences where profile_id = :'CS1'), false) = false,
+  'CS493-3c odmowa nie włącza marketingu');
+
+-- CS493-4: zgoda włącza kategorię (wycofanie = ustawienia powiadomień).
+set role service_role;
+select public.record_signup_consents(:'CS2', true, true, '{"email_marketing": true}', 'signup', 'fr',
+  '{"email_marketing": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}', null, null);
+reset role;
+select pg_temp.assert(
+  (select email_marketing from public.notification_preferences where profile_id = :'CS2') = true
+  and (select count(*) from public.email_consent_events where profile_id = :'CS2') = 1
+  and (select granted and category = 'marketing' and source = 'signup' and locale = 'fr'
+              and wording_version = 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+         from public.email_consent_events where profile_id = :'CS2'),
+  'CS493-4 zgoda na marketing: kategoria włączona, zdarzenie #513 ze źródłem signup i wersją treści');
+-- Kontekst źródła nie przecieka na kolejne zapisy w tej samej transakcji.
+select pg_temp.assert(
+  public.email_consent_context('source') is null and public.email_consent_context('wording') is null,
+  'CS493-4a kontekst signup wyczyszczony po zapisie');
+set role authenticated; set app.current_uid = :'CS2'; select pg_temp.assert_client_role();
+select public.set_notification_preferences(
+  '{"email_applications": true, "email_offers": true, "email_messages": true, "email_job_matches": true,
+    "email_marketing": false, "push_enabled": true, "in_app_enabled": true}', 'fr', null);
+select pg_temp.assert(
+  (select email_marketing from public.notification_preferences where profile_id = :'CS2') = false
+  and (select count(*) from public.email_consent_events) = 2
+  and exists (select 1 from public.email_consent_events where category = 'marketing'
+               and not granted and source = 'settings'),
+  'CS493-4b wycofanie w ustawieniach (RPC #513); użytkownik widzi tylko własny dowód');
+reset role; reset app.current_uid;
+
+-- CS493-5: onboarding bez pokazanych zgód opcjonalnych nie tworzy fałszywego dowodu.
+set role service_role;
+select public.record_signup_consents(:'CS1', true, true, '{}', 'onboarding', 'nl', '{}', null, null);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0
+  and (select count(*) from public.document_acceptances where profile_id = :'CS1' and source = 'onboarding') = 2,
+  'CS493-5 onboarding: tylko regulamin + informacja, bez zgody na inne cele');
+
+-- CS493-6: receipty są niezmienne dla każdej roli (także właściciela tabel).
+select pg_temp.expect_error(
+  'update public.document_acceptances set kind = ''legacy_combined'' where profile_id = ''' || :'CS1' || '''',
+  'CONSENT_RECEIPT_IMMUTABLE', 'CS493-6 document_acceptances bez UPDATE');
+select pg_temp.expect_error(
+  'delete from public.document_acceptances where profile_id = ''' || :'CS1' || '''',
+  'CONSENT_RECEIPT_IMMUTABLE', 'CS493-6b document_acceptances bez DELETE');
+-- Kontrola ujemna: bez triggera przepisanie akceptacji regulaminu na dawny wpis przechodzi.
+begin;
+drop trigger document_acceptances_immutable on public.document_acceptances;
+update public.document_acceptances set kind = 'legacy_combined', source = null where profile_id = :'CS1';
+select pg_temp.assert(
+  not exists (select 1 from public.document_acceptances where profile_id = :'CS1' and kind <> 'legacy_combined'),
+  'CS493-6d kontrola ujemna: bez triggera znaczenie receiptu dałoby się przepisać');
+rollback;
+-- Kontrola ujemna: bez źródła 'signup' w triggerze 0101 zgoda z rejestracji byłaby 'direct'.
+begin;
+create or replace function public.record_email_consent_change()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $f$
+begin
+  insert into public.email_consent_events (profile_id, category, granted, source, locale)
+  values (new.profile_id, 'marketing', new.email_marketing, 'direct', 'pl');
+  return null;
+end $f$;
+set role service_role;
+select public.record_signup_consents(:'CS1', true, true, '{"email_marketing": true}', 'signup', 'nl', '{}', null, null);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.email_consent_events where profile_id = :'CS1' and source = 'signup'),
+  'CS493-6e kontrola ujemna: trigger bez źródła signup nie daje dowodu z rejestracji');
+rollback;
+
+-- CS493-7: Better Auth, marker v2 — osobne receipty, zgoda opcjonalna z formularza.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CS3','cs3@test.be','Cs Three', jsonb_build_object('role','candidate','first_name','Cs','last_name','Three',
+    'locale','en','signup_receipt_version',2,'agree_terms',true,'privacy_notice_ack',true,
+    'optional_consents', jsonb_build_object('email_marketing', true),
+    'consent_wording', jsonb_build_object('terms','sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','privacy','sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','email_marketing','sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc')));
+select pg_temp.assert(
+  (select array_agg(kind order by kind) from public.document_acceptances where profile_id = :'CS3')
+    = array['privacy_notice_ack','terms_acceptance']
+  and (select granted and source = 'signup' and locale = 'en' and wording_version = 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+         from public.email_consent_events where profile_id = :'CS3' and category = 'marketing')
+  and (select email_marketing from public.notification_preferences where profile_id = :'CS3'),
+  'CS493-7 rejestracja v2: dwa osobne receipty + zgoda opcjonalna');
+-- v2 bez potwierdzenia informacji o prywatności albo z celem spoza listy = brak konta.
+select pg_temp.expect_error(format(
+  'insert into auth.users(id,email,name,raw_user_meta_data) values (%L,%L,%L,%L::jsonb)',
+  :'CS4', 'cs4@test.be', 'Cs Four',
+  '{"role":"employer","first_name":"Cs","last_name":"Four","locale":"pl","signup_receipt_version":2,"agree_terms":true}'),
+  'VALIDATION_FAILED', 'CS493-7b v2 bez potwierdzenia informacji o prywatności');
+select pg_temp.expect_error(format(
+  'insert into auth.users(id,email,name,raw_user_meta_data) values (%L,%L,%L,%L::jsonb)',
+  :'CS4', 'cs4@test.be', 'Cs Four',
+  '{"role":"employer","first_name":"Cs","last_name":"Four","locale":"pl","signup_receipt_version":2,"agree_terms":true,"privacy_notice_ack":true,"optional_consents":{"profile_ai":true}}'),
+  'VALIDATION_FAILED', 'CS493-7c v2 z celem spoza listy');
+select pg_temp.expect_error(format(
+  'insert into auth.users(id,email,name,raw_user_meta_data) values (%L,%L,%L,%L::jsonb)',
+  :'CS4', 'cs4@test.be', 'Cs Four',
+  '{"role":"employer","first_name":"Cs","last_name":"Four","locale":"pl","signup_receipt_version":null,"agree_terms":true}'),
+  'VALIDATION_FAILED', 'CS493-7d marker null');
+select pg_temp.assert(
+  not exists (select 1 from auth.users where id = :'CS4')
+  and not exists (select 1 from public.profiles where id = :'CS4'),
+  'CS493-7e odrzucona rejestracja nie zostawia konta');
+-- v2 bez zgody opcjonalnej: konto powstaje, marketing wyłączony, brak dowodu zgody.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CS5','cs5@test.be','Cs Five','{"role":"employer","first_name":"Cs","last_name":"Five","locale":"pl","signup_receipt_version":2,"agree_terms":true,"privacy_notice_ack":true}');
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CS5') = 2
+  and (select count(*) from public.email_consent_events where profile_id = :'CS5') = 0
+  and coalesce((select email_marketing from public.notification_preferences where profile_id = :'CS5'), false) = false,
+  'CS493-7f brak zgody opcjonalnej nie blokuje konta');
+
+-- CS493-8: usunięcie konta (kaskada) usuwa receipty mimo niezmienności.
+delete from auth.users where id = :'CS5';
+select pg_temp.assert(
+  not exists (select 1 from public.document_acceptances where profile_id = :'CS5')
+  and not exists (select 1 from public.profiles where id = :'CS5'),
+  'CS493-8 kaskada usunięcia konta usuwa receipty');
+delete from auth.users where id = :'CS3';
+select pg_temp.assert(
+  not exists (select 1 from public.email_consent_events where profile_id = :'CS3'),
+  'CS493-8b kaskada usuwa dowód zgód opcjonalnych (#513)');
 -- DR486. Retencja, eksport danych kandydata, usunięcie konta, kolejka storage,
 --        ponowne usunięcie po odtworzeniu kopii (0105)
 -- ============================================================================
@@ -8554,5 +8753,497 @@ begin; select pg_temp.cj_drop_filter('j.deleted_at is null');
 select pg_temp.assert(pg_temp.cj_public('cj-deleted') = 1, 'CJ186-4f bez filtra usunięcia wycieka'); rollback;
 select pg_temp.assert(pg_temp.cj_public(s) = 0, 'CJ186-4g po cofnięciu filtry wróciły: ' || s)
 from unnest(array['cj-demo', 'cj-demo-company', 'cj-paused', 'cj-expired', 'cj-unverified', 'cj-deleted']) s;
+
+-- ============================================================================
+-- BR490 (#490, 0106): rejestr incydentów i naruszeń danych osobowych — tylko admin,
+-- niezmienna historia, CAS wersji, reguły art. 33/34, eksport, zawiadomienie osób przez
+-- outbox w języku ODBIORCY. Kontrole ujemne (w transakcjach cofanych): grant SELECT bez
+-- RLS, wyłączony trigger historii, treść w języku nadawcy — każda daje wykrywalny błąd.
+-- ============================================================================
+\set BRA 'e4900000-0000-0000-0000-0000000000a1'
+\set BRB 'e4900000-0000-0000-0000-0000000000a2'
+\set BRC 'e4900000-0000-0000-0000-0000000000a3'
+\set BRK1 'e4900000-0000-0000-0000-0000000000c1'
+\set BRK2 'e4900000-0000-0000-0000-0000000000c2'
+\set BRN1 'e4900000-0000-0000-0000-0000000000d1'
+\set BRN2 'e4900000-0000-0000-0000-0000000000d2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'BRA','bra@test.be','Br A','{"role":"candidate","first_name":"Br","last_name":"A","locale":"pl"}'),
+  (:'BRB','brb@test.be','Br B','{"role":"employer","first_name":"Br","last_name":"B","locale":"nl"}'),
+  (:'BRC','brc@test.be','Br C','{"role":"candidate","first_name":"Br","last_name":"C","locale":"fr"}');
+-- Adres BRC ma aktywną blokadę (#44) — zawiadomienie nie trafi do kolejki (widać w liczniku).
+insert into public.email_suppressions(email, reason) values ('brc@test.be', 'hard_bounce');
+
+select jsonb_build_object(
+  'kind', 'personal_data_breach', 'title', 'Błędny adresat e-maila',
+  'description', 'Powiadomienie trafiło do niewłaściwej osoby.',
+  'detectedAt', (now() - interval '2 hours')::text, 'occurredAt', (now() - interval '3 hours')::text,
+  'dataCategories', jsonb_build_array('contact', 'applications', 'contact'),
+  'affectedCount', '1', 'affectedCountEstimated', false,
+  'riskLevel', 'not_assessed', 'authorityDecision', 'pending', 'subjectsDecision', 'pending'
+)::text as br_form \gset
+
+-- BR490-1: tabele rejestru niedostępne bezpośrednio (także dla admina — tylko RPC).
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select 1 from public.breach_incidents', 'permission denied',
+  'BR490-1 anon nie czyta rejestru');
+select pg_temp.expect_error($$select public.admin_create_breach_incident(gen_random_uuid(), '{}'::jsonb)$$,
+  'permission denied', 'BR490-1b anon nie wywoła RPC rejestru');
+reset role;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select 1 from public.breach_incidents', 'permission denied',
+  'BR490-1c admin nie czyta tabeli bezpośrednio');
+select pg_temp.expect_error('select 1 from public.breach_incident_events', 'permission denied',
+  'BR490-1d admin nie czyta historii bezpośrednio');
+select pg_temp.expect_error($$insert into public.breach_incidents(reference, client_key, title, description, detected_at)
+  values ('X', gen_random_uuid(), 't', 'd', now())$$, 'permission denied', 'BR490-1e brak bezpośredniego INSERT');
+select pg_temp.expect_error('select 1 from public.breach_notice_recipients', 'permission denied',
+  'BR490-1f admin nie czyta listy odbiorców bezpośrednio');
+reset role; reset app.current_uid;
+-- KONTROLA UJEMNA: z grantem SELECT i bez RLS odczyt by przeszedł — asercje 1–1f to wykrywają.
+begin;
+grant select on public.breach_incidents to authenticated;
+alter table public.breach_incidents disable row level security;
+set local role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) >= 0 from public.breach_incidents),
+  'BR490-1g z grantem i bez RLS odczyt przechodzi (test wykrywa błąd)');
+rollback;
+reset role; reset app.current_uid;
+
+-- BR490-2: kandydat i pracodawca nie mają dostępu do RPC (PERMISSION_DENIED).
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_breach_incident(%L, %L::jsonb)', :'BRK1', :'br_form'),
+  'PERMISSION_DENIED', 'BR490-2 kandydat nie założy wpisu');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_export_breach_incident(%L, ''json'')', :'BRK1'),
+  'PERMISSION_DENIED', 'BR490-2b pracodawca nie eksportuje');
+reset role; reset app.current_uid;
+
+-- BR490-3: admin zakłada wpis; ponowienie z tym samym kluczem = ten sam wpis.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_breach_incident(:'BRK1', :'br_form'::jsonb) as br1 \gset
+select pg_temp.assert(public.admin_create_breach_incident(:'BRK1', :'br_form'::jsonb) = :'br1'::uuid,
+  'BR490-3 ponowienie z tym samym kluczem zwraca ten sam wpis');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(reference ~ '^NAR-[0-9]{4}-[0-9A-F]{10}$' and version = 1
+          and status = 'open' and data_categories = array['applications','contact']
+          and affected_count = 1 and not affected_count_estimated and created_by = :'ADMIN'::uuid)
+     from public.breach_incidents where client_key = :'BRK1'),
+  'BR490-3b jeden wpis: numer, wersja 1, kategorie bez duplikatów, autor');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(event_type = 'created' and changes ? 'title' and actor_id = :'ADMIN'::uuid)
+     from public.breach_incident_events where incident_id = :'br1'),
+  'BR490-3c historia: jedno zdarzenie created z polami');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(actor_id = :'ADMIN'::uuid and after_data::text not like '%niewłaściwej%')
+     from public.audit_logs where action = 'breach.created' and entity_id = :'br1'),
+  'BR490-3d audyt breach.created bez treści opisu');
+
+-- BR490-4: reguły art. 33/34 i wymagane uzasadnienia (kod pola w błędzie).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"riskLevel":"risk"}')::text),
+  'riskAssessment:required', 'BR490-4 ocena ryzyka wymaga uzasadnienia');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"riskLevel":"risk","riskAssessment":"r","authorityDecision":"not_required","authorityDecisionReason":"x"}')::text),
+  'authorityDecision:conflictsWithRisk', 'BR490-4b ryzyko + „nie zgłaszamy” odrzucone (art. 33)');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"riskLevel":"high_risk","riskAssessment":"r","subjectsDecision":"not_required","subjectsDecisionReason":"x"}')::text),
+  'subjectsDecision:conflictsWithRisk', 'BR490-4c wysokie ryzyko + „nie zawiadamiamy” odrzucone (art. 34)');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"authorityDecision":"notify"}')::text),
+  'authorityDecisionReason:required', 'BR490-4d decyzja bez uzasadnienia odrzucona');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || jsonb_build_object('riskLevel', 'risk', 'riskAssessment', 'r',
+     'authorityDecision', 'notify', 'authorityDecisionReason', 'x',
+     'detectedAt', (now() - interval '100 hours')::text, 'occurredAt', (now() - interval '101 hours')::text,
+     'authorityNotifiedAt', (now() - interval '1 hour')::text))::text),
+  'authorityDelayReason:required', 'BR490-4e zgłoszenie po 72 h wymaga przyczyn opóźnienia');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || jsonb_build_object('detectedAt', (now() + interval '1 day')::text))::text),
+  'detectedAt:future', 'BR490-4f stwierdzenie w przyszłości odrzucone');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"detectedAt":"nie-data"}')::text),
+  'detectedAt:invalid', 'BR490-4g zła data odrzucona z kodem pola');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1',
+  (:'br_form'::jsonb || '{"dataCategories":["cv_files","hasla"]}')::text),
+  'dataCategories:invalid', 'BR490-4h kategoria spoza listy odrzucona');
+reset role; reset app.current_uid;
+-- CHECK na tabeli działa niezależnie od RPC (bezpośredni zapis właściciela).
+select pg_temp.expect_error(format(
+  $$update public.breach_incidents set risk_level = 'high_risk', risk_assessment = 'r',
+    subjects_decision = 'not_required', subjects_decision_reason = 'x' where id = %L$$, :'br1'),
+  'breach_subjects_vs_risk', 'BR490-4i CHECK art. 34 także poza RPC');
+
+-- BR490-5: edycja z CAS wersji; różnice w historii; zapis bez zmian nie tworzy zdarzenia.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.admin_update_breach_incident(:'br1', 1,
+  (:'br_form'::jsonb || jsonb_build_object('riskLevel', 'high_risk', 'riskAssessment', 'Dane kontaktowe i aplikacja',
+     'authorityDecision', 'notify', 'authorityDecisionReason', 'Prawdopodobne ryzyko',
+     'subjectsDecision', 'notify', 'subjectsDecisionReason', 'Wysokie ryzyko',
+     'actionsTaken', 'Poprawiono wybór adresata'))) = 2,
+  'BR490-5 edycja podnosi wersję do 2');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 1, %L::jsonb)', :'br1', :'br_form'),
+  'STALE_STATE', 'BR490-5b nieaktualna wersja → STALE_STATE');
+select pg_temp.assert(public.admin_update_breach_incident(:'br1', 2,
+  (:'br_form'::jsonb || jsonb_build_object('riskLevel', 'high_risk', 'riskAssessment', 'Dane kontaktowe i aplikacja',
+     'authorityDecision', 'notify', 'authorityDecisionReason', 'Prawdopodobne ryzyko',
+     'subjectsDecision', 'notify', 'subjectsDecisionReason', 'Wysokie ryzyko',
+     'actionsTaken', 'Poprawiono wybór adresata'))) = 2,
+  'BR490-5c zapis bez zmian nie podnosi wersji');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(version = 2 and changes -> 'risk_level' = '{"from":"not_assessed","to":"high_risk"}'::jsonb
+          and not changes ? 'title')
+     from public.breach_incident_events where incident_id = :'br1' and event_type = 'updated'),
+  'BR490-5d jedno zdarzenie updated tylko ze zmienionymi polami (przed/po)');
+select pg_temp.assert(
+  (select after_data -> 'fields' ? 'risk_level' and after_data::text not like '%Dane kontaktowe%'
+     from public.audit_logs where action = 'breach.updated' and entity_id = :'br1'),
+  'BR490-5e audyt: nazwy pól bez treści');
+
+-- BR490-6: historia i wpis niezmienne dla KAŻDEJ roli (tu superuser).
+select pg_temp.expect_error(format('update public.breach_incident_events set note = %L where incident_id = %L', 'x', :'br1'),
+  'BREACH_HISTORY_IMMUTABLE', 'BR490-6 historia bez UPDATE');
+select pg_temp.expect_error(format('delete from public.breach_incident_events where incident_id = %L', :'br1'),
+  'BREACH_HISTORY_IMMUTABLE', 'BR490-6b historia bez DELETE');
+select pg_temp.expect_error('truncate public.breach_incident_events', 'BREACH_HISTORY_IMMUTABLE',
+  'BR490-6c historia bez TRUNCATE');
+select pg_temp.expect_error(format('delete from public.breach_incidents where id = %L', :'br1'),
+  'BREACH_REGISTER_NO_DELETE', 'BR490-6d wpisu rejestru nie da się usunąć');
+select pg_temp.expect_error(format('update public.breach_incidents set reference = %L where id = %L', 'NAR-0000-X', :'br1'),
+  'BREACH_REGISTER_IMMUTABLE_FIELD', 'BR490-6e numeru wpisu nie da się zmienić');
+-- KONTROLA UJEMNA: bez triggera wpis historii dałby się przepisać.
+begin;
+alter table public.breach_incident_events disable trigger trg_breach_events_immutable;
+update public.breach_incident_events set note = 'przepisane' where incident_id = :'br1';
+select pg_temp.assert(exists (select 1 from public.breach_incident_events where note = 'przepisane'),
+  'BR490-6f bez triggera historia jest zmienialna (test wykrywa błąd)');
+rollback;
+
+-- BR490-7: zamknięcie tylko po udokumentowaniu decyzji; zamknięty wpis bez edycji; ponowne otwarcie.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_close_breach_incident(%L, 2, %L)', :'br1', 'Koniec'),
+  'BREACH_NOT_READY: authorityNotifiedAt', 'BR490-7 zamknięcie bez daty zgłoszenia do organu odrzucone');
+select pg_temp.expect_error(format('select public.admin_close_breach_incident(%L, 2, %L)', :'br1', '  '),
+  'closureSummary:required', 'BR490-7b zamknięcie wymaga podsumowania');
+reset role; reset app.current_uid;
+
+-- BR490-8: eksport — wpis, historia, bez klucza klienta; eksport zostaje w historii i dzienniku.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_export_breach_incident(:'br1', 'json')::text as br_export \gset
+select pg_temp.expect_error(format('select public.admin_export_breach_incident(%L, ''xml'')', :'br1'),
+  'format:invalid', 'BR490-8 nieznany format odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (:'br_export'::jsonb -> 'incident' ->> 'reference') ~ '^NAR-'
+  and not (:'br_export'::jsonb -> 'incident' ? 'client_key')
+  and jsonb_array_length(:'br_export'::jsonb -> 'events') = 2,
+  'BR490-8b eksport: wpis bez client_key + dwa zdarzenia (created, updated)');
+select pg_temp.assert(
+  (select count(*) = 1 from public.breach_incident_events where incident_id = :'br1' and event_type = 'exported')
+  and (select count(*) = 1 from public.audit_logs where action = 'breach.exported' and entity_id = :'br1'),
+  'BR490-8c eksport zapisany w historii i w dzienniku');
+
+-- BR490-9: zawiadomienie osób — treść wymagana w języku KAŻDEGO odbiorcy (Invariant #1).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_notify_breach_subjects(:'br1', :'BRN1',
+  array[:'BRA', 'BRB@test.be', 'nieznany@test.be', :'BRC'],
+  '{"pl":{"subject":"Temat PL","body":"Treść PL"},"en":{"subject":"Subject EN","body":"Body EN"}}'::jsonb)::text as br_invalid \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  :'br_invalid'::jsonb ->> 'status' = 'invalid'
+  and :'br_invalid'::jsonb -> 'missingLocales' = '["fr", "nl"]'::jsonb
+  and :'br_invalid'::jsonb -> 'unknown' = '["nieznany@test.be"]'::jsonb,
+  'BR490-9 brak treści nl/fr i nieznany adres → invalid');
+select pg_temp.assert(not exists (select 1 from public.email_deliveries where template = 'breachNotice')
+  and not exists (select 1 from public.breach_notices),
+  'BR490-9b nic nie zakolejkowano przy błędnym zestawie');
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_notify_breach_subjects(:'br1', :'BRN1', array[:'BRA', 'BRB@test.be', :'BRC'],
+  '{"pl":{"subject":"Temat PL","body":"Treść PL"},"nl":{"subject":"Onderwerp NL","body":"Tekst NL"},"fr":{"subject":"Sujet FR","body":"Texte FR"}}'::jsonb)::text as br_ok \gset
+select pg_temp.assert(public.admin_notify_breach_subjects(:'br1', :'BRN1', array[:'BRA'], '{}'::jsonb)::jsonb
+    -> 'noticeId' = :'br_ok'::jsonb -> 'noticeId',
+  'BR490-9c ponowienie z tym samym kluczem zwraca to samo zawiadomienie');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  :'br_ok'::jsonb ->> 'status' = 'queued' and (:'br_ok'::jsonb ->> 'recipients')::int = 3
+  and (:'br_ok'::jsonb ->> 'queued')::int = 2,
+  'BR490-9d 3 odbiorców, 2 w kolejce (adres z blokadą pominięty)');
+select pg_temp.assert(
+  (select count(*) = 2
+          and bool_and((profile_id = :'BRA'::uuid and locale = 'pl' and payload ->> 'noticeSubject' = 'Temat PL'
+                        and payload ->> 'panel' = 'candidate')
+                    or (profile_id = :'BRB'::uuid and locale = 'nl' and payload ->> 'noticeSubject' = 'Onderwerp NL'
+                        and payload ->> 'panel' = 'employer'))
+     from public.email_deliveries where template = 'breachNotice'),
+  'BR490-9e każdy e-mail w języku odbiorcy (pl/nl), nie nadawcy (admin: en)');
+select pg_temp.assert(
+  (select count(*) = 3 and count(*) filter (where queued) = 2 from public.breach_notice_recipients),
+  'BR490-9f lista odbiorców z flagą kolejki');
+select pg_temp.assert(
+  (select count(*) = 1 from public.breach_incident_events where incident_id = :'br1' and event_type = 'subjects_notified')
+  and (select after_data::text not like '%bra@test.be%' from public.audit_logs
+        where action = 'breach.subjects_notified' and entity_id = :'br1'),
+  'BR490-9g historia i dziennik bez adresów odbiorców');
+-- KONTROLA UJEMNA: treść wybierana po języku nadawcy (admin = en) dałaby zły język.
+select pg_temp.assert(public.resolve_recipient_locale(:'ADMIN') = 'en'
+  and (select payload ->> 'noticeSubject' from public.email_deliveries
+        where template = 'breachNotice' and profile_id = :'BRB') <> 'Subject EN',
+  'BR490-9h język nadawcy różni się od odbiorcy — test rozróżnia te przypadki');
+
+-- BR490-10: incydent bez decyzji o zawiadomieniu — brak wysyłki; zamknięcie i ponowne otwarcie.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_breach_incident(:'BRK2',
+  (:'br_form'::jsonb || '{"kind":"security_incident","title":"Skan portów"}')::text::jsonb) as br2 \gset
+select pg_temp.expect_error(format('select public.admin_notify_breach_subjects(%L, %L, array[%L], %L::jsonb)',
+    :'br2', :'BRN2', :'BRA', '{"pl":{"subject":"a","body":"b"}}'),
+  'BREACH_NOTIFY_NOT_DECIDED', 'BR490-10 bez decyzji o zawiadomieniu nie ma wysyłki');
+select pg_temp.assert(public.admin_close_breach_incident(:'br2', 1, 'Brak danych osobowych') = 2,
+  'BR490-10b incydent bezpieczeństwa zamykany bez decyzji art. 33/34');
+select pg_temp.expect_error(format('select public.admin_update_breach_incident(%L, 2, %L::jsonb)', :'br2', :'br_form'),
+  'BREACH_CLOSED', 'BR490-10c zamkniętego wpisu nie edytujemy');
+select pg_temp.expect_error(format('select public.admin_reopen_breach_incident(%L, 2, %L)', :'br2', ''),
+  'reason:required', 'BR490-10d ponowne otwarcie wymaga powodu');
+select pg_temp.assert(public.admin_reopen_breach_incident(:'br2', 2, 'Nowe ustalenia') = 3,
+  'BR490-10e ponowne otwarcie z powodem');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'open' and closed_at is null and closure_summary = '' from public.breach_incidents where id = :'br2')
+  and (select array_agg(event_type order by created_at, version) = array['created','closed','reopened']
+         from public.breach_incident_events where incident_id = :'br2')
+  and (select note = 'Brak danych osobowych' from public.breach_incident_events
+        where incident_id = :'br2' and event_type = 'closed'),
+  'BR490-10f podsumowanie zamknięcia zostaje w historii po ponownym otwarciu');
+
+-- BR490-11: panel admina czyta rejestr service-rolem (po potwierdzeniu roli w aplikacji).
+set role service_role;
+select pg_temp.assert((select count(*) = 2 from public.breach_incidents)
+  and (select count(*) >= 6 from public.breach_incident_events)
+  and (select count(*) = 1 from public.breach_notices),
+  'BR490-11 service_role czyta wpisy, historię i zawiadomienia');
+reset role;
+
+-- BR490-12: usunięcie konta admina (FK `on delete set null`) zeruje autora w historii,
+-- wpisie i zawiadomieniu; każda inna zmiana tych wierszy nadal odrzucana.
+begin;
+select pg_temp.assert((select count(*) > 0 from public.breach_incident_events where actor_id = :'ADMIN'),
+  'BR490-12 przygotowanie: admin jest autorem wpisów historii');
+update public.breach_incident_events set actor_id = null where actor_id = :'ADMIN';
+update public.breach_incidents set created_by = null where created_by = :'ADMIN';
+update public.breach_notices set created_by = null where created_by = :'ADMIN';
+select pg_temp.assert((select count(*) = 0 from public.breach_incident_events where actor_id is not null)
+  and (select count(*) = 0 from public.breach_incidents where created_by is not null),
+  'BR490-12 autor wyzerowany jak przy usunięciu konta');
+select pg_temp.expect_error(format('update public.breach_incident_events set note = %L where incident_id = %L', 'x', :'br1'),
+  'BREACH_HISTORY_IMMUTABLE', 'BR490-12b inna zmiana historii nadal odrzucana');
+select pg_temp.expect_error(format('update public.breach_incidents set created_by = %L where id = %L', :'ADMIN', :'br1'),
+  'BREACH_REGISTER_IMMUTABLE_FIELD', 'BR490-12c autora nie da się podmienić');
+select pg_temp.expect_error(format('update public.breach_notices set queued_count = 0 where incident_id = %L', :'br1'),
+  'BREACH_HISTORY_IMMUTABLE', 'BR490-12d zawiadomienie nadal niezmienne');
+rollback;
+
+-- ============================================================================
+-- LOC348. Invariant #1 na żywej bazie (#348): email_deliveries.locale = język ODBIORCY
+--   dla każdego szablonu z przepływów (§9 + weryfikacja firmy + zaproszenie do zespołu),
+--   nadawca zawsze w innym języku niż odbiorca, oferta w trzecim (default_locale='pl'
+--   ≠ preferowane języki stron). Fallback preferred → account → signup → 'en'.
+--   Kontrole ujemne: resolve_recipient_locale podmieniony na język SESJI NADAWCY albo
+--   na odwróconą kolejność fallbacku → ten sam predykat daje fałsz.
+--   Całość w transakcji z rollbackiem — dalsze sekcje nie widzą tych danych. Sekcja stoi
+--   na końcu pliku (jak BR490-12): harness rate-limit.test.ts owija cały plik w jedno
+--   BEGIN … ROLLBACK, a `rollback` kończy wtedy także tę zewnętrzną transakcję.
+-- ============================================================================
+\set CAN348 'e3480000-0000-0000-0000-0000000000a1'
+\set OWN348 'e3480000-0000-0000-0000-0000000000a2'
+\set REC348 'e3480000-0000-0000-0000-0000000000a3'
+\set INV348 'e3480000-0000-0000-0000-0000000000a4'
+\set SGN348 'e3480000-0000-0000-0000-0000000000a5'
+\set NUL348 'e3480000-0000-0000-0000-0000000000a6'
+\set COM348 'e3480000-0000-0000-0000-0000000000f1'
+\set JOB348 'e3480000-0000-0000-0000-0000000000b1'
+\set JOB348B 'e3480000-0000-0000-0000-0000000000b2'
+reset role; reset app.current_uid;
+begin;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CAN348','can348@test.be','Clara F','{"role":"candidate","first_name":"Clara","last_name":"Fontaine","locale":"pl"}'),
+  (:'OWN348','own348@test.be','Owen E','{"role":"employer","first_name":"Owen","last_name":"Evans","locale":"nl"}'),
+  (:'REC348','rec348@test.be','Rita P','{"role":"employer","first_name":"Rita","last_name":"Peeters","locale":"fr"}'),
+  (:'INV348','inv348@test.be','Ivo N','{"role":"employer","first_name":"Ivo","last_name":"Nowak","locale":"fr"}'),
+  (:'SGN348','sgn348@test.be','Sam S','{"role":"candidate","first_name":"Sam","last_name":"S","locale":"nl"}'),
+  (:'NUL348','nul348@test.be','Nel N','{"role":"candidate","first_name":"Nel","last_name":"N"}');
+-- Języki: kandydat fr (preferred; signup pl), owner en (preferred; signup nl),
+-- rekruter pl (account; signup fr, bez preferred), zapraszany fr (tylko signup),
+-- SGN nl (tylko signup), NUL bez żadnego języka → en. Admin w tej transakcji: nl.
+update public.profiles set preferred_locale = 'fr' where id = :'CAN348';
+update public.profiles set preferred_locale = 'en' where id = :'OWN348';
+update public.profiles set preferred_locale = null, account_locale = 'pl', signup_locale = 'fr' where id = :'REC348';
+update public.profiles set preferred_locale = null, account_locale = null where id in (:'INV348', :'SGN348');
+update public.profiles set preferred_locale = null, account_locale = null, signup_locale = null where id = :'NUL348';
+update public.profiles set preferred_locale = 'nl' where id = :'ADMIN';
+
+create temp table loc348_expected(profile_id uuid primary key, locale text not null) on commit drop;
+insert into loc348_expected values
+  (:'CAN348','fr'), (:'OWN348','en'), (:'REC348','pl'), (:'INV348','fr'), (:'SGN348','nl'), (:'NUL348','en');
+
+-- Predykat wszystkich asercji sekcji (używany także w kontrolach ujemnych):
+-- istnieje ≥1 wiersz szablonu dla odbiorcy i KAŻDY ma locale = oczekiwany język odbiorcy.
+create function pg_temp.loc348_ok(p_template text, p_profile uuid) returns boolean
+language sql as $$
+  select count(*) > 0 and bool_and(d.locale = e.locale)
+    from public.email_deliveries d join loc348_expected e on e.profile_id = d.profile_id
+   where d.template = p_template and d.profile_id = p_profile
+$$;
+
+-- LOC348-1: fallback w bazie (ten sam kod, którego używa enqueue_email).
+select pg_temp.assert(
+  public.resolve_recipient_locale(:'CAN348') = 'fr'
+  and public.resolve_recipient_locale(:'REC348') = 'pl'
+  and public.resolve_recipient_locale(:'SGN348') = 'nl'
+  and public.resolve_recipient_locale(:'NUL348') = 'en'
+  and public.resolve_recipient_locale('e3480000-0000-0000-0000-00000000dead') = 'en',
+  'LOC348-1 fallback preferred → account → signup → en (także brak profilu)');
+
+-- Firma czeka na weryfikację; admin (nl) weryfikuje → companyVerified do ownera (en).
+insert into public.companies(id,name,status) values (:'COM348','Firma 348','pending');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COM348',:'OWN348','owner',true), (:'COM348',:'REC348','recruiter',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JOB348',:'COM348','job-348','Operator 348','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JOB348B',:'COM348','job-348b','Operator 348B','warehouse','permanent','Gent','Flandria','active','pl');
+select set_config('app.current_uid', :'ADMIN', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.admin_set_company_status(:'COM348'::uuid, 'verified', 'pending', null);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('companyVerified', :'OWN348'),
+  'LOC348-2 companyVerified w języku ownera (en), nie admina (nl)');
+
+-- Kandydat (fr) aplikuje dwa razy → newApplication do ownera (en) i rekrutera (pl).
+select set_config('app.current_uid', :'CAN348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JOB348'::uuid, 'loc348-app-1', null, null, 'Bonjour') as app348 \gset
+select public.apply_to_job(:'JOB348B'::uuid, 'loc348-app-2', null, null, null) as app348b \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('newApplication', :'OWN348')
+  and pg_temp.loc348_ok('newApplication', :'REC348'),
+  'LOC348-3 newApplication: owner en, rekruter pl (nadawca fr, oferta pl)');
+
+-- Rekruter (pl) zmienia statusy i wysyła propozycję → e-maile do kandydata (fr).
+select set_config('app.current_uid', :'REC348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'app348'::uuid, 'viewed');
+select public.transition_application(:'app348'::uuid, 'shortlisted');
+select public.send_offer(:'JOB348'::uuid, :'CAN348'::uuid, 'loc348-off-1', 'Zapraszamy', null) as off348 \gset
+reset role;
+-- Drugą propozycję wysyła owner (en): odpowiedź trafia do NADAWCY propozycji.
+select set_config('app.current_uid', :'OWN348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'JOB348B'::uuid, :'CAN348'::uuid, 'loc348-off-2', 'Invitation', null) as off348b \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('applicationViewed', :'CAN348'),
+  'LOC348-4 applicationViewed w języku kandydata (fr), nie rekrutera (pl)');
+select pg_temp.assert(pg_temp.loc348_ok('statusChanged', :'CAN348'),
+  'LOC348-5 statusChanged w języku kandydata (fr)');
+select pg_temp.assert(pg_temp.loc348_ok('jobOffer', :'CAN348')
+  and (select bool_and(locale = 'fr') from public.offers where id in (:'off348', :'off348b')),
+  'LOC348-6 jobOffer i offers.locale w języku kandydata (fr)');
+
+-- Kandydat akceptuje propozycję rekrutera i odrzuca propozycję ownera → odpowiedź do nadawcy.
+select set_config('app.current_uid', :'CAN348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.respond_to_offer(:'off348'::uuid, true);
+select public.respond_to_offer(:'off348b'::uuid, false);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('offerAccepted', :'REC348'),
+  'LOC348-7 offerAccepted do rekrutera w jego języku (pl), nie kandydata (fr)');
+select pg_temp.assert(pg_temp.loc348_ok('offerDeclined', :'OWN348'),
+  'LOC348-8 offerDeclined do ownera w jego języku (en)');
+
+-- Wiadomości w obie strony.
+select set_config('app.current_uid', :'REC348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'app348'::uuid, null) as conv348 \gset
+select public.send_message(:'conv348'::uuid, 'Dzień dobry', gen_random_uuid()) as msg348a \gset
+reset role;
+select set_config('app.current_uid', :'CAN348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'conv348'::uuid, 'Merci', gen_random_uuid()) as msg348b \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('newMessage', :'CAN348'),
+  'LOC348-9 newMessage firma → kandydat w języku kandydata (fr)');
+select pg_temp.assert(pg_temp.loc348_ok('newMessage', :'OWN348')
+  and pg_temp.loc348_ok('newMessage', :'REC348'),
+  'LOC348-9b newMessage kandydat → firma: owner en, rekruter pl');
+
+-- Zaproszenie do zespołu: owner (en) zaprasza konto pracodawcy z samym signup fr.
+select set_config('app.current_uid', :'OWN348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select invitation_id as inv348 from public.invite_company_member(:'COM348'::uuid, 'inv348@test.be', 'recruiter') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.loc348_ok('teamInvitation', :'INV348'),
+  'LOC348-10 teamInvitation w języku zaproszonego (signup fr), nie zapraszającego (en)');
+
+-- LOC348-11: pokrycie — KAŻDY e-mail wygenerowany w sekcji ma język odbiorcy i żaden
+-- szablon z listy nie został pominięty (nowy szablon w tych przepływach = aktualizacja listy).
+select pg_temp.assert(
+  (select bool_and(d.locale = e.locale) from public.email_deliveries d
+     join loc348_expected e on e.profile_id = d.profile_id)
+  and (select array_agg(distinct d.template order by d.template) from public.email_deliveries d
+     join loc348_expected e on e.profile_id = d.profile_id)
+    = array['applicationViewed','companyVerified','jobOffer','newApplication','newMessage',
+            'offerAccepted','offerDeclined','statusChanged','teamInvitation'],
+  'LOC348-11 wszystkie e-maile sekcji w języku odbiorcy, komplet szablonów');
+
+-- Kontrola ujemna 1: regresja „język sesji nadawcy”. Rekruter (pl) zmienia status →
+-- statusChanged do kandydata dostaje pl; ten sam predykat musi to wykryć.
+savepoint loc348_neg;
+create or replace function public.resolve_recipient_locale(p_profile_id uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select coalesce((select p.preferred_locale from public.profiles p where p.id = auth.uid()),
+                  (select p.account_locale from public.profiles p where p.id = auth.uid()), 'en');
+$$;
+select set_config('app.current_uid', :'REC348', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'app348b'::uuid, 'viewed');
+reset role; reset app.current_uid;
+select pg_temp.assert(not pg_temp.loc348_ok('applicationViewed', :'CAN348'),
+  'LOC348-N1 kontrola ujemna: język nadawcy (pl) zamiast odbiorcy (fr) wykryty');
+rollback to savepoint loc348_neg;
+
+-- Kontrola ujemna 2: odwrócona kolejność fallbacku (signup przed preferred).
+savepoint loc348_neg2;
+create or replace function public.resolve_recipient_locale(p_profile_id uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select coalesce((select coalesce(p.signup_locale, p.account_locale, p.preferred_locale)
+                     from public.profiles p where p.id = p_profile_id), 'en');
+$$;
+select pg_temp.assert(public.resolve_recipient_locale(:'CAN348') <> 'fr'
+  and public.resolve_recipient_locale(:'REC348') <> 'pl',
+  'LOC348-N2 kontrola ujemna: odwrócony fallback daje inny język niż oczekiwany');
+rollback to savepoint loc348_neg2;
+select pg_temp.assert(public.resolve_recipient_locale(:'CAN348') = 'fr',
+  'LOC348-N3 po kontrolach ujemnych funkcja produkcyjna wróciła');
+rollback;
+
+-- ============================================================================
+-- SV25. Worker poczty na puli service (#25, 0107): claim_email_batch wykonywalne przez
+--       service_role, nadal NIE przez authenticated/anon (kontrola ujemna na obu rolach).
+-- ============================================================================
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  has_function_privilege('service_role', 'public.claim_email_batch(integer, integer)', 'EXECUTE'),
+  'SV25-1 service_role wykonuje claim_email_batch');
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.claim_email_batch(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.claim_email_batch(integer, integer)', 'EXECUTE'),
+  'SV25-2 authenticated/anon bez EXECUTE na claim_email_batch');
+set role service_role;
+select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)),
+  'SV25-3 claim jako service_role (bez błędu uprawnień)');
+reset role;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -24,10 +24,3 @@ export function effectiveJobStatus(
   return status === 'active' && isPastExpiry(expiresAt, now) ? 'expired' : status;
 }
 
-/**
- * Filtr PostgREST dla zapytań „aktywna i nadal ważna” — ten sam predykat co
- * `expires_at is null or expires_at > now()` w bazie.
- */
-export function notExpiredFilter(now: Date = new Date()): string {
-  return `expires_at.is.null,expires_at.gt.${now.toISOString()}`;
-}

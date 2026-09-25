@@ -103,15 +103,32 @@ describe('inwentarz AI (#489)', () => {
 
   it('import ogłoszenia zapisuje tylko szkic — akcja nie woła publikacji', () => {
     const action = readFileSync(join(ROOT, 'src/lib/actions/job-import.ts'), 'utf8');
-    expect(action).toContain("rpc('save_job_draft'");
-    expect(action).not.toMatch(/rpc\(\s*['"]publish_job|\bpublishJob\b/);
+    // #25: RPC przez helper `rpc(tx, 'nazwa', …)` z src/lib/db/sql.ts.
+    const PUBLISH = /rpc(?:Rows)?\((?:\s*\w+\s*,)?\s*['"]publish_job|\bpublishJob\b/;
+    expect(action).toMatch(/rpc\(\s*tx,\s*'save_job_draft'/);
+    expect(action).not.toMatch(PUBLISH);
     // Kontrola ujemna reguły: wywołanie publikacji byłoby wykryte.
-    expect("await supabase.rpc('publish_job', { p_job_id: id })").toMatch(/rpc\(\s*['"]publish_job|\bpublishJob\b/);
+    expect("await rpc(tx, 'publish_job', { p_job_id: id })").toMatch(PUBLISH);
+  });
+
+  it('asystent redagowania (#37) niczego nie zapisuje — akcja nie woła bazy do zapisu ani publikacji', () => {
+    const WRITE = /\brpc(?:Rows)?\(|\bsql\(|save_job_draft|publish_job|update_published_job|\bpublishJob\b|\bupdateJobDraft\b/;
+    for (const path of ['src/lib/actions/job-assist.ts', 'src/lib/ai-assist/run-assist.ts', 'src/lib/ai-assist/assist.ts']) {
+      expect(readFileSync(join(ROOT, path), 'utf8'), path).not.toMatch(WRITE);
+    }
+    // Kontrola ujemna reguły.
+    expect("await rpc(tx, 'save_job_draft', { p_job_id: id })").toMatch(WRITE);
   });
 
   it('kod funkcji AI nie dotyka statusu, widoczności ani kolejności kandydatów', () => {
-    const files = [...AI_FEATURES.flatMap((f) => f.callSites), 'src/lib/actions/job-import.ts', 'src/lib/ai-import/run-import.ts'];
-    const forbidden = /transition_application|apply_to_job|withdraw_application|is_searchable|set_candidate_searchable|public\.matches|from\(['"]matches['"]\)|from\(['"]applications['"]\)/;
+    const files = [
+      ...AI_FEATURES.flatMap((f) => f.callSites),
+      'src/lib/actions/job-import.ts',
+      'src/lib/ai-import/run-import.ts',
+      'src/lib/actions/job-assist.ts',
+      'src/lib/ai-assist/run-assist.ts',
+    ];
+    const forbidden = /transition_application|apply_to_job|withdraw_application|is_searchable|set_candidate_searchable|public\.matches|from\(['"]matches['"]\)|from\(['"]applications['"]\)|\bpublic\.applications\b/;
     for (const path of files.filter((p) => existsSync(join(ROOT, p)))) {
       expect(readFileSync(join(ROOT, path), 'utf8'), path).not.toMatch(forbidden);
     }

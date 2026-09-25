@@ -98,7 +98,7 @@ export interface Activity {
 }
 
 /** Wspólne dla każdej czynności: hosting aplikacji i bazy. */
-const HOSTING: ProcessorId[] = ['railway', 'supabase'];
+const HOSTING: ProcessorId[] = ['railway'];
 
 export const ACTIVITIES: Record<ActivityId, Activity> = {
   account: {
@@ -184,7 +184,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'ai-translation': {
     name: 'Tłumaczenia AI (rdzeń)',
-    inCode: 'Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0106). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone.',
+    inCode: 'Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0109). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone.',
     processors: [...HOSTING, 'anthropic'],
     retentionInCode:
       'deactivate_translation_source(purge) usuwa rewizje, zadania i przekłady encji (wywołanie przy usunięciu konta/oferty — do wpięcia w #33/#34). Wynik odrzuconej rewizji nie jest przechowywany (poza propozycją przy korekcie ręcznej).',
@@ -430,7 +430,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       checksum_sha256: 'file',
       scan_status: 'file',
     },
-    note: 'Treść pliku leży w buckecie (Supabase Storage), w tabeli są metadane.',
+    note: 'Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane.',
   },
 
   // --- Aplikacje ---------------------------------------------------------------------------
@@ -662,6 +662,9 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['candidate', 'employer'],
     columns: {
       profile_id: 'reference',
+      // #493 (0108): rodzaj elementu (regulamin / informacja o prywatności / dawny wspólny) i kanał.
+      kind: 'consent',
+      source: 'consent',
       document_version: 'consent',
       accepted_at: 'consent',
       ip_address: 'technical',
@@ -721,6 +724,32 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     note: 'Wyłącznie liczniki przebiegów retencji (bez danych osobowych).',
   },
 
+  // --- Rejestr naruszeń (#490, 0106) --------------------------------------------------------
+  'public.breach_incidents': {
+    activities: ['security-audit'],
+    subjects: ['admin'],
+    columns: { created_by: 'reference', description: 'correspondence', actions_taken: 'correspondence' },
+    note: 'Opis zdarzenia i skali bez kopii danych osób (interfejs prosi o opis zakresu). Dostęp tylko admin (RPC, odczyt service-role).',
+  },
+  'public.breach_incident_events': {
+    activities: ['security-audit'],
+    subjects: ['admin'],
+    columns: { actor_id: 'reference', changes: 'technical', note: 'correspondence' },
+    note: 'Niezmienna historia zmian wpisu (pole: przed/po).',
+  },
+  'public.breach_notices': {
+    activities: ['security-audit', 'email-notifications'],
+    subjects: ['admin'],
+    columns: { created_by: 'reference', content: 'correspondence' },
+    note: 'Treść zawiadomienia wpisana przez administratora (per język), bez listy adresów.',
+  },
+  'public.breach_notice_recipients': {
+    activities: ['security-audit', 'email-notifications'],
+    subjects: ['candidate', 'employer'],
+    columns: { profile_id: 'reference', locale: 'preferences', queued: 'technical' },
+    note: 'Kto dostał zawiadomienie o naruszeniu (konto + język), bez adresu e-mail.',
+  },
+
   // --- Bezpieczeństwo i audyt ----------------------------------------------------------------
   'public.retention_policies': {
     activities: ['data-rights'],
@@ -764,7 +793,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['security-audit'],
     subjects: ['candidate', 'employer', 'visitor'],
     columns: { key: 'technical' },
-    note: 'Klucz = akcja + adres IP (ścieżka Supabase, bez haszowania) albo HMAC (ścieżka PostgreSQL, src/lib/db/rate-limit.ts).',
+    note: 'Klucz = akcja + adres IP (+ identyfikator) bez haszowania (src/lib/rate-limit.ts, pula service); wariant HMAC src/lib/db/rate-limit.ts niepodłączony.',
   },
   'public.system_events': {
     activities: ['security-audit'],

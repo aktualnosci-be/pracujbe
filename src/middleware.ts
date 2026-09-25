@@ -1,18 +1,11 @@
 import createIntlMiddleware from 'next-intl/middleware';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { routing } from './i18n/routing';
 import { resolveCitySlugAlias } from '@/lib/locations/city-aliases';
 import { isOneTimeLinkPath } from '@/lib/analytics/route-policy';
-import {
-  guestLinkCookieName,
-  guestLinkMaxAge,
-  guestLinkPath,
-  guestLinkPurpose,
-  isGuestLinkToken,
-} from '@/lib/guest-apply/link-state';
-import { env, isAppReady, isSupabaseConfigured } from '@/lib/env';
+import { guestLinkPurpose } from '@/lib/guest-apply/link-state';
+import { isAppReady } from '@/lib/env';
 import {
   SITE_ACCESS_COOKIE,
   SITE_ACCESS_DENIED_PARAM,
@@ -37,18 +30,12 @@ const MAINTENANCE_HTML =
   'Service temporarily unavailable. Please try again shortly.</p></body></html>';
 
 /**
- * Middleware = next-intl + odświeżanie sesji Supabase.
+ * Middleware = bramka hasła + fail-closed gotowości + next-intl.
  *
- * 1. next-intl (wykrywanie języka z Accept-Language dla "/", prefiks locale, redirecty
- *    nieobsłużonych ścieżek) — uruchamiane ZAWSZE, jego odpowiedź jest bazą.
- * 2. Sesja Supabase (@supabase/ssr): przy skonfigurowanym env odświeżamy token
- *    (`getUser()` rotuje wygasły access token na podstawie refresh tokena) i przenosimy
- *    zaktualizowane cookies na odpowiedź next-intl. Panele (candidate/employer/onboarding)
- *    polegają na tym — serwerowy guard w layoutcie (`getUser()` w RSC nie może zapisać
- *    cookies) zobaczy świeżą sesję tylko dzięki rotacji tutaj.
- *
- * Bez env (`isSupabaseConfigured() === false`) NIE inicjujemy Supabase — działa sam
- * next-intl (tryb demo). Matcher wyklucza api, auth (callback poza i18n), pliki wewnętrzne
+ * Sesje (#24) sprawdza serwer (Node) w guardach paneli i akcjach: Better Auth + PostgreSQL
+ * (`getCurrentIdentity`). Middleware działa na Edge, więc NIE łączy się z bazą, nie czyta ani
+ * nie odświeża cookie sesji i nie podejmuje decyzji o dostępie — nie ma tu też żadnego
+ * `Set-Cookie` zależnego od użytkownika. Matcher wyklucza api, auth, pliki wewnętrzne
  * Next/Vercel oraz assety (wszystko z kropką).
  */
 const handleIntl = createIntlMiddleware(routing);
@@ -57,8 +44,7 @@ const handleIntl = createIntlMiddleware(routing);
  * Nagłówek dla odpowiedzi, które nie mogą trafić do cache współdzielonego (#298). Strony
  * publiczne są statyczne/ISR i dostają `s-maxage`; middleware wykonuje się jednak przy KAŻDYM
  * żądaniu (także trafieniu w cache ISR), więc tu nadpisujemy nagłówek, gdy odpowiedź zależy od
- * żądającego: bramka hasła (CDN nie może podać strony osobie bez cookie dostępu) oraz
- * odświeżone cookies sesji (CDN nie może zapamiętać cudzego `Set-Cookie`).
+ * żądającego: bramka hasła (CDN nie może podać strony osobie bez cookie dostępu).
  */
 const PRIVATE_CACHE_CONTROL = 'private, no-store';
 
@@ -71,30 +57,17 @@ function protectOneTimeResponse(request: NextRequest, response: NextResponse): N
   return response;
 }
 
-/** Existing query links are exchanged for a path-scoped HttpOnly cookie and a clean URL. */
-function exchangeLegacyGuestLink(request: NextRequest): NextResponse | null {
-  const link = guestLinkPurpose(request.nextUrl.pathname);
-  if (!link || !request.nextUrl.searchParams.has('token')) return null;
-
-  const values = request.nextUrl.searchParams.getAll('token');
+/**
+ * Linki gościa z tokenem w query (format sprzed #506) są odrzucane (#505): token w query trafia
+ * do logów pierwszego żądania, więc nie przyjmujemy go jako uprawnienia. Czysty URL bez cookie —
+ * strona pokazuje „link nieprawidłowy” z prośbą o ponowne wysłanie aplikacji (nowy link ma token
+ * we fragmencie). Cookie staged z nowego linku zostaje nietknięte.
+ */
+function rejectLegacyGuestLink(request: NextRequest): NextResponse | null {
+  if (!guestLinkPurpose(request.nextUrl.pathname) || !request.nextUrl.searchParams.has('token')) return null;
   const url = request.nextUrl.clone();
   url.search = '';
-  const response = NextResponse.redirect(url, 303);
-  const name = guestLinkCookieName(link.purpose);
-  const path = guestLinkPath(link.locale, link.purpose);
-  const token = values.length === 1 ? values[0] : null;
-  if (isGuestLinkToken(token)) {
-    response.cookies.set(name, token, {
-      path,
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: request.nextUrl.protocol === 'https:',
-      maxAge: guestLinkMaxAge(link.purpose),
-    });
-  } else {
-    response.cookies.set(name, '', { path, maxAge: 0 });
-  }
-  return protectOneTimeResponse(request, response);
+  return protectOneTimeResponse(request, NextResponse.redirect(url, 303));
 }
 
 const CITY_LANDING_RE = /^\/([a-z]{2})\/praca\/miasto\/([^/]+)\/?$/;
@@ -146,7 +119,7 @@ async function siteAccessGate(request: NextRequest): Promise<NextResponse | null
 }
 
 export default async function middleware(request: NextRequest) {
-  const guestRedirect = exchangeLegacyGuestLink(request);
+  const guestRedirect = rejectLegacyGuestLink(request);
   if (guestRedirect) return guestRedirect;
 
   const gated = await siteAccessGate(request);
@@ -173,37 +146,11 @@ export default async function middleware(request: NextRequest) {
   // Serwis za bramką hasła: odpowiedź dla osoby z dostępem nie może trafić do cache współdzielonego.
   if (getSiteAccessPassword()) response.headers.set('cache-control', PRIVATE_CACHE_CONTROL);
 
-  // 2) Brak env → tryb demo: nie inicjuj Supabase, zwróć samą odpowiedź next-intl.
-  const url = env.supabaseUrl;
-  const anonKey = env.supabaseAnonKey;
-  if (!isSupabaseConfigured() || !url || !anonKey) {
-    return response;
-  }
-
-  // 3) Odśwież sesję i przenieś zaktualizowane cookies na odpowiedź next-intl.
-  const supabase = createServerClient(url, anonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-        for (const { name, value, options } of cookiesToSet) {
-          response.cookies.set(name, value, options);
-        }
-        if (cookiesToSet.length > 0) response.headers.set('cache-control', PRIVATE_CACHE_CONTROL);
-      },
-    },
-  });
-
-  // Wymusza walidację/rotację tokenu i (w razie potrzeby) zapis cookies przez setAll.
-  await supabase.auth.getUser();
-
   return response;
 }
 
 export const config = {
-  // Pomijamy: api, auth (callback OAuth/e-mail — obsługiwany poza i18n), pliki wewnętrzne
-  // Next/Vercel oraz wszystko z kropką (assety, .xml, .txt). `auth` MUSI być wykluczone,
-  // inaczej /auth/callback jest przekierowywany na /{locale}/auth/callback (404).
+  // Pomijamy: api (w tym /api/auth), auth (dawny callback — ścieżki bez locale nie są
+  // przekierowywane), pliki wewnętrzne Next/Vercel oraz wszystko z kropką (assety, .xml, .txt).
   matcher: ['/((?!api|auth|_next|_vercel|.*\\..*).*)'],
 };

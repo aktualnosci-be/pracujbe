@@ -17,6 +17,19 @@ describe('Konfiguracja ograniczonej puli', () => {
     expect(config.options).toContain('-c role=pracujbe_ops -c search_path=public');
     expect(config.max).toBe(1);
   });
+  it('pula zadań serwerowych (#25): rola service_role, schemat public, 3 połączenia', () => {
+    const config = runtimePoolConfig('postgres://svc:secret@localhost/app', 'service');
+    expect(config.options).toContain('-c role=service_role -c search_path=public');
+    expect(config.max).toBe(3);
+  });
+  it('pula limitera (0058) i workera poczty auth (0061): własne role, mało sesji', () => {
+    const limiter = runtimePoolConfig('postgres://limiter:secret@localhost/app', 'rate_limit');
+    expect(limiter.options).toContain('-c role=pracujbe_rate_limit -c search_path=public');
+    expect(limiter.max).toBe(2);
+    const mail = runtimePoolConfig('postgres://mail:secret@localhost/app', 'auth_mail');
+    expect(mail.options).toContain('-c role=pracujbe_auth_mail -c search_path=auth');
+    expect(mail.max).toBe(2);
+  });
   it.each([
     '', 'not-a-url', 'https://user:secret@host/db', 'postgres://host/db',
     'postgres://user:secret@host/',

@@ -8,13 +8,9 @@ import {
   listReports,
   listUsers,
 } from '@/lib/data/admin';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerClient } from '@/lib/supabase/server';
+import { fakeDb, fakeSession, pgError, resetFakeDb, type FakeCall } from '../helpers/fake-db';
 
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('next/navigation', () => ({
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
@@ -22,53 +18,21 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
-type Result = { data?: unknown; error?: unknown; count?: number | null };
+const ADMIN = { id: '00000000-0000-4000-8000-00000000a001', role: 'admin' } as const;
 
-/** Zapytanie-łańcuch Supabase: każdy filtr zwraca siebie, `await` daje `result(calls)`. */
-function query(result: (calls: Array<[string, unknown[]]>) => Result) {
-  const calls: Array<[string, unknown[]]> = [];
-  const q: Record<string, unknown> = {};
-  for (const method of ['select', 'is', 'eq', 'in', 'or', 'gte', 'lt', 'order', 'limit']) {
-    q[method] = (...args: unknown[]) => {
-      calls.push([method, args]);
-      return q;
-    };
-  }
-  q.then = (resolve: (value: Result) => unknown) => Promise.resolve(result(calls)).then(resolve);
-  return { q, calls };
+/** Wywołania service_role (transakcja `withServiceRole`). */
+function serviceCalls(): FakeCall[] {
+  return fakeDb.calls.filter((call) => call.as === 'service');
 }
 
-function mockClient(byTable: Record<string, Array<(calls: Array<[string, unknown[]]>) => Result>>) {
-  const allCalls: Record<string, Array<Array<[string, unknown[]]>>> = {};
-  const from = vi.fn((table: string) => {
-    const next = byTable[table]?.shift();
-    if (!next) throw new Error(`unexpected table ${table}`);
-    const { q, calls } = query(next);
-    (allCalls[table] ??= []).push(calls);
-    return q;
-  });
-  vi.mocked(createAdminClient).mockReturnValue({ from } as never);
-  return allCalls;
-}
-
-/** Sesja użytkownika (klient pod RLS): `user` z getUser i rola z własnego profilu. */
-function mockSession(user: { id: string } | null, role: string | null, profileError?: unknown) {
-  const single = { data: role ? { role } : null, error: profileError ?? null };
-  const profileQuery = {
-    select: () => profileQuery,
-    eq: () => profileQuery,
-    maybeSingle: () => Promise.resolve(single),
-  };
-  vi.mocked(createServerClient).mockResolvedValue({
-    auth: { getUser: () => Promise.resolve({ data: { user } }) },
-    from: vi.fn(() => profileQuery),
-  } as never);
+/** Pusta odpowiedź dla każdego zapytania listy (bez danych pomocniczych). */
+function emptyList(name: string) {
+  fakeDb.rows(name, []);
 }
 
 beforeEach(() => {
-  vi.resetAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
-  mockSession({ id: 'admin-1' }, 'admin');
+  vi.clearAllMocks();
+  resetFakeDb({ ...ADMIN });
 });
 
 describe('panel admina — odczyt service-role tylko po potwierdzeniu roli', () => {
@@ -80,79 +44,91 @@ describe('panel admina — odczyt service-role tylko po potwierdzeniu roli', () 
     ['listAuditLogs', () => listAuditLogs()],
   ] as const;
 
-  it.each(loaders)('%s: brak sesji → notFound, bez klienta service-role', async (_name, load) => {
-    mockSession(null, null);
+  it.each(loaders)('%s: brak sesji → notFound, bez zapytań service-role', async (_name, load) => {
+    fakeSession.identity = null;
     await expect(load()).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
-  it.each(loaders)('%s: rola inna niż admin → notFound, bez klienta service-role', async (_name, load) => {
-    mockSession({ id: 'emp-1' }, 'employer');
+  it.each(loaders)('%s: rola inna niż admin → notFound, bez zapytań service-role', async (_name, load) => {
+    fakeSession.identity = { id: '00000000-0000-4000-8000-00000000e001', role: 'employer' };
     await expect(load()).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
-  it.each(loaders)('%s: błąd odczytu roli → notFound (fail closed)', async (_name, load) => {
-    mockSession({ id: 'admin-1' }, null, { message: 'boom' });
+  it.each(loaders)('%s: błąd odczytu tożsamości → notFound (fail closed)', async (_name, load) => {
+    const portal = await import('@/lib/db/portal');
+    vi.spyOn(portal, 'getPortalIdentity').mockRejectedValueOnce(new Error('boom'));
     await expect(load()).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('admin: odczyty idą przez service_role, nie pod sesją', async () => {
+    emptyList('admin.users');
+    await listUsers();
+    expect(fakeDb.calls.map((c) => c.as)).toEqual(['service']);
   });
 });
 
 describe('panel admina — błąd odczytu nie udaje pustej listy (#311)', () => {
   it.each([
-    ['listCompanies', () => listCompanies(), 'companies'],
-    ['listReports', () => listReports(), 'reports'],
-    ['listUsers', () => listUsers(), 'profiles'],
-    ['listAuditLogs', () => listAuditLogs(), 'audit_logs'],
-  ] as const)('%s: błąd zapytania → status error', async (_name, load, table) => {
-    mockClient({ [table]: [() => ({ data: null, error: { message: 'boom' } })] });
+    ['listCompanies', () => listCompanies(), 'admin.companies'],
+    ['listReports', () => listReports(), 'admin.reports'],
+    ['listUsers', () => listUsers(), 'admin.users'],
+    ['listAuditLogs', () => listAuditLogs(), 'admin.audit-logs'],
+  ] as const)('%s: błąd zapytania → status error', async (_name, load, query) => {
+    fakeDb.rows(query, () => {
+      throw pgError('XX000', 'boom');
+    });
     await expect(load()).resolves.toEqual({ status: 'error' });
   });
 
   it('listReports: błąd odczytu nazw zgłaszających → status error', async () => {
-    mockClient({
-      reports: [() => ({ data: [{ id: 'r1', reporter_id: 'u1', status: 'open' }], error: null })],
-      profiles: [() => ({ data: null, error: { message: 'boom' } })],
-    });
+    fakeDb
+      .rows('admin.reports', [{ id: 'r1', reporter_id: 'u1', status: 'open' }])
+      .rows('admin.report-reporters', () => {
+        throw pgError('XX000', 'boom');
+      });
     await expect(listReports()).resolves.toEqual({ status: 'error' });
   });
 
   it('pusta lista z bazy to status ok z pustymi wierszami', async () => {
-    mockClient({ profiles: [() => ({ data: [], error: null })] });
+    emptyList('admin.users');
     await expect(listUsers()).resolves.toEqual({ status: 'ok', rows: [], nextCursor: null });
   });
 
   it('getAdminStats: błąd pojedynczego licznika → status error (nie zera)', async () => {
-    mockClient({
-      companies: [() => ({ count: 5, error: null }), () => ({ count: null, error: { message: 'boom' } })],
-      profiles: [() => ({ count: 10, error: null })],
-      reports: [() => ({ count: 1, error: null })],
-    });
+    fakeDb
+      .count('admin.stats-companies', 5)
+      .count('admin.stats-pending-companies', () => {
+        throw pgError('XX000', 'boom');
+      })
+      .count('admin.stats-users', 10)
+      .count('admin.stats-open-reports', 1);
     await expect(getAdminStats()).resolves.toEqual({ status: 'error' });
   });
 });
 
 describe('panel admina — kolejka weryfikacji firm (#307)', () => {
   it('licznik „Oczekujące” obejmuje statusy unverified i pending', async () => {
-    const calls = mockClient({
-      companies: [() => ({ count: 5, error: null }), () => ({ count: 3, error: null })],
-      profiles: [() => ({ count: 10, error: null })],
-      reports: [() => ({ count: 1, error: null })],
-    });
+    fakeDb
+      .count('admin.stats-companies', 5)
+      .count('admin.stats-pending-companies', 3)
+      .count('admin.stats-users', 10)
+      .count('admin.stats-open-reports', 1);
     await expect(getAdminStats()).resolves.toEqual({
       status: 'ok',
       stats: { companies: 5, pendingCompanies: 3, users: 10, openReports: 1 },
     });
-    expect(calls.companies?.[1]).toContainEqual(['in', ['status', ['unverified', 'pending']]]);
+    expect(fakeDb.callsTo('admin.stats-pending-companies')[0]?.values).toEqual([['unverified', 'pending']]);
   });
 
   it('filtr `awaiting` listy firm filtruje unverified + pending', async () => {
-    const calls = mockClient({
-      companies: [() => ({ data: [{ id: 'c1', name: 'A', status: 'unverified', vat_number: 'BE1' }], error: null })],
-    });
+    fakeDb.rows('admin.companies', [{ id: 'c1', name: 'A', status: 'unverified', vat_number: 'BE1' }]);
     const result = await listCompanies({ status: 'awaiting' });
-    expect(calls.companies?.[0]).toContainEqual(['in', ['status', ['unverified', 'pending']]]);
+    const call = fakeDb.callsTo('admin.companies')[0]!;
+    expect(call.text).toContain('status::text = ANY($1::text[])');
+    expect(call.values[0]).toEqual(['unverified', 'pending']);
     expect(result).toMatchObject({ status: 'ok', rows: [{ id: 'c1', vatNumber: 'BE1' }] });
   });
 });
@@ -163,9 +139,16 @@ describe('panel admina — kolejka weryfikacji firm (#307)', () => {
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
+/** Wartość parametru `$n` użytego w tekście zapytania po danym fragmencie SQL. */
+function paramAfter(call: { text: string; values: unknown[] }, fragment: RegExp): unknown {
+  const match = fragment.exec(call.text);
+  return match ? call.values[Number(match[1]) - 1] : undefined;
+}
+
 /**
- * „Baza” 205 użytkowników (część z RÓWNĄ datą utworzenia), którą mock filtruje tak jak
- * PostgREST: warunek kursora z `.or()`, sortowanie `created_at desc, id desc`, `limit`.
+ * „Baza” użytkowników (część z RÓWNĄ datą utworzenia), którą atrapa filtruje tak jak
+ * PostgreSQL: warunek kursora `(created_at, id) < ($a, $b)`, sortowanie `created_at desc,
+ * id desc`, `LIMIT $n`.
  */
 function pagedProfiles(total: number) {
   const all = Array.from({ length: total }, (_, i) => ({
@@ -174,20 +157,19 @@ function pagedProfiles(total: number) {
     // Co 10 wierszy ta sama data — kursor musi rozstrzygać po `id`.
     created_at: `2026-01-${String(1 + Math.floor(i / 10)).padStart(2, '0')}T10:00:00.123456+00:00`,
   }));
-  return (calls: Array<[string, unknown[]]>) => {
+  return (call: { text: string; values: unknown[] }) => {
     let rows = [...all];
-    const or = calls.find(([m]) => m === 'or')?.[1][0] as string | undefined;
-    if (or) {
-      const m = /created_at\.lt\."([^"]+)",and\(created_at\.eq\."([^"]+)",id\.lt\.([0-9a-f-]+)\)/.exec(or);
-      if (!m) throw new Error(`unexpected or: ${or}`);
-      const [, ts, , id] = m;
-      rows = rows.filter((r) => r.created_at < ts! || (r.created_at === ts && r.id < id!));
+    const cursor = /\(created_at, id\) < \(\$(\d+)::timestamptz, \$(\d+)::uuid\)/.exec(call.text);
+    if (cursor) {
+      const ts = call.values[Number(cursor[1]) - 1] as string;
+      const id = call.values[Number(cursor[2]) - 1] as string;
+      rows = rows.filter((r) => r.created_at < ts || (r.created_at === ts && r.id < id));
     }
     rows.sort((a, b) =>
       a.created_at === b.created_at ? (a.id < b.id ? 1 : -1) : a.created_at < b.created_at ? 1 : -1,
     );
-    const limit = calls.find(([m]) => m === 'limit')?.[1][0] as number;
-    return { data: rows.slice(0, limit), error: null };
+    const limit = paramAfter(call, /LIMIT \$(\d+)/) as number;
+    return rows.slice(0, limit);
   };
 }
 
@@ -197,8 +179,8 @@ describe('panel admina — stronicowanie kursorem (#418)', () => {
     const seen: string[] = [];
     let cursor: string | null = null;
     let pages = 0;
+    fakeDb.rows('admin.users', pagedProfiles(total));
     do {
-      mockClient({ profiles: [pagedProfiles(total)] });
       const result = await listUsers({ cursor });
       expect(result.status).toBe('ok');
       if (result.status !== 'ok') return;
@@ -215,61 +197,81 @@ describe('panel admina — stronicowanie kursorem (#418)', () => {
   });
 
   it('kursor zachowuje znacznik czasu z mikrosekundami (bez utraty przez Date)', async () => {
-    mockClient({ profiles: [pagedProfiles(ADMIN_PAGE_SIZE + 1)] });
+    fakeDb.rows('admin.users', pagedProfiles(ADMIN_PAGE_SIZE + 1));
     const result = await listUsers();
     if (result.status !== 'ok') throw new Error('expected ok');
-    expect(decodeAdminCursor(result.nextCursor)?.createdAt).toMatch(/\.123456\+00:00$/);
+    const cursor = decodeAdminCursor(result.nextCursor);
+    expect(cursor?.createdAt).toMatch(/\.123456\+00:00$/);
+    // Ten sam znacznik trafia do parametru zapytania następnej strony.
+    await listUsers({ cursor: result.nextCursor });
+    const next = fakeDb.callsTo('admin.users')[1]!;
+    expect(next.values).toContain(cursor?.createdAt);
   });
 
-  it('kontrola ujemna: zmanipulowany kursor = pierwsza strona (bez filtra kursora)', async () => {
-    const calls = mockClient({ profiles: [() => ({ data: [], error: null })] });
+  it('kontrola ujemna: zmanipulowany kursor = pierwsza strona (bez warunku kursora)', async () => {
+    emptyList('admin.users');
     await listUsers({ cursor: 'x' + "'),id.gt.0" });
-    expect(calls.profiles?.[0]?.some(([m]) => m === 'or')).toBe(false);
+    const call = fakeDb.callsTo('admin.users')[0]!;
+    expect(call.text).not.toContain('(created_at, id) <');
+    expect(call.values).toEqual([ADMIN_PAGE_SIZE + 1]);
   });
 
-  it('wyszukiwanie i kursor łączone w jeden parametr `or` (and(or(..),or(..)))', async () => {
-    const calls = mockClient({ profiles: [() => ({ data: [], error: null })] });
+  it('wyszukiwanie, rola i kursor jako parametry (wartości nigdy w tekście SQL)', async () => {
+    emptyList('admin.users');
     const cursor = 'MjAyNi0wMS0wMVQxMDowMDowMCswMDowMHwwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDE';
-    await listUsers({ q: 'Jan, (x)', role: 'employer', cursor });
-    const ors = calls.profiles?.[0]?.filter(([m]) => m === 'or') ?? [];
-    expect(ors).toHaveLength(1);
-    const filter = ors[0]![1][0] as string;
-    expect(filter.startsWith('and(or(first_name.ilike."%Jan x%"')).toBe(true);
-    expect(filter).toContain('or(created_at.lt.');
-    expect(calls.profiles?.[0]).toContainEqual(['eq', ['role', 'employer']]);
+    await listUsers({ q: "Jan, (x)'; drop", role: 'employer', cursor });
+    const call = fakeDb.callsTo('admin.users')[0]!;
+    expect(call.text).toContain('first_name::text ILIKE $2 OR last_name::text ILIKE $2 OR email::text ILIKE $2');
+    expect(call.text).toContain('(created_at, id) < ($3::timestamptz, $4::uuid)');
+    expect(call.text).not.toContain('drop');
+    expect(call.values).toEqual([
+      'employer',
+      "%Jan x '; drop%",
+      '2026-01-01T10:00:00+00:00',
+      '00000000-0000-4000-8000-000000000001',
+      ADMIN_PAGE_SIZE + 1,
+    ]);
+  });
+
+  it('`_` z frazy jest literałem LIKE, nie symbolem wieloznacznym', async () => {
+    emptyList('admin.users');
+    await listUsers({ q: 'jan_k' });
+    expect(fakeDb.callsTo('admin.users')[0]?.values[0]).toBe('%jan\\_k%');
   });
 
   it('kontrola ujemna: nieznana rola (np. moderator) nie filtruje listy', async () => {
-    const calls = mockClient({ profiles: [() => ({ data: [], error: null })] });
+    emptyList('admin.users');
     await listUsers({ role: 'moderator' });
-    expect(calls.profiles?.[0]?.some(([m]) => m === 'eq')).toBe(false);
+    expect(fakeDb.callsTo('admin.users')[0]?.text).not.toContain('role::text =');
   });
 
   it('firmy: wyszukiwanie obejmuje nazwę, VAT, KBO i e-mail', async () => {
-    const calls = mockClient({ companies: [() => ({ data: [], error: null })] });
+    emptyList('admin.companies');
     await listCompanies({ q: 'BE0123' });
-    const filter = calls.companies?.[0]?.find(([m]) => m === 'or')?.[1][0] as string;
+    const call = fakeDb.callsTo('admin.companies')[0]!;
     for (const col of ['name', 'vat_number', 'registration_number', 'email']) {
-      expect(filter).toContain(`${col}.ilike."%BE0123%"`);
+      expect(call.text).toContain(`${col}::text ILIKE $1`);
     }
+    expect(call.values[0]).toBe('%BE0123%');
   });
 });
 
 describe('panel admina — zgłoszenia: filtr statusu i cel (#416)', () => {
   it('domyślny filtr = otwarte + w analizie', async () => {
-    const calls = mockClient({ reports: [() => ({ data: [], error: null })] });
+    emptyList('admin.reports');
     await listReports();
-    expect(calls.reports?.[0]).toContainEqual(['in', ['status', ['open', 'reviewing']]]);
+    const call = fakeDb.callsTo('admin.reports')[0]!;
+    expect(call.text).toContain('status::text = ANY($1::text[])');
+    expect(call.values[0]).toEqual(['open', 'reviewing']);
   });
 
   it('filtr `all` bez ograniczenia statusu; nieznany → domyślny', async () => {
-    const calls = mockClient({
-      reports: [() => ({ data: [], error: null }), () => ({ data: [], error: null })],
-    });
+    emptyList('admin.reports');
     await listReports({ status: 'all' });
     await listReports({ status: 'drop table' });
-    expect(calls.reports?.[0]?.some(([m]) => m === 'in')).toBe(false);
-    expect(calls.reports?.[1]).toContainEqual(['in', ['status', ['open', 'reviewing']]]);
+    const [all, unknown] = fakeDb.callsTo('admin.reports');
+    expect(all?.text).not.toContain('status::text');
+    expect(unknown?.values[0]).toEqual(['open', 'reviewing']);
   });
 
   it('cel dla każdego target_type: link/podgląd, usunięty cel ma jawny stan', async () => {
@@ -282,46 +284,31 @@ describe('panel admina — zgłoszenia: filtr statusu i cel (#416)', () => {
       status: 'open',
       created_at: '2026-01-01T10:00:00+00:00',
     });
-    mockClient({
-      reports: [
-        () => ({
-          data: [
-            report('r1', 'job', 'j1'),
-            report('r2', 'company', 'c1'),
-            report('r3', 'user', 'u1'),
-            report('r4', 'message', 'm1'),
-            report('r5', 'job', 'j-gone'),
-            report('r6', 'company', 'c-deleted'),
-          ],
-          error: null,
-        }),
-      ],
-      jobs: [
-        () => ({
-          data: [{ id: 'j1', title: 'Magazynier', slug: 'magazynier-gent', status: 'active' }],
-          error: null,
-        }),
-      ],
-      companies: [
-        () => ({
-          data: [
-            { id: 'c1', name: 'Firma A' },
-            { id: 'c-deleted', name: 'Firma B', deleted_at: '2026-01-02T00:00:00Z' },
-          ],
-          error: null,
-        }),
-      ],
-      profiles: [
-        () => ({
-          data: [{ id: 'u1', first_name: 'Jan', last_name: 'Peeters', email: 'jan@example.com' }],
-          error: null,
-        }),
-      ],
-      messages: [() => ({ data: [{ id: 'm1', body: '  Treść\n wiadomości ' }], error: null })],
-    });
+    fakeDb
+      .rows('admin.reports', [
+        report('r1', 'job', 'j1'),
+        report('r2', 'company', 'c1'),
+        report('r3', 'user', 'u1'),
+        report('r4', 'message', 'm1'),
+        report('r5', 'job', 'j-gone'),
+        report('r6', 'company', 'c-deleted'),
+      ])
+      .rows('admin.report-target-jobs', [
+        { id: 'j1', title: 'Magazynier', slug: 'magazynier-gent', status: 'active' },
+      ])
+      .rows('admin.report-target-companies', [
+        { id: 'c1', name: 'Firma A' },
+        { id: 'c-deleted', name: 'Firma B', deleted_at: '2026-01-02T00:00:00Z' },
+      ])
+      .rows('admin.report-target-users', [
+        { id: 'u1', first_name: 'Jan', last_name: 'Peeters', email: 'jan@example.com' },
+      ])
+      .rows('admin.report-target-messages', [{ id: 'm1', body: '  Treść\n wiadomości ' }]);
 
     const result = await listReports({ status: 'all' });
     if (result.status !== 'ok') throw new Error('expected ok');
+    // Jeden batchowy odczyt na typ celu (bez N+1).
+    expect(fakeDb.callsTo('admin.report-target-jobs')[0]?.values).toEqual([['j1', 'j-gone']]);
     const byId = Object.fromEntries(result.rows.map((r) => [r.id, r.target]));
     expect(byId.r1).toEqual({
       label: 'Magazynier',
@@ -340,60 +327,45 @@ describe('panel admina — zgłoszenia: filtr statusu i cel (#416)', () => {
   });
 
   it('błąd odczytu celów → status error (nie rozstrzygamy na ślepo)', async () => {
-    mockClient({
-      reports: [
-        () => ({
-          data: [{ id: 'r1', target_type: 'job', target_id: 'j1', status: 'open' }],
-          error: null,
-        }),
-      ],
-      jobs: [() => ({ data: null, error: { message: 'boom' } })],
-    });
+    fakeDb
+      .rows('admin.reports', [{ id: 'r1', target_type: 'job', target_id: 'j1', status: 'open' }])
+      .rows('admin.report-target-jobs', () => {
+        throw pgError('XX000', 'boom');
+      });
     await expect(listReports()).resolves.toEqual({ status: 'error' });
   });
 });
 
 describe('panel admina — dziennik zdarzeń (#417)', () => {
   it('mapuje aktora, obiekt i zmianę statusu; system = brak aktora', async () => {
-    mockClient({
-      audit_logs: [
-        () => ({
-          data: [
-            {
-              id: 'a1',
-              actor_id: 'admin-1',
-              action: 'company.status_changed',
-              entity_type: 'company',
-              entity_id: 'c1',
-              before_data: { status: 'pending' },
-              after_data: { status: 'verified' },
-              created_at: '2026-01-01T10:00:00+00:00',
-            },
-            {
-              id: 'a2',
-              actor_id: null,
-              action: 'company.created',
-              entity_type: 'company',
-              entity_id: 'c2',
-              before_data: null,
-              after_data: { status: 'unverified', name: 'X' },
-              created_at: '2026-01-01T09:00:00+00:00',
-            },
-          ],
-          error: null,
-        }),
-      ],
-      profiles: [() => ({ data: [{ id: 'admin-1', first_name: 'Ada', last_name: 'Admin' }], error: null })],
-      companies: [
-        () => ({
-          data: [
-            { id: 'c1', name: 'Firma A' },
-            { id: 'c2', name: 'Firma B', deleted_at: '2026-01-02T00:00:00Z' },
-          ],
-          error: null,
-        }),
-      ],
-    });
+    fakeDb
+      .rows('admin.audit-logs', [
+        {
+          id: 'a1',
+          actor_id: 'admin-1',
+          action: 'company.status_changed',
+          entity_type: 'company',
+          entity_id: 'c1',
+          before_data: { status: 'pending' },
+          after_data: { status: 'verified' },
+          created_at: '2026-01-01T10:00:00+00:00',
+        },
+        {
+          id: 'a2',
+          actor_id: null,
+          action: 'company.created',
+          entity_type: 'company',
+          entity_id: 'c2',
+          before_data: null,
+          after_data: { status: 'unverified', name: 'X' },
+          created_at: '2026-01-01T09:00:00+00:00',
+        },
+      ])
+      .rows('admin.audit-actors', [{ id: 'admin-1', first_name: 'Ada', last_name: 'Admin' }])
+      .rows('admin.audit-companies', [
+        { id: 'c1', name: 'Firma A' },
+        { id: 'c2', name: 'Firma B', deleted_at: '2026-01-02T00:00:00Z' },
+      ]);
     const result = await listAuditLogs();
     if (result.status !== 'ok') throw new Error('expected ok');
     expect(result.rows[0]).toMatchObject({
@@ -407,7 +379,7 @@ describe('panel admina — dziennik zdarzeń (#417)', () => {
   });
 
   it('filtry: typ, akcja, obiekt, zakres dat w Europe/Brussels, aktor „system”', async () => {
-    const calls = mockClient({ audit_logs: [() => ({ data: [], error: null })] });
+    emptyList('admin.audit-logs');
     await listAuditLogs({
       entity: 'company',
       action: 'company.status_changed',
@@ -416,29 +388,53 @@ describe('panel admina — dziennik zdarzeń (#417)', () => {
       from: '2025-07-01',
       to: '2025-07-01',
     });
-    const c = calls.audit_logs?.[0] ?? [];
-    expect(c).toContainEqual(['eq', ['entity_type', 'company']]);
-    expect(c).toContainEqual(['eq', ['action', 'company.status_changed']]);
-    expect(c).toContainEqual(['eq', ['entity_id', '00000000-0000-4000-8000-000000000001']]);
-    expect(c).toContainEqual(['is', ['actor_id', null]]);
-    expect(c).toContainEqual(['gte', ['created_at', '2025-06-30T22:00:00.000Z']]);
-    expect(c).toContainEqual(['lt', ['created_at', '2025-07-01T22:00:00.000Z']]);
+    const call = fakeDb.callsTo('admin.audit-logs')[0]!;
+    for (const fragment of [
+      'entity_type = $1',
+      'action = $2',
+      'entity_id = $3::uuid',
+      'created_at >= $4::timestamptz',
+      'created_at < $5::timestamptz',
+      'actor_id IS NULL',
+    ]) {
+      expect(call.text).toContain(fragment);
+    }
+    expect(call.values.slice(0, 5)).toEqual([
+      'company',
+      'company.status_changed',
+      '00000000-0000-4000-8000-000000000001',
+      '2025-06-30T22:00:00.000Z',
+      '2025-07-01T22:00:00.000Z',
+    ]);
+    expect(fakeDb.callsTo('admin.audit-actor-search')).toHaveLength(0);
   });
 
   it('kontrola ujemna: nieznane wartości filtrów są ignorowane', async () => {
-    const calls = mockClient({ audit_logs: [() => ({ data: [], error: null })] });
+    emptyList('admin.audit-logs');
     await listAuditLogs({ entity: 'profiles', action: 'drop', entityId: 'nope', from: '2025-13-01' });
-    const c = calls.audit_logs?.[0] ?? [];
-    expect(c.some(([m]) => m === 'eq' || m === 'gte' || m === 'lt')).toBe(false);
+    const call = fakeDb.callsTo('admin.audit-logs')[0]!;
+    expect(call.text).not.toMatch(/entity_type =|action =|entity_id =|created_at >=|created_at </);
+    expect(call.values).toEqual([ADMIN_PAGE_SIZE + 1]);
+  });
+
+  it('aktor po nazwie: id dopasowanych profili filtrują dziennik', async () => {
+    fakeDb.rows('admin.audit-actor-search', [{ id: 'p1' }, { id: 'p2' }]);
+    emptyList('admin.audit-logs');
+    await listAuditLogs({ actor: 'Ada' });
+    expect(fakeDb.callsTo('admin.audit-actor-search')[0]?.values).toEqual(['%Ada%']);
+    const call = fakeDb.callsTo('admin.audit-logs')[0]!;
+    expect(call.text).toContain('actor_id = ANY($1::uuid[])');
+    expect(call.values[0]).toEqual(['p1', 'p2']);
   });
 
   it('aktor po nazwie bez dopasowań → pusta lista bez odczytu audit_logs', async () => {
-    const calls = mockClient({ profiles: [() => ({ data: [], error: null })] });
+    emptyList('admin.audit-actor-search');
     await expect(listAuditLogs({ actor: 'Nikt' })).resolves.toEqual({
       status: 'ok',
       rows: [],
       nextCursor: null,
     });
-    expect(calls.audit_logs).toBeUndefined();
+    expect(fakeDb.callsTo('admin.audit-logs')).toHaveLength(0);
+    expect(serviceCalls()).toHaveLength(1);
   });
 });

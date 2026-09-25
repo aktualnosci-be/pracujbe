@@ -12,6 +12,7 @@ const pages = [
   '/reset-hasla',
   '/ustaw-nowe-haslo',
   '/potwierdzenie',
+  '/potwierdz-email',
 ];
 
 for (const locale of ['pl', 'nl', 'fr', 'en']) {

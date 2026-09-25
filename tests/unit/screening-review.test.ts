@@ -5,23 +5,17 @@ import { publishJob } from '@/lib/actions/jobs';
 import { AUDIT_ACTION_KEY, parseScreeningReviewFilter } from '@/lib/admin/list-params';
 import { titleKeyForType } from '@/lib/data/notifications';
 import { toUserMessageKey } from '@/lib/errors';
-import { isSupabaseConfigured } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { SCREENING_REVIEW_REASON_MAX } from '@/lib/screening/risk';
 import { buildScreeningReviewNotices, screeningReviewReasonError } from '@/lib/screening/review';
-import { createServerClient } from '@/lib/supabase/server';
+import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #497 — przegląd pytań screeningowych po stronie aplikacji: stan pytań blokujących publikację
  * (ta sama reguła co strażnik w bazie), mapowanie błędów publikacji, akcja admina.
  */
 
-vi.mock('@/lib/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/env')>()),
-  isSupabaseConfigured: vi.fn(),
-}));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -29,19 +23,9 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 const JOB_ID = '5a0e8f4c-2b1d-4c3e-9f7a-1d2e3f4a5b6c';
 const REVIEW_ID = '6b1f9a5d-3c2e-4d4f-8a8b-2e3f4a5b6c7d';
 
-type Result = { data?: unknown; error?: unknown };
-
-function chain(result: Result) {
-  const q: Record<string, unknown> = {};
-  for (const m of ['select', 'is', 'eq', 'in', 'order', 'limit']) q[m] = () => q;
-  q.maybeSingle = () => Promise.resolve(result);
-  q.then = (done: (value: Result) => unknown) => Promise.resolve(result).then(done);
-  return q;
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  resetFakeDb({ id: '11111111-1111-4111-8111-111111111111', role: 'employer' });
   vi.mocked(checkRateLimit).mockResolvedValue(true);
 });
 
@@ -88,23 +72,11 @@ describe('uzasadnienie decyzji', () => {
 
 describe('publishJob — pytania blokujące publikację', () => {
   function mockPublish(message: string) {
-    const rpc = vi.fn().mockResolvedValue({ error: { message } });
-    const from = vi.fn((table: string) => {
-      if (table === 'jobs') return chain({ data: { id: JOB_ID, title: 'Magazynier' }, error: null });
-      if (table === 'job_screening_questions') {
-        return chain({
-          data: [{ position: 1, content_fingerprint: 'b', risk_categories: ['age'] }],
-          error: null,
-        });
-      }
-      return chain({ data: [{ content_fingerprint: 'b', status: 'pending' }], error: null });
-    });
-    vi.mocked(createServerClient).mockResolvedValue({
-      auth: { getUser: () => Promise.resolve({ data: { user: { id: 'emp-1' } } }) },
-      from,
-      rpc,
-    } as never);
-    return { rpc, from };
+    fakeDb
+      .rows('jobs.publish-title', [{ id: JOB_ID, title: 'Magazynier' }])
+      .rpc('publish_job', () => { throw pgError('P0001', message); })
+      .rows('jobs.screening-questions-review', [{ position: 1, content_fingerprint: 'b', risk_categories: ['age'] }])
+      .rows('jobs.screening-reviews', [{ content_fingerprint: 'b', status: 'pending' }]);
   }
 
   it('SCREENING_REVIEW_REQUIRED z bazy → kod + pytania do poprawy', async () => {
@@ -124,9 +96,9 @@ describe('publishJob — pytania blokujące publikację', () => {
   });
 
   it('kontrola ujemna: inny błąd publikacji nie dołącza stanu pytań', async () => {
-    const { from } = mockPublish('VALIDATION_FAILED: brak wymagań obowiązkowych');
+    mockPublish('VALIDATION_FAILED: brak wymagań obowiązkowych');
     await expect(publishJob(JOB_ID)).resolves.toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(from).not.toHaveBeenCalledWith('screening_question_reviews');
+    expect(fakeDb.callsTo('jobs.screening-reviews')).toHaveLength(0);
   });
 
   it('komunikaty błędów mają klucze i18n', () => {
@@ -136,12 +108,14 @@ describe('publishJob — pytania blokujące publikację', () => {
 });
 
 describe('decideScreeningReview (admin)', () => {
-  function mockRpc(result: { error: unknown } = { error: null }) {
-    const rpc = vi.fn().mockResolvedValue(result);
-    vi.mocked(createServerClient).mockResolvedValue({
-      auth: { getUser: () => Promise.resolve({ data: { user: { id: 'admin-1' } } }) },
-      rpc,
-    } as never);
+  function mockRpc(result: { error: string | null } = { error: null }) {
+    const rpc = vi.fn();
+    resetFakeDb({ id: '22222222-2222-4222-8222-222222222222', role: 'admin' });
+    fakeDb.rpc('admin_decide_screening_review', ({ args }: { args: Record<string, unknown> }) => {
+      rpc('admin_decide_screening_review', args);
+      if (result.error) throw pgError('P0001', result.error);
+      return null;
+    });
     return rpc;
   }
 
@@ -180,7 +154,7 @@ describe('decideScreeningReview (admin)', () => {
   });
 
   it('decyzja już podjęta / treść zmieniona → STALE_STATE', async () => {
-    mockRpc({ error: { message: 'STALE_STATE: przegląd nie oczekuje na decyzję' } });
+    mockRpc({ error: 'STALE_STATE: przegląd nie oczekuje na decyzję' });
     await expect(decideScreeningReview(REVIEW_ID, 'approved', '')).resolves.toEqual({
       ok: false,
       error: 'STALE_STATE',

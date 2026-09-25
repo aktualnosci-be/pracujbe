@@ -1,15 +1,18 @@
 /**
  * Warstwa danych panelu administratora — Pracuj.be (Etap 7g).
  *
- * ⚠️ ODCZYTY przez `createAdminClient()` (service-role, OMIJA RLS). Każda funkcja publiczna
- * SAMA potwierdza rolę `admin` sesji (`requireAdmin`) PRZED utworzeniem klienta service-role —
- * guard w `admin/layout.tsx` nie wystarcza (layout nie musi się renderować razem ze stroną).
- * Brak sesji, inna rola albo błąd odczytu roli → `notFound()` (fail closed, nie ujawniamy
- * panelu). Klient service-role importowany LENIWIE, żeby moduł nie ciągnął
- * `server-only`/klienta do bundla trybu DEMO oraz żeby build bez env przechodził.
+ * ⚠️ ODCZYTY przez `withServiceRole()` (pula service_role, OMIJA RLS). Każda funkcja publiczna
+ * SAMA potwierdza rolę `admin` sesji (`requireAdmin` → `getPortalIdentity()`) PRZED otwarciem
+ * transakcji service_role — guard w `admin/layout.tsx` nie wystarcza (layout nie musi się
+ * renderować razem ze stroną). Brak sesji, inna rola albo błąd odczytu tożsamości →
+ * `notFound()` (fail closed, nie ujawniamy panelu).
  *
- * Bez konfiguracji Supabase (`isSupabaseConfigured() === false`) zwracamy dane DEMO —
- * dzięki temu panel renderuje się w podglądzie/buildzie bez backendu.
+ * Zapytania to parametryzowany SQL (`@/lib/db/sql`, #25): listy stronicowane kursorem
+ * (`created_at`, `id`) i wyszukiwanie ILIKE po stronie serwera. Jedna lista = jedna transakcja
+ * — błąd któregokolwiek odczytu daje jawny stan `error` (#311), nie częściowe dane.
+ *
+ * Bez konfiguracji backendu (`isPortalDataConfigured() === false`) zwracamy dane DEMO —
+ * dzięki temu panel renderuje się w podglądzie/buildzie bez bazy.
  */
 
 import { notFound } from 'next/navigation';
@@ -17,13 +20,13 @@ import { cache } from 'react';
 
 import {
   ADMIN_PAGE_SIZE,
-  cursorOrFilter,
   decodeAdminCursor,
   encodeAdminCursor,
   matchesSearch,
   normalizeAdminSearch,
   parseAuditAction,
   parseAuditEntity,
+  parseBreachFilter,
   parseEmailSuppressionFilter,
   parseReportFilter,
   parseReportKindFilter,
@@ -32,13 +35,13 @@ import {
   parseUuid,
   parseYmd,
   reportStatusesFor,
-  searchOrFilter,
 } from '@/lib/admin/list-params';
 import { appDayStartUtc } from '@/lib/datetime';
 import { demoJobs } from '@/lib/data/demo';
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
+import { attempt, queryCount, queryOne, queryRows } from '@/lib/db/sql';
+import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
 import {
   isScreeningQuestionType,
   toLocalizedText,
@@ -351,7 +354,7 @@ const DEMO_USERS: AdminUserRow[] = [
 ];
 
 /* ---------------------------------------------------------------------------
- * Pomocnicze parsowanie (klient Supabase jest nietypowany → dane `any`)
+ * Pomocnicze parsowanie (wiersze JSON z bazy są nietypowane — zawężamy bez `any`)
  * ------------------------------------------------------------------------- */
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -415,23 +418,14 @@ function toPage<T extends { id: string }>(
 }
 
 /**
- * Potwierdza rolę `admin` bieżącej sesji (odczyt własnego profilu pod RLS). Wynik
+ * Potwierdza rolę `admin` bieżącej sesji (tożsamość z `getPortalIdentity()`). Wynik
  * zapamiętany na czas jednego żądania (`cache`), więc kilka odczytów strony = jedno sprawdzenie.
  */
 const isAdminSession = cache(async (): Promise<boolean> => {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return false;
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (error) throw error;
-    return asString(asRecord(data)['role']) === 'admin';
+    // `getPortalIdentity()` = zweryfikowana sesja + rola z profilu (już sprawdzona w bazie).
+    const me = await getPortalIdentity();
+    return me?.role === 'admin';
   } catch (error) {
     captureError(error, { area: 'admin.requireAdmin' });
     return false;
@@ -444,66 +438,92 @@ export async function requireAdmin(): Promise<void> {
 }
 
 /* ---------------------------------------------------------------------------
+ * Budowanie warunków SQL (wartości zawsze w parametrach `$n`)
+ * ------------------------------------------------------------------------- */
+
+/** Zbiera parametry zapytania i zwraca ich znaczniki `$n`. */
+class SqlParams {
+  readonly values: unknown[] = [];
+
+  add(value: unknown): string {
+    this.values.push(value);
+    return `$${this.values.length}`;
+  }
+}
+
+/**
+ * Warunek „starsze niż kursor” dla sortowania `created_at desc, id desc` (porównanie
+ * wierszowe = `created_at < ts OR (created_at = ts AND id < id)`). Zły token = brak warunku
+ * (pierwsza strona). Znacznik czasu przechodzi do bazy tekstem — pełna precyzja mikrosekund.
+ */
+function cursorCondition(params: SqlParams, token: string | null | undefined, alias = ''): string | null {
+  const cursor = decodeAdminCursor(token);
+  if (!cursor) return null;
+  const prefix = alias ? `${alias}.` : '';
+  return `(${prefix}created_at, ${prefix}id) < (${params.add(cursor.createdAt)}::timestamptz, ${params.add(cursor.id)}::uuid)`;
+}
+
+/**
+ * Fraza (już znormalizowana przez `normalizeAdminSearch` — bez `%`, `*`, `\`) w dowolnej
+ * z kolumn (ILIKE). `_` escapujemy, żeby był literałem, a nie symbolem wieloznacznym LIKE.
+ */
+function searchCondition(params: SqlParams, columns: readonly string[], q: string): string {
+  const pattern = params.add(`%${q.replace(/_/g, '\\_')}%`);
+  return `(${columns.map((column) => `${column}::text ILIKE ${pattern}`).join(' OR ')})`;
+}
+
+/** `WHERE …` z niepustych warunków (albo pusty string). */
+function whereOf(conditions: Array<string | null | false | undefined>): string {
+  const present = conditions.filter((c): c is string => typeof c === 'string' && c.length > 0);
+  return present.length ? `WHERE ${present.join(' AND ')}` : '';
+}
+
+/** Unikalne, niepuste identyfikatory. */
+function uniqueIds(values: string[]): string[] {
+  return [...new Set(values.filter((v) => v.length > 0))];
+}
+
+/** Imiona i nazwiska profili po id (batch, bez N+1). */
+async function readProfileNames(
+  tx: TransactionQuery,
+  name: string,
+  ids: string[],
+): Promise<Record<string, unknown>[]> {
+  if (ids.length === 0) return [];
+  return queryRows(
+    tx,
+    name,
+    'SELECT id, first_name, last_name, email FROM public.profiles WHERE id = ANY($1::uuid[])',
+    [ids],
+  );
+}
+
+/* ---------------------------------------------------------------------------
  * Publiczne API
  * ------------------------------------------------------------------------- */
 
 /** Kafelki statystyk dashboardu admina. Bez env → dane DEMO. Błąd dowolnego licznika → `error`. */
 export async function getAdminStats(): Promise<AdminStatsResult> {
-  if (!isSupabaseConfigured()) return { status: 'ok', stats: DEMO_STATS };
+  if (!isPortalDataConfigured()) return { status: 'ok', stats: DEMO_STATS };
   await requireAdmin();
 
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const supabase = createAdminClient();
-
-    const results = await Promise.all([
-      supabase
-        .from('companies')
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null),
-      supabase
-        .from('companies')
-        .select('id', { count: 'exact', head: true })
-        .in('status', [...AWAITING_COMPANY_STATUSES])
-        .is('deleted_at', null),
-      supabase.from('profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null),
-      supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-    ]);
-
-    const failed = results.find((r) => r.error || typeof r.count !== 'number');
-    if (failed) throw failed.error ?? new Error('ADMIN_STATS_COUNT_MISSING');
-
-    const [companies, pending, users, reports] = results;
-    return {
-      status: 'ok',
-      stats: {
-        companies: companies.count as number,
-        pendingCompanies: pending.count as number,
-        users: users.count as number,
-        openReports: reports.count as number,
-      },
-    };
+    const stats = await withServiceRole(async (tx) => ({
+      companies: await queryCount(tx, 'admin.stats-companies',
+        'SELECT 1 FROM public.companies WHERE deleted_at IS NULL'),
+      pendingCompanies: await queryCount(tx, 'admin.stats-pending-companies',
+        'SELECT 1 FROM public.companies WHERE deleted_at IS NULL AND status::text = ANY($1::text[])',
+        [[...AWAITING_COMPANY_STATUSES]]),
+      users: await queryCount(tx, 'admin.stats-users',
+        'SELECT 1 FROM public.profiles WHERE deleted_at IS NULL'),
+      openReports: await queryCount(tx, 'admin.stats-open-reports',
+        "SELECT 1 FROM public.reports WHERE status = 'open'"),
+    }));
+    return { status: 'ok', stats };
   } catch (error) {
     captureError(error, { area: 'admin.getAdminStats' });
     return { status: 'error' };
   }
-}
-
-/** Filtr kursora z tokenu URL (zły token = pierwsza strona). */
-function cursorFilterOf(token: string | null | undefined): string | null {
-  const cursor = decodeAdminCursor(token);
-  return cursor ? cursorOrFilter(cursor) : null;
-}
-
-/**
- * Łączy warunki `or` (wyszukiwanie + kursor) w jeden parametr PostgREST: dwa osobne `.or()`
- * dałyby dwa parametry `or` w URL, więc zagnieżdżamy je w `and(or(..),or(..))`.
- */
-function combineOrFilters(...filters: Array<string | null>): string | null {
-  const present = filters.filter((f): f is string => Boolean(f));
-  if (present.length === 0) return null;
-  if (present.length === 1) return present[0]!;
-  return `and(${present.map((f) => `or(${f})`).join(',')})`;
 }
 
 /**
@@ -515,7 +535,7 @@ export async function listCompanies(
 ): Promise<AdminListResult<AdminCompanyRow>> {
   const filter = query.status ?? undefined;
   const q = normalizeAdminSearch(query.q);
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return demoList(
       filterDemoCompanies(filter).filter((c) =>
         matchesSearch([c.name, c.vatNumber, c.registrationNumber, c.email], q),
@@ -525,26 +545,28 @@ export async function listCompanies(
   await requireAdmin();
 
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const supabase = createAdminClient();
-
-    let builder = supabase
-      .from('companies')
-      .select('id, name, status, created_at, vat_number, registration_number, email, city')
-      .is('deleted_at', null);
-    if (filter === AWAITING_FILTER) builder = builder.in('status', [...AWAITING_COMPANY_STATUSES]);
-    else if (filter && filter !== 'all') builder = builder.eq('status', filter);
-    const orFilter = combineOrFilters(
-      q ? searchOrFilter(['name', 'vat_number', 'registration_number', 'email'], q) : null,
-      cursorFilterOf(query.cursor),
+    const params = new SqlParams();
+    const statuses =
+      filter === AWAITING_FILTER
+        ? [...AWAITING_COMPANY_STATUSES]
+        : filter && filter !== 'all'
+          ? [filter]
+          : null;
+    const where = whereOf([
+      'deleted_at IS NULL',
+      statuses && `status::text = ANY(${params.add(statuses)}::text[])`,
+      q && searchCondition(params, ['name', 'vat_number', 'registration_number', 'email'], q),
+      cursorCondition(params, query.cursor),
+    ]);
+    const limit = params.add(ADMIN_PAGE_SIZE + 1);
+    const data = await withServiceRole((tx) =>
+      queryRows(tx, 'admin.companies',
+        `SELECT id, name, status, created_at, vat_number, registration_number, email, city
+           FROM public.companies
+           ${where}
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${limit}`, params.values),
     );
-    if (orFilter) builder = builder.or(orFilter);
-
-    const { data, error } = await builder
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(ADMIN_PAGE_SIZE + 1);
-    if (error) throw error;
 
     return toPage(
       asRows(data).map((row) => ({
@@ -568,8 +590,6 @@ export async function listCompanies(
 /** Maks. długość podglądu zgłoszonej wiadomości. */
 const MESSAGE_PREVIEW_MAX = 280;
 
-type SupabaseAdmin = ReturnType<typeof import('@/lib/supabase/admin').createAdminClient>;
-
 /** Cel nieodnaleziony albo usunięty. */
 const DELETED_TARGET: AdminReportTarget = { label: null, href: null, preview: null, deleted: true };
 
@@ -578,17 +598,13 @@ const DELETED_TARGET: AdminReportTarget = { label: null, href: null, preview: nu
  * rzuca (lista zgłoszeń bez celów = rozstrzyganie na ślepo, więc to błąd, nie pusta treść).
  */
 async function loadReportTargets(
-  supabase: SupabaseAdmin,
+  tx: TransactionQuery,
   rows: Record<string, unknown>[],
 ): Promise<Map<string, AdminReportTarget>> {
-  const idsOf = (type: string) => [
-    ...new Set(
-      rows
-        .filter((r) => asString(r['target_type']) === type)
-        .map((r) => asString(r['target_id']))
-        .filter((id) => id.length > 0),
-    ),
-  ];
+  const idsOf = (type: string) =>
+    uniqueIds(
+      rows.filter((r) => asString(r['target_type']) === type).map((r) => asString(r['target_id'])),
+    );
   const targets = new Map<string, AdminReportTarget>();
   const key = (type: string, id: string) => `${type}:${id}`;
 
@@ -597,28 +613,29 @@ async function loadReportTargets(
   const userIds = idsOf('user');
   const messageIds = idsOf('message');
 
-  const [jobs, companies, users, messages] = await Promise.all([
-    jobIds.length
-      ? supabase.from('jobs').select('id, title, slug, status, deleted_at').in('id', jobIds)
-      : null,
-    companyIds.length
-      ? supabase.from('companies').select('id, name, deleted_at').in('id', companyIds)
-      : null,
-    userIds.length
-      ? supabase
-          .from('profiles')
-          .select('id, first_name, last_name, email, deleted_at')
-          .in('id', userIds)
-      : null,
-    messageIds.length
-      ? supabase.from('messages').select('id, body, deleted_at').in('id', messageIds)
-      : null,
-  ]);
-  for (const res of [jobs, companies, users, messages]) {
-    if (res?.error) throw res.error;
-  }
+  // Sekwencyjnie na jednej transakcji; `id::text` — cel spoza formatu UUID po prostu nie pasuje.
+  const jobs = jobIds.length
+    ? await queryRows(tx, 'admin.report-target-jobs',
+        'SELECT id, title, slug, status, deleted_at FROM public.jobs WHERE id::text = ANY($1::text[])',
+        [jobIds])
+    : [];
+  const companies = companyIds.length
+    ? await queryRows(tx, 'admin.report-target-companies',
+        'SELECT id, name, deleted_at FROM public.companies WHERE id::text = ANY($1::text[])',
+        [companyIds])
+    : [];
+  const users = userIds.length
+    ? await queryRows(tx, 'admin.report-target-users',
+        'SELECT id, first_name, last_name, email, deleted_at FROM public.profiles WHERE id::text = ANY($1::text[])',
+        [userIds])
+    : [];
+  const messages = messageIds.length
+    ? await queryRows(tx, 'admin.report-target-messages',
+        'SELECT id, body, deleted_at FROM public.messages WHERE id::text = ANY($1::text[])',
+        [messageIds])
+    : [];
 
-  for (const job of asRows(jobs?.data)) {
+  for (const job of asRows(jobs)) {
     if (asNullableString(job['deleted_at'])) continue;
     const slug = asNullableString(job['slug']);
     targets.set(key('job', asString(job['id'])), {
@@ -632,7 +649,7 @@ async function loadReportTargets(
       deleted: false,
     });
   }
-  for (const company of asRows(companies?.data)) {
+  for (const company of asRows(companies)) {
     if (asNullableString(company['deleted_at'])) continue;
     const name = asNullableString(company['name']);
     targets.set(key('company', asString(company['id'])), {
@@ -642,7 +659,7 @@ async function loadReportTargets(
       deleted: false,
     });
   }
-  for (const user of asRows(users?.data)) {
+  for (const user of asRows(users)) {
     if (asNullableString(user['deleted_at'])) continue;
     const name = fullName(user);
     const email = asNullableString(user['email']);
@@ -654,7 +671,7 @@ async function loadReportTargets(
       deleted: false,
     });
   }
-  for (const message of asRows(messages?.data)) {
+  for (const message of asRows(messages)) {
     if (asNullableString(message['deleted_at'])) continue;
     const body = asString(message['body']).replace(/\s+/g, ' ').trim();
     targets.set(key('message', asString(message['id'])), {
@@ -674,6 +691,103 @@ async function loadReportTargets(
   );
 }
 
+interface ReportPageData {
+  rows: Record<string, unknown>[];
+  nameById: Map<string, string>;
+  eventsById: Map<string, AdminReportEvent[]>;
+  decisionById: Map<string, AdminModerationDecision>;
+  targets: Map<string, AdminReportTarget>;
+}
+
+/** Strona zgłoszeń i dane pomocnicze (zgłaszający, historia DSA, decyzje, cele) w jednej transakcji. */
+async function readReportPage(
+  tx: TransactionQuery,
+  statuses: string[] | null,
+  kind: string,
+  cursorToken: string | null | undefined,
+): Promise<ReportPageData> {
+  const params = new SqlParams();
+  const where = whereOf([
+    statuses && `status::text = ANY(${params.add(statuses)}::text[])`,
+    kind !== 'all' && `kind = ${params.add(kind)}`,
+    cursorCondition(params, cursorToken),
+  ]);
+  const limit = params.add(ADMIN_PAGE_SIZE + 1);
+  const rows = asRows(
+    await queryRows(tx, 'admin.reports',
+      `SELECT id, reporter_id, target_type, target_id, reason, details, status, created_at, kind,
+              case_number, due_at, content_url, reporter_name, reporter_email, target_snapshot,
+              decision_id, review_priority, review_flag
+         FROM public.reports
+         ${where}
+        ORDER BY created_at DESC, id DESC
+        LIMIT ${limit}`, params.values),
+  );
+
+  // Nazwy zgłaszających — jeden batchowy odczyt po unikalnych id (unikamy N+1).
+  const nameById = new Map<string, string>();
+  const reporterIds = uniqueIds(rows.map((r) => asString(r['reporter_id'])));
+  for (const profile of asRows(await readProfileNames(tx, 'admin.report-reporters', reporterIds))) {
+    nameById.set(asString(profile['id']), fullName(profile));
+  }
+
+  // Historia spraw DSA (#41) — jeden odczyt dla całej strony.
+  const dsaIds = rows.filter((r) => asString(r['kind']) === 'dsa_notice').map((r) => asString(r['id']));
+  const eventsById = new Map<string, AdminReportEvent[]>();
+  if (dsaIds.length > 0) {
+    const events = await queryRows(tx, 'admin.report-events',
+      `SELECT report_id, event_type, to_status, created_at
+         FROM public.report_events
+        WHERE report_id = ANY($1::uuid[])
+        ORDER BY id ASC`, [dsaIds]);
+    for (const event of asRows(events)) {
+      const type = REPORT_EVENT_TYPES.find((t) => t === asString(event['event_type']));
+      if (!type) continue;
+      const list = eventsById.get(asString(event['report_id'])) ?? [];
+      list.push({
+        type,
+        toStatus: asNullableString(event['to_status']),
+        at: asString(event['created_at']),
+      });
+      eventsById.set(asString(event['report_id']), list);
+    }
+  }
+
+  // Decyzje moderacyjne (#42) i ich przywrócenia — jeden odczyt na stronę.
+  const decisionIds = uniqueIds(rows.map((r) => asString(r['decision_id'])));
+  const decisionById = new Map<string, AdminModerationDecision>();
+  if (decisionIds.length > 0) {
+    const decisions = await queryRows(tx, 'admin.report-decisions',
+      `SELECT id, reference, decision, facts, ground_type, ground_reference, automated_detection, decided_at
+         FROM public.moderation_decisions
+        WHERE id = ANY($1::uuid[])`, [decisionIds]);
+    const restorations = await queryRows(tx, 'admin.report-restorations',
+      `SELECT decision_id, reason, restored_at
+         FROM public.moderation_restorations
+        WHERE decision_id = ANY($1::uuid[])`, [decisionIds]);
+    const restoredBy = new Map(asRows(restorations).map((r) => [asString(r['decision_id']), r]));
+    for (const d of asRows(decisions)) {
+      const id = asString(d['id']);
+      const restoration = restoredBy.get(id);
+      decisionById.set(id, {
+        id,
+        reference: asString(d['reference']),
+        decision: asString(d['decision']),
+        facts: asString(d['facts']),
+        groundType: asNullableString(d['ground_type']),
+        groundReference: asNullableString(d['ground_reference']),
+        automatedDetection: d['automated_detection'] === true,
+        decidedAt: asString(d['decided_at']),
+        restoredAt: restoration ? asNullableString(restoration['restored_at']) : null,
+        restoreReason: restoration ? asNullableString(restoration['reason']) : null,
+      });
+    }
+  }
+
+  const targets = await loadReportTargets(tx, rows);
+  return { rows, nameById, eventsById, decisionById, targets };
+}
+
 /**
  * Lista zgłoszeń (#416): filtr statusu (domyślnie otwarte + w analizie), cel zgłoszenia, nazwa
  * zgłaszającego, stronicowanie kursorem (#418). Bez env → DEMO.
@@ -683,7 +797,7 @@ export async function listReports(
 ): Promise<AdminListResult<AdminReportRow>> {
   const statuses = reportStatusesFor(parseReportFilter(query.status));
   const kind = parseReportKindFilter(query.kind);
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return demoList(
       DEMO_REPORTS.filter(
         (r) =>
@@ -695,103 +809,9 @@ export async function listReports(
   await requireAdmin();
 
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const supabase = createAdminClient();
-
-    let builder = supabase
-      .from('reports')
-      .select(
-        'id, reporter_id, target_type, target_id, reason, details, status, created_at, kind, case_number, due_at, content_url, reporter_name, reporter_email, target_snapshot, decision_id, review_priority, review_flag',
-      );
-    if (statuses) builder = builder.in('status', statuses);
-    if (kind !== 'all') builder = builder.eq('kind', kind);
-    const orFilter = cursorFilterOf(query.cursor);
-    if (orFilter) builder = builder.or(orFilter);
-
-    const { data, error } = await builder
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(ADMIN_PAGE_SIZE + 1);
-    if (error) throw error;
-
-    const rows = asRows(data);
-
-    // Nazwy zgłaszających — jeden batchowy odczyt po unikalnych id (unikamy N+1 i zależności od nazw FK).
-    const reporterIds = [
-      ...new Set(rows.map((r) => asString(r['reporter_id'])).filter((id) => id.length > 0)),
-    ];
-    const nameById = new Map<string, string>();
-    if (reporterIds.length > 0) {
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .in('id', reporterIds);
-      if (profilesError) throw profilesError;
-      for (const profile of asRows(profiles)) {
-        nameById.set(asString(profile['id']), fullName(profile));
-      }
-    }
-
-    // Historia spraw DSA (#41) — jeden odczyt dla całej strony.
-    const dsaIds = rows.filter((r) => asString(r['kind']) === 'dsa_notice').map((r) => asString(r['id']));
-    const eventsById = new Map<string, AdminReportEvent[]>();
-    if (dsaIds.length > 0) {
-      const { data: events, error: eventsError } = await supabase
-        .from('report_events')
-        .select('report_id, event_type, to_status, created_at')
-        .in('report_id', dsaIds)
-        .order('id', { ascending: true });
-      if (eventsError) throw eventsError;
-      for (const event of asRows(events)) {
-        const type = REPORT_EVENT_TYPES.find((t) => t === asString(event['event_type']));
-        if (!type) continue;
-        const list = eventsById.get(asString(event['report_id'])) ?? [];
-        list.push({
-          type,
-          toStatus: asNullableString(event['to_status']),
-          at: asString(event['created_at']),
-        });
-        eventsById.set(asString(event['report_id']), list);
-      }
-    }
-
-    // Decyzje moderacyjne (#42) i ich przywrócenia — jeden odczyt na stronę.
-    const decisionIds = rows.map((r) => asString(r['decision_id'])).filter((id) => id.length > 0);
-    const decisionById = new Map<string, AdminModerationDecision>();
-    if (decisionIds.length > 0) {
-      const [{ data: decisions, error: decisionsError }, { data: restorations, error: restorationsError }] =
-        await Promise.all([
-          supabase
-            .from('moderation_decisions')
-            .select('id, reference, decision, facts, ground_type, ground_reference, automated_detection, decided_at')
-            .in('id', decisionIds),
-          supabase
-            .from('moderation_restorations')
-            .select('decision_id, reason, restored_at')
-            .in('decision_id', decisionIds),
-        ]);
-      if (decisionsError) throw decisionsError;
-      if (restorationsError) throw restorationsError;
-      const restoredBy = new Map(asRows(restorations).map((r) => [asString(r['decision_id']), r]));
-      for (const d of asRows(decisions)) {
-        const id = asString(d['id']);
-        const restoration = restoredBy.get(id);
-        decisionById.set(id, {
-          id,
-          reference: asString(d['reference']),
-          decision: asString(d['decision']),
-          facts: asString(d['facts']),
-          groundType: asNullableString(d['ground_type']),
-          groundReference: asNullableString(d['ground_reference']),
-          automatedDetection: d['automated_detection'] === true,
-          decidedAt: asString(d['decided_at']),
-          restoredAt: restoration ? asNullableString(restoration['restored_at']) : null,
-          restoreReason: restoration ? asNullableString(restoration['reason']) : null,
-        });
-      }
-    }
-
-    const targets = await loadReportTargets(supabase, rows);
+    const { rows, nameById, eventsById, decisionById, targets } = await withServiceRole((tx) =>
+      readReportPage(tx, statuses, kind, query.cursor),
+    );
 
     return toPage(
       rows.map((row) => {
@@ -850,7 +870,7 @@ export async function listUsers(
 ): Promise<AdminListResult<AdminUserRow>> {
   const q = normalizeAdminSearch(query.q);
   const role = parseUserRoleFilter(query.role);
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return demoList(
       DEMO_USERS.filter(
         (u) => (!role || u.role === role) && matchesSearch([u.name, u.email], q),
@@ -860,25 +880,22 @@ export async function listUsers(
   await requireAdmin();
 
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const supabase = createAdminClient();
-
-    let builder = supabase
-      .from('profiles')
-      .select('id, first_name, last_name, email, role, created_at')
-      .is('deleted_at', null);
-    if (role) builder = builder.eq('role', role);
-    const orFilter = combineOrFilters(
-      q ? searchOrFilter(['first_name', 'last_name', 'email'], q) : null,
-      cursorFilterOf(query.cursor),
+    const params = new SqlParams();
+    const where = whereOf([
+      'deleted_at IS NULL',
+      role && `role::text = ${params.add(role)}`,
+      q && searchCondition(params, ['first_name', 'last_name', 'email'], q),
+      cursorCondition(params, query.cursor),
+    ]);
+    const limit = params.add(ADMIN_PAGE_SIZE + 1);
+    const data = await withServiceRole((tx) =>
+      queryRows(tx, 'admin.users',
+        `SELECT id, first_name, last_name, email, role, created_at
+           FROM public.profiles
+           ${where}
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${limit}`, params.values),
     );
-    if (orFilter) builder = builder.or(orFilter);
-
-    const { data, error } = await builder
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(ADMIN_PAGE_SIZE + 1);
-    if (error) throw error;
 
     return toPage(
       asRows(data).map((row) => ({
@@ -1001,7 +1018,7 @@ export async function listAuditLogs(
   const fromIso = appDayStartUtc(parseYmd(query.from));
   const toIso = appDayStartUtc(parseYmd(query.to), true);
 
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return demoList(
       DEMO_AUDIT.filter(
         (row) =>
@@ -1017,70 +1034,61 @@ export async function listAuditLogs(
   await requireAdmin();
 
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const supabase = createAdminClient();
-
-    // Aktor po nazwie/e-mailu → id profili (max 100 dopasowań); brak dopasowań = pusta lista.
-    let actorIdsFilter: string[] | null = null;
     const systemActor = actorQuery?.toLowerCase() === AUDIT_ACTOR_SYSTEM;
-    if (actorQuery && !systemActor) {
-      const { data: actors, error: actorsError } = await supabase
-        .from('profiles')
-        .select('id')
-        .or(searchOrFilter(['first_name', 'last_name', 'email'], actorQuery))
-        .limit(100);
-      if (actorsError) throw actorsError;
-      actorIdsFilter = asRows(actors)
-        .map((r) => asString(r['id']))
-        .filter(Boolean);
-      if (actorIdsFilter.length === 0) return { status: 'ok', rows: [], nextCursor: null };
-    }
+    const page = await withServiceRole(async (tx) => {
+      // Aktor po nazwie/e-mailu → id profili (max 100 dopasowań); brak dopasowań = pusta lista.
+      let actorIdsFilter: string[] | null = null;
+      if (actorQuery && !systemActor) {
+        const actorParams = new SqlParams();
+        const actors = await queryRows(tx, 'admin.audit-actor-search',
+          `SELECT id FROM public.profiles
+            ${whereOf([searchCondition(actorParams, ['first_name', 'last_name', 'email'], actorQuery)])}
+            LIMIT 100`, actorParams.values);
+        actorIdsFilter = uniqueIds(asRows(actors).map((r) => asString(r['id'])));
+        if (actorIdsFilter.length === 0) return null;
+      }
 
-    let builder = supabase
-      .from('audit_logs')
-      .select('id, actor_id, action, entity_type, entity_id, before_data, after_data, created_at');
-    if (entity) builder = builder.eq('entity_type', entity);
-    if (action) builder = builder.eq('action', action);
-    if (entityId) builder = builder.eq('entity_id', entityId);
-    if (fromIso) builder = builder.gte('created_at', fromIso);
-    if (toIso) builder = builder.lt('created_at', toIso);
-    if (systemActor) builder = builder.is('actor_id', null);
-    if (actorIdsFilter) builder = builder.in('actor_id', actorIdsFilter);
+      const params = new SqlParams();
+      const where = whereOf([
+        entity && `entity_type = ${params.add(entity)}`,
+        action && `action = ${params.add(action)}`,
+        entityId && `entity_id = ${params.add(entityId)}::uuid`,
+        fromIso && `created_at >= ${params.add(fromIso)}::timestamptz`,
+        toIso && `created_at < ${params.add(toIso)}::timestamptz`,
+        systemActor && 'actor_id IS NULL',
+        actorIdsFilter && `actor_id = ANY(${params.add(actorIdsFilter)}::uuid[])`,
+        cursorCondition(params, query.cursor),
+      ]);
+      const limit = params.add(ADMIN_PAGE_SIZE + 1);
+      const rows = asRows(
+        await queryRows(tx, 'admin.audit-logs',
+          `SELECT id, actor_id, action, entity_type, entity_id, before_data, after_data, created_at
+             FROM public.audit_logs
+             ${where}
+            ORDER BY created_at DESC, id DESC
+            LIMIT ${limit}`, params.values),
+      );
 
-    const orFilter = cursorFilterOf(query.cursor);
-    if (orFilter) builder = builder.or(orFilter);
-
-    const { data, error } = await builder
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(ADMIN_PAGE_SIZE + 1);
-    if (error) throw error;
-    const rows = asRows(data);
-
-    const uniq = (values: string[]) => [...new Set(values.filter((v) => v.length > 0))];
-    const actorIds = uniq(rows.map((r) => asString(r['actor_id'])));
-    const companyIds = uniq(
-      rows.filter((r) => asString(r['entity_type']) === 'company').map((r) => asString(r['entity_id'])),
-    );
-
-    const [actorsRes, companiesRes] = await Promise.all([
-      actorIds.length
-        ? supabase.from('profiles').select('id, first_name, last_name, email').in('id', actorIds)
-        : null,
-      companyIds.length
-        ? supabase.from('companies').select('id, name, deleted_at').in('id', companyIds)
-        : null,
-    ]);
-    if (actorsRes?.error) throw actorsRes.error;
-    if (companiesRes?.error) throw companiesRes.error;
+      const actorIds = uniqueIds(rows.map((r) => asString(r['actor_id'])));
+      const companyIds = uniqueIds(
+        rows.filter((r) => asString(r['entity_type']) === 'company').map((r) => asString(r['entity_id'])),
+      );
+      const actors = await readProfileNames(tx, 'admin.audit-actors', actorIds);
+      const companies = companyIds.length
+        ? await queryRows(tx, 'admin.audit-companies',
+            'SELECT id, name, deleted_at FROM public.companies WHERE id = ANY($1::uuid[])', [companyIds])
+        : [];
+      return { rows, actors: asRows(actors), companies: asRows(companies) };
+    });
+    if (!page) return { status: 'ok', rows: [], nextCursor: null };
 
     const actorName = new Map<string, string | null>();
-    for (const p of asRows(actorsRes?.data)) {
+    for (const p of page.actors) {
       const name = fullName(p);
       actorName.set(asString(p['id']), name.length > 0 ? name : asNullableString(p['email']));
     }
     const companyName = new Map<string, { name: string | null; deleted: boolean }>();
-    for (const c of asRows(companiesRes?.data)) {
+    for (const c of page.companies) {
       companyName.set(asString(c['id']), {
         name: asNullableString(c['name']),
         deleted: Boolean(asNullableString(c['deleted_at'])),
@@ -1088,7 +1096,7 @@ export async function listAuditLogs(
     }
 
     return toPage(
-      rows.map((row) => {
+      page.rows.map((row) => {
         const entityType = asNullableString(row['entity_type']);
         const id = asNullableString(row['entity_id']);
         const actorId = asNullableString(row['actor_id']);
@@ -1110,6 +1118,9 @@ export async function listAuditLogs(
           entityHref = { pathname: '/admin/poczta', query: { status: 'all' } };
         } else if (entityType === 'screening_question_review') {
           entityHref = { pathname: '/admin/pytania', query: { status: 'all' } };
+        } else if (entityType === 'breach_incident' && id) {
+          const uuid = parseUuid(id);
+          entityHref = uuid ? { pathname: `/admin/naruszenia/${uuid}` } : null;
         }
         return {
           id: asString(row['id']),
@@ -1241,39 +1252,38 @@ function demoCompanyDetail(id: string): AdminCompanyDetailResult {
 
 /**
  * Ostatni rozstrzygający wynik VIES (0088). Błąd odczytu nie psuje szczegółu firmy —
- * stan `load_error` pozwala i tak sprawdzić numer ręcznie.
+ * sekcja w `attempt` (SAVEPOINT), a stan `load_error` pozwala i tak sprawdzić numer ręcznie.
  */
 async function readStoredViesCheck(
-  supabase: ReturnType<typeof import('@/lib/supabase/admin').createAdminClient>,
+  tx: TransactionQuery,
   companyId: string,
 ): Promise<{ stored: StoredViesCheck | null; failed: boolean }> {
-  try {
-    const { data, error } = await supabase
-      .from('company_vies_checks')
-      .select('vat_number, result, vies_name, checked_at')
-      .eq('company_id', companyId)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return { stored: null, failed: false };
-    const row = asRecord(data);
-    const result = asString(row['result']);
-    const checkedAt = asNullableString(row['checked_at']);
-    if ((result !== 'valid' && result !== 'invalid') || !checkedAt) {
-      return { stored: null, failed: true };
-    }
-    return {
-      stored: {
-        vatNumber: asString(row['vat_number']),
-        result,
-        viesName: asNullableString(row['vies_name']),
-        checkedAt,
-      },
-      failed: false,
-    };
-  } catch (error) {
-    captureError(error, { area: 'admin.readStoredViesCheck' });
+  const read = await attempt(tx, () =>
+    queryOne(tx, 'admin.company-vies-check',
+      `SELECT vat_number, result, vies_name, checked_at
+         FROM public.company_vies_checks
+        WHERE company_id = $1`, [companyId]),
+  );
+  if (!read.ok) {
+    captureError(read.error, { area: 'admin.readStoredViesCheck' });
     return { stored: null, failed: true };
   }
+  if (!read.value) return { stored: null, failed: false };
+  const row = asRecord(read.value);
+  const result = asString(row['result']);
+  const checkedAt = asNullableString(row['checked_at']);
+  if ((result !== 'valid' && result !== 'invalid') || !checkedAt) {
+    return { stored: null, failed: true };
+  }
+  return {
+    stored: {
+      vatNumber: asString(row['vat_number']),
+      result,
+      viesName: asNullableString(row['vies_name']),
+      checkedAt,
+    },
+    failed: false,
+  };
 }
 
 /**
@@ -1282,57 +1292,53 @@ async function readStoredViesCheck(
  * zły identyfikator → `not_found`; błąd któregokolwiek odczytu → `error` (bez częściowych danych).
  */
 export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailResult> {
-  if (!isSupabaseConfigured()) return demoCompanyDetail(id);
+  if (!isPortalDataConfigured()) return demoCompanyDetail(id);
   await requireAdmin();
 
   const uuid = parseUuid(id);
   if (!uuid) return { status: 'not_found' };
 
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const supabase = createAdminClient();
+    const loaded = await withServiceRole(async (tx) => {
+      const company = await queryOne(tx, 'admin.company-detail',
+        `SELECT id, name, status, status_reason, created_at, verified_at, vat_number,
+                registration_number, email, phone, website, address, postal_code, city, region,
+                country, industry, description
+           FROM public.companies
+          WHERE id = $1 AND deleted_at IS NULL`, [uuid]);
+      if (!company) return null;
+      // Członek + jego profil (odpowiednik osadzenia `profiles!company_members_profile_id_fkey`).
+      const members = await queryRows(tx, 'admin.company-members',
+        `SELECT m.id, m.role, m.is_active, m.joined_at, m.created_at,
+                (SELECT to_json(p) FROM (
+                   SELECT pr.first_name, pr.last_name, pr.email
+                     FROM public.profiles pr WHERE pr.id = m.profile_id) p) AS profiles
+           FROM public.company_members m
+          WHERE m.company_id = $1
+          ORDER BY m.created_at ASC, m.id ASC`, [uuid]);
+      const jobs = await queryRows(tx, 'admin.company-jobs',
+        `SELECT id, title, status, slug, created_at
+           FROM public.jobs
+          WHERE company_id = $1 AND deleted_at IS NULL
+          ORDER BY created_at DESC, id DESC
+          LIMIT $2`, [uuid, ADMIN_COMPANY_JOBS_LIMIT]);
+      const jobsTotal = await queryCount(tx, 'admin.company-jobs-count',
+        'SELECT 1 FROM public.jobs WHERE company_id = $1 AND deleted_at IS NULL', [uuid]);
+      const c = asRecord(company);
+      const vatSource = companyVatSource(
+        asNullableString(c['vat_number']),
+        asNullableString(c['registration_number']),
+      );
+      const viesRead = vatSource
+        ? await readStoredViesCheck(tx, uuid)
+        : { stored: null, failed: false };
+      return { c, members: asRows(members), jobs: asRows(jobs), jobsTotal, vatSource, viesRead };
+    });
+    if (!loaded) return { status: 'not_found' };
 
-    const [companyRes, membersRes, jobsRes] = await Promise.all([
-      supabase
-        .from('companies')
-        .select(
-          'id, name, status, status_reason, created_at, verified_at, vat_number, registration_number, email, phone, website, address, postal_code, city, region, country, industry, description',
-        )
-        .eq('id', uuid)
-        .is('deleted_at', null)
-        .maybeSingle(),
-      supabase
-        .from('company_members')
-        .select(
-          'id, role, is_active, joined_at, created_at, profiles!company_members_profile_id_fkey(first_name, last_name, email)',
-        )
-        .eq('company_id', uuid)
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true }),
-      supabase
-        .from('jobs')
-        .select('id, title, status, slug, created_at', { count: 'exact' })
-        .eq('company_id', uuid)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false })
-        .limit(ADMIN_COMPANY_JOBS_LIMIT),
-    ]);
-    if (companyRes.error) throw companyRes.error;
-    if (membersRes.error) throw membersRes.error;
-    if (jobsRes.error) throw jobsRes.error;
-    if (!companyRes.data) return { status: 'not_found' };
-
-    const c = asRecord(companyRes.data);
+    const { c, vatSource, viesRead } = loaded;
     const status = asString(c['status'], 'unverified');
-    const vatSource = companyVatSource(
-      asNullableString(c['vat_number']),
-      asNullableString(c['registration_number']),
-    );
-    const viesRead = vatSource
-      ? await readStoredViesCheck(supabase, uuid)
-      : { stored: null, failed: false };
-    const jobs = asRows(jobsRes.data).map((row) => ({
+    const jobs = loaded.jobs.map((row) => ({
       id: asString(row['id']),
       title: asString(row['title']),
       status: asString(row['status'], 'draft'),
@@ -1364,10 +1370,8 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
           status === 'rejected' || status === 'suspended'
             ? asNullableString(c['status_reason'])
             : null,
-        members: asRows(membersRes.data).map((row) => {
-          const profile = asRecord(
-            Array.isArray(row['profiles']) ? row['profiles'][0] : row['profiles'],
-          );
+        members: loaded.members.map((row) => {
+          const profile = asRecord(row['profiles']);
           return {
             id: asString(row['id']),
             name: fullName(profile),
@@ -1378,7 +1382,7 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
           };
         }),
         jobs,
-        jobsTotal: typeof jobsRes.count === 'number' ? jobsRes.count : jobs.length,
+        jobsTotal: loaded.jobsTotal,
         vies: buildViesState({
           companyName: asString(c['name']),
           vatSource,
@@ -1451,7 +1455,7 @@ export async function listEmailSuppressions(
 ): Promise<AdminListResult<AdminEmailSuppressionRow>> {
   const filter = parseEmailSuppressionFilter(query.status);
   const q = normalizeAdminSearch(query.q);
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return demoList(
       DEMO_EMAIL_SUPPRESSIONS.filter(
         (row) =>
@@ -1463,40 +1467,30 @@ export async function listEmailSuppressions(
   await requireAdmin();
 
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const supabase = createAdminClient();
+    const params = new SqlParams();
+    const where = whereOf([
+      filter === 'active' && 'lifted_at IS NULL',
+      filter === 'lifted' && 'lifted_at IS NOT NULL',
+      q && searchCondition(params, ['email'], q),
+      cursorCondition(params, query.cursor),
+    ]);
+    const limit = params.add(ADMIN_PAGE_SIZE + 1);
+    const { rows, profiles } = await withServiceRole(async (tx) => {
+      const page = asRows(
+        await queryRows(tx, 'admin.email-suppressions',
+          `SELECT id, email, reason, created_at, lifted_at, lifted_by, lift_reason
+             FROM public.email_suppressions
+             ${where}
+            ORDER BY created_at DESC, id DESC
+            LIMIT ${limit}`, params.values),
+      );
+      const adminIds = uniqueIds(page.map((r) => asString(r['lifted_by'])));
+      return { rows: page, profiles: asRows(await readProfileNames(tx, 'admin.email-suppression-admins', adminIds)) };
+    });
 
-    let builder = supabase
-      .from('email_suppressions')
-      .select('id, email, reason, created_at, lifted_at, lifted_by, lift_reason');
-    if (filter === 'active') builder = builder.is('lifted_at', null);
-    if (filter === 'lifted') builder = builder.not('lifted_at', 'is', null);
-    const orFilter = combineOrFilters(
-      q ? searchOrFilter(['email'], q) : null,
-      cursorFilterOf(query.cursor),
-    );
-    if (orFilter) builder = builder.or(orFilter);
-
-    const { data, error } = await builder
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(ADMIN_PAGE_SIZE + 1);
-    if (error) throw error;
-    const rows = asRows(data);
-
-    const adminIds = [
-      ...new Set(rows.map((r) => asString(r['lifted_by'])).filter((id) => id.length > 0)),
-    ];
     const nameById = new Map<string, string>();
-    if (adminIds.length > 0) {
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .in('id', adminIds);
-      if (profilesError) throw profilesError;
-      for (const profile of asRows(profiles)) {
-        nameById.set(asString(profile['id']), fullName(profile));
-      }
+    for (const profile of profiles) {
+      nameById.set(asString(profile['id']), fullName(profile));
     }
 
     return toPage(
@@ -1605,7 +1599,7 @@ export async function listScreeningReviews(
   query: AdminScreeningReviewsQuery = {},
 ): Promise<AdminListResult<AdminScreeningReviewRow>> {
   const filter = parseScreeningReviewFilter(query.status);
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return demoList(
       DEMO_SCREENING_REVIEWS.filter(
         (row) =>
@@ -1616,25 +1610,44 @@ export async function listScreeningReviews(
   await requireAdmin();
 
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const supabase = createAdminClient();
-
-    let builder = supabase
-      .from('screening_question_reviews')
-      .select(
-        'id, job_id, content_fingerprint, risk_categories, question_type, prompt, options, status, created_at, requested_by, decided_by, decided_at, decision_reason',
+    const params = new SqlParams();
+    const where = whereOf([
+      filter === 'pending' && "status = 'pending'",
+      filter === 'decided' && "status IN ('approved', 'rejected')",
+      cursorCondition(params, query.cursor),
+    ]);
+    const limit = params.add(ADMIN_PAGE_SIZE + 1);
+    const { raw, jobs, questions, profiles } = await withServiceRole(async (tx) => {
+      const reviews = asRows(
+        await queryRows(tx, 'admin.screening-reviews',
+          `SELECT id, job_id, content_fingerprint, risk_categories, question_type, prompt, options,
+                  status, created_at, requested_by, decided_by, decided_at, decision_reason
+             FROM public.screening_question_reviews
+             ${where}
+            ORDER BY created_at DESC, id DESC
+            LIMIT ${limit}`, params.values),
       );
-    if (filter === 'pending') builder = builder.eq('status', 'pending');
-    if (filter === 'decided') builder = builder.in('status', ['approved', 'rejected']);
-    const cursorFilter = cursorFilterOf(query.cursor);
-    if (cursorFilter) builder = builder.or(cursorFilter);
-
-    const { data, error } = await builder
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(ADMIN_PAGE_SIZE + 1);
-    if (error) throw error;
-    const raw = asRows(data);
+      const pageRows = reviews.slice(0, ADMIN_PAGE_SIZE);
+      const jobIds = uniqueIds(pageRows.map((r) => asString(r['job_id'])));
+      const profileIds = uniqueIds(
+        pageRows.flatMap((r) => [asString(r['requested_by']), asString(r['decided_by'])]),
+      );
+      return {
+        raw: reviews,
+        jobs: jobIds.length > 0
+          ? asRows(await queryRows(tx, 'admin.screening-review-jobs',
+              `SELECT j.id, j.title, j.status, j.company_id, j.deleted_at,
+                      (SELECT to_json(c) FROM (SELECT name FROM public.companies c WHERE c.id = j.company_id) c) AS companies
+                 FROM public.jobs j WHERE j.id = ANY($1::uuid[])`, [jobIds]))
+          : [],
+        questions: jobIds.length > 0
+          ? asRows(await queryRows(tx, 'admin.screening-review-questions',
+              `SELECT job_id, content_fingerprint FROM public.job_screening_questions
+                WHERE job_id = ANY($1::uuid[])`, [jobIds]))
+          : [],
+        profiles: asRows(await readProfileNames(tx, 'admin.screening-review-profiles', profileIds)),
+      };
+    });
     const page = raw.slice(0, ADMIN_PAGE_SIZE);
     const lastRaw = page[page.length - 1];
     const lastCreatedAt = lastRaw ? asNullableString(lastRaw['created_at']) : null;
@@ -1643,44 +1656,14 @@ export async function listScreeningReviews(
         ? encodeAdminCursor({ createdAt: lastCreatedAt, id: asString(lastRaw['id']) })
         : null;
 
-    const jobIds = [...new Set(page.map((r) => asString(r['job_id'])).filter(Boolean))];
-    const profileIds = [
-      ...new Set(
-        page
-          .flatMap((r) => [asString(r['requested_by']), asString(r['decided_by'])])
-          .filter((id) => id.length > 0),
-      ),
-    ];
-
-    const [jobs, questions, profiles] = await Promise.all([
-      jobIds.length > 0
-        ? supabase
-            .from('jobs')
-            .select('id, title, status, company_id, deleted_at, companies(name)')
-            .in('id', jobIds)
-        : Promise.resolve({ data: [], error: null }),
-      jobIds.length > 0
-        ? supabase
-            .from('job_screening_questions')
-            .select('job_id, content_fingerprint')
-            .in('job_id', jobIds)
-        : Promise.resolve({ data: [], error: null }),
-      profileIds.length > 0
-        ? supabase.from('profiles').select('id, first_name, last_name').in('id', profileIds)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-    if (jobs.error) throw jobs.error;
-    if (questions.error) throw questions.error;
-    if (profiles.error) throw profiles.error;
-
-    const jobById = new Map(asRows(jobs.data).map((job) => [asString(job['id']), job]));
+    const jobById = new Map(jobs.map((job) => [asString(job['id']), job]));
     const present = new Set(
-      asRows(questions.data).map(
+      questions.map(
         (q) => `${asString(q['job_id'])}:${asString(q['content_fingerprint'])}`,
       ),
     );
     const nameById = new Map(
-      asRows(profiles.data).map((profile) => [asString(profile['id']), fullName(profile)]),
+      profiles.map((profile) => [asString(profile['id']), fullName(profile)]),
     );
     const nameOf = (id: string): string | null => {
       const name = id ? nameById.get(id) : undefined;
@@ -1724,6 +1707,268 @@ export async function listScreeningReviews(
     return { status: 'ok', rows, nextCursor };
   } catch (error) {
     captureError(error, { area: 'admin.listScreeningReviews' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Rejestr incydentów i naruszeń danych osobowych (#490)
+ * ------------------------------------------------------------------------- */
+
+export interface AdminBreachRow {
+  id: string;
+  reference: string;
+  kind: string;
+  title: string;
+  status: string;
+  detectedAt: string | null;
+  riskLevel: string;
+  authorityDecision: string;
+  authorityNotifiedAt: string | null;
+  subjectsDecision: string;
+  createdAt: string | null;
+}
+
+export interface AdminBreachEvent {
+  id: string;
+  version: number;
+  /** created/updated/closed/reopened/subjects_notified/exported. */
+  eventType: string;
+  /** Zmienione pola (kolumny bazy) — przed/po. */
+  changes: Record<string, { from: unknown; to: unknown }>;
+  note: string;
+  actorName: string | null;
+  createdAt: string | null;
+}
+
+export interface AdminBreachNotice {
+  id: string;
+  recipientCount: number;
+  queuedCount: number;
+  locales: string[];
+  createdAt: string | null;
+}
+
+export interface AdminBreachDetail extends AdminBreachRow {
+  description: string;
+  occurredAt: string | null;
+  dataCategories: string[];
+  affectedCount: number | null;
+  affectedCountEstimated: boolean;
+  riskAssessment: string;
+  authorityDecisionReason: string;
+  authorityReference: string;
+  authorityDelayReason: string;
+  subjectsDecisionReason: string;
+  subjectsNotifiedAt: string | null;
+  actionsTaken: string;
+  closedAt: string | null;
+  closureSummary: string;
+  version: number;
+  events: AdminBreachEvent[];
+  notices: AdminBreachNotice[];
+}
+
+export type AdminBreachDetailResult =
+  | { status: 'ok'; incident: AdminBreachDetail }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+export interface AdminBreachesQuery extends AdminListQuery {
+  status?: string | null;
+}
+
+const DEMO_BREACH_DETAIL: AdminBreachDetail = {
+  id: 'demo-b1',
+  reference: 'NAR-2025-DEMO000001',
+  kind: 'personal_data_breach',
+  title: 'Przykładowy wpis: e-mail do niewłaściwego odbiorcy',
+  status: 'open',
+  detectedAt: '2025-02-10T08:15:00.000Z',
+  riskLevel: 'not_assessed',
+  authorityDecision: 'pending',
+  authorityNotifiedAt: null,
+  subjectsDecision: 'pending',
+  createdAt: '2025-02-10T08:30:00.000Z',
+  description: 'Wpis demonstracyjny — w trybie bez bazy zapis nie jest możliwy.',
+  occurredAt: null,
+  dataCategories: ['contact'],
+  affectedCount: 1,
+  affectedCountEstimated: false,
+  riskAssessment: '',
+  authorityDecisionReason: '',
+  authorityReference: '',
+  authorityDelayReason: '',
+  subjectsDecisionReason: '',
+  subjectsNotifiedAt: null,
+  actionsTaken: '',
+  closedAt: null,
+  closureSummary: '',
+  version: 1,
+  events: [
+    {
+      id: 'demo-e1',
+      version: 1,
+      eventType: 'created',
+      changes: {},
+      note: '',
+      actorName: null,
+      createdAt: '2025-02-10T08:30:00.000Z',
+    },
+  ],
+  notices: [],
+};
+
+function breachRowOf(row: Record<string, unknown>): AdminBreachRow {
+  return {
+    id: asString(row['id']),
+    reference: asString(row['reference']),
+    kind: asString(row['kind']),
+    title: asString(row['title']),
+    status: asString(row['status']),
+    detectedAt: asNullableString(row['detected_at']),
+    riskLevel: asString(row['risk_level']),
+    authorityDecision: asString(row['authority_decision']),
+    authorityNotifiedAt: asNullableString(row['authority_notified_at']),
+    subjectsDecision: asString(row['subjects_decision']),
+    createdAt: asNullableString(row['created_at']),
+  };
+}
+
+const BREACH_LIST_COLUMNS =
+  'id, reference, kind, title, status, detected_at, risk_level, authority_decision, authority_notified_at, subjects_decision, created_at';
+
+/** Lista rejestru (#490): filtr otwarte/zamknięte/wszystkie, wyszukiwanie po numerze i tytule. */
+export async function listBreachIncidents(
+  query: AdminBreachesQuery = {},
+): Promise<AdminListResult<AdminBreachRow>> {
+  const filter = parseBreachFilter(query.status);
+  const q = normalizeAdminSearch(query.q);
+  if (!isPortalDataConfigured()) {
+    return demoList(
+      [DEMO_BREACH_DETAIL].filter(
+        (row) =>
+          (filter === 'all' || row.status === filter) && matchesSearch([row.reference, row.title], q),
+      ),
+    );
+  }
+  await requireAdmin();
+
+  try {
+    const params = new SqlParams();
+    const where = whereOf([
+      filter !== 'all' && `status::text = ${params.add(filter)}`,
+      q && searchCondition(params, ['reference', 'title'], q),
+      cursorCondition(params, query.cursor),
+    ]);
+    const limit = params.add(ADMIN_PAGE_SIZE + 1);
+    const data = await withServiceRole((tx) =>
+      queryRows(tx, 'admin.breaches',
+        `SELECT ${BREACH_LIST_COLUMNS}
+           FROM public.breach_incidents
+           ${where}
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${limit}`, params.values),
+    );
+    return toPage(asRows(data).map(breachRowOf), (row) => row.createdAt);
+  } catch (error) {
+    captureError(error, { area: 'admin.listBreachIncidents' });
+    return { status: 'error' };
+  }
+}
+
+function asInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
+/** Szczegół wpisu z historią i zawiadomieniami (bez adresów odbiorców). */
+export async function getBreachIncident(id: string): Promise<AdminBreachDetailResult> {
+  if (!isPortalDataConfigured()) {
+    return id === DEMO_BREACH_DETAIL.id
+      ? { status: 'ok', incident: DEMO_BREACH_DETAIL }
+      : { status: 'not_found' };
+  }
+  await requireAdmin();
+  const uuid = parseUuid(id);
+  if (!uuid) return { status: 'not_found' };
+
+  try {
+    const loaded = await withServiceRole(async (tx) => {
+      const incidentRow = await queryOne(tx, 'admin.breach',
+        'SELECT * FROM public.breach_incidents WHERE id = $1', [uuid]);
+      if (!incidentRow) return null;
+      const events = await queryRows(tx, 'admin.breach-events',
+        `SELECT id, version, event_type, actor_id, changes, note, created_at
+           FROM public.breach_incident_events
+          WHERE incident_id = $1
+          ORDER BY created_at ASC, id ASC`, [uuid]);
+      const notices = await queryRows(tx, 'admin.breach-notices',
+        `SELECT id, recipient_count, queued_count, content, created_at
+           FROM public.breach_notices
+          WHERE incident_id = $1
+          ORDER BY created_at DESC`, [uuid]);
+      const actorIds = uniqueIds(asRows(events).map((e) => asString(e['actor_id'])));
+      const profiles = actorIds.length > 0
+        ? await queryRows(tx, 'admin.breach-actors',
+          'SELECT id, first_name, last_name FROM public.profiles WHERE id = ANY($1::uuid[])', [actorIds])
+        : [];
+      return { incidentRow, events, notices, profiles };
+    });
+    if (!loaded) return { status: 'not_found' };
+    const row = asRecord(loaded.incidentRow);
+    const eventRows = asRows(loaded.events);
+    const nameById = new Map<string, string>();
+    for (const profile of asRows(loaded.profiles)) nameById.set(asString(profile['id']), fullName(profile));
+
+    const incident: AdminBreachDetail = {
+      ...breachRowOf(row),
+      description: asString(row['description']),
+      occurredAt: asNullableString(row['occurred_at']),
+      dataCategories: Array.isArray(row['data_categories'])
+        ? row['data_categories'].filter((c): c is string => typeof c === 'string')
+        : [],
+      affectedCount: asInteger(row['affected_count']),
+      affectedCountEstimated: row['affected_count_estimated'] !== false,
+      riskAssessment: asString(row['risk_assessment']),
+      authorityDecisionReason: asString(row['authority_decision_reason']),
+      authorityReference: asString(row['authority_reference']),
+      authorityDelayReason: asString(row['authority_delay_reason']),
+      subjectsDecisionReason: asString(row['subjects_decision_reason']),
+      subjectsNotifiedAt: asNullableString(row['subjects_notified_at']),
+      actionsTaken: asString(row['actions_taken']),
+      closedAt: asNullableString(row['closed_at']),
+      closureSummary: asString(row['closure_summary']),
+      version: asInteger(row['version']) ?? 1,
+      events: eventRows.map((e) => {
+        const actorId = asString(e['actor_id']);
+        const name = actorId ? (nameById.get(actorId) ?? '') : '';
+        const changes = asRecord(e['changes']);
+        return {
+          id: asString(e['id']),
+          version: asInteger(e['version']) ?? 0,
+          eventType: asString(e['event_type']),
+          changes: Object.fromEntries(
+            Object.entries(changes).map(([key, value]) => {
+              const pair = asRecord(value);
+              return [key, { from: pair['from'] ?? null, to: pair['to'] ?? null }];
+            }),
+          ),
+          note: asString(e['note']),
+          actorName: name.length > 0 ? name : null,
+          createdAt: asNullableString(e['created_at']),
+        };
+      }),
+      notices: asRows(loaded.notices).map((n) => ({
+        id: asString(n['id']),
+        recipientCount: asInteger(n['recipient_count']) ?? 0,
+        queuedCount: asInteger(n['queued_count']) ?? 0,
+        locales: Object.keys(asRecord(n['content'])).sort(),
+        createdAt: asNullableString(n['created_at']),
+      })),
+    };
+    return { status: 'ok', incident };
+  } catch (error) {
+    captureError(error, { area: 'admin.getBreachIncident' });
     return { status: 'error' };
   }
 }

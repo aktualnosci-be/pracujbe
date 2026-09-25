@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
  * Paginacja listy ofert (server component) wg makiety 02-jobs-list: „1 2 3 4 5 … 95 >”.
  * Linki oparte są o query param `page` i zachowują pozostałe filtry (`filters`). Strona 1
  * nie zawiera parametru `page` (kanoniczny adres bazowy). Renderuje `nav` z linkami — działa
- * bez JS. Aktywna strona: granatowa pigułka; pozostałe: obrys + hover.
+ * bez JS. Aktywna strona: pigułka w kolorze marki; pozostałe: obrys + hover.
  */
 
 export interface PaginationProps {

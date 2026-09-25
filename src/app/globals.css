@@ -150,6 +150,8 @@
   --pp-section-bg: #f8f8f8;
   --pp-photo-bg: #f5f5f5;
   --pp-save-bg: #fff0f0;
+  /* `.people .side-item.active` — to samo #fff0f0 (na tle sidebaru #fafafa, bez przezroczystości). */
+  --pp-side-active-bg: #fff0f0;
   --pp-note-bg: #fff9f9;
   --pp-line: #e5e5e5;
   --pp-line-nav: #efefef;
@@ -162,6 +164,8 @@
   --pp-line-note: #f0d8d9;
   --pp-line-pill: #e6e6e6;
   --pp-line-notice: #edc6c9;
+  /* `.btn.secondary` — obramowanie #ddd. */
+  --pp-line-btn: #dddddd;
   --pp-text-hero: #666666;
   --pp-text-sub: #707070;
   --pp-text-label: #626262;
@@ -181,7 +185,7 @@
 @layer components {
   /* Prototyp nie ma resetu line-height (body = `normal`), Tailwind preflight daje 1.5 — bez tej
      reguły każdy wiersz byłby o kilka pikseli wyższy niż w prototypie. */
-  .pp-nav, .pp-hero, .pp-search-section, .pp-offers, .pp-fields, .pp-footer-bar, .pp-passport {
+  .pp-nav, .pp-hero, .pp-search-section, .pp-list-header, .pp-offers, .pp-fields, .pp-footer-bar, .pp-passport {
     line-height: normal;
     color: var(--pp-ink);
     /* opsz = 9 (domyślna wartość osi): ten sam krój, który prototyp dostaje z Google Fonts
@@ -234,6 +238,9 @@
   .pp-btn:hover { background: var(--pp-red-hover); border-color: var(--pp-red-hover); }
   .pp-btn-ink { background: var(--pp-ink); border-color: var(--pp-ink); }
   .pp-btn-ink:hover { background: var(--pp-black); border-color: var(--pp-black); opacity: .88; }
+  /* `.btn.secondary` — białe tło, linia #ddd, tekst ink. */
+  .pp-btn-secondary { background: var(--pp-white); border-color: var(--pp-line-btn); color: var(--pp-ink); }
+  .pp-btn-secondary:hover { background: var(--pp-section-bg); border-color: var(--pp-line-btn); }
   .pp-nav .pp-btn { min-height: 46px; padding: 12px 19px; }
   .pp-text-link {
     display: inline-flex;
@@ -349,6 +356,26 @@
   .pp-search input::placeholder { color: var(--pp-text-dt); opacity: 1; }
   .pp-search input::-webkit-search-cancel-button { display: none; }
   .pp-search .pp-btn { min-height: 58px; padding: 15px 26px; border-radius: 11px; }
+
+  /* ---------- Nagłówek listy ofert (.p-list-header) ---------- */
+  /* Boczny margines daje `.container` strony; prototyp: padding 32px 5% 27px. Opis pod H1
+     (SEO/kontekst) i baner demo to treść aplikacji spoza prototypu. */
+  .pp-list-header { padding-bottom: 27px; }
+  /* `.pp-page-title` — ten sam nagłówek na stronach treściowych bez ekranu w prototypie
+     (hub/landing ofert, poradniki, strony informacyjne, zgłoszenie treści); marginesy
+     zostają przy stronie. */
+  .pp-page-title, .pp-list-header h1 {
+    color: var(--pp-ink);
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.08;
+    letter-spacing: -.035em;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+    font-optical-sizing: none;
+  }
+  .pp-list-header h1 { margin: 12px 0 25px; }
+  .pp-list-intro { margin: -13px 0 25px; font-size: 16px; line-height: 1.6; color: var(--pp-text-hero); }
 
   /* ---------- Najnowsze oferty (.p-offers) ---------- */
   .pp-offers {
@@ -575,6 +602,10 @@
     .pp-profile-note { grid-column: 1 / -1; }
   }
   @media (max-width: 600px) {
+    .pp-list-header { padding-bottom: 23px; }
+    .pp-page-title, .pp-list-header h1 { font-size: 32px; line-height: 1.15; }
+    .pp-list-header h1 { margin: 14px 0 23px; }
+    .pp-list-intro { margin: -11px 0 23px; font-size: 15px; }
     .pp-nav { gap: 14px; padding: 19px var(--pp-gutter-sm); }
     .pp-logo { font-size: 26px; }
     .pp-hero { display: flex; flex-direction: column; align-items: stretch; gap: 25px; padding: 27px var(--pp-gutter-sm) 25px; }

@@ -19,7 +19,25 @@ const state = vi.hoisted(() => ({
   rateLimit: vi.fn(),
 }));
 
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: () => state.configured }));
+// #25: sesja i odczyt przez warstwę danych (`withPortalTransaction` + RPC pod sesją).
+vi.mock('@/lib/db/portal', () => ({
+  isPortalDataConfigured: () => state.configured,
+  getPortalIdentity: async () => (state.user ? { id: state.user.id, role: 'employer' } : null),
+  withPortalTransaction: async (
+    identity: { id: string } | null,
+    action: (tx: { query: (text: string, values?: unknown[]) => Promise<unknown> }) => Promise<unknown>,
+  ) => action({
+    query: async (text: string, values: unknown[] = []) => {
+      const fn = /^\/\* rpcrows:([a-z_]+) \*\//.exec(text)?.[1];
+      if (!fn) throw new Error(`nieoczekiwane zapytanie: ${text.slice(0, 60)}`);
+      const args: Record<string, unknown> = {};
+      for (const m of text.matchAll(/([a-z_]+) => \$(\d+)/g)) args[m[1]!] = values[Number(m[2]) - 1];
+      state.rpc(fn, args, identity?.id ?? null);
+      if (state.error) throw state.error;
+      return { rows: [{ v: state.rows ?? [] }] };
+    },
+  }),
+}));
 vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: async (...args: unknown[]) => {
     state.rateLimit(...args);
@@ -28,15 +46,6 @@ vi.mock('@/lib/rate-limit', () => ({
 }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/campaign-banner/font', () => ({ bannerFontBase64: async () => undefined }));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: state.user } }) },
-    rpc: async (name: string, args: unknown) => {
-      state.rpc(name, args);
-      return { data: state.rows, error: state.error };
-    },
-  }),
-}));
 vi.mock('next-intl/server', () => ({
   getTranslations: async ({ locale, namespace }: { locale: string; namespace: string }) => {
     const messages = (locale === 'nl' ? nl : pl) as unknown as Record<string, Record<string, string>>;
@@ -87,7 +96,7 @@ describe('GET /api/employer/jobs/[id]/banner', () => {
   it('zwraca SVG oferty z trasy zaufanej (RPC panelu) z nagłówkami prywatności', async () => {
     const response = await call('format=300x250&locale=nl&download=1');
     expect(response.status).toBe(200);
-    expect(state.rpc).toHaveBeenCalledWith('get_managed_campaign_job', { p_job_id: JOB_ID, p_locale: 'nl' });
+    expect(state.rpc).toHaveBeenCalledWith('get_managed_campaign_job', { p_job_id: JOB_ID, p_locale: 'nl' }, 'u-1');
     expect(response.headers.get('content-type')).toBe('image/svg+xml; charset=utf-8');
     expect(response.headers.get('content-security-policy')).toMatch(/default-src 'none'.*sandbox/);
     expect(response.headers.get('content-disposition')).toBe(
@@ -149,7 +158,7 @@ describe('GET /api/employer/jobs/[id]/banner', () => {
       expect((await call(query, id)).status).toBe(400);
     }
     expect(state.rpc).not.toHaveBeenCalled();
-    state.error = { message: 'boom' };
+    state.error = Object.assign(new Error('boom'), { code: 'XX000' });
     const response = await call();
     expect(response.status).toBe(500);
     expect(await response.text()).toBe('');

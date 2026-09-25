@@ -11,21 +11,14 @@ import {
   parseEmailSuppressionFilter,
 } from '@/lib/admin/list-params';
 import { listEmailSuppressions } from '@/lib/data/admin';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerClient } from '@/lib/supabase/server';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #44 — panel admina: podgląd blokad adresów e-mail i ręczne zdjęcie blokady
  * z uzasadnieniem (akcja + reguły wspólne z dialogiem + kontrakt z migracją 0098).
  */
 
-vi.mock('@/lib/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/env')>()),
-  isSupabaseConfigured: vi.fn(),
-}));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('next/navigation', () => ({
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
@@ -34,39 +27,25 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const SUPPRESSION_ID = '5a0e8f4c-2b1d-4c3e-9f7a-1d2e3f4a5b6c';
+const ADMIN_ID = '00000000-0000-4000-8000-00000000a001';
 const MIGRATION = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/0098_email_delivery_events.sql'),
   'utf8',
 );
 
-type Result = { data?: unknown; error?: unknown };
-
-function chain(result: Result, calls: string[] = []) {
-  const q: Record<string, unknown> = {};
-  for (const m of ['select', 'is', 'not', 'eq', 'in', 'or', 'order', 'limit']) {
-    q[m] = (...args: unknown[]) => {
-      calls.push(`${m}:${JSON.stringify(args)}`);
-      return q;
-    };
-  }
-  q.maybeSingle = () => Promise.resolve(result);
-  q.then = (done: (value: Result) => unknown) => Promise.resolve(result).then(done);
-  return q;
-}
-
-function mockSession(role: string | null, rpcResult: { error: unknown } = { error: null }) {
-  const rpc = vi.fn().mockResolvedValue(rpcResult);
-  vi.mocked(createServerClient).mockResolvedValue({
-    auth: { getUser: () => Promise.resolve({ data: { user: { id: 'admin-1' } } }) },
-    from: vi.fn(() => chain({ data: role ? { role } : null, error: null })),
-    rpc,
-  } as never);
-  return rpc;
+/** Sesja z rolą; RPC `admin_lift_email_suppression` zwraca void albo rzuca błąd bazy. */
+function mockSession(role: 'admin' | 'candidate' | 'employer' | null, rpcError?: string) {
+  resetFakeDb(role ? { id: ADMIN_ID, role } : null);
+  fakeDb.rpc('admin_lift_email_suppression', () => {
+    if (rpcError) throw pgError('P0001', rpcError);
+    return null;
+  });
+  return () => fakeDb.callsTo('admin_lift_email_suppression');
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  resetFakeDb(null);
 });
 
 describe('reguły uzasadnienia zdjęcia blokady', () => {
@@ -87,10 +66,17 @@ describe('liftEmailSuppression', () => {
   it('woła RPC pod sesją admina z przyciętym uzasadnieniem', async () => {
     const rpc = mockSession('admin');
     await expect(liftEmailSuppression(SUPPRESSION_ID, '  Adres potwierdzony  ')).resolves.toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledWith('admin_lift_email_suppression', {
-      p_id: SUPPRESSION_ID,
-      p_reason: 'Adres potwierdzony',
+    expect(rpc()).toHaveLength(1);
+    expect(rpc()[0]).toMatchObject({
+      as: ADMIN_ID,
+      args: { p_id: SUPPRESSION_ID, p_reason: 'Adres potwierdzony' },
     });
+  });
+
+  it('bez sesji → PERMISSION_DENIED bez wywołania RPC', async () => {
+    const rpc = mockSession(null);
+    await expect(liftEmailSuppression(SUPPRESSION_ID, 'powód')).resolves.toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(rpc()).toHaveLength(0);
   });
 
   it('KONTROLA UJEMNA: bez uzasadnienia i ze złym id — bez wywołania RPC', async () => {
@@ -104,22 +90,23 @@ describe('liftEmailSuppression', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpc()).toHaveLength(0);
   });
 
   it('błędy RPC → stabilne kody (STALE_STATE, PERMISSION_DENIED, pole uzasadnienia)', async () => {
-    mockSession('admin', { error: { message: 'STALE_STATE' } });
+    mockSession('admin', 'STALE_STATE');
     await expect(liftEmailSuppression(SUPPRESSION_ID, 'powód')).resolves.toEqual({ ok: false, error: 'STALE_STATE' });
-    mockSession('candidate', { error: { message: 'PERMISSION_DENIED' } });
+    mockSession('candidate', 'PERMISSION_DENIED');
     await expect(liftEmailSuppression(SUPPRESSION_ID, 'powód')).resolves.toEqual({ ok: false, error: 'PERMISSION_DENIED' });
-    mockSession('admin', { error: { message: 'VALIDATION_FAILED: REASON_TOO_LONG' } });
+    mockSession('admin', 'VALIDATION_FAILED: REASON_TOO_LONG');
     await expect(liftEmailSuppression(SUPPRESSION_ID, 'powód')).resolves.toMatchObject({ reason: 'tooLong' });
   });
 
   it('tryb demo nic nie zapisuje', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    mockSession('admin');
+    fakeSession.configured = false;
     await expect(liftEmailSuppression('demo-s1', 'powód')).resolves.toEqual({ ok: true, demo: true });
-    expect(createServerClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });
 
@@ -127,45 +114,61 @@ describe('listEmailSuppressions', () => {
   it('bez roli admina → notFound przed odczytem service-role', async () => {
     mockSession('employer');
     await expect(listEmailSuppressions()).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('domyślnie tylko aktywne blokady; nazwa admina, który zdjął blokadę', async () => {
     mockSession('admin');
-    const calls: string[] = [];
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: (table: string) =>
-        table === 'email_suppressions'
-          ? chain(
-              {
-                data: [
-                  {
-                    id: SUPPRESSION_ID,
-                    email: 'a@example.com',
-                    reason: 'complaint',
-                    created_at: '2026-09-24T10:00:00.000000+00:00',
-                    lifted_at: null,
-                    lifted_by: null,
-                    lift_reason: null,
-                  },
-                ],
-                error: null,
-              },
-              calls,
-            )
-          : chain({ data: [], error: null }),
-    } as never);
+    fakeDb.rows('admin.email-suppressions', [
+      {
+        id: SUPPRESSION_ID,
+        email: 'a@example.com',
+        reason: 'complaint',
+        created_at: '2026-09-24T10:00:00.000000+00:00',
+        lifted_at: null,
+        lifted_by: null,
+        lift_reason: null,
+      },
+    ]);
     const result = await listEmailSuppressions({ status: 'nieznany' });
-    expect(calls).toContain('is:["lifted_at",null]');
+    const call = fakeDb.callsTo('admin.email-suppressions')[0]!;
+    expect(call.as).toBe('service');
+    expect(call.text).toContain('lifted_at IS NULL');
     expect(result).toMatchObject({
       status: 'ok',
       rows: [{ id: SUPPRESSION_ID, email: 'a@example.com', reason: 'complaint', liftedAt: null }],
       nextCursor: null,
     });
+    // Bez `lifted_by` nie czytamy profili.
+    expect(fakeDb.callsTo('admin.email-suppression-admins')).toHaveLength(0);
+  });
+
+  it('zdjęte: filtr, wyszukiwanie po adresie i nazwa admina', async () => {
+    mockSession('admin');
+    fakeDb
+      .rows('admin.email-suppressions', [
+        {
+          id: SUPPRESSION_ID,
+          email: 'a@example.com',
+          reason: 'hard_bounce',
+          created_at: '2026-09-24T10:00:00.000000+00:00',
+          lifted_at: '2026-09-24T11:00:00.000000+00:00',
+          lifted_by: ADMIN_ID,
+          lift_reason: 'Adres potwierdzony',
+        },
+      ])
+      .rows('admin.email-suppression-admins', [{ id: ADMIN_ID, first_name: 'Ada', last_name: 'Admin' }]);
+    const result = await listEmailSuppressions({ status: 'lifted', q: 'a@example' });
+    const call = fakeDb.callsTo('admin.email-suppressions')[0]!;
+    expect(call.text).toContain('lifted_at IS NOT NULL');
+    expect(call.text).toContain('email::text ILIKE $1');
+    expect(call.values[0]).toBe('%a@example%');
+    expect(fakeDb.callsTo('admin.email-suppression-admins')[0]?.values).toEqual([[ADMIN_ID]]);
+    expect(result).toMatchObject({ status: 'ok', rows: [{ liftedByName: 'Ada Admin' }] });
   });
 
   it('demo: filtr zdjętych i wyszukiwanie', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     const lifted = await listEmailSuppressions({ status: 'lifted' });
     expect(lifted.status === 'ok' && lifted.rows.every((r) => r.liftedAt !== null)).toBe(true);
     const found = await listEmailSuppressions({ status: 'all', q: 'skarga' });

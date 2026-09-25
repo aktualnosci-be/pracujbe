@@ -28,6 +28,7 @@ const emptyForm = {
   password: '',
   passwordConfirm: '',
   agreeTerms: false,
+  privacyNoticeAck: false,
 };
 
 describe('pusty formularz rejestracji', () => {
@@ -39,6 +40,7 @@ describe('pusty formularz rejestracji', () => {
       password: 'auth.error.passwordRequired',
       passwordConfirm: 'auth.error.passwordConfirmRequired',
       agreeTerms: 'auth.error.termsRequired',
+      privacyNoticeAck: 'auth.error.privacyNoticeRequired',
     });
   });
 
@@ -88,8 +90,11 @@ describe('niezgodność haseł w tej samej rundzie co inne błędy', () => {
       email: 'jan@example.com',
       passwordConfirm: 'abcdefgh1',
       agreeTerms: true,
+      privacyNoticeAck: true,
     });
     expect(result.success).toBe(true);
     expect(result.success && result.data.agreeTerms).toBe(true);
+    // #493: zgoda opcjonalna nie jest wymagana — brak = odmowa.
+    expect(result.success && result.data.marketingOptIn).toBeUndefined();
   });
 });

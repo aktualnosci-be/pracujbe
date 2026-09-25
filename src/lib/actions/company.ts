@@ -3,12 +3,17 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
-import { createServerClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { execute, queryOne, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
-import { ACTIVE_COMPANY_COOKIE, getActiveCompany } from '@/lib/company-context';
+import {
+  ACTIVE_COMPANY_COOKIE,
+  getActiveCompany,
+  type ActiveCompanyContext,
+} from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
 
 /** UUID v4 (walidacja identyfikatorów przekazywanych z klienta). */
@@ -27,7 +32,8 @@ import {
  *   - `createCompany` — zakłada PIERWSZĄ firmę pracodawcy (status wymuszony `unverified`) razem
  *                        z VAT/KBO i właścicielem w jednej transakcji — RPC `create_first_company`
  *                        (0072; idempotentne: ponowne kliknięcie zwraca tę samą firmę).
- *   - `updateCompany` — aktualizuje dane firmy aktywnego członkostwa (RLS `companies_update_member`).
+ *   - `updateCompany` — aktualizuje dane firmy aktywnego członkostwa (UPDATE pod RLS
+ *                        `companies_update_member`: tylko owner/admin, 0040).
  *                        Statusu nie ustawia; zmiana nazwy/VAT zweryfikowanej firmy przywraca
  *                        w bazie status `pending` (trigger `protect_company_verification`, 0072).
  *   - `createAdditionalCompany` — KOLEJNA firma zalogowanego pracodawcy (#403) — RPC
@@ -36,7 +42,8 @@ import {
  *   - `requestCompanyReverification` — odrzucona firma wraca do kolejki weryfikacji admina
  *                        (RPC `request_company_reverification`, 0072).
  *
- * Zapis idzie pod SESJĄ użytkownika (RLS, NIGDY service-role). Walidacja Zod (te same schematy
+ * Zapis idzie pod SESJĄ użytkownika (`withPortalTransaction` — RLS, NIGDY service-role).
+ * Walidacja Zod (te same schematy
  * co formularz). Błędy mapowane na stabilny `ErrorCode` — bez technikaliów (Invariant #8).
  * Rate limiting per IP (fail-open). Bez env → tryb DEMO (`{ ok: true, demo: true }`), build/UX
  * działa bez backendu.
@@ -92,6 +99,13 @@ function mapPgError(message: string | undefined): ErrorCode {
   return 'INTERNAL';
 }
 
+/** Wyjątek transakcji → kod użytkowy (błąd bazy wg komunikatu; reszta → Sentry + INTERNAL). */
+function failureCode(error: unknown, area: string): ErrorCode {
+  if (isDatabaseError(error)) return mapPgError(databaseErrorMessage(error));
+  captureError(error, { area });
+  return 'INTERNAL';
+}
+
 /** Rdzeń sluga (bez diakrytyków) + losowy sufiks (slug `companies` jest UNIQUE). */
 function companySlug(name: string): string {
   const base = name
@@ -121,24 +135,20 @@ export async function setActiveCompany(
 ): Promise<{ ok: boolean }> {
   if (typeof companyId !== 'string' || !UUID_RE.test(companyId))
     return { ok: false };
-  if (!isSupabaseConfigured()) return { ok: true }; // demo: bez sesji nie utrwalamy
+  if (!isPortalDataConfigured()) return { ok: true }; // demo: bez sesji nie utrwalamy
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false };
 
-    // Autoryzacja: użytkownik musi mieć AKTYWNE członkostwo w tej firmie.
-    const { data, error } = await supabase
-      .from('company_members')
-      .select('id')
-      .eq('profile_id', user.id)
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .limit(1);
-    if (error || !asRecord((data ?? [])[0])['id']) return { ok: false };
+    // Autoryzacja: użytkownik musi mieć AKTYWNE członkostwo w tej firmie (RLS: własne wiersze).
+    const member = await withPortalTransaction(me, (tx) =>
+      queryOne<Record<string, unknown>>(tx, 'company.active-membership',
+        `SELECT id FROM public.company_members
+          WHERE profile_id = $1 AND company_id = $2 AND is_active = true
+          LIMIT 1`, [me.id, companyId]),
+    );
+    if (!asRecord(member)['id']) return { ok: false };
 
     const store = await cookies();
     store.set(ACTIVE_COMPANY_COOKIE, companyId, {
@@ -171,7 +181,7 @@ export async function createCompany(
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
 
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return { ok: true, id: DEMO_COMPANY_ID, demo: true };
   }
 
@@ -186,27 +196,23 @@ export async function createCompany(
   }
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const { data, error } = await supabase.rpc('create_first_company', {
-      p_name: v.name,
-      p_slug: companySlug(v.name),
-      p_vat_number: nullIfEmpty(v.vatNumber),
-    });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+    const data = await withPortalTransaction(me, (tx) =>
+      rpcRows(tx, 'create_first_company', {
+        p_name: v.name,
+        p_slug: companySlug(v.name),
+        p_vat_number: nullIfEmpty(v.vatNumber),
+      }),
+    );
 
-    const row = asRecord(Array.isArray(data) ? data[0] : data);
-    const id = asString(row['company_id']);
+    const id = asString(asRecord(data[0])['company_id']);
     if (!id) return { ok: false, error: 'INTERNAL' };
 
     return { ok: true, id };
   } catch (e) {
-    captureError(e, { area: 'company.createCompany' });
-    return { ok: false, error: 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'company.createCompany') };
   }
 }
 
@@ -225,7 +231,7 @@ export async function createAdditionalCompany(
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
 
-  if (!isSupabaseConfigured()) return { ok: true, id: DEMO_COMPANY_ID, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, id: DEMO_COMPANY_ID, demo: true };
 
   if (
     !(await checkRateLimit('company-create', {
@@ -237,21 +243,24 @@ export async function createAdditionalCompany(
   }
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const { data, error } = await supabase.rpc('create_additional_company', {
-      p_name: v.name,
-      p_slug: companySlug(v.name),
-      p_vat_number: nullIfEmpty(v.vatNumber),
-    });
-    if (error) return { ok: false, error: mapTeamError(error.message) };
+    let data: Record<string, unknown>[];
+    try {
+      data = await withPortalTransaction(me, (tx) =>
+        rpcRows(tx, 'create_additional_company', {
+          p_name: v.name,
+          p_slug: companySlug(v.name),
+          p_vat_number: nullIfEmpty(v.vatNumber),
+        }),
+      );
+    } catch (e) {
+      if (isDatabaseError(e)) return { ok: false, error: mapTeamError(databaseErrorMessage(e)) };
+      throw e;
+    }
 
-    const row = asRecord(Array.isArray(data) ? data[0] : data);
-    const id = asString(row['company_id']);
+    const id = asString(asRecord(data[0])['company_id']);
     if (!UUID_RE.test(id)) return { ok: false, error: 'INTERNAL' };
 
     (await cookies()).set(ACTIVE_COMPANY_COOKIE, id, {
@@ -285,13 +294,12 @@ export async function updateCompany(
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
 
-  // Zbuduj patch tylko z pól obecnych w wejściu (nazwa niepusta; VAT: wartość albo null).
-  const patch: Record<string, unknown> = {};
-  if (v.name !== undefined) patch['name'] = v.name;
-  if (v.vatNumber !== undefined) patch['vat_number'] = nullIfEmpty(v.vatNumber);
-  if (Object.keys(patch).length === 0) return { ok: true }; // nic do zapisania
+  // Zapis tylko pól obecnych w wejściu (nazwa niepusta; VAT: wartość albo null).
+  const setName = v.name !== undefined;
+  const setVat = v.vatNumber !== undefined;
+  if (!setName && !setVat) return { ok: true }; // nic do zapisania
 
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   // Rate limit per IP — łagodny (edycja to częsta akcja).
   if (
@@ -304,42 +312,46 @@ export async function updateCompany(
   }
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const active = await getActiveCompany(supabase, user.id);
-    const companyId = active.activeId;
-    if (!companyId) return { ok: false, error: 'NOT_FOUND' };
-    if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
+    type Outcome =
+      | { error: ErrorCode }
+      | { error: null; active: ActiveCompanyContext; companyId: string; rows: Record<string, unknown>[] };
+    const outcome = await withPortalTransaction(me, async (tx): Promise<Outcome> => {
+      const active = await getActiveCompany(tx, me.id);
+      const companyId = active.activeId;
+      if (!companyId) return { error: 'NOT_FOUND' };
+      if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
+        return { error: 'PERMISSION_DENIED' };
+      }
+
+      // RLS `companies_update_member` (owner/admin) + trigger `protect_company_verification`
+      // (status nietykalny; zmiana nazwy/VAT zweryfikowanej firmy → pending).
+      const { rows } = await execute(tx, 'company.update',
+        `UPDATE public.companies
+            SET name = CASE WHEN $2 THEN $3 ELSE name END,
+                vat_number = CASE WHEN $4 THEN $5 ELSE vat_number END
+          WHERE id = $1
+          RETURNING id, status::text AS status`,
+        [companyId, setName, setName ? v.name : null, setVat, setVat ? nullIfEmpty(v.vatNumber) : null]);
+      return { error: null, active, companyId, rows };
+    });
+    if (outcome.error !== null) return { ok: false, error: outcome.error };
+
+    const { active, companyId, rows } = outcome;
+    // RLS przepuszcza UPDATE bez wiersza (0 rows) — to nie jest sukces.
+    if (rows.length !== 1 || asString(asRecord(rows[0])['id']) !== companyId) {
       return { ok: false, error: 'PERMISSION_DENIED' };
     }
 
-    // RLS `companies_update_member` + trigger `protect_company_verification` (status nietykalny).
-    const { data, error } = await supabase
-      .from('companies')
-      .update(patch)
-      .eq('id', companyId)
-      .select('id, status');
-    if (error) return { ok: false, error: mapPgError(error.message) };
-    if (
-      !Array.isArray(data) ||
-      data.length !== 1 ||
-      asString(asRecord(data[0])['id']) !== companyId
-    ) {
-      return { ok: false, error: 'PERMISSION_DENIED' };
-    }
-
-    const newStatus = asString(asRecord(data[0])['status']);
+    const newStatus = asString(asRecord(rows[0])['status']);
     if (active.activeStatus === 'verified' && newStatus === 'pending') {
       return { ok: true, reverificationRequired: true };
     }
     return { ok: true };
   } catch (e) {
-    captureError(e, { area: 'company.updateCompany' });
-    return { ok: false, error: 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'company.updateCompany') };
   }
 }
 
@@ -353,7 +365,7 @@ export async function updateCompany(
  * (zawieszenie zdejmuje wyłącznie administrator). Autoryzację i przejście egzekwuje RPC.
  */
 export async function requestCompanyReverification(): Promise<ReverificationResult> {
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   if (
     !(await checkRateLimit('company-reverify', {
@@ -365,27 +377,23 @@ export async function requestCompanyReverification(): Promise<ReverificationResu
   }
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const active = await getActiveCompany(supabase, user.id);
-    if (!active.activeId) return { ok: false, error: 'NOT_FOUND' };
-    if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
-      return { ok: false, error: 'PERMISSION_DENIED' };
-    }
-
-    const { error } = await supabase.rpc('request_company_reverification', {
-      p_company_id: active.activeId,
+    const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
+      const active = await getActiveCompany(tx, me.id);
+      if (!active.activeId) return 'NOT_FOUND';
+      if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
+        return 'PERMISSION_DENIED';
+      }
+      await rpc(tx, 'request_company_reverification', { p_company_id: active.activeId });
+      return null;
     });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+    if (outcome) return { ok: false, error: outcome };
 
     revalidatePath('/employer', 'layout');
     return { ok: true };
   } catch (e) {
-    captureError(e, { area: 'company.requestCompanyReverification' });
-    return { ok: false, error: 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'company.requestCompanyReverification') };
   }
 }

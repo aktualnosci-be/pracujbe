@@ -13,8 +13,7 @@ import {
 import { parseReportCase } from '@/lib/content-reports/case';
 import { titleKeyForType } from '@/lib/data/notifications';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #42 — decyzja moderacyjna w sprawie DSA: reguły wspólne z dialogiem i bazą, akcja woła JEDNO
@@ -23,11 +22,7 @@ import { createServerClient } from '@/lib/supabase/server';
  * sprawy w widoku zgłaszającego.
  */
 
-vi.mock('@/lib/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/env')>()),
-  isSupabaseConfigured: vi.fn(),
-}));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const REPORT_ID = '0b9a9c0e-5f4e-4c1a-9d52-6f1f3c1d2e01';
@@ -36,18 +31,28 @@ const FACTS = 'Oferta wymaga od kandydatów opłaty za rekrutację z góry.';
 const SITE = 'https://pracuj.be';
 const LOCALES: readonly Locale[] = ['pl', 'nl', 'fr', 'en'];
 
-function mockSession(rpcResult: { error: unknown } = { error: null }) {
-  const rpc = vi.fn().mockResolvedValue(rpcResult);
-  vi.mocked(createServerClient).mockResolvedValue({
-    auth: { getUser: () => Promise.resolve({ data: { user: { id: 'admin-1' } } }) },
-    rpc,
-  } as never);
-  return rpc;
+const ADMIN_ID = '00000000-0000-4000-8000-00000000a001';
+
+/**
+ * Sesja admina; oba RPC (decyzja, przywrócenie) zwracają uuid albo rzucają błąd bazy.
+ * Zwraca listę wywołań RPC (nazwa + argumenty po nazwach) w kolejności.
+ */
+function mockSession(rpcError?: string) {
+  resetFakeDb({ id: ADMIN_ID, role: 'admin' });
+  const handler = () => {
+    if (rpcError) throw pgError('P0001', rpcError);
+    return DECISION_ID;
+  };
+  fakeDb.rpc('admin_decide_report', handler).rpc('admin_restore_moderation', handler);
+  return () =>
+    fakeDb.calls
+      .filter((c) => c.kind === 'rpc' || c.kind === 'rpcrows')
+      .map((c) => [c.name, c.args, c.as] as const);
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  resetFakeDb({ id: ADMIN_ID, role: 'admin' });
 });
 
 describe('#42 reguły decyzji (dialog, akcja i baza)', () => {
@@ -104,8 +109,9 @@ describe('#42 decideReport / restoreModeration', () => {
       automatedDetection: true,
     });
     expect(res).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledWith('admin_decide_report', {
+    expect(rpc()).toHaveLength(1);
+    expect(rpc()[0]?.[2]).toBe(ADMIN_ID); // pod sesją admina, nie service_role
+    expect(rpc()[0]?.slice(0, 2)).toEqual(['admin_decide_report', {
       p_report_id: REPORT_ID,
       p_expected_status: 'reviewing',
       p_decision: 'job_removed',
@@ -113,7 +119,7 @@ describe('#42 decideReport / restoreModeration', () => {
       p_ground_type: 'terms',
       p_ground_reference: 'Regulamin § 4',
       p_automated_detection: true,
-    });
+    }]);
   });
 
   it('brak działań nie wysyła podstawy', async () => {
@@ -124,14 +130,14 @@ describe('#42 decideReport / restoreModeration', () => {
       groundType: 'terms',
       groundReference: '§ 4',
     });
-    expect(rpc.mock.calls[0]?.[1]).toMatchObject({ p_ground_type: null, p_ground_reference: null });
+    expect(rpc()[0]?.[1]).toMatchObject({ p_ground_type: null, p_ground_reference: null });
   });
 
   it('niepoprawne dane → błąd pola bez wywołania bazy', async () => {
     const rpc = mockSession();
     const res = await decideReport(REPORT_ID, 'open', 'job', { decision: 'job_removed', facts: FACTS });
     expect(res).toEqual({ ok: false, error: 'VALIDATION_FAILED', field: 'groundType', fieldError: 'required' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpc()).toHaveLength(0);
     expect(await decideReport('nie-uuid', 'open', 'job', { decision: 'no_action', facts: FACTS })).toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
@@ -145,13 +151,13 @@ describe('#42 decideReport / restoreModeration', () => {
     ['PERMISSION_DENIED', 'PERMISSION_DENIED'],
     ['INJECTED_ENFORCEMENT_FAILURE', 'INTERNAL'],
   ])('błąd RPC „%s” → %s (bez szczegółów technicznych)', async (message, code) => {
-    mockSession({ error: { message } });
+    mockSession(message);
     const res = await decideReport(REPORT_ID, 'open', 'job', { decision: 'no_action', facts: FACTS });
     expect(res).toEqual({ ok: false, error: code });
   });
 
   it('błąd walidacji z bazy wraca przy polu', async () => {
-    mockSession({ error: { message: 'VALIDATION_FAILED: GROUND_REFERENCE_TOO_LONG' } });
+    mockSession('VALIDATION_FAILED: GROUND_REFERENCE_TOO_LONG');
     const res = await decideReport(REPORT_ID, 'open', 'job', {
       decision: 'job_removed',
       facts: FACTS,
@@ -169,21 +175,30 @@ describe('#42 decideReport / restoreModeration', () => {
       field: 'reason',
       fieldError: 'tooShort',
     });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpc()).toHaveLength(0);
     expect(await restoreModeration(DECISION_ID, ' Autor usunął wymóg opłaty z oferty. ')).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledWith('admin_restore_moderation', {
-      p_decision_id: DECISION_ID,
-      p_reason: 'Autor usunął wymóg opłaty z oferty.',
+    expect(rpc()).toEqual([
+      ['admin_restore_moderation', { p_decision_id: DECISION_ID, p_reason: 'Autor usunął wymóg opłaty z oferty.' }, ADMIN_ID],
+    ]);
+  });
+
+  it('bez sesji → PERMISSION_DENIED bez wywołania RPC', async () => {
+    const rpc = mockSession();
+    fakeSession.identity = null;
+    expect(await decideReport(REPORT_ID, 'open', 'job', { decision: 'no_action', facts: FACTS })).toEqual({
+      ok: false,
+      error: 'PERMISSION_DENIED',
     });
+    expect(rpc()).toHaveLength(0);
   });
 
   it('bez backendu → demo, bez zapisu', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(await decideReport(REPORT_ID, 'open', 'job', { decision: 'no_action', facts: FACTS })).toEqual({
       ok: true,
       demo: true,
     });
-    expect(createServerClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });
 

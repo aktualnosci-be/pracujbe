@@ -2,8 +2,8 @@
 
 import { cookies } from 'next/headers';
 import { z } from 'zod/v3';
-import { createServerClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { queryRows } from '@/lib/db/sql';
 
 export type PublicSavedState =
   | { status: 'candidate'; savedIds: string[] }
@@ -27,38 +27,21 @@ export async function getPublicSavedJobs(
   const parsed = z.array(z.string().uuid()).max(100).safeParse(jobIds);
   if (await isAnonymousViewerFixture()) return { status: 'anonymous' };
   if (!parsed.success) return { status: 'unavailable' };
-  if (!isSupabaseConfigured()) return { status: 'unavailable' };
+  if (!isPortalDataConfigured()) return { status: 'unavailable' };
   try {
-    const client = await createServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await client.auth.getUser();
-    if (!user) {
-      if (authError && authError.name !== 'AuthSessionMissingError')
-        return { status: 'error' };
-      return { status: 'anonymous' };
-    }
-    if (authError) return { status: 'error' };
-    const { data: profile, error: profileError } = await client
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-    if (profileError) return { status: 'error' };
-    if (profile?.role !== 'candidate') return { status: 'unavailable' };
+    // Tożsamość z sesji serwera (rola z profilu, już sprawdzona). Brak = gość.
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'anonymous' };
+    if (me.role !== 'candidate') return { status: 'unavailable' };
     const ids = [...new Set(parsed.data)];
     if (!ids.length) return { status: 'candidate', savedIds: [] };
-    const { data, error } = await client
-      .from('saved_jobs')
-      .select('job_id')
-      .eq('candidate_id', user.id)
-      .in('job_id', ids)
-      .limit(100);
-    if (error || !data) return { status: 'error' };
+    const rows = await withPortalTransaction(me, (tx) => queryRows<{ job_id: string }>(tx, 'candidate.public-saved-jobs',
+      `SELECT job_id FROM public.saved_jobs
+        WHERE candidate_id = $1 AND job_id = ANY($2::uuid[])
+        LIMIT 100`, [me.id, ids]));
     return {
       status: 'candidate',
-      savedIds: data.map((row) => row.job_id as string),
+      savedIds: rows.map((row) => row.job_id),
     };
   } catch {
     return { status: 'error' };

@@ -1,6 +1,7 @@
 import 'server-only';
 
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { withServiceRole } from '@/lib/db/portal';
+import { rpc, rpcRows } from '@/lib/db/sql';
 
 /**
  * Worker kolejki usuwania obiektów storage (#486, `storage_deletion_queue`, 0105).
@@ -10,22 +11,21 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * usunięcie w akcji się nie powiodło. Worker bierze partię (`claim_storage_deletions`:
  * SKIP LOCKED + dzierżawa 5 min), usuwa obiekty przez service-role i raportuje wynik
  * (`complete_storage_deletion`): sukces usuwa wiersz, błąd = ponowienie z backoffem.
+ * #25: claim i każdy wynik to osobne, krótkie transakcje service_role (pula `service`) —
+ * dzierżawa jest zatwierdzona przed usuwaniem obiektów, a żadna transakcja nie trwa podczas
+ * wywołania storage.
  * Brak obiektu w storage to sukces (usuwanie idempotentne). Do logów trafia tylko kod błędu —
  * nigdy ścieżka obiektu ani URL.
  *
- * Obiekty usuwa `ObjectDeleter`: prywatny bucket Railway (#26), gdy jest skonfigurowany, inaczej
- * Supabase Storage (przejściowo, `supabaseDeleter`).
+ * Obiekty usuwa `ObjectDeleter`: prywatny bucket Railway (#26). Bez jego konfiguracji każdy
+ * wiersz kończy się błędem `STORAGE_UNCONFIGURED` i wraca do kolejki z backoffem.
  */
 
 /** Usunięcie jednego obiektu; `null` = sukces, inaczej krótki kod błędu (bez ścieżki). */
 export type ObjectDeleter = (bucket: string, path: string) => Promise<string | null>;
 
-export function supabaseDeleter(admin: SupabaseClient): ObjectDeleter {
-  return async (bucket, path) => {
-    const result = await admin.storage.from(bucket).remove([path]);
-    return result.error ? 'STORAGE_ERROR' : null;
-  };
-}
+/** Bez bucketu: obiekt nie może zostać usunięty — wiersz zostaje w kolejce (ponowienie). */
+export const unconfiguredDeleter: ObjectDeleter = async () => 'STORAGE_UNCONFIGURED';
 
 /** Bucket Railway ma jedną nazwę z konfiguracji; wiersze CV mają w `files.bucket` 'candidate-files'. */
 export function railwayDeleter(
@@ -60,13 +60,12 @@ function asRows(value: unknown): ClaimedRow[] {
 }
 
 export async function processStorageDeletions(
-  admin: SupabaseClient,
-  deleteObject: ObjectDeleter = supabaseDeleter(admin),
+  deleteObject: ObjectDeleter,
   limit = 50,
 ): Promise<StorageDeletionRun> {
-  const { data, error } = await admin.rpc('claim_storage_deletions', { p_limit: limit });
-  if (error) throw error;
-  const rows = asRows(data);
+  const rows = asRows(
+    await withServiceRole((tx) => rpcRows(tx, 'claim_storage_deletions', { p_limit: limit })),
+  );
   let deleted = 0;
   let failed = 0;
   for (const row of rows) {
@@ -77,8 +76,8 @@ export async function processStorageDeletions(
       code = 'STORAGE_UNAVAILABLE';
     }
     const ok = code === null;
-    const done = await admin.rpc('complete_storage_deletion', { p_id: row.id, p_ok: ok, p_error: code });
-    if (done.error) throw done.error;
+    await withServiceRole((tx) =>
+      rpc(tx, 'complete_storage_deletion', { p_id: row.id, p_ok: ok, p_error: code }));
     if (ok) deleted += 1;
     else failed += 1;
   }

@@ -505,7 +505,7 @@ function SidebarLink({
       aria-current={active ? 'page' : undefined}
       className={cn(
         SIDE_ITEM,
-        active ? 'bg-primary/10 font-[650] text-primary-dark' : 'text-foreground hover:bg-muted',
+        active ? 'bg-[color:var(--pp-side-active-bg)] font-[650] text-primary-dark' : 'text-foreground hover:bg-muted',
       )}
     >
       <span className="shrink-0" aria-hidden="true">
