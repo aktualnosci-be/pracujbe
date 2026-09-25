@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 
 import { NextResponse } from 'next/server';
 
+import { campaignSendingReady } from '@/lib/admin/campaigns';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc, type RpcArgs } from '@/lib/db/sql';
 import { isProductionMode } from '@/lib/env';
@@ -140,9 +141,11 @@ async function run(request: Request): Promise<Response> {
       ? 0
       : await task('savedSearchAlerts', 'process_saved_search_alerts', { p_limit: 500 });
   // #45: rezerwacja i kolejkowanie paczki odbiorców aktywnych rewizji kampanii (0101).
-  const campaignEmailsQueued = await task('emailCampaigns', 'process_email_campaigns', {
-    p_limit: 500,
-  });
+  // Bez nadawcy marketingu i linku wypisania worker listu nie wyśle — nie rezerwujemy
+  // odbiorców (rezerwacja jest jednorazowa na rewizję), kampania czeka na konfigurację.
+  const campaignEmailsQueued = campaignSendingReady()
+    ? await task('emailCampaigns', 'process_email_campaigns', { p_limit: 500 })
+    : 0;
   // #486: retencja jako dane (0105) — zwraca liczniki per kategoria (jsonb).
   let retention: Record<string, number> = {};
   try {

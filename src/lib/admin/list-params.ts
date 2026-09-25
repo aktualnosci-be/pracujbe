@@ -232,7 +232,7 @@ export function reportReasonView(reason: string): ReportReasonView {
  * Dziennik zdarzeń (audit_logs, #417)
  * ------------------------------------------------------------------------- */
 
-/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106). */
+/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106, 0108). */
 export const AUDIT_ENTITY_TYPES = [
   'company',
   'report',
@@ -241,6 +241,7 @@ export const AUDIT_ENTITY_TYPES = [
   'email_suppression',
   'breach_incident',
   'screening_question_review',
+  'email_campaign',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -269,6 +270,8 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'breach.subjects_notified': 'auditActionBreachSubjectsNotified',
   'screening_question.review_requested': 'auditActionScreeningRequested',
   'screening_question.reviewed': 'auditActionScreeningReviewed',
+  'email_campaign.activated': 'auditActionCampaignActivated',
+  'email_campaign.cancelled': 'auditActionCampaignCancelled',
 };
 
 export function parseAuditEntity(raw: string | undefined | null): AuditEntityType | null {
