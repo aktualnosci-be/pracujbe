@@ -46,11 +46,15 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | Zmienna | Bez niej |
 |---|---|
 | `DATABASE_AUTH_MAIL_URL` | listy potwierdzenia adresu i resetu hasła czekają w kolejce; cron poczty 503 |
-| `RESEND_API_KEY` | żaden e-mail nie wychodzi; cron poczty 503 |
+| `EMAIL_PROVIDER` | wybór dostawcy (`emaillabs` na produkcji); jawna wartość bez kluczy dostawcy blokuje wysyłkę (503 cronu) |
+| `EMAILLABS_APP_KEY`, `EMAILLABS_SECRET_KEY`, `EMAILLABS_SMTP_ACCOUNT` | przy `EMAIL_PROVIDER=emaillabs` żaden e-mail nie wychodzi; cron poczty 503 (`docs/EMAILLABS_SETUP.md`) |
+| `RESEND_API_KEY` | przy `EMAIL_PROVIDER=resend` żaden e-mail nie wychodzi; cron poczty 503 |
 | `EMAIL_FROM`, `EMAIL_REPLY_TO` | nadawca domyślny; newsletter/marketing nie wychodzi bez jawnego `EMAIL_FROM` |
 | `EMAIL_SENDER_IDENTITY`, `EMAIL_SENDER_POSTAL_ADDRESS` | newsletter/marketing nie wychodzi (stopka nadawcy, #45) |
 | `EMAIL_UNSUBSCRIBE_SECRET` | brak linków wypisania → marketing nie wychodzi |
 | `RESEND_WEBHOOK_SECRET` | webhook doręczeń 503 (brak blokad po odbiciach, #44) |
+| `EMAILLABS_WEBHOOK_SECRET` | webhook raportów EmailLabs 503 (brak blokad po odbiciach) |
+| `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | opcjonalnie; oba albo żaden — gdy ustawione, webhook wymaga też Basic auth |
 | `EMAIL_QUEUE_SECRET` | cron `/api/email/process` bez autoryzacji (401) |
 | `MAINTENANCE_SECRET` | cron `/api/maintenance` bez autoryzacji |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | w produkcji rejestracja, reset hasła, zgłoszenia treści i aplikacja bez konta są odrzucane (fail-closed); logowanie działa |
