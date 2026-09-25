@@ -6,9 +6,9 @@ import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 /**
- * Potwierdzenie e-maila — strona informacyjna po rejestracji ("sprawdź skrzynkę").
- * Właściwa wymiana kodu na sesję odbywa się w route handlerze `/auth/callback`
- * (link z wiadomości e-mail). Strona wyłączona z indeksowania (noindex).
+ * Potwierdzenie e-maila — strona informacyjna po rejestracji ("sprawdź skrzynkę"). Sam link
+ * z wiadomości prowadzi do `/potwierdz-email#token=…`, gdzie adres potwierdza przycisk
+ * (server action `confirmEmail`). Strona nie tworzy sesji. Wyłączona z indeksowania (noindex).
  */
 
 type PageProps = {

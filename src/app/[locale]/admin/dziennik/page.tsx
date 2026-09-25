@@ -54,6 +54,7 @@ const ENTITY_LABEL: Record<string, string> = {
   application: 'entityApplication',
   offer: 'entityOffer',
   email_suppression: 'entityEmailSuppression',
+  breach_incident: 'entityBreach',
   screening_question_review: 'entityScreeningReview',
 };
 
@@ -126,6 +127,10 @@ export default async function AdminAuditPage({
     if (entityType === 'email_suppression') {
       if (value === 'lifted') return t('emailStatusLifted');
       if (EMAIL_SUPPRESSION_REASON_KEY[value]) return t(EMAIL_SUPPRESSION_REASON_KEY[value]);
+    }
+    if (entityType === 'breach_incident') {
+      if (value === 'open') return t('breachStatusOpen');
+      if (value === 'closed') return t('breachStatusClosed');
     }
     return t('statusUnknown');
   };

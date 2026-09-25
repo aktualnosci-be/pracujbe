@@ -5,9 +5,8 @@ import { CandidateShell } from '@/components/candidate/CandidateShell';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
-import type { PortalIdentity } from '@/lib/auth/session';
-import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { queryOne } from '@/lib/db/sql';
+import { displayName, getCurrentIdentity, readOwnProfileSummary } from '@/lib/auth/current';
+import { isPortalAuthConfigured } from '@/lib/env';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
 
@@ -18,11 +17,11 @@ import { getUnreadConversationsCount } from '@/lib/data/messages';
  * kliencki `CandidateShell`, który — dla ścieżek kreatora onboardingu — świadomie
  * przepuszcza treść bez sidebara (kreator ma własny lekki layout).
  *
- * GUARD: przy skonfigurowanej bazie wymaga (1) zalogowanego użytkownika (`getPortalIdentity`) —
- * brak sesji → redirect na /logowanie; (2) roli kandydata — pracodawca trafiający na panel
- * kandydata → redirect do /employer (symetria z guardem panelu pracodawcy), administrator →
- * /admin. Kandydat przed onboardingiem przechodzi. Bez env → tryb demo.
- * `force-dynamic`, bo guard zależy od sesji.
+ * GUARD (#24): przy skonfigurowanych kontach PostgreSQL wymaga zweryfikowanej sesji serwerowej
+ * (`getCurrentIdentity`: cookie Better Auth → aktywny profil, potwierdzony e-mail). Brak sesji →
+ * /logowanie; pracodawca → /employer, administrator → /admin (rola z profilu, nie z cookie).
+ * Awaria odczytu sesji rzuca (granica błędu), nie wpuszcza jako gościa ani innej roli.
+ * Bez konfiguracji kont → tryb demo. `force-dynamic`, bo guard zależy od sesji.
  *
  * NOINDEX dla całego poddrzewa panelu (Invariant #9): metadata dziedziczy się do stron
  * i podlayoutów, o ile nie zostanie nadpisana.
@@ -32,20 +31,6 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
-
-/** Imię i nazwisko z własnego profilu (pod sesją). Błąd → brak nazwy (neutralna etykieta). */
-async function readUserName(me: PortalIdentity): Promise<string | undefined> {
-  try {
-    const row = await withPortalTransaction(me, (tx) => queryOne<{ first_name: unknown; last_name: unknown }>(
-      tx, 'candidate.shell-name', 'SELECT first_name, last_name FROM public.profiles WHERE id = $1', [me.id]));
-    const first = typeof row?.first_name === 'string' ? row.first_name : '';
-    const last = typeof row?.last_name === 'string' ? row.last_name : '';
-    const fullName = `${first} ${last}`.trim();
-    return fullName.length > 0 ? fullName : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 export default async function CandidateLayout({
   children,
@@ -62,26 +47,22 @@ export default async function CandidateLayout({
   let unreadMessages: number | undefined;
   let userName: string | undefined;
 
-  if (isPortalDataConfigured()) {
-    // Tożsamość z sesji serwera (aktywny profil, potwierdzony e-mail, rola z bazy) — rola
-    // jest już sprawdzona, nie czytamy jej drugi raz.
-    const me = await getPortalIdentity();
-    if (!me) {
+  if (isPortalAuthConfigured()) {
+    const identity = await getCurrentIdentity();
+    if (!identity) {
       redirect({ href: '/logowanie', locale: locale as Locale });
-      return null; // nieosiągalne (redirect rzuca) — zawęża typ `me` dla TS
+      return null; // nieosiągalne (redirect rzuca) — zawęża typ dla TS
     }
     // Pracodawca → jego panel; administrator → panel admina. Twarda granica roli kandydata
-    // jest w RPC (ensure_candidate_profile/apply_to_job, P1-04).
-    if (me.role === 'employer') {
+    // jest dodatkowo w RPC (ensure_candidate_profile/apply_to_job, P1-04).
+    if (identity.role === 'employer') {
       redirect({ href: '/employer', locale: locale as Locale });
     }
-    if (me.role === 'admin') {
+    if (identity.role === 'admin') {
       redirect({ href: '/admin', locale: locale as Locale });
     }
-
-    // P1-09: realna nazwa kandydata (topbar), bez zmyślonej „Adam Kowalski". Odczyt własnego
-    // profilu pod sesją (RLS: self-select); awaria odczytu = brak nazwy, nie błąd panelu.
-    userName = await readUserName(me);
+    // P1-09: realna nazwa kandydata (topbar), bez zmyślonej „Adam Kowalski".
+    userName = displayName(await readOwnProfileSummary(identity));
 
     // Realne powiadomienia + licznik nieprzeczytanych konwersacji (pod sesją/RLS).
     const [notif, unread] = await Promise.all([

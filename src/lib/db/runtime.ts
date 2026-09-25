@@ -5,6 +5,8 @@ import { createRuntimePool } from './pool';
 let domain: ReturnType<typeof createRuntimePool> | undefined;
 let domainReady: Pool | undefined;
 let ops: ReturnType<typeof createRuntimePool> | undefined;
+let rateLimit: ReturnType<typeof createRuntimePool> | undefined;
+let authMail: ReturnType<typeof createRuntimePool> | undefined;
 
 /** Leniwa pula procesu. Błąd inicjalizacji nie zostaje utrwalony do restartu. */
 export function getDomainPool() {
@@ -49,12 +51,38 @@ export function getOpsPool() {
   return ops;
 }
 
+/** Leniwa pula limitera (0058): login z członkostwem wyłącznie w pracujbe_rate_limit. */
+export function getRateLimitPool() {
+  if (!rateLimit) {
+    const url = process.env.DATABASE_RATE_LIMIT_URL;
+    if (!url) throw new Error('Brak konfiguracji połączenia limitera.');
+    rateLimit = createRuntimePool(url, 'rate_limit').catch(error => {
+      rateLimit = undefined;
+      throw error;
+    });
+  }
+  return rateLimit;
+}
+
+/** Leniwa pula workera wiadomości auth (0061): członkostwo wyłącznie w pracujbe_auth_mail. */
+export function getAuthMailPool() {
+  if (!authMail) {
+    const url = process.env.DATABASE_AUTH_MAIL_URL;
+    if (!url) throw new Error('Brak konfiguracji połączenia kolejki wiadomości auth.');
+    authMail = createRuntimePool(url, 'auth_mail').catch(error => {
+      authMail = undefined;
+      throw error;
+    });
+  }
+  return authMail;
+}
+
 let service: ReturnType<typeof createRuntimePool> | undefined;
 
 /**
  * Leniwa pula zadań uprzywilejowanych (#25): osobny login z jedynym członkostwem
  * service_role (`DATABASE_SERVICE_URL`). Używają jej wyłącznie worker poczty, webhooki,
- * cron maintenance, limiter i odczyty panelu admina po `requireAdmin` — nigdy loadery
+ * cron maintenance i odczyty panelu admina po `requireAdmin` — nigdy loadery
  * paneli kandydata/pracodawcy.
  */
 export function getServicePool() {

@@ -32,6 +32,7 @@ export const QUEUED_EMAIL_TYPES = [
   'appealReceived', // submit_moderation_appeal / submit_report_appeal (0104) — do odwołującego się
   'appealUpheld', // admin_decide_appeal (0104) → decyzja utrzymana
   'appealReversed', // admin_decide_appeal (0104) → odwołanie uwzględnione
+  'breachNotice', // admin_notify_breach_subjects (0106) — treść od administratora
 ] as const satisfies readonly EmailType[];
 
 /**

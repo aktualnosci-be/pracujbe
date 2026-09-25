@@ -1,5 +1,4 @@
 import createIntlMiddleware from 'next-intl/middleware';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { routing } from './i18n/routing';
@@ -12,7 +11,7 @@ import {
   guestLinkPurpose,
   isGuestLinkToken,
 } from '@/lib/guest-apply/link-state';
-import { env, isAppReady, isSupabaseConfigured } from '@/lib/env';
+import { isAppReady } from '@/lib/env';
 import {
   SITE_ACCESS_COOKIE,
   SITE_ACCESS_DENIED_PARAM,
@@ -37,18 +36,12 @@ const MAINTENANCE_HTML =
   'Service temporarily unavailable. Please try again shortly.</p></body></html>';
 
 /**
- * Middleware = next-intl + odświeżanie sesji Supabase.
+ * Middleware = bramka hasła + fail-closed gotowości + next-intl.
  *
- * 1. next-intl (wykrywanie języka z Accept-Language dla "/", prefiks locale, redirecty
- *    nieobsłużonych ścieżek) — uruchamiane ZAWSZE, jego odpowiedź jest bazą.
- * 2. Sesja Supabase (@supabase/ssr): przy skonfigurowanym env odświeżamy token
- *    (`getUser()` rotuje wygasły access token na podstawie refresh tokena) i przenosimy
- *    zaktualizowane cookies na odpowiedź next-intl. Panele (candidate/employer/onboarding)
- *    polegają na tym — serwerowy guard w layoutcie (`getUser()` w RSC nie może zapisać
- *    cookies) zobaczy świeżą sesję tylko dzięki rotacji tutaj.
- *
- * Bez env (`isSupabaseConfigured() === false`) NIE inicjujemy Supabase — działa sam
- * next-intl (tryb demo). Matcher wyklucza api, auth (callback poza i18n), pliki wewnętrzne
+ * Sesje (#24) sprawdza serwer (Node) w guardach paneli i akcjach: Better Auth + PostgreSQL
+ * (`getCurrentIdentity`). Middleware działa na Edge, więc NIE łączy się z bazą, nie czyta ani
+ * nie odświeża cookie sesji i nie podejmuje decyzji o dostępie — nie ma tu też żadnego
+ * `Set-Cookie` zależnego od użytkownika. Matcher wyklucza api, auth, pliki wewnętrzne
  * Next/Vercel oraz assety (wszystko z kropką).
  */
 const handleIntl = createIntlMiddleware(routing);
@@ -57,8 +50,7 @@ const handleIntl = createIntlMiddleware(routing);
  * Nagłówek dla odpowiedzi, które nie mogą trafić do cache współdzielonego (#298). Strony
  * publiczne są statyczne/ISR i dostają `s-maxage`; middleware wykonuje się jednak przy KAŻDYM
  * żądaniu (także trafieniu w cache ISR), więc tu nadpisujemy nagłówek, gdy odpowiedź zależy od
- * żądającego: bramka hasła (CDN nie może podać strony osobie bez cookie dostępu) oraz
- * odświeżone cookies sesji (CDN nie może zapamiętać cudzego `Set-Cookie`).
+ * żądającego: bramka hasła (CDN nie może podać strony osobie bez cookie dostępu).
  */
 const PRIVATE_CACHE_CONTROL = 'private, no-store';
 
@@ -173,37 +165,11 @@ export default async function middleware(request: NextRequest) {
   // Serwis za bramką hasła: odpowiedź dla osoby z dostępem nie może trafić do cache współdzielonego.
   if (getSiteAccessPassword()) response.headers.set('cache-control', PRIVATE_CACHE_CONTROL);
 
-  // 2) Brak env → tryb demo: nie inicjuj Supabase, zwróć samą odpowiedź next-intl.
-  const url = env.supabaseUrl;
-  const anonKey = env.supabaseAnonKey;
-  if (!isSupabaseConfigured() || !url || !anonKey) {
-    return response;
-  }
-
-  // 3) Odśwież sesję i przenieś zaktualizowane cookies na odpowiedź next-intl.
-  const supabase = createServerClient(url, anonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-        for (const { name, value, options } of cookiesToSet) {
-          response.cookies.set(name, value, options);
-        }
-        if (cookiesToSet.length > 0) response.headers.set('cache-control', PRIVATE_CACHE_CONTROL);
-      },
-    },
-  });
-
-  // Wymusza walidację/rotację tokenu i (w razie potrzeby) zapis cookies przez setAll.
-  await supabase.auth.getUser();
-
   return response;
 }
 
 export const config = {
-  // Pomijamy: api, auth (callback OAuth/e-mail — obsługiwany poza i18n), pliki wewnętrzne
-  // Next/Vercel oraz wszystko z kropką (assety, .xml, .txt). `auth` MUSI być wykluczone,
-  // inaczej /auth/callback jest przekierowywany na /{locale}/auth/callback (404).
+  // Pomijamy: api (w tym /api/auth), auth (dawny callback — ścieżki bez locale nie są
+  // przekierowywane), pliki wewnętrzne Next/Vercel oraz wszystko z kropką (assety, .xml, .txt).
   matcher: ['/((?!api|auth|_next|_vercel|.*\\..*).*)'],
 };

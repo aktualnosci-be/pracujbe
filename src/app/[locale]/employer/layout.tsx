@@ -6,9 +6,10 @@ import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
-import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { queryRows } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { getCurrentIdentity, type PortalIdentity } from '@/lib/auth/current';
+import { getDomainPool } from '@/lib/db/runtime';
+import { withUserTransaction } from '@/lib/db/transaction';
+import { isPortalAuthConfigured } from '@/lib/env';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
 import { getEmployerShellData } from '@/lib/data/employer';
@@ -22,13 +23,13 @@ import type { CompanySwitcherCompany } from '@/components/employer/CompanySwitch
  * Owija strony w chrome panelu (DashboardShell: jasny sidebar `.side-item` z przełącznikiem firmy
  * + topbar) poprzez kliencki `EmployerShell`.
  *
- * GUARD: przy skonfigurowanej bazie i sesjach (`isPortalDataConfigured`) wymaga (1) zalogowanego użytkownika oraz
- * (2) aktywnego członkostwa w firmie (`company_members.is_active = true`). Brak sesji →
- * /logowanie. Konto pracodawcy bez firmy (np. nieudany bootstrap po rejestracji — #365) →
- * zamiast strony formularz zakładania firmy (CompanyOnboarding), nie rejestracja nowego
- * konta; inne role bez firmy → /rejestracja-pracodawca. Błąd odczytu członkostwa → chrome
- * z komunikatem i ponowieniem (bez treści strony). Bez env → tryb demo (panel na danych
- * DEMO). `force-dynamic`, bo guard zależy od sesji.
+ * GUARD (#24): przy skonfigurowanych kontach wymaga (1) zweryfikowanej sesji serwerowej
+ * (`getCurrentIdentity`) oraz (2) aktywnego członkostwa w firmie (`company_members.is_active`,
+ * odczyt pod RLS z UUID sesji). Brak sesji → /logowanie. Konto pracodawcy bez firmy (np.
+ * nieudany bootstrap po potwierdzeniu adresu — #365) → formularz zakładania firmy
+ * (CompanyOnboarding); inne role bez firmy → /rejestracja-pracodawca. Błąd odczytu członkostwa →
+ * chrome z komunikatem i ponowieniem (bez treści strony). Bez konfiguracji kont → tryb demo
+ * (panel na danych DEMO). `force-dynamic`, bo guard zależy od sesji.
  *
  * Layout pozostaje serwerowy, aby wyeksportować NOINDEX dla całego poddrzewa panelu
  * (Invariant #9) — metadata dziedziczy się do stron.
@@ -38,6 +39,21 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
+
+/** Czy osoba ma aktywne członkostwo w jakiejkolwiek firmie (RLS: własne wiersze). `null` = błąd. */
+async function hasActiveMembership(identity: PortalIdentity): Promise<boolean | null> {
+  try {
+    return await withUserTransaction(await getDomainPool(), identity.id, async (tx) => {
+      const result = (await tx.query(
+        'SELECT EXISTS (SELECT 1 FROM public.company_members WHERE profile_id = $1 AND is_active = true) AS member',
+        [identity.id],
+      )) as { rows: { member: boolean }[] };
+      return result.rows[0]?.member === true;
+    });
+  } catch {
+    return null;
+  }
+}
 
 export default async function EmployerLayout({
   children,
@@ -58,38 +74,20 @@ export default async function EmployerLayout({
   let userName: string | undefined;
   let mode: EmployerShellMode = 'demo';
 
-  if (isPortalDataConfigured()) {
-    let me: Awaited<ReturnType<typeof getPortalIdentity>>;
-    try {
-      me = await getPortalIdentity();
-    } catch (error) {
-      // Awaria odczytu sesji/profilu ≠ brak sesji: chrome z ponowieniem, nie przekierowanie.
-      captureError(error, { area: 'employer.layout.identity' });
-      return <EmployerShell mode="error">{null}</EmployerShell>;
-    }
-    if (!me) {
+  if (isPortalAuthConfigured()) {
+    const identity = await getCurrentIdentity();
+    if (!identity) {
       redirect({ href: '/logowanie', locale: locale as Locale });
-      return null; // nieosiągalne (redirect rzuca) — zawęża typ `me` dla TS
+      return null; // nieosiągalne (redirect rzuca) — zawęża typ dla TS
     }
 
     // Aktywne członkostwo w firmie jest wymagane, by wejść do panelu pracodawcy.
-    // RLS (pod sesją) pozwala czytać własny wiersz (profile_id = auth.uid()). Użytkownik może
-    // należeć do wielu firm — LIMIT 1 wystarcza do potwierdzenia dostępu.
-    let hasMembership: boolean;
-    try {
-      const memberships = await withPortalTransaction(me, (tx) =>
-        queryRows(tx, 'employer-layout.membership',
-          `SELECT id FROM public.company_members
-            WHERE profile_id = $1 AND is_active = true
-            LIMIT 1`, [me.id]));
-      hasMembership = memberships.length > 0;
-    } catch (error) {
-      captureError(error, { area: 'employer.layout.membership' });
+    const member = await hasActiveMembership(identity);
+    if (member === null) {
       return <EmployerShell mode="error">{null}</EmployerShell>;
     }
-    if (!hasMembership) {
-      // Rola pochodzi z profilu w bazie (getPortalIdentity) — bez drugiego odczytu.
-      if (me.role !== 'employer') {
+    if (!member) {
+      if (identity.role !== 'employer') {
         redirect({ href: '/rejestracja-pracodawca', locale: locale as Locale });
       }
       // #403: zaproszenia do zespołów (błąd odczytu nie blokuje zakładania własnej firmy).
@@ -108,8 +106,6 @@ export default async function EmployerLayout({
       return (
         <EmployerShell mode="ok">
           <CompanyOnboarding
-            // Nazwa firmy z formularza rejestracji leży w auth.users (poza zasięgiem roli
-            // authenticated) — formularz startuje pusty (#25).
             defaultName=""
             invitations={invitations}
           />

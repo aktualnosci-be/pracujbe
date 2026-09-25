@@ -45,7 +45,7 @@ Pule runtime (`src/lib/db/pool.ts`) używają oddzielnych loginów i ról startu
 
 ## Warstwa danych paneli na PostgreSQL — 24 września 2026 (#25)
 
-Loadery, Server Actions, layouty paneli kandydata/pracodawcy/admina, onboarding, worker poczty, webhooki, limiter i cron korzystają z `src/lib/db/*` zamiast klienta Supabase: tożsamość z sesji Better Auth (`getPortalIdentity`), jedno połączenie na transakcję z `SET LOCAL ROLE authenticated`/`anon` i `app.current_uid`, RLS i te same RPC w bazie. Zadania uprzywilejowane idą osobną pulą `service` (`DATABASE_SERVICE_URL`, login z jedynym członkostwem `service_role`, piąty login `db:logins`). Migracja `0107` nadaje `claim_email_batch` EXECUTE dla `service_role`. Opis: `docs/railway/WARSTWA_DANYCH.md`.
+Loadery, Server Actions, layouty paneli kandydata/pracodawcy/admina, onboarding, worker poczty, webhooki, rejestr naruszeń (#490) i cron korzystają z `src/lib/db/*` zamiast klienta Supabase: tożsamość z sesji Better Auth (`getPortalIdentity` → `getCurrentIdentity` z #24), jedno połączenie na transakcję z `SET LOCAL ROLE authenticated`/`anon` i `app.current_uid`, RLS i te same RPC w bazie. Zadania uprzywilejowane idą osobną pulą `service` (`DATABASE_SERVICE_URL`, login z jedynym członkostwem `service_role`, piąty login `db:logins`). Limiter: login z #24 (`DATABASE_RATE_LIMIT_URL`), przejściowo pula `service`. Gotowość produkcji wymaga też `DATABASE_SERVICE_URL`. Migracja `0107` nadaje `claim_email_batch` EXECUTE dla `service_role`. Opis: `docs/railway/WARSTWA_DANYCH.md`.
 
 Dowód: 8 plików `tests/integration/portal-*.test.ts` na PostgreSQL 16 z pełnymi migracjami i loginami jak w produkcji (prywatność: inny kandydat, obca firma, gość; stronicowanie; idempotencja RPC), testy unit na atrapie transakcji. Klient Supabase został wyłącznie w sesjach/trasach auth i middleware (#24) oraz w uploadzie CV (#26); SDK usuwa #27. Nie ustawiono zmiennych Railway. Znane braki: nazwa firmy z rejestracji nie podpowiada się w formularzu zakładania firmy (metadane konta niedostępne dla `authenticated` — wymaga #24 albo wąskiego RPC); kandydat nie widzi nazwy firmy w wiadomościach (stan od 0014, bez zmian).
 
@@ -61,3 +61,20 @@ Dowód: 8 plików `tests/integration/portal-*.test.ts` na PostgreSQL 16 z pełny
 - Test braku wycieku puli oczekuje do 2 sekund na zamknięcie backendu PostgreSQL. Nadal wymaga zera obcych połączeń; usuwa wyścig między zamknięciem socketu i aktualizacją `pg_stat_activity`, wykryty w CI `35650817175`.
 
 Nie potwierdzono jeszcze utworzenia PostgreSQL/bucketu na Railway, DNS ani gotowości produkcyjnych przepływów po zmianie dostawcy. Samo scalenie stylu nie jest potwierdzeniem deployu. Historyczny plan Vercel/Supabase/Stripe nie wyznacza dalszych prac.
+
+## Konta i sesje na PostgreSQL — 24 września 2026 (#24, #429)
+
+Rejestracja, logowanie, wylogowanie, reset hasła, potwierdzenie adresu i sesje działają na Better Auth + PostgreSQL Railway; Supabase Auth nie jest już używany (na Supabase nigdy nie było danych, więc nie ma migracji kont — tylko przepięcie kodu).
+
+- `src/lib/actions/auth.ts`: akcje przez `auth.api` z limiterem PostgreSQL (`DATABASE_RATE_LIMIT_URL`, `RATE_LIMIT_KEY_SECRET`), Turnstile i Zod. Rola po logowaniu i potwierdzeniu wyłącznie z aktywnego profilu (`roleFromProfileRead`); brak/awaria → sesja cofnięta, kontrolowany błąd.
+- `/api/auth/[...all]`: jawna lista — publiczny jest tylko `GET /get-session`; endpointy mutujące SDK dają 404 (omijałyby limiter i Turnstile). Bez konfiguracji kont → 404 bez łączenia z bazą.
+- Linki z e-maili prowadzą do `/{locale}/potwierdz-email#token=…` i `/{locale}/ustaw-nowe-haslo#token=…` (język odbiorcy z kolejki 0061). Token we fragmencie nie trafia do logów ani nagłówka Referer (#505), strona usuwa go z adresu; adres potwierdza kliknięcie przycisku, nie samo otwarcie linku. Stary `/auth/callback` (PKCE Supabase) usunięty.
+- Worker kolejki `auth.email_outbox` działa w tym samym cronie co `/api/email/process` (login `DATABASE_AUTH_MAIL_URL`, `RESEND_API_KEY`).
+- Guardy paneli (`candidate`, `employer`, `admin`, onboarding) i `getCurrentIdentity()` (`src/lib/auth/current.ts`) — jedyne wejście tożsamości dla #25/#26. Middleware nie czyta sesji (Edge, bez bazy).
+- Dowód: `tests/integration/auth-actions.test.ts` na PostgreSQL 16 (rejestracja → list → potwierdzenie → firma/panel, równoległe kliknięcia = jedna firma, wylogowanie unieważnia sesję, reset raz i unieważnia sesje, zawieszenie od następnego żądania, sfałszowane cookie, brak enumeracji). Unit: `auth-*`, `rate-limit-postgres`, `railway-env`. E2E: `auth-link-token`, `auth-error-focus`, `auth-heading`, `one-time-link-tracking`.
+
+### Decyzja #429: kiedy `APP_MODE=production` przestaje dawać 503
+
+`isAppReady()` w produkcji wymaga teraz PostgreSQL zamiast Supabase: `DATABASE_APP_URL`, `DATABASE_AUTH_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (= origin `NEXT_PUBLIC_SITE_URL`, HTTPS), `DATABASE_RATE_LIMIT_URL` + `RATE_LIMIT_KEY_SECRET` i publiczny https URL. `/api/health` dodatkowo wykonuje `SELECT 1` przez pulę domeny (limit 2 s) — niedostępna baza = 503 `unavailable`, więc healthcheck Railway odzwierciedla realną dostępność PostgreSQL. `checks` (za `HEALTH_CHECK_SECRET`) raportują `database`, `auth`, `authUrl`, `rateLimit`, `authMail`, `databaseReachable`.
+
+Technicznie 503 znika po tym PR, gdy te zmienne są ustawione. **Nie ustawiać jednak `APP_MODE=production`, dopóki nie są scalone #25 (panele i akcje domenowe na PostgreSQL) i #26 (pliki CV)** — do tego czasu loadery paneli wciąż czytają Supabase i przy zalogowanej sesji Better Auth pokazywałyby dane demonstracyjne lub puste. Kolejność ustala integrator; bez migracji, loginów (`db:logins`) i zmiennych Railway kod działa tylko w testach.

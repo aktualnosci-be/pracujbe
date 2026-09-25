@@ -713,6 +713,32 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     note: 'Wyłącznie liczniki przebiegów retencji (bez danych osobowych).',
   },
 
+  // --- Rejestr naruszeń (#490, 0106) --------------------------------------------------------
+  'public.breach_incidents': {
+    activities: ['security-audit'],
+    subjects: ['admin'],
+    columns: { created_by: 'reference', description: 'correspondence', actions_taken: 'correspondence' },
+    note: 'Opis zdarzenia i skali bez kopii danych osób (interfejs prosi o opis zakresu). Dostęp tylko admin (RPC, odczyt service-role).',
+  },
+  'public.breach_incident_events': {
+    activities: ['security-audit'],
+    subjects: ['admin'],
+    columns: { actor_id: 'reference', changes: 'technical', note: 'correspondence' },
+    note: 'Niezmienna historia zmian wpisu (pole: przed/po).',
+  },
+  'public.breach_notices': {
+    activities: ['security-audit', 'email-notifications'],
+    subjects: ['admin'],
+    columns: { created_by: 'reference', content: 'correspondence' },
+    note: 'Treść zawiadomienia wpisana przez administratora (per język), bez listy adresów.',
+  },
+  'public.breach_notice_recipients': {
+    activities: ['security-audit', 'email-notifications'],
+    subjects: ['candidate', 'employer'],
+    columns: { profile_id: 'reference', locale: 'preferences', queued: 'technical' },
+    note: 'Kto dostał zawiadomienie o naruszeniu (konto + język), bez adresu e-mail.',
+  },
+
   // --- Bezpieczeństwo i audyt ----------------------------------------------------------------
   'public.retention_policies': {
     activities: ['data-rights'],

@@ -8,10 +8,10 @@ PostgREST i bez klienta Supabase. Wzorzec: publiczny odczyt ofert (`src/lib/db/p
 
 | moduł | do czego |
 | --- | --- |
-| `getPortalIdentity()` (`src/lib/db/portal.ts`) | zalogowany użytkownik żądania: sesja Better Auth → `readPortalIdentity` (aktywny profil, potwierdzony e-mail, rola z bazy). Raz na żądanie (`cache`). `null` = gość albo brak konfiguracji. |
+| `getPortalIdentity()` (`src/lib/db/portal.ts`) | zalogowany użytkownik żądania: deleguje do `getCurrentIdentity()` (#24, `src/lib/auth/current.ts`: sesja Better Auth → aktywny profil, potwierdzony e-mail, rola z bazy) i rejestruje wynik dla `withPortalTransaction`. Raz na żądanie (`cache`). `null` = gość albo brak konfiguracji; awaria sesji/bazy = wyjątek. Guardy layoutów wołają `getCurrentIdentity()` bezpośrednio. |
 | `withPortalTransaction(identity, tx => …)` | jedno połączenie z puli domeny (`DATABASE_APP_URL`), `BEGIN` → `SET LOCAL ROLE authenticated` (gość: `anon`) → `app.current_uid` = UUID z sesji → zapytania → `COMMIT`/`ROLLBACK`. RLS i RPC decydują w bazie. Przyjmuje wyłącznie obiekt z `getPortalIdentity()`. |
-| `withServiceRole(tx => …)` | osobna pula `service` (`DATABASE_SERVICE_URL`, login z jedynym członkostwem `service_role`). Tylko worker poczty, webhooki, cron, limiter i odczyty panelu admina **po** `requireAdmin`. Nigdy w loaderach kandydata/pracodawcy. |
-| `isPortalDataConfigured()` | zastępuje `isSupabaseConfigured()` w warstwie paneli: `DATABASE_APP_URL` + konfiguracja Better Auth. Bez niej panele działają w trybie demo jak dotąd. |
+| `withServiceRole(tx => …)` | osobna pula `service` (`DATABASE_SERVICE_URL`, login z jedynym członkostwem `service_role`). Tylko worker poczty, webhooki, cron i odczyty panelu admina **po** `requireAdmin`; limiter tylko przejściowo, gdy nie ma loginu limitera z #24 (`DATABASE_RATE_LIMIT_URL` ma pierwszeństwo). Nigdy w loaderach kandydata/pracodawcy. |
+| `isPortalDataConfigured()` | zastępuje `isSupabaseConfigured()` w warstwie paneli; = `isPortalAuthConfigured()` (#24: `DATABASE_APP_URL` + konfiguracja Better Auth). Bez niej panele działają w trybie demo jak dotąd. |
 
 Zapytania (`src/lib/db/sql.ts`) — wynik budowany w PostgreSQL przez `json_agg`/`to_json`,
 czyli w tym samym kształcie co PostgREST (czas ISO z mikrosekundami, `bigint` jako liczba,

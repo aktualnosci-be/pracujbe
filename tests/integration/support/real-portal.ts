@@ -32,3 +32,19 @@ export function realPortal() {
       withServiceTransaction(db().service, action),
   };
 }
+
+/**
+ * `@/lib/auth/current` (#24) na tej samej tożsamości testu: guardy layoutów czytają
+ * `getCurrentIdentity()`, a nazwa do chrome panelu idzie prawdziwym `readOwnProfileSummary`
+ * (wymaga też `realDomainRuntime()` dla `@/lib/db/runtime`).
+ *
+ *   vi.mock('@/lib/auth/current', async (orig) => (await import('./support/real-portal')).realCurrent(await orig()));
+ */
+export function realCurrent<M extends object>(original: M) {
+  return { ...original, getCurrentIdentity: async () => realSession.identity };
+}
+
+/** `@/lib/db/runtime` → pula WWW izolowanej bazy (login `pracujbe_app` jak w produkcji). */
+export function realDomainRuntime<M extends object>(original: M) {
+  return { ...original, getDomainPool: async () => db().web };
+}

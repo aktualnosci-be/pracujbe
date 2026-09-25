@@ -22,6 +22,10 @@ vi.mock('@/lib/guest-apply/link-cookie', () => ({
   readGuestLinkToken: async (purpose: 'confirm' | 'claim') => linkToken[purpose],
   clearGuestLinkToken: async () => undefined,
 }));
+// Guardy layoutów (#24): tożsamość z `getCurrentIdentity`, nazwa z prawdziwego odczytu profilu.
+vi.mock('@/lib/auth/current', async (orig) => (await import('./support/real-portal')).realCurrent(await orig()));
+vi.mock('@/lib/db/runtime', async (orig) => (await import('./support/real-portal')).realDomainRuntime(await orig()));
+vi.mock('@/lib/env', async (orig) => ({ ...(await orig<typeof import('@/lib/env')>()), isPortalAuthConfigured: () => true }));
 // Chrome panelu (inne grupy): layout testujemy tylko w zakresie guardu i nazwy użytkownika.
 vi.mock('@/lib/data/notifications', () => ({ getNotifications: async () => ({ status: 'ready', items: [], unread: 0 }) }));
 vi.mock('@/lib/data/messages', () => ({ getUnreadConversationsCount: async () => 0 }));
