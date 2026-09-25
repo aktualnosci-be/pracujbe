@@ -1517,7 +1517,7 @@ export async function listEmailSuppressions(
 }
 
 /* ---------------------------------------------------------------------------
- * Wiadomości z formularza kontaktu (#61, 0108)
+ * Wiadomości z formularza kontaktu (#61, 0109)
  * ------------------------------------------------------------------------- */
 
 export interface AdminContactMessageRow {

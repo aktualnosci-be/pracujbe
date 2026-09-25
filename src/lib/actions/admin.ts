@@ -229,7 +229,7 @@ export async function liftEmailSuppression(
 
 /**
  * Oznacza wiadomość z formularza kontaktu jako obsłużoną albo przywraca ją do nowych (#61).
- * Tylko admin (RPC `admin_set_contact_message_status`, 0108: CAS po statusie, audyt bez treści).
+ * Tylko admin (RPC `admin_set_contact_message_status`, 0109: CAS po statusie, audyt bez treści).
  */
 export async function setContactMessageStatus(
   messageId: string,

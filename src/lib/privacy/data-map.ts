@@ -702,7 +702,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       locale: 'preferences',
       handled_by: 'reference',
     },
-    note: 'Wiadomości z formularza kontaktu (0108). Retencja i powiązanie z eksportem/usunięciem konta — do decyzji właściciela (#486).',
+    note: 'Wiadomości z formularza kontaktu (0109). Retencja i powiązanie z eksportem/usunięciem konta — do decyzji właściciela (#486).',
   },
   'public.report_events': {
     activities: ['dsa-moderation'],

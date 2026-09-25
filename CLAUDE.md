@@ -579,7 +579,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   w języku odbiorcy, bezpłatny etap z `docs/PRODUCT_DECISIONS.md`); bez cen i liczb (strażnik
   `tests/unit/employers-page.test.ts`). „Dla pracodawców” w nawigacji i stopce prowadzi tutaj;
   „Dodaj ofertę” i CTA strony — do `/rejestracja-pracodawca`. W bramce a11y (#221).
-- [x] Pomoc i Kontakt (#61, część techniczna, migracja `0108`): `/pomoc` = pytania i odpowiedzi
+- [x] Pomoc i Kontakt (#61, część techniczna, migracja `0109`): `/pomoc` = pytania i odpowiedzi
   wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
   `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść
   20–5000, imię opcjonalne, e-mail. Akcja `submitContactMessage`: limiter `contact` (fail-safe) →
@@ -1002,7 +1002,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
   0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084), jobMatch
   (`process_saved_search_alerts`, 0092, #100), supportContact/contactMessageAdmin (`submit_contact_message`,
-  0108, #61); Auth (kolejka Better Auth, #24) — accountConfirmation/passwordReset; magicLink/emailChange/invite wysyłał tylko GoTrue (#27). **Świadomie nieużywane** (brak
+  0109, #61); Auth (kolejka Better Auth, #24) — accountConfirmation/passwordReset; magicLink/emailChange/invite wysyłał tylko GoTrue (#27). **Świadomie nieużywane** (brak
   zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
   (#51). Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
   statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja NN.

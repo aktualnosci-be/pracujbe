@@ -10,7 +10,7 @@ import { enforceTurnstile } from '@/lib/turnstile/verify';
 import { CONTACT_REFERENCE_RE, contactSchema, type ContactInput } from '@/lib/validation/contact';
 
 /**
- * Formularz kontaktu (#61) — cienka warstwa nad RPC `submit_contact_message` (0108).
+ * Formularz kontaktu (#61) — cienka warstwa nad RPC `submit_contact_message` (0109).
  * Kolejność jak w zgłoszeniu treści (#41): limiter (IP, fail-safe) → Turnstile (polityka
  * `contact`: fail-closed) → walidacja Zod → tożsamość z sesji (gość = null) → RPC
  * service_role. Idempotencja, limit per adres, potwierdzenie do nadawcy (język formularza)

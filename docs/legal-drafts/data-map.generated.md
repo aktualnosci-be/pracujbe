@@ -515,20 +515,20 @@ Tabele w migracjach: 92; z danymi osobowymi: 59; bez danych osobowych: 33.
 
 ### `public.contact_messages`
 
-- **Migracja:** `supabase/migrations/0108_contact_messages.sql`
+- **Migracja:** `supabase/migrations/0109_contact_messages.sql`
 - **Czynności:** Formularz kontaktu
 - **Osoby:** Odwiedzający (bez konta), Kandydaci (konto), Pracodawcy i członkowie firm, Administratorzy portalu
-- **Uwaga:** Wiadomości z formularza kontaktu (0108). Retencja i powiązanie z eksportem/usunięciem konta — do decyzji właściciela (#486).
+- **Uwaga:** Wiadomości z formularza kontaktu (0109). Retencja i powiązanie z eksportem/usunięciem konta — do decyzji właściciela (#486).
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `sender_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0108_contact_messages.sql` |
-| `sender_name` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0108_contact_messages.sql` |
-| `sender_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0108_contact_messages.sql` |
-| `topic` | Korespondencja i treści swobodne | `supabase/migrations/0108_contact_messages.sql` |
-| `message` | Korespondencja i treści swobodne | `supabase/migrations/0108_contact_messages.sql` |
-| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0108_contact_messages.sql` |
-| `handled_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0108_contact_messages.sql` |
+| `sender_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0109_contact_messages.sql` |
+| `sender_name` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0109_contact_messages.sql` |
+| `sender_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0109_contact_messages.sql` |
+| `topic` | Korespondencja i treści swobodne | `supabase/migrations/0109_contact_messages.sql` |
+| `message` | Korespondencja i treści swobodne | `supabase/migrations/0109_contact_messages.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0109_contact_messages.sql` |
+| `handled_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0109_contact_messages.sql` |
 
 ### `public.conversation_members`
 

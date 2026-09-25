@@ -9000,7 +9000,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- CT61. Formularz kontaktu (#61, 0108): tabela tylko przez RPC service_role; walidacja,
+-- CT61. Formularz kontaktu (#61, 0109): tabela tylko przez RPC service_role; walidacja,
 --       idempotencja, limit na adres; potwierdzenie w języku FORMULARZA, powiadomienie
 --       każdego admina w JEGO języku (Invariant #1); payload bez treści i adresu nadawcy;
 --       obsługa przez admina z CAS i audytem.
