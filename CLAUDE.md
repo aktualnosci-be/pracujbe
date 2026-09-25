@@ -889,8 +889,21 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   godziny, e-maile/URL/telefony, jednostki, brutto/netto, okres stawki, kwalifikacje, nazwy
   własne, negacja) — niepoprawny wynik nigdy nie trafia do bazy; logi tylko kody. Worker
   `processTranslationBatch` (dostawca poza transakcją). Dowód: `rls.sql` sekcja TR31 z kontrolą
-  ujemną TR31-N; unit `translation-*`. **Do zrobienia:** wpięcie ofert (#33) i profili (#34),
-  trasa/cron workera, budżet (#36), benchmark i wybór modelu (#30), UI/SEO stanu tłumaczenia.
+  ujemną TR31-N; unit `translation-*`. **Do zrobienia:** wpięcie profili (#34), budżet (#36),
+  benchmark i wybór modelu (#30), UI/SEO stanu tłumaczenia.
+  Oferty (#33, migracja `0133`, zależy od #514): odroczone triggery na `jobs`/
+  `job_translations`/`job_requirements`/`companies` → przy COMMIT `sync_job_translation_source`:
+  oferta publiczna (active, niewygasła, firma verified, nie demo) = `record_translation_source`
+  z polami w języku oferty (opis, listy, wymagania tekstowe `requirements_mandatory.N`/
+  `_optional.N`), niepubliczna = ukrycie, usunięta = purge. Każda ścieżka zapisu (publish,
+  edycja, pauza/wznowienie, wygaśnięcie, moderacja, status firmy) kolejkuje zatwierdzoną treść;
+  rollback bez śladu, jedna transakcja = jedna rewizja, stawka/miasto bez rewizji (wspólne
+  z `jobs`), limit pól rdzenia = `skipped` bez blokady publikacji. Worker `POST
+  /api/translation/process` (`MAINTENANCE_SECRET`, `src/lib/translation/run.ts`, log użycia AI),
+  bez flagi `skipped`. Wersja pipeline SQL = TS (`translation-job-sync.test`). Dowód: `rls.sql`
+  sekcja TR33 (dwie sesje przez dblink, kontrola ujemna TR33-N); sekcja TR31 na własnych
+  encjach. **Otwarte:** odczyt przekładów w widoku oferty/liście/JobPosting (UI/SEO), UI korekty
+  ręcznej, `protectedTerms` (nazwa firmy), budżet (#552: `costBudgeted`), cron (właściciel).
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.

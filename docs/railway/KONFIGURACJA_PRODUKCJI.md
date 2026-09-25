@@ -107,6 +107,7 @@ cronów (także poza Railway).
 |---|---|---|---|
 | `cron-email` | `http://<prywatna domena web>:<PORT>/api/email/process` | = `EMAIL_QUEUE_SECRET` | co 5 min |
 | `cron-maintenance` | `http://<prywatna domena web>:<PORT>/api/maintenance` | = `MAINTENANCE_SECRET` | `0 * * * *` |
+| `cron-translation` (tylko po włączeniu `AI_TRANSLATION_ENABLED`, #33) | `http://<prywatna domena web>:<PORT>/api/translation/process` | = `MAINTENANCE_SECRET` | co 5 min |
 
 Kopie i odtworzenie bazy: `OPERATIONS.md` sekcja 5 (osobne usługi, własne zmienne).
 

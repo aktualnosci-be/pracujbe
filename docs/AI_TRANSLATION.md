@@ -1,7 +1,7 @@
 # Tłumaczenia AI — rdzeń (#31, #32)
 
-Stan: 24.09.2026. Fundament kolejki, adaptera dostawcy i walidacji faktów. **Funkcja nie jest
-wpięta w oferty ani profile** — to kroki #33 (oferty) i #34 (profile). Domyślnie wyłączona.
+Stan: 25.09.2026. Fundament kolejki, adaptera dostawcy i walidacji faktów (#31/#32) oraz
+wpięcie ofert (#33, sekcja „Oferty” niżej). Profile — #34. Domyślnie wyłączona.
 Języki: tylko pl/nl/fr/en (decyzja właściciela; bez ro/uk z #29/#38). Plan całości:
 `docs/AI_MULTILINGUAL_PLAN.md`.
 
@@ -69,6 +69,49 @@ ujemną TR31-N (bez kontroli rewizji spóźniony wynik v1 zostałby opublikowany
 Logi/monitoring dostają tylko kody i liczniki (`TranslationBatchResult`, `onEvent`) — nigdy
 treść pól, promptu ani komunikatu dostawcy.
 
+## Oferty (#33, migracja 0133)
+
+Kolejka oferty jest skutkiem ZATWIERDZONEGO stanu oferty, nie osobnym wywołaniem w każdej
+ścieżce zapisu. Odroczone triggery (`constraint trigger … initially deferred`) na `jobs`,
+`job_translations`, `job_requirements` i `companies` wołają przy COMMIT
+`sync_job_translation_source(job)`:
+
+| Stan oferty przy commicie | Skutek |
+|---|---|
+| publiczna: `active`, nieusunięta, niewygasła, firma `verified`, `is_demo = false` | `record_translation_source` z polami w języku oferty (`default_locale`) — nowa treść = nowa rewizja + zadania dla pozostałych języków; ta sama = no-op; wznowienie = requeued |
+| szkic, wstrzymana, zamknięta, wygasła, firma zawieszona, demo | `deactivate_translation_source(purge = false)`; szkic nigdy nie publiczny nie tworzy wpisu |
+| usunięta (`deleted_at` albo brak wiersza) | purge — rewizje, zadania, przekłady i korekty |
+
+Obejmuje to każdą ścieżkę: `publish_job`, `update_published_job`, wstrzymanie/wznowienie/
+ponowne otwarcie, `expire_due_jobs`, decyzje moderacyjne, status firmy. Rollback zapisu nie
+zostawia śladu w kolejce, a wiele zmian w jednej transakcji (opis + replace-all wymagań) daje
+jedną rewizję z końcową treścią. Wynagrodzenie, miasto, daty i flagi nie są polami tłumaczenia —
+ich zmiana nie tworzy rewizji i jest od razu wspólna (czytane z `jobs`).
+
+Pola: `title`, `description`, `working_hours`, `shifts`, `company_description`, `meta_title`,
+`meta_description`, `responsibilities.N`, `conditions.N`, `benefits.N`, `highlights.N`,
+`requirements_mandatory.N`, `requirements_optional.N` (wymagania w języku oferty). Oferta ponad
+limit rdzenia (80 pól / 60 000 znaków) publikuje się normalnie, tłumaczenie jest pomijane
+(`skipped`, źródło ukryte). Wersja pipeline w SQL (`translation_pipeline_version()`) = stała TS
+(test `translation-job-sync`).
+
+Worker: `POST /api/translation/process` (`MAINTENANCE_SECRET`/`CRON_SECRET`), kilka paczek do
+pustej kolejki albo 20 s (`src/lib/translation/run.ts`); bez flagi odpowiada `skipped` bez
+bazy i dostawcy. Każde wywołanie modelu = wiersz logu użycia AI (bez treści). Cron: usługa
+`cron-translation` w `docs/railway/KONFIGURACJA_PRODUKCJI.md` — tylko po decyzji o włączeniu.
+
+Dowód: `rls.sql` sekcja TR33 (publikacja, pola wymagań, rollback, stawka bez rewizji, jedna
+transakcja = jedna rewizja, spóźniony wynik = superseded, korekta ręczna po edycji, pauza/
+wznowienie, firma zawieszona, wygaśnięcie, dwie sesje równolegle, limit pól, demo, soft/hard
+delete) z kontrolą ujemną TR33-N; unit `translation-job-sync`, `translation-run`,
+`translation-process-route`.
+
+Otwarte (#33 → kolejne kroki): odczyt przekładów na stronie oferty, w liście i JobPosting
+(UI/SEO — dziś przekład jest tylko w `translation_documents`), UI korekty ręcznej dla
+rekrutera, ochrona nazwy firmy (`protectedTerms`) w zleceniu, budżet AI (#36/#552 — po
+scaleniu: `costBudgeted: true` w inwentarzu i rezerwacja budżetu przed wywołaniem w
+`run.ts`), oferty ponad limit pól (podział na kilka zleceń).
+
 ## Konfiguracja
 
 | Zmienna | Znaczenie |
@@ -81,6 +124,6 @@ treść pól, promptu ani komunikatu dostawcy.
 
 ## Otwarte (poza tym krokiem)
 
-Wpięcie ofert (#33) i profili (#34), trasa/cron workera, budżet i raport kosztów (#36),
+Wpięcie profili (#34), budżet i raport kosztów (#36),
 benchmark i wybór modelu/effortu (#30), UI stanu tłumaczenia i SEO, bramka prywatności
 przed prawdziwymi profilami (umowa powierzenia, retencja dostawcy — decyzja właściciela).
