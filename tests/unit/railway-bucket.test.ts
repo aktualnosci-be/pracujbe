@@ -295,6 +295,48 @@ describe("Prywatny adapter Railway Bucket przez rzeczywisty SDK S3", () => {
     });
     expect(handle.mock.calls[0]![0].method).toBe("DELETE");
   });
+  it("LIST (#17): tylko klucze CV, obce liczone, kursor = ostatni klucz strony", async () => {
+    const { store, handle } = fixture();
+    const other = `${owner}/cv-33333333-3333-4333-8333-333333333333.docx`;
+    const xml = (truncated: boolean, keys: string[]) =>
+      response(200, Readable.from([
+        `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><IsTruncated>${truncated}</IsTruncated>` +
+          keys.map((k) => `<Contents><Key>${k}</Key><LastModified>2026-09-20T10:00:00.000Z</LastModified><Size>3</Size></Contents>`).join("") +
+          `<KeyCount>${keys.length}</KeyCount><MaxKeys>2</MaxKeys></ListBucketResult>`,
+      ]), { "content-type": "application/xml" });
+    handle
+      .mockResolvedValueOnce(xml(true, [key, "zz-exports/raport.csv"]))
+      .mockResolvedValueOnce(xml(false, [other]))
+      .mockResolvedValueOnce(xml(true, []));
+    expect(await store.list({ maxKeys: 2 })).toEqual({
+      ok: true,
+      value: {
+        objects: [{ key, lastModified: new Date("2026-09-20T10:00:00.000Z") }],
+        foreign: 1,
+        nextStartAfter: "zz-exports/raport.csv",
+      },
+    });
+    expect(await store.list({ startAfter: "zz-exports/raport.csv", maxKeys: 2 })).toMatchObject({
+      ok: true,
+      value: { objects: [{ key: other }], foreign: 0, nextStartAfter: null },
+    });
+    const second = handle.mock.calls[1]![0] as Request & { query?: Record<string, string> };
+    expect(second.method).toBe("GET");
+    expect(second.query).toMatchObject({ "list-type": "2", "start-after": "zz-exports/raport.csv", "max-keys": "2" });
+    // Obcięta strona bez kluczy nie przesunęłaby kursora → awaria, nie pętla.
+    expect(await store.list({})).toMatchObject({ ok: false, error: "UNAVAILABLE" });
+  });
+  it("LIST (#17): odrzuca zły limit i kursor bez żądania; błąd dostawcy = kod", async () => {
+    const { store, handle } = fixture();
+    for (const input of [{ maxKeys: 0 }, { maxKeys: 1001 }, { maxKeys: 1.5 }, { startAfter: "" }, { startAfter: "x".repeat(501) }])
+      expect(await store.list(input)).toMatchObject({ ok: false, error: "INVALID_INPUT" });
+    expect(handle).not.toHaveBeenCalled();
+    handle.mockResolvedValueOnce(providerError(403, "AccessDenied"));
+    const denied = await store.list({});
+    expect(denied).toEqual({ ok: false, error: "ACCESS_DENIED", retryable: false });
+    expect(JSON.stringify(denied)).not.toContain("test-secret-key");
+    expect(await createRailwayBucket({ ...config, endpoint: "http://x" }).list({})).toMatchObject({ error: "NOT_CONFIGURED" });
+  });
   it("sanityzuje błąd transportu i nie ponawia automatycznie zapisu", async () => {
     const { store, handle } = fixture();
     handle.mockRejectedValue(
