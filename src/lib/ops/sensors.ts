@@ -32,6 +32,17 @@ export const opsMetricsSchema = z.object({
   storageDeletion: z
     .object({ pending: count, oldestPendingAgeSeconds: count, deadLetters: count })
     .optional(),
+  // #44 (0118). Brak sekcji = baza sprzed migracji: czujki poczty milczą zamiast 503.
+  mail: z.object({
+    sentLast24h: count,
+    hardBouncesLast24h: count,
+    complaintsLast24h: count,
+    sentBaseline7d: count,
+    hardBouncesBaseline7d: count,
+    complaintsBaseline7d: count,
+    activeSuppressions: count,
+    newSuppressionsLast24h: count,
+  }).nullable().default(null),
 });
 
 export type OpsMetrics = z.infer<typeof opsMetricsSchema>;
@@ -55,6 +66,20 @@ export const OPS_THRESHOLDS = {
    * `retention_policies.storage_physical_deletion`) — alarm, zanim termin minie.
    */
   storageDeletionOldestSeconds: 24 * 60 * 60,
+  /** #44: poniżej tej liczby listów w oknie odsetek to szum (1 odbicie na 10 = 10%). */
+  mailMinSample: 50,
+  /** Odsetek trwałych odbić kohorty 24 h — ponad 5% dostawcy zaczynają ograniczać wysyłkę. */
+  mailHardBounceRate: 0.05,
+  /** Odsetek skarg kohorty 24 h — 0,3% to górna granica wytycznych dużych skrzynek. */
+  mailComplaintRate: 0.003,
+  /** Wzrost: odsetek 24 h > krotność odsetka z 7 dób bazowych i ponad dolny próg. */
+  mailRateRiseFactor: 2,
+  mailHardBounceRiseFloor: 0.02,
+  mailComplaintRiseFloor: 0.001,
+  /** Nowe blokady (trwałe odbicia + skargi) w 24 h — nagły skok = zła lista lub import. */
+  mailNewSuppressions: 20,
+  /** Aktywne blokady łącznie — sygnał do przeglądu listy, nie awaria. */
+  mailActiveSuppressions: 1000,
 } as const;
 
 export type OpsSignal =
@@ -70,7 +95,13 @@ export type OpsSignal =
   | 'db_connections'
   | 'app_pool_waiting'
   | 'storage_deletion_age'
-  | 'storage_deletion_dead_letter';
+  | 'storage_deletion_dead_letter'
+  | 'mail_hard_bounce_rate'
+  | 'mail_hard_bounce_rising'
+  | 'mail_complaint_rate'
+  | 'mail_complaint_rising'
+  | 'mail_suppressions_new'
+  | 'mail_suppressions_active';
 
 export interface OpsEvaluation {
   status: 'ok' | 'alert';
@@ -111,6 +142,8 @@ export function evaluateOps(metrics: OpsMetrics, pool: AppPoolStats | null = nul
     alerts.push('db_connections');
   }
 
+  if (metrics.mail) evaluateMail(metrics.mail, alerts, warnings);
+
   // #574: 20 nieudanych prób = dead-letter (obiekt CV został w storage) — zawsze alarm.
   const storage = metrics.storageDeletion;
   if (storage) {
@@ -124,4 +157,35 @@ export function evaluateOps(metrics: OpsMetrics, pool: AppPoolStats | null = nul
   if (pool && pool.waiting > 0) warnings.push('app_pool_waiting');
 
   return { status: alerts.length > 0 ? 'alert' : 'ok', alerts, warnings };
+}
+
+type MailMetrics = NonNullable<OpsMetrics['mail']>;
+
+/**
+ * #44: jakość doręczeń. Odsetek = zdarzenia kohorty / listy przyjęte przez dostawcę w oknie.
+ * Za mała próba = brak oceny (ani alarmu, ani „wzrostu” z pojedynczego odbicia).
+ */
+function evaluateMail(mail: MailMetrics, alerts: OpsSignal[], warnings: OpsSignal[]): void {
+  const t = OPS_THRESHOLDS;
+  if (mail.sentLast24h >= t.mailMinSample) {
+    const baselineOk = mail.sentBaseline7d >= t.mailMinSample;
+    const rate = (events: number) => events / mail.sentLast24h;
+    const baseline = (events: number) => events / mail.sentBaseline7d;
+    const rising = (now: number, base: number, floor: number) =>
+      baselineOk && now > floor && now > base * t.mailRateRiseFactor;
+
+    const bounce = rate(mail.hardBouncesLast24h);
+    if (bounce > t.mailHardBounceRate) alerts.push('mail_hard_bounce_rate');
+    else if (rising(bounce, baseline(mail.hardBouncesBaseline7d), t.mailHardBounceRiseFloor)) {
+      alerts.push('mail_hard_bounce_rising');
+    }
+
+    const complaint = rate(mail.complaintsLast24h);
+    if (complaint > t.mailComplaintRate) alerts.push('mail_complaint_rate');
+    else if (rising(complaint, baseline(mail.complaintsBaseline7d), t.mailComplaintRiseFloor)) {
+      alerts.push('mail_complaint_rising');
+    }
+  }
+  if (mail.newSuppressionsLast24h > t.mailNewSuppressions) alerts.push('mail_suppressions_new');
+  if (mail.activeSuppressions > t.mailActiveSuppressions) warnings.push('mail_suppressions_active');
 }

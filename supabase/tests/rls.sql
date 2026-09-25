@@ -4901,6 +4901,82 @@ select pg_temp.assert(
     like '%USING gin (search_fold(city) gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))%',
   'OPS47-9 idx_jobs_city_fold_trgm: GIN trigram na search_fold(city), częściowy jak predykat listy ofert');
 
+-- =============================================================================
+-- OPS44 — czujki poczty (0118, #44): sekcja `mail` w ops_metrics — kohorta listów
+-- przyjętych w 24 h / 7 dobach bazowych, trwałe odbicia i skargi tej kohorty, aktywne
+-- i nowe blokady. Tylko liczby; pracujbe_ops nadal bez praw do tabel.
+-- =============================================================================
+\echo '--- OPS44 ops_metrics mail ---'
+set role pracujbe_ops;
+select pg_temp.expect_error('select count(*) from public.email_suppressions', 'permission denied',
+  'OPS44-1 pracujbe_ops nie czyta blokad');
+select pg_temp.assert(
+  (select jsonb_typeof(public.ops_metrics() -> 'mail') = 'object'
+     and (public.ops_metrics() -> 'mail') ?& array['sentLast24h', 'hardBouncesLast24h', 'complaintsLast24h',
+       'sentBaseline7d', 'hardBouncesBaseline7d', 'complaintsBaseline7d', 'activeSuppressions',
+       'newSuppressionsLast24h']),
+  'OPS44-2 pracujbe_ops czyta sekcję mail z kompletem kluczy');
+reset role;
+
+select public.ops_metrics() -> 'mail' as mail_base \gset
+begin;
+insert into public.email_deliveries(to_email, template, status, sent_at, bounce_type, bounced_at, complained_at) values
+  -- kohorta 24 h: 4 przyjęte, 1 trwałe odbicie, 1 skarga, 1 odbicie przejściowe (nie liczone)
+  ('ops44-a@test.invalid', 'newMessage', 'delivered', now() - interval '1 hour', null, null, null),
+  ('ops44-b@test.invalid', 'newMessage', 'bounced', now() - interval '2 hours', 'permanent', now() - interval '2 hours', null),
+  ('ops44-c@test.invalid', 'newMessage', 'complained', now() - interval '3 hours', null, null, now() - interval '1 hour'),
+  ('ops44-d@test.invalid', 'newMessage', 'sent', now() - interval '4 hours', 'transient', now() - interval '4 hours', null),
+  -- okno bazowe (2–8 dób): 2 przyjęte, 1 trwałe odbicie ze zdarzeniem DZIŚ (liczy się kohorta)
+  ('ops44-e@test.invalid', 'newMessage', 'delivered', now() - interval '3 days', null, null, null),
+  ('ops44-f@test.invalid', 'newMessage', 'bounced', now() - interval '5 days', 'permanent', now() - interval '1 hour', null),
+  -- poza oknem 8 dób i bez sent_at (queued/failed) — pomijane
+  ('ops44-g@test.invalid', 'newMessage', 'bounced', now() - interval '9 days', 'permanent', now() - interval '9 days', null),
+  ('ops44-h@test.invalid', 'newMessage', 'queued', null, null, null, null);
+insert into public.email_suppressions(email, reason, created_at, lifted_at, lift_reason) values
+  ('ops44-b@test.invalid', 'hard_bounce', now() - interval '2 hours', null, null),
+  ('ops44-c@test.invalid', 'complaint', now() - interval '3 days', null, null),
+  ('ops44-z@test.invalid', 'hard_bounce', now() - interval '1 hour', now(), 'ops44 zdjęta');
+set local role pracujbe_ops;
+select public.ops_metrics() -> 'mail' as mail_now \gset
+reset role;
+select pg_temp.assert(
+  ((:'mail_now')::jsonb ->> 'sentLast24h')::int = ((:'mail_base')::jsonb ->> 'sentLast24h')::int + 4
+  and ((:'mail_now')::jsonb ->> 'hardBouncesLast24h')::int = ((:'mail_base')::jsonb ->> 'hardBouncesLast24h')::int + 1
+  and ((:'mail_now')::jsonb ->> 'complaintsLast24h')::int = ((:'mail_base')::jsonb ->> 'complaintsLast24h')::int + 1,
+  'OPS44-3 kohorta 24 h: przyjęte, trwałe odbicia (przejściowe pominięte), skargi');
+select pg_temp.assert(
+  ((:'mail_now')::jsonb ->> 'sentBaseline7d')::int = ((:'mail_base')::jsonb ->> 'sentBaseline7d')::int + 2
+  and ((:'mail_now')::jsonb ->> 'hardBouncesBaseline7d')::int = ((:'mail_base')::jsonb ->> 'hardBouncesBaseline7d')::int + 1
+  and ((:'mail_now')::jsonb ->> 'complaintsBaseline7d')::int = ((:'mail_base')::jsonb ->> 'complaintsBaseline7d')::int,
+  'OPS44-4 okno bazowe 7 dób: kohorta po sent_at, starsze niż 8 dób i niewysłane pominięte');
+select pg_temp.assert(
+  ((:'mail_now')::jsonb ->> 'activeSuppressions')::int = ((:'mail_base')::jsonb ->> 'activeSuppressions')::int + 2
+  and ((:'mail_now')::jsonb ->> 'newSuppressionsLast24h')::int = ((:'mail_base')::jsonb ->> 'newSuppressionsLast24h')::int + 2,
+  'OPS44-5 blokady: aktywne bez zdjętych, nowe z 24 h (także zdjęta)');
+select pg_temp.assert(
+  position('ops44' in (:'mail_now')) = 0 and position('@' in (:'mail_now')) = 0,
+  'OPS44-6 sekcja mail bez adresów i identyfikatorów');
+rollback;
+
+-- Kontrola ujemna: funkcja o kształcie z 0096 (te same sekcje, bez `mail`) nie przechodzi
+-- warunku OPS44-2 — asercja zależy od 0118, a nie od przypadkowego klucza. (Bez \ir:
+-- plik bywa podawany przez stdin, np. tests/integration/rate-limit.test.ts.)
+begin;
+alter function public.ops_metrics() rename to ops_metrics_0118;
+create function public.ops_metrics() returns jsonb language sql stable security definer
+  set search_path = pg_catalog, public, pg_temp as $$ select public.ops_metrics_0118() - 'mail' $$;
+grant execute on function public.ops_metrics() to pracujbe_ops;
+set local role pracujbe_ops;
+select pg_temp.assert(
+  (public.ops_metrics() ?& array['email', 'authEmail', 'webhooks', 'maintenance', 'connections'])
+  and not coalesce(jsonb_typeof(public.ops_metrics() -> 'mail') = 'object', false),
+  'OPS44-7 kontrola ujemna: kształt z 0096 nie daje sekcji mail');
+rollback;
+select pg_temp.assert(
+  (select pg_get_indexdef('public.idx_email_deliveries_sent_at'::regclass))
+    like '%(sent_at) WHERE (sent_at IS NOT NULL)%',
+  'OPS44-8 idx_email_deliveries_sent_at: częściowy indeks pod okno kohorty');
+
 -- ============================================================================
 -- SS100. Zapisane wyszukiwania i alerty o nowych ofertach (0092, #100): kanoniczne
 -- filtry bez duplikatów, izolacja właściciela, RPC-only DML, worker przez

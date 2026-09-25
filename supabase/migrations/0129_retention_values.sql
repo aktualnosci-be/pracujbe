@@ -36,7 +36,7 @@
 --
 -- Rollback (nowa migracja naprawcza): run_retention_purge z 0105 (drop wersji (integer,
 -- boolean)), complete/claim_storage_deletions i queue_storage_deletion z 0105, ops_metrics
--- z 0096; drop retention_purge_batch, requeue_storage_dead_letters, touch_profile_activity,
+-- z 0118; drop retention_purge_batch, requeue_storage_dead_letters, touch_profile_activity,
 -- trigger trg_auth_sessions_touch_activity, trg_applications_closed_at,
 -- tabela retention_warnings, kolumny applications.closed_at,
 -- storage_deletion_queue.dead_lettered_at, retention_policies.warning_period/enforcement;
@@ -274,7 +274,7 @@ end $$;
 revoke all on function public.requeue_storage_dead_letters(uuid[]) from public, anon, authenticated;
 grant execute on function public.requeue_storage_dead_letters(uuid[]) to service_role;
 
--- ops_metrics z 0096 + sekcja storageDeletion (same liczby).
+-- ops_metrics z 0118 (0096 + mail) + sekcja storageDeletion (same liczby).
 create or replace function public.ops_metrics()
 returns jsonb
 language plpgsql
@@ -288,6 +288,7 @@ declare
   v_webhooks jsonb;
   v_maintenance jsonb;
   v_connections jsonb;
+  v_mail jsonb;
   v_storage jsonb;
 begin
   select jsonb_build_object(
@@ -335,6 +336,28 @@ begin
     'reserved', current_setting('superuser_reserved_connections')::integer
   ) into v_connections;
 
+  -- #44: jakość doręczeń. Kohorta = listy przyjęte przez dostawcę (sent_at) w oknie;
+  -- odbicie trwałe (bounce_type = 'permanent') i skarga liczone dla tej samej kohorty,
+  -- niezależnie od tego, kiedy przyszło zdarzenie. Okno bazowe = 7 dób przed bieżącą
+  -- dobą (wzrost odsetka porównuje aplikacja). Progi i minimalna próba — w aplikacji.
+  select jsonb_build_object(
+    'sentLast24h', count(*) filter (where sent_at > now() - interval '24 hours'),
+    'hardBouncesLast24h', count(*) filter (where sent_at > now() - interval '24 hours'
+      and bounce_type = 'permanent'),
+    'complaintsLast24h', count(*) filter (where sent_at > now() - interval '24 hours'
+      and complained_at is not null),
+    'sentBaseline7d', count(*) filter (where sent_at <= now() - interval '24 hours'),
+    'hardBouncesBaseline7d', count(*) filter (where sent_at <= now() - interval '24 hours'
+      and bounce_type = 'permanent'),
+    'complaintsBaseline7d', count(*) filter (where sent_at <= now() - interval '24 hours'
+      and complained_at is not null),
+    'activeSuppressions', (select count(*) from public.email_suppressions where lifted_at is null),
+    'newSuppressionsLast24h', (select count(*) from public.email_suppressions
+      where created_at > now() - interval '24 hours')
+  ) into v_mail
+  from public.email_deliveries
+  where sent_at > now() - interval '8 days';
+
   -- #574: obiekty czekające na fizyczne usunięcie (wiek od usunięcia wiersza) i dead-letter.
   select jsonb_build_object(
     'pending', count(*) filter (where dead_lettered_at is null),
@@ -350,6 +373,7 @@ begin
     'webhooks', v_webhooks,
     'maintenance', v_maintenance,
     'connections', v_connections,
+    'mail', v_mail,
     'storageDeletion', v_storage
   );
 end $$;
