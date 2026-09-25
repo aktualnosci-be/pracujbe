@@ -10,12 +10,15 @@ import {
   AuthPageTitle,
   AuthPaper,
 } from '@/components/auth/auth-page';
-import { AuthForm } from '@/components/auth/AuthForm';
+import { EmployerSignupEntry } from '@/components/auth/EmployerSignupEntry';
 
 /**
  * Rejestracja pracodawcy. Formularz kliencki (AuthForm) wywołuje server action
  * `registerEmployer` (rola = employer, nazwa firmy w metadanych do dalszego onboardingu),
  * zapisuje `preferred_locale` = bieżące locale i przekierowuje do potwierdzenia e-maila.
+ *
+ * Link z zaproszenia do zespołu (0121, `#token=` we fragmencie) przełącza formularz na
+ * rejestrację bez nazwy firmy (`EmployerSignupEntry`); zaproszenie czeka potem w panelu.
  *
  * Zalogowany pracodawca nie widzi formularza nowego konta (#365): trafia do panelu, który
  * sam pokaże zakładanie firmy, jeśli jeszcze jej nie ma.
@@ -55,7 +58,7 @@ export default async function RegisterEmployerPage({ params }: PageProps) {
         <AuthPageTitle>{t('registerEmployerTitle')}</AuthPageTitle>
       </AuthPageHeader>
       <AuthPaper>
-        <AuthForm variant="registerEmployer" />
+        <EmployerSignupEntry />
 
         <div className="space-y-3 text-sm">
           <Link

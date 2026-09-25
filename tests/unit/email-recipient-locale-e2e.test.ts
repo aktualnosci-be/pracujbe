@@ -279,6 +279,7 @@ async function assertRecipientLanguage(
 /** #45: claim zwraca wiersze, budżet wysyłki (0087) zawsze przyznany w tych testach. */
 function mockClaim(result: { data: unknown[] }) {
   fakeDb.rpc("claim_email_batch", result.data);
+  fakeDb.rpc("email_delivery_send_check", null);
   fakeDb.rpc("take_email_send_budget", [{ granted: true, retry_at: null }]);
 }
 

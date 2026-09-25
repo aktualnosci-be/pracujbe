@@ -65,6 +65,8 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `HEALTH_CHECK_SECRET` | brak szczegółów `/api/health` i czujek `/api/health/ops` (#47) |
 | `DATABASE_OPS_URL` | czujki używają puli service (#47) |
 | `ERROR_WEBHOOK_URL` | brak powiadomień o błędach serwera na Discordzie (#571; `…/api/webhooks/<id>/<token>` albo z końcówką `/slack`; tylko serwer, nie jako zmienna publiczna); `/api/health` `checks.errorWebhook=false` |
+| `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_READ_ACCESS_KEY_ID`, `BACKUP_S3_READ_SECRET_ACCESS_KEY` | czujka wieku kopii w R2 (#569) zgłasza `backup_unconfigured` (503 `/api/health/ops`); tylko klucz ODCZYTU — klucz zapisu `BACKUP_S3_ACCESS_KEY_ID`/`BACKUP_S3_SECRET_ACCESS_KEY` wyłącznie w usłudze `backup` |
+| `BACKUP_S3_PREFIX`, `BACKUP_S3_REGION` | opcjonalnie; prefiks jak w usłudze `backup`, region domyślnie `auto` |
 | `SITE_ACCESS_PASSWORD` | bramka „w przygotowaniu” wyłączona — **zostaje do decyzji właściciela** |
 
 ### 2C. Opcjonalne
@@ -108,7 +110,9 @@ cronów (także poza Railway).
 | `cron-email` | `http://<prywatna domena web>:<PORT>/api/email/process` | = `EMAIL_QUEUE_SECRET` | co 5 min |
 | `cron-maintenance` | `http://<prywatna domena web>:<PORT>/api/maintenance` | = `MAINTENANCE_SECRET` | `0 * * * *` |
 
-Kopie i odtworzenie bazy: `OPERATIONS.md` sekcja 5 (osobne usługi, własne zmienne).
+Kopie i odtworzenie bazy: `OPERATIONS.md` sekcja 5 (osobne usługi, własne zmienne). Usługa
+`backup` (#569) buduje się z `docker/backup/Dockerfile` i wysyła kopie do Cloudflare R2
+(`BACKUP_RESTORE.md`, „Kopia poza Railwayem”).
 
 ## 5. Odbiór
 

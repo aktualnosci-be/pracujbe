@@ -132,6 +132,7 @@ describe('renderDelivery — marketing tylko z tożsamością, wypisaniem i text
 describe('worker: newsletter z kampanii', () => {
   function mockQueue(rows: unknown[]) {
     fakeDb.rpc('claim_email_batch', rows);
+    fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
   }
   const queued = {

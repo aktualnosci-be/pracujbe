@@ -1525,7 +1525,8 @@
     "errorFileType": "Seules les images PNG, JPG et WebP sont acceptées.",
     "errorUrlMissing": "Collez un lien vers l’annonce.",
     "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
-    "contactNote": "Nous ne reprenons pas les adresses e-mail, numéros de téléphone et numéros d’identification dans le formulaire. Indiquez vous-même l’e-mail de contact à la dernière étape."
+    "contactNote": "Nous ne reprenons pas les adresses e-mail, numéros de téléphone et numéros d’identification dans le formulaire. Indiquez vous-même l’e-mail de contact à la dernière étape.",
+    "errorBudget": "L’import depuis une annonce est temporairement indisponible. Remplissez le formulaire manuellement ou réessayez plus tard."
   },
   "jobAssist": {
     "title": "Améliorer le texte avec l'assistant IA",
@@ -2287,7 +2288,29 @@
     "auditActionCampaignCancelled": "Arrêt d’une révision de campagne",
     "entityEmailCampaign": "Campagne e-mail",
     "appealTargetRestoration": "Contre la levée de la restriction",
-    "appealRestorationSummary": "Restriction levée le {date} : {reason}"
+    "appealRestorationSummary": "Restriction levée le {date} : {reason}",
+    "navAiCosts": "Coûts IA",
+    "aiCostsTitle": "Coûts IA",
+    "aiCostsSubtitle": "Dépenses liées aux appels de modèles d’IA par rapport au budget global. Lecture seule.",
+    "aiCostsBudget": "Budget",
+    "aiCostsToday": "Aujourd’hui",
+    "aiCostsMonth": "Ce mois-ci",
+    "aiCostsOfLimit": "sur {limit} ({percent} %)",
+    "aiCostsNoLimit": "Aucune limite définie — les appels sont bloqués",
+    "aiCostsNearLimit": "Au moins 80 % de la limite a été utilisée.",
+    "aiCostsExhausted": "Limite atteinte — les nouveaux appels sont bloqués.",
+    "aiCostsStale": "Réservations non réglées depuis plus de 15 minutes : {count}",
+    "aiCostsHowCounted": "Le coût est calculé à partir des tokens déclarés par le fournisseur et de la grille tarifaire du code. Une réservation non réglée compte en entier. Le jour et le mois suivent l’heure de Bruxelles.",
+    "aiCostsLimitsHint": "Le propriétaire fixe les limites dans la base de données (voir docs/AI_BUDGET.md). Une limite de 0 désactive toutes les fonctions d’IA.",
+    "aiCostsDaily": "{days} derniers jours",
+    "aiCostsMonthly": "Mois",
+    "aiCostsNoData": "Aucun appel sur cette période.",
+    "aiCostsRow": "Appels : {calls} · réussis : {ok} · échoués : {notOk} · en cours : {open} · tokens entrée/sortie : {input} / {output}",
+    "aiCostsCalls": "appels : {calls}",
+    "aiCostsFeatureJobImport": "Import d’annonce",
+    "aiCostsFeatureTranslation": "Traduction du contenu",
+    "aiCostsFeatureAssist": "Assistant de rédaction d’offre",
+    "aiCostsFeatureCvImport": "Import de CV"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -2595,7 +2618,19 @@
       "alreadyMember": "Cette personne fait déjà partie de l’équipe.",
       "invitationLimit": "La limite de 50 invitations en attente est atteinte. Annulez les invitations obsolètes.",
       "companyLimit": "Vous pouvez gérer au maximum 5 entreprises.",
-      "lastOwner": "L’entreprise doit avoir au moins un propriétaire actif."
+      "lastOwner": "L’entreprise doit avoir au moins un propriétaire actif.",
+      "localeRequired": "Choisissez la langue de l’invitation."
+    },
+    "localeLabel": "Langue de l’invitation",
+    "invitedSent": "Invitation enregistrée. Cette personne recevra un e-mail : avec un compte employeur, dans la langue de ce compte ; sans compte, dans la langue choisie, avec un lien d’inscription.",
+    "inviteLinkHint": "Une personne sans compte reçoit un e-mail dans la langue choisie avec un lien pour créer un compte employeur (utilisable une fois, valable 14 jours). Après confirmation de l’adresse, l’invitation l’attendra dans son espace. Une personne avec un compte reçoit l’e-mail dans la langue de son compte.",
+    "signup": {
+      "checking": "Vérification du lien d’invitation…",
+      "intro": "Invitation à rejoindre l’équipe de {company}. Rôle : {role}.",
+      "nextSteps": "Créez un compte employeur et confirmez votre adresse e-mail. L’invitation vous attendra dans votre espace, dans l’onglet « Équipe » : vous pourrez y rejoindre l’entreprise ou la refuser.",
+      "emailFixed": "Le compte est créé avec l’adresse qui a reçu l’invitation.",
+      "used": "Ce lien d’invitation a déjà été utilisé. Si vous avez un compte, connectez-vous : l’invitation vous attend dans votre espace.",
+      "invalid": "Le lien d’invitation est invalide ou a expiré. Demandez une nouvelle invitation à l’entreprise ou créez un compte employeur classique."
     }
   },
   "emailUnsubscribe": {
@@ -2675,7 +2710,13 @@
     "deleteTitle": "Supprimer la recherche « {name} » ?",
     "deleteDescription": "Vous ne recevrez plus d’alertes sur les nouvelles offres correspondant à ces filtres.",
     "deleted": "Nous avons supprimé la recherche.",
-    "updated": "Nous avons enregistré les modifications."
+    "updated": "Nous avons enregistré les modifications.",
+    "rename": "Renommer",
+    "renameLabel": "Nouveau nom de la recherche",
+    "renameSave": "Enregistrer le nom",
+    "renameCancel": "Annuler",
+    "renamed": "Nous avons renommé la recherche.",
+    "renameHint": "De 1 à 80 caractères."
   },
   "contentReport": {
     "metaTitle": "Signaler un contenu",
@@ -2820,6 +2861,23 @@
     "categoryUnion": "affiliation syndicale",
     "categoryPolitical": "opinions politiques",
     "categoryCriminal": "antécédents judiciaires"
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Désactivation de l’alerte",
+    "title": "Désactiver cette alerte ?",
+    "confirmText": "Nous n’enverrons plus d’e-mails de nouvelles offres pour cette seule recherche enregistrée. Vos autres recherches et notifications restent inchangées.",
+    "confirmButton": "Désactiver cette alerte",
+    "pending": "Enregistrement…",
+    "doneTitle": "Alerte désactivée",
+    "doneText": "Nous ne vous enverrons plus d’alertes pour cette recherche. La recherche reste enregistrée — vous pouvez réactiver l’alerte dans votre espace candidat.",
+    "settingsHint": "Vous pouvez modifier vos recherches et alertes après connexion.",
+    "loginLink": "Se connecter",
+    "invalidTitle": "Le lien n’est pas valide",
+    "invalidText": "Ce lien est incomplet ou a été modifié. Utilisez le lien du dernier e-mail ou modifiez l’alerte après connexion.",
+    "expiredTitle": "Le lien a expiré",
+    "expiredText": "Ce lien n’est plus valable. Utilisez le lien du dernier e-mail ou modifiez l’alerte après connexion.",
+    "unavailableText": "La désactivation de l’alerte est momentanément indisponible. Réessayez plus tard ou modifiez l’alerte après connexion.",
+    "errorText": "La modification n’a pas pu être enregistrée. Veuillez réessayer."
   },
   "cvImport": {
     "eyebrow": "Votre profil",

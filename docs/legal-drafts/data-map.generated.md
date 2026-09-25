@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 94; z danymi osobowymi: 60; bez danych osobowych: 34.
+Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -16,7 +16,7 @@ Tabele w migracjach: 94; z danymi osobowymi: 60; bez danych osobowych: 34.
 | Profil zawodowy kandydata (`candidate-profile`) | Onboarding (6 kroków), umiejętności/języki/certyfikaty, widoczność profilu dla firm (is_searchable), zapisane oferty. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.candidate_visibility_events`, `public.saved_jobs` | Railway | Kod nie usuwa danych — do ustalenia |
 | Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.storage_deletion_queue`, `public.storage_gc_sweeps` | Railway | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona. |
 | Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
-| Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, EmailLabs, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
+| Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, EmailLabs, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. |
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
 | Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.files`, `public.message_attachments`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend, EmailLabs | Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue. |
 | Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.jobs`, `public.screening_question_reviews` | Railway, Resend, EmailLabs, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
@@ -28,7 +28,7 @@ Tabele w migracjach: 94; z danymi osobowymi: 60; bez danych osobowych: 34.
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. | — | Railway | job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach. |
 | Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
 | Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.storage_deletion_queue` | Railway | run_retention_purge (/api/maintenance): okresy z retention_policies; domyślnie tylko pliki i profile oznaczone jako usunięte (30 dni), pozostałe kategorie wyłączone. Ślad wniosków i rejestr usunięć bez usuwania do decyzji właściciela. |
-| Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy. | `public.erasure_tombstones` | Railway | BACKUP_RETENTION najnowszych kopii (domyślnie 14). |
+| Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy; kopia i manifest wysyłane do prywatnego bucketu Cloudflare R2 (BACKUP_S3_*, #569). | `public.erasure_tombstones` | Railway, Cloudflare R2 (bucket kopii bazy) | BACKUP_RETENTION najnowszych kopii (domyślnie 14) lokalnie i w buckecie R2; opcjonalnie BACKUP_S3_MAX_AGE_DAYS (najnowsza kopia zostaje zawsze). |
 | Płatności (wyłączone) (`billing-disabled`) | Martwy schemat po wyłączonym billingu (#51); brak aktywnego przepływu. | — | Stripe | Kod nie usuwa danych — do ustalenia |
 
 ## 2. Usługi zewnętrzne (subprocesorzy — kandydaci do weryfikacji)
@@ -42,7 +42,7 @@ Tabele w migracjach: 94; z danymi osobowymi: 60; bez danych osobowych: 34.
 - **Kod:** `docs/railway/README.md`, `docs/railway/OPERATIONS.md`, `src/lib/db/pool.ts`, `src/lib/db/portal.ts`, `scripts/railway-cron-call.mjs`
 - **Uwaga:** Pliki CV w prywatnym buckecie S3 Railway (src/lib/storage/railway-bucket.ts, #26); pobranie tylko krótkim linkiem HMAC przez /api/files/cv.
 - **Uwaga:** Limiter (src/lib/rate-limit.ts): przy loginie DATABASE_RATE_LIMIT_URL klucz HMAC akcji i adresu IP; przejściowa ścieżka przez pulę service zapisuje klucz z adresem IP bez haszowania.
-- **Uwaga:** Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age i zapisuje w BACKUP_DIR; miejsce przechowywania kopii nie wynika z repozytorium.
+- **Uwaga:** Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age w usłudze cron Railway (docker/backup/Dockerfile); przechowywane są poza Railwayem w buckecie Cloudflare R2 (#569).
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
@@ -58,6 +58,7 @@ Tabele w migracjach: 94; z danymi osobowymi: 60; bez danych osobowych: 34.
 - **Kod:** `src/lib/email/transport/resend.ts`, `src/lib/email/outbox.ts`, `src/lib/auth/email-worker.ts`, `src/app/api/email/webhook/resend/route.ts`, `src/emails/wiring.ts`
 - **Uwaga:** Wywołanie resend.emails.send przekazuje from, to, subject, html i opcjonalnie nagłówki wypisania; kod nie ustawia opcji śledzenia otwarć/kliknięć — stan tych ustawień na koncie do sprawdzenia.
 - **Uwaga:** Payloady kolejki nie zawierają treści wiadomości czatu ani odpowiedzi screeningowych (sekcja e-maili w mapie jest generowana z migracji).
+- **Uwaga:** Do szablonu trafiają tylko pola z listy src/lib/email/payload-fields.ts (#503); odbiorca firmowy jest ponownie sprawdzany przy odbiorze z kolejki (email_recipient_authorized).
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
@@ -90,6 +91,22 @@ Tabele w migracjach: 94; z danymi osobowymi: 60; bez danych osobowych: 34.
 - **Uwaga:** Wysyłka tylko z runtime serwera (reporter rejestrowany w instrumentation); w przeglądarce captureError to no-op.
 - **Uwaga:** Wiadomość budowana od zera z bezpiecznych pól — bez treści wyjątku, cause, kontekstu, nagłówków i parametrów; limit 2000 znaków.
 - **Uwaga:** Ten sam kod najwyżej raz na 10 min, przerwa po 429 wg retry_after, timeout 3 s; adres webhooka nie trafia do logów ani komunikatów.
+- **Rola (procesor/administrator):** DO UZUPEŁNIENIA
+- **Region przetwarzania:** DO UZUPEŁNIENIA
+- **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
+- **Umowa (DPA):** DO UZUPEŁNIENIA
+- **Retencja u dostawcy:** DO UZUPEŁNIENIA
+
+### Cloudflare R2 (bucket kopii bazy) (`cloudflare-r2`)
+
+- **Cel w portalu:** Przechowywanie zaszyfrowanych kopii bazy poza Railwayem (#569); pliki CV zostają w buckecie Railway.
+- **Kategorie danych:** Zaszyfrowany (age, klucz publiczny) zrzut całej bazy — wszystkie kategorie z mapy tabel; dostawca nie ma klucza prywatnego; Manifest kopii bez danych: rozmiary, SHA-256, liczby tabel i migracji, wersja serwera
+- **Osoby:** Kandydaci, Aplikujący bez konta, Pracodawcy i członkowie firm, Zgłaszający treści, Administratorzy
+- **Aktywacja:** BACKUP_S3_ENDPOINT + BACKUP_S3_BUCKET + klucz zapisu BACKUP_S3_ACCESS_KEY_ID/SECRET w zadaniu kopii; aplikacja tylko klucz odczytu BACKUP_S3_READ_* (czujka wieku kopii).
+- **Kod:** `scripts/db/backup.sh`, `scripts/db/restore-backup.sh`, `scripts/db/lib/backup-s3.mjs`, `src/lib/ops/backup-freshness.ts`
+- **Uwaga:** Bucket prywatny, bez domeny publicznej i bez r2.dev (ustawienie w panelu Cloudflare — docs/railway/OPERATIONS.md).
+- **Uwaga:** Retencja w buckecie: BACKUP_RETENTION najnowszych kopii, opcjonalnie BACKUP_S3_MAX_AGE_DAYS; usuwa tylko obiekty o wzorcu nazwy kopii.
+- **Uwaga:** Usługa web czyta wyłącznie listę obiektów (wiek ostatniej kopii w /api/health/ops) — klucz zapisu w usłudze web to alarm backup_misconfigured.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
@@ -480,6 +497,7 @@ Tabele w migracjach: 94; z danymi osobowymi: 60; bez danych osobowych: 34.
 - **Migracja:** `supabase/migrations/0086_company_team.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Osoby zaproszone do zespołu firmy, Pracodawcy i członkowie firm
+- **Uwaga:** Język zaproszenia wybiera zapraszający (adres bez konta, 0121); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -487,6 +505,9 @@ Tabele w migracjach: 94; z danymi osobowymi: 60; bez danych osobowych: 34.
 | `role` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0086_company_team.sql` |
 | `invited_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0086_company_team.sql` |
 | `responded_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0086_company_team.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0121_team_invitation_signup.sql` |
+| `signup_token_hash` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0121_team_invitation_signup.sql` |
+| `signup_token_used_at` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0121_team_invitation_signup.sql` |
 
 ### `public.company_members`
 
@@ -1047,39 +1068,48 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 `src/lib/email/guest-delivery.ts`). E-maile konta (`src/lib/email/auth-email.ts`):
 `accountConfirmation`, `passwordReset` — zawierają link z tokenem.
 
-| Szablon | Pola payloadu | Funkcje SQL |
-|---|---|---|
-| `appealReceived` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `recipientName` | `submit_moderation_appeal`, `submit_report_appeal`, `submit_report_restoration_appeal` |
-| `appealReversed` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
-| `appealUpheld` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
-| `applicationViewed` | `companyName`, `jobTitle` | `transition_application` |
-| `breachNotice` | `incidentReference`, `noticeSubject`, `noticeText`, `panel` | `admin_notify_breach_subjects` |
-| `companyRejected` | `companyName`, `reason` | `admin_set_company_status` |
-| `companySuspended` | `companyName`, `reason` | `admin_set_company_status` |
-| `companyVerified` | `companyName`, `reason` | `admin_set_company_status` |
-| `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `submit_guest_application` |
-| `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `confirm_guest_application` |
-| `jobMatch` | `count`, `jobs`, `query`, `searchName` | `process_saved_search_alerts` |
-| `jobOffer` | `companyName`, `currency`, `expiresAt`, `jobTitle`, `salaryMax`, `salaryMin`, `salaryPeriod` | `send_offer` |
-| `jobPublished` | `jobTitle` | `publish_job` |
-| `moderationCompanySuspended` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
-| `moderationJobRemoved` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
-| `moderationRestored` | `companyName`, `decisionReference`, `jobTitle`, `reason` | `moderation_restore_core` |
-| `newApplication` | `candidateName`, `jobTitle` | `apply_to_job`, `confirm_guest_application` |
-| `newMessage` | `conversationId`, `panel`, `senderName` | `send_message` |
-| `offerAccepted` | `candidateName`, `jobTitle` | `respond_to_offer` |
-| `offerDeclined` | `candidateName`, `jobTitle` | `respond_to_offer` |
-| `reportDecisionActioned` | `caseNumber`, `recipientName`, `targetType` | `admin_decide_report` |
-| `reportDecisionNoAction` | `caseNumber`, `recipientName`, `targetType` | `admin_decide_report` |
-| `reportReceived` | `accessCode`, `caseNumber`, `recipientName`, `targetType` | `submit_content_report` |
-| `reportRestored` | `caseNumber`, `recipientName` | `admin_restore_moderation` |
-| `statusChanged` | `companyName`, `jobTitle`, `status` | `transition_application` |
-| `teamInvitation` | `companyName`, `inviterName`, `panel` | `invite_company_member` |
+Minimalizacja (#503): do szablonu — a więc do dostawcy poczty — trafiają tylko pola z listy
+`src/lib/email/payload-fields.ts`; resztę payloadu worker odrzuca przed renderem (zostaje w bazie).
+Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal ma uprawnienie
+(`email_recipient_authorized` w `claim_email_batch`).
+
+| Szablon | Pola payloadu | Odrzucane przez workera | Funkcje SQL |
+|---|---|---|---|
+| `appealReceived` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `recipientName` | `appealTarget`, `companyName` | `submit_moderation_appeal`, `submit_report_appeal`, `submit_report_restoration_appeal` |
+| `appealReversed` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `appealTarget`, `companyName` | `admin_decide_appeal` |
+| `appealUpheld` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `appealTarget`, `companyName` | `admin_decide_appeal` |
+| `applicationViewed` | `companyName`, `jobTitle` | — | `transition_application` |
+| `breachNotice` | `incidentReference`, `noticeSubject`, `noticeText`, `panel` | — | `admin_notify_breach_subjects` |
+| `companyRejected` | `companyName`, `reason` | — | `admin_set_company_status` |
+| `companySuspended` | `companyName`, `reason` | — | `admin_set_company_status` |
+| `companyVerified` | `companyName`, `reason` | `reason` | `admin_set_company_status` |
+| `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `jobSlug`, `nonce` | `submit_guest_application` |
+| `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `nonce` | `confirm_guest_application` |
+| `guestStatusChanged` | `companyName`, `jobTitle`, `recipientName`, `status` | — | `transition_application` |
+| `jobMatch` | `count`, `jobs`, `query`, `searchName` | `query` | `process_saved_search_alerts` |
+| `jobOffer` | `companyName`, `currency`, `expiresAt`, `jobTitle`, `salaryMax`, `salaryMin`, `salaryPeriod` | — | `send_offer` |
+| `jobPublished` | `jobTitle` | — | `publish_job` |
+| `moderationCompanySuspended` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
+| `moderationJobRemoved` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | — | `admin_decide_appeal`, `admin_decide_report` |
+| `moderationRestored` | `companyName`, `decisionReference`, `jobTitle`, `reason` | — | `moderation_restore_core` |
+| `newApplication` | `candidateName`, `jobTitle` | — | `apply_to_job`, `confirm_guest_application` |
+| `newMessage` | `conversationId`, `panel`, `senderName` | — | `send_message` |
+| `offerAccepted` | `candidateName`, `jobTitle` | — | `respond_to_offer` |
+| `offerDeclined` | `candidateName`, `jobTitle` | — | `respond_to_offer` |
+| `reportDecisionActioned` | `caseNumber`, `recipientName`, `targetType` | — | `admin_decide_report` |
+| `reportDecisionNoAction` | `caseNumber`, `recipientName`, `targetType` | — | `admin_decide_report` |
+| `reportReceived` | `accessCode`, `caseNumber`, `recipientName`, `targetType` | — | `submit_content_report` |
+| `reportRestored` | `caseNumber`, `recipientName` | — | `admin_restore_moderation` |
+| `statusChanged` | `companyName`, `jobTitle`, `status` | — | `transition_application` |
+| `teamInvitation` | `companyName`, `inviterName`, `panel` | — | `invite_company_member` |
+| `teamInvitationSignup` | `companyName`, `inviterName`, `nonce` | `nonce` | `invite_company_member` |
 
 ## 5. Tabele bez danych osobowych
 
 | Tabela | Uzasadnienie |
 |---|---|
+| `public.ai_budget_limits` | Słownik/konfiguracja (globalne limity kosztów AI, #36) — bez danych osobowych. |
+| `public.ai_usage_ledger` | Liczniki wywołań modeli AI (funkcja, model, wynik, tokeny, koszt, doba) — bez treści i identyfikatorów osób/firm (#36). |
 | `public.categories` | Słownik/konfiguracja (kategorie) — bez danych osobowych. |
 | `public.certificates` | Słownik/konfiguracja (certyfikaty) — bez danych osobowych. |
 | `public.checkout_intents` | Martwy schemat billingu. |

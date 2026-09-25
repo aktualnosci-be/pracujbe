@@ -19,6 +19,12 @@
 #                                (domyślnie mktemp; usuwany zawsze, także po błędzie),
 #   BACKUP_HEARTBEAT_URL       — opcjonalnie adres „dead man's switch": po sukcesie GET URL,
 #                                po błędzie GET URL/fail (brak pingu = alarm po stronie usługi).
+#   BACKUP_AGE_RECIPIENTS      — zamiast pliku: klucze publiczne age w zmiennej (usługa Railway),
+#   BACKUP_S3_*                — #569: kopia poza Railwayem w prywatnym buckecie Cloudflare R2
+#                                (scripts/db/lib/backup-s3.mjs; klucz ZAPISU tylko tutaj). Po
+#                                zapisie lokalnym: wysyłka artefaktu, potem manifestu, i retencja
+#                                w buckecie (BACKUP_RETENTION + opcjonalnie BACKUP_S3_MAX_AGE_DAYS).
+#                                Błąd wysyłki = błąd kopii (kod 1, heartbeat /fail).
 #
 # Kod wyjścia: 0 = kopia zapisana i odczytana; 1 = błąd kopii; 2 = zła konfiguracja.
 # Plaintext istnieje tylko w katalogu roboczym 0700 do chwili zaszyfrowania.
@@ -36,7 +42,14 @@ fail() { echo "BACKUP: $1" >&2; heartbeat /fail; exit "${2:-1}"; }
 
 [ -n "${BACKUP_SOURCE_URL:-}" ] || fail 'Ustaw BACKUP_SOURCE_URL.' 2
 [ -n "${BACKUP_DIR:-}" ] || fail 'Ustaw BACKUP_DIR.' 2
-[ -n "${BACKUP_AGE_RECIPIENTS_FILE:-}" ] || fail 'Ustaw BACKUP_AGE_RECIPIENTS_FILE.' 2
+recipients_tmp=''
+if [ -z "${BACKUP_AGE_RECIPIENTS_FILE:-}" ] && [ -n "${BACKUP_AGE_RECIPIENTS:-}" ]; then
+  recipients_tmp="$(mktemp "${TMPDIR:-/tmp}/pracujbe-recipients.XXXXXX")" || fail 'Nie można zapisać odbiorców age.' 2
+  trap 'rm -f -- "$recipients_tmp"' EXIT
+  printf '%s\n' "$BACKUP_AGE_RECIPIENTS" | tr ' ' '\n' | grep . >"$recipients_tmp" || true
+  BACKUP_AGE_RECIPIENTS_FILE="$recipients_tmp"
+fi
+[ -n "${BACKUP_AGE_RECIPIENTS_FILE:-}" ] || fail 'Ustaw BACKUP_AGE_RECIPIENTS_FILE albo BACKUP_AGE_RECIPIENTS.' 2
 [ -r "$BACKUP_AGE_RECIPIENTS_FILE" ] || fail 'Plik odbiorców age jest nieczytelny.' 2
 grep -qE '^age1[0-9a-z]{58}$' "$BACKUP_AGE_RECIPIENTS_FILE" \
   || fail 'Plik odbiorców nie zawiera klucza publicznego age1….' 2
@@ -49,6 +62,15 @@ retention="${BACKUP_RETENTION:-14}"
 for bin in pg_dump pg_restore psql age sha256sum; do
   command -v "$bin" >/dev/null || fail "Brak programu $bin." 2
 done
+
+# #569: bucket R2 — konfiguracja sprawdzana PRZED zrzutem (zła = kod 2, nic nie powstaje).
+s3_cli="$(dirname "$0")/lib/backup-s3.mjs"
+s3=''
+if [ -n "${BACKUP_S3_ENDPOINT:-}${BACKUP_S3_BUCKET:-}${BACKUP_S3_ACCESS_KEY_ID:-}${BACKUP_S3_SECRET_ACCESS_KEY:-}" ]; then
+  command -v node >/dev/null || fail 'Brak programu node (wysyłka do R2).' 2
+  s3_msg="$(node "$s3_cli" check write 2>&1 >/dev/null)" || fail "Konfiguracja R2: ${s3_msg#BACKUP_S3: }" 2
+  s3=1
+fi
 
 mkdir -p "$BACKUP_DIR" || fail 'Nie można utworzyć BACKUP_DIR.' 2
 chmod 700 "$BACKUP_DIR" 2>/dev/null || true
@@ -67,6 +89,7 @@ manifest_tmp=''
 cleanup() {
   close_src
   rm -rf "$workdir"
+  if [ -n "$recipients_tmp" ]; then rm -f -- "$recipients_tmp"; fi
   if [ -n "$partial" ]; then rm -f -- "$partial"; fi
   if [ -n "$manifest_tmp" ]; then rm -f -- "$manifest_tmp"; fi
 }
@@ -160,5 +183,15 @@ for old in "${all[@]:$retention}"; do
 done
 kept=$(( ${#all[@]} - removed ))
 
+remote=''
+if [ -n "$s3" ]; then
+  echo 'BACKUP: wysyłka do R2 (artefakt, potem manifest)'
+  # Najpierw artefakt, potem manifest: kopia z manifestem w buckecie jest kompletna.
+  node "$s3_cli" upload "$BACKUP_DIR/$name" "$BACKUP_DIR/${name%.dump.age}.json" >/dev/null \
+    || fail 'Wysyłka kopii do R2 nie powiodła się.'
+  remote_prune="$(node "$s3_cli" prune "$retention")" || fail 'Retencja w R2 nie powiodła się.'
+  remote="; R2: wysłano, ${remote_prune#BACKUP_S3: }"
+fi
+
 heartbeat ''
-echo "BACKUP: PASS — $name, ${enc_bytes} B zaszyfrowane (${plain_bytes} B zrzutu), ${tables} tabel, ${migrations} migracji; retencja: zachowano ${kept}, usunięto ${removed}."
+echo "BACKUP: PASS — $name, ${enc_bytes} B zaszyfrowane (${plain_bytes} B zrzutu), ${tables} tabel, ${migrations} migracji; retencja: zachowano ${kept}, usunięto ${removed}${remote}"

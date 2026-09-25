@@ -15,6 +15,7 @@ import { getActiveCompany } from '@/lib/company-context';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { cookies } from 'next/headers';
 import { mapTeamError, teamErrorKey } from '@/lib/team/errors';
+import { hashTeamInviteToken, teamInviteTokenFromNonce } from '@/lib/team/invite-token';
 import { toUserMessageKey } from '@/lib/errors';
 import { assignableRoles, canManageRole, canManageTeam, canRecruit } from '@/lib/team/permissions';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
@@ -75,12 +76,12 @@ beforeEach(() => {
 describe('inviteTeamMember (#403)', () => {
   it('zaprasza do AKTYWNEJ firmy znormalizowany adres z rolą', async () => {
     const db = client({ data: [{ invitation_id: INVITE, created: true }], error: null });
-    expect(await inviteTeamMember({ email: '  rita@firma.be ', role: 'recruiter' })).toEqual({ ok: true });
+    expect(await inviteTeamMember({ email: '  rita@firma.be ', role: 'recruiter', locale: 'pl' })).toEqual({ ok: true });
     expect(db.calls).toHaveLength(1);
     expect(db.calls[0]).toMatchObject({
       name: 'invite_company_member',
       as: USER,
-      args: { p_company_id: COMPANY, p_email: 'rita@firma.be', p_role: 'recruiter' },
+      args: { p_company_id: COMPANY, p_email: 'rita@firma.be', p_role: 'recruiter', p_locale: 'pl' },
     });
     // Aktywna firma czytana w tej samej transakcji (kontekst dostaje tx i UUID z sesji).
     expect(vi.mocked(getActiveCompany).mock.calls[0]?.[1]).toBe(USER);
@@ -88,11 +89,11 @@ describe('inviteTeamMember (#403)', () => {
 
   it('KONTROLA UJEMNA: rola owner i zły e-mail nie docierają do bazy', async () => {
     const db = client({ data: null, error: null });
-    expect(await inviteTeamMember({ email: 'rita@firma.be', role: 'owner' as never })).toEqual({
+    expect(await inviteTeamMember({ email: 'rita@firma.be', role: 'owner' as never, locale: 'pl' })).toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(await inviteTeamMember({ email: 'bez-malpy', role: 'member' })).toEqual({
+    expect(await inviteTeamMember({ email: 'bez-malpy', role: 'member', locale: 'pl' })).toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
     });
@@ -101,12 +102,12 @@ describe('inviteTeamMember (#403)', () => {
 
   it('mapuje błędy bazy na stabilne kody (bez technikaliów)', async () => {
     client({ data: null, error: { message: 'MEMBER_ALREADY_EXISTS' } });
-    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member' })).toEqual({
+    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member', locale: 'pl' })).toEqual({
       ok: false,
       error: 'MEMBER_ALREADY_EXISTS',
     });
     client({ data: null, error: { message: 'PERMISSION_DENIED' } });
-    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member' })).toEqual({
+    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member', locale: 'pl' })).toEqual({
       ok: false,
       error: 'PERMISSION_DENIED',
     });
@@ -114,22 +115,52 @@ describe('inviteTeamMember (#403)', () => {
 
   it('bez sesji i bez aktywnej firmy — brak wywołania RPC', async () => {
     const anon = client({ data: null, error: null }, null);
-    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member' })).toEqual({
+    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member', locale: 'pl' })).toEqual({
       ok: false,
       error: 'PERMISSION_DENIED',
     });
     expect(anon.calls).toHaveLength(0);
     vi.mocked(getActiveCompany).mockResolvedValue({ activeId: null, activeRole: 'member' } as never);
     const noCompany = client({ data: null, error: null });
-    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member' })).toEqual({ ok: false, error: 'NOT_FOUND' });
+    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member', locale: 'pl' })).toEqual({ ok: false, error: 'NOT_FOUND' });
     expect(noCompany.calls).toHaveLength(0);
+  });
+
+  it('0121: język zaproszenia i token — do bazy tylko hash tokenu i nonce', async () => {
+    const db = client({ data: [{ invitation_id: INVITE, created: true }], error: null });
+    expect(await inviteTeamMember({ email: 'nowy@firma.be', role: 'member', locale: 'nl' })).toEqual({ ok: true });
+    const args = db.calls[0]?.args as Record<string, string>;
+    expect(args.p_locale).toBe('nl');
+    expect(args.p_signup_token_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(args.p_signup_nonce).toMatch(/^[A-Za-z0-9_-]{32}$/);
+    // Hash = sha256(token), token = HMAC(sekret, "team-invite:" + nonce) — link odtworzy worker.
+    const token = teamInviteTokenFromNonce(args.p_signup_nonce!);
+    expect(token).not.toBeNull();
+    expect(hashTeamInviteToken(token!)).toBe(args.p_signup_token_hash);
+    expect(Object.values(args)).not.toContain(token);
+    // Każde zaproszenie ma nowy token.
+    await inviteTeamMember({ email: 'nowy@firma.be', role: 'member', locale: 'nl' });
+    expect((db.calls[1]?.args as Record<string, string>).p_signup_nonce).not.toBe(args.p_signup_nonce);
+  });
+
+  it('KONTROLA UJEMNA: język spoza PL/NL/FR/EN albo brak języka nie dociera do bazy', async () => {
+    const db = client({ data: null, error: null });
+    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member', locale: 'de' as never })).toEqual({
+      ok: false,
+      error: 'VALIDATION_FAILED',
+    });
+    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member' } as never)).toEqual({
+      ok: false,
+      error: 'VALIDATION_FAILED',
+    });
+    expect(db.calls).toHaveLength(0);
   });
 
   it('limit per IP i tryb demo', async () => {
     vi.mocked(checkRateLimit).mockResolvedValue(false);
-    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member' })).toEqual({ ok: false, error: 'RATE_LIMITED' });
+    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member', locale: 'pl' })).toEqual({ ok: false, error: 'RATE_LIMITED' });
     fakeSession.configured = false;
-    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member' })).toEqual({ ok: true, demo: true });
+    expect(await inviteTeamMember({ email: 'a@b.be', role: 'member', locale: 'pl' })).toEqual({ ok: true, demo: true });
   });
 });
 

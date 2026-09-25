@@ -36,6 +36,7 @@ function row(id: string, template: EmailType, locale: string, payload: Record<st
 /** #45: claim zwraca wiersze, budżet wysyłki (0087) zawsze przyznany w tych testach. */
 function mockClaim(result: { data: unknown[] }) {
   fakeDb.rpc('claim_email_batch', result.data);
+  fakeDb.rpc('email_delivery_send_check', null);
   fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
 }
 
@@ -103,7 +104,7 @@ describe('processEmailQueue — język odbiorcy z email_deliveries.locale', () =
     const [mark] = fakeDb.callsTo('email.outbox.mark-sent');
     expect(mark).toMatchObject({ as: 'service', values: ['d1', 'provider-1', 1, 'resend'] });
     // Claim → (wysyłka HTTP) → zapis wyniku: claim to osobna transakcja przed wysyłką.
-    expect(fakeDb.calls.map((c) => c.name)).toEqual(['claim_email_batch', 'take_email_send_budget', 'email.outbox.mark-sent']);
+    expect(fakeDb.calls.map((c) => c.name)).toEqual(['claim_email_batch', 'email_delivery_send_check', 'take_email_send_budget', 'email.outbox.mark-sent']);
   });
 
   it('błąd claimu → ok:false (503 dla monitoringu), bez wysyłki', async () => {

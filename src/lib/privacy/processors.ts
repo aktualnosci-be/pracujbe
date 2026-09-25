@@ -17,6 +17,7 @@ export type ProcessorId =
   | 'emaillabs'
   | 'discord-webhook'
   | 'cloudflare-turnstile'
+  | 'cloudflare-r2'
   | 'anthropic'
   | 'stripe'
   | 'google-analytics'
@@ -67,7 +68,7 @@ export const PROCESSORS: readonly Processor[] = [
     notes: [
       'Pliki CV w prywatnym buckecie S3 Railway (src/lib/storage/railway-bucket.ts, #26); pobranie tylko krótkim linkiem HMAC przez /api/files/cv.',
       'Limiter (src/lib/rate-limit.ts): przy loginie DATABASE_RATE_LIMIT_URL klucz HMAC akcji i adresu IP; przejściowa ścieżka przez pulę service zapisuje klucz z adresem IP bez haszowania.',
-      'Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age i zapisuje w BACKUP_DIR; miejsce przechowywania kopii nie wynika z repozytorium.',
+      'Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age w usłudze cron Railway (docker/backup/Dockerfile); przechowywane są poza Railwayem w buckecie Cloudflare R2 (#569).',
     ],
     ...UNKNOWN,
   },
@@ -88,6 +89,7 @@ export const PROCESSORS: readonly Processor[] = [
     notes: [
       'Wywołanie resend.emails.send przekazuje from, to, subject, html i opcjonalnie nagłówki wypisania; kod nie ustawia opcji śledzenia otwarć/kliknięć — stan tych ustawień na koncie do sprawdzenia.',
       'Payloady kolejki nie zawierają treści wiadomości czatu ani odpowiedzi screeningowych (sekcja e-maili w mapie jest generowana z migracji).',
+      'Do szablonu trafiają tylko pola z listy src/lib/email/payload-fields.ts (#503); odbiorca firmowy jest ponownie sprawdzany przy odbiorze z kolejki (email_recipient_authorized).',
     ],
     ...UNKNOWN,
   },
@@ -133,6 +135,25 @@ export const PROCESSORS: readonly Processor[] = [
       'Wysyłka tylko z runtime serwera (reporter rejestrowany w instrumentation); w przeglądarce captureError to no-op.',
       'Wiadomość budowana od zera z bezpiecznych pól — bez treści wyjątku, cause, kontekstu, nagłówków i parametrów; limit 2000 znaków.',
       'Ten sam kod najwyżej raz na 10 min, przerwa po 429 wg retry_after, timeout 3 s; adres webhooka nie trafia do logów ani komunikatów.',
+    ],
+    ...UNKNOWN,
+  },
+  {
+    id: 'cloudflare-r2',
+    name: 'Cloudflare R2 (bucket kopii bazy)',
+    purpose: 'Przechowywanie zaszyfrowanych kopii bazy poza Railwayem (#569); pliki CV zostają w buckecie Railway.',
+    dataCategories: [
+      'Zaszyfrowany (age, klucz publiczny) zrzut całej bazy — wszystkie kategorie z mapy tabel; dostawca nie ma klucza prywatnego',
+      'Manifest kopii bez danych: rozmiary, SHA-256, liczby tabel i migracji, wersja serwera',
+    ],
+    dataSubjects: ['Kandydaci', 'Aplikujący bez konta', 'Pracodawcy i członkowie firm', 'Zgłaszający treści', 'Administratorzy'],
+    activation:
+      'BACKUP_S3_ENDPOINT + BACKUP_S3_BUCKET + klucz zapisu BACKUP_S3_ACCESS_KEY_ID/SECRET w zadaniu kopii; aplikacja tylko klucz odczytu BACKUP_S3_READ_* (czujka wieku kopii).',
+    codeRefs: ['scripts/db/backup.sh', 'scripts/db/restore-backup.sh', 'scripts/db/lib/backup-s3.mjs', 'src/lib/ops/backup-freshness.ts'],
+    notes: [
+      'Bucket prywatny, bez domeny publicznej i bez r2.dev (ustawienie w panelu Cloudflare — docs/railway/OPERATIONS.md).',
+      'Retencja w buckecie: BACKUP_RETENTION najnowszych kopii, opcjonalnie BACKUP_S3_MAX_AGE_DAYS; usuwa tylko obiekty o wzorcu nazwy kopii.',
+      'Usługa web czyta wyłącznie listę obiektów (wiek ostatniej kopii w /api/health/ops) — klucz zapisu w usłudze web to alarm backup_misconfigured.',
     ],
     ...UNKNOWN,
   },

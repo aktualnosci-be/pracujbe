@@ -1525,7 +1525,8 @@
     "errorFileType": "Obsługujemy tylko obrazy PNG, JPG i WebP.",
     "errorUrlMissing": "Wklej link do ogłoszenia.",
     "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie.",
-    "contactNote": "Adresów e-mail, numerów telefonu i numerów identyfikacyjnych nie przenosimy do formularza. E-mail kontaktowy wpisz ręcznie w ostatnim kroku."
+    "contactNote": "Adresów e-mail, numerów telefonu i numerów identyfikacyjnych nie przenosimy do formularza. E-mail kontaktowy wpisz ręcznie w ostatnim kroku.",
+    "errorBudget": "Import z ogłoszenia jest chwilowo niedostępny. Wypełnij formularz ręcznie albo spróbuj później."
   },
   "jobAssist": {
     "title": "Popraw treść z asystentem AI",
@@ -2287,7 +2288,29 @@
     "auditActionCampaignCancelled": "Zatrzymanie rewizji kampanii",
     "entityEmailCampaign": "Kampania e-mail",
     "appealTargetRestoration": "Od cofnięcia ograniczenia",
-    "appealRestorationSummary": "Ograniczenie cofnięte {date}: {reason}"
+    "appealRestorationSummary": "Ograniczenie cofnięte {date}: {reason}",
+    "navAiCosts": "Koszty AI",
+    "aiCostsTitle": "Koszty AI",
+    "aiCostsSubtitle": "Wydatki na wywołania modeli AI względem globalnego budżetu. Tylko odczyt.",
+    "aiCostsBudget": "Budżet",
+    "aiCostsToday": "Dziś",
+    "aiCostsMonth": "Bieżący miesiąc",
+    "aiCostsOfLimit": "z {limit} ({percent}%)",
+    "aiCostsNoLimit": "Brak limitu — wywołania są blokowane",
+    "aiCostsNearLimit": "Wykorzystano co najmniej 80% limitu.",
+    "aiCostsExhausted": "Limit wyczerpany — nowe wywołania są blokowane.",
+    "aiCostsStale": "Rezerwacje bez rozliczenia od ponad 15 minut: {count}",
+    "aiCostsHowCounted": "Koszt liczony z tokenów zgłoszonych przez dostawcę i cennika w kodzie. Rezerwacja bez rozliczenia liczy się w pełnej kwocie. Doba i miesiąc według czasu w Brukseli.",
+    "aiCostsLimitsHint": "Limity ustawia właściciel w bazie danych (opis: docs/AI_BUDGET.md). Limit 0 wyłącza wszystkie funkcje AI.",
+    "aiCostsDaily": "Ostatnie {days} dni",
+    "aiCostsMonthly": "Miesiące",
+    "aiCostsNoData": "Brak wywołań w tym okresie.",
+    "aiCostsRow": "Wywołania: {calls} · udane: {ok} · nieudane: {notOk} · w toku: {open} · tokeny wejścia/wyjścia: {input} / {output}",
+    "aiCostsCalls": "wywołania: {calls}",
+    "aiCostsFeatureJobImport": "Import ogłoszenia",
+    "aiCostsFeatureTranslation": "Tłumaczenie treści",
+    "aiCostsFeatureAssist": "Asystent treści oferty",
+    "aiCostsFeatureCvImport": "Import CV"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -2595,7 +2618,19 @@
       "alreadyMember": "Ta osoba jest już w zespole.",
       "invitationLimit": "Osiągnięto limit 50 oczekujących zaproszeń. Cofnij nieaktualne zaproszenia.",
       "companyLimit": "Możesz prowadzić maksymalnie 5 firm.",
-      "lastOwner": "Firma musi mieć co najmniej jednego aktywnego właściciela."
+      "lastOwner": "Firma musi mieć co najmniej jednego aktywnego właściciela.",
+      "localeRequired": "Wybierz język zaproszenia."
+    },
+    "localeLabel": "Język zaproszenia",
+    "invitedSent": "Zaproszenie zapisane. Ta osoba dostanie e-mail: z kontem pracodawcy — w języku swojego konta, bez konta — w wybranym języku, z linkiem do rejestracji.",
+    "inviteLinkHint": "Osoba bez konta dostanie e-mail w wybranym języku z linkiem do założenia konta pracodawcy (działa raz, ważny 14 dni). Po potwierdzeniu adresu zaproszenie będzie czekać w jej panelu. Osoba z kontem dostaje e-mail w języku swojego konta.",
+    "signup": {
+      "checking": "Sprawdzamy link zaproszenia…",
+      "intro": "Zaproszenie do zespołu firmy {company}. Rola: {role}.",
+      "nextSteps": "Załóż konto pracodawcy i potwierdź adres e-mail. Zaproszenie będzie czekać w Twoim panelu, w zakładce „Zespół” — tam dołączysz do firmy albo je odrzucisz.",
+      "emailFixed": "Konto zakładasz na adres, na który przyszło zaproszenie.",
+      "used": "Ten link zaproszenia został już użyty. Jeśli masz konto, zaloguj się — zaproszenie czeka w panelu.",
+      "invalid": "Link zaproszenia jest nieprawidłowy albo wygasł. Poproś firmę o nowe zaproszenie albo załóż zwykłe konto pracodawcy."
     }
   },
   "emailUnsubscribe": {
@@ -2675,7 +2710,13 @@
     "deleteTitle": "Usunąć wyszukiwanie „{name}”?",
     "deleteDescription": "Przestaniesz dostawać alerty o nowych ofertach z tymi filtrami.",
     "deleted": "Usunęliśmy wyszukiwanie.",
-    "updated": "Zapisaliśmy zmiany."
+    "updated": "Zapisaliśmy zmiany.",
+    "rename": "Zmień nazwę",
+    "renameLabel": "Nowa nazwa wyszukiwania",
+    "renameSave": "Zapisz nazwę",
+    "renameCancel": "Anuluj",
+    "renamed": "Zmieniliśmy nazwę wyszukiwania.",
+    "renameHint": "Od 1 do 80 znaków."
   },
   "contentReport": {
     "metaTitle": "Zgłoś treść",
@@ -2820,6 +2861,23 @@
     "categoryUnion": "przynależność do związku zawodowego",
     "categoryPolitical": "poglądy polityczne",
     "categoryCriminal": "karalność"
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Wyłączenie alertu",
+    "title": "Wyłączyć ten alert?",
+    "confirmText": "Przestaniemy wysyłać e-maile z nowymi ofertami dla tego jednego zapisanego wyszukiwania. Pozostałe wyszukiwania i powiadomienia działają bez zmian.",
+    "confirmButton": "Wyłącz ten alert",
+    "pending": "Zapisywanie…",
+    "doneTitle": "Alert wyłączony",
+    "doneText": "Nie wyślemy Ci już alertów dla tego wyszukiwania. Wyszukiwanie zostaje zapisane — alert włączysz ponownie w panelu kandydata.",
+    "settingsHint": "Zapisane wyszukiwania i alerty zmienisz po zalogowaniu.",
+    "loginLink": "Zaloguj się",
+    "invalidTitle": "Link jest nieprawidłowy",
+    "invalidText": "Ten link jest niepełny lub został zmieniony. Skorzystaj z linku z najnowszego e-maila albo zmień alert po zalogowaniu.",
+    "expiredTitle": "Link wygasł",
+    "expiredText": "Ten link jest już nieaktualny. Skorzystaj z linku z najnowszego e-maila albo zmień alert po zalogowaniu.",
+    "unavailableText": "Wyłączenie alertu jest chwilowo niedostępne. Spróbuj później albo zmień alert po zalogowaniu.",
+    "errorText": "Nie udało się zapisać zmiany. Spróbuj ponownie."
   },
   "cvImport": {
     "eyebrow": "Twój profil",

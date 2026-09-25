@@ -128,7 +128,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'guest-applications': {
     name: 'Aplikacja bez konta',
-    inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto.',
+    inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto.',
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
       'purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach.',
@@ -204,9 +204,11 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   backups: {
     name: 'Kopie zapasowe bazy',
-    inCode: 'scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy.',
-    processors: ['railway'],
-    retentionInCode: 'BACKUP_RETENTION najnowszych kopii (domyślnie 14).',
+    inCode:
+      'scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy; kopia i manifest wysyłane do prywatnego bucketu Cloudflare R2 (BACKUP_S3_*, #569).',
+    processors: ['railway', 'cloudflare-r2'],
+    retentionInCode:
+      'BACKUP_RETENTION najnowszych kopii (domyślnie 14) lokalnie i w buckecie R2; opcjonalnie BACKUP_S3_MAX_AGE_DAYS (najnowsza kopia zostaje zawsze).',
   },
   'billing-disabled': {
     name: 'Płatności (wyłączone)',
@@ -574,7 +576,16 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.company_invitations': {
     activities: ['companies'],
     subjects: ['invitee', 'employer'],
-    columns: { email: 'contact', role: 'identity', invited_by: 'reference', responded_by: 'reference' },
+    columns: {
+      email: 'contact',
+      role: 'identity',
+      invited_by: 'reference',
+      responded_by: 'reference',
+      locale: 'preferences',
+      signup_token_hash: 'credentials',
+      signup_token_used_at: 'credentials',
+    },
+    note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0121); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
   },
   'public.company_vies_checks': {
     activities: ['companies'],
@@ -723,6 +734,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       decided_by: 'reference',
     },
     note: 'Uzasadnienia odwołania i rozpatrzenia są anonimizowane przez dsa_retention_run po końcu drogi odwołania i okresie retencji (#43).',
+  },
+  'public.ai_budget_limits': DICTIONARY('globalne limity kosztów AI, #36'),
+  'public.ai_usage_ledger': {
+    activities: ['ai-job-import'],
+    subjects: [],
+    columns: {},
+    note: 'Liczniki wywołań modeli AI (funkcja, model, wynik, tokeny, koszt, doba) — bez treści i identyfikatorów osób/firm (#36).',
   },
   'public.dsa_retention_runs': {
     activities: ['dsa-moderation'],

@@ -11,6 +11,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
 import { ACTIVE_COMPANY_COOKIE, getActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
+import { issueTeamInviteToken } from '@/lib/team/invite-token';
 import {
   memberRoleSchema,
   teamInviteSchema,
@@ -24,7 +25,9 @@ import {
  * akcje walidują wejście (Zod), dokładają limit per IP i mapują błędy na stabilne kody
  * (Invariant #8). Bez env → tryb demo (`{ ok: true, demo: true }`).
  *
- *   - `inviteTeamMember`     — zaproszenie po e-mailu do AKTYWNEJ firmy (idempotentne),
+ *   - `inviteTeamMember`     — zaproszenie po e-mailu do AKTYWNEJ firmy (idempotentne); język
+ *                              zaproszenia i jednorazowy token linku rejestracji dla adresu
+ *                              bez konta (0121) — wynik nie zależy od istnienia konta,
  *   - `revokeTeamInvitation` — cofnięcie oczekującego zaproszenia,
  *   - `setTeamMemberRole`    — zmiana roli członka,
  *   - `setTeamMemberActive`  — dezaktywacja / przywrócenie członka,
@@ -78,6 +81,13 @@ export async function inviteTeamMember(input: TeamInviteInput): Promise<TeamActi
   if (!parsed.success) return fail('VALIDATION_FAILED');
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
   if (await limited('team-invite', INVITE_RATE_MAX)) return fail('RATE_LIMITED');
+  // Token liczymy zawsze (baza wie, czy adres ma konto — akcja nie). Bez sekretu w produkcji
+  // link rejestracji nie powstałby, więc zaproszenia nie przyjmujemy (nie udajemy wysyłki).
+  const signupToken = issueTeamInviteToken();
+  if (!signupToken) {
+    captureError(new Error('team invite token secret missing'), { area: 'team.invite.token' });
+    return fail('INTERNAL');
+  }
 
   try {
     const me = await getPortalIdentity();
@@ -89,6 +99,9 @@ export async function inviteTeamMember(input: TeamInviteInput): Promise<TeamActi
         p_company_id: active.activeId,
         p_email: parsed.data.email,
         p_role: parsed.data.role,
+        p_locale: parsed.data.locale,
+        p_signup_token_hash: signupToken.hash,
+        p_signup_nonce: signupToken.nonce,
       });
       return true;
     });
