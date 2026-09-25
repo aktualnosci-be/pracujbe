@@ -156,9 +156,11 @@ test('#492: bez deklaracji wieku zgłoszenie nie wychodzi, fokus na deklaracji',
   await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
   await form.getByRole('button', { name: t.apply.submit }).click();
 
+  // #576: dwa przedziały (16–17 / 18+) — błąd na grupie, fokus na pierwszej opcji grupy.
+  const ageGroup = form.getByRole('radiogroup', { name: t.auth.ageBandLegend });
+  await expect(ageGroup).toHaveAttribute('aria-invalid', 'true');
+  await expect(form.locator('input[name="guest-apply-age"]:focus')).toHaveCount(1);
   const age = form.getByRole('radio', { name: ageLabel(t) });
-  await expect(age).toHaveAttribute('aria-invalid', 'true');
-  await expect(age).toBeFocused();
   await expect(dialog.getByTestId('guest-apply-sent')).toHaveCount(0);
   expect(actions).toHaveLength(0);
 
