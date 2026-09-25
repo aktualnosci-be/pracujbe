@@ -1,7 +1,7 @@
 # Budżet kosztów AI (#36)
 
 Globalny, twardy limit wydatków na wywołania modeli AI — wspólny dla wszystkich funkcji
-z inwentarza (`src/lib/ai/inventory.ts`). Migracja `0108_ai_budget.sql` (numer tymczasowy).
+z inwentarza (`src/lib/ai/inventory.ts`). Migracja `0109_ai_budget.sql` (numer tymczasowy).
 
 ## Jak działa
 
@@ -59,6 +59,13 @@ raport czyta ostatnie 31 dni i 12 miesięcy.
   (ostrzeżenie) — rezerwacja bez rozliczenia > 15 min (proces padł w trakcie wywołania);
   `ai_budget_unavailable` (ostrzeżenie) — stanu nie da się odczytać. Stan (same liczby)
   w polu `aiBudget` odpowiedzi.
+
+## Funkcje objęte budżetem
+
+- Import ogłoszenia (#465): `withJobImportBudget` (`src/lib/ai/job-import-usage.ts`).
+- Asystent treści oferty (#37): bramka `src/lib/ai-assist/budget.ts` (rezerwacja → bilet →
+  rozliczenie), szacunek `src/lib/ai-assist/cost.ts`.
+- Tłumaczenia (#514): jeszcze nie — hook poniżej.
 
 ## Nowa funkcja AI (hook, np. tłumaczenia #514)
 

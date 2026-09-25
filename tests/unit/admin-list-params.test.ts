@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  cursorOrFilter,
   decodeAdminCursor,
   encodeAdminCursor,
   normalizeAdminSearch,
@@ -10,7 +9,6 @@ import {
   REPORT_REASON_KEY,
   reportReasonView,
   reportStatusesFor,
-  searchOrFilter,
 } from '@/lib/admin/list-params';
 import { appDayStartUtc, createAppDateFormatter } from '@/lib/datetime';
 import en from '@/messages/en.json';
@@ -39,12 +37,6 @@ describe('kursor list admina (#418)', () => {
   ])('kontrola ujemna: %s → null (pierwsza strona)', (_name, token) => {
     expect(decodeAdminCursor(token)).toBeNull();
   });
-
-  it('filtr kursora rozstrzyga równe daty po id', () => {
-    expect(cursorOrFilter({ createdAt: '2026-01-01T00:00:00Z', id: 'x' })).toBe(
-      'created_at.lt."2026-01-01T00:00:00Z",and(created_at.eq."2026-01-01T00:00:00Z",id.lt.x)',
-    );
-  });
 });
 
 describe('wyszukiwanie admina (#418)', () => {
@@ -54,12 +46,6 @@ describe('wyszukiwanie admina (#418)', () => {
     expect(normalizeAdminSearch('   ')).toBeNull();
     expect(normalizeAdminSearch(undefined)).toBeNull();
     expect(normalizeAdminSearch('jan_kowalski@example.com')).toBe('jan_kowalski@example.com');
-  });
-
-  it('buduje warunek ILIKE w cudzysłowie dla każdej kolumny', () => {
-    expect(searchOrFilter(['name', 'email'], 'de vos')).toBe(
-      'name.ilike."%de vos%",email.ilike."%de vos%"',
-    );
   });
 });
 

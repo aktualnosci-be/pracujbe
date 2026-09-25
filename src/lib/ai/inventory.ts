@@ -57,7 +57,7 @@ export interface AiFeature {
   costBudgeted: boolean;
 }
 
-export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation'] as const;
+export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'job_offer_assist'] as const;
 export type AiFeatureId = (typeof AI_FEATURE_IDS)[number];
 
 export const AI_FEATURES: readonly AiFeature[] = [
@@ -95,6 +95,24 @@ export const AI_FEATURES: readonly AiFeature[] = [
     usageLogged: false,
     // Hook gotowy: `withAiBudget({ feature: 'content_translation', … })` (docs/AI_BUDGET.md).
     costBudgeted: false,
+  },
+  {
+    id: 'job_offer_assist',
+    issues: ['#37'],
+    status: 'behind_flag',
+    callSites: ['src/lib/ai-assist/assist.ts'],
+    enableFlag: 'AI_JOB_ASSIST_ENABLED',
+    provider: 'anthropic',
+    inputs: ['job_offer_text'],
+    output:
+      'Propozycja nowego brzmienia opisu, obowiązków i wymagań oferty (JSON ze schematu) w języku oferty; propozycje z nowymi liczbami/linkami albo danymi kontaktowymi są odrzucane przez serwer.',
+    humanInTheLoop: true,
+    humanStep:
+      'Propozycja trafia wyłącznie do panelu w kreatorze (src/components/employer/JobAssistPanel.tsx); pole zmienia się dopiero po kliknięciu „Użyj propozycji”, a zapis robi rekruter przyciskiem „Dalej”/„Zapisz”. Akcja src/lib/actions/job-assist.ts nie zapisuje do bazy i nie woła publish_job.',
+    decidesAboutPerson: false,
+    usageLogged: true,
+    // Bramka `src/lib/ai-assist/budget.ts` = rezerwacja w globalnym budżecie (#36).
+    costBudgeted: true,
   },
 ];
 

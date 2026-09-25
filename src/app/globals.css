@@ -164,6 +164,8 @@
   --pp-line-note: #f0d8d9;
   --pp-line-pill: #e6e6e6;
   --pp-line-notice: #edc6c9;
+  /* `.btn.secondary` — obramowanie #ddd. */
+  --pp-line-btn: #dddddd;
   --pp-text-hero: #666666;
   --pp-text-sub: #707070;
   --pp-text-label: #626262;
@@ -236,6 +238,9 @@
   .pp-btn:hover { background: var(--pp-red-hover); border-color: var(--pp-red-hover); }
   .pp-btn-ink { background: var(--pp-ink); border-color: var(--pp-ink); }
   .pp-btn-ink:hover { background: var(--pp-black); border-color: var(--pp-black); opacity: .88; }
+  /* `.btn.secondary` — białe tło, linia #ddd, tekst ink. */
+  .pp-btn-secondary { background: var(--pp-white); border-color: var(--pp-line-btn); color: var(--pp-ink); }
+  .pp-btn-secondary:hover { background: var(--pp-section-bg); border-color: var(--pp-line-btn); }
   .pp-nav .pp-btn { min-height: 46px; padding: 12px 19px; }
   .pp-text-link {
     display: inline-flex;

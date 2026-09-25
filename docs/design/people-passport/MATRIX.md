@@ -50,7 +50,7 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/design/compare-p
 | public | `jobs` | `/pl/polityka-prywatnosci` | — | — | 94% | 90% | ✓ | jw. |
 | public | `jobs` | `/pl/polityka-cookies` | — | — | 94% | 90% | ✓ | jw. |
 | public | `jobs` | `/pl/zglos-tresc` | — | — | 94% | 90% | ✓ | Formularz DSA (#41): `.pp-page-title` (ten PR). |
-| public | `jobs` | `/pl/nie-ma-takiej-strony` | — | — | 77% | 79% | ~ | Strona 404 — własny, zwarty układ (H1 24 px) → zadanie Z5. |
+| public | `jobs` | `/pl/nie-ma-takiej-strony` | — | — | 98% | 100% | ✓ | Strona 404 = `.p-list-header` (nadtytuł „404”, H1 `.pp-page-title`) + `.pp-btn`/`.pp-btn-secondary` (Z5). Jedyna różnica: przycisk 49 px zamiast 58 px przycisku wyszukiwarki prototypu. |
 | auth | `apply` | `/pl/logowanie` | — | — | 54% | 59% | ✗ | Brak ekranu w prototypie. Minimalny layout auth (logo bez nawigacji, H1 24 px, przyciski shadcn 16 px/500) → zadanie Z4. |
 | auth | `apply` | `/pl/rejestracja` | — | — | 54% | 59% | ✗ | jw. |
 | auth | `apply` | `/pl/rejestracja-pracodawca` | — | — | 54% | 59% | ✗ | jw. |
@@ -82,10 +82,10 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/design/compare-p
 | employer | `company` | `/pl/employer/firma/nowa` | — | — | 90% | 81% | ~ | Brak ekranu; H1 `.extended` (ten PR). ([#496](https://github.com/aktualnosci-be/pracujbe/pull/496)) |
 | admin | `employer` | `/pl/admin` | — | — | 81% | 69% | ✗ | Brak ekranu; prymitywy panelu pracodawcy (#483). Chrome panelu → Z1; przyciski w tabelach mniejsze niż `.btn`. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
 | admin | `employer` | `/pl/admin/firmy` | — | — | 84% | 73% | ~ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
-| admin | `company` | `/pl/admin/firmy/[id]` | — | — | 75% | 65% | ✗ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
-| admin | `employer` | `/pl/admin/zgloszenia` | — | — | 81% | 69% | ✗ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
+| admin | `company` | `/pl/admin/firmy/[id]` | — | — | 81% | 69% | ✗ | H1 `.extended` 40/30 px (Z6); przyciski akcji = `.btn`. Pozostała różnica = chrome panelu → Z1. |
+| admin | `employer` | `/pl/admin/zgloszenia` | — | — | 84% | 73% | ~ | Filtry statusu i rodzaju = `.btn`/`.btn.secondary` (Z6). Pozostała różnica = chrome panelu → Z1. |
 | admin | `employer` | `/pl/admin/uzytkownicy` | — | — | 84% | 73% | ~ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
-| admin | `employer` | `/pl/admin/poczta` | — | — | 73% | 65% | ✗ | jw.; przyciski-pigułki (promień 9999 px) w filtrach → Z6. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
+| admin | `employer` | `/pl/admin/poczta` | — | — | 79% | 73% | ~ | Filtry = `.btn`/`.btn.secondary` zamiast pigułek (Z6). Pozostała różnica = chrome panelu → Z1. |
 | admin | `employer` | `/pl/admin/dziennik` | — | — | 84% | 81% | ~ | jw. ([#483](https://github.com/aktualnosci-be/pracujbe/pull/483)) |
 | brand | `home` | `/pl/offline` | — | — | 55% | 55% | ✗ | Samodzielny `public/offline.html` bez nagłówka witryny (działa bez sieci); logo/kolory prototypu. ([#510](https://github.com/aktualnosci-be/pracujbe/pull/510)) |
 | email | `materials/newsletter.html` | `React Email (newsletter)` | 6.2% | 18.6% | — | — | ~ | Odstępstwa klientów pocztowych (#510): bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii, inne teksty i liczba ofert; 390 px — różna wysokość treści. ([#510](https://github.com/aktualnosci-be/pracujbe/pull/510)) |
@@ -138,6 +138,12 @@ favicon prototypu (`#C23D22`, Arial) był szkicem kierunku i nie jest wzorcem.
   zamiast 288 px z licznikami i „Pokaż więcej”; wymaga sprawdzenia etykiet NL/FR i reflow 200%.
 - **Z4 — strony auth**: brak ekranu w prototypie; propozycja — `.paper.demo-form` z nagłówkiem
   witryny, H1 `.extended` i przyciskami `.pp-btn` (dziś layout minimalny, H1 24 px, shadcn).
-- **Z5 — strona 404**: H1 i przycisk w stylu `.pp-page-title`/`.pp-btn`.
-- **Z6 — przyciski w panelu admina**: pigułki filtrów (promień 9999 px, 44 px) i przyciski
-  tabel vs `.btn` prototypu (11 px promienia, 49 px).
+- ~~**Z5 — strona 404**~~ — zrobione (pomiar 2026-09-25): `.p-list-header` z nadtytułem „404”,
+  H1 `.pp-page-title` (40/32 px), `.pp-btn` + nowy `.pp-btn-secondary` (`.btn.secondary`,
+  linia `--pp-line-btn` #ddd); także globalna 404 poza językami.
+- ~~**Z6 — przyciski w panelu admina**~~ — zrobione (pomiar 2026-09-25): filtry list
+  (firmy, zgłoszenia, naruszenia, poczta, pytania) = `filterTabClass` (aktywny `.btn`, reszta
+  `.btn.secondary`, bez pigułek), akcje w wierszach i dialogu = `BTN_ACTION` (geometria
+  `.people .btn`: 14 px/650, 49 px, promień 11 px), szczegół firmy z H1 `.extended`.
+  Strażnik: `tests/e2e/prototype-matrix.spec.ts` (style z prototypu + axe, kontrola ujemna
+  na pigułce).

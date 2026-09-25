@@ -27,10 +27,8 @@ export default function RootNotFound(): React.JSX.Element {
     <html lang="pl">
       <body className="flex min-h-screen items-center justify-center bg-background p-6 font-sans text-foreground">
         <main className="max-w-md space-y-6 text-center">
-          <p className="text-6xl font-bold tracking-tight text-primary" aria-hidden="true">
-            404
-          </p>
-          <h1 className="space-y-1 text-xl font-semibold">
+          <p className="pp-eyebrow">404</p>
+          <h1 className="pp-page-title space-y-1">
             {LOCALES.map((l) => (
               <span key={l.code} lang={l.code} className="block">
                 {l.message}
@@ -44,7 +42,7 @@ export default function RootNotFound(): React.JSX.Element {
                   href={`/${l.code}`}
                   lang={l.code}
                   hrefLang={l.code}
-                  className="inline-flex h-12 items-center rounded-md border border-input px-5 text-sm font-medium hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="pp-btn pp-btn-secondary"
                 >
                   {l.home}
                 </a>

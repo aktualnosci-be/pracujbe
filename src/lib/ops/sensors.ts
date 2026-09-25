@@ -79,7 +79,7 @@ export function parseOpsMetrics(raw: unknown): OpsMetrics | null {
 }
 
 /**
- * @param aiBudget stan budżetu AI (#36, `ai_budget_status()` z 0108): `null` = odczyt się nie
+ * @param aiBudget stan budżetu AI (#36, `ai_budget_status()` z 0109): `null` = odczyt się nie
  *   udał (ostrzeżenie — rezerwacje i tak odmawiają przy błędzie bazy), `undefined` = nie mierzono.
  */
 export function evaluateOps(

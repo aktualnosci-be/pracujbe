@@ -247,12 +247,18 @@ describe('rezerwacja w bazie (databaseBudgetStore)', () => {
     });
   });
 
-  it('wyniki i funkcje w TS zgadzają się z CHECK-ami migracji 0108', async () => {
-    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/0108_ai_budget.sql'), 'utf8');
+  it('wyniki i funkcje w TS zgadzają się z CHECK-ami migracji 0109', async () => {
+    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/0109_ai_budget.sql'), 'utf8');
     const { AI_USAGE_OUTCOMES } = await import('@/lib/ai/usage-log');
     const { AI_FEATURE_IDS } = await import('@/lib/ai/inventory');
     const list = (values: readonly string[]) => values.map((v) => `'${v}'`).join(', ');
     expect(sql).toContain(`feature in (${list(AI_FEATURE_IDS)})`);
     expect(sql).toContain(`outcome in (${list(AI_USAGE_OUTCOMES)})`);
+  });
+
+  it('asystent (#37): szacunek budżetu używa tego samego max_tokens co wywołanie modelu', async () => {
+    const source = readFileSync(join(__dirname, '..', '..', 'src/lib/ai-assist/assist.ts'), 'utf8');
+    const { JOB_ASSIST_MAX_TOKENS } = await import('@/lib/ai-assist/cost');
+    expect(source).toContain(`max_tokens: ${JOB_ASSIST_MAX_TOKENS},`);
   });
 });

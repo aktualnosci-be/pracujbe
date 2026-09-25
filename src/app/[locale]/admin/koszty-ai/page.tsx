@@ -28,7 +28,7 @@ import { getAiCostReport } from '@/lib/data/admin-ai-costs';
  *
  * Wydatek doby i bieżącego miesiąca (Europe/Brussels) względem globalnego limitu, dzienne
  * agregaty per funkcja AI (wywołania, wyniki, tokeny, koszt) i sumy miesięczne. Dane z
- * `ai_cost_report` (0108) — same liczby, bez treści i identyfikatorów osób/firm. Limity
+ * `ai_cost_report` (0109) — same liczby, bez treści i identyfikatorów osób/firm. Limity
  * zmienia właściciel w bazie (docs/AI_BUDGET.md); strona nie ma akcji zapisu.
  */
 
@@ -39,6 +39,7 @@ const BASE_PATH = '/admin/koszty-ai';
 const FEATURE_KEY: Record<AiFeatureId, string> = {
   job_listing_import: 'aiCostsFeatureJobImport',
   content_translation: 'aiCostsFeatureTranslation',
+  job_offer_assist: 'aiCostsFeatureAssist',
 };
 
 const LEVEL_KEY: Record<AiBudgetLevel, string | null> = {
