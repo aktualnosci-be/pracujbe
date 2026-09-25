@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0108_admin_email_campaigns.sql — #45 (otwarte): panel admina kampanii e-mail.
+-- 0109_admin_email_campaigns.sql — #45 (otwarte): panel admina kampanii e-mail.
 --
 -- Numer TYMCZASOWY — ostateczny nada integrator (kolejka migracji).
 --

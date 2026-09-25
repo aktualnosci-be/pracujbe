@@ -21,7 +21,7 @@ import { getEmailCampaign, listEmailCampaigns } from '@/lib/data/admin-campaigns
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * #45 (otwarte) — panel admina kampanii e-mail: reguły (lustro RPC 0108), gotowość nadawcy,
+ * #45 (otwarte) — panel admina kampanii e-mail: reguły (lustro RPC 0109), gotowość nadawcy,
  * podgląd treści w każdym języku, akcje pod sesją admina (CAS statusu) i odczyt service-rolem
  * dopiero po potwierdzeniu roli. Kontrole ujemne: brak nadawcy = brak RPC aktywacji,
  * brak nadawcy = brak kolejkowania w harmonogramie.
@@ -42,7 +42,7 @@ vi.mock('@/lib/env', async (importOriginal) => ({
 const CAMPAIGN_ID = '7c0e8f4c-2b1d-4c3e-9f7a-1d2e3f4a5b6c';
 const ADMIN_ID = '00000000-0000-4000-8000-00000000a001';
 const MIGRATION = readFileSync(
-  resolve(process.cwd(), 'supabase/migrations/0108_admin_email_campaigns.sql'),
+  resolve(process.cwd(), 'supabase/migrations/0109_admin_email_campaigns.sql'),
   'utf8',
 );
 const MESSAGES = Object.fromEntries(
@@ -82,7 +82,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('reguły statusów (lustro RPC 0108)', () => {
+describe('reguły statusów (lustro RPC 0109)', () => {
   it('aktywacja tylko szkicu, zatrzymanie szkicu/aktywnej/zakończonej', () => {
     expect(CAMPAIGN_STATUSES.filter(canActivateCampaign)).toEqual(['draft']);
     expect(CAMPAIGN_STATUSES.filter(canCancelCampaign)).toEqual(['draft', 'active', 'completed']);
