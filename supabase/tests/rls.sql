@@ -9236,7 +9236,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- OL112. Linki firmy w publicznym detalu oferty (0112): get_public_job zwraca
+-- OL112. Linki firmy w publicznym detalu oferty (0114): get_public_job zwraca
 --        company_website / company_logo_url tylko dla firmy verified i tylko jako
 --        bezwzględny https (public_https_url). Kontrole ujemne w transakcjach cofanych:
 --        bez walidacji zły URL wycieka, bez bramki weryfikacji wycieka link firmy

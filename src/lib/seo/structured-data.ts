@@ -29,7 +29,7 @@ const HOST_LABEL = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 /**
  * Adres do publikacji w danych strukturalnych: bezwzględny https z nazwą hosta (co najmniej
  * jedna kropka), bez danych logowania, najwyżej 2048 znaków; inaczej `undefined`. Druga
- * warstwa po `public_https_url` w bazie (0112) — dane mogą też przyjść z innego źródła.
+ * warstwa po `public_https_url` w bazie (0114) — dane mogą też przyjść z innego źródła.
  */
 export function publicHttpsUrl(value: string | undefined): string | undefined {
   const raw = value?.trim();

@@ -117,7 +117,7 @@ describe('JobPosting JSON-LD (#313)', () => {
   });
 });
 
-describe('JobPosting hiringOrganization sameAs/logo (0112)', () => {
+describe('JobPosting hiringOrganization sameAs/logo (0114)', () => {
   const org = (overrides: Partial<JobDetail>) =>
     buildJobPostingJsonLd(job(overrides), 'u', labels).hiringOrganization as Record<string, unknown>;
 
