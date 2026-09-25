@@ -5,7 +5,7 @@
  * Egzekwowanie blokady żyje w bazie (migracja 0078): profil/PII, wyszukiwanie, dopasowania,
  * propozycje i wiadomości zablokowanej firmy. Tu jest tylko odczyt dla ekranu ustawień
  * i szczegółu oferty. Błąd odczytu = jawny `error` (bez udawania pustej listy); technikalia
- * wyłącznie do Sentry (Invariant #8).
+ * wyłącznie do kanału błędów (Invariant #8).
  *
  * Tryb demo (bez env): jedna przykładowa blokada firmy demonstracyjnej (Invariant #12 —
  * `demo: true`), żeby ekran i przepływ odblokowania działały bez backendu.
@@ -13,7 +13,7 @@
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpcRows } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { demoCompanies } from '@/lib/data/demo';
 
 export interface CompanyBlock {

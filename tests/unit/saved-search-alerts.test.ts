@@ -14,7 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * Zachowanie bazy (izolacja, idempotencja, opt-out) — `supabase/tests/rls.sql` sekcja SS100.
  */
 
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 

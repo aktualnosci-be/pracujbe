@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.rateLimit }));
 vi.mock('@/lib/turnstile/verify', () => ({ enforceTurnstile: mocks.turnstile }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 
 import { lookupReportCase, submitContentReport } from '@/lib/actions/content-reports';

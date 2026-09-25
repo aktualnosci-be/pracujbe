@@ -5,7 +5,7 @@ import { readTextWithLimit } from '@/lib/http/read-limited';
 import { parseFunnelPayload } from '@/lib/job-funnel/events';
 import { funnelRateLimiter } from '@/lib/job-funnel/rate-limit';
 import { classifyFunnelRequest } from '@/lib/job-funnel/request-filter';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Endpoint serwerowego lejka ofert (#99). Strony ofert są statyczne/ISR (#298), więc

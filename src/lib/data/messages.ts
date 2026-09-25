@@ -12,14 +12,14 @@
  *   od 0014 czytelne tylko dla członków firmy, więc kandydat dostaje '' → neutralna etykieta UI).
  * - `conversations`/`conversation_members`/`messages`: wyłącznie uczestnik konwersacji.
  *
- * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do Sentry,
+ * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do kanału błędów,
  * a wyniki listy i wątku odróżniają awarię od prawdziwego braku danych.
  */
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, queryRows, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 

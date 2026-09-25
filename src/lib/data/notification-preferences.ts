@@ -10,12 +10,12 @@
  *
  * Błąd odczytu NIE jest zamieniany na wartości domyślne (#309): ekran dostałby fałszywy stan,
  * a zapis nadpisałby wcześniejsze opt-outy. Loader zwraca jawny wynik `ready | error`;
- * technikalia trafiają tylko do Sentry (Invariant #8).
+ * technikalia trafiają tylko do kanału błędów (Invariant #8).
  */
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /** Preferencje powiadomień zalogowanego użytkownika (kontrakt dla UI/akcji). */
 export interface NotificationPreferences {

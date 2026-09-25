@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PortalIdentity } from '@/lib/auth/session';
 import { getJobCompanyBlockAction, setCompanyBlockAction } from '@/lib/actions/company-blocks';
 import { getJobCompanyBlock, loadMyCompanyBlocks } from '@/lib/data/company-blocks';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const ME = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const COMPANY = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';

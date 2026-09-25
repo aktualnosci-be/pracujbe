@@ -7,9 +7,8 @@ dopiero po transmisji.
 
 | Kanał | Stan w kodzie | Ochrona |
 |---|---|---|
-| Sentry Node/Edge (`sentry.server/edge.config.ts`, przez `src/instrumentation.ts`) | aktywny tylko z `NEXT_PUBLIC_SENTRY_DSN` | `beforeSend: redactSentryEvent` (#508, `src/lib/sentry-egress.ts`): nowe zdarzenie z samym kodem błędu; tracing wyłączony |
-| Sentry w przeglądarce (`sentry.client.config.ts`) | plik nie jest ładowany (brak `withSentryConfig`/`instrumentation-client`) — kanał nieaktywny | jw., gdy zostanie wpięty |
-| `captureError` (`src/lib/sentry.ts`) i `onRequestError` | jw. | do SDK trafia tylko kod (#508); zdarzenie i tak przechodzi `redactSentryEvent` |
+| Webhook błędów Discorda (#571, `src/lib/error-webhook/`, rejestrowany w `register()` w `src/instrumentation.ts`) | aktywny tylko z poprawną `ERROR_WEBHOOK_URL` (https, `discord.com`/`discordapp.com`, `/api/webhooks/<id>/<token>[/slack]`); pusta = brak wysyłki, `/api/health` `checks.errorWebhook=false` | wiadomość budowana od zera: kod z `ErrorCodes` (inaczej `INTERNAL`), trasa przez `redactUrl` (bez query/fragmentu, bez segmentów z danymi; `onRequestError` daje szablon trasy), wydanie, środowisko, czas; limit 2000 znaków |
+| `captureError` (`src/lib/error-report.ts`) i `onRequestError` | serwer: przez zarejestrowany reporter; przeglądarka: no-op (reporter nie istnieje, adres nie trafia do bundla) | do reportera trafia tylko kod — bez wyjątku, `cause` i kontekstu |
 | Logi serwera (stdout/stderr → Railway) | zawsze poza `next dev` | `installConsoleRedaction()` w `register()` — reguły z `src/lib/privacy/redact.ts` |
 
 ## Reguły redakcji logów (`src/lib/privacy/redact.ts`)
@@ -27,16 +26,25 @@ ani surowych odpowiedzi dostawców; loguj kod i obszar.
 
 ## Testy
 
-`tests/unit/privacy-redaction.test.ts` (reguły, konsola, filtr #508 na pełnym zdarzeniu,
-strażnik konfiguracji telemetrii), `tests/unit/privacy-sentry-sdk.test.ts` (payload
-wychodzący z SDK przez przechwycony transport z opcjami jak w configach: `captureError`,
-`onRequestError`, breadcrumbs, `cause`, tracing) i kontrola ujemna
-`privacy-sentry-sdk-control.test.ts` (to samo bez filtra niesie dane). Uzupełniają testy
-#508 (`sentry-egress`, `sentry-capture`). Uruchamiane w jobie `unit`.
+`tests/unit/privacy-redaction.test.ts` (reguły, konsola, wiadomość webhooka z danymi na
+wejściu, strażnik konfiguracji telemetrii) i `tests/unit/error-webhook.test.ts` (#571: oba
+formaty adresu i odrzucenie obcych, brak wysyłki bez zmiennej, payload bez PII z kontrolą
+ujemną, `onRequestError` z szablonem trasy, limit i obcięcie, deduplikacja, 429 `retry_after`,
+timeout, ciche awarie bez adresu w logach, strażnik bundla klienta i braku SDK Sentry).
+Uruchamiane w jobie `unit`.
+
+## Webhook błędów (#571)
+
+- Sentry usunięte (`@sentry/nextjs`, `sentry.*.config.ts`, `sentry-egress`): SDK w przeglądarce
+  i tak nie było ładowane, a serwerowe zdarzenia zawierały tylko kod — webhook daje ten sam
+  zakres bez zależności (mniej kodu w buildzie serwera i Edge, bez hosta Sentry w CSP).
+- Ten sam kod najwyżej raz na 10 min (następna wiadomość podaje liczbę pominiętych), po 429
+  przerwa wg `retry_after` (maks. 1 h), timeout 3 s. Błąd webhooka nie zmienia odpowiedzi
+  i nie jest logowany z adresem. Stan deduplikacji jest per proces.
 
 ## Poza kodem (właściciel)
 
-Konfiguracja produkcyjna Sentry (czy DSN jest ustawiony), region, retencja, dostęp personelu,
-umowa powierzenia i transfer poza EOG, logi Railway (retencja, dostęp), wpis do rejestru
+Adres webhooka w Railway (`ERROR_WEBHOOK_URL`), kto ma dostęp do kanału Discorda, region,
+retencja i warunki Discorda, logi Railway (retencja, dostęp), wpis do rejestru
 czynności (#485), retencja i usuwanie danych już wysłanych (#486), ocena ewentualnych
-incydentów wg runbooka #490. Do czasu tej oceny Sentry pozostaje wyłączone (brak DSN).
+incydentów wg runbooka #490. Wiadomość nie zawiera danych osobowych, ale ocena kanału należy do właściciela.

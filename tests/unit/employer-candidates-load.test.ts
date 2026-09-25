@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTopMatchedCandidates } from "@/lib/data/employer";
 import { getActiveCompany } from "@/lib/company-context";
 import { getPortalIdentity } from "@/lib/db/portal";
-import { captureError } from "@/lib/sentry";
+import { captureError } from "@/lib/error-report";
 import { fakeDb, fakeSession, pgError, resetFakeDb } from "../helpers/fake-db";
 
 vi.mock("@/lib/db/portal", async () => {
@@ -11,7 +11,7 @@ vi.mock("@/lib/db/portal", async () => {
   return { ...portal, getPortalIdentity: vi.fn(portal.getPortalIdentity) };
 });
 vi.mock("@/lib/company-context", () => ({ getActiveCompany: vi.fn() }));
-vi.mock("@/lib/sentry", () => ({ captureError: vi.fn() }));
+vi.mock("@/lib/error-report", () => ({ captureError: vi.fn() }));
 
 const USER = "11111111-1111-4111-8111-111111111111";
 

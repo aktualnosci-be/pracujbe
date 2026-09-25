@@ -16,7 +16,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { jsonArg, rpc as callRpc, type RpcArgs } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { isLocale } from '@/i18n/routing';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Server Actions rejestru incydentów i naruszeń danych osobowych (#490) — panel admina.
@@ -81,7 +81,7 @@ type RpcOutcome = { data: unknown; error?: undefined } | { data?: undefined; err
 
 /**
  * Jedno RPC pod sesją administratora. Brak sesji → `null` (PERMISSION_DENIED); błąd bazy →
- * `{ error }` do mapowania na kod użytkowy; inne wyjątki (sieć, konfiguracja) rzucają → Sentry.
+ * `{ error }` do mapowania na kod użytkowy; inne wyjątki (sieć, konfiguracja) rzucają → kanał błędów.
  */
 async function adminRpc(fn: string, args: RpcArgs): Promise<RpcOutcome | null> {
   const me = await getPortalIdentity();

@@ -15,7 +15,7 @@ export type ProcessorId =
   | 'railway'
   | 'resend'
   | 'emaillabs'
-  | 'sentry'
+  | 'discord-webhook'
   | 'cloudflare-turnstile'
   | 'anthropic'
   | 'stripe'
@@ -120,16 +120,19 @@ export const PROCESSORS: readonly Processor[] = [
     ...UNKNOWN,
   },
   {
-    id: 'sentry',
-    name: 'Sentry',
-    purpose: 'Zgłaszanie błędów aplikacji (klient, serwer, edge).',
-    dataCategories: ['Kod błędu z listy ErrorCodes, identyfikator i czas zdarzenia'],
-    dataSubjects: ['Użytkownicy, u których wystąpił błąd (pośrednio)'],
-    activation: 'NEXT_PUBLIC_SENTRY_DSN / SENTRY_DSN; bez DSN brak wysyłki.',
-    codeRefs: ['sentry.client.config.ts', 'sentry.server.config.ts', 'sentry.edge.config.ts', 'src/lib/sentry-egress.ts'],
+    id: 'discord-webhook',
+    name: 'Discord (webhook kanału błędów)',
+    purpose: 'Powiadomienie zespołu o błędzie serwera (5xx, captureError) na kanale Discorda (#571).',
+    dataCategories: [
+      'Dane techniczne bez danych osobowych: kod błędu z listy ErrorCodes, szablon trasy bez query/fragmentu, wersja wydania (SHA), środowisko, czas, liczba pominiętych powtórzeń',
+    ],
+    dataSubjects: ['Brak (wiadomość nie zawiera danych osób; trasa i tekst przechodzą redakcję #502)'],
+    activation: 'ERROR_WEBHOOK_URL (tylko serwer; https discord.com/discordapp.com); pusta zmienna = brak wysyłki.',
+    codeRefs: ['src/lib/error-webhook/', 'src/lib/error-report.ts', 'src/instrumentation.ts'],
     notes: [
-      'sendDefaultPii: false, Session Replay i tracing wyłączone (sample rate 0).',
-      'beforeSend = redactSentryEvent: zdarzenie budowane od zera z bezpiecznych pól (bez URL, treści wyjątku, extras i załączników).',
+      'Wysyłka tylko z runtime serwera (reporter rejestrowany w instrumentation); w przeglądarce captureError to no-op.',
+      'Wiadomość budowana od zera z bezpiecznych pól — bez treści wyjątku, cause, kontekstu, nagłówków i parametrów; limit 2000 znaków.',
+      'Ten sam kod najwyżej raz na 10 min, przerwa po 429 wg retry_after, timeout 3 s; adres webhooka nie trafia do logów ani komunikatów.',
     ],
     ...UNKNOWN,
   },

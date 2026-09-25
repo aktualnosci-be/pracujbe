@@ -26,7 +26,7 @@ import {
 import { rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { reportCaseLookupSchema } from '@/lib/validation/content-report';
 
 /**
@@ -98,7 +98,7 @@ function groundsFailure(message: string): AppealActionResult | null {
     : null;
 }
 
-/** Wyjątek przy zapisie odwołania → pole `grounds` albo kod użytkowy; nieznany = INTERNAL (+ Sentry). */
+/** Wyjątek przy zapisie odwołania → pole `grounds` albo kod użytkowy; nieznany = INTERNAL (+ kanał błędów). */
 function appealFailure(error: unknown, area: string): AppealActionResult {
   if (!isDatabaseError(error)) {
     captureError(error, { area });

@@ -13,7 +13,7 @@ import { evaluateOps } from '@/lib/ops/sensors';
  *
  * HTTP 200 `ok` — brak alarmów (także sygnał recovery po alarmie);
  * HTTP 503 `alert` — co najmniej jeden próg przekroczony (kody w `alerts`);
- * HTTP 503 `unavailable` — metryk nie da się odczytać (baza/konfiguracja; szczegół w Sentry);
+ * HTTP 503 `unavailable` — metryk nie da się odczytać (baza/konfiguracja; szczegół w kanale błędów);
  * HTTP 503 `unconfigured` — brak źródła metryk (`DATABASE_OPS_URL` ani service-role).
  */
 

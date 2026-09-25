@@ -22,7 +22,7 @@ const COMPANY = '22222222-2222-4222-8222-222222222222';
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(() => true) }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/company-context', () => ({ getActiveCompany: vi.fn() }));
 vi.mock('@/lib/ai-assist/assist', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/lib/ai-assist/assist')>();

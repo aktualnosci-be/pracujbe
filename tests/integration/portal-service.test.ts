@@ -12,7 +12,7 @@ import { startPortalDb } from './support/portal-db';
 const { sent } = vi.hoisted(() => ({ sent: [] as Array<{ to: string; html: string; subject: string }> }));
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('next/headers', () => ({ headers: async () => new Headers({ 'x-real-ip': '192.0.2.44' }) }));
 vi.mock('@/lib/turnstile/verify', () => ({ enforceTurnstile: async () => null }));
 // Konfiguracja integracji nie transformuje JSX; render szablonów sprawdzają testy unit

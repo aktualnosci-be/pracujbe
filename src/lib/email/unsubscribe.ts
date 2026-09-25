@@ -5,7 +5,7 @@ import type { EmailPreferenceCategory } from '@/lib/email/categories';
 import { unsubscribeSecretFromEnv, verifyUnsubscribeToken } from '@/lib/email/unsubscribe-token';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Wypisanie z kategorii e-maili na podstawie podpisanego tokenu (#45).

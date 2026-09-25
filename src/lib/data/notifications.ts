@@ -11,7 +11,7 @@
  * czas przez `Intl.RelativeTimeFormat` w języku odbiorcy. Zwracamy ścieżki BEZ prefiksu
  * locale — prefiks dołoży `Link`/nawigacja z `@/i18n/navigation`.
  *
- * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do Sentry
+ * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do kanału błędów
  * i zwracamy osobny stan błędu, bez niepewnego licznika i linków.
  */
 
@@ -19,7 +19,7 @@ import { getTranslations } from 'next-intl/server';
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryCount, queryRows } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 
 /* ---------------------------------------------------------------------------
@@ -244,7 +244,7 @@ function demoNotifications(
 
 /**
  * Ostatnie powiadomienia bieżącego użytkownika (created_at desc, limit 20) + licznik
- * nieprzeczytanych. Bez env → 3 pozycje DEMO (linki wg `demoRole`). Błąd → Sentry + stan błędu.
+ * nieprzeczytanych. Bez env → 3 pozycje DEMO (linki wg `demoRole`). Błąd → kanał błędów + stan błędu.
  */
 export async function getNotifications(
   locale: string,
