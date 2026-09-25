@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { ApplicationActions } from '@/components/candidate/ApplicationActions';
+import { ApplicationScreeningAnswers } from '@/components/candidate/ApplicationScreeningAnswers';
 import { StatusPill } from '@/components/ui/status-pill';
 import { loadMoreApplications } from '@/lib/actions/candidate-applications';
 import type { MyApplication, MyApplicationsPage } from '@/lib/data/candidate';
@@ -143,6 +144,10 @@ export function CandidateApplicationsList({
                     </span>
                   ))}
                 </div>
+                {/* #101: pytania screeningowe i odpowiedzi — snapshot z chwili wysłania. */}
+                {app.screeningCount > 0 ? (
+                  <ApplicationScreeningAnswers applicationId={app.id} count={app.screeningCount} locale={locale} />
+                ) : null}
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                   {app.slug ? (
                     <Link href={`/oferty-pracy/${app.slug}`} className={TEXT_LINK}>

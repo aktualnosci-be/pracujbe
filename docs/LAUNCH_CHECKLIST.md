@@ -51,12 +51,10 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 
 ## 4. Auth
 
-- [ ] Confirm email = ON; szablony e-mail Auth w PL/NL/FR/EN i z brandingiem.
-- [ ] **Send Email Hook** (Authentication → Hooks → Send Email) ustawiony na
-      `https://pracuj.be/api/auth/email-hook` z sekretem `SEND_EMAIL_HOOK_SECRET` —
-      e-maile Auth (potwierdzenie/reset) idą w JĘZYKU ODBIORCY (Invariant #1). Zweryfikuj
-      na staging, że mail przychodzi w języku rejestracji (a nie domyślnym GoTrue).
-- [ ] Site URL = `https://pracuj.be`; Redirect URLs (allow list) obejmują produkcję.
+- [ ] Konta Better Auth na PostgreSQL Railway (#24): `DATABASE_AUTH_URL`, `BETTER_AUTH_SECRET`,
+      `BETTER_AUTH_URL` = `https://pracuj.be`; `/api/health` z tokenem pokazuje `auth`/`authUrl` = true.
+- [ ] E-maile kont (potwierdzenie/reset) z kolejki `auth.email_outbox`: `DATABASE_AUTH_MAIL_URL` +
+      `RESEND_API_KEY` + cron `/api/email/process`; mail przychodzi w JĘZYKU ODBIORCY (Invariant #1).
 - [ ] Rate limits i (opcjonalnie) CAPTCHA włączone.
 - [ ] Reset hasła nie ujawnia istnienia konta.
 

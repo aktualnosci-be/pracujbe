@@ -51,7 +51,7 @@ const application = { jobId: JOB, agreeTerms: true as const, idempotencyKey: KEY
 const RPCS = [
   'apply_to_job', 'transition_application', 'send_offer', 'respond_to_offer',
   'save_candidate_onboarding_step3', 'save_candidate_onboarding_step5', 'finish_onboarding',
-  'record_document_acceptance',
+  'record_signup_consents',
 ] as const;
 
 /** Wszystkie RPC przepływu zwracają wynik; `fail(name, message)` = błąd bazy (pg: message + SQLSTATE). */
@@ -196,7 +196,7 @@ describe('saveOnboardingStep', () => {
     certificates: ['VCA', 'ADR'],
     certificateExpiry: { VCA: '2027-01-31' },
   };
-  const STEP6 = { availability: 'immediate', preferredContractTypes: ['permanent'], agreeTerms: true };
+  const STEP6 = { availability: 'immediate', preferredContractTypes: ['permanent'], agreeTerms: true, privacyNoticeAck: true };
 
   it('krok 3: doświadczenie i umiejętności jednym RPC (jedna transakcja, #142)', async () => {
     expect(await saveOnboardingStep(3, STEP3)).toEqual({ ok: true });
@@ -220,15 +220,30 @@ describe('saveOnboardingStep', () => {
     ]);
   });
 
-  it('krok 6 z finish: finish_onboarding i receipt zgody', async () => {
+  it('krok 6 z finish: finish_onboarding i osobne receipty bez zgód na inne cele (#493)', async () => {
     expect(await saveOnboardingStep(6, STEP6, { finish: true })).toEqual({ ok: true });
     expect(fakeDb.callsTo('onboarding.candidate-profile-upsert')[0]!.as).toBe(USER);
     expect(fakeDb.callsTo('finish_onboarding')[0]).toMatchObject({ as: USER, args: {} });
-    // Receipt: RPC tylko dla service_role, kluczowane UUID z sesji.
-    expect(fakeDb.callsTo('record_document_acceptance')[0]).toMatchObject({
+    // Receipty: RPC tylko dla service_role, kluczowane UUID z sesji; regulamin i informacja
+    // o prywatności osobno, kanał onboarding, bez zgód opcjonalnych.
+    const call = fakeDb.callsTo('record_signup_consents')[0]!;
+    expect(call).toMatchObject({
       as: 'service',
-      args: { p_profile_id: USER, p_documents: ['terms', 'privacy'], p_locale: 'nl', p_user_agent: 'vitest' },
+      args: {
+        p_profile_id: USER,
+        p_terms_accepted: true,
+        p_privacy_notice_ack: true,
+        p_source: 'onboarding',
+        p_locale: 'nl',
+        p_user_agent: 'vitest',
+      },
     });
+    expect(JSON.parse(call.args['p_optional'] as string)).toEqual({});
+    expect(Object.keys(JSON.parse(call.args['p_wording_versions'] as string)).sort()).toEqual([
+      'privacy',
+      'terms',
+    ]);
+    expect(fakeDb.callsTo('record_document_acceptance')).toHaveLength(0);
   });
 
   it('krok 6 z finish: profil niekompletny w DB → ONBOARDING_INCOMPLETE, bez receiptu', async () => {
@@ -237,7 +252,7 @@ describe('saveOnboardingStep', () => {
       ok: false,
       error: 'ONBOARDING_INCOMPLETE',
     });
-    expect(fakeDb.callsTo('record_document_acceptance')).toHaveLength(0);
+    expect(fakeDb.callsTo('record_signup_consents')).toHaveLength(0);
   });
 
   it.each([
@@ -278,6 +293,10 @@ describe('saveOnboardingStep', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
+    // #493: sam regulamin bez potwierdzenia informacji o prywatności nie kończy onboardingu.
+    expect(
+      await saveOnboardingStep(6, { ...STEP6, privacyNoticeAck: undefined }, { finish: true }),
+    ).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
     expect(fakeDb.calls).toHaveLength(0);
   });
 });

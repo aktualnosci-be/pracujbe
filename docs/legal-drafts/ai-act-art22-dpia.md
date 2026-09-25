@@ -24,9 +24,10 @@ AI albo adres jego API), który nie ma wpisu w inwentarzu. Test ma kontrolę uje
 |---|---|---|---|---|---|---|
 | A1 | Import ogłoszenia (#465, #469) | na `main`, za flagą `AI_JOB_IMPORT_ENABLED` (domyślnie wyłączona) | zrzut ekranu albo tekst strony ogłoszenia osoby trzeciej, dostarczony przez rekrutera | pola kreatora oferty + lista pól „do sprawdzenia” | tak: wynik trafia tylko do szkicu (`save_job_draft`); akcja nie woła `publish_job`; publikuje rekruter | brak: kod nie dotyka aplikacji, profili, dopasowań ani widoczności kandydatów (test) |
 | A2 | Tłumaczenie treści (#31, #32) | otwarty PR #514; na tej gałęzi brak pliku | pola oferty (pracodawca) i pola profilu kandydata (kandydat) | tłumaczenie tych pól na inne języki portalu, po walidacji faktów | do potwierdzenia po scaleniu #514 (w inwentarzu: `humanInTheLoop: false`, korekta ręczna po fakcie) | do potwierdzenia po scaleniu #514 |
+| A3 | Asystent redagowania oferty (#37, część pracodawcy) | ten PR, za flagą `AI_JOB_ASSIST_ENABLED` (domyślnie wyłączona) | tytuł, opis, obowiązki i wymagania obowiązkowe oferty wpisane przez rekrutera (e-maile, telefony, numery identyfikacyjne usuwane przed wysłaniem) | propozycja nowego brzmienia tych pól w języku oferty; propozycje z nowymi liczbami/linkami albo danymi kontaktowymi odrzuca serwer | tak: propozycja widoczna obok tekstu rekrutera; pole zmienia się dopiero po kliknięciu „Użyj propozycji”; akcja nic nie zapisuje i nie publikuje (test) | brak: wejście nie zawiera danych kandydatów (ścisły schemat, test); kod nie dotyka aplikacji, profili, dopasowań ani widoczności |
 
-Dostawca obu funkcji: Anthropic (Messages API). Model domyślny: `claude-opus-5`, nadpisywalny
-zmienną środowiskową. Model nie ma narzędzi; odpowiedź ogranicza schemat JSON.
+Dostawca wszystkich funkcji: Anthropic (Messages API). Model domyślny: `claude-opus-5` (A1),
+`claude-opus-5-5` (A3), nadpisywalny zmienną środowiskową. Model nie ma narzędzi; odpowiedź ogranicza schemat JSON.
 
 Log użycia: od tej zmiany import ogłoszenia (A1) zapisuje jeden wiersz JSON na wywołanie
 modelu (`src/lib/ai/usage-log.ts`): `type`, `at`, `feature`, `outcome`, `inputKind`, `model`,

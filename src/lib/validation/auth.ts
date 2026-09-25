@@ -34,7 +34,7 @@ const nameSchema = z
   .max(80, 'auth.error.nameTooLong');
 
 /**
- * Zgoda na regulamin: wymagane `true`. Celowo NIE `z.literal(true)` — niepoprawny literal jest
+ * Akceptacja regulaminu (#493: tylko regulamin): wymagane `true`. Celowo NIE `z.literal(true)` — niepoprawny literal jest
  * błędem krytycznym Zod, który wstrzymuje `.refine` całego obiektu, przez co niezgodność haseł
  * wychodziła dopiero po poprawieniu reszty formularza. Błąd niekrytyczny (`fatal: false`)
  * pozwala zgłosić wszystkie problemy w jednej rundzie.
@@ -43,6 +43,18 @@ const agreeTermsSchema = z.custom<true>((value) => value === true, {
   message: 'auth.error.termsRequired',
   fatal: false,
 });
+
+/**
+ * Potwierdzenie zapoznania się z informacją o prywatności (#493) — osobne pole, NIE zgoda.
+ * Wymagane (dowód spełnienia obowiązku informacyjnego), niekrytyczne jak regulamin.
+ */
+const privacyNoticeAckSchema = z.custom<true>((value) => value === true, {
+  message: 'auth.error.privacyNoticeRequired',
+  fatal: false,
+});
+
+/** Zgoda opcjonalna (#493): brak/odmowa nie blokuje rejestracji. */
+const optionalConsentSchema = z.boolean().optional();
 
 /** Zgodność haseł; puste powtórzenie ma własny komunikat („Powtórz hasło”). */
 function passwordsMatch(data: { password: string; passwordConfirm: string }): boolean {
@@ -63,6 +75,8 @@ export const registerCandidateSchema = z
     lastName: nameSchema,
     locale: localeSchema.optional(),
     agreeTerms: agreeTermsSchema,
+    privacyNoticeAck: privacyNoticeAckSchema,
+    marketingOptIn: optionalConsentSchema,
   })
   .refine(passwordsMatch, {
     path: ['passwordConfirm'],
@@ -84,6 +98,8 @@ export const registerEmployerSchema = z
     lastName: nameSchema,
     locale: localeSchema.optional(),
     agreeTerms: agreeTermsSchema,
+    privacyNoticeAck: privacyNoticeAckSchema,
+    marketingOptIn: optionalConsentSchema,
   })
   .refine(passwordsMatch, {
     path: ['passwordConfirm'],

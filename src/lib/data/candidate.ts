@@ -27,6 +27,7 @@ import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 import { findLatestActiveProposal } from '@/lib/candidate-offers';
 import { customOfferMessage } from '@/lib/offers/default-message';
+import { parseScreeningAnswers, type ScreeningAnswer } from '@/lib/screening/questions';
 import {
   EMPTY_PROFILE_CHECKLIST,
   completionPctOf,
@@ -71,6 +72,11 @@ export interface MyApplication {
   /** Data zgłoszenia (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
   date: string;
   status: string;
+  /**
+   * Liczba zapisanych odpowiedzi na pytania screeningowe (#101). > 0 = karta pokazuje
+   * przycisk „Moje odpowiedzi”; treść wczytuje osobno `getMyApplicationScreeningAnswers`.
+   */
+  screeningCount: number;
 }
 
 export interface ApplicationCursor {
@@ -394,9 +400,23 @@ function demoApplications(locale: Locale): MyApplication[] {
       slug: job?.slug ?? null,
       date: new Date(Date.now() - pick.daysAgo * 86_400_000).toISOString(),
       status: pick.status,
+      screeningCount: DEMO_SCREENING_ANSWERS[`demo-app-${index}`]?.length ?? 0,
     };
   });
 }
+
+/**
+ * Odpowiedzi DEMO (#101) — snapshot jak w `application_screening_answers`: treść w języku
+ * oferty (PL) i tłumaczenia; pytanie bez odpowiedzi pokazuje „Brak odpowiedzi”.
+ */
+const DEMO_SCREENING_ANSWERS: Record<string, ScreeningAnswer[]> = {
+  'demo-app-0': [
+    { position: 0, type: 'yes_no', required: true, prompt: { pl: 'Czy masz prawo jazdy kat. B?', nl: 'Heb je een rijbewijs B?', fr: 'Avez-vous le permis B ?', en: 'Do you hold a category B driving licence?' }, options: [], answerBoolean: true, answerDate: null, answerText: null },
+    { position: 1, type: 'single_choice', required: true, prompt: { pl: 'Na którą zmianę możesz pracować?', nl: 'Welke ploeg kun je werken?', fr: 'Quelle équipe pouvez-vous faire ?', en: 'Which shift can you work?' }, options: [{ id: 'o1', label: { pl: 'Dzienna', nl: 'Dagploeg', fr: 'Jour', en: 'Day shift' } }, { id: 'o2', label: { pl: 'Nocna', nl: 'Nachtploeg', fr: 'Nuit', en: 'Night shift' } }], answerBoolean: null, answerDate: null, answerText: 'o2' },
+    { position: 2, type: 'date', required: false, prompt: { pl: 'Od kiedy możesz zacząć?', nl: 'Vanaf wanneer kun je beginnen?', fr: 'À partir de quand pouvez-vous commencer ?', en: 'When can you start?' }, options: [], answerBoolean: null, answerDate: '2026-10-05', answerText: null },
+    { position: 3, type: 'short_text', required: false, prompt: { pl: 'Opisz krótko doświadczenie na magazynie', nl: 'Beschrijf kort je magazijnervaring', fr: 'Décrivez brièvement votre expérience en entrepôt', en: 'Briefly describe your warehouse experience' }, options: [], answerBoolean: null, answerDate: null, answerText: null },
+  ],
+};
 
 function demoSaved(locale: Locale): RecommendedJob[] {
   return resolveDemoJobs(locale)
@@ -696,7 +716,9 @@ export async function getMyApplicationsPage(
       // Kursor (czas + UUID) jako porównanie krotek: starsze zgłoszenie albo ten sam czas
       // i mniejszy UUID. Kursor z Server Action jest sprawdzany przez Zod przed trafieniem tutaj.
       const rows = await queryRows(tx, 'candidate.applications-page',
-        `SELECT id, job_id, status, submitted_at
+        `SELECT id, job_id, status, submitted_at,
+                (SELECT count(*)::int FROM public.application_screening_answers s
+                  WHERE s.application_id = applications.id) AS screening_count
            FROM public.applications
           WHERE candidate_id = $1
             AND deleted_at IS NULL
@@ -732,6 +754,7 @@ export async function getMyApplicationsPage(
           slug: job?.slug ?? null,
           date: asStr(r['submitted_at']),
           status: asStr(r['status'], 'submitted'),
+          screeningCount: Number(r['screening_count'] ?? 0) || 0,
         };
       });
       return { items, nextCursor };
@@ -755,6 +778,7 @@ function developmentApplicationFixture(locale: Locale, cursor: ApplicationCursor
       slug: job?.slug ?? null,
       date: submittedAt,
       status: 'submitted',
+      screeningCount: 0,
     };
   });
   const remaining = cursor
@@ -777,6 +801,36 @@ export async function getMyApplicationsPreview(
   } catch {
     // getMyApplicationsPage zgłosił już błąd do Sentry.
     return { status: 'error' };
+  }
+}
+
+/**
+ * Pytania screeningowe i odpowiedzi WŁASNEGO zgłoszenia (#101) — niezmienny snapshot
+ * z `application_screening_answers` (treść pytań i opcji z chwili wysłania, nie z bieżącej
+ * oferty). Odczyt pod sesją: polityka `application_screening_answers_select` (0093) wpuszcza
+ * kandydata tylko do jego zgłoszeń; warunek `candidate_id` w zapytaniu to ten sam zakres
+ * powtórzony jawnie. Cudze albo nieistniejące zgłoszenie = pusta lista. Błąd bazy → wyjątek
+ * (ekran pokazuje błąd z ponowieniem, nie „brak pytań”).
+ */
+const ANSWERS_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function getMyApplicationScreeningAnswers(applicationId: string): Promise<ScreeningAnswer[]> {
+  if (!isPortalDataConfigured()) return DEMO_SCREENING_ANSWERS[applicationId] ?? [];
+  if (!ANSWERS_UUID_RE.test(applicationId)) return [];
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return [];
+    const rows = await withPortalTransaction(me, (tx) => queryRows(tx, 'candidate.application-screening-answers',
+      `SELECT s.position, s.type, s.required, s.prompt, s.options, s.answer_boolean, s.answer_date, s.answer_text
+         FROM public.application_screening_answers s
+         JOIN public.applications a ON a.id = s.application_id
+        WHERE s.application_id = $1 AND a.candidate_id = $2 AND a.deleted_at IS NULL
+        ORDER BY s.position`, [applicationId, me.id]));
+    return parseScreeningAnswers(rows);
+  } catch (error) {
+    captureError(error, { area: 'candidate.getMyApplicationScreeningAnswers' });
+    throw error;
   }
 }
 
