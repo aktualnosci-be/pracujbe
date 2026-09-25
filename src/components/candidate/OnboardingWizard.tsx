@@ -1220,7 +1220,7 @@ export function OnboardingWizard({
           }}
         />
         <div className="flex min-w-0 flex-col gap-[13px] lg:flex-row lg:flex-wrap">
-          <Button asChild variant="ghost" disabled={busy} className={cn(BTN_RESET, 'min-h-[49px] rounded-[11px] px-[19px] text-sm font-[650]')}>
+          <Button asChild variant="ghost" disabled={busy} className={cn(BTN_RESET, 'min-h-[49px] rounded-[11px] px-[19px] text-sm font-[650] leading-[normal]')}>
             <Link href="/candidate">{t('cancel')}</Link>
           </Button>
           {/* #323: `aria-disabled` zamiast `disabled` — przycisk zachowuje fokus podczas zapisu;

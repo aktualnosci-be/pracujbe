@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { ErrorCode } from '@/lib/errors';
+import { AiBudgetError } from '@/lib/ai/budget-error';
 import { ExtractorError, type ExtractionInput, type JobExtractor } from '@/lib/ai-import/extract';
 import { checkImportImageBytes, type ImportImageProblem } from '@/lib/ai-import/image';
 import { mapExtraction, type MappedImport } from '@/lib/ai-import/map';
@@ -87,6 +88,8 @@ export async function runJobImport(source: ImportSource, deps: RunImportDeps): P
   try {
     raw = await deps.extractor.extract(input);
   } catch (e) {
+    // #36: budżet przekroczony lub niedostępny — model nie został wywołany (fail-closed).
+    if (e instanceof AiBudgetError) return { ok: false, error: 'AI_BUDGET_EXCEEDED' };
     if (e instanceof ExtractorError && e.reason === 'rateLimited') return { ok: false, error: 'RATE_LIMITED' };
     return { ok: false, error: 'JOB_IMPORT_FAILED' };
   }

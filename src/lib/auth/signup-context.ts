@@ -10,6 +10,10 @@ import {
   type RegisterEmployerInput,
 } from '../validation/auth';
 import {
+  registerInvitedEmployerSchema,
+  type RegisterInvitedEmployerInput,
+} from '../validation/team-invite-signup';
+import {
   consentWordingVersions,
   OPTIONAL_CONSENT_PURPOSES,
   signupOptionalConsents,
@@ -55,7 +59,7 @@ function denied(): never {
 }
 
 async function runSignup<T>(
-  input: RegisterCandidateInput | RegisterEmployerInput,
+  input: RegisterCandidateInput | RegisterEmployerInput | RegisterInvitedEmployerInput,
   role: SignupMetadata['role'],
   fallbackLocale: unknown,
   action: (credentials: SignupCredentials) => Promise<T>,
@@ -105,6 +109,18 @@ export async function withEmployerSignup<T>(
   action: (credentials: SignupCredentials) => Promise<T>,
 ): Promise<T> {
   return runSignup(registerEmployerSchema.parse(input), 'employer', fallbackLocale, action);
+}
+
+/**
+ * Pracodawca z linku zaproszenia do zespołu (0121): bez nazwy firmy w metadanych, więc
+ * potwierdzenie adresu nie zakłada firmy — zaproszenie czeka w panelu.
+ */
+export async function withInvitedEmployerSignup<T>(
+  input: unknown,
+  fallbackLocale: unknown,
+  action: (credentials: SignupCredentials) => Promise<T>,
+): Promise<T> {
+  return runSignup(registerInvitedEmployerSchema.parse(input), 'employer', fallbackLocale, action);
 }
 
 /** Hook endpointu: również duplikat e-maila musi przejść tę samą walidację. */

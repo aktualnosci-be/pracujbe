@@ -15,7 +15,7 @@ import {
 import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
   hashGuestToken,

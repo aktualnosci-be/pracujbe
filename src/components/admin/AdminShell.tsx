@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { BarChart3, Building2, Flag, History, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, ShieldAlert, Users } from 'lucide-react';
+import { BarChart3, Building2, Coins, Flag, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, ShieldAlert, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
@@ -12,7 +12,7 @@ import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/Da
 /**
  * AdminShell — chrome panelu administratora. Reużywa `DashboardShell` (jasny sidebar `.side-item` +
  * topbar), tak jak panele kandydata/pracodawcy, ale z własną nawigacją: Podsumowanie / Firmy
- * / Zgłoszenia / Odwołania / Raport DSA (#43) / Pytania screeningowe (#497) / Użytkownicy / Blokady poczty (#44) / Kampanie e-mail (#45) / Rejestr naruszeń (#490) / Dziennik zdarzeń (#417). Renderowane przez `admin/layout.tsx` (guard + noindex).
+ * / Zgłoszenia / Odwołania / Raport DSA (#43) / Pytania screeningowe (#497) / Użytkownicy / Blokady poczty (#44) / Kampanie e-mail (#45) / Rejestr naruszeń (#490) / Koszty AI (#36) / Dziennik zdarzeń (#417). Renderowane przez `admin/layout.tsx` (guard + noindex).
  *
  * Dzwonek powiadomień jest ukryty (#423) — administracja nie korzysta z kolejki notyfikacji
  * użytkownika, a pusty dzwonek byłby martwym elementem. Sygnały do działania (kolejka
@@ -33,6 +33,8 @@ const HREF = {
   campaigns: '/admin/kampanie',
   screening: '/admin/pytania',
   breaches: '/admin/naruszenia',
+  contact: '/admin/kontakt',
+  aiCosts: '/admin/koszty-ai',
 } as const;
 
 /** Inicjały z nazwy (maks. 2 znaki). */
@@ -59,9 +61,11 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
     { href: HREF.dsaReport, label: t('navDsaReport'), icon: <BarChart3 /> },
     { href: HREF.screening, label: t('navScreening'), icon: <ListChecks /> },
     { href: HREF.users, label: t('navUsers'), icon: <Users /> },
+    { href: HREF.contact, label: t('navContact'), icon: <Inbox /> },
     { href: HREF.email, label: t('navEmail'), icon: <MailX /> },
     { href: HREF.campaigns, label: t('navCampaigns'), icon: <Megaphone /> },
     { href: HREF.breaches, label: t('navBreaches'), icon: <ShieldAlert /> },
+    { href: HREF.aiCosts, label: t('navAiCosts'), icon: <Coins /> },
     { href: HREF.audit, label: t('navAudit'), icon: <History /> },
   ];
 

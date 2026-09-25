@@ -15,7 +15,7 @@ import { isAppealStatus, parseAppealState, type AppealState, type AppealStatus }
 import { getActiveCompany } from '@/lib/company-context';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, rpcRows } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /** Dane aktywnej firmy zalogowanego pracodawcy (kontrakt dla UI). */
 export interface MyCompany {

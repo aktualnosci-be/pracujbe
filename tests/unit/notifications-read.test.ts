@@ -3,14 +3,14 @@ import { getTranslations } from 'next-intl/server';
 
 import type { PortalIdentity } from '@/lib/auth/session';
 import { getNotifications } from '@/lib/data/notifications';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('next-intl/server', () => ({
   getTranslations: vi.fn().mockResolvedValue((key: string) => key),
 }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const SELF = '11111111-1111-4111-8111-111111111111';
 

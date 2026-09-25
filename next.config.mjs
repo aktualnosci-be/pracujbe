@@ -63,7 +63,7 @@ const nextConfig = {
     // 'unsafe-inline' dla script-src jest słabsze niż nonce, ale NIE łamie działania;
     // twarda migracja do nonce wymaga testów przeglądarkowych (E2E) — patrz roadmapa.
     // Poza tym pełne, restrykcyjne dyrektywy: object/base/frame-ancestors/form-action
-    // oraz zawężone connect/img/font (Supabase, Sentry, GA/Meta tylko tam, gdzie trzeba).
+    // oraz zawężone connect/img/font (GA/Meta tylko tam, gdzie trzeba).
     const csp = [
       "default-src 'self'",
       "base-uri 'self'",
@@ -77,8 +77,8 @@ const nextConfig = {
       // P3-02: obrazy z własnego origin, data:/blob: i piksele trackerów (po zgodzie).
       "img-src 'self' data: blob: https://www.google-analytics.com https://www.facebook.com",
       "font-src 'self' data:",
-      // XHR/fetch: API własne, Sentry ingest, GA/Meta.
-      `connect-src 'self' https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://connect.facebook.net${isDev ? ' ws: http://localhost:*' : ''}`,
+      // XHR/fetch: API własne, GA/Meta (webhook błędów #571 idzie z serwera — bez hosta w CSP).
+      `connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://connect.facebook.net${isDev ? ' ws: http://localhost:*' : ''}`,
       // Ramki: Meta Pixel (fallback) i Cloudflare Turnstile (#46, ochrona formularzy), reszta zablokowana.
       "frame-src 'self' https://www.facebook.com https://challenges.cloudflare.com",
       "worker-src 'self' blob:",

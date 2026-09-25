@@ -4,7 +4,7 @@ import { startPortalDb } from './support/portal-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const { getNotifications } = await import('../../src/lib/data/notifications');
 const { markNotificationsRead } = await import('../../src/lib/actions/notifications');

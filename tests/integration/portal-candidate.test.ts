@@ -13,7 +13,7 @@ vi.mock('next/headers', () => ({
   headers: async () => new Headers({ 'user-agent': 'vitest', 'x-real-ip': '203.0.113.7' }),
   cookies: async () => ({ get: () => undefined }),
 }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 // Limiter i Turnstile mają własne testy (inne grupy #25); tu przepuszczamy.
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }));
 vi.mock('@/lib/turnstile/verify', () => ({ enforceTurnstile: async () => null }));

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getMyJobMatch } from '@/lib/data/matching';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
@@ -12,7 +12,7 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 type Read = 'candidate_profiles' | 'candidate_skills' | 'candidate_languages' | 'candidate_certificates' | 'get_job_match_profile' | 'locations';
 const READS: Read[] = ['candidate_profiles', 'candidate_skills', 'candidate_languages', 'candidate_certificates', 'get_job_match_profile', 'locations'];

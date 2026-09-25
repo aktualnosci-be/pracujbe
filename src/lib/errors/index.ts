@@ -154,7 +154,7 @@ export function toUserMessageKey(code: ErrorCode): string {
 export interface AppErrorOptions {
   /** Nadpisanie klucza tłumaczenia komunikatu dla użytkownika. Domyślnie `errors.<code>`. */
   userMessageKey?: string;
-  /** Dodatkowy kontekst (do logów/Sentry) — NIGDY nie pokazywany użytkownikowi. */
+  /** Dodatkowy kontekst (do logów/kanału błędów) — NIGDY nie pokazywany użytkownikowi. */
   context?: Record<string, unknown>;
   /** Oryginalny błąd (zachowany jako `cause`). */
   cause?: unknown;

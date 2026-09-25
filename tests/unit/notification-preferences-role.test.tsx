@@ -17,7 +17,7 @@ vi.mock('@/lib/db/portal', async () => {
   fake.fakeSession.serviceConfigured = false;
   return fake.fakePortal();
 });
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('next-intl/server', () => ({
   getTranslations: async ({ locale, namespace }: { locale: 'pl' | 'nl' | 'fr' | 'en'; namespace: string }) =>
     (key: string) =>

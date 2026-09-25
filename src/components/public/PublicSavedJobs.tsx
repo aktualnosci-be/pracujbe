@@ -152,7 +152,7 @@ export function PublicSaveJobButton({
     : cn(
         'relative z-10 inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 text-sm transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
         passport &&
-          'min-h-[49px] rounded-[11px] border-[color:var(--pp-line-btn)] bg-card px-[21px] font-[650]',
+          'min-h-[49px] rounded-[11px] border-[color:var(--pp-line-btn)] bg-card px-[21px] font-[650] leading-[normal]',
         saved ? 'text-accent' : passport ? 'text-foreground' : 'text-muted-foreground',
       );
   const Icon = saved ? BookmarkCheck : Bookmark;

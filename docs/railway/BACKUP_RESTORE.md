@@ -67,6 +67,8 @@ BACKUP_AGE_RECIPIENTS_FILE  # klucz(e) publiczne age1…
 BACKUP_RETENTION            # domyślnie 14 (1–365)
 BACKUP_WORK_DIR             # opcjonalnie: dysk na chwilowy zrzut (usuwany zawsze)
 BACKUP_HEARTBEAT_URL        # opcjonalnie
+BACKUP_AGE_RECIPIENTS       # zamiast pliku: klucze publiczne age w zmiennej (usługa Railway)
+BACKUP_S3_*                 # #569: kopia w buckecie Cloudflare R2 (sekcja niżej)
 ```
 
 Kod `0` = kopia zapisana i odczytana, `1` = błąd kopii, `2` = zła konfiguracja.
@@ -78,6 +80,44 @@ Klucze: `age-keygen -o pracujbe-backup.key` (klucz prywatny przechowuj POZA Rail
 Rotacja: dopisz nowy klucz publiczny do `recipients.txt` (kopie da się otworzyć
 każdym z kluczy) i usuń stary po wygaśnięciu retencji.
 
+## Kopia poza Railwayem — Cloudflare R2 (#569)
+
+Kopia trafia do **osobnego, prywatnego bucketu Cloudflare R2** przez API S3 (endpoint R2,
+region `auto`, styl ścieżki). Pliki CV zostają w buckecie Railway (#26, zmienne `AWS_*`) —
+`scripts/db/lib/backup-s3.mjs` odmawia (kod 2), gdy `BACKUP_S3_*` wskazuje ten sam bucket
+albo klucz co `AWS_*`.
+
+`backup.sh` sprawdza konfigurację R2 **przed** zrzutem (zła/niepełna = kod 2, nic nie
+powstaje). Po zapisie lokalnym wysyła artefakt, potem manifest (kopia z manifestem jest
+kompletna), sprawdza rozmiar obiektów i stosuje retencję w buckecie: zostaje
+`BACKUP_RETENTION` najnowszych kopii, a przy `BACKUP_S3_MAX_AGE_DAYS` także usuwane są
+kopie starsze niż N dni; najnowsza kompletna kopia zostaje zawsze, usuwane są wyłącznie
+obiekty o wzorcu nazwy kopii. Błąd wysyłki lub retencji = kod 1 i heartbeat `/fail`.
+
+Klucze (dwa osobne tokeny API R2, zakres: tylko ten bucket):
+
+| Zmienna | Gdzie | Uprawnienie |
+|---|---|---|
+| `BACKUP_S3_ENDPOINT` | zadanie kopii, usługa web, odtworzenie | `https://<konto>.r2.cloudflarestorage.com` |
+| `BACKUP_S3_BUCKET`, `BACKUP_S3_PREFIX` (opcjonalnie), `BACKUP_S3_REGION` (domyślnie `auto`) | jw. | — |
+| `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | **tylko** zadanie kopii | Object Read & Write |
+| `BACKUP_S3_READ_ACCESS_KEY_ID`, `BACKUP_S3_READ_SECRET_ACCESS_KEY` | usługa web (czujka), odtworzenie | Object Read only |
+| `BACKUP_S3_MAX_AGE_DAYS` | zadanie kopii (opcjonalnie) | — |
+
+Klucz zapisu w usłudze web = alarm `backup_misconfigured` w `/api/health/ops`.
+
+Odtworzenie z R2: `RESTORE_S3_OBJECT=latest` (albo nazwa `pracujbe-<UTC>.dump.age`) zamiast
+`RESTORE_ARCHIVE`, z kluczem **odczytu** — skrypt pobiera artefakt i manifest do katalogu
+chwilowego i dalej działa jak dla pliku lokalnego (SHA-256, odszyfrowanie, kontrole).
+Oba naraz albo klucz zapisu zamiast odczytu = kod 2.
+
+Test: `npm run test:backup` dokłada scenariusz R2 na atrapie S3
+(`tests/helpers/fake-s3-server.mjs`, klucz odczytu nie może PUT/DELETE): trzy kopie z wysyłką
+przy retencji 2 w buckecie, najnowsza w R2 = lokalna, odtworzenie z R2 i kontrole ujemne
+(klucz zapisu do odtworzenia, oba źródła naraz, klucz odczytu do wysyłki — bucket bez zmian,
+niepełna konfiguracja, endpoint http). Logika w Vitest: `backup-r2.test.ts`,
+`backup-r2-image.test.ts`, `ops-health-route.test.ts`.
+
 ## Odtworzenie artefaktu — `scripts/db/restore-backup.sh`
 
 ```text
@@ -85,6 +125,7 @@ RESTORE_ARCHIVE             # ścieżka pracujbe-<UTC>.dump.age (manifest obok)
 RESTORE_AGE_IDENTITY_FILE   # klucz prywatny age
 RESTORE_TARGET_URL          # pusta baza pracujbe_restore_* na OSOBNYM klastrze
 RESTORE_TOMBSTONES_FILE     # (opcjonalnie, #486) rejestr usunięć nowszy niż kopia
+RESTORE_S3_OBJECT           # (#569) zamiast RESTORE_ARCHIVE: `latest` albo nazwa w R2 + BACKUP_S3_READ_*
 ```
 
 Kolejne kroki: zgodność SHA-256 artefaktu z manifestem, odszyfrowanie, pełny
@@ -128,7 +169,8 @@ automatycznie. Gotowy krok dla właściciela jest w [OPERATIONS.md](OPERATIONS.m
 - Harmonogram kopii (raz na dobę) i okresowego odtworzenia (raz w tygodniu): usługi
   cron Railway z klientem PG18 i `age` albo zewnętrzny runner. Koszt i miejsce
   wybiera właściciel.
-- Miejsce przechowywania artefaktów poza wolumenem bazy (bucket, druga lokalizacja).
+- Bucket R2 (#569): utworzenie, **bez domeny publicznej i bez `r2.dev`**, dwa tokeny API
+  (zapis / tylko odczyt, zakres: ten bucket), zmienne jak wyżej — kroki w OPERATIONS.md §5.
 - Usługa heartbeat dla `BACKUP_HEARTBEAT_URL` (alarm przy braku kopii).
 - Wolumen Railway ma własne snapshoty. Te skrypty dowodzą odtwarzalności logicznej
   kopii i nie zastępują polityki kopii wolumenu.

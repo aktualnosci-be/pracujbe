@@ -11,7 +11,7 @@ import pl from '@/messages/pl.json';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a>,
 }));

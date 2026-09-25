@@ -21,7 +21,7 @@ identyfikatorów ani konfiguracji.
 |---|---|---|
 | 200 | `ok` | brak alarmów; po alarmie to **sygnał recovery** |
 | 503 | `alert` | przekroczony próg, kody w `alerts` |
-| 503 | `unavailable` | nie da się odczytać metryk (baza/uprawnienia); szczegół w Sentry `ops.metrics` |
+| 503 | `unavailable` | nie da się odczytać metryk (baza/uprawnienia); szczegół: kod błędu na webhooku błędów (#571) |
 | 503 | `unconfigured` | brak źródła metryk (`DATABASE_OPS_URL` ani service-role) |
 
 `warnings` nie zmieniają kodu HTTP. To sygnały do przeglądu, np. nieudane wysyłki z 24 h.
@@ -39,6 +39,16 @@ identyfikatorów ani konfiguracji.
 | `db_connections` | alarm | użyte ≥ 80% z `max_connections − superuser_reserved_connections` | wyciek połączeń, za dużo replik |
 | `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h | błędne adresy, odrzucenia dostawcy |
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |
+| `ai_budget_exhausted` | alarm | wydatek AI doby lub miesiąca ≥ limit, limit 0 albo brak limitu (#36) | wyczerpany budżet — funkcje AI zablokowane; decyzja o limicie w `docs/AI_BUDGET.md` |
+| `ai_budget_near_limit` | ostrzeżenie | wydatek AI ≥ 80% limitu doby lub miesiąca | rosnące użycie importu/tłumaczeń |
+| `ai_budget_stale_reservation` | ostrzeżenie | rezerwacja budżetu AI bez rozliczenia > 15 min | proces padł w trakcie wywołania modelu (liczy się w pełnej kwocie) |
+| `ai_budget_unavailable` | ostrzeżenie | nie da się odczytać `ai_budget_status()` | brak migracji 0120 lub uprawnień `pracujbe_ops` |
+| `mail_hard_bounce_rate` | alarm | ≥ 50 listów przyjętych w 24 h i > 5% z nich trwale odbitych | zła lista adresów, import, literówki w formularzu |
+| `mail_hard_bounce_rising` | alarm | odsetek trwałych odbić 24 h > 2% i > 2× odsetka z 7 dób bazowych (≥ 50 listów w obu oknach) | jak wyżej, wcześniejszy sygnał |
+| `mail_complaint_rate` | alarm | ≥ 50 listów w 24 h i > 0,3% skarg | niechciane wiadomości, brak łatwego wypisania |
+| `mail_complaint_rising` | alarm | odsetek skarg 24 h > 0,1% i > 2× odsetka z 7 dób bazowych | nowa kampania/szablon |
+| `mail_suppressions_new` | alarm | > 20 nowych blokad adresów w 24 h | nagły skok odbić lub skarg |
+| `mail_suppressions_active` | ostrzeżenie | > 1000 aktywnych blokad | przegląd listy w `/admin/poczta` |
 
 Liczby pochodzą z `public.ops_metrics()` (migracja `0096`, `SECURITY DEFINER`,
 EXECUTE mają tylko `pracujbe_ops` i `service_role`). Rola `pracujbe_ops` nie ma
@@ -46,6 +56,24 @@ EXECUTE mają tylko `pracujbe_ops` i `service_role`). Rola `pracujbe_ops` nie ma
 `tests/integration/ops-metrics.test.ts` z prawdziwym loginem, kontrolą ujemną
 i odmową dostępu do tabel. `appPool` opisuje pulę jednej instancji. Przy kilku
 replikach każde wywołanie może trafić do innej instancji.
+
+### Poczta (#44, migracja `0118`)
+
+Sekcja `mail` w `ops_metrics()` zawiera same liczby: listy przyjęte przez dostawcę
+(`sent_at`) w ostatnich 24 h i w 7 dobach bazowych przed nimi (okno 2.–8. doba), ile
+z tej samej kohorty trwale się odbiło (`bounce_type = 'permanent'`) i ile dostało
+skargę (zdarzenia z webhooka Resend, 0098), liczbę aktywnych blokad
+(`email_suppressions`, `lifted_at is null`) i blokad założonych w 24 h. Odsetki
+liczymy dla kohorty wysyłki, więc spóźnione zdarzenie (np. skarga po dwóch dniach)
+trafia do okna, w którym list wyszedł. Poniżej 50 listów w oknie odsetków nie
+oceniamy — pojedyncze odbicie przy małym ruchu nie podnosi alarmu. Wiek najstarszego
+gotowego wiersza obu kolejek (`email_deliveries`, `auth.email_outbox`) to istniejące
+`email_queue_age` / `auth_email_queue_age`. Progi to wartości startowe
+(`OPS_THRESHOLDS.mail*`) — skoryguj je po kilku tygodniach realnego ruchu. Baza bez
+`0118` nie ma sekcji `mail`: czujki poczty milczą, reszta działa. Kolejka auth nie
+zapisuje zdarzeń doręczenia, więc odsetki dotyczą tylko poczty domenowej. Dowód:
+`rls.sql` sekcja OPS44 (z kontrolą ujemną na ciele z `0096`), test integracyjny
+z loginem monitoringu (alarm → recovery), `tests/unit/ops-sensors.test.ts`.
 
 Źródło metryk ustala `src/lib/ops/metrics-source.ts`. Pierwszeństwo ma
 `DATABASE_OPS_URL` (PostgreSQL Railway, osobny login, jedna sesja na proces),
@@ -57,9 +85,15 @@ Pełny opis: [BACKUP_RESTORE.md](BACKUP_RESTORE.md). W skrócie:
 
 - `scripts/db/backup.sh` tworzy zaszyfrowany artefakt `age` (klucz publiczny),
   wykonuje pełny odczyt `pg_restore`, zapisuje manifest z rozmiarami i SHA-256,
-  stosuje retencję i opcjonalnie wysyła ping heartbeat;
+  stosuje retencję i opcjonalnie wysyła ping heartbeat; z `BACKUP_S3_*` wysyła kopię
+  i manifest do prywatnego bucketu Cloudflare R2 i przycina retencję w buckecie (#569);
 - `scripts/db/restore-backup.sh` odtwarza artefakt do izolowanej bazy
-  `pracujbe_restore_*` i porównuje wynik z manifestem;
+  `pracujbe_restore_*` i porównuje wynik z manifestem (także prosto z R2:
+  `RESTORE_S3_OBJECT=latest`, klucz tylko do odczytu);
+- czujka `backup` w `GET /api/health/ops`: wiek ostatniej kompletnej kopii w R2 (klucz
+  odczytu `BACKUP_S3_READ_*`); stany `ok`, `stale` (> 26 h), `missing`, `unavailable`,
+  `misconfigured` (np. klucz zapisu w usłudze web) i `unconfigured` — **każdy poza `ok`
+  to alarm** `backup_*` (503), więc brak konfiguracji nie wygląda na „OK”;
 - `scripts/db/test-backup.sh` (`npm run test:backup`) to test obu skryptów na
   PostgreSQL 16 z kontrolami ujemnymi;
 - `scripts/db/verify-restore.sh` to dotychczasowy dowód „zrzut → odtworzenie”
@@ -173,6 +207,7 @@ w innych językach w SQL (`Brussels`, `Luik`; dziś rozwija je aplikacja przez
 |---|---|---|
 | **Kod** (route `/api/health/ops`, `src/lib/ops/*`, skrypty) | redeploy poprzedniego SHA w Railway; endpoint znika, pozostałe trasy bez zmian | — |
 | **Schemat** (`0096`) | NOWA migracja naprawcza: `drop function public.ops_metrics()`, `drop index public.idx_jobs_city_trgm`, `revoke usage on schema public from pracujbe_ops`, a po odebraniu członkostwa loginowi monitoringu `drop role pracujbe_ops` | nie edytuj zastosowanej `0096`; kod starszy niż `0096` działa na bazie z `0096` (funkcja i indeks są addytywne) |
+| **Schemat** (`0118`, poczta) | NOWA migracja naprawcza z ciałem `ops_metrics()` z `0096` i `drop index public.idx_email_deliveries_sent_at` | aplikacja toleruje brak sekcji `mail` (czujki poczty milczą) |
 | **Dane** | `0096` nie zmienia danych. Utracone dane odtwarzasz z kopii: `restore-backup.sh` do izolowanej bazy, weryfikacja, potem decyzja o przełączeniu/eksporcie | nigdy nie odtwarzaj kopii bezpośrednio do produkcyjnej bazy; skrypty odmawiają celu spoza `pracujbe_restore_*` |
 
 Kopie logiczne nie zastępują snapshotów wolumenu Railway i odwrotnie. Snapshot
@@ -198,12 +233,24 @@ izolowanego celu i sprawdzić jej zawartość.
    z nagłówkiem `x-health-token`, oczekiwane 200 co 5 min. Alarm po 2 kolejnych
    odpowiedziach innych niż 200, recovery po pierwszym 200. Krytyczna ścieżka
    bez zapisu danych to lista `/pl/oferty-pracy` (odczyt z bazy przez rolę `anon`).
-4. **Kopie:** osobna usługa cron (bez publicznej domeny) z klientem PostgreSQL
-   w wersji ≥ serwera (Railway: 18) i `age`. Potrzebuje zmiennych `BACKUP_*`
-   (patrz BACKUP_RESTORE.md), katalogu artefaktów na wolumenie lub w buckecie
-   poza wolumenem bazy, harmonogramu raz na dobę i `BACKUP_HEARTBEAT_URL` do
-   usługi dead-man’s-switch. Klucz prywatny `age` trzymaj poza Railway (np. w menedżerze haseł właściciela).
-5. **Okresowe odtworzenie:** raz w tygodniu `restore-backup.sh` do tymczasowej
+4. **Kopie (#569 — Cloudflare R2):**
+   1. Cloudflare → R2: nowy bucket (np. `pracujbe-db-backups`), lokalizacja UE;
+      **nie** podłączaj domeny publicznej i **nie** włączaj `r2.dev` (Settings → Public access: disabled).
+   2. R2 → Manage API tokens: token „Object Read & Write” ograniczony do tego bucketu
+      (dla zadania kopii) i token „Object Read only” do tego bucketu (dla usługi web i odtworzenia).
+   3. Railway: nowa usługa `backup` z tego repozytorium, *Dockerfile path*
+      `docker/backup/Dockerfile` (obraz: node 22, `pg_dump` 18, `age`), bez publicznej
+      domeny, restart NEVER, cron raz na dobę (np. `17 3 * * *`). Zmienne:
+      `BACKUP_SOURCE_URL` (login tylko do odczytu), `BACKUP_AGE_RECIPIENTS` (klucz publiczny
+      `age1…`), `BACKUP_RETENTION`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`,
+      opcjonalnie `BACKUP_S3_PREFIX`/`BACKUP_S3_MAX_AGE_DAYS`, `BACKUP_S3_ACCESS_KEY_ID`,
+      `BACKUP_S3_SECRET_ACCESS_KEY`, opcjonalnie `BACKUP_HEARTBEAT_URL`.
+   4. Usługa web: `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, (`BACKUP_S3_PREFIX`),
+      `BACKUP_S3_READ_ACCESS_KEY_ID`, `BACKUP_S3_READ_SECRET_ACCESS_KEY` — **bez** klucza zapisu.
+   5. Pierwsze uruchomienie ręczne → `BACKUP: PASS … R2: wysłano`; `/api/health/ops` → `backup.status = ok`.
+   Klucz prywatny `age` trzymaj poza Railway (np. w menedżerze haseł właściciela).
+5. **Okresowe odtworzenie:** raz w tygodniu `restore-backup.sh` z R2
+   (`RESTORE_S3_OBJECT=latest`, klucz odczytu) do tymczasowej
    bazy na osobnym klastrze, np. jednorazowej usłudze Railway PostgreSQL lub
    lokalnym kontenerze. Wynik `RESTORE: PASS` zanotuj w STATUS.md.
 6. **CI (opcjonalnie, zmiana workflow należy do właściciela):** test kopii

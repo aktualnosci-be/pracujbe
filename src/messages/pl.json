@@ -1536,7 +1536,8 @@
     "errorFileType": "Obsługujemy tylko obrazy PNG, JPG i WebP.",
     "errorUrlMissing": "Wklej link do ogłoszenia.",
     "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie.",
-    "contactNote": "Adresów e-mail, numerów telefonu i numerów identyfikacyjnych nie przenosimy do formularza. E-mail kontaktowy wpisz ręcznie w ostatnim kroku."
+    "contactNote": "Adresów e-mail, numerów telefonu i numerów identyfikacyjnych nie przenosimy do formularza. E-mail kontaktowy wpisz ręcznie w ostatnim kroku.",
+    "errorBudget": "Import z ogłoszenia jest chwilowo niedostępny. Wypełnij formularz ręcznie albo spróbuj później."
   },
   "jobAssist": {
     "title": "Popraw treść z asystentem AI",
@@ -1599,6 +1600,18 @@
     "threadStart": "To początek rozmowy.",
     "senderCompanyFallback": "Pracodawca",
     "senderCandidateFallback": "Kandydat",
+    "attachFile": "Dołącz plik",
+    "attachHint": "PDF, DOC, DOCX, JPG lub PNG, maks. 5 MB, najwyżej {max} pliki w wiadomości.",
+    "attachmentsLabel": "Załączniki",
+    "attachmentUploading": "Wgrywanie…",
+    "attachmentUploadError": "Nie udało się dodać pliku. Spróbuj ponownie.",
+    "attachmentErrorType": "Dozwolone formaty: PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentLimit": "Do jednej wiadomości możesz dołączyć najwyżej {max} pliki.",
+    "attachmentRemove": "Usuń plik {name}",
+    "attachmentDownload": "Pobierz {name} ({size})",
+    "attachmentDownloadError": "Nie udało się pobrać pliku. Spróbuj ponownie.",
+    "attachmentUnavailable": "Plik czeka na sprawdzenie — pobieranie niedostępne.",
+    "attachmentOnlyPreview": "Załącznik",
     "reportMessage": "Zgłoś",
     "reportMessageLabel": "Zgłoś wiadomość: {sender}",
     "reportConversation": "Zgłoś rozmowę",
@@ -2222,6 +2235,24 @@
     "breachNoticeRecipientsMalformed": "Nieprawidłowy adres lub identyfikator: {list}.",
     "breachNoticeContentRequired": "Wpisz temat i treść w co najmniej jednym języku.",
     "breachNoticeNotAllowed": "Zawiadomienie można wysłać dla otwartego naruszenia danych osobowych z zapisaną decyzją „zawiadamiamy osoby”.",
+    "navContact": "Kontakt",
+    "contactTitle": "Wiadomości z formularza kontaktu",
+    "contactSubtitle": "Wiadomości wysłane przez formularz kontaktu. Odpowiadaj ze swojej skrzynki na adres nadawcy, a potem oznacz wiadomość jako obsłużoną.",
+    "contactFilterLabel": "Filtr wiadomości",
+    "contactFilterNew": "Nowe",
+    "contactFilterHandled": "Obsłużone",
+    "contactStatusNew": "Nowa",
+    "contactStatusHandled": "Obsłużona",
+    "contactSearchLabel": "Szukaj wiadomości",
+    "contactSearchHint": "Numer wiadomości, adres e-mail albo imię nadawcy.",
+    "contactEmpty": "Brak wiadomości.",
+    "contactReceivedAt": "Otrzymano:",
+    "contactFormLocale": "Język formularza: {locale}",
+    "contactHandledBy": "Obsłużył(a): {name}",
+    "contactActionHandle": "Oznacz jako obsłużoną",
+    "contactActionReopen": "Przywróć do nowych",
+    "contactMarkedHandled": "Wiadomość oznaczona jako obsłużona.",
+    "contactReopened": "Wiadomość przywrócona do nowych.",
     "kindMessage": "Wiadomości",
     "targetConversation": "Rozmowa",
     "messageReportScopeMessage": "Dowód: zgłoszona wiadomość (stan z chwili zgłoszenia)",
@@ -2287,7 +2318,29 @@
     "auditActionCampaignCancelled": "Zatrzymanie rewizji kampanii",
     "entityEmailCampaign": "Kampania e-mail",
     "appealTargetRestoration": "Od cofnięcia ograniczenia",
-    "appealRestorationSummary": "Ograniczenie cofnięte {date}: {reason}"
+    "appealRestorationSummary": "Ograniczenie cofnięte {date}: {reason}",
+    "navAiCosts": "Koszty AI",
+    "aiCostsTitle": "Koszty AI",
+    "aiCostsSubtitle": "Wydatki na wywołania modeli AI względem globalnego budżetu. Tylko odczyt.",
+    "aiCostsBudget": "Budżet",
+    "aiCostsToday": "Dziś",
+    "aiCostsMonth": "Bieżący miesiąc",
+    "aiCostsOfLimit": "z {limit} ({percent}%)",
+    "aiCostsNoLimit": "Brak limitu — wywołania są blokowane",
+    "aiCostsNearLimit": "Wykorzystano co najmniej 80% limitu.",
+    "aiCostsExhausted": "Limit wyczerpany — nowe wywołania są blokowane.",
+    "aiCostsStale": "Rezerwacje bez rozliczenia od ponad 15 minut: {count}",
+    "aiCostsHowCounted": "Koszt liczony z tokenów zgłoszonych przez dostawcę i cennika w kodzie. Rezerwacja bez rozliczenia liczy się w pełnej kwocie. Doba i miesiąc według czasu w Brukseli.",
+    "aiCostsLimitsHint": "Limity ustawia właściciel w bazie danych (opis: docs/AI_BUDGET.md). Limit 0 wyłącza wszystkie funkcje AI.",
+    "aiCostsDaily": "Ostatnie {days} dni",
+    "aiCostsMonthly": "Miesiące",
+    "aiCostsNoData": "Brak wywołań w tym okresie.",
+    "aiCostsRow": "Wywołania: {calls} · udane: {ok} · nieudane: {notOk} · w toku: {open} · tokeny wejścia/wyjścia: {input} / {output}",
+    "aiCostsCalls": "wywołania: {calls}",
+    "aiCostsFeatureJobImport": "Import ogłoszenia",
+    "aiCostsFeatureTranslation": "Tłumaczenie treści",
+    "aiCostsFeatureAssist": "Asystent treści oferty",
+    "aiCostsFeatureCvImport": "Import CV"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -2597,7 +2650,19 @@
       "alreadyMember": "Ta osoba jest już w zespole.",
       "invitationLimit": "Osiągnięto limit 50 oczekujących zaproszeń. Cofnij nieaktualne zaproszenia.",
       "companyLimit": "Możesz prowadzić maksymalnie 5 firm.",
-      "lastOwner": "Firma musi mieć co najmniej jednego aktywnego właściciela."
+      "lastOwner": "Firma musi mieć co najmniej jednego aktywnego właściciela.",
+      "localeRequired": "Wybierz język zaproszenia."
+    },
+    "localeLabel": "Język zaproszenia",
+    "invitedSent": "Zaproszenie zapisane. Ta osoba dostanie e-mail: z kontem pracodawcy — w języku swojego konta, bez konta — w wybranym języku, z linkiem do rejestracji.",
+    "inviteLinkHint": "Osoba bez konta dostanie e-mail w wybranym języku z linkiem do założenia konta pracodawcy (działa raz, ważny 14 dni). Po potwierdzeniu adresu zaproszenie będzie czekać w jej panelu. Osoba z kontem dostaje e-mail w języku swojego konta.",
+    "signup": {
+      "checking": "Sprawdzamy link zaproszenia…",
+      "intro": "Zaproszenie do zespołu firmy {company}. Rola: {role}.",
+      "nextSteps": "Załóż konto pracodawcy i potwierdź adres e-mail. Zaproszenie będzie czekać w Twoim panelu, w zakładce „Zespół” — tam dołączysz do firmy albo je odrzucisz.",
+      "emailFixed": "Konto zakładasz na adres, na który przyszło zaproszenie.",
+      "used": "Ten link zaproszenia został już użyty. Jeśli masz konto, zaloguj się — zaproszenie czeka w panelu.",
+      "invalid": "Link zaproszenia jest nieprawidłowy albo wygasł. Poproś firmę o nowe zaproszenie albo załóż zwykłe konto pracodawcy."
     }
   },
   "emailUnsubscribe": {
@@ -2677,7 +2742,13 @@
     "deleteTitle": "Usunąć wyszukiwanie „{name}”?",
     "deleteDescription": "Przestaniesz dostawać alerty o nowych ofertach z tymi filtrami.",
     "deleted": "Usunęliśmy wyszukiwanie.",
-    "updated": "Zapisaliśmy zmiany."
+    "updated": "Zapisaliśmy zmiany.",
+    "rename": "Zmień nazwę",
+    "renameLabel": "Nowa nazwa wyszukiwania",
+    "renameSave": "Zapisz nazwę",
+    "renameCancel": "Anuluj",
+    "renamed": "Zmieniliśmy nazwę wyszukiwania.",
+    "renameHint": "Od 1 do 80 znaków."
   },
   "contentReport": {
     "metaTitle": "Zgłoś treść",
@@ -2834,6 +2905,141 @@
     "categoryUnion": "przynależność do związku zawodowego",
     "categoryPolitical": "poglądy polityczne",
     "categoryCriminal": "karalność"
+  },
+  "help": {
+    "metaTitle": "Pomoc — pytania i odpowiedzi",
+    "metaDescription": "Jak działa Pracuj.be: profil bez CV, aplikowanie, dopasowanie ofert, konto pracodawcy, weryfikacja firmy i e-maile w Twoim języku.",
+    "title": "Pomoc",
+    "intro": "Odpowiedzi na najczęstsze pytania o to, jak działa Pracuj.be. Jeśli nie znajdziesz tu odpowiedzi, napisz do nas przez formularz kontaktu.",
+    "groups": {
+      "candidates": "Dla kandydatów",
+      "employers": "Dla pracodawców",
+      "account": "Konto, e-maile i bezpieczeństwo"
+    },
+    "faq": {
+      "noCv": {
+        "q": "Czy potrzebuję CV, żeby szukać pracy?",
+        "a": "Nie. Po <register>rejestracji</register> tworzysz prosty profil zawodowy w sześciu krótkich krokach — m.in. zawody, umiejętności, języki i dostępność. Plik CV (PDF, DOC lub DOCX do 5 MB) możesz dodać, ale nie jest wymagany."
+      },
+      "guestApply": {
+        "q": "Czy mogę aplikować bez zakładania konta?",
+        "a": "Tak. W formularzu aplikacji podajesz imię i nazwisko oraz adres e-mail, a zgłoszenie potwierdzasz linkiem z wiadomości e-mail. Później możesz założyć konto z tym samym adresem i przejąć zgłoszenie."
+      },
+      "match": {
+        "q": "Jak liczone jest dopasowanie do oferty?",
+        "a": "Procent dopasowania wynika ze stałych kryteriów: zawodu i kategorii, umiejętności, lokalizacji, doświadczenia, dostępności, języków, certyfikatów, prawa jazdy i warunków umowy. Wyniku nie ustala sztuczna inteligencja, a przy ofercie widzisz, co spełniasz i czego brakuje."
+      },
+      "visibility": {
+        "q": "Czy pracodawcy widzą mój profil?",
+        "a": "Zweryfikowane firmy mogą znaleźć Twój profil tylko wtedy, gdy włączysz opcję „Pozwól zweryfikowanym pracodawcom znaleźć mój profil” w ustawieniach — domyślnie jest wyłączona. Firma, do której aplikujesz, widzi Twoje zgłoszenie. Wybrane firmy możesz zablokować w sekcji „Zablokowane firmy”."
+      },
+      "alerts": {
+        "q": "Jak dostawać powiadomienia o nowych ofertach?",
+        "a": "Na <jobs>liście ofert</jobs> ustaw filtry i wybierz „Zapisz wyszukiwanie”. W panelu kandydata włączysz dla niego powiadomienia e-mail — codziennie albo raz w tygodniu."
+      },
+      "data": {
+        "q": "Jak pobrać swoje dane albo usunąć konto?",
+        "a": "W ustawieniach panelu kandydata, w sekcji „Twoje dane i konto”, pobierzesz swoje dane w pliku JSON albo usuniesz konto."
+      },
+      "free": {
+        "q": "Ile kosztuje publikowanie ofert?",
+        "a": "Na obecnym etapie korzystanie z Pracuj.be jest dla pracodawców bezpłatne. Portal nie sprzedaje pakietów ani płatnych publikacji ofert."
+      },
+      "verification": {
+        "q": "Dlaczego firma musi zostać zweryfikowana?",
+        "a": "Oferty publikują tylko firmy zweryfikowane przez administratora portalu. Status weryfikacji widzisz w panelu pracodawcy. Jeśli firma zostanie odrzucona, zobaczysz powód i możesz wybrać „Wyślij ponownie do weryfikacji”."
+      },
+      "drafts": {
+        "q": "Czy mogę przygotować ofertę przed weryfikacją?",
+        "a": "Tak. Kreator oferty zapisuje szkic po każdym kroku. Opublikujesz go, gdy firma zostanie zweryfikowana."
+      },
+      "team": {
+        "q": "Jak dodać współpracowników?",
+        "a": "Właściciel lub administrator firmy zaprasza osoby z zespołu po adresie e-mail w panelu pracodawcy i nadaje im rolę."
+      },
+      "applications": {
+        "q": "Jak kontaktuję się z kandydatami?",
+        "a": "Zgłoszenia, wiadomości i propozycje pracy obsługujesz w panelu pracodawcy. Więcej przeczytasz na stronie <employer>Dla pracodawców</employer>."
+      },
+      "languages": {
+        "q": "W jakich językach działa serwis?",
+        "a": "Serwis jest dostępny po polsku, niderlandzku, francusku i angielsku. Język zmienisz w nagłówku albo w stopce strony."
+      },
+      "emailLanguage": {
+        "q": "W jakim języku dostaję e-maile?",
+        "a": "E-maile z konta wysyłamy w języku ustawionym na Twoim koncie — także wtedy, gdy wiadomość wysyła pracodawca używający innego języka."
+      },
+      "noEmail": {
+        "q": "Nie dostaję e-maili z serwisu. Co zrobić?",
+        "a": "Sprawdź folder spam i poprawność adresu e-mail. Jeśli wiadomości nadal nie ma, napisz do nas przez formularz kontaktu."
+      },
+      "suspicious": {
+        "q": "Oferta wygląda podejrzanie. Co zrobić?",
+        "a": "Na stronie oferty wybierz „Zgłoś ofertę” albo „Zgłoś firmę”. Zgłoszenie wyślesz także bez konta i dostaniesz numer sprawy, po którym sprawdzisz jej status."
+      }
+    },
+    "contactTitle": "Nie znalazłeś odpowiedzi?",
+    "contactDesc": "Napisz do nas przez formularz kontaktu. Odpowiemy na adres e-mail podany w formularzu.",
+    "contactCta": "Przejdź do formularza kontaktu"
+  },
+  "contact": {
+    "metaTitle": "Kontakt",
+    "metaDescription": "Napisz do zespołu Pracuj.be przez formularz kontaktu — w sprawie konta kandydata, konta pracodawcy, ofert pracy lub problemów technicznych.",
+    "title": "Kontakt",
+    "intro": "Masz pytanie o konto, ofertę albo działanie serwisu? Napisz do nas przez formularz — odpowiemy na podany adres e-mail.",
+    "formTitle": "Formularz kontaktu",
+    "topicLabel": "Temat",
+    "topicPlaceholder": "Wybierz temat",
+    "topicCandidateAccount": "Konto kandydata",
+    "topicEmployerAccount": "Konto pracodawcy lub firma",
+    "topicJobListing": "Oferta pracy",
+    "topicTechnical": "Problem techniczny",
+    "topicPrivacy": "Moje dane osobowe",
+    "topicOther": "Inna sprawa",
+    "messageLabel": "Wiadomość",
+    "messageHint": "Opisz sprawę (co najmniej {min} znaków). Nie podawaj numeru rejestru narodowego, PESEL ani numerów dokumentów.",
+    "nameLabel": "Imię (opcjonalnie)",
+    "emailLabel": "Adres e-mail",
+    "emailHint": "Na ten adres wyślemy potwierdzenie i odpowiedź.",
+    "submit": "Wyślij wiadomość",
+    "networkError": "Nie udało się połączyć z serwerem. Twoja wiadomość jest nadal w formularzu — spróbuj ponownie.",
+    "successTitle": "Wiadomość wysłana",
+    "successBody": "Dziękujemy. Na podany adres wysłaliśmy potwierdzenie z numerem wiadomości.",
+    "successDuplicate": "Ta wiadomość została już wysłana wcześniej — nie wysłaliśmy jej drugi raz.",
+    "referenceLabel": "Numer wiadomości",
+    "referenceHint": "Podaj ten numer, jeśli będziesz chcieć coś dodać.",
+    "backToHelp": "Wróć do strony Pomoc",
+    "beforeTitle": "Zanim napiszesz",
+    "beforeHelp": "Odpowiedzi na najczęstsze pytania znajdziesz na stronie <help>Pomoc</help>.",
+    "beforeReport": "Podejrzaną ofertę zgłoś bezpośrednio na jej stronie („Zgłoś ofertę”) — znajdziesz ją na <jobs>liście ofert</jobs>.",
+    "beforeNoIds": "Nie wysyłaj w wiadomości numerów dokumentów ani haseł.",
+    "error": {
+      "topicRequired": "Wybierz temat wiadomości.",
+      "messageRequired": "Wpisz treść wiadomości.",
+      "messageTooShort": "Wiadomość jest za krótka — opisz sprawę trochę dokładniej.",
+      "messageTooLong": "Wiadomość jest za długa.",
+      "nameTooLong": "Imię jest za długie.",
+      "emailRequired": "Podaj adres e-mail.",
+      "emailInvalid": "Podaj poprawny adres e-mail.",
+      "sensitiveId": "Usuń numer rejestru narodowego, PESEL lub numer dokumentu — nie jest potrzebny, żeby odpowiedzieć na wiadomość."
+    }
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Wyłączenie alertu",
+    "title": "Wyłączyć ten alert?",
+    "confirmText": "Przestaniemy wysyłać e-maile z nowymi ofertami dla tego jednego zapisanego wyszukiwania. Pozostałe wyszukiwania i powiadomienia działają bez zmian.",
+    "confirmButton": "Wyłącz ten alert",
+    "pending": "Zapisywanie…",
+    "doneTitle": "Alert wyłączony",
+    "doneText": "Nie wyślemy Ci już alertów dla tego wyszukiwania. Wyszukiwanie zostaje zapisane — alert włączysz ponownie w panelu kandydata.",
+    "settingsHint": "Zapisane wyszukiwania i alerty zmienisz po zalogowaniu.",
+    "loginLink": "Zaloguj się",
+    "invalidTitle": "Link jest nieprawidłowy",
+    "invalidText": "Ten link jest niepełny lub został zmieniony. Skorzystaj z linku z najnowszego e-maila albo zmień alert po zalogowaniu.",
+    "expiredTitle": "Link wygasł",
+    "expiredText": "Ten link jest już nieaktualny. Skorzystaj z linku z najnowszego e-maila albo zmień alert po zalogowaniu.",
+    "unavailableText": "Wyłączenie alertu jest chwilowo niedostępne. Spróbuj później albo zmień alert po zalogowaniu.",
+    "errorText": "Nie udało się zapisać zmiany. Spróbuj ponownie."
   },
   "cvImport": {
     "eyebrow": "Twój profil",

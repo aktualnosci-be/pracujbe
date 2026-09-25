@@ -1536,7 +1536,8 @@
     "errorFileType": "Seules les images PNG, JPG et WebP sont acceptées.",
     "errorUrlMissing": "Collez un lien vers l’annonce.",
     "errorNetwork": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
-    "contactNote": "Nous ne reprenons pas les adresses e-mail, numéros de téléphone et numéros d’identification dans le formulaire. Indiquez vous-même l’e-mail de contact à la dernière étape."
+    "contactNote": "Nous ne reprenons pas les adresses e-mail, numéros de téléphone et numéros d’identification dans le formulaire. Indiquez vous-même l’e-mail de contact à la dernière étape.",
+    "errorBudget": "L’import depuis une annonce est temporairement indisponible. Remplissez le formulaire manuellement ou réessayez plus tard."
   },
   "jobAssist": {
     "title": "Améliorer le texte avec l'assistant IA",
@@ -1599,6 +1600,18 @@
     "threadStart": "C'est le début de la conversation.",
     "senderCompanyFallback": "Employeur",
     "senderCandidateFallback": "Candidat",
+    "attachFile": "Joindre un fichier",
+    "attachHint": "PDF, DOC, DOCX, JPG ou PNG, 5 Mo max., {max} fichiers au plus par message.",
+    "attachmentsLabel": "Pièces jointes",
+    "attachmentUploading": "Envoi du fichier…",
+    "attachmentUploadError": "Impossible d’ajouter le fichier. Veuillez réessayer.",
+    "attachmentErrorType": "Formats acceptés : PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentLimit": "Vous pouvez joindre au plus {max} fichiers à un message.",
+    "attachmentRemove": "Retirer le fichier {name}",
+    "attachmentDownload": "Télécharger {name} ({size})",
+    "attachmentDownloadError": "Impossible de télécharger le fichier. Veuillez réessayer.",
+    "attachmentUnavailable": "Fichier en cours de vérification — téléchargement indisponible.",
+    "attachmentOnlyPreview": "Pièce jointe",
     "reportMessage": "Signaler",
     "reportMessageLabel": "Signaler le message : {sender}",
     "reportConversation": "Signaler la conversation",
@@ -2222,6 +2235,24 @@
     "breachNoticeRecipientsMalformed": "Adresse ou identifiant non valide : {list}.",
     "breachNoticeContentRequired": "Saisissez l’objet et le texte dans au moins une langue.",
     "breachNoticeNotAllowed": "L’information peut être envoyée pour une violation de données personnelles ouverte avec la décision enregistrée « nous informons les personnes ».",
+    "navContact": "Contact",
+    "contactTitle": "Messages du formulaire de contact",
+    "contactSubtitle": "Messages envoyés via le formulaire de contact. Répondez depuis votre propre boîte à l’adresse de l’expéditeur, puis marquez le message comme traité.",
+    "contactFilterLabel": "Filtre des messages",
+    "contactFilterNew": "Nouveaux",
+    "contactFilterHandled": "Traités",
+    "contactStatusNew": "Nouveau",
+    "contactStatusHandled": "Traité",
+    "contactSearchLabel": "Rechercher des messages",
+    "contactSearchHint": "Numéro du message, adresse e-mail ou prénom de l’expéditeur.",
+    "contactEmpty": "Aucun message.",
+    "contactReceivedAt": "Reçu :",
+    "contactFormLocale": "Langue du formulaire : {locale}",
+    "contactHandledBy": "Traité par : {name}",
+    "contactActionHandle": "Marquer comme traité",
+    "contactActionReopen": "Remettre en nouveau",
+    "contactMarkedHandled": "Message marqué comme traité.",
+    "contactReopened": "Message remis en nouveau.",
     "kindMessage": "Messages",
     "targetConversation": "Conversation",
     "messageReportScopeMessage": "Preuve : message signalé (état au moment du signalement)",
@@ -2287,7 +2318,29 @@
     "auditActionCampaignCancelled": "Arrêt d’une révision de campagne",
     "entityEmailCampaign": "Campagne e-mail",
     "appealTargetRestoration": "Contre la levée de la restriction",
-    "appealRestorationSummary": "Restriction levée le {date} : {reason}"
+    "appealRestorationSummary": "Restriction levée le {date} : {reason}",
+    "navAiCosts": "Coûts IA",
+    "aiCostsTitle": "Coûts IA",
+    "aiCostsSubtitle": "Dépenses liées aux appels de modèles d’IA par rapport au budget global. Lecture seule.",
+    "aiCostsBudget": "Budget",
+    "aiCostsToday": "Aujourd’hui",
+    "aiCostsMonth": "Ce mois-ci",
+    "aiCostsOfLimit": "sur {limit} ({percent} %)",
+    "aiCostsNoLimit": "Aucune limite définie — les appels sont bloqués",
+    "aiCostsNearLimit": "Au moins 80 % de la limite a été utilisée.",
+    "aiCostsExhausted": "Limite atteinte — les nouveaux appels sont bloqués.",
+    "aiCostsStale": "Réservations non réglées depuis plus de 15 minutes : {count}",
+    "aiCostsHowCounted": "Le coût est calculé à partir des tokens déclarés par le fournisseur et de la grille tarifaire du code. Une réservation non réglée compte en entier. Le jour et le mois suivent l’heure de Bruxelles.",
+    "aiCostsLimitsHint": "Le propriétaire fixe les limites dans la base de données (voir docs/AI_BUDGET.md). Une limite de 0 désactive toutes les fonctions d’IA.",
+    "aiCostsDaily": "{days} derniers jours",
+    "aiCostsMonthly": "Mois",
+    "aiCostsNoData": "Aucun appel sur cette période.",
+    "aiCostsRow": "Appels : {calls} · réussis : {ok} · échoués : {notOk} · en cours : {open} · tokens entrée/sortie : {input} / {output}",
+    "aiCostsCalls": "appels : {calls}",
+    "aiCostsFeatureJobImport": "Import d’annonce",
+    "aiCostsFeatureTranslation": "Traduction du contenu",
+    "aiCostsFeatureAssist": "Assistant de rédaction d’offre",
+    "aiCostsFeatureCvImport": "Import de CV"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -2597,7 +2650,19 @@
       "alreadyMember": "Cette personne fait déjà partie de l’équipe.",
       "invitationLimit": "La limite de 50 invitations en attente est atteinte. Annulez les invitations obsolètes.",
       "companyLimit": "Vous pouvez gérer au maximum 5 entreprises.",
-      "lastOwner": "L’entreprise doit avoir au moins un propriétaire actif."
+      "lastOwner": "L’entreprise doit avoir au moins un propriétaire actif.",
+      "localeRequired": "Choisissez la langue de l’invitation."
+    },
+    "localeLabel": "Langue de l’invitation",
+    "invitedSent": "Invitation enregistrée. Cette personne recevra un e-mail : avec un compte employeur, dans la langue de ce compte ; sans compte, dans la langue choisie, avec un lien d’inscription.",
+    "inviteLinkHint": "Une personne sans compte reçoit un e-mail dans la langue choisie avec un lien pour créer un compte employeur (utilisable une fois, valable 14 jours). Après confirmation de l’adresse, l’invitation l’attendra dans son espace. Une personne avec un compte reçoit l’e-mail dans la langue de son compte.",
+    "signup": {
+      "checking": "Vérification du lien d’invitation…",
+      "intro": "Invitation à rejoindre l’équipe de {company}. Rôle : {role}.",
+      "nextSteps": "Créez un compte employeur et confirmez votre adresse e-mail. L’invitation vous attendra dans votre espace, dans l’onglet « Équipe » : vous pourrez y rejoindre l’entreprise ou la refuser.",
+      "emailFixed": "Le compte est créé avec l’adresse qui a reçu l’invitation.",
+      "used": "Ce lien d’invitation a déjà été utilisé. Si vous avez un compte, connectez-vous : l’invitation vous attend dans votre espace.",
+      "invalid": "Le lien d’invitation est invalide ou a expiré. Demandez une nouvelle invitation à l’entreprise ou créez un compte employeur classique."
     }
   },
   "emailUnsubscribe": {
@@ -2677,7 +2742,13 @@
     "deleteTitle": "Supprimer la recherche « {name} » ?",
     "deleteDescription": "Vous ne recevrez plus d’alertes sur les nouvelles offres correspondant à ces filtres.",
     "deleted": "Nous avons supprimé la recherche.",
-    "updated": "Nous avons enregistré les modifications."
+    "updated": "Nous avons enregistré les modifications.",
+    "rename": "Renommer",
+    "renameLabel": "Nouveau nom de la recherche",
+    "renameSave": "Enregistrer le nom",
+    "renameCancel": "Annuler",
+    "renamed": "Nous avons renommé la recherche.",
+    "renameHint": "De 1 à 80 caractères."
   },
   "contentReport": {
     "metaTitle": "Signaler un contenu",
@@ -2834,6 +2905,141 @@
     "categoryUnion": "affiliation syndicale",
     "categoryPolitical": "opinions politiques",
     "categoryCriminal": "antécédents judiciaires"
+  },
+  "help": {
+    "metaTitle": "Aide — questions et réponses",
+    "metaDescription": "Comment fonctionne Pracuj.be : profil sans CV, candidature, compatibilité avec les offres, compte employeur, vérification de l’entreprise et e-mails dans votre langue.",
+    "title": "Aide",
+    "intro": "Réponses aux questions les plus fréquentes sur le fonctionnement de Pracuj.be. Si vous ne trouvez pas de réponse, écrivez-nous via le formulaire de contact.",
+    "groups": {
+      "candidates": "Pour les candidats",
+      "employers": "Pour les employeurs",
+      "account": "Compte, e-mails et sécurité"
+    },
+    "faq": {
+      "noCv": {
+        "q": "Ai-je besoin d’un CV pour chercher un emploi ?",
+        "a": "Non. Après votre <register>inscription</register>, vous créez un profil professionnel simple en six étapes courtes — notamment métiers, compétences, langues et disponibilité. Vous pouvez ajouter un fichier CV (PDF, DOC ou DOCX jusqu’à 5 Mo), mais ce n’est pas obligatoire."
+      },
+      "guestApply": {
+        "q": "Puis-je postuler sans créer de compte ?",
+        "a": "Oui. Dans le formulaire de candidature, vous indiquez vos nom et prénom ainsi que votre adresse e-mail, puis vous confirmez la candidature via le lien reçu par e-mail. Plus tard, vous pouvez créer un compte avec la même adresse et reprendre la candidature."
+      },
+      "match": {
+        "q": "Comment la compatibilité avec une offre est-elle calculée ?",
+        "a": "Le pourcentage de compatibilité repose sur des critères fixes : métier et catégorie, compétences, lieu, expérience, disponibilité, langues, certificats, permis de conduire et conditions du contrat. Le résultat n’est pas déterminé par une intelligence artificielle, et l’offre indique ce que vous remplissez et ce qui manque."
+      },
+      "visibility": {
+        "q": "Les employeurs voient-ils mon profil ?",
+        "a": "Les entreprises vérifiées ne peuvent trouver votre profil que si vous activez l’option « Autoriser les employeurs vérifiés à trouver mon profil » dans vos paramètres — elle est désactivée par défaut. L’entreprise à laquelle vous postulez voit votre candidature. Vous pouvez bloquer certaines entreprises dans la section « Entreprises bloquées »."
+      },
+      "alerts": {
+        "q": "Comment recevoir des alertes pour les nouvelles offres ?",
+        "a": "Sur la <jobs>liste des offres</jobs>, définissez vos filtres et choisissez « Enregistrer la recherche ». Dans l’espace candidat, vous activez les alertes e-mail pour cette recherche — chaque jour ou chaque semaine."
+      },
+      "data": {
+        "q": "Comment télécharger mes données ou supprimer mon compte ?",
+        "a": "Dans les paramètres de l’espace candidat, section « Vos données et votre compte », vous téléchargez vos données dans un fichier JSON ou supprimez votre compte."
+      },
+      "free": {
+        "q": "Combien coûte la publication d’offres ?",
+        "a": "À ce stade, Pracuj.be est gratuit pour les employeurs. Le portail ne vend ni forfaits ni publications d’offres payantes."
+      },
+      "verification": {
+        "q": "Pourquoi mon entreprise doit-elle être vérifiée ?",
+        "a": "Seules les entreprises vérifiées par un administrateur du portail peuvent publier des offres. Le statut de vérification est visible dans l’espace employeur. Si l’entreprise est refusée, vous voyez le motif et pouvez choisir « Renvoyer en vérification »."
+      },
+      "drafts": {
+        "q": "Puis-je préparer une offre avant la vérification ?",
+        "a": "Oui. L’assistant de création enregistre un brouillon après chaque étape. Vous le publiez dès que votre entreprise est vérifiée."
+      },
+      "team": {
+        "q": "Comment ajouter des collègues ?",
+        "a": "Le propriétaire ou l’administrateur de l’entreprise invite les membres de l’équipe par leur adresse e-mail dans l’espace employeur et leur attribue un rôle."
+      },
+      "applications": {
+        "q": "Comment contacter les candidats ?",
+        "a": "Vous gérez les candidatures, les messages et les propositions d’emploi dans l’espace employeur. Pour en savoir plus, consultez la page <employer>Pour les employeurs</employer>."
+      },
+      "languages": {
+        "q": "Dans quelles langues le site est-il disponible ?",
+        "a": "Le site est disponible en polonais, néerlandais, français et anglais. Vous changez de langue dans l’en-tête ou le pied de page."
+      },
+      "emailLanguage": {
+        "q": "Dans quelle langue vais-je recevoir les e-mails ?",
+        "a": "Les e-mails liés à votre compte sont envoyés dans la langue définie sur votre compte — même lorsque le message vient d’un employeur qui utilise une autre langue."
+      },
+      "noEmail": {
+        "q": "Je ne reçois pas les e-mails du site. Que faire ?",
+        "a": "Vérifiez votre dossier de courrier indésirable et l’exactitude de votre adresse e-mail. Si le message n’arrive toujours pas, écrivez-nous via le formulaire de contact."
+      },
+      "suspicious": {
+        "q": "Une offre semble suspecte. Que faire ?",
+        "a": "Sur la page de l’offre, choisissez « Signaler l’offre » ou « Signaler l’entreprise ». Vous pouvez envoyer un signalement même sans compte et recevez un numéro de dossier pour en suivre le statut."
+      }
+    },
+    "contactTitle": "Vous n’avez pas trouvé de réponse ?",
+    "contactDesc": "Écrivez-nous via le formulaire de contact. Nous répondrons à l’adresse e-mail indiquée dans le formulaire.",
+    "contactCta": "Accéder au formulaire de contact"
+  },
+  "contact": {
+    "metaTitle": "Contact",
+    "metaDescription": "Écrivez à l’équipe de Pracuj.be via le formulaire de contact — au sujet de votre compte candidat, de votre compte employeur, d’offres d’emploi ou de problèmes techniques.",
+    "title": "Contact",
+    "intro": "Une question sur votre compte, une offre ou le fonctionnement du site ? Écrivez-nous via le formulaire — nous répondrons à l’adresse e-mail indiquée.",
+    "formTitle": "Formulaire de contact",
+    "topicLabel": "Sujet",
+    "topicPlaceholder": "Choisissez un sujet",
+    "topicCandidateAccount": "Compte candidat",
+    "topicEmployerAccount": "Compte employeur ou entreprise",
+    "topicJobListing": "Offre d’emploi",
+    "topicTechnical": "Problème technique",
+    "topicPrivacy": "Mes données personnelles",
+    "topicOther": "Autre demande",
+    "messageLabel": "Message",
+    "messageHint": "Décrivez votre demande (au moins {min} caractères). N’indiquez pas de numéro de registre national, de PESEL ni de numéros de documents.",
+    "nameLabel": "Prénom (facultatif)",
+    "emailLabel": "Adresse e-mail",
+    "emailHint": "Nous enverrons la confirmation et la réponse à cette adresse.",
+    "submit": "Envoyer le message",
+    "networkError": "Impossible de joindre le serveur. Votre message est toujours dans le formulaire — veuillez réessayer.",
+    "successTitle": "Message envoyé",
+    "successBody": "Merci. Nous avons envoyé une confirmation avec le numéro du message à l’adresse indiquée.",
+    "successDuplicate": "Ce message avait déjà été envoyé — nous ne l’avons pas envoyé une deuxième fois.",
+    "referenceLabel": "Numéro du message",
+    "referenceHint": "Mentionnez ce numéro si vous souhaitez ajouter quelque chose.",
+    "backToHelp": "Retour à la page d’aide",
+    "beforeTitle": "Avant d’écrire",
+    "beforeHelp": "Les réponses aux questions les plus fréquentes se trouvent sur la page <help>Aide</help>.",
+    "beforeReport": "Signalez une offre suspecte directement sur sa page (« Signaler l’offre ») — vous la trouverez dans la <jobs>liste des offres</jobs>.",
+    "beforeNoIds": "N’envoyez ni numéros de documents ni mots de passe dans votre message.",
+    "error": {
+      "topicRequired": "Choisissez un sujet.",
+      "messageRequired": "Saisissez votre message.",
+      "messageTooShort": "Votre message est trop court — décrivez votre demande un peu plus en détail.",
+      "messageTooLong": "Votre message est trop long.",
+      "nameTooLong": "Le prénom est trop long.",
+      "emailRequired": "Indiquez votre adresse e-mail.",
+      "emailInvalid": "Indiquez une adresse e-mail valide.",
+      "sensitiveId": "Supprimez le numéro de registre national, le PESEL ou le numéro de document — il n’est pas nécessaire pour répondre à votre message."
+    }
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Désactivation de l’alerte",
+    "title": "Désactiver cette alerte ?",
+    "confirmText": "Nous n’enverrons plus d’e-mails de nouvelles offres pour cette seule recherche enregistrée. Vos autres recherches et notifications restent inchangées.",
+    "confirmButton": "Désactiver cette alerte",
+    "pending": "Enregistrement…",
+    "doneTitle": "Alerte désactivée",
+    "doneText": "Nous ne vous enverrons plus d’alertes pour cette recherche. La recherche reste enregistrée — vous pouvez réactiver l’alerte dans votre espace candidat.",
+    "settingsHint": "Vous pouvez modifier vos recherches et alertes après connexion.",
+    "loginLink": "Se connecter",
+    "invalidTitle": "Le lien n’est pas valide",
+    "invalidText": "Ce lien est incomplet ou a été modifié. Utilisez le lien du dernier e-mail ou modifiez l’alerte après connexion.",
+    "expiredTitle": "Le lien a expiré",
+    "expiredText": "Ce lien n’est plus valable. Utilisez le lien du dernier e-mail ou modifiez l’alerte après connexion.",
+    "unavailableText": "La désactivation de l’alerte est momentanément indisponible. Réessayez plus tard ou modifiez l’alerte après connexion.",
+    "errorText": "La modification n’a pas pu être enregistrée. Veuillez réessayer."
   },
   "cvImport": {
     "eyebrow": "Votre profil",

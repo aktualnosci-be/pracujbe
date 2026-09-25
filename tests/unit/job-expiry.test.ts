@@ -4,14 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectiveJobStatus, isPastExpiry } from '@/lib/job-expiry';
 
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(), fileBucketConfig: () => null }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/lib/actions/jobs', () => ({ setJobStatus: vi.fn() }));
 
 import { isProductionMode } from '@/lib/env';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 import { allowedActions } from '@/components/employer/JobLifecycleActions';
 import { POST } from '@/app/api/maintenance/route';
@@ -61,6 +61,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     'process_saved_search_alerts',
     'process_email_campaigns',
     'run_retention_purge',
+    'purge_stale_message_attachments',
     'claim_storage_deletions',
   ];
 
@@ -101,6 +102,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,
       retention: {},
+      purgedMessageAttachments: 0,
       // #17: bez bucketu Railway GC bucketu pominięty.
       storageGc: null,
       // #43: czyszczenie spraw DSA wyłączone bez jawnej flagi — bez wywołania bazy.

@@ -3,6 +3,7 @@ import { PassThrough, Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createCandidateCvKey,
+  createMessageAttachmentKey,
   createRailwayBucket,
   type RailwayBucketOptions,
 } from "@/lib/storage/railway-bucket";
@@ -79,6 +80,30 @@ async function requireStream(
 afterEach(() => vi.useRealTimers());
 
 describe("Prywatny adapter Railway Bucket przez rzeczywisty SDK S3", () => {
+  it("załączniki rozmów (0119): klucz `<rozmowa>/att-<uuid>` z JPG/PNG; CV nadal bez obrazów", async () => {
+    const { store, handle } = fixture();
+    const png = createMessageAttachmentKey(owner, "png");
+    expect(png).toMatch(
+      new RegExp(`^${owner}/att-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.png$`),
+    );
+    expect((await store.put({ key: png, bytes: new Uint8Array([1]), contentType: "image/png" })).ok).toBe(true);
+    expect((await store.delete({ key: png })).ok).toBe(true);
+    expect(handle).toHaveBeenCalledTimes(2);
+    // Kontrole ujemne: MIME ≠ rozszerzenie, obraz jako CV, obcy prefiks nazwy i rozszerzenie.
+    handle.mockClear();
+    for (const invalid of [
+      { key: png, contentType: "image/jpeg" as const },
+      { key: key.replace(".pdf", ".png"), contentType: "image/png" as const },
+      { key: png.replace("/att-", "/img-"), contentType: "image/png" as const },
+      { key: png.replace(".png", ".gif"), contentType: "image/png" as const },
+    ]) {
+      expect(await store.put({ ...invalid, bytes: new Uint8Array([1]) })).toMatchObject({ error: "INVALID_INPUT" });
+    }
+    expect(handle).not.toHaveBeenCalled();
+    expect(() => createMessageAttachmentKey("../x", "png")).toThrow("INVALID_INPUT");
+    expect(() => createCandidateCvKey(owner, "png" as "pdf")).toThrow("INVALID_INPUT");
+  });
+
   it("tworzy unikalne klucze UUIDv4 bez nazwy pliku i przyjmuje je przy zapisie", async () => {
     const { store, handle } = fixture();
     const keys = new Set(
@@ -325,6 +350,25 @@ describe("Prywatny adapter Railway Bucket przez rzeczywisty SDK S3", () => {
     expect(second.query).toMatchObject({ "list-type": "2", "start-after": "zz-exports/raport.csv", "max-keys": "2" });
     // Obcięta strona bez kluczy nie przesunęłaby kursora → awaria, nie pętla.
     expect(await store.list({})).toMatchObject({ ok: false, error: "UNAVAILABLE" });
+  });
+  it("LIST (#17 × 0119): załącznik rozmowy to dla GC CV klucz obcy, nie sierota do usunięcia", async () => {
+    const { store, handle } = fixture();
+    const attachment = `${owner}/att-44444444-4444-4444-8444-444444444444.png`;
+    handle.mockResolvedValueOnce(
+      response(200, Readable.from([
+        `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><IsTruncated>false</IsTruncated>` +
+          [key, attachment].map((k) => `<Contents><Key>${k}</Key><LastModified>2026-09-20T10:00:00.000Z</LastModified><Size>3</Size></Contents>`).join("") +
+          `<KeyCount>2</KeyCount><MaxKeys>10</MaxKeys></ListBucketResult>`,
+      ]), { "content-type": "application/xml" }),
+    );
+    expect(await store.list({ maxKeys: 10 })).toEqual({
+      ok: true,
+      value: {
+        objects: [{ key, lastModified: new Date("2026-09-20T10:00:00.000Z") }],
+        foreign: 1,
+        nextStartAfter: null,
+      },
+    });
   });
   it("LIST (#17): odrzuca zły limit i kursor bez żądania; błąd dostawcy = kod", async () => {
     const { store, handle } = fixture();
