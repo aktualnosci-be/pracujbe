@@ -114,6 +114,12 @@ export interface EmailDataMap {
     inviterName?: string | null;
     actionUrl: string;
   };
+  /** 0121: adres bez konta — `actionUrl` = rejestracja pracodawcy z tokenem we fragmencie `#`. */
+  teamInvitationSignup: {
+    companyName: string;
+    inviterName?: string | null;
+    actionUrl: string;
+  };
   /**
    * Digest nowych ofert dla zapisanego wyszukiwania (#100). `jobs` = najnowsze (≤ 5) z
    * gotowymi adresami w locale odbiorcy (worker, `delivery-data.ts`); `count` = wszystkie nowe.
@@ -214,6 +220,7 @@ const SUBJECT_FIELD: Partial<Record<EmailType, string>> = {
   companyRejected: 'reason',
   companySuspended: 'reason',
   teamInvitation: 'inviterName',
+  teamInvitationSignup: 'inviterName',
 };
 
 /** Pusta wartość albo sam placeholder (myślniki/spacje), np. `'—'` z `coalesce(..., '—')` w RPC. */
@@ -608,6 +615,17 @@ export function TeamInvitationEmail(props: EmailProps<'teamInvitation'>): ReactE
   );
 }
 
+export function TeamInvitationSignupEmail(props: EmailProps<'teamInvitationSignup'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="teamInvitationSignup"
+      vars={props}
+      ctaHref={props.actionUrl}
+    />
+  );
+}
+
 export function GuestApplicationConfirmEmail(props: EmailProps<'guestApplicationConfirm'>): ReactElement {
   return (
     <EmailShell
@@ -898,6 +916,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   companyRejected: CompanyRejectedEmail,
   companySuspended: CompanySuspendedEmail,
   teamInvitation: TeamInvitationEmail,
+  teamInvitationSignup: TeamInvitationSignupEmail,
   jobMatch: JobMatchEmail,
   guestApplicationConfirm: GuestApplicationConfirmEmail,
   guestApplicationSent: GuestApplicationSentEmail,

@@ -495,6 +495,7 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 - **Migracja:** `supabase/migrations/0086_company_team.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Osoby zaproszone do zespołu firmy, Pracodawcy i członkowie firm
+- **Uwaga:** Język zaproszenia wybiera zapraszający (adres bez konta, 0121); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -502,6 +503,9 @@ Tabele w migracjach: 96; z danymi osobowymi: 60; bez danych osobowych: 36.
 | `role` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0086_company_team.sql` |
 | `invited_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0086_company_team.sql` |
 | `responded_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0086_company_team.sql` |
+| `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0121_team_invitation_signup.sql` |
+| `signup_token_hash` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0121_team_invitation_signup.sql` |
+| `signup_token_used_at` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0121_team_invitation_signup.sql` |
 
 ### `public.company_members`
 
@@ -1090,6 +1094,7 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `reportRestored` | `caseNumber`, `recipientName` | `admin_restore_moderation` |
 | `statusChanged` | `companyName`, `jobTitle`, `status` | `transition_application` |
 | `teamInvitation` | `companyName`, `inviterName`, `panel` | `invite_company_member` |
+| `teamInvitationSignup` | `companyName`, `inviterName`, `nonce` | `invite_company_member` |
 
 ## 5. Tabele bez danych osobowych
 
