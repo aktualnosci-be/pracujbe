@@ -1,7 +1,7 @@
-# Lejek ofert — dokumentacja techniczna (#99, #499)
+# Lejek ofert — dokumentacja techniczna (#99, #499, #575)
 
 Opis tego, co dzieje się z danymi, gdy strona oferty lub lista ofert zgłasza zdarzenie lejka.
-Same fakty z kodu (stan na 2026-09-24). Ocena prawna (ePrivacy, RODO) jest w szkicu
+Same fakty z kodu (stan na 2026-09-25). Ocena prawna (ePrivacy, RODO) jest w szkicu
 [`docs/legal-drafts/eprivacy-lejek.md`](legal-drafts/eprivacy-lejek.md).
 
 ## 1. Zdarzenia i moment wysyłki
@@ -15,9 +15,24 @@ Same fakty z kodu (stan na 2026-09-24). Ocena prawna (ePrivacy, RODO) jest w szk
 - Wysyłka następuje po załadowaniu strony, gdy karta jest widoczna (`whenPageVisible`: nie w
   prerenderze ani w tle).
 - Oferty demonstracyjne (`isDemo`) nie wysyłają zdarzeń.
-- **Wysyłka nie zależy od wyboru w banerze cookies.** Ani `JobFunnelBeacon`, ani
-  `reportApplyStarted` nie czytają zgody (`src/lib/consent*.ts`). Zdarzenia idą także przed
-  decyzją, po odmowie i po wycofaniu zgody.
+- **Wysyłka tylko po zgodzie w kategorii analitycznej banera cookies** (decyzja właściciela
+  z 25.09.2026, #575; `src/lib/job-funnel/client.ts`):
+  - zgoda jest czytana z cookie `pracujbe_consent` tuż przed wysyłką (`sendFunnelEvent`), więc
+    odmowa albo wycofanie w innej karcie i zapisana odmowa po restarcie przeglądarki blokują
+    kolejne zdarzenia; zgoda ze starej wersji polityki = brak decyzji; sama zgoda marketingowa
+    nie wystarcza; trasy prywatne (`allowsTrackingOnPath`) nigdy nie mierzą;
+  - przed decyzją wyświetlenie (`detail_view`, `search_appearance`) czeka w pamięci karty
+    (`whenFunnelConsent`) i wychodzi dopiero po zgodzie analitycznej udzielonej w tej karcie;
+    odmowa lub zapis bez analityki czyści oczekujące zdarzenia, a zmiana strony
+    (odmontowanie wyspy) je anuluje — przy opuszczeniu strony nic nie jest wysyłane;
+  - `apply_started` bez zgody nie jest wysyłane ani kolejkowane.
+- Dowód: `tests/unit/job-funnel-consent.test.tsx` (kontrola ujemna: bez bramki w
+  `sendFunnelEvent` testy są czerwone) i `tests/e2e/job-funnel-no-storage.spec.ts` (4 języki:
+  przed decyzją, po „Tylko niezbędne”, po wycofaniu w tej i w drugiej karcie, zmiana strony,
+  odświeżenie, restart z zapisaną odmową = zero żądań; ze zgodą zdarzenia wychodzą).
+- Panel `/employer/statystyki` informuje, że pojawienia, wyświetlenia i rozpoczęte aplikowanie
+  pochodzą tylko od osób ze zgodą (`jobFunnel.consentNote`); wysłane aplikacje liczone są
+  wszystkie (ze stanu `applications`).
 
 ## 2. Co wychodzi z przeglądarki
 
@@ -44,13 +59,13 @@ Treść żądania (JSON, limit 4096 B po stronie serwera):
 Nic. Lejek nie zapisuje cookies, `localStorage`, `sessionStorage` ani IndexedDB i nie
 odczytuje z nich niczego.
 
-Dowód: `tests/e2e/job-funnel-no-storage.spec.ts` (serwer fixture, w CI w jobie `e2e`):
+Dowód (po zgodzie): `tests/e2e/job-funnel-no-storage.spec.ts` (serwer fixture, w CI w jobie `e2e`):
 - stan cookies/localStorage/sessionStorage/IndexedDB jest identyczny w chwili wysyłki
   zdarzenia i po nim, dla `search_appearance`, `detail_view` i `apply_started`;
 - nonce nie występuje w żadnym z tych magazynów;
 - żądanie lejka nie ma nagłówka `Cookie`, mimo że strona ma cookie (sonda testu);
 - odpowiedź nie ma `Set-Cookie`;
-- zgoda nie była udzielona (baner widoczny, brak cookie `pracujbe_consent`).
+- jedyne cookies strony to sonda testu, `pracujbe_consent` i `NEXT_LOCALE`.
 
 Kontrola ujemna wykonana ręcznie przy tej zmianie: klient z `credentials: 'include'` i zapisem
 nonce do `sessionStorage` daje czerwone oba testy zdarzeń. Test porównujący stan ma też własną
@@ -78,8 +93,8 @@ Kolejność: limit rozmiaru → parsowanie → walidacja (zdarzenie z listy, non
 
 | Tabela | Kolumny | Retencja |
 |---|---|---|
-| `job_funnel_daily` | `job_id`, `day` (data w Europe/Brussels), `search_appearances`, `detail_views`, `apply_started`, `updated_at` | bez limitu (usuwane kaskadowo z ofertą) |
-| `job_funnel_receipts` | `nonce`, `event`, `created_at` | co najmniej 2 dni; kasowanie tylko przy kolejnym zapisie, najwyżej 200 wierszy starszych niż 2 dni na zapis |
+| `job_funnel_daily` | `job_id`, `day` (data w Europe/Brussels), `search_appearances`, `detail_views`, `apply_started`, `updated_at` | bieżący i 12 poprzednich miesięcy kalendarzowych (≤ 13), dzień w Europe/Brussels; wcześniej usuwane także kaskadowo z ofertą |
+| `job_funnel_receipts` | `nonce`, `event`, `created_at` | najwyżej 48 h (absolutnie) |
 
 - Liczone są tylko oferty publiczne firm `verified`.
 - Brak kolumn: IP, User-Agent, cookie, identyfikator konta, tekst wyszukiwania, adres strony.
@@ -87,8 +102,12 @@ Kolejność: limit rozmiaru → parsowanie → walidacja (zdarzenie z listy, non
   `pracujbe.funnel_writer`). Tabele bez uprawnień dla `anon`/`authenticated`.
 - Odczyt: `get_company_job_funnel` — recruiter+ firmy oferty; zwraca sumy dzienne oraz
   `applications_submitted` liczone ze stanu `applications`.
-- **Retencja receipts nie ma twardego terminu.** Przy braku ruchu stare wiersze zostają do
-  następnego zdarzenia. Twardy termin wymaga zadania w `/api/maintenance` (osobna zmiana).
+- **Terminy (migracja `0130`, #575):** `purge_job_funnel_data` (service_role, partie
+  `SKIP LOCKED`, same liczniki) woła `/api/maintenance` co godzinę — receipts starsze niż
+  48 h i agregaty sprzed `job_funnel_retention_cutoff(now())` (1. dzień miesiąca 12 miesięcy
+  przed bieżącym) znikają niezależnie od ruchu. `record_job_funnel_event` sprząta receipts
+  > 48 h przed zapisem, więc okno deduplikacji = termin przechowywania. Dowód: `rls.sql`
+  sekcja FC575 (kontrola ujemna: bez zadania dane poza terminem zostają), `tests/unit/job-funnel-retention.test.ts`.
 
 ## 6. Poza kodem (do potwierdzenia)
 

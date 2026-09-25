@@ -61,6 +61,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     'process_saved_search_alerts',
     'process_email_campaigns',
     'run_retention_purge',
+    'purge_job_funnel_data',
     'claim_storage_deletions',
   ];
 
@@ -101,6 +102,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,
       retention: {},
+      // #575: terminy lejka ofert (0130).
+      jobFunnel: {},
       // #17: bez bucketu Railway GC bucketu pominięty.
       storageGc: null,
       // #43: czyszczenie spraw DSA wyłączone bez jawnej flagi — bez wywołania bazy.

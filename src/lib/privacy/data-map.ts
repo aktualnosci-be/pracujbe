@@ -183,9 +183,9 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'job-statistics': {
     name: 'Statystyki ofert (lejek)',
-    inCode: 'Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby.',
+    inCode: 'Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. Zdarzenie wysyłane wyłącznie po zgodzie w kategorii analitycznej banera cookies (#575).',
     processors: HOSTING,
-    retentionInCode: 'job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach.',
+    retentionInCode: 'job_funnel_receipts (nonce deduplikacji) najwyżej 48 h, job_funnel_daily — bieżący i 12 poprzednich miesięcy kalendarzowych (purge_job_funnel_data w /api/maintenance).',
   },
   'analytics-marketing': {
     name: 'Analityka i marketing po zgodzie',

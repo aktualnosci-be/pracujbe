@@ -298,6 +298,7 @@ describe('/api/maintenance — kolejkowanie kampanii tylko z nadawcą', () => {
     'process_saved_search_alerts',
     'process_email_campaigns',
     'run_retention_purge',
+    'purge_job_funnel_data',
   ];
   const request = () =>
     new Request('http://web.internal/api/maintenance', {
