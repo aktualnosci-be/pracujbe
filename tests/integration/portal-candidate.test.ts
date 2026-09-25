@@ -367,7 +367,7 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(await getMyJobMatch(randomUUID())).toEqual({ status: 'none' });
   });
 
-  it('odległość ze słownika locations (0108): gminy spoza listy w kodzie, kontrola ujemna', async () => {
+  it('odległość ze słownika locations (0109): gminy spoza listy w kodzie, kontrola ujemna', async () => {
     const setCities = async (candidate: string, job: string) => {
       await db().admin.query('UPDATE public.candidate_profiles SET city = $2 WHERE profile_id = $1', [alice, candidate]);
       await db().admin.query('UPDATE public.jobs SET city = $2 WHERE id = $1', [jobIds[0], job]);

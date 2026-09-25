@@ -1,11 +1,11 @@
 -- =============================================================================
--- Rollback 0108 — słownik miejscowości z aliasami (#194). Uruchamiać ręcznie jako migrator,
+-- Rollback 0109 — słownik miejscowości z aliasami (#194). Uruchamiać ręcznie jako migrator,
 -- w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć wpis z app_migrations.history.
 -- Plik celowo BEZ BEGIN/COMMIT (supabase/tests/locations-rollback.sql wykonuje go
 -- w transakcji i cofa).
 --
--- Usuwa aliasy i miejscowości dodane przez 0108 (z kodem NIS albo rodzaju innego niż
--- `municipality`), poza 10 miastami z 0010; te wracają do stanu sprzed 0108. Żadna tabela
+-- Usuwa aliasy i miejscowości dodane przez 0109 (z kodem NIS albo rodzaju innego niż
+-- `municipality`), poza 10 miastami z 0010; te wracają do stanu sprzed 0109. Żadna tabela
 -- nie ma klucza obcego do `locations` poza `location_aliases`. Matching po wycofaniu korzysta
 -- z listy w kodzie — wycofanie łączyć z wycofaniem kodu z tego samego PR (loader czyta
 -- `location_aliases`; bez tabeli dopasowanie zwraca błąd odczytu zamiast procentu).

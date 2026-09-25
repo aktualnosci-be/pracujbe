@@ -8,7 +8,7 @@ etykiety PL/NL/FR/EN (+ `mul`, wspólna etykieta Wikidata, jako zapas).
 **Licencja:** dane Wikidata są udostępniane na [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
 (domena publiczna) — bez obowiązku atrybucji; źródło podajemy dla przejrzystości.
 Bez usług płatnych i bez geokodowania przez API w działającej aplikacji: dane trafiają do bazy
-migracją `supabase/migrations/0108_locations_be_municipalities.sql`.
+migracją `supabase/migrations/0109_locations_be_municipalities.sql`.
 
 - Odświeżenie migawki (ręcznie, poza CI): `node scripts/locations/fetch-wikidata.mjs`
 - Wygenerowanie SQL: `node scripts/locations/build-migration.mjs`
