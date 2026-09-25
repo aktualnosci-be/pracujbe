@@ -41,17 +41,16 @@ export const CONSENT_CATEGORIES: readonly ConsentCategory[] = [
   'necessary',
   'preferences',
   'analytics',
-  'marketing',
 ];
 
 /** Zgoda minimalna: tylko kategoria niezbędna (odrzucenie opcjonalnych). */
 export function necessaryOnly(): ConsentCategories {
-  return { necessary: true, preferences: false, analytics: false, marketing: false };
+  return { necessary: true, preferences: false, analytics: false };
 }
 
 /** Pełna zgoda: wszystkie kategorie włączone. */
 export function acceptAllCategories(): ConsentCategories {
-  return { necessary: true, preferences: true, analytics: true, marketing: true };
+  return { necessary: true, preferences: true, analytics: true };
 }
 
 /** Czy dana kategoria jest objęta ważną zgodą (necessary zawsze true). */
@@ -79,7 +78,6 @@ export function saveConsent(
       necessary: true,
       preferences: categories.preferences === true,
       analytics: categories.analytics === true,
-      marketing: categories.marketing === true,
     },
     ts: new Date().toISOString(),
     id: createConsentId(),

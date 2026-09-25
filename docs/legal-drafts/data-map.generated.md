@@ -27,7 +27,7 @@ Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 | Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.age_policy`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Discord (webhook kanału błędów), Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, Anthropic (Claude API) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. Zdarzenie wysyłane wyłącznie po zgodzie w kategorii analitycznej banera cookies (#575). | — | Railway | job_funnel_receipts (nonce deduplikacji) najwyżej 48 h, job_funnel_daily — bieżący i 12 poprzednich miesięcy kalendarzowych (purge_job_funnel_data w /api/maintenance). |
-| Analityka i marketing po zgodzie (`analytics-marketing`) | Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies. | — | Google Analytics (gtag), Meta Pixel | Cookie zgody ważne 180 dni. |
+| Analityka po zgodzie (`analytics-marketing`) | Beacon Cloudflare Web Analytics ładowany dopiero po zgodzie w kategorii analytics (#570: zamiast Google Analytics i Meta Pixel — usunięte); bezcookie'owy. | — | Cloudflare Web Analytics | Cookie zgody ważne 180 dni. |
 | Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.retention_warnings`, `public.storage_deletion_queue` | Railway | run_retention_purge (/api/maintenance): okresy z retention_policies (wartości #574, 0127); harmonogram WYŁĄCZONY do jawnego RETENTION_MODE=dry-run\|apply. Ślad wniosków 1095 dni; rejestr usunięć bez usuwania (minimum 400 dni do zmiany po RET-09/RET-10). |
 | Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy; kopia i manifest wysyłane do prywatnego bucketu Cloudflare R2 (BACKUP_S3_*, #569). | `public.erasure_tombstones` | Railway, Cloudflare R2 (bucket kopii bazy) | BACKUP_RETENTION najnowszych kopii (domyślnie 14) lokalnie i w buckecie R2; opcjonalnie BACKUP_S3_MAX_AGE_DAYS (najnowsza kopia zostaje zawsze). |
 | Płatności (wyłączone) (`billing-disabled`) | Martwy schemat po wyłączonym billingu (#51); brak aktywnego przepływu. | — | Stripe | Kod nie usuwa danych — do ustalenia |
@@ -159,28 +159,15 @@ Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 - **Umowa (DPA):** DO UZUPEŁNIENIA
 - **Retencja u dostawcy:** DO UZUPEŁNIENIA
 
-### Google Analytics (gtag) (`google-analytics`)
+### Cloudflare Web Analytics (`cloudflare-web-analytics`)
 
-- **Cel w portalu:** Analityka ruchu — wyłącznie po zgodzie w kategorii analytics.
-- **Kategorie danych:** Wyświetlenia stron i identyfikatory cookies _ga* ustawiane przez skrypt dostawcy (pełny zakres określa dostawca)
+- **Cel w portalu:** Analityka ruchu — wyłącznie po zgodzie w kategorii analytics (#570, decyzja właściciela 2026-09-25: zamiast Google Analytics i Meta Pixel — usunięte).
+- **Kategorie danych:** Wyświetlenia stron; beacon bezcookie'owy — bez identyfikatorów i bez cookies trackera
 - **Osoby:** Odwiedzający, którzy wyrazili zgodę
-- **Aktywacja:** NEXT_PUBLIC_GA_MEASUREMENT_ID + zgoda analytics w banerze cookies.
+- **Aktywacja:** NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN + zgoda analytics w banerze cookies.
 - **Kod:** `src/components/cookies/Analytics.tsx`, `src/lib/consent-store.ts`
-- **Uwaga:** gtag config z anonymize_ip: true; wycofanie zgody usuwa cookies _ga*.
-- **Rola (procesor/administrator):** DO UZUPEŁNIENIA
-- **Region przetwarzania:** DO UZUPEŁNIENIA
-- **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
-- **Umowa (DPA):** DO UZUPEŁNIENIA
-- **Retencja u dostawcy:** DO UZUPEŁNIENIA
-
-### Meta Pixel (`meta-pixel`)
-
-- **Cel w portalu:** Marketing/remarketing — wyłącznie po zgodzie w kategorii marketing.
-- **Kategorie danych:** Zdarzenie PageView i identyfikatory cookies _fbp/_fbc ustawiane przez skrypt dostawcy (pełny zakres określa dostawca)
-- **Osoby:** Odwiedzający, którzy wyrazili zgodę
-- **Aktywacja:** NEXT_PUBLIC_META_PIXEL_ID + zgoda marketing w banerze cookies.
-- **Kod:** `src/components/cookies/Analytics.tsx`, `src/lib/consent-store.ts`
-- **Uwaga:** Wycofanie zgody: fbq('consent','revoke') i usunięcie cookies _fbp/_fbc.
+- **Uwaga:** Kategorii marketing nie ma w banerze ani w logu zgód (decyzja właściciela 2026-09-25; wersja polityki cookies 2.0, migracja 0130).
+- **Uwaga:** Bez tokenu beacon się nie ładuje, a CSP nie dopuszcza hostów cloudflareinsights.com.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA

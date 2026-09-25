@@ -662,6 +662,7 @@
     "savedSearchLimitReached": "You already have 20 saved searches. Delete one to add a new one.",
     "moderationLocked": "This content is restricted by a moderation decision, so its status cannot be changed.",
     "guestApplyUnavailable": "Applying without an account is temporarily unavailable. Try again later or log in.",
+    "siteAccessUnavailable": "Access to the website is temporarily unavailable. Please try again later.",
     "emailNotVerified": "First confirm your account’s email address — click the link we sent when you registered.",
     "claimExpired": "The link to link the application has expired (it was valid for 30 days).",
     "appealExists": "An appeal against this decision has already been submitted.",
@@ -2503,7 +2504,8 @@
     "passwordLabel": "Access password",
     "submit": "Enter",
     "error": "Incorrect password. Please try again.",
-    "rateLimited": "Too many attempts. Please try again in a few minutes."
+    "rateLimited": "Too many attempts. Please try again in a few minutes.",
+    "unavailable": "Access is temporarily unavailable. Please try again later."
   },
   "offline": {
     "title": "No connection",

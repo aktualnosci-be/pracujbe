@@ -5,8 +5,13 @@
  * Bezpieczny na serwerze: bez `document` odczyt zwraca `null`.
  */
 
-/** Kategorie zgód. `necessary` jest zawsze aktywna i nie podlega wyłączeniu. */
-export type ConsentCategory = 'necessary' | 'preferences' | 'analytics' | 'marketing';
+/**
+ * Kategorie zgód. `necessary` jest zawsze aktywna i nie podlega wyłączeniu. Kategorii
+ * `marketing` nie ma od #570 (po usunięciu Google Analytics i Meta Pixel portal nie używa
+ * trackerów marketingowych — decyzja właściciela 2026-09-25); cookie z polityki sprzed tej
+ * zmiany ma starszą wersję (`CONSENT_POLICY_VERSION`), więc baner pojawia się ponownie.
+ */
+export type ConsentCategory = 'necessary' | 'preferences' | 'analytics';
 
 /** Stan zgody dla każdej kategorii. */
 export type ConsentCategories = Record<ConsentCategory, boolean>;
@@ -36,10 +41,10 @@ export interface ConsentRecord {
 export const CONSENT_COOKIE_NAME = 'pracujbe_consent';
 
 /**
- * Wersja polityki prywatności/cookies. Zmiana wartości w env unieważnia dotychczasowe zgody
- * (użytkownik zobaczy baner ponownie) — patrz `getConsent()`.
+ * Wersja polityki prywatności/cookies. `2.0` (#570): kategorie bez `marketing`. Zmiana wartości
+ * w env unieważnia dotychczasowe zgody (użytkownik zobaczy baner ponownie) — patrz `getConsent()`.
  */
-export const CONSENT_POLICY_VERSION = process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0';
+export const CONSENT_POLICY_VERSION = process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0';
 
 /** Zdarzenie DOM emitowane po zmianie zgody (detail: ConsentRecord). */
 export const CONSENT_CHANGE_EVENT = 'pracujbe:consent-change';
@@ -105,7 +110,6 @@ function parseRecord(raw: string): ConsentRecord | null {
     necessary: true,
     preferences: c.preferences === true,
     analytics: c.analytics === true,
-    marketing: c.marketing === true,
   };
 
   return { v, categories, ts, id };
