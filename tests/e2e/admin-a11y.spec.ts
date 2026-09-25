@@ -32,15 +32,23 @@ const ROUTES = [
   '/admin/uzytkownicy',
   // Blokady adresów e-mail (#44).
   '/admin/poczta',
+  // Kampanie e-mail (#45): lista, szkic (dialog akcji), rewizja aktywna.
+  '/admin/kampanie',
+  '/admin/kampanie/demo-k3',
+  '/admin/kampanie/demo-k2',
   // Rejestr naruszeń (#490): lista, nowy wpis, wpis demonstracyjny.
   '/admin/naruszenia',
   '/admin/naruszenia/nowy',
   '/admin/naruszenia/demo-b1',
+  // Wiadomości z formularza kontaktu (#61).
+  '/admin/kontakt',
   // Przegląd pytań screeningowych (#497).
   '/admin/pytania',
   '/admin/dziennik',
   '/admin/odwolania',
   '/admin/raport-dsa',
+  // Koszty AI (#36) — raport tylko do odczytu.
+  '/admin/koszty-ai',
 ];
 
 for (const viewport of [

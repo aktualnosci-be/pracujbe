@@ -12,9 +12,37 @@ Web: Node22, Railpack, npm run build, npm run start, PORT dostarczony przez plat
 
 ## Cron
 
-Komenda: node scripts/railway-cron-call.mjs. Zmienne tylko CRON_TARGET_URL i CRON_AUTH_SECRET. Dla e-maili kieruj POST do /api/email/process z EMAIL_QUEUE_SECRET; dla maintenance do /api/maintenance z MAINTENANCE_SECRET. Użyj domeny prywatnej web w tym samym środowisku. Najpierw wykonanie ręczne, potem harmonogram co5min / co godzinę UTC, restart NEVER. Nie uruchamiaj jednocześnie harmonogramów Vercel i Railway.
+Dwie osobne usługi cron w tym samym środowisku co web, bez publicznej domeny, obie z komendą
+`node scripts/railway-cron-call.mjs` i restartem NEVER. Harmonogram Railway jest w UTC.
 
-Skrypt kończy się kodem0 przy sukcesie,1 przy błędzie żądania/HTTP,2 przy błędnej konfiguracji. Timeout120s, bez przekierowań. Loguje kod HTTP, bez URL, tokenów i treści odpowiedzi. Wynik HTTP nie zastępuje sprawdzenia dostarczenia e-maila w outboxie.
+| Usługa | `CRON_TARGET_URL` | `CRON_AUTH_SECRET` | Harmonogram |
+|---|---|---|---|
+| `cron-email` | `http://<prywatna domena web>:<port>/api/email/process` | wartość `EMAIL_QUEUE_SECRET` usługi web | `*/5 * * * *` (co 5 min) |
+| `cron-maintenance` | `http://<prywatna domena web>:<port>/api/maintenance` | wartość `MAINTENANCE_SECRET` usługi web | `0 * * * *` (co godzinę) |
+
+Opcjonalnie `CRON_TIMEOUT_SECONDS` (1–600, domyślnie 120). Najpierw jedno wywołanie ręczne
+każdej usługi, potem harmonogram. Nie uruchamiaj jednocześnie harmonogramów Vercel
+(`vercel.json`) i Railway.
+
+**Caller** (`scripts/railway-cron-call.mjs`, test `tests/unit/railway-cron.test.ts`): jedno
+żądanie POST, bez przekierowań, przerwane po czasie. Adres musi wskazywać jedno z dwóch
+zadań powyżej, bez query i fragmentu; zwykłe HTTP tylko dla `*.railway.internal` i
+`localhost`, inny host wymaga HTTPS. Kody wyjścia: `0` = HTTP 2xx, `1` = błąd sieci, HTTP
+spoza 2xx albo przekroczony czas, `2` = błędna konfiguracja (żądanie nie wychodzi). Log
+zawiera stały komunikat i kod HTTP — bez adresu, sekretu i treści odpowiedzi (odpowiedzi
+nie czytamy). Wynik HTTP nie zastępuje sprawdzenia dostarczenia e-maila w outboxie.
+
+**Sekrety** (`src/lib/cron/secrets.ts`, test `tests/unit/cron-secrets.test.ts`):
+`EMAIL_QUEUE_SECRET` otwiera tylko `/api/email/process`, `MAINTENANCE_SECRET` tylko
+`/api/maintenance`. Ta sama wartość w obu zmiennych nie otwiera żadnego zadania (401) —
+wygeneruj dwa różne sekrety. `/api/health` (szczegóły za `HEALTH_CHECK_SECRET`) raportuje
+`queueSecret`, `maintenanceSecret`, `cronSecretsSeparate` i `legacyCronSecret`, bez wartości.
+
+**Przejściowy `CRON_SECRET`** (harmonogram `vercel.json`): otwiera oba zadania, dopóki
+zmienna jest ustawiona w usłudze web; równy któremuś sekretowi zadania jest pomijany.
+Kolejność: uruchom obie usługi cron Railway i sprawdź ręczne wywołania → wyłącz harmonogram
+Vercel → usuń `CRON_SECRET` z usługi web (`legacyCronSecret: false`). Rollback: przywróć
+`CRON_SECRET` i harmonogram Vercel — bez zmiany kodu.
 
 ### Maintenance: wygaszanie ofert (#72)
 
@@ -22,13 +50,15 @@ Skrypt kończy się kodem0 przy sukcesie,1 przy błędzie żądania/HTTP,2 przy 
 
 `/api/maintenance` po wygaszeniu ofert wywołuje też `process_saved_search_alerts(500)` (migracja `0092`, #100, tylko `service_role`): dla zapisanych wyszukiwań z nadszedłym terminem (`next_run_at`) wybiera nowe aktywne oferty tą samą funkcją co lista (`get_public_jobs`), rejestruje parę wyszukiwanie+oferta (bez ponownej wysyłki), tworzy jedno powiadomienie in-app i kolejkuje jeden e-mail `jobMatch` (outbox, język odbiorcy, opt-out `email_job_matches`). Digest najwyżej raz na dobę albo tydzień na wyszukiwanie. Nie wymaga nowej usługi ani zmiennej — wystarczy istniejący harmonogram co godzinę; e-maile wysyła cron `/api/email/process`.
 
-- **Harmonogram:** osobna usługa cron (np. `cron-maintenance`) bez publicznej domeny; komenda `node scripts/railway-cron-call.mjs`, `CRON_TARGET_URL=http://<prywatna domena web>:<port>/api/maintenance`, `CRON_AUTH_SECRET` = `MAINTENANCE_SECRET` usługi web (inny niż `EMAIL_QUEUE_SECRET`), harmonogram `0 * * * *` (co godzinę, UTC), restart NEVER. Najpierw jedno wywołanie ręczne.
-- **Obserwowalność:** odpowiedź 200 zawiera tylko liczniki (`expiredJobs`, `releasedDiscounts`, `releasedCheckouts`, `savedSearchDigests`) — bez danych ofert i bez sekretu; skrypt crona loguje sam kod HTTP. Błąd któregokolwiek zadania → 503 i zdarzenie Sentry `maintenance.gc` z polem `task` (`jobExpiry` dla wygaszania, `savedSearchAlerts` dla alertów wyszukiwań), a cron kończy się kodem 1 (nieudane wykonanie w Railway). Brak service-role w produkcji → 503 `unconfigured`.
+- **Harmonogram:** usługa `cron-maintenance` z tabeli w sekcji „Cron” (co godzinę, UTC).
+- **Obserwowalność:** odpowiedź 200 zawiera tylko liczniki (`expiredJobs`, `releasedDiscounts`, `releasedCheckouts`, `savedSearchDigests`) — bez danych ofert i bez sekretu; skrypt crona loguje sam kod HTTP. Błąd któregokolwiek zadania → 503 i wiadomość z kodem błędu na webhooku błędów (#571, `ERROR_WEBHOOK_URL`), a cron kończy się kodem 1 (nieudane wykonanie w Railway). Brak service-role w produkcji → 503 `unconfigured`.
 - **Niezależność od crona:** publiczna lista, szczegół, aplikowanie (`job_is_public`) i dopasowanie (`get_job_match_profile`) same filtrują `expires_at > now()`; panel pracodawcy liczy i pokazuje aktywną ofertę po terminie jako wygasłą, zanim przebieg zmieni rekord. Opóźniony lub wyłączony cron nie otwiera dostępu do wygasłej oferty.
 - **Cykl życia:** publikacja szkicu z minioną datą i wznowienie wstrzymanej oferty po terminie są odrzucane (`JOB_EXPIRED`); ponowne otwarcie (także aktywnej lub wstrzymanej po terminie) usuwa minioną datę.
 - **Rollback:** wyłącz harmonogram usługi cron (operacja nie ma efektów ubocznych poza zmianą statusu). Zmiany SQL cofa wyłącznie nowa migracja naprawcza (`drop function public.expire_due_jobs()`, `drop index public.idx_jobs_active_expires_at`, odtworzenie `publish_job` z `0073` i `set_job_status` z `0062`); zastosowanej migracji `0085` nie edytuj. Oferty już zmienione na `expired` pracodawca otwiera ponownie z listy ofert.
 
 ## Operacje (#47)
+
+Lista kontrolna konfiguracji usługi production (ustawienia, zmienne wymagane przy `APP_MODE=production`, crony — same nazwy, bez wartości): [KONFIGURACJA_PRODUKCJI.md](KONFIGURACJA_PRODUKCJI.md).
 
 Test wdrożeniowy produkcji (tryb, SHA artefaktu, panele bez sesji, indeksowanie) i odbiór #12: [TEST_WDROZENIOWY.md](TEST_WDROZENIOWY.md).
 

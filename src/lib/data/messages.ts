@@ -12,14 +12,14 @@
  *   od 0014 czytelne tylko dla członków firmy, więc kandydat dostaje '' → neutralna etykieta UI).
  * - `conversations`/`conversation_members`/`messages`: wyłącznie uczestnik konwersacji.
  *
- * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do Sentry,
+ * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do kanału błędów,
  * a wyniki listy i wątku odróżniają awarię od prawdziwego braku danych.
  */
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, queryRows, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 
@@ -34,6 +34,8 @@ export interface ConversationListItem {
   counterpartyName: string;
   /** Treść ostatniej wiadomości (skrót). */
   lastPreview: string;
+  /** Ostatnia wiadomość istnieje, ale ma tylko załączniki (pusta treść, 0119) → UI: etykieta. */
+  lastIsAttachmentOnly?: boolean;
   /** Czas ostatniej wiadomości (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
   lastMessageAt: string;
   unread: boolean;
@@ -56,6 +58,18 @@ export interface ThreadMessage {
   /** Strona nadawcy: firma (rekruter/zespół) albo kandydat — wybór etykiety zastępczej w UI. */
   senderSide: 'company' | 'candidate';
   isSystem: boolean;
+  /** Załączniki wysłane z wiadomością (0119), widoczne dla bieżącego uczestnika. */
+  attachments?: ThreadAttachment[];
+}
+
+/** Załącznik w wątku: bez klucza obiektu i URL — link wystawia akcja przy kliknięciu. */
+export interface ThreadAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** `false` = plik w kwarantannie (skan) — nazwa widoczna, pobranie niedostępne. */
+  downloadable: boolean;
 }
 
 /** Stabilny kursor stronicowania wątku: najstarsza widoczna wiadomość (`created_at`, `id`). */
@@ -194,7 +208,43 @@ async function fetchMessagePage(
     rows.length > THREAD_PAGE_SIZE
       ? { createdAt: asStr(oldest['created_at']), id: asStr(oldest['id']) }
       : null;
-  return { rows: visible.reverse(), olderCursor };
+  const attachments = await fetchAttachments(tx, visible.map((row) => asStr(asRecord(row)['id'])));
+  const withAttachments = visible.map((row) => {
+    const r = asRecord(row);
+    return { ...r, attachments: attachments.get(asStr(r['id'])) ?? [] };
+  });
+  return { rows: withAttachments.reverse(), olderCursor };
+}
+
+/**
+ * Załączniki strony wątku (0119): RPC sprawdza bieżący dostęp do rozmowy i blokadę firmy
+ * (#97) — pliki kandydata, który zablokował firmę, nie trafiają do strony firmowej.
+ */
+async function fetchAttachments(
+  tx: TransactionQuery,
+  messageIds: string[],
+): Promise<Map<string, ThreadAttachment[]>> {
+  const map = new Map<string, ThreadAttachment[]>();
+  const ids = messageIds.filter(Boolean);
+  if (ids.length === 0) return map;
+  const rows = await rpcRows(tx, 'get_message_attachments', { p_message_ids: ids });
+  for (const row of rows) {
+    const r = asRecord(row);
+    const messageId = asStr(r['message_id']);
+    const id = asStr(r['id']);
+    const size = r['size_bytes'];
+    if (!messageId || !id) continue;
+    const list = map.get(messageId) ?? [];
+    list.push({
+      id,
+      fileName: asStr(r['file_name']),
+      mimeType: asStr(r['mime_type']),
+      sizeBytes: typeof size === 'number' ? size : 0,
+      downloadable: r['downloadable'] === true,
+    });
+    map.set(messageId, list);
+  }
+  return map;
 }
 
 /**
@@ -271,6 +321,7 @@ function toThreadMessages(rows: unknown[], uid: string, ctx: SenderContext): Thr
       senderName: resolved || (fromCompany ? ctx.companyName : ''),
       senderSide: fromCompany ? 'company' : 'candidate',
       isSystem: Boolean(r['is_system']),
+      attachments: Array.isArray(r['attachments']) ? (r['attachments'] as ThreadAttachment[]) : [],
     };
   });
 }
@@ -489,6 +540,7 @@ export async function getConversationsResult(locale?: string): Promise<Conversat
             companyNameById,
           ),
           lastPreview: last?.body ?? '',
+          ...(last && last.createdAt && !last.body ? { lastIsAttachmentOnly: true } : {}),
           lastMessageAt: last?.createdAt || asStr(r['last_message_at']),
           unread: unreadCount > 0,
           unreadCount,
@@ -616,4 +668,40 @@ export async function getUnreadConversationsCount(locale?: string): Promise<numb
   // Reużywa `getConversations` (obsługuje demo/env/błędy → nigdy nie rzuca).
   const conversations = await getConversations(locale);
   return conversations.filter((c) => c.unread).length;
+}
+
+/** Własne zgłoszenia w rozmowie (0116): zgłoszone wiadomości i czy zgłoszono całą rozmowę. */
+export interface MyMessageReports {
+  messageIds: string[];
+  conversationReported: boolean;
+}
+
+const NO_REPORTS: MyMessageReports = { messageIds: [], conversationReported: false };
+
+/**
+ * Stan własnych zgłoszeń w rozmowie — RPC `get_my_message_reports` pod sesją (bez dowodu
+ * i opisu). Liczą się tylko sprawy otwarte i w analizie: po rozstrzygnięciu treść można zgłosić
+ * ponownie. Awaria = brak oznaczeń (przycisk zgłoszenia zostaje; baza i tak nie zdubluje sprawy).
+ */
+export async function getMyMessageReports(conversationId: string): Promise<MyMessageReports> {
+  if (!isPortalDataConfigured()) return NO_REPORTS;
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return NO_REPORTS;
+    const rows = await withPortalTransaction(me, (tx) =>
+      rpcRows(tx, 'get_my_message_reports', { p_conversation_id: conversationId }),
+    );
+    const active = rows
+      .map(asRecord)
+      .filter((row) => ['open', 'reviewing'].includes(asStr(row['status'])));
+    return {
+      messageIds: active
+        .filter((row) => asStr(row['target_type']) === 'message')
+        .map((row) => asStr(row['target_id'])),
+      conversationReported: active.some((row) => asStr(row['target_type']) === 'conversation'),
+    };
+  } catch (error) {
+    captureError(error, { area: 'messages.getMyMessageReports' });
+    return NO_REPORTS;
+  }
 }

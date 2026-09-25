@@ -8,7 +8,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { execute, queryOne, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import {
   ACTIVE_COMPANY_COOKIE,
   getActiveCompany,
@@ -99,7 +99,7 @@ function mapPgError(message: string | undefined): ErrorCode {
   return 'INTERNAL';
 }
 
-/** Wyjątek transakcji → kod użytkowy (błąd bazy wg komunikatu; reszta → Sentry + INTERNAL). */
+/** Wyjątek transakcji → kod użytkowy (błąd bazy wg komunikatu; reszta → kanał błędów + INTERNAL). */
 function failureCode(error: unknown, area: string): ErrorCode {
   if (isDatabaseError(error)) return mapPgError(databaseErrorMessage(error));
   captureError(error, { area });

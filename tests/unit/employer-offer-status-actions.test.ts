@@ -10,7 +10,7 @@ import pl from '@/messages/pl.json';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn().mockResolvedValue(true) }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const EMPLOYER = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000009';
 beforeEach(() => {

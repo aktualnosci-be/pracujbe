@@ -23,7 +23,9 @@ export type AiInputSubject =
   /** Treść oferty napisana przez pracodawcę. */
   | 'job_offer_text'
   /** Pola profilu kandydata napisane przez kandydata. */
-  | 'candidate_profile_text';
+  | 'candidate_profile_text'
+  /** Tekst CV kandydata wgrany przez kandydata, po lokalnej minimalizacji (#487, #498). */
+  | 'candidate_cv_text';
 
 export interface AiFeature {
   /** Stały identyfikator — trafia do logu użycia (`src/lib/ai/usage-log.ts`). */
@@ -49,9 +51,15 @@ export interface AiFeature {
   decidesAboutPerson: false;
   /** Pisze log użycia bez treści i PII (`recordAiUsage`). */
   usageLogged: boolean;
+  /**
+   * Każde wywołanie przechodzi przez globalny budżet kosztów (#36, `withAiBudget` w
+   * `src/lib/ai/budget.ts`): rezerwacja przed API, odmowa po przekroczeniu limitu. Wymagane
+   * (`true`) dla funkcji ze statusem `behind_flag` — pilnuje `ai-inventory.test.ts`.
+   */
+  costBudgeted: boolean;
 }
 
-export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'job_offer_assist'] as const;
+export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import'] as const;
 export type AiFeatureId = (typeof AI_FEATURE_IDS)[number];
 
 export const AI_FEATURES: readonly AiFeature[] = [
@@ -70,6 +78,7 @@ export const AI_FEATURES: readonly AiFeature[] = [
       'Szkic w kreatorze (src/lib/actions/job-import.ts nie woła publish_job); publikację wykonuje rekruter przyciskiem „Opublikuj” (publish_job).',
     decidesAboutPerson: false,
     usageLogged: true,
+    costBudgeted: true,
   },
   {
     id: 'content_translation',
@@ -86,6 +95,8 @@ export const AI_FEATURES: readonly AiFeature[] = [
       'Walidacja automatyczna i korekta ręczna po fakcie (PR #514) — do potwierdzenia po scaleniu, czy tłumaczenie jest publikowane bez przeglądu.',
     decidesAboutPerson: false,
     usageLogged: false,
+    // Hook gotowy: `withAiBudget({ feature: 'content_translation', … })` (docs/AI_BUDGET.md).
+    costBudgeted: false,
   },
   {
     id: 'job_offer_assist',
@@ -102,6 +113,26 @@ export const AI_FEATURES: readonly AiFeature[] = [
       'Propozycja trafia wyłącznie do panelu w kreatorze (src/components/employer/JobAssistPanel.tsx); pole zmienia się dopiero po kliknięciu „Użyj propozycji”, a zapis robi rekruter przyciskiem „Dalej”/„Zapisz”. Akcja src/lib/actions/job-assist.ts nie zapisuje do bazy i nie woła publish_job.',
     decidesAboutPerson: false,
     usageLogged: true,
+    // Bramka `src/lib/ai-assist/budget.ts` = rezerwacja w globalnym budżecie (#36).
+    costBudgeted: true,
+  },
+  {
+    id: 'cv_profile_import',
+    issues: ['#487', '#498'],
+    status: 'behind_flag',
+    callSites: ['src/lib/cv-import/extract.ts'],
+    enableFlag: 'AI_CV_IMPORT_ENABLED',
+    provider: 'anthropic',
+    inputs: ['candidate_cv_text'],
+    output:
+      'Propozycje pól profilu (zawody, umiejętności, języki, certyfikaty, lata doświadczenia) ze źródłem i niepewnością; nic nie jest zapisywane bez zatwierdzenia.',
+    humanInTheLoop: true,
+    humanStep:
+      'Kandydat widzi tekst przed wysłaniem i zaznacza każdą propozycję osobno (CvImportPanel); zapis tylko zaznaczonych przez applyCvProposals → apply_candidate_cv_proposals.',
+    decidesAboutPerson: false,
+    usageLogged: true,
+    // `withAiBudget` w src/lib/actions/cv-import.ts (#36): rezerwacja przed wywołaniem modelu.
+    costBudgeted: true,
   },
 ];
 

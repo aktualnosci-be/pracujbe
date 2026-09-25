@@ -1,3 +1,4 @@
+import { Profiler } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,7 +39,8 @@ describe('ApplicationScreeningAnswers', () => {
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('status')).toHaveTextContent('applicationAnswersLoading');
-    const region = await screen.findByRole('region', { name: 'applicationAnswersHeading' });
+    const region = screen.getByRole('region', { name: 'applicationAnswersHeading' });
+    expect(region).toHaveAttribute('aria-busy', 'true');
     await waitFor(() => expect(screen.getAllByRole('term')).toHaveLength(4));
     const terms = screen.getAllByRole('term').map((el) => el.textContent);
     const values = screen.getAllByRole('definition').map((el) => el.textContent);
@@ -50,6 +52,8 @@ describe('ApplicationScreeningAnswers', () => {
       'Opis',
     ]);
     expect(values).toEqual(['employerApplicationNo', 'Night', 'October 5, 2026', 'employerApplicationScreeningNoAnswer']);
+    // Odpowiedzi i koniec ładowania w tym samym renderze (stan ładowania w `state`, nie w
+    // useTransition) — bez czekania: lista z aria-busy="true" byłaby błędem.
     expect(region).toHaveAttribute('aria-busy', 'false');
     expect(loadApplicationScreeningAnswers).toHaveBeenCalledWith('app-1');
 
@@ -58,6 +62,32 @@ describe('ApplicationScreeningAnswers', () => {
     fireEvent.click(toggle);
     expect(screen.getAllByRole('term')).toHaveLength(4);
     expect(loadApplicationScreeningAnswers).toHaveBeenCalledTimes(1);
+  });
+
+  it('never commits the answer list while the region still reports aria-busy="true"', async () => {
+    // Sprawdzenie po KAŻDYM zatwierdzeniu (Profiler): stan pośredni „lista widoczna, a region
+    // nadal zajęty” jest błędem niezależnie od tego, czy test trafi na niego odpytywaniem.
+    loadApplicationScreeningAnswers.mockResolvedValue({ status: 'ready', answers });
+    const busyWithAnswers: number[] = [];
+    let commits = 0;
+    const onRender = () => {
+      commits += 1;
+      const region = document.querySelector('section[aria-label="applicationAnswersHeading"]');
+      if (region?.getAttribute('aria-busy') === 'true' && region.querySelector('dt')) {
+        busyWithAnswers.push(commits);
+      }
+    };
+    render(
+      <Profiler id="answers" onRender={onRender}>
+        <ApplicationScreeningAnswers applicationId="app-1" count={4} locale="en" />
+      </Profiler>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /applicationAnswersToggle/ }));
+    await waitFor(() => expect(screen.getAllByRole('term')).toHaveLength(4));
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'applicationAnswersHeading' })).toHaveAttribute('aria-busy', 'false'),
+    );
+    expect(busyWithAnswers).toEqual([]);
   });
 
   it('shows an error with retry and never an empty answer list after a failure', async () => {

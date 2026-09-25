@@ -57,6 +57,33 @@ po restore) zostawia zadanie usunięcia obiektu. Worker: `claim_storage_deletion
 inaczej Supabase Storage) → `complete_storage_deletion`. Brak obiektu =
 sukces. Ścieżka, która znów ma wiersz `files`, wypada z kolejki bez usuwania.
 
+### 3a. GC bucketu CV (#17, migracja 0117)
+
+`/api/maintenance` przed workerem kolejki woła `runStorageGc` (`src/lib/storage-gc.ts`),
+gdy prywatny bucket Railway jest skonfigurowany. Przebieg porównuje listę bucketu
+(`list` w `railway-bucket.ts`, strony po 500 kluczy, najwyżej 20 stron na wywołanie)
+z wierszami `files` (`bucket = 'candidate-files'`); kursor i liczniki w `storage_gc_sweeps`.
+
+- **Obiekt bez wiersza** `files` (także miękko usuniętego), starszy niż 24 h (upload w toku) →
+  `storage_deletion_queue`, usuwa go worker z sekcji 3. Obiekt bez daty modyfikacji i klucze
+  spoza formatu CV nie są ruszane (`foreignObjects`).
+- **Wiersz bez obiektu** (starszy niż 24 h) → tylko licznik `missingObjects`. Wiersz może
+  wskazywać obiekt w starym storage sprzed migracji — decyzja o nim należy do człowieka.
+- **Tryb:** domyślnie dry-run (same liczniki). Kolejkowanie wymaga `STORAGE_GC_MODE=delete`
+  — produkcyjne kasowanie danych wymaga osobnego zatwierdzenia właściciela (#17).
+  Zmiana trybu w trakcie przebiegu zaczyna go od początku.
+- **Rytm:** nowy przebieg najwcześniej 23 h po poprzednim (dziennie przy cronie co godzinę);
+  przebieg niedokończony (limit stron, awaria) jest kontynuowany od kursora. Dzierżawa 10 min
+  chroni przed dwoma równoległymi przebiegami (`busy`); retry zatwierdzonej strony = `STALE_STATE`.
+- **Prywatność:** odpowiedź i logi zawierają tylko liczniki; kursor (klucz z UUID właściciela)
+  jest czyszczony po zakończeniu przebiegu, historia liczników — 90 dni.
+- **Błąd listy bucketu** → 503 zadania `storageGc` (Sentry: sam kod), kolejka usuwania i tak
+  jest przetwarzana.
+
+Dowód: `tests/integration/storage-gc.test.ts` (PG16: kolejka, karencja, partie, rytm, dzierżawa,
+uprawnienia, kontrola ujemna naiwnego kolejkowania), `tests/unit/storage-gc.test.ts`,
+`tests/unit/railway-bucket.test.ts` (`list`).
+
 ## 4. Prawo dostępu — eksport JSON
 
 UI: `/candidate/ustawienia` → „Pobierz moje dane (JSON)” → `POST /api/account/export`

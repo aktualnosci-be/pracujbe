@@ -27,6 +27,7 @@ import {
   parseAuditAction,
   parseAuditEntity,
   parseBreachFilter,
+  parseContactMessageFilter,
   parseEmailSuppressionFilter,
   parseReportFilter,
   parseReportKindFilter,
@@ -41,7 +42,7 @@ import { demoJobs } from '@/lib/data/demo';
 import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
 import { attempt, queryCount, queryOne, queryRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import {
   isScreeningQuestionType,
   toLocalizedText,
@@ -195,11 +196,29 @@ export interface AdminDsaCase {
   decision: AdminModerationDecision | null;
 }
 
+/**
+ * Zgłoszenie wiadomości albo rozmowy przez jej stronę (0116, `kind = 'message_report'`).
+ * Dane z dowodu zbudowanego w bazie w chwili zgłoszenia (treść wyłącznie zgłoszonej
+ * wiadomości; dla rozmowy same metadane) — niezależne od późniejszej zmiany rozmowy.
+ */
+export interface AdminMessageReport {
+  scope: 'message' | 'conversation';
+  /** Strona nadawcy zgłoszonej wiadomości (null przy zgłoszeniu rozmowy). */
+  senderSide: 'company' | 'candidate' | null;
+  reporterSide: 'company' | 'candidate' | null;
+  companyName: string | null;
+  jobTitle: string | null;
+  messageCount: number | null;
+  capturedAt: string | null;
+}
+
 export interface AdminReportRow {
   id: string;
   /** Sprawa DSA (#41) albo null dla zwykłego zgłoszenia. */
   dsa: AdminDsaCase | null;
-  /** `report_target_type`: job/company/user/message. */
+  /** Zgłoszenie wiadomości/rozmowy (0116); brak/null dla innych rodzajów. */
+  messageReport?: AdminMessageReport | null;
+  /** `report_target_type`: job/company/user/message/conversation. */
   targetType: string;
   targetId: string;
   target: AdminReportTarget;
@@ -329,6 +348,15 @@ const DEMO_REPORTS: AdminReportRow[] = [
   {
     id: 'demo-r3',
     dsa: null,
+    messageReport: {
+      scope: 'message',
+      senderSide: 'company',
+      reporterSide: 'candidate',
+      companyName: demoJobs[2]?.companyName ?? null,
+      jobTitle: demoJobs[2]?.title ?? null,
+      messageCount: 4,
+      capturedAt: '2025-02-08T07:45:00.000Z',
+    },
     targetType: 'message',
     targetId: 'demo-msg-9',
     target: {
@@ -691,6 +719,41 @@ async function loadReportTargets(
   );
 }
 
+/** Strona rozmowy zapisana w dowodzie (0116). */
+function sideOf(value: unknown): 'company' | 'candidate' | null {
+  return value === 'company' || value === 'candidate' ? value : null;
+}
+
+/** Dowód zgłoszenia wiadomości (0116) → widok panelu i cel karty. */
+function toMessageReport(
+  snapshot: unknown,
+): { view: AdminMessageReport; target: AdminReportTarget } {
+  const root = asRecord(snapshot);
+  const conversation = asRecord(root['conversation']);
+  const message = root['message'] === undefined ? null : asRecord(root['message']);
+  const count = Number(conversation['messageCount']);
+  const companyName = asNullableString(conversation['companyName']);
+  const jobTitle = asNullableString(conversation['jobTitle']);
+  const label = [companyName, jobTitle].filter(Boolean).join(' · ');
+  return {
+    view: {
+      scope: message ? 'message' : 'conversation',
+      senderSide: message ? sideOf(message['senderSide']) : null,
+      reporterSide: sideOf(conversation['reporterSide']),
+      companyName,
+      jobTitle,
+      messageCount: Number.isFinite(count) ? count : null,
+      capturedAt: asNullableString(root['capturedAt']),
+    },
+    target: {
+      label: label.length > 0 ? label : null,
+      href: null,
+      preview: message ? asNullableString(message['body']) : null,
+      deleted: false,
+    },
+  };
+}
+
 interface ReportPageData {
   rows: Record<string, unknown>[];
   nameById: Map<string, string>;
@@ -802,7 +865,10 @@ export async function listReports(
       DEMO_REPORTS.filter(
         (r) =>
           (!statuses || statuses.includes(r.status)) &&
-          (kind === 'all' || (kind === 'dsa_notice') === (r.dsa !== null)),
+          (kind === 'all' ||
+            (kind === 'dsa_notice' && r.dsa !== null) ||
+            (kind === 'message_report' && Boolean(r.messageReport)) ||
+            (kind === 'quality' && r.dsa === null && !r.messageReport)),
       ),
     );
   }
@@ -823,6 +889,8 @@ export async function listReports(
         const targetType = asString(row['target_type']);
         const targetId = asString(row['target_id']);
         const isDsa = asString(row['kind']) === 'dsa_notice';
+        const messageReport =
+          asString(row['kind']) === 'message_report' ? toMessageReport(row['target_snapshot']) : null;
         const snapshot = (row['target_snapshot'] ?? null) as {
           job?: { title?: unknown };
           company?: { name?: unknown };
@@ -843,9 +911,11 @@ export async function listReports(
                 decision: decisionById.get(asString(row['decision_id'])) ?? null,
               }
             : null,
+          messageReport: messageReport?.view ?? null,
           targetType,
           targetId,
-          target: targets.get(`${targetType}:${targetId}`) ?? DELETED_TARGET,
+          // Zgłoszenie wiadomości: cel z dowodu (stan w chwili zgłoszenia), nie z bieżącej rozmowy.
+          target: messageReport?.target ?? targets.get(`${targetType}:${targetId}`) ?? DELETED_TARGET,
           reason: asString(row['reason']),
           details: asNullableString(row['details']),
           status: asString(row['status'], 'open'),
@@ -1121,6 +1191,9 @@ export async function listAuditLogs(
         } else if (entityType === 'breach_incident' && id) {
           const uuid = parseUuid(id);
           entityHref = uuid ? { pathname: `/admin/naruszenia/${uuid}` } : null;
+        } else if (entityType === 'email_campaign' && id) {
+          const uuid = parseUuid(id);
+          entityHref = uuid ? { pathname: `/admin/kampanie/${uuid}` } : null;
         }
         return {
           id: asString(row['id']),
@@ -1511,6 +1584,121 @@ export async function listEmailSuppressions(
     );
   } catch (error) {
     captureError(error, { area: 'admin.listEmailSuppressions' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Wiadomości z formularza kontaktu (#61, 0125)
+ * ------------------------------------------------------------------------- */
+
+export interface AdminContactMessageRow {
+  id: string;
+  reference: string;
+  /** Temat ze słownika (`CONTACT_TOPICS`) — UI mapuje na etykietę i18n. */
+  topic: string;
+  message: string;
+  senderName: string | null;
+  senderEmail: string;
+  /** Język formularza (w nim nadawca dostał potwierdzenie). */
+  locale: string;
+  status: 'new' | 'handled';
+  createdAt: string | null;
+  handledAt: string | null;
+  handledByName: string | null;
+}
+
+export interface AdminContactMessagesQuery extends AdminListQuery {
+  status?: string | null;
+}
+
+const DEMO_CONTACT_MESSAGES: AdminContactMessageRow[] = [
+  {
+    id: 'demo-cm1',
+    reference: 'KON-0DE0-0001',
+    topic: 'candidate_account',
+    message: 'Przykładowa wiadomość: nie widzę zapisanych umiejętności po powrocie do kreatora profilu.',
+    senderName: 'Przykładowy nadawca',
+    senderEmail: 'nadawca@example.com',
+    locale: 'pl',
+    status: 'new',
+    createdAt: '2025-02-11T09:20:00.000Z',
+    handledAt: null,
+    handledByName: null,
+  },
+];
+
+/**
+ * Lista wiadomości z formularza kontaktu (#61): filtr nowe/obsłużone/wszystkie (domyślnie
+ * nowe), wyszukiwanie po numerze, adresie i imieniu, stronicowanie kursorem. Odczyt
+ * service-rolem po potwierdzeniu roli admina. Bez env → DEMO.
+ */
+export async function listContactMessages(
+  query: AdminContactMessagesQuery = {},
+): Promise<AdminListResult<AdminContactMessageRow>> {
+  const filter = parseContactMessageFilter(query.status);
+  const q = normalizeAdminSearch(query.q);
+  if (!isPortalDataConfigured()) {
+    return demoList(
+      DEMO_CONTACT_MESSAGES.filter(
+        (row) =>
+          (filter === 'all' || row.status === filter) &&
+          matchesSearch([row.reference, row.senderEmail, row.senderName ?? ''], q),
+      ),
+    );
+  }
+  await requireAdmin();
+
+  try {
+    const params = new SqlParams();
+    const where = whereOf([
+      filter === 'new' && "status = 'new'",
+      filter === 'handled' && "status = 'handled'",
+      q && searchCondition(params, ['reference', 'sender_email', 'sender_name'], q),
+      cursorCondition(params, query.cursor),
+    ]);
+    const limit = params.add(ADMIN_PAGE_SIZE + 1);
+    const { rows, profiles } = await withServiceRole(async (tx) => {
+      const page = asRows(
+        await queryRows(tx, 'admin.contact-messages',
+          `SELECT id, reference, topic, message, sender_name, sender_email, locale, status,
+                  created_at, handled_at, handled_by
+             FROM public.contact_messages
+             ${where}
+            ORDER BY created_at DESC, id DESC
+            LIMIT ${limit}`, params.values),
+      );
+      const adminIds = uniqueIds(page.map((r) => asString(r['handled_by'])));
+      return { rows: page, profiles: asRows(await readProfileNames(tx, 'admin.contact-message-admins', adminIds)) };
+    });
+
+    const nameById = new Map<string, string>();
+    for (const profile of profiles) {
+      nameById.set(asString(profile['id']), fullName(profile));
+    }
+
+    return toPage(
+      rows.map((row) => {
+        const handledBy = asString(row['handled_by']);
+        const name = handledBy ? (nameById.get(handledBy) ?? '') : '';
+        return {
+          id: asString(row['id']),
+          reference: asString(row['reference']),
+          topic: asString(row['topic']),
+          message: asString(row['message']),
+          senderName: asNullableString(row['sender_name']),
+          senderEmail: asString(row['sender_email']),
+          locale: asString(row['locale']),
+          status: asString(row['status']) === 'handled' ? ('handled' as const) : ('new' as const),
+          createdAt: asNullableString(row['created_at']),
+          handledAt: asNullableString(row['handled_at']),
+          handledByName: name.length > 0 ? name : null,
+        };
+      }),
+      (row) => row.createdAt,
+    );
+  } catch (error) {
+    captureError(error, { area: 'admin.listContactMessages' });
     return { status: 'error' };
   }
 }

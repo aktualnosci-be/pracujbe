@@ -9,7 +9,7 @@
  */
 
 import { isFileStorageConfigured, isProductionMode } from '@/lib/env';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 export interface CandidateFileItem {
   id: string;

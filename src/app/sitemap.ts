@@ -37,11 +37,14 @@ const JOBS_PATH = '/oferty-pracy';
 const HUB_PATH = '/praca';
 const GUIDES_PATH = '/poradniki';
 const EMPLOYERS_PATH = '/dla-pracodawcow';
+const HELP_PATH = '/pomoc';
+const CONTACT_PATH = '/kontakt';
 
 /** Publiczne strony statyczne (segment bez prefiksu języka). '' = strona główna.
  *  Tylko trasy zwracające 200 (zweryfikowane smoke) i z REALNĄ treścią.
- *  Strony prawne/informacyjne (regulamin, prywatność, cookies, o-nas, faq, kontakt, pomoc)
- *  mają obecnie treść placeholder → są `noindex` i CELOWO poza sitemap (audyt FUN-09).
+ *  Pomoc i Kontakt (#61) mają realną treść (FAQ z faktów produktu, formularz kontaktu).
+ *  Strony prawne/informacyjne (regulamin, prywatność, cookies, o-nas, faq) mają obecnie treść
+ *  placeholder → są `noindex` i CELOWO poza sitemap (audyt FUN-09).
  *  Po zatwierdzeniu treści dodać je tu z powrotem i zdjąć `noindex` w `_legal/legal-page.tsx`. */
 const STATIC_PATHS: readonly string[] = [
   '',
@@ -49,6 +52,8 @@ const STATIC_PATHS: readonly string[] = [
   HUB_PATH,
   GUIDES_PATH,
   EMPLOYERS_PATH,
+  HELP_PATH,
+  CONTACT_PATH,
 ];
 
 const CATEGORY_KEYS: readonly CategoryKey[] = [

@@ -21,7 +21,7 @@ import {
   type ScreeningReviewDecision,
 } from '@/lib/screening/review';
 import type { ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { checkBelgianVatInVies, type ViesCheckResult } from '@/lib/vies/client';
 import { compareCompanyNames, type CompanyNameComparison } from '@/lib/vies/name-match';
 import { companyVatSource } from '@/lib/vies/state';
@@ -87,7 +87,7 @@ type AdminRpcCall = { status: 'ok' } | { status: 'unauthenticated' } | { status:
 /**
  * RPC `admin_*` pod sesją bieżącego użytkownika (RLS/`is_admin()` decyduje w bazie). Błąd bazy
  * wraca jako komunikat do mapowania na kod użytkowy; wyjątek spoza bazy (sieć, konfiguracja)
- * rzuca dalej — trafia do Sentry w akcji.
+ * rzuca dalej — trafia do kanału błędów w akcji.
  */
 async function callAdminRpc(fn: string, args: RpcArgs): Promise<AdminRpcCall> {
   const me = await getPortalIdentity();
@@ -223,6 +223,40 @@ export async function liftEmailSuppression(
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'admin.liftEmailSuppression' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/**
+ * Oznacza wiadomość z formularza kontaktu jako obsłużoną albo przywraca ją do nowych (#61).
+ * Tylko admin (RPC `admin_set_contact_message_status`, 0125: CAS po statusie, audyt bez treści).
+ */
+export async function setContactMessageStatus(
+  messageId: string,
+  status: 'new' | 'handled',
+  expectedStatus: 'new' | 'handled',
+): Promise<AdminActionResult> {
+  const statuses = ['new', 'handled'];
+  if (!statuses.includes(status) || !statuses.includes(expectedStatus)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  // Tryb DEMO: identyfikatory przykładowych wiadomości nie są UUID; nic nie zapisujemy.
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  if (typeof messageId !== 'string' || !UUID_RE.test(messageId)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  try {
+    const call = await callAdminRpc('admin_set_contact_message_status', {
+      p_id: messageId,
+      p_status: status,
+      p_expected_status: expectedStatus,
+    });
+    if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
+    if (call.status === 'db_error') return { ok: false, error: mapPgError(call.message) };
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'admin.setContactMessageStatus' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

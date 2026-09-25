@@ -45,6 +45,9 @@ const TRACKER_ENV = {
 const JOB_IMPORT_ENV = {
   AI_JOB_IMPORT_ENABLED: '1',
   AI_JOB_IMPORT_PROVIDER: 'fixture',
+  // Import CV (#487) — osobna flaga, ta sama zasada atrapy (bez sieci, nie w produkcji).
+  AI_CV_IMPORT_ENABLED: '1',
+  AI_CV_IMPORT_PROVIDER: 'fixture',
 };
 
 /** Asystent redagowania oferty (#37) — ta sama zasada: atrapa w runtime, nigdy w produkcji. */
@@ -97,6 +100,8 @@ export default defineConfig({
     // Pełny formularz zgłoszenia treści (#41) — oferta fikcyjna bez flagi demo.
     '**/content-report-form.spec.ts',
     '**/job-funnel-no-storage.spec.ts',
+    // Wysyłka formularza kontaktu (#61) — sukces tylko w trybie fixture (demo = brak zapisu).
+    '**/contact-form.spec.ts',
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

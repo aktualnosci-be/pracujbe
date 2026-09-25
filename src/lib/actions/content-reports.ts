@@ -5,7 +5,7 @@ import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
   contentReportSchema,
@@ -16,7 +16,9 @@ import {
 import {
   FIXTURE_CASE_NUMBER,
   FIXTURE_DISMISSED_CASE_NUMBER,
+  FIXTURE_RESTORED_CASE_NUMBER,
   fixtureDismissedReportCase,
+  fixtureRestoredReportCase,
   fixtureReportCase,
   isReportFixtureMode,
   parseReportCase,
@@ -64,7 +66,7 @@ async function sessionUserId(): Promise<string | null> {
   }
 }
 
-/** Wyjątek bazy → kod użytkowy; nieznany błąd = INTERNAL (+ Sentry). */
+/** Wyjątek bazy → kod użytkowy; nieznany błąd = INTERNAL (+ kanał błędów). */
 function failure(error: unknown, area: string): { ok: false; error: ErrorCode } {
   const code = isDatabaseError(error) ? mapPgError(databaseErrorMessage(error)) : 'INTERNAL';
   if (code === 'INTERNAL') captureError(error, { area });
@@ -139,6 +141,7 @@ export async function lookupReportCase(input: ReportCaseLookupInput): Promise<Lo
     if (isReportFixtureMode()) {
       if (caseNumber === FIXTURE_CASE_NUMBER) return { ok: true, report: fixtureReportCase() };
       if (caseNumber === FIXTURE_DISMISSED_CASE_NUMBER) return { ok: true, report: fixtureDismissedReportCase() };
+      if (caseNumber === FIXTURE_RESTORED_CASE_NUMBER) return { ok: true, report: fixtureRestoredReportCase() };
       return { ok: false, error: 'NOT_FOUND' };
     }
     return { ok: false, error: 'DEMO_UNAVAILABLE' };

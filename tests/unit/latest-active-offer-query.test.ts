@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getLatestActiveOffer } from '@/lib/data/candidate';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const CANDIDATE = '22222222-2222-4222-8222-222222222222';
 
@@ -46,5 +46,6 @@ describe('getLatestActiveOffer', () => {
       .rpc('get_offered_jobs_display', [{ job_id: 'job-2', slug: 'kierowca', title: 'Kierowca', company_name: 'Firma', city: 'Gent' }]);
     await expect(getLatestActiveOffer('pl')).resolves.toMatchObject({ id: 'offer-1', jobTitle: 'Kierowca', companyName: 'Firma', slug: 'kierowca' });
     expect(fakeDb.callsTo('get_offered_jobs_display')[0]!.args).toEqual({ p_locale: 'pl' });
+    expect(fakeDb.callsTo('get_applied_jobs_display')[0]!.args).toEqual({ p_locale: 'pl', p_job_ids: ['job-2'] });
   });
 });

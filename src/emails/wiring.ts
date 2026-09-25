@@ -26,6 +26,7 @@ export const QUEUED_EMAIL_TYPES = [
   'reportReceived', // submit_content_report (0094) — enqueue_email_to_address
   'reportDecisionActioned', // admin_decide_report (0099) → ograniczenie treści — do zgłaszającego
   'reportDecisionNoAction', // admin_decide_report (0099) → brak działań — do zgłaszającego
+  'reportRestored', // admin_restore_moderation (0109) → cofnięcie — do zgłaszającego
   'moderationJobRemoved', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
   'moderationCompanySuspended', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
   'moderationRestored', // admin_restore_moderation (0099)
@@ -33,6 +34,8 @@ export const QUEUED_EMAIL_TYPES = [
   'appealUpheld', // admin_decide_appeal (0104) → decyzja utrzymana
   'appealReversed', // admin_decide_appeal (0104) → odwołanie uwzględnione
   'breachNotice', // admin_notify_breach_subjects (0106) — treść od administratora
+  'supportContact', // submit_contact_message (0125) — potwierdzenie do nadawcy, enqueue_email_to_address
+  'contactMessageAdmin', // submit_contact_message (0125) — powiadomienie każdego admina
 ] as const satisfies readonly EmailType[];
 
 /**
@@ -42,6 +45,8 @@ export const QUEUED_EMAIL_TYPES = [
 export const GUEST_EMAIL_TYPES = [
   'guestApplicationConfirm', // submit_guest_application
   'guestApplicationSent', // confirm_guest_application
+  'guestStatusChanged', // transition_application → enqueue_guest_status_email (0122)
+  'teamInvitationSignup', // invite_company_member (0121) — adres bez konta, język zaproszenia
 ] as const satisfies readonly EmailType[];
 
 /** E-maile konta — kolejka Better Auth (`src/lib/auth/email-outbox.ts`, worker `email-worker.ts`). */
@@ -61,7 +66,6 @@ export const UNWIRED_EMAIL_TYPES = {
   jobExpiring: 'Kreator nie ustawia jobs.expires_at i nie ma zadania wygaszania ofert.',
   payment: 'Płatności wyłączone w bezpłatnym MVP (#51).',
   invoice: 'Płatności wyłączone w bezpłatnym MVP (#51).',
-  supportContact: 'Strona kontaktu nie ma formularza; brak zgłoszeń do obsłużenia.',
   // #27: wysyłał je tylko Supabase Auth (GoTrue); Better Auth nie ma tych przepływów.
   magicLink: 'Logowanie linkiem nie jest włączone w Better Auth (#24).',
   emailChange: 'Zmiana adresu e-mail konta nie jest dostępna w Better Auth (#24).',

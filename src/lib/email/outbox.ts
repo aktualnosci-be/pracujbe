@@ -1,9 +1,7 @@
 import 'server-only';
 
-import { Resend } from 'resend';
-
 import { withServiceRole } from '@/lib/db/portal';
-import { execute, queryRows, rpcRows } from '@/lib/db/sql';
+import { execute, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import { renderEmail } from '@/emails/templates';
 import { renderNewsletterEmail } from '@/emails/newsletter';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
@@ -15,6 +13,7 @@ import {
   unsubscribePageUrl,
   unsubscribeSecretFromEnv,
 } from '@/lib/email/unsubscribe-token';
+import { alertOffPageUrl, createAlertOffToken } from '@/lib/email/saved-search-alert-token';
 import { newsletterJobsFromPayload } from '@/lib/email/newsletter-delivery';
 import {
   emailFromEnv,
@@ -24,15 +23,17 @@ import {
 } from '@/lib/email/sender';
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
-import { captureError } from '@/lib/sentry';
-import { isProductionMode, resendApiKey } from '@/lib/env';
+import { captureError } from '@/lib/error-report';
+import { isProductionMode } from '@/lib/env';
+import { emailProviderFromEnv, mailTransportFromEnv, MailSendError } from '@/lib/email/transport';
 
 /**
  * Worker kolejki e-mail (outbox) — P1-13.
  *
  * Pobiera zakolejkowane wiadomości (`email_deliveries.status='queued'`, `next_attempt_at<=now`),
  * renderuje szablon React Email W JĘZYKU ODBIORCY (kolumna `locale`, ustawiona w DB wg
- * INVARIANTU #1) i wysyła przez Resend. Aktualizuje status/attempts/error/next_attempt_at.
+ * INVARIANTU #1) i wysyła przez dostawcę z `EMAIL_PROVIDER` (EmailLabs albo Resend —
+ * `src/lib/email/transport`). Aktualizuje status/attempts/error/next_attempt_at.
  *
  * Zapis domenowy (aplikacja/propozycja) jest niezależny: błąd dostawcy NIE usuwa rekordu —
  * zwiększa `attempts` i planuje ponowienie (backoff), a po `MAX_ATTEMPTS` oznacza `failed`.
@@ -69,7 +70,7 @@ const renderAny = renderEmail as (
   type: EmailType,
   locale: Locale,
   data: Record<string, unknown>,
-  options?: { unsubscribeUrl?: string; sender?: EmailSenderIdentity },
+  options?: { unsubscribeUrl?: string; sender?: EmailSenderIdentity; alertOffUrl?: string },
 ) => Promise<{ subject: string; html: string; text: string }>;
 
 export interface RenderedDelivery {
@@ -89,6 +90,8 @@ export async function renderDelivery(
   data: Record<string, unknown>,
   unsubscribeUrl: string | undefined,
   env: Record<string, string | undefined> = process.env,
+  /** #100: link „wyłącz tylko ten alert” (digest `jobMatch`), liczony przez workera. */
+  alertOffUrl?: string,
 ): Promise<RenderedDelivery> {
   const isMarketing = emailPreferenceCategory(row.template) === 'marketing';
   if (isMarketing) {
@@ -111,6 +114,7 @@ export async function renderDelivery(
   const rendered = await renderAny(row.template as EmailType, locale, data, {
     unsubscribeUrl,
     sender: senderIdentityFromEnv(env) ?? undefined,
+    alertOffUrl,
   });
   return { from: emailFromEnv(env), ...rendered };
 }
@@ -134,9 +138,30 @@ export function unsubscribeLinksFor(
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * #100: link wyłączenia JEDNEGO alertu dla digestu `jobMatch` zapisanego wyszukiwania.
+ * `null` = inny typ maila, brak powiązanego wyszukiwania albo brak sekretu. Token niesie
+ * tylko UUID konta i wyszukiwania (bez e-maila); zapis dopiero po kliknięciu na stronie.
+ */
+export function alertOffLinkFor(
+  row: { profile_id: string | null; template: string; entity_type?: string | null; entity_id?: string | null },
+  locale: string,
+  site: string,
+  secret: string | null,
+): string | null {
+  if (row.template !== 'jobMatch' || row.entity_type !== 'saved_search') return null;
+  if (!row.profile_id || !row.entity_id || !UUID_RE.test(row.entity_id) || !secret) return null;
+  const token = createAlertOffToken({ profileId: row.profile_id, savedSearchId: row.entity_id }, secret);
+  return alertOffPageUrl(site, locale, token);
+}
+
 interface DeliveryRow {
   id: string;
   profile_id: string | null;
+  entity_type?: string | null;
+  entity_id?: string | null;
   to_email: string;
   template: string;
   locale: string;
@@ -151,6 +176,8 @@ export interface ProcessResult {
   /** Wiersze odłożone do następnego okna budżetu (bez zwiększania `attempts`). */
   deferred?: number;
   skipped?: string;
+  /** Wiersze wygaszone tuż przed wysyłką (wypisanie/blokada po claimie, #466 pkt 8). */
+  suppressed?: number;
   /**
    * P1-17: sygnał zdrowia dla endpointu (200 vs 503). `false` = realny problem
    * (brak konfiguracji w produkcji, błąd claimu) — monitoring NIE może widzieć „zielonego"
@@ -161,16 +188,17 @@ export interface ProcessResult {
 }
 
 export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
-  const apiKey = resendApiKey();
+  const transport = mailTransportFromEnv();
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
-  if (!apiKey) {
-    // Brak klucza w PRODUKCJI = błąd konfiguracji (503, alarm). W demo = oczekiwane (200).
+  if (!transport) {
+    // Brak dostawcy w PRODUKCJI = błąd konfiguracji (503, alarm). W demo = oczekiwane (200).
+    const { provider } = emailProviderFromEnv();
     return {
       processed: 0,
       sent: 0,
       failed: 0,
-      skipped: 'RESEND_API_KEY not set',
+      skipped: provider ? `${provider} not configured` : 'email provider not configured',
       ok: !isProductionMode(),
     };
   }
@@ -188,11 +216,11 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     return { processed: 0, sent: 0, failed: 0, skipped: 'claim error', ok: false };
   }
 
-  const resend = new Resend(apiKey);
   const unsubscribeSecret = unsubscribeSecretFromEnv();
   let sent = 0;
   let failed = 0;
   let deferred = 0;
+  let suppressed = 0;
   // Pula, która w tej paczce dostała odmowę, czeka do podanego okna (bez kolejnych zapytań).
   const exhausted = new Map<string, string>();
 
@@ -263,7 +291,20 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         locale,
         data,
         unsubscribe?.pageUrl,
+        process.env,
+        alertOffLinkFor(row, locale, site, unsubscribeSecret) ?? undefined,
       );
+
+      // #100 / #466 pkt 8: ponowna kontrola zgody tuż przed wysyłką (kategoria, blokada
+      // adresu, uprawnienie odbiorcy firmowego z 0122, wyłączony alert, kampania). Odbiorca mógł się wypisać po claimie — wtedy
+      // baza wygasza wiersz (ślad zostaje), a my nic nie wysyłamy i nie zużywamy budżetu.
+      const blockedReason = await withServiceRole((tx) =>
+        rpc<string | null>(tx, 'email_delivery_send_check', { p_delivery_id: row.id }),
+      );
+      if (blockedReason !== null) {
+        suppressed += 1;
+        continue;
+      }
 
       // #45: atomowy budżet puli tuż przed wysyłką (równoległe workery nie przekroczą limitu).
       const [grant] = await withServiceRole((tx) =>
@@ -278,9 +319,11 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         continue;
       }
 
-      // P1-17: idempotency key = delivery.id — jeśli po wysyłce zapis 'sent' zawiedzie i
-      // wiersz wróci do puli, ponowna wysyłka jest deduplikowana po stronie Resend (bez dubletu).
-      const result = await resend.emails.send(
+      // P1-17: klucz idempotencji = delivery.id — jeśli po wysyłce zapis 'sent' zawiedzie i
+      // wiersz wróci do puli, ponowienie nie tworzy drugiego listu (Resend: Idempotency-Key,
+      // EmailLabs: stały messageId + sprawdzenie przed wysyłką). Transport potwierdza wysyłkę
+      // tylko z identyfikatorem wiadomości od dostawcy.
+      const result = await transport.send(
         {
           from,
           to: row.to_email,
@@ -292,11 +335,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         { idempotencyKey: row.id },
       );
 
-      if (result.error) {
-        throw new Error(result.error.message);
-      }
-
-      const providerMessageId = result.data?.id ?? null;
+      const providerMessageId = result.id;
       // Zapis wyniku PO wysyłce — osobna transakcja (bez otwartej transakcji w trakcie HTTP).
       // SEC-15: e-mail WYSŁANY, ale zapis „sent" się nie powiódł — stan niejednoznaczny.
       // Bez tego rekord wróciłby do 'queued' (po wygaśnięciu dzierżawy) i został wysłany PONOWNIE
@@ -308,17 +347,17 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
             tx,
             'email.outbox.mark-sent',
             `UPDATE public.email_deliveries
-                SET status = 'sent', sent_at = now(), provider = 'resend',
+                SET status = 'sent', sent_at = now(), provider = $4,
                     provider_message_id = $2, attempts = $3, locked_at = NULL
               WHERE id = $1`,
-            [row.id, providerMessageId, row.attempts + 1],
+            [row.id, providerMessageId, row.attempts + 1, transport.provider],
           ),
         );
       } catch (markErr) {
         captureError(markErr, {
           area: 'email.outbox.markSent',
           deliveryId: row.id,
-          providerMessageId: providerMessageId ?? 'unknown',
+          providerMessageId,
         });
       }
       sent += 1;
@@ -339,7 +378,8 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
               row.id,
               isFinal ? 'failed' : 'queued',
               attempts,
-              err instanceof Error ? err.message.slice(0, 500) : 'unknown',
+              // Kod błędu dostawcy zamiast jego komunikatu (może zawierać adres odbiorcy).
+              err instanceof MailSendError ? err.message : err instanceof Error ? err.message.slice(0, 500) : 'unknown',
               new Date(Date.now() + backoffMin * 60_000).toISOString(),
             ],
           ),
@@ -352,5 +392,5 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     }
   }
 
-  return { processed: queue.length, sent, failed, deferred, ok: true };
+  return { processed: queue.length, sent, failed, deferred, suppressed, ok: true };
 }

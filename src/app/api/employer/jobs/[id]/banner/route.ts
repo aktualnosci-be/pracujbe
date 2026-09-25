@@ -6,7 +6,7 @@ import { isBannerFormat, renderCampaignBanner } from '@/lib/campaign-banner/rend
 import { campaignBannerTexts, isCampaignJobId, loadManagedCampaignJob } from '@/lib/campaign-banner/source';
 import { getPortalIdentity, isPortalDataConfigured } from '@/lib/db/portal';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Eksport baneru kampanii z oferty (#175, dane z #186): `GET ?format=1200x300&locale=pl`,

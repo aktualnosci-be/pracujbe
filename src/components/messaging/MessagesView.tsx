@@ -7,11 +7,13 @@ import type { Locale } from '@/i18n/routing';
 import {
   getConversationsResult,
   getConversationThread,
+  getMyMessageReports,
   type ConversationThreadResult,
+  type MyMessageReports,
 } from '@/lib/data/messages';
 import { markConversationRead } from '@/lib/actions/messages';
 import { threadDisplayName } from '@/lib/messaging/thread-view';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 import { ConversationList } from './ConversationList';
 import { MessageThread } from './MessageThread';
@@ -64,9 +66,11 @@ export async function MessagesView({
 
   let threadResult: ConversationThreadResult = { status: 'not-found' };
   let markedRead = false;
+  let reports: MyMessageReports | undefined;
   if (activeId) {
     threadResult = await getConversationThread(activeId, locale);
     if (threadResult.status === 'ready') {
+      reports = await getMyMessageReports(activeId);
       // Oznaczamy tylko wątek, który udało się odczytać; licznik zmieniamy po sukcesie RPC.
       try {
         markedRead = (await markConversationRead(activeId)).ok;
@@ -148,6 +152,7 @@ export async function MessagesView({
                     thread={threadResult.thread}
                     locale={locale}
                     headingId={THREAD_HEADING_ID}
+                    reports={reports}
                   />
                   <MessageComposer
                     conversationId={activeId}

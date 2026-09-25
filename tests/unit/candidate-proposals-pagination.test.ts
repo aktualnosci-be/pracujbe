@@ -5,7 +5,7 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: (fn: unknown) => fn }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const ownerId = '22222222-2222-4222-8222-222222222222';
 const jobId = '11111111-1111-4111-8111-111111111111';
@@ -61,6 +61,8 @@ describe('historia propozycji kandydata (#245)', () => {
     expect(calls[0]!.text).toContain('(created_at, id) < ($2::timestamptz, $3::uuid)');
     expect(calls[0]!.text).toContain('ORDER BY created_at DESC, id DESC');
     expect(calls[1]!.values).toEqual([ownerId, createdAt, records[9]!.id, 11]);
+    // #184: metadane z własnych aplikacji tylko dla ofert bieżącej strony.
+    expect(fakeDb.callsTo('get_applied_jobs_display')[0]!.args).toEqual({ p_locale: 'pl', p_job_ids: [jobId] });
   });
 
   it('stosuje datę przed UUID, gdy starsze propozycje mają większe identyfikatory', async () => {

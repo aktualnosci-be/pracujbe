@@ -457,7 +457,8 @@ export default async function JobsListPage({
       </header>
 
       {/* Układ wyników */}
-      <div className="mt-2.5 lg:grid lg:grid-cols-[288px_1fr] lg:gap-8">
+      {/* `.p-list-layout` (#7, Z3): kolumna filtrów 190 px (≤ 1050 px: 165 px), odstęp 32 px (≤ 1050 px: 24 px). */}
+      <div className="mt-2.5 lg:grid lg:grid-cols-[165px_minmax(0,1fr)] lg:gap-6 min-[1051px]:grid-cols-[190px_minmax(0,1fr)] min-[1051px]:gap-8">
         {/* Sidebar (desktop) */}
         <aside className="hidden lg:block">
           <div className="sticky top-24">

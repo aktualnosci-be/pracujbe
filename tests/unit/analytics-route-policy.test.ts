@@ -7,6 +7,7 @@ describe('analytics route policy', () => {
     '/pl/aplikacja/potwierdz',
     '/nl/aplikacja/przejmij',
     '/fr/wypisz',
+    '/nl/wypisz-alert',
     '/en/ustaw-nowe-haslo',
     '/nl/potwierdz-email',
     '/pl/logowanie',
@@ -27,6 +28,7 @@ describe('analytics route policy', () => {
     '/pl/aplikacja/potwierdz',
     '/nl/aplikacja/przejmij',
     '/fr/wypisz',
+    '/nl/wypisz-alert',
     '/en/ustaw-nowe-haslo',
     '/nl/potwierdz-email',
   ])('requires private response headers on %s', (path) => {

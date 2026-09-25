@@ -113,7 +113,7 @@ export function reportStatusesFor(filter: ReportFilter): string[] | null {
  * Rodzaj zgłoszenia (#41): `dsa_notice` — sprawa z publicznego formularza zgłoszeń treści
  * (osobna kolejka), `quality` — pozostałe zgłoszenia. `all` = bez filtra (domyślnie).
  */
-export const REPORT_KIND_FILTERS = ['all', 'dsa_notice', 'quality'] as const;
+export const REPORT_KIND_FILTERS = ['all', 'dsa_notice', 'message_report', 'quality'] as const;
 export type ReportKindFilter = (typeof REPORT_KIND_FILTERS)[number];
 
 export function parseReportKindFilter(raw: string | undefined | null): ReportKindFilter {
@@ -221,7 +221,7 @@ export function reportReasonView(reason: string): ReportReasonView {
  * Dziennik zdarzeń (audit_logs, #417)
  * ------------------------------------------------------------------------- */
 
-/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106). */
+/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106, 0111). */
 export const AUDIT_ENTITY_TYPES = [
   'company',
   'report',
@@ -230,6 +230,7 @@ export const AUDIT_ENTITY_TYPES = [
   'email_suppression',
   'breach_incident',
   'screening_question_review',
+  'email_campaign',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -258,6 +259,8 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'breach.subjects_notified': 'auditActionBreachSubjectsNotified',
   'screening_question.review_requested': 'auditActionScreeningRequested',
   'screening_question.reviewed': 'auditActionScreeningReviewed',
+  'email_campaign.activated': 'auditActionCampaignActivated',
+  'email_campaign.cancelled': 'auditActionCampaignCancelled',
 };
 
 export function parseAuditEntity(raw: string | undefined | null): AuditEntityType | null {
@@ -278,4 +281,14 @@ export function parseUuid(raw: string | undefined | null): string | null {
 /** Data `YYYY-MM-DD` z URL albo null. */
 export function parseYmd(raw: string | undefined | null): string | null {
   return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+}
+
+/** Filtr wiadomości z formularza kontaktu (#61, `contact_messages.status`); domyślnie nowe. */
+export const CONTACT_MESSAGE_FILTERS = ['new', 'handled', 'all'] as const;
+export type ContactMessageFilter = (typeof CONTACT_MESSAGE_FILTERS)[number];
+
+export function parseContactMessageFilter(raw: string | undefined | null): ContactMessageFilter {
+  return raw && (CONTACT_MESSAGE_FILTERS as readonly string[]).includes(raw)
+    ? (raw as ContactMessageFilter)
+    : 'new';
 }

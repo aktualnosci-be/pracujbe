@@ -5,6 +5,9 @@ import { createReleaseAwareBuildMetadata } from './scripts/build-version.mjs';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
+// #47: odbiorca raportów CSP (ścieżka względna — ten sam origin co strona).
+const CSP_REPORT_PATH = '/api/csp-report';
+const CSP_REPORT_GROUP = 'csp-endpoint';
 // #103: wersja 1.0.0 tylko po jawnym PRACUJBE_RELEASE_VERSION=1.0.0; błędna wartość przerywa build.
 const BUILD = createReleaseAwareBuildMetadata(
   new Date(),
@@ -60,7 +63,7 @@ const nextConfig = {
     // 'unsafe-inline' dla script-src jest słabsze niż nonce, ale NIE łamie działania;
     // twarda migracja do nonce wymaga testów przeglądarkowych (E2E) — patrz roadmapa.
     // Poza tym pełne, restrykcyjne dyrektywy: object/base/frame-ancestors/form-action
-    // oraz zawężone connect/img/font (Supabase, Sentry, GA/Meta tylko tam, gdzie trzeba).
+    // oraz zawężone connect/img/font (GA/Meta tylko tam, gdzie trzeba).
     const csp = [
       "default-src 'self'",
       "base-uri 'self'",
@@ -74,17 +77,23 @@ const nextConfig = {
       // P3-02: obrazy z własnego origin, data:/blob: i piksele trackerów (po zgodzie).
       "img-src 'self' data: blob: https://www.google-analytics.com https://www.facebook.com",
       "font-src 'self' data:",
-      // XHR/fetch: API własne, Sentry ingest, GA/Meta.
-      `connect-src 'self' https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://connect.facebook.net${isDev ? ' ws: http://localhost:*' : ''}`,
+      // XHR/fetch: API własne, GA/Meta (webhook błędów #571 idzie z serwera — bez hosta w CSP).
+      `connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://connect.facebook.net${isDev ? ' ws: http://localhost:*' : ''}`,
       // Ramki: Meta Pixel (fallback) i Cloudflare Turnstile (#46, ochrona formularzy), reszta zablokowana.
       "frame-src 'self' https://www.facebook.com https://challenges.cloudflare.com",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
+      // #47: raporty naruszeń (bez zmiany egzekwowanej polityki). `report-uri` dla przeglądarek
+      // bez Reporting API; `report-to` wskazuje grupę z nagłówka `Reporting-Endpoints` niżej.
+      // Endpoint zapisuje tylko dyrektywę i origin zasobu (src/app/api/csp-report/route.ts).
+      `report-uri ${CSP_REPORT_PATH}`,
+      `report-to ${CSP_REPORT_GROUP}`,
     ];
     if (isProd) csp.push('upgrade-insecure-requests');
 
     const security = [
       { key: 'Content-Security-Policy', value: csp.join('; ') },
+      { key: 'Reporting-Endpoints', value: `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}"` },
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       // P3-03: spójnie z CSP `frame-ancestors 'none'` (było SAMEORIGIN — konflikt).
       { key: 'X-Frame-Options', value: 'DENY' },

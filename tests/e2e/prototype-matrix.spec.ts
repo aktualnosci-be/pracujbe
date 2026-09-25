@@ -11,17 +11,29 @@ import { LOCALES, messages, rejectOptionalCookies } from './fixtures/messages';
  * - Z5: strona 404 = `.p-list-header` (nadtytuł 12 px/700 wersaliki, H1 40/32 px, 700,
  *   −0,035em) + `.people .btn` (14 px/650, promień 11 px, min. 49 px) i `.btn.secondary`.
  * - Z6: filtry list admina i przyciski akcji w wierszu = `.btn`/`.btn.secondary` (bez pigułek).
+ * - Z2: szczegół oferty = `.offer-page` + `.offer-layout` (treść + panel 300 px): nadtytuł
+ *   „kategoria / miasto”, H1 `.extended` 40/30 px, karta `.job-passport` (promień 24 px),
+ *   treść w `.paper` (h2 23 px), panel „Twój następny krok” z `.btn` i `.btn.secondary`.
+ * - Z3: panel filtrów listy ofert = `.p-list-layout` (kolumna 190 px, ≤ 1050 px: 165 px) i
+ *   `.people .filters` (h3 15 px/700, etykiety 13 px, linia #e8e8e8).
+ * - Z4: strony auth = nagłówek witryny `.pp-nav` + `.extended h1` (40/30 px, 750) + karta
+ *   `.paper` (promień 22 px) z przyciskiem `.people .btn`.
+ *
+ * - Przyciski paneli (#5): każdy przycisk o geometrii `.btn` w panelach kandydata, pracodawcy
+ *   i admina ma interlinię `normal` jak prototyp (który jej nie ustawia) — nie 20 px z `text-sm`.
  *
  * Kontrola ujemna: te same asercje na wstrzykniętej pigułce (dawny `rounded-full`, 44 px)
  * muszą zwrócić rozbieżności — inaczej test niczego by nie pilnował.
  */
 
-type Expected = Partial<Record<'fontSize' | 'fontWeight' | 'letterSpacing' | 'borderRadius' | 'minHeight' | 'textTransform', string>>;
+type Expected = Partial<
+  Record<'fontSize' | 'fontWeight' | 'letterSpacing' | 'borderRadius' | 'minHeight' | 'textTransform' | 'lineHeight', string>
+>;
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
-/** `.people .btn` — geometria przycisku prototypu. */
-const BTN: Expected = { fontSize: '14px', fontWeight: '650', borderRadius: '11px', minHeight: '49px' };
+/** `.people .btn` — geometria przycisku prototypu (interlinia dziedziczona = `normal`). */
+const BTN: Expected = { fontSize: '14px', fontWeight: '650', borderRadius: '11px', minHeight: '49px', lineHeight: 'normal' };
 
 async function styleMismatches(locator: Locator, expected: Expected): Promise<string[]> {
   const actual = await locator.evaluate((el) => {
@@ -33,6 +45,7 @@ async function styleMismatches(locator: Locator, expected: Expected): Promise<st
       borderRadius: s.borderTopLeftRadius,
       minHeight: s.minHeight,
       textTransform: s.textTransform,
+      lineHeight: s.lineHeight,
     };
   });
   const out: string[] = [];
@@ -95,6 +108,85 @@ for (const locale of LOCALES) {
   }
 }
 
+for (const locale of LOCALES) {
+  test(`Z3: panel filtrów = .p-list-layout + .people .filters (${locale})`, async ({ page }) => {
+    for (const [width, column] of [[1280, 190], [1040, 165]] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/${locale}/oferty-pracy`);
+      if (width === 1280) await rejectOptionalCookies(page, locale);
+      const panel = page.locator('[data-filter-passport="desktop"]');
+      await expect(panel).toBeVisible();
+      const box = await page.locator('aside').filter({ has: panel }).boundingBox();
+      expect(Math.abs((box?.width ?? 0) - column), `${width} px: szerokość kolumny`).toBeLessThanOrEqual(1);
+      await expectStyle(panel.locator('h3').first(), { fontSize: '15px', fontWeight: '700', textTransform: 'none' }, 'h3');
+      await expectStyle(panel.locator('[data-filter-target="checkbox-label"]').first(), { fontSize: '13px' }, 'etykieta');
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow, `${width} px: poziome przewijanie`).toBeLessThanOrEqual(0);
+    }
+    expect(await blockingViolations(page)).toEqual([]);
+  });
+}
+
+const DEMO_JOB = '/oferty-pracy/bricklayer-brussels-1002';
+
+type JobMessages = { job: Record<string, string>; jobs: Record<string, string> };
+
+for (const locale of LOCALES) {
+  for (const width of [1280, 390] as const) {
+    test(`Z2: szczegół oferty = .offer-layout prototypu (${locale}, ${width} px)`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/${locale}${DEMO_JOB}`);
+      await rejectOptionalCookies(page, locale);
+      const m = messages(locale) as unknown as JobMessages;
+      const header = page.getByTestId('job-detail-passport');
+      await expectStyle(header.getByRole('heading', { level: 1 }), {
+        fontSize: width === 1280 ? '40px' : '30px',
+        fontWeight: '750',
+      }, 'H1');
+      await expectStyle(header.locator('p').first(), { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }, 'nadtytuł');
+      await expectStyle(header.locator('dl').locator('..'), { borderRadius: width === 1280 ? '24px' : '20px' }, 'karta-paszport');
+      await expectStyle(page.getByRole('heading', { level: 2, name: m.job.aboutRole }), { fontSize: '23px' }, 'h2 treści');
+      if (width === 1280) {
+        const box = page.getByRole('heading', { level: 2, name: m.job.applyBoxTitle }).locator('..');
+        const boxRect = await box.boundingBox();
+        expect(Math.abs((boxRect?.width ?? 0) - 300), 'panel 300 px').toBeLessThanOrEqual(1);
+        await expectStyle(box.getByRole('button', { name: new RegExp(m.jobs.applyNow) }), BTN, 'Aplikuj');
+        await expectStyle(box.getByRole('button', { name: m.jobs.saveUnavailable }), BTN, 'Zapisz');
+      } else {
+        await expectStyle(page.getByTestId('job-mobile-cta-bar').getByRole('button', { name: new RegExp(m.jobs.applyNow) }), BTN, 'Aplikuj (pasek)');
+      }
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+      expect(await blockingViolations(page)).toEqual([]);
+    });
+  }
+}
+
+const AUTH_ROUTES = ['/logowanie', '/rejestracja', '/rejestracja-pracodawca', '/reset-hasla'] as const;
+
+for (const locale of LOCALES) {
+  for (const width of [1280, 390] as const) {
+    test(`Z4: strony auth = .pp-nav + .extended + .paper.demo-form (${locale}, ${width} px)`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      for (const [index, route] of AUTH_ROUTES.entries()) {
+        await page.goto(`/${locale}${route}`);
+        if (index === 0) await rejectOptionalCookies(page, locale);
+        const header = page.locator('header.pp-nav');
+        await expect(header, `${route}: nagłówek witryny`).toBeVisible();
+        await expectStyle(page.locator('main h1'), {
+          fontSize: width === 1280 ? '40px' : '30px',
+          fontWeight: '750',
+        }, `${route}: H1`);
+        const form = page.locator('main form');
+        await expectStyle(form.locator('button[type="submit"]'), BTN, `${route}: przycisk`);
+        await expectStyle(page.locator('main section').filter({ has: page.locator('form') }), { borderRadius: width === 1280 ? '22px' : '18px' }, `${route}: .paper`);
+        await expectStyle(form.locator('input[type="email"]'), { fontSize: '15px', borderRadius: '11px' }, `${route}: pole`);
+      }
+      expect(await blockingViolations(page)).toEqual([]);
+    });
+  }
+}
+
 for (const locale of ['pl', 'en'] as const) {
   test(`Z6: filtry i akcje admina = .btn prototypu (${locale})`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -124,6 +216,48 @@ for (const locale of ['pl', 'en'] as const) {
   });
 }
 
+/** Trasy paneli (tryb demo) z przyciskami `.btn` prototypu. */
+const PANEL_BUTTON_ROUTES = [
+  '/candidate/profil',
+  '/candidate/onboarding',
+  '/employer',
+  '/employer/oferty/nowa',
+  '/employer/firma',
+  '/employer/zespol',
+  '/admin/firmy',
+];
+
+for (const locale of ['pl', 'fr'] as const) {
+  test(`#5: przyciski paneli = .people .btn z interlinią normal (${locale})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    let checked = 0;
+    const failures: string[] = [];
+    for (const route of PANEL_BUTTON_ROUTES) {
+      await page.goto(`/${locale}${route}`);
+      // Baner zgód tylko przy pierwszym wejściu (potem zapisana zgoda).
+      if (route === PANEL_BUTTON_ROUTES[0]) await rejectOptionalCookies(page, locale);
+      // Przyciski o geometrii `.btn` (min. 49 px, promień 11 px) w treści panelu.
+      const buttons = page.locator('main a, main button').filter({ visible: true });
+      const all = await buttons.all();
+      let onRoute = 0;
+      for (const el of all) {
+        const isBtn = await el.evaluate((node) => {
+          const s = getComputedStyle(node);
+          return s.minHeight === '49px' && s.borderTopLeftRadius === '11px';
+        });
+        if (!isBtn) continue;
+        onRoute += 1;
+        const mismatches = await styleMismatches(el, { lineHeight: 'normal', fontWeight: '650' });
+        if (mismatches.length) failures.push(`${route} „${(await el.innerText()).trim().slice(0, 40)}”: ${mismatches.join(', ')}`);
+      }
+      expect(onRoute, `${route}: brak przycisku .btn`).toBeGreaterThan(0);
+      checked += onRoute;
+    }
+    expect(failures).toEqual([]);
+    expect(checked).toBeGreaterThan(PANEL_BUTTON_ROUTES.length);
+  });
+}
+
 test('kontrola ujemna: pigułka (rounded-full, 44 px, 500) nie przechodzi asercji .btn', async ({ page }) => {
   await page.goto('/pl/nie-ma-takiej-strony-z5');
   // Po hydratacji — inaczej React usuwa dopisany węzeł z drzewa `main`.
@@ -142,6 +276,7 @@ test('kontrola ujemna: pigułka (rounded-full, 44 px, 500) nie przechodzi asercj
       expect.stringMatching(/^borderRadius/),
       expect.stringMatching(/^minHeight/),
       expect.stringMatching(/^fontWeight/),
+      expect.stringMatching(/^lineHeight/),
     ]),
   );
 });

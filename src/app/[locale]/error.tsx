@@ -6,12 +6,12 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useErrorRetry } from '@/components/errors/use-error-retry';
 import { buttonVariants } from '@/components/ui/button';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Granica błędu dla segmentu językowego (App Router). Łapie błędy renderowania stron
  * w obrębie [locale] i pokazuje PRZYJAZNY komunikat z i18n — NIGDY stack trace/technikaliów
- * (Invariant #8). Szczegóły trafiają do Sentry (captureError). Renderowana wewnątrz
+ * (Invariant #8). Szczegóły trafiają do kanału błędów (captureError). Renderowana wewnątrz
  * [locale]/layout, więc ma kontekst i18n i chrome.
  */
 export default function LocaleError({

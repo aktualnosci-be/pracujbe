@@ -1,5 +1,10 @@
 # Resend — e-maile transakcyjne
 
+> **Dostawca domyślny produkcji to EmailLabs** ([`EMAILLABS_SETUP.md`](./EMAILLABS_SETUP.md)).
+> Resend zostaje działającą alternatywą: `EMAIL_PROVIDER=resend` + `RESEND_API_KEY`. Wybór
+> dostawcy, idempotencja, ACK i kody błędów: `src/lib/email/transport/`. Kolejka, wypisanie,
+> budżety i blokady opisane niżej działają tak samo dla obu dostawców.
+
 Konfiguracja Resend do e-maili transakcyjnych Pracuj.be: konto, domena i DNS
 (SPF/DKIM/DMARC), API key, `EMAIL_FROM`, test wysyłki oraz kolejka `email_deliveries`
 z ponawianiem.
@@ -160,7 +165,8 @@ Harmonogram prowadzi osobna usługa cron w Railway, uruchamiająca
 Szczegóły konfiguracji: [`docs/railway/README.md`](./railway/README.md) (sekcja „Cron”).
 Najpierw uruchom zadanie ręcznie i sprawdź `email_deliveries.status`.
 
-Endpoint weryfikuje `Authorization: Bearer <EMAIL_QUEUE_SECRET>` (lub `CRON_SECRET`),
+Endpoint weryfikuje `Authorization: Bearer <EMAIL_QUEUE_SECRET>` (przejściowo także `CRON_SECRET`;
+`MAINTENANCE_SECRET` go nie otwiera — `src/lib/cron/secrets.ts`),
 inaczej zwraca 401. Gdy worker nie może wysyłać (brak konfiguracji w produkcji, błąd
 pobrania kolejki), zwraca 503, więc cron nie raportuje fałszywego sukcesu. Używa
 **service role** — `email_deliveries` nie ma polityk RLS.
@@ -189,11 +195,11 @@ auth.expire_emails() → auth.claim_emails() [queued → leased, FOR UPDATE SKIP
   zwróci `false` (dzierżawę przejął inny worker), wynik liczy się jako `stale`, nie `sent`;
   gdy zapis ACK się nie powiedzie — `ackErrors` i odpowiedź 503. W obu przypadkach worker
   nie woła `fail_email`: dzierżawa wygasa, a ponowienie z tym samym kluczem nie wysyła drugiego listu.
-- Do Sentry i logów trafia tylko ustalony kod (`AUTH_EMAIL_PROVIDER_*`), nigdy komunikat
+- Do Sentry i logów trafia tylko ustalony kod (`EMAIL_PROVIDER_*`), nigdy komunikat
   dostawcy, token ani adres.
 - Odpowiedź endpointu ma pole `auth` (`processed/sent/failed/expired/stale/ackErrors`); 503,
   gdy którakolwiek kolejka zgłosi problem (np. konta PostgreSQL skonfigurowane, a brak
-  `DATABASE_AUTH_MAIL_URL`/`RESEND_API_KEY`/`BETTER_AUTH_URL` w produkcji).
+  `DATABASE_AUTH_MAIL_URL`/kluczy dostawcy z `EMAIL_PROVIDER`/`BETTER_AUTH_URL` w produkcji).
 - Nie uruchamiaj drugiego workera tej samej kolejki. **Rollback:** wyłączyć cron (albo zdjąć
   `DATABASE_AUTH_MAIL_URL`); zlecenia `queued`/`failed` zostają w PostgreSQL do wznowienia.
   Stara kolejka `email_deliveries` działa bez zmian.
@@ -220,6 +226,10 @@ auth.expire_emails() → auth.claim_emails() [queued → leased, FOR UPDATE SKIP
   preferencji (skanery linków) — przekierowuje na stronę z przyciskiem potwierdzenia.
 - `claim_email_batch` ponownie sprawdza zgodę: wiersz osoby wypisanej po zakolejkowaniu
   dostaje `status='failed'`, `suppressed_at`, `error_message='suppressed_opt_out'` i nie wychodzi.
+- #503: e-mail z danymi kandydata do członka firmy (`newApplication`, `offerAccepted`,
+  `offerDeclined`, `newMessage` do strony firmowej) wychodzi tylko, gdy przy claimie odbiorca
+  nadal jest aktywnym recruiter+ firmy — inaczej `error_message='suppressed_recipient_unauthorized'`.
+  Do szablonu worker przekazuje wyłącznie pola z `src/lib/email/payload-fields.ts`.
 - Budżet: `email_send_budget_config` (domyślnie okno 60 s, limit 100, rezerwa auth 20,
   rezerwa transakcyjna 30). Marketing kończy się przy 50 w oknie, transakcyjne przy 80,
   auth może użyć całego limitu. Dopasuj limit do planu Resend (zmiana wiersza przez

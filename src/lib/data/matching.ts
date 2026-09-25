@@ -2,8 +2,8 @@ import 'server-only';
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, queryRows, rpcRows } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
-import { resolveCoordinates, type LocationRow } from '@/lib/matching/locations';
+import { captureError } from '@/lib/error-report';
+import { locationLookupKeys, resolveCoordinates, type LocationAliasRow } from '@/lib/matching/locations';
 import { referenceDate } from '@/lib/matching/reference-date';
 import {
   scoreMatch,
@@ -25,7 +25,8 @@ import {
  * RPC oferty, słownik lokalizacji) się nie udał — wtedy NIE liczymy procentu z niepełnych danych.
  *
  * Języki przechodzą z poziomami po obu stronach (#195); współrzędne miejscowości pochodzą
- * ze słownika `locations` (#194) — miasto spoza słownika = odległość nieznana.
+ * ze słownika `locations` przez aliasy (#194, 0112) — tylko wiersze dla miasta kandydata
+ * i oferty; miasto spoza słownika i listy w kodzie = odległość nieznana.
  *
  * Prywatność: profil kandydata czytany pod RLS (własny wiersz, transakcja sesji
  * `withPortalTransaction`, #25); oferta przez SECURITY DEFINER RPC ograniczone do ofert
@@ -57,7 +58,7 @@ function languagesFrom(rows: unknown, labelField: string): LanguageEntry[] {
     })
     .filter((entry) => entry.label.length > 0);
 }
-function locationRows(rows: unknown): LocationRow[] {
+function locationRows(rows: unknown): LocationAliasRow[] {
   return asArr(rows).map((r) => {
     const rec = asRecord(r);
     // numeric może przyjść jako string (zależnie od serializacji) — konwersja jawna.
@@ -66,8 +67,7 @@ function locationRows(rows: unknown): LocationRow[] {
       return typeof n === 'number' && Number.isFinite(n) ? n : null;
     };
     return {
-      name: asStr(rec['name']),
-      slug: asStr(rec['slug']),
+      aliasKey: asStr(rec['alias_key']),
       latitude: coord(rec['latitude']),
       longitude: coord(rec['longitude']),
     };
@@ -151,8 +151,13 @@ export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
         [profileId]));
       const jobRows = await read('get_job_match_profile', () =>
         rpcRows(tx, 'get_job_match_profile', { p_job_id: jobId }));
-      const locations = await read('locations', () => queryRows(tx, 'matching.locations',
-        'SELECT name, slug, latitude, longitude FROM public.locations WHERE is_active = true'));
+      // Tylko aliasy miasta kandydata i oferty (klucz `cityKey`), nie cały słownik.
+      const lookup = locationLookupKeys(asStr(asRecord(cpData)['city']), asStr(asRecord(jobRows[0])['city']));
+      const locations = lookup.length === 0 ? [] : await read('locations', () => queryRows(tx, 'matching.locations',
+        `SELECT a.alias_key, l.latitude, l.longitude
+           FROM public.location_aliases a
+           JOIN public.locations l ON l.id = a.location_id
+          WHERE l.is_active = true AND a.alias_key = ANY($1::text[])`, [lookup]));
       return { cpData, skills, languages, certificates, jobRows, locationRows: locations };
     });
     if (!inputs) return { status: 'none' };

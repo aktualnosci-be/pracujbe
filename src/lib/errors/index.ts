@@ -55,6 +55,13 @@ export const ErrorCodes = {
   JOB_ASSIST_WRONG_LANGUAGE: 'JOB_ASSIST_WRONG_LANGUAGE',
   JOB_ASSIST_FAILED: 'JOB_ASSIST_FAILED',
   AI_BUDGET_EXCEEDED: 'AI_BUDGET_EXCEEDED',
+  CV_IMPORT_INVALID_FILE: 'CV_IMPORT_INVALID_FILE',
+  CV_IMPORT_NO_TEXT: 'CV_IMPORT_NO_TEXT',
+  CV_IMPORT_SENSITIVE_DATA: 'CV_IMPORT_SENSITIVE_DATA',
+  CV_IMPORT_UNCERTAIN: 'CV_IMPORT_UNCERTAIN',
+  CV_IMPORT_NOT_A_CV: 'CV_IMPORT_NOT_A_CV',
+  CV_IMPORT_NO_PROPOSALS: 'CV_IMPORT_NO_PROPOSALS',
+  CV_IMPORT_FAILED: 'CV_IMPORT_FAILED',
   GUEST_APPLY_UNAVAILABLE: 'GUEST_APPLY_UNAVAILABLE',
   EMAIL_NOT_VERIFIED: 'EMAIL_NOT_VERIFIED',
   CLAIM_EXPIRED: 'CLAIM_EXPIRED',
@@ -117,6 +124,13 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   JOB_ASSIST_WRONG_LANGUAGE: 'jobAssistWrongLanguage',
   JOB_ASSIST_FAILED: 'jobAssistFailed',
   AI_BUDGET_EXCEEDED: 'aiBudgetExceeded',
+  CV_IMPORT_INVALID_FILE: 'cvImportInvalidFile',
+  CV_IMPORT_NO_TEXT: 'cvImportNoText',
+  CV_IMPORT_SENSITIVE_DATA: 'cvImportSensitiveData',
+  CV_IMPORT_UNCERTAIN: 'cvImportUncertain',
+  CV_IMPORT_NOT_A_CV: 'cvImportNotACv',
+  CV_IMPORT_NO_PROPOSALS: 'cvImportNoProposals',
+  CV_IMPORT_FAILED: 'cvImportFailed',
   GUEST_APPLY_UNAVAILABLE: 'guestApplyUnavailable',
   EMAIL_NOT_VERIFIED: 'emailNotVerified',
   CLAIM_EXPIRED: 'claimExpired',
@@ -136,7 +150,7 @@ export function toUserMessageKey(code: ErrorCode): string {
 export interface AppErrorOptions {
   /** Nadpisanie klucza tłumaczenia komunikatu dla użytkownika. Domyślnie `errors.<code>`. */
   userMessageKey?: string;
-  /** Dodatkowy kontekst (do logów/Sentry) — NIGDY nie pokazywany użytkownikowi. */
+  /** Dodatkowy kontekst (do logów/kanału błędów) — NIGDY nie pokazywany użytkownikowi. */
   context?: Record<string, unknown>;
   /** Oryginalny błąd (zachowany jako `cause`). */
   cause?: unknown;

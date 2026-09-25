@@ -5,7 +5,7 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: (fn: unknown) => fn }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const ownerId = '22222222-2222-4222-8222-222222222222';
 const jobId = '11111111-1111-4111-8111-111111111111';
@@ -74,6 +74,9 @@ describe('candidate application history', () => {
     expect(secondCall!.values).toEqual([ownerId, submittedAt, records[9]!.id, 11]);
     expect(fakeDb.callsTo('candidate.applied-jobs-page')[0]!.values[0]).toBe('pl');
     expect(fakeDb.callsTo('candidate.applied-jobs-page')[0]!.text).toContain('get_applied_jobs_display');
+    // #184 (0108): filtr stron wewnątrz RPC (SECURITY DEFINER nie jest inline'owana), nie WHERE na wyniku.
+    expect(fakeDb.callsTo('candidate.applied-jobs-page')[0]!.text).toContain('p_job_ids => $2::uuid[]');
+    expect(fakeDb.callsTo('candidate.applied-jobs-page')[0]!.text).not.toMatch(/WHERE\s+d\.job_id/);
     expect(second.items.every((row) => row.jobTitle === 'Older job' && row.slug === 'older-job')).toBe(true);
   });
 
