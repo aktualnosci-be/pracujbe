@@ -83,6 +83,9 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
           : '';
       return `/zglos-tresc/sprawa${fragment}`;
     }
+    case 'breachNotice':
+      // #490: ustawienia konta odbiorcy (panel z roli w payloadzie RPC).
+      return payload?.['panel'] === 'employer' ? '/employer/ustawienia' : '/candidate/ustawienia';
     case 'newMessage': {
       const panel = payload?.['panel'] === 'employer' ? 'employer' : 'candidate';
       const conversationId = payload?.['conversationId'];

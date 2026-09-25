@@ -69,3 +69,41 @@ export function appDayStartUtc(ymd: string | null | undefined, endExclusive = fa
   guess = naive - appOffsetMs(guess);
   return new Date(guess).toISOString();
 }
+
+const LOCAL_INPUT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
+/**
+ * Wartość pola `datetime-local` (`YYYY-MM-DDTHH:mm`, czas w Europe/Brussels) → ISO UTC.
+ * Pusta albo zła wartość → null (#490: czas stwierdzenia naruszenia i zgłoszeń).
+ */
+export function appLocalInputToUtc(value: string | null | undefined): string | null {
+  const m = value ? LOCAL_INPUT_RE.exec(value.trim()) : null;
+  if (!m) return null;
+  const [y, mo, d, h, mi] = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5])];
+  const naive = Date.UTC(y, mo - 1, d, h, mi);
+  const check = new Date(naive);
+  if (
+    check.getUTCFullYear() !== y ||
+    check.getUTCMonth() !== mo - 1 ||
+    check.getUTCDate() !== d ||
+    check.getUTCHours() !== h ||
+    check.getUTCMinutes() !== mi
+  ) {
+    return null;
+  }
+  let guess = naive - appOffsetMs(naive);
+  guess = naive - appOffsetMs(guess);
+  return new Date(guess).toISOString();
+}
+
+/** ISO UTC → wartość pola `datetime-local` w Europe/Brussels; brak/zła wartość → ''. */
+export function utcToAppLocalInput(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return '';
+  const local = new Date(ts + appOffsetMs(ts));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${local.getUTCFullYear()}-${pad(local.getUTCMonth() + 1)}-${pad(local.getUTCDate())}T${pad(
+    local.getUTCHours(),
+  )}:${pad(local.getUTCMinutes())}`;
+}

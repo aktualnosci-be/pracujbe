@@ -138,7 +138,10 @@ describe('Trwała kolejka auth na PostgreSQL', () => {
     if (!('resetUrl' in prepared.data)) throw new Error('Brak adresu resetu hasła w przygotowanej wiadomości.');
     const url = new URL(prepared.data.resetUrl);
     expect(url.origin).toBe(baseURL);
-    expect(url.searchParams.get('callbackURL')).toBe(`${baseURL}/nl/ustaw-nowe-haslo`);
+    // Strona w języku odbiorcy, token wyłącznie we fragmencie (#505) — nie w ścieżce ani query.
+    expect(url.pathname).toBe('/nl/ustaw-nowe-haslo');
+    expect(url.search).toBe('');
+    expect(new URLSearchParams(url.hash.slice(1)).get('token')).toBe(row.token);
   });
 
   it.each(['api', 'http', 'api-response'] as const)('awaria enqueue cofa verification resetu przez %s', async channel => {

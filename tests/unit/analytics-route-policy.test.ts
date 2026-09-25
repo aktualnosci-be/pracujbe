@@ -8,6 +8,7 @@ describe('analytics route policy', () => {
     '/nl/aplikacja/przejmij',
     '/fr/wypisz',
     '/en/ustaw-nowe-haslo',
+    '/nl/potwierdz-email',
     '/pl/logowanie',
     '/pl/rejestracja',
     '/pl/candidate/aplikacje',
@@ -27,6 +28,7 @@ describe('analytics route policy', () => {
     '/nl/aplikacja/przejmij',
     '/fr/wypisz',
     '/en/ustaw-nowe-haslo',
+    '/nl/potwierdz-email',
   ])('requires private response headers on %s', (path) => {
     expect(isOneTimeLinkPath(path)).toBe(true);
   });

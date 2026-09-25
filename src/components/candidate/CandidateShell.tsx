@@ -19,7 +19,7 @@ import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/Da
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 
 /**
- * CandidateShell — chrome panelu kandydata (makieta 04): granatowy sidebar + topbar
+ * CandidateShell — chrome panelu kandydata (makieta 04): jasny sidebar `.side-item` + topbar
  * z powiadomieniami i avatarem (DashboardShell). Renderowane przez `candidate/layout.tsx`.
  *
  * WYJĄTEK: kreator onboardingu (`/candidate/onboarding/*`) ma własny lekki layout

@@ -1,4 +1,11 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { expect, test, type Page } from '@playwright/test';
+
+const pl = JSON.parse(readFileSync(resolve(process.cwd(), 'src/messages/pl.json'), 'utf-8')) as {
+  auth: { confirmEmailSubmit: string };
+};
 
 /**
  * Po nieudanej wysyłce formularza uwierzytelniania fokus musi trafić na komunikat błędu,
@@ -16,7 +23,7 @@ async function failServerActions(page: Page, path: string): Promise<void> {
   });
 }
 
-const forms: ReadonlyArray<{ path: string; fill: (page: Page) => Promise<void> }> = [
+const forms: ReadonlyArray<{ path: string; hash?: string; fill: (page: Page) => Promise<void> }> = [
   {
     path: '/pl/logowanie',
     fill: async (page) => {
@@ -57,6 +64,8 @@ const forms: ReadonlyArray<{ path: string; fill: (page: Page) => Promise<void> }
   },
   {
     path: '/pl/ustaw-nowe-haslo',
+    // Token z linku e-mail jest we fragmencie (#24/#505) — bez niego formularza nie ma.
+    hash: '#token=AbCdEfGhIjKlMnOpQrStUvWx',
     fill: async (page) => {
       await page.locator('#password').fill('Haslo1234');
       await page.locator('#passwordConfirm').fill('Haslo1234');
@@ -64,10 +73,10 @@ const forms: ReadonlyArray<{ path: string; fill: (page: Page) => Promise<void> }
   },
 ];
 
-for (const { path, fill } of forms) {
+for (const { path, hash, fill } of forms) {
   test(`po błędzie wysyłki fokus jest na komunikacie: ${path}`, async ({ page }) => {
     await failServerActions(page, path);
-    await page.goto(path);
+    await page.goto(`${path}${hash ?? ''}`);
     await fill(page);
 
     // Wysyłka klawiaturą (Enter na przycisku) — ścieżka użytkownika klawiatury.
@@ -87,4 +96,16 @@ test('komunikat z parametru ?error= nie przejmuje fokusu przy wejściu na stron�
   const alert = page.locator('main').getByRole('alert');
   await expect(alert).toBeVisible();
   await expect(alert).not.toBeFocused();
+});
+
+test('potwierdzenie adresu: po błędzie akcji fokus jest na komunikacie, przycisk wraca', async ({ page }) => {
+  await failServerActions(page, '/pl/potwierdz-email');
+  await page.goto('/pl/potwierdz-email#token=aaa.bbb.ccc');
+  const button = page.locator('main').getByRole('button', { name: pl.auth.confirmEmailSubmit });
+  await expect(button).toBeEnabled();
+  await button.press('Enter');
+  const alert = page.locator('main').getByRole('alert');
+  await expect(alert).toBeVisible();
+  await expect(alert).toBeFocused();
+  await expect(button).toBeEnabled();
 });

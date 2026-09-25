@@ -269,7 +269,7 @@ export function CookieConsent() {
           role="region"
           aria-labelledby="cookie-banner-title"
           aria-describedby="cookie-banner-desc"
-          className="fixed inset-x-0 bottom-0 z-50 max-h-[60dvh] overflow-y-auto overscroll-contain border-t border-border bg-background shadow-[0_-4px_24px_rgba(15,42,71,0.08)]"
+          className="fixed inset-x-0 bottom-0 z-50 max-h-[60dvh] overflow-y-auto overscroll-contain border-t border-border bg-background shadow-[0_-4px_24px_hsl(var(--foreground)/0.08)]"
         >
           <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-1 lg:max-w-2xl">

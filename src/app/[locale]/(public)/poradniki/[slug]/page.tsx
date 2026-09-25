@@ -182,7 +182,7 @@ export default async function GuideArticlePage({ params }: PageProps) {
           <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent-dark">
             {t(CATEGORY_LABEL_KEY[guide.category])}
           </span>
-          <h1 className="mt-4 break-words text-3xl font-bold tracking-tight text-foreground hyphens-auto md:text-4xl">
+          <h1 className="mt-4 pp-page-title">
             {guide.title}
           </h1>
           <p className="mt-3 break-words text-lg text-muted-foreground hyphens-auto">

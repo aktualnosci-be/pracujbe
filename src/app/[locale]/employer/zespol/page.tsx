@@ -10,7 +10,7 @@ import {
   BTN_SECONDARY,
   DEMO_NOTE,
   EYEBROW,
-  H1,
+  H1_EXTENDED,
   INFO_PAIRS,
   INTRO,
   NOTICE,
@@ -69,7 +69,7 @@ export default async function EmployerTeamPage({
   if (data.status === 'error') {
     return (
       <div className="min-w-0 max-w-4xl space-y-[22px]">
-        <h1 className={H1}>{t('title')}</h1>
+        <h1 className={H1_EXTENDED}>{t('title')}</h1>
         <section role="alert" className={NOTICE}>
           <div className="min-w-0">
             <h2 className={NOTICE_TITLE}>{t('loadError')}</h2>
@@ -94,7 +94,7 @@ export default async function EmployerTeamPage({
     <div className="min-w-0 max-w-5xl space-y-[22px]">
       <header className="min-w-0">
         <p className={EYEBROW}>{data.companyName || t('title')}</p>
-        <h1 className={H1}>{t('title')}</h1>
+        <h1 className={H1_EXTENDED}>{t('title')}</h1>
         <p className={INTRO}>
           {data.companyName ? t('subtitle', { company: data.companyName }) : t('subtitleGeneric')}
         </p>

@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 
 import { NextResponse } from 'next/server';
 
+import { processAuthEmailQueue } from '@/lib/auth/email-worker';
 import { processEmailQueue } from '@/lib/email/outbox';
 
 /**
@@ -37,10 +38,12 @@ async function run(request: Request): Promise<Response> {
   if (!authorized(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
-  const result = await processEmailQueue();
+  // #24: wiadomości kont (potwierdzenie adresu, reset hasła) z kolejki auth PostgreSQL — ten sam cron.
+  const [result, auth] = await Promise.all([processEmailQueue(), processAuthEmailQueue()]);
   // P1-17: realny problem workera (brak konfiguracji w produkcji, błąd claimu) → 503, aby
   // cron/monitoring NIE widział „zielonego" przebiegu, gdy żaden e-mail nie wychodzi.
-  return NextResponse.json(result, { status: result.ok ? 200 : 503 });
+  const ok = result.ok && auth.ok;
+  return NextResponse.json({ ...result, ok, auth }, { status: ok ? 200 : 503 });
 }
 
 /** Ręczne wywołanie / zgodność (GET). */

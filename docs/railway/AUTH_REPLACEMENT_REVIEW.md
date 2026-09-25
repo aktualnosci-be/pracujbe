@@ -189,3 +189,7 @@ To nadal nie jest przełączenie auth. Nie ma route handlera, importu runtime z
 middleware, Server Actions, guardów, health checku ani konfiguracji Railway.
 Zmienne w `.env.example` dokumentują kontrakt przyszłego wdrożenia; dopóki
 wywołujący nie zostanie dodany w osobnym PR, moduł pozostaje nieaktywny.
+
+### Przepięcie tras i akcji (24 września 2026)
+
+Wykonane dla issue #24 (gałąź `claude/pg-auth-routes`): trasa `/api/auth/[...all]` z listą dozwolonych operacji (tylko `GET /get-session`), Server Actions na `auth.api` z jawnym przeniesieniem `Set-Cookie`, strony `potwierdz-email` i `ustaw-nowe-haslo` z tokenem we fragmencie, worker kolejki 0061, limiter PostgreSQL, guardy paneli na `getCurrentIdentity()`, middleware bez Supabase, gotowość i `/api/health` na PostgreSQL. Odstępstwa od planu powyżej: link weryfikacji nie prowadzi do endpointu SDK, tylko do strony aplikacji (przycisk → `confirmEmail`), a receipt akceptacji nie zapisuje IP ani user-agenta (trigger 0059 nie ma dostępu do żądania). Budżet wysyłki puli `auth` (#45) dotyczy dotąd tylko hooka Supabase — worker PostgreSQL go nie pobiera; do dołożenia razem z usunięciem hooka w #27.
