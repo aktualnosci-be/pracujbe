@@ -2,13 +2,17 @@ import type { Coordinates } from '@/lib/matching/score';
 
 /**
  * Kanoniczne współrzędne belgijskich miast jako dane w kodzie (#194) — bez geokodowania
- * zewnętrznego i bez migracji. Uzupełnia słownik `locations` z bazy (10 miast z `0010`),
- * który ma pierwszeństwo; tu są te same wartości dla tych 10 miast (strażnik w testach)
- * oraz kolejne miejscowości, w których pojawiają się oferty.
+ * zewnętrznego. Źródłem prawdy jest słownik `locations` + `location_aliases` w bazie
+ * (migracja 0112: te miasta + gminy Belgii z Wikidata, CC0); ta lista jest jego lustrem
+ * i zapasem, gdy wiersza w bazie brak. Generator migracji
+ * (`scripts/locations/build-migration.mjs`) bierze stąd współrzędne i aliasy tych miast
+ * (mają pierwszeństwo przed Wikidata); zgodność pilnuje `matching-locations.test.ts`.
  *
  * Współrzędne = przybliżone centrum miejscowości (jak w `0010`). Aliasy: nazwy PL/NL/FR/EN
  * i warianty bez myślników; porównanie bez wielkości liter i znaków diakrytycznych.
- * Miasto spoza listy = współrzędne nieznane — silnik wraca wtedy do reguły nazw/regionu.
+ * Miasto spoza listy i słownika = współrzędne nieznane — silnik wraca do reguły nazw/regionu.
+ * Zmiana tej listy = ponowne `node scripts/locations/build-migration.mjs` (nowa migracja,
+ * gdy 0112 jest już wdrożona).
  */
 export type BelgianCity = {
   slug: string;
@@ -29,13 +33,13 @@ export const BELGIAN_CITIES: readonly BelgianCity[] = [
   { slug: 'charleroi', lat: 50.4113, lng: 4.4445, aliases: ['Charleroi'] },
   { slug: 'bruges', lat: 51.2097, lng: 3.2247, aliases: ['Bruges', 'Brugge', 'Brugia'] },
   { slug: 'kortrijk', lat: 50.8282, lng: 3.2649, aliases: ['Kortrijk', 'Courtrai'] },
-  // --- pozostałe miasta (tylko w kodzie) ---
+  // --- pozostałe miasta (w bazie od 0112) ---
   { slug: 'namur', lat: 50.4674, lng: 4.8718, aliases: ['Namur', 'Namen'] },
   { slug: 'mons', lat: 50.4542, lng: 3.9567, aliases: ['Mons', 'Bergen'] },
   { slug: 'aalst', lat: 50.9378, lng: 4.0403, aliases: ['Aalst', 'Alost'] },
   { slug: 'ostend', lat: 51.2154, lng: 2.9286, aliases: ['Ostend', 'Oostende', 'Ostende', 'Ostenda'] },
   { slug: 'genk', lat: 50.965, lng: 5.5008, aliases: ['Genk'] },
-  { slug: 'sint-niklaas', lat: 51.165, lng: 4.1437, aliases: ['Sint-Niklaas', 'Saint-Nicolas'] },
+  { slug: 'sint-niklaas', lat: 51.165, lng: 4.1437, aliases: ['Sint-Niklaas'] },
   { slug: 'roeselare', lat: 50.9469, lng: 3.1227, aliases: ['Roeselare', 'Roulers'] },
   { slug: 'la-louviere', lat: 50.4796, lng: 4.1874, aliases: ['La Louvière'] },
   { slug: 'tournai', lat: 50.6056, lng: 3.3878, aliases: ['Tournai', 'Doornik'] },

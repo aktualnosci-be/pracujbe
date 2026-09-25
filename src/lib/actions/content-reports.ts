@@ -16,7 +16,9 @@ import {
 import {
   FIXTURE_CASE_NUMBER,
   FIXTURE_DISMISSED_CASE_NUMBER,
+  FIXTURE_RESTORED_CASE_NUMBER,
   fixtureDismissedReportCase,
+  fixtureRestoredReportCase,
   fixtureReportCase,
   isReportFixtureMode,
   parseReportCase,
@@ -139,6 +141,7 @@ export async function lookupReportCase(input: ReportCaseLookupInput): Promise<Lo
     if (isReportFixtureMode()) {
       if (caseNumber === FIXTURE_CASE_NUMBER) return { ok: true, report: fixtureReportCase() };
       if (caseNumber === FIXTURE_DISMISSED_CASE_NUMBER) return { ok: true, report: fixtureDismissedReportCase() };
+      if (caseNumber === FIXTURE_RESTORED_CASE_NUMBER) return { ok: true, report: fixtureRestoredReportCase() };
       return { ok: false, error: 'NOT_FOUND' };
     }
     return { ok: false, error: 'DEMO_UNAVAILABLE' };

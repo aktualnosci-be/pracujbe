@@ -1,11 +1,18 @@
 import 'server-only';
 
-import { Resend } from 'resend';
-
 import { renderEmail } from '@/emails/templates';
 import { emailFromEnv } from '@/lib/email/sender';
 import { env, isAuthMailConfigured, isPortalAuthConfigured, isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
+import {
+  emailProviderFromEnv,
+  mailTransportFromEnv,
+  MailSendError,
+  type MailErrorCode,
+  type MailMessage,
+  type MailSendOptions,
+} from '@/lib/email/transport';
+import { resendTransport } from '@/lib/email/transport/resend';
 import {
   claimAuthEmails,
   completeAuthEmail,
@@ -33,60 +40,34 @@ export interface AuthEmailProcessResult {
   ok: boolean;
 }
 
-export type AuthMailErrorCode = 'delivery_failed' | 'provider_unavailable';
-
-/** Błąd wysyłki z ustalonym kodem — bez komunikatu dostawcy (może zawierać adres lub link). */
-export class AuthMailSendError extends Error {
-  constructor(readonly code: AuthMailErrorCode) {
-    super(code === 'provider_unavailable' ? 'AUTH_EMAIL_PROVIDER_UNAVAILABLE' : 'AUTH_EMAIL_PROVIDER_REJECTED');
-    this.name = 'AuthMailSendError';
-  }
-}
+export type AuthMailErrorCode = MailErrorCode;
 
 /**
- * Błędy Resend, po których warto ponowić (limit, awaria dostawcy lub sieci — SDK zgłasza ją jako
- * `application_error`, równoległe żądanie z tym samym kluczem). Reszta = odrzucenie listu.
+ * Błąd wysyłki z ustalonym kodem — bez komunikatu dostawcy (może zawierać adres lub link).
+ * Ten sam typ dla każdego transportu (`src/lib/email/transport`).
  */
-const RETRYABLE_PROVIDER_ERRORS: ReadonlySet<string> = new Set([
-  'rate_limit_exceeded',
-  'application_error',
-  'internal_server_error',
-  'concurrent_idempotent_requests',
-]);
+export const AuthMailSendError = MailSendError;
+export type AuthMailSendError = MailSendError;
 
-export function classifyProviderError(name: string | undefined): AuthMailErrorCode {
-  return name && RETRYABLE_PROVIDER_ERRORS.has(name) ? 'provider_unavailable' : 'delivery_failed';
-}
+export { classifyProviderError } from '@/lib/email/transport/resend';
 
 type MailPool = Parameters<typeof claimAuthEmails>[0];
 
+/** Minimalny kontrakt nadawcy (atrapy w testach); produkcja = `MailTransport`. */
 export interface MailSender {
-  send(
-    message: { from: string; to: string; subject: string; html: string; text: string },
-    options: { idempotencyKey: string },
-  ): Promise<{ id: string }>;
+  send(message: MailMessage, options: MailSendOptions): Promise<{ id: string }>;
 }
 
-/** Transport Resend z klasyfikacją błędów (eksport dla testów). */
+/** Transport Resend z klasyfikacją błędów (eksport dla testów i zgodności). */
 export function resendSender(apiKey: string): MailSender {
-  const resend = new Resend(apiKey);
-  return {
-    async send(message, options) {
-      const result = await resend.emails.send(message, options);
-      // Komunikat dostawcy może zawierać adres odbiorcy — nie przenosimy go dalej, tylko kod.
-      if (result.error) throw new AuthMailSendError(classifyProviderError(result.error.name));
-      // Bez identyfikatora dostawcy nie wolno potwierdzić wysyłki (ACK) — ponowienie z tym
-      // samym kluczem idempotencji zwróci identyfikator już przyjętego listu.
-      if (!result.data?.id) throw new AuthMailSendError('provider_unavailable');
-      return { id: result.data.id };
-    },
-  };
+  return resendTransport(apiKey);
 }
 
 /**
  * Jedna paczka kolejki `auth.email_outbox` (0061): potwierdzenie adresu i reset hasła.
  * Pula ma wyłącznie rolę `pracujbe_auth_mail` (claim/complete/fail/expire), bez tabel domeny.
- * Klucz idempotencji Resend = UUID zlecenia, więc ponowienie po utraconej odpowiedzi nie wysyła
+ * Klucz idempotencji transportu = UUID zlecenia (Resend: Idempotency-Key, EmailLabs: stały
+ * messageId + sprawdzenie przed wysyłką), więc ponowienie po utraconej odpowiedzi nie wysyła
  * drugiego listu. Token nigdy nie trafia do logów ani Sentry; po wysyłce baza go usuwa.
  */
 export async function processAuthEmailBatch(
@@ -128,8 +109,8 @@ export async function processAuthEmailBatch(
       )).id;
     } catch (error) {
       // Nieznany wyjątek (np. przerwane połączenie) traktujemy jak chwilową niedostępność.
-      const code = error instanceof AuthMailSendError ? error.code : 'provider_unavailable';
-      captureError(new AuthMailSendError(code), { area: 'auth.email.send', kind: delivery.kind });
+      const code = error instanceof MailSendError ? error.code : 'provider_unavailable';
+      captureError(new MailSendError(code), { area: 'auth.email.send', kind: delivery.kind });
       // Dzierżawa wygaśnie sama, gdy zapis porażki też się nie uda — zlecenie wróci do kolejki.
       await failAuthEmail(pool, delivery, code).catch(() => false);
       failed += 1;
@@ -152,19 +133,22 @@ export async function processAuthEmailBatch(
 /**
  * Wywołanie z `/api/email/process` (cron Railway). Bez kont PostgreSQL (tryb demo / przed
  * przepięciem) kolejka nie istnieje → pominięcie bez alarmu. Konta skonfigurowane, a brak loginu
- * workera, klucza Resend lub kanonicznego origin w produkcji → `ok: false` (listy nie wychodzą).
+ * workera, dostawcy poczty (`EMAIL_PROVIDER`) lub kanonicznego origin w produkcji → `ok: false` (listy nie wychodzą).
  */
 export async function processAuthEmailQueue(limit = 20): Promise<AuthEmailProcessResult> {
   const empty = { processed: 0, sent: 0, failed: 0, expired: 0 };
   if (!isPortalAuthConfigured()) return { ...empty, skipped: 'auth not configured', ok: true };
-  const apiKey = process.env.RESEND_API_KEY;
+  const transport = mailTransportFromEnv();
   const baseURL = env.authBaseUrl;
-  if (!isAuthMailConfigured() || !apiKey || !baseURL) {
-    return { ...empty, skipped: 'auth mail not configured', ok: !isProductionMode() };
+  if (!isAuthMailConfigured() || !transport || !baseURL) {
+    const reason = !transport && emailProviderFromEnv().provider === null
+      ? 'email provider not configured'
+      : 'auth mail not configured';
+    return { ...empty, skipped: reason, ok: !isProductionMode() };
   }
   try {
     const { getAuthMailPool } = await import('@/lib/db/runtime');
-    return await processAuthEmailBatch(await getAuthMailPool(), resendSender(apiKey), {
+    return await processAuthEmailBatch(await getAuthMailPool(), transport, {
       baseURL,
       from: emailFromEnv(),
       limit,

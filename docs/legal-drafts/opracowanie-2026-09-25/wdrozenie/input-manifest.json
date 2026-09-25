@@ -1,0 +1,87 @@
+{
+  "original_archive_name": "pracujbe-dla-prawnika.zip",
+  "original_archive_sha256": "474d11c1c234333d4d39b0c80ad66725bf1f950893d4a8a59cf0afb4e15e828e",
+  "file_count": 16,
+  "files": [
+    {
+      "path": "00-CO-ZROBIC.md",
+      "bytes": 4068,
+      "sha256": "3c6bd45db681843872c24ec2f8968305ad67ce57fa0a23e577b247d16100fda9"
+    },
+    {
+      "path": "kontekst-techniczny/AI_JOB_IMPORT.md",
+      "bytes": 13056,
+      "sha256": "a3ec89577821039c2439d8565de407646e57361b7ae7515f4d42f8870b7c5b7b"
+    },
+    {
+      "path": "kontekst-techniczny/DATA_RETENTION.md",
+      "bytes": 8848,
+      "sha256": "1e20fde842cc054947d223af8254d6d89808d3e8e1f3c925e18d831f8286d998"
+    },
+    {
+      "path": "kontekst-techniczny/GUEST_APPLY.md",
+      "bytes": 8257,
+      "sha256": "bbdfe8e9117d16cf071ce8ee47334582c0b1bacd858be2d10f237575a6387f75"
+    },
+    {
+      "path": "kontekst-techniczny/JOB_FUNNEL.md",
+      "bytes": 5863,
+      "sha256": "fcf9edbd82748b7a0e4d4baa5cc647a278f302b3e11d68161ab322ca0774fce9"
+    },
+    {
+      "path": "kontekst-techniczny/PRODUCT_DECISIONS.md",
+      "bytes": 1125,
+      "sha256": "bcb717a675e768a8bedf78f510eca113e2bb7144886d1e3c43479fb706ebfa82"
+    },
+    {
+      "path": "kontekst-techniczny/RESEND_SETUP.md",
+      "bytes": 17279,
+      "sha256": "de0392a4b8416ec2136653483f61a6f04eee092ed624d2331fc4c80ce6cdbbb5"
+    },
+    {
+      "path": "kontekst-techniczny/TELEMETRY_PRIVACY.md",
+      "bytes": 2725,
+      "sha256": "4ea3f0d9e54ded5e826ce972baf80c3aa23ff169797c22962edb0a73ede8395e"
+    },
+    {
+      "path": "kontekst-techniczny/TURNSTILE.md",
+      "bytes": 4906,
+      "sha256": "a1987187fb8255cbf3c6cf80d563ea284b986a80b5f960271a369b14f2bf1eb7"
+    },
+    {
+      "path": "szkice/ai-act-art22-dpia.md",
+      "bytes": 9131,
+      "sha256": "f9304bfb0d66e64b8f994b01f85132c2070ac24adc4b0c62045c496b7d48470b"
+    },
+    {
+      "path": "szkice/data-map.generated.md",
+      "bytes": 75850,
+      "sha256": "9a168aec62022884c3cb084af7a952548b084382bd61432b53e6ba4c6f230165"
+    },
+    {
+      "path": "szkice/dostawcy-i-transfery.md",
+      "bytes": 11791,
+      "sha256": "7d7e3ffe79faebbeaef6ace324630c1cb0ff62015e3ac67210fa4e86fffa55be"
+    },
+    {
+      "path": "szkice/eprivacy-lejek.md",
+      "bytes": 5876,
+      "sha256": "1ba765a44a1df8bbd6eaf37cf3ffceb70ebf600e00cb65103bd2476cc743c657"
+    },
+    {
+      "path": "szkice/procedura-naruszen.md",
+      "bytes": 8144,
+      "sha256": "e81680c4b84b88b45ed83a817d817378f33be3e456052a9d327deb9ce875826b"
+    },
+    {
+      "path": "szkice/rejestr-czynnosci.md",
+      "bytes": 12815,
+      "sha256": "a17ae29784cc00de38e87baa297226f89eb1b8d740a691be2da5afa1b7235de4"
+    },
+    {
+      "path": "szkice/retencja-i-prawa-kandydata.md",
+      "bytes": 6805,
+      "sha256": "7e2e1b2853dd49a28ad3391f5c9a9796610c123c67761c88a374b7481e6c02f9"
+    }
+  ]
+}

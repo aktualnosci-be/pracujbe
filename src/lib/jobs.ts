@@ -17,6 +17,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
+import { searchFold } from '@/lib/search-fold';
 
 export type ContractType =
   | 'permanent'
@@ -223,24 +224,24 @@ function getJobsFromDemo(
     jobs = jobs.filter((job) => locs.includes(job.city));
   }
   if (params.city) {
-    const q = params.city.trim().toLowerCase();
+    const q = searchFold(params.city.trim());
     if (q) {
       jobs = jobs.filter(
         (job) =>
-          job.city.toLowerCase().includes(q) ||
+          searchFold(job.city).includes(q) ||
           job.slug.toLowerCase().includes(q),
       );
     }
   }
   if (params.keyword) {
-    const q = params.keyword.trim().toLowerCase();
+    const q = searchFold(params.keyword.trim());
     if (q) {
       jobs = jobs.filter(
         (job) =>
-          job.title.toLowerCase().includes(q) ||
-          job.companyName.toLowerCase().includes(q) ||
-          job.description.toLowerCase().includes(q) ||
-          job.highlights.some((h) => h.toLowerCase().includes(q)),
+          searchFold(job.title).includes(q) ||
+          searchFold(job.companyName).includes(q) ||
+          searchFold(job.description).includes(q) ||
+          job.highlights.some((h) => searchFold(h).includes(q)),
       );
     }
   }
