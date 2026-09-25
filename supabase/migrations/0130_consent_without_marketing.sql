@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0129_consent_without_marketing.sql — #570: log zgód bez kategorii `marketing`
+-- 0130_consent_without_marketing.sql — #570: log zgód bez kategorii `marketing`
 -- (numer tymczasowy — ostateczny nada integrator).
 --
 -- Decyzja właściciela (25.09.2026): po usunięciu Google Analytics i Meta Pixel portal nie

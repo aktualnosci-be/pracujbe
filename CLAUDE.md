@@ -704,10 +704,14 @@ nie wysyła; potwierdzenie 18+ zdejmuje znacznik. Formularze pokazują przedzia�
 bez triggera aplikacja/gość bez deklaracji przechodzą, konto 16–17 staje się wyszukiwalne — AGE11n);
 unit `age-policy` (lejek z kontrolą ujemną), `profile-visibility`, `guest-apply-form`; E2E
 `auth-age-declaration`, `guest-apply`. Szkic (nieopublikowany): `docs/legal-drafts/kandydaci-niepelnoletni.md`.
+UI zmiany progu w panelu admina (#492): `/admin/ustawienia` — bieżący próg, status zatwierdzenia
+i ostatnia zmiana z dziennika (`getAgePolicySettings`, odczyt service-rolem po `requireAdmin`),
+formularz wyboru 16/18 + uzasadnienie (zawsze wymagane, jak przy statusie firmy) + dialog
+potwierdzenia (`AgePolicyForm`, `AdminConfirmDialog`), zapis przez `setCandidateMinAge`
+(`admin_set_candidate_min_age` pod sesją admina). Bez treści prawnej — same etykiety funkcji.
 **Otwarte (właściciel/prawnik):** treść informacji o wieku (`07-wiek.md`) po akceptacji, kontakt
 osób poniżej 16 lat z udziałem opiekuna, oznaczenie ofert dla młodocianych, procedura dla
-wykrytego konta poniżej progu, UI zmiany progu w panelu admina, test sieciowy lejka PRIV-01
-(unload, dwie karty) dla znacznika.
+wykrytego konta poniżej progu, test sieciowy lejka PRIV-01 (unload, dwie karty) dla znacznika.
 
 Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
 `/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja
@@ -1234,7 +1238,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Kategoria `marketing` usunięta (decyzja właściciela 25.09 — brak trackerów marketingowych):
   kategorie = necessary/preferences/analytics (`src/lib/consent-cookie.ts`, `CONSENT_CATEGORIES`),
   domyślna `CONSENT_POLICY_VERSION` = `2.0`, więc cookie sprzed zmiany (1.0, z marketingiem)
-  jest nieaktualne i baner pyta ponownie. Log zgód: migracja `0129` (numer tymczasowy)
+  jest nieaktualne i baner pyta ponownie. Log zgód: migracja `0130` (numer tymczasowy)
   — `record_consent` zapisuje 3 kategorie, akcja `recordConsent` odrzuca klucze spoza listy;
   wartość `marketing` zostaje w enumie dla historycznych wierszy. Klucze `cookies.marketing*`
   w `src/messages` bez użycia. Dowód: E2E `cookie-consent-categories.spec`, `smoke.spec`,

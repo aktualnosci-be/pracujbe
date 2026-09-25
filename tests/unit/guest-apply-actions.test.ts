@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { headers } from 'next/headers';
 
 import {
   claimGuestApplication,
@@ -81,6 +82,15 @@ describe('submitGuestApplication', () => {
     const token = guestTokenFromNonce('confirm', args.p_confirm_nonce!)!;
     expect(args.p_confirm_token_hash).toBe(hashGuestToken(token));
     expect(JSON.stringify(args)).not.toContain(token);
+  });
+
+  it('kontrola ujemna (#602): sfałszowany X-Forwarded-For bez X-Real-IP nie trafia do zgłoszenia', async () => {
+    vi.mocked(headers).mockResolvedValueOnce(
+      new Headers({ 'x-forwarded-for': '203.0.113.250', 'user-agent': 'UA' }),
+    );
+    expect(await submitGuestApplication({ ...input, phone: '470 12 34 56', phoneCountry: 'BE' })).toEqual({ ok: true });
+    const [call] = fakeDb.callsTo('submit_guest_application');
+    expect((call!.args as Record<string, unknown>).p_ip).toBeNull();
   });
 
   it('per-address limit uses a hash, never the address itself', async () => {

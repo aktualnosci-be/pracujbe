@@ -166,7 +166,7 @@ Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 - **Osoby:** Odwiedzający, którzy wyrazili zgodę
 - **Aktywacja:** NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN + zgoda analytics w banerze cookies.
 - **Kod:** `src/components/cookies/Analytics.tsx`, `src/lib/consent-store.ts`
-- **Uwaga:** Kategorii marketing nie ma w banerze ani w logu zgód (decyzja właściciela 2026-09-25; wersja polityki cookies 2.0, migracja 0129).
+- **Uwaga:** Kategorii marketing nie ma w banerze ani w logu zgód (decyzja właściciela 2026-09-25; wersja polityki cookies 2.0, migracja 0130).
 - **Uwaga:** Bez tokenu beacon się nie ładuje, a CSP nie dopuszcza hostów cloudflareinsights.com.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
@@ -680,6 +680,7 @@ Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 | `error_message` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0006_messaging.sql` |
 | `provider_message_id` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0006_messaging.sql` |
 | `bounce_type` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0098_email_delivery_events.sql` |
+| `lock_token` | nie dotyczy: Token dzierżawy workera (0129, #615) — losowy identyfikator do CAS, nie dane osobowe. | — |
 
 ### `public.email_recipient_windows`
 

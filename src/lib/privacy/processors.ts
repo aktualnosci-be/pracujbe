@@ -213,7 +213,7 @@ export const PROCESSORS: readonly Processor[] = [
     activation: 'NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN + zgoda analytics w banerze cookies.',
     codeRefs: ['src/components/cookies/Analytics.tsx', 'src/lib/consent-store.ts'],
     notes: [
-      'Kategorii marketing nie ma w banerze ani w logu zgód (decyzja właściciela 2026-09-25; wersja polityki cookies 2.0, migracja 0129).',
+      'Kategorii marketing nie ma w banerze ani w logu zgód (decyzja właściciela 2026-09-25; wersja polityki cookies 2.0, migracja 0130).',
       'Bez tokenu beacon się nie ładuje, a CSP nie dopuszcza hostów cloudflareinsights.com.',
     ],
     ...UNKNOWN,

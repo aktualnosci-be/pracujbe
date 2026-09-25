@@ -217,6 +217,7 @@ describe('worker kolejki domenowej przez EmailLabs', () => {
     fakeDb.rpc('claim_email_batch', [{
       id: KEY, profile_id: null, to_email: 'kandydat@example.test', template: 'jobOffer',
       locale: 'nl', payload: { companyName: 'Acme', jobTitle: 'Magazijnier' }, attempts: 0,
+      lock_token: 'lock-emaillabs',
     }]);
     fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
@@ -240,7 +241,7 @@ describe('worker kolejki domenowej przez EmailLabs', () => {
     expect(result).toMatchObject({ processed: 1, sent: 1, failed: 0, ok: true });
     expect(bodyOf(http.posts()[0])).toMatchObject({ to: [{ email: 'kandydat@example.test', messageId: MESSAGE_ID }] });
     const [mark] = fakeDb.callsTo('email.outbox.mark-sent');
-    expect(mark).toMatchObject({ as: 'service', values: [KEY, MESSAGE_ID, 1, 'emaillabs'] });
+    expect(mark).toMatchObject({ as: 'service', values: [KEY, MESSAGE_ID, 1, 'emaillabs', 'lock-emaillabs'] });
   });
 
   it('odrzucenie przez EmailLabs: wiersz wraca z kodem błędu (bez komunikatu dostawcy)', async () => {

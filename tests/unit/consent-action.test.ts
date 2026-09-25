@@ -18,9 +18,13 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
+// #588: `X-Forwarded-For` jest dopisywany przez KLIENTA — wartość mutowalna per test, żeby
+// odróżnić zaufany `X-Real-IP` (musi trafić do receiptu) od sfałszowanego XFF (musi zostać pominięty).
+const requestHeaders = vi.hoisted(() => ({
+  current: new Headers({ 'x-real-ip': '203.0.113.7', 'user-agent': 'Mozilla/5.0 test' }),
+}));
 vi.mock('next/headers', () => ({
-  headers: async () =>
-    new Headers({ 'x-forwarded-for': '203.0.113.7, 10.0.0.1', 'user-agent': 'Mozilla/5.0 test' }),
+  headers: async () => requestHeaders.current,
   cookies: async () => ({
     get: (name: string) => (name === 'pracujbe_visitor' ? { value: 'visitor-1' } : undefined),
   }),
@@ -41,10 +45,11 @@ beforeEach(() => {
   resetFakeDb({ id: USER, role: 'candidate' } as PortalIdentity);
   fakeDb.rpc('record_consent', null);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
+  requestHeaders.current = new Headers({ 'x-real-ip': '203.0.113.7', 'user-agent': 'Mozilla/5.0 test' });
 });
 
 describe('recordConsent', () => {
-  it('wysyła kategorie, źródło, visitor_id, IP klienta i user-agent', async () => {
+  it('wysyła kategorie, źródło, visitor_id, zaufany IP (X-Real-IP) i user-agent', async () => {
     expect(await recordConsent(CATEGORIES, 'cookie_settings')).toEqual({ ok: true });
     expect(sentArgs()).toEqual({
       p_categories: CATEGORIES,
@@ -55,6 +60,25 @@ describe('recordConsent', () => {
     });
     // Zalogowany: transakcja sesji (auth.uid() = konto), jsonb jako JSON.
     expect(fakeDb.callsTo('record_consent')[0]!.as).toBe(USER);
+  });
+
+  it('kontrola ujemna (#588): sfałszowany X-Forwarded-For nie zastępuje brakującego X-Real-IP', async () => {
+    requestHeaders.current = new Headers({
+      'x-forwarded-for': '198.51.100.66',
+      'user-agent': 'Mozilla/5.0 test',
+    });
+    expect(await recordConsent(CATEGORIES, 'cookie_settings')).toEqual({ ok: true });
+    expect(sentArgs().p_ip).toBeNull();
+  });
+
+  it('X-Forwarded-For obok zaufanego X-Real-IP jest ignorowany (#588)', async () => {
+    requestHeaders.current = new Headers({
+      'x-real-ip': '203.0.113.7',
+      'x-forwarded-for': '198.51.100.66',
+      'user-agent': 'Mozilla/5.0 test',
+    });
+    expect(await recordConsent(CATEGORIES, 'cookie_settings')).toEqual({ ok: true });
+    expect(sentArgs().p_ip).toBe('203.0.113.7');
   });
 
   it('gość: zapis jako anon (bez konta), tak samo jak z banera przed logowaniem', async () => {

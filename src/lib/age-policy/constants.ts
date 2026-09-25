@@ -46,3 +46,6 @@ export function isAgeAttestationError(message: string | null | undefined): boole
 export function isAgeAdultRequiredError(message: string | null | undefined): boolean {
   return (message ?? '').includes('AGE_ADULT_REQUIRED');
 }
+
+/** Maks. długość uzasadnienia zmiany progu konta (panel admina, #492) — jak CHECK w `age_policy`. */
+export const CANDIDATE_MIN_AGE_REASON_MAX = 1000;

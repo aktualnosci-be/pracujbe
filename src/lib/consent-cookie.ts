@@ -74,7 +74,13 @@ function readCookie(name: string): string | null {
   const parts = document.cookie ? document.cookie.split('; ') : [];
   for (const part of parts) {
     if (part.startsWith(prefix)) {
-      return decodeURIComponent(part.slice(prefix.length));
+      // #613: cookie uszkodzone/spreparowane (np. niedokończona sekwencja procentowa) rzuca
+      // `URIError` — traktujemy to jak brak zgody zamiast wywalać wywołujący kod (Invariant #8).
+      try {
+        return decodeURIComponent(part.slice(prefix.length));
+      } catch {
+        return null;
+      }
     }
   }
   return null;
