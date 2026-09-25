@@ -14,6 +14,7 @@ import {
   FIELD,
   FIELD_LABEL,
   H1,
+  H1_EXTENDED,
   INTRO,
   SEARCH_BOX,
 } from '@/components/admin/admin-styles';
@@ -42,11 +43,14 @@ export function AdminPageHeader({
   title,
   subtitle,
   eyebrow,
+  extended = false,
 }: {
   title: string;
   subtitle: string;
   /** `.eyebrow` nad tytułem (jak w panelach prototypu). */
   eyebrow?: string;
+  /** Podstrona szczegółu = `.people .extended h1` (40/30 px) zamiast `.dash-content h1` (#7, Z6). */
+  extended?: boolean;
 }): React.JSX.Element {
   return (
     <header className="min-w-0">
@@ -55,7 +59,7 @@ export function AdminPageHeader({
         tabIndex={-1}
         data-admin-focus={ADMIN_PAGE_HEADING_FOCUS}
         className={cn(
-          H1,
+          extended ? H1_EXTENDED : H1,
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         )}
       >

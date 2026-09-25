@@ -20,7 +20,8 @@
       "lcpMsFirstVisit": 1500,
       "lcpMsWithConsent": 1500,
       "cls": 0.05,
-      "tbtMs": 400
+      "tbtMs": 400,
+      "inpMs": 200
     }
   }
 }

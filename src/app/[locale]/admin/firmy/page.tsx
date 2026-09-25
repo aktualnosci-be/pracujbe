@@ -14,7 +14,7 @@ import {
   AdminSearchForm,
 } from '@/components/admin/AdminListControls';
 import {
-  chipClass,
+  filterTabClass,
   INLINE_LINK,
   PANEL,
   ROW,
@@ -173,7 +173,7 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
                 },
               }}
               aria-current={isActive ? 'true' : undefined}
-              className={chipClass(isActive)}
+              className={filterTabClass(isActive)}
             >
               {t(FILTER_LABEL[value] ?? 'filterAll')}
             </Link>
