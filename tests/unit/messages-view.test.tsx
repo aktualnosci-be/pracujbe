@@ -37,6 +37,7 @@ vi.mock('@/i18n/navigation', () => ({
 vi.mock('@/lib/data/messages', () => ({
   getConversationsResult,
   getConversationThread,
+  getMyMessageReports: async () => ({ messageIds: [], conversationReported: false }),
 }));
 
 vi.mock('@/lib/actions/messages', () => ({ markConversationRead }));

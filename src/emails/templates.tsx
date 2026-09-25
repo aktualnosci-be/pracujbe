@@ -128,7 +128,7 @@ export interface EmailDataMap {
   /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
   guestApplicationConfirm: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
   guestApplicationSent: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
-  /** Zmiana statusu aplikacji gościa (0113) — w języku formularza; `status` jak w `statusChanged`. */
+  /** Zmiana statusu aplikacji gościa (0121) — w języku formularza; `status` jak w `statusChanged`. */
   guestStatusChanged: { recipientName?: string; jobTitle: string; companyName: string; status: string; actionUrl: string };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
