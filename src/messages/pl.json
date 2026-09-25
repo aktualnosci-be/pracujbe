@@ -662,6 +662,7 @@
     "savedSearchLimitReached": "Masz już 20 zapisanych wyszukiwań. Usuń jedno z nich, aby dodać nowe.",
     "moderationLocked": "Ta treść jest ograniczona decyzją moderacyjną, więc nie można zmienić jej statusu.",
     "guestApplyUnavailable": "Aplikacja bez konta jest chwilowo niedostępna. Spróbuj później albo zaloguj się.",
+    "siteAccessUnavailable": "Wejście do serwisu jest chwilowo niedostępne. Spróbuj ponownie później.",
     "emailNotVerified": "Najpierw potwierdź adres e-mail swojego konta — kliknij link, który wysłaliśmy przy rejestracji.",
     "claimExpired": "Link do przypisania aplikacji wygasł (był ważny 30 dni).",
     "appealExists": "Odwołanie od tej decyzji zostało już złożone.",
@@ -1201,7 +1202,20 @@
     "itemModerationAppealUpheld": "Odwołanie rozpatrzone: decyzja utrzymana",
     "itemModerationAppealReversed": "Odwołanie uwzględnione: decyzja zmieniona",
     "itemScreeningApproved": "Pytanie w Twojej ofercie zostało zaakceptowane",
-    "itemScreeningRejected": "Pytanie w Twojej ofercie nie zostało zaakceptowane"
+    "itemScreeningRejected": "Pytanie w Twojej ofercie nie zostało zaakceptowane",
+    "listIntro": "Wszystkie powiadomienia z Twojego konta, od najnowszych.",
+    "filterLabel": "Filtr powiadomień",
+    "filterAll": "Wszystkie",
+    "filterUnread": "Nieprzeczytane",
+    "markRead": "Oznacz jako przeczytane",
+    "markReadItem": "Oznacz jako przeczytane: {title}",
+    "markedRead": "Oznaczono powiadomienie jako przeczytane.",
+    "emptyUnread": "Nie masz nieprzeczytanych powiadomień.",
+    "unreadCount": "{count, plural, =0 {Brak nieprzeczytanych} one {1 nieprzeczytane} few {# nieprzeczytane} many {# nieprzeczytanych} other {# nieprzeczytanych}}",
+    "loadMore": "Pokaż więcej",
+    "loadingMore": "Wczytywanie…",
+    "listEnd": "To wszystkie powiadomienia.",
+    "moreError": "Nie udało się wczytać kolejnych powiadomień. Spróbuj ponownie."
   },
   "pricing": {
     "standard": "Standard",
@@ -2489,7 +2503,8 @@
     "passwordLabel": "Hasło dostępu",
     "submit": "Wejdź",
     "error": "Nieprawidłowe hasło. Spróbuj ponownie.",
-    "rateLimited": "Zbyt wiele prób. Spróbuj ponownie za kilka minut."
+    "rateLimited": "Zbyt wiele prób. Spróbuj ponownie za kilka minut.",
+    "unavailable": "Wejście jest chwilowo niedostępne. Spróbuj ponownie później."
   },
   "offline": {
     "title": "Brak połączenia",

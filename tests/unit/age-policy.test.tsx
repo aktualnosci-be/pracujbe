@@ -306,7 +306,7 @@ describe('lejek ofert dla konta 16–17 (#576, LAUNCH-1: jak brak zgody)', () =>
     vi.stubGlobal('fetch', fetchMock);
     const record = {
       v: CONSENT_POLICY_VERSION,
-      categories: { necessary: true, preferences: false, analytics: true, marketing: false },
+      categories: { necessary: true, preferences: false, analytics: true },
       ts: '2026-01-01T00:00:00.000Z',
       id: 'age-policy-test',
     };

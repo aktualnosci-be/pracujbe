@@ -1003,20 +1003,24 @@ select pg_temp.expect_error(
   'insert into public.consents(category, granted) values (''analytics'', true)',
   'permission denied', 'Y1 authenticated nie robi bezpośredniego INSERT do consents');
 reset role;
--- Y2: record_consent (anon) zapisuje 4 kategorie z metadanymi receiptu.
+-- Y2: record_consent (anon) zapisuje 3 kategorie z metadanymi receiptu (0130, #570: bez
+-- `marketing` — klucz ze starego klienta jest ignorowany).
 set role anon; reset app.current_uid; select pg_temp.assert_client_role();
-select public.record_consent('{"analytics":true,"marketing":false,"preferences":true}'::jsonb,
+select public.record_consent('{"analytics":true,"marketing":true,"preferences":true}'::jsonb,
   'cookie_banner', 'vis-123', '203.0.113.7', 'UA/1.0');
 reset role;
 select pg_temp.assert(
-  (select count(*) from public.consents where visitor_id = 'vis-123') = 4,
-  'Y2 record_consent zapisuje 4 kategorie (receipt)');
+  (select count(*) from public.consents where visitor_id = 'vis-123') = 3,
+  'Y2 record_consent zapisuje 3 kategorie (receipt)');
 select pg_temp.assert(
   (select granted from public.consents where visitor_id = 'vis-123' and category = 'necessary') = true,
   'Y2b necessary zawsze granted');
 select pg_temp.assert(
-  (select granted from public.consents where visitor_id = 'vis-123' and category = 'marketing') = false,
-  'Y2c marketing=false zapisane w receipcie');
+  not exists (select 1 from public.consents where visitor_id = 'vis-123' and category = 'marketing'),
+  'Y2c brak wiersza marketing w receipcie (0130, #570)');
+select pg_temp.assert(
+  (select granted from public.consents where visitor_id = 'vis-123' and category = 'analytics') = true,
+  'Y2c2 analytics=true zapisane w receipcie');
 select pg_temp.assert(
   (select host(ip_address) from public.consents where visitor_id = 'vis-123' limit 1) = '203.0.113.7',
   'Y2d IP zapisane w receipcie');
