@@ -74,6 +74,7 @@ describe('Atomowe receipty rejestracji', () => {
   it.each(['pl', 'nl', 'fr', 'en'])('v2 (#493): osobne receipty i zgoda opcjonalna dla %s', async locale => {
     const id = await insert({
       role: 'candidate', locale, agree_terms: true, privacy_notice_ack: true, signup_receipt_version: 2,
+      age_min_attested: 18,
       optional_consents: { email_marketing: locale === 'fr' },
       consent_wording: { terms: `sha256:${'a'.repeat(64)}`, privacy: `sha256:${'b'.repeat(64)}`, email_marketing: `sha256:${'c'.repeat(64)}` },
     });
@@ -87,7 +88,9 @@ describe('Atomowe receipty rejestracji', () => {
     const events = await admin!.query('SELECT category, granted, source, locale, wording_version FROM public.email_consent_events WHERE profile_id=$1', [id]);
     expect(events.rows).toEqual(locale === 'fr'
       ? [{ category: 'marketing', granted: true, source: 'signup', locale, wording_version: `sha256:${'c'.repeat(64)}` }]
-      : []);
+      : []);    // #492: 0126 redefiniuje ten sam trigger — ścieżka v2 zapisuje też deklarację wieku.
+    const age = await admin!.query('SELECT min_age, source FROM public.candidate_age_attestations WHERE profile_id=$1', [id]);
+    expect(age.rows).toEqual([{ min_age: 18, source: 'signup' }]);
   });
 
   // Nieznany język odrzuca klucz obcy profiles → supported_locales (0069, 23503) zanim
@@ -107,6 +110,28 @@ describe('Atomowe receipty rejestracji', () => {
       expect((await admin!.query('SELECT id FROM public.document_acceptances WHERE profile_id=$1', [id])).rows).toHaveLength(0);
     });
 
+  // #492 (0126): kandydat deklaruje próg wieku w tej samej transakcji co konto.
+  it('zapisuje deklarację progu wieku kandydata (bez daty urodzenia)', async () => {
+    const id = await insert({ role: 'candidate', locale: 'nl', agree_terms: true, signup_receipt_version: 1, age_min_attested: 18 });
+    const rows = await admin!.query('SELECT min_age, source, locale FROM public.candidate_age_attestations WHERE profile_id=$1', [id]);
+    expect(rows.rows).toEqual([{ min_age: 18, source: 'signup', locale: 'nl' }]);
+  });
+
+  it.each([
+    [{}], [{ age_min_attested: 15 }], [{ age_min_attested: '18' }],
+    // v2 (#493) bez deklaracji — ta sama odmowa.
+    [{ signup_receipt_version: 2, privacy_notice_ack: true }],
+  ] as const)(
+    'odrzuca rejestrację kandydata bez ważnej deklaracji wieku: %j', async (age) => {
+      const id = randomUUID();
+      await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1, ...age }, id))
+        .rejects.toMatchObject({ message: expect.stringContaining('AGE_ATTESTATION_REQUIRED') });
+      for (const table of ['auth.users', 'public.profiles']) {
+        expect((await admin!.query(`SELECT id FROM ${table} WHERE id=$1`, [id])).rows).toHaveLength(0);
+      }
+      expect((await admin!.query('SELECT id FROM public.candidate_age_attestations WHERE profile_id=$1', [id])).rows).toHaveLength(0);
+    });
+
   it('nie przypisuje fikcyjnej akceptacji kontu technicznemu bez markera', async () => {
     const id = await insert({ role: 'candidate', locale: 'pl' });
     expect((await admin!.query('SELECT id FROM public.document_acceptances WHERE profile_id=$1', [id])).rows).toHaveLength(0);
@@ -118,7 +143,8 @@ describe('Atomowe receipty rejestracji', () => {
       CREATE TRIGGER fail_receipt_test BEFORE INSERT ON public.document_acceptances FOR EACH ROW EXECUTE FUNCTION public.fail_receipt_test();`);
     const id = randomUUID();
     try {
-      await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1 }, id)).rejects.toThrow('kontrolowana awaria receiptu');
+      await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1, age_min_attested: 18 }, id))
+        .rejects.toThrow('kontrolowana awaria receiptu');
       expect((await admin!.query('SELECT id FROM auth.users WHERE id=$1', [id])).rows).toHaveLength(0);
       expect((await admin!.query('SELECT id FROM public.profiles WHERE id=$1', [id])).rows).toHaveLength(0);
     } finally {

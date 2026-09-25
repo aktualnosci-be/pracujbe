@@ -108,6 +108,11 @@ export async function startPortalDb(): Promise<PortalDb> {
       const id = randomUUID();
       await admin.query(`INSERT INTO auth.users(id, email, name, raw_user_meta_data)
         VALUES ($1, $2, 'Test', $3::jsonb)`, [id, `${id}@example.invalid`, JSON.stringify({ role, locale })]);
+      // #492: kandydat z formularza rejestracji ma deklarację progu wieku (bez niej baza
+      // odrzuca aplikację, propozycję i widoczność profilu).
+      if (role === 'candidate') {
+        await admin.query('SELECT public.record_candidate_age_attestation($1, 18, $2)', [id, locale]);
+      }
       return id;
     },
     async stop() {

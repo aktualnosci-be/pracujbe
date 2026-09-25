@@ -595,7 +595,8 @@
       "privacyNoticeRequired": "Bevestig dat je de privacy-informatie hebt gelezen.",
       "companyNameRequired": "Vul de bedrijfsnaam in.",
       "companyNameTooShort": "De bedrijfsnaam is te kort.",
-      "companyNameTooLong": "De bedrijfsnaam is te lang."
+      "companyNameTooLong": "De bedrijfsnaam is te lang.",
+      "ageConfirmRequired": "Kies je leeftijdscategorie."
     },
     "botCheckLabel": "Beveiligingscontrole",
     "botCheckLoading": "Beveiligingscontrole wordt geladen…",
@@ -603,6 +604,11 @@
     "botCheckExpired": "De controle is verlopen. Bevestig ze opnieuw.",
     "botCheckLoadFailed": "De beveiligingscontrole kon niet worden geladen. Controleer je verbinding of schakel inhoudsblokkering voor deze site uit en probeer het opnieuw.",
     "botCheckRetry": "Controle opnieuw laden",
+    "ageBandLegend": "Je leeftijd",
+    "ageBandMinor": "Ik ben {min}–{max} jaar",
+    "ageBandAdult": "Ik ben {age} jaar of ouder",
+    "ageBandMinorHint": "Met deze leeftijd is je profiel niet zichtbaar voor bedrijven in de kandidatenzoekfunctie. Je kunt wel zelf solliciteren op vacatures.",
+    "ageConfirmHint": "We vragen niet naar je geboortedatum of een identiteitsdocument.",
     "confirmEmailTitle": "Account activeren",
     "confirmEmailIntro": "Klik op de knop om je e-mailadres te bevestigen en naar je account te gaan.",
     "confirmEmailSubmit": "E-mailadres bevestigen",
@@ -662,6 +668,8 @@
     "appealWindowClosed": "De termijn om bezwaar te maken tegen deze beslissing is verstreken.",
     "reviewerConflict": "Het bezwaar wordt behandeld door een andere beheerder dan de auteur van de beslissing.",
     "jobImportSensitiveData": "De vacature bevat een identificatienummer van een persoon of document, daarom hebben we ze niet geïmporteerd. Vul het formulier handmatig in.",
+    "ageAttestationRequired": "Bevestig om verder te gaan dat je minstens de vereiste leeftijd hebt. Stond het formulier lang open, vernieuw dan de pagina.",
+    "ageAdultRequired": "Alleen meerderjarigen kunnen deze functie inschakelen.",
     "screeningReviewRequired": "De vacature bevat een vraag die het team van het portaal vóór publicatie moet controleren. Je kunt ze publiceren zodra de vraag is goedgekeurd of nadat je ze hebt aangepast.",
     "screeningQuestionRejected": "Een van de vragen is niet goedgekeurd. Pas ze aan of verwijder ze om de vacature te publiceren.",
     "jobAssistEmpty": "Schrijf eerst een tekst. De assistent verbetert je tekst, maar schrijft geen vacature vanaf nul.",
@@ -1246,7 +1254,9 @@
     "screeningYes": "Ja",
     "screeningNo": "Nee",
     "sensitiveIdHint": "Voor je sollicitatie is geen INSZ-/BIS-nummer of nummer van een identiteitsdocument nodig — vul die niet in.",
-    "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
+    "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren.",
+    "ageRequired": "Bevestig je leeftijd in je accountinstellingen voordat je solliciteert.",
+    "ageRequiredLink": "Naar instellingen"
   },
   "guestApply": {
     "subtitle": "Solliciteer zonder account of log in om je profiel te gebruiken. Een cv is niet nodig.",
@@ -1299,7 +1309,8 @@
       "messageTooLong": "Het bericht mag maximaal 500 tekens hebben.",
       "privacyNoticeRequired": "Bevestig dat je de privacy-informatie hebt gelezen om te solliciteren.",
       "idempotencyKeyInvalid": "Vernieuw de pagina en verstuur het formulier opnieuw.",
-      "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
+      "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren.",
+      "ageConfirmRequired": "Kies je leeftijdscategorie."
     }
   },
   "legal": {
@@ -1941,6 +1952,7 @@
     "caseFlag": "Automatisch signaal: {flag}",
     "auditActionModerationDecided": "Moderatiebeslissing",
     "auditActionModerationRestored": "Beperking opgeheven",
+    "auditActionAgePolicyUpdated": "Leeftijdsgrens kandidaten gewijzigd",
     "navAppeals": "Bezwaren",
     "navDsaReport": "DSA-rapport",
     "appealsTitle": "Bezwaren tegen moderatiebeslissingen",
@@ -2557,7 +2569,9 @@
     "savedOn": "Je profiel is nu zichtbaar voor geverifieerde bedrijven.",
     "savedOff": "Je profiel is nu verborgen voor zoekopdrachten van bedrijven.",
     "saveError": "De wijziging kon niet worden opgeslagen. De instelling is niet veranderd — probeer het opnieuw.",
-    "loadError": "De zichtbaarheid van je profiel kon niet worden geladen. Vernieuw de pagina zo meteen."
+    "loadError": "De zichtbaarheid van je profiel kon niet worden geladen. Vernieuw de pagina zo meteen.",
+    "requiresAge": "Bevestig eerst je leeftijd in het onderdeel „Leeftijd” om je profiel met bedrijven te delen.",
+    "requiresAdult": "Je profiel kan pas vanaf 18 jaar zichtbaar zijn voor bedrijven. Bevestig dit in het onderdeel ‘Leeftijd’ zodra je 18 bent."
   },
   "team": {
     "title": "Team",
@@ -2845,6 +2859,18 @@
     "restorationAppealIntro": "Ben je het niet eens met het opheffen? Dan kun je bezwaar maken. De auteur van de gemelde inhoud krijgt je gegevens niet te zien.",
     "restorationAppealDeadlineNotStarted": "De bezwaartermijn gaat in zodra je de e-mail over het opheffen van de beperking ontvangt.",
     "restorationAppealWindowClosed": "De termijn voor bezwaar tegen het opheffen van de beperking is verstreken."
+  },
+  "ageAttestation": {
+    "sectionTitle": "Leeftijd",
+    "sectionDescription": "Een kandidatenaccount kan vanaf {age} jaar, een profiel dat zichtbaar is voor bedrijven vanaf {adultAge} jaar. We bewaren alleen de gekozen leeftijdscategorie en de datum van bevestiging — geen geboortedatum.",
+    "stateAdult": "Bevestigd: je bent {age} jaar of ouder.",
+    "stateMinor": "Bevestigd: je bent jonger dan {adultAge} jaar. Je kunt solliciteren op vacatures, maar je profiel is niet zichtbaar voor bedrijven. Bevestig hieronder zodra je {adultAge} bent.",
+    "stateMissing": "Geen bevestiging. Zonder bevestiging kun je niet solliciteren en je profiel niet met bedrijven delen.",
+    "submit": "Bevestigen",
+    "saving": "Opslaan…",
+    "saved": "Leeftijdsbevestiging opgeslagen.",
+    "saveError": "De bevestiging kon niet worden opgeslagen. Probeer het opnieuw.",
+    "loadError": "De informatie over je leeftijdsbevestiging kon niet worden geladen."
   },
   "campaignBanner": {
     "eyebrow": "Vacature in België",
