@@ -9,6 +9,12 @@ import {
   type RegisterCandidateInput,
   type RegisterEmployerInput,
 } from '../validation/auth';
+import {
+  consentWordingVersions,
+  OPTIONAL_CONSENT_PURPOSES,
+  signupOptionalConsents,
+  type OptionalConsentPurpose,
+} from '../signup-consents';
 
 interface SignupCredentials {
   readonly email: string;
@@ -17,8 +23,12 @@ interface SignupCredentials {
 }
 
 interface SignupMetadata {
-  readonly signup_receipt_version: 1;
+  /** v2 (#493): regulamin, informacja o prywatności i zgody opcjonalne osobno (0108). */
+  readonly signup_receipt_version: 2;
   readonly agree_terms: true;
+  readonly privacy_notice_ack: true;
+  readonly optional_consents: Readonly<Record<OptionalConsentPurpose, boolean>>;
+  readonly consent_wording: Readonly<Record<string, string>>;
   readonly role: 'candidate' | 'employer';
   readonly locale: NonNullable<RegisterCandidateInput['locale']>;
   readonly first_name: string;
@@ -55,11 +65,15 @@ async function runSignup<T>(
     password: input.password,
     name: `${input.firstName} ${input.lastName}`,
   });
+  const locale = input.locale ?? localeSchema.parse(fallbackLocale);
   const metadata: SignupMetadata = Object.freeze({
-    signup_receipt_version: 1,
+    signup_receipt_version: 2,
     agree_terms: true,
+    privacy_notice_ack: true,
+    optional_consents: Object.freeze(signupOptionalConsents(input)),
+    consent_wording: Object.freeze(consentWordingVersions('signup', locale, OPTIONAL_CONSENT_PURPOSES)),
     role,
-    locale: input.locale ?? localeSchema.parse(fallbackLocale),
+    locale,
     first_name: input.firstName,
     last_name: input.lastName,
     ...('companyName' in input ? { company_name: input.companyName } : {}),

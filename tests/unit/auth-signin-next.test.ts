@@ -119,6 +119,7 @@ describe('registerCandidate — cel po potwierdzeniu adresu', () => {
     firstName: 'Jan',
     lastName: 'Kowalski',
     agreeTerms: true as const,
+    privacyNoticeAck: true as const,
     ageConfirmed: true as const,
     minAge: 18,
     locale: 'pl' as const,

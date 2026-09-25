@@ -50,12 +50,6 @@ export function decodeAdminCursor(token: string | undefined | null): AdminCursor
   return { createdAt, id };
 }
 
-/** Filtr PostgREST „starsze niż kursor” dla sortowania `created_at desc, id desc`. */
-export function cursorOrFilter(cursor: AdminCursor): string {
-  const ts = `"${cursor.createdAt}"`;
-  return `created_at.lt.${ts},and(created_at.eq.${ts},id.lt.${cursor.id})`;
-}
-
 /* ---------------------------------------------------------------------------
  * Wyszukiwanie
  * ------------------------------------------------------------------------- */
@@ -75,11 +69,6 @@ export function normalizeAdminSearch(raw: string | undefined | null): string | n
     .slice(0, ADMIN_SEARCH_MAX)
     .trim();
   return cleaned.length > 0 ? cleaned : null;
-}
-
-/** Filtr `or` PostgREST: fraza (już znormalizowana) w dowolnej z kolumn (ILIKE). */
-export function searchOrFilter(columns: readonly string[], q: string): string {
-  return columns.map((col) => `${col}.ilike."%${q}%"`).join(',');
 }
 
 /** Dopasowanie frazy w danych DEMO (bez bazy). */

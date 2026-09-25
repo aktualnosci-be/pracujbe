@@ -104,10 +104,11 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
 
   await page.getByRole('button', { name: /Dalej: Preferencje i podsumowanie/ }).click();
 
-  // Krok 6: wymagane są dostępność i zgoda.
+  // Krok 6: wymagane są dostępność, regulamin i (osobno, #493) informacja o prywatności.
   await page.getByLabel('Dostępność').click();
   await page.getByRole('option', { name: 'Od zaraz' }).click();
   await page.getByRole('checkbox', { name: /^Akceptuję regulamin/ }).click();
+  await page.getByRole('checkbox', { name: /^Zapoznałem\(-am\) się z informacją o prywatności/ }).click();
 
   // Powrót sprawdza wyłącznie stan zamontowanego komponentu (bez reloadu i bez dowodu DB).
   await page.getByRole('button', { name: 'Wstecz' }).click();
@@ -115,6 +116,9 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   await page.getByRole('button', { name: /Dalej: Preferencje i podsumowanie/ }).click();
   await expect(page.getByLabel('Dostępność')).toHaveText('Od zaraz');
   await expect(page.getByRole('checkbox', { name: /^Akceptuję regulamin/ })).toBeChecked();
+  await expect(
+    page.getByRole('checkbox', { name: /^Zapoznałem\(-am\) się z informacją o prywatności/ }),
+  ).toBeChecked();
 
   await page.getByRole('button', { name: 'Zakończ i opublikuj' }).click();
   await expect(page).toHaveURL(/\/pl\/candidate$/);

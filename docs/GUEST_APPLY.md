@@ -24,7 +24,8 @@ sekcja GA98 (z kontrolami ujemnymi).
    Kolejkuje też e-mail `guestApplicationConfirm`. Firma nic jeszcze nie widzi.
    Odpowiedź jest zawsze neutralna („sprawdź skrzynkę”), więc nie zdradza, czy adres już
    aplikował albo ma konto.
-3. **Potwierdzenie**: link prowadzi do `/{locale}/aplikacja/potwierdz?token=…`. Samo otwarcie
+3. **Potwierdzenie**: link prowadzi do `/{locale}/aplikacja/potwierdz#token=…` (format linków
+   niżej). Samo otwarcie
    strony (GET) niczego nie zmienia. Adres potwierdza dopiero kliknięcie przycisku (POST), bo
    skanery linków w poczcie otwierają linki za użytkownika. RPC `confirm_guest_application`:
    - tworzy `applications` z `candidate_id = NULL` oraz `guest_name`, `guest_email`,
@@ -38,8 +39,9 @@ sekcja GA98 (z kontrolami ujemnymi).
    Wyniki: `confirmed`, `already_confirmed` (ponowne kliknięcie niczego nie zmienia),
    `duplicate` (adres już aplikował na tę ofertę jako gość albo z konta), `expired` (48 h),
    `job_closed`, `invalid`.
-4. **Przejęcie**: `/{locale}/aplikacja/przejmij?token=…`. Bez sesji strona pokazuje
-   logowanie i rejestrację z powrotem na nią (`?next=` z tokenem). RPC
+4. **Przejęcie**: `/{locale}/aplikacja/przejmij#token=…`. Bez sesji strona pokazuje
+   logowanie i rejestrację z powrotem na czysty adres strony (token czeka w cookie HttpOnly,
+   nie trafia do `?next=`). RPC
    `claim_guest_application` (authenticated) wymaga konta kandydata, **zweryfikowanego** e-maila
    sesji (`current_verified_email`, 0086) równego adresowi zgłoszenia i ważnego tokenu:
    - token przejmuje dokładnie jedno konto; ponowienie przez to samo konto zwraca tę samą
@@ -59,6 +61,20 @@ bez daty urodzenia). Akcja przekazuje `p_age_attested_min`; od migracji `0110`
 `guest_application_requests` zapisuje `age_attested_min`/`age_attested_at` i odrzuca
 zgłoszenie bez deklaracji — także przy bezpośrednim wywołaniu funkcji core. Przejęcie
 aplikacji (`claim_guest_application`) wymaga ważnej deklaracji konta kandydata.
+
+## Format linków (#505)
+
+- Token jest we fragmencie (`#token=`), więc przeglądarka nie wysyła go w żądaniu. Strona
+  (`GuestLinkIntake`) usuwa fragment z adresu i historii, wysyła token przez POST (Server
+  Action `stageGuestLink`) do cookie HttpOnly przypisanego do ścieżki (`pb_guest_confirm`
+  48 h, `pb_guest_claim` 30 dni) i przeładowuje czysty adres.
+- Trasy mają `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer`, `noindex`
+  (middleware + metadata) i nie ładują GA/Meta nawet po zgodzie (`route-policy.ts`).
+- Stary format `?token=` (linki wysłane przed #506) jest **odrzucany**: middleware przekierowuje
+  303 na czysty adres bez zapisywania tokenu, a strona pokazuje „link nieprawidłowy” z prośbą
+  o ponowne wysłanie aplikacji. Wybraliśmy odrzucenie zamiast wymiany, bo token z query jest już
+  w logach pierwszego żądania i nie powinien dawać uprawnień. Test: `guest-legacy-link.test.ts`
+  (z kontrolą ujemną), E2E `guest-apply.spec`.
 
 ## Pracodawca
 

@@ -28,6 +28,8 @@ async function fillCandidate(page: Page): Promise<void> {
   await page.locator('#password').fill('Haslo1234');
   await page.locator('#passwordConfirm').fill('Haslo1234');
   await page.locator('#agreeTerms').press('Space');
+  // #493: osobne potwierdzenie informacji o prywatności.
+  await page.locator('#privacyNoticeAck').press('Space');
 }
 
 /** Akcje serwera rejestracji — przechwycone (500), więc test nie zależy od bazy. */

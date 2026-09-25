@@ -19,6 +19,14 @@ import pl from '@/messages/pl.json';
  */
 
 vi.mock('@/lib/actions/guest-applications', () => ({ submitGuestApplication: vi.fn() }));
+// Link do informacji o prywatności w etykiecie (#493) — zwykły <a> zamiast nawigacji next-intl.
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 globalThis.ResizeObserver ??= class {
   observe(): void {}
@@ -28,6 +36,12 @@ globalThis.ResizeObserver ??= class {
 Element.prototype.scrollIntoView ??= function scrollIntoView() {};
 
 afterEach(cleanup);
+
+/** #493: etykieta z linkiem — nazwa dostępna zaczyna się od tekstu do końca linku. */
+function privacyAckName(label: string): RegExp {
+  const lead = (label.split('</privacy>')[0] ?? '').replace(/<[^>]+>/g, '');
+  return new RegExp(`^${lead.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+}
 beforeEach(() => vi.mocked(submitGuestApplication).mockReset());
 
 type Messages = typeof en;
@@ -63,7 +77,7 @@ function renderForm(
     name: screen.getByRole('textbox', { name: new RegExp(m.fullName) }),
     email: screen.getByRole('textbox', { name: new RegExp(m.email) }),
     age: screen.getByRole('checkbox', { name: ageLabel(messages, candidateMinAge ?? 18) }),
-    consent: screen.getByRole('checkbox', { name: messages.apply.consent }),
+    consent: screen.getByRole('checkbox', { name: privacyAckName(messages.apply.privacyNoticeAck) }),
     submit: screen.getByRole('button', { name: messages.apply.submit }),
   };
 }
@@ -81,7 +95,7 @@ describe('GuestApplyForm', () => {
     expect(f.name).toHaveAttribute('aria-invalid', 'true');
     expect(f.name).toHaveAccessibleDescription(en.guestApply.error.nameRequired);
     expect(f.email).toHaveAccessibleDescription(en.guestApply.error.emailRequired);
-    expect(f.consent).toHaveAccessibleDescription(en.guestApply.error.consentRequired);
+    expect(f.consent).toHaveAccessibleDescription(en.guestApply.error.privacyNoticeRequired);
     expect(f.age).toHaveAccessibleDescription(new RegExp(en.guestApply.error.ageConfirmRequired));
     expect(document.activeElement).toBe(f.name);
   });

@@ -36,7 +36,7 @@ export const guestApplicationSchema = z.object({
     'guestApply.error.sensitiveIdNotAllowed',
   ),
   locale: localeSchema,
-  agreeTerms: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.consentRequired' }) }),
+  agreeTerms: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.privacyNoticeRequired' }) }),
   /** #492: deklaracja „mam co najmniej {minAge} lat” — bez daty urodzenia (baza porównuje próg). */
   ageConfirmed: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.ageConfirmRequired' }) }),
   minAge: minAgeSchema,

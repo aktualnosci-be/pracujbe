@@ -30,6 +30,7 @@ const emptyForm = {
   password: '',
   passwordConfirm: '',
   agreeTerms: false,
+  privacyNoticeAck: false,
   // #492: formularz kandydata startuje z niezaznaczoną deklaracją i progiem z serwera.
   ageConfirmed: false,
   minAge: 18,
@@ -44,6 +45,7 @@ describe('pusty formularz rejestracji', () => {
       password: 'auth.error.passwordRequired',
       passwordConfirm: 'auth.error.passwordConfirmRequired',
       agreeTerms: 'auth.error.termsRequired',
+      privacyNoticeAck: 'auth.error.privacyNoticeRequired',
       ageConfirmed: 'auth.error.ageConfirmRequired',
     });
   });
@@ -98,9 +100,12 @@ describe('niezgodność haseł w tej samej rundzie co inne błędy', () => {
       email: 'jan@example.com',
       passwordConfirm: 'abcdefgh1',
       agreeTerms: true,
+      privacyNoticeAck: true,
       ageConfirmed: true,
     });
     expect(result.success).toBe(true);
     expect(result.success && result.data.agreeTerms).toBe(true);
+    // #493: zgoda opcjonalna nie jest wymagana — brak = odmowa.
+    expect(result.success && result.data.marketingOptIn).toBeUndefined();
   });
 });

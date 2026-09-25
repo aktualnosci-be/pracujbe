@@ -388,7 +388,9 @@ grant execute on function public.export_my_data() to authenticated;
 
 -- --- 6. Rejestracja Better Auth: deklaracja w tej samej transakcji co konto -----------------
 -- Funkcja istnieje tylko w bazie z migracjami auth (database/auth/0059, stosowana wcześniej
--- w tej samej kolejności numerów). `create or replace` zachowuje uprawnienia z 0059.
+-- w tej samej kolejności numerów). Treść = wersja z 0108 (#493: receipt v1 albo v2 z osobnym
+-- potwierdzeniem informacji o prywatności i zgodami opcjonalnymi) + deklaracja wieku (#492).
+-- Zmieniając tę funkcję w późniejszej migracji, zachowaj obie części.
 do $mig$
 begin
   if to_regprocedure('auth.record_signup_receipts()') is null then
@@ -396,16 +398,23 @@ begin
   end if;
   execute $ddl$
 create or replace function auth.record_signup_receipts()
-returns trigger language plpgsql security definer set search_path = pg_catalog, public, pg_temp as $$
+returns trigger language plpgsql security definer set search_path = pg_catalog, public, pg_temp as $fn$
 declare
   meta jsonb := new.raw_user_meta_data;
   loc text := meta->>'locale';
+  ver jsonb := meta->'signup_receipt_version';
 begin
   if not (meta ? 'signup_receipt_version') then return new; end if;
-  if meta->'signup_receipt_version' is distinct from '1'::jsonb
+  if coalesce(ver not in ('1'::jsonb, '2'::jsonb), true)
     or meta->'agree_terms' is distinct from 'true'::jsonb
     or coalesce(meta->>'role', '') not in ('candidate', 'employer')
     or not public.is_supported_locale(coalesce(loc, '')) then
+    raise exception 'VALIDATION_FAILED' using errcode = '23514';
+  end if;
+  if ver = '2'::jsonb and (
+       meta->'privacy_notice_ack' is distinct from 'true'::jsonb
+       or jsonb_typeof(coalesce(meta->'optional_consents', '{}'::jsonb)) <> 'object'
+       or jsonb_typeof(coalesce(meta->'consent_wording', '{}'::jsonb)) <> 'object') then
     raise exception 'VALIDATION_FAILED' using errcode = '23514';
   end if;
   -- #492: kandydat deklaruje próg wieku; bez deklaracji konto nie powstaje.
@@ -416,13 +425,22 @@ begin
 
   update public.profiles set preferred_locale = loc where id = new.id;
   if not found then raise exception 'Brak profilu rejestracji.'; end if;
-  perform public.record_document_acceptance(new.id, array['terms','privacy'], loc, null, null);
+  if ver = '1'::jsonb then
+    -- Formularz sprzed #493 (wspólny checkbox) — zapis zachowuje dawne znaczenie.
+    perform public.record_document_acceptance(new.id, array['terms','privacy'], loc, null, null);
+  else
+    perform public.record_signup_consents(new.id, true, true,
+      coalesce(meta->'optional_consents', '{}'::jsonb), 'signup', loc,
+      coalesce(meta->'consent_wording', '{}'::jsonb), null, null);
+  end if;
   if meta->>'role' = 'candidate' then
     perform public.insert_candidate_age_attestation(
       new.id, (meta->>'age_min_attested')::numeric::integer, 'signup', loc);
   end if;
   return new;
-end $$
+end $fn$
   $ddl$;
+  execute 'revoke all on function auth.record_signup_receipts() from public, anon, authenticated, '
+    || 'pracujbe_app, pracujbe_auth, service_role';
 end
 $mig$;

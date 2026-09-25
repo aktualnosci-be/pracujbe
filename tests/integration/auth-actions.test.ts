@@ -1,9 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadMigrations } from '../../scripts/db/migration-files.mjs';
+import { loadProductionMigrations } from '../../scripts/db/production-migrations.mjs';
 import { applyMigrations } from '../../scripts/db/migrate.mjs';
 
 /**
@@ -118,13 +117,9 @@ beforeAll(async () => {
     catch { await new Promise(resolve => setTimeout(resolve, 250)); }
   }
   if (!ready) throw new Error('Izolowany PostgreSQL nie uruchomił się.');
-  const bootstrap = await loadMigrations(fileURLToPath(new URL('../../database/bootstrap/', import.meta.url)));
-  const domain = await loadMigrations(fileURLToPath(new URL('../../supabase/migrations/', import.meta.url)));
-  const authMigrations = await loadMigrations(fileURLToPath(new URL('../../database/auth/', import.meta.url)));
-  await admin.query('BEGIN');
-  for (const migration of bootstrap) await admin.query(migration.sql);
-  await admin.query('COMMIT');
-  await applyMigrations(admin, [...domain, ...authMigrations]);
+  // Kolejność jak w produkcji (bootstrap, potem domena i auth w globalnej numeracji):
+  // migracje domeny po 0059 mogą zmieniać obiekty auth (np. 0108, #493).
+  await applyMigrations(admin, await loadProductionMigrations());
   for (const locale of ['pl', 'nl', 'fr', 'en']) {
     for (const document of ['terms', 'privacy']) {
       await admin.query('INSERT INTO public.consent_versions(document, version, locale, is_current, published_at) VALUES ($1,$2,$3,true,now())',
@@ -191,7 +186,7 @@ async function deliver(to: string): Promise<URL[]> {
 const tokenOf = (url: URL) => new URLSearchParams(url.hash.slice(1)).get('token')!;
 const form = (email: string, locale: 'pl' | 'nl' | 'fr' | 'en') => ({
   email, password: PASSWORD, passwordConfirm: PASSWORD, firstName: 'Anna', lastName: 'Nowak',
-  agreeTerms: true as const, locale,
+  agreeTerms: true as const, privacyNoticeAck: true as const, locale,
   // #492: deklaracja progu wieku (pracodawca ją pomija — schemat usuwa nadmiarowe pola).
   ageConfirmed: true as const, minAge: 18,
 });

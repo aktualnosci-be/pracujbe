@@ -73,6 +73,13 @@ const MUTATIONS = {
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT 'en'::text $$`,
   // Lejek ofert bez deduplikacji po nonce: ponowienie tego samego zgłoszenia liczy się dwa razy (#99).
   'funnel-no-dedup': 'ALTER TABLE public.job_funnel_receipts DROP CONSTRAINT job_funnel_receipts_pkey',
+  // UI (#351): odpowiedź na propozycję zwraca sukces bez zmiany stanu — panel pokazuje
+  // „zaakceptowano”, baza nie (pozorny sukces).
+  'respond-offer-noop': `CREATE OR REPLACE FUNCTION public.respond_to_offer(p_offer_id uuid, p_accept boolean)
+    RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN END $$`,
+  // UI (#351): zmiana statusu zgłoszenia z panelu pracodawcy bez zapisu i historii.
+  'transition-noop': `CREATE OR REPLACE FUNCTION public.transition_application(p_application_id uuid, p_target text)
+    RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN END $$`,
   'retry-new-key': null,
 };
 if (mutation && !Object.hasOwn(MUTATIONS, mutation)) {

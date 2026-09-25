@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * #229: zgoda przy rejestracji linkuje do istniejących stron regulaminu i polityki prywatności
+ * #229/#493: pola przy rejestracji linkują do istniejących stron regulaminu i polityki prywatności
  * w bieżącym języku (nowa karta, żeby nie gubić danych), a klik w link nie przełącza checkboxa.
  */
 
@@ -10,14 +10,19 @@ const locales = ['pl', 'nl', 'fr', 'en'] as const;
 
 for (const locale of locales) {
   for (const slug of pages) {
-    test(`/${locale}/${slug}: zgoda zawiera linki do regulaminu i polityki`, async ({ page }) => {
+    test(`/${locale}/${slug}: regulamin i informacja o prywatności mają osobne pola z linkami`, async ({ page }) => {
       await page.goto(`/${locale}/${slug}`);
-      const consent = page.locator('label[for="agreeTerms"]');
-      for (const path of ['regulamin', 'polityka-prywatnosci']) {
-        const link = consent.locator(`a[href="/${locale}/${path}"]`);
+      const pairs = [
+        ['agreeTerms', 'regulamin', 'polityka-prywatnosci'],
+        ['privacyNoticeAck', 'polityka-prywatnosci', 'regulamin'],
+      ] as const;
+      for (const [id, own, other] of pairs) {
+        const label = page.locator(`label[for="${id}"]`);
+        const link = label.locator(`a[href="/${locale}/${own}"]`);
         await expect(link).toHaveCount(1);
         await expect(link).toHaveAttribute('target', '_blank');
         await expect(link).toHaveAttribute('rel', /noopener/);
+        await expect(label.locator(`a[href="/${locale}/${other}"]`)).toHaveCount(0);
       }
     });
   }
@@ -25,7 +30,7 @@ for (const locale of locales) {
 
 test('klik w link regulaminu otwiera nową kartę i nie zaznacza zgody', async ({ page, context }) => {
   await page.goto('/pl/rejestracja');
-  // Na rejestracji kandydata są dwa pola wyboru (deklaracja wieku #492 i zgoda) — bierzemy zgodę.
+  // Na rejestracji kandydata są kilka pól wyboru (deklaracja wieku #492, zgody #493) — bierzemy regulamin.
   const checkbox = page.locator('#agreeTerms');
   await expect(checkbox).not.toBeChecked();
 

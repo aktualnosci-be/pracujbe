@@ -97,7 +97,7 @@ export interface Activity {
 }
 
 /** Wspólne dla każdej czynności: hosting aplikacji i bazy. */
-const HOSTING: ProcessorId[] = ['railway', 'supabase'];
+const HOSTING: ProcessorId[] = ['railway'];
 
 export const ACTIVITIES: Record<ActivityId, Activity> = {
   account: {
@@ -422,7 +422,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       checksum_sha256: 'file',
       scan_status: 'file',
     },
-    note: 'Treść pliku leży w buckecie (Supabase Storage), w tabeli są metadane.',
+    note: 'Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane.',
   },
 
   // --- Aplikacje ---------------------------------------------------------------------------
@@ -668,6 +668,9 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['candidate', 'employer'],
     columns: {
       profile_id: 'reference',
+      // #493 (0108): rodzaj elementu (regulamin / informacja o prywatności / dawny wspólny) i kanał.
+      kind: 'consent',
+      source: 'consent',
       document_version: 'consent',
       accepted_at: 'consent',
       ip_address: 'technical',

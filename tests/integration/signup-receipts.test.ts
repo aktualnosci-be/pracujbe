@@ -59,7 +59,7 @@ async function insert(metadata: Record<string, unknown>, id = randomUUID()) {
 }
 
 describe('Atomowe receipty rejestracji', () => {
-  it.each(['pl', 'nl', 'fr', 'en'])('zapisuje profil, język i oba dokumenty dla %s', async locale => {
+  it.each(['pl', 'nl', 'fr', 'en'])('v1 (formularz sprzed #493) zapisuje dawny wspólny receipt dla %s', async locale => {
     const id = await insert({ role: 'employer', locale, agree_terms: true, signup_receipt_version: 1 });
     const profile = await admin!.query('SELECT role, preferred_locale, signup_locale FROM public.profiles WHERE id=$1', [id]);
     expect(profile.rows[0]).toEqual({ role: 'employer', preferred_locale: locale, signup_locale: locale });
@@ -67,13 +67,39 @@ describe('Atomowe receipty rejestracji', () => {
     expect(receipts.rows.map(row => ({ document: row.document, locale: row.locale })))
       .toEqual([{ document: 'privacy', locale }, { document: 'terms', locale }]);
     expect(receipts.rows.every(row => row.accepted_at instanceof Date)).toBe(true);
+    const kinds = await admin!.query('SELECT DISTINCT kind FROM public.document_acceptances WHERE profile_id=$1', [id]);
+    expect(kinds.rows).toEqual([{ kind: 'legacy_combined' }]);
+  });
+
+  it.each(['pl', 'nl', 'fr', 'en'])('v2 (#493): osobne receipty i zgoda opcjonalna dla %s', async locale => {
+    const id = await insert({
+      role: 'candidate', locale, agree_terms: true, privacy_notice_ack: true, signup_receipt_version: 2,
+      age_min_attested: 18,
+      optional_consents: { email_marketing: locale === 'fr' },
+      consent_wording: { terms: `sha256:${'a'.repeat(64)}`, privacy: `sha256:${'b'.repeat(64)}`, email_marketing: `sha256:${'c'.repeat(64)}` },
+    });
+    const receipts = await admin!.query(
+      'SELECT document, kind, source, locale, document_version FROM public.document_acceptances WHERE profile_id=$1 ORDER BY document', [id]);
+    expect(receipts.rows).toEqual([
+      { document: 'privacy', kind: 'privacy_notice_ack', source: 'signup', locale, document_version: `sha256:${'b'.repeat(64)}` },
+      { document: 'terms', kind: 'terms_acceptance', source: 'signup', locale, document_version: `sha256:${'a'.repeat(64)}` },
+    ]);
+    // Zgoda opcjonalna = zdarzenie dziennika #513; odmowa nie tworzy zdarzenia.
+    const events = await admin!.query('SELECT category, granted, source, locale, wording_version FROM public.email_consent_events WHERE profile_id=$1', [id]);
+    expect(events.rows).toEqual(locale === 'fr'
+      ? [{ category: 'marketing', granted: true, source: 'signup', locale, wording_version: `sha256:${'c'.repeat(64)}` }]
+      : []);    // #492: 0110 redefiniuje ten sam trigger — ścieżka v2 zapisuje też deklarację wieku.
+    const age = await admin!.query('SELECT min_age, source FROM public.candidate_age_attestations WHERE profile_id=$1', [id]);
+    expect(age.rows).toEqual([{ min_age: 18, source: 'signup' }]);
   });
 
   // Nieznany język odrzuca klucz obcy profiles → supported_locales (0069, 23503) zanim
   // walidacja receiptów zdąży rzucić 23514; w obu przypadkach bez częściowego konta.
   it.each([
     [{ agree_terms: false }, '23514'], [{ agree_terms: 'true' }, '23514'], [{ role: 'admin' }, '23514'],
-    [{ locale: 'de' }, '23503'], [{ signup_receipt_version: 2 }, '23514'],
+    [{ locale: 'de' }, '23503'], [{ signup_receipt_version: 3 }, '23514'],
+    [{ signup_receipt_version: 2 }, '23514'],
+    [{ signup_receipt_version: 2, privacy_notice_ack: true, optional_consents: { ai: true } }, '23514'],
   ] as const)('odrzuca błędny marker bez częściowego konta: %j', async (invalid, code) => {
       const id = randomUUID();
       await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1, ...invalid }, id))
@@ -91,7 +117,11 @@ describe('Atomowe receipty rejestracji', () => {
     expect(rows.rows).toEqual([{ min_age: 18, source: 'signup', locale: 'nl' }]);
   });
 
-  it.each([[{}], [{ age_min_attested: 16 }], [{ age_min_attested: '18' }]] as const)(
+  it.each([
+    [{}], [{ age_min_attested: 16 }], [{ age_min_attested: '18' }],
+    // v2 (#493) bez deklaracji — ta sama odmowa.
+    [{ signup_receipt_version: 2, privacy_notice_ack: true }],
+  ] as const)(
     'odrzuca rejestrację kandydata bez ważnej deklaracji wieku: %j', async (age) => {
       const id = randomUUID();
       await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1, ...age }, id))
