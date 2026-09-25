@@ -9236,112 +9236,85 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- AIB36. Globalny budżet AI (#36, 0114): rezerwacja przed API, dzienny i miesięczny limit,
---        fail-closed (brak limitu / limit 0), rozliczenie idempotentne, uprawnienia.
---        Kontrola ujemna: ai_budget_spent licząca tylko rozliczone wiersze przepuszcza
---        rezerwację ponad limit — test AIB36-3 by ją złapał.
--- =====================================================================reset role; reset app.current_uid;
-select pg_temp.assert(
-  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.ai_budget_settle(uuid, text, integer, integer, bigint)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.ai_cost_report(integer)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.ai_budget_status()', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.ai_budget_status()', 'EXECUTE')
-  and not has_table_privilege('authenticated', 'public.ai_usage_ledger', 'SELECT')
-  and not has_table_privilege('anon', 'public.ai_budget_limits', 'SELECT'),
-  'AIB36-1 klient (anon/authenticated) bez dostępu do budżetu i rejestru');
-select pg_temp.assert(
-  has_function_privilege('pracujbe_ops', 'public.ai_budget_status()', 'EXECUTE')
-  and not has_function_privilege('pracujbe_ops', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
-  and not has_function_privilege('pracujbe_ops', 'public.ai_cost_report(integer)', 'EXECUTE'),
-  'AIB36-2 monitoring czyta tylko stan budżetu');
+-- OL112. Linki firmy w publicznym detalu oferty (0114): get_public_job zwraca
+--        company_website / company_logo_url tylko dla firmy verified i tylko jako
+--        bezwzględny https (public_https_url). Kontrole ujemne w transakcjach cofanych:
+--        bez walidacji zły URL wycieka, bez bramki weryfikacji wycieka link firmy
+--        niezweryfikowanej (po zdjęciu filtra wierszy).
+-- ============================================================================
+\set OLV 'c1080000-0000-0000-0000-0000000000a1'
+\set OLB 'c1080000-0000-0000-0000-0000000000a2'
+\set OLU 'c1080000-0000-0000-0000-0000000000a3'
+\set OLN 'c1080000-0000-0000-0000-0000000000a4'
+\echo '--- OL112 company links in get_public_job ---'
+reset role; reset app.current_uid;
+insert into public.companies(id,name,status,is_demo,website,logo_url) values
+  (:'OLV','Linki Sp','verified',false,' https://www.linki.example/o-nas?x=1 ','https://cdn.linki.example/logo.png'),
+  (:'OLB','Złe Linki Sp','verified',false,'http://zle.example','javascript:alert(1)'),
+  (:'OLU','Bez Weryfikacji Sp','unverified',false,'https://bez.example','https://bez.example/logo.png'),
+  (:'OLN','Bez Linków Sp','verified',false,null,'');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('c1080000-0000-0000-0000-0000000000b1',:'OLV','ol-ok','Magazynier linki','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b2',:'OLB','ol-bad','Magazynier złe linki','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b3',:'OLU','ol-unverified','Magazynier bez weryfikacji','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b4',:'OLN','ol-none','Magazynier bez linków','warehouse','permanent','Gent','Flandria','active','pl');
 
-begin;
-set role service_role;
-update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
-update public.ai_budget_limits set limit_micro_usd = 5000000 where period = 'month';
-select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 600000) as aib_r1 \gset
--- AIB36-3: otwarta rezerwacja liczy się w całości — druga ponad limit doby odrzucona.
-select pg_temp.expect_error(
-  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 500000)',
-  'AI_BUDGET_EXCEEDED', 'AIB36-3 rezerwacja ponad limit dzienny odrzucona');
--- AIB36-4: rozliczenie rzeczywistym kosztem zwalnia resztę; drugie rozliczenie = false.
-select pg_temp.assert(public.ai_budget_settle(:'aib_r1', 'ok', 1200, 800, 100000),
-  'AIB36-4 rozliczenie rezerwacji');
-select pg_temp.assert(not public.ai_budget_settle(:'aib_r1', 'failed', 0, 0, 0),
-  'AIB36-4b ponowne rozliczenie bez skutku');
-select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 500000) is not null,
-  'AIB36-4c po rozliczeniu mieści się kolejna rezerwacja');
+-- OL112-1: walidator — tylko bezwzględny https z hostem; reszta null.
+select pg_temp.assert(public.public_https_url(u) is null, 'OL112-1 odrzucony adres: ' || coalesce(u, '<null>'))
+from unnest(array[null, '', '   ', 'http://a.example', 'javascript:alert(1)', '//a.example',
+                  'https://localhost', 'https://a.example/x y', 'https://a.example/"><script>',
+                  'https://user:pw@a.example', 'https://a.example/' || repeat('x', 2048),
+                  'HTTPS://A.EXAMPLE', 'data:text/html,x', 'https://-a.example']) u;
+select pg_temp.assert(public.public_https_url(' https://a.example/logo.png?v=2#x ') = 'https://a.example/logo.png?v=2#x',
+  'OL112-1b poprawny https (obcięte spacje)');
+select pg_temp.assert(public.public_https_url('https://a.example:8443') = 'https://a.example:8443',
+  'OL112-1c https z portem');
+
+-- OL112-2: gość — poprawne linki firmy verified; złe i puste → null; firma niezweryfikowana → brak wiersza.
+set role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(
-  (select cost_micro_usd = 100000 and input_tokens = 1200 and outcome = 'ok' from public.ai_usage_ledger where id = :'aib_r1'),
-  'AIB36-4d zapisany koszt i tokeny');
--- AIB36-5: nieznany koszt = kwota rezerwacji.
-select public.ai_budget_reserve('content_translation', 'claude-sonnet-5', 300000) as aib_r2 \gset
-select pg_temp.expect_error(
-  'select public.ai_budget_reserve(''content_translation'', ''claude-sonnet-5'', 200000)',
-  'AI_BUDGET_EXCEEDED', 'AIB36-5 limit wspólny dla wszystkich funkcji');
-select public.ai_budget_settle(:'aib_r2', 'failed', null, null, null);
-select pg_temp.assert((select cost_micro_usd = 300000 from public.ai_usage_ledger where id = :'aib_r2'),
-  'AIB36-5b brak kosztu rozliczony kwotą rezerwacji');
--- AIB36-6: limit miesięczny działa niezależnie od dziennego.
-update public.ai_budget_limits set limit_micro_usd = 50000000 where period = 'day';
-update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'month';
-select pg_temp.expect_error(
-  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 200000)',
-  'AI_BUDGET_EXCEEDED', 'AIB36-6 rezerwacja ponad limit miesięczny odrzucona');
--- AIB36-7: limit 0 = wyłącznik; brak limitu = odmowa.
-update public.ai_budget_limits set limit_micro_usd = 50000000 where period = 'month';
-update public.ai_budget_limits set limit_micro_usd = 0 where period = 'day';
-select pg_temp.expect_error(
-  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 1)',
-  'AI_BUDGET_EXCEEDED', 'AIB36-7 limit 0 blokuje każde wywołanie');
-delete from public.ai_budget_limits where period = 'day';
-select pg_temp.expect_error(
-  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 1)',
-  'AI_BUDGET_UNCONFIGURED', 'AIB36-7b brak limitu = odmowa (fail-closed)');
-insert into public.ai_budget_limits (period, limit_micro_usd) values ('day', 50000000);
--- AIB36-8: walidacja wejścia (szacunek 0, obca funkcja, identyfikator modelu z treścią).
-select pg_temp.expect_error(
-  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 0)',
-  'VALIDATION_FAILED', 'AIB36-8 rezerwacja zerowa odrzucona');
-select pg_temp.expect_error(
-  'select public.ai_budget_reserve(''cv_import'', ''claude-opus-5'', 10)',
-  'VALIDATION_FAILED', 'AIB36-8b funkcja spoza inwentarza odrzucona');
-select pg_temp.expect_error(
-  'select public.ai_budget_reserve(''job_listing_import'', ''Jan Kowalski jan@example.com'', 10)',
-  'VALIDATION_FAILED', 'AIB36-8c model musi być identyfikatorem');
--- AIB36-9: raport i stan — same liczby, bez identyfikatorów wierszy.
+  (select company_website = 'https://www.linki.example/o-nas?x=1'
+      and company_logo_url = 'https://cdn.linki.example/logo.png'
+   from public.get_public_job('ol-ok', 'pl')),
+  'OL112-2 firma verified: website i logo');
 select pg_temp.assert(
-  (select (r->'daily'->0) ?& array['day','feature','calls','ok','notOk','open','inputTokens','outputTokens','costMicroUsd']
-      and not ((r->'daily'->0) ? 'id')
-      and jsonb_array_length(r->'monthly') >= 1
-      and (r->'status'->'day'->>'limitMicroUsd')::bigint = 50000000
-     from (select public.ai_cost_report(31) as r) x),
-  'AIB36-9 raport kosztów z agregatami');
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-bad', 'pl')),
+  'OL112-2b http / javascript: → brak pól');
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-none', 'pl')),
+  'OL112-2c brak / pusty adres → brak pól');
+select pg_temp.assert((select count(*) from public.get_public_job('ol-unverified', 'pl')) = 0,
+  'OL112-2d firma niezweryfikowana → brak oferty (i linków)');
 reset role;
-set role pracujbe_ops;
+
+-- OL112-3: kontrole ujemne (zmiana definicji w transakcji cofanej).
+create function pg_temp.ol_patch(p_from text, p_to text) returns void language plpgsql as $$
+declare
+  v_def text := pg_get_functiondef('public.get_public_job(text, text)'::regprocedure);
+begin
+  if position(p_from in v_def) = 0 then
+    raise exception 'ASSERT FAILED: OL112-3 fragment „%” nie występuje w get_public_job', p_from;
+  end if;
+  execute replace(v_def, p_from, p_to);
+end $$;
+-- Bez walidacji adresu zły URL trafia do wyniku (więc OL112-2b wykrywa regresję).
+begin; select pg_temp.ol_patch('public.public_https_url(c.website)', 'c.website');
+select pg_temp.assert((select company_website from public.get_public_job('ol-bad', 'pl')) = 'http://zle.example',
+  'OL112-3 bez walidacji wycieka http'); rollback;
+-- Po zdjęciu filtra wierszy bramka kolumny nadal ukrywa link firmy niezweryfikowanej…
+begin; select pg_temp.ol_patch(E'and c.status = ''verified''\n', '');
 select pg_temp.assert(
-  (select (s->'day'->>'spentMicroUsd')::bigint = 900000 and (s->>'staleReservations')::int = 0
-     from (select public.ai_budget_status() as s) x),
-  'AIB36-9b stan budżetu dla monitoringu');
-reset role;
--- AIB36-10 (kontrola ujemna): wadliwa suma tylko rozliczonych przepuszcza rezerwację
--- ponad limit — AIB36-3 opiera się na liczeniu otwartych rezerwacji.
-update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
-select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 50000) as aib_r3 \gset
-savepoint aib_neg;
-create or replace function public.ai_budget_spent(p_from date, p_to date)
-returns bigint language sql stable security definer set search_path = public, pg_temp as $f$
-  select coalesce(sum(cost_micro_usd), 0)::bigint from public.ai_usage_ledger
-   where status = 'settled' and usage_day >= p_from and usage_day <= p_to $f$;
-select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 60000) is not null,
-  'AIB36-10 kontrola ujemna: bez liczenia otwartych rezerwacji limit przepuszcza');
-rollback to savepoint aib_neg;
-select pg_temp.expect_error(
-  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 60000)',
-  'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
-rollback;
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-unverified', 'pl')),
+  'OL112-3b bramka kolumny: niezweryfikowana firma bez linków');
+-- …a bez niej link wycieka (asercja OL112-3b wykrywa regresję).
+select pg_temp.ol_patch('case when c.status = ''verified'' then public.public_https_url(c.website)',
+                        'case when true then public.public_https_url(c.website)');
+select pg_temp.assert((select company_website from public.get_public_job('ol-unverified', 'pl')) = 'https://bez.example',
+  'OL112-3c bez bramki weryfikacji wycieka link'); rollback;
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-bad', 'pl'))
+  and (select count(*) from public.get_public_job('ol-unverified', 'pl')) = 0,
+  'OL112-3d po cofnięciu definicja wróciła');
 
 -- ============================================================================
 -- PL109. Payloady e-maili i odczyt historii (0113; #293, #22, #290, #184):
@@ -9786,5 +9759,114 @@ select pg_temp.assert(
   and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
   and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute'),
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
+
+-- ============================================================================
+-- AIB36. Globalny budżet AI (#36, 0114): rezerwacja przed API, dzienny i miesięczny limit,
+--        fail-closed (brak limitu / limit 0), rozliczenie idempotentne, uprawnienia.
+--        Kontrola ujemna: ai_budget_spent licząca tylko rozliczone wiersze przepuszcza
+--        rezerwację ponad limit — test AIB36-3 by ją złapał.
+-- ============================================================================
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.ai_budget_settle(uuid, text, integer, integer, bigint)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.ai_cost_report(integer)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.ai_budget_status()', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_status()', 'EXECUTE')
+  and not has_table_privilege('authenticated', 'public.ai_usage_ledger', 'SELECT')
+  and not has_table_privilege('anon', 'public.ai_budget_limits', 'SELECT'),
+  'AIB36-1 klient (anon/authenticated) bez dostępu do budżetu i rejestru');
+select pg_temp.assert(
+  has_function_privilege('pracujbe_ops', 'public.ai_budget_status()', 'EXECUTE')
+  and not has_function_privilege('pracujbe_ops', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('pracujbe_ops', 'public.ai_cost_report(integer)', 'EXECUTE'),
+  'AIB36-2 monitoring czyta tylko stan budżetu');
+
+begin;
+set role service_role;
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
+update public.ai_budget_limits set limit_micro_usd = 5000000 where period = 'month';
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 600000) as aib_r1 \gset
+-- AIB36-3: otwarta rezerwacja liczy się w całości — druga ponad limit doby odrzucona.
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 500000)',
+  'AI_BUDGET_EXCEEDED', 'AIB36-3 rezerwacja ponad limit dzienny odrzucona');
+-- AIB36-4: rozliczenie rzeczywistym kosztem zwalnia resztę; drugie rozliczenie = false.
+select pg_temp.assert(public.ai_budget_settle(:'aib_r1', 'ok', 1200, 800, 100000),
+  'AIB36-4 rozliczenie rezerwacji');
+select pg_temp.assert(not public.ai_budget_settle(:'aib_r1', 'failed', 0, 0, 0),
+  'AIB36-4b ponowne rozliczenie bez skutku');
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 500000) is not null,
+  'AIB36-4c po rozliczeniu mieści się kolejna rezerwacja');
+select pg_temp.assert(
+  (select cost_micro_usd = 100000 and input_tokens = 1200 and outcome = 'ok' from public.ai_usage_ledger where id = :'aib_r1'),
+  'AIB36-4d zapisany koszt i tokeny');
+-- AIB36-5: nieznany koszt = kwota rezerwacji.
+select public.ai_budget_reserve('content_translation', 'claude-sonnet-5', 300000) as aib_r2 \gset
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''content_translation'', ''claude-sonnet-5'', 200000)',
+  'AI_BUDGET_EXCEEDED', 'AIB36-5 limit wspólny dla wszystkich funkcji');
+select public.ai_budget_settle(:'aib_r2', 'failed', null, null, null);
+select pg_temp.assert((select cost_micro_usd = 300000 from public.ai_usage_ledger where id = :'aib_r2'),
+  'AIB36-5b brak kosztu rozliczony kwotą rezerwacji');
+-- AIB36-6: limit miesięczny działa niezależnie od dziennego.
+update public.ai_budget_limits set limit_micro_usd = 50000000 where period = 'day';
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'month';
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 200000)',
+  'AI_BUDGET_EXCEEDED', 'AIB36-6 rezerwacja ponad limit miesięczny odrzucona');
+-- AIB36-7: limit 0 = wyłącznik; brak limitu = odmowa.
+update public.ai_budget_limits set limit_micro_usd = 50000000 where period = 'month';
+update public.ai_budget_limits set limit_micro_usd = 0 where period = 'day';
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 1)',
+  'AI_BUDGET_EXCEEDED', 'AIB36-7 limit 0 blokuje każde wywołanie');
+delete from public.ai_budget_limits where period = 'day';
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 1)',
+  'AI_BUDGET_UNCONFIGURED', 'AIB36-7b brak limitu = odmowa (fail-closed)');
+insert into public.ai_budget_limits (period, limit_micro_usd) values ('day', 50000000);
+-- AIB36-8: walidacja wejścia (szacunek 0, obca funkcja, identyfikator modelu z treścią).
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 0)',
+  'VALIDATION_FAILED', 'AIB36-8 rezerwacja zerowa odrzucona');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''cv_import'', ''claude-opus-5'', 10)',
+  'VALIDATION_FAILED', 'AIB36-8b funkcja spoza inwentarza odrzucona');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''Jan Kowalski jan@example.com'', 10)',
+  'VALIDATION_FAILED', 'AIB36-8c model musi być identyfikatorem');
+-- AIB36-9: raport i stan — same liczby, bez identyfikatorów wierszy.
+select pg_temp.assert(
+  (select (r->'daily'->0) ?& array['day','feature','calls','ok','notOk','open','inputTokens','outputTokens','costMicroUsd']
+      and not ((r->'daily'->0) ? 'id')
+      and jsonb_array_length(r->'monthly') >= 1
+      and (r->'status'->'day'->>'limitMicroUsd')::bigint = 50000000
+     from (select public.ai_cost_report(31) as r) x),
+  'AIB36-9 raport kosztów z agregatami');
+reset role;
+set role pracujbe_ops;
+select pg_temp.assert(
+  (select (s->'day'->>'spentMicroUsd')::bigint = 900000 and (s->>'staleReservations')::int = 0
+     from (select public.ai_budget_status() as s) x),
+  'AIB36-9b stan budżetu dla monitoringu');
+reset role;
+-- AIB36-10 (kontrola ujemna): wadliwa suma tylko rozliczonych przepuszcza rezerwację
+-- ponad limit — AIB36-3 opiera się na liczeniu otwartych rezerwacji.
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 50000) as aib_r3 \gset
+savepoint aib_neg;
+create or replace function public.ai_budget_spent(p_from date, p_to date)
+returns bigint language sql stable security definer set search_path = public, pg_temp as $f$
+  select coalesce(sum(cost_micro_usd), 0)::bigint from public.ai_usage_ledger
+   where status = 'settled' and usage_day >= p_from and usage_day <= p_to $f$;
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 60000) is not null,
+  'AIB36-10 kontrola ujemna: bez liczenia otwartych rezerwacji limit przepuszcza');
+rollback to savepoint aib_neg;
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 60000)',
+  'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
+rollback;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
