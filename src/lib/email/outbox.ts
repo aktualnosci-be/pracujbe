@@ -67,14 +67,14 @@ import {
  * innych workerów), a budżet, zapis wyniku i odłożenie wiersza — każde osobno. Żadna
  * transakcja nie jest otwarta podczas wywołania HTTP dostawcy.
  *
- * #615: `lock_token` (0140) — nowy token nadawany PRZY KAŻDYM claimie (także ponownym po
+ * #615: `lock_token` (0129) — nowy token nadawany PRZY KAŻDYM claimie (także ponownym po
  * wygaśnięciu dzierżawy). Worker niesie go od claimu przez `email_delivery_send_check` do
  * KAŻDEJ dalszej aktualizacji wiersza (mark-sent/mark-failed/defer, warunek `AND lock_token = …`).
  * Jeśli dzierżawa wygaśnie w trakcie (wolny dostawca) i wiersz przejmie inny worker, token się
  * nie zgadza — stary worker dostaje `lease_lost`/`rowCount=0` i NIC nie nadpisuje (wiersz
  * należy już do kogoś innego), więc nie ma podwójnej wysyłki ani wyścigu aktualizacji statusu.
  *
- * #621 (dokończenie #615, 0141): `email_delivery_send_check` odnawia dzierżawę (`locked_at =
+ * #621 (dokończenie #615, 0130): `email_delivery_send_check` odnawia dzierżawę (`locked_at =
  * now()`) TUŻ PRZED wywołaniem `transport.send` poniżej — w TEJ SAMEJ transakcji co kontrola
  * tokenu/zgody, CAS po `lock_token`. Zamyka to wyścig TOCTOU: bez odnowienia dzierżawa nadal
  * biegła od czasu claimu CAŁEJ paczki, więc przy wielu wierszach albo wolnym poprzednim

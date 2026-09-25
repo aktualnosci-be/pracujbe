@@ -1,7 +1,7 @@
 -- =============================================================================
--- 0141 — worker poczty: odnowienie dzierżawy w oknie wysyłki (#621, dokończenie #615/0140).
+-- 0130 — worker poczty: odnowienie dzierżawy w oknie wysyłki (#621, dokończenie #615/0129).
 --
--- Problem: 0140 dodało CAS na `lock_token` (claim/send_check/mark-sent/mark-failed/defer), ale
+-- Problem: 0129 dodało CAS na `lock_token` (claim/send_check/mark-sent/mark-failed/defer), ale
 -- `email_delivery_send_check` kończyło transakcję PRZED wywołaniem dostawcy (`transport.send`
 -- w `src/lib/email/outbox.ts`) bez odnowienia dzierżawy (`locked_at`). Dzierżawa nadal biegła od
 -- CZASU CLAIMU całej paczki — przy wielu wierszach w paczce (przetwarzanych po kolei) albo
@@ -9,7 +9,7 @@
 -- zużyte w chwili wywołania `send_check`/`transport.send`. Worker A mógł dostać `null` (wolno
 -- wysyłać) tuż przed wygaśnięciem dzierżawy, zacząć wołać dostawcę, a w międzyczasie
 -- `claim_email_batch` uznać dzierżawę za wygasłą i oddać wiersz workerowi B — obaj wysyłają.
--- CAS na `mark-sent` (0140) wykrywał to dopiero PO wysyłce (i tylko chronił zapis stanu, nie
+-- CAS na `mark-sent` (0129) wykrywał to dopiero PO wysyłce (i tylko chronił zapis stanu, nie
 -- cofał już wysłanej wiadomości A) — dokładnie luka opisana w #621.
 --
 -- Naprawa: `email_delivery_send_check` — gdy token się zgadza i wiersz NIE jest wygaszany
@@ -21,12 +21,12 @@
 -- całe żądanie”). Awaria procesu/timeout dłuższy niż odnowione okno nadal prowadzi do
 -- bezpiecznego ponowienia: `claim_email_batch` odda wiersz kolejnemu workerowi dopiero po
 -- upływie ŚWIEŻEGO okna, a `mark-sent`/`mark-failed` workera A z NIEAKTUALNYM tokenem (bo
--- wiersz przejął B) i tak nic nie nadpiszą (CAS z 0140, bez zmian).
+-- wiersz przejął B) i tak nic nie nadpiszą (CAS z 0129, bez zmian).
 -- Zawieszony dostawca (#628) — po stronie workera: termin wysyłki krótszy niż dzierżawa,
 -- ponowienie niejednoznacznego wyniku dopiero po pełnej dzierżawie, ten sam klucz
 -- idempotencji (`src/lib/email/outbox.ts`, `SEND_DEADLINE_MS`).
 --
--- Rollback: przywrócić `email_delivery_send_check` z 0140 (bez odnowienia `locked_at`).
+-- Rollback: przywrócić `email_delivery_send_check` z 0129 (bez odnowienia `locked_at`).
 -- =============================================================================
 
 create or replace function public.email_delivery_send_check(p_delivery_id uuid, p_lock_token uuid)

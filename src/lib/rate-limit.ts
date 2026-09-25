@@ -24,6 +24,7 @@ import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import { env, isProductionMode, isRateLimitDatabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/error-report';
+import { trustedClientIp } from '@/lib/http/trusted-ip';
 
 /** Opcje limitu dla pojedynczej akcji. */
 export interface RateLimitOptions {
@@ -70,35 +71,19 @@ const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
   'guest-apply-email',
   // Formularz kontaktu (#61): publiczny formularz wysyłający potwierdzenie na podany adres.
   'contact',
+  // Bramka SITE_ACCESS_PASSWORD (#584): jedyna zapora przed produkcją — awaria limitera nie
+  // może otwierać nieograniczonego zgadywania hasła.
+  'site-access',
 ]);
 
 /**
- * Adres IP klienta. Głównym źródłem jest `x-real-ip` (ustawiane przez platformę/proxy,
- * niespoofowalne przez klienta). Dopiero w razie jego braku sięgamy po `x-forwarded-for`,
- * ale bierzemy PRAWY (ostatni) token — dopisany przez najbliższe zaufane proxy — a nie
- * lewy, który klient może dowolnie sfałszować. Fallback: `unknown`.
+ * Adres IP klienta z jedynego, jawnie skonfigurowanego, zaufanego nagłówka proxy
+ * (`@/lib/http/trusted-ip`, #588/#602) — nigdy z `X-Forwarded-For`, który klient może dowolnie
+ * ustawić. Fallback: `unknown`.
  */
 async function clientIp(): Promise<string> {
   const store = await headers();
-
-  const realIp = store.get('x-real-ip')?.trim();
-  if (realIp) {
-    return realIp;
-  }
-
-  const forwarded = store.get('x-forwarded-for');
-  if (forwarded) {
-    const parts = forwarded
-      .split(',')
-      .map((p) => p.trim())
-      .filter(Boolean);
-    const last = parts[parts.length - 1];
-    if (last) {
-      return last;
-    }
-  }
-
-  return 'unknown';
+  return trustedClientIp(store) ?? 'unknown';
 }
 
 /**
