@@ -30,6 +30,8 @@ Skrypt kończy się kodem0 przy sukcesie,1 przy błędzie żądania/HTTP,2 przy 
 
 ## Operacje (#47)
 
+Test wdrożeniowy produkcji (tryb, SHA artefaktu, panele bez sesji, indeksowanie) i odbiór #12: [TEST_WDROZENIOWY.md](TEST_WDROZENIOWY.md).
+
 Czujki `/api/health/ops`, kopie zaszyfrowane z retencją, okresowe odtworzenie i pomiar wyszukiwania opisuje [OPERATIONS.md](OPERATIONS.md). Kroki infrastruktury (sekret, login monitoringu, uptime, cron kopii) są w sekcji 5 tego dokumentu i nie zostały wykonane.
 
 ## Stan przejściowy kodu
