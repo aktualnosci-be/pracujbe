@@ -91,6 +91,8 @@ funkcji wysyłających dane kandydata do dostawcy bez zatwierdzonego wpisu (#488
   `jobTitle`; `newMessage` → `senderName`, `panel` (bez treści wiadomości). Test
   `tests/unit/privacy-data-map.test.ts` blokuje payloady zawierające CV, odpowiedzi
   screeningowe, treść wiadomości lub telefon (z kontrolą ujemną).
+- Do szablonu worker przekazuje tylko pola z listy `src/lib/email/payload-fields.ts` (#503);
+  resztę payloadu odrzuca przed renderem. Szczegóły i ocena: [`poczta-transfer-resend.md`](poczta-transfer-resend.md).
 - Worker dokłada imię odbiorcy z `profiles`, link do panelu i stopkę wypisania. E-maile konta
   (potwierdzenie, reset hasła, magic link, zmiana e-maila, zaproszenie) zawierają link z tokenem.
 - `reportReceived` zawiera numer sprawy i kod dostępu do statusu zgłoszenia.
@@ -98,9 +100,8 @@ funkcji wysyłających dane kandydata do dostawcy bez zatwierdzonego wpisu (#488
   z repozytorium.
 - Webhook dostawcy przekazuje do portalu zdarzenia doręczenia (odbicie, skarga, opóźnienie),
   zapisywane w `email_deliveries` i `email_suppressions`.
-- Przy wysyłce worker ponownie sprawdza zgodę odbiorcy i blokadę adresu. Pozostałe kryteria
-  #503 dla chwili wysyłki (m.in. aktualne uprawnienie odbiorcy w firmie) — do wykonania w #503,
-  poza zakresem tego szkicu.
+- Przy wysyłce worker ponownie sprawdza zgodę odbiorcy, blokadę adresu i — dla e-maili
+  z danymi kandydata do firmy — aktualne uprawnienie odbiorcy w firmie (#503, `0123`).
 - Kod nie usuwa wierszy `email_deliveries` (retencja odłożona).
 
 **Do ustalenia przez właściciela/prawnika:**

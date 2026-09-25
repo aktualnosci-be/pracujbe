@@ -9452,6 +9452,106 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
+-- ES503. Uprawnienie odbiorcy firmowego w chwili wysyłki (#503, 0123): e-mail z danymi
+--        kandydata zakolejkowany dla recruitera nie wychodzi, gdy przed claimem stracił
+--        rolę; właściciel i kandydat dostają swoje. Kontrola ujemna: bez sprawdzenia
+--        (helper zawsze true) ten sam claim wydaje wiersze byłego recruitera.
+-- ============================================================================
+\echo '--- ES503 send-time recipient check ---'
+begin;
+\set ESC  'e5030000-0000-0000-0000-00000000000c'
+\set ESO  'e5030000-0000-0000-0000-0000000000a1'
+\set ESR  'e5030000-0000-0000-0000-0000000000a2'
+\set ESCO 'e5030000-0000-0000-0000-0000000000f1'
+\set ESJ  'e5030000-0000-0000-0000-0000000000b1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'ESC','esc@test.be','Cleo C','{"role":"candidate","first_name":"Cleo","last_name":"Candidat","locale":"fr"}'),
+  (:'ESO','eso@test.be','Otto O','{"role":"employer","first_name":"Otto","last_name":"Owner","locale":"nl"}'),
+  (:'ESR','esr@test.be','Rita R','{"role":"employer","first_name":"Rita","last_name":"Recruiter","locale":"en"}');
+insert into public.companies(id,name,status) values (:'ESCO','Firma ES','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'ESCO',:'ESO','owner',true),
+  (:'ESCO',:'ESR','recruiter',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'ESJ',:'ESCO','job-es503','Operator ES','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'ESC', false);
+
+-- Wszystko kolejkowane, gdy ESR jest aktywnym recruiterem.
+select set_config('app.current_uid', :'ESC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'ESJ'::uuid, 'es503-app', null, null, null) as esapp \gset
+reset role;
+select set_config('app.current_uid', :'ESR', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'ESJ'::uuid, :'ESC'::uuid, 'es503-off', null, null) as esoff \gset
+select public.get_or_create_conversation(:'esapp'::uuid, null) as esconv \gset
+select public.send_message(:'esconv'::uuid, 'Zapraszamy', gen_random_uuid()) as esmsg_to_cand \gset
+reset role;
+select set_config('app.current_uid', :'ESC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.respond_to_offer(:'esoff'::uuid, true);
+select public.send_message(:'esconv'::uuid, 'Dziękuję', gen_random_uuid()) as esmsg_to_co \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where profile_id = :'ESR' and status = 'queued'
+       and template in ('newApplication', 'offerAccepted', 'newMessage')) = 3,
+  'ES503-0 e-maile z danymi kandydata zakolejkowane dla aktywnego recruitera');
+select pg_temp.assert(
+  public.email_recipient_authorized('newApplication', 'application', :'esapp'::uuid, :'ESR'::uuid)
+  and public.email_recipient_authorized('newMessage', 'message', :'esmsg_to_cand'::uuid, :'ESC'::uuid),
+  'ES503-0b przed odebraniem roli: recruiter i kandydat uprawnieni');
+
+-- ESR traci rolę rekrutacyjną po zakolejkowaniu, przed wysyłką.
+update public.company_members set role = 'member' where company_id = :'ESCO' and profile_id = :'ESR';
+
+-- Kontrola ujemna: bez sprawdzenia w chwili wysyłki claim wydaje wiersze ESR.
+savepoint es503_neg;
+create or replace function public.email_recipient_authorized(
+  p_template text, p_entity_type text, p_entity_id uuid, p_profile_id uuid)
+  returns boolean language sql stable as 'select true';
+select pg_temp.assert(
+  (select count(*) from public.claim_email_batch(100000) c where c.profile_id = :'ESR') = 3,
+  'ES503-1 kontrola ujemna: bez sprawdzenia uprawnień e-maile trafiłyby do b. recruitera');
+rollback to savepoint es503_neg;
+
+select count(*) from public.claim_email_batch(100000) \gset es_claim_
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where profile_id = :'ESR' and status = 'failed' and suppressed_at is not null
+       and error_message = 'suppressed_recipient_unauthorized' and locked_at is null) = 3,
+  'ES503-2 wiersze b. recruitera wygaszone przy claimie (ślad zostaje, nic nie wychodzi)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where profile_id = :'ESO' and status = 'queued' and locked_at is not null
+       and template in ('newApplication', 'newMessage')) = 3,
+  'ES503-3 aktywny właściciel dostaje e-maile: aplikacja + 2 wiadomości (wiersze wydane workerowi)');
+select pg_temp.assert(
+  (select status::text = 'queued' and locked_at is not null from public.email_deliveries
+     where entity_id = :'esmsg_to_cand' and profile_id = :'ESC'),
+  'ES503-4 kandydat (strona spoza firmy) nadal dostaje e-mail o wiadomości');
+
+-- Brak obiektu wiersza albo niezgodny typ obiektu = brak uprawnienia (fail-closed).
+select pg_temp.assert(
+  not public.email_recipient_authorized('newApplication', 'application', gen_random_uuid(), :'ESO'::uuid)
+  and not public.email_recipient_authorized('offerAccepted', 'application', :'esapp'::uuid, :'ESO'::uuid)
+  and not public.email_recipient_authorized('newMessage', 'message', gen_random_uuid(), :'ESC'::uuid)
+  and public.email_recipient_authorized('offerAccepted', 'offer', :'esoff'::uuid, :'ESO'::uuid)
+  and public.email_recipient_authorized('statusChanged', 'application', gen_random_uuid(), :'ESC'::uuid),
+  'ES503-5 obiekt nieistniejący / zły typ → false; szablony spoza firmy bez zmian');
+-- Dezaktywacja członkostwa i usunięcie konta też odbierają uprawnienie.
+update public.company_members set is_active = false where company_id = :'ESCO' and profile_id = :'ESO';
+select pg_temp.assert(
+  not public.email_recipient_authorized('newApplication', 'application', :'esapp'::uuid, :'ESO'::uuid),
+  'ES503-6 nieaktywne członkostwo → brak uprawnienia');
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.email_recipient_authorized(text, text, uuid, uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.email_recipient_authorized(text, text, uuid, uuid)', 'execute'),
+  'ES503-7 helper niedostępny dla ról klienta');
+rollback;
+
+-- ============================================================================
 -- GS98. E-mail do gościa o zmianie statusu (#98, 0122): transition_application kolejkuje
 --       `guestStatusChanged` na adres gościa w języku jego formularza (nie firmy), klucz =
 --       id wiersza historii, tylko potwierdzone zgłoszenie, bez zablokowanego adresu (#44),

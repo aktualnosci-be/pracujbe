@@ -78,10 +78,15 @@ describe('#290: linki CTA w e-mailach z kolejki', () => {
     expect(buildDeliveryData({ template: 'jobOffer', locale: 'pl', payload: {} }, SITE, ' Anna ').data.firstName).toBe(
       'Anna',
     );
+    // Pole imienia z payloadu wygrywa tylko tam, gdzie RPC je podaje (#503: lista pól).
+    expect(
+      buildDeliveryData({ template: 'reportReceived', locale: 'pl', payload: { recipientName: 'Ola' } }, SITE, 'Anna')
+        .data.recipientName,
+    ).toBe('Ola');
     expect(
       buildDeliveryData({ template: 'jobOffer', locale: 'pl', payload: { firstName: 'Ola' } }, SITE, 'Anna').data
         .firstName,
-    ).toBe('Ola');
+    ).toBe('Anna');
   });
 });
 
