@@ -1319,8 +1319,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   rejestracji i liście ofert (strażnik `static-public-pages.test`);
   layout `(public)` odrzuca nieobsługiwany locale (`notFound`). Middleware: bramka hasła i
   odświeżone cookies sesji → `private, no-store`; alias miasta → 308 w middleware (redirect z ISR
-  dublował `Location`). **Otwarte:** ISR zapisuje na dysk także 404 losowych slugów ofert
-  (`isrFlushToDisk: false` odpada — wyłącza cache obrazów); limit = własny `cacheHandler`. Straże: `static-public-pages.test`, `check-next-build.mjs`
+  dublował `Location`). Własny `cacheHandler` (`src/lib/cache/isr-cache-handler.mjs`, `next.config.mjs`): LRU w pamięci
+  (64 MB / 2000 wpisów), 404 losowych slugów tylko w puli pamięci (200 wpisów, TTL 60 s) — nigdy
+  na dysku; wpisy runtime w `.next/cache/isr-handler` (256 MB / 5000 wpisów / 4 MB na wpis,
+  najstarsze usuwane, indeks odbudowany po restarcie); strony z buildu czytane z `.next/server/app`
+  bez nadpisywania; cache obrazów bez zmian. Testy: `isr-cache-handler.test` (mutacja detektora
+  404 = czerwony), E2E `public-cache-headers` (40 losowych slugów = 0 plików; bez handlera +120). Straże: `static-public-pages.test`, `check-next-build.mjs`
   (prerender), E2E `public-cache-headers.spec`. Lista `/oferty-pracy` (filtry), auth, panele — per żądanie.
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa
   Wydanie 1.0.0 (#103): kryteria, blokery i procedura (decyzja właściciela, zielone CI, SHA
