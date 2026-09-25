@@ -48,7 +48,7 @@ const saveSchema = z.object({
 });
 
 const idSchema = z.string().uuid();
-/** Te same reguły co w bazie (0114): 1–80 znaków po przycięciu, bez znaków sterujących. */
+/** Te same reguły co w bazie (0115): 1–80 znaków po przycięciu, bez znaków sterujących. */
 // eslint-disable-next-line no-control-regex
 const nameSchema = z.string().trim().min(1).max(80).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/);
 const frequencySchema = z.enum(['daily', 'weekly']);
