@@ -656,7 +656,12 @@
     "reviewerConflict": "Het bezwaar wordt behandeld door een andere beheerder dan de auteur van de beslissing.",
     "jobImportSensitiveData": "De vacature bevat een identificatienummer van een persoon of document, daarom hebben we ze niet geïmporteerd. Vul het formulier handmatig in.",
     "screeningReviewRequired": "De vacature bevat een vraag die het team van het portaal vóór publicatie moet controleren. Je kunt ze publiceren zodra de vraag is goedgekeurd of nadat je ze hebt aangepast.",
-    "screeningQuestionRejected": "Een van de vragen is niet goedgekeurd. Pas ze aan of verwijder ze om de vacature te publiceren."
+    "screeningQuestionRejected": "Een van de vragen is niet goedgekeurd. Pas ze aan of verwijder ze om de vacature te publiceren.",
+    "jobAssistEmpty": "Schrijf eerst een tekst. De assistent verbetert je tekst, maar schrijft geen vacature vanaf nul.",
+    "jobAssistSuspicious": "De tekst bevat iets wat lijkt op opdrachten voor AI, daarom hebben we geen voorstellen gemaakt. Controleer de inhoud van de velden.",
+    "jobAssistWrongLanguage": "De tekst is in een andere taal dan de vacature. De assistent vertaalt niet — pas de tekst aan in de taal van de vacature.",
+    "jobAssistFailed": "We konden geen voorstellen maken. Probeer het opnieuw of pas de tekst zelf aan.",
+    "aiBudgetExceeded": "De limiet van de AI-assistent is voorlopig bereikt. Probeer het later opnieuw."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -1497,6 +1502,32 @@
     "errorUrlMissing": "Plak een link naar de vacature.",
     "errorNetwork": "Geen verbinding met de server. Controleer je verbinding en probeer het opnieuw.",
     "contactNote": "E-mailadressen, telefoonnummers en identificatienummers nemen we niet over in het formulier. Vul het contact-e-mailadres zelf in bij de laatste stap."
+  },
+  "jobAssist": {
+    "title": "Tekst verbeteren met de AI-assistent",
+    "aiNotice": "Je gebruikt een AI-assistent. Een taalmodel maakt voorstellen op basis van jouw tekst — controleer elk voorstel voordat je het aanvaardt.",
+    "scopeNote": "De assistent verbetert alleen de formulering in de taal van de vacature. Hij voegt geen feiten toe, bewaart niets en publiceert niets. We bewaren de tekst niet en verwijderen e-mailadressen, telefoonnummers en identificatienummers vóór het verzenden.",
+    "suggest": "Verbeteringen voorstellen",
+    "suggesting": "Voorstellen worden gemaakt…",
+    "busyHint": "We maken voorstellen. Dit kan tot een minuut duren.",
+    "resultTitle": "Voorstellen om te controleren",
+    "noSuggestions": "De assistent heeft geen voorstellen voor deze velden.",
+    "yourText": "Jouw tekst",
+    "suggestion": "AI-voorstel",
+    "accept": "Voorstel gebruiken",
+    "acceptField": "Voorstel gebruiken: {field}",
+    "reject": "Mijn tekst behouden",
+    "rejectField": "Mijn tekst behouden: {field}",
+    "restore": "Mijn tekst terugzetten",
+    "restoreField": "Mijn tekst terugzetten: {field}",
+    "accepted": "Veld „{field}” aangepast in het formulier. Er is niets opgeslagen — je slaat de wijzigingen op in de wizard.",
+    "rejected": "We hebben je tekst in het veld „{field}” behouden.",
+    "restored": "We hebben je tekst in het veld „{field}” teruggezet.",
+    "stale": "Dit veld is gewijzigd nadat het voorstel werd gemaakt. Vraag nieuwe voorstellen.",
+    "droppedNewFacts": "Voor het veld „{field}” tonen we geen voorstel, omdat het informatie bevatte die niet in jouw tekst staat.",
+    "droppedSensitive": "Voor het veld „{field}” tonen we geen voorstel, omdat het contactgegevens of een identificatienummer bevatte.",
+    "droppedInvalid": "Het voorstel voor het veld „{field}” voldeed niet aan de eisen van het formulier, daarom tonen we het niet.",
+    "errorNetwork": "Geen verbinding met de server. Controleer je verbinding en probeer het opnieuw."
   },
   "messages": {
     "title": "Berichten",

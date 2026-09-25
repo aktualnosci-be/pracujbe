@@ -748,6 +748,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   pole z e-mailem/telefonem czyszczone, identyfikator → odmowa `JOB_IMPORT_SENSITIVE_DATA`.
   Zrzutu nie redagujemy lokalnie (brak OCR). Test: `ai-import-minimize`. **Otwarte (#500):**
   ocena prawna (art. 6/14, role), decyzja o imporcie obrazu.
+- [x] Asystent redagowania treści oferty (#37, część pracodawcy; za flagą `AI_JOB_ASSIST_ENABLED`,
+  domyślnie wyłączony; `docs/AI_JOB_ASSIST.md`): panel na krokach 5–6 kreatora
+  (`JobAssistPanel`) → akcja `suggestJobText` (recruiter+ aktywnej firmy, limit per firma 20/h
+  i 60/dobę fail-closed, hook budżetu `src/lib/ai-assist/budget.ts` dla #36) → Claude
+  (`claude-opus-5-5`, `AI_JOB_ASSIST_MODEL`, structured output) → propozycja brzmienia opisu,
+  obowiązków i wymagań w języku oferty. Wejście ścisłe (tylko tekst oferty — bez danych
+  kandydatów), e-maile/telefony/identyfikatory usuwane przed wysłaniem, polecenia dla AI
+  (wzorce PL/NL/FR/EN + flaga modelu) = brak propozycji; propozycja z nową liczbą/linkiem albo
+  danymi kontaktowymi nie jest pokazywana. Pole zmienia się tylko po „Użyj propozycji”, obok
+  zawsze tekst rekrutera i „Przywróć mój tekst”; akcja niczego nie zapisuje i nie publikuje.
+  Informacja o AI przed pierwszym użyciem. Atrapa `AI_JOB_ASSIST_PROVIDER=fixture` tylko poza
+  produkcją. Testy: `job-assist-guard`, `job-assist-action`, `ai-inventory`, E2E `job-assist`.
+  **Otwarte:** część dla kandydata (#37), budżet globalny (#36), ocena prawna art. 50 AI Act,
+  fakty słowne (bez liczb) wykrywa tylko przegląd rekrutera.
 - [x] Wygaszanie ofert (#72, migracja `0085`): `expire_due_jobs()` (service_role, `SKIP LOCKED`,
   zwraca liczbę) zmienia tylko `active` z `expires_at <= now()` na `expired`; woła je
   `/api/maintenance` (cron Railway co godzinę, `docs/railway/README.md`). Panel nie czeka na cron:
