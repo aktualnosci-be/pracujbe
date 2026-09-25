@@ -2,7 +2,7 @@
 
 import { isPortalDataConfigured } from '@/lib/db/portal';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { readTeamInvitationSignup, type TeamInvitationSignupPreview } from '@/lib/team/invite-signup';
 
 /**
