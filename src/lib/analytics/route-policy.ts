@@ -7,6 +7,7 @@ const PRIVATE_ROOTS = new Set([
   'rejestracja',
   'rejestracja-pracodawca',
   'potwierdzenie',
+  'potwierdz-email',
   'reset-hasla',
   'ustaw-nowe-haslo',
   'wypisz',
@@ -27,6 +28,6 @@ export function allowsTrackingOnPath(pathname: string): boolean {
 export function isOneTimeLinkPath(pathname: string): boolean {
   const segments = pathname.split('/').filter(Boolean);
   const root = segments[1];
-  return root === 'wypisz' || root === 'ustaw-nowe-haslo' ||
+  return root === 'wypisz' || root === 'ustaw-nowe-haslo' || root === 'potwierdz-email' ||
     (root === 'aplikacja' && (segments[2] === 'potwierdz' || segments[2] === 'przejmij'));
 }

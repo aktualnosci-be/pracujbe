@@ -595,7 +595,13 @@
     "botCheckRequired": "Terminez la vérification de sécurité au-dessus du bouton, puis envoyez le formulaire.",
     "botCheckExpired": "La vérification a expiré. Confirmez-la à nouveau.",
     "botCheckLoadFailed": "La vérification de sécurité n'a pas pu être chargée. Vérifiez votre connexion ou désactivez le blocage de contenu pour ce site, puis réessayez.",
-    "botCheckRetry": "Recharger la vérification"
+    "botCheckRetry": "Recharger la vérification",
+    "confirmEmailTitle": "Activer le compte",
+    "confirmEmailIntro": "Cliquez sur le bouton pour confirmer votre adresse e-mail et accéder à votre compte.",
+    "confirmEmailSubmit": "Confirmer l’adresse e-mail",
+    "linkMissing": "Nous n’avons trouvé aucune donnée dans le lien. Ouvrez à nouveau le lien du message ou demandez-en un nouveau.",
+    "requestNewResetLink": "Demander un nouveau lien de changement de mot de passe",
+    "confirmEmailExpiredHint": "Le lien de confirmation a expiré ? Connectez-vous avec votre adresse e-mail et votre mot de passe — nous vous enverrons un nouveau lien."
   },
   "metadata": {
     "homeTitle": "Pracuj.be — Travailler en Belgique sans CV",
@@ -606,6 +612,7 @@
   "errors": {
     "authInvalidCredentials": "Adresse e-mail ou mot de passe incorrect.",
     "authEmailNotConfirmed": "Confirmez d’abord votre adresse e-mail en cliquant sur le lien que nous vous avons envoyé.",
+    "authLinkInvalid": "Le lien est invalide, a expiré ou a déjà été utilisé. Demandez-en un nouveau.",
     "permissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action.",
     "validationFailed": "Vérifiez vos informations et réessayez.",
     "jobNotActive": "Cette offre n'est plus active.",

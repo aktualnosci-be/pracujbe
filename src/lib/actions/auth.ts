@@ -1,40 +1,44 @@
 'use server';
 
 /**
- * Server Actions uwierzytelniania (Supabase Auth — realne, nie mock).
+ * Server Actions uwierzytelniania — Better Auth + PostgreSQL Railway (#24), realne, nie mock.
  *
  * Kontrakt zwrotu: akcje zwracają serializowalny `AuthActionResult` z ustabilizowanym
- * kodem błędu (`ErrorCode`) — NIGDY technikaliów (stack trace / SQL / surowej odpowiedzi
- * dostawcy). Wewnętrznie mapujemy błędy Supabase na `AppError` z kodem (Invariant #8);
- * warstwa formularza tłumaczy kod na komunikat (`errors.<code>`).
+ * kodem błędu (`ErrorCode`) — NIGDY technikaliów (stack trace / SQL / komunikatu SDK).
+ * Błędy Better Auth mapujemy na `AppError` z kodem (Invariant #8); formularz tłumaczy kod
+ * na komunikat (`errors.<code>`).
  *
- * Sukces logowania/rejestracji kończy się `redirect(...)` (rzuca NEXT_REDIRECT poza
- * blokiem try, więc nie jest łapany). Reset hasła zwraca neutralny sukces — NIE ujawnia,
- * czy e-mail istnieje.
+ * Kolejność każdej akcji: limiter PostgreSQL (fail-safe) → Turnstile → Zod → SDK przez
+ * `auth.api` (bez publicznych endpointów, `/api/auth/[...all]` ich nie wystawia). Cookie sesji
+ * zapisuje plugin `nextCookies()`. Rola i stan konta pochodzą WYŁĄCZNIE z `public.profiles`
+ * (pula domeny pod RLS), nigdy z formularza, URL ani metadanych rejestracji.
  *
- * Locale rejestracji: metadane (role/first_name/last_name/locale) czyta trigger
- * `handle_new_user()` i ustawia z nich `account_locale`/`signup_locale`. `preferred_locale`
- * dopisujemy tu (best-effort, klient service-role), bo trigger go nie ustawia.
+ * Sukces logowania/rejestracji/potwierdzenia kończy się `redirect(...)` (rzuca NEXT_REDIRECT
+ * poza blokiem try). Reset hasła zwraca neutralny sukces — nie ujawnia, czy konto istnieje.
+ * Bez konfiguracji kont (`isPortalAuthConfigured()`) akcje zwracają `INTERNAL` (tryb demo).
  */
 
 import { getLocale } from 'next-intl/server';
-import { headers } from 'next/headers';
-import { z } from 'zod/v3';
-import type { User } from '@supabase/supabase-js';
-
+import { cookies, headers } from 'next/headers';
 import { redirect as redirectPath } from 'next/navigation';
+import { parseSetCookieHeader, toCookieOptions } from 'better-auth/cookies';
+import { z } from 'zod/v3';
 
 import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
+import { bootstrapCompany } from '@/lib/auth/bootstrap-company';
 import { mapAuthError } from '@/lib/auth/map-auth-error';
-import { roleFromProfileRead } from '@/lib/auth/profile-role';
-import { env } from '@/lib/env';
+import { safeNextPath } from '@/lib/auth/next-path';
+import { roleFromProfileRead, type ProfileRole } from '@/lib/auth/profile-role';
+import { getAuthRuntime } from '@/lib/auth/runtime';
+import { withCandidateSignup, withEmployerSignup } from '@/lib/auth/signup-context';
+import { getDomainPool } from '@/lib/db/runtime';
+import { withUserTransaction } from '@/lib/db/transaction';
+import { env, isPortalAuthConfigured } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
-import { createServerClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import {
   loginSchema,
   passwordSchema,
@@ -46,17 +50,26 @@ import {
   type RegisterEmployerInput,
   type ResetInput,
 } from '@/lib/validation/auth';
-import { safeNextPath } from '@/lib/auth/next-path';
+
+/** Token resetu Better Auth: losowy identyfikator URL-safe (bez kropek i ukośników). */
+const resetTokenSchema = z.string().min(16).max(256).regex(/^[A-Za-z0-9_-]+$/);
+/** Token weryfikacji adresu: JWT HS256 podpisany sekretem Better Auth. */
+const verifyTokenSchema = z
+  .string()
+  .max(4096)
+  .regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
 
 /**
- * Schemat ustawienia nowego hasła (po sesji recovery). Reużywa `passwordSchema`
- * (min 8, litera + cyfra) i wymaga zgodnego powtórzenia. Komunikaty to klucze i18n.
- * Definiowany lokalnie (plik `'use server'` może eksportować tylko akcje async).
+ * Schemat ustawienia nowego hasła (z linku resetu). Reużywa `passwordSchema` (min 8, litera +
+ * cyfra) i wymaga zgodnego powtórzenia. Token pochodzi z linku (fragment `#token=`), nie z sesji:
+ * zalogowanie na inne konto nie daje prawa do resetu. Definiowany lokalnie (plik `'use server'`
+ * może eksportować tylko akcje async).
  */
 const updatePasswordSchema = z
   .object({
     password: passwordSchema,
     passwordConfirm: z.string().min(1, 'auth.error.passwordConfirmRequired'),
+    token: resetTokenSchema,
   })
   .refine((data) => data.password === data.passwordConfirm, {
     path: ['passwordConfirm'],
@@ -69,12 +82,15 @@ export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>;
 /** Wynik akcji przekazywany do formularza (serializowalny). Na sukcesie z przekierowaniem akcja nie wraca. */
 export type AuthActionResult = { ok: true } | { ok: false; error: ErrorCode };
 
-/** Role rozpoznawane przy przekierowaniu do panelu (self-signup: candidate/employer). */
-type SignupRole = 'candidate' | 'employer';
-type Role = SignupRole | 'admin';
+/**
+ * Cel po potwierdzeniu adresu (np. oferta, z której kandydat przyszedł). Cookie tej samej
+ * przeglądarki, HttpOnly; link w e-mailu go nie zawiera. Wartość ponownie walidowana przy odczycie.
+ */
+const VERIFY_NEXT_COOKIE = 'pb_verify_next';
+const VERIFY_NEXT_MAX_AGE = 60 * 60 * 24;
 
-/** Ścieżka panelu wg roli (bez prefiksu locale — dokłada go `redirect`/callback). */
-function panelPath(role: Role): string {
+/** Ścieżka panelu wg roli (bez prefiksu locale — dokłada go `redirect`). */
+function panelPath(role: ProfileRole): string {
   switch (role) {
     case 'employer':
       return '/employer';
@@ -92,123 +108,82 @@ async function currentLocale(): Promise<Locale> {
   return supported.includes(value) ? (value as Locale) : routing.defaultLocale;
 }
 
+/** Runtime Better Auth; brak konfiguracji kont → kontrolowany `INTERNAL`. */
+async function portalAuth() {
+  if (!isPortalAuthConfigured()) {
+    throw new AppError('INTERNAL', { context: { reason: 'portal_auth_unconfigured' } });
+  }
+  return getAuthRuntime();
+}
+
+type AuthRuntime = Awaited<ReturnType<typeof getAuthRuntime>>;
+
 /**
- * Odczytuje rolę zalogowanego użytkownika z profiles (RLS: właściciel czyta swój wiersz).
- * Błąd, brak profilu lub nieznana rola → AppError('INTERNAL'), nigdy domyślny kandydat.
+ * Rola z aktywnego profilu (pod RLS, UUID z serwerowego wyniku SDK). Profil nieaktywny,
+ * usunięty, brak profilu, błąd odczytu lub nieznana rola → `AppError('INTERNAL')`, nigdy
+ * domyślny kandydat (#277).
  */
-async function resolveRole(
-  supabase: Awaited<ReturnType<typeof createServerClient>>,
-  userId: string,
-): Promise<Role> {
-  const result = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+async function readProfileRole(userId: string): Promise<ProfileRole> {
+  let result: { data: unknown; error?: unknown };
+  try {
+    const row = await withUserTransaction(await getDomainPool(), userId, async (tx) => {
+      const read = (await tx.query(
+        'SELECT role FROM public.profiles WHERE id = $1 AND is_active = true AND deleted_at IS NULL',
+        [userId],
+      )) as { rows: { role: string }[] };
+      return read.rows[0] ?? null;
+    });
+    result = { data: row };
+  } catch (error) {
+    result = { data: null, error };
+  }
   return roleFromProfileRead(result);
 }
 
-interface SignUpArgs {
-  email: string;
-  password: string;
-  role: SignupRole;
-  firstName: string;
-  lastName: string;
-  companyName?: string;
-  locale: Locale;
-  /** Zgoda na regulamin i politykę prywatności z walidowanego wejścia akcji. */
-  agreeTerms: boolean;
-  /** Zwalidowany cel po potwierdzeniu e-maila (np. oferta); brak → panel wg roli. */
-  next?: string | null;
-}
-
 /**
- * Tworzy konto Auth (signUp) z metadanymi dla triggera i linkiem potwierdzenia do
- * `/auth/callback`. Wymaga zgody na regulamin; receipt akceptacji jest obowiązkowy (jego
- * brak cofa niepotwierdzone konto). `preferred_locale` dopisuje best-effort (service-role).
+ * Przenosi `Set-Cookie` z wyniku `auth.api` na odpowiedź akcji. Plugin `nextCookies()` robi to
+ * samo w runtime Next; jawne przeniesienie nie zależy od sposobu ładowania `next/headers`
+ * w bibliotece i jest idempotentne (te same wartości).
  */
-async function signUpUser(args: SignUpArgs): Promise<void> {
-  // Zgoda sprawdzana na serwerze niezależnie od formularza: bez niej nie tworzymy konta.
-  if (args.agreeTerms !== true) {
-    throw new AppError('VALIDATION_FAILED', { context: { reason: 'terms_not_accepted' } });
-  }
-  const supabase = await createServerClient();
-
-  const next = args.next ?? `/${args.locale}${panelPath(args.role)}`;
-  const emailRedirectTo =
-    `${env.siteUrl}/auth/callback` +
-    `?next=${encodeURIComponent(next)}&locale=${encodeURIComponent(args.locale)}`;
-
-  const metadata: Record<string, string> = {
-    role: args.role,
-    first_name: args.firstName,
-    last_name: args.lastName,
-    locale: args.locale,
-  };
-  if (args.companyName) {
-    metadata['company_name'] = args.companyName;
-  }
-
-  const { data, error } = await supabase.auth.signUp({
-    email: args.email,
-    password: args.password,
-    options: { emailRedirectTo, data: metadata },
+async function applyAuthCookies(responseHeaders: Headers | null | undefined): Promise<void> {
+  const setCookie = responseHeaders?.get('set-cookie');
+  if (!setCookie) return;
+  const store = await cookies();
+  parseSetCookieHeader(setCookie).forEach((attributes, name) => {
+    if (name) store.set(name, attributes.value, toCookieOptions(attributes));
   });
+}
 
-  if (error) {
-    throw mapAuthError(error);
-  }
-
-  // Brak tożsamości = adres już zarejestrowany (odpowiedź neutralna dostawcy): nie ma nowego
-  // konta ani receiptu do zapisania, a błąd ujawniałby istnienie konta.
-  const user = data.user;
-  if (!user?.identities?.length) return;
-
-  // Receipt akceptacji regulaminu i polityki prywatności jest WARUNKIEM konta: bez niego
-  // rejestracja się nie kończy. Kluczujemy po userId — auth.uid() jest jeszcze null (konto
-  // czeka na potwierdzenie e-mail), więc zapis idzie service-rolem.
-  let admin: ReturnType<typeof createAdminClient>;
-  try {
-    admin = createAdminClient();
-    const store = await headers();
-    const ip =
-      store.get('x-real-ip')?.trim() ||
-      store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
-      null;
-    const { error: rcErr } = await admin.rpc('record_document_acceptance', {
-      p_profile_id: user.id,
-      p_documents: ['terms', 'privacy'],
-      p_locale: args.locale,
-      p_ip: ip,
-      p_user_agent: store.get('user-agent'),
-    });
-    if (rcErr) throw rcErr;
-  } catch (e) {
-    captureError(e, { area: 'auth.recordDocumentAcceptance' });
-    await discardUnconfirmedSignup(user);
-    throw new AppError('INTERNAL', { context: { reason: 'signup_receipt_failed' } });
-  }
-
-  // preferred_locale nie jest ustawiany przez trigger — dopisujemy go osobno. Best-effort:
-  // e-mail i tak trafi do właściwego języka dzięki account_locale/signup_locale.
-  try {
-    const { error: localeErr } = await admin
-      .from('profiles')
-      .update({ preferred_locale: args.locale })
-      .eq('id', user.id);
-    if (localeErr) captureError(localeErr, { area: 'auth.signUpUser.preferredLocale' });
-  } catch (e) {
-    captureError(e, { area: 'auth.signUpUser.preferredLocale' });
-  }
+/** Nazwy cookies sesji SDK (z prefiksem `__Secure-`). */
+async function sessionCookieNames(auth: AuthRuntime): Promise<string[]> {
+  const context = await auth.$context;
+  return [
+    context.authCookies.sessionToken.name,
+    context.authCookies.sessionData.name,
+    context.authCookies.dontRememberToken.name,
+  ];
 }
 
 /**
- * Cofa świeżo utworzone, NIEpotwierdzone konto, gdy nie udało się zapisać receiptu.
- * Konto już potwierdzone zostaje nietknięte.
+ * Cofa świeżo wydaną sesję (np. brak znanej roli po logowaniu): usuwa ją z bazy i kasuje cookie
+ * z odpowiedzi. Best-effort — błąd trafia do Sentry, a użytkownik i tak dostaje błąd, nie panel.
  */
-async function discardUnconfirmedSignup(user: User): Promise<void> {
-  if (user.email_confirmed_at) return;
+async function discardSession(
+  auth: AuthRuntime,
+  issued: { token?: string | null; userId?: string } = {},
+): Promise<void> {
   try {
-    const { error } = await createAdminClient().auth.admin.deleteUser(user.id);
-    if (error) captureError(error, { area: 'auth.signUpUser.discard' });
-  } catch (e) {
-    captureError(e, { area: 'auth.signUpUser.discard' });
+    const { internalAdapter } = await auth.$context;
+    if (issued.token) await internalAdapter.deleteSession(issued.token);
+    else if (issued.userId) await internalAdapter.deleteUserSessions(issued.userId);
+  } catch (error) {
+    captureError(error, { area: 'auth.discardSession' });
+  }
+  try {
+    const store = await cookies();
+    for (const name of await sessionCookieNames(auth)) store.delete(name);
+  } catch (error) {
+    captureError(error, { area: 'auth.discardSession.cookies' });
   }
 }
 
@@ -236,28 +211,29 @@ export async function signIn(
   }
 
   const locale = await currentLocale();
-  let role: Role = 'candidate';
+  let role: ProfileRole;
 
   try {
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: parsed.data.email,
-      password: parsed.data.password,
-    });
-    if (error) {
+    const auth = await portalAuth();
+    let result: { token?: string | null; user: { id: string } };
+    try {
+      const signedIn = await auth.api.signInEmail({
+        body: { email: parsed.data.email, password: parsed.data.password },
+        headers: await headers(),
+        returnHeaders: true,
+      });
+      result = signedIn.response;
+      await applyAuthCookies(signedIn.headers);
+    } catch (error) {
       throw mapAuthError(error);
     }
-    const userId = data.user?.id;
-    if (!userId) {
-      throw new AppError('INTERNAL', { context: { reason: 'no_user_after_signin' } });
-    }
     try {
-      role = await resolveRole(supabase, userId);
+      role = await readProfileRole(result.user.id);
     } catch (e) {
-      // Bez znanej roli nie zostawiamy półotwartej sesji: wylogowanie (best-effort)
-      // i kontrolowany błąd zamiast przekierowania do panelu innej roli.
+      // Bez znanej roli nie zostawiamy półotwartej sesji: unieważnienie i kontrolowany błąd
+      // zamiast przekierowania do panelu innej roli.
       captureError(e, { area: 'auth.signIn.resolveRole' });
-      await supabase.auth.signOut().catch(() => undefined);
+      await discardSession(auth, { token: result.token });
       throw e;
     }
   } catch (e) {
@@ -273,9 +249,43 @@ export async function signIn(
   return redirect({ href: panelPath(role), locale });
 }
 
+/** Zapamiętuje bezpieczny cel po potwierdzeniu adresu (ta sama przeglądarka). */
+async function rememberVerifyNext(next: string | null): Promise<void> {
+  const store = await cookies();
+  if (!next) {
+    store.delete(VERIFY_NEXT_COOKIE);
+    return;
+  }
+  store.set(VERIFY_NEXT_COOKIE, next, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: env.siteUrl.startsWith('https:'),
+    path: '/',
+    maxAge: VERIFY_NEXT_MAX_AGE,
+  });
+}
+
 /**
- * Rejestracja kandydata. Sukces → strona potwierdzenia e-maila. Bezpieczny `next` trafia do
- * linku potwierdzającego (`/auth/callback?next=`), więc po potwierdzeniu kandydat wraca np. do oferty.
+ * Wspólna ścieżka rejestracji. Profil, preferowany język i receipty akceptacji regulaminu
+ * i polityki prywatności zapisują triggery 0008/0059 w TEJ SAMEJ transakcji co konto; zlecenie
+ * e-maila potwierdzającego (0061) także — awaria dowolnej części cofa rejestrację. Istniejący
+ * adres daje ten sam wynik co nowy (SDK zwraca neutralny sukces, bez zmiany istniejącego konta).
+ */
+async function signUp(
+  run: (action: (body: { email: string; password: string; name: string }) => Promise<unknown>) => Promise<unknown>,
+): Promise<void> {
+  const auth = await portalAuth();
+  const requestHeaders = await headers();
+  try {
+    await run((body) => auth.api.signUpEmail({ body, headers: requestHeaders }));
+  } catch (error) {
+    throw mapAuthError(error);
+  }
+}
+
+/**
+ * Rejestracja kandydata. Sukces → strona potwierdzenia e-maila. Bezpieczny `next` wraca po
+ * potwierdzeniu adresu w tej samej przeglądarce (cookie), np. do oferty.
  */
 export async function registerCandidate(
   input: RegisterCandidateInput,
@@ -294,20 +304,11 @@ export async function registerCandidate(
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
-
   const locale = parsed.data.locale ?? (await currentLocale());
 
   try {
-    await signUpUser({
-      email: parsed.data.email,
-      password: parsed.data.password,
-      role: 'candidate',
-      firstName: parsed.data.firstName,
-      lastName: parsed.data.lastName,
-      locale,
-      agreeTerms: parsed.data.agreeTerms,
-      next: safeNextPath(next),
-    });
+    await signUp((action) => withCandidateSignup(parsed.data, locale, action));
+    await rememberVerifyNext(safeNextPath(next));
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
   }
@@ -332,20 +333,11 @@ export async function registerEmployer(
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
-
   const locale = parsed.data.locale ?? (await currentLocale());
 
   try {
-    await signUpUser({
-      email: parsed.data.email,
-      password: parsed.data.password,
-      role: 'employer',
-      firstName: parsed.data.firstName,
-      lastName: parsed.data.lastName,
-      companyName: parsed.data.companyName,
-      locale,
-      agreeTerms: parsed.data.agreeTerms,
-    });
+    await signUp((action) => withEmployerSignup(parsed.data, locale, action));
+    await rememberVerifyNext(null);
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
   }
@@ -354,8 +346,10 @@ export async function registerEmployer(
 }
 
 /**
- * Wysyła link resetu hasła. Odpowiedź jest ZAWSZE neutralna (nie ujawnia, czy e-mail
- * istnieje). Wyjątki: błąd walidacji oraz brak konfiguracji (INTERNAL) są sygnalizowane.
+ * Zamawia link resetu hasła. Odpowiedź jest ZAWSZE neutralna (nie ujawnia, czy konto istnieje):
+ * także awaria zapisu zlecenia dla istniejącego konta daje ten sam wynik (błąd trafia do Sentry).
+ * Wyjątki: limit prób, bot-check, walidacja i brak konfiguracji kont (INTERNAL).
+ * Język wiadomości i docelowej strony wynika z profilu ODBIORCY (kolejka 0061), nie z formularza.
  */
 export async function requestPasswordReset(
   input: ResetInput,
@@ -375,59 +369,48 @@ export async function requestPasswordReset(
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
 
-  const locale = await currentLocale();
-
+  let auth: AuthRuntime;
   try {
-    const supabase = await createServerClient();
-    // Callback wymienia kod recovery na sesję i przekierowuje na stronę ustawienia hasła
-    // (dokładnie tam, w języku odbiorcy). `next` jest allowlistowany w handlerze callbacku.
-    const next = `/${locale}/ustaw-nowe-haslo`;
-    const redirectTo =
-      `${env.siteUrl}/auth/callback` +
-      `?next=${encodeURIComponent(next)}&locale=${encodeURIComponent(locale)}`;
-    const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, { redirectTo });
-    if (error) {
-      const mapped = mapAuthError(error);
-      // Rate-limit sygnalizujemy (nie ujawnia istnienia konta); resztę traktujemy neutralnie.
-      if (mapped.code === 'RATE_LIMITED') {
-        return { ok: false, error: 'RATE_LIMITED' };
-      }
-    }
-  } catch (e) {
-    if (isAppError(e) && e.code === 'INTERNAL') {
-      return { ok: false, error: 'INTERNAL' };
-    }
-    // provider/nieznany błąd → pozostajemy neutralni
+    auth = await portalAuth();
+  } catch {
+    return { ok: false, error: 'INTERNAL' };
+  }
+  try {
+    await auth.api.requestPasswordReset({
+      body: { email: parsed.data.email },
+      headers: await headers(),
+    });
+  } catch (error) {
+    captureError(mapAuthError(error), { area: 'auth.requestPasswordReset' });
   }
 
   return { ok: true };
 }
 
 /**
- * Ustawia nowe hasło po sesji recovery (użytkownik trafił tu z linku resetu przez
- * `/auth/callback`, który wymienił kod na sesję). Waliduje wejście (min 8, litera+cyfra,
- * zgodne powtórzenie) i wywołuje `supabase.auth.updateUser({ password })`.
- *
- * Zwraca serializowalny wynik — bez technikaliów (Invariant #8). Brak aktywnej sesji
- * (np. link wygasł) → `AUTH_INVALID_CREDENTIALS`.
+ * Ustawia nowe hasło tokenem z linku resetu (fragment `#token=` strony `ustaw-nowe-haslo`).
+ * Token wskazuje konto niezależnie od sesji przeglądarki; działa raz, a sukces unieważnia
+ * wszystkie sesje tego konta (`revokeSessionsOnPasswordReset`). Nie tworzy nowej sesji —
+ * formularz kieruje do logowania. Wygasły/użyty/zły token → `AUTH_LINK_INVALID`.
  */
 export async function updatePassword(input: UpdatePasswordInput): Promise<AuthActionResult> {
+  if (!(await checkRateLimit('password-update', { max: 10, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
   const parsed = updatePasswordSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: 'VALIDATION_FAILED' };
+    const tokenIssue = parsed.error.issues.some((issue) => issue.path[0] === 'token');
+    return { ok: false, error: tokenIssue ? 'AUTH_LINK_INVALID' : 'VALIDATION_FAILED' };
   }
 
   try {
-    const supabase = await createServerClient();
-
-    // Wymagana aktywna sesja (recovery). getUser() weryfikuje token po stronie Auth.
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) {
-      return { ok: false, error: 'AUTH_INVALID_CREDENTIALS' };
-    }
-
-    const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-    if (error) {
+    const auth = await portalAuth();
+    try {
+      await auth.api.resetPassword({
+        body: { newPassword: parsed.data.password, token: parsed.data.token },
+        headers: await headers(),
+      });
+    } catch (error) {
       throw mapAuthError(error);
     }
   } catch (e) {
@@ -437,78 +420,114 @@ export async function updatePassword(input: UpdatePasswordInput): Promise<AuthAc
   return { ok: true };
 }
 
-/** Prosty, deterministyczny rdzeń sluga z losowym sufiksem (slug `companies` jest UNIQUE). */
-function companySlug(name: string): string {
-  const base = name
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/g, '');
-  const suffix = Math.random().toString(36).slice(2, 8);
-  return base ? `${base}-${suffix}` : `firma-${suffix}`;
+/** Nazwa firmy z prywatnych metadanych rejestracji (zapisanych serwerowo przez adapter). */
+function companyNameFromMetadata(user: Record<string, unknown>): string | null {
+  const meta = user['raw_user_meta_data'];
+  if (!meta || typeof meta !== 'object') return null;
+  const name = (meta as Record<string, unknown>)['company_name'];
+  return typeof name === 'string' && name.trim().length > 0 ? name.trim() : null;
 }
 
 /**
- * Bootstrap firmy pracodawcy po rejestracji (idempotentny, #28). Jedno wywołanie RPC
- * `create_first_company` (0072): w JEDNEJ transakcji blokuje wiersz własnego profilu,
- * ponownie sprawdza członkostwo i dopiero wtedy tworzy firmę + właściciela. Dwa
- * równoczesne callbacki dają jedną firmę — druga transakcja czeka na blokadę i zwraca
- * istniejącą (`created = false`). Kandydat, profil nieaktywny/usunięty oraz samo
- * nieaktywne członkostwo (odebrany dostęp) → PERMISSION_DENIED, bez firmy zastępczej.
- * Błąd wycofuje całą transakcję, więc ponowienie jest bezpieczne.
+ * Potwierdza adres e-mail tokenem z linku (fragment `#token=` strony `potwierdz-email`) —
+ * wywoływane kliknięciem przycisku, nie samym otwarciem linku (skaner poczty nie aktywuje konta).
  *
- * Może przyjąć gotowego klienta (np. z callbacku Auth, który po wymianie kodu ma sesję
- * w pamięci); bez argumentu tworzy własnego klienta z sesji cookie.
+ * Pierwsze potwierdzenie tworzy sesję (cookie przez `nextCookies`), a pracodawca bez firmy
+ * dostaje ją idempotentnie (`bootstrapCompany`: blokada profilu, jedna firma przy równoległych
+ * kliknięciach; błąd nie blokuje logowania — panel pokaże formularz firmy). Konto już
+ * potwierdzone → logowanie (token nie wydaje drugiej sesji). Zły/wygasły token → `AUTH_LINK_INVALID`.
  */
-export async function bootstrapCompany(
-  client?: Awaited<ReturnType<typeof createServerClient>>,
-): Promise<AuthActionResult> {
+export async function confirmEmail(token: string): Promise<AuthActionResult> {
+  if (!(await checkRateLimit('verify-email', { max: 20, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+  const parsedToken = verifyTokenSchema.safeParse(token);
+  if (!parsedToken.success) return { ok: false, error: 'AUTH_LINK_INVALID' };
+
+  const locale = await currentLocale();
+  let target: { path: string } | { panel: ProfileRole } | { login: true };
+
   try {
-    const supabase = client ?? (await createServerClient());
-
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) {
-      return { ok: false, error: 'PERMISSION_DENIED' };
+    const auth = await portalAuth();
+    let sessionIssued = false;
+    try {
+      const verified = await auth.api.verifyEmail({
+        query: { token: parsedToken.data },
+        headers: await headers(),
+        returnHeaders: true,
+      });
+      const context = await auth.$context;
+      const sessionCookie = context.authCookies.sessionToken.name;
+      sessionIssued = verified.headers.getSetCookie().some((c) => c.startsWith(`${sessionCookie}=`));
+      await applyAuthCookies(verified.headers);
+    } catch (error) {
+      throw mapAuthError(error);
     }
-    const user = userData.user;
 
-    const metadata = user.user_metadata as Record<string, unknown> | undefined;
-    const rawName = metadata?.['company_name'];
-    const companyName = typeof rawName === 'string' ? rawName.trim() : '';
-    if (!companyName) {
-      return { ok: false, error: 'VALIDATION_FAILED' };
-    }
+    if (!sessionIssued) {
+      target = { login: true };
+    } else {
+      // Token przeszedł weryfikację podpisu w SDK; e-mail z jego treści wskazuje konto.
+      const { verifyJWT } = await import('better-auth/crypto');
+      const payload = await verifyJWT<{ email?: unknown }>(parsedToken.data, env.authSecret ?? '');
+      const email = typeof payload?.email === 'string' ? payload.email : null;
+      const context = await auth.$context;
+      const found = email ? await context.internalAdapter.findUserByEmail(email) : null;
+      if (!found) throw new AppError('INTERNAL', { context: { reason: 'verified_user_missing' } });
+      const user = found.user as unknown as Record<string, unknown> & { id: string };
 
-    // Bez wcześniejszego SELECT członkostwa: odczyt poza blokadą był źródłem wyścigu.
-    const { error } = await supabase.rpc('create_first_company', {
-      p_name: companyName,
-      p_slug: companySlug(companyName),
-      p_vat_number: null,
-    });
-    if (error) {
-      if (error.message?.includes('PERMISSION_DENIED')) {
-        return { ok: false, error: 'PERMISSION_DENIED' };
+      let role: ProfileRole;
+      try {
+        role = await readProfileRole(user.id);
+      } catch (e) {
+        captureError(e, { area: 'auth.confirmEmail.resolveRole' });
+        await discardSession(auth, { userId: user.id });
+        throw e;
       }
-      throw new AppError('INTERNAL', { cause: error, context: { rpc: 'create_first_company' } });
+
+      if (role === 'employer') {
+        const companyName = companyNameFromMetadata(user);
+        if (companyName) {
+          try {
+            await bootstrapCompany(await getDomainPool(), user.id, companyName);
+          } catch (e) {
+            // Konto działa; panel pracodawcy bez firmy pokaże formularz jej założenia.
+            captureError(e, { area: 'auth.confirmEmail.bootstrapCompany' });
+          }
+        }
+      }
+
+      const store = await cookies();
+      const next = role === 'candidate' ? safeNextPath(store.get(VERIFY_NEXT_COOKIE)?.value) : null;
+      store.delete(VERIFY_NEXT_COOKIE);
+      target = next ? { path: next } : { panel: role };
     }
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
   }
 
-  return { ok: true };
+  if ('path' in target) return redirectPath(target.path);
+  if ('panel' in target) return redirect({ href: panelPath(target.panel), locale });
+  return redirect({ href: '/logowanie', locale });
 }
 
-/** Wylogowanie. Zawsze przekierowuje na stronę logowania. */
+/**
+ * Wylogowanie: unieważnia sesję w bazie i usuwa cookie. Awaria bazy nie jest raportowana jako
+ * globalne wylogowanie — cookie tej przeglądarki i tak znika, błąd trafia do Sentry.
+ * Zawsze przekierowuje na stronę logowania.
+ */
 export async function signOut(): Promise<void> {
   const locale = await currentLocale();
-  try {
-    const supabase = await createServerClient();
-    await supabase.auth.signOut();
-  } catch {
-    // nawet przy błędzie przekierowujemy do logowania
+  if (isPortalAuthConfigured()) {
+    let auth: AuthRuntime | undefined;
+    try {
+      auth = await getAuthRuntime();
+      const signedOut = await auth.api.signOut({ headers: await headers(), returnHeaders: true });
+      await applyAuthCookies(signedOut.headers);
+    } catch (error) {
+      captureError(error, { area: 'auth.signOut' });
+      if (auth) await discardSession(auth);
+    }
   }
   redirect({ href: '/logowanie', locale });
 }

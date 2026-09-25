@@ -6,8 +6,10 @@ import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
+import { getCurrentIdentity, type PortalIdentity } from '@/lib/auth/current';
+import { getDomainPool } from '@/lib/db/runtime';
+import { withUserTransaction } from '@/lib/db/transaction';
+import { isPortalAuthConfigured } from '@/lib/env';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
 import { getEmployerShellData } from '@/lib/data/employer';
@@ -21,13 +23,13 @@ import type { CompanySwitcherCompany } from '@/components/employer/CompanySwitch
  * Owija strony w chrome panelu (DashboardShell: jasny sidebar `.side-item` z przełącznikiem firmy
  * + topbar) poprzez kliencki `EmployerShell`.
  *
- * GUARD: przy skonfigurowanym Supabase wymaga (1) zalogowanego użytkownika oraz
- * (2) aktywnego członkostwa w firmie (`company_members.is_active = true`). Brak sesji →
- * /logowanie. Konto pracodawcy bez firmy (np. nieudany bootstrap po rejestracji — #365) →
- * zamiast strony formularz zakładania firmy (CompanyOnboarding), nie rejestracja nowego
- * konta; inne role bez firmy → /rejestracja-pracodawca. Błąd odczytu członkostwa → chrome
- * z komunikatem i ponowieniem (bez treści strony). Bez env → tryb demo (panel na danych
- * DEMO). `force-dynamic`, bo guard zależy od sesji.
+ * GUARD (#24): przy skonfigurowanych kontach wymaga (1) zweryfikowanej sesji serwerowej
+ * (`getCurrentIdentity`) oraz (2) aktywnego członkostwa w firmie (`company_members.is_active`,
+ * odczyt pod RLS z UUID sesji). Brak sesji → /logowanie. Konto pracodawcy bez firmy (np.
+ * nieudany bootstrap po potwierdzeniu adresu — #365) → formularz zakładania firmy
+ * (CompanyOnboarding); inne role bez firmy → /rejestracja-pracodawca. Błąd odczytu członkostwa →
+ * chrome z komunikatem i ponowieniem (bez treści strony). Bez konfiguracji kont → tryb demo
+ * (panel na danych DEMO). `force-dynamic`, bo guard zależy od sesji.
  *
  * Layout pozostaje serwerowy, aby wyeksportować NOINDEX dla całego poddrzewa panelu
  * (Invariant #9) — metadata dziedziczy się do stron.
@@ -37,6 +39,21 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
+
+/** Czy osoba ma aktywne członkostwo w jakiejkolwiek firmie (RLS: własne wiersze). `null` = błąd. */
+async function hasActiveMembership(identity: PortalIdentity): Promise<boolean | null> {
+  try {
+    return await withUserTransaction(await getDomainPool(), identity.id, async (tx) => {
+      const result = (await tx.query(
+        'SELECT EXISTS (SELECT 1 FROM public.company_members WHERE profile_id = $1 AND is_active = true) AS member',
+        [identity.id],
+      )) as { rows: { member: boolean }[] };
+      return result.rows[0]?.member === true;
+    });
+  } catch {
+    return null;
+  }
+}
 
 export default async function EmployerLayout({
   children,
@@ -57,39 +74,22 @@ export default async function EmployerLayout({
   let userName: string | undefined;
   let mode: EmployerShellMode = 'demo';
 
-  if (isSupabaseConfigured()) {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+  if (isPortalAuthConfigured()) {
+    const identity = await getCurrentIdentity();
+    if (!identity) {
       redirect({ href: '/logowanie', locale: locale as Locale });
-      return null; // nieosiągalne (redirect rzuca) — zawęża typ `user` dla TS
+      return null; // nieosiągalne (redirect rzuca) — zawęża typ dla TS
     }
 
     // Aktywne członkostwo w firmie jest wymagane, by wejść do panelu pracodawcy.
-    // RLS pozwala czytać własny wiersz (profile_id = auth.uid()). Użytkownik może
-    // należeć do wielu firm — limit(1) wystarcza do potwierdzenia dostępu.
-    const { data: memberships, error: membershipError } = await supabase
-      .from('company_members')
-      .select('id')
-      .eq('profile_id', user.id)
-      .eq('is_active', true)
-      .limit(1);
-    if (membershipError || !Array.isArray(memberships)) {
+    const member = await hasActiveMembership(identity);
+    if (member === null) {
       return <EmployerShell mode="error">{null}</EmployerShell>;
     }
-    if (memberships.length === 0) {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (profileError) return <EmployerShell mode="error">{null}</EmployerShell>;
-      if ((profile as { role?: string } | null)?.role !== 'employer') {
+    if (!member) {
+      if (identity.role !== 'employer') {
         redirect({ href: '/rejestracja-pracodawca', locale: locale as Locale });
       }
-      const rawName = (user.user_metadata as Record<string, unknown> | undefined)?.['company_name'];
       // #403: zaproszenia do zespołów (błąd odczytu nie blokuje zakładania własnej firmy).
       const mine = await getMyTeamInvitations();
       const tTeam = await getTranslations({ locale, namespace: 'team' });
@@ -106,7 +106,7 @@ export default async function EmployerLayout({
       return (
         <EmployerShell mode="ok">
           <CompanyOnboarding
-            defaultName={typeof rawName === 'string' ? rawName.trim() : ''}
+            defaultName=""
             invitations={invitations}
           />
         </EmployerShell>
