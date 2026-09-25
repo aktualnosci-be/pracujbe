@@ -735,6 +735,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     },
     note: 'Uzasadnienia odwołania i rozpatrzenia są anonimizowane przez dsa_retention_run po końcu drogi odwołania i okresie retencji (#43).',
   },
+  'public.ai_budget_limits': DICTIONARY('globalne limity kosztów AI, #36'),
+  'public.ai_usage_ledger': {
+    activities: ['ai-job-import'],
+    subjects: [],
+    columns: {},
+    note: 'Liczniki wywołań modeli AI (funkcja, model, wynik, tokeny, koszt, doba) — bez treści i identyfikatorów osób/firm (#36).',
+  },
   'public.dsa_retention_runs': {
     activities: ['dsa-moderation'],
     subjects: [],

@@ -39,6 +39,7 @@ vi.mock('@/lib/ai-import/extract', async (importOriginal) => {
 
 const COMPANY = '22222222-2222-4222-8222-222222222222';
 const JOB = '11111111-1111-4111-8111-111111111111';
+const RESERVATION = '44444444-4444-4444-8444-444444444444';
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
 
 const GOOD = {
@@ -102,6 +103,9 @@ beforeEach(() => {
   resetFakeDb({ id: USER, role: 'employer' });
   saveResult = () => null;
   fakeDb.rpc('save_job_draft', () => saveResult());
+  // #36: globalny budżet AI — rezerwacja i rozliczenie w bazie (atrapa).
+  fakeDb.rpc('ai_budget_reserve', () => RESERVATION);
+  fakeDb.rpc('ai_budget_settle', () => true);
   vi.mocked(isProductionMode).mockReturnValue(true);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
   vi.mocked(getActiveCompany).mockResolvedValue({
@@ -232,7 +236,10 @@ describe('wynik i zapis szkicu', () => {
       values: { title: 'Heftruckchauffeur (m/v/x)', city: 'Gent' },
     });
     expect(createJobDraft).toHaveBeenCalledWith('nl');
-    const rpcCalls = fakeDb.calls.filter((c) => c.kind === 'rpc' || c.kind === 'rpcrows');
+    // Poza rezerwacją/rozliczeniem budżetu AI (#36, service_role) — jedno RPC zapisu.
+    const rpcCalls = fakeDb.calls.filter(
+      (c) => (c.kind === 'rpc' || c.kind === 'rpcrows') && !c.name.startsWith('ai_budget_'),
+    );
     expect(rpcCalls).toHaveLength(1);
     expect(rpcCalls[0]).toMatchObject({ name: 'save_job_draft', as: USER, args: { p_job_id: JOB } });
     expect(JSON.parse(String(rpcCalls[0]!.args.p_content))).toMatchObject({ job: { title: 'Heftruckchauffeur (m/v/x)' } });
@@ -255,7 +262,8 @@ describe('wynik i zapis szkicu', () => {
     expect(res.ok && res.review).toEqual(expect.arrayContaining(['title', 'description', 'city']));
     expect(res.ok && Object.keys(res.values)).not.toContain('status');
     expect(createJobDraft).not.toHaveBeenCalled();
-    expect(fakeDb.calls).toHaveLength(0);
+    // Tylko budżet AI (#36): rezerwacja + rozliczenie, żadnego zapisu treści.
+    expect(fakeDb.calls.map((c) => c.name)).toEqual(['ai_budget_reserve', 'ai_budget_settle']);
   });
 
   it('materiał niebędący ogłoszeniem i awaria AI → kody użytkowe', async () => {
@@ -271,5 +279,39 @@ describe('wynik i zapis szkicu', () => {
     };
     const res = await importJobListing(imageForm());
     expect(res).toMatchObject({ ok: true, jobId: JOB, savedSteps: [] });
+  });
+});
+
+describe('globalny budżet AI (#36)', () => {
+  it('rezerwacja przed wywołaniem modelu i rozliczenie po nim', async () => {
+    const res = await importJobListing(imageForm());
+    expect(res.ok).toBe(true);
+    const names = fakeDb.calls.map((c) => c.name);
+    expect(names.indexOf('ai_budget_reserve')).toBeGreaterThanOrEqual(0);
+    expect(names.indexOf('ai_budget_settle')).toBeGreaterThan(names.indexOf('ai_budget_reserve'));
+    const reserve = fakeDb.calls.find((c) => c.name === 'ai_budget_reserve')!;
+    expect(reserve.as).toBe('service');
+    expect(reserve.args).toMatchObject({ p_feature: 'job_listing_import', p_model: 'claude-opus-5' });
+    expect(Object.keys(reserve.args).sort()).toEqual(['p_estimate_micro_usd', 'p_feature', 'p_model']);
+  });
+
+  it('przekroczony limit → AI_BUDGET_EXCEEDED bez wywołania modelu i bez szkicu', async () => {
+    fakeDb.rpc('ai_budget_reserve', () => {
+      throw pgError('P0001', 'AI_BUDGET_EXCEEDED');
+    });
+    expect(await importJobListing(imageForm())).toEqual({ ok: false, error: 'AI_BUDGET_EXCEEDED' });
+    expect(extract).not.toHaveBeenCalled();
+    expect(createJobDraft).not.toHaveBeenCalled();
+  });
+
+  it('brak bazy zadań serwerowych = odmowa płatnego dostawcy (fail-closed)', async () => {
+    fakeSession.serviceConfigured = false;
+    expect(await importJobListing(imageForm())).toEqual({ ok: false, error: 'AI_BUDGET_EXCEEDED' });
+    expect(extract).not.toHaveBeenCalled();
+  });
+
+  it('kontrola ujemna: przy dostępnym budżecie ten sam import woła model', async () => {
+    await importJobListing(imageForm());
+    expect(extract).toHaveBeenCalledTimes(1);
   });
 });

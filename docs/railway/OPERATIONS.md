@@ -39,6 +39,10 @@ identyfikatorów ani konfiguracji.
 | `db_connections` | alarm | użyte ≥ 80% z `max_connections − superuser_reserved_connections` | wyciek połączeń, za dużo replik |
 | `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h | błędne adresy, odrzucenia dostawcy |
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |
+| `ai_budget_exhausted` | alarm | wydatek AI doby lub miesiąca ≥ limit, limit 0 albo brak limitu (#36) | wyczerpany budżet — funkcje AI zablokowane; decyzja o limicie w `docs/AI_BUDGET.md` |
+| `ai_budget_near_limit` | ostrzeżenie | wydatek AI ≥ 80% limitu doby lub miesiąca | rosnące użycie importu/tłumaczeń |
+| `ai_budget_stale_reservation` | ostrzeżenie | rezerwacja budżetu AI bez rozliczenia > 15 min | proces padł w trakcie wywołania modelu (liczy się w pełnej kwocie) |
+| `ai_budget_unavailable` | ostrzeżenie | nie da się odczytać `ai_budget_status()` | brak migracji 0120 lub uprawnień `pracujbe_ops` |
 | `mail_hard_bounce_rate` | alarm | ≥ 50 listów przyjętych w 24 h i > 5% z nich trwale odbitych | zła lista adresów, import, literówki w formularzu |
 | `mail_hard_bounce_rising` | alarm | odsetek trwałych odbić 24 h > 2% i > 2× odsetka z 7 dób bazowych (≥ 50 listów w obu oknach) | jak wyżej, wcześniejszy sygnał |
 | `mail_complaint_rate` | alarm | ≥ 50 listów w 24 h i > 0,3% skarg | niechciane wiadomości, brak łatwego wypisania |

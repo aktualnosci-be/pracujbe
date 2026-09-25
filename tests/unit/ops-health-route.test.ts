@@ -70,6 +70,18 @@ describe('GET /api/health/ops (#47)', () => {
     expect(await res.json()).toMatchObject({ status: 'alert', alerts: ['webhook_stuck'] });
   });
 
+  it('wyczerpany budżet AI (#36) → 503 alert, stan budżetu w odpowiedzi (same liczby)', async () => {
+    const aiBudget = {
+      day: { spentMicroUsd: 10_000_000, limitMicroUsd: 10_000_000 },
+      month: { spentMicroUsd: 10_000_000, limitMicroUsd: 100_000_000 },
+      staleReservations: 0,
+    };
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics, aiBudget });
+    const res = await call(SECRET);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ status: 'alert', alerts: ['ai_budget_exhausted'], aiBudget });
+  });
+
   it.each([
     ['error', 'unavailable'],
     ['unconfigured', 'unconfigured'],
