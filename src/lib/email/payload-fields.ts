@@ -67,6 +67,9 @@ export const EMAIL_PAYLOAD_FIELDS = {
   // #61 (0125): formularz kontaktu — numer sprawy i temat; bez treści i adresu nadawcy.
   supportContact: ['reference', 'topic', 'recipientName'],
   contactMessageAdmin: ['reference', 'topic'],
+  // #574 (0127): ostrzeżenie przed usunięciem — sama data usunięcia.
+  inactiveCvWarning: ['deletionDate'],
+  inactiveAccountWarning: ['deletionDate'],
 } as const satisfies Record<DeliveredType, readonly string[]>;
 
 /** Payload ograniczony do pól dozwolonych dla szablonu; nieznany szablon → pusty obiekt. */

@@ -5,6 +5,8 @@ import { MailCheck, Send } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { isTurnstileWidgetEnabled, TurnstileWidget, type TurnstileHandle } from '@/components/auth/TurnstileWidget';
+import { CANDIDATE_ADULT_AGE, CANDIDATE_MIN_AGE_FALLBACK, candidateAgeBandsFor } from '@/lib/age-policy/constants';
+import { setKnownMinorDevice } from '@/lib/job-funnel/client';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -64,6 +66,10 @@ import {
  *
  * Pytania screeningowe (#101): te same pola co w zwykłej aplikacji; pytanie wymagane bez
  * odpowiedzi blokuje wysyłkę przy pytaniu, a ten sam błąd z bazy (`questionId`) też tam trafia.
+ *
+ * Polityka wieku (#492, #576): potwierdzenie przedziału wieku (16–17 albo 18+, bez daty
+ * urodzenia) — próg konta z bazy wyznacza przedziały; bez wyboru baza odrzuca zgłoszenie (0126).
+ * Przedział 16–17 wyłącza lejek ofert na tym urządzeniu (LAUNCH-1: jak brak zgody).
  */
 
 const DIAL_CODES: ReadonlyArray<{ code: PhoneCountry; dial: string }> = [
@@ -85,6 +91,8 @@ export interface GuestApplyFormProps {
   screeningQuestions?: ScreeningQuestion[];
   /** Język treści oferty — tekst pytania, gdy brak tłumaczenia w języku strony. */
   contentLocale?: string;
+  /** #492/#576: próg konta z bazy; brak → 18 (tylko przedział 18+). */
+  candidateMinAge?: number;
 }
 
 export function GuestApplyForm({
@@ -92,6 +100,7 @@ export function GuestApplyForm({
   companyName,
   screeningQuestions = [],
   contentLocale,
+  candidateMinAge = CANDIDATE_MIN_AGE_FALLBACK,
 }: GuestApplyFormProps): React.JSX.Element {
   const t = useTranslations('guestApply');
   const ta = useTranslations('apply');
@@ -105,6 +114,7 @@ export function GuestApplyForm({
   const [availability, setAvailability] = React.useState<ApplyAvailabilityOption>('immediate');
   const [message, setMessage] = React.useState('');
   const [consent, setConsent] = React.useState(false);
+  const [ageBand, setAgeBand] = React.useState<number | null>(null);
   const [answers, setAnswers] = React.useState<Record<string, ScreeningAnswerValue>>({});
   const [answerErrors, setAnswerErrors] = React.useState<Record<string, ScreeningAnswerError>>({});
   const [errors, setErrors] = React.useState<FieldErrors>({});
@@ -124,6 +134,7 @@ export function GuestApplyForm({
     phone: React.useRef<HTMLInputElement>(null),
     message: React.useRef<HTMLTextAreaElement>(null),
     consent: React.useRef<HTMLButtonElement>(null),
+    age: React.useRef<HTMLInputElement>(null),
   };
   const formErrorRef = React.useRef<HTMLDivElement>(null);
   const sentHeadingRef = React.useRef<HTMLHeadingElement>(null);
@@ -170,13 +181,14 @@ export function GuestApplyForm({
     if (!name) next.fullName = t('error.nameRequired');
     if (!address) next.email = t('error.emailRequired');
     else if (!looksLikeEmail(address)) next.email = t('error.emailInvalid');
+    if (ageBand === null) next.age = t('error.ageConfirmRequired');
     if (!consent) next.consent = t('error.privacyNoticeRequired');
     const missing = screeningQuestions.filter(
       (question) => question.required && isScreeningAnswerMissing(answers[question.id]),
     );
     setErrors(next);
     setAnswerErrors(Object.fromEntries(missing.map((question) => [question.id, true as const])));
-    // Fokus na pierwszym błędzie w kolejności formularza (Invariant #11): dane, pytania, zgoda.
+    // Fokus na pierwszym błędzie w kolejności formularza (Invariant #11): dane, pytania, wiek, zgoda.
     const firstField = (['fullName', 'email'] as const).find((field) => next[field]);
     if (firstField) {
       focusField(firstField);
@@ -184,6 +196,10 @@ export function GuestApplyForm({
     }
     if (missing[0]) {
       focusQuestion(missing[0].id);
+      return;
+    }
+    if (next.age) {
+      focusField('age');
       return;
     }
     if (next.consent) {
@@ -204,6 +220,8 @@ export function GuestApplyForm({
 
     setFormError(null);
     setSubmitting(true);
+    // #576: przedział 16–17 → lejek ofert wyłączony na tym urządzeniu (jak brak zgody).
+    if (ageBand !== null && ageBand < CANDIDATE_ADULT_AGE) setKnownMinorDevice(true);
     idempotencyKeyRef.current ??= crypto.randomUUID();
     const trimmedMessage = message.trim();
 
@@ -220,6 +238,8 @@ export function GuestApplyForm({
           message: trimmedMessage.length > 0 ? trimmedMessage : undefined,
           locale,
           agreeTerms: true,
+          ageConfirmed: true,
+          minAge: ageBand ?? candidateMinAge,
           idempotencyKey: idempotencyKeyRef.current,
           ...(Object.keys(answerPayload).length > 0 ? { answers: answerPayload } : {}),
         },
@@ -253,6 +273,10 @@ export function GuestApplyForm({
     } else if (res.error === 'SCREENING_ANSWER_REQUIRED' && res.questionId) {
       setAnswerErrors({ [res.questionId]: true });
       focusQuestion(res.questionId);
+    } else if (res.field === 'age') {
+      // #492: brak deklaracji albo próg zmienił się po otwarciu formularza — dane zostają.
+      setErrors({ age: tRoot('errors.ageAttestationRequired') });
+      focusField('age');
     } else if (res.field) {
       setErrors({ [res.field]: tRoot('errors.validationFailed') });
       focusField(res.field);
@@ -424,6 +448,49 @@ export function GuestApplyForm({
           }
         }}
       />
+
+      <fieldset className={FORM_FIELD} aria-labelledby="guest-apply-age-legend">
+        {/* #492/#576: ta sama treść i semantyka co AgeDeclarationField (rejestracja), inline —
+            wspólny komponent dzielił chunk JS szczegółu oferty ponad budżet (perf-budgets). */}
+        <legend id="guest-apply-age-legend" className="text-[13px] font-medium leading-[1.5] text-foreground">{tRoot('auth.ageBandLegend')}</legend>
+        <div
+          className="flex flex-col gap-1.5"
+          role="radiogroup"
+          aria-required="true"
+          aria-invalid={errors.age ? true : undefined}
+          aria-labelledby="guest-apply-age-legend"
+        >
+          {candidateAgeBandsFor(candidateMinAge).map((band, index) => (
+            <label
+              key={band}
+              htmlFor={`guest-apply-age-${band}`}
+              className="flex cursor-pointer items-center gap-[9px] text-[13px] font-normal leading-[1.5] text-foreground"
+            >
+              <input
+                ref={index === 0 ? refs.age : undefined}
+                type="radio"
+                id={`guest-apply-age-${band}`}
+                name="guest-apply-age"
+                value={band}
+                checked={ageBand === band}
+                onChange={() => {
+                  setAgeBand(band);
+                  if (errors.age) setErrors((current) => ({ ...current, age: undefined }));
+                }}
+                aria-describedby={['guest-apply-age-hint', describedBy('age')].filter(Boolean).join(' ')}
+                className="h-4 w-4 shrink-0 accent-primary"
+              />
+              {band < CANDIDATE_ADULT_AGE
+                ? tRoot('auth.ageBandMinor', { min: band, max: CANDIDATE_ADULT_AGE - 1 })
+                : tRoot('auth.ageBandAdult', { age: CANDIDATE_ADULT_AGE })}
+            </label>
+          ))}
+        </div>
+        <p id="guest-apply-age-hint" className="text-xs text-muted-foreground">
+          {tRoot('auth.ageConfirmHint')}
+        </p>
+        {fieldError('age')}
+      </fieldset>
 
       <div className={FORM_FIELD}>
         <div className="flex items-start gap-[9px]">

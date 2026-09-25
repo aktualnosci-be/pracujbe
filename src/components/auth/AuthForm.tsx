@@ -39,6 +39,9 @@ import {
   type AuthActionResult,
 } from '@/lib/actions/auth';
 import type { TurnstileFlow } from '@/lib/turnstile/policy';
+import { CANDIDATE_ADULT_AGE, CANDIDATE_MIN_AGE_FALLBACK } from '@/lib/age-policy/constants';
+import { setKnownMinorDevice } from '@/lib/job-funnel/client';
+import { AgeDeclarationField } from './AgeDeclarationField';
 import {
   isTurnstileWidgetEnabled,
   TurnstileWidget,
@@ -88,6 +91,9 @@ interface AuthFormValues extends FieldValues {
   agreeTerms?: boolean;
   privacyNoticeAck?: boolean;
   marketingOptIn?: boolean;
+  /** #492/#576: potwierdzony przedział wieku (tylko rejestracja kandydata): 16 albo 18. */
+  ageConfirmed?: boolean;
+  minAge?: number | null;
 }
 
 const FIELDS: Record<AuthFormVariant, readonly FieldConfig[]> = {
@@ -146,6 +152,15 @@ const BOT_CHECK_FLOW: Record<AuthFormVariant, TurnstileFlow> = {
   reset: 'passwordReset',
 };
 
+/** #492: deklaracja progu wieku — tylko konto kandydata. */
+const SHOW_AGE: Record<AuthFormVariant, boolean> = {
+  login: false,
+  registerCandidate: true,
+  registerEmployer: false,
+  registerInvitedEmployer: false,
+  reset: false,
+};
+
 const SHOW_TERMS: Record<AuthFormVariant, boolean> = {
   login: false,
   registerCandidate: true,
@@ -171,6 +186,10 @@ function buildDefaults(variant: AuthFormVariant, email?: string): DefaultValues<
     values.agreeTerms = false;
     values.privacyNoticeAck = false;
     values.marketingOptIn = false;
+  }
+  if (SHOW_AGE[variant]) {
+    values.ageConfirmed = false;
+    values.minAge = null;
   }
   return values as DefaultValues<AuthFormValues>;
 }
@@ -237,6 +256,11 @@ export interface AuthFormProps {
    * Serwer waliduje go ponownie (`safeNextPath`). Używany przy logowaniu i rejestracji kandydata.
    */
   next?: string | null;
+  /**
+   * #492/#576: próg konta z bazy (`candidate_min_age()`) — wyznacza przedziały wieku do wyboru
+   * w rejestracji kandydata. Brak → wartość awaryjna 18 (tylko przedział 18+).
+   */
+  candidateMinAge?: number;
   /** Wariant `registerInvitedEmployer`: token z linku zaproszenia i adres zaproszenia. */
   invitation?: { token: string; email: string } | null;
 }
@@ -245,6 +269,7 @@ export function AuthForm({
   variant,
   initialError = null,
   next = null,
+  candidateMinAge = CANDIDATE_MIN_AGE_FALLBACK,
   invitation = null,
 }: AuthFormProps): React.JSX.Element {
   const t = useTranslations('auth');
@@ -277,6 +302,7 @@ export function AuthForm({
     register,
     handleSubmit,
     control,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<AuthFormValues>({
     resolver,
@@ -318,6 +344,10 @@ export function AuthForm({
           );
           break;
         case 'registerCandidate':
+          // #576: przedział 16–17 → lejek ofert wyłączony na tym urządzeniu (jak brak zgody).
+          if (typeof values.minAge === 'number' && values.minAge < CANDIDATE_ADULT_AGE) {
+            setKnownMinorDevice(true);
+          }
           result = await registerCandidate({
             email: values.email ?? '',
             password: values.password ?? '',
@@ -327,6 +357,8 @@ export function AuthForm({
             agreeTerms: true,
             privacyNoticeAck: true,
             marketingOptIn: values.marketingOptIn === true,
+            ageConfirmed: true,
+            minAge: values.minAge ?? candidateMinAge,
             locale: locale as Locale,
           }, next, token);
           break;
@@ -444,6 +476,30 @@ export function AuthForm({
           </div>
         );
       })}
+
+      {SHOW_AGE[variant] ? (
+        <Controller
+          name="minAge"
+          control={control}
+          render={({ field }) => {
+            const ageError = errors.ageConfirmed?.message ?? errors.minAge?.message;
+            return (
+              <AgeDeclarationField
+                ref={field.ref}
+                id="ageConfirmed"
+                minAge={candidateMinAge}
+                value={typeof field.value === 'number' ? field.value : null}
+                onChange={(band) => {
+                  field.onChange(band);
+                  setValue('ageConfirmed', true);
+                }}
+                onBlur={field.onBlur}
+                error={ageError ? tRoot(String(ageError)) : null}
+              />
+            );
+          }}
+        />
+      ) : null}
 
       {SHOW_TERMS[variant] ? (
         <div className="space-y-4">

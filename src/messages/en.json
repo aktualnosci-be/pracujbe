@@ -595,7 +595,8 @@
       "privacyNoticeRequired": "Confirm that you have read the privacy information.",
       "companyNameRequired": "Enter the company name.",
       "companyNameTooShort": "The company name is too short.",
-      "companyNameTooLong": "The company name is too long."
+      "companyNameTooLong": "The company name is too long.",
+      "ageConfirmRequired": "Choose your age range."
     },
     "botCheckLabel": "Security check",
     "botCheckLoading": "Loading the security check…",
@@ -603,6 +604,11 @@
     "botCheckExpired": "The check has expired. Please confirm it again.",
     "botCheckLoadFailed": "The security check couldn't load. Check your connection or turn off content blocking for this site, then try again.",
     "botCheckRetry": "Reload the security check",
+    "ageBandLegend": "Your age",
+    "ageBandMinor": "I am {min}–{max} years old",
+    "ageBandAdult": "I am {age} or older",
+    "ageBandMinorHint": "In this age range your profile will not be visible to companies in the candidate search. You can still apply for jobs yourself.",
+    "ageConfirmHint": "We do not ask for your date of birth or an identity document.",
     "confirmEmailTitle": "Activate your account",
     "confirmEmailIntro": "Click the button to confirm your email address and go to your account.",
     "confirmEmailSubmit": "Confirm email address",
@@ -662,6 +668,8 @@
     "appealWindowClosed": "The deadline to appeal this decision has passed.",
     "reviewerConflict": "The appeal must be reviewed by an administrator other than the one who made the decision.",
     "jobImportSensitiveData": "The listing contains a personal or document identification number, so we did not import it. Please fill in the form manually.",
+    "ageAttestationRequired": "To continue, confirm that you are at least the required age. If the form was open for a long time, refresh the page.",
+    "ageAdultRequired": "Only adults can turn on this feature.",
     "screeningReviewRequired": "The job has a question that the portal team must check before publication. You can publish it once the question is approved or after you change it.",
     "screeningQuestionRejected": "One of the questions was not approved. Change or remove it to publish the job.",
     "jobAssistEmpty": "Write some text first. The assistant improves your text, but doesn't write the offer from scratch.",
@@ -1246,7 +1254,9 @@
     "screeningYes": "Yes",
     "screeningNo": "No",
     "sensitiveIdHint": "Your application does not need a NISS/BIS number or an identity document number — please leave them out.",
-    "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
+    "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply.",
+    "ageRequired": "Before applying, confirm your age in your account settings.",
+    "ageRequiredLink": "Go to settings"
   },
   "guestApply": {
     "subtitle": "Apply without creating an account, or log in to use your profile. No CV needed.",
@@ -1299,7 +1309,8 @@
       "messageTooLong": "The message can have at most 500 characters.",
       "privacyNoticeRequired": "Confirm that you have read the privacy information to send the application.",
       "idempotencyKeyInvalid": "Refresh the page and send the form again.",
-      "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
+      "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply.",
+      "ageConfirmRequired": "Choose your age range."
     }
   },
   "legal": {
@@ -1941,6 +1952,7 @@
     "caseFlag": "Automated signal: {flag}",
     "auditActionModerationDecided": "Moderation decision",
     "auditActionModerationRestored": "Restriction lifted",
+    "auditActionAgePolicyUpdated": "Candidate age threshold changed",
     "navAppeals": "Appeals",
     "navDsaReport": "DSA report",
     "appealsTitle": "Appeals against moderation decisions",
@@ -2176,6 +2188,8 @@
     "breachExportJson": "Export JSON",
     "breachExportCsv": "Export CSV",
     "breachExportHint": "The export contains the entry and its history, without notice recipients’ addresses. Every export stays in the history.",
+    "breachExportPending": "Exporting…",
+    "breachExportError": "The export failed. Try again.",
     "breachActionClose": "Close entry",
     "breachActionReopen": "Reopen",
     "breachCloseTitle": "Close this entry?",
@@ -2444,7 +2458,8 @@
     "lead": "The website is not open to the public yet. If you have an access password, enter it below.",
     "passwordLabel": "Access password",
     "submit": "Enter",
-    "error": "Incorrect password. Please try again."
+    "error": "Incorrect password. Please try again.",
+    "rateLimited": "Too many attempts. Please try again in a few minutes."
   },
   "offline": {
     "title": "No connection",
@@ -2557,7 +2572,9 @@
     "savedOn": "Your profile is now visible to verified companies.",
     "savedOff": "Your profile is now hidden from company searches.",
     "saveError": "We couldn’t save the change. The setting has not changed — please try again.",
-    "loadError": "We couldn’t load your profile visibility setting. Refresh the page in a moment."
+    "loadError": "We couldn’t load your profile visibility setting. Refresh the page in a moment.",
+    "requiresAge": "To share your profile with companies, first confirm your age in the “Age” section.",
+    "requiresAdult": "Your profile can be visible to companies only from age 18. Once you turn 18, confirm it in the “Age” section."
   },
   "team": {
     "title": "Team",
@@ -2680,6 +2697,7 @@
   "jobFunnel": {
     "title": "Job funnel",
     "range": "Period: {from} – {to} (Brussels time)",
+    "consentNote": "Search appearances, views and started applications are counted only for people who accepted analytics cookies. All submitted applications are counted.",
     "rangeLabel": "Job funnel date range",
     "rangeDays": "{count, plural, one {# day} other {# days}}",
     "searchAppearances": "Search result appearances",
@@ -2844,6 +2862,18 @@
     "restorationAppealIntro": "If you disagree with the restriction being lifted, you can appeal. The author of the reported content will not see your details.",
     "restorationAppealDeadlineNotStarted": "The appeal period starts when you receive the email about the restriction being lifted.",
     "restorationAppealWindowClosed": "The period for appealing against the restriction being lifted has ended."
+  },
+  "ageAttestation": {
+    "sectionTitle": "Age",
+    "sectionDescription": "You can have a candidate account from age {age}, and a profile visible to companies from age {adultAge}. We only store the age range you chose and the date you confirmed it — no date of birth.",
+    "stateAdult": "Confirmed: you are {age} or older.",
+    "stateMinor": "Confirmed: you are under {adultAge}. You can apply for jobs, but your profile is not visible to companies. Once you turn {adultAge}, confirm it below.",
+    "stateMissing": "Not confirmed. Without it you cannot apply or share your profile with companies.",
+    "submit": "Confirm",
+    "saving": "Saving…",
+    "saved": "Age confirmation saved.",
+    "saveError": "The confirmation could not be saved. Please try again.",
+    "loadError": "Your age confirmation information could not be loaded."
   },
   "campaignBanner": {
     "eyebrow": "Job in Belgium",

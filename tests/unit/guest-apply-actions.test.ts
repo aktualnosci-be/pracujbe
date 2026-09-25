@@ -40,6 +40,8 @@ const input = {
   email: ' Anna@Example.COM ',
   locale: 'nl' as const,
   agreeTerms: true as const,
+  ageConfirmed: true as const,
+  minAge: 18,
   idempotencyKey: '22222222-2222-4222-8222-222222222222',
 };
 
@@ -71,7 +73,10 @@ describe('submitGuestApplication', () => {
       p_idempotency_key: input.idempotencyKey,
       p_ip: '203.0.113.9',
       p_user_agent: 'UA',
+      // #492: tylko zadeklarowany próg wieku — bez daty urodzenia.
+      p_age_attested_min: 18,
     });
+    expect(JSON.stringify(args)).not.toMatch(/birth|urodz/i);
     // Hash odpowiada tokenowi z nonce (worker odtworzy link), a sam token nie trafia do RPC.
     const token = guestTokenFromNonce('confirm', args.p_confirm_nonce!)!;
     expect(args.p_confirm_token_hash).toBe(hashGuestToken(token));
@@ -89,6 +94,8 @@ describe('submitGuestApplication', () => {
     [{ fullName: '   ' }, 'fullName'],
     [{ email: 'nie-adres' }, 'email'],
     [{ agreeTerms: false as unknown as true }, 'consent'],
+    [{ ageConfirmed: false as unknown as true }, 'age'],
+    [{ minAge: 12 }, 'age'],
     [{ phone: 'abc', phoneCountry: 'PL' }, 'phone'],
   ])('field error %o → %s, no database write', async (patch, field) => {
     expect(await submitGuestApplication({ ...input, ...patch })).toEqual({ ok: false, error: 'VALIDATION_FAILED', field });
@@ -129,6 +136,11 @@ describe('submitGuestApplication', () => {
     fakeDb.rpc('submit_guest_application', 'request-1');
     await submitGuestApplication(input);
     expect(fakeDb.callsTo('submit_guest_application')[1]!.args).toMatchObject({ p_answers: null });
+  });
+
+  it('#492: próg w bazie wyższy niż zadeklarowany → błąd przy polu wieku', async () => {
+    failRpc('submit_guest_application', 'AGE_ATTESTATION_REQUIRED');
+    expect(await submitGuestApplication(input)).toEqual({ ok: false, error: 'AGE_ATTESTATION_REQUIRED', field: 'age' });
   });
 
   it('maps RPC errors without leaking technical details', async () => {

@@ -24,9 +24,10 @@ import {
   type ConsentRecord,
   type ConsentSource,
 } from './consent';
+import { CONSENT_CHANGE_EVENT } from './consent-cookie';
 
-/** Zdarzenie DOM emitowane po zmianie zgody (detail: ConsentRecord). */
-export const CONSENT_CHANGE_EVENT = 'pracujbe:consent-change';
+/** Zdarzenie DOM emitowane po zmianie zgody (detail: ConsentRecord) — definicja w consent-cookie. */
+export { CONSENT_CHANGE_EVENT };
 
 /**
  * Zdarzenie DOM proszące o otwarcie panelu ustawień cookies.

@@ -415,6 +415,8 @@ describe('aplikacja bez konta (#98, #25)', () => {
     const input = {
       jobId: jobIds[6]!, fullName: 'Bob Gość', email, phone: '', phoneCountry: 'BE', message: '',
       locale: 'pl', idempotencyKey: randomUUID(), agreeTerms: true,
+      // #492: deklaracja progu wieku gościa (bez daty urodzenia).
+      ageConfirmed: true, minAge: 18,
     };
     expect(await guest.submitGuestApplication(input as never)).toEqual({ ok: true });
     expect(await guest.submitGuestApplication(input as never)).toEqual({ ok: true });
