@@ -1,13 +1,13 @@
-import { timingSafeEqual } from 'node:crypto';
-
 import { NextResponse } from 'next/server';
 
 import { campaignSendingReady } from '@/lib/admin/campaigns';
 import { dsaRetentionMode } from '@/lib/admin/dsa-retention-mode';
+import { isCronAuthorized } from '@/lib/cron/auth';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc, type RpcArgs } from '@/lib/db/sql';
 import { isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
+import { runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
   processStorageDeletions,
   railwayDeleter,
@@ -32,13 +32,17 @@ import {
  * (null = kategoria wyłączona), partie z limitem i SKIP LOCKED; potem kolejka usuwania obiektów
  * storage (`processStorageDeletions`) — także obiektów plików usuniętych w tym przebiegu.
  * Nieudane usunięcie obiektu to ponowienie w kolejnym przebiegu, nie błąd zadania.
+ * #17: dzienny GC bucketu CV (`runStorageGc`, 0117) — obiekty bez wiersza `files` do kolejki
+ * usuwania (tylko przy `STORAGE_GC_MODE=delete`; domyślnie dry-run z samymi licznikami),
+ * wiersze bez obiektu tylko liczone. Bez bucketu Railway — pominięty (`storageGc: null`).
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
  * #43: czyszczenie spraw DSA (`dsa_retention_run`, 0104) — domyślnie WYŁĄCZONE (terminy czekają
  * na decyzję właściciela, #40); `DSA_RETENTION_MODE=dry-run` = podgląd, `apply` = anonimizacja
  * (`src/lib/admin/dsa-retention-mode.ts`). Odpowiedź: tryb + liczniki przebiegu.
  *
- * Chroniony `MAINTENANCE_SECRET` lub `CRON_SECRET` (`Authorization: Bearer`).
+ * Chroniony `MAINTENANCE_SECRET` (`Authorization: Bearer`); przejściowo także `CRON_SECRET`
+ * (`src/lib/cron/secrets.ts` — sekret e-mail nie otwiera tego zadania).
  * Wymaga puli service_role (`DATABASE_SERVICE_URL`; RPC są service_role-only). #25: każde
  * zadanie to OSOBNA, krótka transakcja `withServiceRole` — wynik jednego zadania jest
  * zatwierdzony niezależnie od błędu innego (jak dawniej osobne wywołania RPC), a zadania
@@ -49,22 +53,6 @@ import {
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
-
-function authorized(request: Request): boolean {
-  const header = request.headers.get('authorization');
-  if (!header) return false;
-  const secrets = [process.env.MAINTENANCE_SECRET, process.env.CRON_SECRET].filter(
-    (s): s is string => Boolean(s),
-  );
-  return secrets.some((s) => safeEqual(header, `Bearer ${s}`));
-}
 
 /**
  * Pliki CV leżą w prywatnym buckecie Railway (#26). Brak jego konfiguracji to błąd każdego
@@ -89,7 +77,7 @@ function retentionCounters(value: unknown): Record<string, number> {
 }
 
 async function run(request: Request): Promise<Response> {
-  if (!authorized(request)) {
+  if (!isCronAuthorized(request, 'maintenance')) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   if (!isServiceDatabaseConfigured()) {
@@ -106,6 +94,7 @@ async function run(request: Request): Promise<Response> {
     | 'savedSearchAlerts'
     | 'emailCampaigns'
     | 'retention'
+    | 'storageGc'
     | 'dsaRetention'
     | 'storageDeletions';
   const failures: Array<{ task: Task; error: unknown }> = [];
@@ -149,6 +138,18 @@ async function run(request: Request): Promise<Response> {
   } catch (error) {
     failures.push({ task: 'retention', error });
   }
+  // #17: GC sierot bucketu CV przed workerem kolejki — sieroty znikają w tym samym przebiegu.
+  let storageGc: StorageGcRun | null = null;
+  try {
+    const { fileBucketConfig } = await import('@/lib/env');
+    const config = fileBucketConfig();
+    if (config) {
+      const { createRailwayBucket } = await import('@/lib/storage/railway-bucket');
+      storageGc = await runStorageGc(createRailwayBucket(config), { dryRun: storageGcDryRun() });
+    }
+  } catch (error) {
+    failures.push({ task: 'storageGc', error });
+  }
   // #43: sprawy DSA — tylko za jawną flagą; `off` nie woła bazy.
   const dsaMode = dsaRetentionMode();
   let dsaRetention: { mode: typeof dsaMode } & Record<string, number | string> = { mode: dsaMode };
@@ -184,6 +185,7 @@ async function run(request: Request): Promise<Response> {
     savedSearchDigests: savedSearchDigests ?? 0,
     campaignEmailsQueued: campaignEmailsQueued ?? 0,
     retention,
+    storageGc,
     dsaRetention,
     storageDeletions,
   });

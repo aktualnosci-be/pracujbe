@@ -68,7 +68,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 **Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Favicon, ikony PWA i `og.png` (#7) = ten sam znak z konturów DM Sans 800 (`scripts/brand-glyphs.py` → `assets/brand/logo-glyphs.json` → `scripts/generate-icons.mjs`; opis `public/ICONS_README.md`, strażnik `brand-assets.test.ts`).
 
-**E-maile (#7):** layout `src/emails/_components.tsx` = kalka `prototype/materials/newsletter.html` (tło #f4f4f4, biała kolumna 600 px, logo jak w nagłówku, H1 36 px, akapity 16 px/1,7 #666, przycisk z promieniem 11 px, sekcje „paszportu” z linią #e5e5e5, stopka #f8f8f8). Kolory wyłącznie z `emailPalette` (test `email-palette.test.tsx` odrzuca inne, z kontrolą ujemną). Odstępstwa klienta pocztowego: style inline + tabele, bez webfontów (`'DM Sans', Arial, sans-serif`), #777 → #767676, tekst stopki #6b6b6b (AA na #f8f8f8); bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii nagłówka (treść maili bez zmian).
+**E-maile (#7):** layout `src/emails/_components.tsx` = kalka `prototype/materials/newsletter.html` (tło #f4f4f4, biała kolumna 600 px, logo jak w nagłówku, H1 36 px, akapity 16 px/1,7 #666, przycisk z promieniem 11 px, sekcje „paszportu” z linią #e5e5e5, stopka #f8f8f8). Kolory wyłącznie z `emailPalette` (test `email-palette.test.tsx` odrzuca inne, z kontrolą ujemną). Odstępstwa klienta pocztowego: style inline + tabele, bez webfontów (`'DM Sans', Arial, sans-serif`), #777 → #767676, tekst stopki #6b6b6b (AA na #f8f8f8); bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii nagłówka (treść maili bez zmian). Typografię pól paszportu porównuje z prototypem test `email-passport-prototype.test.tsx` (z kontrolą ujemną).
 
 ---
 
@@ -1068,8 +1068,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   E-maile Auth nie są blokowane (obowiązkowe). Panel `/admin/poczta`: lista, filtr, zdjęcie
   blokady z uzasadnieniem (`admin_lift_email_suppression`, audyt). Dowód: `rls.sql` sekcja
   ML44, `email-delivery-webhook.test.ts`, `admin-email-suppressions.test.ts`, E2E
-  `admin-email-suppressions.spec`. **Do zrobienia (#44):** alarmy (wiek kolejki, wzrost
-  bounce/complaint), stany w `/api/health`, adapter drugiego dostawcy.
+  `admin-email-suppressions.spec`. Alarmy poczty (migracja `0118`):
+  sekcja `mail` w `ops_metrics()` (kohorta wysyłki 24 h i 7 dób bazowych, trwałe odbicia,
+  skargi, aktywne/nowe blokady — same liczby, rola `pracujbe_ops`), progi w
+  `src/lib/ops/sensors.ts` (`mail_*`: odsetek > 5% odbić / 0,3% skarg, wzrost > 2× bazy,
+  > 20 nowych blokad; próba ≥ 50 listów) → `/api/health/ops` 503/200; wiek kolejek =
+  istniejące `email_queue_age`/`auth_email_queue_age`. Opis `docs/railway/OPERATIONS.md`;
+  dowód `rls.sql` OPS44, `ops-metrics` (PG16), `ops-sensors`. **Do zrobienia (#44):**
+  kalibracja progów na ruchu produkcyjnym, adapter drugiego dostawcy.
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
@@ -1355,7 +1361,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `AWS_S3_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_URL_STYLE`) +
   `FILE_DOWNLOAD_SECRET`; `/api/health` → `fileBucket`/`fileDownloadSecret`. Bez bucketu: demo =
   `DEMO_UNAVAILABLE`, produkcja = błąd. Opis: `docs/railway/STORAGE_ADAPTER_CONTRACT.md`.
-  **Otwarte:** utworzenie bucketu (właściciel), GC sierot, AV, PDF faktur (`storage.ts`, #27).
+  GC sierot (#17, migracja `0117`): dzienny przebieg w `/api/maintenance` (`src/lib/storage-gc.ts`,
+  `list` w adapterze) — obiekt bez wiersza `files` po 24 h → `storage_deletion_queue`, wiersz bez
+  obiektu → tylko licznik; partie z kursorem (`storage_gc_sweeps`), dry-run domyślnie
+  (`STORAGE_GC_MODE=delete` = kasowanie), same liczniki w odpowiedzi. Opis: `docs/DATA_RETENTION.md` §3a.
+  **Otwarte:** utworzenie bucketu (właściciel), zatwierdzenie trybu `delete` na produkcji, GC
+  `email_deliveries`/`processed_webhooks`/`rate_limit` z #17, AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
