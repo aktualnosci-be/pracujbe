@@ -101,7 +101,7 @@ funkcji wysyłających dane kandydata do dostawcy bez zatwierdzonego wpisu (#488
 - Webhook dostawcy przekazuje do portalu zdarzenia doręczenia (odbicie, skarga, opóźnienie),
   zapisywane w `email_deliveries` i `email_suppressions`.
 - Przy wysyłce worker ponownie sprawdza zgodę odbiorcy, blokadę adresu i — dla e-maili
-  z danymi kandydata do firmy — aktualne uprawnienie odbiorcy w firmie (#503, `0108`).
+  z danymi kandydata do firmy — aktualne uprawnienie odbiorcy w firmie (#503, `0109`).
 - Kod nie usuwa wierszy `email_deliveries` (retencja odłożona).
 
 **Do ustalenia przez właściciela/prawnika:**

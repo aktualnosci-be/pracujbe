@@ -9000,7 +9000,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- ES503. Uprawnienie odbiorcy firmowego w chwili wysyłki (#503, 0108): e-mail z danymi
+-- ES503. Uprawnienie odbiorcy firmowego w chwili wysyłki (#503, 0109): e-mail z danymi
 --        kandydata zakolejkowany dla recruitera nie wychodzi, gdy przed claimem stracił
 --        rolę; właściciel i kandydat dostają swoje. Kontrola ujemna: bez sprawdzenia
 --        (helper zawsze true) ten sam claim wydaje wiersze byłego recruitera.

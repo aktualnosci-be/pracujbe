@@ -981,7 +981,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   ML44, `email-delivery-webhook.test.ts`, `admin-email-suppressions.test.ts`, E2E
   `admin-email-suppressions.spec`. **Do zrobienia (#44):** alarmy (wiek kolejki, wzrost
   bounce/complaint), stany w `/api/health`, adapter drugiego dostawcy.
-  Minimalizacja treści (#503, migracja `0108` — numer tymczasowy): worker przekazuje do
+  Minimalizacja treści (#503, migracja `0109` — numer tymczasowy): worker przekazuje do
   szablonu tylko pola z `src/lib/email/payload-fields.ts` (reszta payloadu zostaje w bazie);
   poza listą m.in. podgląd rozmowy (`newMessage.preview`) i wiadomość do propozycji
   (`jobOffer.message`) — e-mail prowadzi do panelu. `claim_email_batch` ponownie sprawdza
