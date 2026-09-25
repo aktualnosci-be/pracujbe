@@ -6,7 +6,7 @@ import { buildDeliveryData } from '@/lib/email/delivery-data';
 import { emailPreferenceCategory, emailSendPool } from '@/lib/email/categories';
 
 /**
- * #574 (0129) — ostrzeżenie przed usunięciem CV / konta z powodu braku aktywności: data
+ * #574 (0127) — ostrzeżenie przed usunięciem CV / konta z powodu braku aktywności: data
  * usunięcia z payloadu sformatowana w języku ODBIORCY (wiersz kolejki), CTA = logowanie
  * (logowanie tworzy sesję → last_seen_at → ostrzeżenie traci ważność). Bez kategorii
  * wypisania — to informacja o koncie, nie marketing.

@@ -30,7 +30,7 @@ export const opsMetricsSchema = z.object({
     staleCheckoutIntents: count,
   }),
   connections: z.object({ used: count, max: count, reserved: count }),
-  /** #574 (0129): kolejka fizycznego usuwania obiektów storage; brak = baza sprzed 0129. */
+  /** #574 (0127): kolejka fizycznego usuwania obiektów storage; brak = baza sprzed 0127. */
   storageDeletion: z
     .object({ pending: count, oldestPendingAgeSeconds: count, deadLetters: count })
     .optional(),

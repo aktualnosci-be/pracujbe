@@ -8195,7 +8195,7 @@ insert into public.files(owner_id, bucket, path, entity_type, deleted_at) values
   (:'RD2', 'candidate-files', :'RD2' || '/cv-recent.pdf', 'candidate_cv', now() - interval '1 day');
 update public.profiles set deleted_at = now() - interval '31 days', is_active = false where id = :'RD3';
 update public.profiles set deleted_at = now() - interval '1 day', is_active = false where id = :'RD4';
--- #574 (0129): retencja liczy od niezmiennego closed_at (tu ustawiony wprost — replica pomija trigger).
+-- #574 (0127): retencja liczy od niezmiennego closed_at (tu ustawiony wprost — replica pomija trigger).
 update public.applications set status = 'rejected', updated_at = now() - interval '40 days',
        closed_at = now() - interval '40 days' where id = :'rdapp2';
 set session_replication_role = origin;
@@ -8225,7 +8225,7 @@ select pg_temp.expect_error('select public.admin_set_retention_policy(''nie_ma''
 select public.admin_set_retention_policy('closed_application', 30);
 select public.admin_set_retention_policy('confirmed_guest_request', 1);
 reset role; reset app.current_uid;
--- Ślad potwierdzonego zgłoszenia gościa powiązanego z zamkniętą aplikacją: od #574 (0129)
+-- Ślad potwierdzonego zgłoszenia gościa powiązanego z zamkniętą aplikacją: od #574 (0127)
 -- zadanie confirmed_guest_request istnieje — po okresie ślad znika (wcześniej: brak zadania).
 set session_replication_role = replica;
 insert into public.guest_application_requests(job_id, email, full_name, locale, idempotency_key, status,
@@ -11168,14 +11168,14 @@ select pg_temp.assert(
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
 -- ============================================================================
--- RV574. Retencja wg opracowania 2026-09-25 (#574, 0129): wartości w retention_policies,
+-- RV574. Retencja wg opracowania 2026-09-25 (#574, 0127): wartości w retention_policies,
 --        niezmienny closed_at (każdy stan końcowy), last_seen_at z sesji, ostrzeżenie 30 dni
 --        przed usunięciem CV/konta, ślad gościa 30/7/7, partie ≥ 601, dry-run bez zmian,
 --        dead-letter kolejki storage. Kontrole ujemne: stara reguła aplikacji (bez hired,
 --        od updated_at), usunięcie bez ostrzeżenia, complete_storage_deletion bez dead-letter,
 --        trigger closed_at zdjęty.
 -- ============================================================================
-\echo '--- RV574 retencja (0129) ---'
+\echo '--- RV574 retencja (0127) ---'
 reset role; reset app.current_uid;
 \set RVC1 'e5740000-0000-4000-8000-0000000000c1'
 \set RVC2 'e5740000-0000-4000-8000-0000000000c2'

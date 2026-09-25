@@ -75,7 +75,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 |---|---|
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | domyślnie `pl` |
 | `DSA_RETENTION_MODE` | domyślnie wyłączone; `dry-run` = podgląd, `apply` = anonimizacja spraw DSA w `/api/maintenance` — tylko po decyzji właściciela o terminach (#40) |
-| `RETENTION_MODE` | domyślnie wyłączone; `dry-run` = liczniki bez zmian, `apply` = retencja danych (okresy z 0129, #574) w `/api/maintenance` — tylko po akceptacji testów i danych operatora przez właściciela |
+| `RETENTION_MODE` | domyślnie wyłączone; `dry-run` = liczniki bez zmian, `apply` = retencja danych (okresy z 0127, #574) w `/api/maintenance` — tylko po akceptacji testów i danych operatora przez właściciela |
 | `NEXT_PUBLIC_CONSENT_POLICY_VERSION` | wersja polityki cookies w zgodach |
 | `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `NEXT_PUBLIC_META_PIXEL_ID` | tracking wyłącznie po zgodzie (Invariant #7) |
 | `AI_JOB_IMPORT_ENABLED`, `ANTHROPIC_API_KEY`, `AI_JOB_IMPORT_MODEL` | import ogłoszeń przez AI (#465), domyślnie wyłączony |

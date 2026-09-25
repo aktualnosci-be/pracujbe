@@ -124,7 +124,7 @@ describe('Czujki operacyjne (#47)', () => {
     for (const key of keys) expect(sql, key).toContain(`'${key}'`);
   });
 
-  it('#574: obiekt storage czeka > 24 h albo dead-letter = alarm; bez sekcji (baza sprzed 0129) = ok', () => {
+  it('#574: obiekt storage czeka > 24 h albo dead-letter = alarm; bez sekcji (baza sprzed 0127) = ok', () => {
     const m: OpsMetrics = { ...healthy(), storageDeletion: { pending: 2, oldestPendingAgeSeconds: 60, deadLetters: 0 } };
     expect(evaluateOps(m)).toEqual({ status: 'ok', alerts: [], warnings: [] });
     m.storageDeletion!.oldestPendingAgeSeconds = OPS_THRESHOLDS.storageDeletionOldestSeconds;
@@ -140,7 +140,7 @@ describe('Czujki operacyjne (#47)', () => {
 });
 
 describe('Kolejka usuwania obiektów storage (#574)', () => {
-  it('obiekt czeka > 24 h albo dead-letter = alarm; bez sekcji (baza sprzed 0129) = ok', () => {
+  it('obiekt czeka > 24 h albo dead-letter = alarm; bez sekcji (baza sprzed 0127) = ok', () => {
     const m: OpsMetrics = { ...healthy(), storageDeletion: { pending: 2, oldestPendingAgeSeconds: 60, deadLetters: 0 } };
     expect(evaluateOps(m)).toEqual({ status: 'ok', alerts: [], warnings: [] });
     m.storageDeletion!.oldestPendingAgeSeconds = OPS_THRESHOLDS.storageDeletionOldestSeconds;

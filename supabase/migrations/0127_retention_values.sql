@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0129_retention_values.sql — #574: okresy retencji wg opracowania 2026-09-25 (#573,
+-- 0127_retention_values.sql — #574: okresy retencji wg opracowania 2026-09-25 (#573,
 -- docs/legal-drafts/opracowanie-2026-09-25/wdrozenie/retention-proposal.json) i brakujące
 -- zadania. HARMONOGRAM WYŁĄCZONY: /api/maintenance woła run_retention_purge wyłącznie przy
 -- jawnym RETENTION_MODE=dry-run|apply (src/lib/retention/mode.ts, domyślnie off). Migracja

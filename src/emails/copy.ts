@@ -1245,7 +1245,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
     },
   },
 
-  // #574: ostrzeżenie przed usunięciem z powodu braku aktywności (retention_purge_batch, 0129).
+  // #574: ostrzeżenie przed usunięciem z powodu braku aktywności (retention_purge_batch, 0127).
   // Treść do akceptacji właściciela przed włączeniem harmonogramu (RETENTION_MODE).
   inactiveCvWarning: {
     pl: {

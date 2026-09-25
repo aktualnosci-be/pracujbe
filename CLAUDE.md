@@ -1342,7 +1342,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13),
   sprostowanie/ograniczenie/sprzeciw, eksport i usunięcie konta pracodawcy,
   potwierdzenie linkiem e-mail.
-  Wartości z opracowania 2026-09-25 (#574, migracja `0129` — numer tymczasowy): okresy w
+  Wartości z opracowania 2026-09-25 (#574, migracja `0127` — numer tymczasowy): okresy w
   `retention_policies` (pliki/profile oznaczone 7 dni łącznie z obiektem, aplikacje i ich
   rozmowy 180 dni od niezmiennego `applications.closed_at` — każdy stan końcowy, także `hired`;
   CV 365 i konto 730 dni bez aktywności z ostrzeżeniem 30 dni — e-maile `inactiveCvWarning`/

@@ -1,5 +1,5 @@
 /**
- * Tryb zadania retencji w cronie `/api/maintenance` (#574, `run_retention_purge`, 0129).
+ * Tryb zadania retencji w cronie `/api/maintenance` (#574, `run_retention_purge`, 0127).
  *
  * Okresy z opracowania 2026-09-25 są zapisane w `retention_policies`, ale harmonogram włącza
  * właściciel dopiero po akceptacji testów i danych operatora. Do tego czasu zadanie jest

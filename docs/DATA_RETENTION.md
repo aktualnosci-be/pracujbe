@@ -6,7 +6,7 @@ zatwierdza administrator danych; roboczy projekt dla prawnika jest w
 (nieopublikowany). W interfejsie są tylko neutralne etykiety funkcji (`accountData.*`).
 
 Migracje: `supabase/migrations/0105_data_retention_rights.sql` (mechanizm) i
-`supabase/migrations/0129_retention_values.sql` (#574 — wartości z opracowania 2026-09-25,
+`supabase/migrations/0127_retention_values.sql` (#574 — wartości z opracowania 2026-09-25,
 brakujące zadania, dead-letter kolejki storage).
 
 > **Harmonogram jest WYŁĄCZONY.** Wartości z opracowania (#573, decyzja właściciela
@@ -25,11 +25,11 @@ brakujące zadania, dead-letter kolejki storage).
 i `enforcement` (kto egzekwuje: `job` = `run_retention_purge`, `monitoring` = czujka
 `ops_metrics`, `infrastructure` = poza bazą, `none` = brak zadania). Zmiana tylko przez
 `admin_set_retention_policy(key, days)` (`is_admin()`, wpis `retention.policy_changed` w
-`audit_logs`); wartości z 0129 zapisał wpis `retention.policies_seeded`. Rejestru usunięć
+`audit_logs`); wartości z 0127 zapisał wpis `retention.policies_seeded`. Rejestru usunięć
 nie da się skrócić poniżej 400 dni (musi przeżyć najstarszą kopię) — zmiana tego minimum
 dopiero po RET-09/RET-10, osobnym krokiem. Tabela jest niedostępna dla ról klienta.
 
-| Klucz | Wartość (0129) | Egzekwuje | Co robi zadanie |
+| Klucz | Wartość (0127) | Egzekwuje | Co robi zadanie |
 |---|---|---|---|
 | `deleted_file` | 7 dni | job | wiersz `files` z `deleted_at` usuwany o `storage_physical_deletion` wcześniej (po 4 dniach), obiekt z kolejki — razem ≤ 7 dni |
 | `deleted_profile` | 7 dni | job | pełne usunięcie kandydata z `profiles.deleted_at` (jak wyżej, 4 dni + kolejka) |
@@ -102,7 +102,7 @@ po restore) zostawia zadanie usunięcia obiektu. Worker: `claim_storage_deletion
 inaczej Supabase Storage) → `complete_storage_deletion`. Brak obiektu =
 sukces. Ścieżka, która znów ma wiersz `files`, wypada z kolejki bez usuwania.
 
-**Dead-letter (RET-04, 0129).** 20. nieudana próba (albo porzucona dzierżawa po niej)
+**Dead-letter (RET-04, 0127).** 20. nieudana próba (albo porzucona dzierżawa po niej)
 ustawia `dead_lettered_at`: wiersz nie jest już pobierany, ale zostaje i podnosi alarm —
 `ops_metrics().storageDeletion` (`pending`, `oldestPendingAgeSeconds`, `deadLetters`),
 czujki `storage_deletion_dead_letter` (każdy wiersz) i `storage_deletion_age` (obiekt czeka
@@ -206,7 +206,7 @@ odtworzonej bazie. Procedura: [railway/BACKUP_RESTORE.md](railway/BACKUP_RESTORE
   triggera kolejki (7f), dane z kopii bez rejestru (9).
 - `npm run test:backup` — kopia → usunięcie → odtworzenie bez rejestru (dane wracają)
   i z rejestrem (usunięte, CV w kolejce), zły rejestr = odmowa.
-- `supabase/tests/rls.sql` sekcja **RV574** (0129) — wartości, `closed_at` (kontrola ujemna
+- `supabase/tests/rls.sql` sekcja **RV574** (0127) — wartości, `closed_at` (kontrola ujemna
   bez triggera i starej reguły bez `hired`), `last_seen_at` z sesji, ostrzeżenie przed
   usunięciem (kontrola ujemna: bez ostrzeżenia nic nie znika), ślad gościa, dry-run bez
   zmian, 601 rekordów w partiach, dead-letter (kontrola ujemna: stary `complete`).

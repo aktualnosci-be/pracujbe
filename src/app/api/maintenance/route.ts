@@ -38,7 +38,7 @@ import {
  * (null = kategoria wyłączona), partie z limitem i SKIP LOCKED; potem kolejka usuwania obiektów
  * storage (`processStorageDeletions`) — także obiektów plików usuniętych w tym przebiegu.
  * Nieudane usunięcie obiektu to ponowienie w kolejnym przebiegu, nie błąd zadania.
- * #574: okresy z opracowania 2026-09-25 (0129) — retencja domyślnie WYŁĄCZONA; włącza ją
+ * #574: okresy z opracowania 2026-09-25 (0127) — retencja domyślnie WYŁĄCZONA; włącza ją
  * `RETENTION_MODE=dry-run|apply` (`src/lib/retention/mode.ts`). `apply` woła kolejne partie,
  * dopóki któraś kategoria wyczerpuje limit (`fullBatches`), najwyżej RETENTION_MAX_BATCHES.
  * Kolejka usuwania obiektów działa niezależnie od trybu (usunięcie konta na wniosek).
@@ -142,7 +142,7 @@ async function run(request: Request): Promise<Response> {
   const campaignEmailsQueued = campaignSendingReady()
     ? await task('emailCampaigns', 'process_email_campaigns', { p_limit: 500 })
     : 0;
-  // #486/#574: retencja jako dane (0105, 0129) — tylko za jawną flagą; `off` nie woła bazy.
+  // #486/#574: retencja jako dane (0105, 0127) — tylko za jawną flagą; `off` nie woła bazy.
   const retentionRunMode = retentionMode();
   let retention: { mode: typeof retentionRunMode; batches: number } & Record<string, number | string> = {
     mode: retentionRunMode,
