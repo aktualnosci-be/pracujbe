@@ -16,6 +16,9 @@ function supabaseHost() {
   }
 }
 const SUPABASE_HOST = supabaseHost();
+// #47: odbiorca raportów CSP (ścieżka względna — ten sam origin co strona).
+const CSP_REPORT_PATH = '/api/csp-report';
+const CSP_REPORT_GROUP = 'csp-endpoint';
 // #103: wersja 1.0.0 tylko po jawnym PRACUJBE_RELEASE_VERSION=1.0.0; błędna wartość przerywa build.
 const BUILD = createReleaseAwareBuildMetadata(
   new Date(),
@@ -91,11 +94,17 @@ const nextConfig = {
       "frame-src 'self' https://www.facebook.com https://challenges.cloudflare.com",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
+      // #47: raporty naruszeń (bez zmiany egzekwowanej polityki). `report-uri` dla przeglądarek
+      // bez Reporting API; `report-to` wskazuje grupę z nagłówka `Reporting-Endpoints` niżej.
+      // Endpoint zapisuje tylko dyrektywę i origin zasobu (src/app/api/csp-report/route.ts).
+      `report-uri ${CSP_REPORT_PATH}`,
+      `report-to ${CSP_REPORT_GROUP}`,
     ];
     if (isProd) csp.push('upgrade-insecure-requests');
 
     const security = [
       { key: 'Content-Security-Policy', value: csp.join('; ') },
+      { key: 'Reporting-Endpoints', value: `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}"` },
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       // P3-03: spójnie z CSP `frame-ancestors 'none'` (było SAMEORIGIN — konflikt).
       { key: 'X-Frame-Options', value: 'DENY' },

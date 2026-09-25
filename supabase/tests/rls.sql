@@ -4895,10 +4895,11 @@ rollback;
 
 -- Użycie indeksu przy realnej liczbie ofert mierzy scripts/db/search-benchmark.sh (EXPLAIN
 -- przed/po); tu — definicja zgodna z predykatem get_public_jobs (status/deleted_at, trigram).
+-- Od 0108 indeks miasta jest wyrażeniowy na search_fold(city) (idx_jobs_city_trgm usunięty).
 select pg_temp.assert(
-  (select pg_get_indexdef('public.idx_jobs_city_trgm'::regclass))
-    like '%USING gin (city gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))%',
-  'OPS47-9 idx_jobs_city_trgm: GIN trigram na city, częściowy jak predykat listy ofert');
+  (select pg_get_indexdef('public.idx_jobs_city_fold_trgm'::regclass))
+    like '%USING gin (search_fold(city) gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))%',
+  'OPS47-9 idx_jobs_city_fold_trgm: GIN trigram na search_fold(city), częściowy jak predykat listy ofert');
 
 -- ============================================================================
 -- SS100. Zapisane wyszukiwania i alerty o nowych ofertach (0092, #100): kanoniczne
@@ -8617,5 +8618,111 @@ set role service_role;
 select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)),
   'SV25-3 claim jako service_role (bez błędu uprawnień)');
 reset role;
+
+-- ============================================================================
+-- SU47. Wyszukiwanie ofert bez diakrytyków i z literalnym %/_/\ (0108, #47):
+--       get_public_jobs/_count/facety składają tytuł i miasto przez search_fold
+--       (lower + unaccent) i escapują wpis użytkownika. Prefiltr po indeksach nie
+--       zmienia wyniku (dokładny warunek na wyświetlanym tytule w locale).
+-- ============================================================================
+\set SUCO  'e8000000-0000-0000-0000-0000000047c0'
+\set SUJA  'e8000000-0000-0000-0000-0000000047a1'
+\set SUJB  'e8000000-0000-0000-0000-0000000047a2'
+\set SUJC  'e8000000-0000-0000-0000-0000000047a3'
+\set SUJD  'e8000000-0000-0000-0000-0000000047a4'
+reset role; reset app.current_uid;
+begin;
+insert into public.companies(id, name, status) values (:'SUCO', 'SU47 Firma', 'verified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SUJA',:'SUCO','su47-a','Pracownik sprzątania SU47X','cleaning','permanent','Liège','Walonia','active','pl', now() - interval '1 hour'),
+  (:'SUJB',:'SUCO','su47-b','Rabat 50% SU47X','warehouse','permanent','Bruxelles','Bruksela','active','pl', now() - interval '2 hours'),
+  (:'SUJC',:'SUCO','su47-c','Kierowca_C SU47X','transport','permanent','Gent','Flandria','active','pl', now() - interval '3 hours'),
+  (:'SUJD',:'SUCO','su47-d','Magazynier SU47X','warehouse','permanent','Namur','Walonia','active','pl', now() - interval '4 hours');
+insert into public.job_translations(job_id, locale, title) values
+  (:'SUJD','pl','Magazynier SU47X'),
+  (:'SUJD','fr','Préparateur de commandes SU47X');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- SU47-1: diakrytyki i wielkość liter po obu stronach.
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'sprzatania su47x') = 1
+  and public.get_public_jobs_count('pl', 'SPRZĄTANIA SU47X') = 1
+  and (select array_agg(slug) from public.get_public_jobs('pl', 'SPRZATANIA su47x')) = array['su47-a'],
+  'SU47-1 słowo kluczowe bez diakrytyków i wielkości liter znajduje ofertę');
+
+-- SU47-2: `%`, `_` i `\` we wpisie są literałami (dotąd `%su47x` pasowało do każdej oferty).
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', '%su47x') = 0
+  and public.get_public_jobs_count('pl', '50% su47x') = 1
+  and public.get_public_jobs_count('pl', 'a_c su47x') = 1
+  and public.get_public_jobs_count('pl', 'm_gazynier su47x') = 0
+  and public.get_public_jobs_count('pl', 'su47x\') = 0
+  and public.get_public_jobs_count('pl', 'su47x', '%') = 0,
+  'SU47-2 %/_/\ w słowie kluczowym i mieście działają literalnie');
+
+-- SU47-3: miasto bez diakrytyków; wynik listy, licznika i facetów zgodny.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs('pl', 'su47x', 'liege')) = array['su47-a']
+  and public.get_public_jobs_count('pl', 'su47x', 'LIÈGE') = 1
+  and (select total from public.get_public_job_filter_facets('pl', 'su47x', 'liege')
+       where dimension = 'total') = 1
+  and (select total from public.get_public_job_filter_facets('pl', 'sprzatania su47x')
+       where dimension = 'total') = 1
+  and (select total from public.get_public_job_filter_facets('pl', '%su47x')
+       where dimension = 'total') = 0,
+  'SU47-3 miasto bez diakrytyków; lista = licznik = facety');
+
+-- SU47-4: dopasowanie liczy się na tytule wyświetlanym w locale — tłumaczenie fr pasuje
+-- tylko dla fr, mimo że prefiltr (dowolne tłumaczenie) obejmuje ofertę także dla pl.
+select pg_temp.assert(
+  public.get_public_jobs_count('fr', 'preparateur de commandes su47x') = 1
+  and public.get_public_jobs_count('pl', 'preparateur de commandes su47x') = 0
+  and (select array_agg(title) from public.get_public_jobs('fr', 'preparateur de commandes su47x'))
+      = array['Préparateur de commandes SU47X'],
+  'SU47-4 tytuł w locale zapytania; prefiltr nie dodaje trafień z innego języka');
+
+-- SU47-5 (kontrola ujemna): stary warunek ILIKE z 0091 na tych samych danych nie znajduje
+-- zapisu bez diakrytyków i traktuje `%` jako symbol wieloznaczny.
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.jobs where title ilike '%' || 'sprzatania su47x' || '%') = 0
+  and (select count(*) from public.jobs where title ilike '%' || '%su47x' || '%') = 4
+  and (select count(*) from public.jobs where city ilike '%' || 'liege' || '%' and id = :'SUJA') = 0,
+  'SU47-5 kontrola ujemna: ILIKE bez search_fold/escapowania daje inny wynik');
+rollback;
+
+-- SU47-6: funkcje pomocnicze — składanie niezmienne (indeks wyrażeniowy), escapowanie.
+select pg_temp.assert(
+  public.search_fold('Liège ŁÓDŹ Șofer Préparateur') = 'liege lodz sofer preparateur'
+  and public.search_like_pattern('50%_\x') = '%50\%\_\\x%'
+  and (select provolatile from pg_proc where oid = 'public.search_fold(text)'::regprocedure) = 'i'
+  and (select count(*) from pg_indexes where schemaname = 'public' and indexname in (
+        'idx_jobs_title_fold_trgm', 'idx_job_translations_title_fold_trgm', 'idx_jobs_city_fold_trgm')) = 3
+  and not exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'idx_jobs_city_trgm'),
+  'SU47-6 search_fold IMMUTABLE, wzorzec escapowany, indeksy fold na miejscu');
+
+-- SU47-7: indeksy obejmują dokładnie wyrażenia prefiltrów (search_fold(kolumna)) i predykat
+-- listy ofert — inaczej planista nie mógłby ich użyć. Wybór planu przy realnej liczbie ofert
+-- mierzy scripts/db/search-benchmark.sh (plan zależy od statystyk, więc nie tu).
+select pg_temp.assert(
+  pg_get_indexdef('public.idx_jobs_title_fold_trgm'::regclass)
+    like '%USING gin (search_fold(title) gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))'
+  and pg_get_indexdef('public.idx_jobs_city_fold_trgm'::regclass)
+    like '%USING gin (search_fold(city) gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))'
+  and pg_get_indexdef('public.idx_job_translations_title_fold_trgm'::regclass)
+    like '%USING gin (search_fold(title) gin_trgm_ops)',
+  'SU47-7 indeksy GIN na search_fold(title/city), częściowe jak predykat listy');
+
+-- SU47-8: funkcje kandydatów tylko dla właściciela RPC (bez EXECUTE dla ról aplikacji);
+-- granty RPC bez zmian.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.search_title_candidates(text)', 'execute')
+  and not has_function_privilege('authenticated', 'public.search_title_candidates(text)', 'execute')
+  and not has_function_privilege('anon', 'public.search_city_candidates(text)', 'execute')
+  and not has_function_privilege('authenticated', 'public.search_city_candidates(text)', 'execute')
+  and has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text)', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
+  and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute'),
+  'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
