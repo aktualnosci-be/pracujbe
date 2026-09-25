@@ -246,6 +246,29 @@ describe('ustawienia: zapis z dowodem zgody', () => {
     });
   });
 
+  it('kontrola ujemna (#605): rola z formularza jest ignorowana, liczy się rola profilu sesji', async () => {
+    // Sesja kandydata, ale formularz podszywa się pod pracodawcę — dowód MUSI użyć roli sesji.
+    resetFakeDb({ id: PROFILE, role: 'candidate' }).rpc('set_notification_preferences', null);
+    const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
+    const { emailConsentWordingVersion } = await import('@/lib/email/consent-wording');
+    expect(
+      await updateNotificationPreferences({ ...values, locale: 'nl', role: 'employer' }),
+    ).toEqual({ ok: true });
+    const [call] = fakeDb.callsTo('set_notification_preferences');
+    expect(call?.args['p_wording_version']).toBe(emailConsentWordingVersion('nl', 'candidate'));
+    expect(call?.args['p_wording_version']).not.toBe(emailConsentWordingVersion('nl', 'employer'));
+  });
+
+  it('admin nie ma tego ekranu ustawień → PERMISSION_DENIED bez zapisu', async () => {
+    resetFakeDb({ id: PROFILE, role: 'admin' });
+    const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
+    expect(await updateNotificationPreferences({ ...values, locale: 'pl' })).toEqual({
+      ok: false,
+      error: 'PERMISSION_DENIED',
+    });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
   it('gość → PERMISSION_DENIED bez zapisu; odmowa bazy → PERMISSION_DENIED, inny błąd → INTERNAL', async () => {
     const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
     resetFakeDb(null);
