@@ -137,7 +137,9 @@ describe('NotificationsList (#148)', () => {
     expect(loadMoreNotifications).toHaveBeenLastCalledWith('pl', first.nextCursor, true);
 
     loadMoreNotifications.mockResolvedValueOnce({ status: 'ready', page: page([item(2, true), item(1, true)], 3) });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: t.retry })); });
+    // Alert pojawia się przed końcem przejścia — czekamy na gotowy przycisk ponowienia.
+    const retry = await screen.findByRole('button', { name: t.retry });
+    await act(async () => { fireEvent.click(retry); });
     await screen.findByText(t.listEnd);
     // Duplikat z granicy strony nie jest powielany.
     expect(screen.getAllByRole('link', { name: /Powiadomienie \d/ }).map((a) => a.textContent)).toEqual([
