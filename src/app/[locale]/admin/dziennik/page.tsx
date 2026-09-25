@@ -58,6 +58,7 @@ const ENTITY_LABEL: Record<string, string> = {
   breach_incident: 'entityBreach',
   screening_question_review: 'entityScreeningReview',
   email_campaign: 'entityEmailCampaign',
+  age_policy: 'entityAgePolicy',
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;

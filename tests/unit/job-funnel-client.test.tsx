@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApplyModal } from '@/components/public/ApplyModal';
 import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
+import { CONSENT_COOKIE_NAME, CONSENT_POLICY_VERSION } from '@/lib/consent';
 import en from '@/messages/en.json';
 
 /**
@@ -15,6 +16,7 @@ import en from '@/messages/en.json';
  */
 
 vi.mock('@/lib/actions/applications', () => ({ applyToJob: vi.fn() }));
+vi.mock('@/lib/actions/consent', () => ({ recordConsent: vi.fn(async () => undefined) }));
 vi.mock('next/navigation', () => ({ usePathname: () => '/pl/oferty-pracy/magazynier' }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, href, ...props }: Omit<React.ComponentProps<'a'>, 'href'> & { href: unknown }) => (
@@ -40,15 +42,32 @@ function sentBodies() {
   });
 }
 
+/** Zgoda analityczna zapisana wcześniej (#575: lejek wysyła tylko po zgodzie). */
+function setStoredConsent(analytics: boolean): void {
+  const record = {
+    v: CONSENT_POLICY_VERSION,
+    categories: { necessary: true, preferences: false, analytics, marketing: false },
+    ts: '2026-01-01T00:00:00.000Z',
+    id: 'funnel-client-test',
+  };
+  document.cookie = `${CONSENT_COOKIE_NAME}=${encodeURIComponent(JSON.stringify(record))}; Path=/`;
+}
+
+function clearStoredConsent(): void {
+  document.cookie = `${CONSENT_COOKIE_NAME}=; Max-Age=0; Path=/`;
+}
+
 beforeEach(() => {
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+  setStoredConsent(true);
 });
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  clearStoredConsent();
 });
 
 describe('JobFunnelBeacon', () => {
@@ -59,8 +78,8 @@ describe('JobFunnelBeacon', () => {
     expect(sent[0]!.url).toBe('/api/job-funnel');
     expect(sent[0]!.init).toMatchObject({ method: 'POST', credentials: 'omit', keepalive: true, cache: 'no-store' });
     expect(sent[0]!.body).toEqual({ event: 'detail_view', nonce: expect.stringMatching(/^[0-9a-f-]{36}$/), jobIds: [JOB] });
-    // Brak zapisu na urządzeniu (Invariant #7).
-    expect(document.cookie).toBe('');
+    // Brak zapisu na urządzeniu (Invariant #7) — jedyne cookie to zgoda z testu.
+    expect(document.cookie.split('; ').map((c) => c.split('=')[0])).toEqual([CONSENT_COOKIE_NAME]);
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
   });

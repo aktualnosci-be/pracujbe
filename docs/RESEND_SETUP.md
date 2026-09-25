@@ -155,7 +155,8 @@ Webhook Resend (#44) → POST /api/email/webhook/resend → record_email_event
 
 ### Uruchamianie workera (cron Railway)
 
-Handler: `src/app/api/email/process/route.ts` (`GET` i `POST /api/email/process`).
+Handler: `src/app/api/email/process/route.ts` (wyłącznie `POST /api/email/process`; `GET`
+zwraca `405` bez autoryzacji ani dostępu do kolejki — #583).
 Harmonogram prowadzi osobna usługa cron w Railway, uruchamiająca
 `node scripts/railway-cron-call.mjs` co 5 minut (UTC, restart NEVER):
 

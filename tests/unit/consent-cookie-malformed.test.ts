@@ -11,6 +11,7 @@ vi.mock('@/lib/actions/consent', () => ({ recordConsent }));
 
 let consent: typeof import('@/lib/consent');
 let store: typeof import('@/lib/consent-store');
+let funnel: typeof import('@/lib/job-funnel/client');
 
 const MALFORMED = ['%E0%A4%A', '%', '%ZZ', '%7B%22v%22%3A%222.0%22%E0'];
 
@@ -18,6 +19,7 @@ beforeAll(async () => {
   vi.stubEnv('NEXT_PUBLIC_CONSENT_POLICY_VERSION', '2.0');
   consent = await import('@/lib/consent');
   store = await import('@/lib/consent-store');
+  funnel = await import('@/lib/job-funnel/client');
 });
 
 afterEach(() => {
@@ -39,6 +41,10 @@ describe('odczyt zgody z uszkodzonego cookie (#613)', () => {
     expect(consent.hasConsent('marketing')).toBe(false);
     expect(() => store.getConsentSnapshot()).not.toThrow();
     expect(store.getConsentSnapshot()).toBeNull();
+    // Lejek ofert (#575) czyta zgodę tuż przed wysyłką — brak decyzji, nic nie wychodzi.
+    window.history.replaceState(null, '', '/pl/oferty-pracy');
+    expect(() => funnel.funnelConsentState()).not.toThrow();
+    expect(funnel.funnelConsentState()).toBe('undecided');
   });
 
   it('poprawna zgoda zapisana po uszkodzonej wartości jest czytana normalnie', () => {

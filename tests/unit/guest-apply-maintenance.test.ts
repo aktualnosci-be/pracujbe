@@ -20,6 +20,7 @@ const MAINTENANCE_RPCS = [
   'process_saved_search_alerts',
   'process_email_campaigns',
   'run_retention_purge',
+  'purge_job_funnel_data',
   'purge_stale_message_attachments',
   'claim_storage_deletions',
 ];

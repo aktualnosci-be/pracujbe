@@ -15,7 +15,10 @@ jobs:
       contents: read
     steps:
       - name: ♻ Delete workflow runs
-        uses: Mattraks/delete-workflow-runs@v2.0.6
+        # Przypięte do pełnego SHA, nie do ruchomego taga (#601) — jedyny krok w repo z
+        # uprawnieniem `actions: write`. Zmiana wersji wymaga jawnej aktualizacji SHA po
+        # niezależnym przeglądzie commita.
+        uses: Mattraks/delete-workflow-runs@39f0bbed25d76b34de5594dceab824811479e5de # v2.0.6
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
