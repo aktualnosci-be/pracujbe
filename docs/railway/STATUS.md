@@ -17,7 +17,7 @@ Baza: b35087b, gałąź infra/railway oparta na pracach PR #8. Zmiany migracyjne
 - [P1: Railway — odbiór produkcji i integracji](https://github.com/aktualnosci-be/pracujbe/issues/16)
 - [P2: Railway — dzienna retencja i GC](https://github.com/aktualnosci-be/pracujbe/issues/17)
 - [P1: Railway — domeny, cutover, rollback i obserwacja](https://github.com/aktualnosci-be/pracujbe/issues/18)
-- [P2: Railway — IaC i cleanup po okresie stabilności](https://github.com/aktualnosci-be/pracujbe/issues/19)
+- [P2: Railway — IaC i cleanup po okresie stabilności](https://github.com/aktualnosci-be/pracujbe/issues/19) — `.railway/railway.ts` + strażnik gotowe, niewłączone ([IAC.md](IAC.md)); cleanup Vercela otwarty
 - [P2: Railway — opcjonalne usprawnienia po migracji](https://github.com/aktualnosci-be/pracujbe/issues/20)
 ## Pierwszy etap implementacji
 
