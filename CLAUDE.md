@@ -879,9 +879,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w trybie bez aplikacji waliduje odpowiedzi przy wysłaniu, potwierdzenie zapisuje je do
   `application_screening_answers` (GA98-13). Retencja w `/api/maintenance`: niepotwierdzone 7 dni po ostatnim linku,
   duplikaty 7 dni po potwierdzeniu (z e-mailami), token przejęcia zerowany po 30 dniach.
-  Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture). **Otwarte:** powiadomienie gościa
-  o zmianie statusu (brak profilu odbiorcy); okres retencji do potwierdzenia w polityce
-  prywatności (#40).
+  Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture).
+  Zmiana statusu (0108): `transition_application` → `enqueue_guest_status_email` →
+  `guestStatusChanged` w języku formularza (`guest_application_requests.locale` — jawnie
+  zapisany język odbiorcy bez profilu, Invariant #1), klucz = id wiersza historii, tylko
+  potwierdzone zgłoszenie, nieusunięta aplikacja bez konta, adres bez blokady (#44); wiersz
+  kolejki = encja aplikacji (retencja #486 usuwa go z aplikacją); payload: imię gościa, firma,
+  tytuł, status; CTA lista ofert, bez tokenu i linku wypisania. Dowód: `rls.sql` sekcja GS98
+  (kontrole ujemne), unit `guest-status-email`. **Otwarte:** okres retencji do potwierdzenia
+  w polityce prywatności (#40).
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia

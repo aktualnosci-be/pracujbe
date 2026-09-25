@@ -128,6 +128,8 @@ export interface EmailDataMap {
   /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
   guestApplicationConfirm: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
   guestApplicationSent: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
+  /** Zmiana statusu aplikacji gościa (0108) — w języku formularza; `status` jak w `statusChanged`. */
+  guestStatusChanged: { recipientName?: string; jobTitle: string; companyName: string; status: string; actionUrl: string };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
   invoice: { recipientName?: string; invoiceNumber: string; amount: string; downloadUrl: string };
@@ -209,6 +211,7 @@ const SUBJECT_FIELD: Partial<Record<EmailType, string>> = {
   offerDeclined: 'candidateName',
   newMessage: 'senderName',
   statusChanged: 'status',
+  guestStatusChanged: 'status',
   companyRejected: 'reason',
   companySuspended: 'reason',
   teamInvitation: 'inviterName',
@@ -230,7 +233,7 @@ function prepareVars(
   data: Record<string, unknown>,
 ): Record<string, unknown> {
   const vars: Record<string, unknown> = { ...data };
-  if (type === 'statusChanged') {
+  if (type === 'statusChanged' || type === 'guestStatusChanged') {
     vars.status = applicationStatusLabel(locale, data.status) ?? '';
   }
   const field = SUBJECT_FIELD[type];
@@ -630,6 +633,18 @@ export function GuestApplicationSentEmail(props: EmailProps<'guestApplicationSen
   );
 }
 
+export function GuestStatusChangedEmail(props: EmailProps<'guestStatusChanged'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="guestStatusChanged"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
 /** Lista nowych ofert w digeście — sekcje jak paszporty newslettera: tytuł-link, firma · miasto. */
 function JobMatchList({ jobs }: { jobs: EmailDataMap['jobMatch']['jobs'] }): ReactElement | null {
   const items = (jobs ?? []).filter((job) => job.title.trim().length > 0 && job.url.length > 0);
@@ -887,6 +902,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   jobMatch: JobMatchEmail,
   guestApplicationConfirm: GuestApplicationConfirmEmail,
   guestApplicationSent: GuestApplicationSentEmail,
+  guestStatusChanged: GuestStatusChangedEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,
   invoice: InvoiceEmail,
