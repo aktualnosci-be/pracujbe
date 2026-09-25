@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
+import { CAMPAIGN_STATUS_KEY, isCampaignStatus } from '@/lib/admin/campaigns';
 import {
   AUDIT_ACTION_KEY,
   AUDIT_ENTITY_TYPES,
@@ -56,6 +57,7 @@ const ENTITY_LABEL: Record<string, string> = {
   email_suppression: 'entityEmailSuppression',
   breach_incident: 'entityBreach',
   screening_question_review: 'entityScreeningReview',
+  email_campaign: 'entityEmailCampaign',
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -131,6 +133,9 @@ export default async function AdminAuditPage({
     if (entityType === 'breach_incident') {
       if (value === 'open') return t('breachStatusOpen');
       if (value === 'closed') return t('breachStatusClosed');
+    }
+    if (entityType === 'email_campaign' && isCampaignStatus(value)) {
+      return t(CAMPAIGN_STATUS_KEY[value]);
     }
     return t('statusUnknown');
   };

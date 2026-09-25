@@ -65,7 +65,7 @@ describe('ThreadMessageList (#146, #358)', () => {
   it('nadawca i czas są przed treścią w DOM', () => {
     renderList();
     const [first, second] = screen.getAllByRole('listitem');
-    // Wiadomość drugiej strony kończy przycisk zgłoszenia (0108) — po treści w DOM.
+    // Wiadomość drugiej strony kończy przycisk zgłoszenia (0113) — po treści w DOM.
     expect(first!.textContent).toBe(`Anna Nowak · 10:52treść 52${pl.messages.reportMessage}`);
     expect(second!.textContent).toBe(`${pl.messages.you} · 10:53treść 53`);
   });
@@ -135,7 +135,7 @@ describe('ThreadMessageList (#146, #358)', () => {
     expect(screen.queryByRole('button', { name: pl.messages.loadOlder })).not.toBeInTheDocument();
   });
 
-  it('zgłoszenie (0108): przycisk tylko przy wiadomości drugiej strony, z nazwą nadawcy i czasu', () => {
+  it('zgłoszenie (0113): przycisk tylko przy wiadomości drugiej strony, z nazwą nadawcy i czasu', () => {
     renderList({ initialOlderCursor: null });
     const buttons = screen.getAllByRole('button', { name: /Zgłoś wiadomość/ });
     expect(buttons).toHaveLength(1);

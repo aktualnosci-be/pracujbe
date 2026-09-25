@@ -29,7 +29,7 @@ export interface MessageThreadProps {
   locale: Locale;
   /** `id` nagłówka `<h2>` — rodzic wskazuje go w `aria-labelledby` regionu wątku. */
   headingId: string;
-  /** Otwarte zgłoszenia bieżącego użytkownika w tej rozmowie (0108). */
+  /** Otwarte zgłoszenia bieżącego użytkownika w tej rozmowie (0113). */
   reports?: MyMessageReports;
 }
 

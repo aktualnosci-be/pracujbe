@@ -94,7 +94,7 @@ async function completeOnboarding(as: string) {
     certificateExpiry: { VCA: '2030-01-31' },
   })).toEqual({ ok: true });
   return saveOnboardingStep(6, {
-    availability: 'immediate', preferredContractTypes: ['permanent'], agreeTerms: true,
+    availability: 'immediate', preferredContractTypes: ['permanent'], agreeTerms: true, privacyNoticeAck: true,
   }, { finish: true });
 }
 
@@ -122,15 +122,20 @@ describe('onboarding i profil kandydata (#25)', () => {
     const { rows } = await db().admin.query(
       `SELECT cp.profile_completed, cp.city, cp.categories::text[] AS categories,
               (SELECT count(*)::int FROM public.candidate_skills s WHERE s.candidate_profile_id = cp.id) AS skills,
-              (SELECT array_agg(document ORDER BY document)::text[] FROM public.document_acceptances d WHERE d.profile_id = cp.profile_id) AS docs
+              (SELECT array_agg(d.document || ':' || d.kind || ':' || d.source ORDER BY d.document)::text[]
+                 FROM public.document_acceptances d WHERE d.profile_id = cp.profile_id) AS docs
          FROM public.candidate_profiles cp WHERE cp.profile_id = $1`, [alice]);
-    expect(rows[0]).toMatchObject({ profile_completed: true, city: 'Gent', categories: ['warehouse'], skills: 2, docs: ['privacy', 'terms'] });
+    // #493: regulamin i informacja o prywatności jako osobne receipty kanału onboarding.
+    expect(rows[0]).toMatchObject({
+      profile_completed: true, city: 'Gent', categories: ['warehouse'], skills: 2,
+      docs: ['privacy:privacy_notice_ack:onboarding', 'terms:terms_acceptance:onboarding'],
+    });
   });
 
   it('niekompletny profil: „Zakończ” zwraca ONBOARDING_INCOMPLETE, a dane kroku 6 zostają', async () => {
     actAs({ id: bob, role: 'candidate' });
     expect(await saveOnboardingStep(6, {
-      availability: 'within_month', preferredContractTypes: ['temporary'], agreeTerms: true,
+      availability: 'within_month', preferredContractTypes: ['temporary'], agreeTerms: true, privacyNoticeAck: true,
     }, { finish: true })).toEqual({ ok: false, error: 'ONBOARDING_INCOMPLETE' });
     const { rows } = await db().admin.query('SELECT availability::text FROM public.candidate_profiles WHERE profile_id = $1', [bob]);
     expect(rows[0]?.availability).toBe('within_month');
@@ -360,6 +365,26 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(await getMyJobMatch(jobIds[0]!)).toEqual({ status: 'none' });
     actAs({ id: alice, role: 'candidate' });
     expect(await getMyJobMatch(randomUUID())).toEqual({ status: 'none' });
+  });
+
+  it('odległość ze słownika locations (0112): gminy spoza listy w kodzie, kontrola ujemna', async () => {
+    const setCities = async (candidate: string, job: string) => {
+      await db().admin.query('UPDATE public.candidate_profiles SET city = $2 WHERE profile_id = $1', [alice, candidate]);
+      await db().admin.query('UPDATE public.jobs SET city = $2 WHERE id = $1', [jobIds[0], job]);
+    };
+    actAs({ id: alice, role: 'candidate' });
+    try {
+      // Puurs (gmina zniesiona 2019) i Bornem — obie tylko w bazie, ~5 km.
+      await setCities('Puurs', 'Bornem');
+      const near = await getMyJobMatch(jobIds[0]!);
+      expect(near.status === 'ok' && near.result.strengths).toContain('withinCommuteRadius');
+      await setCities('Atlantyda', 'Bornem');
+      const unknown = await getMyJobMatch(jobIds[0]!);
+      expect(unknown.status).toBe('ok');
+      expect(unknown.status === 'ok' && unknown.result.strengths).not.toContain('withinCommuteRadius');
+    } finally {
+      await setCities('Gent', 'Gent');
+    }
   });
 
   it('ostatnie wiadomości i licznik nieprzeczytanych rozmów tylko dla członka', async () => {

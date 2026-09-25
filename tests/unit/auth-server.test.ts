@@ -62,12 +62,16 @@ const candidate = {
   firstName: ' Anna ',
   lastName: ' Nowak ',
   agreeTerms: true,
+  privacyNoticeAck: true,
 };
 
 describe('Serwerowy kontekst rejestracji', () => {
   it.each([
     { agreeTerms: false },
     { agreeTerms: undefined },
+    { privacyNoticeAck: false },
+    { privacyNoticeAck: undefined },
+    { marketingOptIn: 'true' },
     { passwordConfirm: 'DifferentPassword123' },
     { password: 'abcdefgh', passwordConfirm: 'abcdefgh' },
     { locale: 'de' },
@@ -94,9 +98,22 @@ describe('Serwerowy kontekst rejestracji', () => {
       expect(body).toEqual({ email: 'applicant@example.invalid', name: 'Anna Nowak', password: candidate.password });
       authorizeSignupRequest(body);
       expect(signupMetadataForUser(body)).toEqual({
-        signup_receipt_version: 1, agree_terms: true, role: 'candidate', locale: 'fr',
-        first_name: 'Anna', last_name: 'Nowak',
+        signup_receipt_version: 2, agree_terms: true, privacy_notice_ack: true,
+        optional_consents: { email_marketing: false },
+        consent_wording: {
+          terms: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+          privacy: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+          email_marketing: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        },
+        role: 'candidate', locale: 'fr', first_name: 'Anna', last_name: 'Nowak',
       });
+    });
+  });
+
+  it('zgoda na marketing z formularza trafia do markera jako osobny wybór (#493)', async () => {
+    await withCandidateSignup({ ...candidate, marketingOptIn: true }, 'pl', async body => {
+      authorizeSignupRequest(body);
+      expect(signupMetadataForUser(body).optional_consents).toEqual({ email_marketing: true });
     });
   });
 

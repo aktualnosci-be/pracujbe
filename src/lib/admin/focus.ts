@@ -26,3 +26,7 @@ export function appealFocusKey(id: string): string {
 export function screeningReviewFocusKey(id: string): string {
   return `screening-review-${id}`;
 }
+
+export function emailCampaignFocusKey(id: string): string {
+  return `email-campaign-${id}`;
+}

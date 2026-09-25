@@ -4895,10 +4895,11 @@ rollback;
 
 -- Użycie indeksu przy realnej liczbie ofert mierzy scripts/db/search-benchmark.sh (EXPLAIN
 -- przed/po); tu — definicja zgodna z predykatem get_public_jobs (status/deleted_at, trigram).
+-- Od 0110 indeks miasta jest wyrażeniowy na search_fold(city) (idx_jobs_city_trgm usunięty).
 select pg_temp.assert(
-  (select pg_get_indexdef('public.idx_jobs_city_trgm'::regclass))
-    like '%USING gin (city gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))%',
-  'OPS47-9 idx_jobs_city_trgm: GIN trigram na city, częściowy jak predykat listy ofert');
+  (select pg_get_indexdef('public.idx_jobs_city_fold_trgm'::regclass))
+    like '%USING gin (search_fold(city) gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))%',
+  'OPS47-9 idx_jobs_city_fold_trgm: GIN trigram na search_fold(city), częściowy jak predykat listy ofert');
 
 -- ============================================================================
 -- SS100. Zapisane wyszukiwania i alerty o nowych ofertach (0092, #100): kanoniczne
@@ -7493,6 +7494,205 @@ select pg_temp.assert((select count(*) from public.moderation_decisions) = 5
 reset role;
 
 -- ============================================================================
+-- CS493. #493 — osobno: regulamin, informacja o prywatności, zgody opcjonalne (0108)
+-- ============================================================================
+\set CS1 'c4930000-0000-0000-0000-000000000001'
+\set CS2 'c4930000-0000-0000-0000-000000000002'
+\set CS3 'c4930000-0000-0000-0000-000000000003'
+\set CS4 'c4930000-0000-0000-0000-000000000004'
+\set CS5 'c4930000-0000-0000-0000-000000000005'
+-- Konta bez markera receiptu (profil z triggera, bez akceptacji).
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CS1','cs1@test.be','Cs One','{"role":"candidate","first_name":"Cs","last_name":"One","locale":"nl"}'),
+  (:'CS2','cs2@test.be','Cs Two','{"role":"employer","first_name":"Cs","last_name":"Two","locale":"fr"}');
+
+-- CS493-0: wiersze sprzed #493 i dawne API = legacy_combined (znaczenie zachowane).
+select pg_temp.assert(
+  (select bool_and(kind = 'legacy_combined' and source is null)
+     from public.document_acceptances where profile_id = :'CANDA'),
+  'CS493-0 dawny wspólny checkbox zapisany jako legacy_combined');
+
+-- CS493-1: klient nie pisze receiptów ani nie woła RPC zapisu.
+set role authenticated; set app.current_uid = :'CS1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'insert into public.document_acceptances (profile_id, document, kind) values ('''
+    || :'CS1' || ''', ''terms'', ''terms_acceptance'')',
+  'permission denied', 'CS493-1 authenticated nie pisze document_acceptances');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{}'', ''signup'')',
+  'permission denied', 'CS493-1b authenticated nie woła record_signup_consents');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{}'', ''signup'')',
+  'permission denied', 'CS493-1c anon nie woła record_signup_consents');
+reset role;
+
+-- CS493-2: regulamin i informacja o prywatności są wymagane; nieznany cel = błąd; bez zapisu.
+set role service_role;
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', false, true, ''{}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2 bez akceptacji regulaminu');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, false, ''{}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2b bez potwierdzenia informacji o prywatności');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{"ai_matching": true}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2c cel spoza listy');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{"email_marketing": "yes"}'', ''signup'')',
+  'VALIDATION_FAILED', 'CS493-2d wybór nie-boolean');
+select pg_temp.expect_error(
+  'select public.record_signup_consents(''' || :'CS1' || ''', true, true, ''{}'', ''cookie_banner'')',
+  'VALIDATION_FAILED', 'CS493-2e kanał spoza listy');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CS1') = 0
+  and (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0,
+  'CS493-2f odrzucone wywołania nie zostawiają receiptu');
+
+-- CS493-3: odmowa zgody opcjonalnej nie blokuje; każdy element osobno; zgoda nie jest włączana.
+set role service_role;
+select public.record_signup_consents(:'CS1', true, true, '{"email_marketing": false}', 'signup', 'nl',
+  '{"terms": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "privacy": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "email_marketing": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}',
+  '203.0.113.9', 'UA/2.0');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CS1') = 2
+  and exists (select 1 from public.document_acceptances where profile_id = :'CS1'
+               and document = 'terms' and kind = 'terms_acceptance' and source = 'signup'
+               and locale = 'nl' and document_version = 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' and ip_address = '203.0.113.9')
+  and exists (select 1 from public.document_acceptances where profile_id = :'CS1'
+               and document = 'privacy' and kind = 'privacy_notice_ack' and source = 'signup'),
+  'CS493-3 regulamin i informacja o prywatności jako osobne receipty z wersją i kanałem');
+select pg_temp.assert(
+  (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0,
+  'CS493-3b odmowa nie tworzy zdarzenia zgody (#513: dziennik zapisuje tylko zmiany)');
+select pg_temp.assert(
+  coalesce((select email_marketing from public.notification_preferences where profile_id = :'CS1'), false) = false,
+  'CS493-3c odmowa nie włącza marketingu');
+
+-- CS493-4: zgoda włącza kategorię (wycofanie = ustawienia powiadomień).
+set role service_role;
+select public.record_signup_consents(:'CS2', true, true, '{"email_marketing": true}', 'signup', 'fr',
+  '{"email_marketing": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}', null, null);
+reset role;
+select pg_temp.assert(
+  (select email_marketing from public.notification_preferences where profile_id = :'CS2') = true
+  and (select count(*) from public.email_consent_events where profile_id = :'CS2') = 1
+  and (select granted and category = 'marketing' and source = 'signup' and locale = 'fr'
+              and wording_version = 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+         from public.email_consent_events where profile_id = :'CS2'),
+  'CS493-4 zgoda na marketing: kategoria włączona, zdarzenie #513 ze źródłem signup i wersją treści');
+-- Kontekst źródła nie przecieka na kolejne zapisy w tej samej transakcji.
+select pg_temp.assert(
+  public.email_consent_context('source') is null and public.email_consent_context('wording') is null,
+  'CS493-4a kontekst signup wyczyszczony po zapisie');
+set role authenticated; set app.current_uid = :'CS2'; select pg_temp.assert_client_role();
+select public.set_notification_preferences(
+  '{"email_applications": true, "email_offers": true, "email_messages": true, "email_job_matches": true,
+    "email_marketing": false, "push_enabled": true, "in_app_enabled": true}', 'fr', null);
+select pg_temp.assert(
+  (select email_marketing from public.notification_preferences where profile_id = :'CS2') = false
+  and (select count(*) from public.email_consent_events) = 2
+  and exists (select 1 from public.email_consent_events where category = 'marketing'
+               and not granted and source = 'settings'),
+  'CS493-4b wycofanie w ustawieniach (RPC #513); użytkownik widzi tylko własny dowód');
+reset role; reset app.current_uid;
+
+-- CS493-5: onboarding bez pokazanych zgód opcjonalnych nie tworzy fałszywego dowodu.
+set role service_role;
+select public.record_signup_consents(:'CS1', true, true, '{}', 'onboarding', 'nl', '{}', null, null);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.email_consent_events where profile_id = :'CS1') = 0
+  and (select count(*) from public.document_acceptances where profile_id = :'CS1' and source = 'onboarding') = 2,
+  'CS493-5 onboarding: tylko regulamin + informacja, bez zgody na inne cele');
+
+-- CS493-6: receipty są niezmienne dla każdej roli (także właściciela tabel).
+select pg_temp.expect_error(
+  'update public.document_acceptances set kind = ''legacy_combined'' where profile_id = ''' || :'CS1' || '''',
+  'CONSENT_RECEIPT_IMMUTABLE', 'CS493-6 document_acceptances bez UPDATE');
+select pg_temp.expect_error(
+  'delete from public.document_acceptances where profile_id = ''' || :'CS1' || '''',
+  'CONSENT_RECEIPT_IMMUTABLE', 'CS493-6b document_acceptances bez DELETE');
+-- Kontrola ujemna: bez triggera przepisanie akceptacji regulaminu na dawny wpis przechodzi.
+begin;
+drop trigger document_acceptances_immutable on public.document_acceptances;
+update public.document_acceptances set kind = 'legacy_combined', source = null where profile_id = :'CS1';
+select pg_temp.assert(
+  not exists (select 1 from public.document_acceptances where profile_id = :'CS1' and kind <> 'legacy_combined'),
+  'CS493-6d kontrola ujemna: bez triggera znaczenie receiptu dałoby się przepisać');
+rollback;
+-- Kontrola ujemna: bez źródła 'signup' w triggerze 0101 zgoda z rejestracji byłaby 'direct'.
+begin;
+create or replace function public.record_email_consent_change()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $f$
+begin
+  insert into public.email_consent_events (profile_id, category, granted, source, locale)
+  values (new.profile_id, 'marketing', new.email_marketing, 'direct', 'pl');
+  return null;
+end $f$;
+set role service_role;
+select public.record_signup_consents(:'CS1', true, true, '{"email_marketing": true}', 'signup', 'nl', '{}', null, null);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.email_consent_events where profile_id = :'CS1' and source = 'signup'),
+  'CS493-6e kontrola ujemna: trigger bez źródła signup nie daje dowodu z rejestracji');
+rollback;
+
+-- CS493-7: Better Auth, marker v2 — osobne receipty, zgoda opcjonalna z formularza.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CS3','cs3@test.be','Cs Three', jsonb_build_object('role','candidate','first_name','Cs','last_name','Three',
+    'locale','en','signup_receipt_version',2,'agree_terms',true,'privacy_notice_ack',true,
+    'optional_consents', jsonb_build_object('email_marketing', true),
+    'consent_wording', jsonb_build_object('terms','sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','privacy','sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','email_marketing','sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc')));
+select pg_temp.assert(
+  (select array_agg(kind order by kind) from public.document_acceptances where profile_id = :'CS3')
+    = array['privacy_notice_ack','terms_acceptance']
+  and (select granted and source = 'signup' and locale = 'en' and wording_version = 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+         from public.email_consent_events where profile_id = :'CS3' and category = 'marketing')
+  and (select email_marketing from public.notification_preferences where profile_id = :'CS3'),
+  'CS493-7 rejestracja v2: dwa osobne receipty + zgoda opcjonalna');
+-- v2 bez potwierdzenia informacji o prywatności albo z celem spoza listy = brak konta.
+select pg_temp.expect_error(format(
+  'insert into auth.users(id,email,name,raw_user_meta_data) values (%L,%L,%L,%L::jsonb)',
+  :'CS4', 'cs4@test.be', 'Cs Four',
+  '{"role":"employer","first_name":"Cs","last_name":"Four","locale":"pl","signup_receipt_version":2,"agree_terms":true}'),
+  'VALIDATION_FAILED', 'CS493-7b v2 bez potwierdzenia informacji o prywatności');
+select pg_temp.expect_error(format(
+  'insert into auth.users(id,email,name,raw_user_meta_data) values (%L,%L,%L,%L::jsonb)',
+  :'CS4', 'cs4@test.be', 'Cs Four',
+  '{"role":"employer","first_name":"Cs","last_name":"Four","locale":"pl","signup_receipt_version":2,"agree_terms":true,"privacy_notice_ack":true,"optional_consents":{"profile_ai":true}}'),
+  'VALIDATION_FAILED', 'CS493-7c v2 z celem spoza listy');
+select pg_temp.expect_error(format(
+  'insert into auth.users(id,email,name,raw_user_meta_data) values (%L,%L,%L,%L::jsonb)',
+  :'CS4', 'cs4@test.be', 'Cs Four',
+  '{"role":"employer","first_name":"Cs","last_name":"Four","locale":"pl","signup_receipt_version":null,"agree_terms":true}'),
+  'VALIDATION_FAILED', 'CS493-7d marker null');
+select pg_temp.assert(
+  not exists (select 1 from auth.users where id = :'CS4')
+  and not exists (select 1 from public.profiles where id = :'CS4'),
+  'CS493-7e odrzucona rejestracja nie zostawia konta');
+-- v2 bez zgody opcjonalnej: konto powstaje, marketing wyłączony, brak dowodu zgody.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CS5','cs5@test.be','Cs Five','{"role":"employer","first_name":"Cs","last_name":"Five","locale":"pl","signup_receipt_version":2,"agree_terms":true,"privacy_notice_ack":true}');
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'CS5') = 2
+  and (select count(*) from public.email_consent_events where profile_id = :'CS5') = 0
+  and coalesce((select email_marketing from public.notification_preferences where profile_id = :'CS5'), false) = false,
+  'CS493-7f brak zgody opcjonalnej nie blokuje konta');
+
+-- CS493-8: usunięcie konta (kaskada) usuwa receipty mimo niezmienności.
+delete from auth.users where id = :'CS5';
+select pg_temp.assert(
+  not exists (select 1 from public.document_acceptances where profile_id = :'CS5')
+  and not exists (select 1 from public.profiles where id = :'CS5'),
+  'CS493-8 kaskada usunięcia konta usuwa receipty');
+delete from auth.users where id = :'CS3';
+select pg_temp.assert(
+  not exists (select 1 from public.email_consent_events where profile_id = :'CS3'),
+  'CS493-8b kaskada usuwa dowód zgód opcjonalnych (#513)');
 -- DR486. Retencja, eksport danych kandydata, usunięcie konta, kolejka storage,
 --        ponowne usunięcie po odtworzeniu kopii (0105)
 -- ============================================================================
@@ -8174,6 +8374,241 @@ select pg_temp.expect_error('select public.dsa_transparency_report(now(), now() 
   'VALIDATION_FAILED', 'APL43-11c zły okres raportu');
 reset role;
 -- ============================================================================
+-- RA43. Odwołanie zgłaszającego od COFNIĘCIA ograniczenia (0109, #43): ręczne cofnięcie
+-- informuje zgłaszającego w jego języku; termin od poinformowania; od cofnięcia po odwołaniu
+-- autora odwołanie nie przysługuje; rozpatruje ktoś inny niż osoba, która cofnęła;
+-- uwzględnienie = nowa decyzja ograniczająca; retencja, raport i eksport.
+-- ============================================================================
+\echo '--- RA43 odwołanie od cofnięcia ---'
+\set RAJ1 'e9800000-0000-0000-0000-0000000000b1'
+\set RAJ2 'e9800000-0000-0000-0000-0000000000b2'
+\set RAJ3 'e9800000-0000-0000-0000-0000000000b3'
+\set RAJ4 'e9800000-0000-0000-0000-0000000000b4'
+\set RAREASON 'Po ponownym przeglądzie oferta nie wymaga żadnych opłat.'
+\set RAGROUNDS 'Rekruter nadal żąda opłaty; opisuję przebieg rozmowy telefonicznej.'
+reset role; reset app.current_uid;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'RAJ1',:'APCO','ra-job-1','Magazynier R1','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'RAJ2',:'APCO','ra-job-2','Magazynier R2','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'RAJ3',:'APCO','ra-job-3','Magazynier R3','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'RAJ4',:'APCO','ra-job-4','Magazynier R4','warehouse','permanent','Antwerpia','Flandria','active','pl');
+
+set role service_role;
+select report_id as rr1, case_number as rcase1 from public.submit_content_report(null, gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RAJ1', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null,
+  'Gość Ra', 'ra1@test.be', 'fr', true) \gset
+select report_id as rr2, case_number as rcase2 from public.submit_content_report(:'CANDA', gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RAJ2', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, null,
+  'ra2@test.be', 'en', true) \gset
+select report_id as rr3, case_number as rcase3 from public.submit_content_report(null, gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RAJ3', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, null,
+  'ra3@test.be', 'nl', true) \gset
+select report_id as rr4 from public.submit_content_report(null, gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RAJ4', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, null,
+  'ra4@test.be', 'nl', true) \gset
+reset role;
+
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'rr1', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as rd1 \gset
+select public.admin_decide_report(:'rr2', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as rd2 \gset
+select public.admin_decide_report(:'rr3', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as rd3 \gset
+select public.admin_decide_report(:'rr4', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as rd4 \gset
+reset role; reset app.current_uid;
+
+-- RA43-1: ręczne cofnięcie (inny admin niż autor decyzji) informuje zgłaszającego w JEGO języku.
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select public.admin_restore_moderation(:'rd1', :'RAREASON') as rs1 \gset
+select public.admin_restore_moderation(:'rd2', :'RAREASON') as rs2 \gset
+select public.admin_restore_moderation(:'rd4', :'RAREASON') as rs4 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where template = 'reportRestored' and entity_type = 'moderation_restoration'
+     and entity_id = :'rs1' and to_email = 'ra1@test.be' and locale = 'fr' and profile_id is null
+     and payload->>'caseNumber' = :'rcase1' and not (payload ? 'reason') and not (payload ? 'companyName')) = 1
+  and (select count(*) from public.email_deliveries where template = 'reportRestored' and entity_id = :'rs2'
+     and profile_id = :'CANDA' and locale = public.resolve_recipient_locale(:'CANDA') and locale <> 'en') = 1,
+  'RA43-1 e-mail o cofnięciu do zgłaszającego: gość w języku formularza, konto wg profilu; bez powodu i danych autora');
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_appealable(:'rs1') = 'OK'
+  and public.moderation_restoration_appeal_deadline(:'rs1') is null,
+  'RA43-1b e-mail w kolejce: odwołanie przysługuje, termin jeszcze nie biegnie');
+reset role;
+
+-- RA43-2: cofnięcie będące skutkiem odwołania autora — bez odwołania zgłaszającego i bez e-maila.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select appeal_id as raa3 from public.submit_moderation_appeal(:'rd3', gen_random_uuid(), :'APGROUNDS') \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select public.admin_decide_appeal(:'raa3', 'pending', 'reversed', :'RAREASON');
+reset role; reset app.current_uid;
+select id as rs3 from public.moderation_restorations where decision_id = :'rd3' \gset
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_appealable(:'rs3') = 'INVALID_TRANSITION',
+  'RA43-2 od cofnięcia po uwzględnionym odwołaniu autora odwołanie nie przysługuje');
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase3' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'INVALID_TRANSITION', 'RA43-2b RPC odrzuca odwołanie od cofnięcia po odwołaniu autora');
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'acase2' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'INVALID_TRANSITION', 'RA43-2c sprawa bez cofnięcia: odwołanie od cofnięcia nie przysługuje');
+reset role;
+select pg_temp.assert((select count(*) from public.email_deliveries where template = 'reportRestored' and entity_id = :'rs3') = 0,
+  'RA43-2d cofnięcie po odwołaniu autora nie wysyła zgłaszającemu e-maila o odwołaniu');
+
+-- RA43-3: dostęp — tylko service_role (za limiterem), zły kod = NOT_FOUND.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase2' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'permission denied', 'RA43-3 klient nie woła RPC z pominięciem limitera');
+select pg_temp.expect_error('select public.moderation_restoration_appealable(''' || :'rs1' || ''')',
+  'permission denied', 'RA43-3b stan drogi odwołania tylko przez serwer');
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase1' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWY'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'NOT_FOUND', 'RA43-3c zły kod dostępu = NOT_FOUND');
+reset role;
+
+-- RA43-4: termin od POINFORMOWANIA o cofnięciu.
+update public.email_deliveries set status = 'bounced', sent_at = now() - interval '2 years'
+  where entity_id = :'rs2' and template = 'reportRestored';
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_appeal_deadline(:'rs2') is null
+  and public.moderation_restoration_appealable(:'rs2') = 'OK',
+  'RA43-4 odbity e-mail o cofnięciu nie jest poinformowaniem');
+reset role;
+update public.email_deliveries set status = 'delivered' where entity_id = :'rs2' and template = 'reportRestored';
+update public.email_deliveries set status = 'sent', sent_at = now() where entity_id = :'rs1' and template = 'reportRestored';
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_appealable(:'rs2') = 'APPEAL_WINDOW_CLOSED',
+  'RA43-4b dwa lata od doręczenia: termin odwołania od cofnięcia upłynął');
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase2' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'APPEAL_WINDOW_CLOSED', 'RA43-4c odwołanie od cofnięcia po terminie odrzucone');
+select public.get_report_case(:'rcase1', 'ABCDEFGHIJKLMNOPQRSTUVWX') as rlook1 \gset
+reset role;
+select pg_temp.assert((:'rlook1'::jsonb)->'restoration'->>'appealState' = 'OK'
+  and ((:'rlook1'::jsonb)->'restoration'->>'appealDeadline')::timestamptz > now() + interval '5 months'
+  and (:'rlook1'::jsonb)->'appeal' = 'null'::jsonb and (:'rlook1'::jsonb)->>'appealState' is null
+  and position(:'RAREASON' in :'rlook1') = 0,
+  'RA43-4d zgłaszający widzi cofnięcie i termin odwołania, bez powodu cofnięcia');
+
+-- RA43-5: odwołanie od cofnięcia — idempotentne, jedno na cofnięcie, e-mail w języku zgłaszającego.
+set role service_role;
+select 'e9800000-0000-0000-0000-00000000a001' as rkey1 \gset
+select appeal_id as rap1, created as rcr1 from public.submit_report_restoration_appeal(:'rcase1',
+  'ABCDEFGHIJKLMNOPQRSTUVWX', :'rkey1', :'RAGROUNDS') \gset
+select appeal_id as rap1r, created as rcr1r from public.submit_report_restoration_appeal(:'rcase1',
+  'ABCDEFGHIJKLMNOPQRSTUVWX', :'rkey1', :'RAGROUNDS') \gset
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase1' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''' || :'RAGROUNDS' || ''')',
+  'APPEAL_EXISTS', 'RA43-5 drugie odwołanie od tego samego cofnięcia');
+select pg_temp.expect_error('select * from public.submit_report_restoration_appeal(''' || :'rcase1' || ''', ''ABCDEFGHIJKLMNOPQRSTUVWX'', gen_random_uuid(), ''za krótko'')',
+  'GROUNDS_REQUIRED', 'RA43-5b uzasadnienie wymagane');
+reset role;
+select pg_temp.assert(:'rcr1'::boolean and not :'rcr1r'::boolean and :'rap1' = :'rap1r'
+  and (select appellant_role = 'reporter' and appealed_restoration_id = :'rs1'::uuid and decision_id = :'rd1'::uuid
+          and appellant_locale = 'fr' and status = 'pending' from public.moderation_appeals where id = :'rap1')
+  and (select count(*) from public.email_deliveries where template = 'appealReceived' and entity_id = :'rap1'
+         and to_email = 'ra1@test.be' and locale = 'fr' and payload->>'appealTarget' = 'restoration') = 1
+  and (select count(*) from public.audit_logs where action = 'moderation.appeal_submitted' and entity_id = :'rr1'
+         and after_data->>'appealedRestorationId' = :'rs1') = 1,
+  'RA43-5c odwołanie od cofnięcia: idempotencja, stan, e-mail (fr), audyt');
+
+-- RA43-6: strażniki tabeli (niezależne od RPC).
+select pg_temp.expect_error('insert into public.moderation_appeals(reference, decision_id, report_id, appellant_role, appellant_locale, grounds, idempotency_key, due_at, appealed_restoration_id) values (''APL-X'', ''' || :'rd2' || ''', ''' || :'rr2' || ''', ''reporter'', ''pl'', ''' || :'RAGROUNDS' || ''', gen_random_uuid(), now(), ''' || :'rs1' || ''')',
+  'nie dotyczy tej decyzji', 'RA43-6 cofnięcie innej decyzji odrzucone przez strażnik');
+select pg_temp.expect_error('insert into public.moderation_appeals(reference, decision_id, report_id, appellant_role, appellant_locale, grounds, idempotency_key, due_at, appealed_restoration_id) values (''APL-Y'', ''' || :'rd2' || ''', ''' || :'rr2' || ''', ''author'', ''pl'', ''' || :'RAGROUNDS' || ''', gen_random_uuid(), now(), ''' || :'rs2' || ''')',
+  'moderation_appeals_restoration_role', 'RA43-6b od cofnięcia odwołuje się wyłącznie zgłaszający');
+select pg_temp.expect_error('update public.moderation_appeals set appealed_restoration_id = null where id = ''' || :'rap1' || '''',
+  'niezmienne', 'RA43-6c celu odwołania nie zmienia bezpośredni zapis');
+
+-- RA43-7: rozpatruje inny człowiek niż osoba, która COFNĘŁA (nie autor decyzji).
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'rap1' || ''', ''pending'', ''upheld'', ''' || :'RAREASON' || ''')',
+  'REVIEWER_CONFLICT', 'RA43-7 osoba, która cofnęła ograniczenie, nie rozpatruje odwołania od cofnięcia');
+reset role; reset app.current_uid;
+select pg_temp.assert((select decided_by = :'ADMIN'::uuid from public.moderation_decisions where id = :'rd1')
+  and (select restored_by = :'ADMIN2'::uuid from public.moderation_restorations where id = :'rs1'),
+  'RA43-7b kontrola: reguła 0104 (autor decyzji) zablokowałaby ADMIN i przepuściła ADMIN2');
+-- Awaria skutku cofa całość.
+create function pg_temp.ra_fail_job() returns trigger language plpgsql as $$
+begin
+  if new.id = 'e9800000-0000-0000-0000-0000000000b1'::uuid then raise exception 'INJECTED_RESTORATION_APPEAL_FAILURE'; end if;
+  return new;
+end $$;
+create trigger trg_ra_fail before update on public.jobs for each row execute function pg_temp.ra_fail_job();
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_decide_appeal(''' || :'rap1' || ''', ''pending'', ''reversed'', ''' || :'RAREASON' || ''', ''job_removed'', ''terms'', ''Regulamin § 4'')',
+  'INJECTED_RESTORATION_APPEAL_FAILURE', 'RA43-7c awaria ponownego ograniczenia przerywa rozpatrzenie');
+reset role; reset app.current_uid;
+drop trigger trg_ra_fail on public.jobs;
+select pg_temp.assert(
+  (select status = 'pending' from public.moderation_appeals where id = :'rap1')
+  and (select count(*) from public.moderation_decisions where appeal_id = :'rap1') = 0
+  and (select status::text = 'active' and moderation_decision_id is null from public.jobs where id = :'RAJ1'),
+  'RA43-7d po awarii: odwołanie oczekuje, treść bez nowego ograniczenia');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_appeal(:'rap1', 'pending', 'reversed', 'Zgłaszający wykazał, że opłata jest nadal pobierana.',
+  'job_removed', 'terms', 'Regulamin § 4 ust. 2');
+reset role; reset app.current_uid;
+select new_decision_id as rd1n from public.moderation_appeals where id = :'rap1' \gset
+select pg_temp.assert(
+  (select status = 'reversed' and decided_by = :'ADMIN'::uuid and not same_reviewer and restoration_id is null
+     from public.moderation_appeals where id = :'rap1')
+  and (select appeal_id = :'rap1'::uuid and decision = 'job_removed' from public.moderation_decisions where id = :'rd1n')
+  and (select status::text = 'resolved' and decision_id = :'rd1n'::uuid from public.reports where id = :'rr1')
+  and (select status::text = 'closed' and moderation_decision_id = :'rd1n'::uuid from public.jobs where id = :'RAJ1')
+  and (select count(*) from public.email_deliveries where template = 'appealReversed' and entity_id = :'rap1'
+         and to_email = 'ra1@test.be' and locale = 'fr' and payload->>'appealTarget' = 'restoration'
+         and not (payload ? 'companyName')) = 1
+  and (select count(*) from public.email_deliveries where template = 'moderationJobRemoved' and entity_id = :'rd1n'
+         and profile_id = :'EMPA') = 1,
+  'RA43-7e uwzględnione odwołanie od cofnięcia: nowa decyzja, treść znów ograniczona, wyniki w językach odbiorców');
+set role service_role;
+select public.get_report_case(:'rcase1', 'ABCDEFGHIJKLMNOPQRSTUVWX') as rlook1b \gset
+select pg_temp.assert(public.moderation_restoration_appealable(:'rs1') = 'APPEAL_EXISTS'
+  and public.moderation_appealable(:'rd1n') = 'OK',
+  'RA43-7f po rozpatrzeniu: od cofnięcia już nie, od nowej decyzji autor może się odwołać');
+reset role;
+select pg_temp.assert((:'rlook1b'::jsonb)->'restoration'->'appeal'->>'status' = 'reversed'
+  and (:'rlook1b'::jsonb)->>'outcome' = 'action_taken',
+  'RA43-7g zgłaszający widzi wynik odwołania od cofnięcia');
+
+-- RA43-8: retencja — cofnięcie bez poinformowania czeka; po terminie od poinformowania — czyszczenie.
+set session_replication_role = replica;
+update public.moderation_restorations set restored_at = now() - interval '2 years' where id in (:'rs2', :'rs4');
+set session_replication_role = origin;
+update public.reports set resolved_at = now() - interval '2 years' where id in (:'rr2', :'rr4');
+set role service_role;
+select pg_temp.assert(
+  exists (select 1 from public.dsa_retention_cases() where report_id = :'rr4' and retention_start is null)
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'rr2' and eligible_at <= now())
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'rr1' and retention_start is null),
+  'RA43-8 niepoinformowany o cofnięciu czeka; po terminie od poinformowania i retencji — kwalifikuje się; nowa decyzja z odwołania otwiera drogę autora');
+select pg_temp.assert((select greatest(r.resolved_at, mr.restored_at) + public.dsa_case_retention() <= now()
+    from public.reports r join public.moderation_decisions d on d.report_id = r.id
+    join public.moderation_restorations mr on mr.decision_id = d.id where r.id = :'rr4'),
+  'RA43-8b kontrola: reguła 0104 (od chwili cofnięcia) objęłaby sprawę przed końcem drogi odwołania');
+select public.dsa_retention_run(false) as rrun \gset
+reset role;
+select pg_temp.assert(
+  (select redacted_at is not null from public.reports where id = :'rr2')
+  and (select count(*) from public.email_deliveries where entity_id = :'rs2' and template = 'reportRestored'
+         and payload = '{}'::jsonb) = 1
+  and (select reason is null and redacted_at is not null from public.moderation_restorations where id = :'rs2')
+  and (select redacted_at is null and reporter_email is not null from public.reports where id = :'rr4')
+  and (select count(*) from public.email_deliveries where entity_id = :'rs4' and payload <> '{}'::jsonb) = 1,
+  'RA43-8c anonimizacja obejmuje e-mail o cofnięciu; sprawa niepoinformowana nienaruszona');
+
+-- RA43-9: raport i eksport — odwołanie od cofnięcia liczone osobno, wiersz na decyzję.
+set role service_role;
+select public.dsa_transparency_report(now() - interval '1 day', now() + interval '1 day') as rtr \gset
+select pg_temp.assert(((:'rtr'::jsonb)->'appeals'->>'againstRestoration')::int = 1
+  and (select appeal_status is null from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day')
+        where decision_reference = (select reference from public.moderation_decisions where id = :'rd1'))
+  and (select count(*) from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day'))
+        = (select count(*) from public.moderation_decisions where decided_at > now() - interval '1 day'),
+  'RA43-9 raport: odwołania od cofnięcia; eksport bez przypisania ich do decyzji jako jej odwołania');
+reset role;
+select pg_temp.assert((select count(*) from public.moderation_decisions d
+    join public.moderation_appeals a on a.decision_id = d.id where d.id = :'rd1') = 1,
+  'RA43-9b kontrola: złączenie po samej decyzji (0104) przypisałoby decyzji odwołanie od cofnięcia');
+-- ============================================================================
 -- CJ186. Zaufany odczyt oferty do materiałów kampanii (#186, #175, 0102): tylko aktywna,
 -- niedemonstracyjna, niewygasła oferta zweryfikowanej firmy; wąskie pola bez PII; wejście
 -- panelu tylko dla recruiter+ firmy oferty lub admina; kontrola ujemna po zdjęciu filtra.
@@ -8801,7 +9236,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- MR. Zgłoszenia wiadomości i rozmów (0108): tylko strona rozmowy, dowód z bazy tylko dla
+-- MR. Zgłoszenia wiadomości i rozmów (0113): tylko strona rozmowy, dowód z bazy tylko dla
 --     admina, idempotencja, jedna otwarta sprawa na wiadomość, limit, niezmienność.
 --     Kontrole ujemne: obca rozmowa, wiadomość spoza rozmowy, powtórka, polityka z 0009.
 -- ============================================================================
@@ -9010,5 +9445,304 @@ set local role authenticated; set local app.current_uid = :'CANDMR'; select pg_t
 select pg_temp.assert((select count(*) > 0 from public.reports where id = :'mr_r1'),
   'MR13 kontrola ujemna: stara polityka odsłania dowód');
 rollback;
+
+
+-- ============================================================================
+-- LOC194. Słownik miejscowości z aliasami (#194, 0112): gminy Belgii + lista kanoniczna,
+--         aliasy PL/NL/FR/EN po kluczu cityKey, odczyt publiczny, zapis tylko serwisowy.
+-- ============================================================================
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.locations where kind = 'municipality' and is_demo = false) >= 560
+  and (select count(*) from public.locations where kind = 'former_municipality') >= 20,
+  'LOC194-1 gminy obecne i zniesione przy fuzjach w słowniku');
+select pg_temp.assert(not exists (
+    select 1 from public.locations l
+     where l.country = 'BE' and l.latitude is not null
+       and not exists (select 1 from public.location_aliases a where a.location_id = l.id)),
+  'LOC194-2 każda miejscowość ma alias');
+select pg_temp.assert(
+  (select (name, latitude, longitude, sort_order) = ('Brussels', 50.850300, 4.351700, 10)
+     from public.locations where slug = 'brussels')
+  and (select (name, latitude, longitude, sort_order) = ('Liège', 50.632600, 5.579700, 70)
+     from public.locations where slug = 'liege'),
+  'LOC194-3 wiersze 0010 bez zmian');
+
+-- Zapytanie loadera (src/lib/data/matching.ts) pod rolą klienta i RLS.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select array_agg(format('%s:%s,%s', a.alias_key, l.latitude, l.longitude) order by a.alias_key)
+     from public.location_aliases a join public.locations l on l.id = a.location_id
+    where l.is_active = true and a.alias_key = any(array['antwerpia', 'luik', 'atlantyda']))
+  = array['antwerpia:51.219400,4.402500', 'luik:50.632600,5.579700'],
+  'LOC194-4 alias PL/NL → współrzędne, nieznane miasto bez wiersza');
+select pg_temp.assert(
+  (select location_id from public.location_aliases where alias_key = 'elsene')
+  = (select location_id from public.location_aliases where alias_key = 'ixelles'),
+  'LOC194-5 nazwy NL/FR gminy spoza listy w kodzie wskazują ten sam wiersz');
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''X'', ''x-loc194'' from public.locations limit 1',
+  'permission denied', 'LOC194-6 zalogowany nie dodaje aliasu');
+select pg_temp.expect_error('update public.location_aliases set alias = alias',
+  'permission denied', 'LOC194-6b zalogowany nie zmienia aliasu');
+select pg_temp.expect_error('update public.locations set latitude = 0',
+  'permission denied', 'LOC194-6c zalogowany nie zmienia współrzędnych');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.location_aliases where alias_key = 'bruksela') = 1,
+  'LOC194-7 anon czyta aliasy');
+select pg_temp.expect_error('delete from public.location_aliases',
+  'permission denied', 'LOC194-7b anon nie usuwa aliasów');
+reset role;
+
+-- Integralność: jeden klucz = jedna miejscowość, klucz w postaci cityKey, NIS unikalny.
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''Antwerpia'', ''antwerpia'' from public.locations where slug = ''ghent''',
+  'duplicate key', 'LOC194-8 alias nie wskazuje dwóch miejscowości');
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''Sint-X'', ''Sint-X'' from public.locations where slug = ''ghent''',
+  'location_aliases_key_format', 'LOC194-8b klucz nie w postaci cityKey');
+select pg_temp.expect_error(
+  'update public.locations set refnis = (select refnis from public.locations where slug = ''antwerp'') where slug = ''ghent''',
+  'duplicate key', 'LOC194-8c kod NIS unikalny');
+
+-- Usunięcie miejscowości usuwa jej aliasy (kaskada), bez sierot.
+begin;
+delete from public.locations where slug = 'namur';
+select pg_temp.assert(not exists (select 1 from public.location_aliases where alias_key in ('namur', 'namen')),
+  'LOC194-9 aliasy usuwane kaskadowo');
+rollback;
+
+-- Kontrola ujemna: bez polityki odczytu klient nie widzi aliasów (RLS włączone, deny).
+begin;
+drop policy location_aliases_public_read on public.location_aliases;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.location_aliases) = 0,
+  'LOC194-10 kontrola ujemna: bez polityki RLS brak odczytu');
+reset role;
+rollback;
+
+-- ============================================================================
+-- AC45. Panel admina kampanii e-mail (#45, 0111): admin_activate/cancel_email_campaign —
+--       tylko admin (is_admin), CAS statusu (STALE_STATE), macierz przejść
+--       (INVALID_TRANSITION), skutek = istniejące RPC z 0101, audyt bez treści i odbiorców.
+-- ============================================================================
+reset role; reset app.current_uid;
+select public.create_email_campaign_revision('ac45-news', :'CMJOBS'::jsonb) as ac_rev1 \gset
+
+-- AC45-1: anon bez EXECUTE; kandydat i pracodawca → PERMISSION_DENIED, bez zmiany stanu.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''draft'')', :'ac_rev1'),
+  'permission denied', 'AC45-1 anon nie wywoła aktywacji');
+reset role;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''draft'')', :'ac_rev1'),
+  'PERMISSION_DENIED', 'AC45-1b kandydat nie aktywuje');
+select pg_temp.expect_error(format('select public.activate_email_campaign(%L)', :'ac_rev1'),
+  'permission denied', 'AC45-1c kandydat nie wywoła RPC service_role z 0101');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_cancel_email_campaign(%L, ''draft'')', :'ac_rev1'),
+  'PERMISSION_DENIED', 'AC45-1d pracodawca nie zatrzyma');
+select pg_temp.expect_error('select count(*) from public.email_campaigns', 'permission denied',
+  'AC45-1e pracodawca nie czyta tabeli kampanii');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status from public.email_campaigns where id = :'ac_rev1') = 'draft',
+  'AC45-1f odmowy nie zmieniły rewizji');
+
+-- AC45-2: CAS — admin widział inny status → STALE_STATE, bez zmiany i bez audytu.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''active'')', :'ac_rev1'),
+  'STALE_STATE', 'AC45-2 nieaktualny status → STALE_STATE');
+select pg_temp.expect_error(format('select public.admin_cancel_email_campaign(%L, null)', :'ac_rev1'),
+  'STALE_STATE', 'AC45-2b brak oczekiwanego statusu → STALE_STATE');
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''draft'')', gen_random_uuid()),
+  'NOT_FOUND', 'AC45-2c nieistniejąca rewizja → NOT_FOUND');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'ac_rev1') = 'draft'
+  and not exists (select 1 from public.audit_logs where entity_id = :'ac_rev1'::uuid),
+  'AC45-2d po odmowie: szkic bez zmian, brak wpisu w dzienniku');
+
+-- AC45-3: aktywacja szkicu przez admina + audyt (aktor = admin, bez treści kampanii).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_activate_email_campaign(:'ac_rev1', 'draft');
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''active'')', :'ac_rev1'),
+  'INVALID_TRANSITION', 'AC45-3 aktywna rewizja nie jest ponownie aktywowana');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'active' and activated_at is not null from public.email_campaigns where id = :'ac_rev1'),
+  'AC45-3b szkic aktywny');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(actor_id = :'ADMIN'::uuid and entity_type = 'email_campaign'
+                                    and before_data ->> 'status' = 'draft' and after_data ->> 'status' = 'active'
+                                    and not (after_data ? 'content') and not (before_data ? 'content'))
+     from public.audit_logs where action = 'email_campaign.activated' and entity_id = :'ac_rev1'::uuid),
+  'AC45-3c audyt aktywacji: admin, statusy, bez treści');
+
+-- AC45-4: aktywacja nowszej rewizji zastępuje poprzednią (skutek 0101), audyt ją wymienia.
+select public.create_email_campaign_revision('ac45-news', :'CMJOBS'::jsonb) as ac_rev2 \gset
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_activate_email_campaign(:'ac_rev2', 'draft');
+select pg_temp.expect_error(format('select public.admin_cancel_email_campaign(%L, ''superseded'')', :'ac_rev1'),
+  'INVALID_TRANSITION', 'AC45-4 zastąpionej rewizji nie da się zatrzymać');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'ac_rev1') = 'superseded'
+  and (select status from public.email_campaigns where id = :'ac_rev2') = 'active'
+  and (select after_data -> 'superseded' -> 0 ->> 'id' from public.audit_logs
+        where action = 'email_campaign.activated' and entity_id = :'ac_rev2'::uuid) = :'ac_rev1',
+  'AC45-4b poprzednia rewizja zastąpiona i wymieniona w audycie');
+
+-- AC45-5: zatrzymanie aktywnej rewizji — zakolejkowany list wygaszony, odbiorca cancelled,
+--         audyt z liczbą wygaszonych listów; ponowienie ze starym statusem → STALE_STATE.
+insert into public.email_deliveries(profile_id, to_email, template, status, entity_type, entity_id,
+                                    idempotency_key, campaign_id)
+values (:'CMN1', 'cmn1@test.be', 'newsletter', 'queued', 'email_campaign', :'ac_rev2',
+        'campaign:' || :'ac_rev2' || ':' || :'CMN1', :'ac_rev2')
+returning id as ac_delivery \gset
+insert into public.email_campaign_recipients(campaign_id, profile_id, status, delivery_id)
+values (:'ac_rev2', :'CMN1', 'queued', :'ac_delivery');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_cancel_email_campaign(:'ac_rev2', 'active');
+select pg_temp.expect_error(format('select public.admin_cancel_email_campaign(%L, ''active'')', :'ac_rev2'),
+  'STALE_STATE', 'AC45-5 drugi admin ze starym widokiem → STALE_STATE');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'ac_rev2') = 'cancelled'
+  and (select status::text || '/' || error_message from public.email_deliveries where id = :'ac_delivery')
+      = 'failed/suppressed_campaign_inactive'
+  and (select status || '/' || reason from public.email_campaign_recipients
+        where campaign_id = :'ac_rev2' and profile_id = :'CMN1') = 'cancelled/cancelled',
+  'AC45-5b rewizja zatrzymana, list wygaszony, odbiorca cancelled');
+select pg_temp.assert(
+  (select (after_data ->> 'suppressed_deliveries')::int = 1 and actor_id = :'ADMIN'::uuid
+          and not (after_data ? 'profile_id') and not (after_data ? 'to_email')
+     from public.audit_logs where action = 'email_campaign.cancelled' and entity_id = :'ac_rev2'::uuid),
+  'AC45-5c audyt zatrzymania: liczba listów, bez danych odbiorcy');
+
+-- AC45-6: KONTROLA UJEMNA — wersja bez porównania statusu przepuściłaby decyzję opartą
+--         na nieaktualnym widoku (asercja AC45-2 wykrywa brak CAS).
+begin;
+create or replace function public.admin_cancel_email_campaign(p_campaign_id uuid, p_expected_status text)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception 'PERMISSION_DENIED' using errcode = '42501'; end if;
+  perform public.cancel_email_campaign(p_campaign_id);
+end $$;
+select public.create_email_campaign_revision('ac45-neg', :'CMJOBS'::jsonb) as ac_neg \gset
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_cancel_email_campaign(:'ac_neg', 'active');
+reset role;
+select pg_temp.assert((select status from public.email_campaigns where id = :'ac_neg') = 'cancelled',
+  'AC45-6 bez CAS nieaktualny widok (active ≠ draft) zatrzymuje rewizję — test wykrywa błąd');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- SU47. Wyszukiwanie ofert bez diakrytyków i z literalnym %/_/\ (0110, #47):
+--       get_public_jobs/_count/facety składają tytuł i miasto przez search_fold
+--       (lower + unaccent) i escapują wpis użytkownika. Prefiltr po indeksach nie
+--       zmienia wyniku (dokładny warunek na wyświetlanym tytule w locale).
+-- ============================================================================
+\set SUCO  'e8000000-0000-0000-0000-0000000047c0'
+\set SUJA  'e8000000-0000-0000-0000-0000000047a1'
+\set SUJB  'e8000000-0000-0000-0000-0000000047a2'
+\set SUJC  'e8000000-0000-0000-0000-0000000047a3'
+\set SUJD  'e8000000-0000-0000-0000-0000000047a4'
+reset role; reset app.current_uid;
+begin;
+insert into public.companies(id, name, status) values (:'SUCO', 'SU47 Firma', 'verified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SUJA',:'SUCO','su47-a','Pracownik sprzątania SU47X','cleaning','permanent','Liège','Walonia','active','pl', now() - interval '1 hour'),
+  (:'SUJB',:'SUCO','su47-b','Rabat 50% SU47X','warehouse','permanent','Bruxelles','Bruksela','active','pl', now() - interval '2 hours'),
+  (:'SUJC',:'SUCO','su47-c','Kierowca_C SU47X','transport','permanent','Gent','Flandria','active','pl', now() - interval '3 hours'),
+  (:'SUJD',:'SUCO','su47-d','Magazynier SU47X','warehouse','permanent','Namur','Walonia','active','pl', now() - interval '4 hours');
+insert into public.job_translations(job_id, locale, title) values
+  (:'SUJD','pl','Magazynier SU47X'),
+  (:'SUJD','fr','Préparateur de commandes SU47X');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- SU47-1: diakrytyki i wielkość liter po obu stronach.
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'sprzatania su47x') = 1
+  and public.get_public_jobs_count('pl', 'SPRZĄTANIA SU47X') = 1
+  and (select array_agg(slug) from public.get_public_jobs('pl', 'SPRZATANIA su47x')) = array['su47-a'],
+  'SU47-1 słowo kluczowe bez diakrytyków i wielkości liter znajduje ofertę');
+
+-- SU47-2: `%`, `_` i `\` we wpisie są literałami (dotąd `%su47x` pasowało do każdej oferty).
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', '%su47x') = 0
+  and public.get_public_jobs_count('pl', '50% su47x') = 1
+  and public.get_public_jobs_count('pl', 'a_c su47x') = 1
+  and public.get_public_jobs_count('pl', 'm_gazynier su47x') = 0
+  and public.get_public_jobs_count('pl', 'su47x\') = 0
+  and public.get_public_jobs_count('pl', 'su47x', '%') = 0,
+  'SU47-2 %/_/\ w słowie kluczowym i mieście działają literalnie');
+
+-- SU47-3: miasto bez diakrytyków; wynik listy, licznika i facetów zgodny.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs('pl', 'su47x', 'liege')) = array['su47-a']
+  and public.get_public_jobs_count('pl', 'su47x', 'LIÈGE') = 1
+  and (select total from public.get_public_job_filter_facets('pl', 'su47x', 'liege')
+       where dimension = 'total') = 1
+  and (select total from public.get_public_job_filter_facets('pl', 'sprzatania su47x')
+       where dimension = 'total') = 1
+  and (select total from public.get_public_job_filter_facets('pl', '%su47x')
+       where dimension = 'total') = 0,
+  'SU47-3 miasto bez diakrytyków; lista = licznik = facety');
+
+-- SU47-4: dopasowanie liczy się na tytule wyświetlanym w locale — tłumaczenie fr pasuje
+-- tylko dla fr, mimo że prefiltr (dowolne tłumaczenie) obejmuje ofertę także dla pl.
+select pg_temp.assert(
+  public.get_public_jobs_count('fr', 'preparateur de commandes su47x') = 1
+  and public.get_public_jobs_count('pl', 'preparateur de commandes su47x') = 0
+  and (select array_agg(title) from public.get_public_jobs('fr', 'preparateur de commandes su47x'))
+      = array['Préparateur de commandes SU47X'],
+  'SU47-4 tytuł w locale zapytania; prefiltr nie dodaje trafień z innego języka');
+
+-- SU47-5 (kontrola ujemna): stary warunek ILIKE z 0091 na tych samych danych nie znajduje
+-- zapisu bez diakrytyków i traktuje `%` jako symbol wieloznaczny.
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.jobs where title ilike '%' || 'sprzatania su47x' || '%') = 0
+  and (select count(*) from public.jobs where title ilike '%' || '%su47x' || '%') = 4
+  and (select count(*) from public.jobs where city ilike '%' || 'liege' || '%' and id = :'SUJA') = 0,
+  'SU47-5 kontrola ujemna: ILIKE bez search_fold/escapowania daje inny wynik');
+rollback;
+
+-- SU47-6: funkcje pomocnicze — składanie niezmienne (indeks wyrażeniowy), escapowanie.
+select pg_temp.assert(
+  public.search_fold('Liège ŁÓDŹ Șofer Préparateur') = 'liege lodz sofer preparateur'
+  and public.search_like_pattern('50%_\x') = '%50\%\_\\x%'
+  and (select provolatile from pg_proc where oid = 'public.search_fold(text)'::regprocedure) = 'i'
+  and (select count(*) from pg_indexes where schemaname = 'public' and indexname in (
+        'idx_jobs_title_fold_trgm', 'idx_job_translations_title_fold_trgm', 'idx_jobs_city_fold_trgm')) = 3
+  and not exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'idx_jobs_city_trgm'),
+  'SU47-6 search_fold IMMUTABLE, wzorzec escapowany, indeksy fold na miejscu');
+
+-- SU47-7: indeksy obejmują dokładnie wyrażenia prefiltrów (search_fold(kolumna)) i predykat
+-- listy ofert — inaczej planista nie mógłby ich użyć. Wybór planu przy realnej liczbie ofert
+-- mierzy scripts/db/search-benchmark.sh (plan zależy od statystyk, więc nie tu).
+select pg_temp.assert(
+  pg_get_indexdef('public.idx_jobs_title_fold_trgm'::regclass)
+    like '%USING gin (search_fold(title) gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))'
+  and pg_get_indexdef('public.idx_jobs_city_fold_trgm'::regclass)
+    like '%USING gin (search_fold(city) gin_trgm_ops) WHERE ((status = ''active''::job_status) AND (deleted_at IS NULL))'
+  and pg_get_indexdef('public.idx_job_translations_title_fold_trgm'::regclass)
+    like '%USING gin (search_fold(title) gin_trgm_ops)',
+  'SU47-7 indeksy GIN na search_fold(title/city), częściowe jak predykat listy');
+
+-- SU47-8: funkcje kandydatów tylko dla właściciela RPC (bez EXECUTE dla ról aplikacji);
+-- granty RPC bez zmian.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.search_title_candidates(text)', 'execute')
+  and not has_function_privilege('authenticated', 'public.search_title_candidates(text)', 'execute')
+  and not has_function_privilege('anon', 'public.search_city_candidates(text)', 'execute')
+  and not has_function_privilege('authenticated', 'public.search_city_candidates(text)', 'execute')
+  and has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text)', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute')
+  and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute'),
+  'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

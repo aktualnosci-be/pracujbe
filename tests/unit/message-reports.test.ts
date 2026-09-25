@@ -13,7 +13,7 @@ import {
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * Zgłoszenia wiadomości i rozmów (0108): Server Action = walidacja i limiter przed RPC,
+ * Zgłoszenia wiadomości i rozmów (0113): Server Action = walidacja i limiter przed RPC,
  * klucz idempotencji bez zmian, RPC pod tożsamością z sesji, kody użytkowe bez surowego
  * tekstu bazy (Invariant #8). Słownik powodów i limit opisu = wartości z migracji.
  * Logika domenowa (dostęp, dowód, jedna otwarta sprawa, niezmienność): rls.sql sekcja MR.
@@ -37,7 +37,7 @@ const input = {
 };
 
 const MIGRATION = readFileSync(
-  join(process.cwd(), 'supabase/migrations/0108_message_reports.sql'),
+  join(process.cwd(), 'supabase/migrations/0113_message_reports.sql'),
   'utf8',
 );
 
@@ -48,7 +48,7 @@ beforeEach(() => {
   fakeDb.rpc('report_conversation_content', { report_id: 'r-1', outcome: 'created' });
 });
 
-describe('kontrakt z migracją 0108', () => {
+describe('kontrakt z migracją 0113', () => {
   it('słownik powodów = lista w RPC report_conversation_content', () => {
     const rpc = MIGRATION.slice(MIGRATION.indexOf('function public.report_conversation_content'));
     const list = /p_category not in\s*\(([^)]*)\)/.exec(rpc)?.[1] ?? '';

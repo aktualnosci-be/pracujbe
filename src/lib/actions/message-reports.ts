@@ -9,7 +9,7 @@ import { captureError } from '@/lib/sentry';
 import { messageReportSchema, type MessageReportInput } from '@/lib/validation/message-report';
 
 /**
- * Zgłoszenie wiadomości albo całej rozmowy przez jej stronę (Etap 5, migracja 0108).
+ * Zgłoszenie wiadomości albo całej rozmowy przez jej stronę (Etap 5, migracja 0113).
  *
  * Cienka warstwa nad RPC `report_conversation_content` wołanym POD SESJĄ: uczestnictwo
  * (strona firmowa = aktywny recruiter+), dowód z treścią tylko zgłoszonej wiadomości,

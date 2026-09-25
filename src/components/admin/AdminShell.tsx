@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { BarChart3, Building2, Flag, History, LayoutDashboard, ListChecks, MailX, Scale, ShieldAlert, Users } from 'lucide-react';
+import { BarChart3, Building2, Flag, History, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, ShieldAlert, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
@@ -12,7 +12,7 @@ import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/Da
 /**
  * AdminShell — chrome panelu administratora. Reużywa `DashboardShell` (jasny sidebar `.side-item` +
  * topbar), tak jak panele kandydata/pracodawcy, ale z własną nawigacją: Podsumowanie / Firmy
- * / Zgłoszenia / Odwołania / Raport DSA (#43) / Pytania screeningowe (#497) / Użytkownicy / Blokady poczty (#44) / Rejestr naruszeń (#490) / Dziennik zdarzeń (#417). Renderowane przez `admin/layout.tsx` (guard + noindex).
+ * / Zgłoszenia / Odwołania / Raport DSA (#43) / Pytania screeningowe (#497) / Użytkownicy / Blokady poczty (#44) / Kampanie e-mail (#45) / Rejestr naruszeń (#490) / Dziennik zdarzeń (#417). Renderowane przez `admin/layout.tsx` (guard + noindex).
  *
  * Dzwonek powiadomień jest ukryty (#423) — administracja nie korzysta z kolejki notyfikacji
  * użytkownika, a pusty dzwonek byłby martwym elementem. Sygnały do działania (kolejka
@@ -30,6 +30,7 @@ const HREF = {
   users: '/admin/uzytkownicy',
   audit: '/admin/dziennik',
   email: '/admin/poczta',
+  campaigns: '/admin/kampanie',
   screening: '/admin/pytania',
   breaches: '/admin/naruszenia',
 } as const;
@@ -59,6 +60,7 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
     { href: HREF.screening, label: t('navScreening'), icon: <ListChecks /> },
     { href: HREF.users, label: t('navUsers'), icon: <Users /> },
     { href: HREF.email, label: t('navEmail'), icon: <MailX /> },
+    { href: HREF.campaigns, label: t('navCampaigns'), icon: <Megaphone /> },
     { href: HREF.breaches, label: t('navBreaches'), icon: <ShieldAlert /> },
     { href: HREF.audit, label: t('navAudit'), icon: <History /> },
   ];

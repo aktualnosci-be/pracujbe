@@ -196,7 +196,7 @@ export interface AdminDsaCase {
 }
 
 /**
- * Zgłoszenie wiadomości albo rozmowy przez jej stronę (0108, `kind = 'message_report'`).
+ * Zgłoszenie wiadomości albo rozmowy przez jej stronę (0113, `kind = 'message_report'`).
  * Dane z dowodu zbudowanego w bazie w chwili zgłoszenia (treść wyłącznie zgłoszonej
  * wiadomości; dla rozmowy same metadane) — niezależne od późniejszej zmiany rozmowy.
  */
@@ -215,7 +215,7 @@ export interface AdminReportRow {
   id: string;
   /** Sprawa DSA (#41) albo null dla zwykłego zgłoszenia. */
   dsa: AdminDsaCase | null;
-  /** Zgłoszenie wiadomości/rozmowy (0108); brak/null dla innych rodzajów. */
+  /** Zgłoszenie wiadomości/rozmowy (0113); brak/null dla innych rodzajów. */
   messageReport?: AdminMessageReport | null;
   /** `report_target_type`: job/company/user/message/conversation. */
   targetType: string;
@@ -718,12 +718,12 @@ async function loadReportTargets(
   );
 }
 
-/** Strona rozmowy zapisana w dowodzie (0108). */
+/** Strona rozmowy zapisana w dowodzie (0113). */
 function sideOf(value: unknown): 'company' | 'candidate' | null {
   return value === 'company' || value === 'candidate' ? value : null;
 }
 
-/** Dowód zgłoszenia wiadomości (0108) → widok panelu i cel karty. */
+/** Dowód zgłoszenia wiadomości (0113) → widok panelu i cel karty. */
 function toMessageReport(
   snapshot: unknown,
 ): { view: AdminMessageReport; target: AdminReportTarget } {
@@ -1190,6 +1190,9 @@ export async function listAuditLogs(
         } else if (entityType === 'breach_incident' && id) {
           const uuid = parseUuid(id);
           entityHref = uuid ? { pathname: `/admin/naruszenia/${uuid}` } : null;
+        } else if (entityType === 'email_campaign' && id) {
+          const uuid = parseUuid(id);
+          entityHref = uuid ? { pathname: `/admin/kampanie/${uuid}` } : null;
         }
         return {
           id: asString(row['id']),

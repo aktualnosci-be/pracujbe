@@ -1,5 +1,10 @@
 # Resend — e-maile transakcyjne
 
+> **Dostawca domyślny produkcji to EmailLabs** ([`EMAILLABS_SETUP.md`](./EMAILLABS_SETUP.md)).
+> Resend zostaje działającą alternatywą: `EMAIL_PROVIDER=resend` + `RESEND_API_KEY`. Wybór
+> dostawcy, idempotencja, ACK i kody błędów: `src/lib/email/transport/`. Kolejka, wypisanie,
+> budżety i blokady opisane niżej działają tak samo dla obu dostawców.
+
 Konfiguracja Resend do e-maili transakcyjnych Pracuj.be: konto, domena i DNS
 (SPF/DKIM/DMARC), API key, `EMAIL_FROM`, test wysyłki oraz kolejka `email_deliveries`
 z ponawianiem.
@@ -189,11 +194,11 @@ auth.expire_emails() → auth.claim_emails() [queued → leased, FOR UPDATE SKIP
   zwróci `false` (dzierżawę przejął inny worker), wynik liczy się jako `stale`, nie `sent`;
   gdy zapis ACK się nie powiedzie — `ackErrors` i odpowiedź 503. W obu przypadkach worker
   nie woła `fail_email`: dzierżawa wygasa, a ponowienie z tym samym kluczem nie wysyła drugiego listu.
-- Do Sentry i logów trafia tylko ustalony kod (`AUTH_EMAIL_PROVIDER_*`), nigdy komunikat
+- Do Sentry i logów trafia tylko ustalony kod (`EMAIL_PROVIDER_*`), nigdy komunikat
   dostawcy, token ani adres.
 - Odpowiedź endpointu ma pole `auth` (`processed/sent/failed/expired/stale/ackErrors`); 503,
   gdy którakolwiek kolejka zgłosi problem (np. konta PostgreSQL skonfigurowane, a brak
-  `DATABASE_AUTH_MAIL_URL`/`RESEND_API_KEY`/`BETTER_AUTH_URL` w produkcji).
+  `DATABASE_AUTH_MAIL_URL`/kluczy dostawcy z `EMAIL_PROVIDER`/`BETTER_AUTH_URL` w produkcji).
 - Nie uruchamiaj drugiego workera tej samej kolejki. **Rollback:** wyłączyć cron (albo zdjąć
   `DATABASE_AUTH_MAIL_URL`); zlecenia `queued`/`failed` zostają w PostgreSQL do wznowienia.
   Stara kolejka `email_deliveries` działa bez zmian.
