@@ -105,6 +105,17 @@ export const jobMatchAlertOffLabel: Record<Locale, string> = {
   en: 'Turn off only this alert',
 };
 
+/**
+ * #503: e-mail `newMessage` mówi tylko, ILE plików dołączono (bez nazw) — pliki odbiorca
+ * otwiera w wątku po zalogowaniu. Forma „Załączniki: N” omija odmianę liczebnika.
+ */
+export const newMessageAttachmentsLabel: Record<Locale, string> = {
+  pl: 'Załączniki w wiadomości: {count}. Pliki otworzysz w panelu.',
+  nl: 'Bijlagen bij het bericht: {count}. Je opent de bestanden in je dashboard.',
+  fr: 'Pièces jointes au message : {count}. Vous pouvez les ouvrir depuis votre tableau de bord.',
+  en: 'Attachments in this message: {count}. Open them in your dashboard.',
+};
+
 export const greetings: Record<Locale, string> = {
   pl: 'Cześć',
   nl: 'Hallo',
