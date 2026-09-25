@@ -5,7 +5,7 @@ import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import { CONTACT_REFERENCE_RE, contactSchema, type ContactInput } from '@/lib/validation/contact';
 

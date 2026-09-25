@@ -64,6 +64,9 @@ export const EMAIL_PAYLOAD_FIELDS = {
   guestStatusChanged: ['recipientName', 'companyName', 'jobTitle', 'status'],
   // #403 (0121): zaproszenie na adres bez konta — link składa worker z `nonce` przed minimalizacją.
   teamInvitationSignup: ['companyName', 'inviterName'],
+  // #61 (0125): formularz kontaktu — numer sprawy i temat; bez treści i adresu nadawcy.
+  supportContact: ['reference', 'topic', 'recipientName'],
+  contactMessageAdmin: ['reference', 'topic'],
 } as const satisfies Record<DeliveredType, readonly string[]>;
 
 /** Payload ograniczony do pól dozwolonych dla szablonu; nieznany szablon → pusty obiekt. */
