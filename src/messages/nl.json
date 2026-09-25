@@ -2385,7 +2385,13 @@
     "agePolicyConfirmTitle": "Leeftijdsdrempel voor kandidaten wijzigen?",
     "agePolicyConfirmDescription": "De drempel verandert van „{from}” naar „{to}”.",
     "agePolicySuccess": "De leeftijdsdrempel voor kandidaten is opgeslagen.",
-    "agePolicySuccessHidden": "De leeftijdsdrempel voor kandidaten is opgeslagen. {count} profielen zijn verborgen uit de zoekresultaten."
+    "agePolicySuccessHidden": "De leeftijdsdrempel voor kandidaten is opgeslagen. {count} profielen zijn verborgen uit de zoekresultaten.",
+    "reportsSortLabel": "Volgorde",
+    "reportsSortNewest": "Nieuwste",
+    "reportsSortPriority": "Prioriteit en termijn",
+    "reportsFlaggedLabel": "Markering",
+    "reportsFlaggedAll": "Alle zaken",
+    "reportsFlaggedOnly": "Gemarkeerd voor controle"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",
