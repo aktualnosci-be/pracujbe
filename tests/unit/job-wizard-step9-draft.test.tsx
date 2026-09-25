@@ -68,12 +68,29 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+/**
+ * Czeka, aż kreator POKAŻE krok `n` (nagłówek „0n / …”). Samo wywołanie `updateJobDraft`
+ * nie wystarcza: akcja jest wołana synchronicznie w kliknięciu, a krok zmienia się dopiero
+ * po jej rozwiązaniu — kolejne „Dalej” w tym oknie trafiało w zablokowany przycisk (zapis
+ * w toku) i przejście przepadało („called 2 times, expected 3”).
+ */
+async function waitForStep(n: number): Promise<void> {
+  const prefix = `${String(n).padStart(2, "0")} / `;
+  await waitFor(() =>
+    expect(
+      screen.getAllByRole("heading", { level: 2 }).some((h) => h.textContent?.startsWith(prefix)),
+    ).toBe(true),
+  );
+  expect(screen.getByRole("button", { name: n < 9 ? "next" : "publish" })).toBeEnabled();
+}
+
 async function goToStep(target: number): Promise<void> {
   for (let s = 1; s < target; s += 1) {
     fireEvent.click(screen.getByRole("button", { name: "next" }));
-    await waitFor(() => expect(updateJobDraft).toHaveBeenCalledTimes(s));
+    await waitForStep(s + 1);
+    expect(updateJobDraft).toHaveBeenCalledTimes(s);
   }
-  await screen.findByRole("checkbox", { name: "agreePublish" });
+  if (target === 9) await screen.findByRole("checkbox", { name: "agreePublish" });
 }
 
 function step9Calls(): unknown[][] {
@@ -142,13 +159,34 @@ describe("JobWizard krok 9: szkic bez zgody na publikację (#193)", () => {
   });
 });
 
+describe("JobWizard: „Dalej” w trakcie zapisu (Invariant #11)", () => {
+  it("drugie kliknięcie przed końcem zapisu jest pomijane, krok zmienia się po zapisie", async () => {
+    let resolveSave: (value: { ok: true; demo: false }) => void = () => {};
+    updateJobDraft.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    render(<JobWizard initialJobId="job-1" initialValues={FULL_DRAFT} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "next" }));
+    // Akcja wywołana od razu, ale krok jeszcze 1 i przycisk zablokowany — dlatego pomocnik
+    // czeka na nagłówek kolejnego kroku, a nie na samo wywołanie `updateJobDraft`.
+    expect(updateJobDraft).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "next" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "next" }));
+    expect(updateJobDraft).toHaveBeenCalledTimes(1);
+
+    resolveSave({ ok: true, demo: false });
+    await waitForStep(2);
+    expect(updateJobDraft).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("JobWizard: za długa pozycja listy (#364)", () => {
   it("odrzuca pozycję z komunikatem przy polu i zostawia wpis do skrócenia", async () => {
     render(<JobWizard initialJobId="job-1" initialValues={FULL_DRAFT} />);
-    for (let s = 1; s < 5; s += 1) {
-      fireEvent.click(screen.getByRole("button", { name: "next" }));
-      await waitFor(() => expect(updateJobDraft).toHaveBeenCalledTimes(s));
-    }
+    await goToStep(5);
     const input = await screen.findByLabelText("responsibilitiesLabel");
     const long = "x".repeat(501);
 

@@ -18,10 +18,11 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 const extract = vi.fn();
 const USER = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const CANDIDATE = { id: USER, role: 'candidate' } as PortalIdentity;
+const RESERVATION = '55555555-5555-4555-8555-555555555555';
 
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(() => true) }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/cv-import/extract', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/lib/cv-import/extract')>();
@@ -61,6 +62,9 @@ beforeEach(() => {
     certificates: 1,
     experienceYears: true,
   }));
+  // #36: globalny budżet AI — rezerwacja i rozliczenie w bazie (atrapa).
+  fakeDb.rpc('ai_budget_reserve', () => RESERVATION);
+  fakeDb.rpc('ai_budget_settle', () => true);
   extract.mockResolvedValue({
     isCv: true,
     suspiciousInstructions: false,
@@ -146,8 +150,54 @@ describe('podgląd i propozycje', () => {
   it('propozycje nie zapisują niczego w profilu', async () => {
     const res = await proposeFromCvAction(CV_WITH_REFEREES);
     expect(res).toMatchObject({ ok: true });
-    expect(fakeDb.calls).toHaveLength(0);
+    // Tylko budżet AI (#36): rezerwacja + rozliczenie, żadnego zapisu profilu.
+    expect(fakeDb.calls.map((c) => c.name)).toEqual(['ai_budget_reserve', 'ai_budget_settle']);
     for (const v of Object.values(REFEREES)) expect(String(extract.mock.calls[0]?.[0])).not.toContain(v);
+  });
+});
+
+describe('globalny budżet AI (#36)', () => {
+  it('rezerwacja przed wywołaniem modelu i rozliczenie tokenami z odpowiedzi', async () => {
+    extract.mockImplementationOnce(async (_text: string, hooks?: { onUsage?: (u: unknown) => void }) => {
+      hooks?.onUsage?.({ inputTokens: 1200, outputTokens: 300 });
+      return {
+        isCv: true,
+        suspiciousInstructions: false,
+        occupations: [{ value: 'Magazynier', evidence: 'Magazynier', uncertain: false }],
+        skills: [],
+        languages: [],
+        certificates: [],
+        experienceYears: { value: '', evidence: '', uncertain: false },
+      };
+    });
+    expect(await proposeFromCvAction(CV_WITH_REFEREES)).toMatchObject({ ok: true });
+    const reserve = fakeDb.calls.find((c) => c.name === 'ai_budget_reserve')!;
+    expect(reserve.as).toBe('service');
+    expect(reserve.args).toMatchObject({ p_feature: 'cv_profile_import' });
+    expect(Number(reserve.args.p_estimate_micro_usd)).toBeGreaterThan(0);
+    // Rejestr budżetu bez treści CV.
+    for (const v of Object.values(REFEREES)) expect(JSON.stringify(reserve.args)).not.toContain(v);
+    const settle = fakeDb.calls.find((c) => c.name === 'ai_budget_settle')!;
+    expect(settle.args).toMatchObject({ p_id: RESERVATION, p_outcome: 'ok', p_input_tokens: 1200, p_output_tokens: 300 });
+  });
+
+  it('przekroczony limit → AI_BUDGET_EXCEEDED bez wywołania modelu', async () => {
+    fakeDb.rpc('ai_budget_reserve', () => {
+      throw pgError('P0001', 'AI_BUDGET_EXCEEDED');
+    });
+    expect(await proposeFromCvAction(CV_WITH_REFEREES)).toEqual({ ok: false, error: 'AI_BUDGET_EXCEEDED' });
+    expect(extract).not.toHaveBeenCalled();
+  });
+
+  it('brak bazy zadań serwerowych = odmowa płatnego dostawcy (fail-closed)', async () => {
+    fakeSession.serviceConfigured = false;
+    expect(await proposeFromCvAction(CV_WITH_REFEREES)).toEqual({ ok: false, error: 'AI_BUDGET_EXCEEDED' });
+    expect(extract).not.toHaveBeenCalled();
+  });
+
+  it('kontrola ujemna: przy dostępnym budżecie ten sam import woła model', async () => {
+    await proposeFromCvAction(CV_WITH_REFEREES);
+    expect(extract).toHaveBeenCalledTimes(1);
   });
 });
 

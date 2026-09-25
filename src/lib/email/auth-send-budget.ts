@@ -1,6 +1,6 @@
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpcRows } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Budżet wysyłki e-maili Auth (#45) — `take_email_send_budget` (0087) dla puli `auth`.
@@ -9,7 +9,7 @@ import { captureError } from '@/lib/sentry';
  * wcześniej (rezerwy), więc odmowa oznacza, że okno dostawcy jest już pełne. Awaria bazy
  * lub brak puli service_role (#25: `DATABASE_SERVICE_URL`) NIE blokuje e-maila
  * logowania/resetu (fail-open): limit dostawcy pozostaje ostatnią granicą, a błąd trafia
- * do Sentry. Pobranie budżetu to własna, krótka transakcja service_role.
+ * do kanału błędów. Pobranie budżetu to własna, krótka transakcja service_role.
  */
 
 export type AuthBudgetResult =

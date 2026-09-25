@@ -102,7 +102,7 @@ export async function ConversationList({
                       item.unread ? 'text-foreground' : 'text-muted-foreground',
                     )}
                   >
-                    {item.lastPreview}
+                    {item.lastPreview || (item.lastIsAttachmentOnly ? t('attachmentOnlyPreview') : '')}
                   </p>
                   {item.unread ? (
                     <span

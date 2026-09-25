@@ -32,7 +32,7 @@ import { requireAdmin, type AdminListResult } from '@/lib/data/admin';
 import { isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
 import { queryOne, queryRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 export interface AdminCampaignRow {
   id: string;

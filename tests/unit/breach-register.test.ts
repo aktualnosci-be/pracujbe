@@ -35,7 +35,7 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
  */
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const MIGRATION = readFileSync(resolve(process.cwd(), 'supabase/migrations/0106_breach_register.sql'), 'utf8');
 const NOW = Date.parse('2026-09-24T12:00:00.000Z');

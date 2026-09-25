@@ -5,7 +5,7 @@ import { z } from 'zod/v3';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Usunięcie konta kandydata (#486).
@@ -20,7 +20,7 @@ import { captureError } from '@/lib/sentry';
  *
  * Tryb demo (bez env): walidacja adresu bez zapisu (`demo: true`). Błędy → kod użytkowy
  * (Invariant #8): `mismatch` (inny adres), `denied` (brak sesji / konto nie-kandydata),
- * `failed` (reszta; technikalia do Sentry).
+ * `failed` (reszta; technikalia do kanału błędów).
  */
 
 const confirmSchema = z.string().trim().email().max(320);

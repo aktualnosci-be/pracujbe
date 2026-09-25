@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState, useTransition } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 
 type AnswersState =
   | { status: 'idle' }
+  | { status: 'loading' }
   | { status: 'ready'; answers: ScreeningAnswer[] }
   | { status: 'error' };
 
@@ -18,6 +19,11 @@ type AnswersState =
  * #101 — rozwijane „Moje odpowiedzi” na karcie zgłoszenia kandydata. Treść wczytywana przy
  * pierwszym rozwinięciu (snapshot pytań i opcji z chwili wysłania), pod sesją i RLS.
  * Wczytane odpowiedzi zostają po zwinięciu; błąd pokazuje komunikat i ponowienie.
+ *
+ * Stan ładowania jest częścią `state` (nie `useTransition`): odpowiedzi i koniec ładowania
+ * (`aria-busy="false"`) trafiają do DOM w tym samym renderze. Z async `startTransition`
+ * `setState` po `await` renderował odpowiedzi, zanim React zatwierdził `pending = false`,
+ * więc przez chwilę lista była widoczna z `aria-busy="true"` (niestabilny test).
  */
 export function ApplicationScreeningAnswers({
   applicationId,
@@ -31,23 +37,24 @@ export function ApplicationScreeningAnswers({
   const t = useTranslations('dashboard');
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<AnswersState>({ status: 'idle' });
-  const [pending, startTransition] = useTransition();
   const regionId = useId();
   const inFlight = useRef(false);
 
   const load = () => {
     if (inFlight.current) return;
     inFlight.current = true;
-    startTransition(async () => {
+    setState({ status: 'loading' });
+    void (async () => {
+      let next: AnswersState;
       try {
         const result = await loadApplicationScreeningAnswers(applicationId);
-        setState(result.status === 'ready' ? result : { status: 'error' });
+        next = result.status === 'ready' ? result : { status: 'error' };
       } catch {
-        setState({ status: 'error' });
-      } finally {
-        inFlight.current = false;
+        next = { status: 'error' };
       }
-    });
+      inFlight.current = false;
+      setState(next);
+    })();
   };
 
   const toggle = () => {
@@ -90,7 +97,7 @@ export function ApplicationScreeningAnswers({
         {open ? (
           <section
             aria-label={t('applicationAnswersHeading')}
-            aria-busy={pending}
+            aria-busy={state.status === 'loading'}
             className="mt-4 min-w-0 border-t border-[color:var(--pp-line-soft)] pt-4"
           >
             <p className={PANEL_P}>{t('applicationAnswersHint')}</p>
@@ -110,7 +117,7 @@ export function ApplicationScreeningAnswers({
               ) : (
                 <p className={cn(PANEL_P, 'mt-3')}>{t('applicationAnswersEmpty')}</p>
               )
-            ) : state.status === 'error' && !pending ? (
+            ) : state.status === 'error' ? (
               <div className="mt-3 min-w-0">
                 <p role="alert" className="text-[15px] text-error">{t('applicationAnswersError')}</p>
                 <button type="button" onClick={load} className={cn(BTN_SMALL, 'mt-3 border-[color:var(--pp-line)] text-foreground hover:bg-soft')}>

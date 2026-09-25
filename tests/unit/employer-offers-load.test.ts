@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCompanyJobsLoad } from "@/lib/data/employer";
 import { getActiveCompany } from "@/lib/company-context";
-import { captureError } from "@/lib/sentry";
+import { captureError } from "@/lib/error-report";
 import { fakeDb, pgError, resetFakeDb } from "../helpers/fake-db";
 
 vi.mock("@/lib/db/portal", async () => (await import("../helpers/fake-db")).fakePortal());
 vi.mock("@/lib/company-context", () => ({ getActiveCompany: vi.fn() }));
-vi.mock("@/lib/sentry", () => ({ captureError: vi.fn() }));
+vi.mock("@/lib/error-report", () => ({ captureError: vi.fn() }));
 
 const USER = "11111111-1111-4111-8111-111111111111";
 

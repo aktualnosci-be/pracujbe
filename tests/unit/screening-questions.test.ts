@@ -21,7 +21,7 @@ import { screeningErrorKey } from '@/components/employer/ScreeningQuestionsEdito
 
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const MIGRATION = readFileSync(
   join(process.cwd(), 'supabase/migrations/0093_screening_questions.sql'),

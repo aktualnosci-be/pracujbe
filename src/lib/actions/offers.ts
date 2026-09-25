@@ -6,7 +6,7 @@ import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { offerSchema, type OfferInput } from '@/lib/validation/offer';
 
 /**
@@ -15,7 +15,7 @@ import { offerSchema, type OfferInput } from '@/lib/validation/offer';
  * Wywołanie w transakcji sesji (`withPortalTransaction`, #25); brak sesji = PERMISSION_DENIED.
  */
 
-/** Błąd wywołania RPC → kod użytkowy; wyjątek spoza bazy → Sentry + INTERNAL (Invariant #8). */
+/** Błąd wywołania RPC → kod użytkowy; wyjątek spoza bazy → kanał błędów + INTERNAL (Invariant #8). */
 function toErrorCode(error: unknown, area: string): ErrorCode {
   if (isDatabaseError(error)) return mapPgError(databaseErrorMessage(error));
   captureError(error, { area });

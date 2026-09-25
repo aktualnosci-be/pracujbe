@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import { env, isProductionMode } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 import {
   TURNSTILE_ACTIONS,
@@ -199,7 +199,7 @@ export async function enforceTurnstile(
   const result = await verifyTurnstileToken(flow, token, options);
   const decision = turnstileDecision(flow, result);
 
-  // Awaria dostawcy/konfiguracji to sygnał operacyjny (Sentry). Odrzucony token — zwykły
+  // Awaria dostawcy/konfiguracji to sygnał operacyjny (kanał błędów). Odrzucony token — zwykły
   // ruch botów lub wygasły token; bez zgłoszeń, żeby nie zalewać monitoringu.
   if (result.status === 'unavailable') {
     captureError(new Error('turnstile_unavailable'), {

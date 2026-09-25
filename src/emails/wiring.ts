@@ -36,6 +36,8 @@ export const QUEUED_EMAIL_TYPES = [
   'breachNotice', // admin_notify_breach_subjects (0106) — treść od administratora
   'inactiveCvWarning', // retention_purge_batch (0129) — przed usunięciem CV (RETENTION_MODE)
   'inactiveAccountWarning', // retention_purge_batch (0129) — przed usunięciem konta (RETENTION_MODE)
+  'supportContact', // submit_contact_message (0125) — potwierdzenie do nadawcy, enqueue_email_to_address
+  'contactMessageAdmin', // submit_contact_message (0125) — powiadomienie każdego admina
 ] as const satisfies readonly EmailType[];
 
 /**
@@ -45,6 +47,8 @@ export const QUEUED_EMAIL_TYPES = [
 export const GUEST_EMAIL_TYPES = [
   'guestApplicationConfirm', // submit_guest_application
   'guestApplicationSent', // confirm_guest_application
+  'guestStatusChanged', // transition_application → enqueue_guest_status_email (0122)
+  'teamInvitationSignup', // invite_company_member (0121) — adres bez konta, język zaproszenia
 ] as const satisfies readonly EmailType[];
 
 /** E-maile konta — kolejka Better Auth (`src/lib/auth/email-outbox.ts`, worker `email-worker.ts`). */
@@ -64,7 +68,6 @@ export const UNWIRED_EMAIL_TYPES = {
   jobExpiring: 'Kreator nie ustawia jobs.expires_at i nie ma zadania wygaszania ofert.',
   payment: 'Płatności wyłączone w bezpłatnym MVP (#51).',
   invoice: 'Płatności wyłączone w bezpłatnym MVP (#51).',
-  supportContact: 'Strona kontaktu nie ma formularza; brak zgłoszeń do obsłużenia.',
   // #27: wysyłał je tylko Supabase Auth (GoTrue); Better Auth nie ma tych przepływów.
   magicLink: 'Logowanie linkiem nie jest włączone w Better Auth (#24).',
   emailChange: 'Zmiana adresu e-mail konta nie jest dostępna w Better Auth (#24).',

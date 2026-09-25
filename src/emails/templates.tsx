@@ -16,7 +16,6 @@ import { render } from '@react-email/render';
 import { Section } from '@react-email/components';
 
 import type { Locale } from '@/i18n/routing';
-import { env } from '@/lib/env';
 import {
   EmailButton,
   EmailHeading,
@@ -30,7 +29,16 @@ import {
   EmailTextLink,
 } from '@/emails/_components';
 import type { EmailCopy, EmailType } from '@/emails/copy';
-import { emailCopy, greetings, interpolate, jobOfferPassportCopy, layoutCopy, moderationLabels } from '@/emails/copy';
+import {
+  contactTopicLabels,
+  emailCopy,
+  greetings,
+  interpolate,
+  jobMatchAlertOffLabel,
+  jobOfferPassportCopy,
+  layoutCopy,
+  moderationLabels,
+} from '@/emails/copy';
 import { applicationStatusLabel } from '@/emails/status-labels';
 import type { EmailSenderIdentity } from '@/lib/email/sender';
 
@@ -114,6 +122,12 @@ export interface EmailDataMap {
     inviterName?: string | null;
     actionUrl: string;
   };
+  /** 0121: adres bez konta — `actionUrl` = rejestracja pracodawcy z tokenem we fragmencie `#`. */
+  teamInvitationSignup: {
+    companyName: string;
+    inviterName?: string | null;
+    actionUrl: string;
+  };
   /**
    * Digest nowych ofert dla zapisanego wyszukiwania (#100). `jobs` = najnowsze (≤ 5) z
    * gotowymi adresami w locale odbiorcy (worker, `delivery-data.ts`); `count` = wszystkie nowe.
@@ -124,6 +138,8 @@ export interface EmailDataMap {
     count: number;
     jobs?: Array<{ title: string; companyName?: string; city?: string; url: string }>;
     actionUrl: string;
+    /** Link wyłączenia tylko tego alertu — wyłącznie z opcji workera (renderEmail), nie z payloadu. */
+    alertOffUrl?: string;
   };
   /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
   guestApplicationConfirm: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
@@ -131,10 +147,18 @@ export interface EmailDataMap {
   /** #574: ostrzeżenie przed usunięciem (brak aktywności); `deletionDate` = ISO 8601, formatowane w locale odbiorcy. */
   inactiveCvWarning: { recipientName?: string; deletionDate: string; actionUrl: string };
   inactiveAccountWarning: { recipientName?: string; deletionDate: string; actionUrl: string };
+  /** Zmiana statusu aplikacji gościa (0122) — w języku formularza; `status` jak w `statusChanged`. */
+  guestStatusChanged: { recipientName?: string; jobTitle: string; companyName: string; status: string; actionUrl: string };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
   invoice: { recipientName?: string; invoiceNumber: string; amount: string; downloadUrl: string };
-  supportContact: { name?: string; subject?: string; message?: string; actionUrl?: string };
+  /** Potwierdzenie wiadomości z formularza kontaktu (#61) — do nadawcy, w języku formularza. */
+  supportContact: { recipientName?: string | null; reference: string; topic?: string; actionUrl: string };
+  /**
+   * Powiadomienie admina o wiadomości z formularza kontaktu (#61), w języku admina. Tylko numer
+   * i temat — treść i adres nadawcy admin czyta w panelu (`/admin/kontakt`).
+   */
+  contactMessageAdmin: { recipientName?: string; reference: string; topic: string; actionUrl: string };
   /** Potwierdzenie zgłoszenia treści (#41) — także do osoby bez konta, w jej języku. */
   reportReceived: {
     recipientName?: string | null;
@@ -214,9 +238,11 @@ const SUBJECT_FIELD: Partial<Record<EmailType, string>> = {
   offerDeclined: 'candidateName',
   newMessage: 'senderName',
   statusChanged: 'status',
+  guestStatusChanged: 'status',
   companyRejected: 'reason',
   companySuspended: 'reason',
   teamInvitation: 'inviterName',
+  teamInvitationSignup: 'inviterName',
 };
 
 /** Pusta wartość albo sam placeholder (myślniki/spacje), np. `'—'` z `coalesce(..., '—')` w RPC. */
@@ -235,7 +261,7 @@ function prepareVars(
   data: Record<string, unknown>,
 ): Record<string, unknown> {
   const vars: Record<string, unknown> = { ...data };
-  if (type === 'statusChanged') {
+  if (type === 'statusChanged' || type === 'guestStatusChanged') {
     vars.status = applicationStatusLabel(locale, data.status) ?? '';
   }
   if (type === 'inactiveCvWarning' || type === 'inactiveAccountWarning') {
@@ -614,6 +640,17 @@ export function TeamInvitationEmail(props: EmailProps<'teamInvitation'>): ReactE
   );
 }
 
+export function TeamInvitationSignupEmail(props: EmailProps<'teamInvitationSignup'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="teamInvitationSignup"
+      vars={props}
+      ctaHref={props.actionUrl}
+    />
+  );
+}
+
 export function GuestApplicationConfirmEmail(props: EmailProps<'guestApplicationConfirm'>): ReactElement {
   return (
     <EmailShell
@@ -696,6 +733,64 @@ export function JobMatchEmail(props: EmailProps<'jobMatch'>): ReactElement {
   );
 }
 
+export function GuestStatusChangedEmail(props: EmailProps<'guestStatusChanged'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="guestStatusChanged"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
+/** Lista nowych ofert w digeście — sekcje jak paszporty newslettera: tytuł-link, firma · miasto. */
+function JobMatchList({ jobs }: { jobs: EmailDataMap['jobMatch']['jobs'] }): ReactElement | null {
+  const items = (jobs ?? []).filter((job) => job.title.trim().length > 0 && job.url.length > 0);
+  if (items.length === 0) return null;
+  return (
+    <Section style={{ margin: '4px 0 8px 0' }} data-email-component="job-match-list">
+      {items.map((job, index) => {
+        const meta = [job.companyName, job.city].filter((v) => v && v.trim().length > 0).join(' · ');
+        return (
+          <EmailPassport
+            key={index}
+            title={<EmailTextLink href={job.url} tone="title">{job.title}</EmailTextLink>}
+            fields={[]}
+            footer={meta ? <strong>{meta}</strong> : undefined}
+          />
+        );
+      })}
+    </Section>
+  );
+}
+
+export function JobMatchEmail(props: EmailProps<'jobMatch'>): ReactElement {
+  const alertOffUrl = typeof props.alertOffUrl === 'string' && props.alertOffUrl.length > 0
+    ? props.alertOffUrl
+    : undefined;
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="jobMatch"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+      detail={
+        <>
+          <JobMatchList jobs={props.jobs} />
+          {alertOffUrl ? (
+            <EmailText muted>
+              <EmailTextLink href={alertOffUrl}>{jobMatchAlertOffLabel[props.locale]}</EmailTextLink>
+            </EmailText>
+          ) : null}
+        </>
+      }
+    />
+  );
+}
+
 export function JobExpiringEmail(props: EmailProps<'jobExpiring'>): ReactElement {
   return (
     <EmailShell
@@ -734,15 +829,27 @@ export function InvoiceEmail(props: EmailProps<'invoice'>): ReactElement {
 }
 
 export function SupportContactEmail(props: EmailProps<'supportContact'>): ReactElement {
-  const ctaHref = props.actionUrl ?? `${env.siteUrl}/${props.locale}`;
   return (
     <EmailShell
       locale={props.locale}
       type="supportContact"
       vars={props}
-      ctaHref={ctaHref}
-      greetingName={props.name}
-      quote={props.message}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+    />
+  );
+}
+
+export function ContactMessageAdminEmail(props: EmailProps<'contactMessageAdmin'>): ReactElement {
+  const labels = contactTopicLabels[props.locale];
+  const topicLabel = props.topic in labels ? labels[props.topic as keyof typeof labels] : labels.other;
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="contactMessageAdmin"
+      vars={{ ...props, topicLabel }}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
     />
   );
 }
@@ -928,15 +1035,18 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   companyRejected: CompanyRejectedEmail,
   companySuspended: CompanySuspendedEmail,
   teamInvitation: TeamInvitationEmail,
+  teamInvitationSignup: TeamInvitationSignupEmail,
   jobMatch: JobMatchEmail,
   guestApplicationConfirm: GuestApplicationConfirmEmail,
   guestApplicationSent: GuestApplicationSentEmail,
   inactiveCvWarning: InactiveCvWarningEmail,
   inactiveAccountWarning: InactiveAccountWarningEmail,
+  guestStatusChanged: GuestStatusChangedEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,
   invoice: InvoiceEmail,
   supportContact: SupportContactEmail,
+  contactMessageAdmin: ContactMessageAdminEmail,
   reportReceived: ReportReceivedEmail,
   reportDecisionActioned: ReportDecisionActionedEmail,
   reportDecisionNoAction: ReportDecisionNoActionEmail,
@@ -958,7 +1068,7 @@ export async function renderEmail<T extends EmailType>(
   type: T,
   locale: Locale,
   data: EmailDataMap[T],
-  options: { unsubscribeUrl?: string; sender?: EmailSenderIdentity } = {},
+  options: { unsubscribeUrl?: string; sender?: EmailSenderIdentity; alertOffUrl?: string } = {},
 ): Promise<{ subject: string; html: string; text: string }> {
   // Rejestr jest w pełni typowany; tu kasujemy generyk wyłącznie na potrzeby createElement
   // (TS nie potrafi skorelować EmailDataMap[T] z sygnaturą createElement).
@@ -970,6 +1080,8 @@ export async function renderEmail<T extends EmailType>(
     locale,
     unsubscribeUrl: options.unsubscribeUrl,
     emailSender: options.sender,
+    // #100: link wyłączenia alertu też PO danych — payload kolejki go nie podmieni.
+    alertOffUrl: options.alertOffUrl,
   });
   const html = await render(element);
   // #45: wersja text/plain z tego samego drzewa (multipart/alternative u dostawcy).

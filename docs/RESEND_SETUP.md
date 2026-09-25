@@ -226,6 +226,10 @@ auth.expire_emails() → auth.claim_emails() [queued → leased, FOR UPDATE SKIP
   preferencji (skanery linków) — przekierowuje na stronę z przyciskiem potwierdzenia.
 - `claim_email_batch` ponownie sprawdza zgodę: wiersz osoby wypisanej po zakolejkowaniu
   dostaje `status='failed'`, `suppressed_at`, `error_message='suppressed_opt_out'` i nie wychodzi.
+- #503: e-mail z danymi kandydata do członka firmy (`newApplication`, `offerAccepted`,
+  `offerDeclined`, `newMessage` do strony firmowej) wychodzi tylko, gdy przy claimie odbiorca
+  nadal jest aktywnym recruiter+ firmy — inaczej `error_message='suppressed_recipient_unauthorized'`.
+  Do szablonu worker przekazuje wyłącznie pola z `src/lib/email/payload-fields.ts`.
 - Budżet: `email_send_budget_config` (domyślnie okno 60 s, limit 100, rezerwa auth 20,
   rezerwa transakcyjna 30). Marketing kończy się przy 50 w oknie, transakcyjne przy 80,
   auth może użyć całego limitu. Dopasuj limit do planu Resend (zmiana wiersza przez

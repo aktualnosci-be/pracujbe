@@ -3,7 +3,7 @@ import 'server-only';
 /**
  * Błąd zgłoszony przez PostgreSQL (pg.DatabaseError): ma SQLSTATE w `code`. Zastępuje
  * pole `error` odpowiedzi PostgREST — akcje mapują `message`/`code` na kody użytkowe
- * (Invariant #8) tak jak dotąd, a wyjątki spoza bazy (sieć, konfiguracja) trafiają do Sentry.
+ * (Invariant #8) tak jak dotąd, a wyjątki spoza bazy (sieć, konfiguracja) trafiają do kanału błędów.
  */
 export interface DatabaseErrorLike {
   message: string;

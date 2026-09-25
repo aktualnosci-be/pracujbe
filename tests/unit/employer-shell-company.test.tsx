@@ -40,7 +40,7 @@ vi.mock('@/components/dashboard/DashboardShell', () => ({
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/company-context', () => ({ getActiveCompany: vi.fn() }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 import { EmployerShell } from '@/components/employer/EmployerShell';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';

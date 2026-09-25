@@ -3,7 +3,7 @@ import 'server-only';
 import { renderEmail } from '@/emails/templates';
 import { emailFromEnv } from '@/lib/email/sender';
 import { env, isAuthMailConfigured, isPortalAuthConfigured, isProductionMode } from '@/lib/env';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import {
   emailProviderFromEnv,
   mailTransportFromEnv,
@@ -68,7 +68,7 @@ export function resendSender(apiKey: string): MailSender {
  * Pula ma wyłącznie rolę `pracujbe_auth_mail` (claim/complete/fail/expire), bez tabel domeny.
  * Klucz idempotencji transportu = UUID zlecenia (Resend: Idempotency-Key, EmailLabs: stały
  * messageId + sprawdzenie przed wysyłką), więc ponowienie po utraconej odpowiedzi nie wysyła
- * drugiego listu. Token nigdy nie trafia do logów ani Sentry; po wysyłce baza go usuwa.
+ * drugiego listu. Token nigdy nie trafia do logów ani kanału błędów; po wysyłce baza go usuwa.
  */
 export async function processAuthEmailBatch(
   pool: MailPool,

@@ -41,7 +41,7 @@ vi.mock('@/lib/data/messages', () => ({
 }));
 
 vi.mock('@/lib/actions/messages', () => ({ markConversationRead }));
-vi.mock('@/lib/sentry', () => ({ captureError }));
+vi.mock('@/lib/error-report', () => ({ captureError }));
 vi.mock('@/components/messaging/ConversationList', () => ({
   ConversationList: ({ items }: { items: Array<{ unreadCount: number }> }) =>
     <div data-testid="conversation-list" data-unread={items[0]?.unreadCount}>conversation-list</div>,

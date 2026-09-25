@@ -8,13 +8,13 @@ import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Server Actions zapisanych wyszukiwań (#100) — cienka warstwa nad RPC z 0092.
  *
  * Kanonizacja filtrów, limit 20, brak duplikatów, rola kandydata i własność są w bazie
- * (`save_saved_search` / `set_saved_search_alerts` / `delete_saved_search`, wołane pod sesją
+ * (`save_saved_search` / `set_saved_search_alerts` / `rename_saved_search` / `delete_saved_search`, wołane pod sesją
  * przez `withPortalTransaction`, #25); tu: walidacja
  * Zod kształtu wejścia + mapowanie błędu na kod użytkowy (Invariant #8). Tryb demo nic nie
  * zapisuje (`DEMO_UNAVAILABLE`) — bez udawanego sukcesu.
@@ -48,6 +48,9 @@ const saveSchema = z.object({
 });
 
 const idSchema = z.string().uuid();
+/** Te same reguły co w bazie (0124): 1–80 znaków po przycięciu, bez znaków sterujących. */
+// eslint-disable-next-line no-control-regex
+const nameSchema = z.string().trim().min(1).max(80).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/);
 const frequencySchema = z.enum(['daily', 'weekly']);
 
 export type SaveSearchResult =
@@ -133,6 +136,28 @@ export async function setSavedSearchAlertsAction(
   } catch (error) {
     if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
     captureError(error, { area: 'saved-searches.setAlerts' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/** Zmiana nazwy własnego wyszukiwania (#100). Cudze/nieistniejące → NOT_FOUND z bazy. */
+export async function renameSavedSearchAction(id: unknown, name: unknown): Promise<SavedSearchMutationResult> {
+  const parsedId = idSchema.safeParse(id);
+  const parsedName = nameSchema.safeParse(name);
+  if (!parsedId.success || !parsedName.success) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'rename_saved_search', { p_saved_search_id: parsedId.data, p_name: parsedName.data }),
+    );
+    revalidateSavedSearches();
+    return { ok: true };
+  } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    captureError(error, { area: 'saved-searches.rename' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

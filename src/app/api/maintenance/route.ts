@@ -12,7 +12,7 @@ import {
   RETENTION_MAX_BATCHES,
   retentionMode,
 } from '@/lib/retention/mode';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
   processStorageDeletions,
@@ -42,6 +42,8 @@ import {
  * `RETENTION_MODE=dry-run|apply` (`src/lib/retention/mode.ts`). `apply` woła kolejne partie,
  * dopóki któraś kategoria wyczerpuje limit (`fullBatches`), najwyżej RETENTION_MAX_BATCHES.
  * Kolejka usuwania obiektów działa niezależnie od trybu (usunięcie konta na wniosek).
+ * 0119: załączniki wiadomości przygotowane, a niewysłane przez 24 h
+ * (`purge_stale_message_attachments`) — wiersz files usunięty, obiekt trafia do kolejki storage.
  * #17: dzienny GC bucketu CV (`runStorageGc`, 0117) — obiekty bez wiersza `files` do kolejki
  * usuwania (tylko przy `STORAGE_GC_MODE=delete`; domyślnie dry-run z samymi licznikami),
  * wiersze bez obiektu tylko liczone. Bez bucketu Railway — pominięty (`storageGc: null`).
@@ -104,6 +106,7 @@ async function run(request: Request): Promise<Response> {
     | 'savedSearchAlerts'
     | 'emailCampaigns'
     | 'retention'
+    | 'messageAttachments'
     | 'storageGc'
     | 'dsaRetention'
     | 'storageDeletions';
@@ -165,6 +168,10 @@ async function run(request: Request): Promise<Response> {
     }
     retention = { ...counters, mode: retentionRunMode, batches };
   }
+  // 0119: przygotowane, a niewysłane załączniki wiadomości (> 24 h) → kolejka storage niżej.
+  const purgedMessageAttachments = await task('messageAttachments', 'purge_stale_message_attachments', {
+    p_older_than_hours: 24,
+  });
   // #17: GC sierot bucketu CV przed workerem kolejki — sieroty znikają w tym samym przebiegu.
   let storageGc: StorageGcRun | null = null;
   try {
@@ -212,6 +219,7 @@ async function run(request: Request): Promise<Response> {
     savedSearchDigests: savedSearchDigests ?? 0,
     campaignEmailsQueued: campaignEmailsQueued ?? 0,
     retention,
+    purgedMessageAttachments: purgedMessageAttachments ?? 0,
     storageGc,
     dsaRetention,
     storageDeletions,

@@ -21,7 +21,7 @@ vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJobTranslations: adapters.translations,
   getPublicJobScreeningQuestions: adapters.screening,
 }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
 
 describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {

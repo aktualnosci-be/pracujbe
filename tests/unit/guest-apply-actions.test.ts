@@ -30,7 +30,7 @@ vi.mock('@/lib/guest-apply/link-cookie', () => ({
   clearGuestLinkToken: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/turnstile/verify', () => ({ enforceTurnstile: vi.fn(async () => null) }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(() => false) }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 
