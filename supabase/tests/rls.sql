@@ -8742,6 +8742,140 @@ begin; select pg_temp.cj_drop_filter('j.deleted_at is null');
 select pg_temp.assert(pg_temp.cj_public('cj-deleted') = 1, 'CJ186-4f bez filtra usunięcia wycieka'); rollback;
 select pg_temp.assert(pg_temp.cj_public(s) = 0, 'CJ186-4g po cofnięciu filtry wróciły: ' || s)
 from unnest(array['cj-demo', 'cj-demo-company', 'cj-paused', 'cj-expired', 'cj-unverified', 'cj-deleted']) s;
+-- CV487. Import CV przez AI (#487, #498, 0115): do profilu trafiają WYŁĄCZNIE pozycje
+-- zatwierdzone przez kandydata, dopisane (nie replace-all) w jednej transakcji. Brak
+-- zatwierdzenia = brak zapisu; za długa pozycja cofa całe wywołanie; tylko własny profil
+-- konta kandydata. Kontrola ujemna: wersja replace-all kasuje ręcznie wpisane pozycje.
+-- ============================================================================
+\set CVC  'e4870000-0000-0000-0000-000000000001'
+\set CVO  'e4870000-0000-0000-0000-000000000002'
+\set CVE  'e4870000-0000-0000-0000-000000000003'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CVC','cvc@test.be','Cv C','{"role":"candidate","first_name":"Celina","last_name":"Cv","locale":"pl"}'),
+  (:'CVO','cvo@test.be','Cv O','{"role":"candidate","first_name":"Otto","last_name":"Cv","locale":"nl"}'),
+  (:'CVE','cve@test.be','Cv E','{"role":"employer","first_name":"Rek","last_name":"Cv","locale":"fr"}');
+
+-- Stan wyjściowy wpisany ręcznie (onboarding): zawód, umiejętność, język z poziomem, certyfikat z datą.
+select set_config('app.current_uid', :'CVC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.save_candidate_onboarding_step3(4, array['Wózek widłowy']);
+select public.save_candidate_onboarding_step5(
+  '[{"language":"Polski","level":"native"}]'::jsonb,
+  '[{"label":"VCA","expires_at":"2030-01-01"}]'::jsonb);
+reset role;
+update public.candidate_profiles set occupations = array['Magazynier'] where profile_id = :'CVC';
+select id as cv_cp from public.candidate_profiles where profile_id = :'CVC' \gset
+
+set role authenticated; select pg_temp.assert_client_role();
+-- CV1: brak zatwierdzonych pozycji → odmowa, stan bez zmian.
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(''{}'', ''{}'', ''[]''::jsonb, ''{}'', null)',
+  'VALIDATION_FAILED', 'CV1 brak zatwierdzenia = brak zapisu');
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(null, null, null, null, null)',
+  'VALIDATION_FAILED', 'CV1b same NULL-e = brak zapisu');
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp') = 1
+  and (select experience_years from public.candidate_profiles where id = :'cv_cp') = 4,
+  'CV1c po odmowie profil bez zmian');
+
+-- CV2: za długa umiejętność cofa CAŁE wywołanie (także poprawny zawód w tym samym żądaniu).
+select pg_temp.expect_error(
+  format('select public.apply_candidate_cv_proposals(array[''Kierowca''], array[%L], null, null, 9)', repeat('x', 121)),
+  'VALIDATION_FAILED', 'CV2 za długa pozycja odrzucona bez obcinania');
+select pg_temp.assert(
+  (select occupations = array['Magazynier'] and experience_years = 4
+   from public.candidate_profiles where id = :'cv_cp'),
+  'CV2b odrzucone wywołanie nie zapisało żadnej części');
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(null, null, ''[{"language":"Nederlands","level":"expert"}]''::jsonb, null, null)',
+  'VALIDATION_FAILED', 'CV2c poziom języka spoza słownika odrzucony');
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(null, null, null, null, 61)',
+  'VALIDATION_FAILED', 'CV2d doświadczenie poza zakresem odrzucone');
+
+-- CV3: zatwierdzone pozycje są DOPISANE; duplikaty (bez względu na wielkość liter) pominięte,
+-- ręcznie wpisany poziom języka i data certyfikatu zostają.
+select pg_temp.assert(
+  public.apply_candidate_cv_proposals(
+    array['Kierowca', 'magazynier'],
+    array['wózek WIDŁOWY', 'Skaner ręczny', 'Skaner ręczny'],
+    '[{"language":"polski","level":"basic"},{"language":"Nederlands","level":"intermediate"}]'::jsonb,
+    array['vca', 'Prawo jazdy C'],
+    null)
+  = '{"occupations":1,"skills":1,"languages":1,"certificates":1,"experienceYears":false}'::jsonb,
+  'CV3 wynik liczy tylko dopisane pozycje');
+select pg_temp.assert(
+  (select occupations = array['Magazynier', 'Kierowca'] and experience_years = 4
+   from public.candidate_profiles where id = :'cv_cp'),
+  'CV3b zawód dopisany, doświadczenie bez zmian (niezatwierdzone)');
+select pg_temp.assert(
+  (select array_agg(skill_label order by skill_label) from public.candidate_skills
+   where candidate_profile_id = :'cv_cp') = array['Skaner ręczny', 'Wózek widłowy'],
+  'CV3c umiejętność dopisana, istniejąca zachowana, bez duplikatu');
+select pg_temp.assert(
+  (select level::text from public.candidate_languages
+   where candidate_profile_id = :'cv_cp' and language_label = 'Polski') = 'native'
+  and (select count(*) from public.candidate_languages where candidate_profile_id = :'cv_cp') = 2,
+  'CV3d poziom ręcznie wpisanego języka zostaje');
+select pg_temp.assert(
+  (select expires_at from public.candidate_certificates
+   where candidate_profile_id = :'cv_cp' and certificate_label = 'VCA') = '2030-01-01'::date
+  and (select count(*) from public.candidate_certificates where candidate_profile_id = :'cv_cp') = 2,
+  'CV3e data ważności certyfikatu zostaje, nowy certyfikat dopisany');
+-- CV3f: samo doświadczenie zatwierdzone → ustawione.
+select public.apply_candidate_cv_proposals(null, null, null, null, 7);
+select pg_temp.assert((select experience_years from public.candidate_profiles where id = :'cv_cp') = 7,
+  'CV3f zatwierdzone doświadczenie zapisane');
+-- CV4: przekroczenie limitu zawodów (10) → odmowa.
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(array[''a1'',''a2'',''a3'',''a4'',''a5'',''a6'',''a7'',''a8'',''a9''], null, null, null, null)',
+  'VALIDATION_FAILED', 'CV4 limit zawodów');
+select pg_temp.expect_error(
+  'insert into public.candidate_skills(candidate_profile_id, skill_label) select id, ''x'' from public.candidate_profiles where profile_id = auth.uid()',
+  'permission denied', 'CV4b bezpośredni DML relacji dalej odebrany');
+reset role;
+
+-- CV5: inny kandydat nie zmienia cudzego profilu (brak parametru właściciela) — zapis trafia do jego własnego.
+select set_config('app.current_uid', :'CVO', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_candidate_cv_proposals(null, array['Lassen'], null, null, null);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp') = 2
+  and (select count(*) from public.candidate_skills s join public.candidate_profiles cp on cp.id = s.candidate_profile_id
+       where cp.profile_id = :'CVO' and s.skill_label = 'Lassen') = 1,
+  'CV5 zapis tylko we własnym profilu');
+
+-- CV6: konto pracodawcy i anon — odmowa.
+select set_config('app.current_uid', :'CVE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.apply_candidate_cv_proposals(null, array[''x''], null, null, null)',
+  'PERMISSION_DENIED', 'CV6 pracodawca nie ma profilu kandydata');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.apply_candidate_cv_proposals(null, array[''x''], null, null, null)',
+  'permission denied', 'CV6b anon bez EXECUTE');
+reset role;
+
+-- Kontrola ujemna: wersja replace-all (jak kroki onboardingu) kasuje ręcznie wpisane pozycje.
+begin;
+create or replace function public.apply_candidate_cv_proposals(
+  p_occupations text[], p_skills text[], p_languages jsonb, p_certificates text[], p_experience_years integer)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  perform public.set_candidate_skills(p_skills);
+  return '{}'::jsonb;
+end $$;
+set local role authenticated; set local app.current_uid = :'CVC'; select pg_temp.assert_client_role();
+select public.apply_candidate_cv_proposals(null, array['Nowa'], null, null, null);
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp' and skill_label = 'Wózek widłowy') = 0,
+  'CV7 kontrola ujemna: replace-all gubi ręcznie wpisaną umiejętność');
+rollback;
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp') = 2,
+  'CV7b po kontroli ujemnej stan przywrócony');
 
 -- ============================================================================
 -- BR490 (#490, 0106): rejestr incydentów i naruszeń danych osobowych — tylko admin,
