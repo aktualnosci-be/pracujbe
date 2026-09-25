@@ -15,6 +15,7 @@ export type ProcessorId =
   | 'railway'
   | 'supabase'
   | 'resend'
+  | 'emaillabs'
   | 'sentry'
   | 'cloudflare-turnstile'
   | 'anthropic'
@@ -97,11 +98,39 @@ export const PROCESSORS: readonly Processor[] = [
       'Identyfikator wysyłki (idempotency key = id wiersza email_deliveries)',
     ],
     dataSubjects: ['Kandydaci', 'Aplikujący bez konta', 'Pracodawcy i członkowie firm', 'Zgłaszający treści'],
-    activation: 'RESEND_API_KEY (bez klucza worker pomija wysyłkę); webhook wymaga RESEND_WEBHOOK_SECRET.',
-    codeRefs: ['src/lib/email/outbox.ts', 'src/app/api/email/webhook/resend/route.ts', 'src/app/api/auth/email-hook/route.ts', 'src/emails/wiring.ts'],
+    activation: 'EMAIL_PROVIDER=resend albo brak EMAIL_PROVIDER bez kompletu kluczy EmailLabs, przy RESEND_API_KEY; hook Supabase Auth zawsze przez Resend; webhook wymaga RESEND_WEBHOOK_SECRET.',
+    codeRefs: ['src/lib/email/transport/resend.ts', 'src/lib/email/outbox.ts', 'src/lib/auth/email-worker.ts', 'src/app/api/email/webhook/resend/route.ts', 'src/app/api/auth/email-hook/route.ts', 'src/emails/wiring.ts'],
     notes: [
       'Wywołanie resend.emails.send przekazuje from, to, subject, html i opcjonalnie nagłówki wypisania; kod nie ustawia opcji śledzenia otwarć/kliknięć — stan tych ustawień na koncie do sprawdzenia.',
       'Payloady kolejki nie zawierają treści wiadomości czatu ani odpowiedzi screeningowych (sekcja e-maili w mapie jest generowana z migracji).',
+    ],
+    ...UNKNOWN,
+  },
+  {
+    id: 'emaillabs',
+    name: 'EmailLabs',
+    purpose:
+      'Wysyłka e-maili transakcyjnych z kolejki email_deliveries i e-maili konta (auth.email_outbox), gdy EMAIL_PROVIDER wybiera EmailLabs; odbiór raportów doręczeń (odbicia, opóźnienia) przez webhook.',
+    dataCategories: [
+      'Adres e-mail odbiorcy',
+      'Temat, treść HTML i tekstowa wyrenderowanego szablonu (pola payloadu — patrz sekcja e-maili w mapie)',
+      'Nagłówki List-Unsubscribe z tokenem wypisania',
+      'Identyfikator wiadomości (messageId = id wiersza kolejki + domena nadawcy)',
+      'Linki z tokenem potwierdzenia adresu / resetu hasła w e-mailach konta',
+    ],
+    dataSubjects: ['Kandydaci', 'Aplikujący bez konta', 'Pracodawcy i członkowie firm', 'Zgłaszający treści'],
+    activation:
+      'EMAIL_PROVIDER=emaillabs albo brak EMAIL_PROVIDER przy komplecie EMAILLABS_APP_KEY, EMAILLABS_SECRET_KEY, EMAILLABS_SMTP_ACCOUNT; webhook wymaga EMAILLABS_WEBHOOK_SECRET.',
+    codeRefs: [
+      'src/lib/email/transport/emaillabs.ts',
+      'src/lib/email/outbox.ts',
+      'src/lib/auth/email-worker.ts',
+      'src/app/api/email/webhook/emaillabs/route.ts',
+    ],
+    notes: [
+      'Każde wywołanie wysyłki ma nagłówek X-TRACKING-OFF: 1 (bez przekierowań linków); open tracking jest ustawieniem konta SMTP — do wyłączenia w panelu (docs/EMAILLABS_SETUP.md).',
+      'Przed wysyłką kod odpytuje statusy po messageId (deduplikacja ponowień) — klucz API potrzebuje prawa odczytu statusów.',
+      'Webhook przekazuje adres odbiorcy i status doręczenia; kod zapisuje tylko status, czas i ewentualną blokadę adresu.',
     ],
     ...UNKNOWN,
   },
