@@ -86,6 +86,8 @@ import {
   updatePublishedJob,
 } from '@/lib/actions/jobs';
 import { isLocale, routing, type Locale } from '@/i18n/routing';
+import { JobAssistPanel } from '@/components/employer/JobAssistPanel';
+import { ASSIST_FIELDS_BY_STEP, type AssistField, type AssistValue } from '@/lib/ai-assist/fields';
 import { isScreeningQuestionType, type ScreeningQuestionDraft } from '@/lib/screening/questions';
 import type { ScreeningReviewNotice } from '@/lib/screening/review';
 import {
@@ -382,6 +384,11 @@ export interface JobWizardProps {
   importSlot?: React.ReactNode;
   /** #465: pola wypełnione importem, które pracodawca musi sprawdzić (nazwy pól formularza). */
   importReview?: { fields: readonly string[]; suspicious: boolean };
+  /**
+   * #37: asystent redagowania treści (kroki 5 i 6) — tylko przy włączonej fladze i dostawcy
+   * (`isJobAssistEnabled`). Propozycja zmienia pole dopiero po kliknięciu „Użyj propozycji”.
+   */
+  assistEnabled?: boolean;
 }
 
 /** #465: pole formularza → krok i etykieta (lista „Do sprawdzenia" na kroku). */
@@ -460,6 +467,7 @@ export function JobWizard({
   contentLocale: contentLocaleProp,
   importSlot,
   importReview,
+  assistEnabled = false,
 }: JobWizardProps = {}): React.JSX.Element {
   const t = useTranslations('jobWizard');
   const tImport = useTranslations('jobImport');
@@ -492,6 +500,36 @@ export function JobWizard({
   });
 
   const values = watch();
+
+  // #37: asystent redagowania — propozycja zmienia pole wyłącznie po kliknięciu (onApply).
+  const assistLabels: Record<AssistField, string> = {
+    description: t('descriptionLabel'),
+    responsibilities: t('responsibilitiesLabel'),
+    requirementsMandatory: t('requirementsMandatoryLabel'),
+  };
+  function renderAssist(onStep: 5 | 6): React.ReactNode {
+    if (!assistEnabled) return null;
+    return (
+      <JobAssistPanel
+        fields={ASSIST_FIELDS_BY_STEP[onStep] ?? []}
+        contentLocale={contentLocale}
+        title={values.title}
+        values={{
+          description: values.description,
+          responsibilities: values.responsibilities,
+          requirementsMandatory: values.requirementsMandatory,
+        }}
+        labels={assistLabels}
+        onApply={(field: AssistField, value: AssistValue) => {
+          if (field === 'description' && typeof value === 'string') {
+            setValue('description', value, { shouldDirty: true });
+          } else if (field !== 'description' && Array.isArray(value)) {
+            setValue(field, value, { shouldDirty: true });
+          }
+        }}
+      />
+    );
+  }
 
   const [step, setStep] = React.useState<WizardStep>(1);
   const [jobId, setJobId] = React.useState<string | null>(initialJobId ?? null);
@@ -1197,6 +1235,7 @@ export function JobWizard({
                 <p className={FORM_HINT}>{t('responsibilitiesHint')}</p>
                 <FieldError name="responsibilities" />
               </div>
+              {renderAssist(5)}
             </div>
           ) : null}
 
@@ -1252,6 +1291,7 @@ export function JobWizard({
                 <p className={FORM_HINT}>{t('minExperienceHint')}</p>
                 <FieldError name="minExperienceYears" />
               </div>
+              {renderAssist(6)}
             </div>
           ) : null}
 
