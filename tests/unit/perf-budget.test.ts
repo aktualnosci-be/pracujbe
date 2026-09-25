@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkRouteBudgets,
   clsFromShifts,
+  inpFromEventEntries,
   median,
   routeEntries,
   routeJsFiles,
@@ -106,6 +107,35 @@ describe("metryki lab", () => {
     ];
     expect(tbtFromLongtasks(tasks, 100)).toBe(120);
   });
+
+  it("INP-proxy = najdłuższy wpis interakcji, bez zdarzeń bez interactionId", () => {
+    const entries = [
+      { name: "pointerover", interactionId: 0, duration: 400 }, // nie interakcja
+      { name: "pointerdown", interactionId: 7, duration: 16 },
+      { name: "pointerup", interactionId: 7, duration: 24 },
+      { name: "click", interactionId: 7, duration: 56 },
+    ];
+    expect(inpFromEventEntries(entries)).toBe(56);
+    // Wpisy < 16 ms API nie zgłasza — brak wpisów = szybka interakcja, nie NaN.
+    expect(inpFromEventEntries([])).toBe(0);
+  });
+
+  it("wolny handler kliknięcia przekracza próg INP (kontrola ujemna)", () => {
+    const { inpMs } = JSON.parse(readFileSync("perf-budgets.json", "utf8")).lab
+      .thresholds;
+    const fast = [{ name: "click", interactionId: 3, duration: 56 }];
+    // To, co zmierzył perf-lab z `--inject-click-delay-ms 300` (CPU 4×).
+    const slow = [
+      { name: "pointerdown", interactionId: 3, duration: 16 },
+      { name: "click", interactionId: 3, duration: 368 },
+    ];
+    expect(
+      median([fast, fast, fast].map(inpFromEventEntries)),
+    ).toBeLessThanOrEqual(inpMs);
+    expect(median([slow, slow, fast].map(inpFromEventEntries))).toBeGreaterThan(
+      inpMs,
+    );
+  });
 });
 
 describe("perf-budgets.json", () => {
@@ -123,7 +153,13 @@ describe("perf-budgets.json", () => {
     );
     expect(budgets.lab.runs).toBeGreaterThanOrEqual(3);
     expect(budgets.lab.runs % 2).toBe(1);
-    for (const key of ["lcpMsFirstVisit", "lcpMsWithConsent", "cls", "tbtMs"]) {
+    for (const key of [
+      "lcpMsFirstVisit",
+      "lcpMsWithConsent",
+      "cls",
+      "tbtMs",
+      "inpMs",
+    ]) {
       expect(budgets.lab.thresholds[key]).toBeGreaterThan(0);
     }
   });

@@ -3,8 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Limiter (#24): przy `DATABASE_RATE_LIMIT_URL` + `RATE_LIMIT_KEY_SECRET` działa na PostgreSQL
- * (osobny login `pracujbe_rate_limit`, klucz HMAC), bez Supabase. Brak zmiennych Supabase nie
- * wyłącza limitera; awaria bazy blokuje akcje auth (fail-safe). Produkcja bez limitera blokuje
+ * (osobny login `pracujbe_rate_limit`, klucz HMAC); awaria bazy blokuje akcje auth (fail-safe). Produkcja bez limitera blokuje
  * akcje wrażliwe zamiast je przepuszczać.
  */
 
@@ -13,11 +12,6 @@ vi.mock('@/lib/db/rate-limit', () => ({ checkDatabaseRateLimit: db.check }));
 vi.mock('@/lib/db/runtime', () => ({ getRateLimitPool: db.pool }));
 vi.mock('next/headers', () => ({ headers: async () => new Headers({ 'x-real-ip': '203.0.113.7' }) }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminClient: () => {
-    throw new Error('Supabase nie może być użyty, gdy limiter PostgreSQL jest skonfigurowany');
-  },
-}));
 
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -26,8 +20,6 @@ const SECRET = 'k'.repeat(40);
 beforeEach(() => {
   db.check.mockReset().mockResolvedValue(true);
   db.pool.mockReset().mockResolvedValue({ connect: vi.fn() });
-  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
-  vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '');
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -37,7 +29,7 @@ function stubLimiter() {
 }
 
 describe('checkRateLimit na PostgreSQL', () => {
-  it('bez Supabase używa limitera PostgreSQL z IP proxy i sekretem HMAC', async () => {
+  it('używa limitera PostgreSQL z IP proxy i sekretem HMAC', async () => {
     stubLimiter();
     expect(await checkRateLimit('signin', { max: 10, windowSeconds: 300 })).toBe(true);
     expect(db.check).toHaveBeenCalledWith(expect.anything(), {

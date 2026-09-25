@@ -94,7 +94,7 @@ async function completeOnboarding(as: string) {
     certificateExpiry: { VCA: '2030-01-31' },
   })).toEqual({ ok: true });
   return saveOnboardingStep(6, {
-    availability: 'immediate', preferredContractTypes: ['permanent'], agreeTerms: true,
+    availability: 'immediate', preferredContractTypes: ['permanent'], agreeTerms: true, privacyNoticeAck: true,
   }, { finish: true });
 }
 
@@ -122,15 +122,20 @@ describe('onboarding i profil kandydata (#25)', () => {
     const { rows } = await db().admin.query(
       `SELECT cp.profile_completed, cp.city, cp.categories::text[] AS categories,
               (SELECT count(*)::int FROM public.candidate_skills s WHERE s.candidate_profile_id = cp.id) AS skills,
-              (SELECT array_agg(document ORDER BY document)::text[] FROM public.document_acceptances d WHERE d.profile_id = cp.profile_id) AS docs
+              (SELECT array_agg(d.document || ':' || d.kind || ':' || d.source ORDER BY d.document)::text[]
+                 FROM public.document_acceptances d WHERE d.profile_id = cp.profile_id) AS docs
          FROM public.candidate_profiles cp WHERE cp.profile_id = $1`, [alice]);
-    expect(rows[0]).toMatchObject({ profile_completed: true, city: 'Gent', categories: ['warehouse'], skills: 2, docs: ['privacy', 'terms'] });
+    // #493: regulamin i informacja o prywatności jako osobne receipty kanału onboarding.
+    expect(rows[0]).toMatchObject({
+      profile_completed: true, city: 'Gent', categories: ['warehouse'], skills: 2,
+      docs: ['privacy:privacy_notice_ack:onboarding', 'terms:terms_acceptance:onboarding'],
+    });
   });
 
   it('niekompletny profil: „Zakończ” zwraca ONBOARDING_INCOMPLETE, a dane kroku 6 zostają', async () => {
     actAs({ id: bob, role: 'candidate' });
     expect(await saveOnboardingStep(6, {
-      availability: 'within_month', preferredContractTypes: ['temporary'], agreeTerms: true,
+      availability: 'within_month', preferredContractTypes: ['temporary'], agreeTerms: true, privacyNoticeAck: true,
     }, { finish: true })).toEqual({ ok: false, error: 'ONBOARDING_INCOMPLETE' });
     const { rows } = await db().admin.query('SELECT availability::text FROM public.candidate_profiles WHERE profile_id = $1', [bob]);
     expect(rows[0]?.availability).toBe('within_month');
@@ -234,6 +239,38 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     const bobPage = await candidateData.getMyApplicationsPage('pl');
     expect(bobPage.items).toHaveLength(1);
     expect(bobPage.items.map((i) => i.id)).not.toContain(aliceApp);
+  });
+
+  it('pytania screeningowe (#101): licznik na karcie i snapshot odpowiedzi tylko dla autora zgłoszenia', async () => {
+    const bobApp = (await db().admin.query('SELECT id FROM public.applications WHERE candidate_id = $1', [bob])).rows[0].id as string;
+    await db().admin.query(`INSERT INTO public.application_screening_answers
+        (application_id, position, type, required, prompt, options, answer_boolean, answer_text)
+      VALUES ($1, 1, 'single_choice', true, '{"pl":"Zmiana?","en":"Shift?"}',
+              '[{"id":"o1","label":{"pl":"Dzienna"}},{"id":"o2","label":{"pl":"Nocna"}}]', NULL, 'o2'),
+             ($1, 0, 'yes_no', true, '{"pl":"Prawo jazdy?"}', '[]', true, NULL),
+             ($2, 0, 'short_text', false, '{"pl":"Cudze pytanie"}', '[]', NULL, 'cudza odpowiedź')`,
+      [aliceApp, bobApp]);
+
+    actAs({ id: alice, role: 'candidate' });
+    const page = await candidateData.getMyApplicationsPage('pl');
+    expect(page.items.find((item) => item.id === aliceApp)?.screeningCount).toBe(2);
+    expect(page.items.filter((item) => item.id !== aliceApp).every((item) => item.screeningCount === 0)).toBe(true);
+    const answers = await candidateData.getMyApplicationScreeningAnswers(aliceApp);
+    expect(answers.map((a) => [a.position, a.type, a.answerBoolean, a.answerText])).toEqual([
+      [0, 'yes_no', true, null],
+      [1, 'single_choice', null, 'o2'],
+    ]);
+    expect(answers[1]!.prompt).toEqual({ pl: 'Zmiana?', en: 'Shift?' });
+    expect(answers[1]!.options.map((o) => o.id)).toEqual(['o1', 'o2']);
+    // Cudze zgłoszenie: pusta lista (bez błędu, bez treści).
+    expect(await candidateData.getMyApplicationScreeningAnswers(bobApp)).toEqual([]);
+
+    // Druga strona: Bob widzi tylko własną odpowiedź, a pracodawca nie czyta odpowiedzi ścieżką kandydata.
+    actAs({ id: bob, role: 'candidate' });
+    expect((await candidateData.getMyApplicationsPage('pl')).items[0]?.screeningCount).toBe(1);
+    expect(await candidateData.getMyApplicationScreeningAnswers(aliceApp)).toEqual([]);
+    actAs({ id: employer, role: 'employer' });
+    expect(await candidateData.getMyApplicationScreeningAnswers(aliceApp)).toEqual([]);
   });
 
   it('pulpit: liczniki z bazy dla właściciela sesji', async () => {

@@ -18,6 +18,7 @@ const items: MyApplication[] = Array.from({ length: 15 }, (_, index) => ({
   slug: `job-${index + 1}`,
   date: '2026-09-20T09:00:00Z',
   status: 'submitted',
+  screeningCount: 0,
 }));
 const cursor = { submittedAt: '2026-09-20T09:00:00+00:00', id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000010' };
 
