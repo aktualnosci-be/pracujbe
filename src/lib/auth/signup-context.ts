@@ -40,6 +40,28 @@ interface SignupMetadata {
   readonly company_name?: string;
   /** #492: zadeklarowany próg wieku kandydata (bez daty urodzenia); trigger zapisuje receipt. */
   readonly age_min_attested?: number;
+  /**
+   * Dowód akceptacji: zaufany adres klienta i user-agent. Trigger przenosi je do receiptów
+   * (`document_acceptances`) i usuwa z metadanych konta w tej samej transakcji; po 7 dniach
+   * zeruje je retencja (`acceptance_ip_user_agent`).
+   */
+  readonly receipt_ip?: string;
+  readonly receipt_user_agent?: string;
+}
+
+/** Zaufany adres i user-agent żądania rejestracji (`signupEvidence` w akcji). */
+export interface SignupEvidence {
+  readonly ip: string | null;
+  readonly userAgent: string | null;
+}
+
+/** Tak samo jak w bazie (`left(user_agent, 512)`). */
+export const RECEIPT_USER_AGENT_MAX = 512;
+
+/** Dowód z nagłówków żądania: IP wyłącznie z zaufanego nagłówka proxy, user-agent obcięty. */
+export function signupEvidenceFrom(headers: Headers, trustedIp: string | null): SignupEvidence {
+  const userAgent = headers.get('user-agent')?.trim().slice(0, RECEIPT_USER_AGENT_MAX) ?? '';
+  return { ip: trustedIp, userAgent: userAgent || null };
 }
 
 interface SignupContext {
@@ -63,6 +85,7 @@ async function runSignup<T>(
   role: SignupMetadata['role'],
   fallbackLocale: unknown,
   action: (credentials: SignupCredentials) => Promise<T>,
+  evidence?: SignupEvidence,
 ): Promise<T> {
   const credentials = Object.freeze({
     email: input.email.toLowerCase(),
@@ -82,6 +105,8 @@ async function runSignup<T>(
     last_name: input.lastName,
     ...('companyName' in input ? { company_name: input.companyName } : {}),
     ...('minAge' in input ? { age_min_attested: input.minAge } : {}),
+    ...(evidence?.ip ? { receipt_ip: evidence.ip } : {}),
+    ...(evidence?.userAgent ? { receipt_user_agent: evidence.userAgent } : {}),
   });
   const context: SignupContext = { credentials, metadata, active: true, admitted: false };
   return signupContext.run(context, async () => {
@@ -99,16 +124,18 @@ export async function withCandidateSignup<T>(
   input: unknown,
   fallbackLocale: unknown,
   action: (credentials: SignupCredentials) => Promise<T>,
+  evidence?: SignupEvidence,
 ): Promise<T> {
-  return runSignup(registerCandidateSchema.parse(input), 'candidate', fallbackLocale, action);
+  return runSignup(registerCandidateSchema.parse(input), 'candidate', fallbackLocale, action, evidence);
 }
 
 export async function withEmployerSignup<T>(
   input: unknown,
   fallbackLocale: unknown,
   action: (credentials: SignupCredentials) => Promise<T>,
+  evidence?: SignupEvidence,
 ): Promise<T> {
-  return runSignup(registerEmployerSchema.parse(input), 'employer', fallbackLocale, action);
+  return runSignup(registerEmployerSchema.parse(input), 'employer', fallbackLocale, action, evidence);
 }
 
 /**
@@ -119,8 +146,9 @@ export async function withInvitedEmployerSignup<T>(
   input: unknown,
   fallbackLocale: unknown,
   action: (credentials: SignupCredentials) => Promise<T>,
+  evidence?: SignupEvidence,
 ): Promise<T> {
-  return runSignup(registerInvitedEmployerSchema.parse(input), 'employer', fallbackLocale, action);
+  return runSignup(registerInvitedEmployerSchema.parse(input), 'employer', fallbackLocale, action, evidence);
 }
 
 /** Hook endpointu: również duplikat e-maila musi przejść tę samą walidację. */

@@ -68,8 +68,11 @@ export const transactionModule = {
     },
   ),
 };
+/** Dodatkowe nagłówki żądania (np. zaufany adres proxy) — zerowane w `resetPortal`. */
+export const requestHeaderValues: Record<string, string> = {};
+
 export const headersModule = {
-  headers: async () => new Headers({ 'user-agent': 'vitest' }),
+  headers: async () => new Headers({ 'user-agent': 'vitest', ...requestHeaderValues }),
   cookies: async () => ({
     get: (name: string) => (cookieJar.has(name) ? { name, value: cookieJar.get(name)!.value } : undefined),
     set: (name: string, value: string, options?: Record<string, unknown>) => {
@@ -107,6 +110,7 @@ export function resetPortal(): void {
     response: { success: true },
   });
   profile.row = { role: 'candidate' };
+  for (const key of Object.keys(requestHeaderValues)) delete requestHeaderValues[key];
   transactionUsers.length = 0;
   cookieJar.clear();
 }
