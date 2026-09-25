@@ -10,11 +10,11 @@ import 'server-only';
  * obowiązujący; baza i tak porównuje deklarację z bieżącym progiem.
  *
  * `loadMyAgeAttestation` — stan deklaracji zalogowanego kandydata (`get_my_age_attestation`,
- * pod sesją). Tryb demo: deklaracja spełniona (`demo: true`, Invariant #12).
+ * w transakcji sesji pod RLS). Tryb demo: deklaracja spełniona (`demo: true`, Invariant #12).
  */
 
 import { CANDIDATE_MIN_AGE_FALLBACK, normalizeCandidateMinAge } from '@/lib/age-policy/constants';
-import { isDatabaseConfigured, isSupabaseConfigured } from '@/lib/env';
+import { isDatabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 import { isBuildPhase } from '@/lib/static-rendering';
 
@@ -52,7 +52,11 @@ export type AgeAttestationLoad =
   | { status: 'error' };
 
 export async function loadMyAgeAttestation(): Promise<AgeAttestationLoad> {
-  if (!isSupabaseConfigured()) {
+  const [{ getPortalIdentity, isPortalDataConfigured, withPortalTransaction }, { rpc }] = await Promise.all([
+    import('@/lib/db/portal'),
+    import('@/lib/db/sql'),
+  ]);
+  if (!isPortalDataConfigured()) {
     return {
       status: 'ready',
       demo: true,
@@ -62,11 +66,11 @@ export async function loadMyAgeAttestation(): Promise<AgeAttestationLoad> {
     };
   }
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('get_my_age_attestation');
-    if (error) throw error;
-    const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null | undefined;
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'error' };
+    const row = await withPortalTransaction(me, (tx) =>
+      rpc<Record<string, unknown>>(tx, 'get_my_age_attestation'),
+    );
     if (!row) return { status: 'error' };
     const attested = row['attested_min_age'];
     return {

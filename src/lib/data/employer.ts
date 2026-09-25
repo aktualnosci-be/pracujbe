@@ -1,25 +1,28 @@
 /**
  * Warstwa danych panelu pracodawcy — Pracuj.be (Etap 4).
  *
- * Strategia (spójna z `@/lib/jobs`): gdy `isSupabaseConfigured()` — dane czytane są z bazy
- * pod SESJĄ zalogowanego użytkownika (RLS), przez `createServerClient` (NIGDY service-role).
- * Bez konfiguracji Supabase (build/preview bez env) zwracamy te same struktury z danymi DEMO,
- * dzięki czemu panel renderuje się bez zmiennych środowiskowych (Invariant: brak degradacji
- * skonfigurowanej bazy do danych demonstracyjnych — w trybie DB zwracamy dane realne lub puste).
+ * Strategia (#25): gdy `isPortalDataConfigured()` — dane czytane są z PostgreSQL pod SESJĄ
+ * zalogowanego użytkownika (`withPortalTransaction`: rola `authenticated` + `app.current_uid`,
+ * RLS decyduje w bazie; NIGDY service-role). Bez konfiguracji (build/preview bez env) zwracamy
+ * te same struktury z danymi DEMO, dzięki czemu panel renderuje się bez zmiennych środowiskowych
+ * (Invariant: brak degradacji skonfigurowanej bazy do danych demonstracyjnych — w trybie DB
+ * zwracamy dane realne lub puste).
  *
- * „Aktywna firma" wyznaczana jest z `company_members` (pierwsze aktywne członkostwo) — panel
- * pokazuje dane wyłącznie tej firmy (RLS pilnuje izolacji firma A / firma B).
- *
- * Klient Supabase importowany jest LENIWIE (dynamic import) — moduł nie ciągnie `next/headers`
- * do bundla trybu DEMO.
+ * „Aktywna firma" wyznaczana jest przez `getActiveCompany` (cookie zwalidowane względem
+ * aktywnych członkostw, FUN-07) — panel pokazuje dane wyłącznie tej firmy (RLS pilnuje
+ * izolacji firma A / firma B). Każdy loader to jedna transakcja; loadery wołane równolegle
+ * przez stronę mają osobne transakcje, więc każda sekcja pulpitu zawodzi niezależnie.
  */
 
 import { cache } from 'react';
 
-import type { SupabaseClient } from '@supabase/supabase-js';
-
-import { isSupabaseConfigured } from '@/lib/env';
-import { effectiveJobStatus, isPastExpiry, notExpiredFilter } from '@/lib/job-expiry';
+import type { PortalIdentity } from '@/lib/auth/session';
+import { getActiveCompany } from '@/lib/company-context';
+import { isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { attempt, queryCount, queryOne, queryRows, rpcRows } from '@/lib/db/sql';
+import type { TransactionQuery } from '@/lib/db/transaction';
+import { effectiveJobStatus, isPastExpiry } from '@/lib/job-expiry';
 import { captureError } from '@/lib/sentry';
 import {
   parseScreeningAnswers,
@@ -193,7 +196,7 @@ const FUNNEL_INTERVIEW_STAGES = [
 ] as const;
 
 /* ---------------------------------------------------------------------------
- * Pomocnicze parsowanie (klient Supabase jest nietypowany → dane `any`)
+ * Pomocnicze parsowanie (wiersze JSON z bazy → `unknown`)
  * ------------------------------------------------------------------------- */
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -217,7 +220,7 @@ function asRows(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.map(asRecord) : [];
 }
 
-/** Embed PostgREST bywa obiektem (to-one) lub tablicą — normalizujemy do pierwszego rekordu. */
+/** Osadzony rekord (`to_json` podzapytania) bywa obiektem, null albo tablicą — normalizujemy. */
 function asEmbeddedRecord(value: unknown): Record<string, unknown> {
   if (Array.isArray(value)) return asRecord(value[0]);
   return asRecord(value);
@@ -232,8 +235,7 @@ function fullName(first: unknown, last: unknown): string {
  * ------------------------------------------------------------------------- */
 
 interface EmployerContext {
-  supabase: SupabaseClient;
-  userId: string;
+  me: PortalIdentity;
   companyId: string;
   companyStatus: string;
 }
@@ -241,26 +243,26 @@ interface EmployerContext {
 /**
  * Kontekst pracodawcy (sesja + aktywna firma) rozwiązywany RAZ na żądanie.
  * `cache()` (React) memoizuje wynik per-request — wołany przez wszystkie loadery panelu
- * (~5×/żądanie) wykonuje `auth.getUser()` + odczyt `company_members` tylko jeden raz.
+ * (~5×/żądanie) czyta sesję i `company_members` tylko jeden raz. Same dane loadery czytają
+ * we własnych transakcjach pod tą samą sesją (RLS nadal sprawdza członkostwo w bazie).
  */
 const loadContext = cache(async (): Promise<EmployerContext | null> => {
-  const { createServerClient } = await import('@/lib/supabase/server');
-  const supabase = await createServerClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError) throw authError;
-  if (!user) return null;
+  const me = await getPortalIdentity();
+  if (!me) return null;
 
   // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
-  const { getActiveCompany } = await import('@/lib/company-context');
-  const ctx = await getActiveCompany(supabase, user.id);
+  const ctx = await withPortalTransaction(me, (tx) => getActiveCompany(tx, me.id));
   if (!ctx.activeId) return null;
 
-  return { supabase, userId: user.id, companyId: ctx.activeId, companyStatus: ctx.activeStatus };
+  return { me, companyId: ctx.activeId, companyStatus: ctx.activeStatus };
 });
+
+/** Kolumny listy zgłoszeń: imię kandydata i tytuł oferty jako osadzone rekordy (pod RLS). */
+const APPLICATION_LIST_COLUMNS = `a.id, a.status, a.candidate_id, a.guest_name,
+       (SELECT to_json(p) FROM (SELECT pr.first_name, pr.last_name FROM public.profiles pr
+                                 WHERE pr.id = a.candidate_id) p) AS profiles,
+       (SELECT to_json(j) FROM (SELECT jb.title FROM public.jobs jb
+                                 WHERE jb.id = a.job_id) j) AS jobs`;
 
 /**
  * Dane do chrome panelu pracodawcy (FUN-07/FUN-13): lista firm użytkownika + aktywna firma
@@ -285,25 +287,19 @@ export type EmployerShellData =
   | { status: 'error' };
 
 export const getEmployerShellData = cache(async (): Promise<EmployerShellData> => {
-  if (!isSupabaseConfigured()) return { status: 'demo' };
+  if (!isPortalDataConfigured()) return { status: 'demo' };
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) return { status: 'error' };
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'error' };
 
-    const { getActiveCompany } = await import('@/lib/company-context');
-    const ctx = await getActiveCompany(supabase, user.id);
-
-    // Brak imienia/nazwiska (lub chwilowy błąd profilu) → neutralna etykieta w UI, nie błąd panelu.
-    const { data: profileRow } = await supabase
-      .from('profiles')
-      .select('first_name, last_name')
-      .eq('id', user.id)
-      .maybeSingle();
+    const { ctx, profileRow } = await withPortalTransaction(me, async (tx) => {
+      const ctx = await getActiveCompany(tx, me.id);
+      // Brak imienia/nazwiska (lub chwilowy błąd profilu) → neutralna etykieta w UI, nie błąd panelu.
+      const profile = await attempt(tx, () =>
+        queryOne(tx, 'employer.shell-profile',
+          'SELECT first_name, last_name FROM public.profiles WHERE id = $1', [me.id]));
+      return { ctx, profileRow: profile.ok ? profile.value : null };
+    });
     const p = asRecord(profileRow);
     const userName = [asString(p['first_name']), asString(p['last_name'])]
       .map((s) => s.trim())
@@ -325,75 +321,39 @@ export const getEmployerShellData = cache(async (): Promise<EmployerShellData> =
   }
 });
 
-/** Identyfikatory (nie usuniętych) ofert aktywnej firmy — do zapytań o aplikacje/dopasowania. */
-async function companyJobIds(supabase: SupabaseClient, companyId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('jobs')
-    .select('id')
-    .eq('company_id', companyId)
-    .is('deleted_at', null);
-  if (error) throw error;
-  return asRows(data)
-    .map((r) => asString(r['id']))
-    .filter((id) => id.length > 0);
-}
-
-/** Wyciąga licznik z odpowiedzi `{ count, error }` zapytania z opcją `{ count: 'exact', head: true }`. */
-function pickCount(res: { count: number | null; error: unknown }): number {
-  if (res.error) throw res.error;
-  return res.count ?? 0;
-}
-
 /* ---------------------------------------------------------------------------
  * Publiczne API panelu pracodawcy
  * ------------------------------------------------------------------------- */
 
 /** Kafelki statystyk (aktywne oferty, nowe aplikacje, dopasowani, wiadomości do odpowiedzi). */
 export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
-  if (!isSupabaseConfigured()) return { status: 'ok', overview: DEMO_OVERVIEW };
+  if (!isPortalDataConfigured()) return { status: 'ok', overview: DEMO_OVERVIEW };
 
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'ok', overview: EMPTY_OVERVIEW };
-    const { supabase, companyId, userId } = ctx;
+    const { me, companyId } = ctx;
 
-    const jobIds = await companyJobIds(supabase, companyId);
+    // Cztery liczniki w jednej transakcji: błąd któregokolwiek = stan błędu kafelków (#304).
+    const overview = await withPortalTransaction(me, async (tx): Promise<EmployerOverview> => ({
+      activeOffersCount: await queryCount(tx, 'employer.overview-active-jobs',
+        `SELECT 1 FROM public.jobs
+          WHERE company_id = $1 AND status = 'active' AND deleted_at IS NULL
+            -- #72: przeterminowana oferta nie jest aktywna także przed przebiegiem maintenance.
+            AND (expires_at IS NULL OR expires_at > now())`, [companyId]),
+      newApplicationsCount: await queryCount(tx, 'employer.overview-new-applications',
+        `SELECT 1 FROM public.applications
+          WHERE company_id = $1 AND status = 'submitted' AND deleted_at IS NULL`, [companyId]),
+      matchedCandidatesCount: await queryCount(tx, 'employer.overview-matches',
+        `SELECT 1 FROM public.matches m
+          WHERE m.job_id IN (SELECT j.id FROM public.jobs j
+                              WHERE j.company_id = $1 AND j.deleted_at IS NULL)`, [companyId]),
+      messagesToAnswerCount: await queryCount(tx, 'employer.overview-unread-messages',
+        `SELECT 1 FROM public.notifications
+          WHERE profile_id = $1 AND type = 'message_received' AND read_at IS NULL`, [me.id]),
+    }));
 
-    const [activeOffers, newApps, matched, messages] = await Promise.all([
-      supabase
-        .from('jobs')
-        .select('id', { count: 'exact', head: true })
-        .eq('company_id', companyId)
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        // #72: przeterminowana oferta nie jest aktywna także przed przebiegiem maintenance.
-        .or(notExpiredFilter()),
-      supabase
-        .from('applications')
-        .select('id', { count: 'exact', head: true })
-        .eq('company_id', companyId)
-        .eq('status', 'submitted')
-        .is('deleted_at', null),
-      jobIds.length === 0
-        ? Promise.resolve({ count: 0, error: null })
-        : supabase.from('matches').select('id', { count: 'exact', head: true }).in('job_id', jobIds),
-      supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('profile_id', userId)
-        .eq('type', 'message_received')
-        .is('read_at', null),
-    ]);
-
-    return {
-      status: 'ok',
-      overview: {
-        activeOffersCount: pickCount(activeOffers),
-        newApplicationsCount: pickCount(newApps),
-        matchedCandidatesCount: pickCount(matched),
-        messagesToAnswerCount: pickCount(messages),
-      },
-    };
+    return { status: 'ok', overview };
   } catch (error) {
     captureError(error, { area: 'employer.getEmployerOverview' });
     return { status: 'error' };
@@ -413,16 +373,15 @@ export interface CompanyEntitlements {
  * trybie demo / bez kontekstu — UI używa wtedy statycznego fallbacku (P1-09).
  */
 export async function getCompanyEntitlements(): Promise<CompanyEntitlements | null> {
-  if (!isSupabaseConfigured()) return null;
+  if (!isPortalDataConfigured()) return null;
   try {
     const ctx = await loadContext();
     if (!ctx) return null;
-    const { supabase, companyId } = ctx;
-    const { data, error } = await supabase.rpc('get_company_entitlements', {
-      p_company_id: companyId,
-    });
-    if (error) throw error;
-    const row = asRecord(Array.isArray(data) ? data[0] : data);
+    const { me, companyId } = ctx;
+    // RETURNS TABLE (0055) — jeden wiersz planu.
+    const rows = await withPortalTransaction(me, (tx) =>
+      rpcRows(tx, 'get_company_entitlements', { p_company_id: companyId }));
+    const row = asRecord(rows[0]);
     if (!row['plan']) return null;
     return {
       plan: asString(row['plan'], 'free'),
@@ -576,66 +535,57 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
  * (ta sama pułapka co P1-07/P1-08). Błąd odczytu → 'error' (UI pokazuje retry, nie pusty kreator).
  */
 export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
-  if (!isSupabaseConfigured()) return demoPublishedJob(jobId);
+  if (!isPortalDataConfigured()) return demoPublishedJob(jobId);
+  if (!UUID_RE.test(jobId)) return { status: 'not-found' };
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'not-found' };
-    const { supabase, companyId } = ctx;
+    const { me, companyId } = ctx;
 
-    const { data: jobRow, error: jobErr } = await supabase
-      .from('jobs')
-      .select(
-        'id, company_id, status, title, category, occupation, contract_type, working_hours, shifts, ' +
-          'start_immediately, start_date, city, region, address, remote, salary_min, salary_max, ' +
-          'currency, salary_period, min_experience_years, requires_driving_license, ' +
-          'no_language_required, accommodation, transport, contact_email, default_locale, slug, ' +
-          'expires_at, updated_at',
-      )
-      .eq('id', jobId)
-      .eq('company_id', companyId)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (jobErr) return { status: 'error' };
-    const job = asRecord(jobRow);
-    if (!asString(job['id'])) return { status: 'not-found' };
+    // Jedna transakcja: błąd dowolnej relacji przerywa odczyt → 'error'. Kreator startujący
+    // z pustych relacji SKASOWAŁBY je przy zapisie (replace-all).
+    const loaded = await withPortalTransaction(me, async (tx) => {
+      const job = await queryOne(tx, 'employer.job-draft',
+        `SELECT id, company_id, status, title, category, occupation, contract_type, working_hours,
+                shifts, start_immediately, start_date, city, region, address, remote, salary_min,
+                salary_max, currency, salary_period, min_experience_years, requires_driving_license,
+                no_language_required, accommodation, transport, contact_email, default_locale, slug,
+                expires_at, updated_at
+           FROM public.jobs
+          WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`, [jobId, companyId]);
+      if (!job) return null;
+      // #72: aktywna po terminie jest wygasła — najpierw ponowne otwarcie, jak dla `expired`.
+      const jobStatus = effectiveJobStatus(asString(job['status']), asString(job['expires_at']) || null);
+      if (!isEditableJobStatus(jobStatus)) return { job, jobStatus, relations: null };
 
-    // #72: aktywna po terminie jest wygasła — najpierw ponowne otwarcie, jak dla `expired`.
-    const jobStatus = effectiveJobStatus(asString(job['status']), asString(job['expires_at']) || null);
-    if (!isEditableJobStatus(jobStatus)) return { status: 'not-editable', jobStatus };
-
+      const locale = asString(job['default_locale'], 'pl');
+      const relations = {
+        translation: await queryOne(tx, 'employer.job-draft-translation',
+          `SELECT description, responsibilities, conditions, benefits, company_description
+             FROM public.job_translations WHERE job_id = $1 AND locale = $2`, [jobId, locale]),
+        requirements: await queryRows(tx, 'employer.job-draft-requirements',
+          'SELECT kind, content, position FROM public.job_requirements WHERE job_id = $1', [jobId]),
+        skills: await queryRows(tx, 'employer.job-draft-skills',
+          'SELECT skill_label, is_mandatory FROM public.job_skills WHERE job_id = $1', [jobId]),
+        languages: await queryRows(tx, 'employer.job-draft-languages',
+          'SELECT language_label, level FROM public.job_languages WHERE job_id = $1', [jobId]),
+        certificates: await queryRows(tx, 'employer.job-draft-certificates',
+          'SELECT certificate_label FROM public.job_certificates WHERE job_id = $1', [jobId]),
+        // job_screening_questions_select (0093): członek firmy oferty.
+        screening: await queryRows(tx, 'employer.job-draft-screening',
+          `SELECT id, position, type, required, prompt, options
+             FROM public.job_screening_questions WHERE job_id = $1 ORDER BY position`, [jobId]),
+      };
+      return { job, jobStatus, relations };
+    });
+    if (!loaded) return { status: 'not-found' };
+    const { job, jobStatus, relations } = loaded;
+    if (!isEditableJobStatus(jobStatus) || !relations) return { status: 'not-editable', jobStatus };
     const locale = asString(job['default_locale'], 'pl');
-    const [translation, requirements, skills, languages, certificates, screening] = await Promise.all([
-      supabase
-        .from('job_translations')
-        .select('description, responsibilities, conditions, benefits, company_description')
-        .eq('job_id', jobId)
-        .eq('locale', locale)
-        .maybeSingle(),
-      supabase.from('job_requirements').select('kind, content, position').eq('job_id', jobId),
-      supabase.from('job_skills').select('skill_label, is_mandatory').eq('job_id', jobId),
-      supabase.from('job_languages').select('language_label, level').eq('job_id', jobId),
-      supabase.from('job_certificates').select('certificate_label').eq('job_id', jobId),
-      // job_screening_questions_select (0093): członek firmy oferty.
-      supabase
-        .from('job_screening_questions')
-        .select('id, position, type, required, prompt, options')
-        .eq('job_id', jobId)
-        .order('position'),
-    ]);
-    // Każdy błąd relacji → 'error': kreator startujący z pustych relacji SKASOWAŁBY je przy zapisie.
-    if (
-      translation.error ||
-      requirements.error ||
-      skills.error ||
-      languages.error ||
-      certificates.error ||
-      screening.error
-    ) {
-      return { status: 'error' };
-    }
+    const { translation, requirements, skills, languages, certificates, screening } = relations;
 
-    const tr = asRecord(translation.data);
-    const reqRows = Array.isArray(requirements.data) ? requirements.data : [];
+    const tr = asRecord(translation);
+    const reqRows = requirements;
     const byKind = (kind: string): string[] =>
       reqRows
         .map((r) => asRecord(r))
@@ -643,7 +593,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         .sort((a, b) => asNumber(a['position']) - asNumber(b['position']))
         .map((r) => asString(r['content']))
         .filter(Boolean);
-    const skillRows = (Array.isArray(skills.data) ? skills.data : []).map((r) => asRecord(r));
+    const skillRows = skills.map((r) => asRecord(r));
 
     return {
       status: 'ok',
@@ -682,14 +632,14 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
           .filter((r) => r['is_mandatory'] !== true)
           .map((r) => asString(r['skill_label']))
           .filter(Boolean),
-        languages: (Array.isArray(languages.data) ? languages.data : [])
+        languages: languages
           .map((r) => asRecord(r))
           .map((r) => ({
             language: asString(r['language_label']),
             level: asString(r['level'], 'basic'),
           }))
           .filter((l) => l.language !== ''),
-        requiredCertificates: (Array.isArray(certificates.data) ? certificates.data : [])
+        requiredCertificates: certificates
           .map((r) => asString(asRecord(r)['certificate_label']))
           .filter(Boolean),
         requiresDrivingLicense: job['requires_driving_license'] === true,
@@ -700,7 +650,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         transport: job['transport'] === true,
         companyDescription: asString(tr['company_description']),
         contactEmail: asString(job['contact_email']),
-        screeningQuestions: parseScreeningQuestions(screening.data).map((q) => ({
+        screeningQuestions: parseScreeningQuestions(screening).map((q) => ({
           type: q.type,
           required: q.required,
           prompt: q.prompt,
@@ -723,7 +673,7 @@ export type CompanyJobsLoad =
 export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
   const safePage = Number.isSafeInteger(page) && page > 0 && page <= Math.floor(Number.MAX_SAFE_INTEGER / 12) ? page : 1;
   const start = (safePage - 1) * 12;
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     // Izolowany serwer dev testów E2E (błąd odczytu, #185). Ta gałąź nie działa w buildzie produkcyjnym.
     if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error') {
       return { status: 'error' };
@@ -734,36 +684,25 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'ok', jobs: [], hasNext: false };
-    const { supabase, companyId } = ctx;
+    const { me, companyId } = ctx;
 
-    const { data: jobsData, error: jobsError } = await supabase
-      .from('jobs')
-      .select('id, title, city, status, slug, expires_at, created_at')
-      .eq('company_id', companyId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(start, start + 12);
-    if (jobsError) throw jobsError;
+    // 13 wierszy = strona + znacznik kolejnej. Liczniki liczone w bazie (count pod RLS) —
+    // bez przesyłania wierszy aplikacji/dopasowań; błąd licznika = błąd całej listy.
+    const rows = await withPortalTransaction(me, (tx) =>
+      queryRows(tx, 'employer.jobs-page',
+        `SELECT j.id, j.title, j.city, j.status, j.slug, j.expires_at, j.created_at,
+                (SELECT count(*) FROM public.applications a
+                  WHERE a.company_id = $1 AND a.job_id = j.id
+                    AND a.status = 'submitted' AND a.deleted_at IS NULL)::integer AS new_applications,
+                (SELECT count(*) FROM public.matches m WHERE m.job_id = j.id)::integer AS matched
+           FROM public.jobs j
+          WHERE j.company_id = $1 AND j.deleted_at IS NULL
+          ORDER BY j.created_at DESC, j.id DESC
+          LIMIT 13 OFFSET $2`, [companyId, start]));
 
-    const rows = asRows(jobsData);
     const hasNext = rows.length > 12;
     const jobs = rows.slice(0, 12);
-    const jobIds = jobs.map((r) => asString(r['id'])).filter((id) => id.length > 0);
-    if (jobIds.length === 0) return { status: 'ok', jobs: [], hasNext: false };
-
-    // Exact head counts avoid Supabase's row limit and transfer no application/match rows.
-    const counts = await Promise.all(jobIds.map(async (id) => {
-      const [applications, matches] = await Promise.all([
-        supabase.from('applications').select('id', { count: 'exact', head: true })
-          .eq('company_id', companyId).eq('job_id', id).eq('status', 'submitted').is('deleted_at', null),
-        supabase.from('matches').select('id', { count: 'exact', head: true }).eq('job_id', id),
-      ]);
-      if (applications.error) throw applications.error;
-      if (matches.error) throw matches.error;
-      return { id, newApplications: applications.count ?? 0, matched: matches.count ?? 0 };
-    }));
-    const countsByJob = new Map(counts.map((row) => [row.id, row]));
+    if (jobs.length === 0) return { status: 'ok', jobs: [], hasNext: false };
 
     const now = new Date();
     return { status: 'ok', hasNext, jobs: jobs.map((r) => {
@@ -776,8 +715,8 @@ export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
         status: effectiveJobStatus(asString(r['status'], 'draft'), expiresAt, now),
         pastExpiry: isPastExpiry(expiresAt, now),
         slug: asString(r['slug']),
-        newApplications: countsByJob.get(id)?.newApplications ?? 0,
-        matched: countsByJob.get(id)?.matched ?? 0,
+        newApplications: asNumber(r['new_applications']),
+        matched: asNumber(r['matched']),
         createdAt: asString(r['created_at']) || null,
       };
     }) };
@@ -793,23 +732,22 @@ export type RecentApplicationsLoad =
   | { status: 'error' };
 
 export async function getRecentApplications(): Promise<RecentApplicationsLoad> {
-  if (!isSupabaseConfigured()) return { status: 'ok', applications: DEMO_APPLICATIONS };
+  if (!isPortalDataConfigured()) return { status: 'ok', applications: DEMO_APPLICATIONS };
 
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'ok', applications: [] };
-    const { supabase, companyId } = ctx;
+    const { me, companyId } = ctx;
 
     // Kandydat, który aplikował, jest widoczny dla firmy (company_can_view_candidate) — RLS
     // przepuszcza odczyt profiles(imię/nazwisko) oraz jobs(tytuł) powiązanych z aplikacją.
-    const { data, error } = await supabase
-      .from('applications')
-      .select('id, status, candidate_id, guest_name, profiles(first_name, last_name), jobs(title)')
-      .eq('company_id', companyId)
-      .is('deleted_at', null)
-      .order('submitted_at', { ascending: false })
-      .limit(6);
-    if (error) throw error;
+    const data = await withPortalTransaction(me, (tx) =>
+      queryRows(tx, 'employer.recent-applications',
+        `SELECT ${APPLICATION_LIST_COLUMNS}
+           FROM public.applications a
+          WHERE a.company_id = $1 AND a.deleted_at IS NULL
+          ORDER BY a.submitted_at DESC
+          LIMIT 6`, [companyId]));
 
     const applications = asRows(data).map((r) => {
       const job = asEmbeddedRecord(r['jobs']);
@@ -837,24 +775,23 @@ export const EMPLOYER_APPLICATIONS_PAGE_SIZE = 12;
 export async function getEmployerApplicationsPage(page: number): Promise<EmployerApplicationsLoad> {
   if (!Number.isSafeInteger(page) || page < 1 || page > 1000) return { status: 'error' };
 
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return { status: 'ok', applications: page === 1 ? DEMO_APPLICATIONS : [], hasMore: false, isDemo: true };
   }
 
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'ok', applications: [], hasMore: false, isDemo: false };
-    const { supabase, companyId } = ctx;
+    const { me, companyId } = ctx;
     const start = (page - 1) * EMPLOYER_APPLICATIONS_PAGE_SIZE;
-    const { data, error } = await supabase
-      .from('applications')
-      .select('id, status, candidate_id, guest_name, profiles(first_name, last_name), jobs(title)')
-      .eq('company_id', companyId)
-      .is('deleted_at', null)
-      .order('submitted_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(start, start + EMPLOYER_APPLICATIONS_PAGE_SIZE);
-    if (error) throw error;
+    // Strona + jeden wiersz znacznika starszych wyników; stabilna kolejność (submitted_at, id).
+    const data = await withPortalTransaction(me, (tx) =>
+      queryRows(tx, 'employer.applications-page',
+        `SELECT ${APPLICATION_LIST_COLUMNS}
+           FROM public.applications a
+          WHERE a.company_id = $1 AND a.deleted_at IS NULL
+          ORDER BY a.submitted_at DESC, a.id DESC
+          LIMIT $2 OFFSET $3`, [companyId, EMPLOYER_APPLICATIONS_PAGE_SIZE + 1, start]));
 
     const rows = asRows(data);
     return {
@@ -879,65 +816,60 @@ export async function getEmployerApplicationsPage(page: number): Promise<Employe
 
 /** Top dopasowani kandydaci (matches × candidate_profiles). Tylko dla firmy zweryfikowanej. */
 export async function getTopMatchedCandidates(options?: { throwOnError?: boolean }): Promise<EmployerMatchedCandidate[]> {
-  if (!isSupabaseConfigured()) return DEMO_CANDIDATES;
+  if (!isPortalDataConfigured()) return DEMO_CANDIDATES;
 
   try {
     const ctx = await loadContext();
     if (!ctx) return [];
-    const { supabase, companyId, companyStatus } = ctx;
+    const { me, companyId, companyStatus } = ctx;
 
     // Dostęp do bazy dopasowanych kandydatów wymaga zweryfikowanej firmy.
     if (companyStatus !== 'verified') return [];
 
-    // Najlepsze dopasowanie NA KANDYDATA liczone w bazie PRZED limitem (#141, 0079): kandydat
-    // dopasowany do wielu ofert firmy nie wypiera innych. RPC działa pod RLS wywołującego
-    // (recruiter+ firmy, widoczność kandydata) i zwraca już posortowanych zwycięzców.
-    const { data: matchData, error: matchError } = await supabase.rpc('get_company_top_matches', {
-      p_company_id: companyId,
-      p_limit: 5,
+    const loaded = await withPortalTransaction(me, async (tx) => {
+      // Najlepsze dopasowanie NA KANDYDATA liczone w bazie PRZED limitem (#141, 0079): kandydat
+      // dopasowany do wielu ofert firmy nie wypiera innych. RPC działa pod RLS wywołującego
+      // (recruiter+ firmy, widoczność kandydata) i zwraca już posortowanych zwycięzców.
+      const matchData = await rpcRows(tx, 'get_company_top_matches', {
+        p_company_id: companyId,
+        p_limit: 5,
+      });
+
+      const best = new Map<string, { jobId: string; score: number }>();
+      for (const r of asRows(matchData)) {
+        const candidateId = asString(r['candidate_id']);
+        if (!candidateId || best.has(candidateId)) continue;
+        best.set(candidateId, { jobId: asString(r['job_id']), score: asNumber(r['score']) });
+      }
+      const candidateIds = [...best.keys()].slice(0, 5);
+      if (candidateIds.length === 0) return null;
+
+      const targetJobIds = [...new Set(candidateIds.map((id) => best.get(id)?.jobId ?? ''))].filter(
+        (id) => id.length > 0,
+      );
+
+      // candidate_profiles: is_searchable=true jest publicznie czytelne; profiles(imię) tylko
+      // dla powiązanych relacją kandydatów (best-effort — brak imienia → UI podstawia etykietę).
+      // jobs/offers: tytuł oferty docelowej i aktywna propozycja (stan „wysłano" z DB, #327).
+      return {
+        best,
+        candidateIds,
+        cpData: await queryRows(tx, 'employer.top-candidates-profiles',
+          `SELECT profile_id, headline, city, occupations
+             FROM public.candidate_profiles WHERE profile_id = ANY($1::uuid[])`, [candidateIds]),
+        profData: await queryRows(tx, 'employer.top-candidates-names',
+          'SELECT id, first_name, last_name FROM public.profiles WHERE id = ANY($1::uuid[])', [candidateIds]),
+        jobData: await queryRows(tx, 'employer.top-candidates-jobs',
+          'SELECT id, title, slug FROM public.jobs WHERE id = ANY($1::uuid[])', [targetJobIds]),
+        offerData: await queryRows(tx, 'employer.top-candidates-offers',
+          `SELECT candidate_id, job_id, sent_at, created_at
+             FROM public.offers
+            WHERE candidate_id = ANY($1::uuid[]) AND job_id = ANY($2::uuid[])
+              AND status IN ('sent', 'viewed') AND deleted_at IS NULL`, [candidateIds, targetJobIds]),
+      };
     });
-    if (matchError) throw matchError;
-
-    const best = new Map<string, { jobId: string; score: number }>();
-    for (const r of asRows(matchData)) {
-      const candidateId = asString(r['candidate_id']);
-      if (!candidateId || best.has(candidateId)) continue;
-      best.set(candidateId, { jobId: asString(r['job_id']), score: asNumber(r['score']) });
-    }
-    const candidateIds = [...best.keys()].slice(0, 5);
-    if (candidateIds.length === 0) return [];
-
-    const targetJobIds = [...new Set(candidateIds.map((id) => best.get(id)?.jobId ?? ''))].filter(
-      (id) => id.length > 0,
-    );
-
-    // candidate_profiles: is_searchable=true jest publicznie czytelne; profiles(imię) tylko
-    // dla powiązanych relacją kandydatów (best-effort — brak imienia → UI podstawia etykietę).
-    // jobs/offers: tytuł oferty docelowej i aktywna propozycja (stan „wysłano" z DB, #327).
-    const [
-      { data: cpData, error: cpError },
-      { data: profData, error: profError },
-      { data: jobData, error: jobError },
-      { data: offerData, error: offerError },
-    ] = await Promise.all([
-      supabase
-        .from('candidate_profiles')
-        .select('profile_id, headline, city, occupations')
-        .in('profile_id', candidateIds),
-      supabase.from('profiles').select('id, first_name, last_name').in('id', candidateIds),
-      supabase.from('jobs').select('id, title, slug').in('id', targetJobIds),
-      supabase
-        .from('offers')
-        .select('candidate_id, job_id, sent_at, created_at')
-        .in('candidate_id', candidateIds)
-        .in('job_id', targetJobIds)
-        .in('status', ['sent', 'viewed'])
-        .is('deleted_at', null),
-    ]);
-    if (cpError) throw cpError;
-    if (profError) throw profError;
-    if (jobError) throw jobError;
-    if (offerError) throw offerError;
+    if (!loaded) return [];
+    const { best, candidateIds, cpData, profData, jobData, offerData } = loaded;
 
     const jobMap = new Map<string, { title: string; slug: string }>();
     for (const r of asRows(jobData)) {
@@ -1003,26 +935,29 @@ function funnelCount(value: number | string | null | undefined): number {
 
 /** Błąd uprawnień RPC (np. zwykły członek firmy bez roli rekrutera) — to nie awaria odczytu. */
 function isPermissionDenied(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === '42501';
+  return isDatabaseError(error) && error.code === '42501';
 }
 
-type EmployerSupabase = EmployerContext['supabase'];
-
+/**
+ * Wiersze lejka ofert. RPC w sekcji `attempt`: odmowa uprawnień (42501) cofa tylko savepoint,
+ * więc pozostałe liczniki tej samej transakcji zostają ważne.
+ */
 async function readJobFunnelRows(
-  supabase: EmployerSupabase,
+  tx: TransactionQuery,
   companyId: string,
   range: FunnelDateRange,
 ): Promise<JobFunnelRow[] | 'denied'> {
-  const { data, error } = await supabase.rpc('get_company_job_funnel', {
-    p_company_id: companyId,
-    p_from: range.from,
-    p_to: range.to,
-  });
-  if (error) {
-    if (isPermissionDenied(error)) return 'denied';
-    throw error;
+  const result = await attempt(tx, () =>
+    rpcRows<JobFunnelRow>(tx, 'get_company_job_funnel', {
+      p_company_id: companyId,
+      p_from: range.from,
+      p_to: range.to,
+    }));
+  if (!result.ok) {
+    if (isPermissionDenied(result.error)) return 'denied';
+    throw result.error;
   }
-  return (data ?? []) as JobFunnelRow[];
+  return result.value;
 }
 
 /**
@@ -1030,11 +965,11 @@ async function readJobFunnelRows(
  * dni kalendarzowych (Europe/Brussels). `null` = brak uprawnień do lejka (nie zero).
  */
 async function readFunnelViews(
-  supabase: EmployerSupabase,
+  tx: TransactionQuery,
   companyId: string,
   now: Date,
 ): Promise<number | null> {
-  const rows = await readJobFunnelRows(supabase, companyId, funnelDateRange(FUNNEL_PERIOD_DAYS, now));
+  const rows = await readJobFunnelRows(tx, companyId, funnelDateRange(FUNNEL_PERIOD_DAYS, now));
   if (rows === 'denied') return null;
   return rows.reduce((sum, row) => sum + funnelCount(row.detail_views), 0);
 }
@@ -1087,13 +1022,14 @@ export async function getJobFunnel(
   now: Date = new Date(),
 ): Promise<JobFunnelLoad> {
   const range = funnelDateRange(days, now);
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return { status: 'ok', range, totals: sumFunnel(DEMO_JOB_FUNNEL), jobs: DEMO_JOB_FUNNEL };
   }
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'denied', range };
-    const rows = await readJobFunnelRows(ctx.supabase, ctx.companyId, range);
+    const { companyId } = ctx;
+    const rows = await withPortalTransaction(ctx.me, (tx) => readJobFunnelRows(tx, companyId, range));
     if (rows === 'denied') return { status: 'denied', range };
     const jobs: JobFunnelItem[] = rows.map((row) => ({
       jobId: row.job_id,
@@ -1117,57 +1053,43 @@ export async function getJobFunnel(
  * złożonych w oknie (`submitted_at`), a w niej te, które KIEDYKOLWIEK osiągnęły etap rozmowy
  * / zatrudnienia (historia statusów — lejek monotoniczny, bez inwersji).
  *
- * Wszystkie trzy liczby to zapytania `count` (head) liczone w bazie pod RLS: brak limitu
- * 1000 wierszy PostgREST i brak listy tysięcy UUID w URL. Etapy liczone jako aplikacje
- * z `!inner` na historii → każda aplikacja liczona raz (odpowiednik `count(distinct)`).
+ * Wszystkie trzy liczby to zapytania `count` liczone w bazie pod RLS (bez przesyłania wierszy
+ * i list UUID). Etapy liczone jako aplikacje z `EXISTS` na historii → każda aplikacja liczona
+ * raz (odpowiednik `count(distinct)`).
  * Wyświetlenia = suma `detail_views` z serwerowego lejka ofert (#99) w tym samym oknie dni;
  * `null`, gdy użytkownik nie ma uprawnień rekrutera (nie udajemy zera).
  */
 export async function getFunnelStats(now: Date = new Date()): Promise<FunnelStatsLoad> {
-  if (!isSupabaseConfigured()) return { status: 'ok', funnel: DEMO_FUNNEL };
+  if (!isPortalDataConfigured()) return { status: 'ok', funnel: DEMO_FUNNEL };
 
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'ok', funnel: EMPTY_FUNNEL };
-    const { supabase, companyId } = ctx;
+    const { me, companyId } = ctx;
     const since = new Date(now.getTime() - FUNNEL_PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-    const cohort = (select: string) =>
-      supabase
-        .from('applications')
-        .select(select, { count: 'exact', head: true })
-        .eq('company_id', companyId)
-        .is('deleted_at', null)
-        .gte('submitted_at', since);
+    const COHORT = `SELECT 1 FROM public.applications a
+                     WHERE a.company_id = $1 AND a.deleted_at IS NULL AND a.submitted_at >= $2::timestamptz`;
+    const REACHED = `AND EXISTS (SELECT 1 FROM public.application_status_history h
+                                  WHERE h.application_id = a.id
+                                    AND h.to_status = ANY($3::public.application_status[]))`;
 
-    const [
-      { count: appCount, error: appError },
-      { count: interviewCount, error: interviewError },
-      { count: hiredCount, error: hiredError },
-    ] = await Promise.all([
-      cohort('id'),
-      cohort('id, application_status_history!inner(to_status)').in(
-        'application_status_history.to_status',
-        [...FUNNEL_INTERVIEW_STAGES],
-      ),
-      cohort('id, application_status_history!inner(to_status)').eq(
-        'application_status_history.to_status',
-        'hired',
-      ),
-    ]);
-    if (appError) throw appError;
-    if (interviewError) throw interviewError;
-    if (hiredError) throw hiredError;
-
-    const views = await readFunnelViews(supabase, companyId, now);
+    const { appCount, interviewCount, hiredCount, views } = await withPortalTransaction(me, async (tx) => ({
+      appCount: await queryCount(tx, 'employer.funnel-applications', COHORT, [companyId, since]),
+      interviewCount: await queryCount(tx, 'employer.funnel-interviews', `${COHORT} ${REACHED}`,
+        [companyId, since, [...FUNNEL_INTERVIEW_STAGES]]),
+      hiredCount: await queryCount(tx, 'employer.funnel-hired', `${COHORT} ${REACHED}`,
+        [companyId, since, ['hired']]),
+      views: await readFunnelViews(tx, companyId, now),
+    }));
 
     return {
       status: 'ok',
       funnel: {
         views,
-        applications: appCount ?? 0,
-        interviews: interviewCount ?? 0,
-        hired: hiredCount ?? 0,
+        applications: appCount,
+        interviews: interviewCount,
+        hired: hiredCount,
       },
     };
   } catch (error) {
@@ -1259,7 +1181,7 @@ const DEMO_APPLICATION_DETAILS: Record<string, Omit<EmployerApplicationDetail, '
 };
 
 export async function getEmployerApplicationDetail(id: string): Promise<EmployerApplicationDetailLoad> {
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     const base = DEMO_APPLICATIONS.find((application) => application.id === id);
     const extra = DEMO_APPLICATION_DETAILS[id];
     if (!base || !extra) return { status: 'not_found' };
@@ -1271,90 +1193,79 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'not_found' };
-    const { supabase, companyId } = ctx;
+    const { me, companyId } = ctx;
 
-    // RLS (0039): tylko kandydat lub recruiter+ oferty; dodatkowo zawężamy do AKTYWNEJ firmy.
-    const { data, error } = await supabase
-      .from('applications')
-      .select('id, status, candidate_id, guest_name, guest_email, job_id, message, phone, availability, submitted_at, match_score, profiles(first_name, last_name), jobs(title)')
-      .eq('id', id)
-      .eq('company_id', companyId)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return { status: 'not_found' };
+    const loaded = await withPortalTransaction(me, async (tx) => {
+      // RLS (0039): tylko kandydat lub recruiter+ oferty; dodatkowo zawężamy do AKTYWNEJ firmy.
+      const row = await queryOne(tx, 'employer.application-detail',
+        `SELECT a.id, a.status, a.candidate_id, a.guest_name, a.guest_email, a.job_id, a.message,
+                a.phone, a.availability, a.submitted_at, a.match_score,
+                (SELECT to_json(p) FROM (SELECT pr.first_name, pr.last_name FROM public.profiles pr
+                                          WHERE pr.id = a.candidate_id) p) AS profiles,
+                (SELECT to_json(j) FROM (SELECT jb.title FROM public.jobs jb
+                                          WHERE jb.id = a.job_id) j) AS jobs
+           FROM public.applications a
+          WHERE a.id = $1 AND a.company_id = $2 AND a.deleted_at IS NULL`, [id, companyId]);
+      if (!row) return null;
 
-    const row = asRecord(data);
-    const candidateId = asString(row['candidate_id']);
-    const jobId = asString(row['job_id']);
-    const job = asEmbeddedRecord(row['jobs']);
-    const candidate = applicationCandidate(row);
-    // #98: aplikacja bez konta nie ma profilu ani dopasowania — nie pytamy o nie bazy.
-    const none = Promise.resolve({ data: null, error: null });
+      const candidateId = asString(row['candidate_id']);
+      const jobId = asString(row['job_id']);
+      const candidate = applicationCandidate(row);
+      // #98: aplikacja bez konta nie ma profilu ani dopasowania — nie pytamy o nie bazy.
+      const withAccount = !candidate.isGuest && candidateId.length > 0;
 
-    const [
-      { data: historyData, error: historyError },
-      { data: cpData, error: cpError },
-      { data: matchData, error: matchError },
-      { data: answerData, error: answerError },
-    ] = await Promise.all([
-      supabase
-        .from('application_status_history')
-        .select('to_status, created_at')
-        .eq('application_id', id)
-        .order('created_at', { ascending: true })
-        .limit(50),
+      const historyData = await queryRows(tx, 'employer.application-detail-history',
+        `SELECT to_status, created_at FROM public.application_status_history
+          WHERE application_id = $1 ORDER BY created_at ASC LIMIT 50`, [id]);
       // candidate_profiles_select_company (0009 + company_can_view_candidate recruiter+, 0033).
-      candidate.isGuest
-        ? none
-        : supabase
-            .from('candidate_profiles')
-            .select('id, headline, city, experience_years, has_driving_license')
-            .eq('profile_id', candidateId)
-            .is('deleted_at', null)
-            .maybeSingle(),
-      candidate.isGuest
-        ? none
-        : supabase.from('matches').select('score').eq('candidate_id', candidateId).eq('job_id', jobId).maybeSingle(),
+      const cpData = withAccount
+        ? await queryOne(tx, 'employer.application-detail-profile',
+            `SELECT id, headline, city, experience_years, has_driving_license
+               FROM public.candidate_profiles WHERE profile_id = $1 AND deleted_at IS NULL`, [candidateId])
+        : null;
+      const matchData = withAccount
+        ? await queryOne(tx, 'employer.application-detail-match',
+            'SELECT score FROM public.matches WHERE candidate_id = $1 AND job_id = $2', [candidateId, jobId])
+        : null;
       // application_screening_answers_select (0093): kandydat albo recruiter+ firmy oferty.
-      supabase
-        .from('application_screening_answers')
-        .select('position, type, required, prompt, options, answer_boolean, answer_date, answer_text')
-        .eq('application_id', id)
-        .order('position'),
-    ]);
-    if (historyError) throw historyError;
-    if (answerError) throw answerError;
-    if (cpError) throw cpError;
-    if (matchError) throw matchError;
+      const answerData = await queryRows(tx, 'employer.application-detail-answers',
+        `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
+           FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id]);
+
+      let relations: { skills: Record<string, unknown>[]; languages: Record<string, unknown>[]; certificates: Record<string, unknown>[] } | null = null;
+      if (cpData) {
+        const cpId = asString(cpData['id']);
+        relations = {
+          skills: await queryRows(tx, 'employer.application-detail-skills',
+            'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1 ORDER BY skill_label', [cpId]),
+          languages: await queryRows(tx, 'employer.application-detail-languages',
+            `SELECT language_label, level FROM public.candidate_languages
+              WHERE candidate_profile_id = $1 ORDER BY language_label`, [cpId]),
+          certificates: await queryRows(tx, 'employer.application-detail-certificates',
+            `SELECT certificate_label FROM public.candidate_certificates
+              WHERE candidate_profile_id = $1 ORDER BY certificate_label`, [cpId]),
+        };
+      }
+      return { row, candidateId, jobId, candidate, historyData, cpData, matchData, answerData, relations };
+    });
+    if (!loaded) return { status: 'not_found' };
+    const { row, candidateId, jobId, candidate, historyData, cpData, matchData, answerData, relations } = loaded;
+    const job = asEmbeddedRecord(row['jobs']);
 
     let profile: EmployerApplicationDetail['profile'] = null;
-    if (cpData) {
+    if (cpData && relations) {
       const cp = asRecord(cpData);
-      const cpId = asString(cp['id']);
-      const [
-        { data: skillData, error: skillError },
-        { data: langData, error: langError },
-        { data: certData, error: certError },
-      ] = await Promise.all([
-        supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', cpId).order('skill_label'),
-        supabase.from('candidate_languages').select('language_label, level').eq('candidate_profile_id', cpId).order('language_label'),
-        supabase.from('candidate_certificates').select('certificate_label').eq('candidate_profile_id', cpId).order('certificate_label'),
-      ]);
-      if (skillError) throw skillError;
-      if (langError) throw langError;
-      if (certError) throw certError;
       const years = cp['experience_years'];
       profile = {
         headline: asString(cp['headline']),
         city: asString(cp['city']),
         experienceYears: typeof years === 'number' ? years : null,
         hasDrivingLicense: cp['has_driving_license'] === true,
-        skills: asRows(skillData).map((r) => asString(r['skill_label'])).filter(Boolean),
-        languages: asRows(langData)
+        skills: relations.skills.map((r) => asString(r['skill_label'])).filter(Boolean),
+        languages: relations.languages
           .map((r) => ({ label: asString(r['language_label']), level: asString(r['level']) }))
           .filter((l) => l.label),
-        certificates: asRows(certData).map((r) => asString(r['certificate_label'])).filter(Boolean),
+        certificates: relations.certificates.map((r) => asString(r['certificate_label'])).filter(Boolean),
       };
     }
 

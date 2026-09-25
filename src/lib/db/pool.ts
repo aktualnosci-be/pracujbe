@@ -1,11 +1,13 @@
 import 'server-only';
 import { Pool, type PoolConfig } from 'pg';
 
-export type DatabasePurpose = 'domain' | 'auth' | 'ops' | 'rate_limit' | 'auth_mail';
+export type DatabasePurpose = 'domain' | 'auth' | 'ops' | 'rate_limit' | 'auth_mail' | 'service';
 /**
  * 'ops' (#47, 0096): login monitoringu — wyłącznie EXECUTE na public.ops_metrics().
  * 'rate_limit' (0058): login limitera — wyłącznie EXECUTE na public.rate_limit_hit().
  * 'auth_mail' (0061): worker wiadomości auth — wyłącznie funkcje claim/complete/fail/expire.
+ * 'service' (#25): login zadań uprzywilejowanych (worker poczty, webhooki, cron, odczyty
+ * panelu admina) — jedyne członkostwo service_role; nigdy w zwykłych loaderach.
  */
 const roles = {
   domain: 'pracujbe_app',
@@ -13,6 +15,7 @@ const roles = {
   ops: 'pracujbe_ops',
   rate_limit: 'pracujbe_rate_limit',
   auth_mail: 'pracujbe_auth_mail',
+  service: 'service_role',
 } as const;
 const authSchemaPurposes: ReadonlySet<DatabasePurpose> = new Set(['auth', 'auth_mail']);
 
@@ -37,7 +40,7 @@ export function runtimePoolConfig(connectionString: string, purpose: DatabasePur
   return {
     connectionString,
     // Monitoring i worker poczty nie mogą zająć połączeń aplikacji: mniej sesji na proces.
-    max: purpose === 'ops' ? 1 : purpose === 'auth_mail' || purpose === 'rate_limit' ? 2 : 5,
+    max: purpose === 'ops' ? 1 : purpose === 'auth_mail' || purpose === 'rate_limit' ? 2 : purpose === 'service' ? 3 : 5,
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
     options: `-c role=${roles[purpose]} -c search_path=${authSchemaPurposes.has(purpose) ? 'auth' : 'public'} -c statement_timeout=30000 -c idle_in_transaction_session_timeout=30000`,

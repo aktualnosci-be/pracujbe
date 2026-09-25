@@ -11,19 +11,17 @@ import {
   setTeamMemberRole,
 } from '@/lib/actions/team';
 import { createAdditionalCompany } from '@/lib/actions/company';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
 import { getActiveCompany } from '@/lib/company-context';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { cookies } from 'next/headers';
 import { mapTeamError, teamErrorKey } from '@/lib/team/errors';
 import { toUserMessageKey } from '@/lib/errors';
 import { assignableRoles, canManageRole, canManageTeam, canRecruit } from '@/lib/team/permissions';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/headers', () => ({ cookies: vi.fn() }));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/company-context', () => ({
   ACTIVE_COMPANY_COOKIE: 'pb_active_company',
   getActiveCompany: vi.fn(),
@@ -35,21 +33,40 @@ const MEMBER = '5b3f0a4e-2f4d-4c1e-9a36-1f7b2c9d8e01';
 const INVITE = '6c4f1b5e-3a5d-4d2f-8b47-2a8c3d0e9f12';
 const COMPANY = '7d5a2c6f-4b6e-4e3a-9c58-3b9d4e1f0a23';
 
+const USER = '8e6b3d7a-5c7f-4f4b-8d69-4c0e5f2a1b34';
 const cookieSet = vi.fn();
 
-function client(rpcResult: { data: unknown; error: unknown }, user: unknown = { id: 'user-1' }) {
-  const supabase = {
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
-    rpc: vi.fn().mockResolvedValue(rpcResult),
-    from: vi.fn(),
+/**
+ * Atrapa bazy: każde RPC zespołu zwraca `data` albo rzuca błąd bazy z `error.message`.
+ * `rpc` = lista wywołań RPC w kolejności [nazwa, argumenty] (tożsamość sprawdza `as`).
+ */
+function client(rpcResult: { data: unknown; error: { message: string } | null }, user: { id: string } | null = { id: USER }) {
+  resetFakeDb(user ? { id: user.id, role: 'employer' } : null);
+  const handler = () => {
+    if (rpcResult.error) throw pgError('P0001', rpcResult.error.message);
+    return rpcResult.data;
   };
-  vi.mocked(createServerClient).mockResolvedValue(supabase as never);
-  return supabase;
+  for (const fn of [
+    'invite_company_member',
+    'revoke_company_invitation',
+    'set_company_member_role',
+    'set_company_member_active',
+    'respond_to_company_invitation',
+    'create_additional_company',
+  ]) {
+    fakeDb.rpc(fn, handler);
+  }
+  const fake = fakeDb;
+  return {
+    get calls() {
+      return fake.calls.filter((c) => c.kind === 'rpc' || c.kind === 'rpcrows');
+    },
+  };
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  resetFakeDb({ id: USER, role: 'employer' });
   vi.mocked(checkRateLimit).mockResolvedValue(true);
   vi.mocked(cookies).mockResolvedValue({ set: cookieSet } as never);
   vi.mocked(getActiveCompany).mockResolvedValue({ activeId: COMPANY, activeRole: 'owner' } as never);
@@ -57,17 +74,20 @@ beforeEach(() => {
 
 describe('inviteTeamMember (#403)', () => {
   it('zaprasza do AKTYWNEJ firmy znormalizowany adres z rolą', async () => {
-    const supabase = client({ data: [{ invitation_id: INVITE, created: true }], error: null });
+    const db = client({ data: [{ invitation_id: INVITE, created: true }], error: null });
     expect(await inviteTeamMember({ email: '  rita@firma.be ', role: 'recruiter' })).toEqual({ ok: true });
-    expect(supabase.rpc).toHaveBeenCalledExactlyOnceWith('invite_company_member', {
-      p_company_id: COMPANY,
-      p_email: 'rita@firma.be',
-      p_role: 'recruiter',
+    expect(db.calls).toHaveLength(1);
+    expect(db.calls[0]).toMatchObject({
+      name: 'invite_company_member',
+      as: USER,
+      args: { p_company_id: COMPANY, p_email: 'rita@firma.be', p_role: 'recruiter' },
     });
+    // Aktywna firma czytana w tej samej transakcji (kontekst dostaje tx i UUID z sesji).
+    expect(vi.mocked(getActiveCompany).mock.calls[0]?.[1]).toBe(USER);
   });
 
   it('KONTROLA UJEMNA: rola owner i zły e-mail nie docierają do bazy', async () => {
-    const supabase = client({ data: null, error: null });
+    const db = client({ data: null, error: null });
     expect(await inviteTeamMember({ email: 'rita@firma.be', role: 'owner' as never })).toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
@@ -76,7 +96,7 @@ describe('inviteTeamMember (#403)', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(supabase.rpc).not.toHaveBeenCalled();
+    expect(db.calls).toHaveLength(0);
   });
 
   it('mapuje błędy bazy na stabilne kody (bez technikaliów)', async () => {
@@ -98,40 +118,41 @@ describe('inviteTeamMember (#403)', () => {
       ok: false,
       error: 'PERMISSION_DENIED',
     });
-    expect(anon.rpc).not.toHaveBeenCalled();
+    expect(anon.calls).toHaveLength(0);
     vi.mocked(getActiveCompany).mockResolvedValue({ activeId: null, activeRole: 'member' } as never);
     const noCompany = client({ data: null, error: null });
     expect(await inviteTeamMember({ email: 'a@b.be', role: 'member' })).toEqual({ ok: false, error: 'NOT_FOUND' });
-    expect(noCompany.rpc).not.toHaveBeenCalled();
+    expect(noCompany.calls).toHaveLength(0);
   });
 
   it('limit per IP i tryb demo', async () => {
     vi.mocked(checkRateLimit).mockResolvedValue(false);
     expect(await inviteTeamMember({ email: 'a@b.be', role: 'member' })).toEqual({ ok: false, error: 'RATE_LIMITED' });
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(await inviteTeamMember({ email: 'a@b.be', role: 'member' })).toEqual({ ok: true, demo: true });
   });
 });
 
 describe('zarządzanie członkami (#403)', () => {
   it('zmiana roli i dezaktywacja idą przez RPC z id członka', async () => {
-    const supabase = client({ data: null, error: null });
+    const db = client({ data: null, error: null });
     expect(await setTeamMemberRole(MEMBER, 'recruiter')).toEqual({ ok: true });
     expect(await setTeamMemberActive(MEMBER, false)).toEqual({ ok: true });
     expect(await revokeTeamInvitation(INVITE)).toEqual({ ok: true });
-    expect(supabase.rpc.mock.calls).toEqual([
+    expect(db.calls.map((c) => [c.name, c.args])).toEqual([
       ['set_company_member_role', { p_member_id: MEMBER, p_role: 'recruiter' }],
       ['set_company_member_active', { p_member_id: MEMBER, p_active: false }],
       ['revoke_company_invitation', { p_invitation_id: INVITE }],
     ]);
+    expect(db.calls.every((c) => c.as === USER)).toBe(true);
   });
 
   it('KONTROLA UJEMNA: nie-UUID i nieznana rola odrzucone przed bazą', async () => {
-    const supabase = client({ data: null, error: null });
+    const db = client({ data: null, error: null });
     expect(await setTeamMemberRole('1 or 1=1', 'member')).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
     expect(await setTeamMemberRole(MEMBER, 'superadmin')).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
     expect(await setTeamMemberActive(MEMBER, 'no' as never)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(supabase.rpc).not.toHaveBeenCalled();
+    expect(db.calls).toHaveLength(0);
   });
 
   it('ostatni owner → LAST_OWNER', async () => {
@@ -145,11 +166,11 @@ describe('zarządzanie członkami (#403)', () => {
 
 describe('respondToTeamInvitation (#403)', () => {
   it('przyjęcie ustawia nową firmę jako aktywną', async () => {
-    const supabase = client({ data: COMPANY, error: null });
+    const db = client({ data: COMPANY, error: null });
     expect(await respondToTeamInvitation(INVITE, true)).toEqual({ ok: true });
-    expect(supabase.rpc).toHaveBeenCalledWith('respond_to_company_invitation', {
-      p_invitation_id: INVITE,
-      p_accept: true,
+    expect(db.calls[0]).toMatchObject({
+      name: 'respond_to_company_invitation',
+      args: { p_invitation_id: INVITE, p_accept: true },
     });
     expect(cookieSet).toHaveBeenCalledWith('pb_active_company', COMPANY, expect.objectContaining({ httpOnly: true }));
   });
@@ -165,12 +186,14 @@ describe('respondToTeamInvitation (#403)', () => {
 
 describe('createAdditionalCompany (#403)', () => {
   it('zakłada kolejną firmę i przełącza na nią panel', async () => {
-    const supabase = client({ data: [{ company_id: COMPANY, created: true }], error: null });
+    const db = client({ data: [{ company_id: COMPANY, created: true }], error: null });
     expect(await createAdditionalCompany({ name: 'Druga Firma', vatNumber: '' })).toEqual({ ok: true, id: COMPANY });
-    expect(supabase.rpc).toHaveBeenCalledWith(
-      'create_additional_company',
-      expect.objectContaining({ p_name: 'Druga Firma', p_vat_number: null }),
-    );
+    // Pusty VAT → jawne null w argumencie (nie pominięty, więc nie domyślna wartość funkcji).
+    expect(db.calls[0]).toMatchObject({
+      name: 'create_additional_company',
+      kind: 'rpcrows',
+      args: { p_name: 'Druga Firma', p_vat_number: null },
+    });
     expect(cookieSet).toHaveBeenCalledWith('pb_active_company', COMPANY, expect.anything());
   });
 

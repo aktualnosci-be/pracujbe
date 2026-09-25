@@ -8887,4 +8887,21 @@ select pg_temp.expect_error(format('select public.record_candidate_age_attestati
   'permission denied', 'AGE16c klient nie zapisuje receiptu rejestracji');
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- SV25. Worker poczty na puli service (#25, 0107): claim_email_batch wykonywalne przez
+--       service_role, nadal NIE przez authenticated/anon (kontrola ujemna na obu rolach).
+-- ============================================================================
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  has_function_privilege('service_role', 'public.claim_email_batch(integer, integer)', 'EXECUTE'),
+  'SV25-1 service_role wykonuje claim_email_batch');
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.claim_email_batch(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.claim_email_batch(integer, integer)', 'EXECUTE'),
+  'SV25-2 authenticated/anon bez EXECUTE na claim_email_batch');
+set role service_role;
+select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)),
+  'SV25-3 claim jako service_role (bez błędu uprawnień)');
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

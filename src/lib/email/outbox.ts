@@ -2,7 +2,8 @@ import 'server-only';
 
 import { Resend } from 'resend';
 
-import { createAdminClient } from '@/lib/supabase/admin';
+import { withServiceRole } from '@/lib/db/portal';
+import { execute, queryRows, rpcRows } from '@/lib/db/sql';
 import { renderEmail } from '@/emails/templates';
 import { renderNewsletterEmail } from '@/emails/newsletter';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
@@ -53,6 +54,11 @@ import { isProductionMode } from '@/lib/env';
  * wypisaniem — brak którejkolwiek części = błąd wiersza (ponowienie, alarm), nie wysyłka.
  * Tracking otwarć/kliknięć jest wyłączony: nie dodajemy pikseli ani przekierowań, a
  * odebraną wiadomość sprawdza `scripts/check-received-eml.mjs` (docs/RESEND_SETUP.md).
+ *
+ * #25: baza przez pulę `service` (`withServiceRole`), każda operacja jako OSOBNA, krótka
+ * transakcja: claim paczki jest zatwierdzony przed pierwszą wysyłką (dzierżawa widoczna dla
+ * innych workerów), a budżet, zapis wyniku i odłożenie wiersza — każde osobno. Żadna
+ * transakcja nie jest otwarta podczas wywołania HTTP dostawcy.
  */
 
 const MAX_ATTEMPTS = 5;
@@ -169,18 +175,19 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     };
   }
 
-  const admin = createAdminClient();
-
   // Atomowy claim (RPC 0021: FOR UPDATE SKIP LOCKED + dzierżawa locked_at) — dwa równoległe
-  // workery NIE pobiorą tego samego wiersza, więc brak podwójnej wysyłki (P2#6).
-  const { data: rows, error } = await admin.rpc('claim_email_batch', { p_limit: limit });
-
-  if (error) {
+  // workery NIE pobiorą tego samego wiersza, więc brak podwójnej wysyłki (P2#6). Własna
+  // transakcja: dzierżawa jest zatwierdzona, zanim zaczniemy wysyłać.
+  let queue: DeliveryRow[];
+  try {
+    queue = await withServiceRole((tx) =>
+      rpcRows<DeliveryRow>(tx, 'claim_email_batch', { p_limit: limit }),
+    );
+  } catch (error) {
     captureError(error, { area: 'email.outbox.claim' });
     return { processed: 0, sent: 0, failed: 0, skipped: 'claim error', ok: false };
   }
 
-  const queue = (rows ?? []) as DeliveryRow[];
   const resend = new Resend(apiKey);
   const unsubscribeSecret = unsubscribeSecretFromEnv();
   let sent = 0;
@@ -191,11 +198,18 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
 
   /** Zwalnia dzierżawę i odkłada wiersz; `attempts` bez zmian — outbox pozostaje ponawialny. */
   async function defer(rowId: string, nextAttemptAt: string): Promise<void> {
-    const { error: deferErr } = await admin
-      .from('email_deliveries')
-      .update({ locked_at: null, next_attempt_at: nextAttemptAt })
-      .eq('id', rowId);
-    if (deferErr) captureError(deferErr, { area: 'email.outbox.defer', deliveryId: rowId });
+    try {
+      await withServiceRole((tx) =>
+        execute(
+          tx,
+          'email.outbox.defer',
+          'UPDATE public.email_deliveries SET locked_at = NULL, next_attempt_at = $2 WHERE id = $1',
+          [rowId, nextAttemptAt],
+        ),
+      );
+    } catch (deferErr) {
+      captureError(deferErr, { area: 'email.outbox.defer', deliveryId: rowId });
+    }
     deferred += 1;
   }
 
@@ -204,16 +218,20 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   const firstNames = new Map<string, string>();
   const profileIds = [...new Set(queue.map((r) => r.profile_id).filter((v): v is string => !!v))];
   if (profileIds.length > 0) {
-    const { data: profiles, error: profilesErr } = await admin
-      .from('profiles')
-      .select('id, first_name')
-      .in('id', profileIds);
-    if (profilesErr) {
-      captureError(profilesErr, { area: 'email.outbox.recipientNames' });
-    } else {
-      for (const p of (profiles ?? []) as Array<{ id: string; first_name: string | null }>) {
+    try {
+      const profiles = await withServiceRole((tx) =>
+        queryRows<{ id: string; first_name: string | null }>(
+          tx,
+          'email.outbox.recipient-names',
+          'SELECT id, first_name FROM public.profiles WHERE id = ANY($1::uuid[])',
+          [profileIds],
+        ),
+      );
+      for (const p of profiles) {
         if (p.first_name) firstNames.set(p.id, p.first_name);
       }
+    } catch (profilesErr) {
+      captureError(profilesErr, { area: 'email.outbox.recipientNames' });
     }
   }
 
@@ -248,14 +266,11 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       );
 
       // #45: atomowy budżet puli tuż przed wysyłką (równoległe workery nie przekroczą limitu).
-      const { data: budget, error: budgetErr } = await admin.rpc('take_email_send_budget', {
-        p_template: row.template,
-      });
-      if (budgetErr) throw budgetErr;
-      const grant = (Array.isArray(budget) ? budget[0] : budget) as
-        | { granted?: boolean; retry_at?: string | null }
-        | null
-        | undefined;
+      const [grant] = await withServiceRole((tx) =>
+        rpcRows<{ granted?: boolean; retry_at?: string | null }>(tx, 'take_email_send_budget', {
+          p_template: row.template,
+        }),
+      );
       if (grant?.granted !== true) {
         const retryAt = grant?.retry_at ?? new Date(Date.now() + 60_000).toISOString();
         exhausted.set(pool, retryAt);
@@ -282,22 +297,24 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       }
 
       const providerMessageId = result.data?.id ?? null;
-      const { error: markErr } = await admin
-        .from('email_deliveries')
-        .update({
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          provider: 'resend',
-          provider_message_id: providerMessageId,
-          attempts: row.attempts + 1,
-          locked_at: null,
-        })
-        .eq('id', row.id);
+      // Zapis wyniku PO wysyłce — osobna transakcja (bez otwartej transakcji w trakcie HTTP).
       // SEC-15: e-mail WYSŁANY, ale zapis „sent" się nie powiódł — stan niejednoznaczny.
       // Bez tego rekord wróciłby do 'queued' (po wygaśnięciu dzierżawy) i został wysłany PONOWNIE
       // (duplikat). Nie da się tu bezpiecznie ponowić; logujemy z provider_message_id do
       // ręcznej reconciliacji (i liczymy jako wysłany, by nie zawyżać 'failed').
-      if (markErr) {
+      try {
+        await withServiceRole((tx) =>
+          execute(
+            tx,
+            'email.outbox.mark-sent',
+            `UPDATE public.email_deliveries
+                SET status = 'sent', sent_at = now(), provider = 'resend',
+                    provider_message_id = $2, attempts = $3, locked_at = NULL
+              WHERE id = $1`,
+            [row.id, providerMessageId, row.attempts + 1],
+          ),
+        );
+      } catch (markErr) {
         captureError(markErr, {
           area: 'email.outbox.markSent',
           deliveryId: row.id,
@@ -309,18 +326,27 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       const attempts = row.attempts + 1;
       const isFinal = attempts >= MAX_ATTEMPTS;
       const backoffMin = Math.min(2 ** attempts, 60);
-      const { error: failErr } = await admin
-        .from('email_deliveries')
-        .update({
-          status: isFinal ? 'failed' : 'queued',
-          attempts,
-          error_message: err instanceof Error ? err.message.slice(0, 500) : 'unknown',
-          next_attempt_at: new Date(Date.now() + backoffMin * 60_000).toISOString(),
-          locked_at: null,
-        })
-        .eq('id', row.id);
       // SEC-15: sprawdzamy też błąd zapisu stanu porażki (inaczej rekord utknąłby zablokowany).
-      if (failErr) captureError(failErr, { area: 'email.outbox.markFailed', deliveryId: row.id });
+      try {
+        await withServiceRole((tx) =>
+          execute(
+            tx,
+            'email.outbox.mark-failed',
+            `UPDATE public.email_deliveries
+                SET status = $2, attempts = $3, error_message = $4, next_attempt_at = $5, locked_at = NULL
+              WHERE id = $1`,
+            [
+              row.id,
+              isFinal ? 'failed' : 'queued',
+              attempts,
+              err instanceof Error ? err.message.slice(0, 500) : 'unknown',
+              new Date(Date.now() + backoffMin * 60_000).toISOString(),
+            ],
+          ),
+        );
+      } catch (failErr) {
+        captureError(failErr, { area: 'email.outbox.markFailed', deliveryId: row.id });
+      }
       captureError(err, { area: 'email.outbox.send', deliveryId: row.id });
       failed += 1;
     }

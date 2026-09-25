@@ -3,7 +3,9 @@
 import { z } from 'zod/v3';
 
 import { minAgeSchema } from '@/lib/age-policy';
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
 
@@ -22,24 +24,24 @@ export async function attestCandidateAgeAction(input: unknown): Promise<AttestAg
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
 
-  if (!isSupabaseConfigured()) return { ok: true, meetsPolicy: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, meetsPolicy: true, demo: true };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('attest_candidate_age', { p_min_age: parsed.data.minAge });
-    if (error) {
-      const message = error.message ?? '';
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    const data = await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'attest_candidate_age', { p_min_age: parsed.data.minAge }),
+    );
+    return { ok: true, meetsPolicy: data === true };
+  } catch (error) {
+    if (isDatabaseError(error)) {
+      const message = databaseErrorMessage(error);
       if (message.includes('AGE_ATTESTATION_REQUIRED')) return { ok: false, error: 'AGE_ATTESTATION_REQUIRED' };
       if (message.includes('PERMISSION_DENIED') || message.includes('UNAUTHENTICATED')) {
         return { ok: false, error: 'PERMISSION_DENIED' };
       }
       if (message.includes('VALIDATION_FAILED')) return { ok: false, error: 'VALIDATION_FAILED' };
-      captureError(error, { area: 'age-attestation.attest' });
-      return { ok: false, error: 'INTERNAL' };
     }
-    return { ok: true, meetsPolicy: data === true };
-  } catch (error) {
     captureError(error, { area: 'age-attestation.attest' });
     return { ok: false, error: 'INTERNAL' };
   }

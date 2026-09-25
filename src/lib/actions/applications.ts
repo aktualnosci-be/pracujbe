@@ -2,10 +2,12 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { captureError } from '@/lib/sentry';
 import {
   applicationPhoneSchema,
   applicationSchema,
@@ -16,7 +18,8 @@ import {
 /**
  * Server Actions procesu aplikowania — cienka warstwa nad bezpiecznymi RPC (0012).
  * Cała logika domenowa (idempotencja, powiązania, historia, kolejka e-mail) jest w DB;
- * tu: walidacja Zod + wywołanie RPC + mapowanie błędu na kod użytkowy (bez technikaliów).
+ * tu: walidacja Zod + wywołanie RPC w transakcji sesji (`withPortalTransaction`, #25) +
+ * mapowanie błędu bazy na kod użytkowy (bez technikaliów, Invariant #8).
  */
 
 /**
@@ -88,33 +91,38 @@ export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> 
   if (sensitive) return { ok: false, error: 'VALIDATION_FAILED', reason: 'sensitiveId', ...sensitive };
 
   // Tryb demo (bez bazy): oferty mają syntetyczne identyfikatory i nic nie zapisujemy.
-  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
   const parsed = applicationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
 
-  const supabase = await createServerClient();
-  const { data, error } = await supabase.rpc('apply_to_job', {
-    p_job_id: v.jobId,
-    p_idempotency_key: v.idempotencyKey ?? randomUUID(),
-    p_phone: v.phone ? v.phone : null,
-    p_availability: v.availability ?? null,
-    p_message: v.message ?? null,
-    // #101: odpowiedzi zapisywane w tej samej transakcji co aplikacja (walidacja w bazie).
-    p_answers: v.answers && Object.keys(v.answers).length > 0 ? v.answers : null,
-  });
-
-  if (error) {
-    // RPC rzuca 'UNAUTHENTICATED' tylko przy braku sesji; konto innej roli dostaje PERMISSION_DENIED.
-    if ((error.message ?? '').startsWith('UNAUTHENTICATED')) {
-      return { ok: false, error: 'UNAUTHENTICATED' };
+  try {
+    // Brak sesji = UNAUTHENTICATED (link logowania); konto innej roli dostaje PERMISSION_DENIED z RPC.
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'UNAUTHENTICATED' };
+    const data = await withPortalTransaction(me, (tx) => rpc(tx, 'apply_to_job', {
+      p_job_id: v.jobId,
+      p_idempotency_key: v.idempotencyKey ?? randomUUID(),
+      p_phone: v.phone ? v.phone : null,
+      p_availability: v.availability ?? null,
+      p_message: v.message ?? null,
+      // #101: odpowiedzi zapisywane w tej samej transakcji co aplikacja (walidacja w bazie).
+      p_answers: v.answers && Object.keys(v.answers).length > 0 ? jsonArg(v.answers) : null,
+    }));
+    return { ok: true, id: String(data) };
+  } catch (error) {
+    if (!isDatabaseError(error)) {
+      captureError(error, { area: 'applications.applyToJob' });
+      return { ok: false, error: 'INTERNAL' };
     }
-    const code = mapPgError(error.message);
-    const questionId = SCREENING_REQUIRED_RE.exec(error.message ?? '')?.[1];
+    const message = databaseErrorMessage(error);
+    // RPC rzuca 'UNAUTHENTICATED' tylko przy braku sesji; konto innej roli dostaje PERMISSION_DENIED.
+    if (message.startsWith('UNAUTHENTICATED')) return { ok: false, error: 'UNAUTHENTICATED' };
+    const code = mapPgError(message);
+    const questionId = SCREENING_REQUIRED_RE.exec(message)?.[1];
     return questionId ? { ok: false, error: code, questionId } : { ok: false, error: code };
   }
-  return { ok: true, id: String(data) };
 }
 
 /** Pracodawca zmienia status aplikacji (allow-lista przejść egzekwowana w RPC). */
@@ -122,11 +130,17 @@ export async function transitionApplication(
   applicationId: string,
   target: string,
 ): Promise<TransitionResult> {
-  const supabase = await createServerClient();
-  const { error } = await supabase.rpc('transition_application', {
-    p_application_id: applicationId,
-    p_target: target,
-  });
-  if (error) return { ok: false, error: mapPgError(error.message) };
-  return { ok: true };
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    await withPortalTransaction(me, (tx) => rpc(tx, 'transition_application', {
+      p_application_id: applicationId,
+      p_target: target,
+    }));
+    return { ok: true };
+  } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    captureError(error, { area: 'applications.transitionApplication' });
+    return { ok: false, error: 'INTERNAL' };
+  }
 }

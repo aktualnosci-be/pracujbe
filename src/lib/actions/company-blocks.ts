@@ -2,7 +2,9 @@
 
 import { z } from 'zod/v3';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
 import { getJobCompanyBlock, type JobCompanyBlockLoad } from '@/lib/data/company-blocks';
@@ -10,7 +12,8 @@ import { getJobCompanyBlock, type JobCompanyBlockLoad } from '@/lib/data/company
 /**
  * Server Actions blokady firm przez kandydata (#97).
  *
- * Zapis wyłącznie przez RPC `set_company_block` (SECURITY DEFINER, 0078): rola kandydata,
+ * Zapis wyłącznie przez RPC `set_company_block` (SECURITY DEFINER, 0078; pod sesją przez
+ * `withPortalTransaction`, #25): rola kandydata,
  * idempotentnie, tylko własne blokady. Wejście walidowane Zod (UUID + bool) przed zapytaniem.
  * Tryb demo: walidacja bez zapisu (`demo: true`). Błędy → kod użytkowy (Invariant #8).
  */
@@ -41,7 +44,7 @@ function mapPgError(message: string | undefined): ErrorCode {
 }
 
 export async function setCompanyBlockAction(companyId: unknown, blocked: unknown): Promise<SetCompanyBlockResult> {
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     const demo = demoBlockSchema.safeParse({ companyId, blocked });
     if (!demo.success) return { ok: false, error: 'VALIDATION_FAILED' };
     return { ok: true, blocked: demo.data.blocked, demo: true };
@@ -51,15 +54,17 @@ export async function setCompanyBlockAction(companyId: unknown, blocked: unknown
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('set_company_block', {
-      p_company_id: parsed.data.companyId,
-      p_blocked: parsed.data.blocked,
-    });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    const data = await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'set_company_block', {
+        p_company_id: parsed.data.companyId,
+        p_blocked: parsed.data.blocked,
+      }),
+    );
     return { ok: true, blocked: data === true };
   } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
     captureError(error, { area: 'company-blocks.setCompanyBlockAction' });
     return { ok: false, error: 'INTERNAL' };
   }

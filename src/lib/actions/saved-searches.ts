@@ -4,7 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod/v3';
 
 import { routing } from '@/i18n/routing';
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
 
@@ -12,7 +14,8 @@ import { captureError } from '@/lib/sentry';
  * Server Actions zapisanych wyszukiwań (#100) — cienka warstwa nad RPC z 0092.
  *
  * Kanonizacja filtrów, limit 20, brak duplikatów, rola kandydata i własność są w bazie
- * (`save_saved_search` / `set_saved_search_alerts` / `delete_saved_search`); tu: walidacja
+ * (`save_saved_search` / `set_saved_search_alerts` / `delete_saved_search`, wołane pod sesją
+ * przez `withPortalTransaction`, #25); tu: walidacja
  * Zod kształtu wejścia + mapowanie błędu na kod użytkowy (Invariant #8). Tryb demo nic nie
  * zapisuje (`DEMO_UNAVAILABLE`) — bez udawanego sukcesu.
  */
@@ -71,31 +74,31 @@ function revalidateSavedSearches(): void {
 export async function saveSearchAction(input: unknown): Promise<SaveSearchResult> {
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
-  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('save_saved_search', {
-      p_name: parsed.data.name,
-      p_locale: parsed.data.locale,
-      p_filters: parsed.data.filters,
-      p_query: parsed.data.query,
-      p_frequency: 'daily',
-    });
-    if (error) {
-      // RPC rzuca UNAUTHENTICATED tylko bez sesji — wtedy UI pokazuje link logowania.
-      if ((error.message ?? '').startsWith('UNAUTHENTICATED')) return { ok: false, error: 'UNAUTHENTICATED' };
-      return { ok: false, error: mapPgError(error.message) };
-    }
-    const row = (Array.isArray(data) ? data[0] : data) as
-      | { saved_search_id?: unknown; created?: unknown }
-      | null
-      | undefined;
+    // Bez sesji UI pokazuje link logowania (RPC odmówiłoby UNAUTHENTICATED).
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'UNAUTHENTICATED' };
+    const rows = await withPortalTransaction(me, (tx) =>
+      rpcRows<{ saved_search_id?: unknown; created?: unknown }>(tx, 'save_saved_search', {
+        p_name: parsed.data.name,
+        p_locale: parsed.data.locale,
+        p_filters: jsonArg(parsed.data.filters),
+        p_query: parsed.data.query,
+        p_frequency: 'daily',
+      }),
+    );
+    const row = rows[0];
     if (!row || typeof row.saved_search_id !== 'string') return { ok: false, error: 'INTERNAL' };
     revalidateSavedSearches();
     return { ok: true, id: row.saved_search_id, created: row.created === true };
   } catch (error) {
+    if (isDatabaseError(error)) {
+      const message = databaseErrorMessage(error);
+      if (message.startsWith('UNAUTHENTICATED')) return { ok: false, error: 'UNAUTHENTICATED' };
+      return { ok: false, error: mapPgError(message) };
+    }
     captureError(error, { area: 'saved-searches.save' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -113,20 +116,22 @@ export async function setSavedSearchAlertsAction(
   if (!parsedId.success || !parsedEnabled.success || !parsedFrequency.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
-  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { error } = await supabase.rpc('set_saved_search_alerts', {
-      p_saved_search_id: parsedId.data,
-      p_enabled: parsedEnabled.data,
-      p_frequency: parsedFrequency.data,
-    });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'set_saved_search_alerts', {
+        p_saved_search_id: parsedId.data,
+        p_enabled: parsedEnabled.data,
+        p_frequency: parsedFrequency.data,
+      }),
+    );
     revalidateSavedSearches();
     return { ok: true };
   } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
     captureError(error, { area: 'saved-searches.setAlerts' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -136,16 +141,18 @@ export async function setSavedSearchAlertsAction(
 export async function deleteSavedSearchAction(id: unknown): Promise<SavedSearchMutationResult> {
   const parsedId = idSchema.safeParse(id);
   if (!parsedId.success) return { ok: false, error: 'VALIDATION_FAILED' };
-  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { error } = await supabase.rpc('delete_saved_search', { p_saved_search_id: parsedId.data });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'delete_saved_search', { p_saved_search_id: parsedId.data }),
+    );
     revalidateSavedSearches();
     return { ok: true };
   } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
     captureError(error, { area: 'saved-searches.delete' });
     return { ok: false, error: 'INTERNAL' };
   }

@@ -796,7 +796,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['security-audit'],
     subjects: ['candidate', 'employer', 'visitor'],
     columns: { key: 'technical' },
-    note: 'Klucz = akcja + adres IP (ścieżka Supabase, bez haszowania) albo HMAC (ścieżka PostgreSQL, src/lib/db/rate-limit.ts).',
+    note: 'Klucz = akcja + adres IP (+ identyfikator) bez haszowania (src/lib/rate-limit.ts, pula service); wariant HMAC src/lib/db/rate-limit.ts niepodłączony.',
   },
   'public.system_events': {
     activities: ['security-audit'],

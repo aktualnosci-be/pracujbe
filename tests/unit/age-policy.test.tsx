@@ -16,10 +16,10 @@ import {
 import { attestCandidateAgeAction } from '@/lib/actions/age-attestation';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
 import { AgeAttestationSettings } from '@/components/settings/AgeAttestationSettings';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
+import type { PortalIdentity } from '@/lib/auth/session';
 import pl from '@/messages/pl.json';
 import en from '@/messages/en.json';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * Polityka wieku kandydatów (#492): próg jako dane (0110), deklaracja bez daty urodzenia,
@@ -27,8 +27,8 @@ import en from '@/messages/en.json';
  */
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn(), isDatabaseConfigured: vi.fn(() => false) }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/env', () => ({ isDatabaseConfigured: vi.fn(() => false) }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/actions/age-attestation', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/actions/age-attestation')>();
@@ -49,14 +49,19 @@ const MIGRATION = (() => {
   return readFileSync(resolve(dir, name), 'utf8');
 })();
 
-function rpcClient(result: { data: unknown; error: unknown }) {
-  const client = { rpc: vi.fn(async () => result) };
-  vi.mocked(createServerClient).mockResolvedValue(client as never);
-  return client;
+const USER = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+
+/** Baza pod sesją kandydata: RPC `fn` zwraca `data` albo rzuca błąd PostgreSQL. */
+function dbRpc(fn: string, result: { data: unknown } | { fail: string }) {
+  resetFakeDb({ id: USER, role: 'candidate' } as PortalIdentity);
+  fakeDb.rpc(fn, () => {
+    if ('fail' in result) throw pgError('P0001', result.fail);
+    return result.data;
+  });
 }
 
 beforeEach(() => {
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  resetFakeDb({ id: USER, role: 'candidate' } as PortalIdentity);
 });
 afterEach(() => {
   cleanup();
@@ -108,17 +113,17 @@ describe('próg wieku — granice i wartość awaryjna', () => {
 
 describe('attestCandidateAgeAction', () => {
   it('wysyła tylko próg (bez daty urodzenia) i zwraca stan z bazy', async () => {
-    const client = rpcClient({ data: true, error: null });
+    dbRpc('attest_candidate_age', { data: true });
     expect(await attestCandidateAgeAction({ confirmed: true, minAge: 18 })).toEqual({ ok: true, meetsPolicy: true });
-    expect(client.rpc).toHaveBeenCalledWith('attest_candidate_age', { p_min_age: 18 });
+    expect(fakeDb.callsTo('attest_candidate_age')[0]).toMatchObject({ args: { p_min_age: 18 }, as: USER });
   });
 
   it.each([[{ confirmed: false, minAge: 18 }], [{ confirmed: true }], [{ confirmed: true, minAge: 12 }], [null]])(
     'odrzuca %j bez wywołania bazy',
     async (input) => {
-      const client = rpcClient({ data: true, error: null });
+      dbRpc('attest_candidate_age', { data: true });
       expect(await attestCandidateAgeAction(input)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-      expect(client.rpc).not.toHaveBeenCalled();
+      expect(fakeDb.calls).toHaveLength(0);
     },
   );
 
@@ -127,24 +132,33 @@ describe('attestCandidateAgeAction', () => {
     ['PERMISSION_DENIED: deklaracja wieku tylko dla kandydata', 'PERMISSION_DENIED'],
     ['relation "x" does not exist', 'INTERNAL'],
   ])('mapuje błąd bazy %s → %s (bez technikaliów)', async (message, code) => {
-    rpcClient({ data: null, error: { message } });
+    dbRpc('attest_candidate_age', { fail: message });
     expect(await attestCandidateAgeAction({ confirmed: true, minAge: 18 })).toEqual({ ok: false, error: code });
   });
 
+  it('bez sesji → PERMISSION_DENIED, bez zapytania do bazy', async () => {
+    resetFakeDb(null);
+    expect(await attestCandidateAgeAction({ confirmed: true, minAge: 18 })).toEqual({
+      ok: false,
+      error: 'PERMISSION_DENIED',
+    });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
   it('tryb demo niczego nie zapisuje', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(await attestCandidateAgeAction({ confirmed: true, minAge: 18 })).toEqual({
       ok: true,
       meetsPolicy: true,
       demo: true,
     });
-    expect(createServerClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });
 
 describe('loadMyAgeAttestation', () => {
   it('czyta stan pod sesją; brak deklaracji = attestedMinAge null', async () => {
-    rpcClient({ data: [{ required_min_age: 18, attested_min_age: null, meets_policy: false }], error: null });
+    dbRpc('get_my_age_attestation', { data: { required_min_age: 18, attested_min_age: null, meets_policy: false } });
     expect(await loadMyAgeAttestation()).toEqual({
       status: 'ready',
       demo: false,
@@ -155,7 +169,7 @@ describe('loadMyAgeAttestation', () => {
   });
 
   it('błąd odczytu → jawny błąd, nie „spełnione”', async () => {
-    rpcClient({ data: null, error: { message: 'boom' } });
+    dbRpc('get_my_age_attestation', { fail: 'boom' });
     expect(await loadMyAgeAttestation()).toEqual({ status: 'error' });
   });
 });
@@ -183,7 +197,7 @@ describe('AgeAttestationSettings', () => {
   });
 
   it('po zapisie pokazuje stan potwierdzony z serwera (en)', async () => {
-    rpcClient({ data: true, error: null });
+    dbRpc('attest_candidate_age', { data: true });
     const f = renderSettings(en, 'en');
     fireEvent.click(f.checkbox);
     fireEvent.click(f.submit);
@@ -195,7 +209,7 @@ describe('AgeAttestationSettings', () => {
   });
 
   it('odmowa bazy (próg zmieniony): komunikat błędu, stan bez zmian', async () => {
-    rpcClient({ data: null, error: { message: 'AGE_ATTESTATION_REQUIRED' } });
+    dbRpc('attest_candidate_age', { fail: 'AGE_ATTESTATION_REQUIRED' });
     const f = renderSettings();
     fireEvent.click(f.checkbox);
     fireEvent.click(f.submit);

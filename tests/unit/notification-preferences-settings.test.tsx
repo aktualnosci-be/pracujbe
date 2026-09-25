@@ -10,8 +10,7 @@ import {
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import CandidateSettingsPage from '@/app/[locale]/candidate/ustawienia/page';
 import EmployerSettingsPage from '@/app/[locale]/employer/ustawienia/page';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 import { updateNotificationPreferences } from '@/lib/actions/notification-preferences';
 import pl from '@/messages/pl.json';
 import nl from '@/messages/nl.json';
@@ -30,8 +29,7 @@ vi.mock('next-intl/server', () => ({
       (translations[locale] as unknown as Record<string, Record<string, string>>)[namespace]![key],
 }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 // Sekcja zablokowanych firm (#97) ma własne testy (company-blocks-action, E2E).
 vi.mock('@/lib/data/company-blocks', () => ({
@@ -52,27 +50,15 @@ vi.mock('@/lib/actions/notification-preferences', () => ({
   updateNotificationPreferences: vi.fn(),
 }));
 
-function client(result: { data?: unknown; error?: unknown; user?: { id: string } | null }) {
-  const query = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue({ data: result.data ?? null, error: result.error ?? null }),
-  };
-  return {
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: result.user === undefined ? { id: 'self' } : result.user },
-      }),
-    },
-    from: vi.fn(() => query),
-  };
-}
+const SELF = '3a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
 
-function useClient(result: Parameters<typeof client>[0]) {
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
-  vi.mocked(createServerClient).mockResolvedValue(
-    client(result) as unknown as Awaited<ReturnType<typeof createServerClient>>,
-  );
+/** Sesja użytkownika + wynik zapytania o własny wiersz preferencji (albo błąd bazy). */
+function setupSession(result: { data?: unknown; error?: unknown; user?: { id: string } | null }) {
+  resetFakeDb(result.user === null ? null : { id: result.user?.id ?? SELF, role: 'candidate' });
+  fakeDb.rows('notification-preferences.own', () => {
+    if (result.error) throw pgError('XX000', 'boom');
+    return result.data ? [result.data] : [];
+  });
 }
 
 // jsdom nie ma ResizeObserver (używa go Radix Checkbox).
@@ -90,23 +76,44 @@ afterEach(cleanup);
 
 describe('loadNotificationPreferences (#309)', () => {
   it('błąd odczytu daje stan błędu, a nie wartości domyślne', async () => {
-    useClient({ error: { message: 'boom' } });
+    setupSession({ error: { message: 'boom' } });
     await expect(loadNotificationPreferences()).resolves.toEqual({ status: 'error' });
   });
 
-  it('wyjątek klienta daje stan błędu', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
-    vi.mocked(createServerClient).mockRejectedValue(new Error('network'));
+  it('wyjątek połączenia daje stan błędu', async () => {
+    setupSession({});
+    fakeDb.rows('notification-preferences.own', () => {
+      throw new Error('network');
+    });
     await expect(loadNotificationPreferences()).resolves.toEqual({ status: 'error' });
   });
 
-  it('brak sesji daje stan błędu (bez formularza)', async () => {
-    useClient({ user: null });
+  it('brak sesji daje stan błędu (bez formularza) i bez zapytania', async () => {
+    setupSession({ user: null });
     await expect(loadNotificationPreferences()).resolves.toEqual({ status: 'error' });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('zapytanie zawężone do własnego profilu, pod sesją (nie service-role)', async () => {
+    setupSession({ data: null });
+    await loadNotificationPreferences();
+    const [call] = fakeDb.callsTo('notification-preferences.own');
+    expect(call?.as).toBe(SELF);
+    expect(call?.values).toEqual([SELF]);
+  });
+
+  it('tryb demo (bez backendu) → wartości domyślne bez zapytań', async () => {
+    resetFakeDb(null);
+    fakeSession.configured = false;
+    await expect(loadNotificationPreferences()).resolves.toEqual({
+      status: 'ready',
+      preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+    });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('brak wiersza daje wartości domyślne jako stan gotowy', async () => {
-    useClient({ data: null });
+    setupSession({ data: null });
     await expect(loadNotificationPreferences()).resolves.toEqual({
       status: 'ready',
       preferences: DEFAULT_NOTIFICATION_PREFERENCES,
@@ -114,7 +121,7 @@ describe('loadNotificationPreferences (#309)', () => {
   });
 
   it('zapisany wiersz zachowuje opt-outy użytkownika', async () => {
-    useClient({
+    setupSession({
       data: {
         email_applications: true,
         email_offers: true,
@@ -151,7 +158,7 @@ describe('ekran ustawień przy błędzie odczytu (#309)', () => {
     ['pracodawca', EmployerSettingsPage],
   ] as const)('%s: pokazuje błąd z ponowieniem i nie pokazuje formularza', async (_, Page) => {
     for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
-      useClient({ error: { message: 'boom' } });
+      setupSession({ error: { message: 'boom' } });
       await renderPage(Page, locale);
       const m = translations[locale];
 
@@ -167,7 +174,7 @@ describe('ekran ustawień przy błędzie odczytu (#309)', () => {
   });
 
   it('po udanym odczycie pokazuje formularz z zapisanymi wartościami', async () => {
-    useClient({ data: { email_job_matches: false } });
+    setupSession({ data: { email_job_matches: false } });
     await renderPage(CandidateSettingsPage, 'pl');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(document.getElementById('pref-emailJobMatches')).toHaveAttribute('data-state', 'unchecked');

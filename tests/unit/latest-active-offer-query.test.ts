@@ -1,67 +1,50 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getLatestActiveOffer } from '@/lib/data/candidate';
-import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
+import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+
+const CANDIDATE = '22222222-2222-4222-8222-222222222222';
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  resetFakeDb({ id: CANDIDATE, role: 'candidate' });
 });
 
 describe('getLatestActiveOffer', () => {
   it('filters active and unexpired rows before a deterministic limit 1', async () => {
-    const calls: string[] = [];
-    const query = {
-      select: vi.fn(() => (calls.push('select'), query)),
-      eq: vi.fn(() => (calls.push('eq'), query)),
-      is: vi.fn(() => (calls.push('is'), query)),
-      in: vi.fn(() => (calls.push('in'), query)),
-      not: vi.fn(() => (calls.push('not'), query)),
-      or: vi.fn(() => (calls.push('or'), query)),
-      order: vi.fn(() => (calls.push('order'), query)),
-      limit: vi.fn(() => (calls.push('limit'), query)),
-      maybeSingle: vi.fn(async () => {
-        calls.push('maybeSingle');
-        return { data: null, error: null as unknown };
-      }),
-    };
-    const supabase = {
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: '22222222-2222-4222-8222-222222222222' } },
-        }),
-      },
-      from: vi.fn().mockReturnValue(query),
-    };
-    vi.mocked(createServerClient).mockResolvedValue(supabase as never);
+    fakeDb.rows('candidate.latest-active-offer', []);
 
     await expect(getLatestActiveOffer('pl')).resolves.toBeNull();
 
-    expect(supabase.from).toHaveBeenCalledWith('offers');
-    expect(query.in).toHaveBeenCalledWith('status', ['sent', 'viewed']);
-    expect(query.not).toHaveBeenCalledWith('sent_at', 'is', null);
-    expect(query.or).toHaveBeenCalledWith(
-      expect.stringMatching(/^expires_at\.is\.null,expires_at\.gt\.\d{4}-/),
-    );
-    expect(query.order.mock.calls).toEqual([
-      ['sent_at', { ascending: false }],
-      ['id', { ascending: false }],
-    ]);
-    expect(query.limit).toHaveBeenCalledWith(1);
-    expect(calls.indexOf('in')).toBeLessThan(calls.indexOf('limit'));
-    expect(calls.indexOf('or')).toBeLessThan(calls.indexOf('limit'));
+    const [call] = fakeDb.callsTo('candidate.latest-active-offer');
+    expect(call).toMatchObject({ as: CANDIDATE, values: [CANDIDATE] });
+    const sql = call!.text.replace(/\s+/g, ' ');
+    expect(sql).toContain('FROM public.offers');
+    expect(sql).toContain('candidate_id = $1');
+    expect(sql).toContain("status IN ('sent', 'viewed')");
+    expect(sql).toContain('sent_at IS NOT NULL');
+    expect(sql).toContain('(expires_at IS NULL OR expires_at > now())');
+    expect(sql).toContain('ORDER BY sent_at DESC, id DESC LIMIT 1');
+    // Filtry przed limitem (w jednym zapytaniu), bez odczytu metadanych, gdy brak wiersza.
+    expect(sql.indexOf('WHERE')).toBeLessThan(sql.indexOf('LIMIT 1'));
+    expect(fakeDb.calls).toHaveLength(1);
 
-    query.maybeSingle.mockResolvedValueOnce({ data: null, error: { code: 'read-failed' } });
+    const readError = pgError('XX000', 'read-failed');
+    fakeDb.rows('candidate.latest-active-offer', () => { throw readError; });
     await expect(getLatestActiveOffer('pl')).resolves.toBeNull();
-    expect(captureError).toHaveBeenCalledWith(
-      { code: 'read-failed' },
-      { area: 'candidate.getLatestActiveOffer' },
-    );
+    expect(captureError).toHaveBeenCalledWith(readError, { area: 'candidate.getLatestActiveOffer' });
+  });
+
+  it('wzbogaca propozycję danymi oferty z własnych aplikacji, potem z propozycji', async () => {
+    fakeDb
+      .rows('candidate.latest-active-offer', [{ id: 'offer-1', job_id: 'job-2', status: 'sent', message: '', sent_at: '2026-09-20T09:00:00+00:00', expires_at: null }])
+      .rpc('get_applied_jobs_display', [])
+      .rpc('get_offered_jobs_display', [{ job_id: 'job-2', slug: 'kierowca', title: 'Kierowca', company_name: 'Firma', city: 'Gent' }]);
+    await expect(getLatestActiveOffer('pl')).resolves.toMatchObject({ id: 'offer-1', jobTitle: 'Kierowca', companyName: 'Firma', slug: 'kierowca' });
+    expect(fakeDb.callsTo('get_offered_jobs_display')[0]!.args).toEqual({ p_locale: 'pl' });
   });
 });

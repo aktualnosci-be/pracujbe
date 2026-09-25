@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { normalizeResendEvent } from '@/lib/email/provider-events';
 import { signStandardWebhook } from '@/lib/webhooks';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #44 — webhook doręczeń Resend: weryfikacja podpisu (Svix / Standard Webhooks), świeżość
@@ -12,18 +13,16 @@ import { signStandardWebhook } from '@/lib/webhooks';
  * i fail-closed bez konfiguracji.
  */
 
-const { adminRpc, captureError, prodMode } = vi.hoisted(() => ({
-  adminRpc: vi.fn(),
+const { captureError, prodMode } = vi.hoisted(() => ({
   captureError: vi.fn(),
   prodMode: { value: true },
 }));
 
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ rpc: adminRpc }) }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError }));
 vi.mock('@/lib/env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/env')>()),
   isProductionMode: () => prodMode.value,
-  isSupabaseConfigured: () => process.env.TEST_SUPABASE !== 'off',
 }));
 
 const SECRET = `whsec_${Buffer.from('resend-webhook-test-key').toString('base64')}`;
@@ -61,26 +60,31 @@ async function post(req: Request): Promise<Response> {
   return POST(req);
 }
 
-/** RPC: claim → wynik claimu; record → ok; complete → true. */
-function mockRpc(claim: string = 'claimed', recordError: unknown = null, completed = true) {
-  adminRpc.mockImplementation(async (fn: string) => {
-    if (fn === 'claim_webhook') return { data: claim, error: null };
-    if (fn === 'record_email_event') return { data: 'applied', error: recordError };
-    if (fn === 'complete_webhook') return { data: completed, error: null };
-    return { data: null, error: { message: 'unexpected rpc' } };
+/**
+ * RPC (każde w osobnej transakcji service_role): claim → wynik claimu; record → ok (albo
+ * wyjątek bazy z podanym komunikatem); complete → true. Nieznane RPC = błąd testu (atrapa).
+ */
+function mockRpc(claim: string = 'claimed', recordError: string | null = null, completed = true) {
+  fakeDb.rpc('claim_webhook', claim);
+  fakeDb.rpc('record_email_event', () => {
+    if (recordError) throw pgError('XX000', recordError);
+    return 'applied';
   });
+  fakeDb.rpc('complete_webhook', completed);
 }
 
-function rpcCalls(fn: string) {
-  return adminRpc.mock.calls.filter(([name]) => name === fn);
+/** Wywołania RPC w kształcie [nazwa, argumenty]; każde jako service_role. */
+function rpcCalls(fn: string): Array<[string, Record<string, unknown>]> {
+  const calls = fakeDb.callsTo(fn);
+  for (const call of calls) expect(call.as).toBe('service');
+  return calls.map((c) => [c.name, c.args]);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   prodMode.value = true;
   process.env.RESEND_WEBHOOK_SECRET = SECRET;
-  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test';
-  delete process.env.TEST_SUPABASE;
+  resetFakeDb(null);
   mockRpc();
 });
 
@@ -147,6 +151,8 @@ describe('POST /api/email/webhook/resend', () => {
       p_bounce_type: 'permanent',
     });
     expect(rpcCalls('complete_webhook')).toHaveLength(1);
+    // Claim zatwierdzony przed zapisem zdarzenia, complete po nim — trzy osobne kroki.
+    expect(fakeDb.calls.map((c) => c.name)).toEqual(['claim_webhook', 'record_email_event', 'complete_webhook']);
   });
 
   it('nagłówki webhook-* (Standard Webhooks) też są akceptowane', async () => {
@@ -180,13 +186,13 @@ describe('POST /api/email/webhook/resend', () => {
       body: body.replace('Permanent', 'Transient'),
     });
     expect((await post(tampered)).status).toBe(401);
-    expect(adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('KONTROLA UJEMNA: nieświeży znacznik czasu (replay starego żądania) → 401', async () => {
     const old = Math.floor(Date.now() / 1000) - 3600;
     expect((await post(signedRequest(JSON.stringify(bounced()), { ts: old }))).status).toBe(401);
-    expect(adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('powtórzone zakończone zdarzenie (duplicate) i równoległa dostawa (locked) nie zmieniają stanu', async () => {
@@ -200,7 +206,7 @@ describe('POST /api/email/webhook/resend', () => {
   });
 
   it('błąd zapisu zdarzenia → 500 bez oznaczenia completed (dostawca ponowi)', async () => {
-    mockRpc('claimed', { message: 'db down' });
+    mockRpc('claimed', 'db down');
     expect((await post(signedRequest(JSON.stringify(bounced())))).status).toBe(500);
     expect(rpcCalls('complete_webhook')).toHaveLength(0);
   });
@@ -221,29 +227,29 @@ describe('POST /api/email/webhook/resend', () => {
     expect((await post(signedRequest(opened))).status).toBe(200);
     expect((await post(signedRequest('{nie-json'))).status).toBe(400);
     expect((await post(signedRequest(JSON.stringify({ type: 'email.delivered', data: {} })))).status).toBe(400);
-    expect(adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('za duże body → 413 przed weryfikacją podpisu', async () => {
     const big = JSON.stringify({ ...bounced(), pad: 'x'.repeat(300_000) });
     expect((await post(signedRequest(big))).status).toBe(413);
-    expect(adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
-  it('fail-closed: brak sekretu albo service-role → 503 (produkcja i poza nią), bez odczytu treści', async () => {
+  it('fail-closed: brak sekretu albo puli service_role → 503 (produkcja i poza nią), bez odczytu treści', async () => {
     delete process.env.RESEND_WEBHOOK_SECRET;
     expect((await post(signedRequest(JSON.stringify(bounced())))).status).toBe(503);
     expect(captureError).toHaveBeenCalledTimes(1);
     prodMode.value = false;
     expect((await post(signedRequest(JSON.stringify(bounced())))).status).toBe(503);
     process.env.RESEND_WEBHOOK_SECRET = SECRET;
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    fakeSession.serviceConfigured = false;
     expect((await post(signedRequest(JSON.stringify(bounced())))).status).toBe(503);
-    expect(adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('logi nie zawierają adresu odbiorcy ani treści zdarzenia', async () => {
-    mockRpc('claimed', { message: 'db down for Odbiorca@Example.com' });
+    mockRpc('claimed', 'db down for Odbiorca@Example.com');
     await post(signedRequest(JSON.stringify(bounced())));
     const logged = JSON.stringify(captureError.mock.calls.map(([e, ctx]) => [String(e), ctx]));
     expect(logged).not.toMatch(/example\.com/i);

@@ -4,11 +4,18 @@ import { createHash } from 'node:crypto';
 import { headers } from 'next/headers';
 import { z } from 'zod/v3';
 
-import { hasServiceRoleKey, isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import {
+  getPortalIdentity,
+  isPortalDataConfigured,
+  isServiceDatabaseConfigured,
+  withPortalTransaction,
+  withServiceRole,
+} from '@/lib/db/portal';
+import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
   hashGuestToken,
@@ -35,7 +42,8 @@ import {
  *    aplikację tokenem z drugiego e-maila.
  *
  * Tokeny: w bazie tylko hash (`@/lib/guest-apply/token`). RPC 1–2 są service_role-only
- * (gość nie ma sesji); 3 działa pod sesją kandydata (auth.uid() + zweryfikowany e-mail).
+ * (gość nie ma sesji → `withServiceRole`); 3 działa w transakcji sesji kandydata
+ * (`withPortalTransaction`: auth.uid() + zweryfikowany e-mail).
  */
 
 export type GuestApplyField = 'fullName' | 'email' | 'phone' | 'message' | 'consent' | 'age';
@@ -151,17 +159,15 @@ export async function submitGuestApplication(
 
   if (isGuestApplyFixture()) return { ok: true };
   // Tryb demo (bez bazy): oferty fikcyjne, nic nie zapisujemy.
-  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
-  if (!hasServiceRoleKey() || !isGuestTokenConfigured()) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  if (!isServiceDatabaseConfigured() || !isGuestTokenConfigured()) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
 
   const confirm = issueGuestToken('confirm');
   if (!confirm) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
 
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const admin = createAdminClient();
     const meta = await requestMeta();
-    const { error } = await admin.rpc('submit_guest_application', {
+    await withServiceRole((tx) => rpc(tx, 'submit_guest_application', {
       p_job_id: v.jobId,
       p_email: v.email,
       p_full_name: v.fullName,
@@ -175,12 +181,14 @@ export async function submitGuestApplication(
       p_ip: meta.ip,
       p_user_agent: meta.userAgent,
       // #101: odpowiedzi walidowane w bazie tymi samymi regułami co apply_to_job.
-      p_answers: v.answers && Object.keys(v.answers).length > 0 ? v.answers : null,
+      p_answers: v.answers && Object.keys(v.answers).length > 0 ? jsonArg(v.answers) : null,
       // #492: zadeklarowany próg wieku (bez daty urodzenia); baza porównuje z bieżącym progiem.
       p_age_attested_min: v.minAge,
-    });
-    if (error) {
-      const message = error.message ?? '';
+    }));
+    return { ok: true };
+  } catch (e) {
+    if (isDatabaseError(e)) {
+      const message = databaseErrorMessage(e);
       if (message.includes('JOB_NOT_ACTIVE')) return { ok: false, error: 'JOB_NOT_ACTIVE' };
       if (message.includes('AGE_ATTESTATION_REQUIRED')) {
         return { ok: false, error: 'AGE_ATTESTATION_REQUIRED', field: 'age' };
@@ -188,11 +196,7 @@ export async function submitGuestApplication(
       const questionId = SCREENING_REQUIRED_RE.exec(message)?.[1];
       if (questionId) return { ok: false, error: 'SCREENING_ANSWER_REQUIRED', questionId };
       if (message.includes('VALIDATION_FAILED')) return { ok: false, error: 'VALIDATION_FAILED' };
-      captureError(error, { area: 'guestApply.submit' });
-      return { ok: false, error: 'INTERNAL' };
     }
-    return { ok: true };
-  } catch (e) {
     captureError(e, { area: 'guestApply.submit' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -205,25 +209,20 @@ export async function confirmGuestApplication(locale: string): Promise<GuestConf
   }
   const token = await readGuestLinkToken('confirm');
   if (!isGuestTokenFormat(token)) return { ok: true, outcome: 'invalid' };
-  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
-  if (!hasServiceRoleKey() || !isGuestTokenConfigured()) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  if (!isServiceDatabaseConfigured() || !isGuestTokenConfigured()) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
 
   const claim = issueGuestToken('claim');
   if (!claim) return { ok: false, error: 'GUEST_APPLY_UNAVAILABLE' };
 
   try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const admin = createAdminClient();
-    const { data, error } = await admin.rpc('confirm_guest_application', {
-      p_token_hash: hashGuestToken(token),
-      p_claim_nonce: claim.nonce,
-      p_claim_token_hash: claim.hash,
-    });
-    if (error) {
-      captureError(error, { area: 'guestApply.confirm' });
-      return { ok: false, error: 'INTERNAL' };
-    }
-    const row = (Array.isArray(data) ? data[0] : data) as { outcome?: unknown; job_slug?: unknown } | null;
+    const rows = await withServiceRole((tx) => rpcRows<{ outcome?: unknown; job_slug?: unknown }>(
+      tx, 'confirm_guest_application', {
+        p_token_hash: hashGuestToken(token),
+        p_claim_nonce: claim.nonce,
+        p_claim_token_hash: claim.hash,
+      }));
+    const row = rows[0] ?? null;
     const outcome = typeof row?.outcome === 'string' && OUTCOMES.has(row.outcome) ? row.outcome : null;
     if (!outcome) {
       captureError(new Error('guest_confirm_unexpected_result'), { area: 'guestApply.confirm' });
@@ -249,15 +248,18 @@ export async function claimGuestApplication(locale: string): Promise<GuestClaimR
   }
   const token = await readGuestLinkToken('claim');
   if (!isGuestTokenFormat(token)) return { ok: false, error: 'NOT_FOUND' };
-  if (!isSupabaseConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
+  let data: unknown;
   try {
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('claim_guest_application', {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'UNAUTHENTICATED' };
+    data = await withPortalTransaction(me, (tx) => rpc(tx, 'claim_guest_application', {
       p_claim_token_hash: hashGuestToken(token),
-    });
-    if (error) {
-      const message = error.message ?? '';
+    }));
+  } catch (error) {
+    if (isDatabaseError(error)) {
+      const message = databaseErrorMessage(error);
       if (message.startsWith('UNAUTHENTICATED')) return { ok: false, error: 'UNAUTHENTICATED' };
       if (message.includes('EMAIL_NOT_VERIFIED')) return { ok: false, error: 'EMAIL_NOT_VERIFIED' };
       if (message.includes('CLAIM_EXPIRED')) return { ok: false, error: 'CLAIM_EXPIRED' };
@@ -266,17 +268,14 @@ export async function claimGuestApplication(locale: string): Promise<GuestClaimR
       if (message.includes('AGE_ATTESTATION_REQUIRED')) return { ok: false, error: 'AGE_ATTESTATION_REQUIRED' };
       if (message.includes('PERMISSION_DENIED')) return { ok: false, error: 'PERMISSION_DENIED' };
       if (message.includes('NOT_FOUND')) return { ok: false, error: 'NOT_FOUND' };
-      captureError(error, { area: 'guestApply.claim' });
-      return { ok: false, error: 'INTERNAL' };
     }
-    try {
-      await clearGuestLinkToken(locale, 'claim');
-    } catch (e) {
-      captureError(e, { area: 'guestApply.claim.clearCookie' });
-    }
-    return { ok: true, applicationId: String(data) };
-  } catch (e) {
-    captureError(e, { area: 'guestApply.claim' });
+    captureError(error, { area: 'guestApply.claim' });
     return { ok: false, error: 'INTERNAL' };
   }
+  try {
+    await clearGuestLinkToken(locale, 'claim');
+  } catch (e) {
+    captureError(e, { area: 'guestApply.claim.clearCookie' });
+  }
+  return { ok: true, applicationId: String(data) };
 }

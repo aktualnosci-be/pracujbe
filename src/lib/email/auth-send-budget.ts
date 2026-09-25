@@ -1,4 +1,5 @@
-import type { createAdminClient } from '@/lib/supabase/admin';
+import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
+import { rpcRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
 
 /**
@@ -6,36 +7,26 @@ import { captureError } from '@/lib/sentry';
  *
  * Pula `auth` ma sufit równy limitowi dostawcy, a newsletter i powiadomienia kończą się
  * wcześniej (rezerwy), więc odmowa oznacza, że okno dostawcy jest już pełne. Awaria bazy
- * lub brak klienta service-role NIE blokuje e-maila logowania/resetu (fail-open): limit
- * dostawcy pozostaje ostatnią granicą, a błąd trafia do Sentry.
+ * lub brak puli service_role (#25: `DATABASE_SERVICE_URL`) NIE blokuje e-maila
+ * logowania/resetu (fail-open): limit dostawcy pozostaje ostatnią granicą, a błąd trafia
+ * do Sentry. Pobranie budżetu to własna, krótka transakcja service_role.
  */
-
-type AdminClient = ReturnType<typeof createAdminClient>;
 
 export type AuthBudgetResult =
   | { status: 'granted' | 'skipped' }
   | { status: 'denied'; retryAfterSeconds: number };
 
 export async function takeAuthSendBudget(
-  admin: AdminClient | null,
   template: string,
   now: () => number = Date.now,
 ): Promise<AuthBudgetResult> {
-  let client = admin;
+  if (!isServiceDatabaseConfigured()) return { status: 'skipped' };
   try {
-    if (!client) {
-      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { status: 'skipped' };
-      client = (await import('@/lib/supabase/admin')).createAdminClient();
-    }
-    const { data, error } = await client.rpc('take_email_send_budget', { p_template: template });
-    if (error) {
-      captureError(error, { area: 'auth.email-hook.budget' });
-      return { status: 'skipped' };
-    }
-    const grant = (Array.isArray(data) ? data[0] : data) as
-      | { granted?: boolean; retry_at?: string | null }
-      | null
-      | undefined;
+    const [grant] = await withServiceRole((tx) =>
+      rpcRows<{ granted?: boolean; retry_at?: string | null }>(tx, 'take_email_send_budget', {
+        p_template: template,
+      }),
+    );
     if (grant?.granted === false) {
       const retryAt = grant.retry_at ? Date.parse(grant.retry_at) : Number.NaN;
       const seconds = Number.isNaN(retryAt) ? 60 : Math.ceil((retryAt - now()) / 1000);

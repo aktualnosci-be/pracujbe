@@ -7,6 +7,7 @@ import { createUnsubscribeToken } from '@/lib/email/unsubscribe-token';
 import { marketingSenderFromEnv, senderIdentityFromEnv } from '@/lib/email/sender';
 import { newsletterJobsFromPayload } from '@/lib/email/newsletter-delivery';
 import { checkReceivedEml } from '../../scripts/lib/received-eml.mjs';
+import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #45, etap 2 — dowód zgody (akcja ustawień → RPC z wersją treści), wypisanie ze wszystkich
@@ -15,25 +16,15 @@ import { checkReceivedEml } from '../../scripts/lib/received-eml.mjs';
  * Scenariusze bazy (dowód, budżet odbiorcy, rezerwacja kampanii): supabase/tests/rls.sql CM45.
  */
 
-const { send, adminRpc, adminFrom, serverRpc, getUser } = vi.hoisted(() => ({
-  send: vi.fn(),
-  adminRpc: vi.fn(),
-  adminFrom: vi.fn(),
-  serverRpc: vi.fn(),
-  getUser: vi.fn(),
-}));
+const { send } = vi.hoisted(() => ({ send: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('resend', () => ({ Resend: class { emails = { send }; } }));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ rpc: adminRpc, from: adminFrom }) }));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: async () => ({ rpc: serverRpc, auth: { getUser } }),
-}));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/env')>()),
   isProductionMode: () => true,
-  isSupabaseConfigured: () => true,
 }));
 
 const SECRET = 'test-unsubscribe-secret-0123456789abcdef';
@@ -51,16 +42,16 @@ const NL_JOBS = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetFakeDb(null)
+    .rows('email.outbox.recipient-names', [])
+    .exec('email.outbox.defer')
+    .exec('email.outbox.mark-sent')
+    .exec('email.outbox.mark-failed');
   process.env.EMAIL_UNSUBSCRIBE_SECRET = SECRET;
-  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test';
   process.env.RESEND_API_KEY = 're_test';
   process.env.NEXT_PUBLIC_SITE_URL = SITE;
   for (const key of Object.keys(SENDER_ENV)) delete process.env[key];
   send.mockResolvedValue({ data: { id: 'provider-1' }, error: null });
-  adminFrom.mockReturnValue({
-    update: () => ({ eq: async () => ({ error: null }) }),
-    select: () => ({ in: async () => ({ data: [], error: null }) }),
-  });
 });
 
 describe('tożsamość nadawcy z konfiguracji', () => {
@@ -140,11 +131,8 @@ describe('renderDelivery — marketing tylko z tożsamością, wypisaniem i text
 
 describe('worker: newsletter z kampanii', () => {
   function mockQueue(rows: unknown[]) {
-    adminRpc.mockImplementation(async (name: string) =>
-      name === 'take_email_send_budget'
-        ? { data: [{ granted: true, retry_at: null }], error: null }
-        : { data: rows, error: null },
-    );
+    fakeDb.rpc('claim_email_batch', rows);
+    fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
   }
   const queued = {
     id: 'n1',
@@ -179,18 +167,19 @@ describe('worker: newsletter z kampanii', () => {
 
 describe('wypisanie ze wszystkich kategorii (strona /wypisz)', () => {
   it('scope=all → email_unsubscribe_all ze źródłem strony i językiem', async () => {
-    adminRpc.mockResolvedValue({ data: true, error: null });
+    fakeDb.rpc('email_unsubscribe_all', true);
     const { unsubscribeFromEmail } = await import('@/lib/actions/email-unsubscribe');
     const form = new FormData();
     form.set('t', createUnsubscribeToken({ profileId: PROFILE, category: 'offers' }, SECRET));
     form.set('l', 'fr');
     form.set('scope', 'all');
     expect(await unsubscribeFromEmail(null, form)).toEqual({ status: 'done', category: 'offers', scope: 'all' });
-    expect(adminRpc).toHaveBeenCalledWith('email_unsubscribe_all', {
-      p_profile_id: PROFILE,
-      p_source: 'unsubscribe_page',
-      p_locale: 'fr',
-    });
+    expect(fakeDb.callsTo('email_unsubscribe_all')).toEqual([
+      expect.objectContaining({
+        args: { p_profile_id: PROFILE, p_source: 'unsubscribe_page', p_locale: 'fr' },
+        as: 'service',
+      }),
+    ]);
   });
 
   it('cudzy (inny sekret) albo wygasły token → brak zapisu', async () => {
@@ -203,17 +192,17 @@ describe('wypisanie ze wszystkich kategorii (strona /wypisz)', () => {
     expired.set('t', createUnsubscribeToken({ profileId: PROFILE, category: 'offers' }, SECRET, Date.UTC(2020, 0, 1)));
     expired.set('scope', 'all');
     expect(await unsubscribeFromEmail(null, expired)).toEqual({ status: 'expired' });
-    expect(adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('nieznany język formularza nie trafia do dowodu (null → język odbiorcy w bazie)', async () => {
-    adminRpc.mockResolvedValue({ data: true, error: null });
+    fakeDb.rpc('email_unsubscribe', true);
     const { unsubscribeFromEmail } = await import('@/lib/actions/email-unsubscribe');
     const form = new FormData();
     form.set('t', createUnsubscribeToken({ profileId: PROFILE, category: 'messages' }, SECRET));
     form.set('l', 'de');
     await unsubscribeFromEmail(null, form);
-    expect(adminRpc).toHaveBeenCalledWith('email_unsubscribe', {
+    expect(fakeDb.callsTo('email_unsubscribe')[0]?.args).toEqual({
       p_profile_id: PROFILE,
       p_category: 'messages',
       p_source: 'unsubscribe_page',
@@ -234,13 +223,15 @@ describe('ustawienia: zapis z dowodem zgody', () => {
   };
 
   it('RPC set_notification_preferences z językiem strony i wersją pokazanej treści', async () => {
-    getUser.mockResolvedValue({ data: { user: { id: PROFILE } } });
-    serverRpc.mockResolvedValue({ error: null });
+    resetFakeDb({ id: PROFILE, role: 'employer' }).rpc('set_notification_preferences', null);
     const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
     const { emailConsentWordingVersion } = await import('@/lib/email/consent-wording');
     expect(await updateNotificationPreferences({ ...values, locale: 'nl', role: 'employer' })).toEqual({ ok: true });
-    expect(serverRpc).toHaveBeenCalledWith('set_notification_preferences', {
-      p_prefs: {
+    const [call] = fakeDb.callsTo('set_notification_preferences');
+    // Zapis pod sesją (RLS/auth.uid()), p_prefs jako jsonb.
+    expect(call?.as).toBe(PROFILE);
+    expect(call?.args).toEqual({
+      p_prefs: JSON.stringify({
         email_applications: true,
         email_offers: false,
         email_messages: true,
@@ -248,10 +239,25 @@ describe('ustawienia: zapis z dowodem zgody', () => {
         email_marketing: true,
         push_enabled: false,
         in_app_enabled: true,
-      },
+      }),
       p_locale: 'nl',
       p_wording_version: emailConsentWordingVersion('nl', 'employer'),
     });
+  });
+
+  it('gość → PERMISSION_DENIED bez zapisu; odmowa bazy → PERMISSION_DENIED, inny błąd → INTERNAL', async () => {
+    const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
+    resetFakeDb(null);
+    expect(await updateNotificationPreferences({ ...values, locale: 'pl' })).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(fakeDb.calls).toHaveLength(0);
+    resetFakeDb({ id: PROFILE, role: 'candidate' }).rpc('set_notification_preferences', () => {
+      throw pgError('42501', 'UNAUTHENTICATED');
+    });
+    expect(await updateNotificationPreferences({ ...values, locale: 'pl' })).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    fakeDb.rpc('set_notification_preferences', () => {
+      throw pgError('22023', 'VALIDATION_FAILED: prefs');
+    });
+    expect(await updateNotificationPreferences({ ...values, locale: 'pl' })).toEqual({ ok: false, error: 'INTERNAL' });
   });
 
   it('nieobsługiwany język → VALIDATION_FAILED bez zapisu', async () => {
@@ -260,7 +266,7 @@ describe('ustawienia: zapis z dowodem zgody', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(serverRpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('wersja treści: deterministyczna, inna dla języka i roli, format zgodny z bazą', async () => {
@@ -277,23 +283,32 @@ describe('budżet e-maili Auth', () => {
   it('odmowa → denied z Retry-After do następnego okna', async () => {
     const { takeAuthSendBudget } = await import('@/lib/email/auth-send-budget');
     const now = Date.UTC(2026, 8, 24, 12, 0, 0);
-    adminRpc.mockResolvedValue({
-      data: [{ granted: false, retry_at: new Date(now + 42_000).toISOString() }],
-      error: null,
-    });
-    expect(await takeAuthSendBudget(null, 'passwordReset', () => now)).toEqual({
+    fakeDb.rpc('take_email_send_budget', [{ granted: false, retry_at: new Date(now + 42_000).toISOString() }]);
+    expect(await takeAuthSendBudget('passwordReset', () => now)).toEqual({
       status: 'denied',
       retryAfterSeconds: 42,
     });
-    expect(adminRpc).toHaveBeenCalledWith('take_email_send_budget', { p_template: 'passwordReset' });
+    expect(fakeDb.callsTo('take_email_send_budget')).toEqual([
+      expect.objectContaining({ args: { p_template: 'passwordReset' }, as: 'service' }),
+    ]);
   });
 
   it('błąd bazy nie blokuje logowania/resetu (fail-open)', async () => {
     const { takeAuthSendBudget } = await import('@/lib/email/auth-send-budget');
-    adminRpc.mockResolvedValue({ data: null, error: { message: 'db down' } });
-    expect(await takeAuthSendBudget(null, 'passwordReset')).toEqual({ status: 'skipped' });
-    adminRpc.mockResolvedValue({ data: [{ granted: true, retry_at: null }], error: null });
-    expect(await takeAuthSendBudget(null, 'passwordReset')).toEqual({ status: 'granted' });
+    fakeDb.rpc('take_email_send_budget', () => {
+      throw pgError('08006', 'db down');
+    });
+    expect(await takeAuthSendBudget('passwordReset')).toEqual({ status: 'skipped' });
+    fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
+    expect(await takeAuthSendBudget('passwordReset')).toEqual({ status: 'granted' });
+  });
+
+  it('brak puli service → skipped bez zapytań (e-mail Auth wychodzi)', async () => {
+    const { takeAuthSendBudget } = await import('@/lib/email/auth-send-budget');
+    const { fakeSession } = await import('../helpers/fake-db');
+    fakeSession.serviceConfigured = false;
+    expect(await takeAuthSendBudget('passwordReset')).toEqual({ status: 'skipped' });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });
 

@@ -11,16 +11,18 @@ import {
   type BreachFieldError,
   type BreachFormErrors,
 } from '@/lib/admin/breach';
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { jsonArg, rpc as callRpc, type RpcArgs } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { isLocale } from '@/i18n/routing';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
 
 /**
  * Server Actions rejestru incydentów i naruszeń danych osobowych (#490) — panel admina.
  *
- * Każdy zapis to jedno RPC pod SESJĄ administratora (SECURITY DEFINER, `is_admin()`, audyt,
+ * Każdy zapis to jedno RPC pod SESJĄ administratora (`withPortalTransaction` z tożsamością
+ * z `getPortalIdentity()`; SECURITY DEFINER, `is_admin()`, audyt,
  * niezmienna historia — migracja 0106). Walidacja pól jak w bazie (`breachFormErrors`);
  * błąd pola z bazy (`VALIDATION_FAILED: <pole>:<kod>`) wraca do formularza przy polu.
  * Klucz idempotencji (`clientKey`) tworzy przeglądarka raz na operację — podwójne kliknięcie
@@ -75,12 +77,21 @@ function withFormField(result: BreachActionResult): BreachActionResult {
   return result;
 }
 
-async function sessionClient() {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user ? supabase : null;
+type RpcOutcome = { data: unknown; error?: undefined } | { data?: undefined; error: { message: string } };
+
+/**
+ * Jedno RPC pod sesją administratora. Brak sesji → `null` (PERMISSION_DENIED); błąd bazy →
+ * `{ error }` do mapowania na kod użytkowy; inne wyjątki (sieć, konfiguracja) rzucają → Sentry.
+ */
+async function adminRpc(fn: string, args: RpcArgs): Promise<RpcOutcome | null> {
+  const me = await getPortalIdentity();
+  if (!me) return null;
+  try {
+    return { data: await withPortalTransaction(me, (tx) => callRpc(tx, fn, args)) };
+  } catch (error) {
+    if (isDatabaseError(error)) return { error: { message: databaseErrorMessage(error) } };
+    throw error;
+  }
 }
 
 function validForm(input: unknown) {
@@ -96,17 +107,17 @@ export async function createBreachIncident(
 ): Promise<BreachActionResult<{ id: string }>> {
   const { form, fields, valid } = validForm(input);
   if (!valid) return { ok: false, error: 'VALIDATION_FAILED', fields };
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
   if (typeof clientKey !== 'string' || !UUID_RE.test(clientKey)) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
   try {
-    const supabase = await sessionClient();
-    if (!supabase) return { ok: false, error: 'PERMISSION_DENIED' };
-    const { data, error } = await supabase.rpc('admin_create_breach_incident', {
+    const outcome = await adminRpc('admin_create_breach_incident', {
       p_client_key: clientKey,
-      p_data: form,
+      p_data: jsonArg(form),
     });
+    if (!outcome) return { ok: false, error: 'PERMISSION_DENIED' };
+    const { data, error } = outcome;
     if (error) return withFormField(mapError(error.message));
     return typeof data === 'string' ? { ok: true, id: data } : { ok: false, error: 'INTERNAL' };
   } catch (e) {
@@ -123,18 +134,18 @@ export async function updateBreachIncident(
 ): Promise<BreachActionResult<{ version: number }>> {
   const { form, fields, valid } = validForm(input);
   if (!valid) return { ok: false, error: 'VALIDATION_FAILED', fields };
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
   if (typeof id !== 'string' || !UUID_RE.test(id) || !Number.isInteger(expectedVersion)) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
   try {
-    const supabase = await sessionClient();
-    if (!supabase) return { ok: false, error: 'PERMISSION_DENIED' };
-    const { data, error } = await supabase.rpc('admin_update_breach_incident', {
+    const outcome = await adminRpc('admin_update_breach_incident', {
       p_id: id,
       p_expected_version: expectedVersion,
-      p_data: form,
+      p_data: jsonArg(form),
     });
+    if (!outcome) return { ok: false, error: 'PERMISSION_DENIED' };
+    const { data, error } = outcome;
     if (error) return withFormField(mapError(error.message));
     return typeof data === 'number' ? { ok: true, version: data } : { ok: false, error: 'INTERNAL' };
   } catch (e) {
@@ -153,19 +164,18 @@ async function transition(
   const max = field === 'closureSummary' ? BREACH_LIMITS.closureSummary : BREACH_LIMITS.reopenReason;
   const noteError = breachNoteError(typeof note === 'string' ? note : '', max);
   if (noteError) return { ok: false, error: 'VALIDATION_FAILED', field, fieldError: noteError };
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
   if (typeof id !== 'string' || !UUID_RE.test(id) || !Number.isInteger(expectedVersion)) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
   try {
-    const supabase = await sessionClient();
-    if (!supabase) return { ok: false, error: 'PERMISSION_DENIED' };
     const args =
       rpc === 'admin_close_breach_incident'
         ? { p_id: id, p_expected_version: expectedVersion, p_summary: note.trim() }
         : { p_id: id, p_expected_version: expectedVersion, p_reason: note.trim() };
-    const { error } = await supabase.rpc(rpc, args);
-    if (error) return mapError(error.message);
+    const outcome = await adminRpc(rpc, args);
+    if (!outcome) return { ok: false, error: 'PERMISSION_DENIED' };
+    if (outcome.error) return mapError(outcome.error.message);
     return { ok: true };
   } catch (e) {
     captureError(e, { area: `admin.${rpc}` });
@@ -252,19 +262,19 @@ export async function notifyBreachSubjects(
     return { ok: false, error: 'VALIDATION_FAILED', field: 'content', fieldError: 'required' };
   }
 
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
   if (typeof id !== 'string' || !UUID_RE.test(id) || typeof clientKey !== 'string' || !UUID_RE.test(clientKey)) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
   try {
-    const supabase = await sessionClient();
-    if (!supabase) return { ok: false, error: 'PERMISSION_DENIED' };
-    const { data, error } = await supabase.rpc('admin_notify_breach_subjects', {
+    const outcome = await adminRpc('admin_notify_breach_subjects', {
       p_id: id,
       p_client_key: clientKey,
       p_recipients: entries,
-      p_content: content,
+      p_content: jsonArg(content),
     });
+    if (!outcome) return { ok: false, error: 'PERMISSION_DENIED' };
+    const { data, error } = outcome;
     if (error) {
       const mapped = mapError(error.message);
       return mapped.ok ? { ok: false, error: 'INTERNAL' } : mapped;
