@@ -4902,7 +4902,7 @@ select pg_temp.assert(
   'OPS47-9 idx_jobs_city_fold_trgm: GIN trigram na search_fold(city), częściowy jak predykat listy ofert');
 
 -- =============================================================================
--- OPS44 — czujki poczty (0113, #44): sekcja `mail` w ops_metrics — kohorta listów
+-- OPS44 — czujki poczty (0118, #44): sekcja `mail` w ops_metrics — kohorta listów
 -- przyjętych w 24 h / 7 dobach bazowych, trwałe odbicia i skargi tej kohorty, aktywne
 -- i nowe blokady. Tylko liczby; pracujbe_ops nadal bez praw do tabel.
 -- =============================================================================
@@ -4959,12 +4959,12 @@ select pg_temp.assert(
 rollback;
 
 -- Kontrola ujemna: funkcja o kształcie z 0096 (te same sekcje, bez `mail`) nie przechodzi
--- warunku OPS44-2 — asercja zależy od 0113, a nie od przypadkowego klucza. (Bez \ir:
+-- warunku OPS44-2 — asercja zależy od 0118, a nie od przypadkowego klucza. (Bez \ir:
 -- plik bywa podawany przez stdin, np. tests/integration/rate-limit.test.ts.)
 begin;
-alter function public.ops_metrics() rename to ops_metrics_0113;
+alter function public.ops_metrics() rename to ops_metrics_0118;
 create function public.ops_metrics() returns jsonb language sql stable security definer
-  set search_path = pg_catalog, public, pg_temp as $$ select public.ops_metrics_0113() - 'mail' $$;
+  set search_path = pg_catalog, public, pg_temp as $$ select public.ops_metrics_0118() - 'mail' $$;
 grant execute on function public.ops_metrics() to pracujbe_ops;
 set local role pracujbe_ops;
 select pg_temp.assert(

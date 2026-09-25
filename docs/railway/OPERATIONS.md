@@ -53,7 +53,7 @@ EXECUTE mają tylko `pracujbe_ops` i `service_role`). Rola `pracujbe_ops` nie ma
 i odmową dostępu do tabel. `appPool` opisuje pulę jednej instancji. Przy kilku
 replikach każde wywołanie może trafić do innej instancji.
 
-### Poczta (#44, migracja `0113`)
+### Poczta (#44, migracja `0118`)
 
 Sekcja `mail` w `ops_metrics()` zawiera same liczby: listy przyjęte przez dostawcę
 (`sent_at`) w ostatnich 24 h i w 7 dobach bazowych przed nimi (okno 2.–8. doba), ile
@@ -66,7 +66,7 @@ oceniamy — pojedyncze odbicie przy małym ruchu nie podnosi alarmu. Wiek najst
 gotowego wiersza obu kolejek (`email_deliveries`, `auth.email_outbox`) to istniejące
 `email_queue_age` / `auth_email_queue_age`. Progi to wartości startowe
 (`OPS_THRESHOLDS.mail*`) — skoryguj je po kilku tygodniach realnego ruchu. Baza bez
-`0113` nie ma sekcji `mail`: czujki poczty milczą, reszta działa. Kolejka auth nie
+`0118` nie ma sekcji `mail`: czujki poczty milczą, reszta działa. Kolejka auth nie
 zapisuje zdarzeń doręczenia, więc odsetki dotyczą tylko poczty domenowej. Dowód:
 `rls.sql` sekcja OPS44 (z kontrolą ujemną na ciele z `0096`), test integracyjny
 z loginem monitoringu (alarm → recovery), `tests/unit/ops-sensors.test.ts`.
@@ -197,7 +197,7 @@ w innych językach w SQL (`Brussels`, `Luik`; dziś rozwija je aplikacja przez
 |---|---|---|
 | **Kod** (route `/api/health/ops`, `src/lib/ops/*`, skrypty) | redeploy poprzedniego SHA w Railway; endpoint znika, pozostałe trasy bez zmian | — |
 | **Schemat** (`0096`) | NOWA migracja naprawcza: `drop function public.ops_metrics()`, `drop index public.idx_jobs_city_trgm`, `revoke usage on schema public from pracujbe_ops`, a po odebraniu członkostwa loginowi monitoringu `drop role pracujbe_ops` | nie edytuj zastosowanej `0096`; kod starszy niż `0096` działa na bazie z `0096` (funkcja i indeks są addytywne) |
-| **Schemat** (`0113`, poczta) | NOWA migracja naprawcza z ciałem `ops_metrics()` z `0096` i `drop index public.idx_email_deliveries_sent_at` | aplikacja toleruje brak sekcji `mail` (czujki poczty milczą) |
+| **Schemat** (`0118`, poczta) | NOWA migracja naprawcza z ciałem `ops_metrics()` z `0096` i `drop index public.idx_email_deliveries_sent_at` | aplikacja toleruje brak sekcji `mail` (czujki poczty milczą) |
 | **Dane** | `0096` nie zmienia danych. Utracone dane odtwarzasz z kopii: `restore-backup.sh` do izolowanej bazy, weryfikacja, potem decyzja o przełączeniu/eksporcie | nigdy nie odtwarzaj kopii bezpośrednio do produkcyjnej bazy; skrypty odmawiają celu spoza `pracujbe_restore_*` |
 
 Kopie logiczne nie zastępują snapshotów wolumenu Railway i odwrotnie. Snapshot
