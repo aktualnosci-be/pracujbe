@@ -13,6 +13,7 @@ import { loginHref, registerHref } from '@/lib/auth/next-path';
 import { reportApplyStarted } from '@/lib/job-funnel/client';
 import { usePublicViewerStatus } from '@/components/public/PublicSavedJobs';
 import { GuestApplyForm } from '@/components/public/GuestApplyForm';
+import { LegalDocLink } from '@/components/legal/LegalDocLink';
 import {
   APPLY_AVAILABILITY_OPTIONS,
   APPLY_AVAILABILITY_TO_DB,
@@ -553,12 +554,18 @@ export function ApplyModal({
                     htmlFor="apply-consent"
                     className="cursor-pointer text-[13px] font-normal leading-[1.5] text-foreground"
                   >
-                    {t('consent')}
+                    {t.rich('privacyNoticeAck', {
+                      privacy: (chunks) => (
+                        <LegalDocLink href="/polityka-prywatnosci" newTabHint={t('opensInNewTab')}>
+                          {chunks}
+                        </LegalDocLink>
+                      ),
+                    })}
                   </Label>
                 </div>
                 {errors.consent ? (
                   <p id="apply-consent-error" className={cn(FORM_ERROR, '-mt-3')}>
-                    {t('consentRequired')}
+                    {t('privacyNoticeRequired')}
                   </p>
                 ) : null}
 

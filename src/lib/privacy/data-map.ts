@@ -662,6 +662,9 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['candidate', 'employer'],
     columns: {
       profile_id: 'reference',
+      // #493 (0108): rodzaj elementu (regulamin / informacja o prywatności / dawny wspólny) i kanał.
+      kind: 'consent',
+      source: 'consent',
       document_version: 'consent',
       accepted_at: 'consent',
       ip_address: 'technical',

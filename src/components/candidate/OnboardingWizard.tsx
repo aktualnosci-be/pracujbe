@@ -154,6 +154,7 @@ interface FormValues {
   expectedSalaryCurrency: Currency;
   bio: string;
   agreeTerms: boolean;
+  privacyNoticeAck: boolean;
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -165,7 +166,7 @@ const STEP_FIELDS: Record<OnboardingStep, (keyof FormValues)[]> = {
   3: ['experienceYears', 'skills'],
   4: ['city', 'region', 'radiusKm', 'hasDrivingLicense', 'hasCar'],
   5: ['languages', 'certificates', 'certificateExpiry'],
-  6: ['availability', 'preferredContractTypes', 'expectedSalaryMin', 'bio', 'agreeTerms'],
+  6: ['availability', 'preferredContractTypes', 'expectedSalaryMin', 'bio', 'agreeTerms', 'privacyNoticeAck'],
 };
 
 const SCHEMAS = {
@@ -242,6 +243,7 @@ function buildStepData(step: OnboardingStep, v: FormValues): unknown {
         expectedSalaryMin: toOptionalNumber(v.expectedSalaryMin),
         bio: v.bio.trim() === '' ? undefined : v.bio,
         agreeTerms: v.agreeTerms,
+        privacyNoticeAck: v.privacyNoticeAck,
         // Waluta nie jest częścią step6Schema — action czyta ją defensywnie z surowych danych.
         expectedSalaryCurrency: v.expectedSalaryCurrency,
       };
@@ -270,7 +272,9 @@ function toFormValues(init?: OnboardingInitialValues): FormValues {
     expectedSalaryMin: init?.expectedSalaryMin != null ? String(init.expectedSalaryMin) : '',
     expectedSalaryCurrency: init?.expectedSalaryCurrency === 'PLN' ? 'PLN' : 'EUR',
     bio: init?.bio ?? '',
+    // #493: dwa osobne pola, żadne nie jest domyślnie zaznaczone.
     agreeTerms: false,
+    privacyNoticeAck: false,
   };
 }
 
@@ -370,7 +374,7 @@ export function OnboardingWizard({
     values.experienceYears.trim() !== '',
     values.city.trim() !== '',
     values.languages.length > 0 || values.certificates.length > 0,
-    Boolean(values.availability) && values.agreeTerms,
+    Boolean(values.availability) && values.agreeTerms && values.privacyNoticeAck,
   ];
   // Kroki z polami, których wymaga `finish_onboarding` (0029): imię, zawody+branże, miasto,
   // dostępność. Przy ONBOARDING_INCOMPLETE prowadzimy kandydata do pierwszego brakującego (#363).
@@ -1148,6 +1152,7 @@ export function OnboardingWizard({
                       onCheckedChange={(checked) =>
                         setValue('agreeTerms', checked === true, { shouldDirty: true })
                       }
+                      aria-required="true"
                       aria-invalid={errors.agreeTerms ? true : undefined}
                       aria-describedby={describedBy('agreeTerms')}
                       className="mt-0.5"
@@ -1156,12 +1161,36 @@ export function OnboardingWizard({
                       htmlFor="onb-agreeTerms-box"
                       className="text-[13px] font-normal leading-[1.5] text-foreground"
                     >
-                      {t.rich('agreeTermsLinks', {
+                      {t.rich('termsAcceptLinks', {
                         terms: (chunks) => (
                           <TermsLink href="/regulamin" newTabHint={t('opensInNewTab')}>
                             {chunks}
                           </TermsLink>
                         ),
+                      })}
+                    </Label>
+                  </div>
+                  <FieldError name="agreeTerms" />
+                </div>
+
+                <div id={domId('privacyNoticeAck')} className={FORM_FIELD}>
+                  <div className="flex items-start gap-2.5">
+                    <Checkbox
+                      id="onb-privacyNoticeAck-box"
+                      checked={values.privacyNoticeAck}
+                      onCheckedChange={(checked) =>
+                        setValue('privacyNoticeAck', checked === true, { shouldDirty: true })
+                      }
+                      aria-required="true"
+                      aria-invalid={errors.privacyNoticeAck ? true : undefined}
+                      aria-describedby={describedBy('privacyNoticeAck')}
+                      className="mt-0.5"
+                    />
+                    <Label
+                      htmlFor="onb-privacyNoticeAck-box"
+                      className="text-[13px] font-normal leading-[1.5] text-foreground"
+                    >
+                      {t.rich('privacyNoticeAckLinks', {
                         privacy: (chunks) => (
                           <TermsLink href="/polityka-prywatnosci" newTabHint={t('opensInNewTab')}>
                             {chunks}
@@ -1170,7 +1199,7 @@ export function OnboardingWizard({
                       })}
                     </Label>
                   </div>
-                  <FieldError name="agreeTerms" />
+                  <FieldError name="privacyNoticeAck" />
                 </div>
               </div>
             ) : null}
