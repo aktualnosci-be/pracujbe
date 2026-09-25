@@ -2456,7 +2456,8 @@
     "lead": "De website is nog niet openbaar. Heb je een toegangswachtwoord, vul het dan hieronder in.",
     "passwordLabel": "Toegangswachtwoord",
     "submit": "Doorgaan",
-    "error": "Onjuist wachtwoord. Probeer het opnieuw."
+    "error": "Onjuist wachtwoord. Probeer het opnieuw.",
+    "rateLimited": "Te veel pogingen. Probeer het over enkele minuten opnieuw."
   },
   "offline": {
     "title": "Geen verbinding",
