@@ -1,0 +1,337 @@
+{
+  "date": "2026-09-25",
+  "status": "DRAFT_NOT_APPROVED_OR_DEPLOYED",
+  "file_count_excluding_this_manifest": 66,
+  "files": [
+    {
+      "path": "00-START-TUTAJ.md",
+      "bytes": 5592,
+      "sha256": "dc4824c83ba356831b38c75ccf6910088262418bcaed0fbab280fe8985546211"
+    },
+    {
+      "path": "01-odpowiedz-na-zlecenie.md",
+      "bytes": 18373,
+      "sha256": "6912d6b010c41b60c0910610153a66e10a29846a4f916d70640912f1e555e720"
+    },
+    {
+      "path": "Pracuj_be_analiza_i_decyzje_2026-09-25.docx",
+      "bytes": 51732,
+      "sha256": "ad89461a009f66f778aa389587b68fe24e3e52198d3f48f2e042dea8b185231b"
+    },
+    {
+      "path": "materialy-zrodlowe/00-CO-ZROBIC.md",
+      "bytes": 4068,
+      "sha256": "3c6bd45db681843872c24ec2f8968305ad67ce57fa0a23e577b247d16100fda9"
+    },
+    {
+      "path": "materialy-zrodlowe/kontekst-techniczny/AI_JOB_IMPORT.md",
+      "bytes": 13056,
+      "sha256": "a3ec89577821039c2439d8565de407646e57361b7ae7515f4d42f8870b7c5b7b"
+    },
+    {
+      "path": "materialy-zrodlowe/kontekst-techniczny/DATA_RETENTION.md",
+      "bytes": 8848,
+      "sha256": "1e20fde842cc054947d223af8254d6d89808d3e8e1f3c925e18d831f8286d998"
+    },
+    {
+      "path": "materialy-zrodlowe/kontekst-techniczny/GUEST_APPLY.md",
+      "bytes": 8257,
+      "sha256": "bbdfe8e9117d16cf071ce8ee47334582c0b1bacd858be2d10f237575a6387f75"
+    },
+    {
+      "path": "materialy-zrodlowe/kontekst-techniczny/JOB_FUNNEL.md",
+      "bytes": 5863,
+      "sha256": "fcf9edbd82748b7a0e4d4baa5cc647a278f302b3e11d68161ab322ca0774fce9"
+    },
+    {
+      "path": "materialy-zrodlowe/kontekst-techniczny/PRODUCT_DECISIONS.md",
+      "bytes": 1125,
+      "sha256": "bcb717a675e768a8bedf78f510eca113e2bb7144886d1e3c43479fb706ebfa82"
+    },
+    {
+      "path": "materialy-zrodlowe/kontekst-techniczny/RESEND_SETUP.md",
+      "bytes": 17279,
+      "sha256": "de0392a4b8416ec2136653483f61a6f04eee092ed624d2331fc4c80ce6cdbbb5"
+    },
+    {
+      "path": "materialy-zrodlowe/kontekst-techniczny/TELEMETRY_PRIVACY.md",
+      "bytes": 2725,
+      "sha256": "4ea3f0d9e54ded5e826ce972baf80c3aa23ff169797c22962edb0a73ede8395e"
+    },
+    {
+      "path": "materialy-zrodlowe/kontekst-techniczny/TURNSTILE.md",
+      "bytes": 4906,
+      "sha256": "a1987187fb8255cbf3c6cf80d563ea284b986a80b5f960271a369b14f2bf1eb7"
+    },
+    {
+      "path": "materialy-zrodlowe/szkice/ai-act-art22-dpia.md",
+      "bytes": 9131,
+      "sha256": "f9304bfb0d66e64b8f994b01f85132c2070ac24adc4b0c62045c496b7d48470b"
+    },
+    {
+      "path": "materialy-zrodlowe/szkice/data-map.generated.md",
+      "bytes": 75850,
+      "sha256": "9a168aec62022884c3cb084af7a952548b084382bd61432b53e6ba4c6f230165"
+    },
+    {
+      "path": "materialy-zrodlowe/szkice/dostawcy-i-transfery.md",
+      "bytes": 11791,
+      "sha256": "7d7e3ffe79faebbeaef6ace324630c1cb0ff62015e3ac67210fa4e86fffa55be"
+    },
+    {
+      "path": "materialy-zrodlowe/szkice/eprivacy-lejek.md",
+      "bytes": 5876,
+      "sha256": "1ba765a44a1df8bbd6eaf37cf3ffceb70ebf600e00cb65103bd2476cc743c657"
+    },
+    {
+      "path": "materialy-zrodlowe/szkice/procedura-naruszen.md",
+      "bytes": 8144,
+      "sha256": "e81680c4b84b88b45ed83a817d817378f33be3e456052a9d327deb9ce875826b"
+    },
+    {
+      "path": "materialy-zrodlowe/szkice/rejestr-czynnosci.md",
+      "bytes": 12815,
+      "sha256": "a17ae29784cc00de38e87baa297226f89eb1b8d740a691be2da5afa1b7235de4"
+    },
+    {
+      "path": "materialy-zrodlowe/szkice/retencja-i-prawa-kandydata.md",
+      "bytes": 6805,
+      "sha256": "7e2e1b2853dd49a28ad3391f5c9a9796610c123c67761c88a374b7481e6c02f9"
+    },
+    {
+      "path": "publiczne/en/01-regulamin.md",
+      "bytes": 7409,
+      "sha256": "ed0d5ec91235045324f3883407681ba9bea67bf74780c2aa6f9788255b6b6716"
+    },
+    {
+      "path": "publiczne/en/02-prywatnosc.md",
+      "bytes": 9749,
+      "sha256": "afbb31c10efe2e351819bcc21b3e54557a370056e47a44f85fc0b61dfea9d960"
+    },
+    {
+      "path": "publiczne/en/03-cookies.md",
+      "bytes": 2258,
+      "sha256": "97f3196d8201a0f2538fb5f179fc7055c9f7be7c29d2bd05a97047d94ef460c2"
+    },
+    {
+      "path": "publiczne/en/04-informacja-kandydata.md",
+      "bytes": 2488,
+      "sha256": "f22425b9636e5008c57eb1d45f9280e7767b3ee70e57de7f5ace5ef8541a7d20"
+    },
+    {
+      "path": "publiczne/en/05-zgoda-marketingowa.md",
+      "bytes": 1492,
+      "sha256": "5c37b912687465a466833055b8904e133a0925134d5df9715d406d175bb78da9"
+    },
+    {
+      "path": "publiczne/en/06-zgloszenie-dsa.md",
+      "bytes": 2369,
+      "sha256": "5c0bd1f7d018a03d1e8a5259ad0ab86815592e3a36c3e6a8a83184a09bd76576"
+    },
+    {
+      "path": "publiczne/en/07-wiek.md",
+      "bytes": 1378,
+      "sha256": "03f46a405b7217d8ef8fb9465d929427baa3384beee7e482d2d887cd71aca220"
+    },
+    {
+      "path": "publiczne/fr/01-regulamin.md",
+      "bytes": 8922,
+      "sha256": "2586ef5f5a95ded1a2df0632d437c2934f9aa8305453a8e17f72977a8c9ca6b8"
+    },
+    {
+      "path": "publiczne/fr/02-prywatnosc.md",
+      "bytes": 11710,
+      "sha256": "38b0ee5b51be0945eeacf8b31603dd45e8a53ce935a73b0e38e951bc033ef4f1"
+    },
+    {
+      "path": "publiczne/fr/03-cookies.md",
+      "bytes": 2746,
+      "sha256": "1721943fabef29a24771a6087c8938ae3a11e3b6c6dd0b94a3cf16de30972110"
+    },
+    {
+      "path": "publiczne/fr/04-informacja-kandydata.md",
+      "bytes": 2597,
+      "sha256": "4f219c4d943d9ef4b577fea233aae6817f08f26520e9aadc15c6743ad54ede05"
+    },
+    {
+      "path": "publiczne/fr/05-zgoda-marketingowa.md",
+      "bytes": 1627,
+      "sha256": "18a8a4cba1bfdd6c165bb542d73ec89b0275ff65a2faf1d81f83870ffc374717"
+    },
+    {
+      "path": "publiczne/fr/06-zgloszenie-dsa.md",
+      "bytes": 2720,
+      "sha256": "a234d3820809d7ae172c338bf60f51d5ba6525500e335ef34e82994861c5ea37"
+    },
+    {
+      "path": "publiczne/fr/07-wiek.md",
+      "bytes": 1588,
+      "sha256": "7f31236185499801de5a357f125dab7dd74da44643be3ff2f3c59d5429dd3079"
+    },
+    {
+      "path": "publiczne/nl/01-regulamin.md",
+      "bytes": 8214,
+      "sha256": "341238b9563e14748bb0b9c9e329e9ca83aef4687077053f86d07eed0d7c91ff"
+    },
+    {
+      "path": "publiczne/nl/02-prywatnosc.md",
+      "bytes": 10855,
+      "sha256": "98e58f2795318835d099bf735b18f626be5ee69859cccb5423726194a9c251d1"
+    },
+    {
+      "path": "publiczne/nl/03-cookies.md",
+      "bytes": 2413,
+      "sha256": "6a1600c35bd505baa16921098e82bdf9c9ae9de9ac4fe12fc56c308ba113a5fe"
+    },
+    {
+      "path": "publiczne/nl/04-informacja-kandydata.md",
+      "bytes": 2517,
+      "sha256": "274483b5ea325419c1c77e41b3df6e75c4fa5373cf619d70cbff610975a94203"
+    },
+    {
+      "path": "publiczne/nl/05-zgoda-marketingowa.md",
+      "bytes": 1486,
+      "sha256": "9a23787a6f5667b3f95227dcef4b3ad3431e30f939435b0fffead62b178238f0"
+    },
+    {
+      "path": "publiczne/nl/06-zgloszenie-dsa.md",
+      "bytes": 2528,
+      "sha256": "c31aff521cbd74182061a0c0d7eaeced630be5122255d1c481dc4507af3e4ef1"
+    },
+    {
+      "path": "publiczne/nl/07-wiek.md",
+      "bytes": 1497,
+      "sha256": "f4ffb5498e67d57288de2dfeabed4a0a9902e5e568e0ae270ea79cd7856c536a"
+    },
+    {
+      "path": "publiczne/pl/01-regulamin.md",
+      "bytes": 7869,
+      "sha256": "5740d1d3da81a8c0db3ba0fa39d3c70753afa31112dc9a90ae7b143f6b519ccd"
+    },
+    {
+      "path": "publiczne/pl/02-prywatnosc.md",
+      "bytes": 10184,
+      "sha256": "52cc4b7fd8ac9c1ef89a081427139e283beb6e0a5232f1963a7cf7e4d8ee2e28"
+    },
+    {
+      "path": "publiczne/pl/03-cookies.md",
+      "bytes": 2476,
+      "sha256": "83ab51df61d88f529406a1328827e428da5dc5523596059a3fb878408bc8faf8"
+    },
+    {
+      "path": "publiczne/pl/04-informacja-kandydata.md",
+      "bytes": 2461,
+      "sha256": "b77fc5fa10039eb4adf951ff952e3519362b650c77bbf37635f026596bcf33d3"
+    },
+    {
+      "path": "publiczne/pl/05-zgoda-marketingowa.md",
+      "bytes": 1471,
+      "sha256": "81ee91da1f5015cb734ea71327180c4495c1435a9f52b9dbb915c99dd445bead"
+    },
+    {
+      "path": "publiczne/pl/06-zgloszenie-dsa.md",
+      "bytes": 2431,
+      "sha256": "e8f8044da654cb0f590bb3c427ebb047439ef6364610c467af65c833a2aaafdc"
+    },
+    {
+      "path": "publiczne/pl/07-wiek.md",
+      "bytes": 1490,
+      "sha256": "4613c2350275c2e4283f96875b2b596c1b749ce9efe0d8d660540f6e230aeb74"
+    },
+    {
+      "path": "szkice/ai-act-art22-dpia.md",
+      "bytes": 11953,
+      "sha256": "2fa027dc2949b43dd14a8e2ad07eb6c881c780ce95994e9c21bae16d42d52c18"
+    },
+    {
+      "path": "szkice/dostawcy-i-transfery.md",
+      "bytes": 8979,
+      "sha256": "194691b5a6f6a0b93b3b210233111a3699fa4300f245f480de73394cfd907503"
+    },
+    {
+      "path": "szkice/dsa-moderacja.md",
+      "bytes": 9324,
+      "sha256": "640645bea023c9e8d02938e6ba858ce3dd6e8b0e6ca38965d5407b64f82b74a0"
+    },
+    {
+      "path": "szkice/eprivacy-lejek.md",
+      "bytes": 5625,
+      "sha256": "681f76d8db91524c43dcd85caf939b70ed16ff37e2d04dac2e92714a6e97a288"
+    },
+    {
+      "path": "szkice/procedura-naruszen.md",
+      "bytes": 7882,
+      "sha256": "045976954e4bec84b600957c45cea73625249ac8636150b5e80a2db5050cd483"
+    },
+    {
+      "path": "szkice/rejestr-czynnosci.md",
+      "bytes": 14948,
+      "sha256": "ae17eb23d2ab9b6676148042634ae05493e4b027a2f5d741e4f1bd29f7f74d2a"
+    },
+    {
+      "path": "szkice/retencja-i-prawa-kandydata.md",
+      "bytes": 13009,
+      "sha256": "1d36387cdc26251fbb9e4b440b46d3f82c595840ef7e990be0b50b83aa4e5e68"
+    },
+    {
+      "path": "szkice/role-portal-pracodawca.md",
+      "bytes": 5076,
+      "sha256": "8b85a733706e2a65e70112b631a61a10830c7d7a574850c1caf295ea811be5d7"
+    },
+    {
+      "path": "wdrozenie/artifact-qa.json",
+      "bytes": 784,
+      "sha256": "b729ffb12c2933b183663dc95566b37e81c8196aadfa8af752189d74e7b67f28"
+    },
+    {
+      "path": "wdrozenie/checklista-odbioru.md",
+      "bytes": 11306,
+      "sha256": "b843b2de55c118f5e0a30974de064f35397c426ec5a01001c3351b4d8169ec60"
+    },
+    {
+      "path": "wdrozenie/dane-operatora.json",
+      "bytes": 9211,
+      "sha256": "8dd33af7fa6f731407a56670fd3d54c9350c40ab1a3ea0bc0372a882c6c7b794"
+    },
+    {
+      "path": "wdrozenie/input-manifest.json",
+      "bytes": 2860,
+      "sha256": "faffa1dac9faa59f5c0d0c86ec2187655fb65eea186b2e8c00604e2f37a9c713"
+    },
+    {
+      "path": "wdrozenie/korekty-mapy-i-zmian.md",
+      "bytes": 7097,
+      "sha256": "343420c079700281e4a02ceeb651308e377d1245c737bad3a6571250b085023f"
+    },
+    {
+      "path": "wdrozenie/macierz-zlecenia.md",
+      "bytes": 2127,
+      "sha256": "2f6c553bac95121aa7edab95a77ca44575436deb1ae3719423f0e4b7ecb2d5f4"
+    },
+    {
+      "path": "wdrozenie/retention-proposal.json",
+      "bytes": 6560,
+      "sha256": "d743b8d2de6fbbd692bc4badbaea8fc345aada6f6ab13033c54e50a8a820fed9"
+    },
+    {
+      "path": "wdrozenie/template-token-register.json",
+      "bytes": 23199,
+      "sha256": "349f04054f08bda15f5a7662cfdb4b1a595988466aeeb10b48e8623474f7ff53"
+    },
+    {
+      "path": "wzory/naruszenie-art33-FR.md",
+      "bytes": 3778,
+      "sha256": "9af40dd446d572c5ce6793451363f21463ff1c8406f039716af73f37de42e543"
+    },
+    {
+      "path": "wzory/naruszenie-art34-PL-NL-FR-EN.md",
+      "bytes": 5326,
+      "sha256": "d5c19c47b588230a338a526874400a6b73d5f96f550899307d2b53aeda3d8531"
+    },
+    {
+      "path": "zrodla.md",
+      "bytes": 7563,
+      "sha256": "6c77801cdb0ed4364a3f4d9ce4e6b3dcc5fb6e97eb29885716bb2eddad40513a"
+    }
+  ]
+}

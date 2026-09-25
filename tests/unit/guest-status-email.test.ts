@@ -8,7 +8,7 @@ import { guestDeliveryToken } from '@/lib/email/guest-delivery';
 import { emailPreferenceCategory } from '@/lib/email/categories';
 
 /**
- * #98 (0109) — e-mail do gościa o zmianie statusu aplikacji: w języku z wiersza kolejki
+ * #98 (0113) — e-mail do gościa o zmianie statusu aplikacji: w języku z wiersza kolejki
  * (= język formularza gościa), status jako etykieta w tym języku, CTA bez tokenu (linki
  * potwierdzenia/przejęcia bez zmian), z danych firmy tylko nazwa i tytuł oferty.
  */

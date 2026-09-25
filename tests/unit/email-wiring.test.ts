@@ -37,7 +37,7 @@ function enqueuedIn(sql: string, type: string): boolean {
 
 /**
  * #98: e-maile do gościa bez profilu idą przez `enqueue_guest_email(...)`, a e-mail o zmianie
- * statusu (0109) przez `enqueue_guest_status_email(...)`.
+ * statusu (0113) przez `enqueue_guest_status_email(...)`.
  */
 function guestEnqueuedIn(sql: string, type: string): boolean {
   const calls = sql.match(/enqueue_guest(?:_status)?_email\([^;]*?\)\s*;/gs) ?? [];

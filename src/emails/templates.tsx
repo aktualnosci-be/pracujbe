@@ -128,7 +128,7 @@ export interface EmailDataMap {
   /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
   guestApplicationConfirm: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
   guestApplicationSent: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
-  /** Zmiana statusu aplikacji gościa (0109) — w języku formularza; `status` jak w `statusChanged`. */
+  /** Zmiana statusu aplikacji gościa (0113) — w języku formularza; `status` jak w `statusChanged`. */
   guestStatusChanged: { recipientName?: string; jobTitle: string; companyName: string; status: string; actionUrl: string };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
   payment: { recipientName?: string; amount: string; description?: string; actionUrl: string };
@@ -145,6 +145,8 @@ export interface EmailDataMap {
   /** Wynik sprawy DSA dla zgłaszającego (#42) — bez uzasadnienia i danych autora. */
   reportDecisionActioned: { recipientName?: string | null; caseNumber: string; actionUrl: string };
   reportDecisionNoAction: { recipientName?: string | null; caseNumber: string; actionUrl: string };
+  /** Cofnięcie ograniczenia — do zgłaszającego (#43, 0109): bez powodu i danych autora. */
+  reportRestored: { recipientName?: string | null; caseNumber: string; actionUrl: string };
   /**
    * Uzasadnienie decyzji moderacyjnej dla autora treści (#42): fakty (cytat), podstawa
    * (`groundType` → etykieta w języku odbiorcy + `groundReference`), udział automatyzacji.
@@ -766,6 +768,18 @@ export function ReportDecisionNoActionEmail(props: EmailProps<'reportDecisionNoA
   );
 }
 
+export function ReportRestoredEmail(props: EmailProps<'reportRestored'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="reportRestored"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+    />
+  );
+}
+
 /** Etykiety podstawy i automatyzacji w języku odbiorcy (nieznana podstawa → pusta). */
 function moderationVars(locale: Locale, props: ModerationEmailData): Record<string, unknown> {
   const labels = moderationLabels[locale];
@@ -910,6 +924,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   reportReceived: ReportReceivedEmail,
   reportDecisionActioned: ReportDecisionActionedEmail,
   reportDecisionNoAction: ReportDecisionNoActionEmail,
+  reportRestored: ReportRestoredEmail,
   moderationJobRemoved: ModerationJobRemovedEmail,
   moderationCompanySuspended: ModerationCompanySuspendedEmail,
   moderationRestored: ModerationRestoredEmail,
