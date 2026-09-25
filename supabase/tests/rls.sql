@@ -11589,6 +11589,7 @@ reset role;
 select pg_temp.assert(:'fc5'::int = 1
   and (select created_at > now() - interval '1 minute' from public.job_funnel_receipts where nonce = :'FCN3'),
   'FC575-5 stary receipt usunięty przed zapisem, nowe zliczenie przyjęte');
+rollback;
 
 -- ============================================================================
 -- RV574. Retencja wg opracowania 2026-09-25 (#574, 0127): wartości w retention_policies,
