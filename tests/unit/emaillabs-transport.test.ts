@@ -218,6 +218,7 @@ describe('worker kolejki domenowej przez EmailLabs', () => {
       id: KEY, profile_id: null, to_email: 'kandydat@example.test', template: 'jobOffer',
       locale: 'nl', payload: { companyName: 'Acme', jobTitle: 'Magazijnier' }, attempts: 0,
     }]);
+    fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
     process.env.EMAIL_PROVIDER = 'emaillabs';
     process.env.EMAILLABS_APP_KEY = CONFIG.appKey;
