@@ -18,7 +18,7 @@ z flagą). Bez flagi strona zwraca 404, a profil wypełnia się ręcznie w kreat
 | 2. Podgląd | kandydat widzi dokładny tekst do wysłania i liczniki usuniętych fragmentów | nie | nie |
 | 3. „Wyślij do analizy” | serwer ponownie minimalizuje tekst, wysyła go do modelu, waliduje odpowiedź | tak | nie |
 | 4. Propozycje | każda pozycja osobno, domyślnie niezaznaczona, ze źródłem w CV i oznaczeniem niepewności | nie | nie |
-| 5. „Dodaj zaznaczone” | tylko zaznaczone pozycje → RPC `apply_candidate_cv_proposals` (0109) | nie | tak |
+| 5. „Dodaj zaznaczone” | tylko zaznaczone pozycje → RPC `apply_candidate_cv_proposals` (0114) | nie | tak |
 
 Pliku, tekstu CV ani propozycji nie zapisujemy. Przepływ nie tworzy rekordu `files`, nie
 udostępnia CV firmom i nie zmienia widoczności profilu. Wynik nie trafia do `scoreMatch`,
@@ -80,7 +80,7 @@ wraca z przeglądarki. Redakcja jest idempotentna.
   oznaczenie „do sprawdzenia”. Język bez poziomu → „podstawowy” + „do sprawdzenia”.
 - Podejrzenie prompt injection → ostrzeżenie i wszystkie propozycje „do sprawdzenia”.
 
-## Zapis (migracja 0109)
+## Zapis (migracja 0114)
 
 `apply_candidate_cv_proposals(p_occupations, p_skills, p_languages, p_certificates,
 p_experience_years)` — SECURITY DEFINER, tylko `authenticated`, własny profil konta kandydata
