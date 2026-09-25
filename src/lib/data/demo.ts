@@ -3,8 +3,8 @@
  * =============================================
  * Ten plik zawiera WYŁĄCZNIE fikcyjne, przykładowe dane ofert pracy, firm, kategorii
  * i lokalizacji. Nazwy firm, wynagrodzenia i opisy są zmyślone. Służą do renderowania
- * strony głównej i listy ofert, gdy Supabase NIE jest skonfigurowane
- * (tryb demo — patrz `isSupabaseConfigured()` w `@/lib/env`).
+ * strony głównej i listy ofert, gdy baza NIE jest skonfigurowana
+ * (tryb demo — patrz `isDatabaseConfigured()` w `@/lib/env`).
  *
  * Miasta i regiony są prawdziwe (belgijskie), reszta treści jest demonstracyjna.
  *

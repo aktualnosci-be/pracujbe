@@ -1,13 +1,9 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { effectiveJobStatus, isPastExpiry, notExpiredFilter } from '@/lib/job-expiry';
+import { effectiveJobStatus, isPastExpiry } from '@/lib/job-expiry';
 
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(), fileBucketConfig: () => null }));
-// Bez bucketu Railway kolejka storage używa (przejściowo) klienta Storage Supabase.
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminClient: () => ({ storage: { from: () => ({ remove: async () => ({ error: null }) }) } }),
-}));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
@@ -40,10 +36,6 @@ describe('wygaszanie ofert w panelu (#72)', () => {
     for (const status of ['draft', 'paused', 'closed', 'expired']) {
       expect(effectiveJobStatus(status, past, NOW)).toBe(status);
     }
-  });
-
-  it('filtr licznika aktywnych = predykat bazy (brak daty lub data przyszła)', () => {
-    expect(notExpiredFilter(NOW)).toBe('expires_at.is.null,expires_at.gt.2026-09-24T12:00:00.000Z');
   });
 
   it('wygasła i wstrzymana po terminie proponują ponowne otwarcie, nie wznowienie', () => {

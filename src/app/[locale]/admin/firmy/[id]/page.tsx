@@ -113,6 +113,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       <div className="min-w-0 space-y-[22px]">
         <BackLink label={t('backToCompanies')} />
         <AdminPageHeader
+          extended
           eyebrow={t('targetCompany')}
           title={t('companiesTitle')}
           subtitle={t('companyDetailSubtitle')}
@@ -127,6 +128,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       <div className="min-w-0 space-y-[22px]">
         <BackLink label={t('backToCompanies')} />
         <AdminPageHeader
+          extended
           eyebrow={t('targetCompany')}
           title={t('companyNotFoundTitle')}
           subtitle={t('companyNotFoundHint')}
@@ -144,6 +146,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
     <div className="min-w-0 space-y-[22px]">
       <BackLink label={t('backToCompanies')} />
       <AdminPageHeader
+        extended
         eyebrow={t('targetCompany')}
         title={company.name || t('nameFallback')}
         subtitle={t('companyDetailSubtitle')}

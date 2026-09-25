@@ -95,7 +95,7 @@ export async function createStack(): Promise<Stack> {
   }
 
   const form = (email: string, locale: Locale, [firstName, lastName]: [string, string]) => ({
-    email, locale, password: PASSWORD, passwordConfirm: PASSWORD, firstName, lastName, agreeTerms: true,
+    email, locale, password: PASSWORD, passwordConfirm: PASSWORD, firstName, lastName, agreeTerms: true, privacyNoticeAck: true,
   });
 
   return {

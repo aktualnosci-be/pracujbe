@@ -9,6 +9,7 @@
  * tam sekretów (service-role key czytany jest osobno, tylko po stronie serwera).
  */
 import { isBillingEnabled } from '@/lib/billing/flag';
+import { emailProviderFromEnv } from '@/lib/email/transport/select';
 
 export const env = {
   /** Publiczny URL aplikacji (kanoniczne linki, e-maile). Fallback: localhost. */
@@ -18,14 +19,6 @@ export const env = {
   /** Domyślny język aplikacji. Fallback: 'pl'. */
   get defaultLocale(): string {
     return process.env.NEXT_PUBLIC_DEFAULT_LOCALE ?? 'pl';
-  },
-  /** URL projektu Supabase — undefined, gdy nieskonfigurowany (tryb demo). */
-  get supabaseUrl(): string | undefined {
-    return process.env.NEXT_PUBLIC_SUPABASE_URL || undefined;
-  },
-  /** Klucz anon Supabase — undefined, gdy nieskonfigurowany (tryb demo). */
-  get supabaseAnonKey(): string | undefined {
-    return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || undefined;
   },
   /**
    * Tryb aplikacji (SEC-19): 'production' | 'demo'. Jedynym źródłem jest APP_MODE. Produkcja
@@ -65,14 +58,6 @@ export const env = {
     return process.env.RATE_LIMIT_KEY_SECRET || undefined;
   },
 };
-
-/**
- * Czy Supabase jest skonfigurowane (URL + anon key obecne).
- * Warstwa danych (@/lib/jobs itp.) używa tego do wyboru: DB vs fallback demo.
- */
-export function isSupabaseConfigured(): boolean {
-  return Boolean(env.supabaseUrl && env.supabaseAnonKey);
-}
 
 /** Publiczne oferty korzystają z ograniczonego loginu PostgreSQL Railway. */
 export function isDatabaseConfigured(): boolean {
@@ -125,11 +110,6 @@ const NON_PROD_HOST_RE = /localhost|127\.0\.0\.1|0\.0\.0\.0|staging|preview/i;
 export function isProductionDeployment(): boolean {
   if (!isProductionMode()) return false;
   return !NON_PROD_HOST_RE.test(env.siteUrl);
-}
-
-/** Klucz service-role obecny (operacje serwerowe: admin, webhooki, worker e-mail). */
-export function hasServiceRoleKey(): boolean {
-  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
 /** Publiczny URL jest realny (https, nie localhost) — wymagane w produkcji (linki, e-maile). */
@@ -220,8 +200,8 @@ export function isFileStorageConfigured(): boolean {
  * `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` = origin serwisu), limiter prób logowania/rejestracji
  * (`DATABASE_RATE_LIMIT_URL` + `RATE_LIMIT_KEY_SECRET`; bez niego akcje auth są blokowane) oraz
  * login zadań serwerowych (`DATABASE_SERVICE_URL`, service_role: worker poczty, webhooki, cron,
- * odczyty admina — #25) oraz realny https URL. Supabase nie jest już warunkiem gotowości (#24, #25).
- * Dostawcy opcjonalni (Resend/worker poczty/Sentry) NIE blokują gotowości — ich stan raportuje
+ * odczyty admina — #25) oraz realny https URL.
+ * Dostawcy opcjonalni (poczta EmailLabs/Resend, worker poczty, Sentry) NIE blokują gotowości — ich stan raportuje
  * /api/health jako `checks` (obserwowalność bez twardego 503).
  */
 export function readinessChecks(): Record<string, boolean> {
@@ -236,6 +216,10 @@ export function readinessChecks(): Record<string, boolean> {
     // #51: sprzedaż wyłączona flagą — sekrety Stripe bez `BILLING_ENABLED` nie liczą się.
     stripe: isBillingEnabled() && Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
     resend: Boolean(process.env.RESEND_API_KEY),
+    // Dostawca wybrany przez `EMAIL_PROVIDER` (albo domyślny) ma komplet kluczy — nazwa
+    // dostawcy w `/api/health` jako `emailProvider`.
+    emailProviderReady: emailProviderFromEnv().ready,
+    emaillabsWebhook: Boolean(process.env.EMAILLABS_WEBHOOK_SECRET?.trim()),
     queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),
     sentry: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN),
     // #26: prywatny bucket Railway (endpoint/region/bucket/klucze) + sekret linków pobrania CV.

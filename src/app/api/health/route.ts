@@ -1,5 +1,6 @@
 import { env, isAppReady, isDatabaseConfigured, isProductionMode, readinessChecks } from '@/lib/env';
 import { HEALTH_TOKEN_HEADER, healthTokenMatches } from '@/lib/ops/health-token';
+import { emailProviderFromEnv } from '@/lib/email/transport/select';
 import { isTurnstileEnabled } from '@/lib/turnstile/verify';
 
 /**
@@ -14,6 +15,7 @@ import { isTurnstileEnabled } from '@/lib/turnstile/verify';
  * rekonesans. Szczegółowy `checks`/`mode` jest widoczny tylko dla monitoringu wewnętrznego:
  * w trybie nieprodukcyjnym albo po podaniu tokena `HEALTH_CHECK_SECRET` (nagłówek
  * `x-health-token`). Nigdy nie ujawnia sekretów ani treści błędu bazy.
+ * `emailProvider` = wybrany dostawca poczty, `checks.emailProviderReady` = ma komplet kluczy.
  * `checks.turnstile` (#46) = czy ochrona formularzy jest włączona — sam boolean, bez kluczy.
  * Czujki operacyjne (kolejki, webhooki, maintenance, połączenia) — `/api/health/ops` (#47).
  */
@@ -60,11 +62,15 @@ export async function GET(request: Request): Promise<Response> {
       {
         status,
         mode: env.appMode,
+        // Wersja artefaktu (`0.YYYYMMDD.M+SHA`) — test wdrożeniowy porównuje SHA (#12).
+        version: process.env.NEXT_PUBLIC_APP_VERSION ?? null,
         checks: {
           ...readinessChecks(),
           ...(database === null ? {} : { databaseReachable: database }),
           turnstile: isTurnstileEnabled(),
         },
+        // Nazwa dostawcy poczty (`emaillabs` | `resend` | `none`) — bez kluczy i adresów.
+        emailProvider: emailProviderFromEnv().provider ?? 'none',
       },
       { status: httpStatus, headers },
     );
