@@ -101,7 +101,7 @@ export function GuestConfirmPanel(): React.JSX.Element {
               : tRoot(toUserMessageKey(error))}
         </div>
       ) : null}
-      <Button type="button" className="min-h-12 w-full" onClick={confirm} disabled={pending} aria-busy={pending || undefined}>
+      <Button type="button" className="w-full" size="passport" onClick={confirm} disabled={pending} aria-busy={pending || undefined}>
         {pending ? t('confirming') : t('confirmButton')}
       </Button>
     </div>

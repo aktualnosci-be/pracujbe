@@ -5,7 +5,7 @@ import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { TranslationFields } from '@/lib/translation/validate';
 
 /**
- * Dostęp workera do kolejki tłumaczeń (0112). Każda metoda = jedno wywołanie RPC (osobna,
+ * Dostęp workera do kolejki tłumaczeń (0127). Każda metoda = jedno wywołanie RPC (osobna,
  * krótka transakcja w bazie) — wywołanie dostawcy odbywa się pomiędzy nimi, nigdy wewnątrz
  * transakcji. Interfejs pozwala testować worker bez bazy.
  */

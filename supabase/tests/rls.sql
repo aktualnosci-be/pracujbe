@@ -6322,7 +6322,7 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
   'ESCO93-8b ręczne zawody z 0010 nietknięte');
 
 -- =============================================================================
--- TR31 (#31, 0112): rewizje źródeł i kolejka tłumaczeń odporna na edycje.
+-- TR31 (#31, 0127): rewizje źródeł i kolejka tłumaczeń odporna na edycje.
 -- Encja = oferta JOBA (typ 'job'), źródło pl → zadania nl/fr/en. Wszystkie funkcje tylko
 -- service_role; tabele bez polityk (domyślnie deny). Kontrola ujemna na końcu sekcji.
 -- =============================================================================
@@ -8989,6 +8989,140 @@ begin; select pg_temp.cj_drop_filter('j.deleted_at is null');
 select pg_temp.assert(pg_temp.cj_public('cj-deleted') = 1, 'CJ186-4f bez filtra usunięcia wycieka'); rollback;
 select pg_temp.assert(pg_temp.cj_public(s) = 0, 'CJ186-4g po cofnięciu filtry wróciły: ' || s)
 from unnest(array['cj-demo', 'cj-demo-company', 'cj-paused', 'cj-expired', 'cj-unverified', 'cj-deleted']) s;
+-- CV487. Import CV przez AI (#487, #498, 0115): do profilu trafiają WYŁĄCZNIE pozycje
+-- zatwierdzone przez kandydata, dopisane (nie replace-all) w jednej transakcji. Brak
+-- zatwierdzenia = brak zapisu; za długa pozycja cofa całe wywołanie; tylko własny profil
+-- konta kandydata. Kontrola ujemna: wersja replace-all kasuje ręcznie wpisane pozycje.
+-- ============================================================================
+\set CVC  'e4870000-0000-0000-0000-000000000001'
+\set CVO  'e4870000-0000-0000-0000-000000000002'
+\set CVE  'e4870000-0000-0000-0000-000000000003'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CVC','cvc@test.be','Cv C','{"role":"candidate","first_name":"Celina","last_name":"Cv","locale":"pl"}'),
+  (:'CVO','cvo@test.be','Cv O','{"role":"candidate","first_name":"Otto","last_name":"Cv","locale":"nl"}'),
+  (:'CVE','cve@test.be','Cv E','{"role":"employer","first_name":"Rek","last_name":"Cv","locale":"fr"}');
+
+-- Stan wyjściowy wpisany ręcznie (onboarding): zawód, umiejętność, język z poziomem, certyfikat z datą.
+select set_config('app.current_uid', :'CVC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.save_candidate_onboarding_step3(4, array['Wózek widłowy']);
+select public.save_candidate_onboarding_step5(
+  '[{"language":"Polski","level":"native"}]'::jsonb,
+  '[{"label":"VCA","expires_at":"2030-01-01"}]'::jsonb);
+reset role;
+update public.candidate_profiles set occupations = array['Magazynier'] where profile_id = :'CVC';
+select id as cv_cp from public.candidate_profiles where profile_id = :'CVC' \gset
+
+set role authenticated; select pg_temp.assert_client_role();
+-- CV1: brak zatwierdzonych pozycji → odmowa, stan bez zmian.
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(''{}'', ''{}'', ''[]''::jsonb, ''{}'', null)',
+  'VALIDATION_FAILED', 'CV1 brak zatwierdzenia = brak zapisu');
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(null, null, null, null, null)',
+  'VALIDATION_FAILED', 'CV1b same NULL-e = brak zapisu');
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp') = 1
+  and (select experience_years from public.candidate_profiles where id = :'cv_cp') = 4,
+  'CV1c po odmowie profil bez zmian');
+
+-- CV2: za długa umiejętność cofa CAŁE wywołanie (także poprawny zawód w tym samym żądaniu).
+select pg_temp.expect_error(
+  format('select public.apply_candidate_cv_proposals(array[''Kierowca''], array[%L], null, null, 9)', repeat('x', 121)),
+  'VALIDATION_FAILED', 'CV2 za długa pozycja odrzucona bez obcinania');
+select pg_temp.assert(
+  (select occupations = array['Magazynier'] and experience_years = 4
+   from public.candidate_profiles where id = :'cv_cp'),
+  'CV2b odrzucone wywołanie nie zapisało żadnej części');
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(null, null, ''[{"language":"Nederlands","level":"expert"}]''::jsonb, null, null)',
+  'VALIDATION_FAILED', 'CV2c poziom języka spoza słownika odrzucony');
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(null, null, null, null, 61)',
+  'VALIDATION_FAILED', 'CV2d doświadczenie poza zakresem odrzucone');
+
+-- CV3: zatwierdzone pozycje są DOPISANE; duplikaty (bez względu na wielkość liter) pominięte,
+-- ręcznie wpisany poziom języka i data certyfikatu zostają.
+select pg_temp.assert(
+  public.apply_candidate_cv_proposals(
+    array['Kierowca', 'magazynier'],
+    array['wózek WIDŁOWY', 'Skaner ręczny', 'Skaner ręczny'],
+    '[{"language":"polski","level":"basic"},{"language":"Nederlands","level":"intermediate"}]'::jsonb,
+    array['vca', 'Prawo jazdy C'],
+    null)
+  = '{"occupations":1,"skills":1,"languages":1,"certificates":1,"experienceYears":false}'::jsonb,
+  'CV3 wynik liczy tylko dopisane pozycje');
+select pg_temp.assert(
+  (select occupations = array['Magazynier', 'Kierowca'] and experience_years = 4
+   from public.candidate_profiles where id = :'cv_cp'),
+  'CV3b zawód dopisany, doświadczenie bez zmian (niezatwierdzone)');
+select pg_temp.assert(
+  (select array_agg(skill_label order by skill_label) from public.candidate_skills
+   where candidate_profile_id = :'cv_cp') = array['Skaner ręczny', 'Wózek widłowy'],
+  'CV3c umiejętność dopisana, istniejąca zachowana, bez duplikatu');
+select pg_temp.assert(
+  (select level::text from public.candidate_languages
+   where candidate_profile_id = :'cv_cp' and language_label = 'Polski') = 'native'
+  and (select count(*) from public.candidate_languages where candidate_profile_id = :'cv_cp') = 2,
+  'CV3d poziom ręcznie wpisanego języka zostaje');
+select pg_temp.assert(
+  (select expires_at from public.candidate_certificates
+   where candidate_profile_id = :'cv_cp' and certificate_label = 'VCA') = '2030-01-01'::date
+  and (select count(*) from public.candidate_certificates where candidate_profile_id = :'cv_cp') = 2,
+  'CV3e data ważności certyfikatu zostaje, nowy certyfikat dopisany');
+-- CV3f: samo doświadczenie zatwierdzone → ustawione.
+select public.apply_candidate_cv_proposals(null, null, null, null, 7);
+select pg_temp.assert((select experience_years from public.candidate_profiles where id = :'cv_cp') = 7,
+  'CV3f zatwierdzone doświadczenie zapisane');
+-- CV4: przekroczenie limitu zawodów (10) → odmowa.
+select pg_temp.expect_error(
+  'select public.apply_candidate_cv_proposals(array[''a1'',''a2'',''a3'',''a4'',''a5'',''a6'',''a7'',''a8'',''a9''], null, null, null, null)',
+  'VALIDATION_FAILED', 'CV4 limit zawodów');
+select pg_temp.expect_error(
+  'insert into public.candidate_skills(candidate_profile_id, skill_label) select id, ''x'' from public.candidate_profiles where profile_id = auth.uid()',
+  'permission denied', 'CV4b bezpośredni DML relacji dalej odebrany');
+reset role;
+
+-- CV5: inny kandydat nie zmienia cudzego profilu (brak parametru właściciela) — zapis trafia do jego własnego.
+select set_config('app.current_uid', :'CVO', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_candidate_cv_proposals(null, array['Lassen'], null, null, null);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp') = 2
+  and (select count(*) from public.candidate_skills s join public.candidate_profiles cp on cp.id = s.candidate_profile_id
+       where cp.profile_id = :'CVO' and s.skill_label = 'Lassen') = 1,
+  'CV5 zapis tylko we własnym profilu');
+
+-- CV6: konto pracodawcy i anon — odmowa.
+select set_config('app.current_uid', :'CVE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.apply_candidate_cv_proposals(null, array[''x''], null, null, null)',
+  'PERMISSION_DENIED', 'CV6 pracodawca nie ma profilu kandydata');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.apply_candidate_cv_proposals(null, array[''x''], null, null, null)',
+  'permission denied', 'CV6b anon bez EXECUTE');
+reset role;
+
+-- Kontrola ujemna: wersja replace-all (jak kroki onboardingu) kasuje ręcznie wpisane pozycje.
+begin;
+create or replace function public.apply_candidate_cv_proposals(
+  p_occupations text[], p_skills text[], p_languages jsonb, p_certificates text[], p_experience_years integer)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  perform public.set_candidate_skills(p_skills);
+  return '{}'::jsonb;
+end $$;
+set local role authenticated; set local app.current_uid = :'CVC'; select pg_temp.assert_client_role();
+select public.apply_candidate_cv_proposals(null, array['Nowa'], null, null, null);
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp' and skill_label = 'Wózek widłowy') = 0,
+  'CV7 kontrola ujemna: replace-all gubi ręcznie wpisaną umiejętność');
+rollback;
+select pg_temp.assert(
+  (select count(*) from public.candidate_skills where candidate_profile_id = :'cv_cp') = 2,
+  'CV7b po kontroli ujemnej stan przywrócony');
 
 -- ============================================================================
 -- BR490 (#490, 0106): rejestr incydentów i naruszeń danych osobowych — tylko admin,
@@ -9481,6 +9615,519 @@ set role service_role;
 select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)),
   'SV25-3 claim jako service_role (bez błędu uprawnień)');
 reset role;
+
+-- ============================================================================
+-- MR. Zgłoszenia wiadomości i rozmów (0116): tylko strona rozmowy, dowód z bazy tylko dla
+--     admina, idempotencja, jedna otwarta sprawa na wiadomość, limit, niezmienność.
+--     Kontrole ujemne: obca rozmowa, wiadomość spoza rozmowy, powtórka, polityka z 0009.
+-- ============================================================================
+reset role; reset app.current_uid;
+\set CANDMR 'e1160000-0000-0000-0000-00000000000c'
+\set CANDMX 'e1160000-0000-0000-0000-00000000000d'
+\set RECMR  'e1160000-0000-0000-0000-0000000000a1'
+\set RECMX  'e1160000-0000-0000-0000-0000000000a2'
+\set COMPMR 'e1160000-0000-0000-0000-0000000000f1'
+\set COMPMX 'e1160000-0000-0000-0000-0000000000f2'
+\set JOBMR  'e1160000-0000-0000-0000-0000000000b1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDMR','candmr@test.be','Mira R','{"role":"candidate","first_name":"Mira","last_name":"R","locale":"pl"}'),
+  (:'CANDMX','candmx@test.be','Xena R','{"role":"candidate","first_name":"Xena","last_name":"R","locale":"pl"}'),
+  (:'RECMR','recmr@test.be','Rik R','{"role":"employer","first_name":"Rik","last_name":"R","locale":"nl"}'),
+  (:'RECMX','recmx@test.be','Xavi R','{"role":"employer","first_name":"Xavi","last_name":"R","locale":"fr"}');
+insert into public.companies(id,name,status) values
+  (:'COMPMR','Firma MR','verified'), (:'COMPMX','Firma MX','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPMR',:'RECMR','owner',true), (:'COMPMX',:'RECMX','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JOBMR',:'COMPMR','job-mr1','Magazynier MR','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDMR', false), (:'CANDMX', false);
+
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JOBMR'::uuid, 'mr-app-1', null, null, null)::text as app_mr \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECMR'; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'app_mr'::uuid, null)::text as conv_mr \gset
+select public.send_message(:'conv_mr'::uuid, 'Proszę przesłać numer konta i kod PIN', gen_random_uuid())::text as msg_mr1 \gset
+select public.send_message(:'conv_mr'::uuid, 'Druga wiadomość rekrutera', gen_random_uuid())::text as msg_mr2 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select public.send_message(:'conv_mr'::uuid, 'Odpowiedź kandydatki', gen_random_uuid())::text as msg_mr3 \gset
+reset role; reset app.current_uid;
+-- Wiadomość z innej rozmowy (EMPA ↔ CANDA z sekcji E) do kontroli „spoza rozmowy”.
+select pg_temp.assert(:'msg' is not null, 'MR0 przygotowanie: wiadomość z innej rozmowy');
+
+\set MRKEY1 'e1160000-0000-0000-0000-000000000101'
+\set MRKEY2 'e1160000-0000-0000-0000-000000000102'
+\set MRKEY3 'e1160000-0000-0000-0000-000000000103'
+\set MRKEY4 'e1160000-0000-0000-0000-000000000104'
+\set MRKEY5 'e1160000-0000-0000-0000-000000000105'
+
+-- MR1: bez EXECUTE dla anon; bez bezpośredniego INSERT dla klienta.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.report_conversation_content(uuid, uuid, text, text, uuid)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.get_my_message_reports(uuid)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.report_conversation_content(uuid, uuid, text, text, uuid)', 'EXECUTE'),
+  'MR1 anon bez EXECUTE, authenticated z EXECUTE');
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format(
+  $q$insert into public.reports(target_type, target_id, reason, kind, idempotency_key, category, target_snapshot, conversation_id)
+     values ('message', %L, 'spam', 'message_report', gen_random_uuid(), 'spam', '{}'::jsonb, %L)$q$, :'msg_mr1', :'conv_mr'),
+  'permission denied', 'MR1b klient nie wstawia zgłoszenia bezpośrednio');
+
+-- MR2: kandydatka zgłasza wiadomość rekrutera → created, dowód z bazy tylko tej wiadomości.
+select report_id::text as mr_r1, outcome as mr_o1
+  from public.report_conversation_content(:'conv_mr', :'msg_mr1', 'fraud', '  Prośba o PIN  ', :'MRKEY1') \gset
+select pg_temp.assert(:'mr_o1' = 'created' and :'mr_r1' <> '', 'MR2 zgłoszenie przyjęte');
+-- Dowód niewidoczny dla zgłaszającej (tylko admin); stan przez get_my_message_reports.
+select pg_temp.assert((select count(*) = 0 from public.reports where id = :'mr_r1'),
+  'MR2b zgłaszająca nie czyta wiersza z dowodem');
+select pg_temp.assert(
+  (select count(*) = 1 from public.get_my_message_reports(:'conv_mr')
+     where target_type = 'message' and target_id = :'msg_mr1' and status = 'open'),
+  'MR2c stan własnego zgłoszenia bez dowodu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select kind = 'message_report' and reporter_id = :'CANDMR' and target_type::text = 'message'
+          and category = 'fraud' and reason = 'fraud' and details = 'Prośba o PIN'
+          and conversation_id = :'conv_mr' and status = 'open'
+          and target_snapshot->'message'->>'body' = 'Proszę przesłać numer konta i kod PIN'
+          and target_snapshot->'message'->>'senderSide' = 'company'
+          and target_snapshot->'conversation'->>'reporterSide' = 'candidate'
+          and target_snapshot::text not like '%Druga wiadomość%'
+          and target_snapshot::text not like '%Odpowiedź kandydatki%'
+     from public.reports where id = :'mr_r1'),
+  'MR2d dowód: treść wyłącznie zgłoszonej wiadomości');
+select pg_temp.assert((select count(*) = 1 from public.report_events where report_id = :'mr_r1' and event_type = 'submitted'),
+  'MR2e historia: submitted');
+set role service_role;
+select pg_temp.assert((select count(*) = 1 from public.reports where id = :'mr_r1' and target_snapshot is not null),
+  'MR2f panel admina (service_role) czyta dowód');
+reset role;
+
+-- MR3: ponowienie z tym samym kluczem → duplicate, to samo id, jeden wiersz.
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select report_id::text as mr_r1b, outcome as mr_o1b
+  from public.report_conversation_content(:'conv_mr', :'msg_mr1', 'fraud', 'Prośba o PIN', :'MRKEY1') \gset
+select pg_temp.assert(:'mr_o1b' = 'duplicate' and :'mr_r1b' = :'mr_r1', 'MR3 ponowienie = to samo zgłoszenie');
+-- MR3b: ten sam klucz dla innej treści → odmowa.
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg_mr2', 'spam', :'MRKEY1'), 'VALIDATION_FAILED', 'MR3b klucz innego zgłoszenia');
+-- MR4 (powtórka): nowy klucz, ta sama wiadomość → already_open, bez nowego wiersza.
+select coalesce(report_id::text, '') as mr_r2, outcome as mr_o2
+  from public.report_conversation_content(:'conv_mr', :'msg_mr1', 'spam', null, :'MRKEY2') \gset
+select pg_temp.assert(:'mr_o2' = 'already_open' and :'mr_r2' = '', 'MR4 powtórka: sprawa już otwarta');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) = 1 from public.reports where kind = 'message_report' and target_id = :'msg_mr1'),
+  'MR4b jedna otwarta sprawa na wiadomość');
+select pg_temp.expect_error(format(
+  $q$insert into public.reports(reporter_id, target_type, target_id, reason, kind, idempotency_key, category, target_snapshot, conversation_id)
+     values (%L, 'message', %L, 'spam', 'message_report', gen_random_uuid(), 'spam', '{}'::jsonb, %L)$q$,
+  :'CANDMR', :'msg_mr1', :'conv_mr'),
+  'reports_message_open_uq', 'MR4c indeks blokuje drugą otwartą sprawę także poza RPC');
+
+-- MR5 (obca rozmowa): obca firma i obcy kandydat → NOT_FOUND, bez wiersza.
+set role authenticated; set app.current_uid = :'RECMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg_mr3', 'spam', :'MRKEY3'), 'NOT_FOUND', 'MR5 obca firma nie zgłasza cudzej rozmowy');
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, null, %L, null, %L)',
+  :'conv_mr', 'spam', :'MRKEY3'), 'NOT_FOUND', 'MR5b obca firma nie zgłasza cudzej rozmowy (całość)');
+select pg_temp.assert((select count(*) = 0 from public.get_my_message_reports(:'conv_mr')),
+  'MR5c obcy nie czyta stanu zgłoszeń cudzej rozmowy');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg_mr1', 'spam', :'MRKEY3'), 'NOT_FOUND', 'MR5d obcy kandydat nie zgłasza cudzej rozmowy');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) = 0 from public.reports where idempotency_key = :'MRKEY3'),
+  'MR5e obca rozmowa: brak wiersza');
+
+-- MR6: wiadomość spoza rozmowy → NOT_FOUND; własna wiadomość → VALIDATION_FAILED.
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg', 'spam', :'MRKEY4'), 'NOT_FOUND', 'MR6 wiadomość z innej rozmowy');
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg_mr3', 'spam', :'MRKEY4'), 'VALIDATION_FAILED', 'MR6b własnej wiadomości nie zgłaszamy');
+-- MR7: słownik powodów i limit opisu.
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, %L)',
+  :'conv_mr', :'msg_mr2', 'nie_ma', :'MRKEY4'), 'VALIDATION_FAILED: kategoria', 'MR7 powód spoza słownika');
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, %L, %L)',
+  :'conv_mr', :'msg_mr2', 'spam', repeat('x', 1001), :'MRKEY4'), 'VALIDATION_FAILED: opis', 'MR7b opis ponad limit');
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, null)',
+  :'conv_mr', :'msg_mr2', 'spam'), 'VALIDATION_FAILED', 'MR7c bez klucza idempotencji');
+
+-- MR8: zgłoszenie całej rozmowy — dowód bez treści wiadomości; druga strona zgłasza osobno.
+select report_id::text as mr_c1, outcome as mr_oc1
+  from public.report_conversation_content(:'conv_mr', null, 'harassment', null, :'MRKEY4') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mr_oc1' = 'created', 'MR8 zgłoszenie rozmowy przyjęte');
+select pg_temp.assert(
+  (select target_type::text = 'conversation' and target_id = :'conv_mr' and not (target_snapshot ? 'message')
+          and (target_snapshot->'conversation'->>'messageCount')::int = 3
+          and target_snapshot::text not like '%PIN%' and target_snapshot::text not like '%Odpowiedź%'
+     from public.reports where id = :'mr_c1'),
+  'MR8b dowód rozmowy: metadane bez treści');
+set role authenticated; set app.current_uid = :'RECMR'; select pg_temp.assert_client_role();
+select outcome as mr_oc2 from public.report_conversation_content(:'conv_mr', null, 'harassment', null, :'MRKEY5') \gset
+select pg_temp.assert(:'mr_oc2' = 'created', 'MR8c druga strona zgłasza rozmowę osobno (bez ujawnienia cudzej sprawy)');
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, gen_random_uuid())',
+  :'conv_mr', :'msg_mr2', 'spam'), 'VALIDATION_FAILED', 'MR8d firma nie zgłasza wiadomości własnej strony');
+reset role; reset app.current_uid;
+
+-- MR9: dezaktywowany członek firmy traci dostęp → NOT_FOUND.
+update public.company_members set is_active = false where company_id = :'COMPMR' and profile_id = :'RECMR';
+set role authenticated; set app.current_uid = :'RECMR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, gen_random_uuid())',
+  :'conv_mr', :'msg_mr3', 'spam'), 'NOT_FOUND', 'MR9 były członek firmy nie zgłasza');
+reset role; reset app.current_uid;
+update public.company_members set is_active = true where company_id = :'COMPMR' and profile_id = :'RECMR';
+
+-- MR10: niezmienność dowodu dla każdej roli; usunięcie odrzucone.
+select pg_temp.expect_error(format($q$update public.reports set target_snapshot = '{}'::jsonb where id = %L$q$, :'mr_r1'),
+  'niezmienna', 'MR10 dowodu nie zmienia nawet właściciel tabel');
+set role service_role;
+select pg_temp.expect_error(format('update public.reports set details = %L where id = %L', 'x', :'mr_r1'),
+  'niezmienna', 'MR10b service_role nie zmienia opisu');
+select pg_temp.expect_error(format('delete from public.reports where id = %L', :'mr_r1'),
+  'nie można usunąć', 'MR10c zgłoszenia nie można usunąć');
+reset role;
+begin;
+update public.reports set reporter_id = null where id = :'mr_r1';
+select pg_temp.assert((select reporter_id is null from public.reports where id = :'mr_r1'),
+  'MR10d usunięcie konta zgłaszającej (FK → null) przechodzi');
+rollback;
+
+-- MR11: admin rozstrzyga (admin_resolve_report); potem ta sama wiadomość znów zgłaszalna.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report(:'mr_r1', 'resolved', 'open');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status = 'resolved' from public.reports where id = :'mr_r1'),
+  'MR11 admin rozstrzygnął zgłoszenie wiadomości');
+set role authenticated; set app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select outcome as mr_o3 from public.report_conversation_content(:'conv_mr', :'msg_mr1', 'fraud', null, gen_random_uuid()) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'mr_o3' = 'created', 'MR11b po rozstrzygnięciu nowa sprawa tej wiadomości');
+
+-- MR12: limit w bazie — 20 zgłoszeń / konto / 24 h.
+begin;
+insert into public.reports(reporter_id, target_type, target_id, reason, kind, idempotency_key, category, target_snapshot, conversation_id, status)
+  select :'CANDMR', 'message', gen_random_uuid(), 'spam', 'message_report', gen_random_uuid(), 'spam', '{}'::jsonb, :'conv_mr', 'resolved'
+  from generate_series(1, 18);
+set local role authenticated; set local app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.report_conversation_content(%L, %L, %L, null, gen_random_uuid())',
+  :'conv_mr', :'msg_mr2', 'spam'), 'RATE_LIMITED', 'MR12 limit zgłoszeń na konto');
+rollback;
+
+-- MR13 (kontrola ujemna): polityka z 0009 (bez wyłączenia `message_report`) odsłoniłaby
+-- zgłaszającej dowód — asercja MR2b wykrywa taką regresję.
+begin;
+drop policy reports_select_own on public.reports;
+create policy reports_select_own on public.reports for select to authenticated using (reporter_id = auth.uid());
+set local role authenticated; set local app.current_uid = :'CANDMR'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) > 0 from public.reports where id = :'mr_r1'),
+  'MR13 kontrola ujemna: stara polityka odsłania dowód');
+rollback;
+
+-- ============================================================================
+-- OL112. Linki firmy w publicznym detalu oferty (0114): get_public_job zwraca
+--        company_website / company_logo_url tylko dla firmy verified i tylko jako
+--        bezwzględny https (public_https_url). Kontrole ujemne w transakcjach cofanych:
+--        bez walidacji zły URL wycieka, bez bramki weryfikacji wycieka link firmy
+--        niezweryfikowanej (po zdjęciu filtra wierszy).
+-- ============================================================================
+\set OLV 'c1080000-0000-0000-0000-0000000000a1'
+\set OLB 'c1080000-0000-0000-0000-0000000000a2'
+\set OLU 'c1080000-0000-0000-0000-0000000000a3'
+\set OLN 'c1080000-0000-0000-0000-0000000000a4'
+\echo '--- OL112 company links in get_public_job ---'
+reset role; reset app.current_uid;
+insert into public.companies(id,name,status,is_demo,website,logo_url) values
+  (:'OLV','Linki Sp','verified',false,' https://www.linki.example/o-nas?x=1 ','https://cdn.linki.example/logo.png'),
+  (:'OLB','Złe Linki Sp','verified',false,'http://zle.example','javascript:alert(1)'),
+  (:'OLU','Bez Weryfikacji Sp','unverified',false,'https://bez.example','https://bez.example/logo.png'),
+  (:'OLN','Bez Linków Sp','verified',false,null,'');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('c1080000-0000-0000-0000-0000000000b1',:'OLV','ol-ok','Magazynier linki','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b2',:'OLB','ol-bad','Magazynier złe linki','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b3',:'OLU','ol-unverified','Magazynier bez weryfikacji','warehouse','permanent','Gent','Flandria','active','pl'),
+  ('c1080000-0000-0000-0000-0000000000b4',:'OLN','ol-none','Magazynier bez linków','warehouse','permanent','Gent','Flandria','active','pl');
+
+-- OL112-1: walidator — tylko bezwzględny https z hostem; reszta null.
+select pg_temp.assert(public.public_https_url(u) is null, 'OL112-1 odrzucony adres: ' || coalesce(u, '<null>'))
+from unnest(array[null, '', '   ', 'http://a.example', 'javascript:alert(1)', '//a.example',
+                  'https://localhost', 'https://a.example/x y', 'https://a.example/"><script>',
+                  'https://user:pw@a.example', 'https://a.example/' || repeat('x', 2048),
+                  'HTTPS://A.EXAMPLE', 'data:text/html,x', 'https://-a.example']) u;
+select pg_temp.assert(public.public_https_url(' https://a.example/logo.png?v=2#x ') = 'https://a.example/logo.png?v=2#x',
+  'OL112-1b poprawny https (obcięte spacje)');
+select pg_temp.assert(public.public_https_url('https://a.example:8443') = 'https://a.example:8443',
+  'OL112-1c https z portem');
+
+-- OL112-2: gość — poprawne linki firmy verified; złe i puste → null; firma niezweryfikowana → brak wiersza.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select company_website = 'https://www.linki.example/o-nas?x=1'
+      and company_logo_url = 'https://cdn.linki.example/logo.png'
+   from public.get_public_job('ol-ok', 'pl')),
+  'OL112-2 firma verified: website i logo');
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-bad', 'pl')),
+  'OL112-2b http / javascript: → brak pól');
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-none', 'pl')),
+  'OL112-2c brak / pusty adres → brak pól');
+select pg_temp.assert((select count(*) from public.get_public_job('ol-unverified', 'pl')) = 0,
+  'OL112-2d firma niezweryfikowana → brak oferty (i linków)');
+reset role;
+
+-- OL112-3: kontrole ujemne (zmiana definicji w transakcji cofanej).
+create function pg_temp.ol_patch(p_from text, p_to text) returns void language plpgsql as $$
+declare
+  v_def text := pg_get_functiondef('public.get_public_job(text, text)'::regprocedure);
+begin
+  if position(p_from in v_def) = 0 then
+    raise exception 'ASSERT FAILED: OL112-3 fragment „%” nie występuje w get_public_job', p_from;
+  end if;
+  execute replace(v_def, p_from, p_to);
+end $$;
+-- Bez walidacji adresu zły URL trafia do wyniku (więc OL112-2b wykrywa regresję).
+begin; select pg_temp.ol_patch('public.public_https_url(c.website)', 'c.website');
+select pg_temp.assert((select company_website from public.get_public_job('ol-bad', 'pl')) = 'http://zle.example',
+  'OL112-3 bez walidacji wycieka http'); rollback;
+-- Po zdjęciu filtra wierszy bramka kolumny nadal ukrywa link firmy niezweryfikowanej…
+begin; select pg_temp.ol_patch(E'and c.status = ''verified''\n', '');
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-unverified', 'pl')),
+  'OL112-3b bramka kolumny: niezweryfikowana firma bez linków');
+-- …a bez niej link wycieka (asercja OL112-3b wykrywa regresję).
+select pg_temp.ol_patch('case when c.status = ''verified'' then public.public_https_url(c.website)',
+                        'case when true then public.public_https_url(c.website)');
+select pg_temp.assert((select company_website from public.get_public_job('ol-unverified', 'pl')) = 'https://bez.example',
+  'OL112-3c bez bramki weryfikacji wycieka link'); rollback;
+select pg_temp.assert(
+  (select company_website is null and company_logo_url is null from public.get_public_job('ol-bad', 'pl'))
+  and (select count(*) from public.get_public_job('ol-unverified', 'pl')) = 0,
+  'OL112-3d po cofnięciu definicja wróciła');
+
+-- ============================================================================
+-- PL109. Payloady e-maili i odczyt historii (0113; #293, #22, #290, #184):
+--   send_offer → expiresAt + kwoty oferty (bez treści wiadomości rekrutera, #503),
+--   send_message → conversationId, get_applied_jobs_display(p_locale, p_job_ids).
+--   Kontrole ujemne (transakcje cofane): definicja bez nowego klucza → asercja pada.
+-- ============================================================================
+\set PLC  'e1080000-0000-0000-0000-00000000000c'
+\set PLC2 'e1080000-0000-0000-0000-00000000000d'
+\set PLE  'e1080000-0000-0000-0000-0000000000a1'
+\set PLCO 'e1080000-0000-0000-0000-0000000000f1'
+\set PLJ1 'e1080000-0000-0000-0000-0000000000b1'
+\set PLJ2 'e1080000-0000-0000-0000-0000000000b2'
+\set PLJ3 'e1080000-0000-0000-0000-0000000000b3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'PLC','plc@test.be','Noor V','{"role":"candidate","first_name":"Noor","last_name":"Vermeulen","locale":"nl"}'),
+  (:'PLC2','plc2@test.be','Luc D','{"role":"candidate","first_name":"Luc","last_name":"Dubois","locale":"fr"}'),
+  (:'PLE','ple@test.be','Piotr R','{"role":"employer","first_name":"Piotr","last_name":"Rekruter","locale":"pl"}');
+insert into public.companies(id,name,status) values (:'PLCO','Firma PL109','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'PLCO',:'PLE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,currency,salary_period,expires_at) values
+  (:'PLJ1',:'PLCO','job-pl109-1','Magazynier PL109','warehouse','permanent','Gent','Flandria','active','pl',
+   2500,3100,'EUR','month', now() + interval '10 days'),
+  (:'PLJ2',:'PLCO','job-pl109-2','Kierowca PL109','warehouse','permanent','Gent','Flandria','active','pl',
+   null,null,'EUR','hour', null),
+  (:'PLJ3',:'PLCO','job-pl109-3','Pomocnik PL109','warehouse','permanent','Gent','Flandria','active','pl',
+   null,null,'EUR','month', null);
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'PLC', false), (:'PLC2', false);
+
+select set_config('app.current_uid', :'PLC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'PLJ1'::uuid, 'pl109-app-1', null, null, null) as plapp1 \gset
+select public.apply_to_job(:'PLJ2'::uuid, 'pl109-app-2', null, null, null) as plapp2 \gset
+reset role;
+select set_config('app.current_uid', :'PLC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'PLJ3'::uuid, 'pl109-app-3', null, null, null) as plapp3 \gset
+reset role;
+select set_config('app.current_uid', :'PLE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'PLJ1'::uuid, :'PLC'::uuid, 'pl109-off-1', 'Bel me op 0470 12 34 56', null) as ploff1 \gset
+select public.send_offer(:'PLJ2'::uuid, :'PLC'::uuid, 'pl109-off-2', null, null) as ploff2 \gset
+select public.get_or_create_conversation(:'plapp1'::uuid, null) as plconv \gset
+select public.send_message(:'plconv'::uuid, 'Dzień dobry', gen_random_uuid()) as plmsg \gset
+reset role; reset app.current_uid;
+
+-- PL109-1: termin = offers.expires_at (ten, który sprawdza respond_to_offer) jako ISO.
+select pg_temp.assert(
+  (select (d.payload->>'expiresAt')::timestamptz = o.expires_at
+     from public.email_deliveries d join public.offers o on o.id = d.entity_id
+    where d.entity_id = :'ploff1' and d.template = 'jobOffer'),
+  'PL109-1 jobOffer.expiresAt = offers.expires_at');
+-- PL109-2: kwoty jako liczby + okres i waluta (tekst składa worker w locale odbiorcy).
+select pg_temp.assert(
+  (select payload->'salaryMin' = '2500'::jsonb and payload->'salaryMax' = '3100'::jsonb
+      and payload->>'salaryPeriod' = 'month' and payload->>'currency' = 'EUR'
+      and not payload ? 'salary'
+     from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
+  'PL109-2 jobOffer niesie kwoty oferty, bez gotowego tekstu wynagrodzenia');
+-- PL109-3: oferta bez kwot → null (worker pomija pole), okres z danych.
+select pg_temp.assert(
+  (select payload ? 'salaryMin' and payload->'salaryMin' = 'null'::jsonb
+      and payload->'salaryMax' = 'null'::jsonb and payload->>'salaryPeriod' = 'hour'
+      and payload->>'expiresAt' is not null
+     from public.email_deliveries where entity_id = :'ploff2' and template = 'jobOffer'),
+  'PL109-3 oferta bez kwot: null w payloadzie, termin domyślny (+30 dni) obecny');
+-- PL109-4: treść wiadomości rekrutera zostaje w offers, NIE trafia do payloadu (#503).
+select pg_temp.assert(
+  (select o.message from public.offers o where o.id = :'ploff1') = 'Bel me op 0470 12 34 56'
+  and (select not payload ? 'message' and payload::text not like '%0470%'
+         from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
+  'PL109-4 payload jobOffer bez treści wiadomości rekrutera');
+-- PL109-5: język e-maila = język ODBIORCY (nl), nie nadawcy (pl) — Invariant #1.
+select pg_temp.assert(
+  (select locale from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer') = 'nl',
+  'PL109-5 jobOffer w języku kandydata');
+-- PL109-6: newMessage niesie identyfikator rozmowy (CTA do wątku).
+select pg_temp.assert(
+  (select payload->>'conversationId' = :'plconv' and locale = 'nl'
+     from public.email_deliveries where entity_id = :'plmsg' and profile_id = :'PLC'),
+  'PL109-6 newMessage.conversationId = rozmowa wiadomości');
+
+-- PL109-7: get_applied_jobs_display — filtr p_job_ids wewnątrz RPC, tylko własne aplikacje.
+set role authenticated; set app.current_uid = :'PLC'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_applied_jobs_display('pl')) = 2,
+  'PL109-7 bez filtra: cała historia własnych aplikacji (zgodność wstecz)');
+select pg_temp.assert(
+  (select array_agg(job_id::text) from public.get_applied_jobs_display(p_locale => 'pl',
+     p_job_ids => array[:'PLJ1'::uuid])) = array[:'PLJ1'::text],
+  'PL109-7b filtr zwraca tylko wskazaną ofertę');
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display(p_locale => 'pl',
+     p_job_ids => array[:'PLJ3'::uuid, gen_random_uuid()])) = 0,
+  'PL109-7c cudza aplikacja (PLC2) i nieznany job_id w filtrze → brak wierszy');
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display(p_locale => 'pl', p_job_ids => array[]::uuid[])) = 0,
+  'PL109-7d pusta lista → brak wierszy');
+select pg_temp.expect_error(
+  'select count(*) from public.get_applied_jobs_display(''pl'', array(select gen_random_uuid() from generate_series(1, 101)))',
+  'VALIDATION_FAILED', 'PL109-7e ponad 100 identyfikatorów odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  to_regprocedure('public.get_applied_jobs_display(text)') is null
+  and has_function_privilege('authenticated', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE'),
+  'PL109-7f stary podpis usunięty; EXECUTE tylko authenticated');
+
+-- KONTROLA UJEMNA 1: send_offer bez expiresAt → asercja PL109-1 wykrywa brak.
+begin;
+do $pl$ begin
+  execute regexp_replace(pg_get_functiondef('public.send_offer(uuid, uuid, text, text, timestamptz)'::regprocedure),
+    '''expiresAt'', v_expires,', '', 'g');
+end $pl$;
+select pg_temp.assert(pg_get_functiondef('public.send_offer(uuid, uuid, text, text, timestamptz)'::regprocedure)
+  not like '%expiresAt%', 'PL109-N1 mutacja usunęła klucz expiresAt');
+select set_config('app.current_uid', :'PLE', false);
+set local role authenticated; select pg_temp.assert_client_role();
+select public.send_offer(:'PLJ3'::uuid, :'PLC2'::uuid, 'pl109-off-neg', null, null) as ploffneg \gset
+reset role;
+select pg_temp.assert(
+  not coalesce((select (payload->>'expiresAt')::timestamptz is not null
+     from public.email_deliveries where entity_id = :'ploffneg' and template = 'jobOffer'), false),
+  'PL109-N1b bez klucza predykat PL109-1 jest fałszywy (test wykrywa regresję)');
+rollback;
+reset role; reset app.current_uid;
+
+-- KONTROLA UJEMNA 2: send_message bez conversationId → asercja PL109-6 wykrywa brak.
+begin;
+do $pl$ begin
+  execute regexp_replace(pg_get_functiondef('public.send_message(uuid, text, uuid)'::regprocedure),
+    ',\s*''conversationId'', p_conversation_id', '', 'g');
+end $pl$;
+select pg_temp.assert(pg_get_functiondef('public.send_message(uuid, text, uuid)'::regprocedure)
+  not like '%''conversationId''%', 'PL109-N2 mutacja usunęła klucz conversationId');
+select set_config('app.current_uid', :'PLE', false);
+set local role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'plconv'::uuid, 'Druga', gen_random_uuid()) as plmsgneg \gset
+reset role;
+select pg_temp.assert(
+  not coalesce((select payload->>'conversationId' = :'plconv'
+     from public.email_deliveries where entity_id = :'plmsgneg' and profile_id = :'PLC'), false),
+  'PL109-N2b bez klucza predykat PL109-6 jest fałszywy (test wykrywa regresję)');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- LOC194. Słownik miejscowości z aliasami (#194, 0112): gminy Belgii + lista kanoniczna,
+--         aliasy PL/NL/FR/EN po kluczu cityKey, odczyt publiczny, zapis tylko serwisowy.
+-- ============================================================================
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.locations where kind = 'municipality' and is_demo = false) >= 560
+  and (select count(*) from public.locations where kind = 'former_municipality') >= 20,
+  'LOC194-1 gminy obecne i zniesione przy fuzjach w słowniku');
+select pg_temp.assert(not exists (
+    select 1 from public.locations l
+     where l.country = 'BE' and l.latitude is not null
+       and not exists (select 1 from public.location_aliases a where a.location_id = l.id)),
+  'LOC194-2 każda miejscowość ma alias');
+select pg_temp.assert(
+  (select (name, latitude, longitude, sort_order) = ('Brussels', 50.850300, 4.351700, 10)
+     from public.locations where slug = 'brussels')
+  and (select (name, latitude, longitude, sort_order) = ('Liège', 50.632600, 5.579700, 70)
+     from public.locations where slug = 'liege'),
+  'LOC194-3 wiersze 0010 bez zmian');
+
+-- Zapytanie loadera (src/lib/data/matching.ts) pod rolą klienta i RLS.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select array_agg(format('%s:%s,%s', a.alias_key, l.latitude, l.longitude) order by a.alias_key)
+     from public.location_aliases a join public.locations l on l.id = a.location_id
+    where l.is_active = true and a.alias_key = any(array['antwerpia', 'luik', 'atlantyda']))
+  = array['antwerpia:51.219400,4.402500', 'luik:50.632600,5.579700'],
+  'LOC194-4 alias PL/NL → współrzędne, nieznane miasto bez wiersza');
+select pg_temp.assert(
+  (select location_id from public.location_aliases where alias_key = 'elsene')
+  = (select location_id from public.location_aliases where alias_key = 'ixelles'),
+  'LOC194-5 nazwy NL/FR gminy spoza listy w kodzie wskazują ten sam wiersz');
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''X'', ''x-loc194'' from public.locations limit 1',
+  'permission denied', 'LOC194-6 zalogowany nie dodaje aliasu');
+select pg_temp.expect_error('update public.location_aliases set alias = alias',
+  'permission denied', 'LOC194-6b zalogowany nie zmienia aliasu');
+select pg_temp.expect_error('update public.locations set latitude = 0',
+  'permission denied', 'LOC194-6c zalogowany nie zmienia współrzędnych');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.location_aliases where alias_key = 'bruksela') = 1,
+  'LOC194-7 anon czyta aliasy');
+select pg_temp.expect_error('delete from public.location_aliases',
+  'permission denied', 'LOC194-7b anon nie usuwa aliasów');
+reset role;
+
+-- Integralność: jeden klucz = jedna miejscowość, klucz w postaci cityKey, NIS unikalny.
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''Antwerpia'', ''antwerpia'' from public.locations where slug = ''ghent''',
+  'duplicate key', 'LOC194-8 alias nie wskazuje dwóch miejscowości');
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''Sint-X'', ''Sint-X'' from public.locations where slug = ''ghent''',
+  'location_aliases_key_format', 'LOC194-8b klucz nie w postaci cityKey');
+select pg_temp.expect_error(
+  'update public.locations set refnis = (select refnis from public.locations where slug = ''antwerp'') where slug = ''ghent''',
+  'duplicate key', 'LOC194-8c kod NIS unikalny');
+
+-- Usunięcie miejscowości usuwa jej aliasy (kaskada), bez sierot.
+begin;
+delete from public.locations where slug = 'namur';
+select pg_temp.assert(not exists (select 1 from public.location_aliases where alias_key in ('namur', 'namen')),
+  'LOC194-9 aliasy usuwane kaskadowo');
+rollback;
+
+-- Kontrola ujemna: bez polityki odczytu klient nie widzi aliasów (RLS włączone, deny).
+begin;
+drop policy location_aliases_public_read on public.location_aliases;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.location_aliases) = 0,
+  'LOC194-10 kontrola ujemna: bez polityki RLS brak odczytu');
+reset role;
+rollback;
 
 -- ============================================================================
 -- AC45. Panel admina kampanii e-mail (#45, 0111): admin_activate/cancel_email_campaign —
