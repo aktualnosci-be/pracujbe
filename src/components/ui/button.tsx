@@ -27,12 +27,17 @@ const buttonVariants = cva(
         outline: 'border border-input bg-background text-foreground hover:bg-soft',
         ghost: 'text-foreground hover:bg-soft',
         link: 'text-primary underline-offset-4 hover:underline',
+        /** `.btn.secondary` z prototypu „Ludzie i praca”: białe tło, linia #ddd, tekst ink (#7). */
+        passportSecondary:
+          'border border-[color:var(--pp-line-btn)] bg-card text-foreground hover:bg-soft',
       },
       size: {
         default: 'h-12 px-6 py-2',
         sm: 'h-9 rounded-md px-4',
         lg: 'h-12 rounded-md px-8 text-base',
         icon: 'h-11 w-11',
+        /** `.people .btn` z prototypu (#7, Z4): 14 px / 650, min. 49 px, promień 11 px, padding 13/21 px. */
+        passport: 'min-h-[49px] rounded-[11px] px-[21px] py-[13px] text-sm font-[650]',
       },
     },
     defaultVariants: {
