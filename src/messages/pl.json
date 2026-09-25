@@ -2710,7 +2710,13 @@
     "deleteTitle": "Usunąć wyszukiwanie „{name}”?",
     "deleteDescription": "Przestaniesz dostawać alerty o nowych ofertach z tymi filtrami.",
     "deleted": "Usunęliśmy wyszukiwanie.",
-    "updated": "Zapisaliśmy zmiany."
+    "updated": "Zapisaliśmy zmiany.",
+    "rename": "Zmień nazwę",
+    "renameLabel": "Nowa nazwa wyszukiwania",
+    "renameSave": "Zapisz nazwę",
+    "renameCancel": "Anuluj",
+    "renamed": "Zmieniliśmy nazwę wyszukiwania.",
+    "renameHint": "Od 1 do 80 znaków."
   },
   "contentReport": {
     "metaTitle": "Zgłoś treść",
@@ -2855,6 +2861,23 @@
     "categoryUnion": "przynależność do związku zawodowego",
     "categoryPolitical": "poglądy polityczne",
     "categoryCriminal": "karalność"
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Wyłączenie alertu",
+    "title": "Wyłączyć ten alert?",
+    "confirmText": "Przestaniemy wysyłać e-maile z nowymi ofertami dla tego jednego zapisanego wyszukiwania. Pozostałe wyszukiwania i powiadomienia działają bez zmian.",
+    "confirmButton": "Wyłącz ten alert",
+    "pending": "Zapisywanie…",
+    "doneTitle": "Alert wyłączony",
+    "doneText": "Nie wyślemy Ci już alertów dla tego wyszukiwania. Wyszukiwanie zostaje zapisane — alert włączysz ponownie w panelu kandydata.",
+    "settingsHint": "Zapisane wyszukiwania i alerty zmienisz po zalogowaniu.",
+    "loginLink": "Zaloguj się",
+    "invalidTitle": "Link jest nieprawidłowy",
+    "invalidText": "Ten link jest niepełny lub został zmieniony. Skorzystaj z linku z najnowszego e-maila albo zmień alert po zalogowaniu.",
+    "expiredTitle": "Link wygasł",
+    "expiredText": "Ten link jest już nieaktualny. Skorzystaj z linku z najnowszego e-maila albo zmień alert po zalogowaniu.",
+    "unavailableText": "Wyłączenie alertu jest chwilowo niedostępne. Spróbuj później albo zmień alert po zalogowaniu.",
+    "errorText": "Nie udało się zapisać zmiany. Spróbuj ponownie."
   },
   "cvImport": {
     "eyebrow": "Twój profil",

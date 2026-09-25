@@ -216,6 +216,7 @@ describe('worker outboxa: wypisanie i budżet', () => {
   }
   function mockRpc(rows: unknown[], budget: (template: string) => { granted: boolean; retry_at: string | null }) {
     fakeDb.rpc('claim_email_batch', rows);
+    fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', ({ args }: { args: Record<string, unknown> }) => [
       budget(String(args['p_template'] ?? '')),
     ]);

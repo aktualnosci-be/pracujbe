@@ -2710,7 +2710,13 @@
     "deleteTitle": "Supprimer la recherche « {name} » ?",
     "deleteDescription": "Vous ne recevrez plus d’alertes sur les nouvelles offres correspondant à ces filtres.",
     "deleted": "Nous avons supprimé la recherche.",
-    "updated": "Nous avons enregistré les modifications."
+    "updated": "Nous avons enregistré les modifications.",
+    "rename": "Renommer",
+    "renameLabel": "Nouveau nom de la recherche",
+    "renameSave": "Enregistrer le nom",
+    "renameCancel": "Annuler",
+    "renamed": "Nous avons renommé la recherche.",
+    "renameHint": "De 1 à 80 caractères."
   },
   "contentReport": {
     "metaTitle": "Signaler un contenu",
@@ -2855,6 +2861,23 @@
     "categoryUnion": "affiliation syndicale",
     "categoryPolitical": "opinions politiques",
     "categoryCriminal": "antécédents judiciaires"
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Désactivation de l’alerte",
+    "title": "Désactiver cette alerte ?",
+    "confirmText": "Nous n’enverrons plus d’e-mails de nouvelles offres pour cette seule recherche enregistrée. Vos autres recherches et notifications restent inchangées.",
+    "confirmButton": "Désactiver cette alerte",
+    "pending": "Enregistrement…",
+    "doneTitle": "Alerte désactivée",
+    "doneText": "Nous ne vous enverrons plus d’alertes pour cette recherche. La recherche reste enregistrée — vous pouvez réactiver l’alerte dans votre espace candidat.",
+    "settingsHint": "Vous pouvez modifier vos recherches et alertes après connexion.",
+    "loginLink": "Se connecter",
+    "invalidTitle": "Le lien n’est pas valide",
+    "invalidText": "Ce lien est incomplet ou a été modifié. Utilisez le lien du dernier e-mail ou modifiez l’alerte après connexion.",
+    "expiredTitle": "Le lien a expiré",
+    "expiredText": "Ce lien n’est plus valable. Utilisez le lien du dernier e-mail ou modifiez l’alerte après connexion.",
+    "unavailableText": "La désactivation de l’alerte est momentanément indisponible. Réessayez plus tard ou modifiez l’alerte après connexion.",
+    "errorText": "La modification n’a pas pu être enregistrée. Veuillez réessayer."
   },
   "cvImport": {
     "eyebrow": "Votre profil",

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { withServiceRole } from '@/lib/db/portal';
-import { execute, queryRows, rpcRows } from '@/lib/db/sql';
+import { execute, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import { renderEmail } from '@/emails/templates';
 import { renderNewsletterEmail } from '@/emails/newsletter';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
@@ -13,6 +13,7 @@ import {
   unsubscribePageUrl,
   unsubscribeSecretFromEnv,
 } from '@/lib/email/unsubscribe-token';
+import { alertOffPageUrl, createAlertOffToken } from '@/lib/email/saved-search-alert-token';
 import { newsletterJobsFromPayload } from '@/lib/email/newsletter-delivery';
 import {
   emailFromEnv,
@@ -69,7 +70,7 @@ const renderAny = renderEmail as (
   type: EmailType,
   locale: Locale,
   data: Record<string, unknown>,
-  options?: { unsubscribeUrl?: string; sender?: EmailSenderIdentity },
+  options?: { unsubscribeUrl?: string; sender?: EmailSenderIdentity; alertOffUrl?: string },
 ) => Promise<{ subject: string; html: string; text: string }>;
 
 export interface RenderedDelivery {
@@ -89,6 +90,8 @@ export async function renderDelivery(
   data: Record<string, unknown>,
   unsubscribeUrl: string | undefined,
   env: Record<string, string | undefined> = process.env,
+  /** #100: link „wyłącz tylko ten alert” (digest `jobMatch`), liczony przez workera. */
+  alertOffUrl?: string,
 ): Promise<RenderedDelivery> {
   const isMarketing = emailPreferenceCategory(row.template) === 'marketing';
   if (isMarketing) {
@@ -111,6 +114,7 @@ export async function renderDelivery(
   const rendered = await renderAny(row.template as EmailType, locale, data, {
     unsubscribeUrl,
     sender: senderIdentityFromEnv(env) ?? undefined,
+    alertOffUrl,
   });
   return { from: emailFromEnv(env), ...rendered };
 }
@@ -134,9 +138,30 @@ export function unsubscribeLinksFor(
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * #100: link wyłączenia JEDNEGO alertu dla digestu `jobMatch` zapisanego wyszukiwania.
+ * `null` = inny typ maila, brak powiązanego wyszukiwania albo brak sekretu. Token niesie
+ * tylko UUID konta i wyszukiwania (bez e-maila); zapis dopiero po kliknięciu na stronie.
+ */
+export function alertOffLinkFor(
+  row: { profile_id: string | null; template: string; entity_type?: string | null; entity_id?: string | null },
+  locale: string,
+  site: string,
+  secret: string | null,
+): string | null {
+  if (row.template !== 'jobMatch' || row.entity_type !== 'saved_search') return null;
+  if (!row.profile_id || !row.entity_id || !UUID_RE.test(row.entity_id) || !secret) return null;
+  const token = createAlertOffToken({ profileId: row.profile_id, savedSearchId: row.entity_id }, secret);
+  return alertOffPageUrl(site, locale, token);
+}
+
 interface DeliveryRow {
   id: string;
   profile_id: string | null;
+  entity_type?: string | null;
+  entity_id?: string | null;
   to_email: string;
   template: string;
   locale: string;
@@ -151,6 +176,8 @@ export interface ProcessResult {
   /** Wiersze odłożone do następnego okna budżetu (bez zwiększania `attempts`). */
   deferred?: number;
   skipped?: string;
+  /** Wiersze wygaszone tuż przed wysyłką (wypisanie/blokada po claimie, #466 pkt 8). */
+  suppressed?: number;
   /**
    * P1-17: sygnał zdrowia dla endpointu (200 vs 503). `false` = realny problem
    * (brak konfiguracji w produkcji, błąd claimu) — monitoring NIE może widzieć „zielonego"
@@ -193,6 +220,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   let sent = 0;
   let failed = 0;
   let deferred = 0;
+  let suppressed = 0;
   // Pula, która w tej paczce dostała odmowę, czeka do podanego okna (bez kolejnych zapytań).
   const exhausted = new Map<string, string>();
 
@@ -263,7 +291,20 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         locale,
         data,
         unsubscribe?.pageUrl,
+        process.env,
+        alertOffLinkFor(row, locale, site, unsubscribeSecret) ?? undefined,
       );
+
+      // #100 / #466 pkt 8: ponowna kontrola zgody tuż przed wysyłką (kategoria, blokada
+      // adresu, uprawnienie odbiorcy firmowego z 0122, wyłączony alert, kampania). Odbiorca mógł się wypisać po claimie — wtedy
+      // baza wygasza wiersz (ślad zostaje), a my nic nie wysyłamy i nie zużywamy budżetu.
+      const blockedReason = await withServiceRole((tx) =>
+        rpc<string | null>(tx, 'email_delivery_send_check', { p_delivery_id: row.id }),
+      );
+      if (blockedReason !== null) {
+        suppressed += 1;
+        continue;
+      }
 
       // #45: atomowy budżet puli tuż przed wysyłką (równoległe workery nie przekroczą limitu).
       const [grant] = await withServiceRole((tx) =>
@@ -351,5 +392,5 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     }
   }
 
-  return { processed: queue.length, sent, failed, deferred, ok: true };
+  return { processed: queue.length, sent, failed, deferred, suppressed, ok: true };
 }
