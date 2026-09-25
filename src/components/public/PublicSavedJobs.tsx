@@ -114,10 +114,13 @@ export function PublicSaveJobButton({
   className,
   iconOnly = false,
   plain = false,
+  passport = false,
 }: {
   jobId: string;
   className?: string;
   iconOnly?: boolean;
+  /** `.btn.secondary` z prototypu (panel „Twój następny krok” szczegółu oferty, #7 Z2). */
+  passport?: boolean;
   /** Bez obramowania (karta-paszport) — tylko z `iconOnly`. */
   plain?: boolean;
 }) {
@@ -148,7 +151,9 @@ export function PublicSaveJobButton({
     ? 'pp-save focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60'
     : cn(
         'relative z-10 inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 text-sm transition-colors hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
-        saved ? 'text-accent' : 'text-muted-foreground',
+        passport &&
+          'min-h-[49px] rounded-[11px] border-[color:var(--pp-line-btn)] bg-card px-[21px] font-[650]',
+        saved ? 'text-accent' : passport ? 'text-foreground' : 'text-muted-foreground',
       );
   const Icon = saved ? BookmarkCheck : Bookmark;
   const content = (

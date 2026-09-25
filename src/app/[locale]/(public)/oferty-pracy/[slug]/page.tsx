@@ -27,6 +27,16 @@ import { defaultAlternateLocale } from '@/lib/job-content-locale';
 import { getJobBySlug, getSimilarJobs, type JobDetail } from '@/lib/jobs';
 import { brandShareImageUrl, buildJobPostingJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { cn } from '@/lib/utils';
+import {
+  EYEBROW,
+  H1_EXTENDED,
+  H2_EXTENDED,
+  H3_EXTENDED,
+  INTRO,
+  P_EXTENDED,
+  PAPER,
+  TEXT_LINK,
+} from '@/components/dashboard/panel-styles';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
 import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
@@ -252,7 +262,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     <details
       id={id}
       open
-      className="group border-b border-border py-4 first:pt-0 lg:border-0 lg:py-0"
+      className="group border-b border-[color:var(--pp-line)] py-4 first:pt-0 last:border-b-0 last:pb-0 lg:border-0 lg:py-0"
     >
       {/*
         Akordeon tylko na mobile: na `lg` summary znika (display:none), więc nie jest
@@ -261,13 +271,13 @@ export default async function JobDetailPage({ params }: PageProps) {
         jeden z nich).
       */}
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 lg:hidden [&::-webkit-details-marker]:hidden">
-        <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+        <h2 className={H2_EXTENDED}>{title}</h2>
         <ChevronDown
           className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 lg:hidden"
           aria-hidden="true"
         />
       </summary>
-      <h2 className="hidden text-xl font-semibold text-foreground lg:block">{title}</h2>
+      <h2 className={cn(H2_EXTENDED, 'hidden lg:block')}>{title}</h2>
       <div className="mt-3 lg:mt-4">{children}</div>
     </details>
   );
@@ -283,7 +293,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
   return (
     <PublicSavedJobsProvider key={JSON.stringify([job.id])} jobIds={[job.id]}>
-    <div className="container py-6 md:py-10">
+    <div className="container py-10 max-[600px]:py-[25px]">
       {jsonLd ? (
         <script
           type="application/ld+json"
@@ -294,230 +304,222 @@ export default async function JobDetailPage({ params }: PageProps) {
 
       <Link
         href={BASE_PATH}
-        className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className={cn(TEXT_LINK, 'font-semibold')}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         {t('backToResults')}
       </Link>
 
-      {job.isDemo ? <DemoJobsNotice className="mb-6" /> : null}
+      {job.isDemo ? <DemoJobsNotice className="mt-6" /> : null}
       {/* Lejek ofert (#99): zliczenie po załadowaniu, bez wpływu na cache ISR tej strony. */}
       {job.isDemo ? null : <JobFunnelBeacon event="detail_view" jobIds={[job.id]} />}
 
-      {/* Paszport oferty: nagłówek i stała metryka z rzeczywistych danych. */}
-      <header
-        data-testid="job-detail-passport"
-        className="mb-6 min-w-0 overflow-hidden rounded-3xl border border-border bg-card p-5 sm:p-7 lg:p-8"
-      >
-        <div className="flex min-w-0 items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-              {tCategory(job.category)}
+      {/* `.offer-layout` (#7, Z2): treść + panel 300 px, odstęp 36 px; jedna kolumna < 1024 px. */}
+      <div className="mt-[30px] grid min-w-0 gap-9 lg:grid-cols-[minmax(0,1fr)_300px]">
+        {/* Treść */}
+        <div className="min-w-0">
+          {/* Paszport oferty: nagłówek i stała metryka z rzeczywistych danych. */}
+          {/* Nagłówek `.extended` (nadtytuł „kategoria / miasto”, H1 40/30 px, `.dash-intro` z firmą)
+              i karta-paszport `.job-passport` ze stałą metryką z rzeczywistych danych. */}
+          <header data-testid="job-detail-passport" className="min-w-0">
+            <p className={EYEBROW}>
+              {tCategory(job.category)} / {job.city}
             </p>
-            <h1
-              lang={contentLang}
-              className="mt-3 break-words text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl"
-            >
+            <h1 lang={contentLang} className={H1_EXTENDED}>
               {job.title}
             </h1>
-            <div className="mt-4 flex min-w-0 items-center gap-3">
-              {companyLogo}
-              <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
-                <span className="break-words">{job.companyName}</span>
-                {job.companyVerified && !job.isDemo ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
-                    <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    {t('verified')}
-                  </span>
-                ) : null}
-              </p>
-            </div>
-          </div>
+            <p className={cn(INTRO, 'mt-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1')}>
+              <span className="break-words">{job.companyName}</span>
+              {job.companyVerified && !job.isDemo ? (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
+                  <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {t('verified')}
+                </span>
+              ) : null}
+            </p>
 
-          {/* Zapisz (desktop); na mobile pozostaje w dolnym pasku. */}
-          <PublicSaveJobButton jobId={job.id} className="hidden lg:inline-flex" />
-        </div>
-
-        <dl
-          className={cn(
-            'mt-7 grid min-w-0 border-y border-border',
-            passportFields.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3',
-          )}
-        >
-          {passportFields.map((field, index) => (
-            <div
-              key={field.key}
-              data-passport-field={field.key}
+            <div className="mt-6 min-w-0 rounded-[24px] border border-[color:var(--pp-line-card)] bg-card px-[26px] pb-5 pt-[22px] max-[500px]:rounded-[20px] max-[500px]:p-[18px]">
+            <dl
               className={cn(
-                'min-w-0 py-5',
-                index === 0
-                  ? 'sm:pr-5'
-                  : 'border-t border-border sm:border-l sm:border-t-0 sm:pl-5',
-                index > 0 && index < passportFields.length - 1 ? 'sm:pr-5' : undefined,
+                'grid min-w-0 border-y border-[color:var(--pp-line-data)]',
+                passportFields.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3',
               )}
             >
-              <dt className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {field.label}
-              </dt>
-              <dd className="break-words text-base font-semibold text-foreground">
-                {field.primary}
-                {field.secondary ? (
-                  <span className="mt-1 block text-sm font-normal text-muted-foreground">
-                    {field.secondary}
-                  </span>
-                ) : null}
-              </dd>
+              {passportFields.map((field, index) => (
+                <div
+                  key={field.key}
+                  data-passport-field={field.key}
+                  className={cn(
+                    'min-w-0 py-5',
+                    index === 0
+                      ? 'sm:pr-5'
+                      : 'border-t border-[color:var(--pp-line-data)] sm:border-l sm:border-t-0 sm:pl-5',
+                    index > 0 && index < passportFields.length - 1 ? 'sm:pr-5' : undefined,
+                  )}
+                >
+                  <dt className="mb-3 text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
+                    {field.label}
+                  </dt>
+                  <dd className="break-words text-base font-semibold text-foreground">
+                    {field.primary}
+                    {field.secondary ? (
+                      <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                        {field.secondary}
+                      </span>
+                    ) : null}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+
+            <p className="mt-4 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
+              <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="break-words">{t('publishedOn')} {publishedLabel}</span>
+            </p>
+
+            {contentLang ? (
+              <p data-testid="job-content-language" className="mt-3 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
+                <LanguagesIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="break-words">
+                  {t('contentLanguageNotice', { language: t(`contentLanguageNames.${contentLang}`) })}
+                </span>
+              </p>
+            ) : null}
             </div>
-          ))}
-        </dl>
+          </header>
 
-        <p className="mt-4 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
-          <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className="break-words">{t('publishedOn')} {publishedLabel}</span>
-        </p>
+          {/*
+            Kotwice do sekcji (nawigacja w obrębie strony, nie zakładki ARIA). Bez stałego
+            `aria-current`/wyróżnienia pierwszej pozycji — strona nie śledzi bieżącej sekcji.
+          */}
+          <nav aria-label={t('sectionsNav')} className="mt-[25px] border-b border-[color:var(--pp-line)]">
+            <ul className="-mb-px flex flex-wrap gap-6">
+              {tabs.map((tab) => (
+                <li key={tab.href}>
+                  <a
+                    href={tab.href}
+                    className="inline-block border-b-2 border-transparent pb-3 text-sm font-medium text-muted-foreground transition-colors hover:border-accent hover:text-foreground"
+                  >
+                    {tab.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-        {contentLang ? (
-          <p data-testid="job-content-language" className="mt-3 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
-            <LanguagesIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="break-words">
-              {t('contentLanguageNotice', { language: t(`contentLanguageNames.${contentLang}`) })}
-            </span>
-          </p>
-        ) : null}
-      </header>
-
-      {/*
-        Kotwice do sekcji (nawigacja w obrębie strony, nie zakładki ARIA). Bez stałego
-        `aria-current`/wyróżnienia pierwszej pozycji — strona nie śledzi bieżącej sekcji.
-      */}
-      <nav aria-label={t('sectionsNav')} className="mb-6 border-b border-border">
-        <ul className="-mb-px flex flex-wrap gap-6">
-          {tabs.map((tab) => (
-            <li key={tab.href}>
-              <a
-                href={tab.href}
-                className="inline-block border-b-2 border-transparent pb-3 text-sm font-medium text-muted-foreground transition-colors hover:border-accent hover:text-foreground"
-              >
-                {tab.label}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-      <div className="grid min-w-0 gap-8 lg:grid-cols-3">
-        {/* Treść */}
-        <div className="min-w-0 lg:col-span-2 lg:space-y-8">
-          <Section id="opis" title={t('aboutRole')}>
-            <p lang={contentLang} className="whitespace-pre-line leading-relaxed text-foreground">{job.description}</p>
-          </Section>
-
-          {job.responsibilities.length > 0 ? (
-            <Section title={t('responsibilities')}>
-              <ul lang={contentLang} className="space-y-2">
-                {job.responsibilities.map((item) => (
-                  <li key={item} className="flex items-start gap-2.5">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
-                    <span className="text-foreground">{item}</span>
-                  </li>
-                ))}
-              </ul>
+          {/* Treść oferty w jednej karcie `.paper` (h2 23 px, h3 18 px, akapity 15 px / 1,7). */}
+          <div className={cn(PAPER, 'mt-[25px] lg:space-y-8')}>
+            <Section id="opis" title={t('aboutRole')}>
+              <p lang={contentLang} className={cn(P_EXTENDED, 'whitespace-pre-line')}>{job.description}</p>
             </Section>
-          ) : null}
 
-          {job.requirementsMandatory.length > 0 || job.requirementsOptional.length > 0 ? (
-            <Section title={t('requirementsMandatory')}>
-              <ul lang={contentLang} className="space-y-2">
-                {job.requirementsMandatory.map((item) => (
-                  <li key={item} className="flex items-start gap-2.5">
-                    <Check className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
-                    <span className="text-foreground">{item}</span>
-                  </li>
-                ))}
-              </ul>
-              {job.requirementsOptional.length > 0 ? (
-                <>
-                  <h3 className="mb-2 mt-4 text-sm font-semibold text-muted-foreground">
-                    {t('requirementsOptional')}
-                  </h3>
-                  <ul lang={contentLang} className="space-y-2">
-                    {job.requirementsOptional.map((item) => (
-                      <li key={item} className="flex items-start gap-2.5">
-                        <span
-                          className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground"
-                          aria-hidden="true"
-                        />
-                        <span className="text-muted-foreground">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : null}
-            </Section>
-          ) : null}
+            {job.responsibilities.length > 0 ? (
+              <Section title={t('responsibilities')}>
+                <ul lang={contentLang} className="space-y-2">
+                  {job.responsibilities.map((item) => (
+                    <li key={item} className="flex items-start gap-2.5">
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
+                      <span className="text-foreground">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
 
-          {job.conditions.length > 0 ? (
-            <Section title={t('conditions')}>
-              <ul lang={contentLang} className="grid gap-3 sm:grid-cols-2">
-                {job.conditions.map((item) => (
-                  <li key={item} className="flex items-start gap-2.5">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
-                    <span className="text-foreground">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          ) : null}
+            {job.requirementsMandatory.length > 0 || job.requirementsOptional.length > 0 ? (
+              <Section title={t('requirementsMandatory')}>
+                <ul lang={contentLang} className="space-y-2">
+                  {job.requirementsMandatory.map((item) => (
+                    <li key={item} className="flex items-start gap-2.5">
+                      <Check className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
+                      <span className="text-foreground">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+                {job.requirementsOptional.length > 0 ? (
+                  <>
+                    <h3 className={cn(H3_EXTENDED, 'mb-2')}>
+                      {t('requirementsOptional')}
+                    </h3>
+                    <ul lang={contentLang} className="space-y-2">
+                      {job.requirementsOptional.map((item) => (
+                        <li key={item} className="flex items-start gap-2.5">
+                          <span
+                            className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          <span className="text-muted-foreground">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+              </Section>
+            ) : null}
 
-          <Section title={t('accommodationCommute')}>
-            {/*
-              Każda para dt/dd jest bezpośrednio w `div` będącym dzieckiem `dl` (HTML/axe
-              `definition-list`); ikona jest dekoracją wewnątrz `dt`, pozycjonowaną w lewym odstępie.
-            */}
-            <dl className="grid gap-4 sm:grid-cols-2">
-              <div className="relative pl-[1.875rem]">
-                <dt className="text-sm text-muted-foreground">
-                  <Home
-                    className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  {t('accommodation')}
-                </dt>
-                <dd className="font-medium text-foreground">
-                  {job.accommodation ? tCommon('yes') : tCommon('no')}
-                </dd>
-              </div>
-              <div className="relative pl-[1.875rem]">
-                <dt className="text-sm text-muted-foreground">
-                  <Truck
-                    className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  {t('transport')}
-                </dt>
-                <dd className="font-medium text-foreground">
-                  {job.transport ? tCommon('yes') : tCommon('no')}
-                </dd>
-              </div>
-              {job.languages.length > 0 ? (
+            {job.conditions.length > 0 ? (
+              <Section title={t('conditions')}>
+                <ul lang={contentLang} className="grid gap-3 sm:grid-cols-2">
+                  {job.conditions.map((item) => (
+                    <li key={item} className="flex items-start gap-2.5">
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+                      <span className="text-foreground">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
+
+            <Section title={t('accommodationCommute')}>
+              {/*
+                Każda para dt/dd jest bezpośrednio w `div` będącym dzieckiem `dl` (HTML/axe
+                `definition-list`); ikona jest dekoracją wewnątrz `dt`, pozycjonowaną w lewym odstępie.
+              */}
+              <dl className="grid gap-4 sm:grid-cols-2">
                 <div className="relative pl-[1.875rem]">
                   <dt className="text-sm text-muted-foreground">
-                    <LanguagesIcon
+                    <Home
                       className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
                       aria-hidden="true"
                     />
-                    {t('languages')}
+                    {t('accommodation')}
                   </dt>
-                  <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
+                  <dd className="font-medium text-foreground">
+                    {job.accommodation ? tCommon('yes') : tCommon('no')}
+                  </dd>
                 </div>
-              ) : null}
-            </dl>
-          </Section>
+                <div className="relative pl-[1.875rem]">
+                  <dt className="text-sm text-muted-foreground">
+                    <Truck
+                      className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    {t('transport')}
+                  </dt>
+                  <dd className="font-medium text-foreground">
+                    {job.transport ? tCommon('yes') : tCommon('no')}
+                  </dd>
+                </div>
+                {job.languages.length > 0 ? (
+                  <div className="relative pl-[1.875rem]">
+                    <dt className="text-sm text-muted-foreground">
+                      <LanguagesIcon
+                        className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      {t('languages')}
+                    </dt>
+                    <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </Section>
+          </div>
 
           {/* Informacje o firmie */}
+          <div className={cn(PAPER, 'mt-[25px]')}>
           <Section id="firma" title={t('aboutCompany')}>
-            <div className="rounded-lg border border-border bg-soft p-5">
+            <div>
               <div className="flex items-center gap-3">
                 {companyLogo}
                 <div>
@@ -532,7 +534,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                   </p>
                 </div>
               </div>
-              <p lang={contentLang} className="mt-3 leading-relaxed text-muted-foreground">{job.companyDescription}</p>
+              <p lang={contentLang} className={cn(P_EXTENDED, 'mt-3')}>{job.companyDescription}</p>
               <Link
                 href={`${BASE_PATH}?keyword=${encodeURIComponent(job.companyName)}`}
                 className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-dark"
@@ -544,6 +546,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               {job.isDemo ? null : <JobCompanyBlockControl jobId={job.id} />}
             </div>
           </Section>
+          </div>
 
           {/* Zgłoszenie treści (DSA, #41) — także bez konta. Oferta przykładowa nie jest treścią serwisu. */}
           {job.isDemo ? null : (
@@ -572,15 +575,21 @@ export default async function JobDetailPage({ params }: PageProps) {
         </div>
 
         {/* Panel boczny */}
-        <aside className="min-w-0 lg:col-span-1">
-          <div className="space-y-4 lg:sticky lg:top-24">
+        <aside className="min-w-0">
+          <div className="space-y-5 lg:sticky lg:top-24">
             {/* Dopasowanie do profilu (tylko dla zalogowanego kandydata; wyspa kliencka) */}
             <div data-testid="job-match-slot">
               <JobMatchCard jobId={job.id} />
             </div>
 
             {/* Aplikuj (desktop — mobile ma dolny pasek) */}
-            <div className="hidden rounded-lg border border-border bg-card p-5 shadow-sm lg:block">
+            {/* `.paper.apply-box` — „Twój następny krok”: Aplikuj (`.btn`) i Zapisz (`.btn.secondary`). */}
+            <section className={cn(PAPER, 'my-0 hidden lg:block')}>
+              <p className={EYEBROW}>{t('applyBoxEyebrow')}</p>
+              <h2 className={cn(H2_EXTENDED, 'mt-2')}>{t('applyBoxTitle')}</h2>
+              <p className={cn(P_EXTENDED, 'mt-2')}>
+                {t('applyBoxText')} {applyHint}
+              </p>
               <ApplyModal
                 jobId={job.id}
                 companyName={job.companyName}
@@ -588,14 +597,14 @@ export default async function JobDetailPage({ params }: PageProps) {
                 screeningQuestions={job.screeningQuestions}
                 contentLocale={job.contentLocale}
                 triggerLabel={applyLabel}
-                triggerHint={applyHint}
-                triggerClassName="w-full"
+                triggerSize="passport"
+                triggerClassName="mt-3 w-full"
               />
-              <PublicSaveJobButton jobId={job.id} className="mt-3 w-full" />
-            </div>
+              <PublicSaveJobButton jobId={job.id} passport className="mt-3 w-full" />
+            </section>
 
             {/* Kontakt */}
-            <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+            <div className={cn(PAPER, 'my-0')}>
               <h2 className="mb-3 text-base font-semibold text-foreground">{t('contactTitle')}</h2>
               <div className="flex items-center gap-3">
                 <Building2 className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -623,12 +632,12 @@ export default async function JobDetailPage({ params }: PageProps) {
 
             {/* Podobne oferty */}
             {similar.status === 'error' ? (
-              <div id="podobne" className="rounded-lg border border-border bg-card p-5 shadow-sm">
+              <div id="podobne" className={cn(PAPER, 'my-0')}>
                 <h2 className="mb-3 text-base font-semibold text-foreground">{t('similarJobs')}</h2>
                 <SimilarJobsError message={t('similarJobsLoadError')} retry={tCommon('retry')} />
               </div>
             ) : similarJobs.length > 0 ? (
-              <div id="podobne" className="rounded-lg border border-border bg-card p-5 shadow-sm">
+              <div id="podobne" className={cn(PAPER, 'my-0')}>
                 <h2 className="mb-3 text-base font-semibold text-foreground">{t('similarJobs')}</h2>
                 <ul className="divide-y divide-border">
                   {similarJobs.map((item) => {
@@ -694,7 +703,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           screeningQuestions={job.screeningQuestions}
           contentLocale={job.contentLocale}
           triggerLabel={applyLabel}
-          triggerSize="default"
+          triggerSize="passport"
           triggerClassName="min-w-0 flex-1"
         />
       </div>

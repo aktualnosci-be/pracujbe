@@ -1,7 +1,13 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AuthPage,
+  AuthPageHeader,
+  AuthPageIntro,
+  AuthPageTitle,
+  AuthPaper,
+} from '@/components/auth/auth-page';
 import { NewPasswordForm } from './NewPasswordForm';
 
 /**
@@ -31,18 +37,14 @@ export default async function SetNewPasswordPage({ params }: PageProps) {
   const t = await getTranslations('auth');
 
   return (
-    <div className="container flex min-h-[calc(100vh-8rem)] items-center justify-center py-12">
-      <div className="w-full max-w-md">
-        <Card>
-          <CardHeader className="space-y-2 text-center">
-            <CardTitle as="h1" className="text-2xl">{t('newPasswordTitle')}</CardTitle>
-            <CardDescription>{t('passwordHint')}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <NewPasswordForm />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <AuthPage>
+      <AuthPageHeader>
+        <AuthPageTitle>{t('newPasswordTitle')}</AuthPageTitle>
+        <AuthPageIntro>{t('passwordHint')}</AuthPageIntro>
+      </AuthPageHeader>
+      <AuthPaper>
+        <NewPasswordForm />
+      </AuthPaper>
+    </AuthPage>
   );
 }

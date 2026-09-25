@@ -66,7 +66,7 @@ export function ConfirmEmailForm(): React.JSX.Element {
         <Button
           type="button"
           className="w-full"
-          size="lg"
+          size="passport"
           onClick={onConfirm}
           disabled={token === undefined || pending}
           aria-busy={pending || undefined}

@@ -45,8 +45,6 @@ export default async function UnsubscribePage({ params }: PageProps) {
     category,
   };
   return (
-    <div className="py-6">
-      <UnsubscribePageContent locale={locale} labels={labels} />
-    </div>
+    <UnsubscribePageContent locale={locale} labels={labels} />
   );
 }
