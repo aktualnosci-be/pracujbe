@@ -5,7 +5,7 @@ import { actAs, realSession } from './support/real-portal';
 import { startPortalDb, type PortalDb } from './support/portal-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 // Aktywna firma bez cookie = pierwsze aktywne członkostwo (company-context waliduje cookie).
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 

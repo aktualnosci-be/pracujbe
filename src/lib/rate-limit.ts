@@ -11,7 +11,7 @@
  *   limitera nie jest skonfigurowany.
  * - Brak jakiejkolwiek konfiguracji: tryb demo → `true`; tryb produkcyjny → akcje wrażliwe
  *   (auth, płatne API, publiczne formularze) blokowane, reszta przepuszczana.
- * - Błąd RPC / wyjątek -> akcje wrażliwe blokowane (fail-safe), pozostałe fail-open + Sentry.
+ * - Błąd RPC / wyjątek -> akcje wrażliwe blokowane (fail-safe), pozostałe fail-open + kanał błędów.
  * - Klucz budowany z akcji + IP (+ opcjonalny identyfikator, np. userId).
  *
  * Nigdy nie ujawniamy użytkownikowi technikaliów — warstwa wyżej zamienia przekroczenie
@@ -23,7 +23,7 @@ import { headers } from 'next/headers';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import { env, isProductionMode, isRateLimitDatabaseConfigured } from '@/lib/env';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /** Opcje limitu dla pojedynczej akcji. */
 export interface RateLimitOptions {
@@ -68,6 +68,8 @@ const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
   // Aplikacja bez konta (#98): publiczny formularz wysyłający e-maile na podany adres.
   'guest-apply',
   'guest-apply-email',
+  // Formularz kontaktu (#61): publiczny formularz wysyłający potwierdzenie na podany adres.
+  'contact',
 ]);
 
 /**

@@ -36,13 +36,16 @@ export const EMAIL_TYPES = [
   'companyRejected',
   'companySuspended',
   'teamInvitation',
+  'teamInvitationSignup',
   'jobMatch',
   'guestApplicationConfirm',
   'guestApplicationSent',
+  'guestStatusChanged',
   'jobExpiring',
   'payment',
   'invoice',
   'supportContact',
+  'contactMessageAdmin',
   'reportReceived',
   'reportDecisionActioned',
   'reportDecisionNoAction',
@@ -89,6 +92,17 @@ export interface EmailCopy {
 }
 
 /** Powitanie (bez imienia) w każdym języku — imię dołączane jest w szablonie. */
+/**
+ * #100: link „wyłącz tylko ten alert” w digeście `jobMatch` (adres podaje worker, nie payload).
+ * Tekst linku — w języku odbiorcy jak cała wiadomość.
+ */
+export const jobMatchAlertOffLabel: Record<Locale, string> = {
+  pl: 'Wyłącz tylko ten alert',
+  nl: 'Alleen deze melding uitzetten',
+  fr: 'Désactiver uniquement cette alerte',
+  en: 'Turn off only this alert',
+};
+
 export const greetings: Record<Locale, string> = {
   pl: 'Cześć',
   nl: 'Hallo',
@@ -215,6 +229,45 @@ export function interpolate(template: string, vars: Record<string, unknown>): st
  * Etykiety uzasadnienia decyzji moderacyjnej (#42) w języku odbiorcy: podstawa ograniczenia
  * i udział automatyzacji. Podstawiane jako `{groundLabel}` / `{automationLabel}`.
  */
+/** Etykiety tematów formularza kontaktu (#61) w języku ODBIORCY e-maila (admina). */
+export const contactTopicLabels: Record<
+  Locale,
+  Record<'candidate_account' | 'employer_account' | 'job_listing' | 'technical' | 'privacy' | 'other', string>
+> = {
+  pl: {
+    candidate_account: 'Konto kandydata',
+    employer_account: 'Konto pracodawcy lub firma',
+    job_listing: 'Oferta pracy',
+    technical: 'Problem techniczny',
+    privacy: 'Moje dane osobowe',
+    other: 'Inna sprawa',
+  },
+  nl: {
+    candidate_account: 'Kandidatenaccount',
+    employer_account: 'Werkgeversaccount of bedrijf',
+    job_listing: 'Vacature',
+    technical: 'Technisch probleem',
+    privacy: 'Mijn persoonsgegevens',
+    other: 'Iets anders',
+  },
+  fr: {
+    candidate_account: 'Compte candidat',
+    employer_account: 'Compte employeur ou entreprise',
+    job_listing: 'Offre d’emploi',
+    technical: 'Problème technique',
+    privacy: 'Mes données personnelles',
+    other: 'Autre demande',
+  },
+  en: {
+    candidate_account: 'Candidate account',
+    employer_account: 'Employer account or company',
+    job_listing: 'Job listing',
+    technical: 'Technical problem',
+    privacy: 'My personal data',
+    other: 'Something else',
+  },
+};
+
 export const moderationLabels: Record<
   Locale,
   { terms: string; law: string; automatedYes: string; automatedNo: string }
@@ -1051,6 +1104,67 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
     },
   },
 
+  // 0121: adres BEZ konta — język zaproszenia wybrany przez zapraszającego (Invariant #1:
+  // odbiorca nie ma profilu), link rejestracji pracodawcy z jednorazowym tokenem.
+  teamInvitationSignup: {
+    pl: {
+      subject: 'Zaproszenie do zespołu firmy {companyName}',
+      preview: '{inviterName} zaprasza Cię do zespołu {companyName} w Pracuj.be.',
+      heading: 'Zaproszenie do zespołu',
+      body: '{inviterName} zaprasza Cię do zespołu firmy {companyName} w Pracuj.be.\n\nZałóż konto pracodawcy na ten adres e-mail i potwierdź go — zaproszenie będzie czekać w Twoim panelu, w zakładce „Zespół”. Tam dołączysz do firmy albo odrzucisz zaproszenie.',
+      cta: 'Załóż konto i zobacz zaproszenie',
+      highlight: '{companyName}',
+      outro: 'Link działa raz i jest ważny 14 dni. Jeśli nie znasz tej firmy, zignoruj tę wiadomość — bez rejestracji nic się nie stanie.',
+      anonymous: {
+        preview: 'Masz zaproszenie do zespołu {companyName} w Pracuj.be.',
+        body: 'Masz zaproszenie do zespołu firmy {companyName} w Pracuj.be.\n\nZałóż konto pracodawcy na ten adres e-mail i potwierdź go — zaproszenie będzie czekać w Twoim panelu, w zakładce „Zespół”. Tam dołączysz do firmy albo odrzucisz zaproszenie.',
+      },
+      footerNote: 'Otrzymujesz tę wiadomość, ponieważ ten adres e-mail został zaproszony do zespołu firmy w Pracuj.be.',
+    },
+    nl: {
+      subject: 'Uitnodiging voor het team van {companyName}',
+      preview: '{inviterName} nodigt je uit voor het team van {companyName} op Pracuj.be.',
+      heading: 'Uitnodiging voor het team',
+      body: '{inviterName} nodigt je uit voor het team van {companyName} op Pracuj.be.\n\nMaak een werkgeversaccount aan met dit e-mailadres en bevestig het — de uitnodiging wacht dan in je dashboard, op het tabblad ‘Team’. Daar neem je deel aan het bedrijf of weiger je de uitnodiging.',
+      cta: 'Account aanmaken en uitnodiging bekijken',
+      highlight: '{companyName}',
+      outro: 'De link werkt één keer en is 14 dagen geldig. Ken je dit bedrijf niet? Negeer dan dit bericht — zonder registratie gebeurt er niets.',
+      anonymous: {
+        preview: 'Je bent uitgenodigd voor het team van {companyName} op Pracuj.be.',
+        body: 'Je bent uitgenodigd voor het team van {companyName} op Pracuj.be.\n\nMaak een werkgeversaccount aan met dit e-mailadres en bevestig het — de uitnodiging wacht dan in je dashboard, op het tabblad ‘Team’. Daar neem je deel aan het bedrijf of weiger je de uitnodiging.',
+      },
+      footerNote: 'Je ontvangt dit bericht omdat dit e-mailadres is uitgenodigd voor het team van een bedrijf op Pracuj.be.',
+    },
+    fr: {
+      subject: 'Invitation à rejoindre l’équipe de {companyName}',
+      preview: '{inviterName} vous invite à rejoindre l’équipe de {companyName} sur Pracuj.be.',
+      heading: 'Invitation à rejoindre une équipe',
+      body: '{inviterName} vous invite à rejoindre l’équipe de {companyName} sur Pracuj.be.\n\nCréez un compte employeur avec cette adresse e-mail et confirmez-la : l’invitation vous attendra dans votre espace, dans l’onglet « Équipe ». Vous pourrez y rejoindre l’entreprise ou refuser l’invitation.',
+      cta: 'Créer un compte et voir l’invitation',
+      highlight: '{companyName}',
+      outro: 'Le lien fonctionne une seule fois et est valable 14 jours. Si vous ne connaissez pas cette entreprise, ignorez ce message : sans inscription, rien ne se passera.',
+      anonymous: {
+        preview: 'Vous êtes invité(e) à rejoindre l’équipe de {companyName} sur Pracuj.be.',
+        body: 'Vous êtes invité(e) à rejoindre l’équipe de {companyName} sur Pracuj.be.\n\nCréez un compte employeur avec cette adresse e-mail et confirmez-la : l’invitation vous attendra dans votre espace, dans l’onglet « Équipe ». Vous pourrez y rejoindre l’entreprise ou refuser l’invitation.',
+      },
+      footerNote: 'Vous recevez ce message car cette adresse e-mail a été invitée à rejoindre l’équipe d’une entreprise sur Pracuj.be.',
+    },
+    en: {
+      subject: 'Invitation to join the {companyName} team',
+      preview: '{inviterName} invites you to join the {companyName} team on Pracuj.be.',
+      heading: 'Team invitation',
+      body: '{inviterName} invites you to join the {companyName} team on Pracuj.be.\n\nCreate an employer account with this email address and confirm it — the invitation will be waiting in your dashboard, on the “Team” tab. There you can join the company or decline the invitation.',
+      cta: 'Create an account and view the invitation',
+      highlight: '{companyName}',
+      outro: 'The link works once and is valid for 14 days. If you do not know this company, you can ignore this message — nothing happens without registration.',
+      anonymous: {
+        preview: 'You have been invited to join the {companyName} team on Pracuj.be.',
+        body: 'You have been invited to join the {companyName} team on Pracuj.be.\n\nCreate an employer account with this email address and confirm it — the invitation will be waiting in your dashboard, on the “Team” tab. There you can join the company or decline the invitation.',
+      },
+      footerNote: 'You are receiving this message because this email address was invited to join a company team on Pracuj.be.',
+    },
+  },
+
   guestApplicationConfirm: {
     pl: {
       subject: 'Potwierdź aplikację: {jobTitle}',
@@ -1126,6 +1240,61 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'Link application to my account',
       highlight: '{jobTitle}',
       outro: 'The link is valid for 30 days and works for one account with this email address.',
+    },
+  },
+
+  guestStatusChanged: {
+    pl: {
+      subject: 'Zmiana statusu aplikacji: {jobTitle}',
+      preview: 'Status Twojej aplikacji to teraz: {status}.',
+      heading: 'Zmiana statusu aplikacji',
+      body: 'Status Twojej aplikacji na ofertę {jobTitle} w firmie {companyName} został zaktualizowany.\n\nAplikację wysłano bez konta. Jeśli firma będzie chciała porozmawiać, skontaktuje się z Tobą podanym adresem e-mail lub telefonem.',
+      cta: 'Przeglądaj oferty',
+      highlight: '{status}',
+      anonymous: {
+        preview: 'Status Twojej aplikacji został zaktualizowany.',
+        highlight: '',
+      },
+      footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be wysłano i potwierdzono aplikację z tym adresem e-mail.',
+    },
+    nl: {
+      subject: 'Statuswijziging sollicitatie: {jobTitle}',
+      preview: 'De status van je sollicitatie is nu: {status}.',
+      heading: 'Statuswijziging sollicitatie',
+      body: 'De status van je sollicitatie voor de vacature {jobTitle} bij {companyName} is bijgewerkt.\n\nJe hebt gesolliciteerd zonder account. Wil het bedrijf verder praten, dan neemt het contact met je op via het opgegeven e-mailadres of telefoonnummer.',
+      cta: 'Vacatures bekijken',
+      highlight: '{status}',
+      anonymous: {
+        preview: 'De status van je sollicitatie is bijgewerkt.',
+        highlight: '',
+      },
+      footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een sollicitatie met dit e-mailadres is verstuurd en bevestigd.',
+    },
+    fr: {
+      subject: 'Changement de statut de candidature : {jobTitle}',
+      preview: 'Le statut de votre candidature est désormais : {status}.',
+      heading: 'Changement de statut',
+      body: 'Le statut de votre candidature pour l’offre {jobTitle} chez {companyName} a été mis à jour.\n\nVous avez postulé sans compte. Si l’entreprise souhaite poursuivre, elle vous contactera à l’adresse e-mail ou au numéro de téléphone indiqués.',
+      cta: 'Voir les offres',
+      highlight: '{status}',
+      anonymous: {
+        preview: 'Le statut de votre candidature a été mis à jour.',
+        highlight: '',
+      },
+      footerNote: 'Vous recevez ce message car une candidature a été envoyée et confirmée sur Pracuj.be avec cette adresse e-mail.',
+    },
+    en: {
+      subject: 'Application status update: {jobTitle}',
+      preview: 'Your application status is now: {status}.',
+      heading: 'Application status update',
+      body: 'The status of your application for the {jobTitle} job at {companyName} has been updated.\n\nYou applied without an account. If the company wants to continue, it will contact you using the email address or phone number you provided.',
+      cta: 'Browse jobs',
+      highlight: '{status}',
+      anonymous: {
+        preview: 'Your application status has been updated.',
+        highlight: '',
+      },
+      footerNote: 'You are receiving this email because an application was sent and confirmed on Pracuj.be with this email address.',
     },
   },
 
@@ -1271,36 +1440,75 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
 
   supportContact: {
     pl: {
-      subject: 'Otrzymaliśmy Twoją wiadomość',
-      preview: 'Dziękujemy za kontakt z Pracuj.be.',
-      heading: 'Dziękujemy za kontakt',
-      body: 'Otrzymaliśmy Twoją wiadomość i wkrótce się z Tobą skontaktujemy. Poniżej znajduje się kopia Twojego zgłoszenia.',
-      cta: 'Przejdź do centrum pomocy',
-      outro: 'Zwykle odpowiadamy w ciągu jednego dnia roboczego.',
+      subject: 'Otrzymaliśmy Twoją wiadomość {reference}',
+      preview: 'Numer wiadomości: {reference}.',
+      heading: 'Dziękujemy za wiadomość',
+      body: 'Otrzymaliśmy Twoją wiadomość wysłaną przez formularz kontaktu w serwisie Pracuj.be i nadaliśmy jej numer podany poniżej.\n\nOdpowiemy na adres e-mail podany w formularzu. W odpowiedzi na tę wiadomość podaj numer, jeśli chcesz coś dodać.',
+      cta: 'Przejdź do strony Pomoc',
+      highlight: '{reference}',
+      footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be wysłano formularz kontaktu z tym adresem e-mail.',
     },
     nl: {
-      subject: 'We hebben je bericht ontvangen',
-      preview: 'Bedankt voor je bericht aan Pracuj.be.',
+      subject: 'We hebben je bericht {reference} ontvangen',
+      preview: 'Berichtnummer: {reference}.',
       heading: 'Bedankt voor je bericht',
-      body: 'We hebben je bericht ontvangen en nemen binnenkort contact met je op. Hieronder vind je een kopie van je bericht.',
-      cta: 'Naar het helpcentrum',
-      outro: 'Meestal reageren we binnen één werkdag.',
+      body: 'We hebben je bericht via het contactformulier op Pracuj.be ontvangen en er het nummer hieronder aan gegeven.\n\nWe antwoorden op het e-mailadres dat je in het formulier hebt ingevuld. Vermeld het nummer als je later iets wilt toevoegen.',
+      cta: 'Naar de hulppagina',
+      highlight: '{reference}',
+      footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een contactformulier met dit e-mailadres is verstuurd.',
     },
     fr: {
-      subject: 'Nous avons bien reçu votre message',
-      preview: 'Merci d’avoir contacté Pracuj.be.',
-      heading: 'Merci de nous avoir contactés',
-      body: 'Nous avons bien reçu votre message et reviendrons vers vous rapidement. Vous trouverez ci-dessous une copie de votre demande.',
-      cta: 'Accéder au centre d’aide',
-      outro: 'Nous répondons généralement sous un jour ouvrable.',
+      subject: 'Nous avons bien reçu votre message {reference}',
+      preview: 'Numéro du message : {reference}.',
+      heading: 'Merci pour votre message',
+      body: 'Nous avons bien reçu votre message envoyé via le formulaire de contact de Pracuj.be et lui avons attribué le numéro ci-dessous.\n\nNous répondrons à l’adresse e-mail indiquée dans le formulaire. Mentionnez ce numéro si vous souhaitez ajouter quelque chose.',
+      cta: 'Accéder à la page d’aide',
+      highlight: '{reference}',
+      footerNote: 'Vous recevez ce message car un formulaire de contact a été envoyé sur Pracuj.be avec cette adresse e-mail.',
     },
     en: {
-      subject: 'We have received your message',
-      preview: 'Thanks for contacting Pracuj.be.',
-      heading: 'Thanks for reaching out',
-      body: 'We have received your message and will get back to you soon. A copy of your request is below.',
-      cta: 'Go to help center',
-      outro: 'We usually reply within one business day.',
+      subject: 'We have received your message {reference}',
+      preview: 'Message number: {reference}.',
+      heading: 'Thanks for your message',
+      body: 'We have received the message you sent through the contact form on Pracuj.be and given it the number shown below.\n\nWe will reply to the email address you entered in the form. Mention this number if you want to add something later.',
+      cta: 'Go to the help page',
+      highlight: '{reference}',
+      footerNote: 'You are receiving this email because a contact form was sent on Pracuj.be with this email address.',
+    },
+  },
+
+  contactMessageAdmin: {
+    pl: {
+      subject: 'Nowa wiadomość z formularza kontaktu {reference}',
+      preview: 'Temat: {topicLabel}.',
+      heading: 'Nowa wiadomość z formularza kontaktu',
+      body: 'W serwisie Pracuj.be wysłano nową wiadomość przez formularz kontaktu. Temat: {topicLabel}.\n\nTreść i adres nadawcy znajdziesz w panelu administratora.',
+      cta: 'Otwórz wiadomości',
+      highlight: '{reference}',
+    },
+    nl: {
+      subject: 'Nieuw bericht via het contactformulier {reference}',
+      preview: 'Onderwerp: {topicLabel}.',
+      heading: 'Nieuw bericht via het contactformulier',
+      body: 'Op Pracuj.be is een nieuw bericht via het contactformulier verstuurd. Onderwerp: {topicLabel}.\n\nDe inhoud en het adres van de afzender vind je in het beheerpaneel.',
+      cta: 'Berichten openen',
+      highlight: '{reference}',
+    },
+    fr: {
+      subject: 'Nouveau message via le formulaire de contact {reference}',
+      preview: 'Sujet : {topicLabel}.',
+      heading: 'Nouveau message via le formulaire de contact',
+      body: 'Un nouveau message a été envoyé via le formulaire de contact de Pracuj.be. Sujet : {topicLabel}.\n\nLe contenu et l’adresse de l’expéditeur se trouvent dans le panneau d’administration.',
+      cta: 'Ouvrir les messages',
+      highlight: '{reference}',
+    },
+    en: {
+      subject: 'New message from the contact form {reference}',
+      preview: 'Topic: {topicLabel}.',
+      heading: 'New message from the contact form',
+      body: 'A new message was sent through the contact form on Pracuj.be. Topic: {topicLabel}.\n\nYou will find the content and the sender’s address in the admin panel.',
+      cta: 'Open messages',
+      highlight: '{reference}',
     },
   },
 

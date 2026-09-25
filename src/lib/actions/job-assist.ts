@@ -4,9 +4,10 @@ import { getActiveCompany } from '@/lib/company-context';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { AnthropicJobAssistor, FixtureJobAssistor } from '@/lib/ai-assist/assist';
 import { aiBudgetGate } from '@/lib/ai-assist/budget';
+import { estimateJobAssistCost } from '@/lib/ai-assist/cost';
 import { jobAssistModel, jobAssistProvider } from '@/lib/ai-assist/config';
 import type { AssistDropped, AssistSuggestion } from '@/lib/ai-assist/fields';
 import { precheckAssist, runJobAssist } from '@/lib/ai-assist/run-assist';
@@ -72,15 +73,29 @@ export async function suggestJobText(input: unknown): Promise<JobAssistResult> {
     }
 
     const model = provider === 'fixture' ? 'fixture' : jobAssistModel();
-    const budget = aiBudgetGate();
-    const budgetRequest = { feature: 'job_offer_assist' as const, companyId, model };
-    if (!(await budget.reserve(budgetRequest))) return { ok: false, error: 'AI_BUDGET_EXCEEDED' };
-
-    const result = await runJobAssist(request, {
-      assistor: provider === 'fixture' ? new FixtureJobAssistor() : new AnthropicJobAssistor(),
+    const ticket = await aiBudgetGate().reserve({
+      feature: 'job_offer_assist',
+      companyId,
       model,
-      onUsage: (usage) => budget.settle({ ...budgetRequest, ...usage }),
+      estimateMicroUsd: estimateJobAssistCost(request, model),
     });
+    if (!ticket) return { ok: false, error: 'AI_BUDGET_EXCEEDED' };
+
+    let result: Awaited<ReturnType<typeof runJobAssist>>;
+    let usageReported = false;
+    try {
+      result = await runJobAssist(request, {
+        assistor: provider === 'fixture' ? new FixtureJobAssistor() : new AnthropicJobAssistor(),
+        model,
+        onUsage: async (usage) => {
+          usageReported = true;
+          await ticket.settle(usage, 'ok');
+        },
+      });
+    } finally {
+      // Bez zgłoszonego zużycia (błąd wywołania) — rozliczenie pełną rezerwacją (#36).
+      if (!usageReported) await ticket.settle(null, 'failed');
+    }
     if (!result.ok) return result;
     return { ...result, ...(configured ? {} : { demo: true }) };
   } catch (e) {

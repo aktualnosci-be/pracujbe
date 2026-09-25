@@ -11,7 +11,7 @@ const db = vi.hoisted(() => ({ check: vi.fn(), pool: vi.fn() }));
 vi.mock('@/lib/db/rate-limit', () => ({ checkDatabaseRateLimit: db.check }));
 vi.mock('@/lib/db/runtime', () => ({ getRateLimitPool: db.pool }));
 vi.mock('next/headers', () => ({ headers: async () => new Headers({ 'x-real-ip': '203.0.113.7' }) }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 import { checkRateLimit } from '@/lib/rate-limit';
 

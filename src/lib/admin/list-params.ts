@@ -282,3 +282,13 @@ export function parseUuid(raw: string | undefined | null): string | null {
 export function parseYmd(raw: string | undefined | null): string | null {
   return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
 }
+
+/** Filtr wiadomości z formularza kontaktu (#61, `contact_messages.status`); domyślnie nowe. */
+export const CONTACT_MESSAGE_FILTERS = ['new', 'handled', 'all'] as const;
+export type ContactMessageFilter = (typeof CONTACT_MESSAGE_FILTERS)[number];
+
+export function parseContactMessageFilter(raw: string | undefined | null): ContactMessageFilter {
+  return raw && (CONTACT_MESSAGE_FILTERS as readonly string[]).includes(raw)
+    ? (raw as ContactMessageFilter)
+    : 'new';
+}

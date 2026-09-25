@@ -38,7 +38,7 @@ export async function Footer({ locale }: { locale: string }) {
       title: t('company'),
       links: [
         { href: '/o-nas', label: t('about') },
-        { href: '/faq', label: t('faq') },
+        { href: '/pomoc', label: t('faq') },
         { href: '/kontakt', label: t('contact') },
       ],
     },

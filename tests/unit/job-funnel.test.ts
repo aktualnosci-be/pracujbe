@@ -167,7 +167,7 @@ describe('POST /api/job-funnel', () => {
     record.mockReset().mockResolvedValue(1);
     vi.doMock('@/lib/db/runtime', () => ({ getDomainPool: vi.fn(async () => ({})) }));
     vi.doMock('@/lib/db/job-funnel', () => ({ recordJobFunnelEvent: record }));
-    vi.doMock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+    vi.doMock('@/lib/error-report', () => ({ captureError: vi.fn() }));
     process.env.DATABASE_APP_URL = 'postgres://example.invalid/app';
   });
 

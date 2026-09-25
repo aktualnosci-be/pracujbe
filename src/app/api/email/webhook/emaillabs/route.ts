@@ -4,7 +4,7 @@ import { verifyEmailLabsWebhook } from '@/lib/email/emaillabs-webhook';
 import { normalizeEmailLabsEvent, type NormalizedEmailEvent } from '@/lib/email/provider-events';
 import { isProductionMode } from '@/lib/env';
 import { readTextWithLimit } from '@/lib/http/read-limited';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Webhook raportów doręczeń EmailLabs — `POST /api/email/webhook/emaillabs`.
@@ -115,7 +115,7 @@ export async function POST(request: Request): Promise<Response> {
         }
       });
     } catch {
-      // Treść błędu bazy może zawierać adres — do Sentry idzie tylko liczba zdarzeń.
+      // Treść błędu bazy może zawierać adres — do kanału błędów idzie tylko liczba zdarzeń.
       captureError(new Error('record_email_event failed'), {
         area: 'email.webhook.emaillabs.record',
         events: events.length,

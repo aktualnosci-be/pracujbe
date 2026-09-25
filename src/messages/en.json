@@ -1525,7 +1525,8 @@
     "errorFileType": "Only PNG, JPG and WebP images are supported.",
     "errorUrlMissing": "Paste a link to the ad.",
     "errorNetwork": "Could not reach the server. Check your connection and try again.",
-    "contactNote": "We do not copy email addresses, phone numbers or identification numbers into the form. Enter the contact email yourself in the last step."
+    "contactNote": "We do not copy email addresses, phone numbers or identification numbers into the form. Enter the contact email yourself in the last step.",
+    "errorBudget": "Importing from a listing is temporarily unavailable. Please fill in the form manually or try again later."
   },
   "jobAssist": {
     "title": "Improve the text with the AI assistant",
@@ -1588,6 +1589,18 @@
     "threadStart": "This is the start of the conversation.",
     "senderCompanyFallback": "Employer",
     "senderCandidateFallback": "Candidate",
+    "attachFile": "Attach file",
+    "attachHint": "PDF, DOC, DOCX, JPG or PNG, max. 5 MB, up to {max} files per message.",
+    "attachmentsLabel": "Attachments",
+    "attachmentUploading": "Uploading…",
+    "attachmentUploadError": "The file could not be added. Please try again.",
+    "attachmentErrorType": "Allowed formats: PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentLimit": "You can attach up to {max} files to one message.",
+    "attachmentRemove": "Remove file {name}",
+    "attachmentDownload": "Download {name} ({size})",
+    "attachmentDownloadError": "The file could not be downloaded. Please try again.",
+    "attachmentUnavailable": "File is being checked — download unavailable.",
+    "attachmentOnlyPreview": "Attachment",
     "reportMessage": "Report",
     "reportMessageLabel": "Report message: {sender}",
     "reportConversation": "Report conversation",
@@ -2210,6 +2223,24 @@
     "breachNoticeRecipientsMalformed": "Invalid address or ID: {list}.",
     "breachNoticeContentRequired": "Enter a subject and text in at least one language.",
     "breachNoticeNotAllowed": "A notice can be sent for an open personal data breach with the saved decision “we notify the people affected”.",
+    "navContact": "Contact",
+    "contactTitle": "Contact form messages",
+    "contactSubtitle": "Messages sent through the contact form. Reply from your own mailbox to the sender’s address, then mark the message as handled.",
+    "contactFilterLabel": "Message filter",
+    "contactFilterNew": "New",
+    "contactFilterHandled": "Handled",
+    "contactStatusNew": "New",
+    "contactStatusHandled": "Handled",
+    "contactSearchLabel": "Search messages",
+    "contactSearchHint": "Message number, email address or sender’s first name.",
+    "contactEmpty": "No messages.",
+    "contactReceivedAt": "Received:",
+    "contactFormLocale": "Form language: {locale}",
+    "contactHandledBy": "Handled by: {name}",
+    "contactActionHandle": "Mark as handled",
+    "contactActionReopen": "Move back to new",
+    "contactMarkedHandled": "Message marked as handled.",
+    "contactReopened": "Message moved back to new.",
     "kindMessage": "Messages",
     "targetConversation": "Conversation",
     "messageReportScopeMessage": "Evidence: reported message (as at the time of the report)",
@@ -2275,7 +2306,29 @@
     "auditActionCampaignCancelled": "Campaign revision stopped",
     "entityEmailCampaign": "Email campaign",
     "appealTargetRestoration": "Against lifting a restriction",
-    "appealRestorationSummary": "Restriction lifted on {date}: {reason}"
+    "appealRestorationSummary": "Restriction lifted on {date}: {reason}",
+    "navAiCosts": "AI costs",
+    "aiCostsTitle": "AI costs",
+    "aiCostsSubtitle": "Spending on AI model calls against the global budget. Read only.",
+    "aiCostsBudget": "Budget",
+    "aiCostsToday": "Today",
+    "aiCostsMonth": "This month",
+    "aiCostsOfLimit": "of {limit} ({percent}%)",
+    "aiCostsNoLimit": "No limit set — calls are blocked",
+    "aiCostsNearLimit": "At least 80% of the limit has been used.",
+    "aiCostsExhausted": "Limit reached — new calls are blocked.",
+    "aiCostsStale": "Reservations not settled for more than 15 minutes: {count}",
+    "aiCostsHowCounted": "Cost is calculated from the tokens reported by the provider and the price list in the code. An unsettled reservation counts in full. Day and month follow Brussels time.",
+    "aiCostsLimitsHint": "Limits are set by the owner in the database (see docs/AI_BUDGET.md). A limit of 0 turns off all AI features.",
+    "aiCostsDaily": "Last {days} days",
+    "aiCostsMonthly": "Months",
+    "aiCostsNoData": "No calls in this period.",
+    "aiCostsRow": "Calls: {calls} · successful: {ok} · failed: {notOk} · in progress: {open} · input/output tokens: {input} / {output}",
+    "aiCostsCalls": "calls: {calls}",
+    "aiCostsFeatureJobImport": "Listing import",
+    "aiCostsFeatureTranslation": "Content translation",
+    "aiCostsFeatureAssist": "Job text assistant",
+    "aiCostsFeatureCvImport": "CV import"
   },
   "settings": {
     "title": "Notification preferences",
@@ -2583,7 +2636,19 @@
       "alreadyMember": "This person is already on the team.",
       "invitationLimit": "You have reached the limit of 50 pending invitations. Revoke outdated invitations.",
       "companyLimit": "You can manage up to 5 companies.",
-      "lastOwner": "The company must have at least one active owner."
+      "lastOwner": "The company must have at least one active owner.",
+      "localeRequired": "Choose the invitation language."
+    },
+    "localeLabel": "Invitation language",
+    "invitedSent": "Invitation saved. This person will get an email: with an employer account, in that account’s language; without an account, in the chosen language, with a sign-up link.",
+    "inviteLinkHint": "Someone without an account gets an email in the chosen language with a link to create an employer account (works once, valid for 14 days). After confirming the address, the invitation waits in their dashboard. Someone with an account gets the email in their account’s language.",
+    "signup": {
+      "checking": "Checking the invitation link…",
+      "intro": "Invitation to join the {company} team. Role: {role}.",
+      "nextSteps": "Create an employer account and confirm your email address. The invitation will wait in your dashboard, on the “Team” tab — there you can join the company or decline it.",
+      "emailFixed": "The account is created with the address that received the invitation.",
+      "used": "This invitation link has already been used. If you have an account, log in — the invitation is waiting in your dashboard.",
+      "invalid": "The invitation link is invalid or has expired. Ask the company for a new invitation or create a regular employer account."
     }
   },
   "emailUnsubscribe": {
@@ -2663,7 +2728,13 @@
     "deleteTitle": "Delete the search “{name}”?",
     "deleteDescription": "You will stop receiving alerts about new jobs matching these filters.",
     "deleted": "We deleted the search.",
-    "updated": "We saved your changes."
+    "updated": "We saved your changes.",
+    "rename": "Rename",
+    "renameLabel": "New search name",
+    "renameSave": "Save name",
+    "renameCancel": "Cancel",
+    "renamed": "We renamed the search.",
+    "renameHint": "1 to 80 characters."
   },
   "contentReport": {
     "metaTitle": "Report content",
@@ -2808,6 +2879,141 @@
     "categoryUnion": "trade union membership",
     "categoryPolitical": "political opinions",
     "categoryCriminal": "criminal record"
+  },
+  "help": {
+    "metaTitle": "Help — questions and answers",
+    "metaDescription": "How Pracuj.be works: a profile without a CV, applying, job matching, employer accounts, company verification and emails in your language.",
+    "title": "Help",
+    "intro": "Answers to the most common questions about how Pracuj.be works. If you can’t find an answer here, write to us through the contact form.",
+    "groups": {
+      "candidates": "For candidates",
+      "employers": "For employers",
+      "account": "Account, emails and safety"
+    },
+    "faq": {
+      "noCv": {
+        "q": "Do I need a CV to look for work?",
+        "a": "No. After you <register>sign up</register>, you create a simple professional profile in six short steps — including occupations, skills, languages and availability. You can add a CV file (PDF, DOC or DOCX up to 5 MB), but it is not required."
+      },
+      "guestApply": {
+        "q": "Can I apply without creating an account?",
+        "a": "Yes. In the application form you enter your full name and email address, then confirm the application with the link in the email. Later you can create an account with the same address and take over the application."
+      },
+      "match": {
+        "q": "How is the match with a job calculated?",
+        "a": "The match percentage is based on fixed criteria: occupation and category, skills, location, experience, availability, languages, certificates, driving licence and contract terms. The result is not decided by artificial intelligence, and the job page shows what you meet and what is missing."
+      },
+      "visibility": {
+        "q": "Can employers see my profile?",
+        "a": "Verified companies can only find your profile if you turn on “Let verified employers find my profile” in your settings — it is off by default. A company you apply to sees your application. You can block specific companies in the “Blocked companies” section."
+      },
+      "alerts": {
+        "q": "How do I get alerts about new jobs?",
+        "a": "On the <jobs>job list</jobs>, set your filters and choose “Save search”. In the candidate panel you turn on email alerts for it — daily or weekly."
+      },
+      "data": {
+        "q": "How do I download my data or delete my account?",
+        "a": "In the candidate panel settings, in the “Your data and account” section, you can download your data as a JSON file or delete your account."
+      },
+      "free": {
+        "q": "How much does it cost to publish jobs?",
+        "a": "At this stage Pracuj.be is free for employers. The portal does not sell packages or paid job postings."
+      },
+      "verification": {
+        "q": "Why does my company need to be verified?",
+        "a": "Only companies verified by a portal administrator can publish jobs. You see the verification status in the employer panel. If the company is rejected, you see the reason and can choose “Send for verification again”."
+      },
+      "drafts": {
+        "q": "Can I prepare a job before verification?",
+        "a": "Yes. The job wizard saves a draft after each step. You publish it once your company is verified."
+      },
+      "team": {
+        "q": "How do I add colleagues?",
+        "a": "The company owner or admin invites team members by email address in the employer panel and gives them a role."
+      },
+      "applications": {
+        "q": "How do I contact candidates?",
+        "a": "You handle applications, messages and job offers in the employer panel. Read more on the <employer>For employers</employer> page."
+      },
+      "languages": {
+        "q": "Which languages is the site available in?",
+        "a": "The site is available in Polish, Dutch, French and English. You can change the language in the header or the footer."
+      },
+      "emailLanguage": {
+        "q": "In which language will I receive emails?",
+        "a": "Emails about your account are sent in the language set on your account — even when the message comes from an employer who uses a different language."
+      },
+      "noEmail": {
+        "q": "I am not receiving emails from the site. What should I do?",
+        "a": "Check your spam folder and that your email address is correct. If the message still doesn’t arrive, write to us through the contact form."
+      },
+      "suspicious": {
+        "q": "A job looks suspicious. What should I do?",
+        "a": "On the job page, choose “Report this job” or “Report this company”. You can send a report without an account and you get a case number to check its status."
+      }
+    },
+    "contactTitle": "Didn’t find an answer?",
+    "contactDesc": "Write to us through the contact form. We will reply to the email address you enter in the form.",
+    "contactCta": "Go to the contact form"
+  },
+  "contact": {
+    "metaTitle": "Contact",
+    "metaDescription": "Write to the Pracuj.be team through the contact form — about your candidate account, employer account, job listings or technical problems.",
+    "title": "Contact",
+    "intro": "Have a question about your account, a job or how the site works? Write to us through the form — we will reply to the email address you enter.",
+    "formTitle": "Contact form",
+    "topicLabel": "Topic",
+    "topicPlaceholder": "Choose a topic",
+    "topicCandidateAccount": "Candidate account",
+    "topicEmployerAccount": "Employer account or company",
+    "topicJobListing": "Job listing",
+    "topicTechnical": "Technical problem",
+    "topicPrivacy": "My personal data",
+    "topicOther": "Something else",
+    "messageLabel": "Message",
+    "messageHint": "Describe your request (at least {min} characters). Do not include a national register number, PESEL or document numbers.",
+    "nameLabel": "First name (optional)",
+    "emailLabel": "Email address",
+    "emailHint": "We will send the confirmation and our reply to this address.",
+    "submit": "Send message",
+    "networkError": "We couldn’t reach the server. Your message is still in the form — please try again.",
+    "successTitle": "Message sent",
+    "successBody": "Thank you. We have sent a confirmation with the message number to the address you entered.",
+    "successDuplicate": "This message had already been sent — we did not send it a second time.",
+    "referenceLabel": "Message number",
+    "referenceHint": "Mention this number if you want to add something later.",
+    "backToHelp": "Back to the help page",
+    "beforeTitle": "Before you write",
+    "beforeHelp": "You will find answers to the most common questions on the <help>Help</help> page.",
+    "beforeReport": "Report a suspicious job directly on its page (“Report this job”) — you will find it on the <jobs>job list</jobs>.",
+    "beforeNoIds": "Do not send document numbers or passwords in your message.",
+    "error": {
+      "topicRequired": "Choose a topic.",
+      "messageRequired": "Enter your message.",
+      "messageTooShort": "Your message is too short — please describe your request in a bit more detail.",
+      "messageTooLong": "Your message is too long.",
+      "nameTooLong": "The first name is too long.",
+      "emailRequired": "Enter your email address.",
+      "emailInvalid": "Enter a valid email address.",
+      "sensitiveId": "Remove the national register number, PESEL or document number — it is not needed to reply to your message."
+    }
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Turn off alert",
+    "title": "Turn off this alert?",
+    "confirmText": "We will stop sending emails with new jobs for this one saved search. Your other searches and notifications stay as they are.",
+    "confirmButton": "Turn off this alert",
+    "pending": "Saving…",
+    "doneTitle": "Alert turned off",
+    "doneText": "We will no longer send you alerts for this search. The search stays saved — you can turn the alert back on in your candidate panel.",
+    "settingsHint": "You can change your saved searches and alerts after logging in.",
+    "loginLink": "Log in",
+    "invalidTitle": "The link is not valid",
+    "invalidText": "This link is incomplete or has been changed. Use the link from the latest email or change the alert after logging in.",
+    "expiredTitle": "The link has expired",
+    "expiredText": "This link is no longer valid. Use the link from the latest email or change the alert after logging in.",
+    "unavailableText": "Turning off the alert is temporarily unavailable. Try again later or change the alert after logging in.",
+    "errorText": "We could not save the change. Please try again."
   },
   "cvImport": {
     "eyebrow": "Your profile",

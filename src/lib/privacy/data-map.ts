@@ -79,6 +79,7 @@ export type ActivityId =
   | 'email-notifications'
   | 'consents'
   | 'dsa-moderation'
+  | 'support-contact'
   | 'security-audit'
   | 'ai-job-import'
   | 'ai-translation'
@@ -129,7 +130,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'guest-applications': {
     name: 'Aplikacja bez konta',
-    inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto.',
+    inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto.',
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
       'purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach.',
@@ -142,9 +143,10 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'employer-contact': {
     name: 'Kontakt pracodawca–kandydat',
-    inCode: 'Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata.',
+    inCode: 'Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata.',
     processors: [...HOSTING, 'resend', 'emaillabs'],
-    retentionInCode: 'Propozycje wygasają (expires_at), dane nie są usuwane.',
+    retentionInCode:
+      'Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue.',
   },
   companies: {
     name: 'Konta firm, zespół i weryfikacja',
@@ -170,10 +172,17 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode: null,
   },
+  'support-contact': {
+    name: 'Formularz kontaktu',
+    inCode:
+      'Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt.',
+    processors: [...HOSTING, 'resend', 'cloudflare-turnstile'],
+    retentionInCode: null,
+  },
   'security-audit': {
     name: 'Bezpieczeństwo, audyt i limity',
     inCode: 'Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów.',
-    processors: [...HOSTING, 'sentry', 'cloudflare-turnstile'],
+    processors: [...HOSTING, 'discord-webhook', 'cloudflare-turnstile'],
     retentionInCode: 'Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie.',
   },
   'ai-job-import': {
@@ -211,9 +220,11 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   backups: {
     name: 'Kopie zapasowe bazy',
-    inCode: 'scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy.',
-    processors: ['railway'],
-    retentionInCode: 'BACKUP_RETENTION najnowszych kopii (domyślnie 14).',
+    inCode:
+      'scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy; kopia i manifest wysyłane do prywatnego bucketu Cloudflare R2 (BACKUP_S3_*, #569).',
+    processors: ['railway', 'cloudflare-r2'],
+    retentionInCode:
+      'BACKUP_RETENTION najnowszych kopii (domyślnie 14) lokalnie i w buckecie R2; opcjonalnie BACKUP_S3_MAX_AGE_DAYS (najnowsza kopia zostaje zawsze).',
   },
   'billing-disabled': {
     name: 'Płatności (wyłączone)',
@@ -418,8 +429,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
 
   // --- Pliki ------------------------------------------------------------------------------
   'public.files': {
-    activities: ['cv-files'],
-    subjects: ['candidate'],
+    activities: ['cv-files', 'employer-contact'],
+    subjects: ['candidate', 'employer'],
     columns: {
       owner_id: 'reference',
       bucket: 'file',
@@ -430,7 +441,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       checksum_sha256: 'file',
       scan_status: 'file',
     },
-    note: 'Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane.',
+    note: 'Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane. entity_type: candidate_cv (CV) albo message_attachment (załącznik rozmowy, entity_id = rozmowa).',
   },
 
   // --- Aplikacje ---------------------------------------------------------------------------
@@ -543,6 +554,17 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['candidate', 'employer'],
     columns: { sender_id: 'reference', body: 'correspondence', read_at: 'technical' },
   },
+  'public.message_attachments': {
+    activities: ['employer-contact'],
+    subjects: ['candidate', 'employer'],
+    columns: { uploader_id: 'reference', file_id: 'reference', message_id: 'reference' },
+    notPersonal: {
+      client_upload_id: 'Losowy klucz idempotencji uploadu.',
+      position: 'Kolejność pliku w wiadomości.',
+      linked_at: 'Czas wysłania z wiadomością.',
+    },
+    note: 'Powiązanie pliku (public.files) z rozmową i wiadomością; treść i nazwa pliku w public.files/buckecie.',
+  },
 
   // --- Firmy -------------------------------------------------------------------------------
   'public.companies': {
@@ -570,7 +592,16 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.company_invitations': {
     activities: ['companies'],
     subjects: ['invitee', 'employer'],
-    columns: { email: 'contact', role: 'identity', invited_by: 'reference', responded_by: 'reference' },
+    columns: {
+      email: 'contact',
+      role: 'identity',
+      invited_by: 'reference',
+      responded_by: 'reference',
+      locale: 'preferences',
+      signup_token_hash: 'credentials',
+      signup_token_used_at: 'credentials',
+    },
+    note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0121); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
   },
   'public.company_vies_checks': {
     activities: ['companies'],
@@ -693,6 +724,20 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       target_snapshot: 'correspondence',
     },
   },
+  'public.contact_messages': {
+    activities: ['support-contact'],
+    subjects: ['visitor', 'candidate', 'employer', 'admin'],
+    columns: {
+      sender_id: 'reference',
+      sender_name: 'identity',
+      sender_email: 'contact',
+      topic: 'correspondence',
+      message: 'correspondence',
+      locale: 'preferences',
+      handled_by: 'reference',
+    },
+    note: 'Wiadomości z formularza kontaktu (0125). Retencja i powiązanie z eksportem/usunięciem konta — do decyzji właściciela (#486).',
+  },
   'public.report_events': {
     activities: ['dsa-moderation'],
     subjects: ['reporter', 'admin'],
@@ -719,6 +764,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       decided_by: 'reference',
     },
     note: 'Uzasadnienia odwołania i rozpatrzenia są anonimizowane przez dsa_retention_run po końcu drogi odwołania i okresie retencji (#43).',
+  },
+  'public.ai_budget_limits': DICTIONARY('globalne limity kosztów AI, #36'),
+  'public.ai_usage_ledger': {
+    activities: ['ai-job-import'],
+    subjects: [],
+    columns: {},
+    note: 'Liczniki wywołań modeli AI (funkcja, model, wynik, tokeny, koszt, doba) — bez treści i identyfikatorów osób/firm (#36).',
   },
   'public.dsa_retention_runs': {
     activities: ['dsa-moderation'],
@@ -779,6 +831,24 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: { path: 'file' },
     notPersonal: { bucket: 'Nazwa bucketa.' },
     note: 'Klucz obiektu do usunięcia (zawiera UUID właściciela); wiersz znika po usunięciu obiektu.',
+  },
+  'public.storage_gc_sweeps': {
+    activities: ['cv-files'],
+    subjects: ['candidate'],
+    columns: { cursor_key: 'file' },
+    notPersonal: {
+      bucket: 'Nazwa bucketa.',
+      dry_run: 'Tryb przebiegu GC.',
+      locked_until: 'Dzierżawa przebiegu.',
+      pages: 'Licznik stron.',
+      objects_scanned: 'Licznik obiektów.',
+      orphan_objects: 'Licznik sierot.',
+      orphan_queued: 'Licznik sierot w kolejce.',
+      missing_objects: 'Licznik wierszy bez obiektu.',
+      started_at: 'Czas startu przebiegu.',
+      finished_at: 'Czas końca przebiegu.',
+    },
+    note: 'Przebieg GC bucketu CV (#17): same liczniki; kursor = ostatni sprawdzony klucz (UUID właściciela), czyszczony po zakończeniu przebiegu, historia 90 dni.',
   },
   'public.audit_logs': {
     activities: ['security-audit'],

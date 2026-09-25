@@ -36,8 +36,8 @@ const buttonVariants = cva(
         sm: 'h-9 rounded-md px-4',
         lg: 'h-12 rounded-md px-8 text-base',
         icon: 'h-11 w-11',
-        /** `.people .btn` z prototypu (#7, Z4): 14 px / 650, min. 49 px, promień 11 px, padding 13/21 px. */
-        passport: 'min-h-[49px] rounded-[11px] px-[21px] py-[13px] text-sm font-[650]',
+        /** `.people .btn` z prototypu (#7, Z4): 14 px / 650, min. 49 px, promień 11 px, padding 13/21 px, interlinia `normal` jak w prototypie. */
+        passport: 'min-h-[49px] rounded-[11px] px-[21px] py-[13px] text-sm font-[650] leading-[normal]',
       },
     },
     defaultVariants: {

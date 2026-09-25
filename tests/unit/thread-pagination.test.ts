@@ -6,7 +6,7 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 const { captureError } = vi.hoisted(() => ({ captureError: vi.fn() }));
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError }));
+vi.mock('@/lib/error-report', () => ({ captureError }));
 
 import {
   THREAD_PAGE_SIZE,
@@ -57,6 +57,7 @@ function fakeThread(store: { rows: Row[]; conversation: boolean; failMessages?: 
   resetFakeDb({ id: ME, role: 'candidate' } as unknown as PortalIdentity);
   const calls = { limit: [] as number[], texts: [] as string[] };
   fakeDb
+    .rpc('get_message_attachments', [])
     .rows('messages.conversation', store.conversation ? [{ id: 'thread-1', subject: 'Praca', company_id: 'company-1' }] : [])
     .rows('messages.conversation-access', store.conversation ? [{ id: 'thread-1', company_id: 'company-1' }] : [])
     .rows('messages.thread-other-members', [{ profile_id: 'other' }])

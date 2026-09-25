@@ -14,7 +14,7 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/data/messages', () => ({ getOlderThreadMessages: vi.fn() }));
 
 const USER = '11111111-1111-4111-8111-111111111111';
@@ -91,6 +91,26 @@ describe('wiadomości', () => {
 
   it('sendMessage: pusta treść → VALIDATION_FAILED bez RPC', async () => {
     expect(await sendMessage(CONVERSATION, '   ', CLIENT_MSG)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('sendMessage z załącznikami (0119): identyfikatory do RPC, pusta treść tylko z plikiem', async () => {
+    const A1 = '77777777-7777-4777-8777-777777777771';
+    const A2 = '77777777-7777-4777-8777-777777777772';
+    expect(await sendMessage(CONVERSATION, '  ', CLIENT_MSG, [A1, A2])).toEqual({ ok: true, id: 'row-1' });
+    expect(fakeDb.callsTo('send_message')[0]).toMatchObject({
+      args: { p_body: '', p_client_message_id: CLIENT_MSG, p_attachment_ids: [A1, A2] },
+      as: USER,
+    });
+    // Bez załączników lista jest pusta (RPC ma wartość domyślną, ale przekazujemy jawnie).
+    await sendMessage(CONVERSATION, 'Tekst', CLIENT_MSG);
+    expect(fakeDb.callsTo('send_message')[1]!.args['p_attachment_ids']).toEqual([]);
+    // Kontrole ujemne: > 3 pliki, duplikat, nie-UUID — bez RPC.
+    fakeDb.calls.length = 0;
+    const four = [A1, A2, '77777777-7777-4777-8777-777777777773', '77777777-7777-4777-8777-777777777774'];
+    expect(await sendMessage(CONVERSATION, 'x', CLIENT_MSG, four)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(await sendMessage(CONVERSATION, 'x', CLIENT_MSG, [A1, A1])).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(await sendMessage(CONVERSATION, 'x', CLIENT_MSG, ['plik'])).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
     expect(fakeDb.calls).toHaveLength(0);
   });
 
