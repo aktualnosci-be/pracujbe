@@ -204,6 +204,7 @@ describe('lookupReportCase', () => {
         appealState: null,
         appealDeadline: null,
         appeal: null,
+        restoration: null,
         events: [{ type: 'submitted', toStatus: 'open', at: '2026-09-20T10:00:00Z' }],
       },
     });
