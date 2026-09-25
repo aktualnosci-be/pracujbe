@@ -913,7 +913,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   stary format `?token=` odrzucany w middleware (303 bez cookie, „link nieprawidłowy”) —
   `guest-legacy-link.test` z kontrolą ujemną.
   Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture).
-  Zmiana statusu (0108): `transition_application` → `enqueue_guest_status_email` →
+  Zmiana statusu (0109): `transition_application` → `enqueue_guest_status_email` →
   `guestStatusChanged` w języku formularza (`guest_application_requests.locale` — jawnie
   zapisany język odbiorcy bez profilu, Invariant #1), klucz = id wiersza historii, tylko
   potwierdzone zgłoszenie, nieusunięta aplikacja bez konta, adres bez blokady (#44); wiersz

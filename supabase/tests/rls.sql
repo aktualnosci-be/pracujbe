@@ -9000,7 +9000,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- GS98. E-mail do gościa o zmianie statusu (#98, 0108): transition_application kolejkuje
+-- GS98. E-mail do gościa o zmianie statusu (#98, 0109): transition_application kolejkuje
 --       `guestStatusChanged` na adres gościa w języku jego formularza (nie firmy), klucz =
 --       id wiersza historii, tylko potwierdzone zgłoszenie, bez zablokowanego adresu (#44),
 --       wiersz kolejki usuwany z aplikacją przez retencję (#486). Kontrole ujemne: helper
