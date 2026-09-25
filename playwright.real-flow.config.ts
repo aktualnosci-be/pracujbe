@@ -46,8 +46,6 @@ export default defineConfig({
       // Migrator i login auth nie trafiają do procesu aplikacji.
       E2E_REAL_ADMIN_URL: '',
       E2E_REAL_AUTH_URL: '',
-      NEXT_PUBLIC_SUPABASE_URL: '',
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
       NODE_OPTIONS: `--require="${requireShim}"`,
     },
   },

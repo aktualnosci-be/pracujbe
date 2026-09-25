@@ -21,7 +21,7 @@ import {
   AdminPager,
 } from '@/components/admin/AdminListControls';
 import {
-  chipClass,
+  filterTabClass,
   ICON_BOX,
   INLINE_LINK,
   PANEL,
@@ -195,7 +195,7 @@ export default async function AdminReportsPage({
                 },
               }}
               aria-current={isActive ? 'true' : undefined}
-              className={chipClass(isActive)}
+              className={filterTabClass(isActive)}
             >
               {t(FILTER_LABEL[value] ?? 'filterAll')}
             </Link>
@@ -218,7 +218,7 @@ export default async function AdminReportsPage({
                 },
               }}
               aria-current={isActive ? 'true' : undefined}
-              className={chipClass(isActive)}
+              className={filterTabClass(isActive)}
             >
               {t(KIND_LABEL[value] ?? 'filterKindAll')}
             </Link>
