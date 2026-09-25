@@ -1,6 +1,6 @@
 # Trwała kolejka wiadomości auth — kontrakt transakcji
 
-Stan: 21 września 2026. Mechanizm zaimplementowany dla przypiętego Better Auth 1.7.5; publiczne trasy i rzeczywisty worker wysyłki pozostają do podłączenia.
+Stan: 24 września 2026. Mechanizm zaimplementowany dla przypiętego Better Auth 1.7.5. Worker wysyłki podłączony do `/api/email/process` (#24/#78, `src/lib/auth/email-worker.ts`, opis w `docs/RESEND_SETUP.md`); konfiguracja crona i sekretów Railway — osobne zadanie.
 
 ## Ustalenie, od którego zależy poprawność
 

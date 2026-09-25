@@ -154,7 +154,8 @@ describe("OnboardingWizard: kod błędu serwera (#363)", () => {
   it("ONBOARDING_INCOMPLETE przy „Zakończ” → komunikat i przejście do brakującego kroku", async () => {
     saveOnboardingStep.mockResolvedValue({ ok: false, error: "ONBOARDING_INCOMPLETE" });
     render(<OnboardingWizard initialStep={6} initialValues={onboardingValues} />);
-    fireEvent.click(screen.getByRole("checkbox", { name: "agreeTermsLinks" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "termsAcceptLinks" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "privacyNoticeAckLinks" }));
     fireEvent.click(screen.getByRole("button", { name: "finish" }));
 
     const heading = await screen.findByRole("heading", { level: 2, name: "step2Title" });
