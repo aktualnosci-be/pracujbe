@@ -4,7 +4,7 @@ import { registerCandidateSchema } from '../../src/lib/validation/auth';
 
 const candidate = {
   email: '  candidate@example.com ', password: 'Example123!', passwordConfirm: 'Example123!',
-  firstName: ' Jan ', lastName: ' Kowalski ', locale: 'pl' as const, agreeTerms: true as const,
+  firstName: ' Jan ', lastName: ' Kowalski ', locale: 'pl' as const, agreeTerms: true as const, privacyNoticeAck: true as const,
 };
 const options = { fields: {}, shouldUseNativeValidation: false, criteriaMode: 'all' as const };
 

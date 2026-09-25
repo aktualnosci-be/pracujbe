@@ -29,7 +29,7 @@ const BLOCKING = new Set(['critical', 'serious']);
 
 type Messages = {
   jobs: { applyNow: string };
-  apply: { submit: string; consent: string; message: string; sensitiveIdHint: string };
+  apply: { submit: string; privacyNoticeAck: string; message: string; sensitiveIdHint: string };
   guestApply: {
     fullName: string;
     email: string;
@@ -39,9 +39,15 @@ type Messages = {
     invalidTitle: string;
     claimTitle: string;
     claimLogin: string;
-    error: { nameRequired: string; emailRequired: string; consentRequired: string; sensitiveIdNotAllowed: string };
+    error: { nameRequired: string; emailRequired: string; privacyNoticeRequired: string; sensitiveIdNotAllowed: string };
   };
 };
+
+/** #493: etykieta z linkiem — nazwa dostępna zaczyna się od tekstu do końca linku. */
+function privacyAckName(t: Messages): RegExp {
+  const lead = (t.apply.privacyNoticeAck.split('</privacy>')[0] ?? '').replace(/<[^>]+>/g, '');
+  return new RegExp(`^${lead.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+}
 
 function msgs(locale: Locale): Messages {
   return JSON.parse(readFileSync(resolve(process.cwd(), 'src', 'messages', `${locale}.json`), 'utf-8')) as Messages;
@@ -95,14 +101,14 @@ for (const locale of LOCALES) {
     await expect(name).toBeFocused();
     await expect(name).toHaveAccessibleDescription(t.guestApply.error.nameRequired);
     await expect(email).toHaveAccessibleDescription(t.guestApply.error.emailRequired);
-    await expect(form.getByRole('checkbox', { name: t.apply.consent })).toHaveAccessibleDescription(
-      t.guestApply.error.consentRequired,
+    await expect(form.getByRole('checkbox', { name: privacyAckName(t) })).toHaveAccessibleDescription(
+      t.guestApply.error.privacyNoticeRequired,
     );
     expect(actions).toHaveLength(0);
 
     await name.fill('Anna Nowak');
     await email.fill('anna@example.com');
-    await form.getByRole('checkbox', { name: t.apply.consent }).click();
+    await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
     await submit.click();
 
     const sent = dialog.getByTestId('guest-apply-sent');
@@ -117,7 +123,7 @@ test('pytania screeningowe (#101): gość musi odpowiedzieć na wymagane, potem 
   const { t, dialog, form } = await openGuestForm(page, 'pl', 1280, SCREENING_JOB_SLUG);
   await form.getByRole('textbox', { name: t.guestApply.fullName }).fill('Anna Nowak');
   await form.getByRole('textbox', { name: t.guestApply.email }).fill('anna@example.com');
-  await form.getByRole('checkbox', { name: t.apply.consent }).click();
+  await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
   await form.getByRole('button', { name: t.apply.submit }).click();
 
   await expect(page.locator(`#apply-q-${Q_YES_NO}`)).toBeFocused();
@@ -136,7 +142,7 @@ test('#495: NISS w wiadomości gościa — błąd przy polu, bez wysłania zgło
   const message = form.getByRole('textbox', { name: t.apply.message });
   // Syntetyczny numer z poprawną sumą kontrolną.
   await message.fill('Mój NISS: 85.07.30-033.28');
-  await form.getByRole('checkbox', { name: t.apply.consent }).click();
+  await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
   await form.getByRole('button', { name: t.apply.submit }).click();
 
   await expect(message).toHaveAttribute('aria-invalid', 'true');
